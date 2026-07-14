@@ -10,12 +10,15 @@ on:
 
 jobs:
   repository-check:
-    name: Repository structure check
+    name: Repository validation
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run repository checks
+      - name: Validate files and executable syntax
         run: bash scripts/validate-repository.sh

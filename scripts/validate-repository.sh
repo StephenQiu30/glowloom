@@ -29,17 +29,25 @@ required_files=(
 )
 
 for file in "${required_files[@]}"; do
-  test -f "$file"
+  if [[ ! -f "$file" ]]; then
+    printf 'Missing required file: %s\n' "$file" >&2
+    exit 1
+  fi
 done
 
-grep -q "tracker:" WORKFLOW.md
-grep -q "kind: linear" WORKFLOW.md
-grep -q "project_slug" WORKFLOW.md
-grep -q "## Codex Workpad" WORKFLOW.md
-grep -q "Human Review" WORKFLOW.md
-grep -q "harness-quality-gate" WORKFLOW.md
+for script in scripts/*.sh; do
+  [[ -f "$script" ]] || continue
+  bash -n "$script"
+done
 
-test ! -d .agents
-test ! -f skills-lock.json
+python -m py_compile .codex/skills/land/land_watch.py
 
-git diff --check
+if [[ -d .agents ]]; then
+  printf 'Unexpected generated directory: .agents\n' >&2
+  exit 1
+fi
+
+if [[ -f skills-lock.json ]]; then
+  printf 'Unexpected generated lock file: skills-lock.json\n' >&2
+  exit 1
+fi
