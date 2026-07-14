@@ -112,7 +112,7 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
 
 
 
-- Agent Review: `receiving-code-review` before accepting, rejecting, or acting on review findings
+- Agent Review: `code-review` before accepting, rejecting, or acting on review findings
 - Runtime / E2E: `agent-browser`, `harness-local-server`, `harness-playwright-evidence` when UI or app-touching
 
 ## Related skills
@@ -310,7 +310,7 @@ Use this only when completion is blocked by missing required tools, non-GitHub a
 ## Step 3: Agent Review, Human Review and merge handling
 
    - Functional Review is mandatory: inspect implementation logic for requirement gaps, regressions, security or data-flow bugs, and false completion where the workpad or PR claims done while functionality is still missing.
-   - Apply `receiving-code-review` rigor to every finding: understand the requirement, verify it against codebase reality, evaluate technical correctness, and only then approve, request rework, or push back with evidence.
+   - Apply `code-review` rigor to every finding: understand the requirement, verify it against codebase reality, evaluate technical correctness, and only then approve, request rework, or push back with evidence.
    - Update the workpad `### Agent Review` section with review status, reviewer identity, findings, required fixes, and verification expectations.
 2. When the issue is in `Human Review`, do not code or change ticket content.
 3. Poll for updates as needed, including GitHub PR review comments from humans and bots.
