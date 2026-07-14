@@ -5,7 +5,6 @@ description: Use when creating a new Linear task or rewriting a Linear task draf
 
 # Linear Create Task
 
-Create Linear tasks with execution-ready content. Every new task should be understandable without extra chat context and should be strict enough to support OpenSpec-driven SDD and later Agent Review.
 
 ## Rules
 
@@ -46,7 +45,6 @@ Use this structure in the Linear issue body:
 ## Task Description
 - Background:
 - Expected change:
-- OpenSpec impact:
 
 ## Scope Boundaries
 - In scope:
@@ -76,7 +74,6 @@ Use this structure in the Linear issue body:
 ### Task Description
 
 - Capture the problem, target behavior, and why the task exists.
-- If the task changes long-lived behavior, require the matching OpenSpec change or OpenSpec update path.
 
 ### Scope Boundaries
 
@@ -111,7 +108,6 @@ Use this structure in the Linear issue body:
 ## Task Description
 - Background: <current problem or missing capability>
 - Expected change: <what should be implemented or updated>
-- OpenSpec impact: <new change / continue existing change / baseline-only update>
 
 ## Scope Boundaries
 - In scope: <what is allowed>
@@ -126,10 +122,8 @@ Use this structure in the Linear issue body:
 ## Validation
 - Automated: <exact test, lint, build, or verification commands worth running>
 - Manual: <manual checks only if they add signal>
-- Agent Review focus: <what must be checked against OpenSpec, code, and boundaries>
 
 ## Deliverables
-- <files, workflow docs, OpenSpec artifacts, PR evidence, or linked outputs>
 ```
 
 ## Final Check Before Creating The Issue
@@ -139,4 +133,3 @@ Use this structure in the Linear issue body:
 - Correct labels are attached for execution, review, and repo/project routing.
 - Validation is concrete and useful.
 - Boundaries are explicit.
-- OpenSpec expectation is stated when long-lived behavior changes.

@@ -6,22 +6,12 @@ required_files=(
   "AGENTS.md"
   "AGENTS.local.md"
   "WORKFLOW.md"
-  "openspec/config.yaml"
-  "openspec/specs/agent-governance/spec.md"
   ".env.example"
   ".codex/skills/agent-browser/SKILL.md"
-  ".codex/skills/openspec-new-change/SKILL.md"
-  ".codex/skills/openspec-apply-change/SKILL.md"
-  ".codex/skills/openspec-verify-change/SKILL.md"
   ".codex/skills/harness-local-server/SKILL.md"
   ".codex/skills/harness-playwright-evidence/SKILL.md"
   ".codex/skills/harness-linear-loop/SKILL.md"
   ".codex/skills/harness-quality-gate/SKILL.md"
-  ".codex/skills/using-superpowers/SKILL.md"
-  ".codex/skills/test-driven-development/SKILL.md"
-  ".codex/skills/executing-plans/SKILL.md"
-  ".codex/skills/verification-before-completion/SKILL.md"
-  "scripts/vendor-superpowers-skills.sh"
   ".codex/skills/debug/SKILL.md"
   ".codex/skills/commit/SKILL.md"
   ".codex/skills/pull/SKILL.md"
@@ -48,7 +38,6 @@ grep -q "project_slug" WORKFLOW.md
 grep -q "## Codex Workpad" WORKFLOW.md
 grep -q "Human Review" WORKFLOW.md
 grep -q "harness-quality-gate" WORKFLOW.md
-grep -q "superpowers" WORKFLOW.md
 
 test ! -d .agents
 test ! -f skills-lock.json

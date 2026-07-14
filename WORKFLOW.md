@@ -90,8 +90,6 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
 
 - Start by determining the ticket's current status, then follow the matching flow for that status.
 - Start every task by opening the tracking workpad comment and bringing it up to date before doing new implementation work.
-- Start every task by locating or creating the relevant OpenSpec change artifacts and use them as the SDD source of truth during execution.
-- Every task must have an active OpenSpec change before implementation starts; no change means no coding, no review, and no handoff.
 - Spend extra effort up front on planning and verification design before implementation.
 - Reproduce first: always confirm the current behavior/issue signal before changing code so the fix target is explicit.
 - Follow TDD/test-first by default: define the expected behavior as a failing automated test or executable validation before implementation. If a test cannot be written first, document the reason in the workpad and add the closest executable acceptance check before coding.
@@ -111,23 +109,14 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
 - Git and GitHub permission problems are not blockers by default; exhaust remote, auth, branch, fork, PR, and manual-link fallbacks before using the blocked-access escape hatch.
 - Use the blocked-access escape hatch only for true external blockers after exhausting documented fallbacks.
 
-## Harness + Superpowers (required for execution quality)
 
-Follow `.codex/skills/harness-quality-gate/SKILL.md` as the master checklist. It wires Harness skills with [obra/superpowers](https://github.com/obra/superpowers) for planning, TDD, execution, E2E evidence, and pre-review verification.
 
-Mandatory Superpowers skills by phase:
 
-- Session / planning: `using-superpowers`, `writing-plans`
-- OpenSpec / SDD: `openspec-new-change`, `openspec-apply-change`, `openspec-verify-change`, `openspec-archive-change`, and when continuing existing work `openspec-continue-change`
-- Red → green: `test-driven-development` (must align with `test:` then `impl:`/`feat:` commits)
-- Implementation: `executing-plans`; use `systematic-debugging` when blocked on failures
 - Agent Review: `receiving-code-review` before accepting, rejecting, or acting on review findings
 - Runtime / E2E: `agent-browser`, `harness-local-server`, `harness-playwright-evidence` when UI or app-touching
-- Handoff: `verification-before-completion`, `requesting-code-review`
 
 ## Related skills
 
-- `harness-quality-gate`: master Harness + Superpowers checklist for this workflow.
 - `linear`: interact with Linear.
 - `commit`: produce clean, logical commits during implementation; follow `## Commit discipline` and `.codex/skills/commit/SKILL.md`.
 - `push`: keep remote branch current and publish updates.
@@ -176,11 +165,8 @@ Allowed commit types are fixed: `test:`, `docs:`, `impl:`, `chore:`, `feat:`, an
    - `Backlog` -> do not modify issue content/state; stop and wait for human to move it to `Todo`.
    - `Todo` -> immediately move to `In Progress`, then ensure bootstrap workpad comment exists (create if missing), then start execution flow.
      - If PR is already attached, start by reviewing all open PR comments and deciding required changes vs explicit pushback responses.
-   - `In Progress` -> continue execution flow from current scratchpad comment and current OpenSpec change artifacts.
-   - `Agent Review` -> run the `code-review` skill. Review the PR, workpad checklist, and the linked OpenSpec proposal/specs/design/tasks against the implementation. Also confirm the relevant OpenSpec change has passed verification and been archived. If issues are found, leave comments, restore the developer's `agent:*` label, and move to `Rework`. If approved and archived, move to `Human Review`.
    - `Human Review` -> wait and poll for decision/review updates.
    - `Merging` -> on entry, open and follow `.codex/skills/land/SKILL.md`; before merge, create and push a pre-merge annotated tag for the exact commit being landed. Do not call `gh pr merge` directly.
-   - `Rework` -> run rework flow on the same OpenSpec loop unless the prior change is explicitly abandoned and replaced.
    - `Blocked` -> stop; leave the workpad blocker brief intact and wait for a human to unblock or move it back to an active state.
    - `Done` -> do nothing and shut down.
 4. Check whether a PR already exists for the current branch and whether it is closed.
@@ -215,11 +201,8 @@ Allowed commit types are fixed: `test:`, `docs:`, `impl:`, `chore:`, `feat:`, an
     - If changes touch app files or app behavior, add explicit app-specific flow checks to `Acceptance Criteria` in the workpad (for example: launch path, changed interaction path, and expected result path).
     - If the ticket description/comment context includes `Validation`, `Test Plan`, or `Testing` sections, copy those requirements into the workpad `Acceptance Criteria` and `Validation` sections as required checkboxes (no optional downgrade).
 7.  Add a `Test-first Evidence` section to the workpad that names the failing test, acceptance script, or executable validation that will prove the change.
-8.  Open and follow `.codex/skills/openspec-new-change/SKILL.md` or `.codex/skills/openspec-continue-change/SKILL.md` first, then `.codex/skills/writing-plans/SKILL.md` and `.codex/skills/using-superpowers/SKILL.md`; refine the workpad plan from their output and link the OpenSpec artifacts in the workpad.
-9.  Standard SDD gate: clarify the spec before implementation. Do not code from issue prose alone; ensure the OpenSpec proposal/specs/design/tasks define expected behavior, scope boundaries, validation, and non-goals clearly enough to drive development.
 10. Run a principal-style self-review of the plan and refine it in the comment.
 11. Before implementing, capture a concrete reproduction signal and record it in the workpad `Notes` section (command/output, screenshot, or deterministic UI behavior).
-12. Open and follow `.codex/skills/test-driven-development/SKILL.md`: run the selected test/validation and record the expected red/failing result. If the task is docs-only or cannot have a red test, record the explicit reason and the executable validation that will replace it. The red/green evidence must map back to the active OpenSpec tasks.
 13. Run the `pull` skill to sync with latest `origin/main` before any code edits, then record the pull/sync result in the workpad `Notes`.
     - Include a `pull skill evidence` note with:
       - merge source(s),
@@ -281,12 +264,10 @@ Use this only when completion is blocked by missing required tools, non-GitHub a
 3.  Load the existing workpad comment and treat it as the active execution checklist.
     - Edit it liberally whenever reality changes (scope, risks, validation approach, discovered tasks).
 4.  Do not implement until the workpad contains `Test-first Evidence` with a red/failing test result, or a documented exception plus substitute executable validation.
-5.  Open and follow `.codex/skills/executing-plans/SKILL.md` while implementing; use `.codex/skills/systematic-debugging/SKILL.md` when investigation stalls.
 6.  Implement against the hierarchical TODOs and keep the comment current:
     - Check off completed items.
     - Add newly discovered items in the appropriate section.
     - Keep parent/child structure intact as scope evolves.
-    - Reflect every meaningful scope or acceptance change back into the active OpenSpec change before continuing implementation.
     - Update the workpad immediately after each meaningful milestone (for example: reproduction complete, code change landed, validation run, review feedback addressed).
     - Never leave completed work unchecked in the plan.
     - For tickets that started as `Todo` with an attached PR, run the full PR feedback sweep protocol immediately after kickoff and before new feature work.
@@ -297,7 +278,6 @@ Use this only when completion is blocked by missing required tools, non-GitHub a
     - Revert every temporary proof edit before commit/push.
     - Document these temporary proof steps and outcomes in the workpad `Validation`/`Notes` sections so reviewers can follow the evidence.
     - If app-touching, run `agent-browser` plus `harness-local-server` and `harness-playwright-evidence` (or `launch-app` / `github-pr-media` when configured) before handoff.
-8.  Open and follow `.codex/skills/verification-before-completion/SKILL.md`; paste proof commands/output into Workpad `Validation` / `Notes`.
 9.  Re-check all acceptance criteria and close any gaps.
 10. Before every `git push` attempt, run the required validation for your scope and confirm it passes; if it fails, address issues and rerun until green, then commit and push changes using only the allowed commit types (`test:`, `docs:`, `impl:`, `chore:`, `feat:`, `refactor:`).
 11. Attach PR URL to the issue (prefer attachment; use the workpad comment only if attachment is unavailable).
@@ -310,9 +290,6 @@ Use this only when completion is blocked by missing required tools, non-GitHub a
     - Do not include PR URL in the workpad comment; keep PR linkage on the issue via attachment/link fields.
     - Add a short `### Confusions` section at the bottom when any part of task execution was unclear/confusing, with concise bullets.
     - Do not post any additional completion summary comment.
-14. Open and follow `.codex/skills/requesting-code-review/SKILL.md`, then before moving to `Human Review`, poll PR feedback and checks:
-    - Run `.codex/skills/openspec-verify-change/SKILL.md` and compare implementation, validation evidence, and PR/workpad notes against the current OpenSpec artifacts.
-    - If verification passes with no critical findings, immediately archive the OpenSpec task/change with `.codex/skills/openspec-archive-change/SKILL.md`; unarchived changes fail the handoff gate and cannot move to `Human Review`.
     - Read the PR `Manual QA Plan` comment (when present) and use it to sharpen UI/runtime test coverage for the current change.
     - Run the full PR feedback sweep protocol.
     - Confirm PR checks are passing (green) after the latest changes.
@@ -332,13 +309,9 @@ Use this only when completion is blocked by missing required tools, non-GitHub a
 
 ## Step 3: Agent Review, Human Review and merge handling
 
-1. When the issue is in `Agent Review`, the designated reviewing agent must open and follow `.codex/skills/receiving-code-review/SKILL.md`, then execute the `code-review` skill and compare the delivered change against the linked OpenSpec proposal/specs/design/tasks and `openspec/specs/` baseline.
    - Functional Review is mandatory: inspect implementation logic for requirement gaps, regressions, security or data-flow bugs, and false completion where the workpad or PR claims done while functionality is still missing.
    - Apply `receiving-code-review` rigor to every finding: understand the requirement, verify it against codebase reality, evaluate technical correctness, and only then approve, request rework, or push back with evidence.
-   - Use `requesting-code-review` and superpowers TDD tools for code review if needed.
    - Update the workpad `### Agent Review` section with review status, reviewer identity, findings, required fixes, and verification expectations.
-   - If the code has issues, missing functionality, unverified acceptance criteria, an unarchived OpenSpec change, or false completion, record each issue as an unchecked finding in `### Agent Review`, move the issue to `Rework`, and restore the original `agent:*` label so the implementation agent can fix them. Do not move to `Human Review` from a failed agent review.
-   - If the code passes Functional Review, confirm the OpenSpec change is verified and archived, then mark the review status as approved in `### Agent Review` and move the issue to `Human Review`.
 2. When the issue is in `Human Review`, do not code or change ticket content.
 3. Poll for updates as needed, including GitHub PR review comments from humans and bots.
 4. If review feedback requires changes, move the issue to `Rework` and follow the rework flow.
@@ -355,15 +328,11 @@ Use this only when completion is blocked by missing required tools, non-GitHub a
    - Read the workpad `### Agent Review` section first and convert every unchecked finding into the new plan/validation checklist.
 3. Close the existing PR tied to the issue.
 4. Remove the existing `## Codex Workpad` comment from the issue.
-5. Continue or recreate the OpenSpec change as needed:
-   - If the original OpenSpec change is still the right scope, reopen and update its proposal/specs/design/tasks.
-   - If the original OpenSpec change is invalid, explicitly replace it with a fresh change before new implementation.
 6. Create a fresh branch from `origin/main`.
 7. Start over from the normal kickoff flow:
    - If current issue state is `Todo`, move it to `In Progress`; otherwise keep the current state.
    - Create a new bootstrap `## Codex Workpad` comment.
    - Build a fresh plan/checklist and execute end-to-end.
-   - Re-run every required Step 1/2 gate, including OpenSpec update, PR feedback sweep, checks, validation, PR metadata, and the full `Completion bar before Agent Review`.
    - After rework fixes are complete, move only to `Agent Review`; the reviewer is the only agent that may approve the issue into `Human Review`.
    - Preserve the issue's `reviewer:*` label if present, or add `reviewer:claude` before returning to `Agent Review`.
 
@@ -378,7 +347,6 @@ Use this only when completion is blocked by missing required tools, non-GitHub a
 - PR checks are green, branch is pushed, and PR is linked on the issue.
 - Required PR metadata is present (`symphony` label).
 - PR body follows the Test-First PR submission template and includes red/green evidence, commands run, test scope, agent usage, and reviewer checklist.
-- `harness-quality-gate` and Superpowers skills (`test-driven-development`, `verification-before-completion`, E2E harness when UI-touching) are satisfied.
 - If app-touching, runtime validation/media requirements from `App runtime validation (required)` are complete.
 
 ## Guardrails
@@ -396,7 +364,6 @@ Use this only when completion is blocked by missing required tools, non-GitHub a
   link to the current issue, and `blockedBy` when the follow-up depends on the
   current issue.
 - Do not move to `Agent Review` unless the `Completion bar before Agent Review` is satisfied.
-- Do not move from `Agent Review` to `Human Review` until the active OpenSpec change has been verified and archived.
 - Do not move from `Rework` directly to `Human Review`; every rework attempt must return through `Agent Review` first.
 - In `Human Review`, do not make changes; wait and poll.
 - If state is terminal (`Done`) or blocked (`Blocked`), do nothing and shut down.

@@ -30,11 +30,9 @@ The loop maintains:
 
 ## Flow
 
-0. Open `.codex/skills/harness-quality-gate/SKILL.md` and `.codex/skills/using-superpowers/SKILL.md` before other work.
 1. Fetch the ticket and confirm current status before changing files.
 2. Move `Todo` to `In Progress` only after the workspace is ready.
 3. Create or update `## Codex Workpad` with plan, acceptance criteria, validation checklist, and environment stamp.
-4. After implementation, follow `test-driven-development` and `executing-plans`; run `harness-local-server` and `harness-playwright-evidence` when relevant; finish with `verification-before-completion`.
 5. Attach or link evidence through Linear API when supported; otherwise paste artifact paths and summaries.
 6. Create or update the PR and link it to the ticket.
 7. Sweep PR comments and CI before moving to `Human Review`.

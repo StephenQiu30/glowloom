@@ -14,9 +14,6 @@ Your role as the reviewing agent is to rigorously evaluate the submitted work fo
    - Read the Linear issue details and thoroughly review the `## Codex Workpad` checklist.
    - Identify the stated Acceptance Criteria and Validation requirements.
 
-2. **Leverage Superpowers:**
-   - You **can and should** use the `requesting-code-review` superpowers skill to dispatch a code reviewer subagent to systematically analyze the code logic and diff.
-   - You can also use the `test-driven-development` superpowers skill to execute TDD flows or run the verification commands listed in the Workpad to confirm that the tests are genuinely passing.
    - If there is UI or application-level behavior, consider using `harness-local-server` or `harness-playwright-evidence` if applicable.
 
 3. **Verify Evidence:**
