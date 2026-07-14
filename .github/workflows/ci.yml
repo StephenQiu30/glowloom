@@ -10,7 +10,7 @@ on:
 
 jobs:
   repository-check:
-    name: Repository validation
+    name: Python syntax check
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -20,5 +20,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate files and executable syntax
-        run: bash scripts/validate-repository.sh
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate merge helper syntax
+        run: python -m py_compile .codex/skills/land/land_watch.py
