@@ -31,7 +31,7 @@ GitHub: <https://github.com/StephenQiu30/stephen-codex.git>
 2. `AGENTS.local.md`：当前项目中的局部规范配置，用于和全局规则区分。
 3. `WORKFLOW.md`：OpenAI Symphony 风格的 Linear ticket 调度契约与 per-ticket Agent SOP。
 4. `.codex/agents/`：Codex 角色定义目录。
-5. `.codex/skills/`：Codex 可复用工作流目录，当前承载 harness、Linear、debug 和 Git 收口相关流程。
+5. `.codex/skills/`：Codex 可复用工作流目录，当前承载 Linear、debug 和 Git 收口流程。
 7. `docs/`：项目文档骨架目录，保留分类目录和 README，正文文档按任务需要再归档。
 8. `.github/workflows/ci.yml`：GitHub Actions CI，用于检查模板基础结构。
 9. `LICENSE`：开源许可证。
@@ -62,11 +62,8 @@ codex/
 │   │   ├── tester.toml
 │   │   └── reporter.toml
 │   └── skills/
-│       ├── agent-browser/
-│       ├── harness-local-server/
-│       ├── harness-playwright-evidence/
-│       ├── harness-linear-loop/
-│       ├── harness-quality-gate/
+│       ├── linear/
+│       ├── linear-task/
 │       ├── debug/
 │       ├── commit/
 │       ├── pull/
@@ -74,11 +71,11 @@ codex/
 │       └── land/
 ├── docs/
 │   ├── README.md
+│   ├── design/
+│   │   └── README.md
 │   ├── prd/
 │   │   └── README.md
 │   ├── plans/
-│   │   └── README.md
-│   ├── design/
 │   │   └── README.md
 │   ├── acceptance/
 │   │   └── README.md
@@ -98,13 +95,13 @@ codex/
 
 ## 核心规范
 
-1. `MVP`：优先完成最小可用闭环，不做过度设计。
-2. `TDD`：新增功能、修复缺陷或调整核心逻辑时，优先执行红灯、绿灯、重构流程。
-3. `SMART`：需求、任务与验收标准需要具体、可衡量、可达成、相关并具备阶段边界。
-4. `文件规模`：单个文件原则上不要超过 200-500 行，持续膨胀时按职责拆分。
-5. `Git 收口`：完成较大任务后必须完成测试、验证和中文 Git 提交，并保持工作区干净。
-6. `PR 合并`：PR 合并前必须先给目标分支状态打 tag，作为合并前回滚点。
-7. `Symphony-ready`：复杂任务优先围绕 Linear ticket、隔离 workspace、Workpad、Human Review 和 Merging 状态机执行。
+1. `交付流程`：正式功能严格按 `Design → PRD → Plan → Acceptance` 推进。
+2. `MVP`：优先完成最小可用闭环，不做过度设计。
+3. `TDD`：新增功能、修复缺陷或调整核心逻辑时，优先执行红灯、绿灯、重构流程。
+4. `SMART`：需求、任务与验收标准需要具体、可衡量、可达成、相关并具备阶段边界。
+5. `文件规模`：规范文件以 200 行以内为目标，确需更长时按职责拆分。
+6. `Git 收口`：完成任务后执行匹配风险的验证，并保持提交和工作区清洁。
+7. `Symphony-ready`：复杂任务围绕 Linear ticket、隔离 workspace、Workpad、Agent Review 和 Human Review 执行。
 
 ## 角色分工
 
@@ -131,14 +128,14 @@ PM -> Builder -> Tester
 1. `AGENTS.md` 存在，并包含 MVP、TDD、SMART、角色协作、Git/PR 收口和交付输出要求。
 2. `AGENTS.local.md` 存在，并说明它是项目局部规范配置文件。
 3. `WORKFLOW.md` 存在，并包含 `tracker.kind: linear`、`project_slug`、`## Codex Workpad` 和 `Human Review` 编排规则。
-4. `.codex/skills/` 中存在 `agent-browser`、`harness-local-server`、`harness-playwright-evidence`、`harness-linear-loop` 和 `debug`，用于补齐浏览器自动化、本地启动、浏览器证据、Linear 闭环和 Symphony 排障。
+4. `.codex/skills/` 中保留 `linear`、`linear-task`、`debug` 和 Git 收口 skills。
 5. `.codex/agents/` 中存在 `pm`、`explorer`、`builder`、`tester`、`reporter` 五类角色。
 6. `docs/` 目录保留分类结构和 README，不包含任务正文文档。
 7. `LICENSE` 与 `CONTRIBUTING.md` 存在，项目具备基础开源使用说明。
 8. README 能够说明本目录定位、功能、结构、角色和验收标准。
 9. Git 提交与 PR 合并规范包含中文提交、工作区干净、PR 合并前 tag 等要求。
-10. GitHub Actions CI 存在，并检查关键规范文件、`WORKFLOW.md`、harness skills 和基础格式。
-11. 单个规范文件保持在 200-500 行以内。
+10. GitHub Actions CI 存在，并检查关键脚本的基础语法。
+11. `AGENTS.md` 不超过 200 行，并明确 `Design → PRD → Plan → Acceptance`。
 
 ## 维护原则
 

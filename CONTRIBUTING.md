@@ -6,7 +6,7 @@
 
 1. 修正或补充 `AGENTS.md`、`AGENTS.local.md` 中的协作规范。
 2. 优化 `.codex/agents/` 中的角色职责。
-3. 优化 `.codex/skills/` 中的 harness、Linear 和 Git 收口流程。
+3. 优化 `.codex/skills/` 中的 Linear、debug 和 Git 收口流程。
 4. 改进 README、WORKFLOW 或 CI 结构检查。
 
 ## 贡献原则

@@ -105,8 +105,9 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
 ## Default posture
 
 - Start by determining the ticket's current status, then follow the matching flow for that status.
-- Start every task by locating the project execution documents that directly govern it, such as linked requirements, designs, plans, and task documents, and use them as the SDD source of truth during execution.
-- Standard SDD means execution-document first: clarify expected behavior, scope boundaries, validation, and non-goals before implementation starts.
+- The repository delivery chain is `Design → PRD → Plan → Acceptance`; link these documents in the workpad and never reverse their order.
+- Before implementation, verify that Design defines the accepted solution, PRD defines scope and measurable acceptance, and Plan is execution-ready. Fill missing upstream stages before coding.
+- After implementation, complete Acceptance against Design, PRD, and Plan with commands, evidence, results, and residual risks. Operations material is post-acceptance support, not another core stage.
 - Start every task by opening the tracking workpad comment and bringing it up to date before doing new implementation work.
 - Spend extra effort up front on planning and verification design before implementation.
 - Reproduce first: always confirm the current behavior/issue signal before changing code so the fix target is explicit.
@@ -181,7 +182,7 @@ Allowed commit types are fixed: `test:`, `docs:`, `impl:`, `chore:`, `feat:`, an
    - `Todo` -> immediately move to `In Progress`, then ensure bootstrap workpad comment exists (create if missing), then start execution flow.
      - If PR is already attached, start by reviewing all open PR comments and deciding required changes vs explicit pushback responses.
    - `In Progress` -> continue execution flow from the current workpad and project execution documents.
-   - `Agent Review` -> run the `code-review` skill. First derive a numbered acceptance checklist from the project execution documents, ticket requirements, and workpad. Then verify every item and record its method, evidence, and `passed`, `failed`, or `blocked` result. If any item fails, is blocked, or lacks evidence, leave comments, restore the developer's `agent:*` label, and move the issue to `Rework`. Move to `Human Review` only when every acceptance item passes.
+   - `Agent Review` -> the designated reviewing agent derives a numbered acceptance checklist from the project execution documents, ticket requirements, and workpad. Verify every item and record its method, evidence, and `passed`, `failed`, or `blocked` result. If any item fails, is blocked, or lacks evidence, leave comments, restore the developer's `agent:*` label, and move the issue to `Rework`. Move to `Human Review` only when every acceptance item passes.
    - `Human Review` -> wait and poll for decision/review updates.
    - `Merging` -> on entry, open and follow `.codex/skills/land/SKILL.md`; before merge, create and push a pre-merge annotated tag for the exact commit being landed. Do not call `gh pr merge` directly.
    - `Rework` -> run the rework flow from the failed or blocked acceptance items.
@@ -314,7 +315,7 @@ Use this only when completion is blocked by missing required tools or missing au
 
 ## Step 3: Agent Review, Human Review and merge handling
 
-1. When the issue is in `Agent Review`, the designated reviewing agent must execute the `code-review` skill and perform item-by-item acceptance.
+1. When the issue is in `Agent Review`, the designated reviewing agent must perform item-by-item acceptance directly from the governing documents, ticket, PR, and workpad.
    - Locate and read the project execution documents directly governing the task, then read the Linear issue, required validation sections, and current workpad.
    - Before testing, create a complete numbered checklist (`AC-01`, `AC-02`, ...) in `### Agent Review`. For every item, define the source, expected result, acceptance method, and required evidence.
    - Review items in number order. Record the actual evidence and exactly one result for each item: `passed`, `failed`, or `blocked`.
