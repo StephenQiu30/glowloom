@@ -1,0 +1,1 @@
+"""Thief worker application."""

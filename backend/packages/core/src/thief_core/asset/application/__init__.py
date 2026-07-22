@@ -1,0 +1,1 @@
+"""asset application boundary."""

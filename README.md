@@ -58,10 +58,11 @@ Design → PRD → Plan → Acceptance
 ## 计划代码结构
 
 ```text
-apps/{web,api,worker,scheduler}/
-packages/{contracts,core,adapters}/
-migrations/{module}/
-tests/{unit,integration,contract,e2e,fixtures}/
+frontend/src/{app,components/ui,lib,hooks}/
+backend/apps/{api,worker,scheduler}/
+backend/packages/{contracts,core,adapters}/
+backend/migrations/{module}/
+backend/tests/{unit,integration,contract,e2e,fixtures}/
 infra/compose/
 ```
 
