@@ -41,9 +41,11 @@ class MigrationIntegrationTests(unittest.TestCase):
         expected_revisions = {f"{module}_0001" for module in MODULES}
         expected_revisions.remove("identity_0001")
         expected_revisions.add("identity_0002")
+        expected_revisions.remove("catalog_0001")
+        expected_revisions.add("catalog_0002")
         self.assertEqual(revisions, expected_revisions)
 
-    def test_only_identity_has_business_tables_after_s1_t01(self) -> None:
+    def test_identity_and_catalog_own_their_business_tables(self) -> None:
         with self.engine.connect() as connection:
             tables = set(
                 connection.execute(
@@ -62,6 +64,9 @@ class MigrationIntegrationTests(unittest.TestCase):
                 ("identity", "users"),
                 ("identity", "invitations"),
                 ("identity", "sessions"),
+                ("catalog", "categories"),
+                ("catalog", "prompt_templates"),
+                ("catalog", "generation_examples"),
             },
         )
 
@@ -86,6 +91,29 @@ class MigrationIntegrationTests(unittest.TestCase):
                     text(
                         "SELECT constraint_name FROM information_schema.table_constraints "
                         "WHERE table_schema = 'identity'"
+                    )
+                ).scalars()
+            )
+
+        self.assertTrue(expected <= constraints, expected - constraints)
+
+    def test_catalog_tables_enforce_publication_and_deduplication(self) -> None:
+        expected = {
+            "ck_catalog_prompt_templates_status",
+            "ck_catalog_prompt_templates_content_hash",
+            "fk_catalog_prompt_templates_category_id_categories",
+            "fk_catalog_generation_examples_template_id_prompt_templates",
+            "uq_catalog_categories_slug",
+            "uq_catalog_prompt_templates_slug",
+            "uq_catalog_prompt_templates_content_hash",
+            "uq_catalog_generation_examples_template_asset",
+        }
+        with self.engine.connect() as connection:
+            constraints = set(
+                connection.execute(
+                    text(
+                        "SELECT constraint_name FROM information_schema.table_constraints "
+                        "WHERE table_schema = 'catalog'"
                     )
                 ).scalars()
             )

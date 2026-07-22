@@ -19,7 +19,7 @@ class PersistenceArchitectureTests(unittest.TestCase):
         for module in MODULES:
             version_directory = BACKEND / f"migrations/{module}/versions"
             revisions = sorted(version_directory.glob("*.py"))
-            expected_count = 2 if module == "identity" else 1
+            expected_count = 2 if module in {"identity", "catalog"} else 1
             self.assertEqual(len(revisions), expected_count, module)
             root_source = revisions[0].read_text()
             self.assertIn(f'revision = "{module}_0001"', root_source)
@@ -54,6 +54,19 @@ class PersistenceArchitectureTests(unittest.TestCase):
         source = migration.read_text()
         self.assertIn('down_revision = "identity_0001"', source)
         for table in ("users", "invitations", "sessions"):
+            self.assertIn(f'op.create_table(\n        "{table}"', source)
+            self.assertIn(f'op.drop_table("{table}"', source)
+
+    def test_catalog_has_a_forward_business_migration(self) -> None:
+        migration = (
+            BACKEND
+            / "migrations/catalog/versions/0002_create_catalog_tables.py"
+        )
+
+        self.assertTrue(migration.is_file())
+        source = migration.read_text()
+        self.assertIn('down_revision = "catalog_0001"', source)
+        for table in ("categories", "prompt_templates", "generation_examples"):
             self.assertIn(f'op.create_table(\n        "{table}"', source)
             self.assertIn(f'op.drop_table("{table}"', source)
 
