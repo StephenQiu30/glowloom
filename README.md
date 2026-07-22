@@ -1,47 +1,49 @@
 # Thief
 
-面向 AI 绘画提示词与生成效果的合规采集、治理、检索和展示知识库。
+面向 AI 绘画创作者的内容创作平台。
 
-Thief 是项目代号，不代表绕过网站规则或权利边界。所有来源必须先通过条款、许可、技术规则和内容安全准入，采集结果必须保留来源证据，并支持撤销、下架与删除。
+产品体验参考即梦的“发现灵感 → 做同款或空白创作 → 生成图片 → 管理作品”路径，但不复制其品牌、界面或内容。爬虫采集的提示词模板、生成参数和示例文件是平台的 `catalog` 内容供给，不是产品主体。
 
-> 当前状态：Design 草案阶段。仓库尚未包含业务实现，也未启动任何外部网站实时爬取。
+Thief 是项目代号，不代表绕过登录、验证码、付费墙、robots、服务条款或内容权利。来源没有明确的访问与公开展示依据时保持禁用。
 
-## 项目目标
+> 当前状态：Design 优化阶段。仓库尚未包含 Web、API、Worker 等业务实现，也未启动外部采集或真实图片生成。
 
-1. 从获准来源采集 prompt、生成参数、模型信息和对应图片。
-2. 对数据执行规范化、去重、来源追踪、权利判定和内容安全门禁。
-3. 使用 PostgreSQL 建立可过滤、可排序、可扩展到向量检索的知识目录。
-4. 使用 MinIO 保存原图、展示衍生图及必要的隔离对象。
-5. 通过 Next.js 图库和详情页展示资源，并支持提示词复制。
-6. 提供来源管理、运行审计、失败重试、审核、notice 和删除闭环。
+## MVP 用户闭环
 
-## MVP 边界
+```text
+浏览/搜索模板 → 查看示例与提示词 → 做同款或空白创作
+→ 编辑提示词与参数 → 异步生成图片 → 查看个人作品
+```
 
-- 首个数据源计划使用固定 revision 和校验和的 DiffusionDB Parquet 数据集。
-- 未通过来源准入的站点默认禁用，不提供任意 URL 通用爬虫。
-- 默认面向内部单租户知识库，成人内容完全拒绝。
-- 首年容量目标不超过 100K 个可发布示例。
-- 只有 Design 被接受后才进入 PRD、Plan 和实现阶段。
+MVP 包含：
 
-## 技术基线
+1. 获准提示词模板和示例文件的采集、清洗、审核与展示。
+2. 首页发现、分类、搜索、模板详情和“做同款”。
+3. 用户登录、创作工作台、真实图片生成、任务状态和个人作品。
+4. 来源管理、任务重试、内容审核、下架和删除。
 
-| 层 | 选型 | 主要职责 |
+MVP 不包含视频生成、模型训练、社区互动、支付订阅、通用爬虫、微服务或 Kubernetes。
+
+## 服务架构
+
+| 服务 | 选型 | 职责 |
 | --- | --- | --- |
-| Web | Next.js 16、React 19、TypeScript、Tailwind | 图库、搜索、详情和管理界面 |
-| API | Python 3.13、FastAPI、Pydantic 2、SQLAlchemy 2 | HTTP API、会话、RBAC 和应用服务 |
-| 异步任务 | Celery 5.6、RabbitMQ 4.3 | 持久任务投递、重试、DLX 和 Worker 隔离 |
-| 数据库 | PostgreSQL 17、`pg_trgm`、pgvector | 事务事实源、词法检索、过滤和向量扩展 |
-| 对象存储 | MinIO AIStor Free、S3 API | 原图、衍生图、隔离对象和备份清单 |
-| 采集与媒体 | httpx、PyArrow Dataset、Pillow | 白名单获取、流式解析、校验和安全解码 |
-| 本地基础设施 | Docker Compose | PostgreSQL、RabbitMQ、MinIO 和观测依赖 |
+| Web | Next.js、React、TypeScript、Tailwind | 模板站、创作工作台、作品页和管理界面 |
+| API | FastAPI、Pydantic、SQLAlchemy | 目录、用户会话、创作、生成和管理 API |
+| Worker | Celery | 采集、媒体、索引和模型生成任务 |
+| Scheduler | 单实例调度进程 | 创建到期采集与维护任务 |
+| PostgreSQL | PostgreSQL、`pg_trgm`，按需 pgvector | 业务数据、任务状态、配额和搜索 |
+| RabbitMQ | RabbitMQ | `crawl`、`media`、`index`、`generation` 队列 |
+| Object Storage | MinIO | 第三方示例文件和用户生成作品 |
 
-RabbitMQ 只负责投递，任务最终状态以 PostgreSQL jobs/outbox 为准；MinIO 通过最小权限身份和独立 bucket 管理不同生命周期的媒体对象。
+MVP 采用模块化单体。`ingestion`、`catalog`、`creation`、`generation`、`asset`、`governance`、`search` 和 `identity` 通过 Port、Workflow 和版本化事件协作，不直接读写彼此的数据表。
 
 ## 设计文档
 
-1. [系统设计](./docs/design/001-ai绘画提示词知识库系统设计.md)：总体架构、来源适配器、任务一致性、API 和检索。
-2. [数据治理与安全设计](./docs/design/002-ai绘画提示词知识库数据治理与安全设计.md)：准入、权利、隐私、SSRF、媒体沙箱和删除防复活。
-3. [技术选型与功能实现设计](./docs/design/003-ai绘画提示词知识库技术选型与功能实现设计.md)：技术基线、代码边界、MVP 页面、纵向切片和验收门禁。
+1. [系统设计](./docs/design/001-ai内容创作平台系统设计.md)：产品定位、创作主链、服务拓扑和核心数据。
+2. [数据治理与安全设计](./docs/design/002-ai内容创作平台数据治理与安全设计.md)：第三方模板、用户创作、生成供应商和删除边界。
+3. [技术选型与功能实现设计](./docs/design/003-ai内容创作平台技术选型与功能实现设计.md)：页面/API、生成契约和实现切片。
+4. [模块边界与解耦设计](./docs/design/004-ai内容创作平台模块边界与解耦设计.md)：数据所有权、Port/Adapter、Workflow 和事件契约。
 
 正式交付顺序固定为：
 
@@ -49,34 +51,22 @@ RabbitMQ 只负责投递，任务最终状态以 PostgreSQL jobs/outbox 为准�
 Design → PRD → Plan → Acceptance
 ```
 
-## 仓库结构
+业务实现只在 Plan 可执行后开始，并在 Acceptance 中逐项验证。
+
+## 计划代码结构
 
 ```text
-.
-├── .codex/                  # Agent 角色与可复用工作流
-├── .github/                 # CI 与 PR 模板
-├── docs/
-│   ├── design/              # 架构与契约设计
-│   ├── prd/                 # 已接受 Design 派生的产品需求
-│   ├── plans/               # 可执行实现与测试计划
-│   ├── acceptance/          # 验收证据与结论
-│   └── operations/          # 验收后的部署与运维说明
-├── AGENTS.md                # 长期协作和交付规则
-├── AGENTS.local.md          # 当前项目环境约束
-└── WORKFLOW.md              # Linear、workspace 与运行时编排
+apps/{web,api,worker,scheduler}/
+packages/{contracts,core,adapters}/
+migrations/{module}/
+tests/{unit,integration,contract,e2e,fixtures}/
+infra/compose/
 ```
 
-计划中的业务代码将按 `apps/web`、`apps/api`、`apps/worker`、`packages/core`、`tests` 和 `infra` 分层；这些目录会在 Plan 接受后按纵向切片逐步创建。
+上述目录会在 Design、PRD 和 Plan 被接受后按纵向切片创建。
 
-## 协作方式
-
-1. 先阅读 [AGENTS.md](./AGENTS.md) 和 [AGENTS.local.md](./AGENTS.local.md)。
-2. 设计或实现变更必须绑定可衡量的验收标准，并遵循仓库的 Design → PRD → Plan → Acceptance 门禁。
-3. 核心逻辑默认按 TDD 的 Red → Green → Refactor 推进。
-4. 贡献要求见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
-
-## 仓库地址与许可
+## 仓库与许可
 
 GitHub：<https://github.com/StephenQiu30/thief>
 
-本项目使用 [MIT License](./LICENSE)。来源数据、图片、模型和提示词仍受各自条款、许可及适用法律约束。
+本项目代码使用 [MIT License](./LICENSE)。采集的提示词、图片、模型和参数仍受其来源条款、许可及适用法律约束。
