@@ -13,8 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 
 BACKEND = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(BACKEND / "packages/core/src"))
-sys.path.insert(0, str(BACKEND / "packages/adapters/src"))
+sys.path.insert(0, str(BACKEND / "src"))
 
 
 class CatalogRepositoryIntegrationTests(unittest.TestCase):
@@ -29,14 +28,14 @@ class CatalogRepositoryIntegrationTests(unittest.TestCase):
         cls.engine.dispose()
 
     def test_catalog_facts_round_trip_without_cross_schema_relationships(self) -> None:
-        from thief_adapters.catalog import SqlAlchemyCatalogRepository
-        from thief_core.catalog import (
+        from thief.catalog.model import (
             Category,
             GenerationExample,
             PromptTemplate,
             SourceAttribution,
             TemplateStatus,
         )
+        from thief.catalog.repository import SqlAlchemyCatalogRepository
 
         now = datetime.now(UTC)
         category = Category(id=uuid4(), slug=f"portrait-{uuid4()}", name="Portrait")

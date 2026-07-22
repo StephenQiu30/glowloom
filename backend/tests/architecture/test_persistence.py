@@ -5,7 +5,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from tools.architecture import MODULES, find_violations
+from tools.architecture import find_violations
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -13,62 +13,43 @@ BACKEND = ROOT / "backend"
 
 
 class PersistenceArchitectureTests(unittest.TestCase):
-    def test_each_module_has_an_independent_schema_migration(self) -> None:
+    def test_one_initial_revision_owns_current_business_schema(self) -> None:
         config = (BACKEND / "alembic.ini").read_text()
-
-        for module in MODULES:
-            version_directory = BACKEND / f"migrations/{module}/versions"
-            revisions = sorted(version_directory.glob("*.py"))
-            expected_count = 2 if module in {"identity", "catalog"} else 1
-            self.assertEqual(len(revisions), expected_count, module)
-            root_source = revisions[0].read_text()
-            self.assertIn(f'revision = "{module}_0001"', root_source)
-            self.assertIn(f'CREATE SCHEMA "{module}"', root_source)
-            self.assertIn(f'DROP SCHEMA "{module}"', root_source)
-            self.assertIn(f"migrations/{module}/versions", config)
-
-    def test_unit_of_work_port_stays_framework_independent(self) -> None:
-        port = (
-            BACKEND
-            / "packages/core/src/thief_core/shared/unit_of_work.py"
-        )
-        adapter = (
-            BACKEND
-            / "packages/adapters/src/thief_adapters/infrastructure/unit_of_work.py"
-        )
-
-        self.assertTrue(port.is_file())
-        self.assertTrue(adapter.is_file())
-        self.assertEqual(
-            find_violations(BACKEND / "packages/core/src/thief_core"),
-            [],
-        )
-
-    def test_identity_has_a_forward_business_migration(self) -> None:
-        migration = (
-            BACKEND
-            / "migrations/identity/versions/0002_create_identity_tables.py"
-        )
+        migration = BACKEND / "migrations/versions/0001_initial.py"
 
         self.assertTrue(migration.is_file())
+        self.assertIn("migrations/versions", config)
         source = migration.read_text()
-        self.assertIn('down_revision = "identity_0001"', source)
-        for table in ("users", "invitations", "sessions"):
-            self.assertIn(f'op.create_table(\n        "{table}"', source)
-            self.assertIn(f'op.drop_table("{table}"', source)
+        self.assertIn('revision = "platform_0001"', source)
+        self.assertIn("down_revision = None", source)
+        for schema in ("identity", "catalog"):
+            self.assertIn(f'CREATE SCHEMA "{schema}"', source)
+            self.assertIn(f'DROP SCHEMA "{schema}"', source)
 
-    def test_catalog_has_a_forward_business_migration(self) -> None:
-        migration = (
-            BACKEND
-            / "migrations/catalog/versions/0002_create_catalog_tables.py"
-        )
+    def test_initial_revision_contains_only_current_business_tables(self) -> None:
+        source = (BACKEND / "migrations/versions/0001_initial.py").read_text()
 
-        self.assertTrue(migration.is_file())
-        source = migration.read_text()
-        self.assertIn('down_revision = "catalog_0001"', source)
-        for table in ("categories", "prompt_templates", "generation_examples"):
-            self.assertIn(f'op.create_table(\n        "{table}"', source)
-            self.assertIn(f'op.drop_table("{table}"', source)
+        for table in (
+            "users",
+            "invitations",
+            "sessions",
+            "categories",
+            "prompt_templates",
+            "generation_examples",
+        ):
+            self.assertIn(f'"{table}"', source)
+        for future_schema in (
+            "asset",
+            "creation",
+            "generation",
+            "governance",
+            "ingestion",
+            "search",
+        ):
+            self.assertNotIn(f'CREATE SCHEMA "{future_schema}"', source)
+
+    def test_business_logic_is_independent_from_sqlalchemy(self) -> None:
+        self.assertEqual(find_violations(BACKEND / "src/thief"), [])
 
     def test_make_exposes_migration_command(self) -> None:
         result = subprocess.run(
@@ -106,16 +87,6 @@ class PersistenceArchitectureTests(unittest.TestCase):
             "make test-integration",
         ):
             self.assertIn(expected, workflow)
-
-        result = subprocess.run(
-            ["make", "--dry-run", "test-integration"],
-            cwd=ROOT,
-            capture_output=True,
-            check=False,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("tests/integration", result.stdout)
 
 
 if __name__ == "__main__":

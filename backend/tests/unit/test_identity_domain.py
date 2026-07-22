@@ -9,9 +9,9 @@ from uuid import uuid4
 
 
 BACKEND = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(BACKEND / "packages/core/src"))
+sys.path.insert(0, str(BACKEND / "src"))
 
-from thief_core.identity import (  # noqa: E402
+from thief.identity.model import (  # noqa: E402
     Invitation,
     Principal,
     Role,

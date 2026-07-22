@@ -1,1 +1,0 @@
-"""governance domain boundary."""

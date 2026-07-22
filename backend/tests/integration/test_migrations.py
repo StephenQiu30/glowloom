@@ -6,7 +6,7 @@ import unittest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-from tools.architecture import MODULES
+from tools.architecture import BUSINESS_MODULES
 
 
 class MigrationIntegrationTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class MigrationIntegrationTests(unittest.TestCase):
     def tearDownClass(cls) -> None:
         cls.engine.dispose()
 
-    def test_all_module_schemas_and_revisions_exist(self) -> None:
+    def test_current_business_schemas_have_one_platform_revision(self) -> None:
         with self.engine.connect() as connection:
             schemas = set(
                 connection.execute(
@@ -28,7 +28,7 @@ class MigrationIntegrationTests(unittest.TestCase):
                         "SELECT schema_name FROM information_schema.schemata "
                         "WHERE schema_name = ANY(:schemas)"
                     ),
-                    {"schemas": list(MODULES)},
+                    {"schemas": list(BUSINESS_MODULES)},
                 ).scalars()
             )
             revisions = set(
@@ -37,13 +37,8 @@ class MigrationIntegrationTests(unittest.TestCase):
                 ).scalars()
             )
 
-        self.assertEqual(schemas, set(MODULES))
-        expected_revisions = {f"{module}_0001" for module in MODULES}
-        expected_revisions.remove("identity_0001")
-        expected_revisions.add("identity_0002")
-        expected_revisions.remove("catalog_0001")
-        expected_revisions.add("catalog_0002")
-        self.assertEqual(revisions, expected_revisions)
+        self.assertEqual(schemas, set(BUSINESS_MODULES))
+        self.assertEqual(revisions, {"platform_0001"})
 
     def test_identity_and_catalog_own_their_business_tables(self) -> None:
         with self.engine.connect() as connection:
@@ -54,7 +49,7 @@ class MigrationIntegrationTests(unittest.TestCase):
                         "FROM information_schema.tables "
                         "WHERE table_schema = ANY(:schemas)"
                     ),
-                    {"schemas": list(MODULES)},
+                    {"schemas": list(BUSINESS_MODULES)},
                 )
             )
 

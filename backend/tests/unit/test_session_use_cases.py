@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 
 BACKEND = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(BACKEND / "packages/core/src"))
+sys.path.insert(0, str(BACKEND / "src"))
 
 
 class FakePasswords:
@@ -65,7 +65,7 @@ class FakeIdentityUnitOfWork:
 
 class SessionUseCaseTests(unittest.TestCase):
     def setUp(self) -> None:
-        from thief_core.identity import Role, User
+        from thief.identity.model import Role, User
 
         self.now = datetime(2026, 7, 22, 10, 0, tzinfo=UTC)
         self.user = User(
@@ -77,7 +77,7 @@ class SessionUseCaseTests(unittest.TestCase):
         )
 
     def test_create_stores_only_session_and_csrf_hashes(self) -> None:
-        from thief_core.identity import IdentitySessions
+        from thief.identity.sessions import IdentitySessions
 
         repository = FakeSessionsRepository(self.user)
         unit_of_work = FakeIdentityUnitOfWork(repository)
@@ -106,7 +106,7 @@ class SessionUseCaseTests(unittest.TestCase):
         self.assertEqual(unit_of_work.commits, 1)
 
     def test_wrong_password_does_not_create_session(self) -> None:
-        from thief_core.identity import InvalidCredentials
+        from thief.identity.sessions import InvalidCredentials
 
         repository = FakeSessionsRepository(self.user)
         service = self._service(repository)
@@ -117,7 +117,7 @@ class SessionUseCaseTests(unittest.TestCase):
         self.assertIsNone(repository.added_session)
 
     def test_active_session_resolves_current_identity(self) -> None:
-        from thief_core.identity import Session
+        from thief.identity.model import Session
 
         session = Session(
             id=uuid4(),
@@ -134,7 +134,8 @@ class SessionUseCaseTests(unittest.TestCase):
         self.assertEqual((identity.user_id, identity.email), (self.user.id, self.user.email))
 
     def test_wrong_csrf_does_not_revoke_session(self) -> None:
-        from thief_core.identity import InvalidCsrf, Session
+        from thief.identity.model import Session
+        from thief.identity.sessions import InvalidCsrf
 
         session = Session(
             id=uuid4(),
@@ -153,7 +154,7 @@ class SessionUseCaseTests(unittest.TestCase):
         self.assertIsNone(repository.revoked_id)
 
     def _service(self, repository: FakeSessionsRepository) -> object:
-        from thief_core.identity import IdentitySessions
+        from thief.identity.sessions import IdentitySessions
 
         return IdentitySessions(
             unit_of_work=lambda: FakeIdentityUnitOfWork(repository),

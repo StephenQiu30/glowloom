@@ -24,8 +24,8 @@ class FoundationLayoutTests(unittest.TestCase):
             "frontend/src/app/page.tsx",
             "backend/pyproject.toml",
             "backend/uv.lock",
-            "backend/apps/api/src/thief_api/main.py",
-            "backend/packages/core/src/thief_core/__init__.py",
+            "backend/src/thief/api/app.py",
+            "backend/src/thief/identity/model.py",
         ]
 
         self.assertEqual(
@@ -103,50 +103,36 @@ class DeliveryWorkflowTests(unittest.TestCase):
 
 
 class ArchitectureBoundaryTests(unittest.TestCase):
-    def test_current_core_has_no_violations(self) -> None:
-        core = ROOT / "backend/packages/core/src/thief_core"
+    def test_current_backend_has_no_boundary_violations(self) -> None:
+        source = ROOT / "backend/src/thief"
 
-        self.assertEqual(find_violations(core), [])
+        self.assertEqual(find_violations(source), [])
 
-    def test_core_rejects_framework_imports(self) -> None:
+    def test_business_logic_rejects_framework_imports(self) -> None:
+        violations = self._scan("catalog/model.py", "from fastapi import FastAPI\n")
+
+        self.assert_rule(violations, "business-framework")
+
+    def test_business_module_rejects_other_business_module_imports(self) -> None:
         violations = self._scan(
-            "catalog/domain/model.py",
-            "from fastapi import FastAPI\n",
+            "identity/sessions.py",
+            "from thief.catalog.model import PromptTemplate\n",
         )
 
-        self.assert_rule(violations, "core-framework")
+        self.assert_rule(violations, "cross-business-module")
 
-    def test_module_rejects_other_module_internals(self) -> None:
-        violations = self._scan(
-            "identity/application/use_case.py",
-            "from thief_core.catalog.domain.model import Template\n",
-        )
-
-        self.assert_rule(violations, "cross-module-internal")
-
-    def test_shared_rejects_business_symbols(self) -> None:
-        violations = self._scan(
-            "shared/job.py",
-            "class GenerationJob:\n    pass\n",
-        )
-
-        self.assert_rule(violations, "shared-business-symbol")
-
-    def test_public_contract_import_is_allowed(self) -> None:
-        violations = self._scan(
-            "identity/application/use_case.py",
-            "from thief_core.catalog import PublishTemplate\n",
-        )
+    def test_api_may_compose_business_modules_and_frameworks(self) -> None:
+        violations = self._scan("api/app.py", "from fastapi import FastAPI\n")
 
         self.assertEqual(violations, [])
 
-    def _scan(self, relative_path: str, source: str) -> list[str]:
+    def _scan(self, relative_path: str, content: str) -> list[str]:
         with tempfile.TemporaryDirectory() as directory:
-            core = Path(directory) / "packages/core/src/thief_core"
-            target = core / relative_path
+            source = Path(directory) / "thief"
+            target = source / relative_path
             target.parent.mkdir(parents=True)
-            target.write_text(source, encoding="utf-8")
-            return find_violations(core)
+            target.write_text(content, encoding="utf-8")
+            return find_violations(source)
 
     def assert_rule(self, violations: list[str], rule: str) -> None:
         self.assertTrue(

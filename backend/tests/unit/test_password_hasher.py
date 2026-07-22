@@ -6,14 +6,13 @@ from pathlib import Path
 
 
 BACKEND = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(BACKEND / "packages/core/src"))
-sys.path.insert(0, str(BACKEND / "packages/adapters/src"))
+sys.path.insert(0, str(BACKEND / "src"))
 
 
 class PasswordHasherTests(unittest.TestCase):
     def test_argon2id_hash_round_trip_does_not_store_plaintext(self) -> None:
-        from thief_adapters.identity.passwords import Argon2PasswordHasher
-        from thief_core.identity import PasswordHasher
+        from thief.identity.passwords import Argon2PasswordHasher
+        from thief.identity.ports import PasswordHasher
 
         hasher = Argon2PasswordHasher()
         self.assertIsInstance(hasher, PasswordHasher)

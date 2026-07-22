@@ -2,12 +2,7 @@ PNPM ?= pnpm
 UV ?= uv
 FRONTEND := frontend
 BACKEND := backend
-BACKEND_PYTHONPATH := $(CURDIR)/$(BACKEND)/apps/api/src
-BACKEND_PYTHONPATH := $(BACKEND_PYTHONPATH):$(CURDIR)/$(BACKEND)/apps/worker/src
-BACKEND_PYTHONPATH := $(BACKEND_PYTHONPATH):$(CURDIR)/$(BACKEND)/apps/scheduler/src
-BACKEND_PYTHONPATH := $(BACKEND_PYTHONPATH):$(CURDIR)/$(BACKEND)/packages/core/src
-BACKEND_PYTHONPATH := $(BACKEND_PYTHONPATH):$(CURDIR)/$(BACKEND)/packages/contracts/src
-BACKEND_PYTHONPATH := $(BACKEND_PYTHONPATH):$(CURDIR)/$(BACKEND)/packages/adapters/src
+BACKEND_PYTHONPATH := $(CURDIR)/$(BACKEND)/src
 COMPOSE_FILE := infra/compose/compose.yaml
 COMPOSE_ENV := infra/compose/.env.example
 COMPOSE := docker compose --env-file $(COMPOSE_ENV) -f $(COMPOSE_FILE)
@@ -26,7 +21,7 @@ bootstrap:
 build:
 	$(PNPM) --dir $(FRONTEND) build
 	$(UV) run --directory $(BACKEND) python -m compileall -q \
-		apps migrations packages tools
+		migrations src tools
 
 dev:
 	$(PNPM) --dir $(FRONTEND) dev
@@ -53,32 +48,32 @@ run-web:
 
 run-api:
 	PYTHONPATH=$(BACKEND_PYTHONPATH) \
-		$(UV) run --directory $(BACKEND) uvicorn thief_api.main:app \
-		--app-dir apps/api/src --host 127.0.0.1 --port 8000
+		$(UV) run --directory $(BACKEND) uvicorn thief.api.app:app \
+		--app-dir src --host 127.0.0.1 --port 8000
 
 run-worker:
-	PYTHONPATH=$(CURDIR)/$(BACKEND)/apps/worker/src \
+	PYTHONPATH=$(BACKEND_PYTHONPATH) \
 		THIEF_RABBITMQ_URL=$(THIEF_RABBITMQ_URL) \
-		$(UV) run --directory $(BACKEND) celery -A thief_worker.app:app worker \
+		$(UV) run --directory $(BACKEND) celery -A thief.worker:app worker \
 		--loglevel=WARNING --pool=solo --queues=generation \
 		--without-gossip --without-heartbeat --without-mingle
 
 run-scheduler:
 	mkdir -p $(CURDIR)/tmp
-	PYTHONPATH=$(CURDIR)/$(BACKEND)/apps/scheduler/src \
+	PYTHONPATH=$(BACKEND_PYTHONPATH) \
 		THIEF_RABBITMQ_URL=$(THIEF_RABBITMQ_URL) \
-		$(UV) run --directory $(BACKEND) celery -A thief_scheduler.app:app beat \
+		$(UV) run --directory $(BACKEND) celery -A thief.scheduler:app beat \
 		--loglevel=WARNING --pidfile=$(CURDIR)/tmp/celerybeat.pid \
 		--schedule=$(CURDIR)/tmp/celerybeat-schedule
 
 lint:
 	$(PNPM) --dir $(FRONTEND) lint
 	$(UV) run --directory $(BACKEND) ruff check \
-		apps migrations packages tests tools
+		migrations src tests tools
 
 typecheck:
 	$(PNPM) --dir $(FRONTEND) typecheck
-	$(UV) run --directory $(BACKEND) mypy apps migrations packages tools
+	$(UV) run --directory $(BACKEND) mypy migrations src tools
 
 test-architecture:
 	PYTHONDONTWRITEBYTECODE=1 $(UV) run --directory $(BACKEND) \

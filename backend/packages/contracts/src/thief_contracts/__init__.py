@@ -1,1 +1,0 @@
-"""Versioned external contracts."""

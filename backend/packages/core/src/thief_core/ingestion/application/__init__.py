@@ -1,1 +1,0 @@
-"""ingestion application boundary."""

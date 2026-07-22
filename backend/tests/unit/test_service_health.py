@@ -15,12 +15,7 @@ import httpx
 
 ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
-for source in (
-    "apps/api/src",
-    "apps/worker/src",
-    "apps/scheduler/src",
-):
-    sys.path.insert(0, str(BACKEND / source))
+sys.path.insert(0, str(BACKEND / "src"))
 
 
 class ServiceHealthTests(unittest.TestCase):
@@ -28,7 +23,7 @@ class ServiceHealthTests(unittest.TestCase):
         asyncio.run(self._assert_api_health_endpoints())
 
     async def _assert_api_health_endpoints(self) -> None:
-        from thief_api.main import app
+        from thief.api.app import app
 
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
@@ -44,8 +39,8 @@ class ServiceHealthTests(unittest.TestCase):
                 )
 
     def test_worker_and_scheduler_expose_cli_healthchecks(self) -> None:
-        from thief_scheduler.main import main as scheduler_main
-        from thief_worker.app import main as worker_main
+        from thief.scheduler import main as scheduler_main
+        from thief.worker import main as worker_main
 
         for service, entrypoint in (
             ("worker", worker_main),
@@ -62,30 +57,26 @@ class ServiceHealthTests(unittest.TestCase):
             )
 
     def test_services_share_the_local_rabbitmq_contract(self) -> None:
-        from thief_scheduler.settings import SchedulerSettings
-        from thief_worker.settings import WorkerSettings
+        from thief.settings import rabbitmq_url
 
         with patch.dict(os.environ, {}, clear=True):
-            for settings_type in (WorkerSettings, SchedulerSettings):
-                settings = settings_type.from_env()
-                self.assertEqual(
-                    settings.rabbitmq_url,
-                    "amqp://thief:thief_local@localhost:5672//",
-                )
+            self.assertEqual(
+                rabbitmq_url(),
+                "amqp://thief:thief_local@localhost:5672//",
+            )
 
     def test_production_services_require_an_explicit_broker_url(self) -> None:
-        from thief_scheduler.settings import SchedulerSettings
-        from thief_worker.settings import WorkerSettings
+        from thief.settings import rabbitmq_url
 
         with patch.dict(os.environ, {"THIEF_ENV": "production"}, clear=True):
-            for settings_type in (WorkerSettings, SchedulerSettings):
-                with self.assertRaisesRegex(RuntimeError, "THIEF_RABBITMQ_URL"):
-                    settings_type.from_env()
+            with self.assertRaisesRegex(RuntimeError, "THIEF_RABBITMQ_URL"):
+                rabbitmq_url()
 
     def test_scheduler_celery_app_uses_its_broker_settings(self) -> None:
-        from thief_scheduler.app import app, settings
+        from thief.scheduler import app
+        from thief.settings import rabbitmq_url
 
-        self.assertEqual(app.conf.broker_url, settings.rabbitmq_url)
+        self.assertEqual(app.conf.broker_url, rabbitmq_url())
 
     def test_make_verify_includes_unit_health_tests(self) -> None:
         result = subprocess.run(

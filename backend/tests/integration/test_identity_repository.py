@@ -14,8 +14,7 @@ from sqlalchemy.orm import sessionmaker
 
 
 BACKEND = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(BACKEND / "packages/core/src"))
-sys.path.insert(0, str(BACKEND / "packages/adapters/src"))
+sys.path.insert(0, str(BACKEND / "src"))
 
 
 class IdentityRepositoryIntegrationTests(unittest.TestCase):
@@ -30,9 +29,12 @@ class IdentityRepositoryIntegrationTests(unittest.TestCase):
         cls.engine.dispose()
 
     def test_accept_invitation_persists_one_user_without_plaintext(self) -> None:
-        from thief_adapters.identity.passwords import Argon2PasswordHasher
-        from thief_adapters.identity.unit_of_work import SqlAlchemyIdentityUnitOfWork
-        from thief_core.identity import AcceptInvitation, AcceptInvitationCommand
+        from thief.identity.invitations import (
+            AcceptInvitation,
+            AcceptInvitationCommand,
+        )
+        from thief.identity.passwords import Argon2PasswordHasher
+        from thief.identity.unit_of_work import SqlAlchemyIdentityUnitOfWork
 
         now = datetime.now(UTC)
         inviter_id = uuid4()

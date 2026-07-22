@@ -7,8 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
-for source in ("packages/core/src", "packages/adapters/src"):
-    sys.path.insert(0, str(BACKEND / source))
+sys.path.insert(0, str(BACKEND / "src"))
 
 
 class FakeSession:
@@ -29,22 +28,16 @@ class FakeSession:
 
 class SqlAlchemyUnitOfWorkTests(unittest.TestCase):
     def test_explicit_commit_finishes_the_transaction(self) -> None:
-        from thief_adapters.infrastructure.unit_of_work import (
-            SqlAlchemyUnitOfWork,
-        )
-        from thief_core.shared.unit_of_work import UnitOfWork
+        from thief.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
         session = FakeSession()
         with SqlAlchemyUnitOfWork(lambda: session) as unit_of_work:
-            self.assertIsInstance(unit_of_work, UnitOfWork)
             unit_of_work.commit()
 
         self.assertEqual((session.commits, session.rollbacks, session.closes), (1, 0, 1))
 
     def test_uncommitted_context_rolls_back(self) -> None:
-        from thief_adapters.infrastructure.unit_of_work import (
-            SqlAlchemyUnitOfWork,
-        )
+        from thief.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
         session = FakeSession()
         with SqlAlchemyUnitOfWork(lambda: session):
@@ -53,9 +46,7 @@ class SqlAlchemyUnitOfWorkTests(unittest.TestCase):
         self.assertEqual((session.commits, session.rollbacks, session.closes), (0, 1, 1))
 
     def test_exception_rolls_back_and_propagates(self) -> None:
-        from thief_adapters.infrastructure.unit_of_work import (
-            SqlAlchemyUnitOfWork,
-        )
+        from thief.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
         session = FakeSession()
         with self.assertRaisesRegex(RuntimeError, "boom"):

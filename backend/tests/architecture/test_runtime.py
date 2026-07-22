@@ -42,17 +42,18 @@ class RuntimeContractTests(unittest.TestCase):
 
     def test_runtime_entrypoints_and_smoke_test_exist(self) -> None:
         for path in (
-            "backend/apps/scheduler/src/thief_scheduler/app.py",
-            "backend/apps/scheduler/src/thief_scheduler/settings.py",
+            "backend/src/thief/api/app.py",
+            "backend/src/thief/scheduler.py",
+            "backend/src/thief/worker.py",
             "backend/tools/runtime_smoke.py",
         ):
             self.assertTrue((ROOT / path).is_file(), path)
 
         for target, expected in (
             ("run-web", "pnpm --dir frontend start"),
-            ("run-api", "uvicorn thief_api.main:app"),
-            ("run-worker", "celery"),
-            ("run-scheduler", "beat"),
+            ("run-api", "uvicorn thief.api.app:app"),
+            ("run-worker", "thief.worker:app"),
+            ("run-scheduler", "thief.scheduler:app"),
             ("test-runtime", "tools/runtime_smoke.py"),
         ):
             result = subprocess.run(

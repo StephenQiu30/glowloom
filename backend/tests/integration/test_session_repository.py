@@ -13,8 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 
 BACKEND = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(BACKEND / "packages/core/src"))
-sys.path.insert(0, str(BACKEND / "packages/adapters/src"))
+sys.path.insert(0, str(BACKEND / "src"))
 
 
 class SessionRepositoryIntegrationTests(unittest.TestCase):
@@ -29,9 +28,9 @@ class SessionRepositoryIntegrationTests(unittest.TestCase):
         cls.engine.dispose()
 
     def test_session_create_resolve_and_revoke_round_trip(self) -> None:
-        from thief_adapters.identity.passwords import Argon2PasswordHasher
-        from thief_adapters.identity.unit_of_work import SqlAlchemyIdentityUnitOfWork
-        from thief_core.identity import IdentitySessions, InvalidSession
+        from thief.identity.passwords import Argon2PasswordHasher
+        from thief.identity.sessions import IdentitySessions, InvalidSession
+        from thief.identity.unit_of_work import SqlAlchemyIdentityUnitOfWork
 
         now = datetime.now(UTC)
         user_id = uuid4()

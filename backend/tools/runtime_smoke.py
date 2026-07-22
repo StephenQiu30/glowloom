@@ -16,14 +16,7 @@ from urllib.parse import unquote, urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
-SOURCE_DIRS = (
-    BACKEND / "apps/api/src",
-    BACKEND / "apps/worker/src",
-    BACKEND / "apps/scheduler/src",
-    BACKEND / "packages/core/src",
-    BACKEND / "packages/contracts/src",
-    BACKEND / "packages/adapters/src",
-)
+SOURCE = BACKEND / "src"
 BROKER_URL = "amqp://thief:thief_local@localhost:5672//"
 
 
@@ -96,7 +89,7 @@ def main() -> int:
     env = os.environ.copy()
     env.update(
         {
-            "PYTHONPATH": os.pathsep.join(map(str, SOURCE_DIRS)),
+            "PYTHONPATH": str(SOURCE),
             "THIEF_ENV": "production",
             "THIEF_RABBITMQ_MANAGEMENT_URL": os.getenv(
                 "THIEF_RABBITMQ_MANAGEMENT_URL", "http://localhost:15672"
@@ -118,9 +111,9 @@ def main() -> int:
                 sys.executable,
                 "-m",
                 "uvicorn",
-                "thief_api.main:app",
+                "thief.api.app:app",
                 "--app-dir",
-                str(SOURCE_DIRS[0]),
+                str(SOURCE),
                 "--host",
                 "127.0.0.1",
                 "--port",
@@ -131,7 +124,7 @@ def main() -> int:
                 "-m",
                 "celery",
                 "-A",
-                "thief_worker.app:app",
+                "thief.worker:app",
                 "worker",
                 "--loglevel=WARNING",
                 "--pool=solo",
@@ -146,7 +139,7 @@ def main() -> int:
                 "-m",
                 "celery",
                 "-A",
-                "thief_scheduler.app:app",
+                "thief.scheduler:app",
                 "beat",
                 "--loglevel=WARNING",
                 f"--pidfile={temporary / 'beat.pid'}",

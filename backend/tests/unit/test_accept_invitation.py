@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 
 BACKEND = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(BACKEND / "packages/core/src"))
+sys.path.insert(0, str(BACKEND / "src"))
 
 
 class FakePasswordHasher:
@@ -68,7 +68,7 @@ class FakeIdentityUnitOfWork:
 
 class AcceptInvitationTests(unittest.TestCase):
     def setUp(self) -> None:
-        from thief_core.identity import Invitation, Role
+        from thief.identity.model import Invitation, Role
 
         self.now = datetime(2026, 7, 22, 9, 0, tzinfo=UTC)
         self.invitation = Invitation(
@@ -82,7 +82,10 @@ class AcceptInvitationTests(unittest.TestCase):
         )
 
     def test_valid_invitation_creates_one_user_and_is_resolved(self) -> None:
-        from thief_core.identity import AcceptInvitation, AcceptInvitationCommand
+        from thief.identity.invitations import (
+            AcceptInvitation,
+            AcceptInvitationCommand,
+        )
 
         repository = FakeIdentityRepository(self.invitation)
         unit_of_work = FakeIdentityUnitOfWork(repository)
@@ -107,7 +110,7 @@ class AcceptInvitationTests(unittest.TestCase):
         self.assertEqual(repository.added_user.password_hash, "hashed:safe password")
 
     def test_expired_invitation_does_not_hash_or_write(self) -> None:
-        from thief_core.identity import (
+        from thief.identity.invitations import (
             AcceptInvitation,
             AcceptInvitationCommand,
             InvitationNotUsable,
@@ -129,7 +132,7 @@ class AcceptInvitationTests(unittest.TestCase):
         self.assertIsNone(repository.added_user)
 
     def test_existing_email_does_not_create_a_second_user(self) -> None:
-        from thief_core.identity import (
+        from thief.identity.invitations import (
             AcceptInvitation,
             AcceptInvitationCommand,
             EmailAlreadyRegistered,

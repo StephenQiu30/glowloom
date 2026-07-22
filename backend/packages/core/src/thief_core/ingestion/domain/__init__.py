@@ -1,1 +1,0 @@
-"""ingestion domain boundary."""

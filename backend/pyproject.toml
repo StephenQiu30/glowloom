@@ -25,14 +25,7 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-pythonpath = [
-  "apps/api/src",
-  "apps/worker/src",
-  "apps/scheduler/src",
-  "packages/core/src",
-  "packages/contracts/src",
-  "packages/adapters/src",
-]
+pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ruff]
@@ -43,11 +36,4 @@ target-version = "py313"
 python_version = "3.13"
 strict = true
 explicit_package_bases = true
-mypy_path = [
-  "apps/api/src",
-  "apps/worker/src",
-  "apps/scheduler/src",
-  "packages/core/src",
-  "packages/contracts/src",
-  "packages/adapters/src",
-]
+mypy_path = ["src"]

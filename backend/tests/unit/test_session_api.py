@@ -11,8 +11,7 @@ import httpx
 
 
 BACKEND = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(BACKEND / "apps/api/src"))
-sys.path.insert(0, str(BACKEND / "packages/core/src"))
+sys.path.insert(0, str(BACKEND / "src"))
 
 
 class FakeIdentitySessions:
@@ -22,7 +21,7 @@ class FakeIdentitySessions:
         self.revoked_with: tuple[str, str] | None = None
 
     def create(self, email: str, password: str) -> object:
-        from thief_core.identity import Role
+        from thief.identity.model import Role
 
         self.created_with = (email, password)
         return SimpleNamespace(
@@ -34,7 +33,7 @@ class FakeIdentitySessions:
         )
 
     def resolve(self, session_token: str) -> object:
-        from thief_core.identity import Role
+        from thief.identity.model import Role
 
         self.resolved_with = session_token
         return SimpleNamespace(
@@ -52,7 +51,7 @@ class SessionApiTests(unittest.TestCase):
         asyncio.run(self._assert_session_flow())
 
     async def _assert_session_flow(self) -> None:
-        from thief_api.main import create_app
+        from thief.api.app import create_app
 
         sessions = FakeIdentitySessions()
         transport = httpx.ASGITransport(app=create_app(sessions=sessions))
@@ -96,8 +95,8 @@ class SessionApiTests(unittest.TestCase):
         asyncio.run(self._assert_invalid_credentials())
 
     async def _assert_invalid_credentials(self) -> None:
-        from thief_api.main import create_app
-        from thief_core.identity import InvalidCredentials
+        from thief.api.app import create_app
+        from thief.identity.sessions import InvalidCredentials
 
         class RejectingSessions(FakeIdentitySessions):
             def create(self, email: str, password: str) -> object:
