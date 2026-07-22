@@ -6,7 +6,7 @@
 
 Thief 是项目代号，不代表绕过登录、验证码、付费墙、robots、服务条款或内容权利。来源没有明确的访问与公开展示依据时保持禁用。
 
-> 当前状态：Design 优化阶段。仓库尚未包含 Web、API、Worker 等业务实现，也未启动外部采集或真实图片生成。
+> 当前状态：四条 Design → PRD → Plan 文档链已接受；业务实现尚未开始，四份 Acceptance 均为待实施草案。
 
 ## MVP 用户闭环
 
@@ -38,12 +38,14 @@ MVP 不包含视频生成、模型训练、社区互动、支付订阅、通用�
 
 MVP 采用模块化单体。`ingestion`、`catalog`、`creation`、`generation`、`asset`、`governance`、`search` 和 `identity` 通过 Port、Workflow 和版本化事件协作，不直接读写彼此的数据表。
 
-## 设计文档
+## 正式文档链
 
-1. [系统设计](./docs/design/001-ai内容创作平台系统设计.md)：产品定位、创作主链、服务拓扑和核心数据。
-2. [数据治理与安全设计](./docs/design/002-ai内容创作平台数据治理与安全设计.md)：第三方模板、用户创作、生成供应商和删除边界。
-3. [技术选型与功能实现设计](./docs/design/003-ai内容创作平台技术选型与功能实现设计.md)：页面/API、生成契约和实现切片。
-4. [模块边界与解耦设计](./docs/design/004-ai内容创作平台模块边界与解耦设计.md)：数据所有权、Port/Adapter、Workflow 和事件契约。
+| 关注点 | Design | PRD | Plan | Acceptance |
+| --- | --- | --- | --- | --- |
+| 产品主链 | [DESIGN-001](./docs/design/001-ai内容创作平台系统设计.md) | [PRD-001](./docs/prd/001-ai内容创作平台需求.md) | [PLAN-001](./docs/plans/001-ai内容创作平台计划.md) | [ACCEPTANCE-001](./docs/acceptance/001-ai内容创作平台验收.md) |
+| 数据治理与安全 | [DESIGN-002](./docs/design/002-ai内容创作平台数据治理与安全设计.md) | [PRD-002](./docs/prd/002-数据治理与安全需求.md) | [PLAN-002](./docs/plans/002-数据治理与安全计划.md) | [ACCEPTANCE-002](./docs/acceptance/002-数据治理与安全验收.md) |
+| 技术功能与运行 | [DESIGN-003](./docs/design/003-ai内容创作平台技术选型与功能实现设计.md) | [PRD-003](./docs/prd/003-技术功能与运行需求.md) | [PLAN-003](./docs/plans/003-技术功能与运行计划.md) | [ACCEPTANCE-003](./docs/acceptance/003-技术功能与运行验收.md) |
+| 模块边界与质量 | [DESIGN-004](./docs/design/004-ai内容创作平台模块边界与解耦设计.md) | [PRD-004](./docs/prd/004-模块边界与工程质量需求.md) | [PLAN-004](./docs/plans/004-模块边界与工程质量计划.md) | [ACCEPTANCE-004](./docs/acceptance/004-模块边界与工程质量验收.md) |
 
 正式交付顺序固定为：
 
@@ -63,7 +65,7 @@ tests/{unit,integration,contract,e2e,fixtures}/
 infra/compose/
 ```
 
-上述目录会在 Design、PRD 和 Plan 被接受后按纵向切片创建。
+上述目录将在实施 PLAN-003 的 S0 时按纵向切片创建。
 
 ## 仓库与许可
 
