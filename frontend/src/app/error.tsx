@@ -11,10 +11,15 @@ import {
 
 export default function ErrorPage({ reset }: { reset: () => void }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-16">
+    <main
+      id="main-content"
+      className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl items-center px-6 py-16"
+    >
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>页面暂时不可用</CardTitle>
+          <CardTitle>
+            <h1>页面暂时不可用</h1>
+          </CardTitle>
           <CardDescription>请稍后重试。</CardDescription>
         </CardHeader>
         <CardContent>

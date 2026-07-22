@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -49,6 +51,55 @@ class FoundationLayoutTests(unittest.TestCase):
 
         manifest = json.loads((ROOT / "frontend/package.json").read_text())
         self.assertIn("radix-ui", manifest["dependencies"])
+
+
+class DeliveryWorkflowTests(unittest.TestCase):
+    def test_backend_pins_current_argon2_password_library(self) -> None:
+        manifest = tomllib.loads((ROOT / "backend/pyproject.toml").read_text())
+
+        self.assertIn("argon2-cffi==25.1.0", manifest["project"]["dependencies"])
+
+    def test_make_verify_runs_current_s0_gates(self) -> None:
+        result = subprocess.run(
+            ["make", "--dry-run", "verify"],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for command in (
+            "unittest discover",
+            "pnpm --dir frontend lint",
+            "ruff check",
+            "pnpm --dir frontend typecheck",
+            "mypy",
+            "pnpm --dir frontend build",
+            "compileall",
+        ):
+            self.assertIn(command, result.stdout)
+
+    def test_ci_uses_pinned_toolchains_and_make_verify(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+
+        for expected in (
+            'node-version-file: ".node-version"',
+            'python-version-file: ".python-version"',
+            'version: "0.11.31"',
+            "pnpm@11.15.1",
+            "make bootstrap",
+            "make verify",
+        ):
+            self.assertIn(expected, workflow)
+
+        action_lines = [
+            line.strip() for line in workflow.splitlines() if "uses:" in line
+        ]
+        self.assertTrue(action_lines)
+        for line in action_lines:
+            reference = line.rsplit("@", 1)[-1].split()[0]
+            self.assertEqual(len(reference), 40, line)
 
 
 class ArchitectureBoundaryTests(unittest.TestCase):

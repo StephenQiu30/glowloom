@@ -11,10 +11,15 @@ import {
 
 export default function NotFound() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-16">
+    <main
+      id="main-content"
+      className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl items-center px-6 py-16"
+    >
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>页面不存在</CardTitle>
+          <CardTitle>
+            <h1>页面不存在</h1>
+          </CardTitle>
           <CardDescription>你访问的内容可能已被移动。</CardDescription>
         </CardHeader>
         <CardContent>
