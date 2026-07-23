@@ -6,7 +6,7 @@
 
 Thief 是项目代号，不代表绕过登录、验证码、付费墙、robots、服务条款或内容权利。来源没有明确的访问与公开展示依据时保持禁用。
 
-> 当前状态：工程基础、身份会话、Web 登录和 catalog 事实源已实现；后端结构收敛为单包与单线迁移。下一业务切片是 catalog 幂等导入。
+> 当前状态：工程基础、身份会话、Web 登录、catalog 事实源和 1K 幂等导入已实现；后端保持单包与单线迁移。下一业务切片是公开目录 API。
 
 ## MVP 用户闭环
 
@@ -75,9 +75,9 @@ backend/tests/{unit,integration,architecture}/
 infra/compose/
 ```
 
-Alembic migration 是数据库结构的线性版本记录，不是业务模块目录。当前唯一基线是
-`platform_0001`；它只创建 identity 与 catalog 已使用的六张表。首次保留数据的环境
-建立后不再重写历史，后续按 `0002_<capability>.py` 顺序追加。
+Alembic migration 是数据库结构的线性版本记录，不是业务模块目录。`platform_0001`
+是初始基线，当前唯一 head 是 `platform_0002`；首次保留数据的环境建立后不再重写
+历史，后续按 `0003_<capability>.py` 顺序追加。
 
 ## 仓库与许可
 
