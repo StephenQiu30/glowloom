@@ -71,7 +71,7 @@ class BackendStructureTests(unittest.TestCase):
 
         self.assertEqual(problems, [])
 
-    def test_alembic_has_one_linear_initial_revision(self) -> None:
+    def test_alembic_has_one_linear_history(self) -> None:
         config = (BACKEND / "alembic.ini").read_text()
         revisions = sorted((BACKEND / "migrations/versions").glob("*.py"))
         result = subprocess.run(
@@ -84,7 +84,10 @@ class BackendStructureTests(unittest.TestCase):
 
         self.assertIn("migrations/versions", config)
         self.assertNotIn("migrations/identity/versions", config)
-        self.assertEqual([path.name for path in revisions], ["0001_initial.py"])
+        self.assertEqual(
+            [path.name for path in revisions],
+            ["0001_initial.py", "0002_catalog_imports.py"],
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(result.stdout.strip().splitlines()), 1)
 

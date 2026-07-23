@@ -48,6 +48,17 @@ class PersistenceArchitectureTests(unittest.TestCase):
         ):
             self.assertNotIn(f'CREATE SCHEMA "{future_schema}"', source)
 
+    def test_catalog_import_revision_extends_the_linear_history(self) -> None:
+        migration = BACKEND / "migrations/versions/0002_catalog_imports.py"
+
+        self.assertTrue(migration.is_file())
+        source = migration.read_text()
+        self.assertIn('revision = "platform_0002"', source)
+        self.assertIn('down_revision = "platform_0001"', source)
+        self.assertIn('"parameters"', source)
+        for table in ("import_manifests", "search_documents"):
+            self.assertIn(f'"{table}"', source)
+
     def test_business_logic_is_independent_from_sqlalchemy(self) -> None:
         self.assertEqual(find_violations(BACKEND / "src/thief"), [])
 

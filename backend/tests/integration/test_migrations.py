@@ -38,7 +38,7 @@ class MigrationIntegrationTests(unittest.TestCase):
             )
 
         self.assertEqual(schemas, set(BUSINESS_MODULES))
-        self.assertEqual(revisions, {"platform_0001"})
+        self.assertEqual(revisions, {"platform_0002"})
 
     def test_identity_and_catalog_own_their_business_tables(self) -> None:
         with self.engine.connect() as connection:
@@ -62,6 +62,8 @@ class MigrationIntegrationTests(unittest.TestCase):
                 ("catalog", "categories"),
                 ("catalog", "prompt_templates"),
                 ("catalog", "generation_examples"),
+                ("catalog", "import_manifests"),
+                ("catalog", "search_documents"),
             },
         )
 
@@ -102,6 +104,8 @@ class MigrationIntegrationTests(unittest.TestCase):
             "uq_catalog_prompt_templates_slug",
             "uq_catalog_prompt_templates_content_hash",
             "uq_catalog_generation_examples_template_asset",
+            "uq_catalog_import_manifests_source_revision_checksum",
+            "fk_catalog_search_documents_template_id_prompt_templates",
         }
         with self.engine.connect() as connection:
             constraints = set(
@@ -114,6 +118,18 @@ class MigrationIntegrationTests(unittest.TestCase):
             )
 
         self.assertTrue(expected <= constraints, expected - constraints)
+
+        with self.engine.connect() as connection:
+            parameters_type = connection.execute(
+                text(
+                    "SELECT data_type FROM information_schema.columns "
+                    "WHERE table_schema = 'catalog' "
+                    "AND table_name = 'prompt_templates' "
+                    "AND column_name = 'parameters'"
+                )
+            ).scalar_one()
+
+        self.assertEqual(parameters_type, "jsonb")
 
 
 if __name__ == "__main__":
