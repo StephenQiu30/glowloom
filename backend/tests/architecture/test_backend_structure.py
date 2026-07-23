@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import subprocess
+import tempfile
 import tomllib
 import unittest
 from pathlib import Path
@@ -13,6 +14,19 @@ SOURCE = BACKEND / "src/thief"
 
 
 class BackendStructureTests(unittest.TestCase):
+    def test_unimplemented_business_module_templates_are_rejected(self) -> None:
+        from tools.architecture import unexpected_module_errors
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "thief"
+            source.mkdir()
+            (source / "creation").mkdir()
+
+            self.assertEqual(
+                unexpected_module_errors(source),
+                ["unexpected-module:creation"],
+            )
+
     def test_backend_uses_one_real_python_package(self) -> None:
         required = {
             "__init__.py",
