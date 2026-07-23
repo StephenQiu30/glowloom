@@ -1,86 +1,151 @@
-# Thief
+# Lanverse Backend
 
-面向 AI 绘画创作者的内容创作平台。
+Lanverse 后端主仓库，当前用于建立稳定、可复用、可验收的 Codex Agent 协作工作流。
 
-产品体验参考即梦的“发现灵感 → 做同款或空白创作 → 生成图片 → 管理作品”路径，但不复制其品牌、界面或内容。爬虫采集的提示词模板、生成参数和示例文件是平台的 `catalog` 内容供给，不是产品主体。
+协作层基于 [`StephenQiu30/stephen-codex`](https://github.com/StephenQiu30/stephen-codex) 整理，并结合本仓库的业务目录骨架完成适配。它包含角色分工、TDD/SMART/MVP 原则、Symphony-ready ticket 编排和 Git/PR 收口要求。
 
-Thief 是项目代号，不代表绕过登录、验证码、付费墙、robots、服务条款或内容权利。来源没有明确的访问与公开展示依据时保持禁用。
+## 项目地址
 
-> 当前状态：工程基础、身份会话、Web 登录、catalog 事实源、1K 幂等导入和公开目录 API 已实现；后端保持单包与单线迁移。下一业务切片是公开目录 UI。
+GitHub: <https://github.com/StephenQiu30/lanverse-backend.git>
 
-## MVP 用户闭环
+## 适用人群
 
-```text
-浏览/搜索模板 → 查看示例与提示词 → 做同款或空白创作
-→ 编辑提示词与参数 → 异步生成图片 → 查看个人作品
-```
+1. 希望为 Codex 项目建立统一协作规则的开发者。
+2. 希望把 AI Agent 分工固化为可维护文件结构的团队。
+3. 希望将 TDD、SMART、MVP 原则写入日常 AI 协作流程的工程团队。
+4. 需要一个可开源、可复制、可二次定制的 Codex Agent 模板项目的用户。
 
-MVP 包含：
+## 目录定位
 
-1. 获准提示词模板和示例文件的采集、清洗、审核与展示。
-2. 首页发现、分类、搜索、模板详情和“做同款”。
-3. 用户登录、创作工作台、真实图片生成、任务状态和个人作品。
-4. 来源管理、任务重试、内容审核、下架和删除。
+本仓库将 Codex 协作规范与 Lanverse 后端工程目录放在同一 Git 根目录中，重点解决以下问题：
 
-MVP 不包含视频生成、模型训练、社区互动、支付订阅、通用爬虫、微服务或 Kubernetes。
+1. Codex 在项目中应该读取哪些规范文件。
+2. Codex 全局规范与项目局部规范如何区分。
+3. Codex 多角色协作时 PM、Explorer、Builder、Tester、Reporter 如何分工。
+4. 如何在 Codex 工作流中持续执行 MVP、TDD、SMART 规范。
+5. 如何通过 `WORKFLOW.md` 对齐 OpenAI Symphony 的 Linear ticket 编排方式。
 
-## 服务架构
+## 目录功能
 
-| 服务 | 选型 | 职责 |
-| --- | --- | --- |
-| Web | Next.js、React、TypeScript、Tailwind | 模板站、创作工作台、作品页和管理界面 |
-| API | FastAPI、Pydantic、SQLAlchemy | 目录、用户会话、创作、生成和管理 API |
-| Worker | Celery | 执行已接入的异步任务；当前只启用 `generation` 队列 |
-| Scheduler | 单实例调度进程 | 创建到期采集与维护任务 |
-| PostgreSQL | PostgreSQL、`pg_trgm`，按需 pgvector | 业务数据、任务状态、配额和搜索 |
-| RabbitMQ | RabbitMQ | `crawl`、`media`、`index`、`generation` 队列 |
-| Object Storage | MinIO | 第三方示例文件和用户生成作品 |
+1. `AGENTS.md`：Codex 侧长期稳定的全局协作规范。
+2. `AGENTS.local.md`：当前项目中的局部规范配置，用于和全局规则区分。
+3. `WORKFLOW.md`：OpenAI Symphony 风格的 Linear ticket 调度契约与 per-ticket Agent SOP。
+4. `.codex/agents/`：Codex 角色定义目录。
+5. `.codex/skills/`：Codex 可复用工作流目录，当前承载 Linear、debug 和 Git 收口流程。
+6. `docs/`：项目文档骨架目录，保留分类目录和 README，正文文档按任务需要再归档。
+7. `backend/`：Lanverse 后端代码；`infra/`：本地依赖设施；现有 `frontend/` 暂作拆仓来源保留。
+8. `.github/workflows/ci.yml`：GitHub Actions CI，用于检查模板基础结构。
+9. `LICENSE`：开源许可证。
+10. `CONTRIBUTING.md`：贡献说明。
 
-MVP 采用模块化单体和一个 Python 包。业务模块只在首个真实用例落地时创建：
-
-| 模块 | 职责 | 状态 |
-| --- | --- | --- |
-| `identity` | 邀请、用户、密码、会话和角色 | 已实现 |
-| `catalog` | 来源导入、溯源、模板、示例、分类和搜索 | 实施中 |
-| `creation` | 草稿、生成任务、供应商尝试、额度、资产和作品 | S4 创建 |
-| `operations` | 来源启停、审核、下架、删除、预算和审计 | S6 创建 |
-
-Web、API、Worker 和 Scheduler 是运行角色，不是重复的业务模块。业务规则不依赖 FastAPI、Celery 或 SQLAlchemy；基础设施实现通过小型 Protocol 接入。
-
-## 正式文档链
-
-| 关注点 | Design | PRD | Plan | Acceptance |
-| --- | --- | --- | --- | --- |
-| 产品主链 | [DESIGN-001](./docs/design/001-ai内容创作平台系统设计.md) | [PRD-001](./docs/prd/001-ai内容创作平台需求.md) | [PLAN-001](./docs/plans/001-ai内容创作平台计划.md) | [ACCEPTANCE-001](./docs/acceptance/001-ai内容创作平台验收.md) |
-| 数据治理与安全 | [DESIGN-002](./docs/design/002-ai内容创作平台数据治理与安全设计.md) | [PRD-002](./docs/prd/002-数据治理与安全需求.md) | [PLAN-002](./docs/plans/002-数据治理与安全计划.md) | [ACCEPTANCE-002](./docs/acceptance/002-数据治理与安全验收.md) |
-| 技术功能与运行 | [DESIGN-003](./docs/design/003-ai内容创作平台技术选型与功能实现设计.md) | [PRD-003](./docs/prd/003-技术功能与运行需求.md) | [PLAN-003](./docs/plans/003-技术功能与运行计划.md) | [ACCEPTANCE-003](./docs/acceptance/003-技术功能与运行验收.md) |
-| 模块边界与质量 | [DESIGN-004](./docs/design/004-ai内容创作平台模块边界与解耦设计.md) | [PRD-004](./docs/prd/004-模块边界与工程质量需求.md) | [PLAN-004](./docs/plans/004-模块边界与工程质量计划.md) | [ACCEPTANCE-004](./docs/acceptance/004-模块边界与工程质量验收.md) |
-
-正式交付顺序固定为：
+## 文件结构
 
 ```text
-Design → PRD → Plan → Acceptance
+lanverse-backend/
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── README.md
+├── LICENSE
+├── CONTRIBUTING.md
+├── AGENTS.md
+├── AGENTS.local.md
+├── WORKFLOW.md
+├── .codex/
+│   ├── agents/
+│   │   ├── pm.toml
+│   │   ├── explorer.toml
+│   │   ├── builder.toml
+│   │   ├── tester.toml
+│   │   └── reporter.toml
+│   └── skills/
+│       ├── linear/
+│       ├── linear-task/
+│       ├── debug/
+│       ├── commit/
+│       ├── pull/
+│       ├── push/
+│       └── land/
+├── docs/
+│   ├── README.md
+│   ├── design/
+│   │   └── README.md
+│   ├── prd/
+│   │   └── README.md
+│   ├── plans/
+│   │   └── README.md
+│   ├── acceptance/
+│   │   └── README.md
+│   └── operations/
+│       └── README.md
+├── backend/
+│   ├── migrations/versions/
+│   ├── src/thief/{api,catalog,identity,infrastructure}/
+│   ├── tests/{architecture,integration,unit}/
+│   └── tools/
+├── frontend/
+│   └── src/{app,components,lib}/
+└── infra/
+    └── compose/
 ```
 
-业务实现只在 Plan 可执行后开始，并在 Acceptance 中逐项验证。
+## 项目使用
 
-## 当前代码结构
+1. 克隆项目：`git clone https://github.com/StephenQiu30/lanverse-backend.git`。
+2. 优先阅读 `AGENTS.md` 理解全局规则，再按需修改 `AGENTS.local.md`。
+3. 接入 Symphony 或兼容 runner 时，配置 `.env` 中的 Linear project slug、workspace root 和 `SOURCE_REPO_URL`。
+4. 自定义角色时修改 `.codex/agents/` 下的角色文件。
+5. 后端业务代码按 `backend/` 和 `infra/` 的既有边界演进；新的前端交付进入独立的 `lanverse-frontend` 仓库。
+6. 本项目使用 MIT License，允许个人或团队在保留许可证声明的前提下自由使用和修改。
+
+## 核心规范
+
+1. `交付流程`：正式功能严格按 `Design → PRD → Plan → Acceptance` 推进。
+2. `MVP`：优先完成最小可用闭环，不做过度设计。
+3. `TDD`：新增功能、修复缺陷或调整核心逻辑时，优先执行红灯、绿灯、重构流程。
+4. `SMART`：需求、任务与验收标准需要具体、可衡量、可达成、相关并具备阶段边界。
+5. `文件规模`：规范文件以 200 行以内为目标，确需更长时按职责拆分。
+6. `Git 收口`：完成任务后执行匹配风险的验证，并保持提交和工作区清洁。
+7. `Symphony-ready`：复杂任务围绕 Linear ticket、隔离 workspace、Workpad、Agent Review 和 Human Review 执行。
+
+## 角色分工
+
+1. `PM`：按 SMART 原则拆解需求、定义范围、制定验收标准、控制 MVP 边界。
+2. `Explorer`：读取代码、查找文件、梳理依赖、提供事实依据。
+3. `Builder`：基于验收目标做最小实现，涉及逻辑改动时遵循 TDD。
+4. `Tester`：执行测试、lint、回归检查，并确认 TDD 红绿重构结果。
+5. `Reporter`：汇总修改内容、验证证据、残余风险和交付说明。
+
+标准执行顺序：
 
 ```text
-frontend/src/{app,components,lib}/
-backend/src/thief/{api,identity,catalog,infrastructure}/
-backend/src/thief/{worker.py,scheduler.py,settings.py}
-backend/migrations/versions/
-backend/tests/{unit,integration,architecture}/
-infra/compose/
+Explorer -> PM -> Builder -> Tester -> Reporter
 ```
 
-Alembic migration 是数据库结构的线性版本记录，不是业务模块目录。`platform_0001`
-是初始基线，当前唯一 head 是 `platform_0002`；首次保留数据的环境建立后不再重写
-历史，后续按 `0003_<capability>.py` 顺序追加。
+简单任务可以压缩为：
 
-## 仓库与许可
+```text
+PM -> Builder -> Tester
+```
 
-GitHub：<https://github.com/StephenQiu30/thief>
+## 验收标准
 
-本项目代码使用 [MIT License](./LICENSE)。采集的提示词、图片、模型和参数仍受其来源条款、许可及适用法律约束。
+1. `AGENTS.md` 存在，并包含 MVP、TDD、SMART、角色协作、Git/PR 收口和交付输出要求。
+2. `AGENTS.local.md` 存在，并说明它是项目局部规范配置文件。
+3. `WORKFLOW.md` 存在，并包含 `tracker.kind: linear`、`project_slug`、`## Codex Workpad` 和 `Human Review` 编排规则。
+4. `.codex/skills/` 中保留 `linear`、`linear-task`、`debug` 和 Git 收口 skills。
+5. `.codex/agents/` 中存在 `pm`、`explorer`、`builder`、`tester`、`reporter` 五类角色。
+6. `docs/` 目录保留分类结构和 README，不包含任务正文文档。
+7. `LICENSE` 与 `CONTRIBUTING.md` 存在，项目具备基础开源使用说明。
+8. README 能够说明本目录定位、功能、结构、角色和验收标准。
+9. Git 提交与 PR 合并规范包含中文提交、工作区干净、PR 合并前 tag 等要求。
+10. GitHub Actions CI 存在，并检查关键脚本的基础语法。
+11. `AGENTS.md` 不超过 200 行，并明确 `Design → PRD → Plan → Acceptance`。
+
+## 维护原则
+
+1. Codex 侧文件命名保持 `AGENTS.md` 与 `AGENTS.local.md`。
+2. 全局稳定规则写入 `AGENTS.md`，项目局部规则写入 `AGENTS.local.md`。
+3. Symphony 调度配置写入 `WORKFLOW.md`，不要把 project slug、workspace root 和 runner hooks 混入 `AGENTS.md`。
+4. 角色职责写入 `.codex/agents/`，不要混入全局规则文件。
+5. 不为当前没有使用场景的角色、流程或目录做过度扩展。
