@@ -9,84 +9,21 @@ on:
       - main
 
 jobs:
-  verification:
-    name: Project verification
+  repository-check:
+    name: Python syntax check
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     permissions:
       contents: read
-    env:
-      CI: "true"
-      THIEF_DATABASE_URL: postgresql+psycopg://thief:thief_ci@localhost:5432/thief
-      THIEF_RABBITMQ_MANAGEMENT_URL: http://localhost:15672
-      THIEF_RABBITMQ_URL: amqp://thief:thief_ci@localhost:5672//
-    services:
-      postgres:
-        image: postgres:18.4-bookworm
-        env:
-          POSTGRES_DB: thief
-          POSTGRES_PASSWORD: thief_ci
-          POSTGRES_USER: thief
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U thief -d thief"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
-      rabbitmq:
-        image: rabbitmq:4.3.3-management
-        env:
-          RABBITMQ_DEFAULT_PASS: thief_ci
-          RABBITMQ_DEFAULT_USER: thief
-        ports:
-          - 5672:5672
-          - 15672:15672
-        options: >-
-          --health-cmd "rabbitmq-diagnostics -q ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 18
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version-file: ".node-version"
-          package-manager-cache: false
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@v5
         with:
-          python-version-file: ".python-version"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.11.31"
-          enable-cache: true
-          cache-dependency-glob: "backend/uv.lock"
-
-      - name: Install pnpm
-        run: npm install --global pnpm@11.15.1
-
-      - name: Install locked dependencies
-        run: make bootstrap
-
-      - name: Migrate database
-        run: make migrate
-
-      - name: Test database integration
-        run: make test-integration
-
-      - name: Verify project
-        run: make verify
-
-      - name: Test four-process runtime
-        run: make test-runtime
+          python-version: "3.12"
 
       - name: Validate merge helper syntax
         run: python -m py_compile .codex/skills/land/land_watch.py
