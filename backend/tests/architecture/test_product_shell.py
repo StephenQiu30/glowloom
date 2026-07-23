@@ -92,6 +92,43 @@ class ProductShellContractTests(unittest.TestCase):
         self.assertIn("returnTo", proxy)
         self.assertIn("<SessionActions />", header)
 
+    def test_public_catalog_ui_uses_generated_contracts_and_real_routes(self) -> None:
+        required = (
+            "app/templates/[id]/page.tsx",
+            "components/catalog-filter-form.tsx",
+            "components/template-card.tsx",
+            "lib/api-schema.d.ts",
+            "lib/catalog.ts",
+        )
+        self.assertEqual(
+            [path for path in required if not (FRONTEND / path).is_file()],
+            [],
+        )
+
+        home = (FRONTEND / "app/page.tsx").read_text()
+        explore = (FRONTEND / "app/explore/page.tsx").read_text()
+        detail = (FRONTEND / "app/templates/[id]/page.tsx").read_text()
+        catalog = (FRONTEND / "lib/catalog.ts").read_text()
+
+        for source in (home, explore, detail):
+            self.assertNotIn("PagePlaceholder", source)
+            self.assertNotIn('"use client"', source)
+        self.assertIn("最新灵感", home)
+        for query in ("q", "category", "model", "aspect_ratio", "source"):
+            self.assertIn(query, explore)
+        self.assertIn("searchParams: Promise", explore)
+        self.assertIn("做同款", detail)
+        self.assertIn("notFound()", detail)
+        self.assertIn('from "@/lib/api-schema"', catalog)
+        self.assertIn('cache: "no-store"', catalog)
+
+    def test_openapi_types_have_a_repeatable_drift_gate(self) -> None:
+        makefile = (ROOT / "Makefile").read_text()
+
+        for target in ("generate-contracts", "verify-contracts"):
+            self.assertIn(f"{target}:", makefile)
+        self.assertIn("verify-contracts", makefile.split("verify:", 1)[1])
+
 
 if __name__ == "__main__":
     unittest.main()
