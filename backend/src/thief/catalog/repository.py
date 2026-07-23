@@ -98,10 +98,10 @@ class SqlAlchemyCatalogRepository(SqlAlchemyCatalogImportRepository):
             .mappings()
             .one_or_none()
         )
-        return _template_from_row(row)
+        return template_from_row(row)
 
 
-def _template_from_row(row: Any) -> PromptTemplate | None:
+def template_from_row(row: Any) -> PromptTemplate | None:
     if row is None:
         return None
     return PromptTemplate(

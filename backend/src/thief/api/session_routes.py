@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import hmac
 from typing import Annotated, Protocol
-from uuid import uuid4
 
 from fastapi import APIRouter, Cookie, Header, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from thief.api.errors import error_response
 from thief.identity.sessions import (
     CreatedSession,
     InvalidCredentials,
@@ -52,7 +52,9 @@ def session_router(sessions: SessionService) -> APIRouter:
         try:
             created = sessions.create(request.email, request.password)
         except (InvalidCredentials, ValueError):
-            return _error(401, "invalid_credentials", "Email or password is invalid.")
+            return error_response(
+                401, "invalid_credentials", "Email or password is invalid."
+            )
         _set_cookies(response, created.session_token, created.csrf_token)
         return _view(created)
 
@@ -66,7 +68,7 @@ def session_router(sessions: SessionService) -> APIRouter:
         try:
             identity = sessions.resolve(session_token or "")
         except InvalidSession:
-            return _error(401, "invalid_session", "Session is not valid.")
+            return error_response(401, "invalid_session", "Session is not valid.")
         return _view(identity)
 
     @router.delete("", status_code=204, response_model=None)
@@ -89,13 +91,13 @@ def session_router(sessions: SessionService) -> APIRouter:
             csrf_cookie,
             csrf_header,
         ):
-            return _error(403, "invalid_csrf", "CSRF validation failed.")
+            return error_response(403, "invalid_csrf", "CSRF validation failed.")
         try:
             sessions.revoke(session_token or "", csrf_header)
         except InvalidCsrf:
-            return _error(403, "invalid_csrf", "CSRF validation failed.")
+            return error_response(403, "invalid_csrf", "CSRF validation failed.")
         except InvalidSession:
-            return _error(401, "invalid_session", "Session is not valid.")
+            return error_response(401, "invalid_session", "Session is not valid.")
         response.status_code = 204
         _clear_cookies(response)
         return response
@@ -142,16 +144,4 @@ def _clear_cookies(response: Response) -> None:
         secure=True,
         httponly=False,
         samesite="lax",
-    )
-
-
-def _error(status: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(
-        status_code=status,
-        content={
-            "code": code,
-            "message": message,
-            "trace_id": uuid4().hex,
-            "details": {},
-        },
     )
