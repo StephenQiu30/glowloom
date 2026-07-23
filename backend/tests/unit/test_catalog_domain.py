@@ -64,6 +64,7 @@ class CatalogDomainTests(unittest.TestCase):
             negative_prompt=None,
             source_model="stable-diffusion",
             aspect_ratio="1:1",
+            parameters={"seed": 42},
             category_id=uuid4(),
             source=SourceAttribution(
                 name="fixture",

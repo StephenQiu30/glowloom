@@ -47,6 +47,7 @@ class CatalogRepositoryIntegrationTests(unittest.TestCase):
             negative_prompt="blurry",
             source_model="stable-diffusion",
             aspect_ratio="1:1",
+            parameters={"seed": 42},
             category_id=category.id,
             source=SourceAttribution(
                 name="fixture",

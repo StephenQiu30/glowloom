@@ -51,11 +51,12 @@ class PromptTemplate:
     negative_prompt: str | None
     source_model: str
     aspect_ratio: str
+    parameters: dict[str, int | float | str]
     category_id: UUID
     source: SourceAttribution
     content_hash: str
     status: TemplateStatus
-    published_at: datetime
+    published_at: datetime | None
 
     def is_public(self) -> bool:
         return self.status is TemplateStatus.PUBLISHED

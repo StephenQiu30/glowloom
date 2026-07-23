@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
@@ -7,6 +8,7 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from thief.catalog.import_repository import SqlAlchemyCatalogImportRepository
 from thief.catalog.model import (
     Category,
     GenerationExample,
@@ -16,7 +18,7 @@ from thief.catalog.model import (
 )
 
 
-class SqlAlchemyCatalogRepository:
+class SqlAlchemyCatalogRepository(SqlAlchemyCatalogImportRepository):
     def __init__(self, session: Session) -> None:
         self._session = session
 
@@ -34,11 +36,12 @@ class SqlAlchemyCatalogRepository:
             text(
                 "INSERT INTO catalog.prompt_templates "
                 "(id, slug, title, prompt, negative_prompt, source_model, "
-                "aspect_ratio, category_id, source_name, source_url, "
+                "aspect_ratio, parameters, category_id, source_name, source_url, "
                 "source_object_id, source_revision, source_license, collected_at, "
                 "content_hash, status, published_at) VALUES "
                 "(:id, :slug, :title, :prompt, :negative_prompt, :source_model, "
-                ":aspect_ratio, :category_id, :source_name, :source_url, "
+                ":aspect_ratio, CAST(:parameters AS JSONB), :category_id, "
+                ":source_name, :source_url, "
                 ":source_object_id, :source_revision, :source_license, :collected_at, "
                 ":content_hash, :status, :published_at)"
             ),
@@ -50,6 +53,7 @@ class SqlAlchemyCatalogRepository:
                 "negative_prompt": template.negative_prompt,
                 "source_model": template.source_model,
                 "aspect_ratio": template.aspect_ratio,
+                "parameters": json.dumps(template.parameters),
                 "category_id": template.category_id,
                 "source_name": template.source.name,
                 "source_url": template.source.url,
@@ -84,7 +88,7 @@ class SqlAlchemyCatalogRepository:
             self._session.execute(
                 text(
                     "SELECT id, slug, title, prompt, negative_prompt, source_model, "
-                    "aspect_ratio, category_id, source_name, source_url, "
+                    "aspect_ratio, parameters, category_id, source_name, source_url, "
                     "source_object_id, source_revision, source_license, collected_at, "
                     "content_hash, status, published_at "
                     "FROM catalog.prompt_templates WHERE id = :id"
@@ -108,6 +112,7 @@ def _template_from_row(row: Any) -> PromptTemplate | None:
         negative_prompt=cast(str | None, row["negative_prompt"]),
         source_model=str(row["source_model"]),
         aspect_ratio=str(row["aspect_ratio"]),
+        parameters=cast(dict[str, int | float | str], row["parameters"]),
         category_id=cast(UUID, row["category_id"]),
         source=SourceAttribution(
             name=str(row["source_name"]),
@@ -119,5 +124,5 @@ def _template_from_row(row: Any) -> PromptTemplate | None:
         ),
         content_hash=str(row["content_hash"]),
         status=TemplateStatus(str(row["status"])),
-        published_at=cast(datetime, row["published_at"]),
+        published_at=cast(datetime | None, row["published_at"]),
     )
