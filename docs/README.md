@@ -1,6 +1,10 @@
 # docs
 
-本目录用于存放 Codex 侧项目文档。所有正式功能遵循 `Design → PRD → Plan → Acceptance`，文档按阶段进入对应子目录。
+本目录用于存放 Codex 侧项目文档。`requirement/` 作为前后端共同的需求分析入口；需求确认后，所有正式功能遵循 `Design → PRD → Plan → Acceptance`，文档按阶段进入对应子目录。
+
+## 需求分析入口
+
+`requirement/` 用于正式设计前的需求发现、市场观察、平台服务范围、主流程和顶层功能分析。需求分析不按前后端拆分，状态达到 `accepted` 后才能作为 Design 的输入。
 
 ## 核心流程
 
@@ -13,11 +17,12 @@
 
 ## 子目录
 
-1. `design/`：技术方案、架构决策、接口设计、实现设计。
-2. `prd/`：产品需求、范围定义、用户故事、MVP 边界。
-3. `plans/`：执行计划、阶段拆解、任务清单、排期安排。
-4. `acceptance/`：验收标准、测试记录、验证报告、回归证据。
-5. `operations/`：发布流程、Git/PR 规范、部署说明、运行手册。
+1. `requirement/`：统一需求分析、研究事实、产品判断和待验证假设。
+2. `design/`：技术方案、架构决策、接口设计、实现设计。
+3. `prd/`：产品需求、范围定义、用户故事、MVP 边界。
+4. `plans/`：执行计划、阶段拆解、任务清单、排期安排。
+5. `acceptance/`：验收标准、测试记录、验证报告、回归证据。
+6. `operations/`：发布流程、Git/PR 规范、部署说明、运行手册。
 
 ## 编写规范
 
@@ -67,8 +72,9 @@
 
 ## 关联规则
 
-1. Design 是 PRD 的上游，必须关联后续 PRD、Plan 和 Acceptance。
-2. PRD 必须引用已接受的 Design，并关联后续 Plan 和 Acceptance。
-3. Plan 必须引用 Design 与 PRD，并关联验证它的 Acceptance。
-4. Acceptance 必须引用并逐项验收 Design、PRD 和 Plan。
-5. operations 应关联对应的发布、提交、PR、部署或回滚流程。
+1. Requirement 是 Design 的需求输入；未确认的假设不能直接成为设计结论。
+2. Design 是 PRD 的上游，必须关联后续 PRD、Plan 和 Acceptance。
+3. PRD 必须引用已接受的 Design，并关联后续 Plan 和 Acceptance。
+4. Plan 必须引用 Design 与 PRD，并关联验证它的 Acceptance。
+5. Acceptance 必须引用并逐项验收 Design、PRD 和 Plan。
+6. operations 应关联对应的发布、提交、PR、部署或回滚流程。
