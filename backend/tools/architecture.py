@@ -14,6 +14,7 @@ FRAMEWORK_FREE_FILES = {
     "identity/ports.py",
     "identity/sessions.py",
 }
+SOURCE_DIRECTORIES = {"api", "catalog", "identity", "infrastructure", "__pycache__"}
 
 
 def required_layout_errors(root: Path) -> list[str]:
@@ -46,7 +47,18 @@ def required_layout_errors(root: Path) -> list[str]:
         for path in ("backend/apps", "backend/packages")
         if (root / path).exists()
     )
+    source = root / "backend/src/thief"
+    if source.is_dir():
+        errors.extend(unexpected_module_errors(source))
     return errors
+
+
+def unexpected_module_errors(source: Path) -> list[str]:
+    return [
+        f"unexpected-module:{path.name}"
+        for path in sorted(source.iterdir())
+        if path.is_dir() and path.name not in SOURCE_DIRECTORIES
+    ]
 
 
 def find_violations(source: Path) -> list[str]:
