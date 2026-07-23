@@ -6,7 +6,7 @@
 
 Thief 是项目代号，不代表绕过登录、验证码、付费墙、robots、服务条款或内容权利。来源没有明确的访问与公开展示依据时保持禁用。
 
-> 当前状态：四条 Design → PRD → Plan 文档链已接受；业务实现尚未开始，四份 Acceptance 均为待实施草案。
+> 当前状态：工程基础、身份会话、Web 登录和 catalog 事实源已实现；后端结构收敛为单包与单线迁移。下一业务切片是 catalog 幂等导入。
 
 ## MVP 用户闭环
 
@@ -30,13 +30,22 @@ MVP 不包含视频生成、模型训练、社区互动、支付订阅、通用�
 | --- | --- | --- |
 | Web | Next.js、React、TypeScript、Tailwind | 模板站、创作工作台、作品页和管理界面 |
 | API | FastAPI、Pydantic、SQLAlchemy | 目录、用户会话、创作、生成和管理 API |
-| Worker | Celery | 采集、媒体、索引和模型生成任务 |
+| Worker | Celery | 执行已接入的异步任务；当前只启用 `generation` 队列 |
 | Scheduler | 单实例调度进程 | 创建到期采集与维护任务 |
 | PostgreSQL | PostgreSQL、`pg_trgm`，按需 pgvector | 业务数据、任务状态、配额和搜索 |
 | RabbitMQ | RabbitMQ | `crawl`、`media`、`index`、`generation` 队列 |
 | Object Storage | MinIO | 第三方示例文件和用户生成作品 |
 
-MVP 采用模块化单体。`ingestion`、`catalog`、`creation`、`generation`、`asset`、`governance`、`search` 和 `identity` 通过 Port、Workflow 和版本化事件协作，不直接读写彼此的数据表。
+MVP 采用模块化单体和一个 Python 包。业务模块只在首个真实用例落地时创建：
+
+| 模块 | 职责 | 状态 |
+| --- | --- | --- |
+| `identity` | 邀请、用户、密码、会话和角色 | 已实现 |
+| `catalog` | 来源导入、溯源、模板、示例、分类和搜索 | 实施中 |
+| `creation` | 草稿、生成任务、供应商尝试、额度、资产和作品 | S4 创建 |
+| `operations` | 来源启停、审核、下架、删除、预算和审计 | S6 创建 |
+
+Web、API、Worker 和 Scheduler 是运行角色，不是重复的业务模块。业务规则不依赖 FastAPI、Celery 或 SQLAlchemy；基础设施实现通过小型 Protocol 接入。
 
 ## 正式文档链
 
@@ -55,18 +64,20 @@ Design → PRD → Plan → Acceptance
 
 业务实现只在 Plan 可执行后开始，并在 Acceptance 中逐项验证。
 
-## 计划代码结构
+## 当前代码结构
 
 ```text
-frontend/src/{app,components/ui,lib,hooks}/
-backend/apps/{api,worker,scheduler}/
-backend/packages/{contracts,core,adapters}/
-backend/migrations/{module}/
-backend/tests/{unit,integration,contract,e2e,fixtures}/
+frontend/src/{app,components,lib}/
+backend/src/thief/{api,identity,catalog,infrastructure}/
+backend/src/thief/{worker.py,scheduler.py,settings.py}
+backend/migrations/versions/
+backend/tests/{unit,integration,architecture}/
 infra/compose/
 ```
 
-上述目录将在实施 PLAN-003 的 S0 时按纵向切片创建。
+Alembic migration 是数据库结构的线性版本记录，不是业务模块目录。当前唯一基线是
+`platform_0001`；它只创建 identity 与 catalog 已使用的六张表。首次保留数据的环境
+建立后不再重写历史，后续按 `0002_<capability>.py` 顺序追加。
 
 ## 仓库与许可
 
