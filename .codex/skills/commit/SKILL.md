@@ -11,7 +11,7 @@ description:
 ## Goals
 
 - Produce a commit that reflects the actual code changes and the session context.
-- Follow `WORKFLOW.md` and `AGENTS.md` commit discipline (allowed types and test-first ordering).
+- Follow all `AGENTS.md` and applicable `AGENTS.local.md` rules (allowed types and test-first ordering).
 - Include both summary and rationale in the body.
 
 ## Allowed commit types
@@ -22,7 +22,7 @@ Only these subject prefixes are allowed:
 - `impl:` — smallest implementation that makes existing red tests pass
 - `feat:` — user-visible capability or behavior changes (after prior `test:` unless documented as not scriptable)
 - `refactor:` — behavior-preserving cleanup after tests are green
-- `docs:` — documentation, examples, workflow text, acceptance notes
+- `docs:` — documentation, examples, and acceptance notes
 - `chore:` — CI, configuration, dependency metadata, generated housekeeping
 
 For feature or behavior work, preserve order: `test:` first, then `impl:`/`feat:`, then optional `refactor:`, `docs:`, or `chore:`.
@@ -32,23 +32,33 @@ Do not mix unrelated types in one commit. Split by type when practical.
 ## Inputs
 
 - Session history for intent and rationale.
-- `git status`, `git diff`, and `git diff --staged` for actual changes.
-- `WORKFLOW.md`, `AGENTS.md`, and workpad `Commit Plan` when present.
+- The true Git root, current branch, `git status`, `git diff`, and
+  `git diff --staged` for actual changes.
+- `AGENTS.md`, every applicable `AGENTS.local.md`, and the current task context.
 
 ## Steps
 
-1. Read session history to identify scope, intent, and rationale.
-2. Inspect the working tree and staged changes (`git status`, `git diff`, `git diff --staged`).
-3. Stage intended changes (`git add -A`) after confirming scope.
-4. Sanity-check newly added files; flag build artifacts, logs, or temp files before committing.
-5. If staging is incomplete or includes unrelated files, fix the index or ask for confirmation.
-6. Choose the allowed type that matches the staged diff. Do not use `fix:` or scoped conventional types unless documented as an exception.
-7. Write a subject line in imperative mood, <= 72 characters. Format: `<type> <short summary>`.
-8. Write a body with summary, rationale, and tests or validation run (or why not run).
-9. Append `Co-authored-by: Codex <codex@openai.com>` unless the user requests a different identity.
-10. Wrap body lines at 72 characters.
-11. Create the commit message with a here-doc or temp file and use `git commit -F <file>`.
-12. Commit only when the message matches the staged changes.
+1. Resolve the true repository root with `git rev-parse --show-toplevel`, then
+   read every `AGENTS.md` and applicable `AGENTS.local.md` for the current path.
+2. Read session history to identify scope, intent, and rationale.
+3. Confirm the current branch with `git branch --show-current` and inspect
+   `git status`; if the branch name is empty, stop and report detached HEAD.
+4. Inspect the working tree and staged changes (`git diff`, `git diff --staged`).
+5. Build an explicit whitelist of task-owned paths, then stage only those paths with
+   `git add -- <path>...`; do not use `git add -A`, broad globs, or repository-wide
+   staging shortcuts.
+6. Compare `git diff --name-only --staged` with the whitelist and inspect
+   `git diff --staged`; exclude unrelated files, secrets, caches, logs, build
+   artifacts, generated output, and temporary files before committing.
+7. If the staged set differs from the whitelist, staging is incomplete, or a path
+   cannot be attributed to the task, fix the index or ask for confirmation.
+8. Choose the allowed type that matches the staged diff. Do not use `fix:` or scoped conventional types unless documented as an exception.
+9. Write a subject line in imperative mood, <= 72 characters. Format: `<type> <short summary>`.
+10. Write a body with summary, rationale, and tests or validation run (or why not run).
+11. Append `Co-authored-by: Codex <codex@openai.com>` unless the user requests a different identity.
+12. Wrap body lines at 72 characters.
+13. Create the commit message with a here-doc or temp file and use `git commit -F <file>`.
+14. Commit only when the message matches the staged changes.
 
 ## Output
 

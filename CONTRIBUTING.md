@@ -6,15 +6,15 @@
 
 1. 修正或补充 `AGENTS.md`、`AGENTS.local.md` 中的协作规范。
 2. 优化 `.codex/agents/` 中的角色职责。
-3. 优化 `.codex/skills/` 中的 Linear、debug 和 Git 收口流程。
-4. 改进 README、WORKFLOW 或 CI 结构检查。
+3. 优化 `.codex/skills/` 中的 commit、pull、push 和 land 操作。
+4. 改进 README 或 CI 结构检查。
 
 ## 贡献原则
 
 1. 遵循 MVP，不引入当前没有使用场景的复杂流程。
 2. 保持 TDD、SMART、Git/PR 规范之间的一致性。
 3. 修改 README 时，应基于真实目录结构，不描述不存在的文件。
-4. 单个文件原则上保持在 200-500 行以内。
+4. 单文件长期不超过 200 行；确需更长时按职责拆分。
 
 ## 提交流程
 
@@ -24,4 +24,4 @@
 4. 中间产物、临时文件、测试输出、调试日志和本地缓存不提交到 GitHub。
 5. 使用中文提交信息说明修改内容。
 6. 创建 PR 时使用中文标题和描述，并填写 Test-first Evidence、测试命令、前后结果和 Agent 使用情况。
-7. PR 合并前先给目标分支打 tag，保留合并前回滚点。
+7. 收到人工合并批准后，确认本地 `HEAD` 与待合并 PR head 一致，为该 PR head 创建并推送 annotated pre-merge tag，再按 `.codex/skills/land/SKILL.md` 合并。

@@ -46,8 +46,7 @@ description:
    - Write a proper PR title that clearly describes the change outcome
    - For branch updates, explicitly reconsider whether current PR title still
      matches the latest scope; update it if it no longer does.
-7. Write/update PR body using `.github/pull_request_template.md` and
-   `WORKFLOW.md` `PR submission content (Test-First required)`:
+7. Write/update PR body using `.github/pull_request_template.md`:
    - Fill every section with concrete content for this change.
    - Include Test-first Evidence, Tests added, Commands run, Result, Agent Usage,
      and Reviewer Checklist.

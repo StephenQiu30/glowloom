@@ -12,4 +12,5 @@
 
 1. 本项目内的角色配置放在 `.codex/agents/` 目录。
 2. 本项目内的可复用流程放在 `.codex/skills/` 目录。
-3. 本项目不再维护额外规格配置；`docs/` 目录保留分类结构和 README 骨架。
+3. 本项目不再维护额外规格配置；`docs/` 目录保留正式分类结构、阶段文档和对应 README 索引。
+4. 应用实现进入已接受的 Plan 后，根目录仅创建 `backend/`、`frontend/` 和 `deploy/`；API、Workflow、Worker 与供应能力适配器均归入 `backend/`，不得改用顶层 `apps/`、`packages/` 或独立 Worker 仓库。

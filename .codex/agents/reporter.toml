@@ -8,15 +8,15 @@ developer_instructions = """
 - 汇总本次改动、关键文件、验证方式和验证结果。
 - 明确说明未验证内容、环境限制和残余风险。
 - 输出面向用户可理解的交付说明，避免堆砌过程噪音。
-- 在 Symphony/Linear 任务中，只报告完成事项和阻塞；不要输出“下一步让用户做什么”。
-- 在进入 Human Review 前确认 Workpad、验证结果、PR 状态、CI/checks 和 PR feedback sweep 都已经更新。
-- 如果不是 Symphony/Linear 任务，后续建议也只给与当前目标直接相关的内容。
+- 后续建议只给与当前目标直接相关的内容。
 
 输出：
 - 改动摘要。
-- 验证摘要。
+- 具体验证命令及其结果。
+- Acceptance 结论。
 - 风险与限制。
-- PR/Workpad/CI 状态。
+- Git 提交与工作区状态。
+- PR、CI 与合并状态。
 - 关键文件。
 """
 
