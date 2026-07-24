@@ -4,7 +4,7 @@ doc_type: Media Security Privacy and Data Lifecycle Architecture Design
 doc_no: ARCH-005
 title: 媒体安全、隐私与数据生命周期设计
 status: review
-version: 0.2.1
+version: 0.2.2
 owner: Lanverse
 audience: [Architecture, Backend, Frontend, QA, Security, Privacy, Governance, Operations]
 feature_area: 媒体处理、时间线、交付、安全、隐私与数据生命周期
@@ -14,7 +14,7 @@ inputs: [ARCH-001, ARCH-003, ARCH-007, FR-007, FR-012至FR-019, NFR-001, TCR-001
 evidence_baselines: [Jellyfish main@a9678194ddf2d9be3ccbe78d4287d87d5089e123, Toonflow master@bc61ec7a1b5df31293b286981a5f4ad4635464ee]
 outputs: [媒体数据模型, 存储分区, 媒体处理流程, 媒体威胁模型, 保留删除策略, 实施验收清单]
 triggers: [媒体格式变化, 时间线或交付语义变化, 数据驻留变化, 安全或隐私风险, 删除与保留规则变化]
-updated: 2026-07-24
+updated: 2026-07-25
 downstream: [Media PRD, Security PRD, Delivery PRD, Plan, Test Plan, Acceptance, ADR]
 ---
 
@@ -24,7 +24,7 @@ downstream: [Media PRD, Security PRD, Delivery PRD, Plan, Test Plan, Acceptance,
 
 Lanverse 以 PostgreSQL 分模块保存媒体、权利、审核和生命周期事实，S3 兼容对象存储只保存二进制对象；事实所有权遵循 [ARCH-007](ARCH-007-业务模块边界与服务协作设计.md)。原始文件、代理、候选、时间线、审核、采用和交付相互独立；外部媒体必须分别通过技术检查和内容安全裁决后才能用于生产。
 
-首发不提供公开对象、永久链接、浏览器正式渲染或任意 URL 导入；不将文件名、对象 Key、CDN 路径或签名 URL 当作授权证据。保留期、数据驻留区域和交付规格在进入 PRD 前由业务、法务、安全和运维确认。
+首发不提供公开对象、永久链接、浏览器正式渲染或任意 URL 导入；不将文件名、对象 Key、CDN 路径或签名 URL 当作授权证据。保留期、数据驻留区域和交付规格在首次使用相应能力的切片 Design 接受前由业务、法务、安全和运维确认。
 
 ## 2. 信任边界与主数据流
 
@@ -168,4 +168,4 @@ flowchart LR
 
 Jellyfish 固定提交中展示了[文件上传与对象存储服务](https://github.com/Forget-C/Jellyfish/blob/a9678194ddf2d9be3ccbe78d4287d87d5089e123/backend/app/services/studio/files.py)，Toonflow 固定提交中展示了[项目素材上传](https://github.com/HBAI-Ltd/Toonflow-app/blob/bc61ec7a1b5df31293b286981a5f4ad4635464ee/src/routes/assets/uploadClip.ts)与[音频素材管理](https://github.com/HBAI-Ltd/Toonflow-app/blob/bc61ec7a1b5df31293b286981a5f4ad4635464ee/src/routes/assets/addAudioAssets.ts)。这些事实只支持“素材需要稳定管理入口”的产品参考，不构成企业安全或生命周期成熟度证明；Lanverse 不照搬其控制面中转二进制、本地路径、宽松引用或单一文件状态。
 
-进入 PRD 前必须确认：首发地区与数据驻留、个人/敏感数据分类、权利和合同保留期、最大文件/项目容量、输入与交付编码规格、扫描/安全供应方、CDN/KMS 方案、删除 SLA、备份保留窗口与安全事件响应责任人。
+进入首次使用相应能力的切片 Design 接受前必须确认：首发地区与数据驻留、个人/敏感数据分类、权利和合同保留期、最大文件/项目容量、输入与交付编码规格、扫描/安全供应方、CDN/KMS 方案、删除 SLA、备份保留窗口与安全事件响应责任人；具体产品选择不得阻塞不依赖它的更早切片。

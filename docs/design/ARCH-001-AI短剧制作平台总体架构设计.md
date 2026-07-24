@@ -4,7 +4,7 @@ doc_type: Solution Architecture Design
 doc_no: ARCH-001
 title: AI短剧制作平台总体架构设计
 status: review
-version: 0.4.1
+version: 0.5.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Security, Operations]
 feature_area: AI短剧制作平台总体架构
@@ -14,7 +14,7 @@ inputs: [SRS-001, NFR-001, TCR-001, TCR-002, TCR-003, ADG-001]
 evidence_baselines: [Jellyfish main@a967819, Toonflow master@bc61ec7]
 outputs: [目标架构, monorepo结构, 部署单元, 模块分组, 迁移与回滚策略]
 triggers: [平台范围变化, 技术基线变化, 部署边界变化, 领域事实归属变化]
-updated: 2026-07-24
+updated: 2026-07-25
 downstream: [PRD, Plan, Acceptance, ADR]
 ---
 
@@ -24,7 +24,7 @@ downstream: [PRD, Plan, Acceptance, ADR]
 
 Lanverse 首发采用统一 monorepo、模块化单体控制面和独立 Worker：Next.js Web 负责交互与 BFF，NestJS API 负责授权和业务事实，PostgreSQL 保存权威数据，Temporal 负责编排长任务，AI/媒体 Worker 独立扩缩容，对象存储保存媒体，Redis 只承担易失缓存与限流。
 
-本设计吸收 Jellyfish 的分镜准备/生成边界，以及 Toonflow 的来源事件、Agent 分工和生产图思路；不复制两者的技术栈或具体代码。流程和 Agent/任务见 [ARCH-002](ARCH-002-短剧生产流程与工作台设计.md)、[ARCH-003](ARCH-003-AI策划与生成任务架构设计.md)，契约、媒体安全与运行质量见 [ARCH-004](ARCH-004-API事件文件与数据契约设计.md)、[ARCH-005](ARCH-005-媒体安全隐私与数据生命周期设计.md)、[ARCH-006](ARCH-006-部署观测灾备容量成本与测试设计.md)；规范模块目录、公开协作和服务映射以 [ARCH-007](ARCH-007-业务模块边界与服务协作设计.md) 为唯一设计源。
+本设计吸收 Jellyfish 的分镜准备/生成边界，以及 Toonflow 的来源事件、Agent 分工和生产图思路；不复制两者的技术栈或具体代码。流程和 Agent/任务见 [ARCH-002](ARCH-002-短剧生产流程与工作台设计.md)、[ARCH-003](ARCH-003-AI策划与生成任务架构设计.md)，契约、媒体安全与运行质量见 [ARCH-004](ARCH-004-API事件文件与数据契约设计.md)、[ARCH-005](ARCH-005-媒体安全隐私与数据生命周期设计.md)、[ARCH-006](ARCH-006-部署观测灾备容量成本与测试设计.md)；规范模块目录、公开协作和服务映射以 [ARCH-007](ARCH-007-业务模块边界与服务协作设计.md) 为唯一设计源，纵向切片、阶段文档链和详细工程目录以 [ARCH-008](ARCH-008-交付切片文档链与工程结构设计.md) 为唯一设计源。
 
 ## 2. 当前状态与约束
 
@@ -155,7 +155,7 @@ Lanverse/
 | FR-009～FR-011、FR-017 | ARCH-003；ARCH-004；ARCH-007 | 能力、生成、任务、候选、成本、契约和恢复 |
 | FR-012～FR-016、FR-018～FR-020 | ARCH-002；ARCH-004～ARCH-005；ARCH-007 | 后期、审核、采用、合规、交付与通知 |
 | NFR-001、TCR-001～TCR-003 | 本文 5～9、12；ARCH-004～ARCH-007 | 契约、模块、数据、媒体、安全、运行、容量和测试 |
-| ADG-001 | 本文第 13 节；ARCH-001～ARCH-007；TRACE-001；ADR-001～ADR-002 | 设计准入、逐需求追踪和技术决策入口 |
+| ADG-001 | 本文第 13 节；ARCH-001～ARCH-008；TRACE-001；ADR-001～ADR-002 | 设计准入、逐需求追踪和技术决策入口 |
 
 逐条需求的覆盖状态、设计位置和预期验证见 [TRACE-001](TRACE-001-AI短剧平台需求设计验证追踪矩阵.md)；后续 PRD、Plan、Test 和 Acceptance 必须回填具体文档编号与证据。
 
@@ -163,14 +163,15 @@ Lanverse/
 
 | 切片 | 可演示闭环 | 依赖 |
 | --- | --- | --- |
-| S0 工程骨架 | monorepo、CI、OpenAPI、身份、观测、健康检查 | Design/PRD/Plan 接受 |
-| S1 来源到分镜 | 来源事件、策划产物、剧本版本、AI 拆镜提案与人工确认 | S0 |
-| S2 资产与准备 | 资产版本、候选处理、ShotPreparationState | S1 |
-| S3 生成闭环 | 预览快照、Temporal 任务、图片/视频候选、任务中心 | S2 |
-| S4 后期与审核 | 配音、字幕、时间线、审核与当前采用 | S3 |
-| S5 成本合规交付 | 账本、权利/安全/标识、质检和交付包 | S4 |
+| S0 可信项目入口 | 登录、工作空间、项目/分集、审计与可复现工程基线 | Design/PRD/Plan 接受 |
+| S1 来源到剧本基线 | 来源证据、Agent 提案、人工确认与剧本基线 | S0 |
+| S2 资产到分镜准备 | 上传隔离、资产版本、拆镜提案与准备确认 | S1 |
+| S3 可计费生成闭环 | 能力、成本/权利预检、持久任务、候选与采用 | S2 |
+| S4 音画后期闭环 | 配音、音效、字幕、时间线与可审粗剪 | S3 |
+| S5 审核合规交付 | 审片、批准、合规、质检与版本化交付 | S4 |
+| S6 运营与首发硬化 | 通知、处置、分析、NFR、恢复与发布判断 | S0～S5 |
 
-每个切片都必须单独完成 PRD、可执行 Plan、测试优先实现和 Acceptance，不允许一次性搭空壳模块。
+切片主需求、成本/合规渐进门禁、阶段文档编号、技术栈和详细目录见 [ARCH-008](ARCH-008-交付切片文档链与工程结构设计.md)。每个切片必须单独完成 Design、PRD、可执行 Plan、测试优先实现和 Acceptance，不允许一次性搭空壳模块。
 
 ## 12. 迁移与回滚
 
@@ -181,4 +182,4 @@ Lanverse/
 
 ## 13. 评审门禁与未决项
 
-进入 PRD 前必须确认：首发部署地区、身份提供商、S3/Temporal/PostgreSQL 托管方案、容量基线和媒体规格，并完成 ARCH-001～ARCH-007、TRACE-001、[ADR-001](ADR-001-首发平台架构与仓库边界.md) 与 [ADR-002](ADR-002-业务模块拆分与依赖方向.md) 的 `design_entry` 评审。进入实现前，适用 Requirement、Design、PRD 和可执行 Plan 必须均为 `accepted`；`implementation_release` 只在实现和 Acceptance 证据完成后作为发布门禁执行。
+进入 PRD 前必须确认：首发部署地区与数据驻留原则、身份边界、容量假设责任人和媒体基准规格，并完成 ARCH-001～ARCH-008、TRACE-001、[ADR-001](ADR-001-首发平台架构与仓库边界.md) 与 [ADR-002](ADR-002-业务模块拆分与依赖方向.md) 的 `design_entry` 评审。具体身份/存储/Temporal/PostgreSQL 托管产品和 AI Provider 按 [ARCH-008 第 9 节](ARCH-008-交付切片文档链与工程结构设计.md#9-渐进决策门禁) 在首次使用它们的切片关闭。进入实现前，适用 Requirement、Design、PRD 和可执行 Plan 必须均为 `accepted`；`implementation_release` 只在实现和 Acceptance 证据完成后作为发布门禁执行。

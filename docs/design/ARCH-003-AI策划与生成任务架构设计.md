@@ -4,7 +4,7 @@ doc_type: Backend Data and Workflow Architecture Design
 doc_no: ARCH-003
 title: AI策划、生成准备与异步任务架构设计
 status: review
-version: 0.4.1
+version: 0.4.2
 owner: Lanverse
 audience: [Architecture, Backend, Frontend, QA, Security, Operations, Data]
 feature_area: 来源事件、Agent策划、镜头生成准备、任务编排与媒体谱系
@@ -14,7 +14,7 @@ inputs: [ARCH-001, ARCH-002, ARCH-007, FR-003至FR-011, FR-016至FR-021, TCR-002
 evidence_baselines: [Jellyfish main@a967819, Toonflow master@bc61ec7]
 outputs: [领域数据模型, Agent运行模型, 生成四层模型, API边界, 任务状态机, 可靠性和回滚设计]
 triggers: [策划流程变化, 任务状态变化, 模型接入变化, 媒体谱系变化, 计费规则变化]
-updated: 2026-07-24
+updated: 2026-07-25
 downstream: [API PRD, Production Plan, Test Plan, Acceptance, ADR]
 ---
 
@@ -195,4 +195,4 @@ sequenceDiagram
 - AC-ARCH-003-005：任一候选媒体可追溯至来源、Script/Shot、资产、AgentRun、Task/Attempt、模型、费用和审核。
 - AC-ARCH-003-006：删除缓存、Agent 记忆、画布和 Temporal 可见性后，仍可由 PostgreSQL 与对象存储重建业务视图。
 
-进入 PRD 前需确认：来源类型与事件关系 P0 范围、Agent 人工门禁、记忆保留、Preview 期限、首发模型能力、失败计费和供应商数据保留边界。
+进入首次使用相应能力的切片 Design 接受前需确认：来源类型与事件关系 P0 范围、Agent 人工门禁、记忆保留、Preview 期限、首发模型能力、失败计费和供应商数据保留边界；各决定的最迟门禁按 [ARCH-008 第 9 节](ARCH-008-交付切片文档链与工程结构设计.md#9-渐进决策门禁) 分配。

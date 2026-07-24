@@ -13,6 +13,8 @@
 3. `Plan` 基于 Design 与 PRD 拆分实现、测试、依赖和交付顺序；仅当 Design、PRD 和可执行 Plan 均为 `accepted` 后才能实现。
 4. `Acceptance` 是实现后的验证产物，对照前三阶段逐项记录证据并给出通过、风险接受或不通过结论。
 
+平台级 Design 负责共同架构基线，切片级 Design 负责单次可交付闭环；二者均被接受后才能建立对应 PRD。下游文档编号可在 Design 中规划，但不得以空 PRD、Plan 或 Acceptance 文件提前占位。纵向切片与编号见 [`ARCH-008`](design/ARCH-008-交付切片文档链与工程结构设计.md)。
+
 `operations/` 只承载验收后的发布、部署、回滚和运行手册，不是第五个核心阶段。
 
 ## 子目录
@@ -80,3 +82,4 @@
 4. Plan 必须引用 Design 与 PRD，并关联验证它的 Acceptance。
 5. Acceptance 必须引用并逐项验收 Design、PRD 和 Plan。
 6. operations 应关联对应的发布、提交、PR、部署或回滚流程。
+7. 双向追踪统一使用 `Requirement → Design AC → PRD AC → Plan Task/Test/Evidence → Implementation → Acceptance Result`；任何 P0 断链都阻止进入下一阶段。

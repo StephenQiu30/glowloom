@@ -4,7 +4,7 @@ doc_type: Operations and Quality Architecture Design
 doc_no: ARCH-006
 title: 部署观测灾备容量成本与测试设计
 status: review
-version: 0.2.0
+version: 0.2.1
 owner: Lanverse
 audience: [Architecture, Frontend, Backend, QA, Security, Operations, FinOps, Governance]
 feature_area: 部署、可观测性、灾备、容量、成本与质量工程
@@ -13,7 +13,7 @@ canonical_path: docs/design/ARCH-006-部署观测灾备容量成本与测试设�
 inputs: [SRS-001, FR-010, FR-017, FR-019, FR-020, NFR-001, TCR-001, TCR-002, TCR-003, ADG-001, ARCH-007]
 outputs: [环境与部署拓扑, CI/CD与迁移策略, 观测与告警, 灾备方案, 容量成本模型, 测试策略, 发布回滚与运行手册]
 triggers: [服务等级变化, 区域或云平台确定, 容量假设变化, 部署边界变化, 成本异常, 重大事故]
-updated: 2026-07-24
+updated: 2026-07-25
 downstream: [PRD, Plan, Acceptance, Operations, ADR]
 ---
 
@@ -187,4 +187,4 @@ P1 告警表示用户关键流程大面积不可用、数据/费用/安全风险
 | TCR-003-017～018、035～042 | 3、5～6、10～11 | SSE、性能、兼容和前端发布方案 | 浏览器 E2E、Web Vitals、旧制品兼容报告 |
 | ADG-001-022～024、034、039～047 | 全文 | 评审清单、测试计划和手册目录 | 门禁通过记录、仪表盘、演练与 Acceptance |
 
-Design 阶段只检查决策完整性、追踪、计算模型、契约示例、测试场景和演练计划；实际制品、流水线、仪表盘、压测、故障注入、恢复演练及运行手册执行结果必须在已接受 Plan 后产生，并写入 Acceptance。进入 PRD 前仍须确认首发地区、身份/托管方案、NFR 容量假设、成本责任人和告警值班目标。
+Design 阶段只检查决策完整性、追踪、计算模型、契约示例、测试场景和演练计划；实际制品、流水线、仪表盘、压测、故障注入、恢复演练及运行手册执行结果必须在已接受 Plan 后产生，并写入 Acceptance。全局 `design_entry` 前须确认首发地区/数据驻留原则、NFR 容量假设责任人及最迟决策点；具体身份/托管产品、成本责任和告警值班目标在首次使用相应能力的切片 Design 接受前关闭。

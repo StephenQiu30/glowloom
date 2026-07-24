@@ -52,4 +52,4 @@
 
 ## 完整实现准入
 
-实现开始前必须同时满足：适用 SRS、FR、NFR、TCR 与 ADG 均为 `accepted`；适用 Design（含全平台基线 ARCH-001～ARCH-007 与相关 ADR）已通过 `design_entry` 并为 `accepted`；PRD 为 `accepted`；Plan 为 `accepted`、可执行且已追踪实现、测试、迁移和回滚。任一条件缺失均不得以代码、测试或 Acceptance 倒推补齐；Acceptance 只在实现完成后记录执行证据与结论。
+实现开始前必须同时满足：适用 SRS、FR、NFR、TCR 与 ADG 均为 `accepted`；适用 Design（含全平台基线 ARCH-001～ARCH-008、切片 Design 与相关 ADR）已通过 `design_entry` 并为 `accepted`；PRD 为 `accepted`；Plan 为 `accepted`、可执行且已追踪实现、测试、迁移和回滚。任一条件缺失均不得以代码、测试或 Acceptance 倒推补齐；Acceptance 只在实现完成后记录执行证据与结论。

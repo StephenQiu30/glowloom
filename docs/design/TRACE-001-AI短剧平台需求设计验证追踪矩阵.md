@@ -4,16 +4,16 @@ doc_type: Requirements Design Verification Traceability Matrix
 doc_no: TRACE-001
 title: AI短剧平台需求设计验证追踪矩阵
 status: review
-version: 0.2.1
+version: 0.3.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Security, Operations, Governance]
 feature_area: 需求、设计与验证追踪
 purpose: 为每份需求的全部规范性条款建立设计位置、覆盖状态和分阶段验证入口
 canonical_path: docs/design/TRACE-001-AI短剧平台需求设计验证追踪矩阵.md
-inputs: [SRS-001, FR-001至FR-021, NFR-001, TCR-001至TCR-003, ADG-001, ARCH-001至ARCH-007, ADR-001至ADR-002]
+inputs: [SRS-001, FR-001至FR-021, NFR-001, TCR-001至TCR-003, ADG-001, ARCH-001至ARCH-008, ADR-001至ADR-002]
 outputs: [逐需求覆盖状态, 设计位置, Design验证入口, 实施验收入口]
 triggers: [需求条款变化, 设计位置变化, 覆盖状态变化, PRD或Plan或Acceptance建立]
-updated: 2026-07-24
+updated: 2026-07-25
 downstream: [PRD, Plan, Test, Acceptance]
 ---
 
@@ -21,7 +21,7 @@ downstream: [PRD, Plan, Test, Acceptance]
 
 ## 1. 使用规则
 
-本矩阵是 [ARCH-001](ARCH-001-AI短剧制作平台总体架构设计.md) 总体追踪的逐需求明细。`covered` 表示指定范围内的全部规范性条款已有设计落点，不表示需求或设计已接受；`partial` 必须列出未覆盖条款，`missing` 阻断 Design 准入。A1～A7 依次代表 [ARCH-001](ARCH-001-AI短剧制作平台总体架构设计.md)、[ARCH-002](ARCH-002-短剧生产流程与工作台设计.md)、[ARCH-003](ARCH-003-AI策划与生成任务架构设计.md)、[ARCH-004](ARCH-004-API事件文件与数据契约设计.md)、[ARCH-005](ARCH-005-媒体安全隐私与数据生命周期设计.md)、[ARCH-006](ARCH-006-部署观测灾备容量成本与测试设计.md)、[ARCH-007](ARCH-007-业务模块边界与服务协作设计.md)。A7 §4～7 的事实所有权、公开契约、依赖和失败规则适用于每个 FR 行。
+本矩阵是 [ARCH-001](ARCH-001-AI短剧制作平台总体架构设计.md) 总体追踪的逐需求明细。`covered` 表示指定范围内的全部规范性条款已有设计落点，不表示需求或设计已接受；`partial` 必须列出未覆盖条款，`missing` 阻断 Design 准入。A1～A8 依次代表 [ARCH-001](ARCH-001-AI短剧制作平台总体架构设计.md) 至 [ARCH-008](ARCH-008-交付切片文档链与工程结构设计.md)。A7 §4～7 的事实所有权、公开契约、依赖和失败规则适用于每个 FR 行；A8 §4～5 定义能力完成主切片和后续阶段文档编号。
 
 实施前“验证入口”仅表示 Plan 中必须建立的测试或评审标识；表中的 `A7 AC` 明确指 AC-ARCH-007-001～006，并由对应风险选择具体编号。没有已接受 Plan 时不得把计划当成已执行证据；后续 PRD、Plan、Test 与 Acceptance 必须回填实际文档编号、用例编号和结果链接。
 
@@ -55,7 +55,7 @@ downstream: [PRD, Plan, Test, Acceptance]
 | TCR-001-001～027 | covered | A1 §1～12；A4 §2；A6 §2～4、8；A7 §8～9 | 架构评审；构建/部署/独立扩缩证据 |
 | TCR-002-001～040 | covered | A1 §5、7、9；A3 §2～11；A4 §2～13；A6 §2～11；A7 §4～10 | A3/A4/A7 AC；边界/集成/工作流/迁移/恢复测试 |
 | TCR-003-001～044 | covered | A1 §6、8～9；A2 §3～11；A4 §2～8、13；A6 §3、5～6、10；A7 §9 | A2/A4/A7 AC；类型、浏览器、性能与 E2E |
-| ADG-001-001～047 | covered | A1～A7；本矩阵；ADR-001～ADR-002 | §3 交付物检查；分 scope 门禁记录 |
+| ADG-001-001～047 | covered | A1～A8；本矩阵；ADR-001～ADR-002 | §3 交付物检查；分 scope 门禁记录 |
 
 ## 3. ADG 设计交付物映射
 
@@ -66,12 +66,12 @@ downstream: [PRD, Plan, Test, Acceptance]
 | 019 AI/Agent | A2、A3、A4、A7 | covered |
 | 020～021 媒体、安全、隐私 | A4、A5、A7 | covered |
 | 022～024 部署、容量、成本、测试 | A6、A7 | covered |
-| 025 双向追踪 | A1、A7、本矩阵、各 ARCH 追踪节 | covered |
+| 025 双向追踪 | A1、A7、A8、本矩阵、各 ARCH 追踪节 | covered |
 | 026 架构决策 | [ADR-001](ADR-001-首发平台架构与仓库边界.md)、[ADR-002](ADR-002-业务模块拆分与依赖方向.md)及 Design README 索引 | covered |
 
 ## 4. 评审与变更规则
 
-- 当前全部映射处于 `review`；仅在适用 SRS、FR、NFR、TCR 与 ADG 均为 `accepted`，且 A1～A7、ADR-001～ADR-002 和未决 P0 决策完成评审后，才能形成 `design_entry` 结论。
+- 当前全部映射处于 `review`；仅在适用 SRS、FR、NFR、TCR 与 ADG 均为 `accepted`，且 A1～A8、ADR-001～ADR-002 和未决 P0 决策完成评审后，才能形成 `design_entry` 结论。
 - 任一需求新增、删除、优先级或语义变化时，先把相关行改为 `partial`，列出缺口，再更新设计；禁止仅修改总范围文字。
 - 每次门禁随机抽取至少一条身份权限、一条长任务、一条媒体生命周期、一条费用和一条交付需求，从原需求逐跳核对至设计与拟定验证。
 - PRD、Plan 及实现后的 Acceptance 建立时在本矩阵增补版本链接；测试失败或残余风险不能以 `covered` 掩盖，须记录到对应 Acceptance。

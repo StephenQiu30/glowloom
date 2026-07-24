@@ -4,7 +4,7 @@ doc_type: Product Workflow and Frontend Architecture Design
 doc_no: ARCH-002
 title: 短剧生产流程与工作台设计
 status: review
-version: 0.4.1
+version: 0.4.2
 owner: Lanverse
 audience: [Product, UX, Architecture, Frontend, Backend, QA, Creative]
 feature_area: 短剧生产流程与创作工作台
@@ -14,7 +14,7 @@ inputs: [ARCH-001, ARCH-007, SRS-001, FR-001至FR-021, TCR-003]
 evidence_baselines: [Jellyfish main@a967819, Toonflow master@bc61ec7]
 outputs: [生产流程, 页面地图, 状态模型, 前后端聚合契约, 异常回流规则]
 triggers: [生产流程变化, 页面职责变化, 镜头状态变化, 协作范围变化]
-updated: 2026-07-24
+updated: 2026-07-25
 downstream: [PRD, Frontend Plan, API Plan, Acceptance]
 ---
 
@@ -197,4 +197,4 @@ flowchart LR
 - AC-ARCH-002-005：断线、并发冲突、重新提取和部分批量失败均保留可判断状态。
 - AC-ARCH-002-006：任一 Agent 产物可反查来源、模型、Skill/Prompt、工具步骤、复核和人工决定；删除画布不丢失业务事实。
 
-进入 PRD 前需确认：`skipped` 是否允许用于所有镜头、跳过理由和批准角色、分集工作室默认布局、外部审片是否首发 P0。
+进入首次使用相应能力的切片 Design 接受前需确认：`skipped` 是否允许用于所有镜头、跳过理由和批准角色、分集工作室默认布局、外部审片是否首发 P0；不依赖这些决定的更早切片可按 [ARCH-008 第 9 节](ARCH-008-交付切片文档链与工程结构设计.md#9-渐进决策门禁) 继续评审。

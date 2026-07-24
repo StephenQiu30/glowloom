@@ -4,7 +4,7 @@ doc_type: Business Module Boundary and Service Collaboration Architecture Design
 doc_no: ARCH-007
 title: 业务模块边界与服务协作设计
 status: review
-version: 0.1.0
+version: 0.1.1
 owner: Lanverse
 audience: [Product, Architecture, Backend, Frontend, QA, Security, Operations, Data]
 feature_area: 业务模块、数据所有权、依赖治理与运行服务
@@ -14,7 +14,7 @@ inputs: [SRS-001, FR-001至FR-021, NFR-001, TCR-001至TCR-003, ADG-001, ARCH-001
 evidence_baselines: [arc42-template@8dff0d9, modular-monolith-with-ddd@91c8ef2, spring-modulith@c4f6d51, nest@d8ee014, dependency-cruiser@15d41a9, samples-typescript@5c245e0, transactional-outbox-pattern@23e0519]
 outputs: [模块目录, 事实所有权, 公开契约, 依赖规则, 服务映射, 边界验证]
 triggers: [业务能力变化, 事实所有权变化, 跨模块协作变化, 部署拆分, 团队或SLO边界变化]
-updated: 2026-07-24
+updated: 2026-07-25
 downstream: [PRD, Plan, Module Design, Contract Test, Acceptance, ADR]
 ---
 
@@ -190,4 +190,4 @@ Domain 只依赖自身和最小 Shared Kernel（ID、时间、金额、Result、
 - AC-ARCH-007-005：API、Dispatcher、Workflow、AI、媒体、运营和 Migration 制品可独立构建/运行，并按职责部署、限流、扩缩和恢复。
 - AC-ARCH-007-006：授权撤销、对象版本过期、Legal Hold、删除和审计可跨模块追踪，任何投影删除后可由权威事实重建。
 
-进入 PRD 前须共同评审模块命名、事实所有权、Process Manager、首发部署合并策略和拆分阈值。本设计处于 `review`，不授权创建 17 个空目录或按模块拆成 17 个服务；模块专属 Design 只在对应交付切片进入 Plan 前按需建立。
+全局 `design_entry` 前须共同评审模块命名、事实所有权、Process Manager、首发部署合并策略和拆分阈值。本设计处于 `review`，不授权创建 17 个空目录或按模块拆成 17 个服务；模块专属 Design 只在对应交付切片进入 PRD 前按需建立并接受。
