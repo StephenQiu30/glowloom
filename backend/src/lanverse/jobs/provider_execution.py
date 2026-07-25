@@ -5,6 +5,9 @@ from typing import Literal, Protocol
 
 from lanverse.infrastructure.database.pool import DatabasePool
 from lanverse.jobs.dispatch import JobContext
+from lanverse.modules.production_jobs.infrastructure.execution_completion import (
+    ExecutionCompletionStore,
+)
 from lanverse.modules.production_jobs.infrastructure.executions import TaskExecutionStore
 
 
@@ -40,6 +43,7 @@ class ProviderExecutionHandler:
         fault: FaultInjector,
     ) -> None:
         self._store = TaskExecutionStore(database)
+        self._completion = ExecutionCompletionStore(database)
         self._provider = provider
         self._fault = fault
 
@@ -51,9 +55,12 @@ class ProviderExecutionHandler:
         if plan.reconcile_first:
             outcome = await self._provider.reconcile(plan.provider_request_key)
             if outcome.state == "unknown":
-                await self._store.mark_unknown(plan)
+                await self._completion.mark_unknown(plan)
                 return
             if outcome.state == "not_found":
+                if plan.cancel_requested:
+                    await self._completion.mark_cancelled(plan)
+                    return
                 self._fault.hit("before_provider_submit")
                 outcome = await self._provider.submit(plan.provider_request_key, plan.prompt)
         else:
@@ -61,7 +68,7 @@ class ProviderExecutionHandler:
             outcome = await self._provider.submit(plan.provider_request_key, plan.prompt)
         self._fault.hit("after_provider_accept")
         if outcome.state == "unknown":
-            await self._store.mark_unknown(plan)
+            await self._completion.mark_unknown(plan)
             return
         if outcome.state != "succeeded" or outcome.provider_request_id is None:
             raise RuntimeError("provider returned an invalid terminal outcome")
@@ -70,4 +77,7 @@ class ProviderExecutionHandler:
         await self._provider.download(outcome)
         self._fault.hit("after_download")
         self._fault.hit("before_registration")
-        await self._store.mark_succeeded(plan)
+        if plan.cancel_requested:
+            await self._completion.mark_cancelled(plan)
+        else:
+            await self._completion.mark_succeeded(plan)
