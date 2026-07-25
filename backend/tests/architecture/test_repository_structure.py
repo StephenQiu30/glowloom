@@ -8,17 +8,29 @@ ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
 
-BACKEND_MODULES = {
-    "project_catalog",
-    "story_development",
-    "generation",
-    "production_jobs",
-    "media_library",
-    "delivery",
+BACKEND_PACKAGE = BACKEND / "src" / "lanverse"
+BACKEND_LAYERS = {
+    "api",
+    "core",
+    "db",
+    "domain",
+    "integrations",
+    "repositories",
+    "resources",
+    "schemas",
+    "services",
+    "workers",
+}
+LEGACY_LAYERS = {
+    "bootstrap",
+    "entrypoints",
+    "infrastructure",
+    "jobs",
+    "modules",
+    "shared_kernel",
 }
 FRONTEND_FEATURES = {"projects", "story", "studio", "tasks", "delivery"}
 FORBIDDEN_ROOTS = {"deploy", "build", "data", "env", "src", "apps", "packages"}
-MODULE_PARTS = {"domain", "application", "infrastructure", "transport"}
 
 
 def child_directories(path: Path) -> set[str]:
@@ -72,22 +84,21 @@ def test_backend_console_entries_are_exact() -> None:
     with (BACKEND / "pyproject.toml").open("rb") as stream:
         project = tomllib.load(stream)["project"]
     assert project["scripts"] == {
-        "lanverse-api": "lanverse.entrypoints.api:main",
-        "lanverse-worker": "lanverse.entrypoints.worker:main",
+        "lanverse-api": "lanverse.main:run",
+        "lanverse-worker": "lanverse.worker:run",
     }
 
 
-def test_present_backend_modules_follow_allowlist_and_shape() -> None:
-    modules_root = BACKEND / "src" / "lanverse" / "modules"
-    present = child_directories(modules_root) - {"__pycache__"}
-    assert present <= BACKEND_MODULES
-    if os.getenv("LANVERSE_ARCHITECTURE_FINAL") == "1":
-        assert present == BACKEND_MODULES
-
-    for name in present:
-        module = modules_root / name
-        assert child_directories(module) >= MODULE_PARTS
-        assert (module / "public.py").is_file()
+def test_backend_uses_one_fastapi_technical_layer_set() -> None:
+    present = child_directories(BACKEND_PACKAGE) - {"__pycache__"}
+    assert present == BACKEND_LAYERS
+    assert not (present & LEGACY_LAYERS)
+    assert {path.name for path in BACKEND_PACKAGE.iterdir() if path.is_file()} == {
+        "__init__.py",
+        "main.py",
+        "py.typed",
+        "worker.py",
+    }
 
 
 def test_present_frontend_features_follow_allowlist() -> None:

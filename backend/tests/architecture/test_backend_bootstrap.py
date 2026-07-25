@@ -7,7 +7,7 @@ import sys
 from fastapi import FastAPI
 
 
-def test_bootstrap_modules_import_without_external_io() -> None:
+def test_application_entries_import_without_external_io() -> None:
     script = """
 import socket
 
@@ -16,9 +16,8 @@ def blocked(*args, **kwargs):
 
 socket.socket.connect = blocked
 socket.create_connection = blocked
-import lanverse.bootstrap.api
-import lanverse.entrypoints.api
-import lanverse.entrypoints.worker
+import lanverse.main
+import lanverse.worker
 """
     result = subprocess.run(
         [sys.executable, "-c", script],
@@ -30,7 +29,7 @@ import lanverse.entrypoints.worker
 
 
 def test_app_factory_returns_independent_fastapi_apps() -> None:
-    module = importlib.import_module("lanverse.bootstrap.api")
+    module = importlib.import_module("lanverse.main")
 
     first = module.create_app()
     second = module.create_app()
@@ -43,8 +42,8 @@ def test_app_factory_returns_independent_fastapi_apps() -> None:
 
 
 def test_console_entrypoints_are_callable() -> None:
-    api = importlib.import_module("lanverse.entrypoints.api")
-    worker = importlib.import_module("lanverse.entrypoints.worker")
+    api = importlib.import_module("lanverse.main")
+    worker = importlib.import_module("lanverse.worker")
 
-    assert callable(api.main)
-    assert callable(worker.main)
+    assert callable(api.run)
+    assert callable(worker.run)
