@@ -12,6 +12,7 @@ REQUIRED_TARGETS = {
     "test-migration",
     "contracts-check",
     "test-jobs",
+    "test-integration",
     "test-e2e",
     "lint",
     "typecheck",
