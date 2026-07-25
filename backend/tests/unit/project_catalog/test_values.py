@@ -42,7 +42,7 @@ def test_source_text_normalizes_line_endings_nfc_and_edge_whitespace() -> None:
     value = SourceTextV1.create(raw)
 
     assert value.content == "汉é\n内容\n" + "a" * 294
-    assert value.codepoint_count == 301
+    assert value.codepoint_count == 300
     assert value.sha256 == sha256(value.content.encode()).hexdigest()
     assert value.normalization_version == "text-normalization-v1"
 
