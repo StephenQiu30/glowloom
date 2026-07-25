@@ -3,7 +3,7 @@ layer: PRD
 doc_type: Product Overview Requirements Document
 doc_no: PRODUCT-01
 title: MVP产品总览与质量目标
-status: draft
+status: accepted
 version: 1.0.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
@@ -23,7 +23,7 @@ downstream: [PRODUCT-02至PRODUCT-07, PLAN-01, PLAN-02, PLAN-09, ACCEPTANCE-01]
 
 本文是模块 PRD 的总览，不复制模块细节。产品范围来自 REQ-01～08，技术与纵向闭环受 DESIGN-01～06 约束，前端体验受 DESIGN-12 约束，完整追踪以 [DESIGN-13](../design/13-需求实现追踪.md) 为准。
 
-当前 Requirement 为 `review`、Design 为 `draft`，因此本文和 PRODUCT-02～07 均为非门禁 `draft`。上游 Design 未全部 `accepted` 且 `design_entry` 未通过前，PRD 不能转为 `accepted`；所有 PRD 未接受前不得接受 Plan 或创建应用代码。
+本文与 PRODUCT-02～07 均已根据 accepted Design 完成评审。PRD 接受只放行 Plan 评审；应用代码仍需全部 Plan 接受并通过 `database_design_ready` 和 `implementation_start`。
 
 ## 2. 产品问题与用户价值
 
@@ -80,4 +80,4 @@ downstream: [PRODUCT-02至PRODUCT-07, PLAN-01, PLAN-02, PLAN-09, ACCEPTANCE-01]
 | NFR-001-001～014 | 全局时限、恢复、安全与证据 | PLAN-01～03、05～09 |
 | TCR-001-001～016 | 技术约束只作为体验和验收边界 | PLAN-02、03 |
 
-转为 `accepted` 前必须确认六份模块 PRD 范围无缺口、AC-PRD-001～010 全部可测、真实 Provider 前置条件有 Owner 与失败结果。实际证据只在实现后的 ACCEPTANCE-01 记录。
+接受评审已确认六份模块 PRD 范围无缺口、AC-PRD-001～010 全部可测、真实 Provider 前置条件具有 Owner 与失败结果。实际运行证据只在实现后的 ACCEPTANCE-01 记录。

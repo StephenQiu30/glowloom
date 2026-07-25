@@ -2,7 +2,7 @@
 
 本目录把已设计的 MVP 转换为规格化产品契约。PRODUCT-01 只管理全局价值与闭环质量，PRODUCT-02～07 按模块管理用户故事、范围、业务规则和 SMART 验收，避免单一 PRD 同时承担全部实现细节。
 
-当前上游 Requirement 为 `review`、Design 为 `draft`，因此全部 PRD 保持 `draft` 且不放行 Plan 或实现。只有 DESIGN-01～13 依次 `accepted` 且 `design_entry` 通过后，本组 PRD 才能正式评审；全部 PRD `accepted` 后才可接受 Plan。
+上游 Requirement、Design 与 `design_entry` 已通过评审，PRODUCT-01～07 全部为 `accepted/1.0.0`。本组 PRD 放行 Plan 评审，不单独授权实现或 Acceptance。
 
 ## 按序产品目录
 
