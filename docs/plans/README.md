@@ -31,7 +31,7 @@ Requirement、Design、PRD 和 PLAN-01～09 现均为 `accepted`。执行仍必�
 ## 执行规则
 
 - 行为任务按 `test:`→`impl:/feat:`→可选 `refactor:/docs:/chore:`，Red 必须证明需求尚未满足。
-- 子计划只能修改自身 allowlist；跨模块通过 `public.py`，额外能力先回到 Requirement/Design/PRD。
+- 子计划只能修改自身 allowlist；跨业务能力通过 `services` 的显式用例与稳定 `schemas` DTO，额外能力先回到 Requirement/Design/PRD。
 - 根 Makefile 是唯一跨生态命令入口；结果在实现后写入 ACCEPTANCE-01，不在 Plan 中伪造。
 - 未映射活动输入、Test ID 和 Evidence ID 的代码、接口、表、依赖、Feature Flag 或占位实现不得提交。
 - 任一 P0 缺少可运行验证、恢复或回滚时，相关 Plan 不得转为 `accepted`。

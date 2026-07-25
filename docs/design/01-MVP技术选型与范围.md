@@ -4,7 +4,7 @@ doc_type: Architecture Decision Record
 doc_no: DESIGN-01
 title: MVP技术选型与范围
 status: accepted
-version: 1.0.1
+version: 1.1.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
 feature_area: AI 短剧制作 MVP
@@ -23,7 +23,7 @@ downstream: [DESIGN-02至DESIGN-13, PRODUCT-01至PRODUCT-07, PLAN-01至PLAN-09, 
 
 Lanverse MVP 是内部验证用的单实例 Web 应用，只交付一个 30～60 秒、6～10 镜头、9:16 单集闭环：输入文本→结构化剧本→分镜→图片/视频与最小 TTS→人工采用候选→字幕/音轨合成→MP4 下载。
 
-采用单一 Git monorepo、Next.js 前端、Redux Toolkit 状态层、FastAPI Python 模块化单体、PostgreSQL 业务事实与 TaskJob 租约、LangChain Core Python AI 接入、MinIO 私有对象存储和 FFmpeg 媒体处理。应用实现仅位于 `backend/`、`frontend/`；Compose 文件直接位于仓库根。
+采用单一 Git monorepo、Next.js 前端、Redux Toolkit 状态层、FastAPI Python 模块化单体、PostgreSQL 业务事实与 TaskJob 租约、LangChain Core Python AI 接入、MinIO 私有对象存储和 FFmpeg 媒体处理。后端按 `api/core/db/schemas/services/repositories/domain/workers/integrations` 单一技术分层组织，不为业务域重复建造五层目录。应用实现仅位于 `backend/`、`frontend/`；Compose 文件直接位于仓库根。
 
 ## 2. 技术基线
 
@@ -33,7 +33,7 @@ Lanverse MVP 是内部验证用的单实例 Web 应用，只交付一个 30～60
 | Web | React、Next.js 16.2.11+ Active LTS 安全补丁、App Router、Tailwind CSS；官方 create-next-app 脚手架 | 支持浏览器与构建版本 |
 | 组件 | shadcn/ui CLI 显式 `--template next --preset nova --base radix`、统一 `radix-ui` Primitives、`components.json` | PLAN-02 固定 `radix-nova`、preset code `b2fA`/version `b`、Lucide 与生成文件/依赖清单；漂移即失败 |
 | 前端状态 | `@reduxjs/toolkit`、`react-redux`、RTK Query；`@umijs/openapi` 从 Swagger/OpenAPI 生成唯一请求与 DTO | Store/生成服务封装边界与零漂移命令 |
-| API | FastAPI `standard-no-fastapi-cloud-cli`、Pydantic v2、REST/JSON；自动 Swagger UI，确定性导出 OpenAPI 3.1，任务 2 秒轮询 | 本地 docs 开关、契约校验与 umi-openapi 兼容测试 |
+| API | FastAPI `standard-no-fastapi-cloud-cli`、Pydantic v2、REST/JSON；自动 Swagger UI，`@umijs/openapi` 直接读取运行中 `/openapi.json`，任务 2 秒轮询 | 本地 docs 开关、实时 URL 契约校验与 umi-openapi 兼容测试 |
 | 数据 | asyncpg 参数化 SQL、按表命名的 PostgreSQL `.sql`、Alembic 版本执行 | DESIGN-06 accepted 后锁定驱动/迁移与 catalog 测试；不使用 ORM/Metadata/autogenerate |
 | 长任务 | PostgreSQL `TaskJob` 租约、`FOR UPDATE SKIP LOCKED`、心跳/过期恢复、单一 Worker | 租约、退避、稳定请求键、对账与故障注入；MVP 不使用 Temporal/Celery/Redis |
 | 媒体 | MinIO 私有对象存储与 `minio` Python SDK；FFmpeg/ffprobe | 现有 MinIO endpoint/bucket、SDK、工具版本、object_key 策略和资源上限 |
@@ -98,7 +98,7 @@ Lanverse MVP 是内部验证用的单实例 Web 应用，只交付一个 30～60
 ## 8. Design 验收标准
 
 - AC-ADR-001-001：[02 MVP总体架构](02-MVP总体架构.md)、[03 任务执行与媒体处理](03-任务执行与媒体处理.md)、[04 接口数据与项目结构](04-接口数据与项目结构.md)、[05 AI短剧端到端制作流程](05-端到端制作流程.md)与[06 数据库表与迁移设计](06-数据库表与迁移设计.md)只使用本决策的技术族、运行单元和单闭环范围。
-- AC-ADR-001-002：所有代码目录、API、数据表和验收项都可定位到 §5 allowlist 与六个模块之一。
+- AC-ADR-001-002：所有代码目录、API、数据表和验收项都可定位到 §5 allowlist 与明确业务能力；后端仅使用 DESIGN-04 的单一 FastAPI 技术分层，不存在重复五层业务模块或静态 OpenAPI 中间副本。
 - AC-ADR-001-003：每类必需能力至少一个真实模型配置，全部启用配置的 Provider/模型/凭据/额度和默认路由均有明确的 PLAN-09 P09-T009 真实 smoke 前关闭条件，Mock 不伪装真实成片证据。
 - AC-ADR-001-004：Worker 重启、重复请求、供应状态未知和渲染失败均有不丢事实、不重复副作用的恢复设计。
 - AC-ADR-001-005：目标应用目录仅包含 `backend/frontend`，Compose 位于根目录，不存在 `deploy/`，且 Acceptance 未在实现前创建。

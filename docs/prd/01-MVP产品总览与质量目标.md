@@ -4,14 +4,14 @@ doc_type: Product Overview Requirements Document
 doc_no: PRODUCT-01
 title: MVP产品总览与质量目标
 status: accepted
-version: 1.0.0
+version: 1.1.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
 feature_area: AI 短剧端到端制作 MVP
 purpose: 固化单操作者从中文故事到可播放 AI 短剧的产品价值、全局范围和闭环质量
 canonical_path: docs/prd/01-MVP产品总览与质量目标.md
 inputs: [REQ-01至REQ-08, DESIGN-01至DESIGN-06, DESIGN-12, DESIGN-13]
-outputs: [MVP 产品地图, 全局业务规则, AC-PRD-009至AC-PRD-010]
+outputs: [MVP 产品地图, 全局业务规则, AC-PRD-009至AC-PRD-011]
 triggers: [MVP 目标变化, 全局范围变化, E2E 或真实 Provider 门禁变化]
 updated: 2026-07-25
 downstream: [PRODUCT-02至PRODUCT-07, PLAN-01, PLAN-02, PLAN-09, ACCEPTANCE-01]
@@ -51,6 +51,7 @@ downstream: [PRODUCT-02至PRODUCT-07, PLAN-01, PLAN-02, PLAN-09, ACCEPTANCE-01]
 | US-MVP-001 | 内部创作者获得一份可制作故事 | 本地应用、PostgreSQL、MinIO 可用且已有批准模型配置 | 建项目→输入来源→确认剧本分镜→生成采用→字幕渲染→下载 | 每阶段显示稳定错误与下一动作；成功事实不因局部失败丢失 | 浏览器播放 MP4，SRT/Manifest 可下载且谱系完整 |
 | US-MVP-002 | QA 要证明闭环可重复 | 固定六镜头 fixture、确定性 Mock、隔离测试数据 | 连续执行完整用户流 3 次 | 任一次失败保留 trace/日志/数据库差异 | 三次均在 10 分钟内完成且无需改库/对象 |
 | US-MVP-003 | 产品需确认真实 AI 可交付 | 已批准文本/图片/视频/TTS 配置、凭据、额度和获权样本 | 运行一次全部模态真实生成与成片质检 | 供应失败必须如实记录，不能以 Mock 替代 | 至少一部真实完整样片满足成片规格 |
+| US-MVP-004 | 全栈开发者新增或调整 API | FastAPI 服务可在本地启动 | 修改路由与 Pydantic 契约→从 Swagger URL 重生成客户端→运行类型和契约检查 | URL 不可用、Operation 漂移或生成失败时命令非零退出，不允许手改客户端或静态降级 Schema | 单一 FastAPI 分层内完成变更，生成客户端与运行中 API 零漂移 |
 
 ## 5. 全局产品规则
 
@@ -71,6 +72,7 @@ downstream: [PRODUCT-02至PRODUCT-07, PLAN-01, PLAN-02, PLAN-09, ACCEPTANCE-01]
 | --- | --- | --- |
 | AC-PRD-009 | 使用既有本地 PostgreSQL/MinIO，从创建项目到浏览器播放 Mock 成片的 E2E 连续 3 次成功；每次≤10分钟且无需人工改库、改对象或跳过页面 | 三个独立 run_id 的 Playwright trace、Task/Delivery、结构化日志和样片；PLAN-09/CI 门禁 |
 | AC-PRD-010 | 正式 Acceptance 结论前，使用批准凭据至少完成 1 个 6～10 镜头、30～60 秒的真实 Provider 完整样片；文本、图片、视频、TTS 全部真实执行，成片满足 AC-PRD-008 且日志无密钥 | 脱敏 Provider 请求 ID、Task/Attempt、ffprobe、样片 URI 与费用摘要；供应失败不得排除；PLAN-09/Acceptance 门禁 |
+| AC-PRD-011 | 在运行中 FastAPI 上修改任一受控测试 Operation 后，单条生成命令只读取 `LANVERSE_OPENAPI_URL` 并在 60 秒内整体更新前端生成目录；服务不可达、生成漂移、手工改动或出现静态 OpenAPI 副本时门禁失败 | 架构测试、真实 HTTP URL 生成测试、两次生成 hash/diff、TypeScript 检查；PLAN-02/03/09 门禁 |
 
 ## 8. 追踪与接受条件
 
@@ -78,6 +80,6 @@ downstream: [PRODUCT-02至PRODUCT-07, PLAN-01, PLAN-02, PLAN-09, ACCEPTANCE-01]
 | --- | --- | --- |
 | SRS-001-001～006 | 第 2～7 节、AC-PRD-009/010 | PLAN-01、02、09 |
 | NFR-001-001～014 | 全局时限、恢复、安全与证据 | PLAN-01～03、05～09 |
-| TCR-001-001～016 | 技术约束只作为体验和验收边界 | PLAN-02、03 |
+| TCR-001-001～016 | 技术约束只作为体验和验收边界；US-MVP-004、AC-PRD-011 固化 API 可维护性 | PLAN-02、03、09 |
 
-接受评审已确认六份模块 PRD 范围无缺口、AC-PRD-001～010 全部可测、真实 Provider 前置条件具有 Owner 与失败结果。实际运行证据只在实现后的 ACCEPTANCE-01 记录。
+接受评审已确认六份模块 PRD 范围无缺口、AC-PRD-001～011 全部可测、真实 Provider 前置条件具有 Owner 与失败结果。实际运行证据只在实现后的 ACCEPTANCE-01 记录。

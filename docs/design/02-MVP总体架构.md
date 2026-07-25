@@ -4,14 +4,14 @@ doc_type: Solution Architecture Design
 doc_no: DESIGN-02
 title: MVP总体架构
 status: accepted
-version: 1.0.0
+version: 1.1.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
 feature_area: AI 短剧端到端制作
-purpose: 定义 MVP 流程、系统边界、六模块事实所有权、页面边界和本地运行拓扑
+purpose: 定义 MVP 流程、系统边界、六个业务能力域的事实所有权、页面边界和本地运行拓扑
 canonical_path: docs/design/02-MVP总体架构.md
 inputs: [REQ-01至REQ-08, DESIGN-01]
-outputs: [端到端架构, 模块边界, 页面边界, 运行拓扑, 安全与回滚约束]
+outputs: [端到端架构, 业务能力边界, 页面边界, 运行拓扑, 安全与回滚约束]
 triggers: [MVP 流程变化, 模块事实变化, 页面职责变化, 运行单元变化]
 updated: 2026-07-25
 downstream: [DESIGN-03至DESIGN-13, PRODUCT-01至PRODUCT-07, PLAN-01至PLAN-09, ACCEPTANCE-01]
@@ -66,9 +66,9 @@ flowchart LR
 - Worker 从 PostgreSQL `task_jobs` 领取租约；网络、对象存储、Provider 和 FFmpeg 副作用只在显式 Job Handler 中执行，并以稳定请求键对账。
 - TaskEvent 在 PostgreSQL 内部追加保存且仅供后端恢复；前端同步任务状态的唯一方式是每 2 秒查询 `GET /v1/tasks/{task_id}`，刷新或断线后仍从权威查询收敛。
 
-## 4. 六模块事实所有权
+## 4. 六个业务能力域的事实所有权
 
-| 模块 | 拥有事实 | 不负责 |
+| 逻辑能力域 | 拥有事实 | 不负责 |
 | --- | --- | --- |
 | `project_catalog` | Project、Episode、生命周期 | 剧本文本、镜头、任务 |
 | `story_development` | SourceRevision、ScriptVersion、CreativeAssetVersion、Episode 级 ShotSpecVersion（含稳定 shot_id） | Provider 执行、媒体字节 |
@@ -77,7 +77,7 @@ flowchart LR
 | `media_library` | MediaObject/MediaVersion、MinIO bucket/object_key、哈希、探测和派生谱系 | 镜头意图、任务状态 |
 | `delivery` | SubtitleVersion、RenderSnapshot、DeliveryVersion、Manifest | 改写上游版本、执行 Provider |
 
-每项业务事实只有一个写入模块。Adoption 以 `usage_type + usage_id + input_version_id + input_hash` 标识角色/场景资产参考、镜头图片、镜头视频或语音音频使用位置，每个版本化位置最多一个 active 关系；整体视觉风格不形成媒体使用位置，只以 confirmed 文字版本/哈希进入镜头图片和视频输入。新上游版本或兼容性输入变化不能复用旧槽位。20 张应用表中的 19 张业务事实由上表六模块拥有；唯一技术表 `idempotency_records` 由根 `infrastructure/idempotency` 拥有，其 Repository 必须复用目标 Handler 注入的 asyncpg connection/transaction，在同一事务保存传输回执，不能自行提交，也不构成第七业务模块。模块只能从对方 `public.py` 导入 Facade、Port、DTO 和事件，不得导入其他模块的 Domain 或 Repository。跨模块长流程由 Job Handler 调用公开应用用例逐步提交，不建立跨模块业务事务。
+每项业务事实只有一个写入能力域。上表名称只表示逻辑所有权，不映射为 Python package；物理代码统一进入 DESIGN-04 的技术分层。Adoption 以 `usage_type + usage_id + input_version_id + input_hash` 标识角色/场景资产参考、镜头图片、镜头视频或语音音频使用位置，每个版本化位置最多一个 active 关系；整体视觉风格不形成媒体使用位置，只以 confirmed 文字版本/哈希进入镜头图片和视频输入。新上游版本或兼容性输入变化不能复用旧槽位。20 张应用表中的 19 张业务事实由上表六个能力域拥有；唯一技术表 `idempotency_records` 由 `repositories/idempotency.py` 实现，其函数必须复用目标 Service 注入的 asyncpg connection/transaction，在同一事务保存传输回执，不能自行提交，也不构成第七业务域。跨域协作只能经 `services` 中的显式用例和 `schemas` 中的稳定 DTO，不得由 API 路由直连其他 Repository；长流程由 Job Handler 调用 Service 逐步提交，不建立跨域业务事务。
 
 ## 5. 前端页面与责任
 
