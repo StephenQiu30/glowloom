@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
 from lanverse.bootstrap.api import create_app
@@ -53,7 +53,7 @@ def test_async_acceptance_and_task_polling_contracts_are_stable() -> None:
         status="running",
         progress=TaskProgress(phase="provider", completed=1, total=3),
         input_outdated=False,
-        result_refs=[],
+        result_refs=(),
         resource_version=2,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -83,16 +83,19 @@ def test_strong_etag_rejects_weak_or_stale_versions() -> None:
         assert raised.value.code == "INVALID_IF_MATCH"
 
 
-def test_app_factory_maps_problems_and_applies_exact_cors() -> None:
+@pytest.mark.asyncio
+async def test_app_factory_maps_problems_and_applies_exact_cors() -> None:
     app = create_app()
 
     @app.get("/__contract_problem__")
     async def contract_problem() -> None:
         raise HttpProblem(status=409, title="Conflict", code="TEST_CONFLICT")
 
-    with TestClient(app) as client:
-        response = client.get("/__contract_problem__")
-        preflight = client.options(
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/__contract_problem__", headers={"Origin": "http://127.0.0.1:3000"}
+        )
+        preflight = await client.options(
             "/v1/projects",
             headers={
                 "Origin": "http://127.0.0.1:3000",
@@ -100,7 +103,7 @@ def test_app_factory_maps_problems_and_applies_exact_cors() -> None:
                 "Access-Control-Request-Headers": "Idempotency-Key,Content-Type",
             },
         )
-        rejected = client.options(
+        rejected = await client.options(
             "/v1/projects",
             headers={
                 "Origin": "http://example.com",
@@ -114,5 +117,5 @@ def test_app_factory_maps_problems_and_applies_exact_cors() -> None:
     assert response.json()["request_id"]
     assert preflight.headers["access-control-allow-origin"] == "http://127.0.0.1:3000"
     assert preflight.headers["access-control-allow-methods"] == "GET, POST, PUT"
-    assert "etag" in preflight.headers["access-control-expose-headers"].lower()
+    assert "etag" in response.headers["access-control-expose-headers"].lower()
     assert "access-control-allow-origin" not in rejected.headers
