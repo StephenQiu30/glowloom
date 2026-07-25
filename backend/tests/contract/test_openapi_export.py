@@ -35,7 +35,22 @@ def test_openapi_export_is_deterministic_and_uses_the_app_factory(tmp_path: Path
     document = json.loads(first.read_text())
     assert document["openapi"] == "3.1.0"
     assert document["info"] == {"title": "Lanverse API", "version": "0.1.0"}
-    assert document["paths"] == {}
+    operations = {
+        operation["operationId"]
+        for path in document["paths"].values()
+        for operation in path.values()
+        if isinstance(operation, dict) and "operationId" in operation
+    }
+    assert operations == {
+        "createProject",
+        "listProjects",
+        "getProject",
+        "getEpisode",
+        "createSourceRevision",
+        "confirmSource",
+        "listSourceRevisions",
+        "getSourceRevision",
+    }
 
 
 def test_openapi_check_detects_artifact_drift(tmp_path: Path) -> None:
