@@ -51,6 +51,11 @@ def test_only_http_services_publish_loopback_ports() -> None:
         assert ports[0]["host_ip"] == "127.0.0.1"
 
 
+def test_frontend_uses_the_standalone_image_entrypoint() -> None:
+    configured = services(compose_config())
+    assert "command" not in configured["frontend"]
+
+
 def test_backend_units_reuse_external_postgres_and_minio_settings() -> None:
     configured = services(compose_config())
     required = set(RUNTIME_ENV)
