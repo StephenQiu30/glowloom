@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -99,6 +99,24 @@ async def test_automatic_retry_adds_parented_attempts_up_to_three_without_duplic
         task_id = await submit_task(database, "attempts")
         retry = AutomaticRetryHandler(database)
         async with database.transaction() as connection:
+            await connection.execute(
+                """
+                UPDATE production_tasks SET status='running', resource_version=2,
+                    progress_json='{"phase":"provider","completed":0,"total":1}',
+                    updated_at=now() WHERE id=$1
+                """,
+                task_id,
+            )
+            await connection.execute(
+                """
+                INSERT INTO task_events(
+                    event_id,task_id,task_resource_version,event_type,correlation_id,data_json
+                ) VALUES($1,$2,2,'task.started',$3,'{}')
+                """,
+                uuid4(),
+                task_id,
+                uuid4(),
+            )
             await connection.execute(
                 """
                 UPDATE production_attempts SET status='failed', error_code='TEMPORARY',
