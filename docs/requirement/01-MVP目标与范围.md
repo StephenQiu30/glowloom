@@ -4,7 +4,7 @@ doc_type: Software Requirements Specification
 doc_no: REQ-01
 title: MVP目标与范围
 status: review
-version: 1.1.0
+version: 1.2.0
 owner: Lanverse
 audience: [Product, Architecture, Dev, QA]
 feature_area: AI短剧端到端制作MVP
@@ -13,7 +13,7 @@ canonical_path: docs/requirement/01-MVP目标与范围.md
 inputs: [AI短剧端到端任务跑通目标]
 outputs: [MVP范围, 功能需求目录, SMART验收基线]
 updated: 2026-07-25
-downstream: [DESIGN-01至DESIGN-07, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
+downstream: [DESIGN-01至DESIGN-13, PRODUCT-01至PRODUCT-07, PLAN-01至PLAN-09, ACCEPTANCE-01]
 ---
 
 # MVP目标与范围
@@ -82,4 +82,4 @@ Lanverse MVP 是供一名受信操作者在本地环境完成一集 AI 短剧的
 
 ## 8. 下游与状态
 
-本文件输出给 DESIGN-01～DESIGN-07、PRODUCT-01 和 PLAN-01。上述 Requirement、Design、PRD 与 Plan 全部为 `accepted` 且通过 REQ-08 前，不得开始实现；ACCEPTANCE-01 只在实现完成后建立。
+本文件输出给 DESIGN-01～13、PRODUCT-01～07 和 PLAN-01～09。上述 Requirement、Design、PRD 与 Plan 全部为 `accepted` 且通过 REQ-08 前，不得开始实现；ACCEPTANCE-01 只在实现完成后建立。

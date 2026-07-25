@@ -4,7 +4,7 @@ doc_type: Solution Architecture Design
 doc_no: DESIGN-02
 title: MVP总体架构
 status: draft
-version: 0.5.0
+version: 0.6.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
 feature_area: AI 短剧端到端制作
@@ -14,7 +14,7 @@ inputs: [REQ-01至REQ-08, DESIGN-01]
 outputs: [端到端架构, 模块边界, 页面边界, 运行拓扑, 安全与回滚约束]
 triggers: [MVP 流程变化, 模块事实变化, 页面职责变化, 运行单元变化]
 updated: 2026-07-25
-downstream: [DESIGN-03至DESIGN-07, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
+downstream: [DESIGN-03至DESIGN-13, PRODUCT-01至PRODUCT-07, PLAN-01至PLAN-09, ACCEPTANCE-01]
 ---
 
 # MVP总体架构

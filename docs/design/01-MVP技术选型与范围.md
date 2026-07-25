@@ -4,7 +4,7 @@ doc_type: Architecture Decision Record
 doc_no: DESIGN-01
 title: MVP技术选型与范围
 status: draft
-version: 0.4.0
+version: 0.5.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
 feature_area: AI 短剧制作 MVP
@@ -14,7 +14,7 @@ inputs: [REQ-01至REQ-08]
 outputs: [MVP 实现 allowlist, 技术栈, 运行单元, 迁移与回滚原则]
 triggers: [MVP 范围变化, 技术族变化, 事实源变化, 任务编排变化, 部署边界变化]
 updated: 2026-07-25
-downstream: [DESIGN-02至DESIGN-07, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
+downstream: [DESIGN-02至DESIGN-13, PRODUCT-01至PRODUCT-07, PLAN-01至PLAN-09, ACCEPTANCE-01]
 ---
 
 # MVP技术选型与范围
@@ -29,18 +29,18 @@ Lanverse MVP 是内部验证用的单实例 Web 应用，只交付一个 30～60
 
 | 关注点 | MVP 选择 | 最迟确定点 |
 | --- | --- | --- |
-| 语言/仓库 | 后端 Python 3.13 + uv；前端 TypeScript strict + Node.js 24 LTS + pnpm；分别提交 `uv.lock` 与 `pnpm-lock.yaml` | database_design_ready 通过后、T-001 脚手架执行时锁定精确 patch 与安装命令 |
+| 语言/仓库 | 后端 Python 3.13 + uv；前端 TypeScript strict + Node.js 24 LTS + pnpm；分别提交 `uv.lock` 与 `pnpm-lock.yaml` | database_design_ready 通过后、PLAN-02 脚手架执行时锁定精确 patch 与安装命令 |
 | Web | React、Next.js 16.2.11+ Active LTS 安全补丁、App Router、Tailwind CSS；官方 create-next-app 脚手架 | 支持浏览器与构建版本 |
-| 组件 | shadcn/ui CLI 显式 `--template next --preset base-nova --base radix`、统一 `radix-ui` Primitives、`components.json` | T-001 固定 `radix-nova`、preset code `b2fA`/version `b`、Lucide 与生成文件/依赖清单；漂移即失败 |
+| 组件 | shadcn/ui CLI 显式 `--template next --preset base-nova --base radix`、统一 `radix-ui` Primitives、`components.json` | PLAN-02 固定 `radix-nova`、preset code `b2fA`/version `b`、Lucide 与生成文件/依赖清单；漂移即失败 |
 | 前端状态 | `@reduxjs/toolkit`、`react-redux`、RTK Query；`@umijs/openapi` 从 Swagger/OpenAPI 生成唯一请求与 DTO | Store/生成服务封装边界与零漂移命令 |
 | API | FastAPI `standard-no-fastapi-cloud-cli`、Pydantic v2、REST/JSON；自动 Swagger UI，确定性导出 OpenAPI 3.1，任务 2 秒轮询 | 本地 docs 开关、契约校验与 umi-openapi 兼容测试 |
 | 数据 | asyncpg 参数化 SQL、按表命名的 PostgreSQL `.sql`、Alembic 版本执行 | DESIGN-06 accepted 后锁定驱动/迁移与 catalog 测试；不使用 ORM/Metadata/autogenerate |
 | 长任务 | PostgreSQL `TaskJob` 租约、`FOR UPDATE SKIP LOCKED`、心跳/过期恢复、单一 Worker | 租约、退避、稳定请求键、对账与故障注入；MVP 不使用 Temporal/Celery/Redis |
 | 媒体 | MinIO 私有对象存储与 `minio` Python SDK；FFmpeg/ffprobe | 现有 MinIO endpoint/bucket、SDK、工具版本、object_key 策略和资源上限 |
-| AI | `langchain-core` 模型/Runnable 接口、能力端口、支持多 Provider/模型的 `AiModelRegistry` 与确定性 Mock；LangSmith tracing 关闭 | T-008 真实 smoke 前：模型配置目录、默认路由、凭据、额度和 Provider SDK；依赖图不得含 `langgraph*`，网络只放行批准 Provider |
+| AI | `langchain-core` 模型/Runnable 接口、能力端口、支持多 Provider/模型的 `AiModelRegistry` 与确定性 Mock；LangSmith tracing 关闭 | PLAN-09 P09-T009 真实 smoke 前：模型配置目录、默认路由、凭据、额度和 Provider SDK；依赖图不得含 `langgraph*`，网络只放行批准 Provider |
 | 质量 | 后端 pytest/pytest-asyncio/HTTPX/Ruff/mypy；前端 Vitest/Testing Library/Playwright；结构化日志 | 命令、门禁、覆盖范围和证据位置 |
 
-依赖 allowlist 仅包含上表技术族；T-001 必须以两个生态各自唯一的 lockfile 和依赖扫描落实为可复现基线。Python 3.13 与 asyncpg/MinIO 使用当前稳定兼容版本；Alembic 只执行受审 SQL，不生成 Schema。
+依赖 allowlist 仅包含上表技术族；PLAN-02 必须以两个生态各自唯一的 lockfile 和依赖扫描落实为可复现基线。Python 3.13 与 asyncpg/MinIO 使用当前稳定兼容版本；Alembic 只执行受审 SQL，不生成 Schema。
 
 选型依据为 [FastAPI 多文件应用](https://fastapi.tiangolo.com/tutorial/bigger-applications/)、[FastAPI Swagger 文档配置](https://fastapi.tiangolo.com/tutorial/metadata/#docs-urls)、[asyncpg](https://magicstack.github.io/asyncpg/current/)、[PostgreSQL SKIP LOCKED](https://www.postgresql.org/docs/current/sql-select.html)、[Alembic operation API](https://alembic.sqlalchemy.org/en/latest/ops.html)、[umi-openapi](https://www.npmjs.com/package/@umijs/openapi)、[Next.js 官方脚手架](https://nextjs.org/docs/app/getting-started/installation)、[shadcn CLI](https://ui.shadcn.com/docs/cli)与[Redux Toolkit App Router 指南](https://redux-toolkit.js.org/usage/nextjs)。
 
@@ -99,6 +99,6 @@ Lanverse MVP 是内部验证用的单实例 Web 应用，只交付一个 30～60
 
 - AC-ADR-001-001：[02 MVP总体架构](02-MVP总体架构.md)、[03 任务执行与媒体处理](03-任务执行与媒体处理.md)、[04 接口数据与项目结构](04-接口数据与项目结构.md)、[05 AI短剧端到端制作流程](05-端到端制作流程.md)与[06 数据库表与迁移设计](06-数据库表与迁移设计.md)只使用本决策的技术族、运行单元和单闭环范围。
 - AC-ADR-001-002：所有代码目录、API、数据表和验收项都可定位到 §5 allowlist 与六个模块之一。
-- AC-ADR-001-003：每类必需能力至少一个真实模型配置，全部启用配置的 Provider/模型/凭据/额度和默认路由均有明确的 T-008 真实 smoke 前关闭条件，Mock 不伪装真实成片证据。
+- AC-ADR-001-003：每类必需能力至少一个真实模型配置，全部启用配置的 Provider/模型/凭据/额度和默认路由均有明确的 PLAN-09 P09-T009 真实 smoke 前关闭条件，Mock 不伪装真实成片证据。
 - AC-ADR-001-004：Worker 重启、重复请求、供应状态未知和渲染失败均有不丢事实、不重复副作用的恢复设计。
 - AC-ADR-001-005：目标应用目录仅包含 `backend/frontend`，Compose 位于根目录，不存在 `deploy/`，且 Acceptance 未在实现前创建。

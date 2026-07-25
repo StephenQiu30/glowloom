@@ -4,7 +4,7 @@ doc_type: Non-Functional Requirements Specification
 doc_no: REQ-06
 title: MVP质量标准
 status: review
-version: 0.2.0
+version: 0.3.0
 owner: Lanverse
 audience: [Architecture, Dev, QA, Operations]
 feature_area: AI 短剧制作 MVP 质量
@@ -14,7 +14,7 @@ inputs: [REQ-01, REQ-02至REQ-05]
 outputs: [质量门槛, 测试边界, 运行限制]
 triggers: [MVP范围变化, 任务模型变化, 媒体规格变化, 部署边界变化]
 updated: 2026-07-25
-downstream: [REQ-07, REQ-08, DESIGN-01至DESIGN-07, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
+downstream: [REQ-07, REQ-08, DESIGN-01至DESIGN-13, PRODUCT-01至PRODUCT-07, PLAN-01至PLAN-09, ACCEPTANCE-01]
 ---
 
 # MVP质量标准

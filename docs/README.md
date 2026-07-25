@@ -7,9 +7,9 @@ Lanverse 当前只交付一个 AI 短剧制作 MVP：单个创作者在受控本
 正式工作严格按 `Requirement → Design → PRD → Plan → Implementation → Acceptance` 推进：
 
 1. [`requirement/`](requirement/README.md) 固定 MVP 能力、质量边界和技术约束。
-2. [`design/`](design/README.md) 定义 FastAPI/前端架构、任务恢复、契约、20 张应用表物理数据模型和工程结构。
-3. [`prd/`](prd/README.md) 固化用户价值、范围和 SMART 验收。
-4. [`plans/`](plans/README.md) 给出 test-first 的实现任务、命令和证据位置。
+2. [`design/`](design/README.md) 用 6 份横切设计、6 份模块设计和 1 份追踪矩阵定义架构、数据、接口、状态与失败恢复。
+3. [`prd/`](prd/README.md) 用 1 份产品总览和 6 份模块 PRD 固化用户价值、范围和 SMART 验收。
+4. [`plans/`](plans/README.md) 用 1 份总计划和 8 份专业子计划给出 test-first 任务、命令、风险、回滚和证据位置。
 5. [`acceptance/`](acceptance/README.md) 只在实现完成后记录实际结果。
 
 只有适用 Requirement、Design、PRD 和 Plan 均为 `accepted`，且 `database_design_ready` 与 `implementation_start` 依次 `passed` 才授权实现。当前文档可在上游评审稳定后提前形成下游草案，但不得以草案状态运行后端或前端脚手架。
