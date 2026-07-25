@@ -30,6 +30,14 @@ class SourceParentNotFound(LookupError):
     pass
 
 
+class VersionConflict(Exception):
+    pass
+
+
+class VersionImmutable(Exception):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class CreateSourceRevisionCommand:
     episode_id: UUID
@@ -37,6 +45,12 @@ class CreateSourceRevisionCommand:
     rights_basis: str | None
     parent_id: UUID | None
     idempotency_key: str
+
+
+@dataclass(frozen=True, slots=True)
+class ConfirmSourceCommand:
+    version_id: UUID
+    expected_resource_version: int
 
 
 class CreateSourceRevisionHandler:
@@ -123,3 +137,27 @@ class ListSourceRevisionsHandler:
             if not await self._sources.lock_episode(connection, episode_id):
                 raise EpisodeNotFound
             return await self._sources.list_for_episode(connection, episode_id)
+
+
+class ConfirmSourceHandler:
+    def __init__(self, database: DatabasePool) -> None:
+        self._database = database
+        self._sources = SourceRevisionRepository()
+
+    async def execute(self, command: ConfirmSourceCommand) -> SourceRevisionSnapshot:
+        async with self._database.transaction() as connection:
+            episode_id = await self._sources.episode_id_for_revision(
+                connection, command.version_id
+            )
+            if episode_id is None:
+                raise SourceRevisionNotFound
+            if not await self._sources.lock_episode(connection, episode_id):
+                raise EpisodeNotFound
+            source = await self._sources.get_for_update(connection, command.version_id)
+            if source is None:
+                raise SourceRevisionNotFound
+            if source.resource_version != command.expected_resource_version:
+                raise VersionConflict
+            if source.status != "draft":
+                raise VersionImmutable
+            return await self._sources.confirm(connection, source)

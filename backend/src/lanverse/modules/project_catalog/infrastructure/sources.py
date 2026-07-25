@@ -9,6 +9,14 @@ from lanverse.modules.project_catalog.domain.values import SourceTextV1
 
 
 class SourceRevisionRepository:
+    async def episode_id_for_revision(
+        self, connection: asyncpg.Connection[asyncpg.Record], revision_id: UUID
+    ) -> UUID | None:
+        value = await connection.fetchval(
+            "SELECT episode_id FROM source_revisions WHERE id = $1", revision_id
+        )
+        return value if isinstance(value, UUID) else None
+
     async def lock_episode(
         self, connection: asyncpg.Connection[asyncpg.Record], episode_id: UUID
     ) -> bool:
@@ -62,6 +70,44 @@ class SourceRevisionRepository:
             "SELECT * FROM source_revisions WHERE id = $1", revision_id
         )
         return self._map(row) if row else None
+
+    async def get_for_update(
+        self, connection: asyncpg.Connection[asyncpg.Record], revision_id: UUID
+    ) -> SourceRevisionSnapshot | None:
+        row = await connection.fetchrow(
+            "SELECT * FROM source_revisions WHERE id = $1 FOR UPDATE", revision_id
+        )
+        return self._map(row) if row else None
+
+    async def confirm(
+        self,
+        connection: asyncpg.Connection[asyncpg.Record],
+        revision: SourceRevisionSnapshot,
+    ) -> SourceRevisionSnapshot:
+        await connection.execute(
+            """
+            UPDATE source_revisions
+            SET status = 'superseded', resource_version = resource_version + 1,
+                updated_at = now()
+            WHERE episode_id = $1 AND status = 'confirmed' AND id <> $2
+            """,
+            revision.episode_id,
+            revision.id,
+        )
+        row = await connection.fetchrow(
+            """
+            UPDATE source_revisions
+            SET status = 'confirmed', resource_version = resource_version + 1,
+                updated_at = now(), confirmed_at = now()
+            WHERE id = $1 AND status = 'draft' AND resource_version = $2
+            RETURNING *
+            """,
+            revision.id,
+            revision.resource_version,
+        )
+        if row is None:
+            raise RuntimeError("source confirmation compare-and-set failed")
+        return self._map(row)
 
     async def list_for_episode(
         self, connection: asyncpg.Connection[asyncpg.Record], episode_id: UUID

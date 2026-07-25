@@ -6,11 +6,11 @@ from uuid import UUID
 import pytest
 
 from lanverse.infrastructure.database.pool import DatabasePool
+from lanverse.modules.project_catalog.application.contracts import SourceRevisionSnapshot
 from lanverse.modules.project_catalog.application.create_project import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
-from lanverse.modules.project_catalog.application.contracts import SourceRevisionSnapshot
 from lanverse.modules.project_catalog.application.sources import (
     ConfirmSourceCommand,
     ConfirmSourceHandler,
