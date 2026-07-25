@@ -3,11 +3,21 @@ from __future__ import annotations
 import io
 import json
 import logging
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from lanverse.infrastructure.database.pool import DatabasePool
 from lanverse.jobs.capacity import WorkerCapacity
+from lanverse.jobs.dispatch import JobHandlerRegistry
 from lanverse.jobs.observability import JobLogger, StructuredJsonFormatter
+from lanverse.jobs.provider_execution import FaultInjector
+from lanverse.jobs.runner import TaskJobRunner
+from lanverse.modules.production_jobs.public import SubmitTaskCommand, TaskSubmitter
+from lanverse.modules.project_catalog.application.create_project import (
+    CreateProjectCommand,
+    CreateProjectHandler,
+)
 from lanverse.shared_kernel.config import ApplicationSettings
 
 
@@ -41,6 +51,55 @@ async def test_capacity_gate_refuses_work_without_waiting_or_overclaiming() -> N
     assert await capacity.try_acquire()
     assert await capacity.try_acquire() is False
     assert capacity.active == 3
+
+
+@pytest.mark.asyncio
+async def test_exhausted_capacity_stops_before_claiming_a_persisted_job(
+    migrated_database_url: str,
+) -> None:
+    database = DatabasePool(migrated_database_url, min_size=1, max_size=2)
+    await database.start()
+    try:
+        project = await CreateProjectHandler(database).execute(
+            CreateProjectCommand(title="容量测试", idempotency_key="capacity:project:1")
+        )
+        episode_id = project.episode.id
+        await TaskSubmitter(database, release_version="test-release").submit(
+            SubmitTaskCommand(
+                episode_id=episode_id,
+                task_type="generate_script",
+                capability="text",
+                scope={"episode_id": str(episode_id)},
+                input_refs={},
+                prompt="生成剧本",
+                parameters={"temperature": 0},
+                model_profile_id="mock-text-v1",
+                provider_id="mock",
+                model_id="deterministic-text",
+                route_version="text-route-v1",
+                schema_version="script-v1",
+                operation_scope=f"generateScript/{episode_id}",
+                idempotency_key="capacity:submit:01",
+                handler_version="1",
+            )
+        )
+        capacity = WorkerCapacity(limit=1)
+        assert await capacity.try_acquire()
+        runner = TaskJobRunner(
+            database,
+            registry=JobHandlerRegistry(),
+            owner="worker-full",
+            lease_duration=timedelta(seconds=10),
+            fault=FaultInjector(),
+            capacity=capacity,
+        )
+
+        assert await runner.run_once(now=datetime(2030, 1, 1, tzinfo=UTC)) is False
+        async with database.transaction() as connection:
+            row = await connection.fetchrow("SELECT state,attempts FROM task_jobs")
+        assert tuple(row) == ("pending", 0)
+    finally:
+        await database.close()
 
     await capacity.release()
     assert await capacity.try_acquire()
