@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
 import pytest
@@ -80,7 +81,9 @@ async def test_generate_script_freezes_input_and_registration_is_idempotent(
                 "(SELECT count(*) FROM task_outputs) outputs"
             )
         assert snapshot is not None
-        assert snapshot["input_refs_json"] == {"source_revision_id": str(source_id)}
+        assert json.loads(snapshot["input_refs_json"]) == {
+            "source_revision_id": str(source_id)
+        }
         assert snapshot["model_profile_id"] == "mock-text-v1"
         assert snapshot["schema_version"] == "script-v1"
         assert counts is not None and tuple(counts.values()) == (1, 1)
