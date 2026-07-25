@@ -60,22 +60,21 @@ async def test_twenty_replays_atomically_create_one_complete_task_bundle(
         assert {result.task_id for result in results} == {results[0].task_id}
         assert all(result.status == "queued" and result.poll_after_ms == 2000 for result in results)
         async with database.transaction() as connection:
-            counts = tuple(
-                await connection.fetchval(f"SELECT count(*) FROM {table}")
-                for table in (
-                    "submission_snapshots",
-                    "production_tasks",
-                    "production_attempts",
-                    "task_events",
-                    "task_jobs",
-                )
-            )
+            counts = []
+            for table in (
+                "submission_snapshots",
+                "production_tasks",
+                "production_attempts",
+                "task_events",
+                "task_jobs",
+            ):
+                counts.append(await connection.fetchval(f"SELECT count(*) FROM {table}"))
             idempotency_count = await connection.fetchval(
                 "SELECT count(*) FROM idempotency_records "
                 "WHERE owner_module = 'production_jobs'"
             )
             payload = await connection.fetchval("SELECT payload_json FROM task_jobs")
-        assert counts == (1, 1, 1, 1, 1)
+        assert tuple(counts) == (1, 1, 1, 1, 1)
         assert idempotency_count == 1
         if isinstance(payload, str):
             payload = json.loads(payload)
@@ -133,16 +132,15 @@ async def test_job_insert_failure_rolls_back_the_entire_task_bundle(
             )
 
         async with database.transaction() as connection:
-            counts = tuple(
-                await connection.fetchval(f"SELECT count(*) FROM {table}")
-                for table in (
-                    "submission_snapshots",
-                    "production_tasks",
-                    "production_attempts",
-                    "task_events",
-                    "task_jobs",
-                )
-            )
-        assert counts == (0, 0, 0, 0, 0)
+            counts = []
+            for table in (
+                "submission_snapshots",
+                "production_tasks",
+                "production_attempts",
+                "task_events",
+                "task_jobs",
+            ):
+                counts.append(await connection.fetchval(f"SELECT count(*) FROM {table}"))
+        assert tuple(counts) == (0, 0, 0, 0, 0)
     finally:
         await database.close()
