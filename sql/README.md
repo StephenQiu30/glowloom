@@ -8,4 +8,4 @@
 
 文件使用显式 `public.<table>`，因此不依赖调用方 `search_path`。所有主键 UUID 由应用生成；全部外键为 `MATCH SIMPLE`、`NOT DEFERRABLE`、`ON UPDATE RESTRICT`、`ON DELETE RESTRICT`。目录不包含公共关系/索引脚本，不使用后置 `ALTER TABLE`、ORM、Alembic autogenerate、psql 元命令或环境变量替换。
 
-当前 Requirement/Design/Plan 尚未 accepted，这些文件是可评审的 Design artifact，不授权直接改动用户现有数据库。获准实现后，Alembic `0001_mvp` 只按上述顺序读取并执行这些文件；测试必须使用隔离空库，先验证目标数据库名称，再与 `pg_catalog` exact-set 比较。
+这些文件是可静态评审的 Design artifact；是否允许执行以当前输入完全匹配的 `database_design_ready` 和 `implementation_start` 门禁记录为准。获准实现后，Alembic `0001_mvp` 只按上述顺序读取并执行这些文件；测试必须使用隔离空库，先验证目标数据库名称，再与 `pg_catalog` exact-set 比较。任何情况都不得直接改动用户现有数据库。
