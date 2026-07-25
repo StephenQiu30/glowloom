@@ -12,9 +12,9 @@ Lanverse 当前只交付一个 AI 短剧制作 MVP：单个创作者在受控本
 4. [`plans/`](plans/README.md) 用 1 份总计划和 8 份专业子计划给出 test-first 任务、命令、风险、回滚和证据位置。
 5. [`acceptance/`](acceptance/README.md) 只在实现完成后记录实际结果。
 
-只有适用 Requirement、Design、PRD 和 Plan 均为 `accepted`，且 `database_design_ready` 与 `implementation_start` 依次 `passed` 才授权实现。当前文档可在上游评审稳定后提前形成下游草案，但不得以草案状态运行后端或前端脚手架。
+适用 Requirement、Design、PRD 和 Plan 现均为 `accepted`，`database_design_ready` 与 `implementation_start` 也已依次 `passed`，因此已授权从 PLAN-02 P02-T001 开始实施。授权不改变任务顺序、TDD 或 allowlist；任一正式输入变更后，对应 gate 失效并必须重审。
 
-`docs/gates/` 只在首次产生有效门禁 Markdown 时创建，用于保存阶段之间的不可变放行记录；它不构成新的交付阶段，也不替代任何正式文档或 Acceptance。
+`docs/gates/` 保存阶段之间的不可变放行记录；它不构成新的交付阶段，也不替代任何正式文档或 Acceptance。当前实现放行记录为 [`implementation_start: passed`](gates/GATE-implementation_start-20260725T114120Z.md)。
 
 ## 唯一 MVP 实现清单
 
