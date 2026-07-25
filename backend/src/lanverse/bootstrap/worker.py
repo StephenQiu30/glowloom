@@ -20,4 +20,8 @@ async def run_worker(settings: ApplicationSettings) -> None:
         "worker host started",
         extra={"environment": container.settings.environment},
     )
-    await stopped.wait()
+    await container.start()
+    try:
+        await stopped.wait()
+    finally:
+        await container.close()

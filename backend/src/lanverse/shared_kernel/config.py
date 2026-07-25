@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,12 +19,25 @@ class ApplicationSettings(BaseSettings):
     api_port: int = Field(default=8000, ge=1, le=65535)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     docs_enabled: bool | None = None
+    database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DATABASE_URL", "LANVERSE_DATABASE_URL"),
+    )
+    database_pool_min_size: int = Field(default=1, ge=1, le=20)
+    database_pool_max_size: int = Field(default=10, ge=1, le=50)
 
     @property
     def expose_docs(self) -> bool:
         if self.docs_enabled is not None:
             return self.docs_enabled
         return self.environment != "production"
+
+    def require_database_url(self) -> str:
+        if not self.database_url:
+            raise ValueError("DATABASE_URL is required")
+        if not self.database_url.startswith(("postgresql://", "postgres://")):
+            raise ValueError("DATABASE_URL must use PostgreSQL")
+        return self.database_url
 
 
 @lru_cache(maxsize=1)

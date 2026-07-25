@@ -14,6 +14,10 @@ def create_lifespan(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.container = container
-        yield
+        await container.start()
+        try:
+            yield
+        finally:
+            await container.close()
 
     return lifespan
