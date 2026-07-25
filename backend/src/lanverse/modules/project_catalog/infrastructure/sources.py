@@ -121,6 +121,18 @@ class SourceRevisionRepository:
         )
         return tuple(self._map(row) for row in rows)
 
+    async def get_current(
+        self, connection: asyncpg.Connection[asyncpg.Record], episode_id: UUID
+    ) -> SourceRevisionSnapshot | None:
+        row = await connection.fetchrow(
+            """
+            SELECT * FROM source_revisions
+            WHERE episode_id = $1 AND status = 'confirmed'
+            """,
+            episode_id,
+        )
+        return self._map(row) if row else None
+
     @staticmethod
     def _map(row: asyncpg.Record) -> SourceRevisionSnapshot:
         return SourceRevisionSnapshot(
