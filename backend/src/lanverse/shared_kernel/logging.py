@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging
 
+from lanverse.jobs.observability import StructuredJsonFormatter
+
 
 def configure_logging(level: str) -> None:
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        force=True,
-    )
+    handler = logging.StreamHandler()
+    handler.setFormatter(StructuredJsonFormatter())
+    logging.basicConfig(level=level, handlers=[handler], force=True)

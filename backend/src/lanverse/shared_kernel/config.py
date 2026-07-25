@@ -25,6 +25,17 @@ class ApplicationSettings(BaseSettings):
     )
     database_pool_min_size: int = Field(default=1, ge=1, le=20)
     database_pool_max_size: int = Field(default=10, ge=1, le=50)
+    provider_max_concurrency: int = Field(default=3, ge=1, le=3)
+    provider_submit_timeout_seconds: int = Field(default=30, ge=1, le=30)
+    provider_status_timeout_seconds: int = Field(default=10, ge=1, le=10)
+    provider_poll_min_seconds: int = Field(default=2, ge=2, le=2)
+    provider_poll_max_seconds: int = Field(default=10, ge=2, le=10)
+    text_task_timeout_seconds: int = Field(default=120, ge=1, le=120)
+    video_task_timeout_seconds: int = Field(default=600, ge=1, le=600)
+    text_status_poll_limit: int = Field(default=60, ge=1, le=60)
+    video_status_poll_limit: int = Field(default=300, ge=1, le=300)
+    worker_lease_seconds: int = Field(default=30, ge=3, le=120)
+    worker_heartbeat_seconds: int = Field(default=10, ge=1, le=30)
 
     @property
     def expose_docs(self) -> bool:
