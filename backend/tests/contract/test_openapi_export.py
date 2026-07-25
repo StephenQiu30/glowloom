@@ -50,6 +50,10 @@ def test_openapi_export_is_deterministic_and_uses_the_app_factory(tmp_path: Path
         "confirmSource",
         "listSourceRevisions",
         "getSourceRevision",
+        "listTasks",
+        "getTask",
+        "cancelTask",
+        "retryTask",
     }
 
 
