@@ -32,3 +32,22 @@ class EpisodeSnapshot:
 class ProjectDetail:
     project: ProjectSnapshot
     episode: EpisodeSnapshot
+
+
+@dataclass(frozen=True, slots=True)
+class SourceRevisionSnapshot:
+    id: UUID
+    episode_id: UUID
+    version: int
+    parent_id: UUID | None
+    content: str
+    normalization_version: str
+    codepoint_count: int
+    sha256: str
+    rights_basis: str
+    rights_declared_at: datetime
+    status: str
+    resource_version: int
+    created_at: datetime
+    updated_at: datetime
+    confirmed_at: datetime | None
