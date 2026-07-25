@@ -12,6 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "openapi:generate": "openapi2ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

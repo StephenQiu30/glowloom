@@ -19,7 +19,8 @@ contracts-toolchain-check:
 
 contracts-check:
 	cd backend && uv run python scripts/export_openapi.py --check
-	cd frontend && $(PNPM_NODE) exec openapi --check
+	cd frontend && $(PNPM_NODE) run openapi:generate
+	git diff --exit-code -- backend/openapi/openapi.json frontend/src/services/generated
 
 test-jobs:
 	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/jobs -q -p no:cacheprovider
