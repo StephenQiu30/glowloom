@@ -53,7 +53,7 @@ def test_only_http_services_publish_loopback_ports() -> None:
 
 def test_frontend_uses_the_standalone_image_entrypoint() -> None:
     configured = services(compose_config())
-    assert "command" not in configured["frontend"]
+    assert configured["frontend"].get("command") is None
 
 
 def test_backend_units_reuse_external_postgres_and_minio_settings() -> None:
