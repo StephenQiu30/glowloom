@@ -22,6 +22,42 @@ CREATE TABLE public.delivery_versions (
     CONSTRAINT uq_delivery_versions_episode_version UNIQUE (episode_id, version),
     CONSTRAINT uq_delivery_versions_episode_id UNIQUE (episode_id, id),
     CONSTRAINT uq_delivery_versions_render_task UNIQUE (render_task_id),
+    CONSTRAINT fk_delivery_versions_episode FOREIGN KEY (episode_id)
+        REFERENCES public.episodes (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_delivery_versions_render_task
+        FOREIGN KEY (episode_id, render_task_id)
+        REFERENCES public.production_tasks (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_delivery_versions_retry
+        FOREIGN KEY (episode_id, retry_of_delivery_id)
+        REFERENCES public.delivery_versions (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_delivery_versions_snapshot
+        FOREIGN KEY (episode_id, render_snapshot_id)
+        REFERENCES public.render_snapshots (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_delivery_versions_final_attempt
+        FOREIGN KEY (render_task_id, final_attempt_id)
+        REFERENCES public.production_attempts (task_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_delivery_versions_mp4 FOREIGN KEY (mp4_media_version_id)
+        REFERENCES public.media_versions (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_delivery_versions_srt FOREIGN KEY (srt_media_version_id)
+        REFERENCES public.media_versions (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_delivery_versions_manifest FOREIGN KEY (manifest_media_version_id)
+        REFERENCES public.media_versions (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_delivery_versions_invariants CHECK (
         version > 0
         AND (
@@ -61,3 +97,24 @@ CREATE TABLE public.delivery_versions (
         )
     )
 );
+
+CREATE INDEX ix_delivery_versions_render_task_fk
+    ON public.delivery_versions (episode_id, render_task_id);
+
+CREATE INDEX ix_delivery_versions_retry_fk
+    ON public.delivery_versions (episode_id, retry_of_delivery_id);
+
+CREATE INDEX ix_delivery_versions_snapshot_fk
+    ON public.delivery_versions (episode_id, render_snapshot_id);
+
+CREATE INDEX ix_delivery_versions_final_attempt_fk
+    ON public.delivery_versions (render_task_id, final_attempt_id);
+
+CREATE INDEX ix_delivery_versions_mp4_fk
+    ON public.delivery_versions (mp4_media_version_id);
+
+CREATE INDEX ix_delivery_versions_srt_fk
+    ON public.delivery_versions (srt_media_version_id);
+
+CREATE INDEX ix_delivery_versions_manifest_fk
+    ON public.delivery_versions (manifest_media_version_id);

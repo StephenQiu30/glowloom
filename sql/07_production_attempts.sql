@@ -21,6 +21,16 @@ CREATE TABLE public.production_attempts (
     CONSTRAINT pk_production_attempts PRIMARY KEY (id),
     CONSTRAINT uq_production_attempts_task_number UNIQUE (task_id, attempt_no),
     CONSTRAINT uq_production_attempts_task_id UNIQUE (task_id, id),
+    CONSTRAINT fk_production_attempts_task_snapshot
+        FOREIGN KEY (task_id, snapshot_id)
+        REFERENCES public.production_tasks (id, snapshot_id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_production_attempts_parent
+        FOREIGN KEY (task_id, parent_attempt_id)
+        REFERENCES public.production_attempts (task_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_production_attempts_invariants CHECK (
         jsonb_typeof(usage_json) = 'object'
         AND jsonb_typeof(safety_json) = 'object'
@@ -88,3 +98,17 @@ CREATE TABLE public.production_attempts (
         )
     )
 );
+
+CREATE UNIQUE INDEX uq_production_attempts_provider_key
+    ON public.production_attempts (provider_id, provider_request_key)
+    WHERE provider_request_key IS NOT NULL;
+
+CREATE UNIQUE INDEX uq_production_attempts_provider_request_id
+    ON public.production_attempts (provider_id, provider_request_id)
+    WHERE provider_request_id IS NOT NULL;
+
+CREATE INDEX ix_production_attempts_snapshot_fk
+    ON public.production_attempts (task_id, snapshot_id);
+
+CREATE INDEX ix_production_attempts_parent_fk
+    ON public.production_attempts (task_id, parent_attempt_id);

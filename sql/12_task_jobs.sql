@@ -14,6 +14,10 @@ CREATE TABLE public.task_jobs (
     completed_at timestamptz,
     CONSTRAINT pk_task_jobs PRIMARY KEY (id),
     CONSTRAINT uq_task_jobs_task_id UNIQUE (task_id),
+    CONSTRAINT fk_task_jobs_task FOREIGN KEY (task_id)
+        REFERENCES public.production_tasks (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_task_jobs_invariants CHECK (
         jsonb_typeof(payload_json) = 'object'
         AND state IN ('pending', 'leased', 'completed', 'failed')
@@ -45,3 +49,11 @@ CREATE TABLE public.task_jobs (
         )
     )
 );
+
+CREATE INDEX ix_task_jobs_pending
+    ON public.task_jobs (next_attempt_at, created_at)
+    WHERE state = 'pending';
+
+CREATE INDEX ix_task_jobs_leased
+    ON public.task_jobs (lease_until)
+    WHERE state = 'leased';

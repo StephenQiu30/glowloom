@@ -19,6 +19,24 @@ CREATE TABLE public.subtitle_versions (
     CONSTRAINT pk_subtitle_versions PRIMARY KEY (id),
     CONSTRAINT uq_subtitle_versions_episode_version UNIQUE (episode_id, version),
     CONSTRAINT uq_subtitle_versions_episode_id UNIQUE (episode_id, id),
+    CONSTRAINT fk_subtitle_versions_episode FOREIGN KEY (episode_id)
+        REFERENCES public.episodes (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_subtitle_versions_parent FOREIGN KEY (episode_id, parent_id)
+        REFERENCES public.subtitle_versions (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_subtitle_versions_script
+        FOREIGN KEY (episode_id, script_version_id)
+        REFERENCES public.script_versions (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_subtitle_versions_shot_spec
+        FOREIGN KEY (episode_id, shot_spec_version_id)
+        REFERENCES public.shot_spec_versions (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_subtitle_versions_invariants CHECK (
         version > 0
         AND resource_version > 0
@@ -34,3 +52,16 @@ CREATE TABLE public.subtitle_versions (
         AND (parent_id IS NULL OR parent_id <> id)
     )
 );
+
+CREATE UNIQUE INDEX uq_subtitle_versions_current
+    ON public.subtitle_versions (episode_id)
+    WHERE status = 'confirmed';
+
+CREATE INDEX ix_subtitle_versions_parent_fk
+    ON public.subtitle_versions (episode_id, parent_id);
+
+CREATE INDEX ix_subtitle_versions_script_fk
+    ON public.subtitle_versions (episode_id, script_version_id);
+
+CREATE INDEX ix_subtitle_versions_shot_spec_fk
+    ON public.subtitle_versions (episode_id, shot_spec_version_id);

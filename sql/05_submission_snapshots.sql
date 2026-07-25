@@ -17,6 +17,10 @@ CREATE TABLE public.submission_snapshots (
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT pk_submission_snapshots PRIMARY KEY (id),
     CONSTRAINT uq_submission_snapshots_episode_id UNIQUE (episode_id, id),
+    CONSTRAINT fk_submission_snapshots_episode FOREIGN KEY (episode_id)
+        REFERENCES public.episodes (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_submission_snapshots_invariants CHECK (
         jsonb_typeof(input_refs_json) = 'object'
         AND jsonb_typeof(parameters_json) = 'object'

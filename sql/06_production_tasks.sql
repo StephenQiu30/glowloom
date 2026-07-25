@@ -10,7 +10,6 @@ CREATE TABLE public.production_tasks (
     status text NOT NULL DEFAULT 'queued',
     progress_json jsonb NOT NULL,
     retry_of_task_id uuid,
-    current_attempt_id uuid,
     error_code text,
     error_json jsonb,
     next_action text,
@@ -23,6 +22,19 @@ CREATE TABLE public.production_tasks (
         UNIQUE (idempotency_scope, idempotency_key),
     CONSTRAINT uq_production_tasks_id_snapshot UNIQUE (id, snapshot_id),
     CONSTRAINT uq_production_tasks_episode_id UNIQUE (episode_id, id),
+    CONSTRAINT fk_production_tasks_episode FOREIGN KEY (episode_id)
+        REFERENCES public.episodes (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_production_tasks_snapshot FOREIGN KEY (episode_id, snapshot_id)
+        REFERENCES public.submission_snapshots (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_production_tasks_retry
+        FOREIGN KEY (episode_id, retry_of_task_id)
+        REFERENCES public.production_tasks (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_production_tasks_invariants CHECK (
         jsonb_typeof(scope_json) = 'object'
         AND jsonb_typeof(progress_json) = 'object'
@@ -74,3 +86,16 @@ CREATE TABLE public.production_tasks (
         AND (retry_of_task_id IS NULL OR retry_of_task_id <> id)
     )
 );
+
+CREATE INDEX ix_production_tasks_nonterminal
+    ON public.production_tasks (status, updated_at)
+    WHERE status IN ('queued', 'running', 'cancelling', 'unknown');
+
+CREATE INDEX ix_production_tasks_episode_created_at
+    ON public.production_tasks (episode_id, created_at DESC);
+
+CREATE INDEX ix_production_tasks_snapshot_fk
+    ON public.production_tasks (episode_id, snapshot_id);
+
+CREATE INDEX ix_production_tasks_retry_fk
+    ON public.production_tasks (episode_id, retry_of_task_id);

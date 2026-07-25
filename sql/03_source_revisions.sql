@@ -18,6 +18,14 @@ CREATE TABLE public.source_revisions (
     CONSTRAINT pk_source_revisions PRIMARY KEY (id),
     CONSTRAINT uq_source_revisions_episode_version UNIQUE (episode_id, version),
     CONSTRAINT uq_source_revisions_episode_id UNIQUE (episode_id, id),
+    CONSTRAINT fk_source_revisions_episode FOREIGN KEY (episode_id)
+        REFERENCES public.episodes (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_source_revisions_parent FOREIGN KEY (episode_id, parent_id)
+        REFERENCES public.source_revisions (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_source_revisions_invariants CHECK (
         version > 0
         AND resource_version > 0
@@ -32,3 +40,10 @@ CREATE TABLE public.source_revisions (
         AND (parent_id IS NULL OR parent_id <> id)
     )
 );
+
+CREATE UNIQUE INDEX uq_source_revisions_current
+    ON public.source_revisions (episode_id)
+    WHERE status = 'confirmed';
+
+CREATE INDEX ix_source_revisions_parent_fk
+    ON public.source_revisions (episode_id, parent_id);

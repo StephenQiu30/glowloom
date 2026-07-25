@@ -9,6 +9,10 @@ CREATE TABLE public.task_outputs (
     CONSTRAINT pk_task_outputs PRIMARY KEY (id),
     CONSTRAINT uq_task_outputs_output UNIQUE (output_type, output_id),
     CONSTRAINT uq_task_outputs_task_slot UNIQUE (task_id, output_type, ordinal),
+    CONSTRAINT fk_task_outputs_task FOREIGN KEY (task_id)
+        REFERENCES public.production_tasks (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_task_outputs_invariants CHECK (
         output_type IN (
             'script_version',

@@ -26,6 +26,19 @@ CREATE TABLE public.media_versions (
     CONSTRAINT uq_media_versions_id_attempt_slot
         UNIQUE (id, origin_attempt_id, output_slot),
     CONSTRAINT uq_media_versions_bucket_key UNIQUE (bucket, object_key),
+    CONSTRAINT fk_media_versions_object FOREIGN KEY (media_object_id)
+        REFERENCES public.media_objects (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_media_versions_parent
+        FOREIGN KEY (media_object_id, parent_id)
+        REFERENCES public.media_versions (media_object_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_media_versions_origin_attempt FOREIGN KEY (origin_attempt_id)
+        REFERENCES public.production_attempts (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_media_versions_invariants CHECK (
         version > 0
         AND (sha256 IS NULL OR sha256 ~ '^[0-9a-f]{64}$')
@@ -55,3 +68,10 @@ CREATE TABLE public.media_versions (
         AND (parent_id IS NULL OR parent_id <> id)
     )
 );
+
+CREATE INDEX ix_media_versions_sha256
+    ON public.media_versions (sha256)
+    WHERE sha256 IS NOT NULL;
+
+CREATE INDEX ix_media_versions_parent_fk
+    ON public.media_versions (media_object_id, parent_id);

@@ -22,3 +22,6 @@ CREATE TABLE public.projects (
         AND timebase = 90000
     )
 );
+
+CREATE INDEX ix_projects_created_at
+    ON public.projects (created_at DESC);

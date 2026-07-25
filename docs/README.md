@@ -14,7 +14,7 @@ Lanverse 当前只交付一个 AI 短剧制作 MVP：单个创作者在受控本
 
 只有适用 Requirement、Design、PRD 和 Plan 均为 `accepted`，且 `database_design_ready` 与 `implementation_start` 依次 `passed` 才授权实现。当前文档可在上游评审稳定后提前形成下游草案，但不得以草案状态运行后端或前端脚手架。
 
-`docs/gates/` 只在首次产生有效门禁 YAML 时创建，用于保存阶段之间的不可变放行记录；它不构成新的交付阶段，也不替代任何正式文档或 Acceptance。
+`docs/gates/` 只在首次产生有效门禁 Markdown 时创建，用于保存阶段之间的不可变放行记录；它不构成新的交付阶段，也不替代任何正式文档或 Acceptance。
 
 ## 唯一 MVP 实现清单
 
@@ -32,6 +32,7 @@ Lanverse 当前只交付一个 AI 短剧制作 MVP：单个创作者在受控本
 
 ## 文档规则
 
+- `docs/` 只允许 `.md` 正式文档、索引和阶段记录；JSON、YAML、Python、生成物与可执行测试放在所属实现目录，禁止混入文档目录。
 - 活跃正式文档状态只使用 `draft/review/accepted`；验证结果使用 `passed/failed/insufficient/not_applicable`。
 - 除目录索引 `README.md` 外，正式 Markdown 文件统一使用 `NN-语义名称.md`：目录内按阅读和交付顺序使用两位数字，名称直接说明文档职责，不在文件名中重复内部文档编号。
 - `doc_no` 使用简短的层级语义编号（如 `REQ-01`、`DESIGN-01`、`PRODUCT-01`、`PLAN-01`、`ACCEPTANCE-01`）；条款级 P0、AC、Test 和 Evidence ID 保持稳定，用于机器追踪，不写入文件名。

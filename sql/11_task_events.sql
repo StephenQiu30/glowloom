@@ -10,6 +10,10 @@ CREATE TABLE public.task_events (
     CONSTRAINT pk_task_events PRIMARY KEY (event_id),
     CONSTRAINT uq_task_events_task_resource_version
         UNIQUE (task_id, task_resource_version),
+    CONSTRAINT fk_task_events_task FOREIGN KEY (task_id)
+        REFERENCES public.production_tasks (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_task_events_invariants CHECK (
         task_resource_version > 0
         AND jsonb_typeof(data_json) = 'object'
@@ -29,3 +33,6 @@ CREATE TABLE public.task_events (
         )
     )
 );
+
+CREATE INDEX ix_task_events_task_occurred_at
+    ON public.task_events (task_id, occurred_at);

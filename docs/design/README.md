@@ -17,7 +17,7 @@
 | 03 | [任务执行与媒体处理](03-任务执行与媒体处理.md) | draft | 快照、Task/Attempt/TaskJob、Provider、TTS、FFmpeg 与恢复 |
 | 04 | [接口数据与项目结构](04-接口数据与项目结构.md) | draft | OpenAPI、轮询、内部事件、逻辑数据、前后端目录、模式和测试边界 |
 | 05 | [AI短剧端到端制作流程](05-端到端制作流程.md) | draft | 唯一交付切片及其用户闭环、失败路径和 SMART Design AC |
-| 06 | [数据库表与迁移设计](06-数据库表与迁移设计.md) | draft | 根逐表 SQL、20 张应用表数据字典、FK/候选键、约束索引、事务锁、三份 JSONB Schema 与机器 exact-set 门禁 |
+| 06 | [数据库表与迁移设计](06-数据库表与迁移设计.md) | draft | 根逐表 SQL、20 张应用表数据字典、内联 FK/候选键、所属表索引、事务锁与 22 列 JSONB 契约 |
 | 07 | [需求实现追踪](07-需求实现追踪.md) | draft | Requirement→Design→PRD/Plan/Test/Acceptance 双向追踪 |
 
 ## 唯一解释规则

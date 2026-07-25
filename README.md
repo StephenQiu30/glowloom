@@ -10,7 +10,7 @@ Lanverse 是一个 AI 短剧制作 MVP：让一名内部创作者把获权中文
 
 ```text
 Lanverse/
-├── sql/       # public schema 的 20 个逐表 SQL、外键与索引
+├── sql/       # public schema 的 20 个自包含逐表 SQL
 ├── backend/   # Python 3.13、FastAPI、asyncpg/逐表 SQL、TaskJob、LangChain Core、MinIO 与 FFmpeg
 ├── frontend/  # create-next-app、shadcn/Radix、Redux Toolkit、umi-openapi，以及五个工作区
 ├── docker-compose.yml  # 只运行 frontend/backend-api/backend-worker，复用现有 PostgreSQL/MinIO

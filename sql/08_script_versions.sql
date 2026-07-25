@@ -21,6 +21,24 @@ CREATE TABLE public.script_versions (
     CONSTRAINT pk_script_versions PRIMARY KEY (id),
     CONSTRAINT uq_script_versions_episode_version UNIQUE (episode_id, version),
     CONSTRAINT uq_script_versions_episode_id UNIQUE (episode_id, id),
+    CONSTRAINT fk_script_versions_episode FOREIGN KEY (episode_id)
+        REFERENCES public.episodes (id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_script_versions_parent FOREIGN KEY (episode_id, parent_id)
+        REFERENCES public.script_versions (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_script_versions_source
+        FOREIGN KEY (episode_id, source_revision_id)
+        REFERENCES public.source_revisions (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
+    CONSTRAINT fk_script_versions_origin_task
+        FOREIGN KEY (episode_id, origin_task_id)
+        REFERENCES public.production_tasks (episode_id, id)
+        MATCH SIMPLE ON UPDATE RESTRICT ON DELETE RESTRICT
+        NOT DEFERRABLE INITIALLY IMMEDIATE,
     CONSTRAINT ck_script_versions_invariants CHECK (
         version > 0
         AND resource_version > 0
@@ -44,3 +62,20 @@ CREATE TABLE public.script_versions (
         AND (prompt_version IS NULL OR char_length(btrim(prompt_version)) > 0)
     )
 );
+
+CREATE UNIQUE INDEX uq_script_versions_current
+    ON public.script_versions (episode_id)
+    WHERE status = 'confirmed';
+
+CREATE UNIQUE INDEX uq_script_versions_origin_task
+    ON public.script_versions (origin_task_id)
+    WHERE origin_task_id IS NOT NULL;
+
+CREATE INDEX ix_script_versions_parent_fk
+    ON public.script_versions (episode_id, parent_id);
+
+CREATE INDEX ix_script_versions_source_fk
+    ON public.script_versions (episode_id, source_revision_id);
+
+CREATE INDEX ix_script_versions_origin_task_fk
+    ON public.script_versions (episode_id, origin_task_id);
