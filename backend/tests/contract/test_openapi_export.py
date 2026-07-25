@@ -54,6 +54,23 @@ def test_openapi_export_is_deterministic_and_uses_the_app_factory(tmp_path: Path
         "getTask",
         "cancelTask",
         "retryTask",
+        "generateScript",
+        "getCurrentScript",
+        "saveScript",
+        "confirmScript",
+        "deriveScriptDraft",
+        "listScriptVersions",
+        "getScriptVersion",
+        "generateStoryboard",
+        "getStoryboard",
+        "listCreativeAssets",
+        "getCreativeAssetVersion",
+        "saveCreativeAsset",
+        "saveStoryboard",
+        "confirmStoryboard",
+        "deriveStoryboardDraft",
+        "listStoryboardVersions",
+        "getStoryboardVersion",
     }
 
 
