@@ -14,7 +14,7 @@ from lanverse.modules.project_catalog.application.create_project import (
     CreateProjectHandler,
 )
 
-NOW = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
+NOW = datetime(2030, 7, 25, 12, 0, tzinfo=UTC)
 
 
 async def create_job(database: DatabasePool) -> UUID:
