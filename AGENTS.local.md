@@ -13,9 +13,12 @@
 1. 本项目内的角色配置放在 `.codex/agents/` 目录。
 2. 本项目内的可复用流程放在 `.codex/skills/` 目录。
 3. 本项目不再维护额外规格配置；`docs/` 只允许 `.md` 正式文档、阶段记录和对应 README 索引，禁止放入 JSON、YAML、Python、生成物或其他非 Markdown 文件。
-4. 应用实现进入已接受的 Plan 后，应用根仅允许 `backend/` 与 `frontend/`；API、TaskJob Worker 与供应能力适配器均归入 `backend/`，不得创建 `deploy/`、顶层 `apps/`、`packages/` 或独立 Worker 仓库。
+4. 应用实现进入已接受的 Plan 后，应用根仅允许 `backend/` 与 `frontend/`；后端源码固定在 `backend/src/lanverse/`，API、TaskJob Worker、业务模块和 Provider/MinIO/FFmpeg Adapter 均归入 `backend/`；前端源码固定在 `frontend/src/`。不得创建根 `src/`、`deploy/`、顶层 `apps/`、`packages/` 或独立 Worker 仓库。
 5. 默认本地 Compose 位于根 `docker-compose.yml` 且只管理 `frontend/backend-api/backend-worker`；其他环境使用 `docker-compose-<env>.yml`，生产固定 `docker-compose-prod.yml`，仅在对应环境进入正式范围后创建。
 6. Compose 和应用复用当前 shell 或用户显式指定的仓库外环境配置中的 PostgreSQL/MinIO；不得扫描、复制、打印或提交用户 secret、`.env`、本地数据库数据或对象存储数据。
 7. 数据库物理实现源固定在根 `sql/`：20 个 `NN_<table>.sql` 按 FK 依赖顺序编号，每表一个标准 SQL 文件；PK、UQ、FK、CHECK 直接写入所属表的 `CREATE TABLE`，索引也保存在所属表文件，不设置公共关系或索引 SQL。目标为 `lanverse` 数据库的 `public` schema；Alembic 只按序执行这些根 SQL，不复制 DDL，不使用 ORM、Metadata 或 autogenerate。
-8. FastAPI OpenAPI artifact 固定为 `backend/openapi/openapi.json`；前端使用 `frontend/openapi2ts.config.ts` 与 `@umijs/openapi` 生成 `frontend/src/services/generated/`，页面经手写 RTK Query 层访问，禁止手写第二套 URL 或 DTO。
+8. FastAPI 路由与 Pydantic 是唯一 HTTP 契约源；开发环境启用 Swagger `/docs` 与 `/openapi.json`，`backend/scripts/export_openapi.py` 确定性写入 `backend/openapi/openapi.json`。前端使用 `frontend/openapi2ts.config.ts` 与 `@umijs/openapi` 生成 `frontend/src/services/generated/`，页面只能经手写 RTK Query 层访问；生成目录不得手改，禁止手写第二套 URL、DTO 或降级 OpenAPI。
 9. 项目验证命令由根 Makefile 统一暴露；实现前至少提供 `test-architecture`、`test-migration`、`contracts-check`、`test-jobs`、`test-e2e`、`lint`、`typecheck` 和 `build`，并把精确结果写入 Acceptance。
+10. 参考项目中的 `agents/routes/lib/middleware/types` 职责分别映射到 owning module 的 `application/transport`、`shared_kernel/bootstrap` 和 OpenAPI 生成客户端；禁止新增 `other`、运行时 `test` 路由或重复通用工具层。MVP 使用 Task HTTP 轮询，不创建 WebSocket/socket 子系统。
+11. `build/`、`data/`、`env/` 不是仓库源码目录：编译产物由工具默认目录生成并忽略，本地模型、MinIO 字节和运行数据使用仓库外现有环境，secret 只来自 shell 或用户显式配置。跨生态编排只放根 Makefile，后端专用辅助命令放 `backend/scripts/`，不预建空目录。
+12. 每次任务产生仓库修改时，只显式暂存任务文件，验证后创建符合 `AGENTS.md` 类型规范的提交；最终 `git status --short` 不得残留本任务修改。若用户要求发布到 `main`，推送后还必须确认 `HEAD` 与 `origin/main` 一致。
