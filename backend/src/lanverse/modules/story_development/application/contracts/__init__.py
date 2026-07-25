@@ -1,0 +1,1 @@
+"""Versioned structured-content contracts."""

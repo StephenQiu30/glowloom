@@ -99,7 +99,10 @@ def test_fixed_script_asset_and_six_shot_contract_is_strict_and_hashable() -> No
     assert len(storyboard.shots) == 6
     assert storyboard.total_duration_ticks == 2700000
     assert all(shot.duration_ticks % 3750 == 0 for shot in storyboard.shots)
-    assert all(shot.content_hash == canonical_content_hash(shot.hash_input()) for shot in storyboard.shots)
+    assert all(
+        shot.content_hash == canonical_content_hash(shot.hash_input())
+        for shot in storyboard.shots
+    )
     assert canonical_content_hash(script) == canonical_content_hash(script)
 
 
