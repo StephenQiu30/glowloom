@@ -5,7 +5,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, Request, Response, status
 
-from lanverse.modules.production_jobs.transport.schemas import task_accepted
 from lanverse.modules.story_development.application.generate import (
     GenerateScriptCommand,
     GenerateScriptHandler,
@@ -27,6 +26,7 @@ from lanverse.modules.story_development.transport.script_schemas import (
     ScriptVersionResponse,
     script_response,
 )
+from lanverse.modules.story_development.transport.task_schemas import task_accepted
 from lanverse.shared_kernel.http_contracts import Problem, TaskAccepted
 from lanverse.shared_kernel.http_dependencies import database_from_request
 from lanverse.shared_kernel.http_headers import (
