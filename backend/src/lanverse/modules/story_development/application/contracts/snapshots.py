@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from lanverse.modules.story_development.application.contracts.content_v1 import (
@@ -9,6 +10,8 @@ from lanverse.modules.story_development.application.contracts.content_v1 import 
     ScriptContentV1,
     ShotSpecCollectionV1,
 )
+
+VersionStatus = Literal["draft", "confirmed", "superseded"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,7 +24,7 @@ class ScriptVersionSnapshot:
     content: ScriptContentV1
     content_hash: str
     origin_task_id: UUID | None
-    status: str
+    status: VersionStatus
     resource_version: int
     created_at: datetime
     updated_at: datetime
@@ -40,7 +43,7 @@ class CreativeAssetVersionSnapshot:
     content: CreativeAssetContentV1
     content_hash: str
     origin_task_id: UUID | None
-    status: str
+    status: VersionStatus
     resource_version: int
     created_at: datetime
     updated_at: datetime
@@ -69,7 +72,7 @@ class StoryboardVersionSnapshot:
     content: ShotSpecCollectionV1
     content_hash: str
     origin_task_id: UUID | None
-    status: str
+    status: VersionStatus
     resource_version: int
     created_at: datetime
     updated_at: datetime

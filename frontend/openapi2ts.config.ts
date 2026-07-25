@@ -1,6 +1,8 @@
+import path from "node:path";
+
 const config = {
-  schemaPath: "../backend/openapi/openapi.json",
-  serversPath: "./src/services/generated",
+  schemaPath: path.resolve(process.cwd(), "../backend/openapi/openapi.json"),
+  serversPath: path.resolve(process.cwd(), "./src/services/generated"),
   namespace: "API",
   nullable: true,
   enumStyle: "string-literal",

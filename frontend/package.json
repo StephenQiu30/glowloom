@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "openapi:generate": "openapi2ts",
+    "openapi:generate": "node scripts/generate-openapi.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

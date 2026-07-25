@@ -54,6 +54,7 @@ async def test_script_http_versions_generation_etags_and_history(
             headers={"If-Match": derived.headers["etag"]},
             json={"content": derived_body["content"]},
         )
+        assert saved.status_code == 200, saved.text
         confirmed = await client.post(
             f"/v1/script-versions/{derived_body['id']}:confirm",
             headers={"If-Match": saved.headers["etag"]},
@@ -108,6 +109,7 @@ async def test_storyboard_asset_http_joint_confirmation_and_derivation(
             headers={"If-Match": board.headers["etag"]},
             json={"content": board.json()["content"]},
         )
+        assert saved_board.status_code == 200, saved_board.text
         confirmed = await client.post(
             f"/v1/shot-spec-versions/{board_id}:confirm",
             headers={"If-Match": saved_board.headers["etag"]},

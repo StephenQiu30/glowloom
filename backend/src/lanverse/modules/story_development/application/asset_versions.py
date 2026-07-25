@@ -23,6 +23,10 @@ class CreativeAssetVersionNotFound(LookupError):
     pass
 
 
+class CreativeAssetIdentityInvalid(ValueError):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class SaveCreativeAssetCommand:
     version_id: UUID
@@ -56,7 +60,9 @@ class SaveCreativeAssetHandler(_AssetHandler):
                 command.content.asset_id != current.asset_id
                 or command.content.asset_type != current.asset_type
             ):
-                raise ValueError("stable asset identity and type cannot be changed")
+                raise CreativeAssetIdentityInvalid(
+                    "stable asset identity and type cannot be changed"
+                )
             return await self._assets.update_draft(connection, current, command.content)
 
 
