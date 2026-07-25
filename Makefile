@@ -1,9 +1,12 @@
-.PHONY: test-architecture test-migration contracts-check test-jobs test-e2e test lint typecheck build build-images
+.PHONY: test-architecture test-database-design test-migration contracts-check test-jobs test-e2e test lint typecheck build build-images
 
 PNPM_NODE = pnpm dlx node@24.18.0 $$(command -v pnpm)
 
 test-architecture:
 	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/architecture -q -p no:cacheprovider
+
+test-database-design:
+	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/database_design -q -p no:cacheprovider
 
 test-migration:
 	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/migrations -q -p no:cacheprovider
