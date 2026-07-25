@@ -45,3 +45,8 @@ def test_all_container_stages_pin_base_image_digests() -> None:
         assert from_lines
         assert all("@sha256:" in line for line in from_lines), from_lines
         assert all(":latest" not in line for line in from_lines), from_lines
+
+
+def test_backend_runtime_copies_a_non_editable_package_install() -> None:
+    text = (ROOT / "backend/Dockerfile").read_text()
+    assert "uv sync --frozen --no-dev --no-editable" in text
