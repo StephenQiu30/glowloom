@@ -77,16 +77,20 @@ async def catalog_snapshot(database_url: str) -> tuple[list[asyncpg.Record], ...
         columns = await connection.fetch(
             "SELECT table_name,column_name,data_type,is_nullable,column_default "
             "FROM information_schema.columns WHERE table_schema='public' "
+            "AND table_name <> 'alembic_version' "
             "ORDER BY table_name,ordinal_position"
         )
         constraints = await connection.fetch(
-            "SELECT c.conname,c.contype,t.relname,pg_get_constraintdef(c.oid) definition "
+            "SELECT c.conname,c.contype::text contype,t.relname,"
+            "pg_get_constraintdef(c.oid) definition "
             "FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid "
             "JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='public' "
+            "AND t.relname <> 'alembic_version' "
             "ORDER BY t.relname,c.conname"
         )
         indexes = await connection.fetch(
             "SELECT tablename,indexname,indexdef FROM pg_indexes WHERE schemaname='public' "
+            "AND tablename <> 'alembic_version' "
             "ORDER BY tablename,indexname"
         )
         return tables, columns, constraints, indexes
@@ -115,7 +119,7 @@ async def test_double_upgrade_builds_a_stable_exact_catalog(isolated_database: s
     assert initial == repeated
     tables, columns, constraints, indexes = initial
     assert {row["tablename"] for row in tables} == TABLES | {"alembic_version"}
-    assert len(columns) == 273
+    assert len(columns) == 272
     assert sum(row["contype"] == "p" for row in constraints) == 20
     assert sum(row["contype"] == "f" for row in constraints) == 51
     assert sum(row["contype"] == "u" for row in constraints) == 37
