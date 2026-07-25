@@ -20,8 +20,16 @@ from lanverse.shared_kernel.ids import new_id
 class StoryboardVersionRepository:
     SELECT = """
         SELECT bv.*,
-               (SELECT id FROM script_versions
-                WHERE episode_id=bv.episode_id AND status='confirmed') current_script_id
+               NOT EXISTS (
+                   SELECT 1 FROM script_versions current_script
+                   JOIN source_revisions current_source
+                     ON current_source.episode_id=current_script.episode_id
+                    AND current_source.id=current_script.source_revision_id
+                    AND current_source.status='confirmed'
+                   WHERE current_script.id=bv.script_version_id
+                     AND current_script.episode_id=bv.episode_id
+                     AND current_script.status='confirmed'
+               ) input_outdated
         FROM shot_spec_versions bv
     """
 
@@ -152,6 +160,4 @@ class StoryboardVersionRepository:
     @staticmethod
     def _map(row: asyncpg.Record) -> StoryboardVersionSnapshot:
         value = map_storyboard(row)
-        return replace(
-            value, input_outdated=row["current_script_id"] != value.content.script_version_id
-        )
+        return replace(value, input_outdated=row["input_outdated"] is True)

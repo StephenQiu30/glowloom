@@ -104,6 +104,7 @@ class TaskRepository:
         connection: asyncpg.Connection[asyncpg.Record],
         row: asyncpg.Record,
     ) -> TaskSnapshot:
+        input_refs = object_value(row["input_refs_json"])
         outputs = await connection.fetch(
             """
             SELECT output_type, output_id FROM task_outputs
@@ -120,8 +121,10 @@ class TaskRepository:
             scope=object_value(row["scope_json"]),
             status=row["status"],
             progress=object_value(row["progress_json"]),
-            input_refs=object_value(row["input_refs_json"]),
-            input_outdated=False,
+            input_refs=input_refs,
+            input_outdated=await self._input_outdated(
+                connection, row["episode_id"], row["type"], input_refs
+            ),
             current_attempt_id=row["current_attempt_id"],
             result_refs=tuple(
                 TaskResultSnapshot(output_type=item["output_type"], output_id=item["output_id"])
@@ -136,3 +139,42 @@ class TaskRepository:
             updated_at=row["updated_at"],
             finished_at=row["finished_at"],
         )
+
+    @staticmethod
+    async def _input_outdated(
+        connection: asyncpg.Connection[asyncpg.Record],
+        episode_id: UUID,
+        task_type: str,
+        input_refs: dict[str, object],
+    ) -> bool:
+        field = {
+            "generate_script": "source_revision_id",
+            "generate_storyboard": "script_version_id",
+        }.get(task_type)
+        if field is None:
+            return False
+        try:
+            input_id = UUID(str(input_refs[field]))
+        except (KeyError, ValueError):
+            return True
+        if task_type == "generate_script":
+            matches = await connection.fetchval(
+                "SELECT true FROM source_revisions "
+                "WHERE id=$1 AND episode_id=$2 AND status='confirmed'",
+                input_id,
+                episode_id,
+            )
+        else:
+            matches = await connection.fetchval(
+                """
+                SELECT true FROM script_versions script
+                JOIN source_revisions source
+                  ON source.episode_id=script.episode_id
+                 AND source.id=script.source_revision_id
+                 AND source.status='confirmed'
+                WHERE script.id=$1 AND script.episode_id=$2 AND script.status='confirmed'
+                """,
+                input_id,
+                episode_id,
+            )
+        return matches is not True
