@@ -4,7 +4,7 @@ doc_type: Architecture Decision Record
 doc_no: DESIGN-01
 title: MVP技术选型与范围
 status: accepted
-version: 1.0.0
+version: 1.0.1
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
 feature_area: AI 短剧制作 MVP
@@ -31,7 +31,7 @@ Lanverse MVP 是内部验证用的单实例 Web 应用，只交付一个 30～60
 | --- | --- | --- |
 | 语言/仓库 | 后端 Python 3.13 + uv；前端 TypeScript strict + Node.js 24 LTS + pnpm；分别提交 `uv.lock` 与 `pnpm-lock.yaml` | database_design_ready 通过后、PLAN-02 脚手架执行时锁定精确 patch 与安装命令 |
 | Web | React、Next.js 16.2.11+ Active LTS 安全补丁、App Router、Tailwind CSS；官方 create-next-app 脚手架 | 支持浏览器与构建版本 |
-| 组件 | shadcn/ui CLI 显式 `--template next --preset base-nova --base radix`、统一 `radix-ui` Primitives、`components.json` | PLAN-02 固定 `radix-nova`、preset code `b2fA`/version `b`、Lucide 与生成文件/依赖清单；漂移即失败 |
+| 组件 | shadcn/ui CLI 显式 `--template next --preset nova --base radix`、统一 `radix-ui` Primitives、`components.json` | PLAN-02 固定 `radix-nova`、preset code `b2fA`/version `b`、Lucide 与生成文件/依赖清单；漂移即失败 |
 | 前端状态 | `@reduxjs/toolkit`、`react-redux`、RTK Query；`@umijs/openapi` 从 Swagger/OpenAPI 生成唯一请求与 DTO | Store/生成服务封装边界与零漂移命令 |
 | API | FastAPI `standard-no-fastapi-cloud-cli`、Pydantic v2、REST/JSON；自动 Swagger UI，确定性导出 OpenAPI 3.1，任务 2 秒轮询 | 本地 docs 开关、契约校验与 umi-openapi 兼容测试 |
 | 数据 | asyncpg 参数化 SQL、按表命名的 PostgreSQL `.sql`、Alembic 版本执行 | DESIGN-06 accepted 后锁定驱动/迁移与 catalog 测试；不使用 ORM/Metadata/autogenerate |
