@@ -4,7 +4,6 @@ import os
 import tomllib
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
@@ -75,7 +74,7 @@ def test_present_backend_modules_follow_allowlist_and_shape() -> None:
 
     for name in present:
         module = modules_root / name
-        assert MODULE_PARTS <= child_directories(module)
+        assert child_directories(module) >= MODULE_PARTS
         assert (module / "public.py").is_file()
 
 

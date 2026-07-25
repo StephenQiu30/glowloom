@@ -16,6 +16,10 @@ dependencies = [
     "rfc8785==0.1.4",
 ]
 
+[project.scripts]
+lanverse-api = "lanverse.entrypoints.api:main"
+lanverse-worker = "lanverse.entrypoints.worker:main"
+
 [build-system]
 requires = ["uv_build==0.11.31"]
 build-backend = "uv_build"
@@ -27,3 +31,15 @@ dev = [
     "pytest-asyncio==1.4.0",
     "ruff==0.16.0",
 ]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+packages = ["lanverse"]

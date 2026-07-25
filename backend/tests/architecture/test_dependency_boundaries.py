@@ -6,7 +6,6 @@ import re
 import tomllib
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
@@ -109,9 +108,12 @@ def test_frontend_has_only_one_direct_http_sender() -> None:
     for path in sorted(source.rglob("*.ts")) + sorted(source.rglob("*.tsx")):
         relative = path.relative_to(source)
         text = path.read_text()
-        if re.search(r"\b(fetch|XMLHttpRequest)\s*\(|\baxios\b", text):
-            if relative not in allowed and "services/generated" not in relative.as_posix():
-                violations.append(relative.as_posix())
+        if (
+            re.search(r"\b(fetch|XMLHttpRequest)\s*\(|\baxios\b", text)
+            and relative not in allowed
+            and "services/generated" not in relative.as_posix()
+        ):
+            violations.append(relative.as_posix())
     assert not violations, violations
 
 
