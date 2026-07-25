@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 from __future__ import annotations
 
 import hashlib
@@ -9,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[3]
 DOCS = ROOT / "docs"
 SQL = ROOT / "sql"
 
+# One line per table keeps physical column-order drift reviewable as a single diff.
 TABLE_COLUMNS = {
     "projects": "id title status aspect_ratio width height fps timebase created_at updated_at",
     "episodes": "id project_id target_min_ticks target_max_ticks created_at updated_at",
