@@ -3,8 +3,8 @@ layer: Design
 doc_type: Architecture Decision Record
 doc_no: DESIGN-01
 title: MVP技术选型与范围
-status: draft
-version: 0.5.0
+status: accepted
+version: 1.0.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
 feature_area: AI 短剧制作 MVP

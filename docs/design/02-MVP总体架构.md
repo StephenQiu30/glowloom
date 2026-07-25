@@ -3,8 +3,8 @@ layer: Design
 doc_type: Solution Architecture Design
 doc_no: DESIGN-02
 title: MVP总体架构
-status: draft
-version: 0.6.0
+status: accepted
+version: 1.0.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
 feature_area: AI 短剧端到端制作

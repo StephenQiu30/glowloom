@@ -1,6 +1,6 @@
 # Design 文档
 
-本目录把 AI 短剧 MVP 的 Requirement 拆成横切设计、业务模块设计和追踪矩阵。当前 Requirement 仍为 `review`，因此全部 Design 保持 `draft`；只有上游 Requirement 全部 `accepted` 且 `design_entry` 通过后，才可依次接受 PRD 与 Plan。本文档拆分不授权创建应用代码或 Acceptance。
+本目录把已接受的 AI 短剧 MVP Requirement 拆成 6 份横切设计、6 份业务模块设计和 1 份追踪矩阵，全部 Design 已进入 `accepted`。Design 接受只放行 PRD 评审，实现仍需通过全部下游文档和独立门禁。
 
 ## 上游需求
 
