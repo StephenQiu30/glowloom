@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 REQUIRED_TARGETS = {
     "test-architecture",
+    "test-contract",
     "test-migration",
     "contracts-check",
     "test-jobs",
