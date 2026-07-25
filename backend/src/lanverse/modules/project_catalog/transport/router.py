@@ -5,7 +5,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, Request, Response, status
 
-from lanverse.infrastructure.database.pool import DatabasePool
 from lanverse.modules.project_catalog.application.create_project import (
     CreateProjectCommand,
     CreateProjectHandler,
@@ -36,7 +35,7 @@ from lanverse.modules.project_catalog.transport.schemas import (
     source_response,
 )
 from lanverse.shared_kernel.http_contracts import Problem
-from lanverse.shared_kernel.http_errors import HttpProblem
+from lanverse.shared_kernel.http_dependencies import database_from_request
 from lanverse.shared_kernel.http_headers import (
     parse_if_match,
     strong_etag,
@@ -52,18 +51,6 @@ ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
-def database_from(request: Request) -> DatabasePool:
-    database = request.app.state.container.database
-    if not isinstance(database, DatabasePool):
-        raise HttpProblem(
-            status=503,
-            title="Database unavailable",
-            code="DATABASE_NOT_CONFIGURED",
-            retryable=True,
-        )
-    return database
-
-
 @router.post(
     "/projects",
     operation_id="createProject",
@@ -76,7 +63,7 @@ async def create_project(
     request: Request,
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ) -> ProjectDetailResponse:
-    database = database_from(request)
+    database = database_from_request(request)
     result = await CreateProjectHandler(database).execute(
         CreateProjectCommand(
             title=body.title,
@@ -88,7 +75,7 @@ async def create_project(
 
 @router.get("/projects", operation_id="listProjects", response_model=ProjectListResponse)
 async def list_projects(request: Request) -> ProjectListResponse:
-    values = await ListProjectsHandler(database_from(request)).execute()
+    values = await ListProjectsHandler(database_from_request(request)).execute()
     return ProjectListResponse(items=tuple(project_detail_response(value) for value in values))
 
 
@@ -99,7 +86,7 @@ async def list_projects(request: Request) -> ProjectListResponse:
     responses=ERROR_RESPONSES,
 )
 async def get_project(project_id: UUID, request: Request) -> ProjectDetailResponse:
-    value = await GetProjectHandler(database_from(request)).execute(project_id)
+    value = await GetProjectHandler(database_from_request(request)).execute(project_id)
     return project_detail_response(value)
 
 
@@ -110,7 +97,7 @@ async def get_project(project_id: UUID, request: Request) -> ProjectDetailRespon
     responses=ERROR_RESPONSES,
 )
 async def get_episode(episode_id: UUID, request: Request) -> EpisodeResponse:
-    value = await GetEpisodeHandler(database_from(request)).execute(episode_id)
+    value = await GetEpisodeHandler(database_from_request(request)).execute(episode_id)
     return episode_response(value)
 
 
@@ -128,7 +115,7 @@ async def create_source_revision(
     response: Response,
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ) -> SourceRevisionResponse:
-    value = await CreateSourceRevisionHandler(database_from(request)).execute(
+    value = await CreateSourceRevisionHandler(database_from_request(request)).execute(
         CreateSourceRevisionCommand(
             episode_id=episode_id,
             content=body.content,
@@ -153,7 +140,7 @@ async def confirm_source(
     response: Response,
     if_match: Annotated[str, Header(alias="If-Match")],
 ) -> SourceRevisionResponse:
-    value = await ConfirmSourceHandler(database_from(request)).execute(
+    value = await ConfirmSourceHandler(database_from_request(request)).execute(
         ConfirmSourceCommand(version_id, parse_if_match(if_match))
     )
     response.headers["ETag"] = strong_etag(value.resource_version)
@@ -169,7 +156,7 @@ async def confirm_source(
 async def list_source_revisions(
     episode_id: UUID, request: Request
 ) -> SourceRevisionListResponse:
-    values = await ListSourceRevisionsHandler(database_from(request)).execute(episode_id)
+    values = await ListSourceRevisionsHandler(database_from_request(request)).execute(episode_id)
     return SourceRevisionListResponse(items=tuple(source_response(value) for value in values))
 
 
@@ -182,6 +169,6 @@ async def list_source_revisions(
 async def get_source_revision(
     version_id: UUID, request: Request, response: Response
 ) -> SourceRevisionResponse:
-    value = await GetSourceRevisionHandler(database_from(request)).execute(version_id)
+    value = await GetSourceRevisionHandler(database_from_request(request)).execute(version_id)
     response.headers["ETag"] = strong_etag(value.resource_version)
     return source_response(value)

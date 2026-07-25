@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -39,3 +40,46 @@ class TaskAcceptedSnapshot:
     @property
     def status_url(self) -> str:
         return f"/v1/tasks/{self.task_id}"
+
+
+@dataclass(frozen=True, slots=True)
+class TaskResultSnapshot:
+    output_type: str
+    output_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class TaskSnapshot:
+    id: UUID
+    episode_id: UUID
+    snapshot_id: UUID
+    task_type: str
+    scope: dict[str, object]
+    status: str
+    progress: dict[str, object]
+    input_refs: dict[str, object]
+    input_outdated: bool
+    current_attempt_id: UUID | None
+    result_refs: tuple[TaskResultSnapshot, ...]
+    error_code: str | None
+    error: dict[str, object] | None
+    next_action: str | None
+    resource_version: int
+    retry_of_task_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
+    finished_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class RetrySubmissionSnapshot:
+    task: TaskSnapshot
+    capability: str
+    prompt: str
+    parameters: dict[str, object]
+    model_profile_id: str
+    provider_id: str
+    model_id: str
+    route_version: str
+    schema_version: str
+    handler_version: str

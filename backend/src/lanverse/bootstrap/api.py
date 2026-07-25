@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from lanverse.bootstrap.container import create_container
 from lanverse.bootstrap.lifespan import create_lifespan
+from lanverse.modules.production_jobs.transport.errors import register_production_job_errors
+from lanverse.modules.production_jobs.transport.router import router as production_job_router
 from lanverse.modules.project_catalog.transport.errors import register_project_catalog_errors
 from lanverse.modules.project_catalog.transport.router import router as project_catalog_router
 from lanverse.shared_kernel.config import ApplicationSettings
@@ -33,6 +35,7 @@ def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
     app.add_exception_handler(HttpProblem, http_problem_handler)
     app.add_exception_handler(RequestValidationError, request_validation_problem_handler)
     register_project_catalog_errors(app)
+    register_production_job_errors(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://127.0.0.1:3000"],
@@ -42,4 +45,5 @@ def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
         expose_headers=["ETag"],
     )
     app.include_router(project_catalog_router)
+    app.include_router(production_job_router)
     return app

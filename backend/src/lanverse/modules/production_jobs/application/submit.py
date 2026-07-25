@@ -33,7 +33,11 @@ class TaskSubmitter:
         request_body = self._request_body(command)
         request_hash = canonical_request_hash(
             method="POST",
-            operation_id=self._operation_id(command.task_type),
+            operation_id=(
+                "retryTask"
+                if command.retry_of_task_id is not None
+                else self._operation_id(command.task_type)
+            ),
             path_parameters={"episode_id": str(command.episode_id)},
             body=request_body,
         )
