@@ -115,7 +115,11 @@ await generateService({
         json.dumps(
             {
                 "extends": str(FRONTEND / "tsconfig.json"),
-                "compilerOptions": {"noEmit": True},
+                "compilerOptions": {
+                    "noEmit": True,
+                    "types": ["node"],
+                    "typeRoots": [str(FRONTEND / "node_modules" / "@types")],
+                },
                 "include": [str(output / "**/*.ts"), str(REQUEST)],
             }
         )
