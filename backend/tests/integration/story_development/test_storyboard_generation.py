@@ -81,8 +81,8 @@ async def test_storyboard_generation_has_stable_assets_shots_and_output_slots(
             database, release_version="test-release"
         ).execute(GenerateStoryboardCommand(episode_id, "board:generate:001"))
         provider = DeterministicTextProvider()
-        first_output = await provider.generate_storyboard(script.content)
-        assert first_output == await provider.generate_storyboard(script.content)
+        first_output = await provider.generate_storyboard(script.id, script.content)
+        assert first_output == await provider.generate_storyboard(script.id, script.content)
 
         registrar = StoryboardResultRegistrar(database)
         first = await registrar.register(accepted.task_id, first_output)
