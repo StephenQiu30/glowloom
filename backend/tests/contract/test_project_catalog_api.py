@@ -14,11 +14,10 @@ async def api_client(database_url: str) -> AsyncIterator[AsyncClient]:
         {"DATABASE_URL": database_url, "environment": "test"}
     )
     app = create_app(settings)
-    async with app.router.lifespan_context(app):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            yield client
+    async with app.router.lifespan_context(app), AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        yield client
 
 
 def source_text(label: str = "甲") -> str:

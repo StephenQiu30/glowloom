@@ -13,6 +13,17 @@ from lanverse.modules.project_catalog.domain.values import ProductionSpec
 
 
 class ProjectRepository:
+    DETAIL_SELECT = """
+        SELECT p.id project_id, p.title, p.status, p.created_at project_created_at,
+               p.updated_at project_updated_at, e.id episode_id,
+               e.target_min_ticks, e.target_max_ticks,
+               e.created_at episode_created_at, e.updated_at episode_updated_at,
+               s.id current_source_revision_id
+        FROM projects p JOIN episodes e ON e.project_id = p.id
+        LEFT JOIN source_revisions s
+          ON s.episode_id = e.id AND s.status = 'confirmed'
+    """
+
     async def insert_project_with_episode(
         self,
         connection: asyncpg.Connection[asyncpg.Record],
@@ -32,20 +43,25 @@ class ProjectRepository:
         self, connection: asyncpg.Connection[asyncpg.Record], project_id: UUID
     ) -> ProjectDetail | None:
         row = await connection.fetchrow(
-            """
-            SELECT p.id project_id, p.title, p.status, p.created_at project_created_at,
-                   p.updated_at project_updated_at, e.id episode_id,
-                   e.target_min_ticks, e.target_max_ticks,
-                   e.created_at episode_created_at, e.updated_at episode_updated_at,
-                   s.id current_source_revision_id
-            FROM projects p JOIN episodes e ON e.project_id = p.id
-            LEFT JOIN source_revisions s
-              ON s.episode_id = e.id AND s.status = 'confirmed'
-            WHERE p.id = $1
-            """,
+            self.DETAIL_SELECT + " WHERE p.id = $1",
             project_id,
         )
         return self._map_detail(row) if row else None
+
+    async def list_details(
+        self, connection: asyncpg.Connection[asyncpg.Record]
+    ) -> tuple[ProjectDetail, ...]:
+        rows = await connection.fetch(self.DETAIL_SELECT + " ORDER BY p.created_at DESC, p.id")
+        return tuple(self._map_detail(row) for row in rows)
+
+    async def get_episode(
+        self, connection: asyncpg.Connection[asyncpg.Record], episode_id: UUID
+    ) -> EpisodeSnapshot | None:
+        row = await connection.fetchrow(
+            self.DETAIL_SELECT + " WHERE e.id = $1",
+            episode_id,
+        )
+        return self._map_detail(row).episode if row else None
 
     @staticmethod
     def _map_detail(row: asyncpg.Record) -> ProjectDetail:

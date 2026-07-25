@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from lanverse.shared_kernel.errors import ApplicationError
@@ -51,4 +52,28 @@ async def http_problem_handler(request: Request, error: Exception) -> JSONRespon
         status_code=error.status,
         content=content,
         media_type="application/problem+json",
+    )
+
+
+async def request_validation_problem_handler(
+    request: Request, error: Exception
+) -> JSONResponse:
+    if not isinstance(error, RequestValidationError):
+        raise error
+    errors = tuple(
+        ProblemFieldError(
+            field=".".join(str(part) for part in item["loc"] if part not in {"body", "header"}),
+            code=str(item["type"]).upper(),
+            message="The request field is invalid.",
+        )
+        for item in error.errors()
+    )
+    return await http_problem_handler(
+        request,
+        HttpProblem(
+            status=422,
+            title="Request validation failed",
+            code="VALIDATION_ERROR",
+            errors=errors,
+        ),
     )

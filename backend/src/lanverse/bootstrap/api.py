@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from lanverse.bootstrap.container import create_container
 from lanverse.bootstrap.lifespan import create_lifespan
+from lanverse.modules.project_catalog.transport.errors import register_project_catalog_errors
+from lanverse.modules.project_catalog.transport.router import router as project_catalog_router
 from lanverse.shared_kernel.config import ApplicationSettings
-from lanverse.shared_kernel.http_errors import HttpProblem, http_problem_handler
+from lanverse.shared_kernel.http_errors import (
+    HttpProblem,
+    http_problem_handler,
+    request_validation_problem_handler,
+)
 
 
 def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
@@ -24,6 +31,8 @@ def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
         lifespan=create_lifespan(container),
     )
     app.add_exception_handler(HttpProblem, http_problem_handler)
+    app.add_exception_handler(RequestValidationError, request_validation_problem_handler)
+    register_project_catalog_errors(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://127.0.0.1:3000"],
@@ -32,4 +41,5 @@ def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
         allow_headers=["Content-Type", "Idempotency-Key", "If-Match"],
         expose_headers=["ETag"],
     )
+    app.include_router(project_catalog_router)
     return app
