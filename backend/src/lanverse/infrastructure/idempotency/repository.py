@@ -53,7 +53,11 @@ def canonical_request_hash(
             "body": body,
         }
     )
-    return hashlib.sha256(rfc8785.dumps(request)).hexdigest()
+    return canonical_value_hash(request)
+
+
+def canonical_value_hash(value: Any) -> str:
+    return hashlib.sha256(rfc8785.dumps(_normalize_strings(value))).hexdigest()
 
 
 class IdempotencyRepository:
