@@ -2,9 +2,16 @@
 .agents/
 skills-lock.json
 node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 npm-debug.log*
 package-lock.json
 dist/
+.next/
 coverage/
 artifacts/
 reports/
