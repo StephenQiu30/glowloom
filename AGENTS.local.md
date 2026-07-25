@@ -16,6 +16,6 @@
 4. 应用实现进入已接受的 Plan 后，应用根仅允许 `backend/` 与 `frontend/`；API、TaskJob Worker 与供应能力适配器均归入 `backend/`，不得创建 `deploy/`、顶层 `apps/`、`packages/` 或独立 Worker 仓库。
 5. 默认本地 Compose 位于根 `docker-compose.yml` 且只管理 `frontend/backend-api/backend-worker`；其他环境使用 `docker-compose-<env>.yml`，生产固定 `docker-compose-prod.yml`，仅在对应环境进入正式范围后创建。
 6. Compose 和应用复用当前 shell 或用户显式指定的仓库外环境配置中的 PostgreSQL/MinIO；不得扫描、复制、打印或提交用户 secret、`.env`、本地数据库数据或对象存储数据。
-7. 数据库物理实现按 `backend/migrations/sql/<version>/tables/<NN>_<table>.sql` 每表一个标准 SQL 文件拆分；跨表 FK 与索引使用同版本 `90_foreign_keys.sql`、`91_indexes.sql`，Alembic 只排序执行，不使用 ORM、Metadata 或 autogenerate。
+7. 数据库物理实现源固定在根 `sql/`：`01_projects.sql` 至 `20_delivery_versions.sql` 每表一个标准 SQL 文件，跨表 FK 与索引分别使用 `90_foreign_keys.sql`、`91_indexes.sql`；目标为 `lanverse` 数据库的 `public` schema。Alembic 只按序执行这些根 SQL，不复制 DDL，不使用 ORM、Metadata 或 autogenerate。
 8. FastAPI OpenAPI artifact 固定为 `backend/openapi/openapi.json`；前端使用 `frontend/openapi2ts.config.ts` 与 `@umijs/openapi` 生成 `frontend/src/services/generated/`，页面经手写 RTK Query 层访问，禁止手写第二套 URL 或 DTO。
 9. 项目验证命令由根 Makefile 统一暴露；实现前至少提供 `test-architecture`、`test-migration`、`contracts-check`、`test-jobs`、`test-e2e`、`lint`、`typecheck` 和 `build`，并把精确结果写入 Acceptance。

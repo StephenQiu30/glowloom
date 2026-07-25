@@ -10,10 +10,11 @@ Lanverse 是一个 AI 短剧制作 MVP：让一名内部创作者把获权中文
 
 ```text
 Lanverse/
+├── sql/       # public schema 的 20 个逐表 SQL、外键与索引
 ├── backend/   # Python 3.13、FastAPI、asyncpg/逐表 SQL、TaskJob、LangChain Core、MinIO 与 FFmpeg
 ├── frontend/  # create-next-app、shadcn/Radix、Redux Toolkit、umi-openapi，以及五个工作区
 ├── docker-compose.yml  # 只运行 frontend/backend-api/backend-worker，复用现有 PostgreSQL/MinIO
 └── docs/      # Requirement、Design、PRD、Plan、Acceptance 与 Operations
 ```
 
-API 与单一 Worker 同属 `backend/`。其他环境只在进入正式范围后新增根目录 `docker-compose-<env>.yml`，生产固定为 `docker-compose-prod.yml`；仓库不创建 `deploy/` 或提交本地 env。以上目录与正式文档中的六个业务模块、20 张应用表（19 张业务事实表 + 1 张幂等技术表）共同构成完整实现清单；文档未定义的能力不得产生目录、接口、数据表、开关或占位代码。数据库 Design 未接受或任一实现准入未通过时不会创建应用脚手架。
+根 [`sql/`](sql/README.md) 是实现前即可评审的数据库 Design artifact；API 与单一 Worker 同属 `backend/`。其他环境只在进入正式范围后新增根目录 `docker-compose-<env>.yml`，生产固定为 `docker-compose-prod.yml`；仓库不创建 `deploy/` 或提交本地 env。以上目录与正式文档中的六个业务模块、20 张应用表（19 张业务事实表 + 1 张幂等技术表）共同构成完整实现清单；数据库 Design 未接受或任一实现准入未通过时不会创建应用脚手架或执行 SQL。

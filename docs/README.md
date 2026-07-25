@@ -24,7 +24,7 @@ Lanverse 当前只交付一个 AI 短剧制作 MVP：单个创作者在受控本
 - 图片、视频和逐句 TTS 独立任务，以及任务恢复、候选预览与逐位置采用。
 - 源语言字幕、服务端合成与 30–60 秒纵向 MP4/SRT/Manifest 交付。
 - 项目、故事、制作室、任务与交付五个前端工作区。
-- FastAPI/asyncpg/Alembic 后端、逐表标准 SQL、PostgreSQL 20 张应用表（19 张业务事实表 + 1 张幂等技术表）、TaskJob 租约 Worker、MinIO 私有对象存储和 FFmpeg。
+- 根 `sql/` 中面向 `public` schema 的逐表标准 SQL，以及 FastAPI/asyncpg/Alembic 后端、PostgreSQL 20 张应用表（19 张业务事实表 + 1 张幂等技术表）、TaskJob 租约 Worker、MinIO 私有对象存储和 FFmpeg。
 - create-next-app 前端、显式 shadcn/Radix 基座、Redux Toolkit/RTK Query 状态边界，以及 Swagger→`@umijs/openapi` 生成请求链。
 - Mock Provider 自动 E2E，以及至少一部覆盖文本、图片、视频和 TTS 的真实 Provider 完整样片。
 

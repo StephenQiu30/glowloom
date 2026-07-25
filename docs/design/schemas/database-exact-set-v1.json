@@ -1,6 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "schema_version": "database-exact-set-v1",
+  "database": "lanverse",
+  "namespace": "public",
   "counts": { "tables": 20, "foreign_keys": 53, "candidate_uniques": 15, "partial_uniques": 13, "partial_indexes": 4, "jsonb_columns": 22, "application_invariants": 10, "schema_invariants": 14 },
   "tables": {
     "project_catalog": ["projects", "episodes"],

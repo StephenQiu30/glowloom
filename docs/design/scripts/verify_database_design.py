@@ -17,6 +17,7 @@ from database_design_contracts import (
     walk_refs,
 )
 from database_design_relations import validate_relational_exact_sets
+from verify_sql_design import validate_sql_artifacts
 
 ROOT = Path(__file__).resolve().parents[3]
 DESIGN = ROOT / "docs/design/06-数据库表与迁移设计.md"
@@ -24,6 +25,8 @@ SCHEMAS = ROOT / "docs/design/schemas"
 MANIFEST = SCHEMAS / "database-exact-set-v1.json"
 CONTRACTS = Path(__file__).with_name("database_design_contracts.py")
 RELATIONS = Path(__file__).with_name("database_design_relations.py")
+SQL_VERIFIER = Path(__file__).with_name("verify_sql_design.py")
+SQL_DIR = ROOT / "sql"
 
 
 def main() -> None:
@@ -78,6 +81,7 @@ def main() -> None:
         "application invariant",
     )
     validate_jsonb_mappings(manifest["jsonb_columns"], columns, documents, design)
+    sql_artifacts = validate_sql_artifacts(SQL_DIR, manifest, columns)
 
     artifacts = [
         DESIGN,
@@ -85,6 +89,8 @@ def main() -> None:
         Path(__file__),
         CONTRACTS,
         RELATIONS,
+        SQL_VERIFIER,
+        *sql_artifacts,
         *sorted(SCHEMAS / name for name in documents),
     ]
     digests = {
