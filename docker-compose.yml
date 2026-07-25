@@ -1,0 +1,42 @@
+x-backend-environment: &backend-environment
+  LANVERSE_ENVIRONMENT: ${LANVERSE_ENVIRONMENT:-development}
+  LANVERSE_LOG_LEVEL: ${LANVERSE_LOG_LEVEL:-INFO}
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+  MINIO_ENDPOINT: ${MINIO_ENDPOINT:?MINIO_ENDPOINT is required}
+  MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:?MINIO_PUBLIC_ENDPOINT is required}
+  MINIO_BUCKET: ${MINIO_BUCKET:?MINIO_BUCKET is required}
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required}
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+    command: ["pnpm", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
+    ports:
+      - "127.0.0.1:${LANVERSE_FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend-api
+    init: true
+
+  backend-api:
+    build:
+      context: ./backend
+    command: ["lanverse-api"]
+    environment:
+      <<: *backend-environment
+      LANVERSE_API_HOST: 0.0.0.0
+      LANVERSE_API_PORT: 8000
+    ports:
+      - "127.0.0.1:${LANVERSE_API_PORT:-8000}:8000"
+    init: true
+
+  backend-worker:
+    build:
+      context: ./backend
+    command: ["lanverse-worker"]
+    environment:
+      <<: *backend-environment
+    init: true
