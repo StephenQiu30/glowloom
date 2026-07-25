@@ -56,6 +56,18 @@ def test_frontend_scaffold_files_are_complete() -> None:
     assert required <= {item.name for item in FRONTEND.iterdir()}
 
 
+def test_frontend_dependency_build_scripts_are_explicitly_reviewed() -> None:
+    workspace = (FRONTEND / "pnpm-workspace.yaml").read_text()
+
+    assert "ignoredBuiltDependencies" not in workspace
+    assert "  es5-ext: false" in workspace
+    assert {
+        line.strip().removesuffix(": true")
+        for line in workspace.splitlines()
+        if line.startswith("  ") and line.endswith(": true")
+    } == {"sharp", "unrs-resolver"}
+
+
 def test_backend_console_entries_are_exact() -> None:
     with (BACKEND / "pyproject.toml").open("rb") as stream:
         project = tomllib.load(stream)["project"]
