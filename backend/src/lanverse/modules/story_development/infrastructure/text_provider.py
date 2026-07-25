@@ -31,10 +31,10 @@ class DeterministicTextProvider:
         )
 
     async def generate_storyboard(
-        self, script_version_id: UUID, content: ScriptContentV1
+        self, generation_id: UUID, script_version_id: UUID, content: ScriptContentV1
     ) -> str:
         self.call_count += 1
-        namespace = uuid5(NAMESPACE_URL, str(script_version_id))
+        namespace = uuid5(NAMESPACE_URL, str(generation_id))
         asset_specs: tuple[
             tuple[Literal["character", "scene", "visual_style"], str], ...
         ] = (

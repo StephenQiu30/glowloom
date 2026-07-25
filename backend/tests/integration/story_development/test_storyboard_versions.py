@@ -55,7 +55,9 @@ async def test_storyboard_edit_confirm_and_derive_preserve_stable_ids(
         assert any(item.id == edited_asset.id for item in confirmed.assets)
         with pytest.raises(VersionImmutable):
             await SaveStoryboardHandler(database).execute(
-                SaveStoryboardCommand(board.id, confirmed.storyboard.resource_version, board.content)
+                SaveStoryboardCommand(
+                    board.id, confirmed.storyboard.resource_version, board.content
+                )
             )
 
         command = DeriveStoryboardDraftCommand(board.id, "board:derive:key01")
@@ -86,7 +88,7 @@ async def test_joint_confirmation_rolls_back_when_an_asset_reference_is_missing(
     await database.start()
     try:
         _, generated = await storyboard_draft(database, "board:atomic:001")
-        refs = [str(uuid4()), *map(str, generated.storyboard.content.asset_version_ids[1:])]
+        refs = [*map(str, generated.storyboard.content.asset_version_ids), str(uuid4())]
         async with database.transaction() as connection:
             await connection.execute(
                 "UPDATE shot_spec_versions SET asset_version_refs_json=$2::jsonb WHERE id=$1",
