@@ -52,6 +52,10 @@ async def test_capacity_gate_refuses_work_without_waiting_or_overclaiming() -> N
     assert await capacity.try_acquire() is False
     assert capacity.active == 3
 
+    await capacity.release()
+    assert await capacity.try_acquire()
+    assert capacity.active == 3
+
 
 @pytest.mark.asyncio
 async def test_exhausted_capacity_stops_before_claiming_a_persisted_job(
@@ -100,11 +104,6 @@ async def test_exhausted_capacity_stops_before_claiming_a_persisted_job(
         assert tuple(row) == ("pending", 0)
     finally:
         await database.close()
-
-    await capacity.release()
-    assert await capacity.try_acquire()
-    assert capacity.active == 3
-
 
 def test_job_logs_are_structured_and_reject_sensitive_or_unreviewed_fields() -> None:
     stream = io.StringIO()
