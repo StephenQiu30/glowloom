@@ -1,4 +1,4 @@
-.PHONY: test-architecture test-database-design test-migration test-contract-foundation contracts-toolchain-check contracts-check test-jobs test-e2e test lint typecheck build build-images
+.PHONY: test-architecture test-database-design test-migration test-contract-foundation test-contract contracts-toolchain-check contracts-check test-jobs test-e2e test lint typecheck build build-images
 
 PNPM_NODE = pnpm dlx node@24.18.0 $$(command -v pnpm)
 
@@ -13,6 +13,9 @@ test-migration:
 
 test-contract-foundation:
 	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/contract/test_http_foundation.py -q -p no:cacheprovider
+
+test-contract:
+	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/contract -q -p no:cacheprovider
 
 contracts-toolchain-check:
 	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/contract/test_umi_toolchain.py -q -p no:cacheprovider
