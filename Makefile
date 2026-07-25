@@ -1,4 +1,4 @@
-.PHONY: test-architecture test-database-design test-migration test-contract-foundation test-contract contracts-toolchain-check contracts-check test-jobs test-e2e test lint typecheck build build-images
+.PHONY: test-architecture test-database-design test-migration test-contract-foundation test-contract contracts-toolchain-check contracts-check test-jobs test-integration test-e2e test lint typecheck build build-images
 
 PNPM_NODE = pnpm dlx node@24.18.0 $$(command -v pnpm)
 
@@ -27,6 +27,9 @@ contracts-check:
 
 test-jobs:
 	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/jobs -q -p no:cacheprovider
+
+test-integration:
+	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/integration -q -p no:cacheprovider
 
 test-e2e:
 	cd frontend && $(PNPM_NODE) exec playwright test
