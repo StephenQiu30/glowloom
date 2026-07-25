@@ -3,8 +3,8 @@ layer: Plan
 doc_type: Database and API Contract Implementation Plan
 doc_no: PLAN-03
 title: 数据库与API契约计划
-status: draft
-version: 0.1.0
+status: accepted
+version: 1.0.0
 owner: Lanverse
 audience: [Architecture, Backend, Frontend, QA, Operations]
 feature_area: PostgreSQL、HTTP 与生成客户端

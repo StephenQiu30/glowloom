@@ -1,8 +1,8 @@
 # Plan 文档
 
-本目录把已接受前才可执行的 Design/PRD 拆成一个总计划和八个专业子计划。PLAN-01 只负责编排依赖、门禁、提交纪律和 Evidence；PLAN-02～09 分别拥有明确路径、Red、最小 Green、命令和完成定义。
+本目录把已接受的 Design/PRD 拆成一个总计划和八个专业子计划。PLAN-01 只负责编排依赖、门禁、提交纪律和 Evidence；PLAN-02～09 分别拥有明确路径、Red、最小 Green、命令和完成定义。
 
-当前 Requirement、Design、PRD 尚未 `accepted`，因此全部 Plan 保持 `draft`，不得执行脚手架、依赖安装、DDL、应用源码或 Acceptance。数据库物理设计还必须先取得 `database_design_ready: passed`，全部计划接受后再取得 `implementation_start: passed`。
+Requirement、Design、PRD 和 PLAN-01～09 现均为 `accepted`。执行仍必须先取得 `database_design_ready: passed`，再取得 `implementation_start: passed`；Acceptance 只能在实现完成后创建。
 
 ## 按执行顺序
 

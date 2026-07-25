@@ -3,7 +3,7 @@ layer: Plan
 doc_type: MVP Master Implementation Plan
 doc_no: PLAN-01
 title: MVP总执行计划
-status: draft
+status: accepted
 version: 1.0.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
@@ -21,7 +21,7 @@ downstream: [PLAN-02至PLAN-09, ACCEPTANCE-01]
 
 ## 1. 准入状态与目标
 
-本 Plan 当前为 `draft`，不授权实现。只有 REQ-01～08、DESIGN-01～13、PRODUCT-01～07 和 PLAN-01～09 全部 `accepted`，`database_design_ready` 与 `implementation_start` 依次 `passed` 后，才能从 PLAN-02 的首个脚手架任务开始。
+本 Plan 与 PLAN-02～09 已完成评审并进入 `accepted`。只有当前输入完全匹配的 `database_design_ready` 与 `implementation_start` 依次 `passed` 后，才能从 PLAN-02 的首个脚手架任务开始。
 
 交付目标是固定六镜头 fixture 能从获权正文连续运行到可播放 MP4，并保留来源/创作版本、Task/Attempt/TaskJob、Candidate/Adoption、MinIO MediaVersion、Subtitle/RenderSnapshot/Delivery 和完整谱系。Acceptance 只在全部实现完成后创建。
 
