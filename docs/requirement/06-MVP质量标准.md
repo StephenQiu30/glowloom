@@ -3,8 +3,8 @@ layer: Requirement
 doc_type: Non-Functional Requirements Specification
 doc_no: REQ-06
 title: MVP质量标准
-status: review
-version: 0.3.0
+status: accepted
+version: 1.0.0
 owner: Lanverse
 audience: [Architecture, Dev, QA, Operations]
 feature_area: AI 短剧制作 MVP 质量

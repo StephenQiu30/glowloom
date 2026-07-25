@@ -3,7 +3,7 @@ layer: Requirement
 doc_type: Software Requirements Specification
 doc_no: REQ-01
 title: MVP目标与范围
-status: review
+status: accepted
 version: 1.2.0
 owner: Lanverse
 audience: [Product, Architecture, Dev, QA]
