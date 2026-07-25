@@ -16,12 +16,12 @@ from lanverse.modules.project_catalog.application.sources import (
     CreateSourceRevisionCommand,
     CreateSourceRevisionHandler,
 )
+from lanverse.modules.story_development.application.contracts.snapshots import (
+    ScriptVersionSnapshot,
+)
 from lanverse.modules.story_development.application.generate import (
     GenerateScriptCommand,
     GenerateScriptHandler,
-)
-from lanverse.modules.story_development.application.contracts.snapshots import (
-    ScriptVersionSnapshot,
 )
 from lanverse.modules.story_development.application.results import ScriptResultRegistrar
 from lanverse.modules.story_development.application.scripts import (
