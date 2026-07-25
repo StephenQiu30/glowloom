@@ -2,7 +2,7 @@
 
 本目录存放执行计划类文档。
 
-当前 MVP 只有一份下游纵向计划草案：[AI短剧端到端实施计划](01-AI短剧端到端实施计划.md)。它在 Requirement、Design 与 PRD 依次 `accepted` 前保持 `draft` 且不参与门禁；上游接受后，Plan 的任务、依赖触发点和证据评审通过才能转为 `accepted`。随后单独执行 `implementation_start` 门禁，只有该门禁 `passed` 才授权实现。Plan 是执行契约，不是愿望清单；每项任务都必须定位输入、修改边界、预期 Red、最小 Green、命令、证据与完成定义。
+当前 MVP 只有一份下游纵向计划草案：[AI短剧端到端实施计划](01-AI短剧端到端实施计划.md)。它在 Requirement、Design 与 PRD 依次 `accepted` 前保持 `draft` 且不参与门禁；上游接受后，Plan 的任务、依赖触发点和证据评审通过才能转为 `accepted`。数据库物理设计还必须先取得 `database_design_ready: passed`，随后 `implementation_start: passed` 才授权运行任一脚手架或实现。Plan 是执行契约，不是愿望清单；每项任务都必须定位输入、修改边界、预期 Red、最小 Green、命令、证据与完成定义。
 
 ## 适合放入
 
@@ -29,7 +29,7 @@
 3. `依赖与决策`：环境、外部服务、数据、迁移、负责人及最迟关闭点。
 4. `任务顺序`：按 `test:` Red → `impl:`/`feat:` Green → 可选 `refactor:` 拆分；每项含 ID、前置、路径、命令和完成定义。
 5. `测试矩阵`：把每个 Design/PRD AC 映射到测试 ID、层级、夹具、命令和预期证据。
-6. `迁移与回滚`：数据库、契约、Workflow、配置和制品的兼容/恢复步骤。
+6. `迁移与回滚`：数据库、契约、TaskJob、配置和制品的兼容/恢复步骤。
 7. `交付门禁`：类型、lint、构建、契约、集成、E2E、安全、性能或恢复的适用命令。
 8. `Acceptance 映射`：定义 Evidence ID 和结果位置，但不提前创建或填写 Acceptance 报告。
 

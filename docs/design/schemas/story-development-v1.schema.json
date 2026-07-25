@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lanverse.local/schemas/story-development-v1.schema.json",
+  "title": "Lanverse story development JSONB contracts v1",
+  "x-lanverse-invariants": [
+    "STORY-JSON-001: scenes and each scene's speech_lines have unique IDs and ordinals exactly 1..n; speech_line_id is globally unique, at least one speech line exists, and every text_hash equals SHA-256(UTF8(NFC(text))) recomputed by the application",
+    "STORY-JSON-002: AssetVersionRefs is sorted by asset_id UUID bytes, has unique asset_id/asset_version_id, contains exactly one visual_style and at least one scene, and every ShotSpec asset reference is a member",
+    "STORY-JSON-003: ShotSpecList has unique shot_id and ordinals exactly 1..n; every speech_line_id occurs in exactly one shot; summed duration_ticks is 2700000..5400000",
+    "STORY-JSON-004: each ShotSpec content_hash is SHA-256 of its NFC+RFC8785 object with content_hash omitted"
+  ],
+  "$defs": {
+    "Uuid": { "type": "string", "format": "uuid" },
+    "Hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "SpeechLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["speech_line_id", "ordinal", "kind", "text", "text_hash", "voice_id", "speaker_asset_id"],
+      "properties": {
+        "speech_line_id": { "$ref": "#/$defs/Uuid" },
+        "ordinal": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "kind": { "enum": ["dialogue", "narration"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "text_hash": { "$ref": "#/$defs/Hash" },
+        "voice_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "speaker_asset_id": { "oneOf": [{ "$ref": "#/$defs/Uuid" }, { "type": "null" }] }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "dialogue" } } }, "then": { "properties": { "speaker_asset_id": { "$ref": "#/$defs/Uuid" } } } },
+        { "if": { "properties": { "kind": { "const": "narration" } } }, "then": { "properties": { "speaker_asset_id": { "type": "null" } } } }
+      ]
+    },
+    "Scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scene_id", "ordinal", "location", "time_of_day", "action", "speech_lines"],
+      "properties": {
+        "scene_id": { "$ref": "#/$defs/Uuid" },
+        "ordinal": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "location": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "time_of_day": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "action": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "speech_lines": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/SpeechLine" } }
+      }
+    },
+    "ScriptContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenes"],
+      "properties": {
+        "scenes": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "$ref": "#/$defs/Scene" } }
+      }
+    },
+    "AssetVersionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset_id", "asset_version_id", "asset_type", "content_hash"],
+      "properties": {
+        "asset_id": { "$ref": "#/$defs/Uuid" },
+        "asset_version_id": { "$ref": "#/$defs/Uuid" },
+        "asset_type": { "enum": ["character", "scene", "visual_style"] },
+        "content_hash": { "$ref": "#/$defs/Hash" }
+      }
+    },
+    "AssetVersionRefs": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/AssetVersionRef" }
+    },
+    "ShotSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shot_id", "ordinal", "purpose", "visual_prompt", "action", "duration_ticks", "speech_line_ids", "character_asset_version_ids", "scene_asset_version_id", "visual_style_version_id", "content_hash"],
+      "properties": {
+        "shot_id": { "$ref": "#/$defs/Uuid" },
+        "ordinal": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "purpose": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "visual_prompt": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "action": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "duration_ticks": { "type": "integer", "minimum": 270000, "maximum": 720000, "multipleOf": 3750 },
+        "speech_line_ids": { "type": "array", "maxItems": 100, "uniqueItems": true, "items": { "$ref": "#/$defs/Uuid" } },
+        "character_asset_version_ids": { "type": "array", "maxItems": 100, "uniqueItems": true, "items": { "$ref": "#/$defs/Uuid" } },
+        "scene_asset_version_id": { "$ref": "#/$defs/Uuid" },
+        "visual_style_version_id": { "$ref": "#/$defs/Uuid" },
+        "content_hash": { "$ref": "#/$defs/Hash" }
+      }
+    },
+    "ShotSpecList": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/ShotSpec" }
+    }
+  }
+}

@@ -13,4 +13,9 @@
 1. 本项目内的角色配置放在 `.codex/agents/` 目录。
 2. 本项目内的可复用流程放在 `.codex/skills/` 目录。
 3. 本项目不再维护额外规格配置；`docs/` 目录保留正式分类结构、阶段文档和对应 README 索引。
-4. 应用实现进入已接受的 Plan 后，根目录仅创建 `backend/`、`frontend/` 和 `deploy/`；API、Workflow、Worker 与供应能力适配器均归入 `backend/`，不得改用顶层 `apps/`、`packages/` 或独立 Worker 仓库。
+4. 应用实现进入已接受的 Plan 后，应用根仅允许 `backend/` 与 `frontend/`；API、TaskJob Worker 与供应能力适配器均归入 `backend/`，不得创建 `deploy/`、顶层 `apps/`、`packages/` 或独立 Worker 仓库。
+5. 默认本地 Compose 位于根 `docker-compose.yml` 且只管理 `frontend/backend-api/backend-worker`；其他环境使用 `docker-compose-<env>.yml`，生产固定 `docker-compose-prod.yml`，仅在对应环境进入正式范围后创建。
+6. Compose 和应用复用当前 shell 或用户显式指定的仓库外环境配置中的 PostgreSQL/MinIO；不得扫描、复制、打印或提交用户 secret、`.env`、本地数据库数据或对象存储数据。
+7. 数据库物理实现按 `backend/migrations/sql/<version>/tables/<NN>_<table>.sql` 每表一个标准 SQL 文件拆分；跨表 FK 与索引使用同版本 `90_foreign_keys.sql`、`91_indexes.sql`，Alembic 只排序执行，不使用 ORM、Metadata 或 autogenerate。
+8. FastAPI OpenAPI artifact 固定为 `backend/openapi/openapi.json`；前端使用 `frontend/openapi2ts.config.ts` 与 `@umijs/openapi` 生成 `frontend/src/services/generated/`，页面经手写 RTK Query 层访问，禁止手写第二套 URL 或 DTO。
+9. 项目验证命令由根 Makefile 统一暴露；实现前至少提供 `test-architecture`、`test-migration`、`contracts-check`、`test-jobs`、`test-e2e`、`lint`、`typecheck` 和 `build`，并把精确结果写入 Acceptance。

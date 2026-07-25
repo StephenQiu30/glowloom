@@ -7,14 +7,14 @@ Lanverse 当前只交付一个 AI 短剧制作 MVP：单个创作者在受控本
 正式工作严格按 `Requirement → Design → PRD → Plan → Implementation → Acceptance` 推进：
 
 1. [`requirement/`](requirement/README.md) 固定 MVP 能力、质量边界和技术约束。
-2. [`design/`](design/README.md) 定义架构、任务恢复、契约、数据和工程结构。
+2. [`design/`](design/README.md) 定义 FastAPI/前端架构、任务恢复、契约、20 张应用表物理数据模型和工程结构。
 3. [`prd/`](prd/README.md) 固化用户价值、范围和 SMART 验收。
 4. [`plans/`](plans/README.md) 给出 test-first 的实现任务、命令和证据位置。
 5. [`acceptance/`](acceptance/README.md) 只在实现完成后记录实际结果。
 
-只有适用 Requirement、Design、PRD 和 Plan 均为 `accepted` 才授权实现。当前文档可在上游评审稳定后提前形成下游草案，但不得以草案状态开始代码工作。
+只有适用 Requirement、Design、PRD 和 Plan 均为 `accepted`，且 `database_design_ready` 与 `implementation_start` 依次 `passed` 才授权实现。当前文档可在上游评审稳定后提前形成下游草案，但不得以草案状态运行后端或前端脚手架。
 
-[`gates/`](gates/README.md) 只保存上述阶段之间的不可变放行记录，不构成新的交付阶段，也不替代任何正式文档或 Acceptance。
+`docs/gates/` 只在首次产生有效门禁 YAML 时创建，用于保存阶段之间的不可变放行记录；它不构成新的交付阶段，也不替代任何正式文档或 Acceptance。
 
 ## 唯一 MVP 实现清单
 
@@ -24,7 +24,8 @@ Lanverse 当前只交付一个 AI 短剧制作 MVP：单个创作者在受控本
 - 图片、视频和逐句 TTS 独立任务，以及任务恢复、候选预览与逐位置采用。
 - 源语言字幕、服务端合成与 30–60 秒纵向 MP4/SRT/Manifest 交付。
 - 项目、故事、制作室、任务与交付五个前端工作区。
-- PostgreSQL 权威事实、Temporal 持久任务、S3 兼容对象存储和 FFmpeg。
+- FastAPI/asyncpg/Alembic 后端、逐表标准 SQL、PostgreSQL 20 张应用表（19 张业务事实表 + 1 张幂等技术表）、TaskJob 租约 Worker、MinIO 私有对象存储和 FFmpeg。
+- create-next-app 前端、显式 shadcn/Radix 基座、Redux Toolkit/RTK Query 状态边界，以及 Swagger→`@umijs/openapi` 生成请求链。
 - Mock Provider 自动 E2E，以及至少一部覆盖文本、图片、视频和 TTS 的真实 Provider 完整样片。
 
 以上清单穷尽本次产品实现范围。未被活跃 Requirement、Design、PRD 和 Plan 明确定义并追踪到验收标准的能力，不是实现输入，也不得产生目录、接口、数据表、Feature Flag 或占位代码。

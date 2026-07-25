@@ -4,7 +4,7 @@ doc_type: Non-Functional Requirements Specification
 doc_no: REQ-06
 title: MVP质量标准
 status: review
-version: 0.1.0
+version: 0.2.0
 owner: Lanverse
 audience: [Architecture, Dev, QA, Operations]
 feature_area: AI 短剧制作 MVP 质量
@@ -14,7 +14,7 @@ inputs: [REQ-01, REQ-02至REQ-05]
 outputs: [质量门槛, 测试边界, 运行限制]
 triggers: [MVP范围变化, 任务模型变化, 媒体规格变化, 部署边界变化]
 updated: 2026-07-25
-downstream: [REQ-07, REQ-08, DESIGN-01至DESIGN-05, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
+downstream: [REQ-07, REQ-08, DESIGN-01至DESIGN-07, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
 ---
 
 # MVP质量标准
@@ -29,18 +29,18 @@ downstream: [REQ-07, REQ-08, DESIGN-01至DESIGN-05, PRODUCT-01, PLAN-01, ACCEPTA
 | --- | --- | --- |
 | NFR-001-001 | 除 Provider 与媒体处理外，本地普通 API 的 p95 应不高于 2 秒，异步命令应在 3 秒内返回可查询 `task_id`。 | API 时序测试 |
 | NFR-001-002 | 活跃任务每 2 秒轮询；服务端状态变化后 5 秒内应在 UI 可见，刷新页面后 3 秒内恢复权威状态。 | Playwright 与 Task 记录 |
-| NFR-001-003 | API 或 Worker 重启不得丢失已提交 Task、Attempt、候选、采用关系、媒体或 Delivery。 | PostgreSQL、Temporal、MinIO 恢复测试 |
+| NFR-001-003 | API 或 Worker 重启不得丢失已提交 Task、Attempt、候选、采用关系、媒体或 Delivery。 | PostgreSQL TaskJob/租约与 MinIO 恢复测试 |
 | NFR-001-004 | 同一幂等键和载荷并发提交 20 次只能形成一个逻辑 Task 和一次初始 Provider 副作用；同键异载荷必须失败。 | 并发集成测试和调用计数 |
-| NFR-001-005 | Provider 已受理但结果未落库时终止 Worker，重启后 120 秒内必须收敛为成功、失败或明确 `unknown`，不得盲目重发。 | Temporal history、Attempt 与 Mock 日志 |
+| NFR-001-005 | Provider 已受理但结果未落库时终止 Worker，重启后 120 秒内必须通过过期租约和原请求键对账，收敛为成功、失败或明确 `unknown`，不得盲目重发。 | TaskJob、Attempt 与 Mock 日志 |
 | NFR-001-006 | 单镜头失败不得删除或重新生成其他成功镜头；只重试失败镜头且历史 Candidate/Attempt 不被覆盖。 | 六镜头故障夹具差异 |
 | NFR-001-007 | 来源、剧本、镜头、快照、Task/Attempt、Provider/模型、MediaVersion、Adoption 和 Delivery 必须双向可追踪。 | 数据库追踪查询 |
 | NFR-001-008 | 最终 MP4 必须为 720×1280、24fps、H.264/AAC 48k、30～60 秒，并包含可听 TTS 与源语言字幕；音画偏差不高于 100ms。 | ffprobe、字幕和播放检查 |
-| NFR-001-009 | Provider、数据库和对象存储秘密只来自服务端配置，不得进入 Git、前端 Bundle、数据库业务字段、日志、Workflow 历史或错误响应。 | secret 扫描与负向测试 |
+| NFR-001-009 | Provider、数据库和对象存储秘密只来自现有服务端环境配置，不得进入 Git、前端 Bundle、数据库业务字段、TaskJob、日志或错误响应。 | secret 扫描与负向测试 |
 | NFR-001-010 | 来源和媒体默认私有；候选预览与成片下载授权均不超过 15 分钟，日志不得记录正文、完整 Prompt、媒体 URL 或认证头。 | 授权与日志测试 |
 | NFR-001-011 | 本地环境必须通过版本化 Compose 启动；干净环境中基于 lockfile 的确定性安装、迁移、类型、lint、测试和构建均可由 Plan 中固定命令执行。 | 命令退出码与制品摘要 |
 | NFR-001-012 | Mock Provider 完整 E2E 应连续 3 次通过，每次不超过 10 分钟；真实 Provider 至少完成 1 次完整样片，但不纳入普通 PR CI。 | CI 与脱敏 smoke 证据 |
 | NFR-001-013 | 输入、并发、Provider 轮询、下载和 FFmpeg 必须有显式大小、次数、超时与进程资源上限；超限应安全失败。 | 边界和资源耗尽测试 |
-| NFR-001-014 | 结构化日志必须含 `release_version/request_id/task_id/attempt_id/workflow_id/error_code` 中适用字段，且用户能看到稳定错误码与下一动作。 | 日志关联与 UI 错误测试 |
+| NFR-001-014 | 结构化日志必须含 `release_version/request_id/task_id/attempt_id/job_id/error_code` 中适用字段，且用户能看到稳定错误码与下一动作。 | 日志关联与 UI 错误测试 |
 
 ## 3. 媒体与输入基线
 

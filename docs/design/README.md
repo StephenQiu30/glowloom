@@ -14,22 +14,24 @@
 | --- | --- | --- | --- |
 | 01 | [MVP技术选型与范围](01-MVP技术选型与范围.md) | draft | 定义 MVP 范围、技术族、运行单元和回滚规则 |
 | 02 | [MVP总体架构](02-MVP总体架构.md) | draft | 端到端流程、六模块事实所有权、前后端与部署边界 |
-| 03 | [任务执行与媒体处理](03-任务执行与媒体处理.md) | draft | 快照、Task/Attempt、Temporal、Provider、TTS、FFmpeg 与恢复 |
-| 04 | [接口数据与项目结构](04-接口数据与项目结构.md) | draft | OpenAPI、轮询、内部事件、数据约束、唯一目录和测试边界 |
+| 03 | [任务执行与媒体处理](03-任务执行与媒体处理.md) | draft | 快照、Task/Attempt/TaskJob、Provider、TTS、FFmpeg 与恢复 |
+| 04 | [接口数据与项目结构](04-接口数据与项目结构.md) | draft | OpenAPI、轮询、内部事件、逻辑数据、前后端目录、模式和测试边界 |
 | 05 | [AI短剧端到端制作流程](05-端到端制作流程.md) | draft | 唯一交付切片及其用户闭环、失败路径和 SMART Design AC |
-| 06 | [需求实现追踪](06-需求实现追踪.md) | draft | Requirement→Design→PRD/Plan/Test/Acceptance 双向追踪 |
+| 06 | [数据库表与迁移设计](06-数据库表与迁移设计.md) | draft | 20 张应用表数据字典、FK/候选键、约束索引、事务锁、Alembic 迁移、三份 JSONB Schema 与机器 exact-set 门禁 |
+| 07 | [需求实现追踪](07-需求实现追踪.md) | draft | Requirement→Design→PRD/Plan/Test/Acceptance 双向追踪 |
 
 ## 唯一解释规则
 
 - [02 MVP总体架构](02-MVP总体架构.md)是模块名称、事实所有权、运行单元和页面边界的唯一设计源。
 - [03 任务执行与媒体处理](03-任务执行与媒体处理.md)是异步状态、恢复、Provider 和媒体渲染语义的唯一设计源。
-- [04 接口数据与项目结构](04-接口数据与项目结构.md)是路径、HTTP 契约、轮询、内部事件、数据约束和工程目录的唯一设计源。
+- [04 接口数据与项目结构](04-接口数据与项目结构.md)是路径、HTTP 契约、轮询、内部事件、逻辑数据、工程目录和设计模式边界的唯一设计源。
 - [05 AI短剧端到端制作流程](05-端到端制作流程.md)只组合前三份核心设计形成一个纵向切片，不另造状态、模块或接口。
-- 基础依赖精确版本由 `PLAN-01` T-001 在应用源码前确定；真实 Provider、模型和必需 SDK 由 T-011 前置门禁确定。Design 不以占位实现代替任一门禁。
+- [06 数据库表与迁移设计](06-数据库表与迁移设计.md)是物理表、列、关系、约束、索引、JSONB、事务锁和迁移的唯一设计源；它 `accepted` 且 `database_design_ready` 通过前不得运行任何脚手架或创建源码。
+- 基础依赖精确版本由 `PLAN-01` T-001 在数据库门禁后随脚手架锁定；真实 Provider、模型和必需 SDK 由 T-008 真实 smoke 前置条件确定。Design 不以占位实现代替任一门禁。
 
 ## 目录边界
 
-应用根目录 allowlist 只有 `backend/`、`frontend/` 和 `deploy/`；CI 必须拒绝其他顶层应用根、独立 Worker 仓库和空模块。正式文档按 `Design → PRD → Plan → Acceptance` 推进，不倒序建立 Acceptance。
+应用根目录 allowlist 只有 `backend/` 与 `frontend/`；根 Compose 不是应用目录，且只管理 frontend/backend-api/backend-worker。CI 必须拒绝 `deploy/`、其他顶层应用根、独立 Worker 仓库和空模块。正式文档按 `Design → PRD → Plan → Acceptance` 推进，不倒序建立 Acceptance。
 
 ## 命名与状态
 

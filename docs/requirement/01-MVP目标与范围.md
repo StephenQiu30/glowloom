@@ -4,7 +4,7 @@ doc_type: Software Requirements Specification
 doc_no: REQ-01
 title: MVP目标与范围
 status: review
-version: 1.0.0
+version: 1.1.0
 owner: Lanverse
 audience: [Product, Architecture, Dev, QA]
 feature_area: AI短剧端到端制作MVP
@@ -13,7 +13,7 @@ canonical_path: docs/requirement/01-MVP目标与范围.md
 inputs: [AI短剧端到端任务跑通目标]
 outputs: [MVP范围, 功能需求目录, SMART验收基线]
 updated: 2026-07-25
-downstream: [DESIGN-01至DESIGN-06, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
+downstream: [DESIGN-01至DESIGN-07, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
 ---
 
 # MVP目标与范围
@@ -65,7 +65,7 @@ Lanverse MVP 是供一名受信操作者在本地环境完成一集 AI 短剧的
 - REQ-04 AI 媒体任务与候选采用：图片、视频、TTS 任务、候选、Adoption 和恢复。
 - REQ-05 字幕合成与成片交付：源语言字幕、固定合成、质检和 MP4 导出。
 - REQ-06 MVP 质量标准：性能、可靠性、安全、追踪和自动化质量。
-- REQ-07 技术与工程约束：技术栈、数据边界、Temporal/OutboxEvent、Provider 和工程结构。
+- REQ-07 技术与工程约束：技术栈、数据边界、PostgreSQL TaskJob 租约、Provider 和工程结构。
 
 ## 6. 实现范围判定
 
@@ -82,4 +82,4 @@ Lanverse MVP 是供一名受信操作者在本地环境完成一集 AI 短剧的
 
 ## 8. 下游与状态
 
-本文件输出给 DESIGN-01～DESIGN-06、PRODUCT-01 和 PLAN-01。上述 Requirement、Design、PRD 与 Plan 全部为 `accepted` 且通过 REQ-08 前，不得开始实现；ACCEPTANCE-01 只在实现完成后建立。
+本文件输出给 DESIGN-01～DESIGN-07、PRODUCT-01 和 PLAN-01。上述 Requirement、Design、PRD 与 Plan 全部为 `accepted` 且通过 REQ-08 前，不得开始实现；ACCEPTANCE-01 只在实现完成后建立。

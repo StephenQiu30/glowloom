@@ -4,7 +4,7 @@ doc_type: Architecture Decision Record
 doc_no: DESIGN-01
 title: MVP技术选型与范围
 status: draft
-version: 0.1.0
+version: 0.4.0
 owner: Lanverse
 audience: [Product, Architecture, Frontend, Backend, QA, Operations]
 feature_area: AI 短剧制作 MVP
@@ -14,7 +14,7 @@ inputs: [REQ-01至REQ-08]
 outputs: [MVP 实现 allowlist, 技术栈, 运行单元, 迁移与回滚原则]
 triggers: [MVP 范围变化, 技术族变化, 事实源变化, 任务编排变化, 部署边界变化]
 updated: 2026-07-25
-downstream: [DESIGN-02至DESIGN-06, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
+downstream: [DESIGN-02至DESIGN-07, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
 ---
 
 # MVP技术选型与范围
@@ -23,23 +23,26 @@ downstream: [DESIGN-02至DESIGN-06, PRODUCT-01, PLAN-01, ACCEPTANCE-01]
 
 Lanverse MVP 是内部验证用的单实例 Web 应用，只交付一个 30～60 秒、6～10 镜头、9:16 单集闭环：输入文本→结构化剧本→分镜→图片/视频与最小 TTS→人工采用候选→字幕/音轨合成→MP4 下载。
 
-采用单一 Git monorepo、Next.js 前端、NestJS 模块化单体、PostgreSQL 业务事实、Temporal 持久工作流、S3 兼容对象存储和 FFmpeg 媒体处理。应用实现仅位于 `backend/`、`frontend/`、`deploy/`。
+采用单一 Git monorepo、Next.js 前端、Redux Toolkit 状态层、FastAPI Python 模块化单体、PostgreSQL 业务事实与 TaskJob 租约、LangChain Core Python AI 接入、MinIO 私有对象存储和 FFmpeg 媒体处理。应用实现仅位于 `backend/`、`frontend/`；Compose 文件直接位于仓库根。
 
 ## 2. 技术基线
 
 | 关注点 | MVP 选择 | 最迟确定点 |
 | --- | --- | --- |
-| 语言/仓库 | TypeScript strict、Node.js 24 LTS、pnpm workspace | T-001 创建应用源码前：确定精确依赖、唯一 lockfile 和安装命令 |
-| Web | React、Next.js App Router、Tailwind CSS、shadcn/ui | 支持浏览器与构建版本 |
-| 前端状态 | TanStack Query；仅编辑会话使用 Zustand | Query/Store 边界与生成客户端命令 |
-| API | NestJS、REST/JSON、OpenAPI 3.1；任务详情 2 秒轮询 | 契约校验与客户端生成工具版本 |
-| 数据 | Prisma、PostgreSQL | 数据库版本、迁移和测试容器 |
-| 长任务 | Temporal TypeScript、PostgreSQL OutboxEvent | Temporal 版本、命名空间、队列与重试参数 |
-| 媒体 | S3 兼容存储；local 使用 MinIO；FFmpeg/ffprobe | 镜像、工具版本、对象策略和资源上限 |
-| AI | 静态 Provider Adapter；每模态一个真实 Provider 与确定性 Mock | T-011 前：文本、图片、视频、TTS 的 Provider/模型/凭据/额度 |
-| 质量 | Vitest、Testing Library、Playwright、结构化日志 | 命令、门禁、覆盖范围和证据位置 |
+| 语言/仓库 | 后端 Python 3.13 + uv；前端 TypeScript strict + Node.js 24 LTS + pnpm；分别提交 `uv.lock` 与 `pnpm-lock.yaml` | database_design_ready 通过后、T-001 脚手架执行时锁定精确 patch 与安装命令 |
+| Web | React、Next.js 16.2.11+ Active LTS 安全补丁、App Router、Tailwind CSS；官方 create-next-app 脚手架 | 支持浏览器与构建版本 |
+| 组件 | shadcn/ui CLI 显式 `--template next --preset base-nova --base radix`、统一 `radix-ui` Primitives、`components.json` | T-001 固定 `radix-nova`、preset code `b2fA`/version `b`、Lucide 与生成文件/依赖清单；漂移即失败 |
+| 前端状态 | `@reduxjs/toolkit`、`react-redux`、RTK Query；`@umijs/openapi` 从 Swagger/OpenAPI 生成唯一请求与 DTO | Store/生成服务封装边界与零漂移命令 |
+| API | FastAPI `standard-no-fastapi-cloud-cli`、Pydantic v2、REST/JSON；自动 Swagger UI，确定性导出 OpenAPI 3.1，任务 2 秒轮询 | 本地 docs 开关、契约校验与 umi-openapi 兼容测试 |
+| 数据 | asyncpg 参数化 SQL、按表命名的 PostgreSQL `.sql`、Alembic 版本执行 | DESIGN-06 accepted 后锁定驱动/迁移与 catalog 测试；不使用 ORM/Metadata/autogenerate |
+| 长任务 | PostgreSQL `TaskJob` 租约、`FOR UPDATE SKIP LOCKED`、心跳/过期恢复、单一 Worker | 租约、退避、稳定请求键、对账与故障注入；MVP 不使用 Temporal/Celery/Redis |
+| 媒体 | MinIO 私有对象存储与 `minio` Python SDK；FFmpeg/ffprobe | 现有 MinIO endpoint/bucket、SDK、工具版本、object_key 策略和资源上限 |
+| AI | `langchain-core` 模型/Runnable 接口、能力端口、支持多 Provider/模型的 `AiModelRegistry` 与确定性 Mock；LangSmith tracing 关闭 | T-008 真实 smoke 前：模型配置目录、默认路由、凭据、额度和 Provider SDK；依赖图不得含 `langgraph*`，网络只放行批准 Provider |
+| 质量 | 后端 pytest/pytest-asyncio/HTTPX/Ruff/mypy；前端 Vitest/Testing Library/Playwright；结构化日志 | 命令、门禁、覆盖范围和证据位置 |
 
-依赖 allowlist 仅包含上表技术族；T-001 必须以 lockfile、Compose 镜像 digest 和依赖扫描把它落实为可复现基线。
+依赖 allowlist 仅包含上表技术族；T-001 必须以两个生态各自唯一的 lockfile 和依赖扫描落实为可复现基线。Python 3.13 与 asyncpg/MinIO 使用当前稳定兼容版本；Alembic 只执行受审 SQL，不生成 Schema。
+
+选型依据为 [FastAPI 多文件应用](https://fastapi.tiangolo.com/tutorial/bigger-applications/)、[FastAPI Swagger 文档配置](https://fastapi.tiangolo.com/tutorial/metadata/#docs-urls)、[asyncpg](https://magicstack.github.io/asyncpg/current/)、[PostgreSQL SKIP LOCKED](https://www.postgresql.org/docs/current/sql-select.html)、[Alembic operation API](https://alembic.sqlalchemy.org/en/latest/ops.html)、[umi-openapi](https://www.npmjs.com/package/@umijs/openapi)、[Next.js 官方脚手架](https://nextjs.org/docs/app/getting-started/installation)、[shadcn CLI](https://ui.shadcn.com/docs/cli)与[Redux Toolkit App Router 指南](https://redux-toolkit.js.org/usage/nextjs)。
 
 ### 2.1 开源实现复审取舍
 
@@ -53,26 +56,26 @@ Lanverse MVP 是内部验证用的单实例 Web 应用，只交付一个 30～60
 | --- | --- |
 | `frontend` | 五个工作台 Feature、生成客户端和 Task 2 秒轮询，不保存正式事实 |
 | `backend-api` | 校验输入、幂等/并发、业务命令、查询、任务轮询和短期下载授权 |
-| `backend-worker` | OutboxEvent 派发、Temporal Workflow/Activity、Provider 调用、下载、探测与渲染 |
-| `postgres` | 唯一业务事实、Task/Attempt、OutboxEvent、TaskEvent 和版本记录 |
-| `temporal` | 可恢复编排历史，不作为产品状态或媒体事实源 |
-| `minio/S3` | 私有媒体字节、派生物和成片；URL 不是业务事实 |
+| `backend-worker` | TaskJob 领取/续租、Provider 调用/对账、下载、探测与渲染 |
+| `postgres` | 唯一业务/恢复事实、Task/Attempt/TaskJob/TaskEvent 和版本记录；复用现有本地实例 |
+| `minio` | 私有媒体字节、派生物和成片；URL 不是业务事实 |
 
-数据库迁移是受控的一次性命令，不是常驻服务。API 和 Worker 必须能独立停止、启动和构建；MVP 可共用一个 Task Queue，但代码保持 Workflow 与 Activity 边界。
+数据库迁移是受控的一次性命令，不是常驻服务。API 和 Worker 必须能独立停止、启动和构建；Worker 用 `Task.type` 分派到具名 Handler，不建立 Workflow 框架。
 
 ## 4. 选择理由
 
 - PostgreSQL、不可变快照和明确版本保证内容、候选与交付可追溯。
-- Temporal 与 OutboxEvent 直接服务“任务在进程重启和外部超时后仍能继续”的核心价值。
+- PostgreSQL TaskJob 与 Attempt 租约直接服务“任务在进程重启和外部超时后仍能继续”，无需新增编排服务。
 - 单仓库、模块化单体和两个后端进程减少首轮部署与契约协调成本。
-- S3 与 FFmpeg 把媒体字节和高资源处理移出控制面。
-- 静态 Adapter 通过部署配置为每种模态绑定唯一 Provider，并使每次调用可确定、可追踪。
+- MinIO 与 FFmpeg 把媒体字节和高资源处理移出控制面。
+- LangChain Core 统一文本模型调用，`AiModelRegistry` 让多个已批准 Provider/模型配置并存；能力端口继续隔离图片、视频和 TTS 的 Provider 差异。完整 `langchain` 当前会传递引入 LangGraph，因此不进入 MVP 基线。
+- Temporal 更适合跨服务补偿、长周期人机流程和多 Worker 版本治理；当前单体单 Worker MVP 采用 PostgreSQL 租约更小且已满足恢复需求。FastAPI BackgroundTasks 不持久，Celery/Dramatiq 又会增加 Redis，因此都不进入 MVP；达到上述复杂度信号后再立 ADR 评估 Temporal。
 
 ## 5. MVP 实现 allowlist
 
 - 一个部署边界内的内部操作者创建一个 Project，并由系统原子创建唯一 Episode。
 - 操作者粘贴中文正文并声明来源权利，生成、编辑和确认结构化剧本、创作资产与分镜。
-- 文本、图片、视频和 TTS 各使用一个已批准真实 Provider；测试使用确定性 Mock。
+- 文本、图片、视频和 TTS 从已批准模型配置目录解析，每类必需能力至少一个配置且可并存多个；每个 Task 固定一个配置，测试使用确定性 Mock。
 - 每个异步命令产生可恢复的 Task/Attempt；媒体结果先成为 Candidate，再由操作者形成 Adoption。
 - 服务端使用已采用视频、逐句 TTS 和已确认字幕生成 MP4、SRT 与 JSON Manifest，并通过 ffprobe 质检。
 - 来源权利声明、服务端密钥、私有对象、短期授权和日志脱敏是交付闭环的必需护栏；交付用途固定为受控内部评审。
@@ -81,21 +84,21 @@ Lanverse MVP 是内部验证用的单实例 Web 应用，只交付一个 30～60
 
 ## 6. 后果与风险
 
-- 单实例、单操作者边界固定为本机 loopback：Compose 只有 frontend、backend-api、minio 可发布端口且全部绑定 `127.0.0.1`，其余服务只在内部网络可达；部署与运行时测试必须拒绝非 loopback 访问。
-- 单 Worker 按[《06 MVP质量标准》](../requirement/06-MVP质量标准.md)的并发、超时和资源上限执行 FFmpeg/Provider Activity；容量不足时拒绝新任务并保留全部已受理任务。
-- Temporal 是本闭环恢复协议的必需运行依赖，必须提供重启、取消、未知状态和幂等证据。
-- 一模态一 Provider 可能形成供应故障阻塞；MVP 显式失败并允许用户对终态失败创建新 Task，不自动切换。
+- 单实例、单操作者边界固定为本机 loopback：根 Compose 只有 frontend、backend-api 发布端口且全部绑定 `127.0.0.1`，Worker 不发布端口；PostgreSQL/MinIO 复用既有本地环境，不由 Compose 管理。运行时测试必须拒绝应用的非 loopback 访问。
+- 单 Worker 按[《06 MVP质量标准》](../requirement/06-MVP质量标准.md)的并发、超时和资源上限执行 FFmpeg/Provider Job Handler；容量不足时停止领取新任务并保留全部已受理任务。
+- TaskJob 领取、心跳、租约过期、取消、unknown 对账必须有真实 PostgreSQL 故障注入证据；租约并不替代 Provider 幂等。
+- 多 Provider/模型配置会增加能力差异和成本风险；MVP 由版本化默认路由在 Task 受理前选定配置，受理后显式失败并允许用户创建新 Task，不自动切换或 fallback。
 
 ## 7. 迁移与回滚规则
 
-当前无应用数据，首次迁移从 `0001` 建立。数据库变更遵循 expand→switch→contract；部署回滚只回退制品和入口，不删除已提交的 Task、Attempt、快照、媒体和 Delivery。
+当前无应用数据；[数据库表与迁移设计](06-数据库表与迁移设计.md)必须先于任何脚手架或源码转为 `accepted`，首次 Alembic 迁移再从 `0001_mvp` 建立。数据库变更遵循 expand→switch→contract；部署回滚只回退制品和入口，不删除已提交的 Task、Attempt、快照、媒体和 Delivery。
 
 实现若偏离本 ADR 的 allowlist、技术基线、运行单元或成片规格，必须先更新 Requirement 与 Design 并重新通过准入门禁，不能在代码中预埋旁路。
 
 ## 8. Design 验收标准
 
-- AC-ADR-001-001：[02 MVP总体架构](02-MVP总体架构.md)、[03 任务执行与媒体处理](03-任务执行与媒体处理.md)、[04 接口数据与项目结构](04-接口数据与项目结构.md)与[05 AI短剧端到端制作流程](05-端到端制作流程.md)只使用本决策的技术族、运行单元和单闭环范围。
+- AC-ADR-001-001：[02 MVP总体架构](02-MVP总体架构.md)、[03 任务执行与媒体处理](03-任务执行与媒体处理.md)、[04 接口数据与项目结构](04-接口数据与项目结构.md)、[05 AI短剧端到端制作流程](05-端到端制作流程.md)与[06 数据库表与迁移设计](06-数据库表与迁移设计.md)只使用本决策的技术族、运行单元和单闭环范围。
 - AC-ADR-001-002：所有代码目录、API、数据表和验收项都可定位到 §5 allowlist 与六个模块之一。
-- AC-ADR-001-003：真实 Provider/模型/凭据/额度均有明确的 T-011 前关闭门禁，Mock 不伪装真实成片证据。
+- AC-ADR-001-003：每类必需能力至少一个真实模型配置，全部启用配置的 Provider/模型/凭据/额度和默认路由均有明确的 T-008 真实 smoke 前关闭条件，Mock 不伪装真实成片证据。
 - AC-ADR-001-004：Worker 重启、重复请求、供应状态未知和渲染失败均有不丢事实、不重复副作用的恢复设计。
-- AC-ADR-001-005：目标目录仅包含 `backend/frontend/deploy` 应用根，且 Acceptance 未在实现前创建。
+- AC-ADR-001-005：目标应用目录仅包含 `backend/frontend`，Compose 位于根目录，不存在 `deploy/`，且 Acceptance 未在实现前创建。
