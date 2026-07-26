@@ -17,6 +17,7 @@ from tests.integration.delivery.render_fixture import (
     complete_ready_delivery,
     render_recipe,
 )
+from tests.integration.delivery.support import render_ready_story
 from workers.provider_execution import FaultInjector
 
 
@@ -130,6 +131,43 @@ async def test_non_ready_delivery_has_no_download_authorization(
             )
     assert response.status_code == 404
     assert response.json()["code"] == "DELIVERY_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_render_episode_http_submission_replays_one_task(
+    migrated_database_url: str,
+) -> None:
+    database = DatabasePool(migrated_database_url, min_size=1, max_size=12)
+    await database.start()
+    try:
+        episode_id, _, _, _ = await render_ready_story(database, "render-http")
+    finally:
+        await database.close()
+    app = create_app(
+        ApplicationSettings.model_validate(
+            {
+                "DATABASE_URL": migrated_database_url,
+                "environment": "test",
+                "render_runtime_image": f"sha256:{'c' * 64}",
+            }
+        )
+    )
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
+    ):
+        first = await client.post(
+            f"/v1/episodes/{episode_id}/renders",
+            headers={"Idempotency-Key": "render:http:0001"},
+        )
+        replay = await client.post(
+            f"/v1/episodes/{episode_id}/renders",
+            headers={"Idempotency-Key": "render:http:0001"},
+        )
+    assert first.status_code == 202
+    assert replay.status_code == 202
+    assert replay.json() == first.json()
+    assert first.json()["status_url"] == f"/v1/tasks/{first.json()['task_id']}"
 
 
 def test_delivery_operations_are_in_the_single_openapi_contract() -> None:
