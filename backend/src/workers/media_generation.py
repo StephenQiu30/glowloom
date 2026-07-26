@@ -1,41 +1,31 @@
 from __future__ import annotations
 
-from typing import Protocol, cast
+from typing import cast
 from uuid import UUID
 
 from db.pool import DatabasePool
-from integrations.ai.deterministic_media import GeneratedMedia
 from integrations.ai.profiles import Capability
 from integrations.ai.registry import AiModelBinding, AiModelRegistry
+from integrations.ai.voices import VoiceCatalog, create_mvp_voice_catalog
 from repositories.task_completion import ExecutionCompletionStore
 from repositories.task_executions import ExecutionPlan, MediaExecutionInput, TaskExecutionStore
 from repositories.task_outputs import TaskOutputStore
-from schemas.media import MediaKind
-from schemas.media_registration import (
-    MediaRegistrationCommand,
-    UsageType,
-)
+from schemas.media_registration import MediaRegistrationCommand
 from services.media_registration import MediaRegistrationService
 from services.media_validation import InvalidMedia
 from workers.dispatch import JobContext
+from workers.media_provider import (
+    ImageProvider,
+    InvalidMediaProviderInput,
+    invoke_media_provider,
+    parse_media_request,
+)
 from workers.provider_execution import FaultInjector
 
-
-class ImageProvider(Protocol):
-    async def generate(self, input_hash: str, output_slot: str) -> GeneratedMedia: ...
+__all__ = ["GenerateMediaJobHandler", "ImageProvider"]
 
 
-class VideoProvider(Protocol):
-    async def generate(
-        self,
-        input_hash: str,
-        output_slot: str,
-        *,
-        duration_ticks: int,
-    ) -> GeneratedMedia: ...
-
-
-class InvalidMediaJobInput(ValueError):
+class InvalidMediaJobInput(InvalidMediaProviderInput):
     pass
 
 
@@ -47,6 +37,7 @@ class GenerateMediaJobHandler:
         registry: AiModelRegistry,
         registration: MediaRegistrationService,
         fault: FaultInjector,
+        voices: VoiceCatalog | None = None,
     ) -> None:
         self._executions = TaskExecutionStore(database)
         self._outputs = TaskOutputStore(database)
@@ -54,6 +45,7 @@ class GenerateMediaJobHandler:
         self._registry = registry
         self._registration = registration
         self._fault = fault
+        self._voices = voices or create_mvp_voice_catalog()
 
     async def handle(self, context: JobContext) -> None:
         plan = await self._executions.prepare(context.payload)
@@ -70,14 +62,21 @@ class GenerateMediaJobHandler:
             return
         job_input = await self._executions.media_input(plan.task_id)
         binding = self._binding(job_input)
-        usage_type, usage_id, input_version_id, input_hash, duration = self._usage(
-            job_input
+        request = parse_media_request(job_input, plan.prompt)
+        provider_voice_id = (
+            self._voices.resolve(
+                job_input.provider_id,
+                job_input.route_version,
+                request.logical_voice_id,
+            )
+            if request.logical_voice_id is not None
+            else None
         )
-        generated = await self._generate(
+        generated = await invoke_media_provider(
             binding.adapter,
             cast(Capability, job_input.capability),
-            input_hash,
-            duration,
+            request,
+            provider_voice_id=provider_voice_id,
         )
         await self._executions.record_provider_success(plan, plan.provider_request_key)
         self._fault.hit("after_media_generation")
@@ -86,14 +85,14 @@ class GenerateMediaJobHandler:
             task_id=plan.task_id,
             attempt_id=plan.attempt_id,
             output_slot="primary",
-            usage_type=usage_type,
-            usage_id=usage_id,
-            input_version_id=input_version_id,
-            input_hash=input_hash,
-            media_kind=cast(MediaKind, job_input.capability),
+            usage_type=request.usage_type,
+            usage_id=request.usage_id,
+            input_version_id=request.input_version_id,
+            input_hash=request.input_hash,
+            media_kind=request.media_kind,
             content_type=generated.content_type,
             data=generated.data,
-            target_duration_ticks=duration,
+            target_duration_ticks=request.target_duration_ticks,
         )
         try:
             registered = await self._registration.register(command)
@@ -122,6 +121,7 @@ class GenerateMediaJobHandler:
         if job_input.task_type != "generate_media" or job_input.capability not in {
             "image",
             "video",
+            "tts",
         }:
             raise InvalidMediaJobInput("job is not a supported media generation task")
         capability = cast(Capability, job_input.capability)
@@ -135,53 +135,6 @@ class GenerateMediaJobHandler:
         ):
             raise InvalidMediaJobInput("frozen model profile no longer matches the registry")
         return binding
-
-    @staticmethod
-    def _usage(
-        job_input: MediaExecutionInput,
-    ) -> tuple[UsageType, UUID, UUID, str, int | None]:
-        refs = job_input.input_refs
-        usage_type = refs.get("usage_type")
-        allowed = (
-            {"asset_image", "shot_image"}
-            if job_input.capability == "image"
-            else {"shot_video"}
-        )
-        if usage_type not in allowed:
-            raise InvalidMediaJobInput("media usage type is invalid")
-        parsed_usage_type = cast(UsageType, usage_type)
-        input_hash = refs.get("input_hash")
-        usage_id = (
-            refs.get("asset_id") if usage_type == "asset_image" else refs.get("shot_id")
-        )
-        try:
-            parsed_usage_id = UUID(str(usage_id))
-            input_version_id = UUID(str(refs["input_version_id"]))
-        except (KeyError, ValueError) as error:
-            raise InvalidMediaJobInput("image usage references are invalid") from error
-        if not isinstance(input_hash, str):
-            raise InvalidMediaJobInput("media input hash is missing")
-        duration = refs.get("duration_ticks") if usage_type == "shot_video" else None
-        if duration is not None and (not isinstance(duration, int) or duration <= 0):
-            raise InvalidMediaJobInput("video target duration is invalid")
-        return parsed_usage_type, parsed_usage_id, input_version_id, input_hash, duration
-
-    @staticmethod
-    async def _generate(
-        adapter: object,
-        capability: Capability,
-        input_hash: str,
-        duration_ticks: int | None,
-    ) -> GeneratedMedia:
-        if capability == "image":
-            return await cast(ImageProvider, adapter).generate(input_hash, "primary")
-        if capability == "video" and duration_ticks is not None:
-            return await cast(VideoProvider, adapter).generate(
-                input_hash,
-                "primary",
-                duration_ticks=duration_ticks,
-            )
-        raise InvalidMediaJobInput("media provider input is incomplete")
 
     async def _complete(
         self, task_id: UUID, candidate_id: UUID, plan: ExecutionPlan

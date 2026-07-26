@@ -104,19 +104,21 @@ class DeterministicTtsProvider:
         text_hash: str,
         output_slot: str,
         *,
-        duration_ticks: int,
+        text: str,
+        voice_id: str,
     ) -> GeneratedMedia:
-        seed = _seed(text_hash, output_slot, "tts-v1")
-        if duration_ticks <= 0:
-            raise ValueError("duration must be positive")
-        numerator = duration_ticks * 48000
-        if numerator % TIMEBASE:
-            raise ValueError("duration must align to the 48kHz sample rate")
+        if not text or len(text) > 500:
+            raise ValueError("text must contain between 1 and 500 codepoints")
+        if not voice_id.strip():
+            raise ValueError("voice id must be non-empty")
+        seed = _seed(text_hash, output_slot, f"tts-v1:{voice_id}")
+        sample_count = min(8 * 48000, max(48000, len(text) * 2400))
+        duration_ticks = sample_count * TIMEBASE // 48000
         self.call_count += 1
         return GeneratedMedia(
             output_slot=output_slot,
             content_type="audio/wav",
-            data=_mono_wav(48000, numerator // TIMEBASE, 220 + seed[0]),
+            data=_mono_wav(48000, sample_count, 220 + seed[0]),
             duration_ticks=duration_ticks,
             sample_rate=48000,
             channels=1,
