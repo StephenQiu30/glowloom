@@ -4,6 +4,12 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from integrations.ai.deterministic_media import (
+    DeterministicImageProvider,
+    DeterministicTtsProvider,
+)
+from integrations.ai.deterministic_text import DeterministicTextProvider
+from integrations.ai.deterministic_video import DeterministicVideoProvider, DockerFfmpegRuntime
 from integrations.ai.profiles import (
     AiModelProfile,
     AiModelSelection,
@@ -102,6 +108,15 @@ class AiModelRegistry:
         )
 
 
+def _mock_adapter_factories() -> Mapping[tuple[Capability, str], AdapterFactory]:
+    return {
+        ("text", "mock"): lambda _profile: DeterministicTextProvider(),
+        ("image", "mock"): lambda _profile: DeterministicImageProvider(),
+        ("video", "mock"): lambda _profile: DeterministicVideoProvider(DockerFfmpegRuntime()),
+        ("tts", "mock"): lambda _profile: DeterministicTtsProvider(),
+    }
+
+
 def create_mvp_registry(
     adapter_factories: Mapping[tuple[Capability, str], AdapterFactory] | None = None,
 ) -> AiModelRegistry:
@@ -151,5 +166,7 @@ def create_mvp_registry(
     return AiModelRegistry(
         profiles,
         defaults=defaults,
-        adapter_factories=adapter_factories,
+        adapter_factories=(
+            adapter_factories if adapter_factories is not None else _mock_adapter_factories()
+        ),
     )

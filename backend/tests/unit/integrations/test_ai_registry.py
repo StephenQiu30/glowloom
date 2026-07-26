@@ -4,6 +4,7 @@ from dataclasses import FrozenInstanceError
 from typing import cast
 
 import pytest
+
 from integrations.ai.deterministic_media import (
     DeterministicImageProvider,
     DeterministicTtsProvider,
