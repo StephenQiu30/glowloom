@@ -16,6 +16,10 @@ class InvalidMediaProviderInput(ValueError):
     pass
 
 
+class RetryableMediaProviderError(RuntimeError):
+    pass
+
+
 class ImageProvider(Protocol):
     async def generate(self, input_hash: str, output_slot: str) -> GeneratedMedia: ...
 

@@ -17,6 +17,7 @@ from workers.dispatch import JobContext
 from workers.media_provider import (
     ImageProvider,
     InvalidMediaProviderInput,
+    RetryableMediaProviderError,
     invoke_media_provider,
     parse_media_request,
 )
@@ -72,12 +73,22 @@ class GenerateMediaJobHandler:
             if request.logical_voice_id is not None
             else None
         )
-        generated = await invoke_media_provider(
-            binding.adapter,
-            cast(Capability, job_input.capability),
-            request,
-            provider_voice_id=provider_voice_id,
-        )
+        try:
+            generated = await invoke_media_provider(
+                binding.adapter,
+                cast(Capability, job_input.capability),
+                request,
+                provider_voice_id=provider_voice_id,
+            )
+        except RetryableMediaProviderError:
+            await self._completion.mark_failed(
+                plan,
+                error_code="PROVIDER_TEMPORARY",
+                summary="Media provider failed temporarily",
+                retryable=True,
+                next_action="Retry only this media slot",
+            )
+            return
         await self._executions.record_provider_success(plan, plan.provider_request_key)
         self._fault.hit("after_media_generation")
         command = MediaRegistrationCommand(
