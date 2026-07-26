@@ -4,7 +4,7 @@ doc_type: Database and API Contract Implementation Plan
 doc_no: PLAN-03
 title: 数据库与API契约计划
 status: accepted
-version: 1.1.0
+version: 1.2.0
 owner: Lanverse
 audience: [Architecture, Backend, Frontend, QA, Operations]
 feature_area: PostgreSQL、HTTP 与生成客户端
@@ -13,7 +13,7 @@ canonical_path: docs/plans/03-数据库与API契约计划.md
 inputs: [DESIGN-04, DESIGN-06, DESIGN-13, PRODUCT-01, PLAN-01, PLAN-02]
 outputs: [0001_mvp 迁移, asyncpg 基础设施, HTTP 公共契约, OpenAPI/umi 工具链兼容证明]
 triggers: [Schema 变化, Operation exact-set 变化, 生成工具变化]
-updated: 2026-07-25
+updated: 2026-07-26
 downstream: [PLAN-04至PLAN-09, ACCEPTANCE-01]
 ---
 
@@ -31,7 +31,7 @@ Alembic 只执行根 SQL，不复制 DDL、不使用 ORM/Metadata/autogenerate�
 | --- | --- | --- |
 | 物理 DDL | `sql/01_*.sql`～`20_*.sql` | 每表一文件，内联 key/FK/CHECK，所属表索引同文件 |
 | 首次迁移 | `backend/migrations/versions/0001_mvp.py` | 按编号读取根 SQL；无复制 DDL |
-| 运行时数据 | `backend/src/lanverse/db/` + `repositories/` | asyncpg pool/transaction、参数化 SQL 与 Row Mapper |
+| 运行时数据 | `backend/src/db/` + `backend/src/repositories/` | asyncpg pool/transaction、参数化 SQL 与 Row Mapper |
 | HTTP 契约 | `api/routes/` + `schemas/` | FastAPI 路由与 Pydantic 是唯一契约源 |
 | OpenAPI | 运行中 API 的 `LANVERSE_OPENAPI_URL` | 本地默认 `http://127.0.0.1:8000/openapi.json`；不保存静态中间副本 |
 | 前端生成 | `frontend/openapi2ts.config.ts`；最终 `src/services/generated/` | `@umijs/openapi` 1.14.1 直接读取 URL 并整体覆盖；生成目录提交但不得手改 |
