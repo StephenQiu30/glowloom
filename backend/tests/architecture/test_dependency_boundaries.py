@@ -150,6 +150,7 @@ def test_generated_openapi_client_uses_the_native_api_directory() -> None:
 def test_only_api_wrapper_may_import_generated_services() -> None:
     source = FRONTEND / "src"
     wrapper = source / "store" / "backend-api.ts"
+    allowed = {Path("store/backend-api.ts"), Path("store/backend-api.test.ts")}
     assert wrapper.is_file()
     wrapper_text = wrapper.read_text()
     assert "@/api/" in wrapper_text
@@ -165,6 +166,6 @@ def test_only_api_wrapper_may_import_generated_services() -> None:
             continue
         text = path.read_text()
         for module in generated_modules:
-            if f"@/api/{module}" in text and relative != Path("store/backend-api.ts"):
+            if f"@/api/{module}" in text and relative not in allowed:
                 violations.append(f"{relative.as_posix()} -> {module}")
     assert not violations, violations

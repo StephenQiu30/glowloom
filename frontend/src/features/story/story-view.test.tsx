@@ -31,8 +31,8 @@ describe("StoryView", () => {
     );
 
     await user.type(screen.getByRole("textbox", { name: "获权故事正文" }), "山".repeat(300));
-    await user.click(screen.getByRole("combobox", { name: "权利依据" }));
-    await user.click(screen.getByRole("option", { name: "原创" }));
+    screen.getByRole("combobox", { name: "权利依据" }).focus();
+    await user.keyboard("{Enter}{ArrowUp}{Enter}");
     await user.click(screen.getByRole("button", { name: "保存来源草稿" }));
 
     expect(createSource).toHaveBeenCalledWith({ content: "山".repeat(300), rights: "original" });

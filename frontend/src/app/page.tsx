@@ -1,5 +1,7 @@
 import { Clapperboard, Film, Images, ScrollText } from "lucide-react";
 
+import { LandingAction } from "@/components/landing-action";
+
 const stages = [
   { label: "剧本", icon: ScrollText },
   { label: "分镜", icon: Clapperboard },
@@ -21,6 +23,7 @@ export default function Home() {
         <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
           以可追溯的版本、任务和媒体事实，串起 30–60 秒竖屏短剧的完整制作闭环。
         </p>
+        <LandingAction />
         <p className="mt-10 text-sm font-medium text-foreground">
           剧本 → 分镜 → 媒体 → 成片
         </p>
