@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from fastapi import Request
 
 from api.problems import HttpProblem
@@ -29,8 +31,8 @@ def object_store_from_request(request: Request) -> ObjectStore:
             code="OBJECT_STORAGE_NOT_CONFIGURED",
             retryable=True,
         )
-    return object_store
+    return cast(ObjectStore, object_store)
 
 
 def clock_from_request(request: Request) -> Clock:
-    return request.app.state.runtime.clock
+    return cast(Clock, request.app.state.runtime.clock)
