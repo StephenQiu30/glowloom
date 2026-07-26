@@ -132,17 +132,33 @@ def test_frontend_has_only_one_direct_http_sender() -> None:
         if (
             re.search(r"\b(fetch|XMLHttpRequest)\s*\(|\baxios\b", text)
             and relative not in allowed
-            and "services/generated" not in relative.as_posix()
         ):
             violations.append(relative.as_posix())
     assert not violations, violations
 
 
-def test_only_api_wrapper_imports_generated_services() -> None:
+def test_generated_openapi_client_uses_the_native_api_directory() -> None:
     source = FRONTEND / "src"
+    api = source / "api"
+    assert api.is_dir()
+    assert list(api.glob("*.ts"))
+    assert not [path for path in api.iterdir() if path.is_dir()]
+    assert not (source / "services" / "generated").exists()
+    assert not (source / "services" / "api").exists()
+
+
+def test_only_api_wrapper_may_import_generated_services() -> None:
+    source = FRONTEND / "src"
+    generated_modules = {
+        path.stem for path in (source / "api").glob("*.ts") if path.name != "typings.d.ts"
+    }
     violations: list[str] = []
     for path in sorted(source.rglob("*.ts")) + sorted(source.rglob("*.tsx")):
         relative = path.relative_to(source)
-        if "services/generated" in path.read_text() and relative != Path("services/api.ts"):
-            violations.append(relative.as_posix())
+        if relative.parent == Path("api"):
+            continue
+        text = path.read_text()
+        for module in generated_modules:
+            if f"@/api/{module}" in text and relative != Path("store/backend-api.ts"):
+                violations.append(f"{relative.as_posix()} -> {module}")
     assert not violations, violations
