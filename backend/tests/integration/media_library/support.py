@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from db.pool import DatabasePool
 from integrations.ai.deterministic_video import DockerFfmpegRuntime
 from integrations.ai.registry import AiModelRegistry, create_mvp_registry
 from integrations.object_storage import MinioObjectStore, RemoteObject
 from schemas.jobs import JobPayload
+from services.adoptions import AdoptCandidateCommand, AdoptCandidateHandler
 from services.media_generation import GenerateMediaCommand, GenerateMediaHandler
 from services.media_registration import MediaRegistrationService
 from services.media_validation import MediaValidationService
@@ -95,28 +96,22 @@ async def adopt_task_candidate(database: DatabasePool, task_id: UUID) -> dict[st
             task_id,
         )
         assert candidate is not None
-        adoption_id = uuid4()
-        await connection.execute(
-            """
-            INSERT INTO adoptions (
-                id,episode_id,usage_type,usage_id,input_version_id,input_hash,
-                version,candidate_id,status
-            ) VALUES ($1,$2,$3,$4,$5,$6,1,$7,'active')
-            """,
-            adoption_id,
-            candidate["episode_id"],
-            candidate["usage_type"],
-            candidate["usage_id"],
-            candidate["input_version_id"],
-            candidate["input_hash"],
-            candidate["id"],
+    adoption = await AdoptCandidateHandler(database).execute(
+        AdoptCandidateCommand(
+            usage_type=candidate["usage_type"],
+            usage_id=candidate["usage_id"],
+            input_version_id=candidate["input_version_id"],
+            input_hash=candidate["input_hash"],
+            candidate_id=candidate["id"],
+            idempotency_key=f"test-adopt:{task_id}",
         )
+    )
     return {
         "usage_type": candidate["usage_type"],
         "usage_id": str(candidate["usage_id"]),
         "input_version_id": str(candidate["input_version_id"]),
         "input_hash": candidate["input_hash"],
-        "adoption_id": str(adoption_id),
+        "adoption_id": str(adoption.id),
         "candidate_id": str(candidate["id"]),
         "media_version_id": str(candidate["media_version_id"]),
         "sha256": candidate["sha256"],

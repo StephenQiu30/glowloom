@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from api.routes.adoptions import router as adoption_router
 from api.routes.assets import router as asset_router
 from api.routes.candidates import router as candidate_router
 from api.routes.media import router as media_router
@@ -9,6 +10,7 @@ from api.routes.storyboards import router as storyboard_router
 from api.routes.tasks import router as task_router
 
 router = APIRouter()
+router.include_router(adoption_router)
 router.include_router(project_router)
 router.include_router(task_router)
 router.include_router(script_router)

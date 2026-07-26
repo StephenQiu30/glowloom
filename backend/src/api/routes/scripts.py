@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Request, Response, status
@@ -11,7 +11,8 @@ from api.headers import (
     strong_etag,
     validate_idempotency_key,
 )
-from schemas.common import Problem, TaskAccepted
+from api.responses import RESOURCE_API_ERRORS
+from schemas.common import TaskAccepted
 from schemas.script_api import (
     SaveScriptRequest,
     ScriptVersionListResponse,
@@ -36,12 +37,6 @@ from services.story_generation import (
 )
 
 router = APIRouter(prefix="/v1")
-ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    404: {"model": Problem},
-    409: {"model": Problem},
-    412: {"model": Problem},
-    422: {"model": Problem},
-}
 
 
 @router.post(
@@ -49,7 +44,7 @@ ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     operation_id="generateScript",
     response_model=TaskAccepted,
     status_code=status.HTTP_202_ACCEPTED,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def generate_script(
     episode_id: UUID,
@@ -68,7 +63,7 @@ async def generate_script(
     "/episodes/{episode_id}/script",
     operation_id="getCurrentScript",
     response_model=ScriptVersionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def get_current_script(
     episode_id: UUID, request: Request, response: Response
@@ -82,7 +77,7 @@ async def get_current_script(
     "/script-versions/{version_id}",
     operation_id="saveScript",
     response_model=ScriptVersionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def save_script(
     version_id: UUID,
@@ -102,7 +97,7 @@ async def save_script(
     "/script-versions/{version_id}:confirm",
     operation_id="confirmScript",
     response_model=ScriptVersionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def confirm_script(
     version_id: UUID,
@@ -122,7 +117,7 @@ async def confirm_script(
     operation_id="deriveScriptDraft",
     response_model=ScriptVersionResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def derive_script_draft(
     version_id: UUID,
@@ -141,7 +136,7 @@ async def derive_script_draft(
     "/episodes/{episode_id}/script-versions",
     operation_id="listScriptVersions",
     response_model=ScriptVersionListResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def list_script_versions(
     episode_id: UUID, request: Request
@@ -154,7 +149,7 @@ async def list_script_versions(
     "/script-versions/{version_id}",
     operation_id="getScriptVersion",
     response_model=ScriptVersionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def get_script_version(
     version_id: UUID, request: Request, response: Response

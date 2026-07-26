@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Request, Response
 
 from api.dependencies import database_from_request
 from api.headers import parse_if_match, strong_etag
-from schemas.common import Problem
+from api.responses import RESOURCE_API_ERRORS
 from schemas.storyboard_api import (
     CreativeAssetListResponse,
     CreativeAssetVersionResponse,
@@ -22,19 +22,13 @@ from services.storyboards import (
 )
 
 router = APIRouter(prefix="/v1")
-ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    404: {"model": Problem},
-    409: {"model": Problem},
-    412: {"model": Problem},
-    422: {"model": Problem},
-}
 
 
 @router.get(
     "/episodes/{episode_id}/creative-assets",
     operation_id="listCreativeAssets",
     response_model=CreativeAssetListResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def list_creative_assets(
     episode_id: UUID,
@@ -50,7 +44,7 @@ async def list_creative_assets(
     "/creative-asset-versions/{version_id}",
     operation_id="getCreativeAssetVersion",
     response_model=CreativeAssetVersionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def get_creative_asset_version(
     version_id: UUID, request: Request, response: Response
@@ -66,7 +60,7 @@ async def get_creative_asset_version(
     "/creative-asset-versions/{version_id}",
     operation_id="saveCreativeAsset",
     response_model=CreativeAssetVersionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def save_creative_asset(
     version_id: UUID,

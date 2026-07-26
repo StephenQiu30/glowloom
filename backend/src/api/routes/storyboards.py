@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Request, Response, status
@@ -11,7 +11,8 @@ from api.headers import (
     strong_etag,
     validate_idempotency_key,
 )
-from schemas.common import Problem, TaskAccepted
+from api.responses import RESOURCE_API_ERRORS
+from schemas.common import TaskAccepted
 from schemas.storyboard_api import (
     SaveStoryboardRequest,
     StoryboardGenerationResponse,
@@ -38,12 +39,6 @@ from services.storyboards import (
 )
 
 router = APIRouter(prefix="/v1")
-ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    404: {"model": Problem},
-    409: {"model": Problem},
-    412: {"model": Problem},
-    422: {"model": Problem},
-}
 
 
 @router.post(
@@ -51,7 +46,7 @@ ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     operation_id="generateStoryboard",
     response_model=TaskAccepted,
     status_code=status.HTTP_202_ACCEPTED,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def generate_storyboard(
     episode_id: UUID,
@@ -70,7 +65,7 @@ async def generate_storyboard(
     "/episodes/{episode_id}/storyboard",
     operation_id="getStoryboard",
     response_model=StoryboardVersionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def get_storyboard(
     episode_id: UUID, request: Request, response: Response
@@ -84,7 +79,7 @@ async def get_storyboard(
     "/shot-spec-versions/{version_id}",
     operation_id="saveStoryboard",
     response_model=StoryboardVersionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def save_storyboard(
     version_id: UUID,
@@ -104,7 +99,7 @@ async def save_storyboard(
     "/shot-spec-versions/{version_id}:confirm",
     operation_id="confirmStoryboard",
     response_model=StoryboardGenerationResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def confirm_storyboard(
     version_id: UUID,
@@ -124,7 +119,7 @@ async def confirm_storyboard(
     operation_id="deriveStoryboardDraft",
     response_model=StoryboardGenerationResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def derive_storyboard_draft(
     version_id: UUID,
@@ -145,7 +140,7 @@ async def derive_storyboard_draft(
     "/episodes/{episode_id}/shot-spec-versions",
     operation_id="listStoryboardVersions",
     response_model=StoryboardVersionListResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def list_storyboard_versions(
     episode_id: UUID, request: Request
@@ -162,7 +157,7 @@ async def list_storyboard_versions(
     "/shot-spec-versions/{version_id}",
     operation_id="getStoryboardVersion",
     response_model=StoryboardVersionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def get_storyboard_version(
     version_id: UUID, request: Request, response: Response

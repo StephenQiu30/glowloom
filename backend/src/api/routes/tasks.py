@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Request, Response, status
@@ -11,7 +11,8 @@ from api.headers import (
     strong_etag,
     validate_idempotency_key,
 )
-from schemas.common import Problem, TaskAccepted, TaskResponse
+from api.responses import RESOURCE_API_ERRORS
+from schemas.common import TaskAccepted, TaskResponse
 from schemas.task_api import (
     TaskListResponse,
     task_accepted,
@@ -24,12 +25,6 @@ from services.tasks import (
 )
 
 router = APIRouter(prefix="/v1")
-ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    404: {"model": Problem},
-    409: {"model": Problem},
-    412: {"model": Problem},
-    422: {"model": Problem},
-}
 
 
 @router.get("/tasks", operation_id="listTasks", response_model=TaskListResponse)
@@ -44,7 +39,7 @@ async def list_tasks(
     "/tasks/{task_id}",
     operation_id="getTask",
     response_model=TaskResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def get_task(task_id: UUID, request: Request, response: Response) -> TaskResponse:
     value = await TaskQueryService(database_from_request(request)).get(task_id)
@@ -56,7 +51,7 @@ async def get_task(task_id: UUID, request: Request, response: Response) -> TaskR
     "/tasks/{task_id}:cancel",
     operation_id="cancelTask",
     response_model=TaskResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def cancel_task(
     task_id: UUID,
@@ -79,7 +74,7 @@ async def cancel_task(
     operation_id="retryTask",
     response_model=TaskAccepted,
     status_code=status.HTTP_202_ACCEPTED,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def retry_task(
     task_id: UUID,

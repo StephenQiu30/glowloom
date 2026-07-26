@@ -5,7 +5,7 @@ from uuid import UUID
 
 import asyncpg  # type: ignore[import-untyped]
 
-from repositories.adoptions import AdoptionRepository
+from repositories.adopted_media import AdoptedMediaRepository
 from repositories.asset_versions import CreativeAssetVersionRepository
 from repositories.storyboard_versions import StoryboardVersionRepository
 from schemas.media_registration import UsageType
@@ -47,7 +47,7 @@ class MediaInputFreezer:
     def __init__(self) -> None:
         self._assets = CreativeAssetVersionRepository()
         self._storyboards = StoryboardVersionRepository()
-        self._adoptions = AdoptionRepository()
+        self._adoptions = AdoptedMediaRepository()
 
     async def freeze(
         self,
@@ -77,7 +77,11 @@ class MediaInputFreezer:
         asset = await self._assets.get(connection, request.input_version_id, for_update=True)
         if asset is None or asset.episode_id != request.episode_id:
             raise MediaInputNotFound("creative asset version was not found")
-        if asset.asset_id != request.usage_id or asset.status != "confirmed":
+        if (
+            asset.asset_id != request.usage_id
+            or asset.status != "confirmed"
+            or asset.input_outdated
+        ):
             raise MediaInputOutdated("asset is not the requested confirmed input")
         if asset.asset_type == "visual_style":
             raise UnsupportedMediaUsage("visual style does not have an image slot")

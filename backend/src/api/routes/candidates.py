@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
@@ -10,6 +10,7 @@ from api.dependencies import (
     database_from_request,
     object_store_from_request,
 )
+from api.responses import CANDIDATE_API_ERRORS
 from schemas.candidate_api import (
     CandidateListResponse,
     PreviewAuthorizationRequest,
@@ -17,23 +18,17 @@ from schemas.candidate_api import (
     candidate_response,
     preview_response,
 )
-from schemas.common import Problem
 from schemas.media_registration import UsageType
 from services.candidates import CandidateQueryService, PreviewAuthorizationService
 
 router = APIRouter(prefix="/v1")
-ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    404: {"model": Problem},
-    422: {"model": Problem},
-    503: {"model": Problem},
-}
 
 
 @router.get(
     "/episodes/{episode_id}/candidates",
     operation_id="listCandidates",
     response_model=CandidateListResponse,
-    responses=ERROR_RESPONSES,
+    responses=CANDIDATE_API_ERRORS,
 )
 async def list_candidates(
     episode_id: UUID,
@@ -57,7 +52,7 @@ async def list_candidates(
     "/media-versions/{media_version_id}/preview-authorizations",
     operation_id="authorizeCandidatePreview",
     response_model=PreviewAuthorizationResponse,
-    responses=ERROR_RESPONSES,
+    responses=CANDIDATE_API_ERRORS,
 )
 async def authorize_candidate_preview(
     media_version_id: UUID,

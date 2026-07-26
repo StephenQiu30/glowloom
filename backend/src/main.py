@@ -2,19 +2,10 @@ from __future__ import annotations
 
 import uvicorn
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.candidate_errors import register_candidate_errors
-from api.problems import (
-    HttpProblem,
-    http_problem_handler,
-    request_validation_problem_handler,
-)
-from api.project_errors import register_project_catalog_errors
+from api.errors import register_api_errors
 from api.router import router
-from api.story_errors import register_story_development_errors
-from api.task_errors import register_production_job_errors
 from core.config import ApplicationSettings, load_settings
 from core.lifespan import create_lifespan
 from core.logging import configure_logging
@@ -32,12 +23,7 @@ def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
         openapi_url="/openapi.json" if resolved.expose_docs else None,
         lifespan=create_lifespan(runtime),
     )
-    app.add_exception_handler(HttpProblem, http_problem_handler)
-    app.add_exception_handler(RequestValidationError, request_validation_problem_handler)
-    register_project_catalog_errors(app)
-    register_production_job_errors(app)
-    register_story_development_errors(app)
-    register_candidate_errors(app)
+    register_api_errors(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://127.0.0.1:3000"],

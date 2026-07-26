@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Request, Response, status
@@ -11,7 +11,7 @@ from api.headers import (
     strong_etag,
     validate_idempotency_key,
 )
-from schemas.common import Problem
+from api.responses import RESOURCE_API_ERRORS
 from schemas.project_api import (
     CreateProjectRequest,
     CreateSourceRevisionRequest,
@@ -43,12 +43,6 @@ from services.sources import (
 )
 
 router = APIRouter(prefix="/v1")
-ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    404: {"model": Problem},
-    409: {"model": Problem},
-    412: {"model": Problem},
-    422: {"model": Problem},
-}
 
 
 @router.post(
@@ -56,7 +50,7 @@ ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     operation_id="createProject",
     response_model=ProjectDetailResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def create_project(
     body: CreateProjectRequest,
@@ -83,7 +77,7 @@ async def list_projects(request: Request) -> ProjectListResponse:
     "/projects/{project_id}",
     operation_id="getProject",
     response_model=ProjectDetailResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def get_project(project_id: UUID, request: Request) -> ProjectDetailResponse:
     value = await GetProjectHandler(database_from_request(request)).execute(project_id)
@@ -94,7 +88,7 @@ async def get_project(project_id: UUID, request: Request) -> ProjectDetailRespon
     "/episodes/{episode_id}",
     operation_id="getEpisode",
     response_model=EpisodeResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def get_episode(episode_id: UUID, request: Request) -> EpisodeResponse:
     value = await GetEpisodeHandler(database_from_request(request)).execute(episode_id)
@@ -106,7 +100,7 @@ async def get_episode(episode_id: UUID, request: Request) -> EpisodeResponse:
     operation_id="createSourceRevision",
     response_model=SourceRevisionResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def create_source_revision(
     episode_id: UUID,
@@ -132,7 +126,7 @@ async def create_source_revision(
     "/source-revisions/{version_id}:confirm",
     operation_id="confirmSource",
     response_model=SourceRevisionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def confirm_source(
     version_id: UUID,
@@ -151,7 +145,7 @@ async def confirm_source(
     "/episodes/{episode_id}/source-revisions",
     operation_id="listSourceRevisions",
     response_model=SourceRevisionListResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def list_source_revisions(
     episode_id: UUID, request: Request
@@ -164,7 +158,7 @@ async def list_source_revisions(
     "/source-revisions/{version_id}",
     operation_id="getSourceRevision",
     response_model=SourceRevisionResponse,
-    responses=ERROR_RESPONSES,
+    responses=RESOURCE_API_ERRORS,
 )
 async def get_source_revision(
     version_id: UUID, request: Request, response: Response
