@@ -79,6 +79,18 @@ class MinioTransport:
         except (S3Error, HTTPError, OSError) as error:
             raise ObjectStoreUnavailable("MinIO put failed") from error
 
+    def get(self, bucket: str, object_key: str, max_bytes: int) -> bytes:
+        response = None
+        try:
+            response = self._client.get_object(bucket, object_key)
+            return response.read(max_bytes + 1)
+        except (S3Error, HTTPError, OSError) as error:
+            raise ObjectStoreUnavailable("MinIO get failed") from error
+        finally:
+            if response is not None:
+                response.close()
+                response.release_conn()
+
     def presign_get(self, bucket: str, object_key: str, expires_seconds: int) -> str:
         try:
             return self._public_client.presigned_get_object(

@@ -5,8 +5,8 @@ from uuid import UUID
 import pytest
 
 from integrations.object_storage import (
-    ObjectIntegrityError,
     MinioObjectStore,
+    ObjectIntegrityError,
     ObjectKeyConflict,
     ObjectStoreUnavailable,
     RemoteObject,
@@ -46,8 +46,11 @@ class FakeTransport:
             content_type=content_type,
         )
 
-    def get(self, bucket: str, object_key: str) -> bytes:
-        return self.contents[(bucket, object_key)]
+    def get(self, bucket: str, object_key: str, max_bytes: int) -> bytes:
+        return self.contents[(bucket, object_key)][: max_bytes + 1]
+
+    def presign_get(self, bucket: str, object_key: str, expires_seconds: int) -> str:
+        return f"https://example.test/{bucket}/{object_key}?expires={expires_seconds}"
 
 
 @pytest.mark.asyncio
@@ -113,17 +116,21 @@ async def test_interrupted_upload_can_retry_the_same_key() -> None:
     transport = FakeTransport()
     transport.fail_next_put = True
     store = MinioObjectStore(transport, bucket="lanverse")
-    arguments = {
-        "episode_id": EPISODE_ID,
-        "attempt_id": ATTEMPT_ID,
-        "output_slot": "extra/0",
-        "content_type": "audio/wav",
-        "data": b"wav-bytes",
-    }
-
     with pytest.raises(ObjectStoreUnavailable):
-        await store.put(**arguments)
-    result = await store.put(**arguments)
+        await store.put(
+            episode_id=EPISODE_ID,
+            attempt_id=ATTEMPT_ID,
+            output_slot="extra/0",
+            content_type="audio/wav",
+            data=b"wav-bytes",
+        )
+    result = await store.put(
+        episode_id=EPISODE_ID,
+        attempt_id=ATTEMPT_ID,
+        output_slot="extra/0",
+        content_type="audio/wav",
+        data=b"wav-bytes",
+    )
 
     assert result.object_key.endswith("/extra-0.wav")
     assert transport.write_count == 2
@@ -157,7 +164,7 @@ async def test_read_verifies_private_location_size_and_digest() -> None:
         max_bytes=32,
     ) == b"trusted-media"
 
-    transport.contents[(stored.bucket, stored.object_key)] = b"tampered-media"
+    transport.contents[(stored.bucket, stored.object_key)] = b"changed-media"
     with pytest.raises(ObjectIntegrityError, match="digest"):
         await store.read(
             bucket=stored.bucket,

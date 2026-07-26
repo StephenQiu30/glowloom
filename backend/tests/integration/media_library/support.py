@@ -23,6 +23,7 @@ from workers.provider_execution import FaultInjector
 class MemoryTransport:
     def __init__(self) -> None:
         self.objects: dict[tuple[str, str], RemoteObject] = {}
+        self.contents: dict[tuple[str, str], bytes] = {}
         self.authorizations: list[tuple[str, str, int]] = []
 
     def stat(self, bucket: str, object_key: str) -> RemoteObject | None:
@@ -36,7 +37,12 @@ class MemoryTransport:
         content_type: str,
         sha256: str,
     ) -> None:
-        self.objects[(bucket, object_key)] = RemoteObject(len(data), sha256, content_type)
+        location = (bucket, object_key)
+        self.contents[location] = data
+        self.objects[location] = RemoteObject(len(data), sha256, content_type)
+
+    def get(self, bucket: str, object_key: str, max_bytes: int) -> bytes:
+        return self.contents[(bucket, object_key)][: max_bytes + 1]
 
     def presign_get(self, bucket: str, object_key: str, expires_seconds: int) -> str:
         self.authorizations.append((bucket, object_key, expires_seconds))

@@ -26,6 +26,10 @@ class ObjectKeyConflict(RuntimeError):
     pass
 
 
+class ObjectIntegrityError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class RemoteObject:
     byte_size: int
@@ -60,6 +64,8 @@ class ObjectTransport(Protocol):
         sha256: str,
     ) -> None: ...
 
+    def get(self, bucket: str, object_key: str, max_bytes: int) -> bytes: ...
+
     def presign_get(self, bucket: str, object_key: str, expires_seconds: int) -> str: ...
 
 
@@ -81,6 +87,15 @@ class ObjectStore(Protocol):
     async def authorize_read(
         self, *, bucket: str, object_key: str, expires_seconds: int
     ) -> str: ...
+
+    async def read(
+        self,
+        *,
+        bucket: str,
+        object_key: str,
+        expected_sha256: str,
+        max_bytes: int,
+    ) -> bytes: ...
 
 
 class MinioObjectStore:
@@ -163,6 +178,39 @@ class MinioObjectStore:
             )
         except (ObjectStoreUnavailable, OSError) as error:
             raise ObjectStoreUnavailable("object authorization failed") from error
+
+    async def read(
+        self,
+        *,
+        bucket: str,
+        object_key: str,
+        expected_sha256: str,
+        max_bytes: int,
+    ) -> bytes:
+        if bucket != self._bucket or not object_key or object_key != object_key.strip():
+            raise ValueError("object location is outside the configured private bucket")
+        if re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None:
+            raise ValueError("expected object digest is invalid")
+        if max_bytes <= 0:
+            raise ValueError("object byte limit must be positive")
+        remote = await self._stat(object_key)
+        if remote is None:
+            raise ObjectIntegrityError("object is missing")
+        if remote.byte_size > max_bytes:
+            raise ObjectIntegrityError("object exceeds the byte limit")
+        if remote.sha256 != expected_sha256:
+            raise ObjectIntegrityError("object metadata digest does not match")
+        try:
+            data = await asyncio.to_thread(
+                self._transport.get, bucket, object_key, max_bytes
+            )
+        except (ObjectStoreUnavailable, OSError) as error:
+            raise ObjectStoreUnavailable("object download failed") from error
+        if len(data) != remote.byte_size:
+            raise ObjectIntegrityError("object size does not match")
+        if hashlib.sha256(data).hexdigest() != expected_sha256:
+            raise ObjectIntegrityError("object digest does not match")
+        return data
 
     async def _stat(self, object_key: str) -> RemoteObject | None:
         try:
