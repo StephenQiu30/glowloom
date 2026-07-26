@@ -57,9 +57,11 @@ async def story_with_tts_adoptions(
 
 
 async def render_ready_story(
-    database: DatabasePool, key: str
+    database: DatabasePool,
+    key: str,
+    transport: MemoryTransport | None = None,
 ) -> tuple[UUID, StoryboardVersionSnapshot, SubtitleVersionSnapshot, MemoryTransport]:
-    transport = MemoryTransport()
+    transport = transport or MemoryTransport()
     episode_id, _, board = await story_with_tts_adoptions(database, key, transport)
     submit = GenerateMediaHandler(database, release_version="test-release")
     jobs = media_job_handler(database, transport=transport)
