@@ -130,6 +130,13 @@ def test_present_frontend_features_follow_allowlist() -> None:
         assert present == FRONTEND_FEATURES
 
 
+def test_tailwind_inline_theme_uses_parse_time_font_families() -> None:
+    theme = (FRONTEND / "src" / "app" / "globals.css").read_text()
+    assert '--font-sans: "Geist", "Geist Fallback", ui-sans-serif' in theme
+    assert '--font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace' in theme
+    assert "--font-sans: var(--font-geist-sans)" not in theme
+
+
 def test_api_errors_have_one_global_registry_and_response_enum() -> None:
     api = BACKEND_SOURCE / "api"
     assert (api / "errors.py").is_file()
