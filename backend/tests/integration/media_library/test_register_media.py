@@ -83,7 +83,7 @@ async def test_registers_ready_media_and_candidate_idempotently(
     transport = MemoryTransport()
     try:
         episode_id, task_id, attempt_id = await create_media_task(database)
-        media = await DeterministicImageProvider().generate(INPUT_HASH, "shot/1")
+        media = await DeterministicImageProvider().generate(INPUT_HASH, "primary")
         service = MediaRegistrationService(
             database,
             MediaValidationService(DockerFfmpegRuntime()),
@@ -142,7 +142,7 @@ async def test_replay_with_different_usage_facts_is_rejected(
     await database.start()
     try:
         episode_id, task_id, attempt_id = await create_media_task(database)
-        media = await DeterministicImageProvider().generate(INPUT_HASH, "shot/1")
+        media = await DeterministicImageProvider().generate(INPUT_HASH, "primary")
         service = MediaRegistrationService(
             database,
             MediaValidationService(DockerFfmpegRuntime()),

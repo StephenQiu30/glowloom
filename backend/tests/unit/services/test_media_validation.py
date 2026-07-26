@@ -26,7 +26,7 @@ INPUT_HASH = "a" * 64
 
 @pytest.mark.asyncio
 async def test_validates_image_bytes_and_strict_probe_summary() -> None:
-    media = await DeterministicImageProvider().generate(INPUT_HASH, "shot/1")
+    media = await DeterministicImageProvider().generate(INPUT_HASH, "primary")
     service = MediaValidationService(DockerFfmpegRuntime())
 
     validated = await service.validate("image", media.content_type, media.data)
@@ -44,7 +44,7 @@ async def test_validates_image_bytes_and_strict_probe_summary() -> None:
 async def test_validates_video_and_accepts_exact_duration_tolerance_boundary() -> None:
     runtime = DockerFfmpegRuntime()
     media = await DeterministicVideoProvider(runtime).generate(
-        INPUT_HASH, "shot/1", duration_ticks=270000
+        INPUT_HASH, "primary", duration_ticks=270000
     )
     service = MediaValidationService(runtime)
 
@@ -72,7 +72,7 @@ async def test_validates_video_and_accepts_exact_duration_tolerance_boundary() -
 @pytest.mark.asyncio
 async def test_validates_exact_wav_duration_and_audio_shape() -> None:
     media = await DeterministicTtsProvider().generate(
-        INPUT_HASH, "speech/1", duration_ticks=180000
+        INPUT_HASH, "primary", duration_ticks=180000
     )
     service = MediaValidationService(DockerFfmpegRuntime())
 
@@ -92,9 +92,9 @@ async def test_validates_exact_wav_duration_and_audio_shape() -> None:
 async def test_rejects_mime_size_corruption_and_video_duration_over_tolerance() -> None:
     runtime = DockerFfmpegRuntime()
     service = MediaValidationService(runtime)
-    image = await DeterministicImageProvider().generate(INPUT_HASH, "shot/1")
+    image = await DeterministicImageProvider().generate(INPUT_HASH, "primary")
     video = await DeterministicVideoProvider(runtime).generate(
-        INPUT_HASH, "shot/1", duration_ticks=270000
+        INPUT_HASH, "primary", duration_ticks=270000
     )
 
     with pytest.raises(InvalidMedia, match="MIME"):

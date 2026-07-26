@@ -7,6 +7,7 @@ from uuid import UUID
 from db.pool import DatabasePool
 from domain.task_states import transition_task
 from repositories.task_events import TaskEventRepository
+from repositories.tasks import object_value
 from schemas.jobs import JobPayload
 
 
@@ -20,6 +21,19 @@ class ExecutionPlan:
     reconcile_first: bool
     cancel_requested: bool
     skip: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class MediaExecutionInput:
+    episode_id: UUID
+    task_type: str
+    capability: str
+    input_refs: dict[str, object]
+    model_profile_id: str
+    provider_id: str
+    model_id: str
+    route_version: str
+    schema_version: str
 
 
 class TaskExecutionStore:
@@ -103,6 +117,34 @@ class TaskExecutionStore:
                 reconcile_first=reconcile_first,
                 cancel_requested=row["task_status"] == "cancelling",
             )
+
+    async def media_input(self, task_id: UUID) -> MediaExecutionInput:
+        async with self._database.transaction() as connection:
+            row = await connection.fetchrow(
+                """
+                SELECT task.episode_id,task.type task_type,snapshot.capability,
+                       snapshot.input_refs_json,snapshot.model_profile_id,
+                       snapshot.provider_id,snapshot.model_id,snapshot.route_version,
+                       snapshot.schema_version
+                FROM production_tasks task
+                JOIN submission_snapshots snapshot ON snapshot.id=task.snapshot_id
+                WHERE task.id=$1
+                """,
+                task_id,
+            )
+        if row is None:
+            raise LookupError("media task input was not found")
+        return MediaExecutionInput(
+            episode_id=row["episode_id"],
+            task_type=row["task_type"],
+            capability=row["capability"],
+            input_refs=object_value(row["input_refs_json"]),
+            model_profile_id=row["model_profile_id"],
+            provider_id=row["provider_id"],
+            model_id=row["model_id"],
+            route_version=row["route_version"],
+            schema_version=row["schema_version"],
+        )
 
     async def record_provider_success(
         self, plan: ExecutionPlan, provider_request_id: str

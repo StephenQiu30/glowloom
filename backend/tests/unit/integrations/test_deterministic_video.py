@@ -16,9 +16,9 @@ async def test_video_mock_is_stable_isolated_and_decodable() -> None:
     runtime = DockerFfmpegRuntime()
     provider = DeterministicVideoProvider(runtime)
 
-    first = await provider.generate(INPUT_HASH, "shot/1", duration_ticks=270000)
-    replay = await provider.generate(INPUT_HASH, "shot/1", duration_ticks=270000)
-    other = await provider.generate(INPUT_HASH, "shot/2", duration_ticks=270000)
+    first = await provider.generate(INPUT_HASH, "primary", duration_ticks=270000)
+    replay = await provider.generate(INPUT_HASH, "primary", duration_ticks=270000)
+    other = await provider.generate(INPUT_HASH, "extra/0", duration_ticks=270000)
 
     assert first == replay
     assert first.data != other.data
@@ -42,13 +42,13 @@ async def test_video_mock_rejects_invalid_hash_slot_and_duration() -> None:
     provider = DeterministicVideoProvider(DockerFfmpegRuntime())
 
     with pytest.raises(ValueError, match="input hash"):
-        await provider.generate("invalid", "shot/1", duration_ticks=270000)
+        await provider.generate("invalid", "primary", duration_ticks=270000)
     with pytest.raises(ValueError, match="output slot"):
         await provider.generate(INPUT_HASH, "../escape", duration_ticks=270000)
     with pytest.raises(ValueError, match="between 3 and 8 seconds"):
-        await provider.generate(INPUT_HASH, "shot/1", duration_ticks=180000)
+        await provider.generate(INPUT_HASH, "primary", duration_ticks=180000)
     with pytest.raises(ValueError, match="whole video frames"):
-        await provider.generate(INPUT_HASH, "shot/1", duration_ticks=270001)
+        await provider.generate(INPUT_HASH, "primary", duration_ticks=270001)
 
 
 def test_ffmpeg_runtime_uses_an_immutable_image_reference() -> None:

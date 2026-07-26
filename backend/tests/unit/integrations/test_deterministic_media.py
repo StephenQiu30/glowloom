@@ -41,9 +41,9 @@ def decode_png(value: bytes) -> tuple[int, int, bytes]:
 async def test_image_mock_is_stable_isolated_and_decodable() -> None:
     provider = DeterministicImageProvider()
 
-    first = await provider.generate(INPUT_HASH, "shot/1")
-    replay = await provider.generate(INPUT_HASH, "shot/1")
-    other = await provider.generate(INPUT_HASH, "shot/2")
+    first = await provider.generate(INPUT_HASH, "primary")
+    replay = await provider.generate(INPUT_HASH, "primary")
+    other = await provider.generate(INPUT_HASH, "extra/0")
 
     assert first == replay
     assert first.data != other.data
@@ -61,9 +61,9 @@ async def test_image_mock_is_stable_isolated_and_decodable() -> None:
 async def test_tts_mock_is_stable_isolated_and_exact_duration_wav() -> None:
     provider = DeterministicTtsProvider()
 
-    first = await provider.generate(INPUT_HASH, "speech/1", duration_ticks=180000)
-    replay = await provider.generate(INPUT_HASH, "speech/1", duration_ticks=180000)
-    other = await provider.generate(INPUT_HASH, "speech/2", duration_ticks=180000)
+    first = await provider.generate(INPUT_HASH, "primary", duration_ticks=180000)
+    replay = await provider.generate(INPUT_HASH, "primary", duration_ticks=180000)
+    other = await provider.generate(INPUT_HASH, "extra/0", duration_ticks=180000)
 
     assert first == replay
     assert first.data != other.data
@@ -86,8 +86,8 @@ async def test_media_mocks_reject_invalid_hash_slot_and_duration() -> None:
     tts = DeterministicTtsProvider()
 
     with pytest.raises(ValueError, match="input hash"):
-        await image.generate("invalid", "shot/1")
+        await image.generate("invalid", "primary")
     with pytest.raises(ValueError, match="output slot"):
         await image.generate(INPUT_HASH, "../escape")
     with pytest.raises(ValueError, match="duration"):
-        await tts.generate(INPUT_HASH, "speech/1", duration_ticks=0)
+        await tts.generate(INPUT_HASH, "primary", duration_ticks=0)

@@ -51,7 +51,6 @@ class MediaRegistrationCommand:
     data: bytes
     target_duration_ticks: int | None = None
 
-
 @dataclass(frozen=True, slots=True)
 class MediaRegistrationSnapshot:
     media_object_id: UUID
@@ -63,10 +62,8 @@ class MediaRegistrationSnapshot:
     object_key: str
     sha256: str
 
-
 class MediaRegistrationService:
     _CAPABILITY_KIND = {"image": "image", "video": "video", "tts": "audio"}
-
     def __init__(
         self,
         database: DatabasePool,
@@ -77,6 +74,15 @@ class MediaRegistrationService:
         self._validator = validator
         self._object_store = object_store
         self._repository = MediaRepository()
+
+    async def find_registered(
+        self, attempt_id: UUID, output_slot: str
+    ) -> MediaRegistrationSnapshot | None:
+        async with self._database.transaction() as connection:
+            row = await self._repository.find_by_attempt_slot(
+                connection, attempt_id=attempt_id, output_slot=output_slot
+            )
+        return self._snapshot(row) if row is not None else None
 
     async def register(self, command: MediaRegistrationCommand) -> MediaRegistrationSnapshot:
         if INPUT_HASH.fullmatch(command.input_hash) is None:

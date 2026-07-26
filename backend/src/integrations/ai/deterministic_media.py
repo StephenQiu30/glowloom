@@ -12,7 +12,7 @@ from array import array
 from dataclasses import dataclass
 
 INPUT_HASH = re.compile(r"^[0-9a-f]{64}$")
-SLOT_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+OUTPUT_SLOT = re.compile(r"^(primary|extra/[0-9]+)$")
 TIMEBASE = 90000
 
 
@@ -36,11 +36,8 @@ class GeneratedMedia:
 def _seed(input_hash: str, output_slot: str, discriminator: str) -> bytes:
     if INPUT_HASH.fullmatch(input_hash) is None:
         raise ValueError("input hash must be 64 lowercase hexadecimal characters")
-    segments = output_slot.split("/")
-    if len(segments) < 2 or any(
-        segment in {".", ".."} or SLOT_SEGMENT.fullmatch(segment) is None for segment in segments
-    ):
-        raise ValueError("output slot must use safe slash-separated segments")
+    if OUTPUT_SLOT.fullmatch(output_slot) is None:
+        raise ValueError("output slot must be primary or extra/{index}")
     return hashlib.sha256(f"{discriminator}:{input_hash}:{output_slot}".encode()).digest()
 
 
