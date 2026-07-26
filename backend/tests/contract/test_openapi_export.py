@@ -58,6 +58,8 @@ def test_openapi_http_response_is_deterministic(live_openapi_url: str) -> None:
         "listStoryboardVersions",
         "getStoryboardVersion",
         "generateMedia",
+        "listCandidates",
+        "authorizeCandidatePreview",
     }
 
 
