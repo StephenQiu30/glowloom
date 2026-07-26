@@ -8,8 +8,11 @@ from integrations.ai.deterministic_video import DockerFfmpegRuntime
 from integrations.ai.registry import AiModelRegistry, create_mvp_registry
 from integrations.object_storage import MinioObjectStore, RemoteObject
 from schemas.jobs import JobPayload
+from services.media_generation import GenerateMediaCommand, GenerateMediaHandler
 from services.media_registration import MediaRegistrationService
 from services.media_validation import MediaValidationService
+from services.storyboards import ConfirmStoryboardCommand, ConfirmStoryboardHandler
+from tests.integration.story_development.support import storyboard_draft
 from workers.dispatch import JobContext
 from workers.media_generation import GenerateMediaJobHandler
 from workers.provider_execution import FaultInjector
@@ -55,17 +58,20 @@ def media_job_handler(
 async def run_media_job(
     database: DatabasePool, task_id: UUID, handler: GenerateMediaJobHandler
 ) -> None:
+    await handler.handle(await media_job_context(database, task_id))
+
+
+async def media_job_context(database: DatabasePool, task_id: UUID) -> JobContext:
     async with database.transaction() as connection:
         row = await connection.fetchrow(
             "SELECT id,payload_json FROM task_jobs WHERE task_id=$1", task_id
         )
     assert row is not None
-    context = JobContext(
+    return JobContext(
         job_id=row["id"],
         owner="media-test",
         payload=JobPayload.parse(json.loads(row["payload_json"])),
     )
-    await handler.handle(context)
 
 
 async def adopt_task_candidate(database: DatabasePool, task_id: UUID) -> dict[str, object]:
@@ -106,3 +112,56 @@ async def adopt_task_candidate(database: DatabasePool, task_id: UUID) -> dict[st
         "media_version_id": str(candidate["media_version_id"]),
         "sha256": candidate["sha256"],
     }
+
+
+async def accepted_video_task(
+    database: DatabasePool, key: str
+) -> tuple[UUID, int, JobContext]:
+    episode_id, generated = await storyboard_draft(database, f"video-worker:{key}")
+    confirmed = await ConfirmStoryboardHandler(database).execute(
+        ConfirmStoryboardCommand(
+            generated.storyboard.id, generated.storyboard.resource_version
+        )
+    )
+    shot = confirmed.storyboard.content.shots[0]
+    assets = {item.id: item for item in confirmed.assets}
+    handler = GenerateMediaHandler(database, release_version="test-release")
+    jobs = media_job_handler(database)
+    for version_id in shot.asset_version_ids:
+        asset = assets[version_id]
+        if asset.asset_type == "visual_style":
+            continue
+        accepted = await handler.execute(
+            GenerateMediaCommand(
+                episode_id,
+                "asset_image",
+                asset.asset_id,
+                asset.id,
+                f"video-worker:{key}:asset:{asset.asset_id}",
+            )
+        )
+        await run_media_job(database, accepted.task_id, jobs)
+        await adopt_task_candidate(database, accepted.task_id)
+    image = await handler.execute(
+        GenerateMediaCommand(
+            episode_id,
+            "shot_image",
+            shot.shot_id,
+            confirmed.storyboard.id,
+            f"video-worker:{key}:shot-image",
+        )
+    )
+    await run_media_job(database, image.task_id, jobs)
+    await adopt_task_candidate(database, image.task_id)
+    video = await handler.execute(
+        GenerateMediaCommand(
+            episode_id,
+            "shot_video",
+            shot.shot_id,
+            confirmed.storyboard.id,
+            f"video-worker:{key}:video",
+        )
+    )
+    return video.task_id, shot.duration_ticks, await media_job_context(
+        database, video.task_id
+    )
