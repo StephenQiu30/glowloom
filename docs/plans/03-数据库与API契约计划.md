@@ -44,7 +44,7 @@ Alembic 只执行根 SQL，不复制 DDL、不使用 ORM/Metadata/autogenerate�
 | P03-T001 数据库门禁 | 静态测试断言 20 文件/表、列、51 FK、候选键、partial、22 JSONB 映射；任一输入非 accepted 或 gate 缺失即失败 | 只修正式 Design/根 SQL/gate，不执行 DDL；`test:` | `make test-database-design`；T-DATABASE-DESIGN-GATE；EV-000 |
 | P03-T002 首次迁移 | 空库尚无 20 表，migration/catalog test Red | Alembic env + `0001_mvp` 顺序执行根 SQL；`impl:` | `make test-migration` 双 `upgrade head`；T-MIGRATION/T-DB-CONSTRAINTS；EV-002 |
 | P03-T003 数据库基础设施 | pool、transaction、Row Mapper/UoW contract tests Red | config、pool、显式 transaction 与错误映射；不建 BaseRepository；`impl:` | pytest integration + Ruff/mypy |
-| P03-T004 HTTP 公共契约 | Problem、ETag、Idempotency、`202` 和 Task 查询的公共 schema/header/error tests Red | App Factory 基础、公共 contract/error/header；不注册未实现业务 Operation；`impl:` | `make test-contract-foundation`；T-CONTRACT |
+| P03-T004 HTTP 公共契约 | Problem、ETag、Idempotency、`202`、Task 查询、全局异常映射和错误状态枚举 tests Red | App Factory 基础、`api/errors.py` 唯一异常注册、`api/responses.py` 统一 OpenAPI 状态响应、公共 contract/header；Router 不复制 `ERROR_RESPONSES`，Service 不保存 HTTP 状态；不注册未实现业务 Operation；`impl:` | `make test-contract-foundation`；T-CONTRACT |
 | P03-T005 实时 OpenAPI 契约 | 测试服务 `/openapi.json` 不可达、非 3.1 或两次响应不确定时 Red | 从同一 `create_app()` 启动 loopback Uvicorn 测试服务并校验响应，不写静态 artifact；`chore:` | 两次 HTTP 响应 canonical hash 相同 |
 | P03-T006 umi URL 兼容探针 | 代表性 201/202/Problem/ETag/Task schema 的 OpenAPI 3.1 URL→umi→tsc 先 Red | 锁定 `openapi2ts.config.ts`、request sender 和测试临时输出；只接受 `LANVERSE_OPENAPI_URL`；`impl:` | `make contracts-toolchain-check`；EV-002 |
 | P03-T007 最终 URL 生成链 | PLAN-06 Green | 静态 OpenAPI 副本、文件型 `schemaPath`、不可达 URL 或生成漂移测试 Red | 删除导出脚本/静态副本，生成命令启动或连接真实 loopback API、等待健康后执行 `@umijs/openapi`，最后做 git drift/tsc；`refactor:/chore:` | `make contracts-check`；T-CONTRACT；EV-002 |
