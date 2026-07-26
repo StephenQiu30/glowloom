@@ -27,23 +27,23 @@ declare namespace API {
   type CreateSourceRevisionRequest = {
     /** Content */
     content: string;
-    /** Parent Id */
-    parent_id: string | null | null;
     /** Rights Basis */
     rights_basis: "original" | "licensed";
+    /** Parent Id */
+    parent_id: string | null | null;
   };
 
   type CreativeAssetContentV1 = {
+    /** Schema Version */
+    schema_version: string | null;
     /** Asset Id */
     asset_id: string;
     /** Asset Type */
     asset_type: "character" | "scene" | "visual_style";
-    /** Description */
-    description: string;
     /** Name */
     name: string;
-    /** Schema Version */
-    schema_version: string | null;
+    /** Description */
+    description: string;
   };
 
   type CreativeAssetListResponse = {
@@ -52,35 +52,35 @@ declare namespace API {
   };
 
   type CreativeAssetVersionResponse = {
+    /** Id */
+    id: string;
     /** Asset Id */
     asset_id: string;
-    /** Confirmed At */
-    confirmed_at: string | null;
+    /** Episode Id */
+    episode_id: string;
+    /** Version */
+    version: number;
+    /** Parent Id */
+    parent_id: string | null;
+    /** Source Script Version Id */
+    source_script_version_id: string;
     content: CreativeAssetContentV1;
     /** Content Hash */
     content_hash: string;
-    /** Created At */
-    created_at: string;
-    /** Episode Id */
-    episode_id: string;
-    /** Id */
-    id: string;
-    /** Input Outdated */
-    input_outdated: boolean;
     /** Origin Task Id */
     origin_task_id: string | null;
-    /** Parent Id */
-    parent_id: string | null;
-    /** Resource Version */
-    resource_version: number;
-    /** Source Script Version Id */
-    source_script_version_id: string;
     /** Status */
     status: "draft" | "confirmed" | "superseded";
+    /** Resource Version */
+    resource_version: number;
+    /** Input Outdated */
+    input_outdated: boolean;
+    /** Created At */
+    created_at: string;
     /** Updated At */
     updated_at: string;
-    /** Version */
-    version: number;
+    /** Confirmed At */
+    confirmed_at: string | null;
   };
 
   type deriveScriptDraftParams = {
@@ -92,18 +92,18 @@ declare namespace API {
   };
 
   type EpisodeResponse = {
-    /** Created At */
-    created_at: string;
-    /** Current Source Revision Id */
-    current_source_revision_id: string | null;
     /** Id */
     id: string;
     /** Project Id */
     project_id: string;
-    /** Target Max Ticks */
-    target_max_ticks: number;
     /** Target Min Ticks */
     target_min_ticks: number;
+    /** Target Max Ticks */
+    target_max_ticks: number;
+    /** Current Source Revision Id */
+    current_source_revision_id: string | null;
+    /** Created At */
+    created_at: string;
     /** Updated At */
     updated_at: string;
   };
@@ -179,31 +179,31 @@ declare namespace API {
   };
 
   type Problem = {
+    /** Type */
+    type: string;
+    /** Title */
+    title: string;
+    /** Status */
+    status: number;
     /** Code */
     code: string;
+    /** Retryable */
+    retryable: boolean;
+    /** Request Id */
+    request_id: string;
     /** Detail */
     detail: string | null | null;
     /** Errors */
     errors: ProblemFieldError[] | null | null;
     /** Metadata */
     metadata: Record<string, any> | null | null;
-    /** Request Id */
-    request_id: string;
-    /** Retryable */
-    retryable: boolean;
-    /** Status */
-    status: number;
-    /** Title */
-    title: string;
-    /** Type */
-    type: string;
   };
 
   type ProblemFieldError = {
-    /** Code */
-    code: string;
     /** Field */
     field: string;
+    /** Code */
+    code: string;
     /** Message */
     message: string;
   };
@@ -211,23 +211,23 @@ declare namespace API {
   type ProductionSpecResponse = {
     /** Aspect Ratio */
     aspect_ratio: string;
-    /** Fps */
-    fps: number;
-    /** Height */
-    height: number;
-    /** Target Max Ticks */
-    target_max_ticks: number;
-    /** Target Min Ticks */
-    target_min_ticks: number;
-    /** Timebase */
-    timebase: number;
     /** Width */
     width: number;
+    /** Height */
+    height: number;
+    /** Fps */
+    fps: number;
+    /** Timebase */
+    timebase: number;
+    /** Target Min Ticks */
+    target_min_ticks: number;
+    /** Target Max Ticks */
+    target_max_ticks: number;
   };
 
   type ProjectDetailResponse = {
-    episode: EpisodeResponse;
     project: ProjectResponse;
+    episode: EpisodeResponse;
   };
 
   type ProjectListResponse = {
@@ -236,15 +236,15 @@ declare namespace API {
   };
 
   type ProjectResponse = {
-    /** Created At */
-    created_at: string;
     /** Id */
     id: string;
-    production_spec: ProductionSpecResponse;
-    /** Status */
-    status: string;
     /** Title */
     title: string;
+    /** Status */
+    status: string;
+    production_spec: ProductionSpecResponse;
+    /** Created At */
+    created_at: string;
     /** Updated At */
     updated_at: string;
   };
@@ -278,27 +278,27 @@ declare namespace API {
   };
 
   type SceneV1 = {
-    /** Action */
-    action: string;
-    /** Location */
-    location: string;
-    /** Ordinal */
-    ordinal: number;
     /** Scene Id */
     scene_id: string;
-    /** Speech Lines */
-    speech_lines: SpeechLineV1[];
+    /** Ordinal */
+    ordinal: number;
+    /** Location */
+    location: string;
     /** Time Of Day */
     time_of_day: "dawn" | "day" | "dusk" | "night" | "interior";
+    /** Action */
+    action: string;
+    /** Speech Lines */
+    speech_lines: SpeechLineV1[];
   };
 
   type ScriptContentV1 = {
-    /** Scenes */
-    scenes: SceneV1[];
     /** Schema Version */
     schema_version: string | null;
     /** Title */
     title: string;
+    /** Scenes */
+    scenes: SceneV1[];
   };
 
   type ScriptVersionListResponse = {
@@ -307,69 +307,69 @@ declare namespace API {
   };
 
   type ScriptVersionResponse = {
-    /** Confirmed At */
-    confirmed_at: string | null;
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Version */
+    version: number;
+    /** Parent Id */
+    parent_id: string | null;
+    /** Source Revision Id */
+    source_revision_id: string;
+    /** Schema Version */
+    schema_version: string | null;
     content: ScriptContentV1;
     /** Content Hash */
     content_hash: string;
-    /** Created At */
-    created_at: string;
-    /** Episode Id */
-    episode_id: string;
-    /** Id */
-    id: string;
-    /** Input Outdated */
-    input_outdated: boolean;
     /** Origin Task Id */
     origin_task_id: string | null;
-    /** Parent Id */
-    parent_id: string | null;
-    /** Resource Version */
-    resource_version: number;
-    /** Schema Version */
-    schema_version: string | null;
-    /** Source Revision Id */
-    source_revision_id: string;
     /** Status */
     status: "draft" | "confirmed" | "superseded";
+    /** Resource Version */
+    resource_version: number;
+    /** Input Outdated */
+    input_outdated: boolean;
+    /** Created At */
+    created_at: string;
     /** Updated At */
     updated_at: string;
-    /** Version */
-    version: number;
+    /** Confirmed At */
+    confirmed_at: string | null;
   };
 
   type ShotSpecCollectionV1 = {
-    /** Asset Version Ids */
-    asset_version_ids: string[];
     /** Schema Version */
     schema_version: string | null;
     /** Script Version Id */
     script_version_id: string;
-    /** Shots */
-    shots: ShotV1[];
+    /** Asset Version Ids */
+    asset_version_ids: string[];
     /** Speech Line Ids */
     speech_line_ids: string[];
+    /** Shots */
+    shots: ShotV1[];
   };
 
   type ShotV1 = {
-    /** Action */
-    action: string;
-    /** Asset Version Ids */
-    asset_version_ids: string[];
-    /** Content Hash */
-    content_hash: string;
-    /** Duration Ticks */
-    duration_ticks: number;
-    /** Narrative Purpose */
-    narrative_purpose: string;
-    /** Ordinal */
-    ordinal: number;
     /** Shot Id */
     shot_id: string;
-    /** Speech Line Ids */
-    speech_line_ids: string[];
+    /** Ordinal */
+    ordinal: number;
+    /** Narrative Purpose */
+    narrative_purpose: string;
     /** Visual Prompt */
     visual_prompt: string;
+    /** Action */
+    action: string;
+    /** Duration Ticks */
+    duration_ticks: number;
+    /** Asset Version Ids */
+    asset_version_ids: string[];
+    /** Speech Line Ids */
+    speech_line_ids: string[];
+    /** Content Hash */
+    content_hash: string;
   };
 
   type SourceRevisionListResponse = {
@@ -378,47 +378,45 @@ declare namespace API {
   };
 
   type SourceRevisionResponse = {
-    /** Codepoint Count */
-    codepoint_count: number;
-    /** Confirmed At */
-    confirmed_at: string | null;
-    /** Content */
-    content: string;
-    /** Created At */
-    created_at: string;
-    /** Episode Id */
-    episode_id: string;
     /** Id */
     id: string;
-    /** Normalization Version */
-    normalization_version: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Version */
+    version: number;
     /** Parent Id */
     parent_id: string | null;
-    /** Resource Version */
-    resource_version: number;
+    /** Content */
+    content: string;
+    /** Normalization Version */
+    normalization_version: string;
+    /** Codepoint Count */
+    codepoint_count: number;
+    /** Sha256 */
+    sha256: string;
     /** Rights Basis */
     rights_basis: "original" | "licensed";
     /** Rights Declared At */
     rights_declared_at: string;
-    /** Sha256 */
-    sha256: string;
     /** Status */
     status: "draft" | "confirmed" | "superseded";
+    /** Resource Version */
+    resource_version: number;
+    /** Created At */
+    created_at: string;
     /** Updated At */
     updated_at: string;
-    /** Version */
-    version: number;
+    /** Confirmed At */
+    confirmed_at: string | null;
   };
 
   type SpeechLineV1 = {
-    /** Kind */
-    kind: "dialogue" | "narration";
-    /** Ordinal */
-    ordinal: number;
-    /** Speaker */
-    speaker: string | null | null;
     /** Speech Line Id */
     speech_line_id: string;
+    /** Ordinal */
+    ordinal: number;
+    /** Kind */
+    kind: "dialogue" | "narration";
     /** Text */
     text: string;
     /** Voice Id */
@@ -427,6 +425,8 @@ declare namespace API {
       | "narrator_male"
       | "character_young_female"
       | "character_young_male";
+    /** Speaker */
+    speaker: string | null | null;
   };
 
   type StoryboardGenerationResponse = {
@@ -441,42 +441,42 @@ declare namespace API {
   };
 
   type StoryboardVersionResponse = {
-    /** Confirmed At */
-    confirmed_at: string | null;
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Version */
+    version: number;
+    /** Parent Id */
+    parent_id: string | null;
     content: ShotSpecCollectionV1;
     /** Content Hash */
     content_hash: string;
-    /** Created At */
-    created_at: string;
-    /** Episode Id */
-    episode_id: string;
-    /** Id */
-    id: string;
-    /** Input Outdated */
-    input_outdated: boolean;
     /** Origin Task Id */
     origin_task_id: string | null;
-    /** Parent Id */
-    parent_id: string | null;
-    /** Resource Version */
-    resource_version: number;
     /** Status */
     status: "draft" | "confirmed" | "superseded";
+    /** Resource Version */
+    resource_version: number;
+    /** Input Outdated */
+    input_outdated: boolean;
+    /** Created At */
+    created_at: string;
     /** Updated At */
     updated_at: string;
-    /** Version */
-    version: number;
+    /** Confirmed At */
+    confirmed_at: string | null;
   };
 
   type TaskAccepted = {
-    /** Resource Version */
-    resource_version: number;
-    /** Status */
-    status: string;
-    /** Status Url */
-    status_url: string;
     /** Task Id */
     task_id: string;
+    /** Status */
+    status: string;
+    /** Resource Version */
+    resource_version: number;
+    /** Status Url */
+    status_url: string;
   };
 
   type TaskError = {
@@ -494,35 +494,25 @@ declare namespace API {
   };
 
   type TaskProgress = {
-    /** Completed */
-    completed: number;
-    /** Message */
-    message: string | null | null;
     /** Phase */
     phase: string;
+    /** Completed */
+    completed: number;
     /** Total */
     total: number;
+    /** Message */
+    message: string | null | null;
   };
 
   type TaskResponse = {
-    /** Created At */
-    created_at: string;
-    /** Current Attempt Id */
-    current_attempt_id: string | null | null;
-    error: TaskError | null | null;
-    /** Finished At */
-    finished_at: string | null | null;
     /** Id */
     id: string;
-    /** Input Outdated */
-    input_outdated: boolean;
-    /** Poll After Ms */
-    poll_after_ms: number | null;
-    progress: TaskProgress;
-    /** Resource Version */
-    resource_version: number;
-    /** Result Refs */
-    result_refs: TaskResultRef[];
+    /** Type */
+    type:
+      | "generate_script"
+      | "generate_storyboard"
+      | "generate_media"
+      | "render_episode";
     scope: TaskScope;
     /** Status */
     status:
@@ -533,19 +523,27 @@ declare namespace API {
       | "succeeded"
       | "failed"
       | "unknown";
-    /** Type */
-    type:
-      | "generate_script"
-      | "generate_storyboard"
-      | "generate_media"
-      | "render_episode";
+    progress: TaskProgress;
+    /** Input Outdated */
+    input_outdated: boolean;
+    /** Current Attempt Id */
+    current_attempt_id: string | null | null;
+    /** Result Refs */
+    result_refs: TaskResultRef[];
+    error: TaskError | null | null;
+    /** Resource Version */
+    resource_version: number;
+    /** Poll After Ms */
+    poll_after_ms: number | null;
+    /** Created At */
+    created_at: string;
     /** Updated At */
     updated_at: string;
+    /** Finished At */
+    finished_at: string | null | null;
   };
 
   type TaskResultRef = {
-    /** Output Id */
-    output_id: string;
     /** Output Type */
     output_type:
       | "script_version"
@@ -553,20 +551,22 @@ declare namespace API {
       | "shot_spec_version"
       | "generation_candidate"
       | "delivery_version";
+    /** Output Id */
+    output_id: string;
   };
 
   type TaskScope = true;
 
   type ValidationError = {
-    /** Context */
-    ctx: Record<string, any> | null;
-    /** Input */
-    input: any | null;
     /** Location */
     loc: (string | number)[];
     /** Message */
     msg: string;
     /** Error Type */
     type: string;
+    /** Input */
+    input: any | null;
+    /** Context */
+    ctx: Record<string, any> | null;
   };
 }

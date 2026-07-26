@@ -1,4 +1,4 @@
-.PHONY: test-architecture test-database-design test-migration test-contract-foundation test-contract contracts-toolchain-check contracts-check test-jobs test-integration test-e2e test lint typecheck build build-images
+.PHONY: test-architecture test-database-design test-migration test-contract-foundation test-contract contracts-toolchain-check generate-api contracts-check test-jobs test-integration test-e2e test lint typecheck build build-images
 
 PNPM_NODE = pnpm dlx node@24.18.0 $$(command -v pnpm)
 
@@ -20,10 +20,11 @@ test-contract:
 contracts-toolchain-check:
 	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/contract/test_umi_toolchain.py -q -p no:cacheprovider
 
-contracts-check:
-	cd backend && uv run python scripts/export_openapi.py --check
-	cd frontend && $(PNPM_NODE) run openapi:generate
-	git diff --exit-code -- backend/openapi/openapi.json frontend/src/services/generated
+generate-api:
+	cd backend && uv run python scripts/generate_api_client.py
+
+contracts-check: generate-api
+	git diff --exit-code -- frontend/src/services/generated
 
 test-jobs:
 	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/jobs -q -p no:cacheprovider
