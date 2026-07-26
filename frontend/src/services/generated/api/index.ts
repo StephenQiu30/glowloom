@@ -31,6 +31,7 @@ import * as saveStoryboard from "./saveStoryboard";
 import * as confirmStoryboard from "./confirmStoryboard";
 import * as deriveStoryboardDraft from "./deriveStoryboardDraft";
 import * as listStoryboardVersions from "./listStoryboardVersions";
+import * as generateMedia from "./generateMedia";
 export default {
   listProjects,
   createProject,
@@ -61,4 +62,5 @@ export default {
   confirmStoryboard,
   deriveStoryboardDraft,
   listStoryboardVersions,
+  generateMedia,
 };

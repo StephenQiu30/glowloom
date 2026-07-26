@@ -108,6 +108,21 @@ declare namespace API {
     updated_at: string;
   };
 
+  type generateMediaParams = {
+    episode_id: string;
+  };
+
+  type GenerateMediaRequest = {
+    /** Usage Type */
+    usage_type: "asset_image" | "shot_image" | "shot_video" | "speech_audio";
+    /** Usage Id */
+    usage_id: string;
+    /** Input Version Id */
+    input_version_id: string;
+    /** Model Profile Id */
+    model_profile_id: string | null | null;
+  };
+
   type generateScriptParams = {
     episode_id: string;
   };
