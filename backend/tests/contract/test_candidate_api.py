@@ -54,9 +54,7 @@ async def test_candidate_list_hides_object_location_and_preview_is_episode_scope
             app.state.runtime,
             object_store=MinioObjectStore(transport, bucket="lanverse"),
         )
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             listed = await client.get(
                 f"/v1/episodes/{row['episode_id']}/candidates",
                 params={
@@ -95,15 +93,72 @@ async def test_candidate_list_hides_object_location_and_preview_is_episode_scope
     assert denied.json()["code"] == "CANDIDATE_NOT_FOUND"
 
 
+@pytest.mark.asyncio
+async def test_candidate_adoption_is_idempotent_and_visible_in_the_slot(
+    migrated_database_url: str,
+) -> None:
+    database = DatabasePool(migrated_database_url, min_size=1, max_size=3)
+    await database.start()
+    try:
+        task_id, _, _ = await accepted_tts_task(database, "candidate-adoption-api")
+        await run_media_job(database, task_id, media_job_handler(database))
+        async with database.transaction() as connection:
+            candidate = await connection.fetchrow(
+                "SELECT * FROM generation_candidates WHERE task_id=$1", task_id
+            )
+        assert candidate is not None
+    finally:
+        await database.close()
+    app = create_app(
+        ApplicationSettings.model_validate(
+            {"DATABASE_URL": migrated_database_url, "environment": "test"}
+        )
+    )
+    body = {
+        "usage_type": candidate["usage_type"],
+        "usage_id": str(candidate["usage_id"]),
+        "input_version_id": str(candidate["input_version_id"]),
+        "input_hash": candidate["input_hash"],
+        "candidate_id": str(candidate["id"]),
+    }
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
+    ):
+        created = await client.post(
+            "/v1/adoptions", json=body, headers={"Idempotency-Key": "adopt:api:0001"}
+        )
+        replay = await client.post(
+            "/v1/adoptions", json=body, headers={"Idempotency-Key": "adopt:api:0001"}
+        )
+        reused = await client.post(
+            "/v1/adoptions",
+            json={**body, "candidate_id": str(uuid4())},
+            headers={"Idempotency-Key": "adopt:api:0001"},
+        )
+        listed = await client.get(
+            f"/v1/episodes/{candidate['episode_id']}/candidates",
+            params={key: value for key, value in body.items() if key != "candidate_id"},
+        )
+
+    assert created.status_code == 201
+    assert replay.status_code == 201
+    assert replay.json() == created.json()
+    assert created.json()["candidate_id"] == str(candidate["id"])
+    assert created.json()["status"] == "active"
+    assert reused.status_code == 409
+    assert reused.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
+    assert listed.json()["items"][0]["active_adoption_id"] == created.json()["id"]
+
+
 def test_candidate_operations_are_in_the_single_openapi_contract() -> None:
     schema = create_app().openapi()
     paths = schema["paths"]
 
-    assert paths["/v1/episodes/{episode_id}/candidates"]["get"]["operationId"] == (
-        "listCandidates"
-    )
-    authorization = paths[
-        "/v1/media-versions/{media_version_id}/preview-authorizations"
-    ]["post"]
+    assert paths["/v1/episodes/{episode_id}/candidates"]["get"]["operationId"] == ("listCandidates")
+    authorization = paths["/v1/media-versions/{media_version_id}/preview-authorizations"]["post"]
     assert authorization["operationId"] == "authorizeCandidatePreview"
     assert authorization["requestBody"]["required"] is True
+    adoption = paths["/v1/adoptions"]["post"]
+    assert adoption["operationId"] == "adoptCandidate"
+    assert adoption["requestBody"]["required"] is True
