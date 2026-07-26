@@ -103,6 +103,21 @@ class DockerFfmpegRuntime:
         except (KeyError, TypeError, ValueError) as error:
             raise MediaRuntimeError("ffprobe returned an invalid response") from error
 
+    async def verify_video_decode(self, data: bytes) -> None:
+        arguments = (
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            "pipe:0",
+            "-map",
+            "0:v:0",
+            "-f",
+            "null",
+            "-",
+        )
+        await self._run("ffmpeg", arguments, stdin=data)
+
     async def _run(
         self,
         entrypoint: str,
