@@ -4,6 +4,7 @@ from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
+
 from schemas.subtitles import (
     SubtitleContentV1,
     SubtitleCueV1,
@@ -68,7 +69,7 @@ def test_subtitle_contract_has_stable_hash_mapping_and_srt() -> None:
 
     validate_speech_mapping(value, (LINE_ONE, LINE_TWO))
     assert subtitle_content_hash(value) == subtitle_content_hash(
-        SubtitleContentV1.model_validate(value.model_dump(mode="json"))
+        SubtitleContentV1.model_validate_json(value.model_dump_json())
     )
     assert render_srt(value) == (
         "1\n00:00:00,000 --> 00:00:01,000\n第1句旁白\n\n"
