@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-import asyncpg  # type: ignore[import-untyped]
-
 from db.pool import DatabasePool
 from integrations.ffmpeg_recipe import (
     RenderAudioSource,
@@ -15,6 +13,7 @@ from integrations.object_storage import ObjectStore
 from repositories.render_snapshots import RenderSnapshotRepository
 from repositories.subtitles import SubtitleRepository
 from schemas.delivery_manifest import DeliveryMediaLineageV1
+from schemas.delivery_media_lineage import media_lineage
 from schemas.rendering import RenderSnapshot
 from schemas.subtitle_versions import SubtitleVersionSnapshot
 from services.subtitle_srt import render_srt
@@ -70,8 +69,12 @@ class RenderSourceLoader:
             )
             rows = await connection.fetch(
                 """
-                SELECT version.id,version.bucket,version.object_key,version.sha256,
-                       version.status,candidate.usage_type,candidate.usage_id,
+                SELECT version.id media_version_id,version.bucket,version.object_key,
+                       version.sha256 media_sha256,
+                       version.status,version.mime_type,version.byte_size,
+                       version.duration_ticks,version.timebase,version.probe_summary_json,
+                       object.media_kind,object.source_kind,
+                       candidate.usage_type,candidate.usage_id,
                        candidate.input_version_id,candidate.input_hash,
                        adoption.id adoption_id,candidate.id candidate_id,
                        attempt.id origin_attempt_id,task.id origin_task_id,
@@ -80,6 +83,7 @@ class RenderSourceLoader:
                        submission.provider_id,submission.model_id,
                        submission.route_version,submission.schema_version
                 FROM media_versions version
+                JOIN media_objects object ON object.id=version.media_object_id
                 JOIN generation_candidates candidate
                   ON candidate.media_version_id=version.id
                 JOIN adoptions adoption ON adoption.candidate_id=candidate.id
@@ -93,12 +97,12 @@ class RenderSourceLoader:
                 [item.adoption_id for item in references],
             )
         locations = {
-            row["id"]: _Location(
+            row["media_version_id"]: _Location(
                 row["bucket"],
                 row["object_key"],
-                row["sha256"],
+                row["media_sha256"],
                 row["status"],
-                _lineage(row),
+                media_lineage(row),
             )
             for row in rows
         }
@@ -165,35 +169,3 @@ class RenderSourceLoader:
             expected_sha256=expected_sha256,
             max_bytes=max_bytes,
         )
-
-
-def _lineage(row: asyncpg.Record) -> DeliveryMediaLineageV1:
-    required = (
-        "capability",
-        "model_profile_id",
-        "provider_id",
-        "model_id",
-        "route_version",
-        "schema_version",
-    )
-    if any(row[name] is None for name in required):
-        raise RenderSourceInvalid("media provider lineage is incomplete")
-    return DeliveryMediaLineageV1(
-        usage_type=row["usage_type"],
-        usage_id=row["usage_id"],
-        input_version_id=row["input_version_id"],
-        input_hash=row["input_hash"],
-        adoption_id=row["adoption_id"],
-        candidate_id=row["candidate_id"],
-        media_version_id=row["id"],
-        media_sha256=row["sha256"],
-        origin_attempt_id=row["origin_attempt_id"],
-        origin_task_id=row["origin_task_id"],
-        origin_submission_snapshot_id=row["origin_submission_snapshot_id"],
-        capability=row["capability"],
-        model_profile_id=row["model_profile_id"],
-        provider_id=row["provider_id"],
-        model_id=row["model_id"],
-        route_version=row["route_version"],
-        provider_schema_version=row["schema_version"],
-    )

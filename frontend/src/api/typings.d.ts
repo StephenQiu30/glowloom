@@ -43,6 +43,10 @@ declare namespace API {
     media_version_id: string;
   };
 
+  type authorizeDownloadParams = {
+    delivery_id: string;
+  };
+
   type cancelTaskParams = {
     task_id: string;
   };
@@ -213,6 +217,200 @@ declare namespace API {
     confirmed_at: string | null;
   };
 
+  type DeliveryArtifactResponse = {
+    /** Artifact Type */
+    artifact_type: "mp4" | "srt" | "manifest";
+    /** Media Version Id */
+    media_version_id: string;
+    /** Source Kind */
+    source_kind: "ffmpeg" | "application";
+    /** Mime Type */
+    mime_type: string;
+    /** Byte Size */
+    byte_size: number;
+    /** Sha256 */
+    sha256: string;
+    /** Width */
+    width: number | null;
+    /** Height */
+    height: number | null;
+    /** Duration Ticks */
+    duration_ticks: number | null;
+    /** Timebase */
+    timebase: number | null;
+  };
+
+  type DeliveryDetailResponse = {
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Version */
+    version: number;
+    /** Render Task Id */
+    render_task_id: string;
+    /** Final Attempt Id */
+    final_attempt_id: string | null;
+    /** Retry Of Delivery Id */
+    retry_of_delivery_id: string | null;
+    /** Render Snapshot Id */
+    render_snapshot_id: string;
+    /** Status */
+    status: "rendering" | "ready" | "failed" | "cancelled";
+    /** Artifacts */
+    artifacts: DeliveryArtifactResponse[];
+    /** Ffmpeg Version */
+    ffmpeg_version: string | null;
+    ffprobe_summary: DeliveryProbeSummaryV1 | null;
+    /** Error Code */
+    error_code: string | null;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+    /** Finished At */
+    finished_at: string | null;
+    lineage: DeliveryLineageResponse;
+  };
+
+  type DeliveryLineageResponse = {
+    source_revision: SourceRevisionResponse;
+    script_version: ScriptVersionResponse;
+    /** Creative Asset Versions */
+    creative_asset_versions: CreativeAssetVersionResponse[];
+    shot_spec_version: StoryboardVersionResponse;
+    subtitle_version: SubtitleVersionResponse;
+    render_snapshot: RenderSnapshotLineageResponse;
+    render_task: RenderTaskLineageResponse;
+    /** Render Attempts */
+    render_attempts: RenderAttemptResponse[];
+    /** Input Media */
+    input_media: DeliveryMediaLineageV1[];
+    /** Delivery Media */
+    delivery_media: DeliveryArtifactResponse[];
+  };
+
+  type DeliveryListResponse = {
+    /** Items */
+    items: DeliverySummaryResponse[];
+  };
+
+  type DeliveryMediaLineageV1 = {
+    /** Usage Type */
+    usage_type: "shot_video" | "speech_audio";
+    /** Usage Id */
+    usage_id: string;
+    /** Input Version Id */
+    input_version_id: string;
+    /** Input Hash */
+    input_hash: string;
+    /** Adoption Id */
+    adoption_id: string;
+    /** Candidate Id */
+    candidate_id: string;
+    /** Media Version Id */
+    media_version_id: string;
+    /** Media Sha256 */
+    media_sha256: string;
+    /** Media Kind */
+    media_kind: "video" | "audio";
+    /** Source Kind */
+    source_kind: string;
+    /** Mime Type */
+    mime_type: string;
+    /** Byte Size */
+    byte_size: number;
+    /** Duration Ticks */
+    duration_ticks: number;
+    /** Timebase */
+    timebase: number;
+    /** Probe Summary */
+    probe_summary: Record<string, any>;
+    /** Origin Attempt Id */
+    origin_attempt_id: string;
+    /** Origin Task Id */
+    origin_task_id: string;
+    /** Origin Submission Snapshot Id */
+    origin_submission_snapshot_id: string;
+    /** Capability */
+    capability: "video" | "tts";
+    /** Model Profile Id */
+    model_profile_id: string;
+    /** Provider Id */
+    provider_id: string;
+    /** Model Id */
+    model_id: string;
+    /** Route Version */
+    route_version: string;
+    /** Provider Schema Version */
+    provider_schema_version: string;
+  };
+
+  type DeliveryProbeSummaryV1 = {
+    /** Schema Version */
+    schema_version: string | null;
+    /** Video Codec */
+    video_codec: string;
+    /** Pixel Format */
+    pixel_format: string;
+    /** Width */
+    width: number;
+    /** Height */
+    height: number;
+    /** Frame Rate */
+    frame_rate: string;
+    /** Audio Codec */
+    audio_codec: string;
+    /** Audio Sample Rate */
+    audio_sample_rate: number;
+    /** Audio Channels */
+    audio_channels: number;
+    /** Duration Ticks */
+    duration_ticks: number;
+    /** Video Start Ticks */
+    video_start_ticks: number;
+    /** Video Duration Ticks */
+    video_duration_ticks: number;
+    /** Audio Start Ticks */
+    audio_start_ticks: number;
+    /** Audio Duration Ticks */
+    audio_duration_ticks: number;
+    /** Timebase */
+    timebase: number | null;
+  };
+
+  type DeliverySummaryResponse = {
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Version */
+    version: number;
+    /** Render Task Id */
+    render_task_id: string;
+    /** Final Attempt Id */
+    final_attempt_id: string | null;
+    /** Retry Of Delivery Id */
+    retry_of_delivery_id: string | null;
+    /** Render Snapshot Id */
+    render_snapshot_id: string;
+    /** Status */
+    status: "rendering" | "ready" | "failed" | "cancelled";
+    /** Artifacts */
+    artifacts: DeliveryArtifactResponse[];
+    /** Ffmpeg Version */
+    ffmpeg_version: string | null;
+    ffprobe_summary: DeliveryProbeSummaryV1 | null;
+    /** Error Code */
+    error_code: string | null;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+    /** Finished At */
+    finished_at: string | null;
+  };
+
   type deriveScriptDraftParams = {
     version_id: string;
   };
@@ -223,6 +421,31 @@ declare namespace API {
 
   type deriveSubtitleDraftParams = {
     version_id: string;
+  };
+
+  type DownloadAuthorizationItem = {
+    /** Artifact Type */
+    artifact_type: "mp4" | "srt" | "manifest";
+    /** Media Version Id */
+    media_version_id: string;
+    /** Url */
+    url: string;
+    /** Expires In Seconds */
+    expires_in_seconds: number;
+    /** Expires At */
+    expires_at: string;
+  };
+
+  type DownloadAuthorizationRequest = {
+    /** Episode Id */
+    episode_id: string;
+    /** Artifact Types */
+    artifact_types: ("mp4" | "srt" | "manifest")[] | null;
+  };
+
+  type DownloadAuthorizationResponse = {
+    /** Items */
+    items: DownloadAuthorizationItem[];
   };
 
   type EpisodeResponse = {
@@ -271,6 +494,10 @@ declare namespace API {
 
   type getCurrentScriptParams = {
     episode_id: string;
+  };
+
+  type getDeliveryParams = {
+    delivery_id: string;
   };
 
   type getEpisodeParams = {
@@ -325,6 +552,10 @@ declare namespace API {
   type listCreativeAssetsParams = {
     episode_id: string;
     include_versions: boolean;
+  };
+
+  type listDeliveriesParams = {
+    episode_id: string;
   };
 
   type listScriptVersionsParams = {
@@ -432,6 +663,181 @@ declare namespace API {
     created_at: string;
     /** Updated At */
     updated_at: string;
+  };
+
+  type RenderAttemptResponse = {
+    /** Id */
+    id: string;
+    /** Task Id */
+    task_id: string;
+    /** Submission Snapshot Id */
+    submission_snapshot_id: string;
+    /** Attempt No */
+    attempt_no: number;
+    /** Parent Attempt Id */
+    parent_attempt_id: string | null;
+    /** Status */
+    status: string;
+    /** Execution Metadata */
+    execution_metadata: Record<string, any>;
+    /** Error Code */
+    error_code: string | null;
+    /** Error Summary */
+    error_summary: string | null;
+    /** Created At */
+    created_at: string;
+    /** Submitted At */
+    submitted_at: string | null;
+    /** Started At */
+    started_at: string | null;
+    /** Finished At */
+    finished_at: string | null;
+  };
+
+  type RenderInputRefsV1 = {
+    /** Schema Version */
+    schema_version: string | null;
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string;
+    /** Subtitle Version Id */
+    subtitle_version_id: string;
+    /** Subtitle Content Hash */
+    subtitle_content_hash: string;
+    /** Video Adoptions */
+    video_adoptions: RenderMediaRefV1[];
+    /** Tts Adoptions */
+    tts_adoptions: RenderMediaRefV1[];
+  };
+
+  type RenderMediaRefV1 = {
+    /** Usage Type */
+    usage_type: "shot_video" | "speech_audio";
+    /** Usage Id */
+    usage_id: string;
+    /** Input Version Id */
+    input_version_id: string;
+    /** Input Hash */
+    input_hash: string;
+    /** Adoption Id */
+    adoption_id: string;
+    /** Candidate Id */
+    candidate_id: string;
+    /** Media Version Id */
+    media_version_id: string;
+    /** Sha256 */
+    sha256: string;
+    /** Duration Ticks */
+    duration_ticks: number;
+    /** Timebase */
+    timebase: number | null;
+  };
+
+  type RenderRecipeV1 = {
+    /** Schema Version */
+    schema_version: string | null;
+    /** Runtime Image */
+    runtime_image: string;
+    /** Ffmpeg Version */
+    ffmpeg_version: string;
+    /** Ffprobe Version */
+    ffprobe_version: string;
+    /** Font Name */
+    font_name: string;
+    /** Font File */
+    font_file: string;
+    /** Font Sha256 */
+    font_sha256: string;
+    /** Font License */
+    font_license: "OFL-1.1" | "Bitstream-Vera";
+    /** Timebase */
+    timebase: number | null;
+    /** Width */
+    width: number | null;
+    /** Height */
+    height: number | null;
+    /** Fps */
+    fps: number | null;
+    /** Audio Rate */
+    audio_rate: number | null;
+    /** Audio Channels */
+    audio_channels: number | null;
+    /** Video Codec */
+    video_codec: string | null;
+    /** Video Preset */
+    video_preset: string | null;
+    /** Pixel Format */
+    pixel_format: string | null;
+    /** Audio Codec */
+    audio_codec: string | null;
+    /** Audio Bitrate */
+    audio_bitrate: string | null;
+    /** Scale Mode */
+    scale_mode: string | null;
+    /** Padding Color */
+    padding_color: string | null;
+    /** Video Tolerance Ticks */
+    video_tolerance_ticks: number | null;
+    /** Remove Source Audio */
+    remove_source_audio: boolean | null;
+    /** Preserve Tts Speed */
+    preserve_tts_speed: boolean | null;
+    /** Burn Subtitles */
+    burn_subtitles: boolean | null;
+  };
+
+  type RenderSegmentV1 = {
+    /** Shot Id */
+    shot_id: string;
+    /** Ordinal */
+    ordinal: number;
+    /** Start Ticks */
+    start_ticks: number;
+    /** End Ticks */
+    end_ticks: number;
+    /** Duration Ticks */
+    duration_ticks: number;
+    /** Video Adoption Id */
+    video_adoption_id: string;
+    /** Tts Adoption Ids */
+    tts_adoption_ids: string[];
+  };
+
+  type RenderSnapshotLineageResponse = {
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Initial Task Id */
+    initial_task_id: string | null;
+    input_refs: RenderInputRefsV1;
+    /** Segments */
+    segments: RenderSegmentV1[];
+    recipe: RenderRecipeV1;
+    /** Recipe Hash */
+    recipe_hash: string;
+    /** Content Hash */
+    content_hash: string;
+    /** Created At */
+    created_at: string;
+  };
+
+  type RenderTaskLineageResponse = {
+    /** Id */
+    id: string;
+    /** Submission Snapshot Id */
+    submission_snapshot_id: string;
+    /** Status */
+    status: string;
+    /** Resource Version */
+    resource_version: number;
+    /** Retry Of Task Id */
+    retry_of_task_id: string | null;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+    /** Finished At */
+    finished_at: string | null;
   };
 
   type retryTaskParams = {

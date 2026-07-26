@@ -23,6 +23,7 @@ from services.asset_versions import (
     CreativeAssetVersionNotFound,
 )
 from services.candidates import CandidateNotFound, CandidateQueryInvalid
+from services.deliveries import DeliveryNotFound
 from services.media_generation import (
     MediaInputNotFound,
     MediaInputOutdated,
@@ -115,6 +116,8 @@ def to_problem(error: Exception) -> HttpProblem:
         )
     if isinstance(error, (CandidateNotFound, AdoptionCandidateNotFound)):
         return HttpProblem(status=404, title="Candidate not found", code="CANDIDATE_NOT_FOUND")
+    if isinstance(error, DeliveryNotFound):
+        return HttpProblem(status=404, title="Delivery not found", code="DELIVERY_NOT_FOUND")
     if isinstance(error, CandidateNotAdoptable):
         return HttpProblem(
             status=422,
@@ -184,6 +187,7 @@ BUSINESS_ERRORS = (
     AdoptionCandidateNotFound,
     CandidateNotAdoptable,
     CandidateQueryInvalid,
+    DeliveryNotFound,
     ObjectStoreUnavailable,
     TaskNotFound,
     TaskNotRetryable,

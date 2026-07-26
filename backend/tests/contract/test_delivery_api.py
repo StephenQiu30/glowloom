@@ -13,8 +13,10 @@ from integrations.object_storage import MinioObjectStore
 from main import create_app
 from services.render_delivery import StartRenderDeliveryHandler
 from services.render_submission import RenderEpisodeCommand, RenderEpisodeCoordinator
-from tests.integration.delivery.render_fixture import complete_ready_delivery
-from tests.integration.delivery.test_render_submission import recipe
+from tests.integration.delivery.render_fixture import (
+    complete_ready_delivery,
+    render_recipe,
+)
 from workers.provider_execution import FaultInjector
 
 
@@ -40,9 +42,7 @@ async def test_delivery_query_hides_locations_and_authorizes_ready_exact_set(
             app.state.runtime,
             object_store=MinioObjectStore(transport, bucket="lanverse"),
         )
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             listed = await client.get(f"/v1/episodes/{episode_id}/deliveries")
             detail = await client.get(f"/v1/deliveries/{delivery_id}")
             authorized = await client.post(
@@ -73,6 +73,10 @@ async def test_delivery_query_hides_locations_and_authorizes_ready_exact_set(
     assert lineage["render_task"]["id"]
     assert lineage["render_attempts"]
     assert all(item["provider_id"] and item["model_id"] for item in lineage["input_media"])
+    assert all(
+        item["byte_size"] > 0 and item["duration_ticks"] > 0 and item["probe_summary"]
+        for item in lineage["input_media"]
+    )
     assert {item["artifact_type"] for item in lineage["delivery_media"]} == {
         "mp4",
         "srt",
@@ -102,7 +106,7 @@ async def test_non_ready_delivery_has_no_download_authorization(
         del ready_id
         accepted = await RenderEpisodeCoordinator(
             database,
-            recipe=recipe(),
+            recipe=render_recipe(),
             release_version="test-release",
             fault=FaultInjector(),
         ).execute(RenderEpisodeCommand(episode_id, "delivery-api:still-rendering"))
@@ -119,9 +123,7 @@ async def test_non_ready_delivery_has_no_download_authorization(
             app.state.runtime,
             object_store=MinioObjectStore(transport, bucket="lanverse"),
         )
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 f"/v1/deliveries/{rendering.id}/download-authorizations",
                 json={"episode_id": str(episode_id), "artifact_types": ["mp4"]},
@@ -132,9 +134,7 @@ async def test_non_ready_delivery_has_no_download_authorization(
 
 def test_delivery_operations_are_in_the_single_openapi_contract() -> None:
     paths = create_app().openapi()["paths"]
-    assert paths["/v1/episodes/{episode_id}/deliveries"]["get"]["operationId"] == (
-        "listDeliveries"
-    )
+    assert paths["/v1/episodes/{episode_id}/deliveries"]["get"]["operationId"] == ("listDeliveries")
     assert paths["/v1/deliveries/{delivery_id}"]["get"]["operationId"] == "getDelivery"
     authorization = paths["/v1/deliveries/{delivery_id}/download-authorizations"]["post"]
     assert authorization["operationId"] == "authorizeDownload"

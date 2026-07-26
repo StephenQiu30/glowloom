@@ -32,3 +32,9 @@ CANDIDATE_API_ERRORS = error_responses(
     ApiErrorStatus.UNPROCESSABLE_ENTITY,
     ApiErrorStatus.SERVICE_UNAVAILABLE,
 )
+
+DELIVERY_API_ERRORS = error_responses(
+    ApiErrorStatus.NOT_FOUND,
+    ApiErrorStatus.UNPROCESSABLE_ENTITY,
+    ApiErrorStatus.SERVICE_UNAVAILABLE,
+)

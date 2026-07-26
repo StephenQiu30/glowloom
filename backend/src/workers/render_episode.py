@@ -8,6 +8,7 @@ from integrations.ffmpeg_recipe import RenderSources
 from integrations.object_storage import ObjectIntegrityError, ObjectKeyConflict, ObjectStore
 from repositories.render_completion import RenderCompletionStore
 from repositories.render_executions import RenderExecutionStore
+from schemas.delivery_media_lineage import DeliveryMediaLineageInvalid
 from schemas.rendering import RenderRecipeV1
 from services.delivery_artifacts import DeliveryArtifactWriter
 from services.delivery_quality import DeliveryQualityInvalid, DeliveryQualityPolicy
@@ -56,6 +57,7 @@ class RenderEpisodeJobHandler:
             )
         except (
             DeliveryQualityInvalid,
+            DeliveryMediaLineageInvalid,
             MediaRuntimeError,
             ObjectIntegrityError,
             ObjectKeyConflict,

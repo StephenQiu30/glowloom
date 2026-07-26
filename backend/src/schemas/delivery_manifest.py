@@ -25,6 +25,13 @@ class DeliveryMediaLineageV1(StrictContract):
     candidate_id: UUID
     media_version_id: UUID
     media_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    media_kind: Literal["video", "audio"]
+    source_kind: Literal["provider"]
+    mime_type: str = Field(min_length=1, max_length=100)
+    byte_size: int = Field(gt=0)
+    duration_ticks: int = Field(gt=0)
+    timebase: Literal[90000]
+    probe_summary: dict[str, object]
     origin_attempt_id: UUID
     origin_task_id: UUID
     origin_submission_snapshot_id: UUID

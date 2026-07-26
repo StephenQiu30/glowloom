@@ -41,7 +41,7 @@ class _ProbeRuntime:
         )
 
 
-def _recipe() -> RenderRecipeV1:
+def render_recipe() -> RenderRecipeV1:
     return RenderRecipeV1(
         runtime_image="sha256:" + "a" * 64,
         ffmpeg_version="8.1",
@@ -62,7 +62,7 @@ async def complete_ready_delivery(
     episode_id, _, _, _ = await render_ready_story(database, key, transport)
     accepted = await RenderEpisodeCoordinator(
         database,
-        recipe=_recipe(),
+        recipe=render_recipe(),
         release_version="test-release",
         fault=FaultInjector(),
     ).execute(RenderEpisodeCommand(episode_id, f"delivery-api:{key}"))
