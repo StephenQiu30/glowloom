@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Protocol
 
 from integrations.ai.deterministic_video import MediaRuntimeError, VideoProbe
 from integrations.local_media_probe import (
@@ -13,6 +13,7 @@ from integrations.local_media_probe import (
 from schemas.media import (
     AudioProbeSummaryV1,
     ImageProbeSummaryV1,
+    MediaKind,
     MediaProbeSummary,
     VideoProbeSummaryV1,
 )
@@ -24,9 +25,6 @@ AUDIO_MAX_BYTES = 32 * 1024 * 1024
 VIDEO_MIN_TICKS = 3 * TIMEBASE
 VIDEO_MAX_TICKS = 8 * TIMEBASE
 VIDEO_TOLERANCE_TICKS = TIMEBASE
-
-MediaKind = Literal["image", "video", "audio"]
-
 
 class InvalidMedia(ValueError):
     pass

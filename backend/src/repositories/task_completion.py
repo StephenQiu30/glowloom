@@ -79,6 +79,52 @@ class ExecutionCompletionStore:
             )
             await self._record(connection, plan, transition.resource_version, transition.event_type)
 
+    async def mark_failed(
+        self,
+        plan: ExecutionPlan,
+        *,
+        error_code: str,
+        summary: str,
+        retryable: bool,
+        next_action: str,
+    ) -> None:
+        async with self._database.transaction() as connection:
+            task = await connection.fetchrow(
+                "SELECT status,resource_version FROM production_tasks WHERE id=$1 FOR UPDATE",
+                plan.task_id,
+            )
+            if task is None or task["status"] == "failed":
+                return
+            transition = transition_task(task["status"], "failed", task["resource_version"])
+            await connection.execute(
+                """
+                UPDATE production_attempts SET status='failed',finished_at=now(),
+                    error_code=$2,error_summary=$3
+                WHERE id=$1 AND status NOT IN ('succeeded','failed','cancelled')
+                """,
+                plan.attempt_id,
+                error_code,
+                summary,
+            )
+            await connection.execute(
+                """
+                UPDATE production_tasks SET status='failed',resource_version=$2,
+                    progress_json='{"phase":"failed","completed":0,"total":1}',
+                    error_code=$3,error_json=$4::jsonb,next_action=$5,
+                    updated_at=now(),finished_at=now()
+                WHERE id=$1 AND resource_version=$6
+                """,
+                plan.task_id,
+                transition.resource_version,
+                error_code,
+                json.dumps({"retryable": retryable, "summary": summary}),
+                next_action,
+                transition.previous_resource_version,
+            )
+            await self._record(
+                connection, plan, transition.resource_version, transition.event_type
+            )
+
     async def mark_cancelled(self, plan: ExecutionPlan) -> None:
         async with self._database.transaction() as connection:
             task = await connection.fetchrow(

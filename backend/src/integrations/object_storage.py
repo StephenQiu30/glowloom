@@ -42,6 +42,12 @@ class StoredObject:
     content_type: str
 
 
+@dataclass(frozen=True, slots=True)
+class ObjectLocation:
+    bucket: str
+    object_key: str
+
+
 class ObjectTransport(Protocol):
     def stat(self, bucket: str, object_key: str) -> RemoteObject | None: ...
 
@@ -53,6 +59,22 @@ class ObjectTransport(Protocol):
         content_type: str,
         sha256: str,
     ) -> None: ...
+
+
+class ObjectStore(Protocol):
+    def invalid_location(
+        self, episode_id: UUID, attempt_id: UUID, output_slot: str
+    ) -> ObjectLocation: ...
+
+    async def put(
+        self,
+        *,
+        episode_id: UUID,
+        attempt_id: UUID,
+        output_slot: str,
+        content_type: str,
+        data: bytes,
+    ) -> StoredObject: ...
 
 
 class MinioObjectStore:
@@ -76,6 +98,15 @@ class MinioObjectStore:
             raise ValueError("content type is not supported")
         safe_slot = output_slot.replace("/", "-")
         return f"episodes/{episode_id}/attempts/{attempt_id}/{safe_slot}.{extension}"
+
+    def invalid_location(
+        self, episode_id: UUID, attempt_id: UUID, output_slot: str
+    ) -> ObjectLocation:
+        if OUTPUT_SLOT.fullmatch(output_slot) is None:
+            raise ValueError("output slot is invalid")
+        safe_slot = output_slot.replace("/", "-")
+        key = f"episodes/{episode_id}/attempts/{attempt_id}/{safe_slot}.invalid"
+        return ObjectLocation(self._bucket, key)
 
     async def put(
         self,

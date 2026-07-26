@@ -37,6 +37,7 @@ class MediaRegistrationRow:
     probe_summary: Mapping[str, object]
     media_status: str
     candidate_status: str
+    blocked_reason: str | None
 
 
 class MediaRepository:
@@ -80,7 +81,7 @@ class MediaRepository:
                    version.mime_type,version.byte_size,version.sha256,version.width,
                    version.height,version.duration_ticks,version.timebase,
                    version.probe_summary_json,version.status media_status,
-                   candidate.status candidate_status
+                   candidate.status candidate_status,candidate.blocked_reason
             FROM media_versions version
             JOIN media_objects object ON object.id=version.media_object_id
             JOIN generation_candidates candidate ON candidate.media_version_id=version.id
@@ -91,7 +92,7 @@ class MediaRepository:
         )
         return self._map(row) if row else None
 
-    async def insert_ready(
+    async def insert_finalized(
         self,
         connection: asyncpg.Connection[asyncpg.Record],
         *,
@@ -113,13 +114,14 @@ class MediaRepository:
         height: int | None,
         duration_ticks: int | None,
         timebase: int | None,
-        probe_summary: Mapping[str, object],
+        probe_summary: Mapping[str, object] | None,
+        media_status: str,
+        candidate_status: str,
+        blocked_reason: str | None,
     ) -> MediaRegistrationRow:
         media_object_id = new_id()
         media_version_id = new_id()
         candidate_id = new_id()
-        candidate_status = "ready" if output_slot == "primary" else "blocked"
-        blocked_reason = None if candidate_status == "ready" else "EXTRA_OUTPUT_NOT_ADOPTABLE"
         await connection.execute(
             """
             INSERT INTO media_objects(id,episode_id,media_kind,source_kind)
@@ -135,11 +137,12 @@ class MediaRepository:
                 id,media_object_id,version,origin_attempt_id,output_slot,bucket,
                 object_key,mime_type,byte_size,sha256,status,width,height,
                 duration_ticks,timebase,probe_summary_json,finalized_at
-            ) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8,$9,'ready',$10,$11,$12,$13,$14::jsonb,now())
+            ) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,now())
             """,
             media_version_id, media_object_id, attempt_id, output_slot, bucket,
-            object_key, content_type, byte_size, sha256, width, height,
-            duration_ticks, timebase, json.dumps(probe_summary, separators=(",", ":")),
+            object_key, content_type, byte_size, sha256, media_status, width, height,
+            duration_ticks, timebase,
+            json.dumps(probe_summary, separators=(",", ":")) if probe_summary else None,
         )
         await connection.execute(
             """
@@ -171,6 +174,12 @@ class MediaRepository:
             object_key=row["object_key"], content_type=row["mime_type"],
             byte_size=row["byte_size"], sha256=row["sha256"], width=row["width"],
             height=row["height"], duration_ticks=row["duration_ticks"],
-            timebase=row["timebase"], probe_summary=object_value(row["probe_summary_json"]),
+            timebase=row["timebase"],
+            probe_summary=(
+                object_value(row["probe_summary_json"])
+                if row["probe_summary_json"] is not None
+                else {}
+            ),
             media_status=row["media_status"], candidate_status=row["candidate_status"],
+            blocked_reason=row["blocked_reason"],
         )

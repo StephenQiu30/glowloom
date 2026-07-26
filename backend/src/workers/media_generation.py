@@ -9,11 +9,12 @@ from integrations.ai.registry import AiModelBinding, AiModelRegistry
 from repositories.task_completion import ExecutionCompletionStore
 from repositories.task_executions import ExecutionPlan, MediaExecutionInput, TaskExecutionStore
 from repositories.task_outputs import TaskOutputStore
-from services.media_registration import (
+from schemas.media_registration import (
     MediaRegistrationCommand,
-    MediaRegistrationService,
     UsageType,
 )
+from services.media_registration import MediaRegistrationService
+from services.media_validation import InvalidMedia
 from workers.dispatch import JobContext
 from workers.provider_execution import FaultInjector
 
@@ -62,21 +63,39 @@ class GenerateMediaJobHandler:
         generated = await provider.generate(input_hash, "primary")
         await self._executions.record_provider_success(plan, plan.provider_request_key)
         self._fault.hit("after_media_generation")
-        registered = await self._registration.register(
-            MediaRegistrationCommand(
-                episode_id=job_input.episode_id,
-                task_id=plan.task_id,
-                attempt_id=plan.attempt_id,
-                output_slot="primary",
-                usage_type=usage_type,
-                usage_id=usage_id,
-                input_version_id=input_version_id,
-                input_hash=input_hash,
-                media_kind="image",
-                content_type=generated.content_type,
-                data=generated.data,
-            )
+        command = MediaRegistrationCommand(
+            episode_id=job_input.episode_id,
+            task_id=plan.task_id,
+            attempt_id=plan.attempt_id,
+            output_slot="primary",
+            usage_type=usage_type,
+            usage_id=usage_id,
+            input_version_id=input_version_id,
+            input_hash=input_hash,
+            media_kind="image",
+            content_type=generated.content_type,
+            data=generated.data,
         )
+        try:
+            registered = await self._registration.register(command)
+        except InvalidMedia:
+            registered = await self._registration.register_invalid(
+                command, reason="OUTPUT_INVALID"
+            )
+            await self._outputs.record(
+                plan.task_id,
+                "generation_candidate",
+                registered.candidate_id,
+                ordinal=0,
+            )
+            await self._completion.mark_failed(
+                plan,
+                error_code="OUTPUT_INVALID",
+                summary="Provider media failed technical validation",
+                retryable=False,
+                next_action="Create a new generation task for this slot",
+            )
+            return
         self._fault.hit("after_media_registration")
         await self._complete(plan.task_id, registered.candidate_id, plan)
 

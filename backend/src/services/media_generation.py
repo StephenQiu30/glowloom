@@ -9,13 +9,13 @@ from db.pool import DatabasePool
 from integrations.ai.registry import AiModelRegistry, create_mvp_registry
 from repositories.asset_versions import CreativeAssetVersionRepository
 from repositories.storyboard_versions import StoryboardVersionRepository
+from schemas.media_registration import UsageType
 from schemas.story_content import canonical_content_hash
 from schemas.story_snapshots import (
     CreativeAssetVersionSnapshot,
     StoryboardVersionSnapshot,
 )
 from schemas.tasks import SubmitTaskCommand, TaskAcceptedSnapshot
-from services.media_registration import UsageType
 from services.task_submission import TaskSubmitter
 
 

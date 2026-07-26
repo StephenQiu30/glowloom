@@ -1,79 +1,35 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from typing import Literal, Protocol
 from uuid import UUID
 
 import asyncpg  # type: ignore[import-untyped]
 
 from db.pool import DatabasePool
-from integrations.object_storage import StoredObject
+from integrations.object_storage import ObjectStore, StoredObject
 from repositories.media import MediaRegistrationRow, MediaRepository
-from services.media_validation import MediaKind, MediaValidationService, ValidatedMedia
+from schemas.media_registration import (
+    MediaRegistrationCommand,
+    MediaRegistrationSnapshot,
+)
+from services.invalid_media_registration import InvalidMediaRegistrar
+from services.media_errors import MediaRegistrationConflict, MediaTaskMismatch
+from services.media_validation import MediaValidationService, ValidatedMedia
 
 INPUT_HASH = re.compile(r"^[0-9a-f]{64}$")
-UsageType = Literal["asset_image", "shot_image", "shot_video", "speech_audio"]
-
-
-class MediaRegistrationConflict(RuntimeError):
-    pass
-
-
-class MediaTaskMismatch(ValueError):
-    pass
-
-
-class ObjectStorePort(Protocol):
-    async def put(
-        self,
-        *,
-        episode_id: UUID,
-        attempt_id: UUID,
-        output_slot: str,
-        content_type: str,
-        data: bytes,
-    ) -> StoredObject: ...
-
-
-@dataclass(frozen=True, slots=True)
-class MediaRegistrationCommand:
-    episode_id: UUID
-    task_id: UUID
-    attempt_id: UUID
-    output_slot: str
-    usage_type: UsageType
-    usage_id: UUID
-    input_version_id: UUID
-    input_hash: str
-    media_kind: MediaKind
-    content_type: str
-    data: bytes
-    target_duration_ticks: int | None = None
-
-@dataclass(frozen=True, slots=True)
-class MediaRegistrationSnapshot:
-    media_object_id: UUID
-    media_version_id: UUID
-    candidate_id: UUID
-    media_status: str
-    candidate_status: str
-    bucket: str
-    object_key: str
-    sha256: str
-
 class MediaRegistrationService:
     _CAPABILITY_KIND = {"image": "image", "video": "video", "tts": "audio"}
     def __init__(
         self,
         database: DatabasePool,
         validator: MediaValidationService,
-        object_store: ObjectStorePort,
+        object_store: ObjectStore,
     ) -> None:
         self._database = database
         self._validator = validator
         self._object_store = object_store
         self._repository = MediaRepository()
+        self._invalid = InvalidMediaRegistrar(database, object_store)
 
     async def find_registered(
         self, attempt_id: UUID, output_slot: str
@@ -116,7 +72,11 @@ class MediaRegistrationService:
             if existing is not None:
                 self._assert_replay(existing, command, stored, validated, probe)
                 return self._snapshot(existing)
-            registered = await self._repository.insert_ready(
+            candidate_status = "ready" if command.output_slot == "primary" else "blocked"
+            blocked_reason = (
+                None if candidate_status == "ready" else "EXTRA_OUTPUT_NOT_ADOPTABLE"
+            )
+            registered = await self._repository.insert_finalized(
                 connection,
                 episode_id=command.episode_id,
                 task_id=command.task_id,
@@ -137,8 +97,16 @@ class MediaRegistrationService:
                 duration_ticks=validated.duration_ticks,
                 timebase=validated.timebase,
                 probe_summary=probe,
+                media_status="ready",
+                candidate_status=candidate_status,
+                blocked_reason=blocked_reason,
             )
             return self._snapshot(registered)
+
+    async def register_invalid(
+        self, command: MediaRegistrationCommand, *, reason: str
+    ) -> MediaRegistrationSnapshot:
+        return await self._invalid.register(command, reason=reason)
 
     async def _assert_task(
         self,
