@@ -72,7 +72,10 @@ async def test_validates_video_and_accepts_exact_duration_tolerance_boundary() -
 @pytest.mark.asyncio
 async def test_validates_exact_wav_duration_and_audio_shape() -> None:
     media = await DeterministicTtsProvider().generate(
-        INPUT_HASH, "primary", duration_ticks=180000
+        INPUT_HASH,
+        "primary",
+        text="旁白" * 20,
+        voice_id="mock.narrator_female",
     )
     service = MediaValidationService(DockerFfmpegRuntime())
 
