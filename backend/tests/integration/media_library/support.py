@@ -11,6 +11,7 @@ from schemas.jobs import JobPayload
 from services.media_generation import GenerateMediaCommand, GenerateMediaHandler
 from services.media_registration import MediaRegistrationService
 from services.media_validation import MediaValidationService
+from services.script_versions import GetScriptVersionHandler
 from services.storyboards import ConfirmStoryboardCommand, ConfirmStoryboardHandler
 from tests.integration.story_development.support import storyboard_draft
 from workers.dispatch import JobContext
@@ -165,3 +166,25 @@ async def accepted_video_task(
     return video.task_id, shot.duration_ticks, await media_job_context(
         database, video.task_id
     )
+
+
+async def accepted_tts_task(
+    database: DatabasePool, key: str
+) -> tuple[UUID, str, JobContext]:
+    episode_id, generated = await storyboard_draft(database, f"tts-worker:{key}")
+    script = await GetScriptVersionHandler(database).execute(
+        generated.storyboard.content.script_version_id
+    )
+    line = script.content.scenes[0].speech_lines[0]
+    accepted = await GenerateMediaHandler(
+        database, release_version="test-release"
+    ).execute(
+        GenerateMediaCommand(
+            episode_id,
+            "speech_audio",
+            line.speech_line_id,
+            script.id,
+            f"tts-worker:{key}:audio",
+        )
+    )
+    return accepted.task_id, line.text, await media_job_context(database, accepted.task_id)

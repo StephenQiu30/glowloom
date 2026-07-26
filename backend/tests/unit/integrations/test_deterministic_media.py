@@ -61,23 +61,31 @@ async def test_image_mock_is_stable_isolated_and_decodable() -> None:
 async def test_tts_mock_is_stable_isolated_and_exact_duration_wav() -> None:
     provider = DeterministicTtsProvider()
 
-    first = await provider.generate(INPUT_HASH, "primary", duration_ticks=180000)
-    replay = await provider.generate(INPUT_HASH, "primary", duration_ticks=180000)
-    other = await provider.generate(INPUT_HASH, "extra/0", duration_ticks=180000)
+    arguments = {"text": "雨夜里，她终于找到了回家的路。", "voice_id": "mock.narrator_female"}
+    first = await provider.generate(INPUT_HASH, "primary", **arguments)
+    replay = await provider.generate(INPUT_HASH, "primary", **arguments)
+    other = await provider.generate(INPUT_HASH, "extra/0", **arguments)
+    other_voice = await provider.generate(
+        INPUT_HASH,
+        "primary",
+        text=arguments["text"],
+        voice_id="mock.narrator_male",
+    )
 
     assert first == replay
     assert first.data != other.data
+    assert first.data != other_voice.data
     assert first.content_type == "audio/wav"
-    assert first.duration_ticks == 180000
+    assert first.duration_ticks is not None and first.duration_ticks > 0
     assert first.sample_rate == 48000 and first.channels == 1
     assert len(first.sha256) == 64
     with wave.open(io.BytesIO(first.data), "rb") as stream:
         assert stream.getframerate() == 48000
         assert stream.getnchannels() == 1
         assert stream.getsampwidth() == 2
-        assert stream.getnframes() == 96000
+        assert stream.getnframes() * 90000 == first.duration_ticks * 48000
         assert stream.readframes(stream.getnframes())
-    assert provider.call_count == 3
+    assert provider.call_count == 4
 
 
 @pytest.mark.asyncio
@@ -89,5 +97,7 @@ async def test_media_mocks_reject_invalid_hash_slot_and_duration() -> None:
         await image.generate("invalid", "primary")
     with pytest.raises(ValueError, match="output slot"):
         await image.generate(INPUT_HASH, "../escape")
-    with pytest.raises(ValueError, match="duration"):
-        await tts.generate(INPUT_HASH, "primary", duration_ticks=0)
+    with pytest.raises(ValueError, match="text"):
+        await tts.generate(INPUT_HASH, "primary", text="", voice_id="mock.voice")
+    with pytest.raises(ValueError, match="voice"):
+        await tts.generate(INPUT_HASH, "primary", text="旁白", voice_id="")
