@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from uuid import UUID
 
 import pytest
@@ -115,9 +114,14 @@ def test_content_rejects_order_overlap_duplicate_and_oversized_text() -> None:
     with pytest.raises(ValidationError):
         content(first, overlapping)
     with pytest.raises(ValidationError):
-        content(replace(first, ordinal=2))
+        content(first.model_copy(update={"ordinal": 2}))
     with pytest.raises(ValidationError):
-        content(first, replace(first, ordinal=2, start_ticks=90000, end_ticks=180000))
+        content(
+            first,
+            first.model_copy(
+                update={"ordinal": 2, "start_ticks": 90000, "end_ticks": 180000}
+            ),
+        )
     with pytest.raises(ValidationError):
         SubtitleCueV1.model_validate({**first.model_dump(), "text": "字" * 501})
 
