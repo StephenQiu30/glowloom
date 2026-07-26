@@ -4,14 +4,14 @@ from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
+
+from db.pool import DatabasePool
 from schemas.rendering import RenderRecipeV1
 from services.render_snapshots import (
     CreateRenderSnapshotCommand,
     CreateRenderSnapshotHandler,
     RenderInputInvalid,
 )
-
-from db.pool import DatabasePool
 from tests.integration.delivery.support import render_ready_story
 
 
@@ -55,12 +55,23 @@ async def test_render_snapshot_freezes_current_media_and_recipe(
         assert await stored_count(database, episode_id, "render_snapshots") == 1
         assert await stored_count(database, episode_id, "production_tasks") == 0
 
+        tts_ref = subtitle.input_refs.tts_adoptions[0]
+        await replace_subtitle_tts_hash(database, subtitle.id, "b" * 64)
+        with pytest.raises(RenderInputInvalid, match=str(tts_ref.speech_line_id)):
+            await handler.execute(
+                CreateRenderSnapshotCommand(
+                    episode_id, "renderEpisode/test", "render:snapshot:0002"
+                )
+            )
+        assert await stored_count(database, episode_id, "render_snapshots") == 1
+        await replace_subtitle_tts_hash(database, subtitle.id, tts_ref.input_hash)
+
         missing_shot_id = board.content.shots[0].shot_id
         await supersede_video(database, episode_id, missing_shot_id)
         with pytest.raises(RenderInputInvalid, match=str(missing_shot_id)):
             await handler.execute(
                 CreateRenderSnapshotCommand(
-                    episode_id, "renderEpisode/test", "render:snapshot:0002"
+                    episode_id, "renderEpisode/test", "render:snapshot:0003"
                 )
             )
         assert await stored_count(database, episode_id, "render_snapshots") == 1
@@ -92,11 +103,30 @@ async def supersede_video(database: DatabasePool, episode_id: UUID, shot_id: UUI
         )
 
 
+async def replace_subtitle_tts_hash(
+    database: DatabasePool, subtitle_id: UUID, input_hash: str
+) -> None:
+    async with database.transaction() as connection:
+        await connection.execute(
+            """
+            UPDATE subtitle_versions
+            SET input_refs_json=jsonb_set(
+                input_refs_json,'{tts_adoptions,0,input_hash}',to_jsonb($2::text)
+            )
+            WHERE id=$1
+            """,
+            subtitle_id,
+            input_hash,
+        )
+
+
 async def stored_count(database: DatabasePool, episode_id: UUID, table_name: str) -> int:
     if table_name not in {"render_snapshots", "production_tasks"}:
         raise ValueError("unsupported test table")
     async with database.transaction() as connection:
+        condition = " AND type='render_episode'" if table_name == "production_tasks" else ""
         value = await connection.fetchval(
-            f"SELECT count(*) FROM {table_name} WHERE episode_id=$1", episode_id
+            f"SELECT count(*) FROM {table_name} WHERE episode_id=$1{condition}",
+            episode_id,
         )
     return int(value)
