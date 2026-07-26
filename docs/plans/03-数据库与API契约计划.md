@@ -34,8 +34,8 @@ Alembic 只执行根 SQL，不复制 DDL、不使用 ORM/Metadata/autogenerate�
 | 运行时数据 | `backend/src/db/` + `backend/src/repositories/` | asyncpg pool/transaction、参数化 SQL 与 Row Mapper |
 | HTTP 契约 | `api/routes/` + `schemas/` | FastAPI 路由与 Pydantic 是唯一契约源 |
 | OpenAPI | 运行中 API 的 `LANVERSE_OPENAPI_URL` | 本地默认 `http://127.0.0.1:8000/openapi.json`；不保存静态中间副本 |
-| 前端生成 | `frontend/openapi2ts.config.ts`；最终 `src/services/` | `@umijs/openapi` 1.14.1 直接读取 URL；生成文件直接发布到该目录并带固定标识，不得套子目录或手改；只替换生成文件，不覆盖手写层 |
-| 请求/缓存 | `src/lib/request.ts`；最终 `src/services/api.ts` | 本计划交付唯一 sender；PLAN-09 在最终生成函数上建立 RTK Query endpoint |
+| 前端生成 | `frontend/openapi2ts.config.ts`；最终 `src/api/` | `@umijs/openapi` 1.14.1 直接读取 URL，并通过指向 `src/` 的 `serversPath` 原生创建 `api/`；目录整体覆盖、只含生成文件，不增加中间目录，不得手改 |
+| 请求/缓存 | `src/lib/request.ts`；最终 `src/store/backend-api.ts` | 本计划交付唯一 sender；PLAN-09 在最终生成函数上建立 RTK Query endpoint，不手写请求接口 |
 
 ## 3. TDD 实施任务
 
@@ -68,7 +68,7 @@ PLAN-04～08 每实现一组 Operation 就同步增加正式 contract test；未
 - 错误为 `application/problem+json`，无 stack/secret/Prompt/签名 URL。
 - 创建/重放/版本冲突/异步受理/Task polling 具备成功与失败示例。
 - OpenAPI 版本为 3.1；锁定 umi 必须从真实 HTTP URL 消费，服务不可达或生成失败时非零退出，不降级为文件、副本或第二 Schema。
-- PLAN-09 必须验证页面禁止直接导入生成目录，只有 `services/api.ts` 可调用最终生成函数。
+- PLAN-09 必须验证页面禁止直接导入生成目录，只有 `store/backend-api.ts` 可调用最终生成函数。
 
 ## 6. 风险、回滚与 Definition of Done
 
