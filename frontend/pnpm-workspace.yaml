@@ -1,6 +1,0 @@
-saveExact: true
-
-allowBuilds:
-  es5-ext: false
-  sharp: true
-  unrs-resolver: true
