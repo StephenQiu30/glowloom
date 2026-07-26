@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { Providers } from "@/app/providers";
+import { backendApi } from "@/store/backend-api";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { makeStore } from "@/store/make-store";
 import { setSidebarOpen } from "@/store/slices/ui-slice";
@@ -28,6 +29,7 @@ describe("Redux application boundary", () => {
     expect(first).not.toBe(second);
     expect(first.getState().ui.sidebarOpen).toBe(false);
     expect(second.getState().ui.sidebarOpen).toBe(true);
+    expect(first.getState()).toHaveProperty(backendApi.reducerPath);
   });
 
   it("provides typed Redux hooks through the root provider", async () => {
