@@ -1,0 +1,10 @@
+# Lanverse Design 索引
+
+当前处于重新设计阶段，以下文档均为待业务确认的提案，不代表已经进入实现。
+
+| 文档 | 内容 | 状态 |
+| --- | --- | --- |
+| [001 产品调研与核心能力](./001-product-research-and-capabilities.md) | 对标产品、生产链路、功能边界与 MVP | proposed |
+| [002 架构与技术选型](./002-architecture-and-technology-selection.md) | 模块化架构、目录、数据、任务与技术栈 | proposed |
+
+下游顺序：业务确认两份 Design → 编写 MVP PRD 与验收指标 → 制定实施 Plan → 开始编码。
