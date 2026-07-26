@@ -74,12 +74,12 @@ class TaskSnapshot:
 @dataclass(frozen=True, slots=True)
 class RetrySubmissionSnapshot:
     task: TaskSnapshot
-    capability: str
-    prompt: str
+    capability: str | None
+    prompt: str | None
     parameters: dict[str, object]
-    model_profile_id: str
-    provider_id: str
-    model_id: str
-    route_version: str
+    model_profile_id: str | None
+    provider_id: str | None
+    model_id: str | None
+    route_version: str | None
     schema_version: str
     handler_version: str

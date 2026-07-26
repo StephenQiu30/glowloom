@@ -15,6 +15,7 @@ class RenderExecutionPlan:
     episode_id: UUID
     task_id: UUID
     attempt_id: UUID
+    attempt_no: int
     render_snapshot_id: UUID
     cancel_requested: bool
     skip: bool = False
@@ -31,7 +32,8 @@ class RenderExecutionStore:
                 """
                 SELECT task.id task_id,task.episode_id,task.status task_status,
                        task.resource_version,task.snapshot_id,submission.input_refs_json,
-                       attempt.id attempt_id,attempt.status attempt_status
+                       attempt.id attempt_id,attempt.attempt_no,
+                       attempt.status attempt_status
                 FROM production_tasks task
                 JOIN submission_snapshots submission ON submission.id=task.snapshot_id
                 JOIN LATERAL (
@@ -56,6 +58,7 @@ class RenderExecutionStore:
                 episode_id=row["episode_id"],
                 task_id=row["task_id"],
                 attempt_id=row["attempt_id"],
+                attempt_no=row["attempt_no"],
                 render_snapshot_id=render_snapshot_id,
                 cancel_requested=row["task_status"] == "cancelling",
                 skip=row["task_status"] in {"cancelled", "succeeded", "failed"},

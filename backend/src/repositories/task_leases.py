@@ -43,10 +43,10 @@ class JobLeaseRepository:
                 FROM task_jobs j
                 JOIN production_tasks t ON t.id = j.task_id
                 WHERE (
-                    (j.state = 'pending' AND j.next_attempt_at <= $2)
+                    (j.state = 'pending' AND j.next_attempt_at <= $2
+                     AND t.status IN ('queued','running','cancelling','unknown'))
                     OR (j.state = 'leased' AND j.lease_until <= $2)
                 )
-                AND t.status IN ('queued','running','cancelling','unknown')
                 ORDER BY j.next_attempt_at, j.created_at, j.id
                 FOR UPDATE OF j SKIP LOCKED
                 LIMIT 1

@@ -38,7 +38,7 @@ class TaskSubmitter:
         connection: asyncpg.Connection[asyncpg.Record],
         command: SubmitTaskCommand,
     ) -> TaskAcceptedSnapshot:
-        if command.task_type == "render_episode":
+        if command.task_type == "render_episode" and command.retry_of_task_id is None:
             raise UnsupportedTaskSubmission("render uses the delivery coordinator")
         request_body = self._request_body(command)
         request_hash = canonical_request_hash(

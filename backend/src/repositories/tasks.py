@@ -73,16 +73,18 @@ class TaskRepository:
             task_id,
             task.snapshot_id,
         )
-        if row is None or any(
-            row[name] is None
-            for name in (
-                "capability",
-                "prompt",
-                "model_profile_id",
-                "provider_id",
-                "model_id",
-                "route_version",
-            )
+        if row is None:
+            return None
+        provider_fields = (
+            "capability",
+            "prompt",
+            "model_profile_id",
+            "provider_id",
+            "model_id",
+            "route_version",
+        )
+        if task.task_type != "render_episode" and any(
+            row[name] is None for name in provider_fields
         ):
             return None
         payload = object_value(row["payload_json"])

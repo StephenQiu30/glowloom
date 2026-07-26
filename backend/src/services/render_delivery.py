@@ -21,7 +21,8 @@ class StartRenderDeliveryHandler:
             task_input = await self._deliveries.task_render_input(connection, task_id)
             if task_input is None:
                 raise RenderTaskInvalid("render task is required")
-            episode_id, snapshot_id = task_input
+            episode_id = task_input.episode_id
+            snapshot_id = task_input.render_snapshot_id
             if not await self._deliveries.lock_episode(connection, episode_id):
                 raise RenderTaskInvalid("render task episode is missing")
             locked_input = await self._deliveries.task_render_input(connection, task_id)
@@ -30,9 +31,18 @@ class StartRenderDeliveryHandler:
             existing = await self._deliveries.get_by_task(connection, task_id)
             if existing is not None:
                 return existing
+            retry_of_delivery_id = None
+            if task_input.retry_of_task_id is not None:
+                previous = await self._deliveries.get_by_task(
+                    connection, task_input.retry_of_task_id
+                )
+                if previous is None or previous.episode_id != episode_id:
+                    raise RenderTaskInvalid("retry delivery is missing")
+                retry_of_delivery_id = previous.id
             return await self._deliveries.insert_rendering(
                 connection,
                 episode_id=episode_id,
                 task_id=task_id,
                 render_snapshot_id=snapshot_id,
+                retry_of_delivery_id=retry_of_delivery_id,
             )

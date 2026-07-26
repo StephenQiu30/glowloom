@@ -6,6 +6,7 @@ from db.pool import DatabasePool
 from schemas.jobs import InvalidJobPayload, JobPayload
 from workers.capacity import WorkerCapacity
 from workers.dispatch import JobContext, JobHandlerRegistry
+from workers.errors import RetryableJobError
 from workers.lease_queue import JobQueue
 from workers.provider_execution import FaultInjector
 
@@ -47,7 +48,19 @@ class TaskJobRunner:
             if row is None or row["snapshot_id"] != payload.snapshot_id:
                 raise InvalidJobPayload("TaskJob snapshot_id does not match its task")
             context = JobContext(job_id=lease.id, owner=self._owner, payload=payload)
-            await self._registry.dispatch(row["type"], context)
+            try:
+                await self._registry.dispatch(row["type"], context)
+            except RetryableJobError as error:
+                released = await self._queue.release(
+                    lease.id,
+                    self._owner,
+                    now=now,
+                    next_attempt_at=now + error.retry_after,
+                    error_code=error.code,
+                )
+                if not released:
+                    raise RuntimeError("worker lost the lease before retry release") from error
+                return True
             completed = await self._queue.complete(lease.id, self._owner, now=now)
             if not completed:
                 raise RuntimeError("worker lost the lease before completion")

@@ -118,7 +118,7 @@ class RetryTaskHandler:
         command = SubmitTaskCommand(
             episode_id=source.task.episode_id,
             task_type=cast(TaskType, source.task.task_type),
-            capability=cast(Capability, source.capability),
+            capability=cast(Capability | None, source.capability),
             scope=source.task.scope,
             input_refs=source.task.input_refs,
             prompt=source.prompt,
@@ -133,6 +133,6 @@ class RetryTaskHandler:
             handler_version=source.handler_version,
             retry_of_task_id=task_id,
         )
-        return await TaskSubmitter(
-            self._database, release_version=self._release_version
-        ).submit(command)
+        return await TaskSubmitter(self._database, release_version=self._release_version).submit(
+            command
+        )

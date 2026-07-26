@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Literal, cast
 from uuid import UUID
 
@@ -13,6 +14,13 @@ from schemas.deliveries import (
     DeliveryVersionSnapshot,
 )
 from schemas.delivery_quality import DeliveryProbeSummaryV1
+
+
+@dataclass(frozen=True, slots=True)
+class RenderTaskDeliveryInput:
+    episode_id: UUID
+    render_snapshot_id: UUID
+    retry_of_task_id: UUID | None
 
 
 class DeliveryRepository:
@@ -28,10 +36,10 @@ class DeliveryRepository:
 
     async def task_render_input(
         self, connection: asyncpg.Connection[asyncpg.Record], task_id: UUID
-    ) -> tuple[UUID, UUID] | None:
+    ) -> RenderTaskDeliveryInput | None:
         row = await connection.fetchrow(
             """
-            SELECT task.episode_id,submission.input_refs_json
+            SELECT task.episode_id,task.retry_of_task_id,submission.input_refs_json
             FROM production_tasks task
             JOIN submission_snapshots submission ON submission.id=task.snapshot_id
             WHERE task.id=$1 AND task.type='render_episode'
@@ -48,7 +56,7 @@ class DeliveryRepository:
             snapshot_id = UUID(str(inputs["render_snapshot_id"]))
         except (KeyError, TypeError, ValueError) as error:
             raise RuntimeError("render task input is invalid") from error
-        return row["episode_id"], snapshot_id
+        return RenderTaskDeliveryInput(row["episode_id"], snapshot_id, row["retry_of_task_id"])
 
     async def get_by_task(
         self, connection: asyncpg.Connection[asyncpg.Record], task_id: UUID
@@ -117,6 +125,7 @@ class DeliveryRepository:
         episode_id: UUID,
         task_id: UUID,
         render_snapshot_id: UUID,
+        retry_of_delivery_id: UUID | None = None,
     ) -> DeliveryVersionSnapshot:
         version = await connection.fetchval(
             "SELECT coalesce(max(version),0)+1 FROM delivery_versions WHERE episode_id=$1",
@@ -125,14 +134,16 @@ class DeliveryRepository:
         row = await connection.fetchrow(
             """
             INSERT INTO delivery_versions(
-                id,episode_id,version,render_task_id,render_snapshot_id
-            ) VALUES($1,$2,$3,$4,$5) RETURNING *
+                id,episode_id,version,render_task_id,render_snapshot_id,
+                retry_of_delivery_id
+            ) VALUES($1,$2,$3,$4,$5,$6) RETURNING *
             """,
             new_id(),
             episode_id,
             version,
             task_id,
             render_snapshot_id,
+            retry_of_delivery_id,
         )
         if row is None:
             raise RuntimeError("created delivery could not be read")
