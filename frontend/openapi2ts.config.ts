@@ -4,7 +4,7 @@ const config = {
   schemaPath:
     process.env.LANVERSE_OPENAPI_URL ??
     "http://127.0.0.1:8000/openapi.json",
-  serversPath: path.resolve(process.cwd(), "./src/services/generated"),
+  serversPath: path.resolve(process.cwd(), "./src"),
   namespace: "API",
   nullable: true,
   enumStyle: "string-literal",

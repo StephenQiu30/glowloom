@@ -24,7 +24,7 @@ generate-api:
 	cd backend && uv run python scripts/generate_api_client.py
 
 contracts-check: generate-api
-	git diff --exit-code -- frontend/src/services/generated
+	git diff --exit-code -- frontend/src/api
 
 test-jobs:
 	cd backend && PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/jobs -q -p no:cacheprovider
