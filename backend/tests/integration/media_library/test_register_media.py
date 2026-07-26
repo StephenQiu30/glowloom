@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from uuid import UUID, uuid4
 
 import pytest
@@ -121,10 +122,14 @@ async def test_registers_ready_media_and_candidate_idempotently(
             row = await connection.fetchrow(
                 "SELECT * FROM media_versions WHERE id=$1", first.media_version_id
             )
-        assert counts == {"media_objects": 1, "media_versions": 1, "candidates": 1}
+        assert dict(counts) == {"media_objects": 1, "media_versions": 1, "candidates": 1}
         assert row["bucket"] == "lanverse"
         assert row["object_key"] == first.object_key
-        assert row["probe_summary_json"] == {"codec": "png", "width": 720, "height": 1280}
+        assert json.loads(row["probe_summary_json"]) == {
+            "codec": "png",
+            "width": 720,
+            "height": 1280,
+        }
     finally:
         await database.close()
 
