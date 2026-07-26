@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 
 from db.pool import DatabasePool
-from integrations.ai.deterministic_media import DeterministicImageProvider
+from integrations.ai.deterministic_media import DeterministicImageProvider, GeneratedMedia
 from integrations.ai.deterministic_video import DockerFfmpegRuntime
 from integrations.ai.registry import create_mvp_registry
 from integrations.object_storage import MinioObjectStore, RemoteObject
@@ -18,7 +18,7 @@ from services.storyboards import ConfirmStoryboardCommand, ConfirmStoryboardHand
 from services.tasks import TaskQueryService
 from tests.integration.story_development.support import storyboard_draft
 from workers.dispatch import JobContext
-from workers.media_generation import GenerateMediaJobHandler
+from workers.media_generation import GenerateMediaJobHandler, ImageProvider
 from workers.provider_execution import FaultInjector, InjectedFault
 
 
@@ -51,6 +51,16 @@ class FailOnce(FaultInjector):
             raise InjectedFault(point)
 
 
+class CorruptImageProvider:
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    async def generate(self, input_hash: str, output_slot: str) -> GeneratedMedia:
+        assert len(input_hash) == 64 and output_slot == "primary"
+        self.call_count += 1
+        return GeneratedMedia(output_slot, "image/png", b"not-a-decodable-png")
+
+
 async def accepted_image_task(
     database: DatabasePool, key: str
 ) -> tuple[UUID, JobContext]:
@@ -80,14 +90,15 @@ async def accepted_image_task(
 
 def image_handler(
     database: DatabasePool,
-    provider: DeterministicImageProvider,
+    provider: ImageProvider,
     fault: FaultInjector,
+    transport: MemoryTransport | None = None,
 ) -> GenerateMediaJobHandler:
     registry = create_mvp_registry({("image", "mock"): lambda _profile: provider})
     registration = MediaRegistrationService(
         database,
         MediaValidationService(DockerFfmpegRuntime()),
-        MinioObjectStore(MemoryTransport(), bucket="lanverse"),
+        MinioObjectStore(transport or MemoryTransport(), bucket="lanverse"),
     )
     return GenerateMediaJobHandler(
         database,
@@ -129,6 +140,49 @@ async def test_image_job_registers_candidate_output_before_succeeding(
             "ready",
             64,
         )
+    finally:
+        await database.close()
+
+
+@pytest.mark.asyncio
+async def test_invalid_image_is_blocked_without_upload_and_task_fails_cleanly(
+    migrated_database_url: str,
+) -> None:
+    database = DatabasePool(migrated_database_url, min_size=1, max_size=3)
+    await database.start()
+    try:
+        task_id, context = await accepted_image_task(database, "invalid")
+        provider = CorruptImageProvider()
+        transport = MemoryTransport()
+
+        await image_handler(database, provider, FaultInjector(), transport).handle(context)
+
+        task = await TaskQueryService(database).get(task_id)
+        assert task.status == "failed"
+        assert task.error_code == "OUTPUT_INVALID"
+        assert provider.call_count == 1
+        assert transport.objects == {}
+        assert len(task.result_refs) == 1
+        async with database.transaction() as connection:
+            row = await connection.fetchrow(
+                """
+                SELECT candidate.status,candidate.blocked_reason,
+                       version.status media_status,version.byte_size,version.sha256,
+                       version.probe_summary_json
+                FROM generation_candidates candidate
+                JOIN media_versions version ON version.id=candidate.media_version_id
+                WHERE candidate.task_id=$1
+                """,
+                task_id,
+            )
+        assert (row["status"], row["blocked_reason"], row["media_status"]) == (
+            "blocked",
+            "OUTPUT_INVALID",
+            "invalid",
+        )
+        assert row["byte_size"] == len(b"not-a-decodable-png")
+        assert len(row["sha256"]) == 64
+        assert row["probe_summary_json"] is None
     finally:
         await database.close()
 
