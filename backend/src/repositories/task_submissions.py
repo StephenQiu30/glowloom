@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from uuid import UUID
 
 import asyncpg  # type: ignore[import-untyped]
@@ -8,11 +9,54 @@ import asyncpg  # type: ignore[import-untyped]
 from schemas.tasks import SubmitTaskCommand
 
 
+@dataclass(frozen=True, slots=True)
+class StoredTaskSubmission:
+    task_id: UUID
+    snapshot_id: UUID
+    episode_id: UUID
+    task_type: str
+    input_refs: dict[str, object]
+
+
 def json_value(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 class TaskSubmissionRepository:
+    async def find_by_idempotency(
+        self,
+        connection: asyncpg.Connection[asyncpg.Record],
+        *,
+        scope: str,
+        key: str,
+    ) -> StoredTaskSubmission | None:
+        row = await connection.fetchrow(
+            """
+            SELECT task.id task_id,task.snapshot_id,task.episode_id,task.type,
+                   submission.input_refs_json
+            FROM production_tasks task
+            JOIN submission_snapshots submission ON submission.id=task.snapshot_id
+            WHERE task.idempotency_scope=$1 AND task.idempotency_key=$2
+            FOR UPDATE OF task
+            """,
+            scope,
+            key,
+        )
+        if row is None:
+            return None
+        inputs = row["input_refs_json"]
+        if isinstance(inputs, str):
+            inputs = json.loads(inputs)
+        if not isinstance(inputs, dict):
+            raise RuntimeError("task input references are invalid")
+        return StoredTaskSubmission(
+            task_id=row["task_id"],
+            snapshot_id=row["snapshot_id"],
+            episode_id=row["episode_id"],
+            task_type=row["type"],
+            input_refs={str(name): value for name, value in inputs.items()},
+        )
+
     async def insert_bundle(
         self,
         connection: asyncpg.Connection[asyncpg.Record],

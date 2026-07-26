@@ -17,6 +17,19 @@ from schemas.rendering import (
 
 
 class RenderSnapshotRepository:
+    async def get(
+        self,
+        connection: asyncpg.Connection[asyncpg.Record],
+        snapshot_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> RenderSnapshot | None:
+        suffix = " WHERE id=$1"
+        if for_update:
+            suffix += " FOR UPDATE"
+        row = await connection.fetchrow("SELECT * FROM render_snapshots" + suffix, snapshot_id)
+        return self._map(row) if row else None
+
     async def find_submission(
         self,
         connection: asyncpg.Connection[asyncpg.Record],
@@ -71,6 +84,26 @@ class RenderSnapshotRepository:
         )
         if row is None:
             raise RuntimeError("created render snapshot could not be read")
+        return self._map(row)
+
+    async def bind_initial_task(
+        self,
+        connection: asyncpg.Connection[asyncpg.Record],
+        *,
+        snapshot_id: UUID,
+        task_id: UUID,
+    ) -> RenderSnapshot:
+        row = await connection.fetchrow(
+            """
+            UPDATE render_snapshots SET initial_task_id=$2
+            WHERE id=$1 AND (initial_task_id IS NULL OR initial_task_id=$2)
+            RETURNING *
+            """,
+            snapshot_id,
+            task_id,
+        )
+        if row is None:
+            raise RuntimeError("render snapshot is bound to another task")
         return self._map(row)
 
     @staticmethod

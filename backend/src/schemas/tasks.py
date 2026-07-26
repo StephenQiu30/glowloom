@@ -13,15 +13,15 @@ Capability = Literal["text", "image", "video", "tts"]
 class SubmitTaskCommand:
     episode_id: UUID
     task_type: TaskType
-    capability: Capability
+    capability: Capability | None
     scope: dict[str, object]
     input_refs: dict[str, object]
-    prompt: str
+    prompt: str | None
     parameters: dict[str, object]
-    model_profile_id: str
-    provider_id: str
-    model_id: str
-    route_version: str
+    model_profile_id: str | None
+    provider_id: str | None
+    model_id: str | None
+    route_version: str | None
     schema_version: str
     operation_scope: str
     idempotency_key: str
