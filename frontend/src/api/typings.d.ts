@@ -137,6 +137,10 @@ declare namespace API {
     version_id: string;
   };
 
+  type confirmSubtitlesParams = {
+    version_id: string;
+  };
+
   type CreateProjectRequest = {
     /** Title */
     title: string;
@@ -153,6 +157,10 @@ declare namespace API {
     rights_basis: "original" | "licensed";
     /** Parent Id */
     parent_id: string | null | null;
+  };
+
+  type createSubtitlesParams = {
+    episode_id: string;
   };
 
   type CreativeAssetContentV1 = {
@@ -210,6 +218,10 @@ declare namespace API {
   };
 
   type deriveStoryboardDraftParams = {
+    version_id: string;
+  };
+
+  type deriveSubtitleDraftParams = {
     version_id: string;
   };
 
@@ -285,6 +297,14 @@ declare namespace API {
     version_id: string;
   };
 
+  type getSubtitlesParams = {
+    episode_id: string;
+  };
+
+  type getSubtitleVersionParams = {
+    version_id: string;
+  };
+
   type getTaskParams = {
     task_id: string;
   };
@@ -316,6 +336,10 @@ declare namespace API {
   };
 
   type listStoryboardVersionsParams = {
+    episode_id: string;
+  };
+
+  type listSubtitleVersionsParams = {
     episode_id: string;
   };
 
@@ -436,6 +460,14 @@ declare namespace API {
 
   type SaveStoryboardRequest = {
     content: ShotSpecCollectionV1;
+  };
+
+  type SaveSubtitleRequest = {
+    content: SubtitleContentV1;
+  };
+
+  type saveSubtitlesParams = {
+    version_id: string;
   };
 
   type SceneV1 = {
@@ -615,6 +647,83 @@ declare namespace API {
     content_hash: string;
     /** Origin Task Id */
     origin_task_id: string | null;
+    /** Status */
+    status: "draft" | "confirmed" | "superseded";
+    /** Resource Version */
+    resource_version: number;
+    /** Input Outdated */
+    input_outdated: boolean;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+    /** Confirmed At */
+    confirmed_at: string | null;
+  };
+
+  type SubtitleContentV1 = {
+    /** Schema Version */
+    schema_version: string | null;
+    /** Language */
+    language: string;
+    /** Timebase */
+    timebase: number | null;
+    /** Cues */
+    cues: SubtitleCueV1[];
+  };
+
+  type SubtitleCueV1 = {
+    /** Cue Id */
+    cue_id: string;
+    /** Ordinal */
+    ordinal: number;
+    /** Speech Line Id */
+    speech_line_id: string;
+    /** Shot Id */
+    shot_id: string;
+    /** Text */
+    text: string;
+    /** Voice Id */
+    voice_id:
+      | "narrator_female"
+      | "narrator_male"
+      | "character_young_female"
+      | "character_young_male";
+    /** Source Text Hash */
+    source_text_hash: string;
+    /** Start Ticks */
+    start_ticks: number;
+    /** End Ticks */
+    end_ticks: number;
+    /** Tts Duration Ticks */
+    tts_duration_ticks: number;
+    /** Shot Start Ticks */
+    shot_start_ticks: number;
+    /** Shot End Ticks */
+    shot_end_ticks: number;
+  };
+
+  type SubtitleVersionListResponse = {
+    /** Items */
+    items: SubtitleVersionResponse[];
+  };
+
+  type SubtitleVersionResponse = {
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Version */
+    version: number;
+    /** Parent Id */
+    parent_id: string | null;
+    /** Script Version Id */
+    script_version_id: string;
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string;
+    content: SubtitleContentV1;
+    /** Content Hash */
+    content_hash: string;
     /** Status */
     status: "draft" | "confirmed" | "superseded";
     /** Resource Version */

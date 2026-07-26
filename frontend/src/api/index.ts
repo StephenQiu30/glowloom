@@ -32,6 +32,13 @@ import * as saveStoryboard from "./saveStoryboard";
 import * as confirmStoryboard from "./confirmStoryboard";
 import * as deriveStoryboardDraft from "./deriveStoryboardDraft";
 import * as listStoryboardVersions from "./listStoryboardVersions";
+import * as listSubtitleVersions from "./listSubtitleVersions";
+import * as createSubtitles from "./createSubtitles";
+import * as getSubtitles from "./getSubtitles";
+import * as getSubtitleVersion from "./getSubtitleVersion";
+import * as saveSubtitles from "./saveSubtitles";
+import * as deriveSubtitleDraft from "./deriveSubtitleDraft";
+import * as confirmSubtitles from "./confirmSubtitles";
 import * as generateMedia from "./generateMedia";
 import * as listCandidates from "./listCandidates";
 import * as authorizeCandidatePreview from "./authorizeCandidatePreview";
@@ -66,6 +73,13 @@ export default {
   confirmStoryboard,
   deriveStoryboardDraft,
   listStoryboardVersions,
+  listSubtitleVersions,
+  createSubtitles,
+  getSubtitles,
+  getSubtitleVersion,
+  saveSubtitles,
+  deriveSubtitleDraft,
+  confirmSubtitles,
   generateMedia,
   listCandidates,
   authorizeCandidatePreview,
