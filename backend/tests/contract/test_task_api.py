@@ -126,6 +126,7 @@ async def test_failed_task_retry_creates_one_new_linked_task(
     async with app.router.lifespan_context(app), AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
+        failed = await client.get(f"/v1/tasks/{task_id}")
         retried = await client.post(
             f"/v1/tasks/{task_id}:retry",
             headers={"Idempotency-Key": "retry:task:00001", "If-Match": '"2"'},
@@ -135,6 +136,7 @@ async def test_failed_task_retry_creates_one_new_linked_task(
             headers={"Idempotency-Key": "retry:task:00001", "If-Match": '"2"'},
         )
 
+    assert failed.json()["error"]["next_action"] == "retry"
     assert retried.status_code == 202
     assert retried.json() == replayed.json()
     assert retried.json()["task_id"] != str(task_id)
@@ -187,3 +189,17 @@ def test_task_openapi_operations_extend_the_single_contract() -> None:
         if isinstance(operation, dict) and "operationId" in operation
     }
     assert {"listTasks", "getTask", "cancelTask", "retryTask"} <= operations
+
+
+def test_task_scope_openapi_is_a_safe_discoverable_slot_contract() -> None:
+    scope = create_app().openapi()["components"]["schemas"]["TaskScope"]
+
+    assert set(scope["properties"]) == {
+        "episode_id",
+        "render_snapshot_id",
+        "usage_type",
+        "usage_id",
+        "input_version_id",
+        "input_hash",
+    }
+    assert scope["required"] == ["episode_id"]
