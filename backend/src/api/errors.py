@@ -30,6 +30,7 @@ from services.media_generation import (
 )
 from services.project_queries import ProjectNotFound
 from services.project_reader import ConfirmedSourceNotFound
+from services.render_inputs import RenderInputInvalid
 from services.script_versions import (
     ScriptVersionNotFound,
 )
@@ -63,7 +64,9 @@ def to_problem(error: Exception) -> HttpProblem:
     if isinstance(error, ProjectCatalogValidationError):
         field = "title" if error.code.startswith("PROJECT_TITLE") else "content"
         return HttpProblem(
-            status=422, title="Invalid project input", code=error.code,
+            status=422,
+            title="Invalid project input",
+            code=error.code,
             metadata=dict(error.metadata),
             detail=f"The {field} field does not satisfy the accepted contract.",
         )
@@ -95,11 +98,12 @@ def to_problem(error: Exception) -> HttpProblem:
             code="STORY_REFERENCE_INVALID",
             detail=str(error),
         )
-    if isinstance(error, SubtitleInputInvalid):
+    if isinstance(error, (SubtitleInputInvalid, RenderInputInvalid)):
+        kind = "subtitle" if isinstance(error, SubtitleInputInvalid) else "render"
         return HttpProblem(
             status=422,
-            title="Invalid subtitle input",
-            code="SUBTITLE_INPUT_INVALID",
+            title=f"Invalid {kind} input",
+            code=f"{kind.upper()}_INPUT_INVALID",
             detail=str(error),
         )
     if isinstance(error, UnsupportedMediaUsage):
@@ -113,7 +117,9 @@ def to_problem(error: Exception) -> HttpProblem:
         return HttpProblem(status=404, title="Candidate not found", code="CANDIDATE_NOT_FOUND")
     if isinstance(error, CandidateNotAdoptable):
         return HttpProblem(
-            status=422, title="Candidate is not adoptable", code="CANDIDATE_NOT_ADOPTABLE",
+            status=422,
+            title="Candidate is not adoptable",
+            code="CANDIDATE_NOT_ADOPTABLE",
             detail=str(error),
         )
     if isinstance(error, CandidateQueryInvalid):
@@ -172,6 +178,7 @@ BUSINESS_ERRORS = (
     StoryReferenceInvalid,
     CreativeAssetIdentityInvalid,
     SubtitleInputInvalid,
+    RenderInputInvalid,
     UnsupportedMediaUsage,
     CandidateNotFound,
     AdoptionCandidateNotFound,

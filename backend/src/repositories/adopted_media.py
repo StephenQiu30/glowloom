@@ -100,6 +100,35 @@ class AdoptedMediaRepository:
         )
         return tuple(self._map(row) for row in rows)
 
+    async def list_active_shot_videos(
+        self,
+        connection: asyncpg.Connection[asyncpg.Record],
+        *,
+        episode_id: UUID,
+        shot_spec_version_id: UUID,
+        shot_ids: tuple[UUID, ...],
+    ) -> tuple[AdoptedMediaRow, ...]:
+        rows = await connection.fetch(
+            """
+            SELECT adoption.id adoption_id,adoption.candidate_id,
+                   candidate.media_version_id,adoption.usage_type,adoption.usage_id,
+                   adoption.input_version_id,adoption.input_hash,version.sha256,
+                   version.duration_ticks,version.timebase
+            FROM adoptions adoption
+            JOIN generation_candidates candidate ON candidate.id=adoption.candidate_id
+            JOIN media_versions version ON version.id=candidate.media_version_id
+            WHERE adoption.episode_id=$1 AND adoption.usage_type='shot_video'
+              AND adoption.input_version_id=$2 AND adoption.usage_id=ANY($3::uuid[])
+              AND adoption.status='active' AND candidate.status='ready'
+              AND version.status='ready'
+            FOR UPDATE OF adoption
+            """,
+            episode_id,
+            shot_spec_version_id,
+            shot_ids,
+        )
+        return tuple(self._map(row) for row in rows)
+
     @staticmethod
     def _map(row: asyncpg.Record) -> AdoptedMediaRow:
         return AdoptedMediaRow(
