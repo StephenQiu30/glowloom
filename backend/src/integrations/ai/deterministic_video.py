@@ -30,6 +30,13 @@ class VideoProbe:
     frame_rate: str
     duration_seconds: float
     audio_stream_count: int
+    video_start_seconds: float | None = None
+    video_duration_seconds: float | None = None
+    audio_codec_name: str | None = None
+    audio_sample_rate: int | None = None
+    audio_channels: int | None = None
+    audio_start_seconds: float | None = None
+    audio_duration_seconds: float | None = None
 
 
 class VideoRuntime(Protocol):
@@ -84,7 +91,8 @@ class DockerFfmpegRuntime:
             "-v",
             "error",
             "-show_entries",
-            "stream=codec_type,codec_name,pix_fmt,width,height,avg_frame_rate:format=duration",
+            "stream=codec_type,codec_name,pix_fmt,width,height,avg_frame_rate,"
+            "sample_rate,channels,start_time,duration:format=duration",
             "-of",
             "json",
             "-i",
@@ -98,6 +106,7 @@ class DockerFfmpegRuntime:
         if len(videos) != 1:
             raise MediaRuntimeError("expected exactly one video stream")
         video = videos[0]
+        audio = audios[0] if len(audios) == 1 else None
         media_format = cast(dict[str, object], payload.get("format", {}))
         try:
             return VideoProbe(
@@ -108,6 +117,13 @@ class DockerFfmpegRuntime:
                 frame_rate=str(video["avg_frame_rate"]),
                 duration_seconds=float(cast(str, media_format["duration"])),
                 audio_stream_count=len(audios),
+                video_start_seconds=_optional_float(video.get("start_time")),
+                video_duration_seconds=_optional_float(video.get("duration")),
+                audio_codec_name=str(audio["codec_name"]) if audio else None,
+                audio_sample_rate=int(cast(str, audio["sample_rate"])) if audio else None,
+                audio_channels=int(cast(int, audio["channels"])) if audio else None,
+                audio_start_seconds=(_optional_float(audio.get("start_time")) if audio else None),
+                audio_duration_seconds=(_optional_float(audio.get("duration")) if audio else None),
             )
         except (KeyError, TypeError, ValueError) as error:
             raise MediaRuntimeError("ffprobe returned an invalid response") from error
@@ -172,6 +188,12 @@ class DockerFfmpegRuntime:
             detail = result.stderr.decode(errors="replace")[-1000:].strip()
             raise MediaRuntimeError(f"FFmpeg command failed: {detail}")
         return result.stdout
+
+
+def _optional_float(value: object) -> float | None:
+    if value in (None, "N/A"):
+        return None
+    return float(cast(str, value))
 
 
 class DeterministicVideoProvider:

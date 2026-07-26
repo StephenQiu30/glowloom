@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from services.delivery_quality import DeliveryQualityInvalid, DeliveryQualityPolicy
 
 from integrations.ai.deterministic_media import DeterministicTtsProvider
 from integrations.ai.deterministic_video import (
@@ -18,6 +17,7 @@ from integrations.ffmpeg_recipe import (
 )
 from integrations.ffmpeg_render import DockerRenderRuntime
 from schemas.rendering import RenderRecipeV1
+from services.delivery_quality import DeliveryQualityInvalid, DeliveryQualityPolicy
 
 DEJAVU_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 DEJAVU_SHA256 = "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280"
