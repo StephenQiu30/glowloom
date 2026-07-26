@@ -63,6 +63,24 @@ class SubtitleContentV1(StrictContract):
         return self
 
 
+class SubtitleTtsRefV1(StrictContract):
+    speech_line_id: UUID
+    adoption_id: UUID
+    candidate_id: UUID
+    media_version_id: UUID
+    input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    duration_ticks: int = Field(gt=0)
+    timebase: Literal[90000]
+
+
+class SubtitleInputRefsV1(StrictContract):
+    schema_version: Literal["subtitle-input-v1"] = "subtitle-input-v1"
+    script_version_id: UUID
+    shot_spec_version_id: UUID
+    tts_adoptions: tuple[SubtitleTtsRefV1, ...] = Field(min_length=1, max_length=100)
+
+
 def validate_speech_mapping(
     content: SubtitleContentV1, expected_speech_line_ids: tuple[UUID, ...]
 ) -> None:
