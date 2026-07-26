@@ -1,1 +1,0 @@
-"""Project-catalog HTTP transport."""

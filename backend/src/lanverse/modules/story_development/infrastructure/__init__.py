@@ -1,1 +1,0 @@
-"""Story-development persistence adapters."""

@@ -108,7 +108,11 @@ def test_backend_builds_the_direct_src_layout() -> None:
 
 
 def test_backend_uses_one_fastapi_technical_layer_set() -> None:
-    present = child_directories(BACKEND_SOURCE) - {"__pycache__"}
+    present = {
+        name
+        for name in child_directories(BACKEND_SOURCE)
+        if name != "__pycache__" and not name.endswith(".egg-info")
+    }
     assert present == BACKEND_LAYERS
     assert not (present & LEGACY_LAYERS)
     assert "lanverse" not in present
