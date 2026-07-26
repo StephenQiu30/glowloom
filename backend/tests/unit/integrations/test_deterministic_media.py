@@ -6,6 +6,7 @@ import wave
 import zlib
 
 import pytest
+
 from integrations.ai.deterministic_media import (
     DeterministicImageProvider,
     DeterministicTtsProvider,
