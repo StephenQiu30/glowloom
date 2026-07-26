@@ -4,6 +4,10 @@ import asyncio
 from uuid import UUID
 
 import pytest
+
+from db.pool import DatabasePool
+from schemas.subtitles import SubtitleContentV1, SubtitleCueV1
+from services.script_versions import VersionConflict, VersionImmutable
 from services.subtitles import (
     ConfirmSubtitleCommand,
     ConfirmSubtitleHandler,
@@ -16,10 +20,6 @@ from services.subtitles import (
     SaveSubtitleCommand,
     SaveSubtitleHandler,
 )
-
-from db.pool import DatabasePool
-from schemas.subtitles import SubtitleContentV1, SubtitleCueV1
-from services.script_versions import VersionConflict, VersionImmutable
 from tests.integration.delivery.support import story_with_tts_adoptions
 
 
