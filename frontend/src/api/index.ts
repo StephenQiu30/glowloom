@@ -2,6 +2,7 @@
 /* eslint-disable */
 // API 更新时间：
 // API 唯一标识：
+import * as adoptCandidate from "./adoptCandidate";
 import * as listProjects from "./listProjects";
 import * as createProject from "./createProject";
 import * as getProject from "./getProject";
@@ -35,6 +36,7 @@ import * as generateMedia from "./generateMedia";
 import * as listCandidates from "./listCandidates";
 import * as authorizeCandidatePreview from "./authorizeCandidatePreview";
 export default {
+  adoptCandidate,
   listProjects,
   createProject,
   getProject,

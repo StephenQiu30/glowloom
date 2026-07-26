@@ -1,4 +1,44 @@
 declare namespace API {
+  type AdoptCandidateRequest = {
+    /** Usage Type */
+    usage_type: "asset_image" | "shot_image" | "shot_video" | "speech_audio";
+    /** Usage Id */
+    usage_id: string;
+    /** Input Version Id */
+    input_version_id: string;
+    /** Input Hash */
+    input_hash: string;
+    /** Candidate Id */
+    candidate_id: string;
+  };
+
+  type AdoptionResponse = {
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Usage Type */
+    usage_type: "asset_image" | "shot_image" | "shot_video" | "speech_audio";
+    /** Usage Id */
+    usage_id: string;
+    /** Input Version Id */
+    input_version_id: string;
+    /** Input Hash */
+    input_hash: string;
+    /** Version */
+    version: number;
+    /** Candidate Id */
+    candidate_id: string;
+    /** Supersedes Id */
+    supersedes_id: string | null;
+    /** Status */
+    status: "active" | "superseded";
+    /** Created At */
+    created_at: string;
+    /** Superseded At */
+    superseded_at: string | null;
+  };
+
   type authorizeCandidatePreviewParams = {
     media_version_id: string;
   };
