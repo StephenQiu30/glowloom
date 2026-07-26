@@ -69,6 +69,8 @@ async def test_asset_image_submission_freezes_exact_confirmed_asset_input(
             "episode_id": str(episode_id),
             "usage_type": "asset_image",
             "usage_id": str(asset.asset_id),
+            "input_version_id": str(asset.id),
+            "input_hash": canonical_content_hash(expected_input),
         }
         assert (
             row["model_profile_id"],
