@@ -128,3 +128,16 @@ def test_present_frontend_features_follow_allowlist() -> None:
     assert present <= FRONTEND_FEATURES
     if os.getenv("LANVERSE_ARCHITECTURE_FINAL") == "1":
         assert present == FRONTEND_FEATURES
+
+
+def test_api_errors_have_one_global_registry_and_response_enum() -> None:
+    api = BACKEND_SOURCE / "api"
+    assert (api / "errors.py").is_file()
+    assert (api / "responses.py").is_file()
+    assert not list(api.glob("*_errors.py"))
+    violations = [
+        path.relative_to(ROOT).as_posix()
+        for path in (api / "routes").glob("*.py")
+        if "ERROR_RESPONSES" in path.read_text()
+    ]
+    assert not violations, violations

@@ -38,6 +38,16 @@ def test_problem_contract_is_strict_and_safe() -> None:
         Problem.model_validate({**problem.model_dump(), "stack": "secret"})
 
 
+def test_global_error_status_enum_builds_problem_responses() -> None:
+    from api.responses import ApiErrorStatus, error_responses
+
+    assert {status.value for status in ApiErrorStatus} == {404, 409, 412, 422, 503}
+    assert error_responses(
+        ApiErrorStatus.NOT_FOUND,
+        ApiErrorStatus.CONFLICT,
+    ) == {404: {"model": Problem}, 409: {"model": Problem}}
+
+
 def test_async_acceptance_and_task_polling_contracts_are_stable() -> None:
     task_id = uuid4()
     accepted = TaskAccepted(
