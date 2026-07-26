@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 
 from integrations.object_storage import (
+    ObjectIntegrityError,
     MinioObjectStore,
     ObjectKeyConflict,
     ObjectStoreUnavailable,
@@ -44,6 +45,9 @@ class FakeTransport:
             sha256=sha256,
             content_type=content_type,
         )
+
+    def get(self, bucket: str, object_key: str) -> bytes:
+        return self.contents[(bucket, object_key)]
 
 
 @pytest.mark.asyncio
@@ -132,3 +136,40 @@ def test_object_key_rejects_unknown_mime_and_unsafe_slots() -> None:
         store.object_key(EPISODE_ID, ATTEMPT_ID, "primary", "text/html")
     with pytest.raises(ValueError, match="output slot"):
         store.object_key(EPISODE_ID, ATTEMPT_ID, "../escape", "image/png")
+
+
+@pytest.mark.asyncio
+async def test_read_verifies_private_location_size_and_digest() -> None:
+    transport = FakeTransport()
+    store = MinioObjectStore(transport, bucket="lanverse")
+    stored = await store.put(
+        episode_id=EPISODE_ID,
+        attempt_id=ATTEMPT_ID,
+        output_slot="primary",
+        content_type="video/mp4",
+        data=b"trusted-media",
+    )
+
+    assert await store.read(
+        bucket=stored.bucket,
+        object_key=stored.object_key,
+        expected_sha256=stored.sha256,
+        max_bytes=32,
+    ) == b"trusted-media"
+
+    transport.contents[(stored.bucket, stored.object_key)] = b"tampered-media"
+    with pytest.raises(ObjectIntegrityError, match="digest"):
+        await store.read(
+            bucket=stored.bucket,
+            object_key=stored.object_key,
+            expected_sha256=stored.sha256,
+            max_bytes=32,
+        )
+
+    with pytest.raises(ValueError, match="private bucket"):
+        await store.read(
+            bucket="another-bucket",
+            object_key=stored.object_key,
+            expected_sha256=stored.sha256,
+            max_bytes=32,
+        )
