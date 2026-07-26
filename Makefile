@@ -1,4 +1,4 @@
-.PHONY: test-architecture test-database-design test-migration test-contract-foundation test-contract contracts-toolchain-check generate-api contracts-check test-jobs test-integration test-e2e test lint typecheck build build-images
+.PHONY: test-architecture test-database-design test-migration test-contract-foundation test-contract contracts-toolchain-check generate-api contracts-check test-jobs test-integration test-e2e test lint typecheck build build-images build-render-image verify-render-image
 
 PNPM_NODE = pnpm dlx node@24.18.0 $$(command -v pnpm)
 
@@ -53,3 +53,10 @@ build:
 
 build-images:
 	docker compose -f docker-compose.yml build
+
+build-render-image:
+	docker build --file backend/Dockerfile.render --tag lanverse-render:noto-2.004 backend
+
+verify-render-image: build-render-image
+	LANVERSE_RENDER_IMAGE=$$(docker image inspect --format '{{.Id}}' lanverse-render:noto-2.004) \
+		uv run --project backend python backend/scripts/verify_render_runtime.py

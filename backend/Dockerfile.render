@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1.7
+FROM docker.io/jrottenberg/ffmpeg@sha256:83ef82d9850314baa3504821e2ea6598e40e2096ac8f967a842d31234be2be92
+
+USER root
+RUN install -d -m 0755 /usr/share/fonts/opentype/noto /usr/share/licenses/noto-cjk
+
+ADD --checksum=sha256:2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b \
+    https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf \
+    /usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf
+ADD --checksum=sha256:6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2 \
+    https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE \
+    /usr/share/licenses/noto-cjk/OFL.txt
+
+RUN chmod 0444 /usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf \
+      /usr/share/licenses/noto-cjk/OFL.txt \
+    && test "$(sha256sum /usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf | cut -d' ' -f1)" \
+      = "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b" \
+    && test -s /usr/share/licenses/noto-cjk/OFL.txt
+
+LABEL org.opencontainers.image.title="Lanverse FFmpeg Render Runtime" \
+      org.opencontainers.image.version="ffmpeg-8.1-noto-cjk-2.004" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later AND OFL-1.1"

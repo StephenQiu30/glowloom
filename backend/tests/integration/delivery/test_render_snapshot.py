@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from db.pool import DatabasePool
+from integrations.ai.deterministic_video import FFMPEG_IMAGE
 from schemas.rendering import RenderRecipeV1
 from services.render_snapshots import (
     CreateRenderSnapshotCommand,
@@ -17,9 +18,11 @@ from tests.integration.delivery.support import render_ready_story
 
 def render_recipe() -> RenderRecipeV1:
     return RenderRecipeV1(
+        runtime_image=FFMPEG_IMAGE,
         ffmpeg_version="mock-ffmpeg-7.1",
         ffprobe_version="mock-ffprobe-7.1",
         font_name="Noto Sans CJK SC",
+        font_file="/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         font_sha256="a" * 64,
         font_license="OFL-1.1",
     )
@@ -82,9 +85,11 @@ async def test_render_snapshot_freezes_current_media_and_recipe(
 def test_render_recipe_requires_pinned_tools_and_font() -> None:
     with pytest.raises(ValidationError):
         RenderRecipeV1(
+            runtime_image=FFMPEG_IMAGE,
             ffmpeg_version="",
             ffprobe_version="mock-ffprobe-7.1",
             font_name="Noto Sans CJK SC",
+            font_file="/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
             font_sha256="not-a-digest",
             font_license="OFL-1.1",
         )

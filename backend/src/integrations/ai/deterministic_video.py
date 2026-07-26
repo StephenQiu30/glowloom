@@ -40,7 +40,16 @@ class DockerFfmpegRuntime:
     def __init__(self, *, timeout_seconds: float = 30) -> None:
         self._timeout_seconds = timeout_seconds
 
-    async def render_color(self, color: str, duration_seconds: str) -> bytes:
+    async def render_color(
+        self,
+        color: str,
+        duration_seconds: str,
+        *,
+        width: int = 720,
+        height: int = 1280,
+    ) -> bytes:
+        if width <= 0 or height <= 0:
+            raise ValueError("video dimensions must be positive")
         arguments = (
             "-hide_banner",
             "-loglevel",
@@ -48,7 +57,7 @@ class DockerFfmpegRuntime:
             "-f",
             "lavfi",
             "-i",
-            f"color=c=0x{color}:s=720x1280:r=24:d={duration_seconds}",
+            f"color=c=0x{color}:s={width}x{height}:r=24:d={duration_seconds}",
             "-an",
             "-c:v",
             "libx264",

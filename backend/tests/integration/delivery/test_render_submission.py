@@ -7,6 +7,7 @@ from uuid import UUID
 import pytest
 
 from db.pool import DatabasePool
+from integrations.ai.deterministic_video import FFMPEG_IMAGE
 from schemas.rendering import RenderRecipeV1
 from services.render_delivery import StartRenderDeliveryHandler
 from services.render_submission import RenderEpisodeCommand, RenderEpisodeCoordinator
@@ -27,9 +28,11 @@ class FailOnce(FaultInjector):
 
 def recipe() -> RenderRecipeV1:
     return RenderRecipeV1(
+        runtime_image=FFMPEG_IMAGE,
         ffmpeg_version="mock-ffmpeg-7.1",
         ffprobe_version="mock-ffprobe-7.1",
         font_name="Noto Sans CJK SC",
+        font_file="/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         font_sha256="a" * 64,
         font_license="OFL-1.1",
     )

@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import pytest
-from integrations.ffmpeg_render import (
-    DockerRenderRuntime,
+from pydantic import ValidationError
+
+from integrations.ai.deterministic_media import DeterministicTtsProvider
+from integrations.ai.deterministic_video import FFMPEG_IMAGE, DockerFfmpegRuntime
+from integrations.ffmpeg_recipe import (
     RenderAudioSource,
     RenderSources,
     RenderVideoSource,
     build_ffmpeg_arguments,
 )
-from pydantic import ValidationError
-
-from integrations.ai.deterministic_media import DeterministicTtsProvider
-from integrations.ai.deterministic_video import DockerFfmpegRuntime
+from integrations.ffmpeg_render import DockerRenderRuntime
 from schemas.rendering import RenderRecipeV1
 
 DEJAVU_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
@@ -20,12 +20,13 @@ DEJAVU_SHA256 = "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee294045383728
 
 def recipe() -> RenderRecipeV1:
     return RenderRecipeV1(
+        runtime_image=FFMPEG_IMAGE,
         ffmpeg_version="8.1",
         ffprobe_version="8.1",
         font_name="DejaVu Sans",
         font_file=DEJAVU_PATH,
         font_sha256=DEJAVU_SHA256,
-        font_license="OFL-1.1",
+        font_license="Bitstream-Vera",
     )
 
 
@@ -49,6 +50,7 @@ def test_render_arguments_are_structured_and_never_map_source_audio() -> None:
 
     with pytest.raises(ValidationError):
         RenderRecipeV1(
+            runtime_image=FFMPEG_IMAGE,
             ffmpeg_version="8.1",
             ffprobe_version="8.1",
             font_name="Noto;movie=/etc/passwd",
@@ -61,7 +63,7 @@ def test_render_arguments_are_structured_and_never_map_source_audio() -> None:
 @pytest.mark.asyncio
 async def test_real_ffmpeg_normalizes_six_segments_and_mixes_tts() -> None:
     media_runtime = DockerFfmpegRuntime()
-    video = await media_runtime.render_color("335577", "3.000000")
+    video = await media_runtime.render_color("335577", "2.000000", width=640, height=360)
     speech = await DeterministicTtsProvider().generate(
         "a" * 64,
         "primary",

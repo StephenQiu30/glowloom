@@ -44,11 +44,20 @@ class RenderSegmentV1(StrictContract):
 
 class RenderRecipeV1(StrictContract):
     schema_version: Literal["render-recipe-v1"] = "render-recipe-v1"
+    runtime_image: str = Field(
+        pattern=r"^(?:[a-z0-9./_-]+@sha256:[0-9a-f]{64}|sha256:[0-9a-f]{64})$"
+    )
     ffmpeg_version: str = Field(min_length=1, max_length=128, pattern=r".*\S.*")
     ffprobe_version: str = Field(min_length=1, max_length=128, pattern=r".*\S.*")
-    font_name: str = Field(min_length=1, max_length=128, pattern=r".*\S.*")
+    font_name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,127}$")
+    font_file: str = Field(
+        pattern=(
+            r"^/usr/share/fonts/(?:[A-Za-z0-9_.-]+/)*"
+            r"[A-Za-z0-9_.-]+\.(?:otf|ttf|ttc)$"
+        )
+    )
     font_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    font_license: Literal["OFL-1.1"]
+    font_license: Literal["OFL-1.1", "Bitstream-Vera"]
     timebase: Literal[90000] = 90000
     width: Literal[720] = 720
     height: Literal[1280] = 1280
@@ -56,8 +65,10 @@ class RenderRecipeV1(StrictContract):
     audio_rate: Literal[48000] = 48000
     audio_channels: Literal[2] = 2
     video_codec: Literal["h264"] = "h264"
+    video_preset: Literal["veryfast"] = "veryfast"
     pixel_format: Literal["yuv420p"] = "yuv420p"
     audio_codec: Literal["aac"] = "aac"
+    audio_bitrate: Literal["192k"] = "192k"
     scale_mode: Literal["contain"] = "contain"
     padding_color: Literal["#000000"] = "#000000"
     video_tolerance_ticks: Literal[90000] = 90000
