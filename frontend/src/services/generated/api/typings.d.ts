@@ -1,6 +1,88 @@
 declare namespace API {
+  type authorizeCandidatePreviewParams = {
+    media_version_id: string;
+  };
+
   type cancelTaskParams = {
     task_id: string;
+  };
+
+  type CandidateListResponse = {
+    /** Items */
+    items: CandidateResponse[];
+  };
+
+  type CandidateResponse = {
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Task Id */
+    task_id: string;
+    /** Attempt Id */
+    attempt_id: string;
+    /** Output Slot */
+    output_slot: string;
+    /** Usage Type */
+    usage_type: "asset_image" | "shot_image" | "shot_video" | "speech_audio";
+    /** Usage Id */
+    usage_id: string;
+    /** Input Version Id */
+    input_version_id: string;
+    /** Input Hash */
+    input_hash: string;
+    /** Media Version Id */
+    media_version_id: string;
+    /** Status */
+    status: "pending_media" | "ready" | "blocked";
+    /** Blocked Reason */
+    blocked_reason: string | null;
+    /** Model Profile Id */
+    model_profile_id: string;
+    /** Provider Id */
+    provider_id: string;
+    /** Model Id */
+    model_id: string;
+    /** Route Version */
+    route_version: string;
+    /** Schema Version */
+    schema_version: string;
+    /** Active Adoption Id */
+    active_adoption_id: string | null;
+    technical_summary: CandidateTechnicalSummary;
+    /** Created At */
+    created_at: string;
+    /** Finalized At */
+    finalized_at: string | null;
+  };
+
+  type CandidateTechnicalSummary = {
+    /** Mime Type */
+    mime_type: string;
+    /** Byte Size */
+    byte_size: number | null;
+    /** Sha256 */
+    sha256: string | null;
+    /** Width */
+    width: number | null;
+    /** Height */
+    height: number | null;
+    /** Duration Ticks */
+    duration_ticks: number | null;
+    /** Timebase */
+    timebase: number | null;
+    /** Codec */
+    codec: string | null | null;
+    /** Pixel Format */
+    pixel_format: string | null | null;
+    /** Frame Rate */
+    frame_rate: string | null | null;
+    /** Audio Stream Count */
+    audio_stream_count: number | null | null;
+    /** Sample Rate */
+    sample_rate: number | null | null;
+    /** Channels */
+    channels: number | null | null;
   };
 
   type confirmScriptParams = {
@@ -172,6 +254,14 @@ declare namespace API {
     detail: ValidationError[] | null;
   };
 
+  type listCandidatesParams = {
+    episode_id: string;
+    usage_type: "asset_image" | "shot_image" | "shot_video" | "speech_audio";
+    usage_id: string;
+    input_version_id: string;
+    input_hash: string;
+  };
+
   type listCreativeAssetsParams = {
     episode_id: string;
     include_versions: boolean;
@@ -191,6 +281,22 @@ declare namespace API {
 
   type listTasksParams = {
     episode_id: string;
+  };
+
+  type PreviewAuthorizationRequest = {
+    /** Episode Id */
+    episode_id: string;
+  };
+
+  type PreviewAuthorizationResponse = {
+    /** Media Version Id */
+    media_version_id: string;
+    /** Url */
+    url: string;
+    /** Expires In Seconds */
+    expires_in_seconds: number;
+    /** Expires At */
+    expires_at: string;
   };
 
   type Problem = {
