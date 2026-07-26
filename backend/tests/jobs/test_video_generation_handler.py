@@ -124,7 +124,7 @@ async def test_video_job_uses_frozen_duration_and_registers_ready_candidate(
                 """
                 SELECT candidate.status,version.status media_status,
                        version.duration_ticks,version.width,version.height,
-                       version.probe_summary_json->>'schema_version' probe_schema
+                       version.probe_summary_json->>'codec' codec
                 FROM generation_candidates candidate
                 JOIN media_versions version ON version.id=candidate.media_version_id
                 WHERE candidate.task_id=$1
@@ -137,7 +137,7 @@ async def test_video_job_uses_frozen_duration_and_registers_ready_candidate(
             duration_ticks,
             720,
             1280,
-            "video-probe-v1",
+            "h264",
         )
     finally:
         await database.close()
