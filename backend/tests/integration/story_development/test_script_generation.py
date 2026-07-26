@@ -10,6 +10,11 @@ from db.pool import DatabasePool
 from integrations.ai.deterministic_text import (
     DeterministicTextProvider,
 )
+from integrations.ai.registry import (
+    AiModelProfile,
+    AiModelRegistry,
+    ProfileNotFound,
+)
 from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
@@ -81,9 +86,7 @@ async def test_generate_script_freezes_input_and_registration_is_idempotent(
                 "(SELECT count(*) FROM task_outputs) outputs"
             )
         assert snapshot is not None
-        assert json.loads(snapshot["input_refs_json"]) == {
-            "source_revision_id": str(source_id)
-        }
+        assert json.loads(snapshot["input_refs_json"]) == {"source_revision_id": str(source_id)}
         assert snapshot["model_profile_id"] == "mock-text-v1"
         assert snapshot["schema_version"] == "script-v1"
         assert counts is not None and tuple(counts.values()) == (1, 1)
@@ -111,5 +114,70 @@ async def test_invalid_text_output_does_not_create_a_script_draft(
         async with database.transaction() as connection:
             assert await connection.fetchval("SELECT count(*) FROM script_versions") == 0
             assert await connection.fetchval("SELECT count(*) FROM task_outputs") == 0
+    finally:
+        await database.close()
+
+
+@pytest.mark.asyncio
+async def test_script_submission_freezes_the_exact_registry_profile_without_fallback(
+    migrated_database_url: str,
+) -> None:
+    database = DatabasePool(migrated_database_url, min_size=1, max_size=2)
+    await database.start()
+    registry = AiModelRegistry(
+        [
+            AiModelProfile(
+                profile_id="approved-text-v2",
+                capability="text",
+                provider_id="approved-provider",
+                model_id="approved-model-v2",
+                route_version="approved-route-v2",
+                schema_versions=frozenset({"script-v1"}),
+                parameters={"temperature": 0.2, "response_format": "json"},
+                kind="provider",
+                credential_env_names=("APPROVED_PROVIDER_API_KEY",),
+            )
+        ],
+        defaults={"text": "approved-text-v2"},
+    )
+    try:
+        episode_id, _ = await confirmed_source(database)
+        handler = GenerateScriptHandler(
+            database,
+            release_version="test-release",
+            registry=registry,
+        )
+        accepted = await handler.execute(
+            GenerateScriptCommand(
+                episode_id,
+                "script:profile:0001",
+                model_profile_id="approved-text-v2",
+            )
+        )
+        with pytest.raises(ProfileNotFound):
+            await handler.execute(
+                GenerateScriptCommand(
+                    episode_id,
+                    "script:profile:0002",
+                    model_profile_id="missing-profile",
+                )
+            )
+
+        async with database.transaction() as connection:
+            snapshot = await connection.fetchrow(
+                "SELECT * FROM submission_snapshots WHERE id=$1",
+                accepted.snapshot_id,
+            )
+            task_count = await connection.fetchval("SELECT count(*) FROM production_tasks")
+        assert snapshot is not None
+        assert snapshot["model_profile_id"] == "approved-text-v2"
+        assert snapshot["provider_id"] == "approved-provider"
+        assert snapshot["model_id"] == "approved-model-v2"
+        assert snapshot["route_version"] == "approved-route-v2"
+        assert json.loads(snapshot["parameters_json"]) == {
+            "temperature": 0.2,
+            "response_format": "json",
+        }
+        assert task_count == 1
     finally:
         await database.close()
