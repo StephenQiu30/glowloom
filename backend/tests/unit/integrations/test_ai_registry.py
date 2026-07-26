@@ -4,6 +4,12 @@ from dataclasses import FrozenInstanceError
 from typing import cast
 
 import pytest
+from integrations.ai.deterministic_media import (
+    DeterministicImageProvider,
+    DeterministicTtsProvider,
+)
+from integrations.ai.deterministic_text import DeterministicTextProvider
+from integrations.ai.deterministic_video import DeterministicVideoProvider
 from integrations.ai.registry import (
     AdapterUnavailable,
     AiModelProfile,
@@ -141,6 +147,16 @@ def test_adapter_factory_is_exact_and_missing_factory_is_an_error() -> None:
     assert calls == ["text-a"]
     with pytest.raises(AdapterUnavailable):
         registry.bind("image", "image-a")
+
+
+def test_mvp_registry_binds_all_four_deterministic_adapters() -> None:
+    registry = create_mvp_registry()
+
+    assert isinstance(registry.bind("text").adapter, DeterministicTextProvider)
+    assert isinstance(registry.bind("image").adapter, DeterministicImageProvider)
+    assert isinstance(registry.bind("video").adapter, DeterministicVideoProvider)
+    assert isinstance(registry.bind("tts").adapter, DeterministicTtsProvider)
+    assert registry.bind("image").adapter is not registry.bind("image").adapter
 
 
 def test_duplicate_profile_ids_are_rejected() -> None:
