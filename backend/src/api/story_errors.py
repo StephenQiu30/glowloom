@@ -9,6 +9,11 @@ from services.asset_versions import (
     CreativeAssetIdentityInvalid,
     CreativeAssetVersionNotFound,
 )
+from services.media_generation import (
+    MediaInputNotFound,
+    MediaInputOutdated,
+    UnsupportedMediaUsage,
+)
 from services.project_reader import ConfirmedSourceNotFound
 from services.script_versions import (
     ScriptVersionNotFound,
@@ -30,6 +35,13 @@ def to_problem(error: Exception) -> HttpProblem:
         )
     if isinstance(error, VersionConflict):
         return HttpProblem(status=412, title="Version conflict", code="VERSION_CONFLICT")
+    if isinstance(error, MediaInputOutdated):
+        return HttpProblem(
+            status=412,
+            title="Media input is outdated",
+            code="VERSION_CONFLICT",
+            detail=str(error),
+        )
     if isinstance(error, VersionImmutable):
         return HttpProblem(
             status=409, title="Version is immutable", code="VERSION_IMMUTABLE"
@@ -41,6 +53,13 @@ def to_problem(error: Exception) -> HttpProblem:
             code="STORY_REFERENCE_INVALID",
             detail=str(error),
         )
+    if isinstance(error, UnsupportedMediaUsage):
+        return HttpProblem(
+            status=422,
+            title="Media usage is unsupported",
+            code="MEDIA_USAGE_UNSUPPORTED",
+            detail=str(error),
+        )
     if isinstance(
         error,
         (
@@ -48,6 +67,7 @@ def to_problem(error: Exception) -> HttpProblem:
             ScriptVersionNotFound,
             CreativeAssetVersionNotFound,
             StoryboardVersionNotFound,
+            MediaInputNotFound,
         ),
     ):
         return HttpProblem(status=404, title="Story resource not found", code="RESOURCE_NOT_FOUND")
@@ -64,6 +84,7 @@ def register_story_development_errors(app: FastAPI) -> None:
     for error_type in (
         IdempotencyKeyReused,
         VersionConflict,
+        MediaInputOutdated,
         VersionImmutable,
         StoryReferenceInvalid,
         CreativeAssetIdentityInvalid,
@@ -71,5 +92,7 @@ def register_story_development_errors(app: FastAPI) -> None:
         ScriptVersionNotFound,
         CreativeAssetVersionNotFound,
         StoryboardVersionNotFound,
+        MediaInputNotFound,
+        UnsupportedMediaUsage,
     ):
         app.add_exception_handler(error_type, story_development_error_handler)
