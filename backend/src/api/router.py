@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from api.routes.assets import router as asset_router
+from api.routes.candidates import router as candidate_router
 from api.routes.media import router as media_router
 from api.routes.projects import router as project_router
 from api.routes.scripts import router as script_router
@@ -14,3 +15,4 @@ router.include_router(script_router)
 router.include_router(asset_router)
 router.include_router(storyboard_router)
 router.include_router(media_router)
+router.include_router(candidate_router)

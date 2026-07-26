@@ -60,6 +60,8 @@ class ObjectTransport(Protocol):
         sha256: str,
     ) -> None: ...
 
+    def presign_get(self, bucket: str, object_key: str, expires_seconds: int) -> str: ...
+
 
 class ObjectStore(Protocol):
     def invalid_location(
@@ -75,6 +77,10 @@ class ObjectStore(Protocol):
         content_type: str,
         data: bytes,
     ) -> StoredObject: ...
+
+    async def authorize_read(
+        self, *, bucket: str, object_key: str, expires_seconds: int
+    ) -> str: ...
 
 
 class MinioObjectStore:
@@ -140,6 +146,23 @@ class MinioObjectStore:
                 raise ObjectStoreUnavailable("uploaded object cannot be read")
             self._assert_same(persisted, expected)
         return StoredObject(self._bucket, object_key, len(data), sha256, content_type)
+
+    async def authorize_read(
+        self, *, bucket: str, object_key: str, expires_seconds: int
+    ) -> str:
+        if bucket != self._bucket or not object_key or object_key != object_key.strip():
+            raise ValueError("object location is outside the configured private bucket")
+        if expires_seconds != 900:
+            raise ValueError("private media authorization must expire after 900 seconds")
+        try:
+            return await asyncio.to_thread(
+                self._transport.presign_get,
+                bucket,
+                object_key,
+                expires_seconds,
+            )
+        except (ObjectStoreUnavailable, OSError) as error:
+            raise ObjectStoreUnavailable("object authorization failed") from error
 
     async def _stat(self, object_key: str) -> RemoteObject | None:
         try:

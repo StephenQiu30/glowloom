@@ -35,6 +35,7 @@ def create_runtime(settings: ApplicationSettings) -> ApplicationRuntime:
             access_key=config.access_key,
             secret_key=config.secret_key,
             secure=config.secure,
+            public_endpoint=config.public_endpoint,
         )
         object_store = MinioObjectStore(transport, bucket=config.bucket)
     return ApplicationRuntime(

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+from datetime import timedelta
+from urllib.parse import urlsplit
 
 from minio import Minio
 from minio.error import S3Error
@@ -10,8 +12,9 @@ from integrations.object_storage import ObjectStoreUnavailable, RemoteObject
 
 
 class MinioTransport:
-    def __init__(self, client: Minio) -> None:
+    def __init__(self, client: Minio, public_client: Minio | None = None) -> None:
         self._client = client
+        self._public_client = public_client or client
 
     @classmethod
     def from_credentials(
@@ -21,6 +24,7 @@ class MinioTransport:
         access_key: str,
         secret_key: str,
         secure: bool,
+        public_endpoint: str,
     ) -> MinioTransport:
         client = Minio(
             endpoint,
@@ -28,7 +32,14 @@ class MinioTransport:
             secret_key=secret_key,
             secure=secure,
         )
-        return cls(client)
+        public = urlsplit(public_endpoint)
+        public_client = Minio(
+            public.netloc,
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=public.scheme == "https",
+        )
+        return cls(client, public_client)
 
     def stat(self, bucket: str, object_key: str) -> RemoteObject | None:
         try:
@@ -67,3 +78,13 @@ class MinioTransport:
             )
         except (S3Error, HTTPError, OSError) as error:
             raise ObjectStoreUnavailable("MinIO put failed") from error
+
+    def presign_get(self, bucket: str, object_key: str, expires_seconds: int) -> str:
+        try:
+            return self._public_client.presigned_get_object(
+                bucket,
+                object_key,
+                expires=timedelta(seconds=expires_seconds),
+            )
+        except (S3Error, HTTPError, OSError, ValueError) as error:
+            raise ObjectStoreUnavailable("MinIO authorization failed") from error

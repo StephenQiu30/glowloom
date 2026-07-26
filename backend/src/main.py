@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.candidate_errors import register_candidate_errors
 from api.problems import (
     HttpProblem,
     http_problem_handler,
@@ -36,6 +37,7 @@ def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
     register_project_catalog_errors(app)
     register_production_job_errors(app)
     register_story_development_errors(app)
+    register_candidate_errors(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://127.0.0.1:3000"],
