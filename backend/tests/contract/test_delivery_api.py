@@ -134,6 +134,9 @@ async def test_non_ready_delivery_has_no_download_authorization(
 
 def test_delivery_operations_are_in_the_single_openapi_contract() -> None:
     paths = create_app().openapi()["paths"]
+    render = paths["/v1/episodes/{episode_id}/renders"]["post"]
+    assert render["operationId"] == "renderEpisode"
+    assert render["responses"]["202"]
     assert paths["/v1/episodes/{episode_id}/deliveries"]["get"]["operationId"] == ("listDeliveries")
     assert paths["/v1/deliveries/{delivery_id}"]["get"]["operationId"] == "getDelivery"
     authorization = paths["/v1/deliveries/{delivery_id}/download-authorizations"]["post"]

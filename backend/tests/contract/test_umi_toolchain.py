@@ -6,6 +6,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from tests.contract.operation_contract import EXPECTED_OPERATIONS
+
 ROOT = Path(__file__).resolve().parents[3]
 FRONTEND = ROOT / "frontend"
 CONFIG = FRONTEND / "openapi2ts.config.ts"
@@ -66,8 +68,11 @@ def test_openapi_31_url_generates_typecheckable_umi_services(
     assert not stale.exists()
     assert {path.name for path in output.iterdir() if path.is_dir()} == {"api"}
     assert not [path for path in api_root.iterdir() if path.is_dir()]
-    generated_files = list(api_root.glob("*.ts"))
-    assert generated_files
+    assert {path.name for path in api_root.glob("*.ts")} == {
+        *(f"{operation_id}.ts" for operation_id, _, _ in EXPECTED_OPERATIONS),
+        "index.ts",
+        "typings.d.ts",
+    }
 
     tsconfig = tmp_path / "tsconfig.json"
     tsconfig.write_text(

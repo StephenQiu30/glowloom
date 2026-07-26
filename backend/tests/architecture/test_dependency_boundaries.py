@@ -149,6 +149,12 @@ def test_generated_openapi_client_uses_the_native_api_directory() -> None:
 
 def test_only_api_wrapper_may_import_generated_services() -> None:
     source = FRONTEND / "src"
+    wrapper = source / "store" / "backend-api.ts"
+    assert wrapper.is_file()
+    wrapper_text = wrapper.read_text()
+    assert "@/api/" in wrapper_text
+    assert "@/lib/request" not in wrapper_text
+    assert not re.search(r"\b(fetch|XMLHttpRequest)\s*\(|\baxios\b", wrapper_text)
     generated_modules = {
         path.stem for path in (source / "api").glob("*.ts") if path.name != "typings.d.ts"
     }

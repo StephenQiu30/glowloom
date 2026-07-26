@@ -4,6 +4,8 @@ import json
 import urllib.request
 from pathlib import Path
 
+from tests.contract.operation_contract import EXPECTED_OPERATIONS
+
 ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
 
@@ -22,56 +24,12 @@ def test_openapi_http_response_is_deterministic(live_openapi_url: str) -> None:
     assert document["openapi"] == "3.1.0"
     assert document["info"] == {"title": "Lanverse API", "version": "0.1.0"}
     operations = {
-        operation["operationId"]
-        for path in document["paths"].values()
-        for operation in path.values()
+        (operation["operationId"], method, path)
+        for path, path_item in document["paths"].items()
+        for method, operation in path_item.items()
         if isinstance(operation, dict) and "operationId" in operation
     }
-    assert operations == {
-        "createProject",
-        "listProjects",
-        "getProject",
-        "getEpisode",
-        "createSourceRevision",
-        "confirmSource",
-        "listSourceRevisions",
-        "getSourceRevision",
-        "listTasks",
-        "getTask",
-        "cancelTask",
-        "retryTask",
-        "generateScript",
-        "getCurrentScript",
-        "saveScript",
-        "confirmScript",
-        "deriveScriptDraft",
-        "listScriptVersions",
-        "getScriptVersion",
-        "generateStoryboard",
-        "getStoryboard",
-        "listCreativeAssets",
-        "getCreativeAssetVersion",
-        "saveCreativeAsset",
-        "saveStoryboard",
-        "confirmStoryboard",
-        "deriveStoryboardDraft",
-        "listStoryboardVersions",
-        "getStoryboardVersion",
-        "generateMedia",
-        "listCandidates",
-        "adoptCandidate",
-        "authorizeCandidatePreview",
-        "listDeliveries",
-        "getDelivery",
-        "authorizeDownload",
-        "createSubtitles",
-        "getSubtitles",
-        "saveSubtitles",
-        "listSubtitleVersions",
-        "getSubtitleVersion",
-        "deriveSubtitleDraft",
-        "confirmSubtitles",
-    }
+    assert operations == EXPECTED_OPERATIONS
 
 
 def test_repository_has_no_static_openapi_intermediate() -> None:
