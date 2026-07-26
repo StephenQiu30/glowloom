@@ -43,6 +43,7 @@ async def test_subtitle_http_create_edit_confirm_derive_and_history(
             headers={"If-Match": created.headers["etag"]},
             json={"content": body["content"]},
         )
+        assert saved.status_code == 200, saved.text
         confirmed = await client.post(
             f"/v1/subtitle-versions/{body['id']}:confirm",
             headers={"If-Match": saved.headers["etag"]},
