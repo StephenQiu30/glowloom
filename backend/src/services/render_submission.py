@@ -25,6 +25,11 @@ class FaultPoint(Protocol):
     def hit(self, point: str) -> None: ...
 
 
+class _NoFault:
+    def hit(self, point: str) -> None:
+        del point
+
+
 @dataclass(frozen=True, slots=True)
 class RenderEpisodeCommand:
     episode_id: UUID
@@ -38,10 +43,10 @@ class RenderEpisodeCoordinator:
         *,
         recipe: RenderRecipeV1,
         release_version: str,
-        fault: FaultPoint,
+        fault: FaultPoint | None = None,
     ) -> None:
         self._database = database
-        self._fault = fault
+        self._fault = fault or _NoFault()
         self._idempotency = RenderIdempotencyRepository()
         self._snapshots = RenderSnapshotRepository()
         self._snapshot_creator = CreateRenderSnapshotHandler(database, recipe=recipe)

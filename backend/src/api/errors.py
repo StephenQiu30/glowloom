@@ -18,10 +18,7 @@ from services.adoptions import (
     AdoptionInputOutdated,
     CandidateNotAdoptable,
 )
-from services.asset_versions import (
-    CreativeAssetIdentityInvalid,
-    CreativeAssetVersionNotFound,
-)
+from services.asset_versions import CreativeAssetIdentityInvalid, CreativeAssetVersionNotFound
 from services.candidates import CandidateNotFound, CandidateQueryInvalid
 from services.deliveries import DeliveryNotFound
 from services.media_generation import (
@@ -32,6 +29,7 @@ from services.media_generation import (
 from services.project_queries import ProjectNotFound
 from services.project_reader import ConfirmedSourceNotFound
 from services.render_inputs import RenderInputInvalid
+from services.render_recipe import RenderRuntimeUnavailable
 from services.script_versions import (
     ScriptVersionNotFound,
 )
@@ -60,6 +58,18 @@ from services.storyboard_versions import (
 from services.subtitles import SubtitleInputInvalid, SubtitleVersionNotFound
 from services.tasks import TaskNotFound, TaskNotRetryable, TaskVersionConflict
 
+NOT_FOUND_ERRORS = (
+    ProjectNotFound,
+    EpisodeNotFound,
+    SourceRevisionNotFound,
+    ConfirmedSourceNotFound,
+    ScriptVersionNotFound,
+    CreativeAssetVersionNotFound,
+    StoryboardVersionNotFound,
+    SubtitleVersionNotFound,
+    MediaInputNotFound,
+)
+
 
 def to_problem(error: Exception) -> HttpProblem:
     if isinstance(error, ProjectCatalogValidationError):
@@ -75,18 +85,13 @@ def to_problem(error: Exception) -> HttpProblem:
         return HttpProblem(status=422, title="Invalid rights basis", code="RIGHTS_BASIS_INVALID")
     if isinstance(error, IdempotencyKeyReused):
         return HttpProblem(
-            status=409,
-            title="Idempotency key reused",
-            code="IDEMPOTENCY_KEY_REUSED",
+            status=409, title="Idempotency key reused", code="IDEMPOTENCY_KEY_REUSED"
         )
     if isinstance(error, (SourceVersionConflict, ScriptVersionConflict, TaskVersionConflict)):
         return HttpProblem(status=412, title="Version conflict", code="VERSION_CONFLICT")
     if isinstance(error, (MediaInputOutdated, AdoptionInputOutdated)):
         return HttpProblem(
-            status=412,
-            title="Input is outdated",
-            code="VERSION_CONFLICT",
-            detail=str(error),
+            status=412, title="Input is outdated", code="VERSION_CONFLICT", detail=str(error)
         )
     if isinstance(error, (SourceVersionImmutable, ScriptVersionImmutable)):
         return HttpProblem(status=409, title="Version is immutable", code="VERSION_IMMUTABLE")
@@ -127,9 +132,7 @@ def to_problem(error: Exception) -> HttpProblem:
         )
     if isinstance(error, CandidateQueryInvalid):
         return HttpProblem(
-            status=422,
-            title="Candidate query is invalid",
-            code="CANDIDATE_QUERY_INVALID",
+            status=422, title="Candidate query is invalid", code="CANDIDATE_QUERY_INVALID"
         )
     if isinstance(error, ObjectStoreUnavailable):
         return HttpProblem(
@@ -138,26 +141,17 @@ def to_problem(error: Exception) -> HttpProblem:
             code="OBJECT_STORAGE_UNAVAILABLE",
             retryable=True,
         )
+    if isinstance(error, RenderRuntimeUnavailable):
+        return HttpProblem(
+            status=503, title="Render runtime unavailable", code="RENDER_RUNTIME_NOT_CONFIGURED"
+        )
     if isinstance(error, TaskNotFound):
         return HttpProblem(status=404, title="Task not found", code="TASK_NOT_FOUND")
     if isinstance(error, TaskNotRetryable):
         return HttpProblem(status=409, title="Task is not retryable", code="TASK_NOT_RETRYABLE")
     if isinstance(error, InvalidStateTransition):
         return HttpProblem(status=409, title="Invalid task state", code="INVALID_TASK_STATE")
-    if isinstance(
-        error,
-        (
-            ProjectNotFound,
-            EpisodeNotFound,
-            SourceRevisionNotFound,
-            ConfirmedSourceNotFound,
-            ScriptVersionNotFound,
-            CreativeAssetVersionNotFound,
-            StoryboardVersionNotFound,
-            SubtitleVersionNotFound,
-            MediaInputNotFound,
-        ),
-    ):
+    if isinstance(error, NOT_FOUND_ERRORS):
         return HttpProblem(status=404, title="Resource not found", code="RESOURCE_NOT_FOUND")
     raise error
 
@@ -189,18 +183,11 @@ BUSINESS_ERRORS = (
     CandidateQueryInvalid,
     DeliveryNotFound,
     ObjectStoreUnavailable,
+    RenderRuntimeUnavailable,
     TaskNotFound,
     TaskNotRetryable,
     InvalidStateTransition,
-    ProjectNotFound,
-    EpisodeNotFound,
-    SourceRevisionNotFound,
-    ConfirmedSourceNotFound,
-    ScriptVersionNotFound,
-    CreativeAssetVersionNotFound,
-    StoryboardVersionNotFound,
-    SubtitleVersionNotFound,
-    MediaInputNotFound,
+    *NOT_FOUND_ERRORS,
 )
 
 

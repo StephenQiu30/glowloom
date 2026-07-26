@@ -74,6 +74,10 @@ class ApplicationSettings(BaseSettings):
     video_status_poll_limit: int = Field(default=300, ge=1, le=300)
     worker_lease_seconds: int = Field(default=30, ge=3, le=120)
     worker_heartbeat_seconds: int = Field(default=10, ge=1, le=30)
+    render_runtime_image: str | None = Field(
+        default=None,
+        pattern=r"^(?:[a-z0-9./_-]+@sha256:[0-9a-f]{64}|sha256:[0-9a-f]{64})$",
+    )
 
     @property
     def expose_docs(self) -> bool:

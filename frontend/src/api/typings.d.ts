@@ -694,6 +694,10 @@ declare namespace API {
     finished_at: string | null;
   };
 
+  type renderEpisodeParams = {
+    episode_id: string;
+  };
+
   type RenderInputRefsV1 = {
     /** Schema Version */
     schema_version: string | null;

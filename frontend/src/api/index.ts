@@ -42,6 +42,7 @@ import * as confirmSubtitles from "./confirmSubtitles";
 import * as generateMedia from "./generateMedia";
 import * as listCandidates from "./listCandidates";
 import * as authorizeCandidatePreview from "./authorizeCandidatePreview";
+import * as renderEpisode from "./renderEpisode";
 import * as listDeliveries from "./listDeliveries";
 import * as getDelivery from "./getDelivery";
 import * as authorizeDownload from "./authorizeDownload";
@@ -86,6 +87,7 @@ export default {
   generateMedia,
   listCandidates,
   authorizeCandidatePreview,
+  renderEpisode,
   listDeliveries,
   getDelivery,
   authorizeDownload,

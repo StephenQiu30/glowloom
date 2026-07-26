@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Header, Request, status
 
 from api.dependencies import (
     clock_from_request,
     database_from_request,
     object_store_from_request,
 )
+from api.headers import validate_idempotency_key
 from api.responses import DELIVERY_API_ERRORS
+from schemas.common import TaskAccepted
 from schemas.delivery_api import (
     DeliveryDetailResponse,
     DeliveryListResponse,
@@ -21,9 +24,38 @@ from schemas.delivery_api_mappers import (
     detail_response,
     summary_response,
 )
+from schemas.task_accepted import task_accepted
 from services.deliveries import DeliveryDownloadService, DeliveryQueryService
+from services.render_recipe import pinned_render_recipe
+from services.render_submission import RenderEpisodeCommand, RenderEpisodeCoordinator
 
 router = APIRouter(prefix="/v1")
+
+
+@router.post(
+    "/episodes/{episode_id}/renders",
+    operation_id="renderEpisode",
+    response_model=TaskAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=DELIVERY_API_ERRORS,
+)
+async def render_episode(
+    episode_id: UUID,
+    request: Request,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
+) -> TaskAccepted:
+    runtime = request.app.state.runtime
+    value = await RenderEpisodeCoordinator(
+        database_from_request(request),
+        recipe=pinned_render_recipe(runtime.settings.render_runtime_image),
+        release_version="0.1.0",
+    ).execute(
+        RenderEpisodeCommand(
+            episode_id=episode_id,
+            idempotency_key=validate_idempotency_key(idempotency_key),
+        )
+    )
+    return task_accepted(value)
 
 
 @router.get(
