@@ -55,6 +55,7 @@ from services.storyboard_versions import (
     StoryboardVersionNotFound,
     StoryReferenceInvalid,
 )
+from services.subtitles import SubtitleInputInvalid, SubtitleVersionNotFound
 from services.tasks import TaskNotFound, TaskNotRetryable, TaskVersionConflict
 
 
@@ -62,9 +63,7 @@ def to_problem(error: Exception) -> HttpProblem:
     if isinstance(error, ProjectCatalogValidationError):
         field = "title" if error.code.startswith("PROJECT_TITLE") else "content"
         return HttpProblem(
-            status=422,
-            title="Invalid project input",
-            code=error.code,
+            status=422, title="Invalid project input", code=error.code,
             metadata=dict(error.metadata),
             detail=f"The {field} field does not satisfy the accepted contract.",
         )
@@ -96,6 +95,13 @@ def to_problem(error: Exception) -> HttpProblem:
             code="STORY_REFERENCE_INVALID",
             detail=str(error),
         )
+    if isinstance(error, SubtitleInputInvalid):
+        return HttpProblem(
+            status=422,
+            title="Invalid subtitle input",
+            code="SUBTITLE_INPUT_INVALID",
+            detail=str(error),
+        )
     if isinstance(error, UnsupportedMediaUsage):
         return HttpProblem(
             status=422,
@@ -107,9 +113,7 @@ def to_problem(error: Exception) -> HttpProblem:
         return HttpProblem(status=404, title="Candidate not found", code="CANDIDATE_NOT_FOUND")
     if isinstance(error, CandidateNotAdoptable):
         return HttpProblem(
-            status=422,
-            title="Candidate is not adoptable",
-            code="CANDIDATE_NOT_ADOPTABLE",
+            status=422, title="Candidate is not adoptable", code="CANDIDATE_NOT_ADOPTABLE",
             detail=str(error),
         )
     if isinstance(error, CandidateQueryInvalid):
@@ -141,6 +145,7 @@ def to_problem(error: Exception) -> HttpProblem:
             ScriptVersionNotFound,
             CreativeAssetVersionNotFound,
             StoryboardVersionNotFound,
+            SubtitleVersionNotFound,
             MediaInputNotFound,
         ),
     ):
@@ -166,6 +171,7 @@ BUSINESS_ERRORS = (
     SourceParentNotFound,
     StoryReferenceInvalid,
     CreativeAssetIdentityInvalid,
+    SubtitleInputInvalid,
     UnsupportedMediaUsage,
     CandidateNotFound,
     AdoptionCandidateNotFound,
@@ -182,6 +188,7 @@ BUSINESS_ERRORS = (
     ScriptVersionNotFound,
     CreativeAssetVersionNotFound,
     StoryboardVersionNotFound,
+    SubtitleVersionNotFound,
     MediaInputNotFound,
 )
 
