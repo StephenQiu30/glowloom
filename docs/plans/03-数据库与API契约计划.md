@@ -34,7 +34,7 @@ Alembic 只执行根 SQL，不复制 DDL、不使用 ORM/Metadata/autogenerate�
 | 运行时数据 | `backend/src/db/` + `backend/src/repositories/` | asyncpg pool/transaction、参数化 SQL 与 Row Mapper |
 | HTTP 契约 | `api/routes/` + `schemas/` | FastAPI 路由与 Pydantic 是唯一契约源 |
 | OpenAPI | 运行中 API 的 `LANVERSE_OPENAPI_URL` | 本地默认 `http://127.0.0.1:8000/openapi.json`；不保存静态中间副本 |
-| 前端生成 | `frontend/openapi2ts.config.ts`；最终 `src/services/generated/` | `@umijs/openapi` 1.14.1 直接读取 URL 并整体覆盖；生成目录提交但不得手改 |
+| 前端生成 | `frontend/openapi2ts.config.ts`；最终 `src/services/` | `@umijs/openapi` 1.14.1 直接读取 URL；生成文件直接发布到该目录并带固定标识，不得套子目录或手改；只替换生成文件，不覆盖手写层 |
 | 请求/缓存 | `src/lib/request.ts`；最终 `src/services/api.ts` | 本计划交付唯一 sender；PLAN-09 在最终生成函数上建立 RTK Query endpoint |
 
 ## 3. TDD 实施任务
