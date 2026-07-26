@@ -14,13 +14,13 @@ from workers.provider_execution import FaultInjector
 from workers.render_episode import RenderEpisodeJobHandler
 
 
-class _RenderRuntime:
+class SuccessfulRenderRuntime:
     async def render(self, sources: RenderSources, recipe: RenderRecipeV1) -> bytes:
         assert sources.videos and sources.audios and recipe.ffmpeg_version == "8.1"
         return b"delivery-api-final-mp4"
 
 
-class _ProbeRuntime:
+class ValidDeliveryProbeRuntime:
     async def probe(self, data: bytes) -> VideoProbe:
         assert data == b"delivery-api-final-mp4"
         return VideoProbe(
@@ -69,8 +69,8 @@ async def complete_ready_delivery(
     await RenderEpisodeJobHandler(
         database,
         object_store=MinioObjectStore(transport, bucket="lanverse"),
-        render_runtime=_RenderRuntime(),
-        probe_runtime=_ProbeRuntime(),
+        render_runtime=SuccessfulRenderRuntime(),
+        probe_runtime=ValidDeliveryProbeRuntime(),
     ).handle(await media_job_context(database, accepted.task_id))
     async with database.transaction() as connection:
         delivery_id = await connection.fetchval(
