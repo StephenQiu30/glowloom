@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from httpx import ASGITransport, AsyncClient
-
 import pytest
+from httpx import ASGITransport, AsyncClient
 
 from core.config import ApplicationSettings
 from db.pool import DatabasePool
