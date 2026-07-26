@@ -6,13 +6,13 @@ from uuid import UUID
 
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.jobs.lease_queue import JobQueue
-from lanverse.modules.production_jobs.public import SubmitTaskCommand, TaskSubmitter
-from lanverse.modules.project_catalog.application.create_project import (
+from db.pool import DatabasePool
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
+from services.task_submission import SubmitTaskCommand, TaskSubmitter
+from workers.lease_queue import JobQueue
 
 NOW = datetime(2030, 7, 25, 12, 0, tzinfo=UTC)
 

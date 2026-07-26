@@ -6,8 +6,8 @@ from uuid import uuid4
 
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.modules.story_development.application.storyboards import (
+from db.pool import DatabasePool
+from services.storyboards import (
     ConfirmStoryboardCommand,
     ConfirmStoryboardHandler,
     DeriveStoryboardDraftCommand,

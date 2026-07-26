@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from lanverse.modules.production_jobs.domain.state_machines import (
+from domain.task_states import (
     InvalidStateTransition,
     transition_attempt,
     transition_job,

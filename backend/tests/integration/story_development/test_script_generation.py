@@ -6,25 +6,25 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.modules.project_catalog.application.create_project import (
+from db.pool import DatabasePool
+from integrations.ai.deterministic_text import (
+    DeterministicTextProvider,
+)
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
-from lanverse.modules.project_catalog.application.sources import (
+from services.sources import (
     ConfirmSourceCommand,
     ConfirmSourceHandler,
     CreateSourceRevisionCommand,
     CreateSourceRevisionHandler,
 )
-from lanverse.modules.story_development.application.generate import (
+from services.story_generation import (
     GenerateScriptCommand,
     GenerateScriptHandler,
 )
-from lanverse.modules.story_development.application.results import ScriptResultRegistrar
-from lanverse.modules.story_development.infrastructure.text_provider import (
-    DeterministicTextProvider,
-)
+from services.story_results import ScriptResultRegistrar
 
 
 async def confirmed_source(database: DatabasePool) -> tuple[UUID, UUID]:

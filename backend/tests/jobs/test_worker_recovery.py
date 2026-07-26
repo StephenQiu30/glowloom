@@ -5,21 +5,21 @@ from uuid import UUID
 
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.jobs.dispatch import JobHandlerRegistry
-from lanverse.jobs.provider_execution import (
+from db.pool import DatabasePool
+from services.projects import (
+    CreateProjectCommand,
+    CreateProjectHandler,
+)
+from services.task_submission import SubmitTaskCommand, TaskSubmitter
+from services.tasks import TaskQueryService
+from workers.dispatch import JobHandlerRegistry
+from workers.provider_execution import (
     FaultInjector,
     InjectedFault,
     ProviderExecutionHandler,
     ProviderOutcome,
 )
-from lanverse.jobs.runner import TaskJobRunner
-from lanverse.modules.production_jobs.application.tasks import TaskQueryService
-from lanverse.modules.production_jobs.public import SubmitTaskCommand, TaskSubmitter
-from lanverse.modules.project_catalog.application.create_project import (
-    CreateProjectCommand,
-    CreateProjectHandler,
-)
+from workers.runner import TaskJobRunner
 
 NOW = datetime(2030, 7, 25, 12, 0, tzinfo=UTC)
 

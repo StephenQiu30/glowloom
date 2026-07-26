@@ -4,23 +4,18 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.jobs.dispatch import (
-    InvalidJobPayload,
-    JobContext,
-    JobHandlerRegistry,
-    JobPayload,
-    UnknownJobHandler,
-)
-from lanverse.modules.production_jobs.infrastructure.outputs import (
+from db.pool import DatabasePool
+from repositories.task_outputs import (
     OutputSlotConflict,
     TaskOutputStore,
 )
-from lanverse.modules.production_jobs.public import SubmitTaskCommand, TaskSubmitter
-from lanverse.modules.project_catalog.application.create_project import (
+from schemas.jobs import InvalidJobPayload, JobPayload
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
+from services.task_submission import SubmitTaskCommand, TaskSubmitter
+from workers.dispatch import JobContext, JobHandlerRegistry, UnknownJobHandler
 
 
 class RecordingHandler:

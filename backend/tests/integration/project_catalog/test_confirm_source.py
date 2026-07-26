@@ -5,13 +5,13 @@ from uuid import UUID
 
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.modules.project_catalog.application.contracts import SourceRevisionSnapshot
-from lanverse.modules.project_catalog.application.create_project import (
+from db.pool import DatabasePool
+from schemas.projects import SourceRevisionSnapshot
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
-from lanverse.modules.project_catalog.application.sources import (
+from services.sources import (
     ConfirmSourceCommand,
     ConfirmSourceHandler,
     CreateSourceRevisionCommand,

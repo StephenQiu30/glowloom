@@ -5,36 +5,36 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.modules.project_catalog.application.create_project import (
+from db.pool import DatabasePool
+from integrations.ai.deterministic_text import (
+    DeterministicTextProvider,
+)
+from schemas.story_snapshots import (
+    ScriptVersionSnapshot,
+)
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
-from lanverse.modules.project_catalog.application.sources import (
+from services.script_versions import (
+    ConfirmScriptCommand,
+    ConfirmScriptHandler,
+)
+from services.sources import (
     ConfirmSourceCommand,
     ConfirmSourceHandler,
     CreateSourceRevisionCommand,
     CreateSourceRevisionHandler,
 )
-from lanverse.modules.story_development.application.contracts.snapshots import (
-    ScriptVersionSnapshot,
-)
-from lanverse.modules.story_development.application.generate import (
+from services.story_generation import (
     GenerateScriptCommand,
     GenerateScriptHandler,
     GenerateStoryboardCommand,
     GenerateStoryboardHandler,
 )
-from lanverse.modules.story_development.application.results import (
+from services.story_results import (
     ScriptResultRegistrar,
     StoryboardResultRegistrar,
-)
-from lanverse.modules.story_development.application.scripts import (
-    ConfirmScriptCommand,
-    ConfirmScriptHandler,
-)
-from lanverse.modules.story_development.infrastructure.text_provider import (
-    DeterministicTextProvider,
 )
 
 

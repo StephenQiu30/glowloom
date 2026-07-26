@@ -6,14 +6,14 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from lanverse.bootstrap.api import create_app
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.modules.production_jobs.public import SubmitTaskCommand, TaskSubmitter
-from lanverse.modules.project_catalog.application.create_project import (
+from core.config import ApplicationSettings
+from db.pool import DatabasePool
+from main import create_app
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
-from lanverse.shared_kernel.config import ApplicationSettings
+from services.task_submission import SubmitTaskCommand, TaskSubmitter
 
 
 async def submit_task(database_url: str, key: str) -> tuple[UUID, UUID]:

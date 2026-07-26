@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
 
-BACKEND_PACKAGE = BACKEND / "src" / "lanverse"
+BACKEND_SOURCE = BACKEND / "src"
 BACKEND_LAYERS = {
     "api",
     "core",
@@ -84,19 +84,36 @@ def test_backend_console_entries_are_exact() -> None:
     with (BACKEND / "pyproject.toml").open("rb") as stream:
         project = tomllib.load(stream)["project"]
     assert project["scripts"] == {
-        "lanverse-api": "lanverse.main:run",
-        "lanverse-worker": "lanverse.worker:run",
+        "lanverse-api": "main:run",
+        "lanverse-worker": "worker:run",
+    }
+
+
+def test_backend_builds_the_direct_src_layout() -> None:
+    with (BACKEND / "pyproject.toml").open("rb") as stream:
+        config = tomllib.load(stream)
+
+    assert config["build-system"] == {
+        "requires": ["setuptools==83.0.0"],
+        "build-backend": "setuptools.build_meta",
+    }
+    setuptools = config["tool"]["setuptools"]
+    assert setuptools["package-dir"] == {"": "src"}
+    assert setuptools["py-modules"] == ["main", "worker"]
+    assert setuptools["include-package-data"] is True
+    assert setuptools["packages"]["find"] == {
+        "where": ["src"],
+        "namespaces": False,
     }
 
 
 def test_backend_uses_one_fastapi_technical_layer_set() -> None:
-    present = child_directories(BACKEND_PACKAGE) - {"__pycache__"}
+    present = child_directories(BACKEND_SOURCE) - {"__pycache__"}
     assert present == BACKEND_LAYERS
     assert not (present & LEGACY_LAYERS)
-    assert {path.name for path in BACKEND_PACKAGE.iterdir() if path.is_file()} == {
-        "__init__.py",
+    assert "lanverse" not in present
+    assert {path.name for path in BACKEND_SOURCE.iterdir() if path.is_file()} == {
         "main.py",
-        "py.typed",
         "worker.py",
     }
 

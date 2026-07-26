@@ -7,25 +7,25 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
-from lanverse.bootstrap.api import create_app
-from lanverse.shared_kernel.http_contracts import (
+from api.headers import (
+    parse_if_match,
+    strong_etag,
+    validate_idempotency_key,
+)
+from api.problems import HttpProblem
+from main import create_app
+from schemas.common import (
     Problem,
     TaskAccepted,
     TaskProgress,
     TaskResponse,
-)
-from lanverse.shared_kernel.http_errors import HttpProblem
-from lanverse.shared_kernel.http_headers import (
-    parse_if_match,
-    strong_etag,
-    validate_idempotency_key,
 )
 
 
 def test_problem_contract_is_strict_and_safe() -> None:
     request_id = uuid4()
     problem = Problem(
-        type="https://lanverse.local/problems/version-conflict",
+        type="https://local/problems/version-conflict",
         title="Version conflict",
         status=412,
         code="VERSION_CONFLICT",

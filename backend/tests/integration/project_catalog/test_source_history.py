@@ -7,12 +7,12 @@ from uuid import UUID
 import asyncpg
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.modules.project_catalog.application.create_project import (
+from db.pool import DatabasePool
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
-from lanverse.modules.project_catalog.application.sources import (
+from services.sources import (
     CreateSourceRevisionCommand,
     CreateSourceRevisionHandler,
     GetSourceRevisionHandler,

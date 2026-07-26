@@ -5,26 +5,18 @@ from uuid import UUID
 
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.modules.project_catalog.application.create_project import (
+from db.pool import DatabasePool
+from integrations.ai.deterministic_text import (
+    DeterministicTextProvider,
+)
+from schemas.story_snapshots import (
+    ScriptVersionSnapshot,
+)
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
-from lanverse.modules.project_catalog.application.sources import (
-    ConfirmSourceCommand,
-    ConfirmSourceHandler,
-    CreateSourceRevisionCommand,
-    CreateSourceRevisionHandler,
-)
-from lanverse.modules.story_development.application.contracts.snapshots import (
-    ScriptVersionSnapshot,
-)
-from lanverse.modules.story_development.application.generate import (
-    GenerateScriptCommand,
-    GenerateScriptHandler,
-)
-from lanverse.modules.story_development.application.results import ScriptResultRegistrar
-from lanverse.modules.story_development.application.scripts import (
+from services.script_versions import (
     ConfirmScriptCommand,
     ConfirmScriptHandler,
     DeriveScriptDraftCommand,
@@ -36,9 +28,17 @@ from lanverse.modules.story_development.application.scripts import (
     VersionConflict,
     VersionImmutable,
 )
-from lanverse.modules.story_development.infrastructure.text_provider import (
-    DeterministicTextProvider,
+from services.sources import (
+    ConfirmSourceCommand,
+    ConfirmSourceHandler,
+    CreateSourceRevisionCommand,
+    CreateSourceRevisionHandler,
 )
+from services.story_generation import (
+    GenerateScriptCommand,
+    GenerateScriptHandler,
+)
+from services.story_results import ScriptResultRegistrar
 
 
 async def script_draft(

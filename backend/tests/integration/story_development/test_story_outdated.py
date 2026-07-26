@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.modules.production_jobs.application.tasks import TaskQueryService
-from lanverse.modules.project_catalog.application.sources import (
+from db.pool import DatabasePool
+from services.project_reader import ProjectCatalogReader
+from services.script_versions import GetScriptVersionHandler
+from services.sources import (
     ConfirmSourceCommand,
     ConfirmSourceHandler,
     CreateSourceRevisionCommand,
     CreateSourceRevisionHandler,
 )
-from lanverse.modules.project_catalog.public import ProjectCatalogReader
-from lanverse.modules.story_development.application.scripts import GetScriptVersionHandler
-from lanverse.modules.story_development.application.storyboards import (
+from services.storyboards import (
     GetCreativeAssetVersionHandler,
     GetStoryboardVersionHandler,
 )
+from services.tasks import TaskQueryService
 from tests.integration.story_development.support import storyboard_draft
 
 

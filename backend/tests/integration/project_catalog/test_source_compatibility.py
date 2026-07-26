@@ -4,18 +4,18 @@ from uuid import uuid4
 
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.modules.project_catalog.application.create_project import (
+from db.pool import DatabasePool
+from services.project_reader import ProjectCatalogReader
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
-from lanverse.modules.project_catalog.application.sources import (
+from services.sources import (
     ConfirmSourceCommand,
     ConfirmSourceHandler,
     CreateSourceRevisionCommand,
     CreateSourceRevisionHandler,
 )
-from lanverse.modules.project_catalog.public import ProjectCatalogReader
 
 
 def source_text(label: str) -> str:

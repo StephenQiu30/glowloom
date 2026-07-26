@@ -16,8 +16,8 @@ def blocked(*args, **kwargs):
 
 socket.socket.connect = blocked
 socket.create_connection = blocked
-import lanverse.main
-import lanverse.worker
+import main
+import worker
 """
     result = subprocess.run(
         [sys.executable, "-c", script],
@@ -29,7 +29,7 @@ import lanverse.worker
 
 
 def test_app_factory_returns_independent_fastapi_apps() -> None:
-    module = importlib.import_module("lanverse.main")
+    module = importlib.import_module("main")
 
     first = module.create_app()
     second = module.create_app()
@@ -42,8 +42,8 @@ def test_app_factory_returns_independent_fastapi_apps() -> None:
 
 
 def test_console_entrypoints_are_callable() -> None:
-    api = importlib.import_module("lanverse.main")
-    worker = importlib.import_module("lanverse.worker")
+    api = importlib.import_module("main")
+    worker = importlib.import_module("worker")
 
     assert callable(api.run)
     assert callable(worker.run)

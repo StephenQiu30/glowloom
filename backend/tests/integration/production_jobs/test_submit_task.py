@@ -7,13 +7,13 @@ from uuid import UUID
 import asyncpg
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.infrastructure.idempotency.repository import IdempotencyKeyReused
-from lanverse.modules.production_jobs.public import SubmitTaskCommand, TaskSubmitter
-from lanverse.modules.project_catalog.application.create_project import (
+from db.pool import DatabasePool
+from repositories.idempotency import IdempotencyKeyReused
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
+from services.task_submission import SubmitTaskCommand, TaskSubmitter
 
 
 async def create_episode(database: DatabasePool, key: str) -> UUID:

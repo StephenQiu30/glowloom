@@ -7,18 +7,18 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.jobs.capacity import WorkerCapacity
-from lanverse.jobs.dispatch import JobHandlerRegistry
-from lanverse.jobs.observability import JobLogger, StructuredJsonFormatter
-from lanverse.jobs.provider_execution import FaultInjector
-from lanverse.jobs.runner import TaskJobRunner
-from lanverse.modules.production_jobs.public import SubmitTaskCommand, TaskSubmitter
-from lanverse.modules.project_catalog.application.create_project import (
+from core.config import ApplicationSettings
+from db.pool import DatabasePool
+from services.projects import (
     CreateProjectCommand,
     CreateProjectHandler,
 )
-from lanverse.shared_kernel.config import ApplicationSettings
+from services.task_submission import SubmitTaskCommand, TaskSubmitter
+from workers.capacity import WorkerCapacity
+from workers.dispatch import JobHandlerRegistry
+from workers.observability import JobLogger, StructuredJsonFormatter
+from workers.provider_execution import FaultInjector
+from workers.runner import TaskJobRunner
 
 
 def test_provider_and_worker_resource_limits_are_explicit_and_bounded() -> None:
@@ -109,7 +109,7 @@ def test_job_logs_are_structured_and_reject_sensitive_or_unreviewed_fields() -> 
     stream = io.StringIO()
     handler = logging.StreamHandler(stream)
     handler.setFormatter(StructuredJsonFormatter())
-    logger = logging.getLogger("lanverse.test.jobs")
+    logger = logging.getLogger("test.jobs")
     logger.handlers = [handler]
     logger.propagate = False
     logger.setLevel(logging.INFO)

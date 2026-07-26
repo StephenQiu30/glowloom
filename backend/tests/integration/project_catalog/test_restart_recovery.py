@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from lanverse.bootstrap.api import create_app
-from lanverse.shared_kernel.config import ApplicationSettings
+from core.config import ApplicationSettings
+from main import create_app
 
 
 def settings_for(database_url: str) -> ApplicationSettings:

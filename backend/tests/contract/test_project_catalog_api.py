@@ -5,8 +5,8 @@ from collections.abc import AsyncIterator
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from lanverse.bootstrap.api import create_app
-from lanverse.shared_kernel.config import ApplicationSettings
+from core.config import ApplicationSettings
+from main import create_app
 
 
 async def api_client(database_url: str) -> AsyncIterator[AsyncClient]:

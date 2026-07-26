@@ -34,7 +34,7 @@ def live_openapi_url() -> Iterator[str]:
             sys.executable,
             "-m",
             "uvicorn",
-            "lanverse.main:create_app",
+            "main:create_app",
             "--factory",
             "--host",
             "127.0.0.1",

@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
-PACKAGE = BACKEND / "src" / "lanverse"
+PACKAGE = BACKEND / "src"
 DOMAIN = PACKAGE / "domain"
 LEGACY_IMPORT_ROOTS = {
     "bootstrap",
@@ -82,7 +82,7 @@ def test_source_does_not_import_legacy_package_roots() -> None:
     for path in python_files(PACKAGE):
         for module in imported_modules(path):
             parts = module.split(".")
-            if parts[:1] == ["lanverse"] and len(parts) > 1 and parts[1] in LEGACY_IMPORT_ROOTS:
+            if parts[0] == "lanverse" or parts[0] in LEGACY_IMPORT_ROOTS:
                 violations.append(f"{path.relative_to(ROOT)} -> {module}")
     assert not violations, violations
 
@@ -92,7 +92,7 @@ def test_services_and_repositories_do_not_depend_on_http_layer() -> None:
     for layer in ("services", "repositories"):
         for path in python_files(PACKAGE / layer):
             for module in imported_modules(path):
-                if module == "lanverse.api" or module.startswith("lanverse.api."):
+                if module == "api" or module.startswith("api."):
                     violations.append(f"{path.relative_to(ROOT)} -> {module}")
     assert not violations, violations
 
@@ -101,7 +101,7 @@ def test_repositories_do_not_depend_on_services_or_workers() -> None:
     violations: list[str] = []
     for path in python_files(PACKAGE / "repositories"):
         for module in imported_modules(path):
-            if module.startswith(("lanverse.services", "lanverse.workers")):
+            if module == "services" or module.startswith(("services.", "workers", "workers.")):
                 violations.append(f"{path.relative_to(ROOT)} -> {module}")
     assert not violations, violations
 

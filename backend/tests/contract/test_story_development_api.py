@@ -5,9 +5,9 @@ from collections.abc import AsyncIterator
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from lanverse.bootstrap.api import create_app
-from lanverse.infrastructure.database.pool import DatabasePool
-from lanverse.shared_kernel.config import ApplicationSettings
+from core.config import ApplicationSettings
+from db.pool import DatabasePool
+from main import create_app
 from tests.integration.story_development.support import storyboard_draft
 
 

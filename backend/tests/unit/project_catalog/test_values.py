@@ -4,7 +4,7 @@ from hashlib import sha256
 
 import pytest
 
-from lanverse.modules.project_catalog.domain.values import (
+from domain.projects import (
     ProductionSpec,
     ProjectCatalogValidationError,
     ProjectTitle,

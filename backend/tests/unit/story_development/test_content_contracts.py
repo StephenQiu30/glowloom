@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from lanverse.modules.story_development.application.contracts.content_v1 import (
+from schemas.story_content import (
     CreativeAssetContentV1,
     SceneV1,
     ScriptContentV1,

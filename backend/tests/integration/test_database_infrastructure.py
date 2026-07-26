@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncpg
 import pytest
 
-from lanverse.infrastructure.database.errors import (
+from db.errors import (
     DatabaseConflictError,
     DatabaseUnavailableError,
     translate_database_error,
 )
-from lanverse.infrastructure.database.pool import DatabasePool
+from db.pool import DatabasePool
 
 
 @pytest.mark.asyncio
