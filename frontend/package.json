@@ -10,7 +10,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint src tests vitest.config.ts playwright.config.ts",
+    "lint": "eslint src tests openapi2ts.config.ts vitest.config.ts playwright.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",

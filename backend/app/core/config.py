@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     app_name: str = "Lanverse API"
     environment: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     database_url: str = "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse"
     test_database_url: str | None = None

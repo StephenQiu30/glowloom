@@ -18,7 +18,7 @@ make dev-api
 make dev-frontend
 ```
 
-API 默认位于 `http://127.0.0.1:8000`，Web 默认位于 `http://127.0.0.1:3000`。完整质量门禁使用 `make check`；浏览器验收命令将在前端契约任务中加入。
+API 默认位于 `http://127.0.0.1:8000`，Web 默认位于 `http://127.0.0.1:3000`。完整质量门禁使用 `make check`；浏览器验收需显式执行 `make e2e-install` 与 `make e2e`。
 
 ## 配置
 
