@@ -1,12 +1,12 @@
 FROM node:22.23.1-alpine AS dependencies
 WORKDIR /app
-COPY frontend/package.json frontend/package-lock.json ./
+COPY package.json package-lock.json ./
 RUN npm ci
 
 FROM node:22.23.1-alpine AS builder
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
-COPY frontend ./
+COPY . ./
 RUN npm run build
 
 FROM node:22.23.1-alpine AS runner

@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+.venv
+.pytest_cache
+.ruff_cache
+.pyright
+__pycache__
+*.py[cod]
+tests
+*.log

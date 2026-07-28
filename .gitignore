@@ -30,6 +30,5 @@ tmp/
 temp/
 .tmp/
 
-deploy/data/
 data/
 logs/
