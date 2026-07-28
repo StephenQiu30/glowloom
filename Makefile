@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: setup dev-api dev-frontend db-init generate-api lint typecheck test hygiene check docker-build compose-up compose-down contract e2e-install e2e
+.PHONY: setup dev-api dev-frontend db-init generate-api lint typecheck test hygiene check docker-build compose-up compose-down identity-up identity-down contract contract-oidc e2e-install e2e
 
 setup:
 	@uv --version | grep -q '0.11.32'
@@ -51,10 +51,19 @@ compose-up:
 	@if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then echo 'Reusing local MinIO on port 9000'; else docker compose --env-file deploy/.env.example -f deploy/compose.yaml --profile minio up -d minio; fi
 
 compose-down:
-	docker compose --env-file deploy/.env.example -f deploy/compose.yaml --profile rabbitmq --profile minio down
+	docker compose --env-file deploy/.env.example -f deploy/compose.yaml --profile rabbitmq --profile minio --profile identity down
+
+identity-up:
+	docker compose --env-file deploy/.env.example -f deploy/compose.yaml --profile identity up -d keycloak
+
+identity-down:
+	docker compose --env-file deploy/.env.example -f deploy/compose.yaml --profile identity down
 
 contract:
 	cd backend && LANVERSE_RUN_MINIO_CONTRACT=1 uv run --frozen --no-python-downloads pytest tests/contract/test_minio_port.py
+
+contract-oidc:
+	set -a; . deploy/.env.example; set +a; cd backend && LANVERSE_RUN_OIDC_CONTRACT=1 uv run --frozen --no-python-downloads pytest tests/contract/test_oidc_provider.py
 
 e2e-install:
 	cd frontend && npx playwright install chromium
