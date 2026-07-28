@@ -35,3 +35,4 @@ jobs:
           OPENAPI_SCHEMA_URL=http://127.0.0.1:8000/openapi.json make generate-api
           git diff --exit-code -- frontend/src/api
       - run: make check
+      - run: make docker-build

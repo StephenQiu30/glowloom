@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse"
     test_database_url: str | None = None
     redis_url: str = "redis://127.0.0.1:6379/0"
-    rabbitmq_url: str = "amqp://lanverse:lanverse@127.0.0.1:5672/"
+    rabbitmq_url: str = "amqp://lanverse:lanverse-development-only@127.0.0.1:5672/"
 
     minio_endpoint: str = "127.0.0.1:9000"
     minio_access_key: str = "lanverse"

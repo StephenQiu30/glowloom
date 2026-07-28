@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: setup dev-api dev-frontend db-init generate-api lint typecheck test hygiene check e2e-install e2e
+.PHONY: setup dev-api dev-frontend db-init generate-api lint typecheck test hygiene check docker-build compose-up compose-down contract e2e-install e2e
 
 setup:
 	@uv --version | grep -q '0.11.32'
@@ -41,6 +41,20 @@ check: lint typecheck test hygiene
 	uv lock --project backend --check --no-python-downloads
 	test -f frontend/src/api/index.ts
 	cd frontend && npm run build
+	docker compose --env-file deploy/.env.example -f deploy/compose.yaml config >/dev/null
+
+docker-build:
+	docker compose --env-file deploy/.env.example -f deploy/compose.yaml build api web
+
+compose-up:
+	docker compose --env-file deploy/.env.example -f deploy/compose.yaml --profile rabbitmq up -d rabbitmq
+	@if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then echo 'Reusing local MinIO on port 9000'; else docker compose --env-file deploy/.env.example -f deploy/compose.yaml --profile minio up -d minio; fi
+
+compose-down:
+	docker compose --env-file deploy/.env.example -f deploy/compose.yaml --profile rabbitmq --profile minio down
+
+contract:
+	cd backend && LANVERSE_RUN_MINIO_CONTRACT=1 uv run --frozen --no-python-downloads pytest tests/contract/test_minio_port.py
 
 e2e-install:
 	cd frontend && npx playwright install chromium
