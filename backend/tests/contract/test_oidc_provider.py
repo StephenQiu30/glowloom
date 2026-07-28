@@ -40,7 +40,14 @@ def _test_user(
     response = client.post(
         f"{base_url}/admin/realms/lanverse-test/users",
         headers=headers,
-        json={"username": username, "enabled": True},
+        json={
+            "username": username,
+            "email": f"{username}@example.invalid",
+            "emailVerified": True,
+            "firstName": "Contract",
+            "lastName": "Fixture",
+            "enabled": True,
+        },
     )
     response.raise_for_status()
     user_id = response.headers["Location"].rsplit("/", maxsplit=1)[-1]
