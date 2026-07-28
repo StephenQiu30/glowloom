@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any, cast
 
@@ -33,7 +33,7 @@ def _test_user(
     *,
     base_url: str,
     admin_token: str,
-) -> Iterator[tuple[str, str]]:
+) -> Generator[tuple[str, str]]:
     username = f"contract-{secrets.token_hex(8)}"
     password = secrets.token_urlsafe(24)
     headers = {"Authorization": f"Bearer {admin_token}"}
