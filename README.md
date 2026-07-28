@@ -13,10 +13,12 @@ Lanverse 是面向 AI 短剧生产的模块化单体应用。当前工程从可�
 
 ```bash
 make setup
-cd frontend && npm run dev
+make db-init
+make dev-api
+make dev-frontend
 ```
 
-Web 默认位于 `http://127.0.0.1:3000`。当前工程基线质量门禁使用 `make check`；API 与端到端命令将在对应纵向任务实现时加入。
+API 默认位于 `http://127.0.0.1:8000`，Web 默认位于 `http://127.0.0.1:3000`。完整质量门禁使用 `make check`；浏览器验收命令将在前端契约任务中加入。
 
 ## 配置
 

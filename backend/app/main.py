@@ -1,0 +1,98 @@
+import asyncio
+from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+
+from app.core.config import Settings, get_settings
+from app.core.database import database_ping
+from app.core.errors import register_exception_handlers
+from app.core.logging import RequestContextMiddleware, configure_logging
+from app.core.observability import MetricsMiddleware, metrics_response
+from app.core.schemas import DependencyStatus, HealthResponse, ReadinessResponse
+from app.integrations.minio import MinioObjectStorage
+from app.integrations.rabbitmq import rabbitmq_ping
+from app.integrations.redis import redis_ping
+
+Check = Callable[[], Awaitable[None]]
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    configure_logging(get_settings().log_level)
+    yield
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    active = settings or get_settings()
+    app = FastAPI(title=active.app_name, version="0.1.0", lifespan=lifespan)
+    app.state.settings = active
+    app.add_middleware(MetricsMiddleware)
+    app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=active.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    register_exception_handlers(app)
+
+    @app.get("/healthz", response_model=HealthResponse, tags=["system"])
+    # FastAPI registers route functions through decorators at runtime.
+    async def _healthz() -> HealthResponse:  # pyright: ignore[reportUnusedFunction]
+        return HealthResponse()
+
+    @app.get(
+        "/readyz",
+        response_model=ReadinessResponse,
+        responses={503: {"model": ReadinessResponse}},
+        tags=["system"],
+    )
+    async def _readyz(  # pyright: ignore[reportUnusedFunction]
+        response: Response,
+    ) -> ReadinessResponse:
+        storage = MinioObjectStorage(
+            active.minio_endpoint,
+            active.minio_access_key,
+            active.minio_secret_key,
+            active.minio_bucket,
+            secure=active.minio_secure,
+            thread_limit=active.storage_thread_limit,
+        )
+        checks: dict[str, tuple[bool, Check]] = {
+            "postgresql": (True, database_ping),
+            "redis": (False, lambda: redis_ping(active.redis_url)),
+            "rabbitmq": (False, lambda: rabbitmq_ping(active.rabbitmq_url)),
+            "minio": (False, storage.ensure_bucket),
+        }
+        dependencies: dict[str, DependencyStatus] = {}
+        for name, (critical, check) in checks.items():
+            try:
+                await asyncio.wait_for(check(), timeout=active.infrastructure_timeout_seconds)
+                dependencies[name] = DependencyStatus(critical=critical, status="available")
+            except Exception:
+                dependencies[name] = DependencyStatus(
+                    critical=critical,
+                    status="unavailable" if critical else "degraded",
+                    reason=f"{name}_unavailable",
+                )
+        unavailable = any(
+            item.critical and item.status != "available" for item in dependencies.values()
+        )
+        degraded = any(item.status != "available" for item in dependencies.values())
+        status = "unavailable" if unavailable else "degraded" if degraded else "ready"
+        if unavailable:
+            response.status_code = 503
+        return ReadinessResponse(status=status, dependencies=dependencies)
+
+    @app.get("/metrics", include_in_schema=True, tags=["system"])
+    async def _metrics() -> Response:  # pyright: ignore[reportUnusedFunction]
+        return metrics_response()
+
+    return app
+
+
+app = create_app()
