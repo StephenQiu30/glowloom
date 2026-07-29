@@ -33,20 +33,40 @@ def test_container_files_live_at_their_runtime_boundaries() -> None:
     business_compose = (ROOT / "docker-compose.yml").read_text()
     environment_compose = (ROOT / "docker-compose-env.yml").read_text()
 
-    assert "  api:" in business_compose
+    assert "name: lanverse-services" in business_compose
+    assert "  server:" in business_compose
     assert "  web:" in business_compose
-    assert "  io-worker:" in business_compose
-    assert business_compose.count("image: lanverse-backend:local") == 3
-    assert 'command: ["python", "-m", "app.io_worker"]' in business_compose
+    assert "  api:" not in business_compose
+    assert "  scheduler:" not in business_compose
+    assert "  io-worker:" not in business_compose
+    assert business_compose.count("image: lanverse-backend:local") == 1
     assert "  postgres:" not in business_compose
     assert "  redis:" not in business_compose
     assert "  rabbitmq:" not in business_compose
     assert "  minio:" not in business_compose
 
-    assert "  api:" not in environment_compose
+    for container_name in ("lanverse-server", "lanverse-web"):
+        assert f"container_name: {container_name}" in business_compose
+
+    assert "name: lanverse-environment" in environment_compose
+    assert "  server:" not in environment_compose
     assert "  web:" not in environment_compose
     for service in ("postgres", "redis", "rabbitmq", "minio"):
         assert f"  {service}:" in environment_compose
+        assert f"container_name: lanverse-{service}" in environment_compose
+    for image in ("postgres:latest", "redis:latest", "rabbitmq:latest", "minio/minio:latest"):
+        assert f"image: {image}\n" in environment_compose
+    assert "@sha256:" not in environment_compose
+
+    makefile = (ROOT / "Makefile").read_text()
+    assert "services-up:" in makefile
+    assert "services-down:" in makefile
+    assert "docker compose -f docker-compose.yml up -d --build" in makefile
+    assert "business-up:" not in makefile
+    assert "business-down:" not in makefile
+
+    backend_dockerfile = (ROOT / "backend/Dockerfile").read_text()
+    assert 'CMD ["python", "-m", "app.server"]' in backend_dockerfile
 
 
 def test_environment_configuration_has_one_repository_entrypoint() -> None:
