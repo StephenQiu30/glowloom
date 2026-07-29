@@ -75,6 +75,7 @@ class Episode(Base):
         CheckConstraint("revision >= 1", name="ck_prj_episode_revision"),
         CheckConstraint("position >= 1", name="ck_prj_episode_position"),
         CheckConstraint("target_duration_ms > 0", name="ck_prj_episode_duration"),
+        UniqueConstraint("id", "workspace_id", name="uq_prj_episode_id_workspace"),
         Index(
             "uq_prj_episode_active_position",
             "project_id",

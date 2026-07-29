@@ -41,6 +41,10 @@ declare namespace API {
     data: PaginatedProjects;
   };
 
+  type ApiResponsePaginatedScriptVersions_ = {
+    data: PaginatedScriptVersions;
+  };
+
   type ApiResponsePaginatedTasks_ = {
     data: PaginatedTasks;
   };
@@ -55,6 +59,18 @@ declare namespace API {
 
   type ApiResponseRevocationResponse_ = {
     data: RevocationResponse;
+  };
+
+  type ApiResponseScriptImportResponse_ = {
+    data: ScriptImportResponse;
+  };
+
+  type ApiResponseScriptSourceResponse_ = {
+    data: ScriptSourceResponse;
+  };
+
+  type ApiResponseScriptVersionResponse_ = {
+    data: ScriptVersionResponse;
   };
 
   type ApiResponseTaskResponse_ = {
@@ -276,8 +292,16 @@ declare namespace API {
     project_id: string;
   };
 
+  type getSourceApiV1ScriptSourcesSourceIdGetParams = {
+    source_id: string;
+  };
+
   type getTaskApiV1TasksTaskIdGetParams = {
     task_id: string;
+  };
+
+  type getVersionApiV1ScriptVersionsVersionIdGetParams = {
+    version_id: string;
   };
 
   type getWorkspaceApiV1WorkspacesWorkspaceIdGetParams = {
@@ -292,6 +316,10 @@ declare namespace API {
   type HTTPValidationError = {
     /** Detail */
     detail: ValidationError[] | null;
+  };
+
+  type importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPostParams = {
+    episode_id: string;
   };
 
   type listEpisodesApiV1ProjectsProjectIdEpisodesGetParams = {
@@ -326,6 +354,12 @@ declare namespace API {
     offset: number | null;
   };
 
+  type listVersionsApiV1ScriptSourcesSourceIdVersionsGetParams = {
+    source_id: string;
+    limit: number | null | null;
+    offset: number | null;
+  };
+
   type listWorkspacesApiV1WorkspacesGetParams = {
     include_archived: boolean | null;
   };
@@ -354,6 +388,17 @@ declare namespace API {
   type PaginatedProjects = {
     /** Items */
     items: ProjectResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
+  type PaginatedScriptVersions = {
+    /** Items */
+    items: ScriptVersionResponse[];
     /** Total */
     total: number;
     /** Limit */
@@ -521,6 +566,68 @@ declare namespace API {
   type RevocationResponse = {
     /** Revoked */
     revoked: boolean | null;
+  };
+
+  type ScriptImportRequest = {
+    /** Input Type */
+    input_type: string;
+    /** Title */
+    title: string;
+    /** Body */
+    body: string;
+    /** Rights Declaration */
+    rights_declaration: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type ScriptImportResponse = {
+    source: ScriptSourceResponse;
+    version: ScriptVersionResponse;
+  };
+
+  type ScriptSourceResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Input Type */
+    input_type: "text" | "media";
+    /** Title */
+    title: string;
+    /** Source Media Version Id */
+    source_media_version_id: string | null;
+    /** Rights Declaration */
+    rights_declaration: string;
+    /** Status */
+    status: "active" | "archived";
+    /** Revision */
+    revision: number;
+    /** Created At */
+    created_at: string;
+  };
+
+  type ScriptVersionResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Source Id */
+    source_id: string;
+    /** Version No */
+    version_no: number;
+    /** Status */
+    status: "draft" | "published";
+    /** Body */
+    body: string;
+    /** Content Hash */
+    content_hash: string;
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
   };
 
   type TaskErrorResponse = {

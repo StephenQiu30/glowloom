@@ -5,10 +5,12 @@
 import * as identity from "./identity";
 import * as projects from "./projects";
 import * as tasks from "./tasks";
+import * as scripts from "./scripts";
 import * as system from "./system";
 export default {
   identity,
   projects,
   tasks,
+  scripts,
   system,
 };

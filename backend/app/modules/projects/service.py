@@ -360,6 +360,24 @@ async def _owned_episode(
     return result[0], result[1], result[2]
 
 
+async def lock_active_episode_for_content_write(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    episode_id: UUID,
+) -> Episode:
+    episode, _, _ = await _owned_episode(
+        session, claims, episode_id, for_update=True
+    )
+    if episode.status != "active":
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Episode is archived",
+            status_code=409,
+            next_action="restore_episode",
+        )
+    return episode
+
+
 async def create_episode(
     session: AsyncSession,
     claims: AccessTokenClaims,
