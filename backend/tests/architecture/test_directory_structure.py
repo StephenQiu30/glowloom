@@ -35,6 +35,9 @@ def test_container_files_live_at_their_runtime_boundaries() -> None:
 
     assert "  api:" in business_compose
     assert "  web:" in business_compose
+    assert "  io-worker:" in business_compose
+    assert business_compose.count("image: lanverse-backend:local") == 3
+    assert 'command: ["python", "-m", "app.io_worker"]' in business_compose
     assert "  postgres:" not in business_compose
     assert "  redis:" not in business_compose
     assert "  rabbitmq:" not in business_compose
