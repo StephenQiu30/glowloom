@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     test_database_url: str | None = None
     redis_url: str = "redis://127.0.0.1:6379/0"
     rabbitmq_url: str = "amqp://guest:guest@127.0.0.1:5672/"
+    outbox_batch_size: int = Field(default=20, ge=1, le=100)
+    outbox_claim_seconds: int = Field(default=60, ge=5, le=3600)
+    outbox_poll_seconds: float = Field(default=1.0, ge=0.1, le=60)
 
     minio_endpoint: str = "127.0.0.1:9000"
     minio_access_key: str = "lanverse"

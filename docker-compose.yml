@@ -2,6 +2,7 @@ name: lanverse-business
 
 services:
   api:
+    image: lanverse-backend:local
     build:
       context: ./backend
     environment:
@@ -26,6 +27,19 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
+    restart: unless-stopped
+
+  scheduler:
+    image: lanverse-backend:local
+    command: ["python", "-m", "app.scheduler"]
+    environment:
+      DATABASE_URL: ${CONTAINER_DATABASE_URL:-postgresql+asyncpg://postgres:lanverse-development-only@host.docker.internal:5432/lanverse}
+      RABBITMQ_URL: ${CONTAINER_RABBITMQ_URL:-amqp://lanverse:lanverse-development-only@host.docker.internal:5672/}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-20}
+      OUTBOX_CLAIM_SECONDS: ${OUTBOX_CLAIM_SECONDS:-60}
+      OUTBOX_POLL_SECONDS: ${OUTBOX_POLL_SECONDS:-1.0}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   web:

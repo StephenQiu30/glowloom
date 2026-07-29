@@ -30,3 +30,10 @@ def test_test_database_must_not_equal_application_database() -> None:
     url = "postgresql+asyncpg://postgres/lanverse_test"
     with pytest.raises(ValueError, match="must not equal"):
         validate_test_database_url(url, url)
+
+
+def test_outbox_resource_limits_are_bounded() -> None:
+    settings = Settings()
+    assert 1 <= settings.outbox_batch_size <= 100
+    assert 5 <= settings.outbox_claim_seconds <= 3600
+    assert 0.1 <= settings.outbox_poll_seconds <= 60

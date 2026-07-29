@@ -22,6 +22,15 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 12
+      rabbitmq:
+        image: rabbitmq:4.3.4-alpine
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v9.0.0
@@ -51,6 +60,8 @@ jobs:
           OPENAPI_SCHEMA_URL=http://127.0.0.1:8000/openapi.json make generate-api
           git diff --exit-code -- frontend/src/api
       - run: make check
+      - name: Run RabbitMQ publisher contract
+        run: RABBITMQ_URL=amqp://guest:guest@127.0.0.1:5672/ make contract-rabbitmq
       - name: Install Playwright Chromium
         run: cd frontend && npx playwright install --with-deps chromium
       - name: Run browser E2E

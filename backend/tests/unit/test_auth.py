@@ -41,4 +41,9 @@ def test_access_token_rejects_wrong_audience_and_tampering() -> None:
 
 def test_production_rejects_the_committed_development_secret() -> None:
     with pytest.raises(ValidationError, match="JWT_SECRET_KEY must be set"):
-        Settings(environment="production")
+        Settings(
+            environment="production",
+            jwt_secret_key=SecretStr(
+                "development-only-jwt-secret-change-before-production"
+            ),
+        )
