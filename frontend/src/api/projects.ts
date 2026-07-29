@@ -96,6 +96,23 @@ export async function episodeDeletePreflightApiV1EpisodesEpisodeIdDeletePrefligh
   );
 }
 
+/** Episode Production Snapshot GET /api/v1/episodes/${param0}/production-snapshot */
+export async function episodeProductionSnapshotApiV1EpisodesEpisodeIdProductionSnapshotGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.episodeProductionSnapshotApiV1EpisodesEpisodeIdProductionSnapshotGetParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseEpisodeProductionSnapshot_>(
+    `/api/v1/episodes/${param0}/production-snapshot`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
 /** Restore Episode POST /api/v1/episodes/${param0}/restore */
 export async function restoreEpisodeApiV1EpisodesEpisodeIdRestorePost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -322,6 +339,23 @@ export async function reorderEpisodesApiV1ProjectsProjectIdEpisodesReorderPost(
       },
       params: { ...queryParams },
       data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Project Production Snapshot GET /api/v1/projects/${param0}/production-snapshot */
+export async function projectProductionSnapshotApiV1ProjectsProjectIdProductionSnapshotGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.projectProductionSnapshotApiV1ProjectsProjectIdProductionSnapshotGetParams,
+  options?: RequestOptions
+) {
+  const { project_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseProjectProductionSnapshot_>(
+    `/api/v1/projects/${param0}/production-snapshot`,
+    {
+      method: "GET",
+      params: { ...queryParams },
       ...(options || {}),
     }
   );

@@ -15,6 +15,10 @@ declare namespace API {
     data: EpisodeOrderResponse;
   };
 
+  type ApiResponseEpisodeProductionSnapshot_ = {
+    data: EpisodeProductionSnapshot;
+  };
+
   type ApiResponseEpisodeResponse_ = {
     data: EpisodeResponse;
   };
@@ -35,6 +39,10 @@ declare namespace API {
 
   type ApiResponsePaginatedProjects_ = {
     data: PaginatedProjects;
+  };
+
+  type ApiResponseProjectProductionSnapshot_ = {
+    data: ProjectProductionSnapshot;
   };
 
   type ApiResponseProjectResponse_ = {
@@ -72,6 +80,17 @@ declare namespace API {
     expires_in: number;
   };
 
+  type BlockingReason = {
+    /** Code */
+    code: string;
+    /** Summary */
+    summary: string;
+    /** Resource Type */
+    resource_type: "project" | "episode";
+    /** Resource Id */
+    resource_id: string;
+  };
+
   type BudgetLimitRequest = {
     /** Amount */
     amount: number | string;
@@ -86,6 +105,17 @@ declare namespace API {
     current_password: string;
     /** New Password */
     new_password: string;
+  };
+
+  type CostSummary = {
+    /** Status */
+    status: string | null;
+    /** Currency */
+    currency: string;
+    /** Reserved */
+    reserved: string | null;
+    /** Used */
+    used: string | null;
   };
 
   type createEpisodeApiV1ProjectsProjectIdEpisodesPostParams = {
@@ -160,6 +190,31 @@ declare namespace API {
     /** Project Revision */
     project_revision: number;
   };
+
+  type EpisodeProductionSnapshot = {
+    /** Episode Id */
+    episode_id: string;
+    /** Current Stage */
+    current_stage: string;
+    /** Completion */
+    completion: number;
+    /** Blocking Reasons */
+    blocking_reasons: BlockingReason[];
+    /** Next Actions */
+    next_actions: NextAction[];
+    task_summary: TaskSummary;
+    review_summary: ReviewSummary;
+    cost_summary: CostSummary;
+    /** Partial Failures */
+    partial_failures: PartialFailure[];
+    /** Computed At */
+    computed_at: string;
+  };
+
+  type episodeProductionSnapshotApiV1EpisodesEpisodeIdProductionSnapshotGetParams =
+    {
+      episode_id: string;
+    };
 
   type EpisodeReorderRequest = {
     /** Episode Ids */
@@ -258,6 +313,15 @@ declare namespace API {
     workspace: WorkspaceResponse;
   };
 
+  type NextAction = {
+    /** Code */
+    code: string;
+    /** Label */
+    label: string;
+    /** Href */
+    href: string;
+  };
+
   type PaginatedProjects = {
     /** Items */
     items: ProjectResponse[];
@@ -267,6 +331,15 @@ declare namespace API {
     limit: number;
     /** Offset */
     offset: number;
+  };
+
+  type PartialFailure = {
+    /** Module */
+    module: string;
+    /** Code */
+    code: string;
+    /** Summary */
+    summary: string;
   };
 
   type ProfileUpdateRequest = {
@@ -292,6 +365,30 @@ declare namespace API {
     /** Target Duration Ms */
     target_duration_ms: number | null;
   };
+
+  type ProjectProductionSnapshot = {
+    /** Project Id */
+    project_id: string;
+    /** Current Stage */
+    current_stage: "project_setup" | "script_import";
+    /** Completion */
+    completion: number;
+    /** Blocking Reasons */
+    blocking_reasons: BlockingReason[];
+    /** Next Actions */
+    next_actions: NextAction[];
+    /** Episodes */
+    episodes: EpisodeProductionSnapshot[];
+    /** Partial Failures */
+    partial_failures: PartialFailure[];
+    /** Computed At */
+    computed_at: string;
+  };
+
+  type projectProductionSnapshotApiV1ProjectsProjectIdProductionSnapshotGetParams =
+    {
+      project_id: string;
+    };
 
   type ProjectResponse = {
     /** Id */
@@ -374,9 +471,25 @@ declare namespace API {
     workspace_id: string;
   };
 
+  type ReviewSummary = {
+    /** Status */
+    status: string | null;
+    /** Pending */
+    pending: number | null;
+  };
+
   type RevocationResponse = {
     /** Revoked */
     revoked: boolean | null;
+  };
+
+  type TaskSummary = {
+    /** Status */
+    status: string | null;
+    /** Running */
+    running: number | null;
+    /** Failed */
+    failed: number | null;
   };
 
   type updateBudgetLimitApiV1ProjectsProjectIdBudgetLimitPostParams = {

@@ -14,12 +14,14 @@ from app.modules.projects.schemas import (
     DeleteResponse,
     EpisodeCreateRequest,
     EpisodeOrderResponse,
+    EpisodeProductionSnapshot,
     EpisodeReorderRequest,
     EpisodeResponse,
     EpisodeStateRequest,
     EpisodeUpdateRequest,
     PaginatedProjects,
     ProjectCreateRequest,
+    ProjectProductionSnapshot,
     ProjectResponse,
     ProjectStateRequest,
     ProjectUpdateRequest,
@@ -269,3 +271,31 @@ async def delete_episode(
 ) -> ApiResponse[DeleteResponse]:
     await service.delete_episode(session, claims, episode_id, expected_revision)
     return ApiResponse(data=DeleteResponse())
+
+
+@router.get(
+    "/projects/{project_id}/production-snapshot",
+    response_model=ApiResponse[ProjectProductionSnapshot],
+)
+async def project_production_snapshot(
+    project_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ProjectProductionSnapshot]:
+    return ApiResponse(
+        data=await service.project_production_snapshot(session, claims, project_id)
+    )
+
+
+@router.get(
+    "/episodes/{episode_id}/production-snapshot",
+    response_model=ApiResponse[EpisodeProductionSnapshot],
+)
+async def episode_production_snapshot(
+    episode_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[EpisodeProductionSnapshot]:
+    return ApiResponse(
+        data=await service.episode_production_snapshot(session, claims, episode_id)
+    )
