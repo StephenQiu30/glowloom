@@ -17,18 +17,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  type AppApiError,
+  appApiErrorMessage,
   useLoginMutation,
   useRegisterMutation,
 } from "@/lib/app-api";
 import { setAccessToken } from "@/lib/auth-session";
 
 type AuthMode = "login" | "register";
-
-function getErrorMessage(error: unknown): string {
-  const apiError = error as Partial<AppApiError>;
-  return apiError.message ?? "操作失败，请稍后重试。";
-}
 
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
@@ -56,7 +51,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       setAccessToken(auth.access_token);
       router.replace("/projects");
     } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
+      setErrorMessage(appApiErrorMessage(error));
     }
   }
 

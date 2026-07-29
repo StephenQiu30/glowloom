@@ -7,8 +7,12 @@ import {
   registerApiV1AuthRegisterPost,
 } from "@/api/identity";
 import {
+  createEpisodeApiV1ProjectsProjectIdEpisodesPost,
   createProjectApiV1ProjectsPost,
+  getProjectApiV1ProjectsProjectIdGet,
+  listEpisodesApiV1ProjectsProjectIdEpisodesGet,
   listProjectsApiV1ProjectsGet,
+  projectProductionSnapshotApiV1ProjectsProjectIdProductionSnapshotGet,
 } from "@/api/projects";
 import { ApiClientError } from "@/lib/request";
 
@@ -17,6 +21,10 @@ export type AppApiError = {
   code: string;
   nextAction?: string;
 };
+
+export function appApiErrorMessage(error: unknown): string {
+  return (error as Partial<AppApiError> | undefined)?.message ?? "服务暂时不可用，请稍后重试。";
+}
 
 async function runRequest<T>(
   request: () => Promise<{ data: T }>,
@@ -43,7 +51,7 @@ async function runRequest<T>(
 export const appApi = createApi({
   reducerPath: "appApi",
   baseQuery: fakeBaseQuery<AppApiError>(),
-  tagTypes: ["Me", "Projects"],
+  tagTypes: ["Me", "Projects", "Project", "Episodes", "Snapshot"],
   endpoints: (builder) => ({
     login: builder.mutation<API.AuthResponse, API.LoginRequest>({
       queryFn: (body) => runRequest(() => loginApiV1AuthLoginPost(body)),
@@ -77,14 +85,59 @@ export const appApi = createApi({
       queryFn: (body) => runRequest(() => createProjectApiV1ProjectsPost(body)),
       invalidatesTags: ["Projects"],
     }),
+    project: builder.query<API.ProjectResponse, string>({
+      queryFn: (projectId) =>
+        runRequest(() => getProjectApiV1ProjectsProjectIdGet({ project_id: projectId })),
+      providesTags: (_result, _error, projectId) => [{ type: "Project", id: projectId }],
+    }),
+    episodes: builder.query<API.EpisodeResponse[], string>({
+      queryFn: (projectId) =>
+        runRequest(() =>
+          listEpisodesApiV1ProjectsProjectIdEpisodesGet({
+            project_id: projectId,
+            include_archived: false,
+          }),
+        ),
+      providesTags: (_result, _error, projectId) => [{ type: "Episodes", id: projectId }],
+    }),
+    createEpisode: builder.mutation<
+      API.EpisodeResponse,
+      { projectId: string; body: API.EpisodeCreateRequest }
+    >({
+      queryFn: ({ projectId, body }) =>
+        runRequest(() =>
+          createEpisodeApiV1ProjectsProjectIdEpisodesPost(
+            { project_id: projectId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: "Project", id: projectId },
+        { type: "Episodes", id: projectId },
+        { type: "Snapshot", id: projectId },
+      ],
+    }),
+    projectSnapshot: builder.query<API.ProjectProductionSnapshot, string>({
+      queryFn: (projectId) =>
+        runRequest(() =>
+          projectProductionSnapshotApiV1ProjectsProjectIdProductionSnapshotGet({
+            project_id: projectId,
+          }),
+        ),
+      providesTags: (_result, _error, projectId) => [{ type: "Snapshot", id: projectId }],
+    }),
   }),
 });
 
 export const {
+  useCreateEpisodeMutation,
   useCreateProjectMutation,
+  useEpisodesQuery,
   useLoginMutation,
   useLogoutMutation,
   useMeQuery,
+  useProjectQuery,
+  useProjectSnapshotQuery,
   useProjectsQuery,
   useRegisterMutation,
 } = appApi;

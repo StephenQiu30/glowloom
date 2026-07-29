@@ -28,7 +28,7 @@ import { Label } from "@/components/ui/label";
 import { useHasAccessToken } from "@/hooks/use-auth-session";
 import {
   appApi,
-  type AppApiError,
+  appApiErrorMessage,
   useCreateProjectMutation,
   useLogoutMutation,
   useMeQuery,
@@ -36,10 +36,6 @@ import {
 } from "@/lib/app-api";
 import { clearAccessToken, hasAccessToken } from "@/lib/auth-session";
 import type { AppStore } from "@/lib/store";
-
-function errorMessage(error: unknown): string {
-  return (error as Partial<AppApiError> | undefined)?.message ?? "服务暂时不可用，请稍后重试。";
-}
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -82,7 +78,7 @@ export default function ProjectsPage() {
       }).unwrap();
       formElement.reset();
     } catch (error: unknown) {
-      setCommandError(errorMessage(error));
+      setCommandError(appApiErrorMessage(error));
     }
   }
 
@@ -110,7 +106,7 @@ export default function ProjectsPage() {
       <main className="mx-auto max-w-xl px-6 py-20">
         <Alert variant="destructive">
           <AlertTitle>无法加载工作空间</AlertTitle>
-          <AlertDescription>{errorMessage(me.error)}</AlertDescription>
+          <AlertDescription>{appApiErrorMessage(me.error)}</AlertDescription>
         </Alert>
       </main>
     );
@@ -157,7 +153,7 @@ export default function ProjectsPage() {
           {projects.isError && (
             <Alert variant="destructive" className="mb-5">
               <AlertTitle>无法加载项目</AlertTitle>
-              <AlertDescription>{errorMessage(projects.error)}</AlertDescription>
+              <AlertDescription>{appApiErrorMessage(projects.error)}</AlertDescription>
             </Alert>
           )}
 
