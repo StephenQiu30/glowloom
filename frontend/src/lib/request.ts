@@ -1,5 +1,7 @@
 import axios, { type AxiosRequestConfig } from "axios";
 
+import { clearAccessToken, getAccessToken } from "@/lib/auth-session";
+
 export type RequestOptions = AxiosRequestConfig;
 
 export class ApiClientError extends Error {
@@ -24,16 +26,26 @@ export default async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   try {
-    const response = await client.request<T>({ url, ...options });
+    const accessToken = getAccessToken();
+    const response = await client.request<T>({
+      url,
+      ...options,
+      headers: accessToken
+        ? { Authorization: `Bearer ${accessToken}`, ...options.headers }
+        : options.headers,
+    });
     return response.data;
   } catch (cause: unknown) {
     if (axios.isAxiosError(cause)) {
+      if (cause.response?.status === 401) {
+        clearAccessToken();
+      }
       const envelope = cause.response?.data as
         | { error?: { code?: string; message?: string; next_action?: string } }
         | undefined;
       throw new ApiClientError(
         envelope?.error?.message ?? "服务暂时不可用，请稍后重试。",
-        envelope?.error?.code,
+        envelope?.error?.code ?? "request_failed",
         envelope?.error?.next_action,
       );
     }

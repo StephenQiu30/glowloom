@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 import "./globals.css";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
   title: "Lanverse · AI 短剧制作平台",
