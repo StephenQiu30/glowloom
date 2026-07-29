@@ -31,6 +31,10 @@ declare namespace API {
     data: ExtractionBatchResponse;
   };
 
+  type ApiResponseExtractionCandidateResponse_ = {
+    data: ExtractionCandidateResponse;
+  };
+
   type ApiResponseListEpisodeResponse_ = {
     /** Data */
     data: EpisodeResponse[];
@@ -43,6 +47,10 @@ declare namespace API {
 
   type ApiResponseMeResponse_ = {
     data: MeResponse;
+  };
+
+  type ApiResponsePaginatedExtractionCandidates_ = {
+    data: PaginatedExtractionCandidates;
   };
 
   type ApiResponsePaginatedProjects_ = {
@@ -113,13 +121,30 @@ declare namespace API {
     workspace_id: string;
   };
 
+  type AssetCandidateProposal = {
+    /** Kind */
+    kind: "asset";
+    /** Asset Kind */
+    asset_kind:
+      | "character"
+      | "location"
+      | "prop"
+      | "costume"
+      | "style"
+      | "voice";
+    /** Name */
+    name: string;
+    /** Description */
+    description: string;
+  };
+
   type AuthResponse = {
     user: UserResponse;
     workspace: WorkspaceResponse;
     /** Access Token */
     access_token: string;
     /** Token Type */
-    token_type: string | null;
+    token_type: "bearer" | null;
     /** Expires In */
     expires_in: number;
   };
@@ -144,6 +169,13 @@ declare namespace API {
     expected_revision: number;
   };
 
+  type CandidateSourceRange = {
+    /** Start */
+    start: number;
+    /** End */
+    end: number;
+  };
+
   type ChangePasswordRequest = {
     /** Current Password */
     current_password: string;
@@ -151,9 +183,20 @@ declare namespace API {
     new_password: string;
   };
 
+  type ContinuityCandidateProposal = {
+    /** Kind */
+    kind: "continuity";
+    /** Severity */
+    severity: "info" | "warning" | "blocking";
+    /** Issue */
+    issue: string;
+    /** Suggestion */
+    suggestion: string;
+  };
+
   type CostSummary = {
     /** Status */
-    status: string | null;
+    status: "not_started" | null;
     /** Currency */
     currency: string;
     /** Reserved */
@@ -184,7 +227,7 @@ declare namespace API {
 
   type DeactivateAccountRequest = {
     /** Confirmation */
-    confirmation: string;
+    confirmation: "DEACTIVATE";
   };
 
   type DeleteBlocker = {
@@ -221,7 +264,7 @@ declare namespace API {
 
   type DeleteResponse = {
     /** Deleted */
-    deleted: boolean | null;
+    deleted: true | null;
   };
 
   type DependencyStatus = {
@@ -231,6 +274,21 @@ declare namespace API {
     status: "available" | "degraded" | "unavailable";
     /** Reason */
     reason: string | null | null;
+  };
+
+  type DialogueCandidateProposal = {
+    /** Kind */
+    kind: "dialogue";
+    /** Scene Candidate Key */
+    scene_candidate_key: string;
+    /** Speaker Candidate */
+    speaker_candidate: string;
+    /** Dialogue Kind */
+    dialogue_kind: "spoken" | "narration" | "internal" | "voice_over";
+    /** Text */
+    text: string;
+    /** Performance Note */
+    performance_note: string | null | null;
   };
 
   type diffVersionsApiV1ScriptVersionsVersionIdDiffGetParams = {
@@ -260,7 +318,7 @@ declare namespace API {
     /** Episode Id */
     episode_id: string;
     /** Current Stage */
-    current_stage: string;
+    current_stage: "script_import";
     /** Completion */
     completion: number;
     /** Blocking Reasons */
@@ -333,7 +391,7 @@ declare namespace API {
     /** Script Version Id */
     script_version_id: string;
     /** Scope */
-    scope: string;
+    scope: "full";
     /** Extractor Version */
     extractor_version: string;
     /** Input Hash */
@@ -349,7 +407,38 @@ declare namespace API {
       | "unknown";
     /** Confirmed Script Version Id */
     confirmed_script_version_id: string | null;
+    /** Candidate Count */
+    candidate_count: number;
     task: TaskResponse;
+    /** Created At */
+    created_at: string;
+  };
+
+  type ExtractionCandidateResponse = {
+    /** Id */
+    id: string;
+    /** Batch Id */
+    batch_id: string;
+    /** Candidate Key */
+    candidate_key: string;
+    /** Kind */
+    kind: "scene" | "dialogue" | "asset" | "shot" | "continuity";
+    source_range: CandidateSourceRange;
+    /** Proposal */
+    proposal:
+      | SceneCandidateProposal
+      | DialogueCandidateProposal
+      | AssetCandidateProposal
+      | ShotCandidateProposal
+      | ContinuityCandidateProposal;
+    /** Confidence Note */
+    confidence_note: string | null;
+    /** Required */
+    required: boolean;
+    /** Status */
+    status: "pending" | "accepted" | "linked" | "merged" | "ignored";
+    /** Revision */
+    revision: number;
     /** Created At */
     created_at: string;
   };
@@ -360,6 +449,10 @@ declare namespace API {
 
   type getExtractionBatchApiV1ExtractionBatchesBatchIdGetParams = {
     batch_id: string;
+  };
+
+  type getExtractionCandidateApiV1ExtractionCandidatesCandidateIdGetParams = {
+    candidate_id: string;
   };
 
   type getProjectApiV1ProjectsProjectIdGetParams = {
@@ -384,7 +477,7 @@ declare namespace API {
 
   type HealthResponse = {
     /** Status */
-    status: string | null;
+    status: "ok" | null;
   };
 
   type HTTPValidationError = {
@@ -401,6 +494,29 @@ declare namespace API {
     include_archived: boolean | null;
   };
 
+  type listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGetParams =
+    {
+      batch_id: string;
+      kind:
+        | "scene"
+        | "dialogue"
+        | "asset"
+        | "shot"
+        | "continuity"
+        | null
+        | null;
+      status:
+        | "pending"
+        | "accepted"
+        | "linked"
+        | "merged"
+        | "ignored"
+        | null
+        | null;
+      limit: number | null | null;
+      offset: number | null;
+    };
+
   type listProjectsApiV1ProjectsGetParams = {
     workspace_id: string;
     include_archived: boolean | null;
@@ -413,7 +529,7 @@ declare namespace API {
 
   type listTasksApiV1TasksGetParams = {
     workspace_id: string;
-    task_type: string | null | null;
+    task_type: "script_extraction" | null | null;
     status:
       | "queued"
       | "running"
@@ -457,6 +573,17 @@ declare namespace API {
     label: string;
     /** Href */
     href: string;
+  };
+
+  type PaginatedExtractionCandidates = {
+    /** Items */
+    items: ExtractionCandidateResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
   };
 
   type PaginatedProjects = {
@@ -640,26 +767,39 @@ declare namespace API {
 
   type ReviewSummary = {
     /** Status */
-    status: string | null;
+    status: "not_started" | null;
     /** Pending */
     pending: number | null;
   };
 
   type RevocationResponse = {
     /** Revoked */
-    revoked: boolean | null;
+    revoked: true | null;
+  };
+
+  type SceneCandidateProposal = {
+    /** Kind */
+    kind: "scene";
+    /** Heading */
+    heading: string;
+    /** Location */
+    location: string;
+    /** Time Of Day */
+    time_of_day: string;
+    /** Summary */
+    summary: string;
   };
 
   type ScriptExtractionRequest = {
     /** Scope */
-    scope: string;
+    scope: "full";
     /** Idempotency Key */
     idempotency_key: string;
   };
 
   type ScriptImportRequest = {
     /** Input Type */
-    input_type: string;
+    input_type: "text";
     /** Title */
     title: string;
     /** Body */
@@ -753,6 +893,17 @@ declare namespace API {
     episode_id: string;
   };
 
+  type ShotCandidateProposal = {
+    /** Kind */
+    kind: "shot";
+    /** Scene Candidate Key */
+    scene_candidate_key: string;
+    /** Title */
+    title: string;
+    /** Purpose */
+    purpose: string;
+  };
+
   type startExtractionApiV1ScriptVersionsVersionIdExtractionsPostParams = {
     version_id: string;
   };
@@ -772,9 +923,9 @@ declare namespace API {
     /** Workspace Id */
     workspace_id: string;
     /** Task Type */
-    task_type: string;
+    task_type: "script_extraction";
     /** Request Type */
-    request_type: string;
+    request_type: "extraction_batch";
     /** Request Id */
     request_id: string;
     scope: TaskScopeResponse;
@@ -815,7 +966,7 @@ declare namespace API {
 
   type TaskSummary = {
     /** Status */
-    status: string | null;
+    status: "not_started" | null;
     /** Running */
     running: number | null;
     /** Failed */

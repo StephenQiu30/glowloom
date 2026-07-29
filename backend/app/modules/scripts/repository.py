@@ -4,7 +4,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.identity.models import Membership
-from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
+from app.modules.scripts.models import (
+    ExtractionBatch,
+    ExtractionCandidate,
+    ScriptSource,
+    ScriptVersion,
+)
 
 
 async def find_source_by_idempotency(
@@ -82,6 +87,15 @@ async def find_version_for_user(
     )
 
 
+async def find_version(
+    session: AsyncSession,
+    version_id: UUID,
+) -> ScriptVersion | None:
+    return await session.scalar(
+        select(ScriptVersion).where(ScriptVersion.id == version_id)
+    )
+
+
 async def list_versions_for_user(
     session: AsyncSession,
     user_id: UUID,
@@ -147,6 +161,61 @@ async def find_extraction_batch_for_user(
         .join(Membership, Membership.workspace_id == ExtractionBatch.workspace_id)
         .where(
             ExtractionBatch.id == batch_id,
+            Membership.user_id == user_id,
+            Membership.status == "active",
+        )
+    )
+
+
+async def list_extraction_candidates_for_user(
+    session: AsyncSession,
+    user_id: UUID,
+    batch_id: UUID,
+    *,
+    kind: str | None,
+    status: str | None,
+    limit: int,
+    offset: int,
+) -> tuple[list[ExtractionCandidate], int] | None:
+    batch = await find_extraction_batch_for_user(session, user_id, batch_id)
+    if batch is None:
+        return None
+    filters = [ExtractionCandidate.batch_id == batch_id]
+    if kind is not None:
+        filters.append(ExtractionCandidate.kind == kind)
+    if status is not None:
+        filters.append(ExtractionCandidate.status == status)
+    total = await session.scalar(
+        select(func.count()).select_from(ExtractionCandidate).where(*filters)
+    )
+    candidates = await session.scalars(
+        select(ExtractionCandidate)
+        .where(*filters)
+        .order_by(
+            ExtractionCandidate.source_start,
+            ExtractionCandidate.source_end,
+            ExtractionCandidate.id,
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(candidates), total or 0
+
+
+async def find_extraction_candidate_for_user(
+    session: AsyncSession,
+    user_id: UUID,
+    candidate_id: UUID,
+) -> ExtractionCandidate | None:
+    return await session.scalar(
+        select(ExtractionCandidate)
+        .join(
+            ExtractionBatch,
+            ExtractionBatch.id == ExtractionCandidate.batch_id,
+        )
+        .join(Membership, Membership.workspace_id == ExtractionCandidate.workspace_id)
+        .where(
+            ExtractionCandidate.id == candidate_id,
             Membership.user_id == user_id,
             Membership.status == "active",
         )

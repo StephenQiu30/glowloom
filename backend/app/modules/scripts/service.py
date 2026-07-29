@@ -1,9 +1,11 @@
+import json
 from datetime import UTC, datetime
 from difflib import unified_diff
 from hashlib import sha256
 from typing import Literal, cast
 from uuid import UUID
 
+from pydantic import TypeAdapter
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid6 import uuid7
@@ -12,6 +14,7 @@ from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.identity import service as identity_service
 from app.modules.identity.policy import Capability
+from app.modules.production import repository as production_repository
 from app.modules.production import service as production_service
 from app.modules.production.schemas import (
     ScriptExtractionTaskCommand,
@@ -20,13 +23,25 @@ from app.modules.production.schemas import (
 )
 from app.modules.projects import service as projects_service
 from app.modules.scripts import repository
-from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
+from app.modules.scripts.models import (
+    ExtractionBatch,
+    ExtractionCandidate,
+    ScriptSource,
+    ScriptVersion,
+)
 from app.modules.scripts.schemas import (
+    CandidateKind,
+    CandidateProposal,
+    CandidateSourceRange,
+    CandidateStatus,
     CurrentScriptVersionRequest,
     CurrentScriptVersionResponse,
     ExtractionBatchResponse,
+    ExtractionCandidateResponse,
+    PaginatedExtractionCandidates,
     PaginatedScriptVersions,
     ScriptExtractionRequest,
+    ScriptExtractionResult,
     ScriptImportRequest,
     ScriptImportResponse,
     ScriptSourceResponse,
@@ -38,6 +53,9 @@ from app.modules.scripts.schemas import (
 )
 
 SCRIPT_STRUCTURE_EXTRACTOR_VERSION = "script-structure-v1"
+_CANDIDATE_PROPOSAL_ADAPTER: TypeAdapter[CandidateProposal] = TypeAdapter(
+    CandidateProposal
+)
 
 
 def _source_response(source: ScriptSource) -> ScriptSourceResponse:
@@ -114,9 +132,48 @@ def _batch_response(
         input_hash=batch.input_hash,
         status=task.status,
         confirmed_script_version_id=batch.confirmed_script_version_id,
+        candidate_count=batch.candidate_count,
         task=task,
         created_at=batch.created_at,
     )
+
+
+def _candidate_response(
+    candidate: ExtractionCandidate,
+) -> ExtractionCandidateResponse:
+    return ExtractionCandidateResponse(
+        id=candidate.id,
+        batch_id=candidate.batch_id,
+        candidate_key=candidate.candidate_key,
+        kind=cast(CandidateKind, candidate.kind),
+        source_range=CandidateSourceRange(
+            start=candidate.source_start,
+            end=candidate.source_end,
+        ),
+        proposal=_CANDIDATE_PROPOSAL_ADAPTER.validate_python(candidate.proposal),
+        confidence_note=candidate.confidence_note,
+        required=candidate.required,
+        status=cast(CandidateStatus, candidate.status),
+        revision=candidate.revision,
+        created_at=candidate.created_at,
+    )
+
+
+def _extraction_result_hash(result: ScriptExtractionResult) -> str:
+    candidates = sorted(
+        (
+            candidate.model_dump(mode="json")
+            for candidate in result.candidates
+        ),
+        key=lambda candidate: candidate["candidate_key"],
+    )
+    canonical = json.dumps(
+        {"candidates": candidates},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return sha256(canonical.encode()).hexdigest()
 
 
 def _same_extraction(
@@ -606,3 +663,159 @@ async def synchronize_extraction_batch_status(
     batch.status = status
     batch.updated_at = now
     await session.flush()
+
+
+async def record_extraction_result(
+    session: AsyncSession,
+    batch_id: UUID,
+    result: ScriptExtractionResult,
+) -> None:
+    snapshot = await repository.find_extraction_batch(session, batch_id)
+    if snapshot is None or snapshot.task_id is None:
+        raise ApiError(
+            ErrorCode.NOT_FOUND,
+            "Extraction batch not found",
+            status_code=404,
+        )
+    task = await production_repository.find_task(
+        session,
+        snapshot.task_id,
+        for_update=True,
+    )
+    batch = await repository.find_extraction_batch(
+        session,
+        batch_id,
+        for_update=True,
+    )
+    if (
+        task is None
+        or batch is None
+        or batch.task_id != task.id
+        or task.request_id != batch.id
+        or task.workspace_id != batch.workspace_id
+    ):
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Extraction task state is unavailable",
+            status_code=500,
+        )
+
+    result_hash = _extraction_result_hash(result)
+    if task.status == "succeeded" or batch.status == "succeeded":
+        if (
+            task.status == "succeeded"
+            and batch.status == "succeeded"
+            and batch.result_hash == result_hash
+        ):
+            return
+        raise ApiError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "Extraction result does not match the completed batch",
+            status_code=409,
+        )
+    if task.status in {"failed", "cancelled"} or batch.status in {
+        "failed",
+        "cancelled",
+    }:
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Extraction batch cannot accept a result",
+            status_code=409,
+        )
+    if batch.candidate_count != 0 or batch.result_hash is not None:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Extraction result state is unavailable",
+            status_code=500,
+        )
+
+    version = await repository.find_version(session, batch.script_version_id)
+    if version is None or version.workspace_id != batch.workspace_id:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Extraction input version is unavailable",
+            status_code=500,
+        )
+    for candidate in result.candidates:
+        if candidate.source_range.end > len(version.body):
+            raise ApiError(
+                ErrorCode.INVALID_REQUEST,
+                "Candidate source range exceeds the script body",
+                status_code=422,
+            )
+
+    now = datetime.now(UTC)
+    session.add_all(
+        [
+            ExtractionCandidate(
+                id=uuid7(),
+                workspace_id=batch.workspace_id,
+                batch_id=batch.id,
+                candidate_key=candidate.candidate_key,
+                kind=candidate.proposal.kind,
+                source_start=candidate.source_range.start,
+                source_end=candidate.source_range.end,
+                proposal=candidate.proposal.model_dump(mode="json"),
+                confidence_note=candidate.confidence_note,
+                required=candidate.proposal.kind in {"scene", "dialogue"},
+                status="pending",
+                revision=1,
+                created_at=now,
+                updated_at=now,
+            )
+            for candidate in result.candidates
+        ]
+    )
+    production_service.complete_script_extraction_task(task, now=now)
+    batch.status = "succeeded"
+    batch.result_hash = result_hash
+    batch.candidate_count = len(result.candidates)
+    batch.updated_at = now
+    await session.flush()
+
+
+async def list_extraction_candidates(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    batch_id: UUID,
+    *,
+    kind: CandidateKind | None,
+    status: CandidateStatus | None,
+    limit: int,
+    offset: int,
+) -> PaginatedExtractionCandidates:
+    user = await identity_service.authenticated_user(session, claims)
+    result = await repository.list_extraction_candidates_for_user(
+        session,
+        user.id,
+        batch_id,
+        kind=kind,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    if result is None:
+        raise _not_found("Extraction batch")
+    candidates, total = result
+    return PaginatedExtractionCandidates(
+        items=[_candidate_response(candidate) for candidate in candidates],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+async def get_extraction_candidate(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    candidate_id: UUID,
+) -> ExtractionCandidateResponse:
+    user = await identity_service.authenticated_user(session, claims)
+    candidate = await repository.find_extraction_candidate_for_user(
+        session,
+        user.id,
+        candidate_id,
+    )
+    if candidate is None:
+        raise _not_found("Extraction candidate")
+    return _candidate_response(candidate)

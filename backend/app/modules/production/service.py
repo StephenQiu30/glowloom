@@ -95,6 +95,28 @@ def fail_script_extraction_task(
     return True
 
 
+def complete_script_extraction_task(task: Task, *, now: datetime) -> bool:
+    if task.task_type != "script_extraction":
+        raise ValueError("task is not a script extraction task")
+    if task.status == "succeeded":
+        return False
+    if task.status in {"failed", "cancelled"}:
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Task cannot be completed from its current state",
+            status_code=409,
+        )
+    task.status = "succeeded"
+    task.progress_stage = "completed"
+    task.error_code = None
+    task.error_retryable = None
+    task.error_summary = None
+    task.next_action = "review_candidates"
+    task.revision += 1
+    task.updated_at = now
+    return True
+
+
 async def create_script_extraction_task(
     session: AsyncSession,
     actor: ActorContext,

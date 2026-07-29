@@ -9,9 +9,13 @@ from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
 from app.modules.scripts import service
 from app.modules.scripts.schemas import (
+    CandidateKind,
+    CandidateStatus,
     CurrentScriptVersionRequest,
     CurrentScriptVersionResponse,
     ExtractionBatchResponse,
+    ExtractionCandidateResponse,
+    PaginatedExtractionCandidates,
     PaginatedScriptVersions,
     ScriptExtractionRequest,
     ScriptImportRequest,
@@ -189,6 +193,49 @@ async def get_extraction_batch(
 ) -> ApiResponse[ExtractionBatchResponse]:
     return ApiResponse(
         data=await service.get_extraction_batch(session, claims, batch_id)
+    )
+
+
+@router.get(
+    "/extraction-batches/{batch_id}/candidates",
+    response_model=ApiResponse[PaginatedExtractionCandidates],
+)
+async def list_extraction_candidates(
+    batch_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+    kind: Annotated[CandidateKind | None, Query()] = None,
+    candidate_status: Annotated[
+        CandidateStatus | None,
+        Query(alias="status"),
+    ] = None,
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ApiResponse[PaginatedExtractionCandidates]:
+    return ApiResponse(
+        data=await service.list_extraction_candidates(
+            session,
+            claims,
+            batch_id,
+            kind=kind,
+            status=candidate_status,
+            limit=limit or 20,
+            offset=offset,
+        )
+    )
+
+
+@router.get(
+    "/extraction-candidates/{candidate_id}",
+    response_model=ApiResponse[ExtractionCandidateResponse],
+)
+async def get_extraction_candidate(
+    candidate_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ExtractionCandidateResponse]:
+    return ApiResponse(
+        data=await service.get_extraction_candidate(session, claims, candidate_id)
     )
 
 

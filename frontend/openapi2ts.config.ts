@@ -19,6 +19,7 @@ const HTTP_METHODS = [
 function normalizeGeneratorSuccessResponses(
   openAPIData: OpenAPIObject
 ): OpenAPIObject {
+  exposeConstAsEnum(openAPIData);
   for (const pathItem of Object.values(openAPIData.paths)) {
     if (!pathItem) continue;
     for (const method of HTTP_METHODS) {
@@ -32,6 +33,13 @@ function normalizeGeneratorSuccessResponses(
     }
   }
   return openAPIData;
+}
+
+function exposeConstAsEnum(value: unknown): void {
+  if (typeof value !== "object" || value === null) return;
+  const object = value as Record<string, unknown>;
+  if ("const" in object && !("enum" in object)) object.enum = [object.const];
+  for (const child of Object.values(object)) exposeConstAsEnum(child);
 }
 
 const config = {

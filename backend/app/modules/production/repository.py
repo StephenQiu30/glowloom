@@ -8,8 +8,16 @@ from app.modules.production.models import Task
 from app.modules.production.schemas import TaskStatus
 
 
-async def find_task(session: AsyncSession, task_id: UUID) -> Task | None:
-    return await session.scalar(select(Task).where(Task.id == task_id))
+async def find_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    for_update: bool = False,
+) -> Task | None:
+    query = select(Task).where(Task.id == task_id)
+    if for_update:
+        query = query.with_for_update()
+    return await session.scalar(query)
 
 
 async def find_idempotent_task(

@@ -3,6 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -113,6 +114,7 @@ class ExtractionBatch(Base):
             "'failed', 'cancelled', 'unknown')",
             name="ck_scr_batch_status",
         ),
+        CheckConstraint("candidate_count >= 0", name="ck_scr_batch_candidate_count"),
         UniqueConstraint("id", "workspace_id", name="uq_scr_batch_id_workspace"),
         UniqueConstraint(
             "script_version_id",
@@ -137,10 +139,64 @@ class ExtractionBatch(Base):
     input_hash: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(30), default="queued")
     confirmed_script_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    result_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    candidate_count: Mapped[int] = mapped_column(Integer, default=0)
     idempotency_key: Mapped[str] = mapped_column(String(200))
     created_by: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
     )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
+    )
+
+
+class ExtractionCandidate(Base):
+    __tablename__ = "scr_extraction_candidates"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["batch_id", "workspace_id"],
+            ["scr_extraction_batches.id", "scr_extraction_batches.workspace_id"],
+            name="fk_scr_candidate_batch_workspace",
+        ),
+        CheckConstraint(
+            "kind IN ('scene', 'dialogue', 'asset', 'shot', 'continuity')",
+            name="ck_scr_candidate_kind",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'accepted', 'linked', 'merged', 'ignored')",
+            name="ck_scr_candidate_status",
+        ),
+        CheckConstraint("source_start >= 0", name="ck_scr_candidate_source_start"),
+        CheckConstraint(
+            "source_end > source_start", name="ck_scr_candidate_source_range"
+        ),
+        CheckConstraint("revision >= 1", name="ck_scr_candidate_revision"),
+        UniqueConstraint("id", "workspace_id", name="uq_scr_candidate_id_workspace"),
+        UniqueConstraint(
+            "batch_id", "candidate_key", name="uq_scr_candidate_batch_key"
+        ),
+        Index(
+            "ix_scr_candidate_batch_status_range",
+            "batch_id",
+            "status",
+            "source_start",
+            "source_end",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    batch_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    candidate_key: Mapped[str] = mapped_column(String(100))
+    kind: Mapped[str] = mapped_column(String(30))
+    source_start: Mapped[int] = mapped_column(Integer)
+    source_end: Mapped[int] = mapped_column(Integer)
+    proposal: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    confidence_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    required: Mapped[bool] = mapped_column(Boolean)
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    revision: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now, onupdate=_utc_now

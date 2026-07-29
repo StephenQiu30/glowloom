@@ -63,6 +63,42 @@ export async function getExtractionBatchApiV1ExtractionBatchesBatchIdGet(
   );
 }
 
+/** List Extraction Candidates GET /api/v1/extraction-batches/${param0}/candidates */
+export async function listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGetParams,
+  options?: RequestOptions
+) {
+  const { batch_id: param0, ...queryParams } = params;
+  return request<API.ApiResponsePaginatedExtractionCandidates_>(
+    `/api/v1/extraction-batches/${param0}/candidates`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Get Extraction Candidate GET /api/v1/extraction-candidates/${param0} */
+export async function getExtractionCandidateApiV1ExtractionCandidatesCandidateIdGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getExtractionCandidateApiV1ExtractionCandidatesCandidateIdGetParams,
+  options?: RequestOptions
+) {
+  const { candidate_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseExtractionCandidateResponse_>(
+    `/api/v1/extraction-candidates/${param0}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
 /** Get Source GET /api/v1/script-sources/${param0} */
 export async function getSourceApiV1ScriptSourcesSourceIdGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
