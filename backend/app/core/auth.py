@@ -1,13 +1,17 @@
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 import jwt
+from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings
+from app.core.errors import ApiError, ErrorCode
 
 ALGORITHM = "HS256"
+_bearer = HTTPBearer(auto_error=False)
 
 
 class AccessTokenClaims(BaseModel):
@@ -51,3 +55,26 @@ def decode_access_token(token: str, settings: Settings) -> AccessTokenClaims | N
         return AccessTokenClaims.model_validate(claims)
     except (jwt.PyJWTError, ValidationError, ValueError):
         return None
+
+
+def get_request_settings(request: Request) -> Settings:
+    return request.app.state.settings
+
+
+def get_access_token_claims(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    settings: Annotated[Settings, Depends(get_request_settings)],
+) -> AccessTokenClaims:
+    claims = (
+        decode_access_token(credentials.credentials, settings)
+        if credentials is not None and credentials.scheme.lower() == "bearer"
+        else None
+    )
+    if claims is None:
+        raise ApiError(
+            ErrorCode.UNAUTHENTICATED,
+            "Invalid credentials",
+            status_code=401,
+            next_action="login",
+        )
+    return claims
