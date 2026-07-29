@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AccessTokenClaims, get_access_token_claims
@@ -11,7 +11,9 @@ from app.modules.scripts import service
 from app.modules.scripts.schemas import (
     CurrentScriptVersionRequest,
     CurrentScriptVersionResponse,
+    ExtractionBatchResponse,
     PaginatedScriptVersions,
+    ScriptExtractionRequest,
     ScriptImportRequest,
     ScriptImportResponse,
     ScriptSourceResponse,
@@ -150,6 +152,43 @@ async def diff_versions(
         data=await service.diff_versions(
             session, claims, version_id, other_version_id
         )
+    )
+
+
+@router.post(
+    "/script-versions/{version_id}/extractions",
+    response_model=ApiResponse[ExtractionBatchResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_extraction(
+    version_id: UUID,
+    payload: ScriptExtractionRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ExtractionBatchResponse]:
+    return ApiResponse(
+        data=await service.start_extraction(
+            session,
+            claims,
+            version_id,
+            payload,
+            trace_id=request.state.request_id,
+        )
+    )
+
+
+@router.get(
+    "/extraction-batches/{batch_id}",
+    response_model=ApiResponse[ExtractionBatchResponse],
+)
+async def get_extraction_batch(
+    batch_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ExtractionBatchResponse]:
+    return ApiResponse(
+        data=await service.get_extraction_batch(session, claims, batch_id)
     )
 
 

@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.identity.models import Membership
-from app.modules.scripts.models import ScriptSource, ScriptVersion
+from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
 
 
 async def find_source_by_idempotency(
@@ -106,3 +106,48 @@ async def list_versions_for_user(
         .offset(offset)
     )
     return list(rows), total or 0
+
+
+async def find_idempotent_extraction_batch(
+    session: AsyncSession,
+    script_version_id: UUID,
+    idempotency_key: str,
+) -> ExtractionBatch | None:
+    return await session.scalar(
+        select(ExtractionBatch).where(
+            ExtractionBatch.script_version_id == script_version_id,
+            ExtractionBatch.idempotency_key == idempotency_key,
+        )
+    )
+
+
+async def find_extraction_batch(
+    session: AsyncSession,
+    batch_id: UUID,
+    *,
+    for_update: bool = False,
+) -> ExtractionBatch | None:
+    query = select(ExtractionBatch).where(ExtractionBatch.id == batch_id)
+    if for_update:
+        query = query.with_for_update()
+    return await session.scalar(query)
+
+
+async def find_extraction_batch_for_user(
+    session: AsyncSession,
+    user_id: UUID,
+    batch_id: UUID,
+) -> ExtractionBatch | None:
+    return await session.scalar(
+        select(ExtractionBatch)
+        .join(
+            ScriptVersion,
+            ScriptVersion.id == ExtractionBatch.script_version_id,
+        )
+        .join(Membership, Membership.workspace_id == ExtractionBatch.workspace_id)
+        .where(
+            ExtractionBatch.id == batch_id,
+            Membership.user_id == user_id,
+            Membership.status == "active",
+        )
+    )

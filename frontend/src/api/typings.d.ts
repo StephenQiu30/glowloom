@@ -27,6 +27,10 @@ declare namespace API {
     data: EpisodeResponse;
   };
 
+  type ApiResponseExtractionBatchResponse_ = {
+    data: ExtractionBatchResponse;
+  };
+
   type ApiResponseListEpisodeResponse_ = {
     /** Data */
     data: EpisodeResponse[];
@@ -321,8 +325,41 @@ declare namespace API {
     expected_revision: number;
   };
 
+  type ExtractionBatchResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Script Version Id */
+    script_version_id: string;
+    /** Scope */
+    scope: string;
+    /** Extractor Version */
+    extractor_version: string;
+    /** Input Hash */
+    input_hash: string;
+    /** Status */
+    status:
+      | "queued"
+      | "running"
+      | "waiting_provider"
+      | "succeeded"
+      | "failed"
+      | "cancelled"
+      | "unknown";
+    /** Confirmed Script Version Id */
+    confirmed_script_version_id: string | null;
+    task: TaskResponse;
+    /** Created At */
+    created_at: string;
+  };
+
   type getEpisodeApiV1EpisodesEpisodeIdGetParams = {
     episode_id: string;
+  };
+
+  type getExtractionBatchApiV1ExtractionBatchesBatchIdGetParams = {
+    batch_id: string;
   };
 
   type getProjectApiV1ProjectsProjectIdGetParams = {
@@ -613,6 +650,13 @@ declare namespace API {
     revoked: boolean | null;
   };
 
+  type ScriptExtractionRequest = {
+    /** Scope */
+    scope: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
   type ScriptImportRequest = {
     /** Input Type */
     input_type: string;
@@ -707,6 +751,10 @@ declare namespace API {
 
   type setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPostParams = {
     episode_id: string;
+  };
+
+  type startExtractionApiV1ScriptVersionsVersionIdExtractionsPostParams = {
+    version_id: string;
   };
 
   type TaskErrorResponse = {

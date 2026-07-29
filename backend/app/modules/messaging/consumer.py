@@ -10,6 +10,7 @@ from app.modules.messaging.models import InboxDelivery
 from app.modules.messaging.schemas import MessageEnvelope
 from app.modules.production.models import Task
 from app.modules.production.service import fail_script_extraction_task
+from app.modules.scripts import service as scripts_service
 
 IO_SCRIPT_EXTRACTION_CONSUMER = "lanverse.io.script-extraction.v1"
 ConsumerResult = Literal["completed", "duplicate", "rejected"]
@@ -100,37 +101,49 @@ async def consume_envelope(
     if envelope.event_type != "script_extraction.requested":
         return _reject(delivery, error_code="unsupported_message_type", now=now)
     if envelope.schema_version != 1:
-        fail_script_extraction_task(
+        changed = fail_script_extraction_task(
             task,
             error_code="unsupported_message_schema",
             error_summary="Message schema is not supported",
             next_action="contact_support",
             now=now,
         )
+        if changed:
+            await scripts_service.synchronize_extraction_batch_status(
+                session, task.request_id, "failed", now=now
+            )
         return _reject(
             delivery,
             error_code="unsupported_message_schema",
             now=now,
         )
     if envelope.payload != {"task_id": str(envelope.aggregate_id)}:
-        fail_script_extraction_task(
+        changed = fail_script_extraction_task(
             task,
             error_code="invalid_message_payload",
             error_summary="Message payload does not match the task",
             next_action="contact_support",
             now=now,
         )
+        if changed:
+            await scripts_service.synchronize_extraction_batch_status(
+                session, task.request_id, "failed", now=now
+            )
         return _reject(delivery, error_code="invalid_message_payload", now=now)
     if task.task_type != "script_extraction" or task.request_type != "extraction_batch":
         return _reject(delivery, error_code="unsupported_task_type", now=now)
 
-    fail_script_extraction_task(
+    changed = fail_script_extraction_task(
         task,
         error_code="ai_service_unavailable",
         error_summary="AI extraction service is not configured",
         next_action="configure_ai_service",
         now=now,
     )
+    if changed:
+        await scripts_service.synchronize_extraction_batch_status(
+            session, task.request_id, "failed", now=now
+        )
     delivery.status = "completed"
     delivery.last_error = None
     delivery.processed_at = now

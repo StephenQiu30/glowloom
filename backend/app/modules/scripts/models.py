@@ -92,3 +92,56 @@ class ScriptVersion(Base):
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
+class ExtractionBatch(Base):
+    __tablename__ = "scr_extraction_batches"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["script_version_id", "workspace_id"],
+            ["scr_script_versions.id", "scr_script_versions.workspace_id"],
+            name="fk_scr_batch_version_workspace",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "workspace_id"],
+            ["prod_tasks.id", "prod_tasks.workspace_id"],
+            name="fk_scr_batch_task_workspace",
+        ),
+        CheckConstraint("scope = 'full'", name="ck_scr_batch_scope"),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'waiting_provider', 'succeeded', "
+            "'failed', 'cancelled', 'unknown')",
+            name="ck_scr_batch_status",
+        ),
+        UniqueConstraint("id", "workspace_id", name="uq_scr_batch_id_workspace"),
+        UniqueConstraint(
+            "script_version_id",
+            "idempotency_key",
+            name="uq_scr_batch_version_idempotency",
+        ),
+        UniqueConstraint("task_id", name="uq_scr_batch_task"),
+        Index(
+            "ix_scr_batch_workspace_status_created",
+            "workspace_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    script_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    scope: Mapped[str] = mapped_column(String(20), default="full")
+    extractor_version: Mapped[str] = mapped_column(String(80))
+    input_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(30), default="queued")
+    confirmed_script_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(200))
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
+    )

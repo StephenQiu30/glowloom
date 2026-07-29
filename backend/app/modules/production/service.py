@@ -27,7 +27,7 @@ from app.modules.production.schemas import (
 )
 
 
-def _response(task: Task) -> TaskResponse:
+def task_response(task: Task) -> TaskResponse:
     error = (
         TaskErrorResponse(
             code=task.error_code,
@@ -199,7 +199,7 @@ async def get_task(
         if error.code in {ErrorCode.NOT_FOUND, ErrorCode.FORBIDDEN}:
             raise ApiError(ErrorCode.NOT_FOUND, "Task not found", status_code=404) from error
         raise
-    return _response(task)
+    return task_response(task)
 
 
 async def list_tasks(
@@ -224,7 +224,7 @@ async def list_tasks(
         offset=offset,
     )
     return PaginatedTasks(
-        items=[_response(task) for task in tasks],
+        items=[task_response(task) for task in tasks],
         total=total,
         limit=limit,
         offset=offset,

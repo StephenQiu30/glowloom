@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.modules.production.schemas import TaskResponse, TaskStatus
+
 
 class CommandModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -106,6 +108,24 @@ class ScriptVersionDiffResponse(BaseModel):
     added_lines: int
     removed_lines: int
     diff_lines: list[str]
+
+
+class ScriptExtractionRequest(CommandModel):
+    scope: Literal["full"]
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class ExtractionBatchResponse(BaseModel):
+    id: UUID
+    workspace_id: UUID
+    script_version_id: UUID
+    scope: Literal["full"]
+    extractor_version: str
+    input_hash: str
+    status: TaskStatus
+    confirmed_script_version_id: UUID | None
+    task: TaskResponse
+    created_at: datetime
 
 
 class PaginatedScriptVersions(BaseModel):

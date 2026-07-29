@@ -11,13 +11,22 @@ from uuid6 import uuid7
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.identity import service as identity_service
+from app.modules.identity.policy import Capability
+from app.modules.production import service as production_service
+from app.modules.production.schemas import (
+    ScriptExtractionTaskCommand,
+    TaskResponse,
+    TaskStatus,
+)
 from app.modules.projects import service as projects_service
 from app.modules.scripts import repository
-from app.modules.scripts.models import ScriptSource, ScriptVersion
+from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
 from app.modules.scripts.schemas import (
     CurrentScriptVersionRequest,
     CurrentScriptVersionResponse,
+    ExtractionBatchResponse,
     PaginatedScriptVersions,
+    ScriptExtractionRequest,
     ScriptImportRequest,
     ScriptImportResponse,
     ScriptSourceResponse,
@@ -27,6 +36,8 @@ from app.modules.scripts.schemas import (
     ScriptVersionPublishResponse,
     ScriptVersionResponse,
 )
+
+SCRIPT_STRUCTURE_EXTRACTOR_VERSION = "script-structure-v1"
 
 
 def _source_response(source: ScriptSource) -> ScriptSourceResponse:
@@ -82,6 +93,47 @@ def _source_revision(source: ScriptSource, expected_revision: int) -> None:
             status_code=409,
             details={"current_revision": source.revision},
         )
+
+
+def _batch_response(
+    batch: ExtractionBatch,
+    task: TaskResponse,
+) -> ExtractionBatchResponse:
+    if batch.task_id != task.id:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Extraction batch task is unavailable",
+            status_code=500,
+        )
+    return ExtractionBatchResponse(
+        id=batch.id,
+        workspace_id=batch.workspace_id,
+        script_version_id=batch.script_version_id,
+        scope=cast(Literal["full"], batch.scope),
+        extractor_version=batch.extractor_version,
+        input_hash=batch.input_hash,
+        status=task.status,
+        confirmed_script_version_id=batch.confirmed_script_version_id,
+        task=task,
+        created_at=batch.created_at,
+    )
+
+
+def _same_extraction(
+    batch: ExtractionBatch,
+    version: ScriptVersion,
+    request: ScriptExtractionRequest,
+) -> bool:
+    return (
+        batch.script_version_id == version.id
+        and batch.scope == request.scope
+        and batch.extractor_version == SCRIPT_STRUCTURE_EXTRACTOR_VERSION
+        and batch.input_hash == version.content_hash
+    )
+
+
+def _task_idempotency_key(version_id: UUID, idempotency_key: str) -> str:
+    return sha256(f"{version_id}:{idempotency_key}".encode()).hexdigest()
 
 
 def _same_import(
@@ -413,3 +465,144 @@ async def diff_versions(
         ),
         diff_lines=diff_lines,
     )
+
+
+async def start_extraction(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    version_id: UUID,
+    request: ScriptExtractionRequest,
+    *,
+    trace_id: str,
+) -> ExtractionBatchResponse:
+    now = datetime.now(UTC)
+    async with session.begin():
+        user = await identity_service.authenticated_user(session, claims)
+        version = await repository.find_version_for_user(session, user.id, version_id)
+        if version is None:
+            raise _not_found("Script version")
+        if version.status != "published":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Only published script versions can be extracted",
+                status_code=409,
+            )
+        source = await repository.find_source_for_user(
+            session, user.id, version.source_id, for_update=True
+        )
+        if source is None:
+            raise _not_found("Script source")
+        if source.status != "active":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Script source is archived",
+                status_code=409,
+            )
+        episode = await projects_service.lock_active_episode_for_content_write(
+            session, claims, source.episode_id
+        )
+        actor = await identity_service.actor_context(
+            session,
+            claims,
+            source.workspace_id,
+            Capability.CONTENT_WRITE,
+        )
+        batch_id = uuid7()
+        inserted_id = await session.scalar(
+            insert(ExtractionBatch)
+            .values(
+                id=batch_id,
+                workspace_id=source.workspace_id,
+                script_version_id=version.id,
+                scope=request.scope,
+                extractor_version=SCRIPT_STRUCTURE_EXTRACTOR_VERSION,
+                input_hash=version.content_hash,
+                status="queued",
+                idempotency_key=request.idempotency_key,
+                created_by=claims.sub,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(
+                constraint="uq_scr_batch_version_idempotency"
+            )
+            .returning(ExtractionBatch.id)
+        )
+        if inserted_id is None:
+            batch = await repository.find_idempotent_extraction_batch(
+                session, version.id, request.idempotency_key
+            )
+            if batch is None or batch.task_id is None:
+                raise ApiError(
+                    ErrorCode.INTERNAL_ERROR,
+                    "Extraction batch state is unavailable",
+                    status_code=500,
+                )
+            if not _same_extraction(batch, version, request):
+                raise ApiError(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "Idempotency key was used with different input",
+                    status_code=409,
+                )
+            task = await production_service.get_task(session, claims, batch.task_id)
+            return _batch_response(batch, task)
+
+        task_model = await production_service.create_script_extraction_task(
+            session,
+            actor,
+            ScriptExtractionTaskCommand(
+                workspace_id=source.workspace_id,
+                episode_id=episode.id,
+                request_id=inserted_id,
+                input_version_id=version.id,
+                input_hash=version.content_hash,
+                idempotency_key=_task_idempotency_key(
+                    version.id, request.idempotency_key
+                ),
+            ),
+            trace_id=trace_id,
+        )
+        batch = await repository.find_extraction_batch(
+            session, inserted_id, for_update=True
+        )
+        if batch is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Extraction batch state is unavailable",
+                status_code=500,
+            )
+        batch.task_id = task_model.id
+        await session.flush()
+    return _batch_response(batch, production_service.task_response(task_model))
+
+
+async def get_extraction_batch(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    batch_id: UUID,
+) -> ExtractionBatchResponse:
+    user = await identity_service.authenticated_user(session, claims)
+    batch = await repository.find_extraction_batch_for_user(
+        session, user.id, batch_id
+    )
+    if batch is None or batch.task_id is None:
+        raise _not_found("Extraction batch")
+    task = await production_service.get_task(session, claims, batch.task_id)
+    return _batch_response(batch, task)
+
+
+async def synchronize_extraction_batch_status(
+    session: AsyncSession,
+    batch_id: UUID,
+    status: TaskStatus,
+    *,
+    now: datetime,
+) -> None:
+    batch = await repository.find_extraction_batch(
+        session, batch_id, for_update=True
+    )
+    if batch is None:
+        return
+    batch.status = status
+    batch.updated_at = now
+    await session.flush()

@@ -46,6 +46,23 @@ export async function importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPost(
   );
 }
 
+/** Get Extraction Batch GET /api/v1/extraction-batches/${param0} */
+export async function getExtractionBatchApiV1ExtractionBatchesBatchIdGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getExtractionBatchApiV1ExtractionBatchesBatchIdGetParams,
+  options?: RequestOptions
+) {
+  const { batch_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseExtractionBatchResponse_>(
+    `/api/v1/extraction-batches/${param0}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
 /** Get Source GET /api/v1/script-sources/${param0} */
 export async function getSourceApiV1ScriptSourcesSourceIdGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -179,6 +196,28 @@ export async function diffVersionsApiV1ScriptVersionsVersionIdDiffGet(
       params: {
         ...queryParams,
       },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Start Extraction POST /api/v1/script-versions/${param0}/extractions */
+export async function startExtractionApiV1ScriptVersionsVersionIdExtractionsPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.startExtractionApiV1ScriptVersionsVersionIdExtractionsPostParams,
+  body: API.ScriptExtractionRequest,
+  options?: RequestOptions
+) {
+  const { version_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseExtractionBatchResponse_>(
+    `/api/v1/script-versions/${param0}/extractions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
       ...(options || {}),
     }
   );
