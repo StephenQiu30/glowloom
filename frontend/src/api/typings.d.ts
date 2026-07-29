@@ -11,6 +11,19 @@ declare namespace API {
     data: DeleteResponse;
   };
 
+  type ApiResponseEpisodeOrderResponse_ = {
+    data: EpisodeOrderResponse;
+  };
+
+  type ApiResponseEpisodeResponse_ = {
+    data: EpisodeResponse;
+  };
+
+  type ApiResponseListEpisodeResponse_ = {
+    /** Data */
+    data: EpisodeResponse[];
+  };
+
   type ApiResponseListWorkspaceResponse_ = {
     /** Data */
     data: WorkspaceResponse[];
@@ -34,6 +47,10 @@ declare namespace API {
 
   type ApiResponseWorkspaceResponse_ = {
     data: WorkspaceResponse;
+  };
+
+  type archiveEpisodeApiV1EpisodesEpisodeIdArchivePostParams = {
+    episode_id: string;
   };
 
   type archiveProjectApiV1ProjectsProjectIdArchivePostParams = {
@@ -71,6 +88,10 @@ declare namespace API {
     new_password: string;
   };
 
+  type createEpisodeApiV1ProjectsProjectIdEpisodesPostParams = {
+    project_id: string;
+  };
+
   type DeactivateAccountRequest = {
     /** Confirmation */
     confirmation: string;
@@ -85,6 +106,11 @@ declare namespace API {
     resource_id: string;
     /** Summary */
     summary: string;
+  };
+
+  type deleteEpisodeApiV1EpisodesEpisodeIdDeleteParams = {
+    episode_id: string;
+    expected_revision: number;
   };
 
   type deletePreflightApiV1ProjectsProjectIdDeletePreflightPostParams = {
@@ -117,6 +143,72 @@ declare namespace API {
     reason: string | null | null;
   };
 
+  type EpisodeCreateRequest = {
+    /** Name */
+    name: string;
+    /** Target Duration Ms */
+    target_duration_ms: number | null;
+  };
+
+  type episodeDeletePreflightApiV1EpisodesEpisodeIdDeletePreflightPostParams = {
+    episode_id: string;
+  };
+
+  type EpisodeOrderResponse = {
+    /** Items */
+    items: EpisodeResponse[];
+    /** Project Revision */
+    project_revision: number;
+  };
+
+  type EpisodeReorderRequest = {
+    /** Episode Ids */
+    episode_ids: string[];
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type EpisodeResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Project Id */
+    project_id: string;
+    /** Name */
+    name: string;
+    /** Position */
+    position: number;
+    /** Target Duration Ms */
+    target_duration_ms: number;
+    /** Status */
+    status: "active" | "archived";
+    /** Revision */
+    revision: number;
+    /** Current Script Version Id */
+    current_script_version_id: string | null;
+    /** Current Timeline Version Id */
+    current_timeline_version_id: string | null;
+  };
+
+  type EpisodeStateRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type EpisodeUpdateRequest = {
+    /** Name */
+    name: string | null | null;
+    /** Target Duration Ms */
+    target_duration_ms: number | null | null;
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type getEpisodeApiV1EpisodesEpisodeIdGetParams = {
+    episode_id: string;
+  };
+
   type getProjectApiV1ProjectsProjectIdGetParams = {
     project_id: string;
   };
@@ -133,6 +225,11 @@ declare namespace API {
   type HTTPValidationError = {
     /** Detail */
     detail: ValidationError[] | null;
+  };
+
+  type listEpisodesApiV1ProjectsProjectIdEpisodesGetParams = {
+    project_id: string;
+    include_archived: boolean | null;
   };
 
   type listProjectsApiV1ProjectsGetParams = {
@@ -261,6 +358,14 @@ declare namespace API {
     display_name: string;
   };
 
+  type reorderEpisodesApiV1ProjectsProjectIdEpisodesReorderPostParams = {
+    project_id: string;
+  };
+
+  type restoreEpisodeApiV1EpisodesEpisodeIdRestorePostParams = {
+    episode_id: string;
+  };
+
   type restoreProjectApiV1ProjectsProjectIdRestorePostParams = {
     project_id: string;
   };
@@ -276,6 +381,10 @@ declare namespace API {
 
   type updateBudgetLimitApiV1ProjectsProjectIdBudgetLimitPostParams = {
     project_id: string;
+  };
+
+  type updateEpisodeApiV1EpisodesEpisodeIdPatchParams = {
+    episode_id: string;
   };
 
   type updateProjectApiV1ProjectsProjectIdPatchParams = {

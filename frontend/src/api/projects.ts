@@ -2,6 +2,122 @@
 /* eslint-disable */
 import request, { type RequestOptions } from "@/lib/request";
 
+/** Get Episode GET /api/v1/episodes/${param0} */
+export async function getEpisodeApiV1EpisodesEpisodeIdGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getEpisodeApiV1EpisodesEpisodeIdGetParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseEpisodeResponse_>(
+    `/api/v1/episodes/${param0}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Delete Episode DELETE /api/v1/episodes/${param0} */
+export async function deleteEpisodeApiV1EpisodesEpisodeIdDelete(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.deleteEpisodeApiV1EpisodesEpisodeIdDeleteParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseDeleteResponse_>(`/api/v1/episodes/${param0}`, {
+    method: "DELETE",
+    params: {
+      ...queryParams,
+    },
+    ...(options || {}),
+  });
+}
+
+/** Update Episode PATCH /api/v1/episodes/${param0} */
+export async function updateEpisodeApiV1EpisodesEpisodeIdPatch(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.updateEpisodeApiV1EpisodesEpisodeIdPatchParams,
+  body: API.EpisodeUpdateRequest,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseEpisodeResponse_>(
+    `/api/v1/episodes/${param0}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Archive Episode POST /api/v1/episodes/${param0}/archive */
+export async function archiveEpisodeApiV1EpisodesEpisodeIdArchivePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.archiveEpisodeApiV1EpisodesEpisodeIdArchivePostParams,
+  body: API.EpisodeStateRequest,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseEpisodeResponse_>(
+    `/api/v1/episodes/${param0}/archive`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Episode Delete Preflight POST /api/v1/episodes/${param0}/delete-preflight */
+export async function episodeDeletePreflightApiV1EpisodesEpisodeIdDeletePreflightPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.episodeDeletePreflightApiV1EpisodesEpisodeIdDeletePreflightPostParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseDeletePreflightResponse_>(
+    `/api/v1/episodes/${param0}/delete-preflight`,
+    {
+      method: "POST",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Restore Episode POST /api/v1/episodes/${param0}/restore */
+export async function restoreEpisodeApiV1EpisodesEpisodeIdRestorePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.restoreEpisodeApiV1EpisodesEpisodeIdRestorePostParams,
+  body: API.EpisodeStateRequest,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseEpisodeResponse_>(
+    `/api/v1/episodes/${param0}/restore`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** List Projects GET /api/v1/projects */
 export async function listProjectsApiV1ProjectsGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -143,6 +259,69 @@ export async function deletePreflightApiV1ProjectsProjectIdDeletePreflightPost(
     {
       method: "POST",
       params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
+/** List Episodes GET /api/v1/projects/${param0}/episodes */
+export async function listEpisodesApiV1ProjectsProjectIdEpisodesGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listEpisodesApiV1ProjectsProjectIdEpisodesGetParams,
+  options?: RequestOptions
+) {
+  const { project_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseListEpisodeResponse_>(
+    `/api/v1/projects/${param0}/episodes`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Create Episode POST /api/v1/projects/${param0}/episodes */
+export async function createEpisodeApiV1ProjectsProjectIdEpisodesPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.createEpisodeApiV1ProjectsProjectIdEpisodesPostParams,
+  body: API.EpisodeCreateRequest,
+  options?: RequestOptions
+) {
+  const { project_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseEpisodeResponse_>(
+    `/api/v1/projects/${param0}/episodes`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Reorder Episodes POST /api/v1/projects/${param0}/episodes/reorder */
+export async function reorderEpisodesApiV1ProjectsProjectIdEpisodesReorderPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.reorderEpisodesApiV1ProjectsProjectIdEpisodesReorderPostParams,
+  body: API.EpisodeReorderRequest,
+  options?: RequestOptions
+) {
+  const { project_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseEpisodeOrderResponse_>(
+    `/api/v1/projects/${param0}/episodes/reorder`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
       ...(options || {}),
     }
   );
