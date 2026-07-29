@@ -528,3 +528,158 @@ async def test_current_switch_accepts_only_published_version_from_same_episode(
         },
     )
     assert hidden.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_source_archive_restore_keeps_versions_and_current_reference(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="script-source-lifecycle@example.com"
+    )
+    episode = await _episode(client, headers, workspace_id)
+    imported = await _import_script(client, headers, episode["id"])
+    source = imported["source"]
+    draft = imported["version"]
+    published_response = await client.post(
+        f"/api/v1/script-sources/{source['id']}/versions",
+        headers=headers,
+        json=_publish_payload("归档前发布版本", None),
+    )
+    assert published_response.status_code == 201
+    published = published_response.json()["data"]["version"]
+
+    archived_response = await client.post(
+        f"/api/v1/script-sources/{source['id']}/archive",
+        headers=headers,
+        json={"expected_revision": 1},
+    )
+    assert archived_response.status_code == 200
+    archived = archived_response.json()["data"]
+    assert archived["status"] == "archived"
+    assert archived["revision"] == 2
+
+    fetched = await client.get(
+        f"/api/v1/script-sources/{source['id']}", headers=headers
+    )
+    assert fetched.status_code == 200
+    assert fetched.json()["data"] == archived
+    history = await client.get(
+        f"/api/v1/script-sources/{source['id']}/versions", headers=headers
+    )
+    assert history.status_code == 200
+    assert history.json()["data"]["items"] == [draft, published]
+    fetched_episode = await client.get(
+        f"/api/v1/episodes/{episode['id']}", headers=headers
+    )
+    assert fetched_episode.json()["data"]["current_script_version_id"] == published["id"]
+
+    blocked_publish = await client.post(
+        f"/api/v1/script-sources/{source['id']}/versions",
+        headers=headers,
+        json=_publish_payload("归档来源不能继续发布", published["id"]),
+    )
+    assert blocked_publish.status_code == 409
+    assert blocked_publish.json()["error"]["code"] == "state_conflict"
+    stale_restore = await client.post(
+        f"/api/v1/script-sources/{source['id']}/restore",
+        headers=headers,
+        json={"expected_revision": 1},
+    )
+    assert stale_restore.status_code == 409
+    assert stale_restore.json()["error"]["code"] == "version_conflict"
+    assert stale_restore.json()["error"]["details"]["current_revision"] == 2
+
+    restored_response = await client.post(
+        f"/api/v1/script-sources/{source['id']}/restore",
+        headers=headers,
+        json={"expected_revision": 2},
+    )
+    assert restored_response.status_code == 200
+    restored = restored_response.json()["data"]
+    assert restored["status"] == "active"
+    assert restored["revision"] == 3
+    next_publish = await client.post(
+        f"/api/v1/script-sources/{source['id']}/versions",
+        headers=headers,
+        json=_publish_payload("恢复后版本", published["id"]),
+    )
+    assert next_publish.status_code == 201
+    assert next_publish.json()["data"]["version"]["version_no"] == 3
+
+    async with session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(ScriptVersion)) == 3
+
+
+@pytest.mark.asyncio
+async def test_version_diff_is_derived_private_and_limited_to_one_source(
+    client: httpx.AsyncClient,
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="script-diff-owner@example.com"
+    )
+    episode = await _episode(client, headers, workspace_id)
+    imported = await _import_script(
+        client,
+        headers,
+        episode["id"],
+        body="第一场\n甲：开始\n保留行",
+    )
+    draft = imported["version"]
+    published_response = await client.post(
+        f"/api/v1/script-sources/{imported['source']['id']}/versions",
+        headers=headers,
+        json=_publish_payload("第一场\n甲：继续\n新增行\n保留行", None),
+    )
+    assert published_response.status_code == 201
+    published = published_response.json()["data"]["version"]
+
+    diff_response = await client.get(
+        f"/api/v1/script-versions/{draft['id']}/diff",
+        headers=headers,
+        params={"other_version_id": published["id"]},
+    )
+    assert diff_response.status_code == 200
+    diff = diff_response.json()["data"]
+    assert diff["base_version_id"] == draft["id"]
+    assert diff["target_version_id"] == published["id"]
+    assert diff["added_lines"] == 2
+    assert diff["removed_lines"] == 1
+    assert "-甲：开始" in diff["diff_lines"]
+    assert "+甲：继续" in diff["diff_lines"]
+    assert "+新增行" in diff["diff_lines"]
+
+    same_response = await client.get(
+        f"/api/v1/script-versions/{draft['id']}/diff",
+        headers=headers,
+        params={"other_version_id": draft["id"]},
+    )
+    assert same_response.status_code == 200
+    assert same_response.json()["data"]["added_lines"] == 0
+    assert same_response.json()["data"]["removed_lines"] == 0
+    assert same_response.json()["data"]["diff_lines"] == []
+
+    other_source = await _import_script(
+        client,
+        headers,
+        episode["id"],
+        idempotency_key="script-diff-other-source",
+    )
+    cross_source = await client.get(
+        f"/api/v1/script-versions/{draft['id']}/diff",
+        headers=headers,
+        params={"other_version_id": other_source["version"]["id"]},
+    )
+    assert cross_source.status_code == 409
+    assert cross_source.json()["error"]["code"] == "resource_conflict"
+
+    stranger_headers, _ = await _identity(
+        client, email="script-diff-stranger@example.com"
+    )
+    hidden = await client.get(
+        f"/api/v1/script-versions/{draft['id']}/diff",
+        headers=stranger_headers,
+        params={"other_version_id": published["id"]},
+    )
+    assert hidden.status_code == 404
