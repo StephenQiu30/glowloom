@@ -8,6 +8,7 @@ import pytest
 from pydantic import SecretStr, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from uuid6 import uuid7
 
 from app.core.config import Settings
 from app.core.database import Base, create_engine, get_async_session, validate_test_database_url
@@ -578,4 +579,272 @@ async def test_extraction_result_rejects_invalid_ranges_and_changed_replay(
         assert (
             await session.scalar(select(func.count()).select_from(candidate_table))
             == 5
+        )
+
+
+async def _completed_candidate_batch(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    headers: dict[str, str],
+    workspace_id: str,
+    *,
+    key: str,
+    second_asset: bool = False,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    _, _, published = await _published_script(
+        client,
+        headers,
+        workspace_id,
+        import_key=f"{key}-import",
+    )
+    started = await client.post(
+        f"/api/v1/script-versions/{published['id']}/extractions",
+        headers=headers,
+        json=_extraction_payload(idempotency_key=f"{key}-extraction"),
+    )
+    assert started.status_code == 202
+    batch = started.json()["data"]
+    raw_result = _typed_extraction_result()
+    if second_asset:
+        raw_result["candidates"].append(
+            {
+                "candidate_key": "asset-002",
+                "source_range": {"start": 12, "end": 15},
+                "proposal": {
+                    "kind": "asset",
+                    "asset_kind": "character",
+                    "name": "角色乙",
+                    "description": "回应行动的角色",
+                },
+                "confidence_note": None,
+            }
+        )
+    result = script_schemas.ScriptExtractionResult.model_validate(raw_result)
+    async with session_factory() as session:
+        async with session.begin():
+            await scripts_service.record_extraction_result(
+                session,
+                UUID(batch["id"]),
+                result,
+            )
+    listed = await client.get(
+        f"/api/v1/extraction-batches/{batch['id']}/candidates",
+        headers=headers,
+        params={"limit": 100},
+    )
+    assert listed.status_code == 200
+    return batch, listed.json()["data"]["items"]
+
+
+@pytest.mark.asyncio
+async def test_candidate_decision_is_append_only_idempotent_and_refreshable(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="decision-owner@example.com"
+    )
+    _, candidates = await _completed_candidate_batch(
+        client,
+        session_factory,
+        headers,
+        workspace_id,
+        key="decision-idempotent",
+    )
+    scene = next(item for item in candidates if item["kind"] == "scene")
+    endpoint = f"/api/v1/extraction-candidates/{scene['id']}/decisions"
+    payload = {
+        "decision_key": "accept-scene-001",
+        "expected_revision": 1,
+        "decision": {"action": "accept_new"},
+    }
+
+    first, second = await asyncio.gather(
+        client.post(endpoint, headers=headers, json=payload),
+        client.post(endpoint, headers=headers, json=payload),
+    )
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["data"] == second.json()["data"]
+    result = first.json()["data"]
+    assert result["candidate"]["status"] == "accepted"
+    assert result["candidate"]["revision"] == 2
+    evidence = result["evidence"]
+    assert evidence["candidate_id"] == scene["id"]
+    assert evidence["sequence"] == 1
+    assert evidence["decision_key"] == "accept-scene-001"
+    assert evidence["decision"] == {"action": "accept_new"}
+    assert evidence["actor_id"]
+
+    replay = await client.post(endpoint, headers=headers, json=payload)
+    assert replay.status_code == 201
+    assert replay.json()["data"] == result
+    changed_replay = await client.post(
+        endpoint,
+        headers=headers,
+        json={
+            **payload,
+            "decision": {"action": "ignore"},
+        },
+    )
+    assert changed_replay.status_code == 409
+    assert changed_replay.json()["error"]["code"] == "resource_conflict"
+    stale = await client.post(
+        endpoint,
+        headers=headers,
+        json={
+            "decision_key": "stale-scene-decision",
+            "expected_revision": 1,
+            "decision": {"action": "ignore"},
+        },
+    )
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "version_conflict"
+    assert stale.json()["error"]["details"] == {"current_revision": 2}
+
+    history = await client.get(endpoint, headers=headers)
+    assert history.status_code == 200
+    history_page = history.json()["data"]
+    assert history_page["total"] == 1
+    assert history_page["items"] == [evidence]
+    refreshed = await client.get(
+        f"/api/v1/extraction-candidates/{scene['id']}", headers=headers
+    )
+    assert refreshed.status_code == 200
+    assert refreshed.json()["data"] == result["candidate"]
+
+    stranger_headers, _ = await _identity(
+        client, email="decision-stranger@example.com"
+    )
+    hidden_write = await client.post(endpoint, headers=stranger_headers, json=payload)
+    hidden_history = await client.get(endpoint, headers=stranger_headers)
+    assert hidden_write.status_code == 404
+    assert hidden_history.status_code == 404
+
+    async with session_factory() as session:
+        decision_table = Base.metadata.tables["scr_candidate_decisions"]
+        assert (
+            await session.scalar(select(func.count()).select_from(decision_table))
+            == 1
+        )
+
+
+@pytest.mark.asyncio
+async def test_candidate_decisions_validate_changes_merge_ignore_and_scope(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="decision-validation@example.com"
+    )
+    _, candidates = await _completed_candidate_batch(
+        client,
+        session_factory,
+        headers,
+        workspace_id,
+        key="decision-validation",
+        second_asset=True,
+    )
+    scene = next(item for item in candidates if item["kind"] == "scene")
+    dialogue = next(item for item in candidates if item["kind"] == "dialogue")
+    assets = [item for item in candidates if item["kind"] == "asset"]
+    continuity = next(item for item in candidates if item["kind"] == "continuity")
+
+    wrong_change = await client.post(
+        f"/api/v1/extraction-candidates/{scene['id']}/decisions",
+        headers=headers,
+        json={
+            "decision_key": "wrong-scene-change",
+            "expected_revision": 1,
+            "decision": {
+                "action": "accept_with_changes",
+                "proposal": dialogue["proposal"],
+            },
+        },
+    )
+    assert wrong_change.status_code == 422
+    assert wrong_change.json()["error"]["code"] == "invalid_request"
+
+    changed_proposal = {
+        **scene["proposal"],
+        "summary": "人工修订后的场景摘要",
+    }
+    accepted_change = await client.post(
+        f"/api/v1/extraction-candidates/{scene['id']}/decisions",
+        headers=headers,
+        json={
+            "decision_key": "edit-scene-001",
+            "expected_revision": 1,
+            "decision": {
+                "action": "accept_with_changes",
+                "proposal": changed_proposal,
+            },
+        },
+    )
+    assert accepted_change.status_code == 201
+    assert accepted_change.json()["data"]["evidence"]["decision"] == {
+        "action": "accept_with_changes",
+        "proposal": changed_proposal,
+    }
+
+    cross_type_merge = await client.post(
+        f"/api/v1/extraction-candidates/{assets[0]['id']}/decisions",
+        headers=headers,
+        json={
+            "decision_key": "cross-kind-merge",
+            "expected_revision": 1,
+            "decision": {
+                "action": "merge_into",
+                "target_candidate_id": scene["id"],
+            },
+        },
+    )
+    assert cross_type_merge.status_code == 422
+    assert cross_type_merge.json()["error"]["code"] == "invalid_request"
+    merged = await client.post(
+        f"/api/v1/extraction-candidates/{assets[0]['id']}/decisions",
+        headers=headers,
+        json={
+            "decision_key": "merge-assets-001",
+            "expected_revision": 1,
+            "decision": {
+                "action": "merge_into",
+                "target_candidate_id": assets[1]["id"],
+            },
+        },
+    )
+    assert merged.status_code == 201
+    assert merged.json()["data"]["candidate"]["status"] == "merged"
+
+    ignored = await client.post(
+        f"/api/v1/extraction-candidates/{continuity['id']}/decisions",
+        headers=headers,
+        json={
+            "decision_key": "ignore-continuity-001",
+            "expected_revision": 1,
+            "decision": {"action": "ignore"},
+        },
+    )
+    assert ignored.status_code == 201
+    assert ignored.json()["data"]["candidate"]["status"] == "ignored"
+
+    unsupported_link = await client.post(
+        f"/api/v1/extraction-candidates/{assets[1]['id']}/decisions",
+        headers=headers,
+        json={
+            "decision_key": "link-before-assets-module",
+            "expected_revision": 1,
+            "decision": {
+                "action": "link_existing",
+                "downstream_id": str(uuid7()),
+            },
+        },
+    )
+    assert unsupported_link.status_code == 422
+
+    async with session_factory() as session:
+        decision_table = Base.metadata.tables["scr_candidate_decisions"]
+        assert (
+            await session.scalar(select(func.count()).select_from(decision_table))
+            == 3
         )
