@@ -12,6 +12,7 @@ from uuid6 import uuid7
 from app.core.config import Settings
 from app.core.database import Base, create_engine, get_async_session, validate_test_database_url
 from app.main import create_app
+from app.modules.identity.models import Membership
 from app.modules.projects.models import Episode
 
 TEST_DATABASE_URL = validate_test_database_url(
@@ -191,6 +192,109 @@ async def test_project_lists_are_bounded_and_cross_workspace_is_hidden(
     other_headers, _ = await _identity(client, email="other-owner@example.com")
     hidden = await client.get(f"/api/v1/projects/{project_id}", headers=other_headers)
     assert hidden.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_project_permissions_and_workspace_archive_gate_existing_writes(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    owner_headers, workspace_id = await _identity(client)
+    created = await client.post(
+        "/api/v1/projects",
+        headers=owner_headers,
+        json=_project_payload(workspace_id),
+    )
+    project_id = created.json()["data"]["id"]
+
+    actors: dict[str, tuple[UUID, str]] = {}
+    for role in ("editor", "viewer"):
+        registered = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": f"{role}@example.com",
+                "password": f"a-secure-{role}-password",
+                "display_name": role,
+            },
+        )
+        actor = registered.json()["data"]
+        actors[role] = UUID(actor["user"]["id"]), actor["access_token"]
+
+    async with session_factory() as session:
+        async with session.begin():
+            session.add_all(
+                Membership(
+                    workspace_id=UUID(workspace_id),
+                    user_id=actors[role][0],
+                    role=role,
+                )
+                for role in ("editor", "viewer")
+            )
+
+    editor_headers = {"authorization": f"Bearer {actors['editor'][1]}"}
+    viewer_headers = {"authorization": f"Bearer {actors['viewer'][1]}"}
+    edited = await client.patch(
+        f"/api/v1/projects/{project_id}",
+        headers=editor_headers,
+        json={"name": "编辑者可修改", "expected_revision": 1},
+    )
+    assert edited.status_code == 200
+    assert (
+        await client.post(
+            f"/api/v1/projects/{project_id}/budget-limit",
+            headers=editor_headers,
+            json={"amount": "1", "currency": "CNY", "expected_revision": 2},
+        )
+    ).status_code == 403
+    viewer_read = await client.get(
+        f"/api/v1/projects/{project_id}", headers=viewer_headers
+    )
+    assert viewer_read.status_code == 200
+    assert (
+        await client.patch(
+            f"/api/v1/projects/{project_id}",
+            headers=viewer_headers,
+            json={"name": "只读用户不可修改", "expected_revision": 2},
+        )
+    ).status_code == 403
+
+    archived = await client.post(
+        f"/api/v1/workspaces/{workspace_id}/archive",
+        headers=owner_headers,
+        json={"expected_revision": 1},
+    )
+    assert archived.status_code == 200
+    assert (
+        await client.post(
+            "/api/v1/projects",
+            headers=owner_headers,
+            json=_project_payload(workspace_id, "不应创建"),
+        )
+    ).status_code == 403
+    assert (
+        await client.patch(
+            f"/api/v1/projects/{project_id}",
+            headers=owner_headers,
+            json={"name": "不应修改", "expected_revision": 2},
+        )
+    ).status_code == 403
+    archived_read = await client.get(
+        f"/api/v1/projects/{project_id}", headers=owner_headers
+    )
+    assert archived_read.status_code == 200
+
+    restored = await client.post(
+        f"/api/v1/workspaces/{workspace_id}/restore",
+        headers=owner_headers,
+        json={"expected_revision": 2},
+    )
+    assert restored.status_code == 200
+    resumed = await client.patch(
+        f"/api/v1/projects/{project_id}",
+        headers=owner_headers,
+        json={"name": "恢复后可修改", "expected_revision": 2},
+    )
+    assert resumed.status_code == 200
 
 
 @pytest.mark.asyncio

@@ -20,6 +20,8 @@ test("S1 首登后创建项目和单集并恢复服务端事实", async ({ page 
 
   const projectLink = page.getByRole("link", { name: `打开项目 ${projectName}` });
   await expect(projectLink).toBeVisible();
+  const projectHref = await projectLink.getAttribute("href");
+  expect(projectHref).not.toBeNull();
   await projectLink.click();
 
   await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
@@ -33,4 +35,10 @@ test("S1 首登后创建项目和单集并恢复服务端事实", async ({ page 
   await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
   await expect(page.getByText("第一集", { exact: true })).toBeVisible();
   await expect(page.getByText("导入剧本", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "返回项目" }).click();
+  await page.getByRole("button", { name: "退出登录" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.goto(projectHref!);
+  await expect(page).toHaveURL(/\/login$/);
 });

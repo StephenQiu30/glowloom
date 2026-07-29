@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.identity.models import Membership
+from app.modules.identity.models import Membership, Workspace
 from app.modules.projects.models import Episode, Project
 
 
@@ -48,10 +48,11 @@ async def find_project_for_user(
     project_id: UUID,
     *,
     for_update: bool = False,
-) -> tuple[Project, Membership] | None:
+) -> tuple[Project, Membership, Workspace] | None:
     query = (
-        select(Project, Membership)
+        select(Project, Membership, Workspace)
         .join(Membership, Membership.workspace_id == Project.workspace_id)
+        .join(Workspace, Workspace.id == Project.workspace_id)
         .where(
             Project.id == project_id,
             Membership.user_id == user_id,
@@ -61,7 +62,7 @@ async def find_project_for_user(
     if for_update:
         query = query.with_for_update(of=Project)
     row = (await session.execute(query)).one_or_none()
-    return None if row is None else (row[0], row[1])
+    return None if row is None else (row[0], row[1], row[2])
 
 
 async def count_episodes(session: AsyncSession, project_id: UUID) -> int:
@@ -103,15 +104,16 @@ async def find_episode_for_user(
     episode_id: UUID,
     *,
     for_update: bool = False,
-) -> tuple[Episode, Project, Membership] | None:
+) -> tuple[Episode, Project, Membership, Workspace] | None:
     query = (
-        select(Episode, Project, Membership)
+        select(Episode, Project, Membership, Workspace)
         .join(
             Project,
             (Project.id == Episode.project_id)
             & (Project.workspace_id == Episode.workspace_id),
         )
         .join(Membership, Membership.workspace_id == Episode.workspace_id)
+        .join(Workspace, Workspace.id == Episode.workspace_id)
         .where(
             Episode.id == episode_id,
             Membership.user_id == user_id,
@@ -121,4 +123,4 @@ async def find_episode_for_user(
     if for_update:
         query = query.with_for_update(of=(Episode, Project))
     row = (await session.execute(query)).one_or_none()
-    return None if row is None else (row[0], row[1], row[2])
+    return None if row is None else (row[0], row[1], row[2], row[3])

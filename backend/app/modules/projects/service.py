@@ -68,9 +68,14 @@ def _revision(project: Project, expected: int) -> None:
         )
 
 
-def _capability(project: Project, membership: Membership, capability: Capability) -> None:
+def _capability(
+    project: Project,
+    membership: Membership,
+    workspace_status: str,
+    capability: Capability,
+) -> None:
     try:
-        require_workspace_capability(membership.role, "active", capability)
+        require_workspace_capability(membership.role, workspace_status, capability)
     except PermissionError as error:
         raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403) from error
     if project.status == "archived" and capability != Capability.CONTENT_READ:
@@ -99,14 +104,14 @@ async def _owned_project(
         raise _not_found()
     if allow_archived_command:
         try:
-            require_workspace_capability(result[1].role, "active", capability)
+            require_workspace_capability(result[1].role, result[2].status, capability)
         except PermissionError as error:
             raise ApiError(
                 ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403
             ) from error
     else:
-        _capability(result[0], result[1], capability)
-    return result
+        _capability(result[0], result[1], result[2].status, capability)
+    return result[0], result[1]
 
 
 async def create_project(
@@ -341,7 +346,7 @@ async def _owned_episode(
         raise _episode_not_found()
     try:
         require_workspace_capability(
-            result[2].role, "active", Capability.CONTENT_WRITE
+            result[2].role, result[3].status, Capability.CONTENT_WRITE
         )
     except PermissionError as error:
         raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403) from error
@@ -352,7 +357,7 @@ async def _owned_episode(
             status_code=409,
             next_action="restore_project",
         )
-    return result
+    return result[0], result[1], result[2]
 
 
 async def create_episode(
