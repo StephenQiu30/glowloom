@@ -41,6 +41,10 @@ declare namespace API {
     data: PaginatedProjects;
   };
 
+  type ApiResponsePaginatedTasks_ = {
+    data: PaginatedTasks;
+  };
+
   type ApiResponseProjectProductionSnapshot_ = {
     data: ProjectProductionSnapshot;
   };
@@ -51,6 +55,10 @@ declare namespace API {
 
   type ApiResponseRevocationResponse_ = {
     data: RevocationResponse;
+  };
+
+  type ApiResponseTaskResponse_ = {
+    data: TaskResponse;
   };
 
   type ApiResponseWorkspaceResponse_ = {
@@ -268,6 +276,10 @@ declare namespace API {
     project_id: string;
   };
 
+  type getTaskApiV1TasksTaskIdGetParams = {
+    task_id: string;
+  };
+
   type getWorkspaceApiV1WorkspacesWorkspaceIdGetParams = {
     workspace_id: string;
   };
@@ -293,6 +305,23 @@ declare namespace API {
     search: string | null | null;
     sort: "name" | "created_at" | "updated_at" | null | null;
     order: "asc" | "desc" | null | null;
+    limit: number | null | null;
+    offset: number | null;
+  };
+
+  type listTasksApiV1TasksGetParams = {
+    workspace_id: string;
+    task_type: string | null | null;
+    status:
+      | "queued"
+      | "running"
+      | "waiting_provider"
+      | "succeeded"
+      | "failed"
+      | "cancelled"
+      | "unknown"
+      | null
+      | null;
     limit: number | null | null;
     offset: number | null;
   };
@@ -325,6 +354,17 @@ declare namespace API {
   type PaginatedProjects = {
     /** Items */
     items: ProjectResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
+  type PaginatedTasks = {
+    /** Items */
+    items: TaskResponse[];
     /** Total */
     total: number;
     /** Limit */
@@ -481,6 +521,62 @@ declare namespace API {
   type RevocationResponse = {
     /** Revoked */
     revoked: boolean | null;
+  };
+
+  type TaskErrorResponse = {
+    /** Code */
+    code: string;
+    /** Retryable */
+    retryable: boolean;
+    /** Summary */
+    summary: string;
+  };
+
+  type TaskResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Task Type */
+    task_type: string;
+    /** Request Type */
+    request_type: string;
+    /** Request Id */
+    request_id: string;
+    scope: TaskScopeResponse;
+    /** Status */
+    status:
+      | "queued"
+      | "running"
+      | "waiting_provider"
+      | "succeeded"
+      | "failed"
+      | "cancelled"
+      | "unknown";
+    /** Progress Stage */
+    progress_stage: string;
+    error: TaskErrorResponse | null;
+    /** Next Action */
+    next_action: string | null;
+    /** Cancel Status */
+    cancel_status: "none" | "requested" | "accepted" | "rejected";
+    /** Revision */
+    revision: number;
+  };
+
+  type TaskScopeResponse = {
+    /** Episode Id */
+    episode_id: string | null;
+    /** Render Snapshot Id */
+    render_snapshot_id: string | null;
+    /** Usage Type */
+    usage_type: string | null;
+    /** Usage Id */
+    usage_id: string | null;
+    /** Input Version Id */
+    input_version_id: string | null;
+    /** Input Hash */
+    input_hash: string | null;
   };
 
   type TaskSummary = {

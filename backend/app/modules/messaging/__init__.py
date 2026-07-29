@@ -1,0 +1,1 @@
+"""Transactional message delivery facts."""
