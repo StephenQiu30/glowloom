@@ -26,6 +26,8 @@ API 默认位于 `http://127.0.0.1:8000`，Web 默认位于 `http://127.0.0.1:30
 
 首次使用时只需执行 `cp .env.example .env`，后端、前端、OpenAPI 生成和两份 Compose 均从根目录 `.env` 获取配置；不得在 `backend/` 或 `frontend/` 中创建第二份环境文件。`CONTAINER_*` 变量只解决业务容器访问宿主机服务的地址差异，前端只会收到明确列出的 `NEXT_PUBLIC_*` 公共变量，不会继承后端 secret。
 
-当前默认开发拓扑固定为：本机 PostgreSQL、Redis、RabbitMQ + Docker MinIO。只启动对象存储使用 `make minio-up`；只有本机基础设施缺失或需要隔离复现时才执行 `make env-up` 启动完整容器环境，需要容器化业务进程时执行 `make business-up`。根目录 `docker-compose-env.yml` 只负责环境，`docker-compose.yml` 只负责业务。真实凭据、媒体、日志和数据不得提交。
+当前默认开发拓扑固定为：本机 PostgreSQL、Redis、RabbitMQ + Docker MinIO。只启动对象存储使用 `make minio-up`；只有本机基础设施缺失或需要隔离复现时才执行 `make env-up` 启动完整容器环境，需要容器化业务进程时执行 `make services-up`。根目录 `docker-compose-env.yml` 只负责环境，`docker-compose.yml` 只负责服务。后端 `server` 容器通过一个受监督入口统一运行 API、Scheduler 和 I/O Worker，前端由 `web` 容器运行；真实凭据、媒体、日志和数据不得提交。
+
+Compose 容器统一使用 `lanverse-<模块>` 的稳定名称，例如 `lanverse-server`、`lanverse-web` 和 `lanverse-postgres`，避免默认名称中的实例序号；当前本地拓扑仅支持每个模块运行一个容器实例。
 
 产品、架构、PRD 与执行计划分别位于 `docs/requirement`、`docs/design`、`docs/prd` 和 `docs/plan`。
