@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: setup dev-api dev-frontend db-init generate-api lint typecheck test hygiene check docker-build business-up business-down env-up env-down contract-minio contract-text-provider e2e-install e2e
+.PHONY: setup dev-api dev-frontend db-init generate-api lint typecheck test hygiene check docker-build business-up business-down minio-up minio-down env-up env-down contract-minio contract-text-provider e2e-install e2e
 
 setup:
 	@uv --version | grep -q '0.11.32'
@@ -51,6 +51,12 @@ business-up:
 
 business-down:
 	docker compose -f docker-compose.yml down
+
+minio-up:
+	docker compose -f docker-compose-env.yml up -d minio
+
+minio-down:
+	docker compose -f docker-compose-env.yml stop minio
 
 env-up:
 	docker compose -f docker-compose-env.yml up -d
