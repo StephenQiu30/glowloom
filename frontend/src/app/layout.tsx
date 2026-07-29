@@ -10,8 +10,8 @@ import "./globals.css";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "Lanverse · AI 短剧制作平台",
-  description: "从剧本、分镜、生成到审核交付的 AI 短剧制作工作台",
+  title: "Lanverse · AI 漫剧制作平台",
+  description: "从灵感、资产、分镜到生成交付的一站式 AI 漫剧制作工作台",
 };
 
 export default function RootLayout({
