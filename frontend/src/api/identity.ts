@@ -1,6 +1,6 @@
 // @ts-ignore
 /* eslint-disable */
-import request, { type RequestOptions } from "@/lib/request";
+import request, { type RequestOptions } from "@/lib/api-request";
 
 /** Change Password POST /api/v1/auth/change-password */
 export async function changePasswordApiV1AuthChangePasswordPost(

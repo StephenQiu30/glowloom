@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import ProjectsPage from "@/app/(main)/projects/page";
+import { ProjectDashboard } from "@/app/projects/project-dashboard";
 import { AppProviders } from "@/app/providers";
 import { setAccessToken } from "@/lib/auth-session";
 
@@ -30,6 +30,17 @@ vi.mock("@/api/identity", () => ({
     },
   }),
   loginApiV1AuthLoginPost: vi.fn(),
+  listWorkspacesApiV1WorkspacesGet: vi.fn().mockResolvedValue({
+    data: [
+      {
+        id: "019c0000-0000-7000-8000-000000000002",
+        name: "创作者的工作空间",
+        status: "active",
+        role: "owner",
+        revision: 1,
+      },
+    ],
+  }),
   logoutApiV1AuthLogoutPost: vi.fn(),
   registerApiV1AuthRegisterPost: vi.fn(),
 }));
@@ -70,7 +81,7 @@ describe("projects workspace", () => {
   it("renders server-owned workspace and project facts", async () => {
     render(
       <AppProviders>
-        <ProjectsPage />
+        <ProjectDashboard />
       </AppProviders>,
     );
 

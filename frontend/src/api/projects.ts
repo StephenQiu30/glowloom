@@ -1,6 +1,6 @@
 // @ts-ignore
 /* eslint-disable */
-import request, { type RequestOptions } from "@/lib/request";
+import request, { type RequestOptions } from "@/lib/api-request";
 
 /** Get Episode GET /api/v1/episodes/${param0} */
 export async function getEpisodeApiV1EpisodesEpisodeIdGet(

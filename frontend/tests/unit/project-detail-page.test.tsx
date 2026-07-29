@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppProviders } from "@/app/providers";
-import { ProjectWorkspace } from "@/app/(main)/projects/[projectId]/project-workspace";
+import { ProjectWorkspace } from "@/app/projects/[projectId]/project-workspace";
 import { setAccessToken } from "@/lib/auth-session";
 
 vi.mock("next/navigation", () => ({

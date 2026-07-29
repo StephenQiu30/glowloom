@@ -1,6 +1,6 @@
 import { configureStore } from "@reduxjs/toolkit";
 
-import { appApi } from "@/lib/app-api";
+import { appApi } from "@/lib/server-state";
 
 export function makeStore() {
   return configureStore({

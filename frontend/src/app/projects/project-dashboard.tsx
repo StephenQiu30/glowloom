@@ -7,6 +7,7 @@ import {
   LoaderCircle,
   LogOut,
   Plus,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -33,18 +34,25 @@ import {
   useLogoutMutation,
   useMeQuery,
   useProjectsQuery,
-} from "@/lib/app-api";
+  useWorkspacesQuery,
+} from "@/lib/server-state";
 import { clearAccessToken, hasAccessToken } from "@/lib/auth-session";
-import type { AppStore } from "@/lib/store";
+import type { AppStore } from "@/lib/redux-store";
 
-export default function ProjectsPage() {
+export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceId?: string }) {
   const router = useRouter();
   const dispatch = useDispatch<AppStore["dispatch"]>();
   const authState = useAuthSessionState();
   const isAuthenticated = authState === "authenticated";
   const [commandError, setCommandError] = useState<string | null>(null);
   const me = useMeQuery(undefined, { skip: !isAuthenticated });
-  const workspaceId = me.data?.workspace.id;
+  const workspaces = useWorkspacesQuery(undefined, { skip: !isAuthenticated });
+  const activeWorkspaces = workspaces.data?.filter((workspace) => workspace.status === "active");
+  const selectedWorkspace =
+    activeWorkspaces?.find((workspace) => workspace.id === requestedWorkspaceId) ??
+    activeWorkspaces?.find((workspace) => workspace.id === me.data?.workspace.id) ??
+    me.data?.workspace;
+  const workspaceId = selectedWorkspace?.id;
   const projects = useProjectsQuery(workspaceId ?? "", { skip: !workspaceId });
   const [createProject, createState] = useCreateProjectMutation();
   const [logout, logoutState] = useLogoutMutation();
@@ -130,6 +138,11 @@ export default function ProjectsPage() {
               <p className="text-sm font-medium">{me.data?.user.display_name}</p>
               <p className="text-xs text-muted-foreground">{me.data?.user.email}</p>
             </div>
+            <Button asChild aria-label="账户与工作空间" size="icon" variant="outline">
+              <Link href="/workspaces">
+                <Settings aria-hidden="true" />
+              </Link>
+            </Button>
             <Button
               aria-label="退出登录"
               disabled={logoutState.isLoading}
@@ -149,7 +162,25 @@ export default function ProjectsPage() {
             <div>
               <Badge variant="secondary">{me.data?.workspace.role}</Badge>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight">项目</h1>
-              <p className="mt-2 text-muted-foreground">{me.data?.workspace.name}</p>
+              {activeWorkspaces && activeWorkspaces.length > 1 ? (
+                <div className="mt-2 grid gap-2">
+                  <Label className="sr-only" htmlFor="currentWorkspace">当前工作空间</Label>
+                  <select
+                    className="h-9 rounded-lg border bg-background px-3 text-sm"
+                    id="currentWorkspace"
+                    onChange={(event) => router.replace(`/projects?workspace=${event.target.value}`)}
+                    value={workspaceId}
+                  >
+                    {activeWorkspaces.map((workspace) => (
+                      <option key={workspace.id} value={workspace.id}>
+                        {workspace.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="mt-2 text-muted-foreground">{selectedWorkspace?.name}</p>
+              )}
             </div>
           </div>
 

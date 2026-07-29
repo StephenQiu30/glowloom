@@ -20,7 +20,7 @@ import {
   appApiErrorMessage,
   useLoginMutation,
   useRegisterMutation,
-} from "@/lib/app-api";
+} from "@/lib/server-state";
 import { setAccessToken } from "@/lib/auth-session";
 
 type AuthMode = "login" | "register";

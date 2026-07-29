@@ -1,10 +1,18 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 
 import {
+  archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePost,
+  changePasswordApiV1AuthChangePasswordPost,
+  createWorkspaceApiV1WorkspacesPost,
+  deactivateMeApiV1MeDeactivatePost,
+  listWorkspacesApiV1WorkspacesGet,
   loginApiV1AuthLoginPost,
   logoutApiV1AuthLogoutPost,
   meApiV1MeGet,
   registerApiV1AuthRegisterPost,
+  restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePost,
+  updateMeApiV1MePatch,
+  updateWorkspaceApiV1WorkspacesWorkspaceIdPatch,
 } from "@/api/identity";
 import {
   createEpisodeApiV1ProjectsProjectIdEpisodesPost,
@@ -14,7 +22,7 @@ import {
   listProjectsApiV1ProjectsGet,
   projectProductionSnapshotApiV1ProjectsProjectIdProductionSnapshotGet,
 } from "@/api/projects";
-import { ApiClientError } from "@/lib/request";
+import { ApiClientError } from "@/lib/api-request";
 
 export type AppApiError = {
   message: string;
@@ -22,8 +30,15 @@ export type AppApiError = {
   nextAction?: string;
 };
 
+const errorMessages: Record<string, string> = {
+  unauthenticated: "邮箱或密码不正确，请重新输入。",
+};
+
 export function appApiErrorMessage(error: unknown): string {
-  return (error as Partial<AppApiError> | undefined)?.message ?? "服务暂时不可用，请稍后重试。";
+  const apiError = error as Partial<AppApiError> | undefined;
+  return apiError?.code
+    ? (errorMessages[apiError.code] ?? apiError.message ?? "服务暂时不可用，请稍后重试。")
+    : (apiError?.message ?? "服务暂时不可用，请稍后重试。");
 }
 
 async function runRequest<T>(
@@ -51,7 +66,7 @@ async function runRequest<T>(
 export const appApi = createApi({
   reducerPath: "appApi",
   baseQuery: fakeBaseQuery<AppApiError>(),
-  tagTypes: ["Me", "Projects", "Project", "Episodes", "Snapshot"],
+  tagTypes: ["Me", "Workspaces", "Projects", "Project", "Episodes", "Snapshot"],
   endpoints: (builder) => ({
     login: builder.mutation<API.AuthResponse, API.LoginRequest>({
       queryFn: (body) => runRequest(() => loginApiV1AuthLoginPost(body)),
@@ -65,6 +80,55 @@ export const appApi = createApi({
     }),
     logout: builder.mutation<API.RevocationResponse, void>({
       queryFn: () => runRequest(() => logoutApiV1AuthLogoutPost()),
+    }),
+    updateProfile: builder.mutation<API.MeResponse, API.ProfileUpdateRequest>({
+      queryFn: (body) => runRequest(() => updateMeApiV1MePatch(body)),
+      invalidatesTags: ["Me"],
+    }),
+    changePassword: builder.mutation<API.RevocationResponse, API.ChangePasswordRequest>({
+      queryFn: (body) => runRequest(() => changePasswordApiV1AuthChangePasswordPost(body)),
+    }),
+    deactivateAccount: builder.mutation<
+      API.RevocationResponse,
+      API.DeactivateAccountRequest
+    >({
+      queryFn: (body) => runRequest(() => deactivateMeApiV1MeDeactivatePost(body)),
+    }),
+    workspaces: builder.query<API.WorkspaceResponse[], void>({
+      queryFn: () =>
+        runRequest(() => listWorkspacesApiV1WorkspacesGet({ include_archived: true })),
+      providesTags: ["Workspaces"],
+    }),
+    createWorkspace: builder.mutation<API.WorkspaceResponse, API.WorkspaceCreateRequest>({
+      queryFn: (body) => runRequest(() => createWorkspaceApiV1WorkspacesPost(body)),
+      invalidatesTags: ["Workspaces"],
+    }),
+    updateWorkspace: builder.mutation<
+      API.WorkspaceResponse,
+      { workspaceId: string; body: API.WorkspaceUpdateRequest }
+    >({
+      queryFn: ({ workspaceId, body }) =>
+        runRequest(() =>
+          updateWorkspaceApiV1WorkspacesWorkspaceIdPatch(
+            { workspace_id: workspaceId },
+            body,
+          ),
+        ),
+      invalidatesTags: ["Me", "Workspaces"],
+    }),
+    setWorkspaceArchived: builder.mutation<
+      API.WorkspaceResponse,
+      { workspaceId: string; expectedRevision: number; archived: boolean }
+    >({
+      queryFn: ({ workspaceId, expectedRevision, archived }) =>
+        runRequest(() => {
+          const params = { workspace_id: workspaceId };
+          const body = { expected_revision: expectedRevision };
+          return archived
+            ? archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePost(params, body)
+            : restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePost(params, body);
+        }),
+      invalidatesTags: ["Me", "Workspaces", "Projects"],
     }),
     projects: builder.query<API.PaginatedProjects, string>({
       queryFn: (workspaceId) =>
@@ -130,8 +194,11 @@ export const appApi = createApi({
 });
 
 export const {
+  useChangePasswordMutation,
   useCreateEpisodeMutation,
   useCreateProjectMutation,
+  useCreateWorkspaceMutation,
+  useDeactivateAccountMutation,
   useEpisodesQuery,
   useLoginMutation,
   useLogoutMutation,
@@ -140,4 +207,8 @@ export const {
   useProjectSnapshotQuery,
   useProjectsQuery,
   useRegisterMutation,
+  useSetWorkspaceArchivedMutation,
+  useUpdateProfileMutation,
+  useUpdateWorkspaceMutation,
+  useWorkspacesQuery,
 } = appApi;

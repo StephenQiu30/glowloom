@@ -1,6 +1,6 @@
 // @ts-ignore
 /* eslint-disable */
-import request, { type RequestOptions } from "@/lib/request";
+import request, { type RequestOptions } from "@/lib/api-request";
 
 /**  Healthz GET /healthz */
 export async function healthzHealthzGet(options?: RequestOptions) {

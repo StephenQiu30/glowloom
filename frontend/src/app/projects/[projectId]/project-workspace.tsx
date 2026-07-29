@@ -31,7 +31,7 @@ import {
   useEpisodesQuery,
   useProjectQuery,
   useProjectSnapshotQuery,
-} from "@/lib/app-api";
+} from "@/lib/server-state";
 
 export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const router = useRouter();

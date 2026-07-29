@@ -8,10 +8,10 @@ const config = {
   schemaPath,
   serversPath: "./src/api",
   projectName: ".",
-  requestLibPath: "@/lib/request",
+  requestLibPath: "@/lib/api-request",
   requestOptionsType: "RequestOptions",
   requestImportStatement:
-    "import request, { type RequestOptions } from '@/lib/request';",
+    "import request, { type RequestOptions } from '@/lib/api-request';",
   isCamelCase: true,
   nullable: true,
   enumStyle: "string-literal",
