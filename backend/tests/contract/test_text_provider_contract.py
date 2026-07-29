@@ -5,9 +5,10 @@ import httpx
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-DASHSCOPE_CHAT_COMPLETIONS_URL = (
-    "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-)
+DASHSCOPE_BASE_URL = os.getenv(
+    "DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+).rstrip("/")
+DASHSCOPE_CHAT_COMPLETIONS_URL = f"{DASHSCOPE_BASE_URL}/chat/completions"
 TEXT_PROVIDER_MODEL = "qwen3.7-plus-2026-05-26"
 
 
