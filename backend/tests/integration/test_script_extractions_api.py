@@ -5,7 +5,7 @@ from uuid import UUID
 
 import httpx
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -20,6 +20,8 @@ from app.modules.messaging.service import envelope_from_event
 from app.modules.production import service as production_service
 from app.modules.production.models import Task
 from app.modules.production.schemas import ScriptExtractionTaskCommand
+from app.modules.scripts import schemas as script_schemas
+from app.modules.scripts import service as scripts_service
 
 TEST_DATABASE_URL = validate_test_database_url(
     "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
@@ -332,3 +334,248 @@ async def test_unconfigured_worker_updates_batch_and_task_once_and_is_private(
         task = await session.get(Task, batch["task"]["id"])
         assert task is not None
         assert task.revision == 2
+
+
+def _typed_extraction_result() -> dict[str, Any]:
+    return {
+        "candidates": [
+            {
+                "candidate_key": "scene-001",
+                "source_range": {"start": 0, "end": 3},
+                "proposal": {
+                    "kind": "scene",
+                    "heading": "第一场",
+                    "location": "室内",
+                    "time_of_day": "白天",
+                    "summary": "两人确认行动",
+                },
+                "confidence_note": "场次标题清晰",
+            },
+            {
+                "candidate_key": "dialogue-001",
+                "source_range": {"start": 4, "end": 10},
+                "proposal": {
+                    "kind": "dialogue",
+                    "scene_candidate_key": "scene-001",
+                    "speaker_candidate": "角色甲",
+                    "dialogue_kind": "spoken",
+                    "text": "开始。",
+                    "performance_note": "坚定",
+                },
+                "confidence_note": None,
+            },
+            {
+                "candidate_key": "asset-001",
+                "source_range": {"start": 4, "end": 7},
+                "proposal": {
+                    "kind": "asset",
+                    "asset_kind": "character",
+                    "name": "角色甲",
+                    "description": "行动发起者",
+                },
+                "confidence_note": "说话主体可形成角色资产",
+            },
+            {
+                "candidate_key": "shot-001",
+                "source_range": {"start": 0, "end": 15},
+                "proposal": {
+                    "kind": "shot",
+                    "scene_candidate_key": "scene-001",
+                    "title": "角色甲开场",
+                    "purpose": "交代行动开始",
+                },
+                "confidence_note": None,
+            },
+            {
+                "candidate_key": "continuity-001",
+                "source_range": {"start": 11, "end": 19},
+                "proposal": {
+                    "kind": "continuity",
+                    "severity": "warning",
+                    "issue": "角色乙首次出现",
+                    "suggestion": "确认角色设定",
+                },
+                "confidence_note": "仅作为人工检查提示",
+            },
+        ]
+    }
+
+
+@pytest.mark.asyncio
+async def test_extraction_candidates_are_typed_idempotent_paginated_and_private(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="candidate-owner@example.com"
+    )
+    _, _, published = await _published_script(
+        client, headers, workspace_id, import_key="candidate-import"
+    )
+    started = await client.post(
+        f"/api/v1/script-versions/{published['id']}/extractions",
+        headers=headers,
+        json=_extraction_payload(idempotency_key="candidate-extraction"),
+    )
+    assert started.status_code == 202
+    batch = started.json()["data"]
+
+    result_model = script_schemas.__dict__["ScriptExtractionResult"]
+    record_result = scripts_service.__dict__["record_extraction_result"]
+    result = result_model.model_validate(_typed_extraction_result())
+    with pytest.raises(ValidationError):
+        result_model.model_validate(
+            {
+                "candidates": [
+                    {
+                        "candidate_key": "wrong-union",
+                        "source_range": {"start": 0, "end": 3},
+                        "proposal": {
+                            "kind": "asset",
+                            "asset_kind": "character",
+                            "name": "角色甲",
+                            "description": "角色",
+                            "speaker_candidate": "不允许的跨类型字段",
+                        },
+                    }
+                ]
+            }
+        )
+
+    for _ in range(2):
+        async with session_factory() as session:
+            async with session.begin():
+                await record_result(session, UUID(batch["id"]), result)
+
+    listed = await client.get(
+        f"/api/v1/extraction-batches/{batch['id']}/candidates",
+        headers=headers,
+    )
+    assert listed.status_code == 200
+    page = listed.json()["data"]
+    assert page["total"] == 5
+    assert page["limit"] == 20
+    assert page["offset"] == 0
+    assert [item["proposal"]["kind"] for item in page["items"]] == [
+        "scene",
+        "shot",
+        "asset",
+        "dialogue",
+        "continuity",
+    ]
+    scene = page["items"][0]
+    assert scene["candidate_key"] == "scene-001"
+    assert scene["source_range"] == {"start": 0, "end": 3}
+    assert scene["status"] == "pending"
+    assert scene["revision"] == 1
+    assert scene["required"] is True
+    assert "workspace_id" not in scene
+
+    filtered = await client.get(
+        f"/api/v1/extraction-batches/{batch['id']}/candidates",
+        headers=headers,
+        params={"kind": "scene", "status": "pending", "limit": 1},
+    )
+    assert filtered.status_code == 200
+    assert filtered.json()["data"]["items"] == [scene]
+    detail = await client.get(
+        f"/api/v1/extraction-candidates/{scene['id']}", headers=headers
+    )
+    assert detail.status_code == 200
+    assert detail.json()["data"] == scene
+    invalid_filter = await client.get(
+        f"/api/v1/extraction-batches/{batch['id']}/candidates",
+        headers=headers,
+        params={"kind": "unknown-kind"},
+    )
+    assert invalid_filter.status_code == 422
+
+    completed = await client.get(
+        f"/api/v1/extraction-batches/{batch['id']}", headers=headers
+    )
+    assert completed.status_code == 200
+    completed_batch = completed.json()["data"]
+    assert completed_batch["status"] == "succeeded"
+    assert completed_batch["candidate_count"] == 5
+    assert completed_batch["task"]["status"] == "succeeded"
+    assert completed_batch["task"]["progress_stage"] == "completed"
+    assert completed_batch["task"]["next_action"] == "review_candidates"
+    assert completed_batch["task"]["revision"] == 2
+
+    stranger_headers, _ = await _identity(
+        client, email="candidate-stranger@example.com"
+    )
+    hidden_list = await client.get(
+        f"/api/v1/extraction-batches/{batch['id']}/candidates",
+        headers=stranger_headers,
+    )
+    hidden_detail = await client.get(
+        f"/api/v1/extraction-candidates/{scene['id']}", headers=stranger_headers
+    )
+    assert hidden_list.status_code == 404
+    assert hidden_detail.status_code == 404
+
+    async with session_factory() as session:
+        candidate_table = Base.metadata.tables["scr_extraction_candidates"]
+        assert (
+            await session.scalar(select(func.count()).select_from(candidate_table))
+            == 5
+        )
+
+
+@pytest.mark.asyncio
+async def test_extraction_result_rejects_invalid_ranges_and_changed_replay(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="candidate-conflict@example.com"
+    )
+    _, _, published = await _published_script(
+        client, headers, workspace_id, import_key="candidate-conflict-import"
+    )
+    started = await client.post(
+        f"/api/v1/script-versions/{published['id']}/extractions",
+        headers=headers,
+        json=_extraction_payload(idempotency_key="candidate-conflict-extraction"),
+    )
+    assert started.status_code == 202
+    batch = started.json()["data"]
+    result_model = script_schemas.__dict__["ScriptExtractionResult"]
+    record_result = scripts_service.__dict__["record_extraction_result"]
+
+    invalid = _typed_extraction_result()
+    invalid["candidates"][0]["source_range"] = {"start": 0, "end": 99_999}
+    async with session_factory() as session:
+        with pytest.raises(ApiError) as invalid_error:
+            async with session.begin():
+                await record_result(
+                    session,
+                    UUID(batch["id"]),
+                    result_model.model_validate(invalid),
+                )
+        assert invalid_error.value.code == ErrorCode.INVALID_REQUEST
+
+    valid = result_model.model_validate(_typed_extraction_result())
+    async with session_factory() as session:
+        async with session.begin():
+            await record_result(session, UUID(batch["id"]), valid)
+
+    changed = _typed_extraction_result()
+    changed["candidates"][0]["proposal"]["summary"] = "不同的重放结果"
+    async with session_factory() as session:
+        with pytest.raises(ApiError) as conflict_error:
+            async with session.begin():
+                await record_result(
+                    session,
+                    UUID(batch["id"]),
+                    result_model.model_validate(changed),
+                )
+        assert conflict_error.value.code == ErrorCode.RESOURCE_CONFLICT
+
+    async with session_factory() as session:
+        candidate_table = Base.metadata.tables["scr_extraction_candidates"]
+        assert (
+            await session.scalar(select(func.count()).select_from(candidate_table))
+            == 5
+        )
