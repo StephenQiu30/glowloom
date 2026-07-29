@@ -1,7 +1,8 @@
-name: lanverse-business
+name: lanverse-services
 
 services:
-  api:
+  server:
+    container_name: lanverse-server
     image: lanverse-backend:local
     build:
       context: ./backend
@@ -23,36 +24,17 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:-lanverse-api}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-lanverse-web}
       JWT_ACCESS_TOKEN_MINUTES: ${JWT_ACCESS_TOKEN_MINUTES:-30}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-20}
+      OUTBOX_CLAIM_SECONDS: ${OUTBOX_CLAIM_SECONDS:-60}
+      OUTBOX_POLL_SECONDS: ${OUTBOX_POLL_SECONDS:-1.0}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     restart: unless-stopped
 
-  scheduler:
-    image: lanverse-backend:local
-    command: ["python", "-m", "app.scheduler"]
-    environment:
-      DATABASE_URL: ${CONTAINER_DATABASE_URL:-postgresql+asyncpg://postgres:lanverse-development-only@host.docker.internal:5432/lanverse}
-      RABBITMQ_URL: ${CONTAINER_RABBITMQ_URL:-amqp://lanverse:lanverse-development-only@host.docker.internal:5672/}
-      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-20}
-      OUTBOX_CLAIM_SECONDS: ${OUTBOX_CLAIM_SECONDS:-60}
-      OUTBOX_POLL_SECONDS: ${OUTBOX_POLL_SECONDS:-1.0}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-
-  io-worker:
-    image: lanverse-backend:local
-    command: ["python", "-m", "app.io_worker"]
-    environment:
-      DATABASE_URL: ${CONTAINER_DATABASE_URL:-postgresql+asyncpg://postgres:lanverse-development-only@host.docker.internal:5432/lanverse}
-      RABBITMQ_URL: ${CONTAINER_RABBITMQ_URL:-amqp://lanverse:lanverse-development-only@host.docker.internal:5672/}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-
   web:
+    container_name: lanverse-web
     build:
       context: ./frontend
       args:

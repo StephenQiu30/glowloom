@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: setup dev-api dev-frontend scheduler worker-io db-init generate-api lint typecheck test hygiene check docker-build business-up business-down minio-up minio-down env-up env-down contract-minio contract-rabbitmq e2e-install e2e
+.PHONY: setup dev-api dev-frontend scheduler worker-io db-init generate-api lint typecheck test hygiene check docker-build services-up services-down minio-up minio-down env-up env-down contract-minio contract-rabbitmq e2e-install e2e
 
 setup:
 	@uv --version | grep -q '0.11.32'
@@ -50,12 +50,12 @@ check: lint typecheck test hygiene
 	docker compose -f docker-compose-env.yml config >/dev/null
 
 docker-build:
-	docker compose -f docker-compose.yml build api web
+	docker compose -f docker-compose.yml build server web
 
-business-up:
-	docker compose -f docker-compose.yml up -d
+services-up:
+	docker compose -f docker-compose.yml up -d --build
 
-business-down:
+services-down:
 	docker compose -f docker-compose.yml down
 
 minio-up:
