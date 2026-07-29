@@ -60,7 +60,7 @@ jobs:
           OPENAPI_SCHEMA_URL=http://127.0.0.1:8000/openapi.json make generate-api
           git diff --exit-code -- frontend/src/api
       - run: make check
-      - name: Run RabbitMQ publisher contract
+      - name: Run RabbitMQ publisher and worker contracts
         run: RABBITMQ_URL=amqp://guest:guest@127.0.0.1:5672/ make contract-rabbitmq
       - name: Install Playwright Chromium
         run: cd frontend && npx playwright install --with-deps chromium

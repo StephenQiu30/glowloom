@@ -1,5 +1,10 @@
 import aio_pika
-from aio_pika.abc import AbstractChannel, AbstractExchange, AbstractRobustConnection
+from aio_pika.abc import (
+    AbstractChannel,
+    AbstractExchange,
+    AbstractQueue,
+    AbstractRobustConnection,
+)
 
 from app.modules.messaging.schemas import MessageEnvelope
 
@@ -23,6 +28,19 @@ ALLOWED_ROUTING_KEYS = frozenset(
 )
 
 
+async def declare_task_topology(
+    channel: AbstractChannel,
+) -> tuple[AbstractExchange, AbstractQueue, AbstractQueue]:
+    exchange = await channel.declare_exchange(
+        EXCHANGE, aio_pika.ExchangeType.TOPIC, durable=True
+    )
+    io_queue = await channel.declare_queue(IO_QUEUE, durable=True)
+    media_queue = await channel.declare_queue(MEDIA_QUEUE, durable=True)
+    await io_queue.bind(exchange, routing_key="io.#")
+    await media_queue.bind(exchange, routing_key="media.#")
+    return exchange, io_queue, media_queue
+
+
 class RabbitMQPublisher:
     def __init__(self, url: str) -> None:
         self._url = url
@@ -35,13 +53,7 @@ class RabbitMQPublisher:
             return
         connection = await aio_pika.connect_robust(self._url, timeout=3)
         channel = await connection.channel(publisher_confirms=True)
-        exchange = await channel.declare_exchange(
-            EXCHANGE, aio_pika.ExchangeType.TOPIC, durable=True
-        )
-        io_queue = await channel.declare_queue(IO_QUEUE, durable=True)
-        media_queue = await channel.declare_queue(MEDIA_QUEUE, durable=True)
-        await io_queue.bind(exchange, routing_key="io.#")
-        await media_queue.bind(exchange, routing_key="media.#")
+        exchange, _, _ = await declare_task_topology(channel)
         self._connection = connection
         self._channel = channel
         self._exchange = exchange
