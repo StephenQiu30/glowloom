@@ -31,3 +31,43 @@ async def find_primary_workspace(
     )
     row = result.one_or_none()
     return None if row is None else (row[0], row[1])
+
+
+async def list_workspaces(
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    include_archived: bool,
+) -> list[tuple[Workspace, Membership]]:
+    query = (
+        select(Workspace, Membership)
+        .join(Membership, Membership.workspace_id == Workspace.id)
+        .where(Membership.user_id == user_id, Membership.status == "active")
+        .order_by(Workspace.created_at, Workspace.id)
+    )
+    if not include_archived:
+        query = query.where(Workspace.status == "active")
+    rows = await session.execute(query)
+    return [(row[0], row[1]) for row in rows.all()]
+
+
+async def find_workspace_for_user(
+    session: AsyncSession,
+    user_id: UUID,
+    workspace_id: UUID,
+    *,
+    for_update: bool = False,
+) -> tuple[Workspace, Membership] | None:
+    query = (
+        select(Workspace, Membership)
+        .join(Membership, Membership.workspace_id == Workspace.id)
+        .where(
+            Workspace.id == workspace_id,
+            Membership.user_id == user_id,
+            Membership.status == "active",
+        )
+    )
+    if for_update:
+        query = query.with_for_update(of=Workspace)
+    row = (await session.execute(query)).one_or_none()
+    return None if row is None else (row[0], row[1])

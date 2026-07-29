@@ -9,7 +9,10 @@ class ErrorCode(StrEnum):
     INVALID_REQUEST = "invalid_request"
     UNAUTHENTICATED = "unauthenticated"
     FORBIDDEN = "forbidden"
+    NOT_FOUND = "not_found"
     RESOURCE_CONFLICT = "resource_conflict"
+    VERSION_CONFLICT = "version_conflict"
+    STATE_CONFLICT = "state_conflict"
     DEPENDENCY_UNAVAILABLE = "dependency_unavailable"
     INTERNAL_ERROR = "internal_error"
 
