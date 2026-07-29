@@ -31,9 +31,12 @@ def test_access_token_round_trip_requires_expected_contract() -> None:
 def test_access_token_rejects_wrong_audience_and_tampering() -> None:
     settings = _settings()
     token = create_access_token(uuid4(), 1, settings)
+    header, payload, signature = token.split(".")
+    replacement = "A" if signature[0] != "A" else "B"
+    tampered_token = f"{header}.{payload}.{replacement}{signature[1:]}"
 
     assert decode_access_token(token, _settings(audience="another-client")) is None
-    assert decode_access_token(f"{token[:-1]}x", settings) is None
+    assert decode_access_token(tampered_token, settings) is None
 
 
 def test_production_rejects_the_committed_development_secret() -> None:
