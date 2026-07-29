@@ -5,6 +5,12 @@ import httpx
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from app.integrations.text_provider import (
+    TextProviderFailure,
+    parse_text_provider_response,
+    translate_text_provider_request_error,
+)
+
 DASHSCOPE_BASE_URL = os.getenv(
     "DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
 ).rstrip("/")
@@ -99,17 +105,13 @@ async def test_dashscope_structured_extraction_contract() -> None:
                 json=request_payload,
             )
     except httpx.RequestError as error:
-        pytest.fail(f"provider request failed before HTTP response: {type(error).__name__}")
+        pytest.fail(str(translate_text_provider_request_error(error)))
 
     request_id = response.headers.get("x-request-id", "")
-    if response.status_code != 200:
-        pytest.fail(
-            f"provider returned HTTP {response.status_code}; request_id={request_id or 'missing'}"
-        )
     try:
-        raw_body: object = response.json()
-    except ValueError:
-        pytest.fail("provider returned a non-JSON response")
+        raw_body = parse_text_provider_response(response)
+    except TextProviderFailure as error:
+        pytest.fail(str(error))
     try:
         body = ProviderResponse.model_validate(raw_body)
     except ValidationError:

@@ -9,6 +9,7 @@ dependencies = [
     "asyncpg>=0.31.0",
     "email-validator>=2.3.0",
     "fastapi>=0.140.12",
+    "httpx>=0.28.1",
     "minio>=7.2.20",
     "opentelemetry-api>=1.44.0",
     "opentelemetry-sdk>=1.44.0",
@@ -48,7 +49,6 @@ addopts = "-ra"
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "pyright>=1.1.411",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
