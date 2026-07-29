@@ -99,6 +99,47 @@ export async function getExtractionCandidateApiV1ExtractionCandidatesCandidateId
   );
 }
 
+/** List Candidate Decisions GET /api/v1/extraction-candidates/${param0}/decisions */
+export async function listCandidateDecisionsApiV1ExtractionCandidatesCandidateIdDecisionsGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listCandidateDecisionsApiV1ExtractionCandidatesCandidateIdDecisionsGetParams,
+  options?: RequestOptions
+) {
+  const { candidate_id: param0, ...queryParams } = params;
+  return request<API.ApiResponsePaginatedCandidateDecisions_>(
+    `/api/v1/extraction-candidates/${param0}/decisions`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Decide Extraction Candidate POST /api/v1/extraction-candidates/${param0}/decisions */
+export async function decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPostParams,
+  body: API.CandidateDecisionRequest,
+  options?: RequestOptions
+) {
+  const { candidate_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseCandidateDecisionResultResponse_>(
+    `/api/v1/extraction-candidates/${param0}/decisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** Get Source GET /api/v1/script-sources/${param0} */
 export async function getSourceApiV1ScriptSourcesSourceIdGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

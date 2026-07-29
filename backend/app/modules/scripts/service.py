@@ -24,12 +24,18 @@ from app.modules.production.schemas import (
 from app.modules.projects import service as projects_service
 from app.modules.scripts import repository
 from app.modules.scripts.models import (
+    CandidateDecision,
     ExtractionBatch,
     ExtractionCandidate,
     ScriptSource,
     ScriptVersion,
 )
 from app.modules.scripts.schemas import (
+    AcceptWithChangesDecision,
+    CandidateDecisionCommand,
+    CandidateDecisionEvidenceResponse,
+    CandidateDecisionRequest,
+    CandidateDecisionResultResponse,
     CandidateKind,
     CandidateProposal,
     CandidateSourceRange,
@@ -38,6 +44,8 @@ from app.modules.scripts.schemas import (
     CurrentScriptVersionResponse,
     ExtractionBatchResponse,
     ExtractionCandidateResponse,
+    MergeIntoDecision,
+    PaginatedCandidateDecisions,
     PaginatedExtractionCandidates,
     PaginatedScriptVersions,
     ScriptExtractionRequest,
@@ -55,6 +63,9 @@ from app.modules.scripts.schemas import (
 SCRIPT_STRUCTURE_EXTRACTOR_VERSION = "script-structure-v1"
 _CANDIDATE_PROPOSAL_ADAPTER: TypeAdapter[CandidateProposal] = TypeAdapter(
     CandidateProposal
+)
+_CANDIDATE_DECISION_ADAPTER: TypeAdapter[CandidateDecisionCommand] = TypeAdapter(
+    CandidateDecisionCommand
 )
 
 
@@ -174,6 +185,37 @@ def _extraction_result_hash(result: ScriptExtractionResult) -> str:
         sort_keys=True,
     )
     return sha256(canonical.encode()).hexdigest()
+
+
+def _decision_payload(decision: CandidateDecisionCommand) -> dict[str, object]:
+    return decision.model_dump(mode="json", exclude={"action"})
+
+
+def _decision_evidence(
+    decision: CandidateDecision,
+) -> CandidateDecisionEvidenceResponse:
+    command = _CANDIDATE_DECISION_ADAPTER.validate_python(
+        {"action": decision.action, **decision.payload}
+    )
+    return CandidateDecisionEvidenceResponse(
+        id=decision.id,
+        candidate_id=decision.candidate_id,
+        sequence=decision.sequence,
+        decision_key=decision.decision_key,
+        decision=command,
+        actor_id=decision.actor_id,
+        created_at=decision.created_at,
+    )
+
+
+def _same_decision(
+    existing: CandidateDecision,
+    requested: CandidateDecisionCommand,
+) -> bool:
+    return (
+        existing.action == requested.action
+        and existing.payload == _decision_payload(requested)
+    )
 
 
 def _same_extraction(
@@ -819,3 +861,147 @@ async def get_extraction_candidate(
     if candidate is None:
         raise _not_found("Extraction candidate")
     return _candidate_response(candidate)
+
+
+async def decide_extraction_candidate(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    candidate_id: UUID,
+    request: CandidateDecisionRequest,
+) -> CandidateDecisionResultResponse:
+    async with session.begin():
+        user = await identity_service.authenticated_user(session, claims)
+        candidate = await repository.find_extraction_candidate_for_user(
+            session,
+            user.id,
+            candidate_id,
+            for_update=True,
+        )
+        if candidate is None:
+            raise _not_found("Extraction candidate")
+        actor = await identity_service.actor_context(
+            session,
+            claims,
+            candidate.workspace_id,
+            Capability.CONTENT_WRITE,
+        )
+        existing = await repository.find_candidate_decision_by_key(
+            session,
+            candidate.id,
+            request.decision_key,
+        )
+        if existing is not None:
+            if not _same_decision(existing, request.decision):
+                raise ApiError(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "Decision key was used with different input",
+                    status_code=409,
+                )
+            return CandidateDecisionResultResponse(
+                candidate=_candidate_response(candidate),
+                evidence=_decision_evidence(existing),
+            )
+        if candidate.revision != request.expected_revision:
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT,
+                "Extraction candidate has changed",
+                status_code=409,
+                details={"current_revision": candidate.revision},
+            )
+        if candidate.status != "pending":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Extraction candidate has already been decided",
+                status_code=409,
+            )
+        batch = await repository.find_extraction_batch(session, candidate.batch_id)
+        if batch is None or batch.status != "succeeded":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Extraction batch is not ready for decisions",
+                status_code=409,
+            )
+
+        decision = request.decision
+        if (
+            isinstance(decision, AcceptWithChangesDecision)
+            and decision.proposal.kind != candidate.kind
+        ):
+            raise ApiError(
+                ErrorCode.INVALID_REQUEST,
+                "Changed proposal must match the candidate kind",
+                status_code=422,
+            )
+        if isinstance(decision, MergeIntoDecision):
+            target = await repository.find_extraction_candidate(
+                session,
+                decision.target_candidate_id,
+            )
+            if (
+                target is None
+                or target.id == candidate.id
+                or target.workspace_id != candidate.workspace_id
+                or target.batch_id != candidate.batch_id
+                or target.kind != candidate.kind
+                or target.status in {"merged", "ignored"}
+            ):
+                raise ApiError(
+                    ErrorCode.INVALID_REQUEST,
+                    "Merge target must be an active candidate of the same kind and batch",
+                    status_code=422,
+                )
+
+        status_by_action: dict[str, CandidateStatus] = {
+            "accept_new": "accepted",
+            "accept_with_changes": "accepted",
+            "merge_into": "merged",
+            "ignore": "ignored",
+        }
+        now = datetime.now(UTC)
+        evidence = CandidateDecision(
+            id=uuid7(),
+            workspace_id=candidate.workspace_id,
+            candidate_id=candidate.id,
+            sequence=candidate.revision,
+            decision_key=request.decision_key,
+            action=decision.action,
+            payload=_decision_payload(decision),
+            actor_id=actor.user_id,
+            created_at=now,
+        )
+        session.add(evidence)
+        candidate.status = status_by_action[decision.action]
+        candidate.revision += 1
+        candidate.updated_at = now
+        await session.flush()
+    return CandidateDecisionResultResponse(
+        candidate=_candidate_response(candidate),
+        evidence=_decision_evidence(evidence),
+    )
+
+
+async def list_candidate_decisions(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    candidate_id: UUID,
+    *,
+    limit: int,
+    offset: int,
+) -> PaginatedCandidateDecisions:
+    user = await identity_service.authenticated_user(session, claims)
+    result = await repository.list_candidate_decisions_for_user(
+        session,
+        user.id,
+        candidate_id,
+        limit=limit,
+        offset=offset,
+    )
+    if result is None:
+        raise _not_found("Extraction candidate")
+    decisions, total = result
+    return PaginatedCandidateDecisions(
+        items=[_decision_evidence(decision) for decision in decisions],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )

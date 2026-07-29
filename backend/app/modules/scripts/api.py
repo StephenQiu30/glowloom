@@ -9,12 +9,15 @@ from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
 from app.modules.scripts import service
 from app.modules.scripts.schemas import (
+    CandidateDecisionRequest,
+    CandidateDecisionResultResponse,
     CandidateKind,
     CandidateStatus,
     CurrentScriptVersionRequest,
     CurrentScriptVersionResponse,
     ExtractionBatchResponse,
     ExtractionCandidateResponse,
+    PaginatedCandidateDecisions,
     PaginatedExtractionCandidates,
     PaginatedScriptVersions,
     ScriptExtractionRequest,
@@ -236,6 +239,49 @@ async def get_extraction_candidate(
 ) -> ApiResponse[ExtractionCandidateResponse]:
     return ApiResponse(
         data=await service.get_extraction_candidate(session, claims, candidate_id)
+    )
+
+
+@router.post(
+    "/extraction-candidates/{candidate_id}/decisions",
+    response_model=ApiResponse[CandidateDecisionResultResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def decide_extraction_candidate(
+    candidate_id: UUID,
+    payload: CandidateDecisionRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[CandidateDecisionResultResponse]:
+    return ApiResponse(
+        data=await service.decide_extraction_candidate(
+            session,
+            claims,
+            candidate_id,
+            payload,
+        )
+    )
+
+
+@router.get(
+    "/extraction-candidates/{candidate_id}/decisions",
+    response_model=ApiResponse[PaginatedCandidateDecisions],
+)
+async def list_candidate_decisions(
+    candidate_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ApiResponse[PaginatedCandidateDecisions]:
+    return ApiResponse(
+        data=await service.list_candidate_decisions(
+            session,
+            claims,
+            candidate_id,
+            limit=limit or 20,
+            offset=offset,
+        )
     )
 
 

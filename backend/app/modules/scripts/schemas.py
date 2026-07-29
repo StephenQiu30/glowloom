@@ -194,6 +194,39 @@ CandidateProposal = Annotated[
 ]
 
 
+class AcceptNewDecision(CommandModel):
+    action: Literal["accept_new"]
+
+
+class AcceptWithChangesDecision(CommandModel):
+    action: Literal["accept_with_changes"]
+    proposal: CandidateProposal
+
+
+class MergeIntoDecision(CommandModel):
+    action: Literal["merge_into"]
+    target_candidate_id: UUID
+
+
+class IgnoreDecision(CommandModel):
+    action: Literal["ignore"]
+
+
+CandidateDecisionCommand = Annotated[
+    AcceptNewDecision
+    | AcceptWithChangesDecision
+    | MergeIntoDecision
+    | IgnoreDecision,
+    Field(discriminator="action"),
+]
+
+
+class CandidateDecisionRequest(CommandModel):
+    decision_key: str = Field(min_length=1, max_length=200)
+    expected_revision: int = Field(ge=1)
+    decision: CandidateDecisionCommand
+
+
 class ExtractionCandidateInput(CommandModel):
     candidate_key: str = Field(min_length=1, max_length=100)
     source_range: CandidateSourceRange
@@ -232,6 +265,28 @@ class ExtractionCandidateResponse(BaseModel):
     status: CandidateStatus
     revision: int
     created_at: datetime
+
+
+class CandidateDecisionEvidenceResponse(BaseModel):
+    id: UUID
+    candidate_id: UUID
+    sequence: int
+    decision_key: str
+    decision: CandidateDecisionCommand
+    actor_id: UUID
+    created_at: datetime
+
+
+class CandidateDecisionResultResponse(BaseModel):
+    candidate: ExtractionCandidateResponse
+    evidence: CandidateDecisionEvidenceResponse
+
+
+class PaginatedCandidateDecisions(BaseModel):
+    items: list[CandidateDecisionEvidenceResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class PaginatedExtractionCandidates(BaseModel):

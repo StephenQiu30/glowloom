@@ -1,6 +1,27 @@
 declare namespace API {
+  type AcceptNewDecision = {
+    /** Action */
+    action: "accept_new";
+  };
+
+  type AcceptWithChangesDecision = {
+    /** Action */
+    action: "accept_with_changes";
+    /** Proposal */
+    proposal:
+      | SceneCandidateProposal
+      | DialogueCandidateProposal
+      | AssetCandidateProposal
+      | ShotCandidateProposal
+      | ContinuityCandidateProposal;
+  };
+
   type ApiResponseAuthResponse_ = {
     data: AuthResponse;
+  };
+
+  type ApiResponseCandidateDecisionResultResponse_ = {
+    data: CandidateDecisionResultResponse;
   };
 
   type ApiResponseCurrentScriptVersionResponse_ = {
@@ -47,6 +68,10 @@ declare namespace API {
 
   type ApiResponseMeResponse_ = {
     data: MeResponse;
+  };
+
+  type ApiResponsePaginatedCandidateDecisions_ = {
+    data: PaginatedCandidateDecisions;
   };
 
   type ApiResponsePaginatedExtractionCandidates_ = {
@@ -169,6 +194,45 @@ declare namespace API {
     expected_revision: number;
   };
 
+  type CandidateDecisionEvidenceResponse = {
+    /** Id */
+    id: string;
+    /** Candidate Id */
+    candidate_id: string;
+    /** Sequence */
+    sequence: number;
+    /** Decision Key */
+    decision_key: string;
+    /** Decision */
+    decision:
+      | AcceptNewDecision
+      | AcceptWithChangesDecision
+      | MergeIntoDecision
+      | IgnoreDecision;
+    /** Actor Id */
+    actor_id: string;
+    /** Created At */
+    created_at: string;
+  };
+
+  type CandidateDecisionRequest = {
+    /** Decision Key */
+    decision_key: string;
+    /** Expected Revision */
+    expected_revision: number;
+    /** Decision */
+    decision:
+      | AcceptNewDecision
+      | AcceptWithChangesDecision
+      | MergeIntoDecision
+      | IgnoreDecision;
+  };
+
+  type CandidateDecisionResultResponse = {
+    candidate: ExtractionCandidateResponse;
+    evidence: CandidateDecisionEvidenceResponse;
+  };
+
   type CandidateSourceRange = {
     /** Start */
     start: number;
@@ -229,6 +293,11 @@ declare namespace API {
     /** Confirmation */
     confirmation: "DEACTIVATE";
   };
+
+  type decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPostParams =
+    {
+      candidate_id: string;
+    };
 
   type DeleteBlocker = {
     /** Code */
@@ -485,9 +554,21 @@ declare namespace API {
     detail: ValidationError[] | null;
   };
 
+  type IgnoreDecision = {
+    /** Action */
+    action: "ignore";
+  };
+
   type importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPostParams = {
     episode_id: string;
   };
+
+  type listCandidateDecisionsApiV1ExtractionCandidatesCandidateIdDecisionsGetParams =
+    {
+      candidate_id: string;
+      limit: number | null | null;
+      offset: number | null;
+    };
 
   type listEpisodesApiV1ProjectsProjectIdEpisodesGetParams = {
     project_id: string;
@@ -566,6 +647,13 @@ declare namespace API {
     workspace: WorkspaceResponse;
   };
 
+  type MergeIntoDecision = {
+    /** Action */
+    action: "merge_into";
+    /** Target Candidate Id */
+    target_candidate_id: string;
+  };
+
   type NextAction = {
     /** Code */
     code: string;
@@ -573,6 +661,17 @@ declare namespace API {
     label: string;
     /** Href */
     href: string;
+  };
+
+  type PaginatedCandidateDecisions = {
+    /** Items */
+    items: CandidateDecisionEvidenceResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
   };
 
   type PaginatedExtractionCandidates = {

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.identity.models import Membership
 from app.modules.scripts.models import (
+    CandidateDecision,
     ExtractionBatch,
     ExtractionCandidate,
     ScriptSource,
@@ -206,8 +207,10 @@ async def find_extraction_candidate_for_user(
     session: AsyncSession,
     user_id: UUID,
     candidate_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> ExtractionCandidate | None:
-    return await session.scalar(
+    query = (
         select(ExtractionCandidate)
         .join(
             ExtractionBatch,
@@ -220,3 +223,58 @@ async def find_extraction_candidate_for_user(
             Membership.status == "active",
         )
     )
+    if for_update:
+        query = query.with_for_update(of=ExtractionCandidate)
+    return await session.scalar(query)
+
+
+async def find_extraction_candidate(
+    session: AsyncSession,
+    candidate_id: UUID,
+) -> ExtractionCandidate | None:
+    return await session.scalar(
+        select(ExtractionCandidate).where(ExtractionCandidate.id == candidate_id)
+    )
+
+
+async def find_candidate_decision_by_key(
+    session: AsyncSession,
+    candidate_id: UUID,
+    decision_key: str,
+) -> CandidateDecision | None:
+    return await session.scalar(
+        select(CandidateDecision).where(
+            CandidateDecision.candidate_id == candidate_id,
+            CandidateDecision.decision_key == decision_key,
+        )
+    )
+
+
+async def list_candidate_decisions_for_user(
+    session: AsyncSession,
+    user_id: UUID,
+    candidate_id: UUID,
+    *,
+    limit: int,
+    offset: int,
+) -> tuple[list[CandidateDecision], int] | None:
+    candidate = await find_extraction_candidate_for_user(
+        session,
+        user_id,
+        candidate_id,
+    )
+    if candidate is None:
+        return None
+    total = await session.scalar(
+        select(func.count())
+        .select_from(CandidateDecision)
+        .where(CandidateDecision.candidate_id == candidate_id)
+    )
+    decisions = await session.scalars(
+        select(CandidateDecision)
+        .where(CandidateDecision.candidate_id == candidate_id)
+        .order_by(CandidateDecision.sequence, CandidateDecision.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(decisions), total or 0

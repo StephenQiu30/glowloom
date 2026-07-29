@@ -201,3 +201,38 @@ class ExtractionCandidate(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
     )
+
+
+class CandidateDecision(Base):
+    __tablename__ = "scr_candidate_decisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["candidate_id", "workspace_id"],
+            ["scr_extraction_candidates.id", "scr_extraction_candidates.workspace_id"],
+            name="fk_scr_decision_candidate_workspace",
+        ),
+        CheckConstraint("sequence >= 1", name="ck_scr_decision_sequence"),
+        CheckConstraint(
+            "action IN ('accept_new', 'accept_with_changes', 'merge_into', 'ignore')",
+            name="ck_scr_decision_action",
+        ),
+        UniqueConstraint(
+            "candidate_id", "sequence", name="uq_scr_decision_candidate_sequence"
+        ),
+        UniqueConstraint(
+            "candidate_id", "decision_key", name="uq_scr_decision_candidate_key"
+        ),
+        Index("ix_scr_decision_candidate_created", "candidate_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    candidate_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer)
+    decision_key: Mapped[str] = mapped_column(String(200))
+    action: Mapped[str] = mapped_column(String(40))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    actor_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
