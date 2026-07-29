@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, Clapperboard, Server, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -50,9 +51,11 @@ export default function Home() {
             以版本、任务和人工决议连接剧本、资产、分镜、生成、审核与交付。刷新或任务恢复后，服务端事实始终是唯一依据。
           </p>
           <div className="mt-10 flex flex-wrap gap-3">
-            <Button size="lg" disabled>
-              项目工作台将在 S1 开放
-              <ArrowRight aria-hidden="true" />
+            <Button size="lg" asChild>
+              <Link href="/login">
+                进入项目工作台
+                <ArrowRight aria-hidden="true" />
+              </Link>
             </Button>
           </div>
         </div>
