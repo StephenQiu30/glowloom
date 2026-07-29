@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useHasAccessToken } from "@/hooks/use-auth-session";
+import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
   useCreateEpisodeMutation,
@@ -35,7 +35,8 @@ import {
 
 export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const router = useRouter();
-  const isAuthenticated = useHasAccessToken();
+  const authState = useAuthSessionState();
+  const isAuthenticated = authState === "authenticated";
   const [commandError, setCommandError] = useState<string | null>(null);
   const project = useProjectQuery(projectId, { skip: !isAuthenticated });
   const episodes = useEpisodesQuery(projectId, { skip: !isAuthenticated });
@@ -43,8 +44,8 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const [createEpisode, createState] = useCreateEpisodeMutation();
 
   useEffect(() => {
-    if (!isAuthenticated) router.replace("/login");
-  }, [isAuthenticated, router]);
+    if (authState === "anonymous") router.replace("/login");
+  }, [authState, router]);
 
   async function handleCreateEpisode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,7 +66,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
     }
   }
 
-  if (!isAuthenticated || project.isLoading) {
+  if (authState === "checking" || project.isLoading) {
     return (
       <main className="grid min-h-screen place-items-center" aria-live="polite">
         <LoaderCircle className="size-6 animate-spin" aria-hidden="true" />
@@ -73,6 +74,8 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
       </main>
     );
   }
+
+  if (authState === "anonymous") return null;
 
   if (project.isError || !project.data) {
     return (
@@ -242,8 +245,10 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                     {snapshot.data.next_actions.map((action) => (
                       <div className="rounded-lg bg-muted p-3" key={action.code}>
                         <p className="font-medium">{action.label}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          剧本导入将在下一实施切片开放。
+                        <p className="mt-1 text-xs text-foreground">
+                          {action.code === "import_script"
+                            ? "剧本导入将在下一实施切片开放。"
+                            : "完成此动作后，生产快照会重新计算。"}
                         </p>
                       </div>
                     ))}

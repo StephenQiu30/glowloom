@@ -1,0 +1,36 @@
+import { expect, test } from "@playwright/test";
+
+test("S1 首登后创建项目和单集并恢复服务端事实", async ({ page }) => {
+  const unique = `${Date.now()}-${test.info().workerIndex}`;
+  const email = `creator-${unique}@example.com`;
+  const projectName = `海边来信-${unique}`;
+
+  await page.goto("/register");
+  await page.getByLabel("显示名称").fill("验收创作者");
+  await page.getByLabel("邮箱").fill(email);
+  await page.getByLabel("密码").fill("playwright-secure-password");
+  await page.getByRole("button", { name: "注册并开始创作" }).click();
+
+  await expect(page).toHaveURL(/\/projects$/);
+  await expect(page.getByRole("heading", { name: "项目" })).toBeVisible();
+
+  await page.getByLabel("项目名称").fill(projectName);
+  await page.getByLabel("项目简介").fill("用于验证 S1 纵向业务闭环");
+  await page.getByRole("button", { name: "创建项目" }).click();
+
+  const projectLink = page.getByRole("link", { name: `打开项目 ${projectName}` });
+  await expect(projectLink).toBeVisible();
+  await projectLink.click();
+
+  await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
+  await page.getByLabel("单集名称").fill("第一集");
+  await page.getByRole("button", { name: "创建单集" }).click();
+
+  await expect(page.getByText("第一集", { exact: true })).toBeVisible();
+  await expect(page.getByText("导入剧本", { exact: true })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
+  await expect(page.getByText("第一集", { exact: true })).toBeVisible();
+  await expect(page.getByText("导入剧本", { exact: true })).toBeVisible();
+});

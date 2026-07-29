@@ -575,7 +575,7 @@ def _episode_snapshot(
         blocking_reasons=[
             BlockingReason(
                 code="SCRIPT_MISSING",
-                summary="Episode has no current script version",
+                summary="单集尚未导入剧本",
                 resource_type="episode",
                 resource_id=episode.id,
             )
@@ -634,7 +634,7 @@ async def project_production_snapshot(
         blockers = [
             BlockingReason(
                 code="EPISODE_MISSING",
-                summary="Project has no active episode",
+                summary="项目尚未创建有效单集",
                 resource_type="project",
                 resource_id=project.id,
             )

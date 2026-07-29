@@ -41,6 +41,8 @@ jobs:
         run: |
           cd backend
           uv run --frozen --no-python-downloads uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          api_pid=$!
+          trap 'kill "$api_pid"' EXIT
           cd ..
           for attempt in 1 2 3 4 5; do
             curl --fail --silent http://127.0.0.1:8000/healthz && break
@@ -49,4 +51,8 @@ jobs:
           OPENAPI_SCHEMA_URL=http://127.0.0.1:8000/openapi.json make generate-api
           git diff --exit-code -- frontend/src/api
       - run: make check
+      - name: Install Playwright Chromium
+        run: cd frontend && npx playwright install --with-deps chromium
+      - name: Run browser E2E
+        run: make e2e
       - run: make docker-build

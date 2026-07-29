@@ -388,6 +388,15 @@ async def test_empty_production_snapshot_explains_the_next_action(
         "/api/v1/projects", headers=headers, json=_project_payload(workspace_id)
     )
     project_id = project.json()["data"]["id"]
+    empty_project_snapshot = await client.get(
+        f"/api/v1/projects/{project_id}/production-snapshot", headers=headers
+    )
+    assert empty_project_snapshot.json()["data"]["blocking_reasons"][0] == {
+        "code": "EPISODE_MISSING",
+        "resource_id": project_id,
+        "resource_type": "project",
+        "summary": "项目尚未创建有效单集",
+    }
     episode = await client.post(
         f"/api/v1/projects/{project_id}/episodes",
         headers=headers,
@@ -403,6 +412,7 @@ async def test_empty_production_snapshot_explains_the_next_action(
     assert episode_data["current_stage"] == "script_import"
     assert episode_data["completion"] == 0
     assert episode_data["blocking_reasons"][0]["code"] == "SCRIPT_MISSING"
+    assert episode_data["blocking_reasons"][0]["summary"] == "单集尚未导入剧本"
     assert episode_data["next_actions"][0] == {
         "code": "import_script",
         "href": f"/studio/{episode_id}/script",

@@ -4,12 +4,18 @@ import { useSyncExternalStore } from "react";
 
 import { hasAccessToken, subscribeAuthSession } from "@/lib/auth-session";
 
-const getServerSnapshot = () => false;
+export type AuthSessionState = "checking" | "authenticated" | "anonymous";
 
-export function useHasAccessToken(): boolean {
+const getServerSnapshot = (): AuthSessionState => "checking";
+
+function getBrowserSnapshot(): AuthSessionState {
+  return hasAccessToken() ? "authenticated" : "anonymous";
+}
+
+export function useAuthSessionState(): AuthSessionState {
   return useSyncExternalStore(
     subscribeAuthSession,
-    hasAccessToken,
+    getBrowserSnapshot,
     getServerSnapshot,
   );
 }

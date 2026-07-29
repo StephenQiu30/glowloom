@@ -12,7 +12,12 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "cd ../backend && uv run --frozen --no-python-downloads uvicorn app.main:app --host 127.0.0.1 --port 8000",
+        "cd ../backend && uv run --frozen --no-python-downloads python -m app.initialize_database && uv run --frozen --no-python-downloads uvicorn app.main:app --host 127.0.0.1 --port 8000",
+      env: {
+        DATABASE_URL: "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
+        ENVIRONMENT: "test",
+        JWT_SECRET_KEY: "playwright-only-jwt-secret-with-at-least-32-bytes",
+      },
       url: "http://127.0.0.1:8000/healthz",
       reuseExistingServer: true,
       timeout: 60_000,

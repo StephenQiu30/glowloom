@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useHasAccessToken } from "@/hooks/use-auth-session";
+import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApi,
   appApiErrorMessage,
@@ -40,7 +40,8 @@ import type { AppStore } from "@/lib/store";
 export default function ProjectsPage() {
   const router = useRouter();
   const dispatch = useDispatch<AppStore["dispatch"]>();
-  const isAuthenticated = useHasAccessToken();
+  const authState = useAuthSessionState();
+  const isAuthenticated = authState === "authenticated";
   const [commandError, setCommandError] = useState<string | null>(null);
   const me = useMeQuery(undefined, { skip: !isAuthenticated });
   const workspaceId = me.data?.workspace.id;
@@ -49,10 +50,10 @@ export default function ProjectsPage() {
   const [logout, logoutState] = useLogoutMutation();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (authState === "anonymous") {
       router.replace("/login");
     }
-  }, [isAuthenticated, router]);
+  }, [authState, router]);
 
   useEffect(() => {
     if (me.isError && !hasAccessToken()) {
@@ -92,7 +93,7 @@ export default function ProjectsPage() {
     }
   }
 
-  if (!isAuthenticated || me.isLoading) {
+  if (authState === "checking" || me.isLoading) {
     return (
       <main className="grid min-h-screen place-items-center" aria-live="polite">
         <LoaderCircle className="size-6 animate-spin" aria-hidden="true" />
@@ -100,6 +101,8 @@ export default function ProjectsPage() {
       </main>
     );
   }
+
+  if (authState === "anonymous") return null;
 
   if (me.isError) {
     return (
