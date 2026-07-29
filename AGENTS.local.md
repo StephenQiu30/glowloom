@@ -1,12 +1,6 @@
 # AGENTS.local.md
 
-本文件只记录 Lanverse 仓库当前有效、且不属于业务设计的局部约束。
-
-## 当前状态
-
-1. S0 工程基线已经验收，当前只允许按 `DEV-S1-01 → DEV-S1-04` 实施单人立项闭环；一次只推进一个 DEV 任务。
-2. 用户已确定后端语言为 Python、HTTP 框架为 FastAPI，前端组件体系为 shadcn/ui + Radix UI；其余产品、架构和技术决定以 `docs/design/` 中已接受的文档为准。
-3. S1 必需的身份、空间、项目和空态 Snapshot 范围已接受，D-002 已固定为 FastAPI + JWT 本地认证；S2～S6 未被对应切片接受前，不创建相关业务表、页面、部署服务或占位模块。
+本文件只记录 Lanverse 仓库长期有效、且不属于业务设计的局部约束。当前切片、产品状态、架构和技术选型只以 `docs/` 下对应的 Requirement、Design、PRD、Plan 与 Acceptance 为准，不在本文件重复维护。
 
 ## 仓库边界
 
