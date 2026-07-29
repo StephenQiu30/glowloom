@@ -6,6 +6,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -63,3 +64,43 @@ class OutboxEvent(Base):
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
+class InboxDelivery(Base):
+    __tablename__ = "sys_inbox_deliveries"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('processing', 'completed', 'rejected', "
+            "'retry_scheduled', 'manual_attention')",
+            name="ck_sys_inbox_status",
+        ),
+        CheckConstraint("attempt_count >= 1", name="ck_sys_inbox_attempt_count"),
+        ForeignKeyConstraint(
+            ["task_id", "workspace_id"],
+            ["prod_tasks.id", "prod_tasks.workspace_id"],
+            name="fk_sys_inbox_task_workspace",
+        ),
+        UniqueConstraint(
+            "event_id",
+            "consumer_name",
+            name="uq_sys_inbox_event_consumer",
+        ),
+        Index("ix_sys_inbox_status_received", "status", "received_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_workspaces.id"), nullable=False
+    )
+    event_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    consumer_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    trace_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="processing")
+    attempt_count: Mapped[int] = mapped_column(Integer, default=1)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[str | None] = mapped_column(String(80), nullable=True)

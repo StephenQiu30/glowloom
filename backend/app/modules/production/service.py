@@ -72,6 +72,29 @@ def _same_command(task: Task, command: ScriptExtractionTaskCommand) -> bool:
     )
 
 
+def fail_script_extraction_task(
+    task: Task,
+    *,
+    error_code: str,
+    error_summary: str,
+    next_action: str,
+    now: datetime,
+) -> bool:
+    if task.task_type != "script_extraction":
+        raise ValueError("task is not a script extraction task")
+    if task.status in {"succeeded", "failed", "cancelled"}:
+        return False
+    task.status = "failed"
+    task.progress_stage = "blocked"
+    task.error_code = error_code
+    task.error_retryable = False
+    task.error_summary = error_summary
+    task.next_action = next_action
+    task.revision += 1
+    task.updated_at = now
+    return True
+
+
 async def create_script_extraction_task(
     session: AsyncSession,
     actor: ActorContext,
