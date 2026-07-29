@@ -90,5 +90,13 @@ describe("project production entry", () => {
     expect(await screen.findByText("第一集")).toBeInTheDocument();
     expect(await screen.findByText("导入剧本")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "创建单集" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存项目信息" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "更新预算" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "归档项目" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "检查项目删除条件" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存 第一集" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "归档 第一集" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "下移 第一集" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "检查删除 第一集" })).toBeInTheDocument();
   });
 });

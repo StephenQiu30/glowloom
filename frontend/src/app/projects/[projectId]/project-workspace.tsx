@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  ArrowLeft,
-  Clapperboard,
-  Clock3,
-  LoaderCircle,
-  Plus,
-  ScrollText,
-} from "lucide-react";
+import { ArrowLeft, Clapperboard, Clock3, LoaderCircle, Plus, ScrollText } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
@@ -15,13 +8,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
@@ -33,15 +20,21 @@ import {
   useProjectSnapshotQuery,
 } from "@/lib/server-state";
 
+import { EpisodeLifecycleCard } from "./episode-lifecycle-card";
+import { ProjectLifecyclePanel } from "./project-lifecycle-panel";
+
 export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const router = useRouter();
   const authState = useAuthSessionState();
   const isAuthenticated = authState === "authenticated";
   const [commandError, setCommandError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const project = useProjectQuery(projectId, { skip: !isAuthenticated });
   const episodes = useEpisodesQuery(projectId, { skip: !isAuthenticated });
   const snapshot = useProjectSnapshotQuery(projectId, { skip: !isAuthenticated });
   const [createEpisode, createState] = useCreateEpisodeMutation();
+  const availableEpisodes = episodes.data ?? [];
+  const activeEpisodes = availableEpisodes.filter((episode) => episode.status === "active");
 
   useEffect(() => {
     if (authState === "anonymous") router.replace("/login");
@@ -52,6 +45,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     setCommandError(null);
+    setMessage(null);
     try {
       await createEpisode({
         projectId,
@@ -61,6 +55,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
         },
       }).unwrap();
       formElement.reset();
+      setMessage("单集已创建。");
     } catch (error: unknown) {
       setCommandError(appApiErrorMessage(error));
     }
@@ -116,6 +111,9 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
             <div className="flex gap-2">
               <Badge variant="secondary">{project.data.aspect_ratio}</Badge>
               <Badge variant="outline">{project.data.language}</Badge>
+              <Badge variant={project.data.status === "active" ? "secondary" : "outline"}>
+                {project.data.status === "active" ? "进行中" : "已归档"}
+              </Badge>
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight">{project.data.name}</h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">
@@ -143,14 +141,16 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
           </div>
         </div>
 
-        {(episodes.isError || snapshot.isError) && (
-          <Alert variant="destructive" className="mt-7">
+        {episodes.isError || snapshot.isError ? (
+          <Alert className="mt-7" variant="destructive">
             <AlertTitle>部分生产信息加载失败</AlertTitle>
             <AlertDescription>
               {appApiErrorMessage(episodes.error ?? snapshot.error)}
             </AlertDescription>
           </Alert>
-        )}
+        ) : null}
+
+        <ProjectLifecyclePanel project={project.data} />
 
         <div className="mt-9 grid gap-8 lg:grid-cols-[1fr_20rem]">
           <section>
@@ -159,40 +159,24 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                 <h2 className="text-xl font-semibold">单集</h2>
                 <p className="mt-1 text-sm text-muted-foreground">按服务端顺序组织短剧内容。</p>
               </div>
-              <Badge variant="outline">{episodes.data?.length ?? 0} 集</Badge>
+              <Badge variant="outline">{availableEpisodes.length} 集</Badge>
             </div>
 
             {episodes.isLoading ? (
               <p className="text-sm text-muted-foreground">正在加载单集…</p>
-            ) : episodes.data?.length ? (
+            ) : availableEpisodes.length ? (
               <div className="grid gap-4">
-                {episodes.data.map((episode) => {
-                  const episodeSnapshot = snapshot.data?.episodes.find(
-                    (item) => item.episode_id === episode.id,
-                  );
-                  return (
-                    <Card key={episode.id}>
-                      <CardHeader>
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <CardTitle>{episode.name}</CardTitle>
-                            <CardDescription className="mt-1">
-                              第 {episode.position} 集 · {Math.round(episode.target_duration_ms / 1000)} 秒
-                            </CardDescription>
-                          </div>
-                          <Badge variant="secondary">
-                            {episodeSnapshot?.completion ?? 0}%
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      {episodeSnapshot?.blocking_reasons.length ? (
-                        <CardContent className="text-sm text-muted-foreground">
-                          {episodeSnapshot.blocking_reasons[0].summary}
-                        </CardContent>
-                      ) : null}
-                    </Card>
-                  );
-                })}
+                {availableEpisodes.map((episode) => (
+                  <EpisodeLifecycleCard
+                    activeEpisodes={activeEpisodes}
+                    episode={episode}
+                    episodeSnapshot={snapshot.data?.episodes.find(
+                      (item) => item.episode_id === episode.id,
+                    )}
+                    key={episode.id}
+                    project={project.data}
+                  />
+                ))}
               </div>
             ) : (
               <Card className="border-dashed py-12 text-center">
@@ -215,12 +199,16 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                 <form className="grid gap-4" onSubmit={handleCreateEpisode}>
                   <div className="grid gap-2">
                     <Label htmlFor="episodeName">单集名称</Label>
-                    <Input id="episodeName" name="episodeName" maxLength={120} required />
+                    <Input id="episodeName" maxLength={120} name="episodeName" required />
                   </div>
                   {commandError ? (
                     <p className="text-sm text-destructive" role="alert">{commandError}</p>
                   ) : null}
-                  <Button disabled={createState.isLoading} type="submit">
+                  {message ? <p className="text-sm text-foreground">{message}</p> : null}
+                  <Button
+                    disabled={createState.isLoading || project.data.status === "archived"}
+                    type="submit"
+                  >
                     {createState.isLoading ? (
                       <LoaderCircle className="animate-spin" aria-hidden="true" />
                     ) : (

@@ -15,12 +15,24 @@ import {
   updateWorkspaceApiV1WorkspacesWorkspaceIdPatch,
 } from "@/api/identity";
 import {
+  archiveEpisodeApiV1EpisodesEpisodeIdArchivePost,
+  archiveProjectApiV1ProjectsProjectIdArchivePost,
   createEpisodeApiV1ProjectsProjectIdEpisodesPost,
   createProjectApiV1ProjectsPost,
+  deleteEpisodeApiV1EpisodesEpisodeIdDelete,
+  deletePreflightApiV1ProjectsProjectIdDeletePreflightPost,
+  deleteProjectApiV1ProjectsProjectIdDelete,
+  episodeDeletePreflightApiV1EpisodesEpisodeIdDeletePreflightPost,
   getProjectApiV1ProjectsProjectIdGet,
   listEpisodesApiV1ProjectsProjectIdEpisodesGet,
   listProjectsApiV1ProjectsGet,
   projectProductionSnapshotApiV1ProjectsProjectIdProductionSnapshotGet,
+  reorderEpisodesApiV1ProjectsProjectIdEpisodesReorderPost,
+  restoreEpisodeApiV1EpisodesEpisodeIdRestorePost,
+  restoreProjectApiV1ProjectsProjectIdRestorePost,
+  updateBudgetLimitApiV1ProjectsProjectIdBudgetLimitPost,
+  updateEpisodeApiV1EpisodesEpisodeIdPatch,
+  updateProjectApiV1ProjectsProjectIdPatch,
 } from "@/api/projects";
 import { ApiClientError } from "@/lib/api-request";
 
@@ -135,7 +147,7 @@ export const appApi = createApi({
         runRequest(() =>
           listProjectsApiV1ProjectsGet({
             workspace_id: workspaceId,
-            include_archived: false,
+            include_archived: true,
             search: null,
             sort: "updated_at",
             order: "desc",
@@ -149,6 +161,75 @@ export const appApi = createApi({
       queryFn: (body) => runRequest(() => createProjectApiV1ProjectsPost(body)),
       invalidatesTags: ["Projects"],
     }),
+    updateProject: builder.mutation<
+      API.ProjectResponse,
+      { projectId: string; body: API.ProjectUpdateRequest }
+    >({
+      queryFn: ({ projectId, body }) =>
+        runRequest(() =>
+          updateProjectApiV1ProjectsProjectIdPatch({ project_id: projectId }, body),
+        ),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        "Projects",
+        { type: "Project", id: projectId },
+      ],
+    }),
+    updateProjectBudget: builder.mutation<
+      API.ProjectResponse,
+      { projectId: string; body: API.BudgetLimitRequest }
+    >({
+      queryFn: ({ projectId, body }) =>
+        runRequest(() =>
+          updateBudgetLimitApiV1ProjectsProjectIdBudgetLimitPost(
+            { project_id: projectId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        "Projects",
+        { type: "Project", id: projectId },
+      ],
+    }),
+    setProjectArchived: builder.mutation<
+      API.ProjectResponse,
+      { projectId: string; expectedRevision: number; archived: boolean }
+    >({
+      queryFn: ({ projectId, expectedRevision, archived }) =>
+        runRequest(() => {
+          const params = { project_id: projectId };
+          const body = { expected_revision: expectedRevision };
+          return archived
+            ? archiveProjectApiV1ProjectsProjectIdArchivePost(params, body)
+            : restoreProjectApiV1ProjectsProjectIdRestorePost(params, body);
+        }),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        "Projects",
+        { type: "Project", id: projectId },
+        { type: "Episodes", id: projectId },
+        { type: "Snapshot", id: projectId },
+      ],
+    }),
+    projectDeletePreflight: builder.mutation<API.DeletePreflightResponse, string>({
+      queryFn: (projectId) =>
+        runRequest(() =>
+          deletePreflightApiV1ProjectsProjectIdDeletePreflightPost({
+            project_id: projectId,
+          }),
+        ),
+    }),
+    deleteProject: builder.mutation<
+      API.DeleteResponse,
+      { projectId: string; expectedRevision: number }
+    >({
+      queryFn: ({ projectId, expectedRevision }) =>
+        runRequest(() =>
+          deleteProjectApiV1ProjectsProjectIdDelete({
+            project_id: projectId,
+            expected_revision: expectedRevision,
+          }),
+        ),
+      invalidatesTags: ["Projects"],
+    }),
     project: builder.query<API.ProjectResponse, string>({
       queryFn: (projectId) =>
         runRequest(() => getProjectApiV1ProjectsProjectIdGet({ project_id: projectId })),
@@ -159,7 +240,7 @@ export const appApi = createApi({
         runRequest(() =>
           listEpisodesApiV1ProjectsProjectIdEpisodesGet({
             project_id: projectId,
-            include_archived: false,
+            include_archived: true,
           }),
         ),
       providesTags: (_result, _error, projectId) => [{ type: "Episodes", id: projectId }],
@@ -174,6 +255,79 @@ export const appApi = createApi({
             { project_id: projectId },
             body,
           ),
+        ),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: "Project", id: projectId },
+        { type: "Episodes", id: projectId },
+        { type: "Snapshot", id: projectId },
+      ],
+    }),
+    updateEpisode: builder.mutation<
+      API.EpisodeResponse,
+      { projectId: string; episodeId: string; body: API.EpisodeUpdateRequest }
+    >({
+      queryFn: ({ episodeId, body }) =>
+        runRequest(() =>
+          updateEpisodeApiV1EpisodesEpisodeIdPatch({ episode_id: episodeId }, body),
+        ),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: "Episodes", id: projectId },
+        { type: "Snapshot", id: projectId },
+      ],
+    }),
+    setEpisodeArchived: builder.mutation<
+      API.EpisodeResponse,
+      { projectId: string; episodeId: string; expectedRevision: number; archived: boolean }
+    >({
+      queryFn: ({ episodeId, expectedRevision, archived }) =>
+        runRequest(() => {
+          const params = { episode_id: episodeId };
+          const body = { expected_revision: expectedRevision };
+          return archived
+            ? archiveEpisodeApiV1EpisodesEpisodeIdArchivePost(params, body)
+            : restoreEpisodeApiV1EpisodesEpisodeIdRestorePost(params, body);
+        }),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: "Project", id: projectId },
+        { type: "Episodes", id: projectId },
+        { type: "Snapshot", id: projectId },
+      ],
+    }),
+    reorderEpisodes: builder.mutation<
+      API.EpisodeOrderResponse,
+      { projectId: string; body: API.EpisodeReorderRequest }
+    >({
+      queryFn: ({ projectId, body }) =>
+        runRequest(() =>
+          reorderEpisodesApiV1ProjectsProjectIdEpisodesReorderPost(
+            { project_id: projectId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: "Project", id: projectId },
+        { type: "Episodes", id: projectId },
+        { type: "Snapshot", id: projectId },
+      ],
+    }),
+    episodeDeletePreflight: builder.mutation<API.DeletePreflightResponse, string>({
+      queryFn: (episodeId) =>
+        runRequest(() =>
+          episodeDeletePreflightApiV1EpisodesEpisodeIdDeletePreflightPost({
+            episode_id: episodeId,
+          }),
+        ),
+    }),
+    deleteEpisode: builder.mutation<
+      API.DeleteResponse,
+      { projectId: string; episodeId: string; expectedRevision: number }
+    >({
+      queryFn: ({ episodeId, expectedRevision }) =>
+        runRequest(() =>
+          deleteEpisodeApiV1EpisodesEpisodeIdDelete({
+            episode_id: episodeId,
+            expected_revision: expectedRevision,
+          }),
         ),
       invalidatesTags: (_result, _error, { projectId }) => [
         { type: "Project", id: projectId },
@@ -198,17 +352,27 @@ export const {
   useCreateEpisodeMutation,
   useCreateProjectMutation,
   useCreateWorkspaceMutation,
+  useDeleteEpisodeMutation,
+  useDeleteProjectMutation,
   useDeactivateAccountMutation,
   useEpisodesQuery,
   useLoginMutation,
   useLogoutMutation,
   useMeQuery,
   useProjectQuery,
+  useProjectDeletePreflightMutation,
   useProjectSnapshotQuery,
   useProjectsQuery,
   useRegisterMutation,
+  useReorderEpisodesMutation,
+  useEpisodeDeletePreflightMutation,
+  useSetEpisodeArchivedMutation,
+  useSetProjectArchivedMutation,
   useSetWorkspaceArchivedMutation,
   useUpdateProfileMutation,
+  useUpdateEpisodeMutation,
+  useUpdateProjectBudgetMutation,
+  useUpdateProjectMutation,
   useUpdateWorkspaceMutation,
   useWorkspacesQuery,
 } = appApi;

@@ -200,7 +200,12 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
                   <Card className="h-full transition-transform hover:-translate-y-0.5">
                     <CardHeader>
                       <CardTitle className="flex items-center justify-between gap-3">
-                        <span>{project.name}</span>
+                        <span className="flex items-center gap-2">
+                          {project.name}
+                          {project.status === "archived" ? (
+                            <Badge variant="outline">已归档</Badge>
+                          ) : null}
+                        </span>
                         <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
                       </CardTitle>
                       <CardDescription>{project.description || "尚未添加项目简介"}</CardDescription>

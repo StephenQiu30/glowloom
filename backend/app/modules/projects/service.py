@@ -262,7 +262,7 @@ async def delete_preflight(
                 code="HAS_EPISODES",
                 resource_type="project",
                 resource_id=project.id,
-                summary=f"Project contains {count} episode(s)",
+                summary=f"项目包含 {count} 个单集",
             )
         ]
         if count
@@ -534,7 +534,7 @@ async def episode_delete_preflight(
                 code="HAS_VERSION_REFERENCE",
                 resource_type="episode",
                 resource_id=result[0].id,
-                summary="Episode has a current version reference",
+                summary="单集已有版本引用",
             )
         )
     return DeletePreflightResponse(allowed=not blockers, blockers=blockers)

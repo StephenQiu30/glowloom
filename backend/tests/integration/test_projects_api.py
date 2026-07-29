@@ -283,6 +283,7 @@ async def test_episode_positions_reorder_and_parent_guards_are_atomic(
     )
     assert project_preflight.json()["data"]["allowed"] is False
     assert project_preflight.json()["data"]["blockers"][0]["code"] == "HAS_EPISODES"
+    assert project_preflight.json()["data"]["blockers"][0]["summary"] == "项目包含 3 个单集"
     blocked_delete = await client.delete(
         f"/api/v1/projects/{project_id}", headers=headers, params={"expected_revision": 5}
     )
