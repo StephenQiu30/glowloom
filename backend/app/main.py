@@ -15,6 +15,7 @@ from app.core.schemas import DependencyStatus, HealthResponse, ReadinessResponse
 from app.integrations.minio import MinioObjectStorage
 from app.integrations.rabbitmq import rabbitmq_ping
 from app.integrations.redis import redis_ping
+from app.modules.identity.api import router as identity_router
 
 Check = Callable[[], Awaitable[None]]
 
@@ -39,6 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     register_exception_handlers(app)
+    app.include_router(identity_router)
 
     @app.get("/healthz", response_model=HealthResponse, tags=["system"])
     # FastAPI registers route functions through decorators at runtime.

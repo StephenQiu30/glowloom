@@ -1,6 +1,12 @@
-from typing import Literal
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel
+
+T = TypeVar("T")
+
+
+class ApiResponse(BaseModel, Generic[T]):
+    data: T
 
 
 class HealthResponse(BaseModel):

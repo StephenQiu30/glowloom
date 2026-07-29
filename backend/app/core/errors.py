@@ -7,6 +7,9 @@ from fastapi.responses import JSONResponse
 
 class ErrorCode(StrEnum):
     INVALID_REQUEST = "invalid_request"
+    UNAUTHENTICATED = "unauthenticated"
+    FORBIDDEN = "forbidden"
+    RESOURCE_CONFLICT = "resource_conflict"
     DEPENDENCY_UNAVAILABLE = "dependency_unavailable"
     INTERNAL_ERROR = "internal_error"
 

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +30,23 @@ class Settings(BaseSettings):
     minio_secure: bool = False
     infrastructure_timeout_seconds: float = Field(default=1.5, gt=0, le=10)
     storage_thread_limit: int = Field(default=4, ge=1, le=32)
+
+    jwt_secret_key: SecretStr = SecretStr(
+        "development-only-jwt-secret-change-before-production"
+    )
+    jwt_issuer: str = "lanverse-api"
+    jwt_audience: str = "lanverse-web"
+    jwt_access_token_minutes: int = Field(default=30, ge=5, le=1440)
+
+    @model_validator(mode="after")
+    def reject_development_jwt_secret_in_production(self) -> "Settings":
+        if (
+            self.environment == "production"
+            and self.jwt_secret_key.get_secret_value()
+            == "development-only-jwt-secret-change-before-production"
+        ):
+            raise ValueError("JWT_SECRET_KEY must be set in production")
+        return self
 
 
 @lru_cache
