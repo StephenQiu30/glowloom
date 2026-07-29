@@ -22,6 +22,6 @@ API 默认位于 `http://127.0.0.1:8000`，Web 默认位于 `http://127.0.0.1:30
 
 ## 配置
 
-从 `backend/.env.example` 和 `frontend/.env.example` 复制本地应用配置。默认优先复用本机 PostgreSQL、Redis、RabbitMQ 和 MinIO；需要完整容器环境时执行 `make env-up`，需要容器化业务进程时执行 `make business-up`。根目录 `docker-compose-env.yml` 只负责环境，`docker-compose.yml` 只负责业务。真实凭据、媒体、日志和数据不得提交。
+首次使用时只需执行 `cp .env.example .env`，后端、前端、OpenAPI 生成和两份 Compose 均从根目录 `.env` 获取配置；不得在 `backend/` 或 `frontend/` 中创建第二份环境文件。`CONTAINER_*` 变量只解决业务容器访问宿主机服务的地址差异，前端只会收到明确列出的 `NEXT_PUBLIC_*` 公共变量，不会继承后端 secret。默认优先复用本机 PostgreSQL、Redis、RabbitMQ 和 MinIO；需要完整容器环境时执行 `make env-up`，需要容器化业务进程时执行 `make business-up`。根目录 `docker-compose-env.yml` 只负责环境，`docker-compose.yml` 只负责业务。真实凭据、媒体、日志和数据不得提交。
 
 产品、架构、PRD 与执行计划分别位于 `docs/requirement`、`docs/design`、`docs/prd` 和 `docs/plan`。

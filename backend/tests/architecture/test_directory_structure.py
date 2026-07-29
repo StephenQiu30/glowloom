@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -43,3 +44,16 @@ def test_container_files_live_at_their_runtime_boundaries() -> None:
     assert "  web:" not in environment_compose
     for service in ("postgres", "redis", "rabbitmq", "minio"):
         assert f"  {service}:" in environment_compose
+
+
+def test_environment_configuration_has_one_repository_entrypoint() -> None:
+    assert (ROOT / ".env.example").is_file()
+    assert not (ROOT / "backend/.env.example").exists()
+    assert not (ROOT / "frontend/.env.example").exists()
+
+    package = json.loads((ROOT / "frontend/package.json").read_text())
+    assert "--env-file-if-exists=../.env" in package["scripts"]["openapi2ts"]
+
+    next_config = (ROOT / "frontend/next.config.ts").read_text()
+    assert "process.loadEnvFile(repositoryEnvironmentFile)" in next_config
+    assert 'resolve(process.cwd(), "../.env")' in next_config

@@ -1,6 +1,16 @@
+from pathlib import Path
+
 import pytest
 
+from app.core.config import REPOSITORY_ENV_FILE, Settings
 from app.core.database import validate_test_database_url
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_settings_load_only_the_repository_environment_file() -> None:
+    assert Settings.model_config.get("env_file") == REPOSITORY_ENV_FILE
+    assert REPOSITORY_ENV_FILE == ROOT / ".env"
 
 
 def test_test_database_must_be_explicit() -> None:

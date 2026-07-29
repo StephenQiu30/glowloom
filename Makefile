@@ -19,8 +19,7 @@ db-init:
 	cd backend && uv run --frozen --no-python-downloads python -m app.initialize_database
 
 generate-api:
-	@test -n "$$OPENAPI_SCHEMA_URL" || (echo 'OPENAPI_SCHEMA_URL is required' >&2; exit 1)
-	cd frontend && OPENAPI_SCHEMA_URL="$$OPENAPI_SCHEMA_URL" npm run openapi2ts
+	cd frontend && npm run openapi2ts
 
 lint:
 	cd backend && uv run --frozen --no-python-downloads ruff check app tests

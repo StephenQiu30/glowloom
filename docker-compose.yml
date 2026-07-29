@@ -5,13 +5,19 @@ services:
     build:
       context: ./backend
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:lanverse-development-only@host.docker.internal:5432/lanverse}
-      REDIS_URL: ${REDIS_URL:-redis://host.docker.internal:6379/0}
-      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://lanverse:lanverse-development-only@host.docker.internal:5672/}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-host.docker.internal:9000}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}'
+      DATABASE_URL: ${CONTAINER_DATABASE_URL:-postgresql+asyncpg://postgres:lanverse-development-only@host.docker.internal:5432/lanverse}
+      REDIS_URL: ${CONTAINER_REDIS_URL:-redis://host.docker.internal:6379/0}
+      RABBITMQ_URL: ${CONTAINER_RABBITMQ_URL:-amqp://lanverse:lanverse-development-only@host.docker.internal:5672/}
+      MINIO_ENDPOINT: ${CONTAINER_MINIO_ENDPOINT:-host.docker.internal:9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-lanverse}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-lanverse-development-only}
       MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+      INFRASTRUCTURE_TIMEOUT_SECONDS: ${INFRASTRUCTURE_TIMEOUT_SECONDS:-1.5}
+      STORAGE_THREAD_LIMIT: ${STORAGE_THREAD_LIMIT:-4}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-development-only-jwt-secret-change-before-production}
       JWT_ISSUER: ${JWT_ISSUER:-lanverse-api}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-lanverse-web}
@@ -25,6 +31,8 @@ services:
   web:
     build:
       context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
     ports:
