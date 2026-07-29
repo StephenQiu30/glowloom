@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: setup dev-api dev-frontend db-init generate-api lint typecheck test hygiene check docker-build business-up business-down env-up env-down contract e2e-install e2e
+.PHONY: setup dev-api dev-frontend db-init generate-api lint typecheck test hygiene check docker-build business-up business-down env-up env-down contract-minio contract-text-provider e2e-install e2e
 
 setup:
 	@uv --version | grep -q '0.11.32'
@@ -58,8 +58,11 @@ env-up:
 env-down:
 	docker compose -f docker-compose-env.yml down
 
-contract:
+contract-minio:
 	cd backend && LANVERSE_RUN_MINIO_CONTRACT=1 uv run --frozen --no-python-downloads pytest tests/contract/test_minio_port.py
+
+contract-text-provider:
+	cd backend && LANVERSE_RUN_TEXT_PROVIDER_CONTRACT=1 uv run --env-file ../.env --frozen --no-python-downloads pytest -s tests/contract/test_text_provider_contract.py
 
 e2e-install:
 	cd frontend && npx playwright install chromium
