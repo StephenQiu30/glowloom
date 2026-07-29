@@ -15,6 +15,8 @@ from app.modules.scripts.schemas import (
     ScriptImportRequest,
     ScriptImportResponse,
     ScriptSourceResponse,
+    ScriptSourceStateRequest,
+    ScriptVersionDiffResponse,
     ScriptVersionPublishRequest,
     ScriptVersionPublishResponse,
     ScriptVersionResponse,
@@ -97,6 +99,57 @@ async def set_current_version(
 ) -> ApiResponse[CurrentScriptVersionResponse]:
     return ApiResponse(
         data=await service.set_current_version(session, claims, episode_id, payload)
+    )
+
+
+@router.post(
+    "/script-sources/{source_id}/archive",
+    response_model=ApiResponse[ScriptSourceResponse],
+)
+async def archive_source(
+    source_id: UUID,
+    payload: ScriptSourceStateRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ScriptSourceResponse]:
+    return ApiResponse(
+        data=await service.set_source_archived(
+            session, claims, source_id, payload, archived=True
+        )
+    )
+
+
+@router.post(
+    "/script-sources/{source_id}/restore",
+    response_model=ApiResponse[ScriptSourceResponse],
+)
+async def restore_source(
+    source_id: UUID,
+    payload: ScriptSourceStateRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ScriptSourceResponse]:
+    return ApiResponse(
+        data=await service.set_source_archived(
+            session, claims, source_id, payload, archived=False
+        )
+    )
+
+
+@router.get(
+    "/script-versions/{version_id}/diff",
+    response_model=ApiResponse[ScriptVersionDiffResponse],
+)
+async def diff_versions(
+    version_id: UUID,
+    other_version_id: Annotated[UUID, Query()],
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ScriptVersionDiffResponse]:
+    return ApiResponse(
+        data=await service.diff_versions(
+            session, claims, version_id, other_version_id
+        )
     )
 
 

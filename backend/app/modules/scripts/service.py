@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from difflib import unified_diff
 from hashlib import sha256
 from typing import Literal, cast
 from uuid import UUID
@@ -20,6 +21,8 @@ from app.modules.scripts.schemas import (
     ScriptImportRequest,
     ScriptImportResponse,
     ScriptSourceResponse,
+    ScriptSourceStateRequest,
+    ScriptVersionDiffResponse,
     ScriptVersionPublishRequest,
     ScriptVersionPublishResponse,
     ScriptVersionResponse,
@@ -69,6 +72,16 @@ def _current_response(
         current_script_version_id=current_script_version_id,
         episode_revision=episode_revision,
     )
+
+
+def _source_revision(source: ScriptSource, expected_revision: int) -> None:
+    if source.revision != expected_revision:
+        raise ApiError(
+            ErrorCode.VERSION_CONFLICT,
+            "Script source has changed",
+            status_code=409,
+            details={"current_revision": source.revision},
+        )
 
 
 def _same_import(
@@ -321,3 +334,82 @@ async def set_current_version(
         )
         await session.flush()
     return _current_response(episode.id, version.id, episode.revision)
+
+
+async def set_source_archived(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    source_id: UUID,
+    request: ScriptSourceStateRequest,
+    *,
+    archived: bool,
+) -> ScriptSourceResponse:
+    expected_status = "active" if archived else "archived"
+    async with session.begin():
+        user = await identity_service.authenticated_user(session, claims)
+        source = await repository.find_source_for_user(
+            session, user.id, source_id, for_update=True
+        )
+        if source is None:
+            raise _not_found("Script source")
+        await projects_service.lock_active_episode_for_content_write(
+            session, claims, source.episode_id
+        )
+        _source_revision(source, request.expected_revision)
+        if source.status != expected_status:
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Script source state conflict",
+                status_code=409,
+            )
+        source.status = "archived" if archived else "active"
+        source.archived_at = datetime.now(UTC) if archived else None
+        source.archived_by = claims.sub if archived else None
+        source.revision += 1
+        await session.flush()
+    return _source_response(source)
+
+
+async def diff_versions(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    version_id: UUID,
+    other_version_id: UUID,
+) -> ScriptVersionDiffResponse:
+    user = await identity_service.authenticated_user(session, claims)
+    base = await repository.find_version_for_user(session, user.id, version_id)
+    if base is None:
+        raise _not_found("Script version")
+    target = await repository.find_version_for_user(
+        session, user.id, other_version_id
+    )
+    if target is None:
+        raise _not_found("Script version")
+    if base.source_id != target.source_id:
+        raise ApiError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "Script versions belong to different sources",
+            status_code=409,
+        )
+    diff_lines = list(
+        unified_diff(
+            base.body.splitlines(),
+            target.body.splitlines(),
+            fromfile=f"version-{base.version_no}",
+            tofile=f"version-{target.version_no}",
+            lineterm="",
+        )
+    )
+    return ScriptVersionDiffResponse(
+        base_version_id=base.id,
+        target_version_id=target.id,
+        added_lines=sum(
+            line.startswith("+") and not line.startswith("+++")
+            for line in diff_lines
+        ),
+        removed_lines=sum(
+            line.startswith("-") and not line.startswith("---")
+            for line in diff_lines
+        ),
+        diff_lines=diff_lines,
+    )

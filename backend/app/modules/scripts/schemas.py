@@ -96,6 +96,18 @@ class ScriptVersionPublishResponse(BaseModel):
     current: CurrentScriptVersionResponse
 
 
+class ScriptSourceStateRequest(CommandModel):
+    expected_revision: int = Field(ge=1)
+
+
+class ScriptVersionDiffResponse(BaseModel):
+    base_version_id: UUID
+    target_version_id: UUID
+    added_lines: int
+    removed_lines: int
+    diff_lines: list[str]
+
+
 class PaginatedScriptVersions(BaseModel):
     items: list[ScriptVersionResponse]
     total: int

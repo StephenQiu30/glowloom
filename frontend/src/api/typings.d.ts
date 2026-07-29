@@ -73,6 +73,10 @@ declare namespace API {
     data: ScriptSourceResponse;
   };
 
+  type ApiResponseScriptVersionDiffResponse_ = {
+    data: ScriptVersionDiffResponse;
+  };
+
   type ApiResponseScriptVersionPublishResponse_ = {
     data: ScriptVersionPublishResponse;
   };
@@ -95,6 +99,10 @@ declare namespace API {
 
   type archiveProjectApiV1ProjectsProjectIdArchivePostParams = {
     project_id: string;
+  };
+
+  type archiveSourceApiV1ScriptSourcesSourceIdArchivePostParams = {
+    source_id: string;
   };
 
   type archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePostParams = {
@@ -219,6 +227,11 @@ declare namespace API {
     status: "available" | "degraded" | "unavailable";
     /** Reason */
     reason: string | null | null;
+  };
+
+  type diffVersionsApiV1ScriptVersionsVersionIdDiffGetParams = {
+    version_id: string;
+    other_version_id: string;
   };
 
   type EpisodeCreateRequest = {
@@ -580,6 +593,10 @@ declare namespace API {
     project_id: string;
   };
 
+  type restoreSourceApiV1ScriptSourcesSourceIdRestorePostParams = {
+    source_id: string;
+  };
+
   type restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePostParams = {
     workspace_id: string;
   };
@@ -635,6 +652,24 @@ declare namespace API {
     revision: number;
     /** Created At */
     created_at: string;
+  };
+
+  type ScriptSourceStateRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type ScriptVersionDiffResponse = {
+    /** Base Version Id */
+    base_version_id: string;
+    /** Target Version Id */
+    target_version_id: string;
+    /** Added Lines */
+    added_lines: number;
+    /** Removed Lines */
+    removed_lines: number;
+    /** Diff Lines */
+    diff_lines: string[];
   };
 
   type ScriptVersionPublishRequest = {

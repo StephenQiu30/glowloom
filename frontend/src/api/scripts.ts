@@ -63,6 +63,50 @@ export async function getSourceApiV1ScriptSourcesSourceIdGet(
   );
 }
 
+/** Archive Source POST /api/v1/script-sources/${param0}/archive */
+export async function archiveSourceApiV1ScriptSourcesSourceIdArchivePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.archiveSourceApiV1ScriptSourcesSourceIdArchivePostParams,
+  body: API.ScriptSourceStateRequest,
+  options?: RequestOptions
+) {
+  const { source_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseScriptSourceResponse_>(
+    `/api/v1/script-sources/${param0}/archive`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Restore Source POST /api/v1/script-sources/${param0}/restore */
+export async function restoreSourceApiV1ScriptSourcesSourceIdRestorePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.restoreSourceApiV1ScriptSourcesSourceIdRestorePostParams,
+  body: API.ScriptSourceStateRequest,
+  options?: RequestOptions
+) {
+  const { source_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseScriptSourceResponse_>(
+    `/api/v1/script-sources/${param0}/restore`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** List Versions GET /api/v1/script-sources/${param0}/versions */
 export async function listVersionsApiV1ScriptSourcesSourceIdVersionsGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -116,6 +160,25 @@ export async function getVersionApiV1ScriptVersionsVersionIdGet(
     {
       method: "GET",
       params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Diff Versions GET /api/v1/script-versions/${param0}/diff */
+export async function diffVersionsApiV1ScriptVersionsVersionIdDiffGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.diffVersionsApiV1ScriptVersionsVersionIdDiffGetParams,
+  options?: RequestOptions
+) {
+  const { version_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseScriptVersionDiffResponse_>(
+    `/api/v1/script-versions/${param0}/diff`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
       ...(options || {}),
     }
   );
