@@ -53,7 +53,8 @@ business-down:
 	docker compose -f docker-compose.yml down
 
 minio-up:
-	docker compose -f docker-compose-env.yml up -d minio
+	@curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1 || \
+		docker compose -f docker-compose-env.yml up -d minio
 
 minio-down:
 	docker compose -f docker-compose-env.yml stop minio
