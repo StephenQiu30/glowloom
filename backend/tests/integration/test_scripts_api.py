@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 import pytest
@@ -11,6 +12,7 @@ from app.core.config import Settings
 from app.core.database import Base, create_engine, get_async_session, validate_test_database_url
 from app.main import create_app
 from app.modules.messaging.models import OutboxEvent
+from app.modules.projects.models import Episode
 from app.modules.scripts.models import ScriptSource, ScriptVersion
 
 TEST_DATABASE_URL = validate_test_database_url(
@@ -78,7 +80,7 @@ async def _episode(
     client: httpx.AsyncClient,
     headers: dict[str, str],
     workspace_id: str,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     project_response = await client.post(
         "/api/v1/projects",
         headers=headers,
@@ -108,6 +110,33 @@ def _import_payload(*, body: str = "第一场\r\n角色甲：开始吧。") -> d
         "body": body,
         "rights_declaration": "确认拥有该测试文本的使用权",
         "idempotency_key": "script-import-001",
+    }
+
+
+async def _import_script(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    episode_id: str,
+    *,
+    body: str = "第一场\n角色甲：开始吧。",
+    idempotency_key: str = "script-import-001",
+) -> dict[str, Any]:
+    response = await client.post(
+        f"/api/v1/episodes/{episode_id}/script-sources",
+        headers=headers,
+        json=_import_payload(body=body) | {"idempotency_key": idempotency_key},
+    )
+    assert response.status_code == 201
+    return response.json()["data"]
+
+
+def _publish_payload(
+    body: str,
+    expected_current_version_id: str | None,
+) -> dict[str, str | None]:
+    return {
+        "body": body,
+        "expected_current_version_id": expected_current_version_id,
     }
 
 
@@ -261,3 +290,241 @@ async def test_archived_episode_rejects_new_script_source(
     )
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "state_conflict"
+
+
+@pytest.mark.asyncio
+async def test_publish_appends_immutable_version_and_switches_episode_current(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="script-publish-owner@example.com"
+    )
+    episode = await _episode(client, headers, workspace_id)
+    imported = await _import_script(client, headers, episode["id"])
+    source = imported["source"]
+    draft = imported["version"]
+
+    published_response = await client.post(
+        f"/api/v1/script-sources/{source['id']}/versions",
+        headers=headers,
+        json=_publish_payload("第二场\r\n角色乙：继续。", None),
+    )
+    assert published_response.status_code == 201
+    result = published_response.json()["data"]
+    published = result["version"]
+    assert published["source_id"] == source["id"]
+    assert published["version_no"] == 2
+    assert published["status"] == "published"
+    assert published["body"] == "第二场\n角色乙：继续。"
+    assert result["current"] == {
+        "episode_id": episode["id"],
+        "current_script_version_id": published["id"],
+        "episode_revision": 2,
+    }
+
+    fetched_episode = await client.get(
+        f"/api/v1/episodes/{episode['id']}", headers=headers
+    )
+    assert fetched_episode.status_code == 200
+    assert fetched_episode.json()["data"]["current_script_version_id"] == published["id"]
+    assert fetched_episode.json()["data"]["revision"] == 2
+
+    history = await client.get(
+        f"/api/v1/script-sources/{source['id']}/versions", headers=headers
+    )
+    assert history.status_code == 200
+    assert history.json()["data"]["items"] == [draft, published]
+    immutable = await client.patch(
+        f"/api/v1/script-versions/{published['id']}",
+        headers=headers,
+        json={"body": "不能覆盖发布版本"},
+    )
+    assert immutable.status_code == 405
+
+    stale = await client.post(
+        f"/api/v1/script-sources/{source['id']}/versions",
+        headers=headers,
+        json=_publish_payload("过期编辑器不应创建版本", None),
+    )
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "version_conflict"
+    assert stale.json()["error"]["details"]["current_script_version_id"] == published["id"]
+
+    blank = await client.post(
+        f"/api/v1/script-sources/{source['id']}/versions",
+        headers=headers,
+        json=_publish_payload(" \r\n ", published["id"]),
+    )
+    assert blank.status_code == 422
+    too_long = await client.post(
+        f"/api/v1/script-sources/{source['id']}/versions",
+        headers=headers,
+        json=_publish_payload("字" * 20_001, published["id"]),
+    )
+    assert too_long.status_code == 422
+
+    async with session_factory() as session:
+        versions = list(
+            await session.scalars(
+                select(ScriptVersion).order_by(ScriptVersion.version_no)
+            )
+        )
+        assert [(item.version_no, item.status, item.body) for item in versions] == [
+            (1, "draft", "第一场\n角色甲：开始吧。"),
+            (2, "published", "第二场\n角色乙：继续。"),
+        ]
+        assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_publish_creates_exactly_one_new_version(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="script-publish-concurrent@example.com"
+    )
+    episode = await _episode(client, headers, workspace_id)
+    imported = await _import_script(client, headers, episode["id"])
+    source_id = imported["source"]["id"]
+    endpoint = f"/api/v1/script-sources/{source_id}/versions"
+
+    first, second = await asyncio.gather(
+        client.post(
+            endpoint,
+            headers=headers,
+            json=_publish_payload("并发版本甲", None),
+        ),
+        client.post(
+            endpoint,
+            headers=headers,
+            json=_publish_payload("并发版本乙", None),
+        ),
+    )
+    responses = [first, second]
+    assert sorted(response.status_code for response in responses) == [201, 409]
+    winner = next(response for response in responses if response.status_code == 201)
+    conflict = next(response for response in responses if response.status_code == 409)
+    current_version_id = winner.json()["data"]["version"]["id"]
+    assert conflict.json()["error"]["code"] == "version_conflict"
+    assert (
+        conflict.json()["error"]["details"]["current_script_version_id"]
+        == current_version_id
+    )
+
+    async with session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(ScriptVersion)) == 2
+        version_numbers = list(
+            await session.scalars(
+                select(ScriptVersion.version_no).order_by(ScriptVersion.version_no)
+            )
+        )
+        assert version_numbers == [1, 2]
+        stored_episode = await session.get(Episode, episode["id"])
+        assert stored_episode is not None
+        assert str(stored_episode.current_script_version_id) == current_version_id
+
+
+@pytest.mark.asyncio
+async def test_current_switch_accepts_only_published_version_from_same_episode(
+    client: httpx.AsyncClient,
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="script-current-owner@example.com"
+    )
+    episode = await _episode(client, headers, workspace_id)
+    imported = await _import_script(client, headers, episode["id"])
+    source_id = imported["source"]["id"]
+    draft_id = imported["version"]["id"]
+
+    second_response = await client.post(
+        f"/api/v1/script-sources/{source_id}/versions",
+        headers=headers,
+        json=_publish_payload("已发布版本二", None),
+    )
+    assert second_response.status_code == 201
+    second = second_response.json()["data"]["version"]
+    third_response = await client.post(
+        f"/api/v1/script-sources/{source_id}/versions",
+        headers=headers,
+        json=_publish_payload("已发布版本三", second["id"]),
+    )
+    assert third_response.status_code == 201
+    third = third_response.json()["data"]["version"]
+
+    switched = await client.post(
+        f"/api/v1/episodes/{episode['id']}/current-script-version",
+        headers=headers,
+        json={
+            "version_id": second["id"],
+            "expected_current_version_id": third["id"],
+        },
+    )
+    assert switched.status_code == 200
+    assert switched.json()["data"] == {
+        "episode_id": episode["id"],
+        "current_script_version_id": second["id"],
+        "episode_revision": 4,
+    }
+
+    draft_rejected = await client.post(
+        f"/api/v1/episodes/{episode['id']}/current-script-version",
+        headers=headers,
+        json={
+            "version_id": draft_id,
+            "expected_current_version_id": second["id"],
+        },
+    )
+    assert draft_rejected.status_code == 409
+    assert draft_rejected.json()["error"]["code"] == "state_conflict"
+
+    stale = await client.post(
+        f"/api/v1/episodes/{episode['id']}/current-script-version",
+        headers=headers,
+        json={
+            "version_id": third["id"],
+            "expected_current_version_id": third["id"],
+        },
+    )
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "version_conflict"
+    assert stale.json()["error"]["details"]["current_script_version_id"] == second["id"]
+
+    other_episode = await _episode(client, headers, workspace_id)
+    other_import = await _import_script(
+        client,
+        headers,
+        other_episode["id"],
+        idempotency_key="other-script-import",
+    )
+    other_published_response = await client.post(
+        f"/api/v1/script-sources/{other_import['source']['id']}/versions",
+        headers=headers,
+        json=_publish_payload("另一个单集的版本", None),
+    )
+    assert other_published_response.status_code == 201
+    other_published = other_published_response.json()["data"]["version"]
+    wrong_episode = await client.post(
+        f"/api/v1/episodes/{episode['id']}/current-script-version",
+        headers=headers,
+        json={
+            "version_id": other_published["id"],
+            "expected_current_version_id": second["id"],
+        },
+    )
+    assert wrong_episode.status_code == 409
+    assert wrong_episode.json()["error"]["code"] == "resource_conflict"
+
+    stranger_headers, _ = await _identity(
+        client, email="script-current-stranger@example.com"
+    )
+    hidden = await client.post(
+        f"/api/v1/episodes/{episode['id']}/current-script-version",
+        headers=stranger_headers,
+        json={
+            "version_id": third["id"],
+            "expected_current_version_id": second["id"],
+        },
+    )
+    assert hidden.status_code == 404
