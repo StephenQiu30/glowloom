@@ -9,10 +9,14 @@ from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
 from app.modules.scripts import service
 from app.modules.scripts.schemas import (
+    CurrentScriptVersionRequest,
+    CurrentScriptVersionResponse,
     PaginatedScriptVersions,
     ScriptImportRequest,
     ScriptImportResponse,
     ScriptSourceResponse,
+    ScriptVersionPublishRequest,
+    ScriptVersionPublishResponse,
     ScriptVersionResponse,
 )
 
@@ -62,6 +66,37 @@ async def list_versions(
         data=await service.list_versions(
             session, claims, source_id, limit=limit or 20, offset=offset
         )
+    )
+
+
+@router.post(
+    "/script-sources/{source_id}/versions",
+    response_model=ApiResponse[ScriptVersionPublishResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def publish_version(
+    source_id: UUID,
+    payload: ScriptVersionPublishRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ScriptVersionPublishResponse]:
+    return ApiResponse(
+        data=await service.publish_version(session, claims, source_id, payload)
+    )
+
+
+@router.post(
+    "/episodes/{episode_id}/current-script-version",
+    response_model=ApiResponse[CurrentScriptVersionResponse],
+)
+async def set_current_version(
+    episode_id: UUID,
+    payload: CurrentScriptVersionRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[CurrentScriptVersionResponse]:
+    return ApiResponse(
+        data=await service.set_current_version(session, claims, episode_id, payload)
     )
 
 

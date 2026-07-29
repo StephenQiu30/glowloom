@@ -2,6 +2,28 @@
 /* eslint-disable */
 import request, { type RequestOptions } from "@/lib/api-request";
 
+/** Set Current Version POST /api/v1/episodes/${param0}/current-script-version */
+export async function setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPostParams,
+  body: API.CurrentScriptVersionRequest,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseCurrentScriptVersionResponse_>(
+    `/api/v1/episodes/${param0}/current-script-version`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** Import Text Source POST /api/v1/episodes/${param0}/script-sources */
 export async function importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -55,6 +77,28 @@ export async function listVersionsApiV1ScriptSourcesSourceIdVersionsGet(
       params: {
         ...queryParams,
       },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Publish Version POST /api/v1/script-sources/${param0}/versions */
+export async function publishVersionApiV1ScriptSourcesSourceIdVersionsPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.publishVersionApiV1ScriptSourcesSourceIdVersionsPostParams,
+  body: API.ScriptVersionPublishRequest,
+  options?: RequestOptions
+) {
+  const { source_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseScriptVersionPublishResponse_>(
+    `/api/v1/script-sources/${param0}/versions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
       ...(options || {}),
     }
   );

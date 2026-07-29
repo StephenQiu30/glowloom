@@ -378,6 +378,30 @@ async def lock_active_episode_for_content_write(
     return episode
 
 
+def compare_and_set_current_script_version(
+    episode: Episode,
+    expected_current_version_id: UUID | None,
+    version_id: UUID,
+) -> None:
+    if episode.current_script_version_id != expected_current_version_id:
+        raise ApiError(
+            ErrorCode.VERSION_CONFLICT,
+            "Current script version has changed",
+            status_code=409,
+            details={
+                "current_script_version_id": (
+                    str(episode.current_script_version_id)
+                    if episode.current_script_version_id is not None
+                    else None
+                )
+            },
+        )
+    if episode.current_script_version_id == version_id:
+        return
+    episode.current_script_version_id = version_id
+    episode.revision += 1
+
+
 async def create_episode(
     session: AsyncSession,
     claims: AccessTokenClaims,

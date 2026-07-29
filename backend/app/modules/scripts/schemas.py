@@ -31,6 +31,25 @@ class ScriptImportRequest(CommandModel):
         return value
 
 
+class ScriptVersionPublishRequest(CommandModel):
+    body: str = Field(min_length=1, max_length=20_000)
+    expected_current_version_id: UUID | None
+
+    @field_validator("body", mode="before")
+    @classmethod
+    def normalize_newlines(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.replace("\r\n", "\n").replace("\r", "\n")
+        return value
+
+    @field_validator("body")
+    @classmethod
+    def reject_blank_body(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("script body must contain text")
+        return value
+
+
 class ScriptSourceResponse(BaseModel):
     id: UUID
     workspace_id: UUID
@@ -59,6 +78,22 @@ class ScriptVersionResponse(BaseModel):
 class ScriptImportResponse(BaseModel):
     source: ScriptSourceResponse
     version: ScriptVersionResponse
+
+
+class CurrentScriptVersionRequest(CommandModel):
+    version_id: UUID
+    expected_current_version_id: UUID | None
+
+
+class CurrentScriptVersionResponse(BaseModel):
+    episode_id: UUID
+    current_script_version_id: UUID
+    episode_revision: int
+
+
+class ScriptVersionPublishResponse(BaseModel):
+    version: ScriptVersionResponse
+    current: CurrentScriptVersionResponse
 
 
 class PaginatedScriptVersions(BaseModel):

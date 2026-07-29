@@ -3,6 +3,10 @@ declare namespace API {
     data: AuthResponse;
   };
 
+  type ApiResponseCurrentScriptVersionResponse_ = {
+    data: CurrentScriptVersionResponse;
+  };
+
   type ApiResponseDeletePreflightResponse_ = {
     data: DeletePreflightResponse;
   };
@@ -67,6 +71,10 @@ declare namespace API {
 
   type ApiResponseScriptSourceResponse_ = {
     data: ScriptSourceResponse;
+  };
+
+  type ApiResponseScriptVersionPublishResponse_ = {
+    data: ScriptVersionPublishResponse;
   };
 
   type ApiResponseScriptVersionResponse_ = {
@@ -144,6 +152,22 @@ declare namespace API {
 
   type createEpisodeApiV1ProjectsProjectIdEpisodesPostParams = {
     project_id: string;
+  };
+
+  type CurrentScriptVersionRequest = {
+    /** Version Id */
+    version_id: string;
+    /** Expected Current Version Id */
+    expected_current_version_id: string | null;
+  };
+
+  type CurrentScriptVersionResponse = {
+    /** Episode Id */
+    episode_id: string;
+    /** Current Script Version Id */
+    current_script_version_id: string;
+    /** Episode Revision */
+    episode_revision: number;
   };
 
   type DeactivateAccountRequest = {
@@ -524,6 +548,10 @@ declare namespace API {
     expected_revision: number;
   };
 
+  type publishVersionApiV1ScriptSourcesSourceIdVersionsPostParams = {
+    source_id: string;
+  };
+
   type ReadinessResponse = {
     /** Status */
     status: "ready" | "degraded" | "unavailable";
@@ -609,6 +637,18 @@ declare namespace API {
     created_at: string;
   };
 
+  type ScriptVersionPublishRequest = {
+    /** Body */
+    body: string;
+    /** Expected Current Version Id */
+    expected_current_version_id: string | null;
+  };
+
+  type ScriptVersionPublishResponse = {
+    version: ScriptVersionResponse;
+    current: CurrentScriptVersionResponse;
+  };
+
   type ScriptVersionResponse = {
     /** Id */
     id: string;
@@ -628,6 +668,10 @@ declare namespace API {
     created_by: string;
     /** Created At */
     created_at: string;
+  };
+
+  type setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPostParams = {
+    episode_id: string;
   };
 
   type TaskErrorResponse = {

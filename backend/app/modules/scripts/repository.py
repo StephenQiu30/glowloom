@@ -36,8 +36,10 @@ async def find_source_for_user(
     session: AsyncSession,
     user_id: UUID,
     source_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> ScriptSource | None:
-    return await session.scalar(
+    query = (
         select(ScriptSource)
         .join(Membership, Membership.workspace_id == ScriptSource.workspace_id)
         .where(
@@ -46,6 +48,21 @@ async def find_source_for_user(
             Membership.status == "active",
         )
     )
+    if for_update:
+        query = query.with_for_update(of=ScriptSource)
+    return await session.scalar(query)
+
+
+async def latest_version_number(
+    session: AsyncSession,
+    source_id: UUID,
+) -> int:
+    latest = await session.scalar(
+        select(func.max(ScriptVersion.version_no)).where(
+            ScriptVersion.source_id == source_id
+        )
+    )
+    return latest or 0
 
 
 async def find_version_for_user(

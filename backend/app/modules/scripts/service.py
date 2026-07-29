@@ -14,10 +14,14 @@ from app.modules.projects import service as projects_service
 from app.modules.scripts import repository
 from app.modules.scripts.models import ScriptSource, ScriptVersion
 from app.modules.scripts.schemas import (
+    CurrentScriptVersionRequest,
+    CurrentScriptVersionResponse,
     PaginatedScriptVersions,
     ScriptImportRequest,
     ScriptImportResponse,
     ScriptSourceResponse,
+    ScriptVersionPublishRequest,
+    ScriptVersionPublishResponse,
     ScriptVersionResponse,
 )
 
@@ -53,6 +57,18 @@ def _version_response(version: ScriptVersion) -> ScriptVersionResponse:
 
 def _not_found(resource: str) -> ApiError:
     return ApiError(ErrorCode.NOT_FOUND, f"{resource} not found", status_code=404)
+
+
+def _current_response(
+    episode_id: UUID,
+    current_script_version_id: UUID,
+    episode_revision: int,
+) -> CurrentScriptVersionResponse:
+    return CurrentScriptVersionResponse(
+        episode_id=episode_id,
+        current_script_version_id=current_script_version_id,
+        episode_revision=episode_revision,
+    )
 
 
 def _same_import(
@@ -211,3 +227,97 @@ async def list_versions(
         limit=limit,
         offset=offset,
     )
+
+
+async def publish_version(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    source_id: UUID,
+    request: ScriptVersionPublishRequest,
+) -> ScriptVersionPublishResponse:
+    content_hash = sha256(request.body.encode("utf-8")).hexdigest()
+    now = datetime.now(UTC)
+    async with session.begin():
+        user = await identity_service.authenticated_user(session, claims)
+        source = await repository.find_source_for_user(
+            session, user.id, source_id, for_update=True
+        )
+        if source is None:
+            raise _not_found("Script source")
+        if source.status != "active":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Script source is archived",
+                status_code=409,
+            )
+        episode = await projects_service.lock_active_episode_for_content_write(
+            session, claims, source.episode_id
+        )
+        version = ScriptVersion(
+            id=uuid7(),
+            workspace_id=source.workspace_id,
+            source_id=source.id,
+            version_no=await repository.latest_version_number(session, source.id) + 1,
+            status="published",
+            body=request.body,
+            content_hash=content_hash,
+            structure_summary={},
+            created_by=claims.sub,
+            created_at=now,
+        )
+        projects_service.compare_and_set_current_script_version(
+            episode,
+            request.expected_current_version_id,
+            version.id,
+        )
+        session.add(version)
+        await session.flush()
+    return ScriptVersionPublishResponse(
+        version=_version_response(version),
+        current=_current_response(
+            episode.id,
+            version.id,
+            episode.revision,
+        ),
+    )
+
+
+async def set_current_version(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    episode_id: UUID,
+    request: CurrentScriptVersionRequest,
+) -> CurrentScriptVersionResponse:
+    async with session.begin():
+        episode = await projects_service.lock_active_episode_for_content_write(
+            session, claims, episode_id
+        )
+        version = await repository.find_version_for_user(
+            session, claims.sub, request.version_id
+        )
+        if version is None:
+            raise _not_found("Script version")
+        source = await repository.find_source_for_user(
+            session, claims.sub, version.source_id
+        )
+        if source is None:
+            raise _not_found("Script source")
+        if source.episode_id != episode.id:
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Script version belongs to another episode",
+                status_code=409,
+            )
+        if version.status != "published":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Only published script versions can be current",
+                status_code=409,
+            )
+        projects_service.compare_and_set_current_script_version(
+            episode,
+            request.expected_current_version_id,
+            version.id,
+        )
+        await session.flush()
+    return _current_response(episode.id, version.id, episode.revision)
