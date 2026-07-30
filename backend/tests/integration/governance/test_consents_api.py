@@ -424,12 +424,24 @@ async def test_rights_gate_hides_cross_workspace_subjects_and_fails_closed(
         assert hidden.value.code is ErrorCode.NOT_FOUND
         assert hidden.value.status_code == 404
 
-        with pytest.raises(ApiError) as unavailable:
+        with pytest.raises(ApiError) as missing_asset:
             await check_rights(
                 session,
                 workspace_id=workspace_id,
                 subject=SubjectReference(
                     subject_type=SubjectType.ASSET_VERSION,
+                    subject_id=uuid7(),
+                ),
+                usage=usage,
+            )
+        assert missing_asset.value.code is ErrorCode.NOT_FOUND
+
+        with pytest.raises(ApiError) as unavailable:
+            await check_rights(
+                session,
+                workspace_id=workspace_id,
+                subject=SubjectReference(
+                    subject_type=SubjectType.SHOT_SPEC_VERSION,
                     subject_id=uuid7(),
                 ),
                 usage=usage,

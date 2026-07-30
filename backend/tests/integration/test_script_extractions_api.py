@@ -794,7 +794,8 @@ async def test_candidate_decisions_validate_changes_merge_ignore_and_scope(
             },
         },
     )
-    assert unsupported_link.status_code == 422
+    assert unsupported_link.status_code == 409
+    assert unsupported_link.json()["error"]["next_action"] == "confirm_structure"
 
     async with session_factory() as session:
         decision_table = Base.metadata.tables["scr_candidate_decisions"]

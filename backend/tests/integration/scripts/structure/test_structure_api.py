@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.database import Base
+from app.modules.assets.models import Asset, AssetVersion
 from app.modules.projects.models import Episode
 from app.modules.scripts.extractions import schemas as extraction_schemas
 from app.modules.scripts.extractions import service as extraction_service
@@ -436,3 +437,101 @@ async def test_confirm_structure_is_concurrent_idempotent_ordered_and_private(
         stored_episode = await session.get(Episode, UUID(episode["id"]))
         assert stored_episode is not None
         assert str(stored_episode.current_script_version_id) == input_version["id"]
+
+
+@pytest.mark.asyncio
+async def test_confirmed_asset_candidates_create_or_link_idempotently(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    candidates = _ordered_candidates()
+    candidates.append(
+        _candidate(
+            "asset-link",
+            81,
+            90,
+            {
+                "kind": "asset",
+                "asset_kind": "character",
+                "name": "角色甲别名",
+                "description": "关联同一个角色身份",
+            },
+        )
+    )
+    headers, episode, _, rows = await _completed_batch(
+        client,
+        session_factory,
+        email="asset-handoff@example.com",
+        key="asset-handoff",
+        candidates=candidates,
+    )
+    by_key = {candidate["candidate_key"]: candidate for candidate in rows}
+    await _decide(client, headers, by_key["scene-early"], {"action": "accept_new"})
+    await _decide(client, headers, by_key["scene-late"], {"action": "accept_new"})
+    await _decide(
+        client,
+        headers,
+        by_key["scene-alias"],
+        {
+            "action": "merge_into",
+            "target_candidate_id": by_key["scene-early"]["id"],
+        },
+    )
+    await _decide(client, headers, by_key["dialogue-alias"], {"action": "accept_new"})
+    await _decide(client, headers, by_key["dialogue-ignore"], {"action": "ignore"})
+    confirmed = await client.post(
+        f"/api/v1/extraction-batches/{by_key['scene-early']['batch_id']}/confirm-structure",
+        headers=headers,
+    )
+    assert confirmed.status_code == 201
+
+    create_payload = {
+        "decision_key": "create-asset-from-candidate",
+        "expected_revision": 1,
+        "decision": {"action": "accept_new"},
+    }
+    created = await client.post(
+        f"/api/v1/extraction-candidates/{by_key['asset-pending']['id']}/decisions",
+        headers=headers,
+        json=create_payload,
+    )
+    assert created.status_code == 201
+    created_data = created.json()["data"]
+    assert created_data["candidate"]["status"] == "accepted"
+    assert created_data["evidence"]["downstream_type"] == "ASSET"
+    asset_id = created_data["evidence"]["downstream_id"]
+    assert asset_id
+
+    replay = await client.post(
+        f"/api/v1/extraction-candidates/{by_key['asset-pending']['id']}/decisions",
+        headers=headers,
+        json=create_payload,
+    )
+    assert replay.status_code == 201
+    assert replay.json()["data"] == created_data
+
+    linked = await client.post(
+        f"/api/v1/extraction-candidates/{by_key['asset-link']['id']}/decisions",
+        headers=headers,
+        json={
+            "decision_key": "link-existing-asset",
+            "expected_revision": 1,
+            "decision": {
+                "action": "link_existing",
+                "downstream_id": asset_id,
+            },
+        },
+    )
+    assert linked.status_code == 201
+    linked_data = linked.json()["data"]
+    assert linked_data["candidate"]["status"] == "linked"
+    assert linked_data["evidence"]["downstream_id"] == asset_id
+
+    detail = await client.get(f"/api/v1/assets/{asset_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["data"]["project_id"] == episode["project_id"]
+    assert detail.json()["data"]["current_version_id"]
+
+    async with session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(Asset)) == 1
+        assert await session.scalar(select(func.count()).select_from(AssetVersion)) == 1

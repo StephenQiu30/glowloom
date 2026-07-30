@@ -1,14 +1,14 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import httpx
 import pytest
-from app.modules.assets.models import Asset, AssetMediaReference, AssetVersion
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.modules.assets.models import Asset, AssetMediaReference, AssetVersion
 from tests.support.identity_builders import register_identity_response
 from tests.support.media_builders import seed_ready_media_version
 from tests.support.project_builders import project_payload
@@ -219,22 +219,17 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
         "consent_missing"
     ]
 
+    invalid_payload = _character_version_payload(
+        portrait_id,
+        expected_current_version_id=version["id"],
+    )
+    invalid_spec = dict(cast(dict[str, object], invalid_payload["spec"]))
+    invalid_spec["provider_model"] = "forbidden"
+    invalid_payload["spec"] = invalid_spec
     unknown_field = await client.post(
         f"/api/v1/assets/{asset['id']}/versions",
         headers=headers,
-        json={
-            **_character_version_payload(
-                portrait_id,
-                expected_current_version_id=version["id"],
-            ),
-            "spec": {
-                **_character_version_payload(
-                    portrait_id,
-                    expected_current_version_id=version["id"],
-                )["spec"],
-                "provider_model": "forbidden",
-            },
-        },
+        json=invalid_payload,
     )
     assert unknown_field.status_code == 422
 
