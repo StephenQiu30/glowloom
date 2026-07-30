@@ -45,6 +45,7 @@ import { setAccessToken } from "@/lib/auth-session";
 const workspaceId = "019fb1e0-a00a-70f6-99dc-0b4e9e085565";
 const subjectId = "019fb1e0-a043-73cd-8f84-781bef25b92a";
 const proofId = "019fb1e0-a044-73cd-8f84-781bef25b92b";
+const assetVersionId = "019fb1e0-a045-73cd-8f84-781bef25b92c";
 const consentId = "019fb1e0-a052-7d45-9b43-6821b3b33440";
 const now = "2026-07-30T08:00:00Z";
 
@@ -137,6 +138,7 @@ const media: API.MediaVersionResponse[] = [
 describe("governance consent workspace", () => {
   beforeEach(() => {
     sessionStorage.clear();
+    vi.clearAllMocks();
     setAccessToken("test-access-token");
     apiMocks.me.mockResolvedValue({
       data: {
@@ -212,6 +214,45 @@ describe("governance consent workspace", () => {
       }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent("授权已登记");
+  });
+
+  it("prefills an asset-version consent from the readiness blocker handoff", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <GovernanceWorkspace
+          prefill={{
+            subjectType: "ASSET_VERSION",
+            subjectId: assetVersionId,
+            proofMediaVersionId: proofId,
+          }}
+        />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "登记新授权" })).toBeInTheDocument();
+    expect(screen.getByLabelText("版本类型")).toHaveValue("ASSET_VERSION");
+    expect(screen.getByLabelText("资产版本 UUID")).toHaveValue(assetVersionId);
+    await waitFor(() =>
+      expect(screen.getByLabelText("证明媒体")).toHaveValue(proofId),
+    );
+
+    await user.clear(screen.getByLabelText("权利主体引用"));
+    await user.type(screen.getByLabelText("权利主体引用"), "creator-asset-version-a");
+    await user.clear(screen.getByLabelText("登记说明"));
+    await user.type(screen.getByLabelText("登记说明"), "资产版本生成授权确认");
+    await user.click(screen.getByRole("button", { name: "登记授权" }));
+
+    await waitFor(() => expect(apiMocks.createConsent).toHaveBeenCalledTimes(1));
+    expect(apiMocks.createConsent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: expect.objectContaining({
+          subject_type: "ASSET_VERSION",
+          subject_id: assetVersionId,
+        }),
+        proof_media_version_ids: [proofId],
+      }),
+    );
   });
 
   it("revokes the selected consent with its current revision", async () => {

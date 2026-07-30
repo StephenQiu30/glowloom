@@ -234,6 +234,12 @@ describe("AI 漫剧资产工作台", () => {
     expect(
       await screen.findByText("缺少覆盖当前用途的有效授权"),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "前往授权治理" }),
+    ).toHaveAttribute(
+      "href",
+      `/governance?subjectType=ASSET_VERSION&subjectId=${versionId}&proofMediaVersionId=${mediaVersionId}`,
+    );
 
     await user.click(screen.getByRole("button", { name: "新建资产" }));
     await user.clear(screen.getByLabelText("资产名称"));
