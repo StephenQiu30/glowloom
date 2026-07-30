@@ -21,6 +21,7 @@ export default defineConfig({
         DEEPSEEK_API_KEY: "",
         ENVIRONMENT: "test",
         JWT_SECRET_KEY: "playwright-only-jwt-secret-with-at-least-32-bytes",
+        MINIO_BUCKET: "lanverse-e2e",
         RABBITMQ_URL:
           "amqp://guest:guest@127.0.0.1:5672/lanverse_contract",
       },
