@@ -13,7 +13,11 @@ from app.modules.projects.authorization import (
     owned_project,
     require_project_revision,
 )
-from app.modules.projects.contracts import DeleteBlocker, DeletePreflightResponse
+from app.modules.projects.contracts import (
+    DeleteBlocker,
+    DeletePreflightResponse,
+    ProjectContentContext,
+)
 from app.modules.projects.models import Project
 from app.modules.projects.projects.schemas import (
     BudgetLimitRequest,
@@ -222,3 +226,38 @@ async def delete_project(
                 next_action="review_delete_blockers",
             )
         await session.delete(project)
+
+
+def _content_context(project: Project) -> ProjectContentContext:
+    return ProjectContentContext(
+        project_id=project.id,
+        workspace_id=project.workspace_id,
+        status=cast(Literal["active", "archived"], project.status),
+        revision=project.revision,
+    )
+
+
+async def project_for_content_read(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    project_id: UUID,
+) -> ProjectContentContext:
+    project, _ = await owned_project(
+        session, claims, project_id, Capability.CONTENT_READ
+    )
+    return _content_context(project)
+
+
+async def lock_active_project_for_content_write(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    project_id: UUID,
+) -> ProjectContentContext:
+    project, _ = await owned_project(
+        session,
+        claims,
+        project_id,
+        Capability.CONTENT_WRITE,
+        for_update=True,
+    )
+    return _content_context(project)

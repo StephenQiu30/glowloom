@@ -5,8 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ApiError, ErrorCode
 from app.modules.governance.contracts import SubjectReference, SubjectType
-from app.modules.media import media_version_exists
-from app.modules.scripts import script_version_exists
 
 
 def _dependency_unavailable(subject_type: SubjectType, *, retryable: bool) -> ApiError:
@@ -26,11 +24,23 @@ async def resolve_subject(
 ) -> None:
     try:
         if subject.subject_type is SubjectType.MEDIA_VERSION:
+            from app.modules.media import media_version_exists
+
             exists = await media_version_exists(
                 session, workspace_id, subject.subject_id
             )
         elif subject.subject_type is SubjectType.SCRIPT_VERSION:
+            from app.modules.scripts import script_version_exists
+
             exists = await script_version_exists(
+                session, workspace_id, subject.subject_id
+            )
+        elif subject.subject_type is SubjectType.ASSET_VERSION:
+            # Resolve lazily to avoid an initialization cycle: assets consumes
+            # the public RightsGate while governance resolves asset subjects.
+            from app.modules.assets import asset_version_exists
+
+            exists = await asset_version_exists(
                 session, workspace_id, subject.subject_id
             )
         else:

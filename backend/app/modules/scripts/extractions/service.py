@@ -11,6 +11,7 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
+from app.modules.assets import AssetCandidateCommand, create_or_link_candidate
 from app.modules.identity import Capability, actor_context
 from app.modules.production import (
     ScriptExtractionTaskCommand,
@@ -29,6 +30,7 @@ from app.modules.scripts.authorization import (
 )
 from app.modules.scripts.extractions.schemas import (
     AcceptWithChangesDecision,
+    AssetCandidateProposal,
     CandidateDecisionCommand,
     CandidateDecisionEvidenceResponse,
     CandidateDecisionRequest,
@@ -39,6 +41,7 @@ from app.modules.scripts.extractions.schemas import (
     CandidateStatus,
     ExtractionBatchResponse,
     ExtractionCandidateResponse,
+    LinkExistingDecision,
     MergeIntoDecision,
     PaginatedCandidateDecisions,
     PaginatedExtractionCandidates,
@@ -139,6 +142,8 @@ def _decision_evidence(
         sequence=decision.sequence,
         decision_key=decision.decision_key,
         decision=command,
+        downstream_type=cast(Literal["ASSET"] | None, decision.downstream_type),
+        downstream_id=decision.downstream_id,
         actor_id=decision.actor_id,
         created_at=decision.created_at,
     )
@@ -557,9 +562,82 @@ async def decide_extraction_candidate(
                     status_code=422,
                 )
 
+        if isinstance(decision, LinkExistingDecision) and candidate.kind != "asset":
+            raise ApiError(
+                ErrorCode.INVALID_REQUEST,
+                "Only asset candidates can link an existing asset",
+                status_code=422,
+            )
+
+        downstream_type: str | None = None
+        downstream_id: UUID | None = None
+        if candidate.kind == "asset" and decision.action in {
+            "accept_new",
+            "accept_with_changes",
+            "link_existing",
+        }:
+            if batch.confirmed_script_version_id is None:
+                raise ApiError(
+                    ErrorCode.STATE_CONFLICT,
+                    "Script structure must be confirmed before asset handoff",
+                    status_code=409,
+                    next_action="confirm_structure",
+                )
+            proposal_raw = (
+                decision.proposal
+                if isinstance(decision, AcceptWithChangesDecision)
+                else _CANDIDATE_PROPOSAL_ADAPTER.validate_python(candidate.proposal)
+            )
+            if not isinstance(proposal_raw, AssetCandidateProposal):
+                raise ApiError(
+                    ErrorCode.INVALID_REQUEST,
+                    "Asset candidate proposal is invalid",
+                    status_code=422,
+                )
+            input_version = await repository.find_version(
+                session, batch.script_version_id
+            )
+            source = (
+                None
+                if input_version is None
+                else await repository.find_source(session, input_version.source_id)
+            )
+            if source is None or source.workspace_id != candidate.workspace_id:
+                raise ApiError(
+                    ErrorCode.INTERNAL_ERROR,
+                    "Asset candidate source is unavailable",
+                    status_code=500,
+                )
+            episode = await lock_active_episode_for_content_write(
+                session, claims, source.episode_id
+            )
+            result = await create_or_link_candidate(
+                session,
+                actor,
+                AssetCandidateCommand(
+                    workspace_id=candidate.workspace_id,
+                    project_id=episode.project_id,
+                    candidate_id=candidate.id,
+                    decision_key=request.decision_key,
+                    actor_id=actor.user_id,
+                    action=decision.action,
+                    kind=proposal_raw.asset_kind,
+                    name=proposal_raw.name,
+                    description=proposal_raw.description,
+                    target_asset_id=(
+                        decision.downstream_id
+                        if isinstance(decision, LinkExistingDecision)
+                        else None
+                    ),
+                ),
+            )
+            downstream_type = "ASSET"
+            downstream_id = result.asset_id
+
         status_by_action: dict[str, CandidateStatus] = {
             "accept_new": "accepted",
             "accept_with_changes": "accepted",
+            "link_existing": "linked",
             "merge_into": "merged",
             "ignore": "ignored",
         }
@@ -572,6 +650,8 @@ async def decide_extraction_candidate(
             decision_key=request.decision_key,
             action=decision.action,
             payload=_decision_payload(decision),
+            downstream_type=downstream_type,
+            downstream_id=downstream_id,
             actor_id=actor.user_id,
             created_at=now,
         )

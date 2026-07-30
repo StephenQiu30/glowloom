@@ -12,6 +12,7 @@ from app.core.config import Settings
 from app.core.errors import ApiError, ErrorCode
 from app.modules.identity import ActorContext, Capability, actor_context
 from app.modules.media import repository
+from app.modules.media.contracts import MediaVersionReference
 from app.modules.media.models import MediaLocation, MediaObject, MediaVersion, UploadSession
 from app.modules.media.schemas import (
     AppendVersionRequest,
@@ -606,6 +607,27 @@ async def media_version_accessible(
     if version.workspace_id != workspace_id or version.probe_status == "quarantined":
         return False
     return await repository.find_active_location(session, version.id) is not None
+
+
+async def resolve_media_version_reference(
+    session: AsyncSession, workspace_id: UUID, version_id: UUID
+) -> MediaVersionReference | None:
+    result = await repository.find_media_version(session, version_id)
+    if result is None:
+        return None
+    version, media_object = result
+    if version.workspace_id != workspace_id:
+        return None
+    return MediaVersionReference(
+        id=version.id,
+        workspace_id=version.workspace_id,
+        kind=media_object.kind,
+        object_status=media_object.status,
+        probe_status=version.probe_status,
+        has_active_location=(
+            await repository.find_active_location(session, version.id) is not None
+        ),
+    )
 
 
 async def create_access(

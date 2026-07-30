@@ -1,6 +1,17 @@
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Protocol
+from uuid import UUID
+
+
+@dataclass(frozen=True, slots=True)
+class MediaVersionReference:
+    id: UUID
+    workspace_id: UUID
+    kind: str
+    object_status: str
+    probe_status: str
+    has_active_location: bool
 
 
 @dataclass(frozen=True, slots=True)

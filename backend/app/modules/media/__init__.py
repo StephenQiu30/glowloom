@@ -1,12 +1,23 @@
 """Public media contracts and governed-version lookups."""
 
-from app.modules.media.contracts import MediaProbeError, MediaProbePort, MediaProbeResult
-from app.modules.media.service import media_version_accessible, media_version_exists
+from app.modules.media.contracts import (
+    MediaProbeError,
+    MediaProbePort,
+    MediaProbeResult,
+    MediaVersionReference,
+)
+from app.modules.media.service import (
+    media_version_accessible,
+    media_version_exists,
+    resolve_media_version_reference,
+)
 
 __all__ = [
     "MediaProbeError",
     "MediaProbePort",
     "MediaProbeResult",
+    "MediaVersionReference",
     "media_version_accessible",
     "media_version_exists",
+    "resolve_media_version_reference",
 ]

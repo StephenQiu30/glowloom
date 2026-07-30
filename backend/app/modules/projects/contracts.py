@@ -25,5 +25,14 @@ class DeleteResponse(BaseModel):
 class EpisodeContentContext:
     episode_id: UUID
     workspace_id: UUID
+    project_id: UUID
     current_script_version_id: UUID | None
+    revision: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectContentContext:
+    project_id: UUID
+    workspace_id: UUID
+    status: Literal["active", "archived"]
     revision: int

@@ -289,7 +289,8 @@ class CandidateDecision(Base):
         ),
         CheckConstraint("sequence >= 1", name="ck_scr_decision_sequence"),
         CheckConstraint(
-            "action IN ('accept_new', 'accept_with_changes', 'merge_into', 'ignore')",
+            "action IN ('accept_new', 'accept_with_changes', 'link_existing', "
+            "'merge_into', 'ignore')",
             name="ck_scr_decision_action",
         ),
         UniqueConstraint(
@@ -308,6 +309,8 @@ class CandidateDecision(Base):
     decision_key: Mapped[str] = mapped_column(String(200))
     action: Mapped[str] = mapped_column(String(40))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    downstream_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    downstream_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     actor_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
     )

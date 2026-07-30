@@ -65,7 +65,7 @@ class DialogueCandidateProposal(CommandModel):
 class AssetCandidateProposal(CommandModel):
     kind: Literal["asset"]
     asset_kind: Literal[
-        "character", "location", "prop", "costume", "style", "voice"
+        "character", "location", "prop", "costume", "visual_style", "voice"
     ]
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=2000)
@@ -109,6 +109,11 @@ class MergeIntoDecision(CommandModel):
     target_candidate_id: UUID
 
 
+class LinkExistingDecision(CommandModel):
+    action: Literal["link_existing"]
+    downstream_id: UUID
+
+
 class IgnoreDecision(CommandModel):
     action: Literal["ignore"]
 
@@ -116,6 +121,7 @@ class IgnoreDecision(CommandModel):
 CandidateDecisionCommand = Annotated[
     AcceptNewDecision
     | AcceptWithChangesDecision
+    | LinkExistingDecision
     | MergeIntoDecision
     | IgnoreDecision,
     Field(discriminator="action"),
@@ -174,6 +180,8 @@ class CandidateDecisionEvidenceResponse(BaseModel):
     sequence: int
     decision_key: str
     decision: CandidateDecisionCommand
+    downstream_type: Literal["ASSET"] | None
+    downstream_id: UUID | None
     actor_id: UUID
     created_at: datetime
 
