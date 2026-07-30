@@ -118,7 +118,7 @@ export function EpisodeProductionStudio({
     (task) => task.task_type === "script_extraction",
   )?.request_id;
   const batchId =
-    snapshot?.script_summary.extraction_batch_id ?? startedBatchId ?? taskBatchId;
+    startedBatchId ?? snapshot?.script_summary.extraction_batch_id ?? taskBatchId;
   const batchQuery = useExtractionBatchQuery(batchId ?? "", {
     pollingInterval: 4_000,
     skip: !batchId,
@@ -182,6 +182,7 @@ export function EpisodeProductionStudio({
           expected_current_version_id: episode.current_script_version_id,
         },
       }).unwrap();
+      setStartedBatchId(null);
       return `剧本 v${result.version.version_no} 已发布并设为当前版本。`;
     });
   }
@@ -196,7 +197,7 @@ export function EpisodeProductionStudio({
         versionId,
         body: {
           scope: "full",
-          idempotency_key: `studio-extraction:${versionId}`,
+          idempotency_key: `studio-extraction:${versionId}:${crypto.randomUUID()}`,
         },
       }).unwrap();
       setStartedBatchId(result.id);
@@ -207,8 +208,9 @@ export function EpisodeProductionStudio({
   async function handleDecision(
     candidate: API.ExtractionCandidateResponse,
     decision: API.CandidateDecisionRequest["decision"],
-  ) {
-    if (!batchId || !episode?.project_id) return;
+  ): Promise<boolean> {
+    if (!batchId || !episode?.project_id) return false;
+    let succeeded = false;
     await runAction(async () => {
       await decideCandidate({
         candidateId: candidate.id,
@@ -221,8 +223,10 @@ export function EpisodeProductionStudio({
           decision,
         },
       }).unwrap();
+      succeeded = true;
       return `候选“${candidate.candidate_key}”已完成决议。`;
     });
+    return succeeded;
   }
 
   async function handleConfirm() {
@@ -244,6 +248,7 @@ export function EpisodeProductionStudio({
           expected_current_version_id: episode.current_script_version_id,
         },
       }).unwrap();
+      setStartedBatchId(null);
       return "已确认结构的剧本版本已设为当前入口。";
     });
   }

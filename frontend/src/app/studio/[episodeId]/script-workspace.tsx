@@ -2,14 +2,16 @@
 
 import {
   CheckCircle2,
+  FilePenLine,
   FileInput,
   GitCompareArrows,
   LoaderCircle,
+  Merge,
   Play,
   Save,
   ShieldAlert,
 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +25,19 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
+import {
+  CandidateEditDialog,
+  CandidateMergeDialog,
+} from "./candidate-decision-dialogs";
 import {
   assetKindLabels,
   candidateKindLabels,
@@ -67,12 +81,29 @@ export function ScriptWorkspace({
   onDecide: (
     candidate: API.ExtractionCandidateResponse,
     decision: CandidateDecision,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   onConfirm: () => Promise<void>;
   onSetCurrent: () => Promise<void>;
 }) {
   const [editorBody, setEditorBody] = useState(editableVersion?.body ?? "");
   const [linkedAssets, setLinkedAssets] = useState<Record<string, string>>({});
+  const [editingCandidate, setEditingCandidate] =
+    useState<API.ExtractionCandidateResponse | null>(null);
+  const [mergingCandidate, setMergingCandidate] =
+    useState<API.ExtractionCandidateResponse | null>(null);
+  const mergeTargetsByKind = useMemo(() => {
+    const grouped = new Map<
+      API.ExtractionCandidateResponse["kind"],
+      API.ExtractionCandidateResponse[]
+    >();
+    for (const candidate of candidates) {
+      if (["merged", "ignored"].includes(candidate.status)) continue;
+      const group = grouped.get(candidate.kind) ?? [];
+      group.push(candidate);
+      grouped.set(candidate.kind, group);
+    }
+    return grouped;
+  }, [candidates]);
 
   async function submitImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -115,7 +146,7 @@ export function ScriptWorkspace({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="scriptBody">剧本文本</Label>
-              <textarea
+              <Textarea
                 className="min-h-[360px] w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm leading-7 outline-none transition focus:border-cyan-400 focus:ring-3 focus:ring-cyan-100"
                 id="scriptBody"
                 name="body"
@@ -168,7 +199,7 @@ export function ScriptWorkspace({
           </CardHeader>
           <CardContent>
             <Label className="sr-only" htmlFor="currentScriptBody">剧本文本</Label>
-            <textarea
+            <Textarea
               aria-label="当前剧本文本"
               className="min-h-[400px] w-full resize-y rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 font-mono text-sm leading-7 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-3 focus:ring-cyan-100"
               id="currentScriptBody"
@@ -203,11 +234,31 @@ export function ScriptWorkspace({
             </CardHeader>
             <CardContent className="grid gap-3">
               {candidates.length === 0 ? (
-                <Alert>
-                  <LoaderCircle className={batch.status === "succeeded" ? "" : "animate-spin"} aria-hidden="true" />
-                  <AlertTitle>{batch.status === "succeeded" ? "没有候选" : "等待提取结果"}</AlertTitle>
+                <Alert
+                  className={
+                    ["failed", "cancelled", "unknown"].includes(batch.status)
+                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                      : undefined
+                  }
+                >
+                  {["failed", "cancelled", "unknown"].includes(batch.status) ? (
+                    <ShieldAlert aria-hidden="true" />
+                  ) : (
+                    <LoaderCircle
+                      className={batch.status === "succeeded" ? "" : "animate-spin"}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <AlertTitle>
+                    {batch.status === "succeeded"
+                      ? "没有候选"
+                      : ["failed", "cancelled", "unknown"].includes(batch.status)
+                        ? "提取未完成"
+                        : "等待提取结果"}
+                  </AlertTitle>
                   <AlertDescription>
-                    任务状态会从服务端轮询恢复，不从浏览器本地推断。
+                    {batch.task.error?.summary ??
+                      "任务状态会从服务端轮询恢复，不从浏览器本地推断。"}
                   </AlertDescription>
                 </Alert>
               ) : (
@@ -217,6 +268,9 @@ export function ScriptWorkspace({
                       candidate.proposal.kind === "asset" &&
                       asset.kind === candidate.proposal.asset_kind &&
                       asset.status === "active",
+                  );
+                  const hasMergeTarget = (mergeTargetsByKind.get(candidate.kind) ?? []).some(
+                    (target) => target.id !== candidate.id,
                   );
                   return (
                     <article className="rounded-xl border border-slate-200 p-4" key={candidate.id}>
@@ -242,6 +296,26 @@ export function ScriptWorkspace({
                               接受
                             </Button>
                             <Button
+                              aria-label={`修改 ${candidate.candidate_key} 后接受`}
+                              disabled={busy || (candidate.kind === "asset" && !confirmedVersionId)}
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setEditingCandidate(candidate)}
+                            >
+                              <FilePenLine aria-hidden="true" />修改
+                            </Button>
+                            {hasMergeTarget ? (
+                              <Button
+                                aria-label={`合并 ${candidate.candidate_key}`}
+                                disabled={busy}
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setMergingCandidate(candidate)}
+                              >
+                                <Merge aria-hidden="true" />合并
+                              </Button>
+                            ) : null}
+                            <Button
                               disabled={busy}
                               size="sm"
                               variant="outline"
@@ -258,22 +332,26 @@ export function ScriptWorkspace({
                             <Label htmlFor={`link-${candidate.id}`}>
                               关联已有{assetKindLabels[candidate.proposal.asset_kind]}
                             </Label>
-                            <select
-                              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                              id={`link-${candidate.id}`}
+                            <Select
                               value={linkedAssets[candidate.id] ?? ""}
-                              onChange={(event) =>
+                              onValueChange={(value) =>
                                 setLinkedAssets((current) => ({
                                   ...current,
-                                  [candidate.id]: event.target.value,
+                                  [candidate.id]: value,
                                 }))
                               }
                             >
-                              <option value="">选择已有资产</option>
-                              {linkableAssets.map((asset) => (
-                                <option key={asset.id} value={asset.id}>{asset.name}</option>
-                              ))}
-                            </select>
+                              <SelectTrigger className="w-full" id={`link-${candidate.id}`}>
+                                <SelectValue placeholder="选择已有资产" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {linkableAssets.map((asset) => (
+                                  <SelectItem key={asset.id} value={asset.id}>
+                                    {asset.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <Button
                             disabled={busy || !confirmedVersionId || !linkedAssets[candidate.id]}
@@ -315,9 +393,14 @@ export function ScriptWorkspace({
                 </AlertDescription>
               </Alert>
             ) : null}
-            {snapshot.script_summary.status === "published" ? (
+            {["published", "extraction_blocked"].includes(
+              snapshot.script_summary.status,
+            ) ? (
               <Button className="mt-4 w-full" disabled={busy} onClick={onStartExtraction}>
-                <Play aria-hidden="true" />开始结构提取
+                <Play aria-hidden="true" />
+                {snapshot.script_summary.status === "extraction_blocked"
+                  ? "重新提取结构"
+                  : "开始结构提取"}
               </Button>
             ) : null}
           </CardContent>
@@ -341,6 +424,25 @@ export function ScriptWorkspace({
           </CardContent>
         </Card>
       </aside>
+
+      {editingCandidate ? (
+        <CandidateEditDialog
+          busy={busy}
+          candidate={editingCandidate}
+          key={editingCandidate.id}
+          onClose={() => setEditingCandidate(null)}
+          onDecide={onDecide}
+        />
+      ) : null}
+      {mergingCandidate ? (
+        <CandidateMergeDialog
+          busy={busy}
+          candidate={mergingCandidate}
+          candidates={candidates}
+          onClose={() => setMergingCandidate(null)}
+          onDecide={onDecide}
+        />
+      ) : null}
     </div>
   );
 }
