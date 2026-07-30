@@ -231,7 +231,9 @@ describe("AI 漫剧资产工作台", () => {
 
     expect(await screen.findByRole("heading", { name: "资产库" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "选择资产 顾清禾" })).toBeInTheDocument();
-    expect(await screen.findByText("资产版本缺少有效授权")).toBeInTheDocument();
+    expect(
+      await screen.findByText("缺少覆盖当前用途的有效授权"),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "新建资产" }));
     await user.clear(screen.getByLabelText("资产名称"));

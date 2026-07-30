@@ -1,6 +1,15 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 
 import {
+  appendAssetVersionApiV1AssetsAssetIdVersionsPost,
+  archiveAssetApiV1AssetsAssetIdArchivePost,
+  createAssetApiV1ProjectsProjectIdAssetsPost,
+  getAssetReadinessApiV1AssetVersionsVersionIdReadinessGet,
+  listAssetsApiV1ProjectsProjectIdAssetsGet,
+  listAssetVersionsApiV1AssetsAssetIdVersionsGet,
+  restoreAssetApiV1AssetsAssetIdRestorePost,
+} from "@/api/assets";
+import {
   createConsentApiV1ConsentsPost,
   getConsentApiV1ConsentsConsentIdGet,
   listConsentsApiV1ConsentsGet,
@@ -96,6 +105,10 @@ export const appApi = createApi({
     "Consents",
     "Consent",
     "Media",
+    "Assets",
+    "Asset",
+    "AssetVersions",
+    "AssetReadiness",
   ],
   endpoints: (builder) => ({
     login: builder.mutation<API.AuthResponse, API.LoginRequest>({
@@ -380,6 +393,123 @@ export const appApi = createApi({
         { type: "Media", id: workspaceId },
       ],
     }),
+    assets: builder.query<API.PaginatedAssets, string>({
+      queryFn: (projectId) =>
+        runRequest(() =>
+          listAssetsApiV1ProjectsProjectIdAssetsGet({
+            project_id: projectId,
+            kind: null,
+            include_archived: true,
+            query: null,
+            limit: 100,
+            offset: 0,
+          }),
+        ),
+      providesTags: (result, _error, projectId) => [
+        { type: "Assets", id: projectId },
+        ...(result?.items.map((asset) => ({
+          type: "Asset" as const,
+          id: asset.id,
+        })) ?? []),
+      ],
+    }),
+    assetVersions: builder.query<API.PaginatedAssetVersions, string>({
+      queryFn: (assetId) =>
+        runRequest(() =>
+          listAssetVersionsApiV1AssetsAssetIdVersionsGet({
+            asset_id: assetId,
+            limit: 100,
+            offset: 0,
+          }),
+        ),
+      providesTags: (result, _error, assetId) => [
+        { type: "AssetVersions", id: assetId },
+        ...(result?.items.map((version) => ({
+          type: "AssetReadiness" as const,
+          id: version.id,
+        })) ?? []),
+      ],
+    }),
+    assetReadiness: builder.query<API.AssetReadinessResponse, string>({
+      queryFn: (versionId) =>
+        runRequest(() =>
+          getAssetReadinessApiV1AssetVersionsVersionIdReadinessGet({
+            version_id: versionId,
+            purpose: "ai_short_drama_generation",
+            channel: "lanverse_preview",
+            region: "CN",
+          }),
+        ),
+      providesTags: (_result, _error, versionId) => [
+        { type: "AssetReadiness", id: versionId },
+      ],
+    }),
+    createAsset: builder.mutation<
+      API.AssetResponse,
+      { projectId: string; body: API.AssetCreateRequest }
+    >({
+      queryFn: ({ projectId, body }) =>
+        runRequest(() =>
+          createAssetApiV1ProjectsProjectIdAssetsPost(
+            { project_id: projectId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: "Assets", id: projectId },
+      ],
+    }),
+    appendAssetVersion: builder.mutation<
+      API.AssetVersionCreateResponse,
+      { assetId: string; body: API.AssetVersionCreateRequest }
+    >({
+      queryFn: ({ assetId, body }) =>
+        runRequest(() =>
+          appendAssetVersionApiV1AssetsAssetIdVersionsPost(
+            { asset_id: assetId },
+            body,
+          ),
+        ),
+      invalidatesTags: (result, _error, { assetId }) => [
+        { type: "Asset", id: assetId },
+        { type: "AssetVersions", id: assetId },
+        ...(result
+          ? [
+              { type: "Assets" as const, id: result.asset.project_id },
+              { type: "AssetReadiness" as const, id: result.version.id },
+            ]
+          : []),
+      ],
+    }),
+    setAssetArchived: builder.mutation<
+      API.AssetResponse,
+      { assetId: string; expectedRevision: number; archived: boolean }
+    >({
+      queryFn: ({ assetId, expectedRevision, archived }) =>
+        runRequest(() => {
+          const params = { asset_id: assetId };
+          const body = { expected_revision: expectedRevision };
+          return archived
+            ? archiveAssetApiV1AssetsAssetIdArchivePost(params, body)
+            : restoreAssetApiV1AssetsAssetIdRestorePost(params, body);
+        }),
+      invalidatesTags: (result, _error, { assetId }) => [
+        { type: "Asset", id: assetId },
+        ...(result
+          ? [
+              { type: "Assets" as const, id: result.project_id },
+              ...(result.current_version_id
+                ? [
+                    {
+                      type: "AssetReadiness" as const,
+                      id: result.current_version_id,
+                    },
+                  ]
+                : []),
+            ]
+          : []),
+      ],
+    }),
     consents: builder.query<API.PaginatedConsents, string>({
       queryFn: (workspaceId) =>
         runRequest(() =>
@@ -414,6 +544,7 @@ export const appApi = createApi({
         runRequest(() => createConsentApiV1ConsentsPost(body)),
       invalidatesTags: (_result, _error, body) => [
         { type: "Consents", id: body.workspace_id },
+        "AssetReadiness",
       ],
     }),
     reviseConsent: builder.mutation<
@@ -429,6 +560,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (result, _error, { consentId }) => [
         { type: "Consent", id: consentId },
+        "AssetReadiness",
         ...(result
           ? [{ type: "Consents" as const, id: result.workspace_id }]
           : []),
@@ -447,6 +579,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (result, _error, { consentId }) => [
         { type: "Consent", id: consentId },
+        "AssetReadiness",
         ...(result
           ? [{ type: "Consents" as const, id: result.workspace_id }]
           : []),
@@ -456,10 +589,15 @@ export const appApi = createApi({
 });
 
 export const {
+  useAppendAssetVersionMutation,
+  useAssetReadinessQuery,
+  useAssetsQuery,
+  useAssetVersionsQuery,
   useChangePasswordMutation,
   useConsentQuery,
   useConsentsQuery,
   useCreateConsentMutation,
+  useCreateAssetMutation,
   useCreateEpisodeMutation,
   useCreateProjectMutation,
   useCreateWorkspaceMutation,
@@ -481,6 +619,7 @@ export const {
   useReorderEpisodesMutation,
   useEpisodeDeletePreflightMutation,
   useSetEpisodeArchivedMutation,
+  useSetAssetArchivedMutation,
   useSetProjectArchivedMutation,
   useSetWorkspaceArchivedMutation,
   useUpdateProfileMutation,

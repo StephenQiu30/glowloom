@@ -16,6 +16,30 @@ declare namespace API {
       | ContinuityCandidateProposal;
   };
 
+  type ApiResponseAssetDeletePreflightResponse_ = {
+    data: AssetDeletePreflightResponse;
+  };
+
+  type ApiResponseAssetDeleteResponse_ = {
+    data: AssetDeleteResponse;
+  };
+
+  type ApiResponseAssetReadinessResponse_ = {
+    data: AssetReadinessResponse;
+  };
+
+  type ApiResponseAssetResponse_ = {
+    data: AssetResponse;
+  };
+
+  type ApiResponseAssetVersionCreateResponse_ = {
+    data: AssetVersionCreateResponse;
+  };
+
+  type ApiResponseAssetVersionResponse_ = {
+    data: AssetVersionResponse;
+  };
+
   type ApiResponseAuthResponse_ = {
     data: AuthResponse;
   };
@@ -84,6 +108,14 @@ declare namespace API {
 
   type ApiResponseMeResponse_ = {
     data: MeResponse;
+  };
+
+  type ApiResponsePaginatedAssets_ = {
+    data: PaginatedAssets;
+  };
+
+  type ApiResponsePaginatedAssetVersions_ = {
+    data: PaginatedAssetVersions;
   };
 
   type ApiResponsePaginatedCandidateDecisions_ = {
@@ -170,6 +202,10 @@ declare namespace API {
     data: WorkspaceResponse;
   };
 
+  type appendAssetVersionApiV1AssetsAssetIdVersionsPostParams = {
+    asset_id: string;
+  };
+
   type AppendVersionRequest = {
     /** Workspace Id */
     workspace_id: string;
@@ -187,6 +223,10 @@ declare namespace API {
     idempotency_key: string;
     /** Expected Current Version Id */
     expected_current_version_id: string;
+  };
+
+  type archiveAssetApiV1AssetsAssetIdArchivePostParams = {
+    asset_id: string;
   };
 
   type archiveEpisodeApiV1EpisodesEpisodeIdArchivePostParams = {
@@ -223,12 +263,241 @@ declare namespace API {
       | "location"
       | "prop"
       | "costume"
-      | "style"
+      | "visual_style"
       | "voice";
     /** Name */
     name: string;
     /** Description */
     description: string;
+  };
+
+  type AssetCreateRequest = {
+    /** Kind */
+    kind:
+      | "character"
+      | "location"
+      | "prop"
+      | "costume"
+      | "visual_style"
+      | "voice";
+    /** Name */
+    name: string;
+    /** Aliases */
+    aliases: string[] | null;
+    /** Tags */
+    tags: string[] | null;
+  };
+
+  type AssetCurrentVersionRequest = {
+    /** Version Id */
+    version_id: string;
+    /** Expected Current Version Id */
+    expected_current_version_id: string | null;
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type AssetDeleteBlocker = {
+    /** Code */
+    code: string;
+    /** Summary */
+    summary: string;
+  };
+
+  type assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGetParams = {
+    asset_id: string;
+  };
+
+  type AssetDeletePreflightResponse = {
+    /** Allowed */
+    allowed: boolean;
+    /** Blockers */
+    blockers: AssetDeleteBlocker[];
+  };
+
+  type AssetDeleteResponse = {
+    /** Deleted */
+    deleted: true | null;
+  };
+
+  type AssetMediaReferenceRequest = {
+    /** Media Version Id */
+    media_version_id: string;
+    /** Purpose */
+    purpose:
+      | "portrait"
+      | "full_body"
+      | "expression"
+      | "turnaround"
+      | "environment"
+      | "object"
+      | "outfit"
+      | "style_reference"
+      | "voice_sample";
+    /** Position */
+    position: number;
+  };
+
+  type AssetMediaReferenceResponse = {
+    /** Media Version Id */
+    media_version_id: string;
+    /** Purpose */
+    purpose: string;
+    /** Position */
+    position: number;
+  };
+
+  type AssetReadinessBlocker = {
+    /** Code */
+    code: string;
+    /** Field Path */
+    field_path: string | null | null;
+    /** Dependency Type */
+    dependency_type: string | null | null;
+    /** Dependency Id */
+    dependency_id: string | null | null;
+    /** Summary */
+    summary: string;
+    /** Next Action */
+    next_action: string;
+  };
+
+  type AssetReadinessDependencySnapshot = {
+    /** Asset Version Id */
+    asset_version_id: string;
+    /** Media Version Ids */
+    media_version_ids: string[];
+    /** Consent Ids */
+    consent_ids: string[];
+    /** Evaluated At */
+    evaluated_at: string;
+  };
+
+  type AssetReadinessResponse = {
+    /** Status */
+    status: "draft" | "ready" | "blocked";
+    /** Blockers */
+    blockers: AssetReadinessBlocker[];
+    /** Warnings */
+    warnings: string[];
+    /** Next Actions */
+    next_actions: string[];
+    dependency_snapshot: AssetReadinessDependencySnapshot;
+  };
+
+  type AssetResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Project Id */
+    project_id: string;
+    /** Kind */
+    kind:
+      | "character"
+      | "location"
+      | "prop"
+      | "costume"
+      | "visual_style"
+      | "voice";
+    /** Name */
+    name: string;
+    /** Aliases */
+    aliases: string[];
+    /** Tags */
+    tags: string[];
+    /** Status */
+    status: "active" | "archived";
+    /** Current Version Id */
+    current_version_id: string | null;
+    /** Revision */
+    revision: number;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+    /** Warnings */
+    warnings: "duplicate_name"[] | null;
+  };
+
+  type AssetStateRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type AssetUpdateRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Name */
+    name: string | null | null;
+    /** Aliases */
+    aliases: string[] | null | null;
+    /** Tags */
+    tags: string[] | null | null;
+  };
+
+  type AssetVersionCreateRequest = {
+    /** Spec */
+    spec:
+      | CharacterSpec
+      | LocationSpec
+      | PropSpec
+      | CostumeSpec
+      | StyleSpec
+      | VoiceSpec;
+    /** Prompt Description */
+    prompt_description: string | null;
+    /** Media References */
+    media_references: AssetMediaReferenceRequest[] | null;
+    /** Source Type */
+    source_type: "manual" | "candidate" | null;
+    /** Source Id */
+    source_id: string | null | null;
+    /** Expected Current Version Id */
+    expected_current_version_id: string | null;
+    /** Set As Current */
+    set_as_current: boolean | null;
+  };
+
+  type AssetVersionCreateResponse = {
+    asset: AssetResponse;
+    version: AssetVersionResponse;
+    readiness: AssetReadinessResponse;
+  };
+
+  type AssetVersionResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Asset Id */
+    asset_id: string;
+    /** Version No */
+    version_no: number;
+    /** Schema Version */
+    schema_version: number;
+    /** Spec */
+    spec:
+      | CharacterSpec
+      | LocationSpec
+      | PropSpec
+      | CostumeSpec
+      | StyleSpec
+      | VoiceSpec;
+    /** Prompt Description */
+    prompt_description: string;
+    /** Source Type */
+    source_type: "manual" | "candidate";
+    /** Source Id */
+    source_id: string | null;
+    /** Content Hash */
+    content_hash: string;
+    /** Media References */
+    media_references: AssetMediaReferenceResponse[];
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
   };
 
   type AuthResponse = {
@@ -275,8 +544,13 @@ declare namespace API {
     decision:
       | AcceptNewDecision
       | AcceptWithChangesDecision
+      | LinkExistingDecision
       | MergeIntoDecision
       | IgnoreDecision;
+    /** Downstream Type */
+    downstream_type: "ASSET" | null;
+    /** Downstream Id */
+    downstream_id: string | null;
     /** Actor Id */
     actor_id: string;
     /** Created At */
@@ -292,6 +566,7 @@ declare namespace API {
     decision:
       | AcceptNewDecision
       | AcceptWithChangesDecision
+      | LinkExistingDecision
       | MergeIntoDecision
       | IgnoreDecision;
   };
@@ -313,6 +588,19 @@ declare namespace API {
     current_password: string;
     /** New Password */
     new_password: string;
+  };
+
+  type CharacterSpec = {
+    /** Kind */
+    kind: "character";
+    /** Identity */
+    identity: string | null;
+    /** Appearance */
+    appearance: string | null;
+    /** Age Impression */
+    age_impression: string | null;
+    /** Temperament */
+    temperament: string[] | null;
   };
 
   type completeUploadApiV1MediaUploadsUploadSessionIdCompletePostParams = {
@@ -438,8 +726,25 @@ declare namespace API {
     used: string | null;
   };
 
+  type CostumeSpec = {
+    /** Kind */
+    kind: "costume";
+    /** Appearance */
+    appearance: string | null;
+    /** Material */
+    material: string | null;
+    /** Usage Context */
+    usage_context: string | null;
+    /** Wearer Character Id */
+    wearer_character_id: string | null | null;
+  };
+
   type createAccessApiV1MediaVersionIdAccessPostParams = {
     version_id: string;
+  };
+
+  type createAssetApiV1ProjectsProjectIdAssetsPostParams = {
+    project_id: string;
   };
 
   type createEpisodeApiV1ProjectsProjectIdEpisodesPostParams = {
@@ -472,6 +777,11 @@ declare namespace API {
     {
       candidate_id: string;
     };
+
+  type deleteAssetApiV1AssetsAssetIdDeleteParams = {
+    asset_id: string;
+    expected_revision: number;
+  };
 
   type DeleteBlocker = {
     /** Code */
@@ -711,6 +1021,21 @@ declare namespace API {
     created_at: string;
   };
 
+  type getAssetApiV1AssetsAssetIdGetParams = {
+    asset_id: string;
+  };
+
+  type getAssetReadinessApiV1AssetVersionsVersionIdReadinessGetParams = {
+    version_id: string;
+    purpose: string;
+    channel: string;
+    region: string;
+  };
+
+  type getAssetVersionApiV1AssetVersionsVersionIdGetParams = {
+    version_id: string;
+  };
+
   type getConsentApiV1ConsentsConsentIdGetParams = {
     consent_id: string;
   };
@@ -774,6 +1099,36 @@ declare namespace API {
     {
       media_object_id: string;
     };
+
+  type LinkExistingDecision = {
+    /** Action */
+    action: "link_existing";
+    /** Downstream Id */
+    downstream_id: string;
+  };
+
+  type listAssetsApiV1ProjectsProjectIdAssetsGetParams = {
+    project_id: string;
+    kind:
+      | "character"
+      | "location"
+      | "prop"
+      | "costume"
+      | "visual_style"
+      | "voice"
+      | null
+      | null;
+    include_archived: boolean | null;
+    query: string | null | null;
+    limit: number | null | null;
+    offset: number | null;
+  };
+
+  type listAssetVersionsApiV1AssetsAssetIdVersionsGetParams = {
+    asset_id: string;
+    limit: number | null | null;
+    offset: number | null;
+  };
 
   type listCandidateDecisionsApiV1ExtractionCandidatesCandidateIdDecisionsGetParams =
     {
@@ -862,6 +1217,19 @@ declare namespace API {
 
   type listWorkspacesApiV1WorkspacesGetParams = {
     include_archived: boolean | null;
+  };
+
+  type LocationSpec = {
+    /** Kind */
+    kind: "location";
+    /** Spatial Description */
+    spatial_description: string | null;
+    /** Time Weather */
+    time_weather: string | null;
+    /** Visual Elements */
+    visual_elements: string[] | null;
+    /** Lighting */
+    lighting: string | null;
   };
 
   type LoginRequest = {
@@ -986,6 +1354,28 @@ declare namespace API {
     label: string;
     /** Href */
     href: string;
+  };
+
+  type PaginatedAssets = {
+    /** Items */
+    items: AssetResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
+  type PaginatedAssetVersions = {
+    /** Items */
+    items: AssetVersionResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
   };
 
   type PaginatedCandidateDecisions = {
@@ -1176,6 +1566,19 @@ declare namespace API {
     expected_revision: number;
   };
 
+  type PropSpec = {
+    /** Kind */
+    kind: "prop";
+    /** Appearance */
+    appearance: string | null;
+    /** Material */
+    material: string | null;
+    /** Usage Context */
+    usage_context: string | null;
+    /** Holder Character Id */
+    holder_character_id: string | null | null;
+  };
+
   type publishVersionApiV1ScriptSourcesSourceIdVersionsPostParams = {
     source_id: string;
   };
@@ -1198,6 +1601,10 @@ declare namespace API {
 
   type reorderEpisodesApiV1ProjectsProjectIdEpisodesReorderPostParams = {
     project_id: string;
+  };
+
+  type restoreAssetApiV1AssetsAssetIdRestorePostParams = {
+    asset_id: string;
   };
 
   type restoreEpisodeApiV1EpisodesEpisodeIdRestorePostParams = {
@@ -1390,6 +1797,10 @@ declare namespace API {
     created_at: string;
   };
 
+  type setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPostParams = {
+    asset_id: string;
+  };
+
   type setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPostParams = {
     episode_id: string;
   };
@@ -1417,6 +1828,19 @@ declare namespace API {
     confirmed_version: ScriptVersionResponse;
     /** Scenes */
     scenes: SceneResponse[];
+  };
+
+  type StyleSpec = {
+    /** Kind */
+    kind: "visual_style";
+    /** Visual Language */
+    visual_language: string | null;
+    /** Palette */
+    palette: string | null;
+    /** Lighting Language */
+    lighting_language: string | null;
+    /** Negative Constraints */
+    negative_constraints: string[] | null;
   };
 
   type SubjectIdentity = {
@@ -1503,6 +1927,10 @@ declare namespace API {
     running: number | null;
     /** Failed */
     failed: number | null;
+  };
+
+  type updateAssetApiV1AssetsAssetIdPatchParams = {
+    asset_id: string;
   };
 
   type updateBudgetLimitApiV1ProjectsProjectIdBudgetLimitPostParams = {
@@ -1605,6 +2033,24 @@ declare namespace API {
     input: any | null;
     /** Context */
     ctx: Record<string, any> | null;
+  };
+
+  type VoiceSpec = {
+    /** Kind */
+    kind: "voice";
+    /** Source Kind */
+    source_kind:
+      | "synthetic_recording"
+      | "human_recording"
+      | "voice_clone"
+      | null
+      | null;
+    /** Language */
+    language: string | null;
+    /** Performance Traits */
+    performance_traits: string[] | null;
+    /** Allowed Usage */
+    allowed_usage: string[] | null;
   };
 
   type WorkspaceCreateRequest = {

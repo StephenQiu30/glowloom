@@ -2,418 +2,440 @@
 
 import {
   AlertCircle,
-  ArrowRight,
-  Box,
-  Check,
-  ImagePlus,
-  Info,
-  LockKeyhole,
-  MapPin,
-  Mic2,
-  Palette,
+  CheckCircle2,
+  Layers3,
   Plus,
-  Save,
   Search,
-  Shirt,
-  Upload,
-  Users,
-  WandSparkles,
 } from "lucide-react";
-import Image from "next/image";
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useState } from "react";
 import { Tabs } from "radix-ui";
 
 import { StudioShell } from "@/components/studio/studio-shell";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/class-names";
+import { useAuthSessionState } from "@/hooks/use-auth-session";
+import {
+  appApiErrorMessage,
+  useAppendAssetVersionMutation,
+  useAssetReadinessQuery,
+  useAssetsQuery,
+  useAssetVersionsQuery,
+  useCreateAssetMutation,
+  useMeQuery,
+  useMediaVersionsQuery,
+  useProjectsQuery,
+  useSetAssetArchivedMutation,
+} from "@/lib/server-state";
 
-const assetTypes = [
-  { id: "character", label: "角色", count: 4, icon: Users },
-  { id: "scene", label: "场景", count: 6, icon: MapPin },
-  { id: "prop", label: "道具", count: 8, icon: Box },
-  { id: "costume", label: "服装", count: 5, icon: Shirt },
-  { id: "voice", label: "声音", count: 4, icon: Mic2 },
-  { id: "style", label: "风格", count: 2, icon: Palette },
-] as const;
-
-type AssetType = (typeof assetTypes)[number]["id"];
-
-type Character = {
-  id: string;
-  name: string;
-  role: string;
-  style: string;
-  version: number;
-  locked: boolean;
-  description: string;
-  image: string;
-  sheet?: string;
-  faceReferences: number;
-  costumeReferences: number;
-  shotReferences: number;
-  blockers: number;
-};
-
-const characters: Character[] = [
-  {
-    id: "gu-qinghe",
-    name: "顾清禾",
-    role: "女主角",
-    style: "水墨幻想",
-    version: 3,
-    locked: true,
-    description: "清冷疏离，乌发高髻，青灰色长衫，右眼下方一颗泪痣。",
-    image: "/assets/lanverse-studio/gu-qinghe-portrait.png",
-    sheet: "/assets/lanverse-studio/gu-qinghe-model-sheet.png",
-    faceReferences: 3,
-    costumeReferences: 2,
-    shotReferences: 18,
-    blockers: 2,
-  },
-  {
-    id: "lu-chenzhou",
-    name: "陆沉舟",
-    role: "男主角",
-    style: "水墨幻想",
-    version: 2,
-    locked: true,
-    description: "沉静克制，深色束发，墨灰长袍，左手常持旧剑。",
-    image: "/assets/lanverse-studio/lu-chenzhou-portrait.png",
-    faceReferences: 2,
-    costumeReferences: 2,
-    shotReferences: 14,
-    blockers: 0,
-  },
-  {
-    id: "a-ning",
-    name: "阿宁",
-    role: "重要配角",
-    style: "水墨幻想",
-    version: 1,
-    locked: false,
-    description: "明朗机敏，红色窄袖衣，肩背药箱，发间系红绳。",
-    image: "/assets/lanverse-studio/a-ning-portrait.png",
-    faceReferences: 2,
-    costumeReferences: 1,
-    shotReferences: 8,
-    blockers: 3,
-  },
-  {
-    id: "painting-spirit",
-    name: "画灵",
-    role: "神秘角色",
-    style: "水墨幻想",
-    version: 2,
-    locked: false,
-    description: "银白长发，半透明衣袂，轮廓带水墨晕染与淡青微光。",
-    image: "/assets/lanverse-studio/painting-spirit-portrait.png",
-    faceReferences: 2,
-    costumeReferences: 2,
-    shotReferences: 6,
-    blockers: 1,
-  },
-];
-
-const genericAssets: Record<Exclude<AssetType, "character">, { name: string; meta: string }[]> = {
-  scene: [
-    { name: "顾府画阁", meta: "内景 · 夜 · v2" },
-    { name: "长安雨巷", meta: "外景 · 夜 · v3" },
-    { name: "无相画境", meta: "幻境 · v1" },
-    { name: "西市茶楼", meta: "内景 · 日 · v2" },
-  ],
-  prop: [
-    { name: "青玉画轴", meta: "核心道具 · 已锁定" },
-    { name: "陆氏旧剑", meta: "武器 · 已锁定" },
-    { name: "朱砂伞", meta: "随身道具 · 待确认" },
-    { name: "铜制药箱", meta: "随身道具 · v1" },
-  ],
-  costume: [
-    { name: "顾清禾 · 青灰常服", meta: "角色服装 · v3" },
-    { name: "顾清禾 · 画境礼服", meta: "角色服装 · v1" },
-    { name: "陆沉舟 · 夜行装", meta: "角色服装 · v2" },
-  ],
-  voice: [
-    { name: "顾清禾 · 清冷女声", meta: "普通话 · 已授权" },
-    { name: "陆沉舟 · 青年男声", meta: "普通话 · 已授权" },
-    { name: "旁白 · 沉浸叙事", meta: "普通话 · 已授权" },
-  ],
-  style: [
-    { name: "水墨幻想", meta: "主视觉 · 已锁定" },
-    { name: "雨夜霓虹", meta: "场景变体 · v1" },
-  ],
-};
-
-function CharacterList({ selectedId, onSelect }: { selectedId: string; onSelect: (id: string) => void }) {
-  const [query, setQuery] = useState("");
-  const visibleCharacters = characters.filter((character) => character.name.includes(query));
-
-  return (
-    <section className="min-w-0 border-r border-slate-200/80 bg-white p-3" aria-label="角色列表">
-      <div className="flex items-center justify-between gap-2 px-1 py-1">
-        <h2 className="text-sm font-semibold">角色列表</h2>
-        <Button aria-label="添加角色" size="sm" variant="outline"><Plus aria-hidden="true" />添加</Button>
-      </div>
-      <div className="relative mt-3">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-        <Input className="pl-9" aria-label="搜索角色" placeholder="搜索角色" value={query} onChange={(event) => setQuery(event.target.value)} />
-      </div>
-      <div className="mt-3 grid gap-2">
-        {visibleCharacters.map((character) => (
-          <button
-            aria-pressed={selectedId === character.id}
-            className={cn(
-              "group flex min-w-0 items-center gap-3 rounded-xl border p-2 text-left transition-all",
-              selectedId === character.id
-                ? "border-[#75ccda] bg-[#f2fbfc] shadow-sm shadow-cyan-700/5"
-                : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
-            )}
-            key={character.id}
-            onClick={() => onSelect(character.id)}
-            type="button"
-          >
-            <span className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-              <Image alt={`${character.name}头像`} fill sizes="64px" src={character.image} className="object-cover" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-1.5 truncate text-sm font-medium">
-                {character.name}
-                {character.locked ? <LockKeyhole className="size-3 text-[#079db3]" aria-label="已锁定" /> : null}
-              </span>
-              <span className="mt-1 block truncate text-xs text-slate-500">{character.role} · v{character.version}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ReferenceRow({ label, count, image }: { label: string; count: number; image: string }) {
-  return (
-    <div>
-      <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-        {label}<span className="font-normal text-slate-400">{count} 张</span>
-      </div>
-      <div className="flex gap-2">
-        {Array.from({ length: count }).map((_, index) => (
-          <span className="relative size-12 overflow-hidden rounded-lg border border-slate-200 bg-slate-100" key={index}>
-            <Image alt={`${label} ${index + 1}`} fill sizes="48px" src={image} className={cn("object-cover", index === 1 && "scale-110 object-[55%_35%]", index === 2 && "scale-125 object-[45%_30%]")} />
-          </span>
-        ))}
-        <button aria-label={`添加${label}`} className="grid size-12 place-items-center rounded-lg border border-dashed border-slate-300 text-slate-500 transition-colors hover:border-[#079db3] hover:text-[#079db3]" type="button">
-          <Plus className="size-4" aria-hidden="true" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function CharacterInspector({
-  character,
-  onSaved,
-}: {
-  character: Character;
-  onSaved: (version: number) => void;
-}) {
-  const [description, setDescription] = useState(character.description);
-  const [saved, setSaved] = useState(false);
-
-  function saveVersion() {
-    setSaved(true);
-    onSaved(character.version + 1);
-    window.setTimeout(() => setSaved(false), 2600);
-  }
-
-  return (
-    <aside className="min-w-0 bg-white p-5" aria-label="角色资产信息">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">{character.name}</h2>
-          <p className="mt-1 text-sm text-slate-500">{character.role} · {character.style}</p>
-        </div>
-        <Badge className="border-[#bee8ee] bg-[#effbfc] text-[#087f91]" variant="outline">版本 v{character.version}</Badge>
-      </div>
-
-      <div className="mt-6 flex items-center gap-2 text-sm text-slate-600">
-        {character.locked ? <LockKeyhole className="size-4 text-[#079db3]" aria-hidden="true" /> : <AlertCircle className="size-4 text-amber-500" aria-hidden="true" />}
-        {character.locked ? "已锁定为分镜默认版本" : "未锁定，生成前需确认"}
-      </div>
-
-      <div className="mt-6">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="consistencyDescription">一致性描述</Label>
-          <span className="text-xs text-slate-400">{description.length}/120</span>
-        </div>
-        <textarea
-          className="mt-2 min-h-28 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 outline-none transition focus:border-[#079db3] focus:ring-3 focus:ring-cyan-500/10"
-          id="consistencyDescription"
-          maxLength={120}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </div>
-
-      <div className="mt-6 grid gap-5">
-        <ReferenceRow label="面部参考" count={character.faceReferences} image={character.image} />
-        <ReferenceRow label="服装参考" count={character.costumeReferences} image={character.sheet ?? character.image} />
-      </div>
-
-      <div className="mt-7 grid gap-2">
-        <Button className="h-10 bg-[#079db3] text-white hover:bg-[#078da0]" onClick={saveVersion}>
-          {saved ? <Check aria-hidden="true" /> : <Save aria-hidden="true" />}
-          {saved ? "版本已保存" : "保存新版本"}
-        </Button>
-        <Button className="h-10 text-[#078fa5]" variant="outline">
-          <WandSparkles aria-hidden="true" />生成更多参考
-        </Button>
-      </div>
-
-      <div className="mt-6 rounded-xl border border-amber-200/80 bg-amber-50/80 p-4">
-        <p className="text-sm font-semibold">影响范围</p>
-        <div className="mt-3 grid gap-3 text-sm">
-          <button className="flex items-center gap-2 text-left" type="button">
-            <Info className="size-4 shrink-0 text-[#079db3]" aria-hidden="true" />
-            <span className="flex-1">{character.shotReferences} 个分镜引用此版本</span>
-            <span className="text-[#078fa5]">查看影响</span>
-          </button>
-          {character.blockers > 0 ? (
-            <button className="flex items-center gap-2 text-left" type="button">
-              <AlertCircle className="size-4 shrink-0 text-amber-500" aria-hidden="true" />
-              <span className="flex-1">{character.blockers} 个镜头需重新确认</span>
-              <span className="text-[#078fa5]">去处理</span>
-            </button>
-          ) : (
-            <div className="flex items-center gap-2 text-emerald-700"><Check className="size-4" aria-hidden="true" />没有待处理的镜头</div>
-          )}
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function GenericAssetWorkspace({ type }: { type: Exclude<AssetType, "character"> }) {
-  const assetType = assetTypes.find((item) => item.id === type)!;
-  const Icon = assetType.icon;
-  const items = genericAssets[type];
-
-  return (
-    <div className="grid min-h-[560px] grid-cols-[240px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <section className="border-r border-slate-200 p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">{assetType.label}列表</h2>
-          <Button aria-label={`添加${assetType.label}`} size="icon-sm" variant="outline"><Plus aria-hidden="true" /></Button>
-        </div>
-        <div className="mt-4 grid gap-2">
-          {items.map((item, index) => (
-            <button className={cn("rounded-xl border p-3 text-left", index === 0 ? "border-[#75ccda] bg-[#f2fbfc]" : "border-slate-200 hover:bg-slate-50")} key={item.name} type="button">
-              <span className="block text-sm font-medium">{item.name}</span>
-              <span className="mt-1 block text-xs text-slate-500">{item.meta}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-      <section className="grid place-items-center p-10 text-center">
-        <div className="max-w-sm">
-          <span className="mx-auto grid size-16 place-items-center rounded-2xl bg-slate-100 text-[#079db3]"><Icon className="size-7" aria-hidden="true" /></span>
-          <h2 className="mt-5 text-xl font-semibold">{items[0].name}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">在这里管理{assetType.label}规格、参考媒体、授权状态和不可变版本；锁定后自动成为新分镜的默认引用。</p>
-          <div className="mt-6 flex justify-center gap-2">
-            <Button variant="outline"><Upload aria-hidden="true" />添加参考</Button>
-            <Button className="bg-[#079db3] text-white hover:bg-[#078da0]"><Save aria-hidden="true" />保存新版本</Button>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
+import { CreateAssetDialog, VersionDialog } from "./asset-dialogs";
+import { AssetDetail, AssetList } from "./asset-panels";
+import {
+  type AssetKind,
+  assetTypes,
+  selectClassName,
+  typeConfig,
+} from "./asset-workspace-model";
 
 export function ComicProductionStudio() {
-  const [assetType, setAssetType] = useState<AssetType>("character");
-  const [selectedCharacterId, setSelectedCharacterId] = useState("gu-qinghe");
-  const [currentStep, setCurrentStep] = useState(1);
+  const sessionState = useAuthSessionState();
+  const authenticated = sessionState === "authenticated";
+  const me = useMeQuery(undefined, { skip: !authenticated });
+  const workspaceId = me.data?.workspace.id;
+  const projects = useProjectsQuery(workspaceId ?? "", { skip: !workspaceId });
+  const projectItems = projects.data?.items ?? [];
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const effectiveProject =
+    projectItems.find((project) => project.id === selectedProjectId) ??
+    projectItems.find((project) => project.status === "active") ??
+    projectItems[0];
+  const assets = useAssetsQuery(effectiveProject?.id ?? "", {
+    skip: !effectiveProject,
+  });
+  const media = useMediaVersionsQuery(workspaceId ?? "", { skip: !workspaceId });
+  const [selectedKind, setSelectedKind] = useState<AssetKind>("character");
+  const [query, setQuery] = useState("");
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const allAssets = assets.data?.items ?? [];
+  const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
+  const visibleAssets = allAssets.filter(
+    (asset) =>
+      asset.kind === selectedKind &&
+      (!normalizedQuery ||
+        asset.name.toLocaleLowerCase("zh-CN").includes(normalizedQuery) ||
+        asset.aliases.some((alias) =>
+          alias.toLocaleLowerCase("zh-CN").includes(normalizedQuery),
+        )),
+  );
+  const selectedAsset =
+    visibleAssets.find((asset) => asset.id === selectedAssetId) ?? visibleAssets[0];
+  const versions = useAssetVersionsQuery(selectedAsset?.id ?? "", {
+    skip: !selectedAsset,
+  });
+  const versionItems = versions.data?.items ?? [];
+  const currentVersion =
+    versionItems.find((version) => version.id === selectedAsset?.current_version_id) ??
+    versionItems[0];
+  const readiness = useAssetReadinessQuery(currentVersion?.id ?? "", {
+    refetchOnMountOrArgChange: true,
+    skip: !currentVersion,
+  });
+  const [createAsset, createState] = useCreateAssetMutation();
+  const [appendVersion, appendState] = useAppendAssetVersionMutation();
+  const [setAssetArchived, archiveState] = useSetAssetArchivedMutation();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [versionOpen, setVersionOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const selectedCharacter = useMemo(
-    () => characters.find((character) => character.id === selectedCharacterId) ?? characters[0],
-    [selectedCharacterId],
+  const [actionError, setActionError] = useState<string | null>(null);
+  const mediaVersions = media.data?.items ?? [];
+  const mediaById = new Map(mediaVersions.map((item) => [item.id, item]));
+  const characterAssets = allAssets.filter(
+    (asset) => asset.kind === "character" && asset.status === "active",
   );
 
-  function showNotice(message: string) {
-    setNotice(message);
-    window.setTimeout(() => setNotice(null), 3200);
+  async function submitCreate(request: API.AssetCreateRequest): Promise<boolean> {
+    if (!effectiveProject) return false;
+    setActionError(null);
+    try {
+      const created = await createAsset({
+        projectId: effectiveProject.id,
+        body: request,
+      }).unwrap();
+      setSelectedKind(created.kind);
+      setSelectedAssetId(created.id);
+      setCreateOpen(false);
+      setNotice(`资产身份已创建：${created.name}`);
+      return true;
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+      return false;
+    }
   }
+
+  async function submitVersion(
+    request: API.AssetVersionCreateRequest,
+  ): Promise<boolean> {
+    if (!selectedAsset) return false;
+    setActionError(null);
+    try {
+      const created = await appendVersion({
+        assetId: selectedAsset.id,
+        body: request,
+      }).unwrap();
+      setVersionOpen(false);
+      const statusLabel =
+        created.readiness.status === "ready"
+          ? "可用于生成"
+          : created.readiness.status === "blocked"
+            ? "已阻断"
+            : "草稿未完整";
+      setNotice(`版本 v${created.version.version_no} 已保存，准备度为${statusLabel}。`);
+      return true;
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+      return false;
+    }
+  }
+
+  async function toggleArchive() {
+    if (!selectedAsset) return;
+    setActionError(null);
+    try {
+      const updated = await setAssetArchived({
+        assetId: selectedAsset.id,
+        expectedRevision: selectedAsset.revision,
+        archived: selectedAsset.status === "active",
+      }).unwrap();
+      setNotice(updated.status === "archived" ? "资产已归档。" : "资产已恢复。");
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+    }
+  }
+
+  const activeCount = allAssets.filter((asset) => asset.status === "active").length;
+  const versionedCount = allAssets.filter((asset) => asset.current_version_id).length;
+  const pageError = me.error ?? projects.error ?? assets.error ?? media.error;
 
   return (
     <StudioShell
       active="assets"
-      currentStep={currentStep}
-      projectName="她从画中来"
-      topAction={(
-        <Button className="ml-auto h-10 bg-[#079db3] px-4 text-white hover:bg-[#078da0]" onClick={() => { setCurrentStep(2); showNotice("已进入分镜阶段，2 个受影响镜头等待确认"); }}>
-          继续制作<ArrowRight aria-hidden="true" />
-        </Button>
-      )}
+      projectName={effectiveProject?.name}
+      topAction={
+        authenticated ? (
+          effectiveProject?.status === "active" ? (
+            <Button
+              className="h-10 bg-[#079db3] px-4 text-white hover:bg-[#078da0]"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus aria-hidden="true" />新建资产
+            </Button>
+          ) : (
+            <Button disabled className="h-10" variant="outline">
+              项目已归档
+            </Button>
+          )
+        ) : (
+          <Button
+            asChild
+            className="h-10 bg-[#079db3] px-4 text-white hover:bg-[#078da0]"
+          >
+            <Link href="/login">登录后管理</Link>
+          </Button>
+        )
+      }
     >
       {notice ? (
-        <div className="fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10" role="status">
-          <Check className="size-4 text-emerald-600" aria-hidden="true" />{notice}
+        <div
+          className="fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10"
+          role="status"
+        >
+          <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />
+          {notice}
         </div>
       ) : null}
 
-      <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-[-0.03em]">资产库</h1>
-              <p className="mt-2 text-sm text-slate-500">锁定角色与世界观，让每个镜头保持一致</p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500"><LockKeyhole className="size-4 text-[#079db3]" aria-hidden="true" />资产版本只追加，历史引用不会漂移</div>
+      <div className="mx-auto max-w-[1420px] px-5 py-8 md:px-8">
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <Badge
+              className="border-cyan-100 bg-cyan-50 text-[#087f91]"
+              variant="outline"
+            >
+              生产事实层
+            </Badge>
+            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em]">资产库</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              管理角色、场景、道具、服装、声音与视觉风格的稳定身份、不可变版本和生产准备度。
+            </p>
           </div>
+          {projectItems.length > 0 ? (
+            <div className="grid min-w-56 gap-2">
+              <Label htmlFor="assetProject">当前项目</Label>
+              <select
+                className={selectClassName}
+                id="assetProject"
+                onChange={(event) => {
+                  setSelectedProjectId(event.target.value);
+                  setSelectedAssetId(null);
+                }}
+                value={effectiveProject?.id ?? ""}
+              >
+                {projectItems.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                    {project.status === "archived" ? "（已归档）" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+        </div>
 
-          <Tabs.Root className="mt-6" value={assetType} onValueChange={(value) => setAssetType(value as AssetType)}>
-            <Tabs.List className="flex gap-7 overflow-x-auto border-b border-slate-200" aria-label="资产类型">
-              {assetTypes.map((type) => (
-                <Tabs.Trigger className="group relative flex shrink-0 items-center gap-2 pb-3 text-sm text-slate-500 outline-none data-[state=active]:font-medium data-[state=active]:text-[#078fa5]" key={type.id} value={type.id}>
-                  <type.icon className="size-4" strokeWidth={1.8} aria-hidden="true" />
-                  {type.label}<span className="text-xs text-slate-400">{type.count}</span>
-                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#079db3] opacity-0 group-data-[state=active]:opacity-100" />
-                </Tabs.Trigger>
-              ))}
-            </Tabs.List>
+        {sessionState === "checking" || (authenticated && me.isLoading) ? (
+          <Card className="mt-7">
+            <CardContent className="p-6 text-sm text-slate-500">
+              正在读取创作空间…
+            </CardContent>
+          </Card>
+        ) : null}
+        {sessionState === "anonymous" ? (
+          <Alert className="mt-7 border-amber-200 bg-amber-50 p-5 text-amber-800">
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>需要登录</AlertTitle>
+            <AlertDescription className="text-amber-700">
+              资产身份与版本受 Workspace 隔离保护。
+              <Link className="ml-1 font-medium underline" href="/login">
+                前往登录
+              </Link>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {authenticated && pageError ? (
+          <Alert
+            className="mt-7 border-rose-200 bg-rose-50 p-5 text-rose-800"
+            variant="destructive"
+          >
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>资产事实暂时无法读取</AlertTitle>
+            <AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription>
+          </Alert>
+        ) : null}
+        {actionError ? (
+          <Alert
+            className="mt-5 border-rose-200 bg-rose-50 p-4 text-rose-800"
+            variant="destructive"
+          >
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>操作未完成</AlertTitle>
+            <AlertDescription>{actionError}</AlertDescription>
+          </Alert>
+        ) : null}
 
-            <Tabs.Content className="mt-0 overflow-x-auto outline-none" value="character">
-              <div className="grid min-h-[650px] grid-cols-[220px_minmax(420px,1fr)_330px] overflow-hidden rounded-b-2xl border-x border-b border-slate-200 bg-white 2xl:grid-cols-[240px_minmax(520px,1fr)_350px]" data-testid="character-asset-workspace">
-                <CharacterList selectedId={selectedCharacterId} onSelect={setSelectedCharacterId} />
-                <section className="relative min-w-0 bg-[#fafbfb] p-4" aria-label="角色设定图">
-                  <div className="relative h-[590px] overflow-hidden rounded-2xl border border-slate-200 bg-[#f4f5f4] 2xl:h-[640px]">
-                    <Image
-                      alt={selectedCharacter.sheet ? `${selectedCharacter.name}角色设定图` : `${selectedCharacter.name}角色参考图`}
-                      fill
-                      loading="eager"
-                      sizes="(min-width: 1280px) 55vw, 50vw"
-                      src={selectedCharacter.sheet ?? selectedCharacter.image}
-                      className={selectedCharacter.sheet ? "scale-[1.3] object-contain 2xl:scale-[1.36]" : "object-contain p-16"}
-                    />
-                    {!selectedCharacter.sheet ? (
-                      <div className="absolute right-4 bottom-4 left-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white/95 px-4 py-3 text-sm shadow-sm">
-                        <span className="flex items-center gap-2 text-slate-600"><ImagePlus className="size-4 text-[#079db3]" aria-hidden="true" />角色设定图尚未补齐</span>
-                        <Button size="sm" variant="outline">生成设定图</Button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="absolute inset-x-4 bottom-4 flex items-center justify-center gap-2 text-xs text-slate-500"><Info className="size-4 text-[#079db3]" aria-hidden="true" />锁定后将作为后续分镜与生成的默认参考</div>
-                </section>
-                <CharacterInspector key={selectedCharacter.id} character={selectedCharacter} onSaved={(version) => showNotice(`${selectedCharacter.name} v${version} 已保存，旧版本仍可追溯`)} />
+        {workspaceId && !projects.isLoading && projectItems.length === 0 ? (
+          <Card className="mt-7">
+            <CardContent className="grid min-h-56 place-items-center p-8 text-center">
+              <div>
+                <Layers3 className="mx-auto size-7 text-slate-300" aria-hidden="true" />
+                <h2 className="mt-3 text-lg font-semibold">先创建一个漫剧项目</h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  资产必须归属于明确项目，不能游离在工作区之外。
+                </p>
+                <Button asChild className="mt-5" variant="outline">
+                  <Link href="/projects">前往项目管理</Link>
+                </Button>
               </div>
-            </Tabs.Content>
-            {assetTypes.filter((type) => type.id !== "character").map((type) => (
-              <Tabs.Content className="mt-0 outline-none" key={type.id} value={type.id}>
-                <GenericAssetWorkspace type={type.id as Exclude<AssetType, "character">} />
-              </Tabs.Content>
-            ))}
-          </Tabs.Root>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {effectiveProject ? (
+          <>
+            <section className="mt-7 grid gap-4 sm:grid-cols-3" aria-label="资产概览">
+              <Card>
+                <CardHeader>
+                  <CardDescription>资产身份</CardDescription>
+                  <CardTitle className="text-2xl">{assets.data?.total ?? 0}</CardTitle>
+                </CardHeader>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardDescription>当前使用</CardDescription>
+                  <CardTitle className="text-2xl text-emerald-700">{activeCount}</CardTitle>
+                </CardHeader>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardDescription>已有当前版本</CardDescription>
+                  <CardTitle className="text-2xl text-[#087f91]">
+                    {versionedCount}
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+            </section>
+
+            <Tabs.Root
+              className="mt-6"
+              onValueChange={(value) => {
+                setSelectedKind(value as AssetKind);
+                setSelectedAssetId(null);
+              }}
+              value={selectedKind}
+            >
+              <Tabs.List
+                aria-label="资产类型"
+                className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1"
+              >
+                {assetTypes.map((item) => {
+                  const Icon = item.icon;
+                  const count = allAssets.filter(
+                    (asset) => asset.kind === item.id,
+                  ).length;
+                  return (
+                    <Tabs.Trigger
+                      className="flex min-w-24 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-500 outline-none transition hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-medium data-[state=active]:text-[#078fa5]"
+                      key={item.id}
+                      value={item.id}
+                    >
+                      <Icon className="size-4" aria-hidden="true" />
+                      {item.label}
+                      <span className="text-xs text-slate-400">{count}</span>
+                    </Tabs.Trigger>
+                  );
+                })}
+              </Tabs.List>
+            </Tabs.Root>
+
+            <div className="mt-5 grid items-start gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+              <div className="grid gap-3">
+                <div className="relative">
+                  <Search
+                    className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    aria-label="搜索资产"
+                    className="bg-white pl-9"
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="搜索名称或别名"
+                    value={query}
+                  />
+                </div>
+                <AssetList
+                  assets={visibleAssets}
+                  isLoading={assets.isLoading}
+                  onSelect={setSelectedAssetId}
+                  selectedId={selectedAsset?.id}
+                />
+              </div>
+              {selectedAsset ? (
+                <AssetDetail
+                  asset={selectedAsset}
+                  isArchiving={archiveState.isLoading}
+                  mediaById={mediaById}
+                  onAddVersion={() => setVersionOpen(true)}
+                  onToggleArchive={toggleArchive}
+                  readiness={currentVersion ? readiness.data : undefined}
+                  readinessError={currentVersion ? readiness.error : undefined}
+                  readinessLoading={currentVersion ? readiness.isLoading : false}
+                  versions={versionItems}
+                  versionsLoading={versions.isLoading}
+                />
+              ) : (
+                <Card>
+                  <CardContent className="grid min-h-80 place-items-center p-8 text-center">
+                    <div>
+                      <Layers3
+                        className="mx-auto size-7 text-slate-300"
+                        aria-hidden="true"
+                      />
+                      <p className="mt-3 text-sm font-medium">
+                        选择或新建一个{typeConfig(selectedKind).singular}资产
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        右侧将显示版本、媒体和准备度事实。
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </>
+        ) : null}
       </div>
+
+      <CreateAssetDialog
+        currentKind={selectedKind}
+        isSubmitting={createState.isLoading}
+        key={selectedKind}
+        onOpenChange={setCreateOpen}
+        onSubmit={submitCreate}
+        open={createOpen}
+      />
+      {selectedAsset ? (
+        <VersionDialog
+          asset={selectedAsset}
+          characters={characterAssets}
+          isSubmitting={appendState.isLoading}
+          mediaVersions={mediaVersions}
+          onOpenChange={setVersionOpen}
+          onSubmit={submitVersion}
+          open={versionOpen}
+        />
+      ) : null}
     </StudioShell>
   );
 }
