@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 from uuid import UUID, uuid5
 
 import pytest
@@ -23,6 +24,7 @@ NAMESPACE = UUID("9dfaecf8-3cc7-4fe4-b828-1977e58c96e1")
 def _grant(case: dict[str, object]) -> ConsentGrant:
     scope = case["scope"]
     assert isinstance(scope, dict)
+    typed_scope = cast(dict[str, object], scope)
     revoked_at = case["revoked_at"]
     return ConsentGrant(
         consent_id=uuid5(NAMESPACE, str(case["fixture_id"])),
@@ -30,11 +32,18 @@ def _grant(case: dict[str, object]) -> ConsentGrant:
             ConsentStatus.REVOKED if revoked_at is not None else ConsentStatus.ACTIVE
         ),
         subject_identity_kind=SubjectIdentityKind(str(case["subject_kind"])),
-        purposes=frozenset(str(value) for value in scope["authorized_purposes"]),
-        channels=frozenset(str(value) for value in scope["channels"]),
-        regions=frozenset(str(value) for value in scope["regions"]),
-        valid_from=datetime.fromisoformat(str(scope["valid_from"])),
-        valid_to=datetime.fromisoformat(str(scope["valid_to"])),
+        purposes=frozenset(
+            str(value)
+            for value in cast(list[object], typed_scope["authorized_purposes"])
+        ),
+        channels=frozenset(
+            str(value) for value in cast(list[object], typed_scope["channels"])
+        ),
+        regions=frozenset(
+            str(value) for value in cast(list[object], typed_scope["regions"])
+        ),
+        valid_from=datetime.fromisoformat(str(typed_scope["valid_from"])),
+        valid_to=datetime.fromisoformat(str(typed_scope["valid_to"])),
         proof_accessible=True,
     )
 
@@ -42,10 +51,13 @@ def _grant(case: dict[str, object]) -> ConsentGrant:
 def _usage(case: dict[str, object]) -> RightsUsage:
     scope = case["scope"]
     assert isinstance(scope, dict)
+    typed_scope = cast(dict[str, object], scope)
+    channels = cast(list[object], typed_scope["channels"])
+    regions = cast(list[object], typed_scope["regions"])
     return RightsUsage(
         purpose=str(case["requested_purpose"]),
-        channel=str(scope["channels"][0]),
-        region=str(scope["regions"][0]),
+        channel=str(channels[0]),
+        region=str(regions[0]),
         at_time=datetime.fromisoformat(str(case["evaluation_at"])),
     )
 

@@ -15,6 +15,7 @@ from app.core.schemas import DependencyStatus, HealthResponse, ReadinessResponse
 from app.integrations.minio import MinioObjectStorage
 from app.integrations.rabbitmq import rabbitmq_ping
 from app.integrations.redis import redis_ping
+from app.modules.governance.api import router as governance_router
 from app.modules.identity.api import router as identity_router
 from app.modules.media.api import router as media_router
 from app.modules.production.api import router as production_router
@@ -45,6 +46,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     register_exception_handlers(app)
     app.include_router(identity_router)
+    app.include_router(governance_router)
     app.include_router(media_router)
     app.include_router(projects_router)
     app.include_router(production_router)

@@ -589,6 +589,25 @@ async def get_media(
     return _media_version_response(version)
 
 
+async def media_version_exists(
+    session: AsyncSession, workspace_id: UUID, version_id: UUID
+) -> bool:
+    result = await repository.find_media_version(session, version_id)
+    return result is not None and result[0].workspace_id == workspace_id
+
+
+async def media_version_accessible(
+    session: AsyncSession, workspace_id: UUID, version_id: UUID
+) -> bool:
+    result = await repository.find_media_version(session, version_id)
+    if result is None:
+        return False
+    version, _ = result
+    if version.workspace_id != workspace_id or version.probe_status == "quarantined":
+        return False
+    return await repository.find_active_location(session, version.id) is not None
+
+
 async def create_access(
     session: AsyncSession,
     claims: AccessTokenClaims,

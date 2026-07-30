@@ -18,6 +18,7 @@ from app.modules.governance.service import check_rights
 from app.modules.identity.models import Membership
 from app.modules.media.models import MediaLocation, MediaObject, MediaVersion
 from tests.support.identity_builders import register_identity_response
+from tests.support.project_builders import project_payload
 
 
 async def _identity(
@@ -117,6 +118,7 @@ def _create_payload(
         "scope": _scope(subject_id),
         "proof_media_version_ids": [str(proof_id)],
         "reason": "Synthetic fixture for governance acceptance",
+        "idempotency_key": "consent-register-001",
     }
 
 
@@ -163,6 +165,24 @@ async def test_consent_registration_read_revision_and_revoke_are_append_only(
     assert "object_key" not in str(consent)
     assert "bucket" not in str(consent)
 
+    repeated = await client.post(
+        "/api/v1/consents",
+        headers=headers,
+        json=_create_payload(workspace_id, subject_id, proof_id),
+    )
+    assert repeated.status_code == 201
+    assert repeated.json()["data"] == consent
+    conflicting_create = await client.post(
+        "/api/v1/consents",
+        headers=headers,
+        json={
+            **_create_payload(workspace_id, subject_id, proof_id),
+            "reason": "Same key with different facts",
+        },
+    )
+    assert conflicting_create.status_code == 409
+    assert conflicting_create.json()["error"]["code"] == "resource_conflict"
+
     listed = await client.get(
         "/api/v1/consents",
         headers=headers,
@@ -191,7 +211,7 @@ async def test_consent_registration_read_revision_and_revoke_are_append_only(
                 purpose="ai_short_drama_generation",
                 channel="lanverse_preview",
                 region="CN",
-                at_time=datetime(2026, 7, 29, tzinfo=UTC),
+                at_time=datetime.now(UTC),
             ),
         )
     assert allowed.allowed is True
@@ -257,7 +277,7 @@ async def test_consent_registration_read_revision_and_revoke_are_append_only(
                 purpose="ai_short_drama_generation",
                 channel="lanverse_preview",
                 region="CN",
-                at_time=datetime(2026, 7, 29, tzinfo=UTC),
+                at_time=datetime.now(UTC),
             ),
         )
         assert await session.scalar(select(func.count()).select_from(Consent)) == 1
@@ -304,7 +324,10 @@ async def test_consent_commands_enforce_schema_capabilities_and_workspace_isolat
     unknown = await client.post(
         "/api/v1/consents",
         headers=owner_headers,
-        json={**payload, "scope": {**payload["scope"], "legal_conclusion": True}},
+        json={
+            **payload,
+            "scope": {**_scope(subject_id), "legal_conclusion": True},
+        },
     )
     assert unknown.status_code == 422
     invalid_dates = await client.post(
@@ -313,7 +336,7 @@ async def test_consent_commands_enforce_schema_capabilities_and_workspace_isolat
         json={
             **payload,
             "scope": {
-                **payload["scope"],
+                **_scope(subject_id),
                 "valid_from": "2027-07-01T00:00:00Z",
                 "valid_to": "2026-07-01T00:00:00Z",
             },
@@ -425,3 +448,73 @@ async def test_rights_gate_hides_cross_workspace_subjects_and_fails_closed(
         )
     assert missing.allowed is False
     assert [blocker.code for blocker in missing.blockers] == ["consent_missing"]
+
+
+@pytest.mark.asyncio
+async def test_script_version_resolver_uses_the_real_version_boundary(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, identity = await _identity(client, email="script-rights@example.com")
+    workspace_id = UUID(identity["workspace"]["id"])
+    actor_id = UUID(identity["user"]["id"])
+    proof_id = await _seed_accessible_media(
+        session_factory,
+        workspace_id=workspace_id,
+        actor_id=actor_id,
+        filename="script-rights-proof.png",
+    )
+    project_response = await client.post(
+        "/api/v1/projects",
+        headers=headers,
+        json=project_payload(str(workspace_id), "剧本授权项目"),
+    )
+    assert project_response.status_code == 201
+    project_id = project_response.json()["data"]["id"]
+    episode_response = await client.post(
+        f"/api/v1/projects/{project_id}/episodes",
+        headers=headers,
+        json={"name": "第一集", "target_duration_ms": 90000},
+    )
+    assert episode_response.status_code == 201
+    imported_response = await client.post(
+        f"/api/v1/episodes/{episode_response.json()['data']['id']}/script-sources",
+        headers=headers,
+        json={
+            "input_type": "text",
+            "title": "授权剧本",
+            "body": "第一场\n角色走进雨夜。",
+            "rights_declaration": "拥有本测试文本的使用权",
+            "idempotency_key": "script-rights-import-001",
+        },
+    )
+    assert imported_response.status_code == 201
+    script_version_id = UUID(imported_response.json()["data"]["version"]["id"])
+    payload = _create_payload(workspace_id, script_version_id, proof_id)
+    payload["scope"] = _scope(
+        script_version_id, subject_type="SCRIPT_VERSION"
+    )
+    payload["idempotency_key"] = "script-consent-001"
+    created = await client.post(
+        "/api/v1/consents", headers=headers, json=payload
+    )
+    assert created.status_code == 201
+
+    async with session_factory() as session:
+        result = await check_rights(
+            session,
+            workspace_id=workspace_id,
+            subject=SubjectReference(
+                subject_type=SubjectType.SCRIPT_VERSION,
+                subject_id=script_version_id,
+            ),
+            usage=RightsUsage(
+                purpose="ai_short_drama_generation",
+                channel="lanverse_preview",
+                region="CN",
+                at_time=datetime.now(UTC),
+            ),
+        )
+    assert result.allowed is True
+    assert result.blockers == ()
+    assert result.consent_ids == (UUID(created.json()["data"]["id"]),)

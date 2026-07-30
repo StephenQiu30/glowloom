@@ -235,6 +235,13 @@ async def get_version(
     return _version_response(version)
 
 
+async def script_version_exists(
+    session: AsyncSession, workspace_id: UUID, version_id: UUID
+) -> bool:
+    version = await repository.find_version(session, version_id)
+    return version is not None and version.workspace_id == workspace_id
+
+
 async def list_versions(
     session: AsyncSession,
     claims: AccessTokenClaims,
