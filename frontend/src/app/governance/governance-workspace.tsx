@@ -367,7 +367,17 @@ function ConsentDetail({
   );
 }
 
-export function GovernanceWorkspace() {
+export type GovernancePrefill = {
+  proofMediaVersionId?: string;
+  subjectId: string;
+  subjectType: "ASSET_VERSION";
+};
+
+export function GovernanceWorkspace({
+  prefill,
+}: {
+  prefill?: GovernancePrefill;
+} = {}) {
   const sessionState = useAuthSessionState();
   const authenticated = sessionState === "authenticated";
   const me = useMeQuery(undefined, { skip: !authenticated });
@@ -385,7 +395,7 @@ export function GovernanceWorkspace() {
   const [createConsent, createState] = useCreateConsentMutation();
   const [reviseConsent, reviseState] = useReviseConsentMutation();
   const [revokeConsent, revokeState] = useRevokeConsentMutation();
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(Boolean(prefill));
   const [reviseOpen, setReviseOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -520,6 +530,9 @@ export function GovernanceWorkspace() {
 
       {workspaceId ? (
         <ConsentFormDialog
+          initialProofMediaVersionId={prefill?.proofMediaVersionId}
+          initialSubjectId={prefill?.subjectId}
+          initialSubjectType={prefill?.subjectType}
           isSubmitting={createState.isLoading}
           mediaVersions={mediaVersions}
           mode="create"

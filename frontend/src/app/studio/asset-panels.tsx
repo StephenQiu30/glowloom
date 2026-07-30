@@ -172,6 +172,14 @@ function ReadinessPanel({
   const requiresConsent = readiness.blockers.some(
     (blocker) => blocker.next_action === "review_asset_consent",
   );
+  const consentParams = new URLSearchParams({
+    subjectType: "ASSET_VERSION",
+    subjectId: readiness.dependency_snapshot.asset_version_id,
+  });
+  const proofMediaVersionId = readiness.dependency_snapshot.media_version_ids[0];
+  if (proofMediaVersionId) {
+    consentParams.set("proofMediaVersionId", proofMediaVersionId);
+  }
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -216,7 +224,7 @@ function ReadinessPanel({
       )}
       {requiresConsent ? (
         <Button asChild className="mt-4" variant="outline">
-          <Link href="/governance">前往授权治理</Link>
+          <Link href={`/governance?${consentParams.toString()}`}>前往授权治理</Link>
         </Button>
       ) : null}
     </div>

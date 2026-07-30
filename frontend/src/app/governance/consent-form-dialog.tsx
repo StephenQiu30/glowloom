@@ -18,6 +18,9 @@ export type ConsentFormValue = {
 
 type ConsentFormDialogProps = {
   initialConsent?: API.ConsentDetailResponse;
+  initialProofMediaVersionId?: string;
+  initialSubjectId?: string;
+  initialSubjectType?: API.SubjectType;
   isSubmitting: boolean;
   mediaVersions: API.MediaVersionResponse[];
   mode: "create" | "revise";
@@ -102,6 +105,9 @@ function CheckboxGroup({
 
 export function ConsentFormDialog({
   initialConsent,
+  initialProofMediaVersionId,
+  initialSubjectId,
+  initialSubjectType,
   isSubmitting,
   mediaVersions,
   mode,
@@ -113,10 +119,15 @@ export function ConsentFormDialog({
   const current = initialConsent?.current_revision;
   const initialScope = current?.scope;
   const [subjectType, setSubjectType] = useState<API.SubjectType>(
-    initialScope?.subject_type ?? "MEDIA_VERSION",
+    initialScope?.subject_type ?? initialSubjectType ?? "MEDIA_VERSION",
   );
-  const initialProofId = current?.proof_media_version_ids[0] ?? mediaVersions[0]?.id ?? "";
-  const initialSubjectId = initialScope?.subject_id ?? mediaVersions[0]?.id ?? "";
+  const effectiveInitialProofId =
+    current?.proof_media_version_ids[0] ??
+    initialProofMediaVersionId ??
+    mediaVersions[0]?.id ??
+    "";
+  const effectiveInitialSubjectId =
+    initialScope?.subject_id ?? initialSubjectId ?? mediaVersions[0]?.id ?? "";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -125,7 +136,9 @@ export function ConsentFormDialog({
     const subjectId = String(
       subjectType === "MEDIA_VERSION"
         ? form.get("mediaSubjectId")
-        : form.get("scriptSubjectId"),
+        : subjectType === "ASSET_VERSION"
+          ? form.get("assetSubjectId")
+          : form.get("scriptSubjectId"),
     );
     await onSubmit({
       subjectIdentity: {
@@ -219,6 +232,7 @@ export function ConsentFormDialog({
                   >
                     <option value="MEDIA_VERSION">媒体版本</option>
                     <option value="SCRIPT_VERSION">剧本版本</option>
+                    <option value="ASSET_VERSION">资产版本</option>
                   </select>
                 </div>
                 <div className="grid gap-2">
@@ -227,8 +241,9 @@ export function ConsentFormDialog({
                       <Label htmlFor={`${mode}-mediaSubjectId`}>固定版本</Label>
                       <select
                         className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#079db3] focus:ring-3 focus:ring-cyan-500/10"
-                        defaultValue={initialSubjectId}
+                        defaultValue={effectiveInitialSubjectId}
                         id={`${mode}-mediaSubjectId`}
+                        key={`media-subject-${effectiveInitialSubjectId}-${mediaVersions.length}`}
                         name="mediaSubjectId"
                         required
                       >
@@ -239,13 +254,28 @@ export function ConsentFormDialog({
                         ))}
                       </select>
                     </>
+                  ) : subjectType === "ASSET_VERSION" ? (
+                    <>
+                      <Label htmlFor={`${mode}-assetSubjectId`}>资产版本 UUID</Label>
+                      <Input
+                        defaultValue={
+                          initialScope?.subject_type === "ASSET_VERSION"
+                            ? effectiveInitialSubjectId
+                            : initialSubjectId ?? ""
+                        }
+                        id={`${mode}-assetSubjectId`}
+                        name="assetSubjectId"
+                        placeholder="输入 AssetVersion UUID"
+                        required
+                      />
+                    </>
                   ) : (
                     <>
                       <Label htmlFor={`${mode}-scriptSubjectId`}>固定版本</Label>
                       <Input
                         defaultValue={
                           initialScope?.subject_type === "SCRIPT_VERSION"
-                            ? initialSubjectId
+                            ? effectiveInitialSubjectId
                             : ""
                         }
                         id={`${mode}-scriptSubjectId`}
@@ -347,8 +377,9 @@ export function ConsentFormDialog({
                 <Label htmlFor={`${mode}-proofMediaVersionId`}>证明媒体</Label>
                 <select
                   className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#079db3] focus:ring-3 focus:ring-cyan-500/10"
-                  defaultValue={initialProofId}
+                  defaultValue={effectiveInitialProofId}
                   id={`${mode}-proofMediaVersionId`}
+                  key={`proof-${effectiveInitialProofId}-${mediaVersions.length}`}
                   name="proofMediaVersionId"
                   required
                 >
