@@ -40,6 +40,18 @@ def test_outbox_resource_limits_are_bounded() -> None:
     assert 0.1 <= settings.outbox_poll_seconds <= 60
 
 
+def test_server_bind_address_is_explicit_and_validated() -> None:
+    settings = Settings.model_validate(
+        {"api_host": "127.0.0.1", "api_port": 8001}
+    )
+
+    assert settings.api_host == "127.0.0.1"
+    assert settings.api_port == 8001
+
+    with pytest.raises(ValueError):
+        Settings.model_validate({"api_port": 0})
+
+
 def test_deepseek_key_is_optional_and_secret() -> None:
     assert Settings.model_validate({}).deepseek_api_key is None
     assert Settings.model_validate({"deepseek_api_key": ""}).deepseek_api_key is None

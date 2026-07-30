@@ -19,6 +19,7 @@ from app.modules.media.models import MediaVersion
 from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production.models import Task
+from tests.support.external_contracts import rabbitmq_contract_url
 from tests.support.identity_builders import register_identity_response
 from tests.support.media_fixtures import ONE_PIXEL_PNG
 
@@ -33,6 +34,7 @@ async def test_private_upload_reaches_ready_through_the_real_media_stack(
     session_factory: async_sessionmaker[AsyncSession],
     test_settings: Settings,
 ) -> None:
+    rabbitmq_url = rabbitmq_contract_url()
     storage = MinioObjectStorage(
         test_settings.minio_endpoint,
         test_settings.minio_access_key,
@@ -44,8 +46,8 @@ async def test_private_upload_reaches_ready_through_the_real_media_stack(
     probe = FfprobeMediaProbe(
         timeout_seconds=test_settings.media_probe_timeout_seconds
     )
-    publisher = RabbitMQPublisher(test_settings.rabbitmq_url)
-    observer = await aio_pika.connect_robust(test_settings.rabbitmq_url, timeout=3)
+    publisher = RabbitMQPublisher(rabbitmq_url)
+    observer = await aio_pika.connect_robust(rabbitmq_url, timeout=3)
     message: aio_pika.abc.AbstractIncomingMessage | None = None
     duplicate: aio_pika.abc.AbstractIncomingMessage | None = None
     object_key: str | None = None

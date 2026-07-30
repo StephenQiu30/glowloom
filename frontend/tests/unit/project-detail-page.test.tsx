@@ -158,7 +158,7 @@ describe("真实项目生产入口", () => {
     );
 
     expect(await screen.findByRole("heading", { name: project.name })).toBeInTheDocument();
-    expect(screen.getByText("单集尚未导入剧本")).toBeInTheDocument();
+    expect(screen.getAllByText("单集尚未导入剧本").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "进入第一集 · 雨巷相逢" })).toHaveAttribute(
       "href",
       `/studio/${episodeId}/script`,

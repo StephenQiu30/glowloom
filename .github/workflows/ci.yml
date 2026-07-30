@@ -24,6 +24,8 @@ jobs:
           --health-retries 12
       rabbitmq:
         image: rabbitmq:4.3.4-alpine
+        env:
+          RABBITMQ_DEFAULT_VHOST: lanverse_contract
         ports:
           - 5672:5672
         options: >-
@@ -80,7 +82,7 @@ jobs:
           ffprobe -version
       - name: Run the real media stack contract
         env:
-          RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672/
+          RABBITMQ_CONTRACT_URL: amqp://guest:guest@127.0.0.1:5672/lanverse_contract
           MINIO_ENDPOINT: 127.0.0.1:9000
           MINIO_ACCESS_KEY: lanverse
           MINIO_SECRET_KEY: lanverse-development-only
@@ -89,7 +91,9 @@ jobs:
         if: always()
         run: docker rm --force lanverse-ci-minio || true
       - name: Run RabbitMQ publisher and worker contracts
-        run: RABBITMQ_URL=amqp://guest:guest@127.0.0.1:5672/ make contract-rabbitmq
+        run: make contract-rabbitmq
+        env:
+          RABBITMQ_CONTRACT_URL: amqp://guest:guest@127.0.0.1:5672/lanverse_contract
       - name: Install Playwright Chromium
         run: cd frontend && npx playwright install --with-deps chromium
       - name: Run browser E2E

@@ -12,16 +12,19 @@ test("S1 创作者管理项目和单集完整生命周期", async ({ page }) => 
   await page.getByLabel("密码").fill("playwright-secure-password");
   await page.getByRole("button", { name: "注册并开始创作" }).click();
 
-  await page.getByLabel("项目名称").fill(projectName);
   await page.getByRole("button", { name: "创建项目" }).click();
+  await page.getByLabel("项目名称").fill(projectName);
+  await page.getByRole("button", { name: "确认创建" }).click();
   await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
 
+  await page.getByRole("button", { name: "创建单集" }).click();
   await page.getByLabel("单集名称", { exact: true }).fill("第一集");
+  await page.getByRole("button", { name: "确认创建" }).click();
+  await expect(page.getByRole("link", { name: "进入第一集", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "创建单集" }).click();
-  await expect(page.getByText("第一集", { exact: true })).toBeVisible();
   await page.getByLabel("单集名称", { exact: true }).fill("第二集");
-  await page.getByRole("button", { name: "创建单集" }).click();
-  await expect(page.getByText("第二集", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "确认创建" }).click();
+  await expect(page.getByRole("link", { name: "进入第二集", exact: true })).toBeVisible();
 
   await page.getByLabel("项目名称").fill(`${projectName}-更新`);
   await page.getByLabel("项目简介").fill("已完成生命周期编辑");
@@ -35,7 +38,7 @@ test("S1 创作者管理项目和单集完整生命周期", async ({ page }) => 
   await page.getByLabel("单集名称 第一集").fill("开端");
   await page.getByLabel("目标秒数").nth(1).fill("105");
   await page.getByRole("button", { name: "保存 第一集" }).click();
-  await expect(page.getByText("开端", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "进入开端", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "下移 开端" }).click();
   await expect(page.getByText("第 2 集 · 105 秒")).toBeVisible();

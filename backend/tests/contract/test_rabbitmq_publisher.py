@@ -7,17 +7,16 @@ from uuid6 import uuid7
 
 from app.integrations.rabbitmq import IO_QUEUE, RabbitMQPublisher
 from app.modules.messaging import MessageEnvelope
+from tests.support.external_contracts import rabbitmq_contract_url
 
 
 @pytest.mark.skipif(
     os.getenv("LANVERSE_RUN_RABBITMQ_CONTRACT") != "1",
-    reason="set LANVERSE_RUN_RABBITMQ_CONTRACT=1 with RabbitMQ running",
+    reason="set LANVERSE_RUN_RABBITMQ_CONTRACT=1 with an isolated RabbitMQ vhost",
 )
 @pytest.mark.asyncio
 async def test_rabbitmq_publishes_confirmed_persistent_versioned_envelope() -> None:
-    rabbitmq_url = os.getenv(
-        "RABBITMQ_URL", "amqp://guest:guest@127.0.0.1:5672/"
-    )
+    rabbitmq_url = rabbitmq_contract_url()
     event_id = uuid7()
     task_id = uuid7()
     envelope = MessageEnvelope(

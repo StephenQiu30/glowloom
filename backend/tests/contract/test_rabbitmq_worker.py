@@ -15,17 +15,16 @@ from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
 from app.modules.production.models import Task
+from tests.support.external_contracts import rabbitmq_contract_url
 
 
 @pytest.mark.skipif(
     os.getenv("LANVERSE_RUN_RABBITMQ_CONTRACT") != "1",
-    reason="set LANVERSE_RUN_RABBITMQ_CONTRACT=1 with RabbitMQ running",
+    reason="set LANVERSE_RUN_RABBITMQ_CONTRACT=1 with an isolated RabbitMQ vhost",
 )
 @pytest.mark.asyncio
 async def test_worker_commits_inbox_before_manual_ack_on_real_queue() -> None:
-    rabbitmq_url = os.getenv(
-        "RABBITMQ_URL", "amqp://guest:guest@127.0.0.1:5672/"
-    )
+    rabbitmq_url = rabbitmq_contract_url()
     test_database_url = validate_test_database_url(
         os.getenv(
             "TEST_DATABASE_URL",
