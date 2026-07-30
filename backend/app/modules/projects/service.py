@@ -8,13 +8,12 @@ from uuid6 import uuid7
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.identity import (
+    ActorContext,
     Capability,
     actor_context,
-    get_authenticated_user,
-    require_workspace_capability,
 )
-from app.modules.identity.models import Membership
 from app.modules.projects import repository
+from app.modules.projects.contracts import EpisodeContentContext
 from app.modules.projects.models import Episode, Project
 from app.modules.projects.schemas import (
     BlockingReason,
@@ -72,16 +71,7 @@ def _revision(project: Project, expected: int) -> None:
         )
 
 
-def _capability(
-    project: Project,
-    membership: Membership,
-    workspace_status: str,
-    capability: Capability,
-) -> None:
-    try:
-        require_workspace_capability(membership.role, workspace_status, capability)
-    except PermissionError as error:
-        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403) from error
+def _require_project_state(project: Project, capability: Capability) -> None:
     if project.status == "archived" and capability != Capability.CONTENT_READ:
         raise ApiError(
             ErrorCode.STATE_CONFLICT,
@@ -99,23 +89,19 @@ async def _owned_project(
     *,
     for_update: bool = False,
     allow_archived_command: bool = False,
-) -> tuple[Project, Membership]:
-    user = await get_authenticated_user(session, claims)
-    result = await repository.find_project_for_user(
-        session, user.id, project_id, for_update=for_update
-    )
-    if result is None:
+) -> tuple[Project, ActorContext]:
+    project = await repository.find_project(session, project_id, for_update=for_update)
+    if project is None:
         raise _not_found()
-    if allow_archived_command:
-        try:
-            require_workspace_capability(result[1].role, result[2].status, capability)
-        except PermissionError as error:
-            raise ApiError(
-                ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403
-            ) from error
-    else:
-        _capability(result[0], result[1], result[2].status, capability)
-    return result[0], result[1]
+    try:
+        actor = await actor_context(session, claims, project.workspace_id, capability)
+    except ApiError as error:
+        if error.code == ErrorCode.NOT_FOUND:
+            raise _not_found() from error
+        raise
+    if not allow_archived_command:
+        _require_project_state(project, capability)
+    return project, actor
 
 
 async def create_project(
@@ -341,19 +327,21 @@ async def _owned_episode(
     episode_id: UUID,
     *,
     for_update: bool,
-) -> tuple[Episode, Project, Membership]:
-    user = await get_authenticated_user(session, claims)
-    result = await repository.find_episode_for_user(
-        session, user.id, episode_id, for_update=for_update
-    )
+) -> tuple[Episode, Project, ActorContext]:
+    result = await repository.find_episode(session, episode_id, for_update=for_update)
     if result is None:
         raise _episode_not_found()
     try:
-        require_workspace_capability(
-            result[2].role, result[3].status, Capability.CONTENT_WRITE
+        actor = await actor_context(
+            session,
+            claims,
+            result[0].workspace_id,
+            Capability.CONTENT_WRITE,
         )
-    except PermissionError as error:
-        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403) from error
+    except ApiError as error:
+        if error.code == ErrorCode.NOT_FOUND:
+            raise _episode_not_found() from error
+        raise
     if result[1].status != "active":
         raise ApiError(
             ErrorCode.STATE_CONFLICT,
@@ -361,14 +349,45 @@ async def _owned_episode(
             status_code=409,
             next_action="restore_project",
         )
-    return result[0], result[1], result[2]
+    return result[0], result[1], actor
+
+
+async def _episode_for_read(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    episode_id: UUID,
+) -> tuple[Episode, Project, ActorContext]:
+    result = await repository.find_episode(session, episode_id)
+    if result is None:
+        raise _episode_not_found()
+    try:
+        actor = await actor_context(
+            session,
+            claims,
+            result[0].workspace_id,
+            Capability.CONTENT_READ,
+        )
+    except ApiError as error:
+        if error.code == ErrorCode.NOT_FOUND:
+            raise _episode_not_found() from error
+        raise
+    return result[0], result[1], actor
+
+
+def _episode_content_context(episode: Episode) -> EpisodeContentContext:
+    return EpisodeContentContext(
+        episode_id=episode.id,
+        workspace_id=episode.workspace_id,
+        current_script_version_id=episode.current_script_version_id,
+        revision=episode.revision,
+    )
 
 
 async def lock_active_episode_for_content_write(
     session: AsyncSession,
     claims: AccessTokenClaims,
     episode_id: UUID,
-) -> Episode:
+) -> EpisodeContentContext:
     episode, _, _ = await _owned_episode(
         session, claims, episode_id, for_update=True
     )
@@ -379,14 +398,29 @@ async def lock_active_episode_for_content_write(
             status_code=409,
             next_action="restore_episode",
         )
-    return episode
+    return _episode_content_context(episode)
 
 
-def compare_and_set_current_script_version(
-    episode: Episode,
+async def compare_and_set_current_script_version(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    episode_id: UUID,
     expected_current_version_id: UUID | None,
     version_id: UUID,
-) -> None:
+) -> EpisodeContentContext:
+    episode, _, _ = await _owned_episode(
+        session,
+        claims,
+        episode_id,
+        for_update=True,
+    )
+    if episode.status != "active":
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Episode is archived",
+            status_code=409,
+            next_action="restore_episode",
+        )
     if episode.current_script_version_id != expected_current_version_id:
         raise ApiError(
             ErrorCode.VERSION_CONFLICT,
@@ -401,9 +435,11 @@ def compare_and_set_current_script_version(
             },
         )
     if episode.current_script_version_id == version_id:
-        return
+        return _episode_content_context(episode)
     episode.current_script_version_id = version_id
     episode.revision += 1
+    await session.flush()
+    return _episode_content_context(episode)
 
 
 async def create_episode(
@@ -451,11 +487,8 @@ async def list_episodes(
 async def get_episode(
     session: AsyncSession, claims: AccessTokenClaims, episode_id: UUID
 ) -> EpisodeResponse:
-    user = await get_authenticated_user(session, claims)
-    result = await repository.find_episode_for_user(session, user.id, episode_id)
-    if result is None:
-        raise _episode_not_found()
-    return _episode_response(result[0])
+    episode, _, _ = await _episode_for_read(session, claims, episode_id)
+    return _episode_response(episode)
 
 
 async def update_episode(
@@ -574,17 +607,14 @@ async def set_episode_archived(
 async def episode_delete_preflight(
     session: AsyncSession, claims: AccessTokenClaims, episode_id: UUID
 ) -> DeletePreflightResponse:
-    user = await get_authenticated_user(session, claims)
-    result = await repository.find_episode_for_user(session, user.id, episode_id)
-    if result is None:
-        raise _episode_not_found()
+    episode, _, _ = await _episode_for_read(session, claims, episode_id)
     blockers: list[DeleteBlocker] = []
-    if result[0].current_script_version_id or result[0].current_timeline_version_id:
+    if episode.current_script_version_id or episode.current_timeline_version_id:
         blockers.append(
             DeleteBlocker(
                 code="HAS_VERSION_REFERENCE",
                 resource_type="episode",
-                resource_id=result[0].id,
+                resource_id=episode.id,
                 summary="单集已有版本引用",
             )
         )
@@ -651,11 +681,8 @@ async def episode_production_snapshot(
     claims: AccessTokenClaims,
     episode_id: UUID,
 ) -> EpisodeProductionSnapshot:
-    user = await get_authenticated_user(session, claims)
-    result = await repository.find_episode_for_user(session, user.id, episode_id)
-    if result is None:
-        raise _episode_not_found()
-    return _episode_snapshot(result[0], result[1].currency, datetime.now(UTC))
+    episode, project, _ = await _episode_for_read(session, claims, episode_id)
+    return _episode_snapshot(episode, project.currency, datetime.now(UTC))
 
 
 async def project_production_snapshot(

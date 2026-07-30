@@ -20,7 +20,10 @@ from app.modules.production.schemas import (
     TaskResponse,
     TaskStatus,
 )
-from app.modules.projects import service as projects_service
+from app.modules.projects import (
+    compare_and_set_current_script_version,
+    lock_active_episode_for_content_write,
+)
 from app.modules.scripts import repository
 from app.modules.scripts.models import (
     CandidateDecision,
@@ -262,7 +265,7 @@ async def import_text_source(
     content_hash = sha256(request.body.encode("utf-8")).hexdigest()
     now = datetime.now(UTC)
     async with session.begin():
-        episode = await projects_service.lock_active_episode_for_content_write(
+        episode = await lock_active_episode_for_content_write(
             session, claims, episode_id
         )
         source_id = uuid7()
@@ -271,7 +274,7 @@ async def import_text_source(
             .values(
                 id=source_id,
                 workspace_id=episode.workspace_id,
-                episode_id=episode.id,
+                episode_id=episode.episode_id,
                 input_type=request.input_type,
                 title=title,
                 rights_declaration=rights_declaration,
@@ -286,7 +289,7 @@ async def import_text_source(
         )
         if inserted_id is None:
             source = await repository.find_source_by_idempotency(
-                session, episode.id, request.idempotency_key
+                session, episode.episode_id, request.idempotency_key
             )
             if source is None:
                 raise ApiError(
@@ -315,7 +318,7 @@ async def import_text_source(
         source = ScriptSource(
             id=inserted_id,
             workspace_id=episode.workspace_id,
-            episode_id=episode.id,
+            episode_id=episode.episode_id,
             input_type=request.input_type,
             title=title,
             rights_declaration=rights_declaration,
@@ -413,7 +416,7 @@ async def publish_version(
                 "Script source is archived",
                 status_code=409,
             )
-        episode = await projects_service.lock_active_episode_for_content_write(
+        episode = await lock_active_episode_for_content_write(
             session, claims, source.episode_id
         )
         version = ScriptVersion(
@@ -428,8 +431,10 @@ async def publish_version(
             created_by=claims.sub,
             created_at=now,
         )
-        projects_service.compare_and_set_current_script_version(
-            episode,
+        current = await compare_and_set_current_script_version(
+            session,
+            claims,
+            episode.episode_id,
             request.expected_current_version_id,
             version.id,
         )
@@ -438,9 +443,9 @@ async def publish_version(
     return ScriptVersionPublishResponse(
         version=_version_response(version),
         current=_current_response(
-            episode.id,
+            current.episode_id,
             version.id,
-            episode.revision,
+            current.revision,
         ),
     )
 
@@ -452,7 +457,7 @@ async def set_current_version(
     request: CurrentScriptVersionRequest,
 ) -> CurrentScriptVersionResponse:
     async with session.begin():
-        episode = await projects_service.lock_active_episode_for_content_write(
+        episode = await lock_active_episode_for_content_write(
             session, claims, episode_id
         )
         version = await repository.find_version_for_user(
@@ -465,7 +470,7 @@ async def set_current_version(
         )
         if source is None:
             raise _not_found("Script source")
-        if source.episode_id != episode.id:
+        if source.episode_id != episode.episode_id:
             raise ApiError(
                 ErrorCode.RESOURCE_CONFLICT,
                 "Script version belongs to another episode",
@@ -477,13 +482,15 @@ async def set_current_version(
                 "Only published script versions can be current",
                 status_code=409,
             )
-        projects_service.compare_and_set_current_script_version(
-            episode,
+        current = await compare_and_set_current_script_version(
+            session,
+            claims,
+            episode.episode_id,
             request.expected_current_version_id,
             version.id,
         )
         await session.flush()
-    return _current_response(episode.id, version.id, episode.revision)
+    return _current_response(current.episode_id, version.id, current.revision)
 
 
 async def set_source_archived(
@@ -502,7 +509,7 @@ async def set_source_archived(
         )
         if source is None:
             raise _not_found("Script source")
-        await projects_service.lock_active_episode_for_content_write(
+        await lock_active_episode_for_content_write(
             session, claims, source.episode_id
         )
         _source_revision(source, request.expected_revision)
@@ -596,7 +603,7 @@ async def start_extraction(
                 "Script source is archived",
                 status_code=409,
             )
-        episode = await projects_service.lock_active_episode_for_content_write(
+        episode = await lock_active_episode_for_content_write(
             session, claims, source.episode_id
         )
         actor = await actor_context(
@@ -650,7 +657,7 @@ async def start_extraction(
             actor,
             ScriptExtractionTaskCommand(
                 workspace_id=source.workspace_id,
-                episode_id=episode.id,
+                episode_id=episode.episode_id,
                 request_id=inserted_id,
                 input_version_id=version.id,
                 input_hash=version.content_hash,

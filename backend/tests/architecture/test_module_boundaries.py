@@ -7,8 +7,6 @@ KNOWN_INTERNAL_IMPORTS = {
     "messaging/consumer.py:app.modules.production.service:fail_script_extraction_task",
     "messaging/consumer.py:app.modules.scripts:service",
     "production/service.py:app.modules.messaging.models:OutboxEvent",
-    "projects/repository.py:app.modules.identity.models:Membership,Workspace",
-    "projects/service.py:app.modules.identity.models:Membership",
     "scripts/repository.py:app.modules.identity.models:Membership",
     "scripts/schemas.py:app.modules.production.schemas:TaskResponse,TaskStatus",
     (
@@ -17,7 +15,6 @@ KNOWN_INTERNAL_IMPORTS = {
     ),
     "scripts/service.py:app.modules.production:repository",
     "scripts/service.py:app.modules.production:service",
-    "scripts/service.py:app.modules.projects:service",
 }
 
 
