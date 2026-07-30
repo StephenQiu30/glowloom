@@ -6,11 +6,10 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid6 import uuid7
 
+from app.modules.messaging.contracts import MessageEnvelope
 from app.modules.messaging.models import InboxDelivery
-from app.modules.messaging.schemas import MessageEnvelope
-from app.modules.production.models import Task
-from app.modules.production.service import fail_script_extraction_task
-from app.modules.scripts import service as scripts_service
+from app.modules.production import fail_script_extraction_task, lock_task
+from app.modules.scripts import synchronize_extraction_batch_status
 
 IO_SCRIPT_EXTRACTION_CONSUMER = "lanverse.io.script-extraction.v1"
 ConsumerResult = Literal["completed", "duplicate", "rejected"]
@@ -89,9 +88,7 @@ async def consume_envelope(
     if not is_first_delivery:
         return "duplicate"
 
-    task = await session.scalar(
-        select(Task).where(Task.id == envelope.aggregate_id).with_for_update()
-    )
+    task = await lock_task(session, envelope.aggregate_id)
     if task is None:
         return _reject(delivery, error_code="task_not_found", now=now)
     if task.workspace_id != envelope.workspace_id:
@@ -101,15 +98,16 @@ async def consume_envelope(
     if envelope.event_type != "script_extraction.requested":
         return _reject(delivery, error_code="unsupported_message_type", now=now)
     if envelope.schema_version != 1:
-        changed = fail_script_extraction_task(
-            task,
+        changed = await fail_script_extraction_task(
+            session,
+            task.id,
             error_code="unsupported_message_schema",
             error_summary="Message schema is not supported",
             next_action="contact_support",
             now=now,
         )
         if changed:
-            await scripts_service.synchronize_extraction_batch_status(
+            await synchronize_extraction_batch_status(
                 session, task.request_id, "failed", now=now
             )
         return _reject(
@@ -118,30 +116,32 @@ async def consume_envelope(
             now=now,
         )
     if envelope.payload != {"task_id": str(envelope.aggregate_id)}:
-        changed = fail_script_extraction_task(
-            task,
+        changed = await fail_script_extraction_task(
+            session,
+            task.id,
             error_code="invalid_message_payload",
             error_summary="Message payload does not match the task",
             next_action="contact_support",
             now=now,
         )
         if changed:
-            await scripts_service.synchronize_extraction_batch_status(
+            await synchronize_extraction_batch_status(
                 session, task.request_id, "failed", now=now
             )
         return _reject(delivery, error_code="invalid_message_payload", now=now)
     if task.task_type != "script_extraction" or task.request_type != "extraction_batch":
         return _reject(delivery, error_code="unsupported_task_type", now=now)
 
-    changed = fail_script_extraction_task(
-        task,
+    changed = await fail_script_extraction_task(
+        session,
+        task.id,
         error_code="ai_service_unavailable",
         error_summary="AI extraction service is not configured",
         next_action="configure_ai_service",
         now=now,
     )
     if changed:
-        await scripts_service.synchronize_extraction_batch_status(
+        await synchronize_extraction_batch_status(
             session, task.request_id, "failed", now=now
         )
     delivery.status = "completed"

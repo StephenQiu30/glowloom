@@ -11,11 +11,10 @@ from app.integrations.rabbitmq import IO_QUEUE, RabbitMQPublisher
 from app.io_worker import process_incoming_message
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
+from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
-from app.modules.messaging.service import envelope_from_event
+from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
 from app.modules.production.models import Task
-from app.modules.production.schemas import ScriptExtractionTaskCommand
-from app.modules.production.service import create_script_extraction_task
 
 
 @pytest.mark.skipif(

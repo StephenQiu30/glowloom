@@ -1,28 +1,18 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
 
-TaskStatus = Literal[
-    "queued",
-    "running",
-    "waiting_provider",
-    "succeeded",
-    "failed",
-    "cancelled",
-    "unknown",
+from app.modules.production.contracts import ScriptExtractionTaskCommand, TaskStatus
+
+__all__ = [
+    "PaginatedTasks",
+    "ScriptExtractionTaskCommand",
+    "TaskErrorResponse",
+    "TaskResponse",
+    "TaskScopeResponse",
+    "TaskStatus",
 ]
-
-
-class ScriptExtractionTaskCommand(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    workspace_id: UUID
-    episode_id: UUID
-    request_id: UUID
-    input_version_id: UUID
-    input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    idempotency_key: str = Field(min_length=1, max_length=200)
 
 
 class TaskScopeResponse(BaseModel):

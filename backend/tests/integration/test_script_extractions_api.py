@@ -18,9 +18,8 @@ from app.modules.identity import ActorContext
 from app.modules.messaging.consumer import IO_SCRIPT_EXTRACTION_CONSUMER, consume_envelope
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.messaging.service import envelope_from_event
-from app.modules.production import service as production_service
+from app.modules.production import ScriptExtractionTaskCommand, TaskResponse
 from app.modules.production.models import Task
-from app.modules.production.schemas import ScriptExtractionTaskCommand
 from app.modules.scripts import schemas as script_schemas
 from app.modules.scripts import service as scripts_service
 
@@ -225,7 +224,7 @@ async def test_extraction_transaction_rolls_back_all_three_facts(
     _, _, published = await _published_script(
         client, headers, workspace_id, import_key="rollback-import"
     )
-    real_create = production_service.create_script_extraction_task
+    real_create = scripts_service.create_script_extraction_task
 
     async def _fail_after_task_creation(
         session: AsyncSession,
@@ -233,7 +232,7 @@ async def test_extraction_transaction_rolls_back_all_three_facts(
         command: ScriptExtractionTaskCommand,
         *,
         trace_id: str,
-    ) -> Task:
+    ) -> TaskResponse:
         await real_create(session, actor, command, trace_id=trace_id)
         raise ApiError(
             ErrorCode.INTERNAL_ERROR,
@@ -242,7 +241,7 @@ async def test_extraction_transaction_rolls_back_all_three_facts(
         )
 
     monkeypatch.setattr(
-        production_service,
+        scripts_service,
         "create_script_extraction_task",
         _fail_after_task_creation,
     )

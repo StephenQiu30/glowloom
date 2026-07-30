@@ -2,19 +2,7 @@ import ast
 from pathlib import Path
 
 MODULES = Path(__file__).resolve().parents[2] / "app/modules"
-KNOWN_INTERNAL_IMPORTS = {
-    "messaging/consumer.py:app.modules.production.models:Task",
-    "messaging/consumer.py:app.modules.production.service:fail_script_extraction_task",
-    "messaging/consumer.py:app.modules.scripts:service",
-    "production/service.py:app.modules.messaging.models:OutboxEvent",
-    "scripts/schemas.py:app.modules.production.schemas:TaskResponse,TaskStatus",
-    (
-        "scripts/service.py:app.modules.production.schemas:"
-        "ScriptExtractionTaskCommand,TaskResponse,TaskStatus"
-    ),
-    "scripts/service.py:app.modules.production:repository",
-    "scripts/service.py:app.modules.production:service",
-}
+KNOWN_INTERNAL_IMPORTS: set[str] = set()
 
 
 def _cross_module_internal_imports() -> set[str]:

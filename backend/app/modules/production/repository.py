@@ -4,8 +4,8 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.production.contracts import TaskStatus
 from app.modules.production.models import Task
-from app.modules.production.schemas import TaskStatus
 
 
 async def find_task(

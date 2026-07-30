@@ -13,12 +13,14 @@ from uuid6 import uuid7
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.identity import Capability, actor_context
-from app.modules.production import repository as production_repository
-from app.modules.production import service as production_service
-from app.modules.production.schemas import (
+from app.modules.production import (
     ScriptExtractionTaskCommand,
     TaskResponse,
     TaskStatus,
+    complete_script_extraction_task,
+    create_script_extraction_task,
+    get_task,
+    lock_task,
 )
 from app.modules.projects import (
     compare_and_set_current_script_version,
@@ -684,10 +686,10 @@ async def start_extraction(
                     "Idempotency key was used with different input",
                     status_code=409,
                 )
-            task = await production_service.get_task(session, claims, batch.task_id)
+            task = await get_task(session, claims, batch.task_id)
             return _batch_response(batch, task)
 
-        task_model = await production_service.create_script_extraction_task(
+        task = await create_script_extraction_task(
             session,
             actor,
             ScriptExtractionTaskCommand(
@@ -711,9 +713,9 @@ async def start_extraction(
                 "Extraction batch state is unavailable",
                 status_code=500,
             )
-        batch.task_id = task_model.id
+        batch.task_id = task.id
         await session.flush()
-    return _batch_response(batch, production_service.task_response(task_model))
+    return _batch_response(batch, task)
 
 
 async def get_extraction_batch(
@@ -727,7 +729,7 @@ async def get_extraction_batch(
     await _require_resource_access(
         session, claims, batch.workspace_id, "Extraction batch"
     )
-    task = await production_service.get_task(session, claims, batch.task_id)
+    task = await get_task(session, claims, batch.task_id)
     return _batch_response(batch, task)
 
 
@@ -760,11 +762,7 @@ async def record_extraction_result(
             "Extraction batch not found",
             status_code=404,
         )
-    task = await production_repository.find_task(
-        session,
-        snapshot.task_id,
-        for_update=True,
-    )
+    task = await lock_task(session, snapshot.task_id)
     batch = await repository.find_extraction_batch(
         session,
         batch_id,
@@ -849,7 +847,7 @@ async def record_extraction_result(
             for candidate in result.candidates
         ]
     )
-    production_service.complete_script_extraction_task(task, now=now)
+    await complete_script_extraction_task(session, task.id, now=now)
     batch.status = "succeeded"
     batch.result_hash = result_hash
     batch.candidate_count = len(result.candidates)

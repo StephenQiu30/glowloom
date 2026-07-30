@@ -14,16 +14,19 @@ from app.modules.identity import (
     actor_context,
     require_workspace_capability,
 )
-from app.modules.messaging.models import OutboxEvent
+from app.modules.messaging import OutboxEventCommand, enqueue_outbox_event
 from app.modules.production import repository
+from app.modules.production.contracts import (
+    ScriptExtractionTaskCommand,
+    TaskContext,
+    TaskStatus,
+)
 from app.modules.production.models import Task
 from app.modules.production.schemas import (
     PaginatedTasks,
-    ScriptExtractionTaskCommand,
     TaskErrorResponse,
     TaskResponse,
     TaskScopeResponse,
-    TaskStatus,
 )
 
 
@@ -63,6 +66,17 @@ def task_response(task: Task) -> TaskResponse:
     )
 
 
+def _task_context(task: Task) -> TaskContext:
+    return TaskContext(
+        id=task.id,
+        workspace_id=task.workspace_id,
+        request_id=task.request_id,
+        task_type=task.task_type,
+        request_type=task.request_type,
+        status=cast(TaskStatus, task.status),
+    )
+
+
 def _same_command(task: Task, command: ScriptExtractionTaskCommand) -> bool:
     return (
         task.request_id == command.request_id
@@ -72,7 +86,7 @@ def _same_command(task: Task, command: ScriptExtractionTaskCommand) -> bool:
     )
 
 
-def fail_script_extraction_task(
+def _fail_script_extraction_task(
     task: Task,
     *,
     error_code: str,
@@ -95,7 +109,7 @@ def fail_script_extraction_task(
     return True
 
 
-def complete_script_extraction_task(task: Task, *, now: datetime) -> bool:
+def _complete_script_extraction_task(task: Task, *, now: datetime) -> bool:
     if task.task_type != "script_extraction":
         raise ValueError("task is not a script extraction task")
     if task.status == "succeeded":
@@ -117,13 +131,68 @@ def complete_script_extraction_task(task: Task, *, now: datetime) -> bool:
     return True
 
 
+async def lock_task(
+    session: AsyncSession,
+    task_id: UUID,
+) -> TaskContext | None:
+    task = await repository.find_task(session, task_id, for_update=True)
+    return None if task is None else _task_context(task)
+
+
+async def fail_script_extraction_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    error_code: str,
+    error_summary: str,
+    next_action: str,
+    now: datetime,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Task state is unavailable",
+            status_code=500,
+        )
+    changed = _fail_script_extraction_task(
+        task,
+        error_code=error_code,
+        error_summary=error_summary,
+        next_action=next_action,
+        now=now,
+    )
+    if changed:
+        await session.flush()
+    return changed
+
+
+async def complete_script_extraction_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Task state is unavailable",
+            status_code=500,
+        )
+    changed = _complete_script_extraction_task(task, now=now)
+    if changed:
+        await session.flush()
+    return changed
+
+
 async def create_script_extraction_task(
     session: AsyncSession,
     actor: ActorContext,
     command: ScriptExtractionTaskCommand,
     *,
     trace_id: str,
-) -> Task:
+) -> TaskResponse:
     if actor.workspace_id != command.workspace_id:
         raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403)
     try:
@@ -178,11 +247,11 @@ async def create_script_extraction_task(
                 "Idempotency key was used with different input",
                 status_code=409,
             )
-        return existing
+        return task_response(existing)
 
-    session.add(
-        OutboxEvent(
-            id=uuid7(),
+    await enqueue_outbox_event(
+        session,
+        OutboxEventCommand(
             workspace_id=command.workspace_id,
             event_type="script_extraction.requested",
             schema_version=1,
@@ -191,18 +260,15 @@ async def create_script_extraction_task(
             routing_key="io.script.extract",
             payload={"task_id": str(inserted_id)},
             trace_id=trace_id,
-            status="pending",
-            attempt_count=0,
             available_at=now,
             occurred_at=now,
-            created_at=now,
-        )
+        ),
     )
     await session.flush()
     task = await repository.find_task(session, inserted_id)
     if task is None:
         raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
-    return task
+    return task_response(task)
 
 
 async def get_task(

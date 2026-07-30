@@ -15,9 +15,8 @@ from app.core.errors import ApiError, ErrorCode
 from app.main import create_app
 from app.modules.identity import ActorContext
 from app.modules.messaging.models import OutboxEvent
+from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
 from app.modules.production.models import Task
-from app.modules.production.schemas import ScriptExtractionTaskCommand
-from app.modules.production.service import create_script_extraction_task
 
 TEST_DATABASE_URL = validate_test_database_url(
     "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",

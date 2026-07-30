@@ -8,11 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings, get_settings
 from app.core.database import session_factory
 from app.integrations.rabbitmq import declare_task_topology
+from app.modules.messaging import MessageEnvelope
 from app.modules.messaging.consumer import (
     IO_SCRIPT_EXTRACTION_CONSUMER,
     consume_envelope,
 )
-from app.modules.messaging.schemas import MessageEnvelope
 
 IO_WORKER_MAX_IN_FLIGHT = 4
 MAX_MESSAGE_BYTES = 64 * 1024

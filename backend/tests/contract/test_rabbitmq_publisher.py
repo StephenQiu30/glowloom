@@ -6,7 +6,7 @@ import pytest
 from uuid6 import uuid7
 
 from app.integrations.rabbitmq import IO_QUEUE, RabbitMQPublisher
-from app.modules.messaging.schemas import MessageEnvelope
+from app.modules.messaging import MessageEnvelope
 
 
 @pytest.mark.skipif(

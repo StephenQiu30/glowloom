@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.modules.production.schemas import TaskResponse, TaskStatus
+from app.modules.production import TaskResponse, TaskStatus
 
 
 class CommandModel(BaseModel):

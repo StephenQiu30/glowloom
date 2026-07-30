@@ -6,7 +6,7 @@ from aio_pika.abc import (
     AbstractRobustConnection,
 )
 
-from app.modules.messaging.schemas import MessageEnvelope
+from app.modules.messaging import MessageEnvelope
 
 EXCHANGE = "lanverse.tasks.v1"
 IO_QUEUE = "lanverse.io"

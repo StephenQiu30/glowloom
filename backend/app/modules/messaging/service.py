@@ -4,13 +4,42 @@ from uuid import UUID
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid6 import uuid7
 
+from app.modules.messaging.contracts import MessageEnvelope, OutboxEventCommand
 from app.modules.messaging.models import OutboxEvent
-from app.modules.messaging.schemas import MessageEnvelope
 
 
 class MessagePublisher(Protocol):
     async def publish(self, envelope: MessageEnvelope, routing_key: str) -> None: ...
+
+
+async def enqueue_outbox_event(
+    session: AsyncSession,
+    command: OutboxEventCommand,
+) -> UUID:
+    event_id = uuid7()
+    session.add(
+        OutboxEvent(
+            id=event_id,
+            workspace_id=command.workspace_id,
+            event_type=command.event_type,
+            schema_version=command.schema_version,
+            aggregate_type=command.aggregate_type,
+            aggregate_id=command.aggregate_id,
+            routing_key=command.routing_key,
+            payload=command.payload,
+            trace_id=command.trace_id,
+            causation_event_id=command.causation_event_id,
+            status="pending",
+            attempt_count=0,
+            available_at=command.available_at,
+            occurred_at=command.occurred_at,
+            created_at=command.occurred_at,
+        )
+    )
+    await session.flush()
+    return event_id
 
 
 def envelope_from_event(event: OutboxEvent) -> MessageEnvelope:
