@@ -1,6 +1,13 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 
 import {
+  createConsentApiV1ConsentsPost,
+  getConsentApiV1ConsentsConsentIdGet,
+  listConsentsApiV1ConsentsGet,
+  reviseConsentApiV1ConsentsConsentIdRevisionsPost,
+  revokeConsentApiV1ConsentsConsentIdRevokePost,
+} from "@/api/governance";
+import {
   archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePost,
   changePasswordApiV1AuthChangePasswordPost,
   createWorkspaceApiV1WorkspacesPost,
@@ -14,6 +21,7 @@ import {
   updateMeApiV1MePatch,
   updateWorkspaceApiV1WorkspacesWorkspaceIdPatch,
 } from "@/api/identity";
+import { listMediaApiV1MediaGet } from "@/api/media";
 import {
   archiveEpisodeApiV1EpisodesEpisodeIdArchivePost,
   archiveProjectApiV1ProjectsProjectIdArchivePost,
@@ -78,7 +86,17 @@ async function runRequest<T>(
 export const appApi = createApi({
   reducerPath: "appApi",
   baseQuery: fakeBaseQuery<AppApiError>(),
-  tagTypes: ["Me", "Workspaces", "Projects", "Project", "Episodes", "Snapshot"],
+  tagTypes: [
+    "Me",
+    "Workspaces",
+    "Projects",
+    "Project",
+    "Episodes",
+    "Snapshot",
+    "Consents",
+    "Consent",
+    "Media",
+  ],
   endpoints: (builder) => ({
     login: builder.mutation<API.AuthResponse, API.LoginRequest>({
       queryFn: (body) => runRequest(() => loginApiV1AuthLoginPost(body)),
@@ -344,11 +362,104 @@ export const appApi = createApi({
         ),
       providesTags: (_result, _error, projectId) => [{ type: "Snapshot", id: projectId }],
     }),
+    mediaVersions: builder.query<API.PaginatedMedia, string>({
+      queryFn: (workspaceId) =>
+        runRequest(() =>
+          listMediaApiV1MediaGet({
+            workspace_id: workspaceId,
+            kind: null,
+            source_type: null,
+            include_archived: false,
+            created_from: null,
+            created_to: null,
+            limit: 100,
+            offset: 0,
+          }),
+        ),
+      providesTags: (_result, _error, workspaceId) => [
+        { type: "Media", id: workspaceId },
+      ],
+    }),
+    consents: builder.query<API.PaginatedConsents, string>({
+      queryFn: (workspaceId) =>
+        runRequest(() =>
+          listConsentsApiV1ConsentsGet({
+            workspace_id: workspaceId,
+            limit: 50,
+            offset: 0,
+          }),
+        ),
+      providesTags: (result, _error, workspaceId) => [
+        { type: "Consents", id: workspaceId },
+        ...(result?.items.map((consent) => ({
+          type: "Consent" as const,
+          id: consent.id,
+        })) ?? []),
+      ],
+    }),
+    consent: builder.query<API.ConsentDetailResponse, string>({
+      queryFn: (consentId) =>
+        runRequest(() =>
+          getConsentApiV1ConsentsConsentIdGet({ consent_id: consentId }),
+        ),
+      providesTags: (_result, _error, consentId) => [
+        { type: "Consent", id: consentId },
+      ],
+    }),
+    createConsent: builder.mutation<
+      API.ConsentDetailResponse,
+      API.ConsentCreateRequest
+    >({
+      queryFn: (body) =>
+        runRequest(() => createConsentApiV1ConsentsPost(body)),
+      invalidatesTags: (_result, _error, body) => [
+        { type: "Consents", id: body.workspace_id },
+      ],
+    }),
+    reviseConsent: builder.mutation<
+      API.ConsentDetailResponse,
+      { consentId: string; body: API.ConsentRevisionRequest }
+    >({
+      queryFn: ({ consentId, body }) =>
+        runRequest(() =>
+          reviseConsentApiV1ConsentsConsentIdRevisionsPost(
+            { consent_id: consentId },
+            body,
+          ),
+        ),
+      invalidatesTags: (result, _error, { consentId }) => [
+        { type: "Consent", id: consentId },
+        ...(result
+          ? [{ type: "Consents" as const, id: result.workspace_id }]
+          : []),
+      ],
+    }),
+    revokeConsent: builder.mutation<
+      API.ConsentDetailResponse,
+      { consentId: string; body: API.ConsentRevokeRequest }
+    >({
+      queryFn: ({ consentId, body }) =>
+        runRequest(() =>
+          revokeConsentApiV1ConsentsConsentIdRevokePost(
+            { consent_id: consentId },
+            body,
+          ),
+        ),
+      invalidatesTags: (result, _error, { consentId }) => [
+        { type: "Consent", id: consentId },
+        ...(result
+          ? [{ type: "Consents" as const, id: result.workspace_id }]
+          : []),
+      ],
+    }),
   }),
 });
 
 export const {
   useChangePasswordMutation,
+  useConsentQuery,
+  useConsentsQuery,
+  useCreateConsentMutation,
   useCreateEpisodeMutation,
   useCreateProjectMutation,
   useCreateWorkspaceMutation,
@@ -359,11 +470,14 @@ export const {
   useLoginMutation,
   useLogoutMutation,
   useMeQuery,
+  useMediaVersionsQuery,
   useProjectQuery,
   useProjectDeletePreflightMutation,
   useProjectSnapshotQuery,
   useProjectsQuery,
   useRegisterMutation,
+  useReviseConsentMutation,
+  useRevokeConsentMutation,
   useReorderEpisodesMutation,
   useEpisodeDeletePreflightMutation,
   useSetEpisodeArchivedMutation,

@@ -9,6 +9,7 @@ import {
   Home,
   Plus,
   Settings,
+  ShieldCheck,
   Sparkles,
   WandSparkles,
   X,
@@ -24,7 +25,12 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/class-names";
 import { mockProductionStages } from "@/lib/mock-studio-data";
 
-export type StudioNavigation = "create" | "projects" | "assets" | "settings";
+export type StudioNavigation =
+  | "create"
+  | "projects"
+  | "assets"
+  | "governance"
+  | "settings";
 
 export function StudioBrand() {
   return (
@@ -123,6 +129,12 @@ export function StudioShell({
     { id: "create" as const, label: "创作", icon: Home, href: "/" },
     { id: "projects" as const, label: "项目", icon: Folder, href: "/projects" },
     { id: "assets" as const, label: "资产", icon: Box, href: "/studio" },
+    {
+      id: "governance" as const,
+      label: "治理",
+      icon: ShieldCheck,
+      href: "/governance",
+    },
   ];
 
   return (
@@ -161,7 +173,7 @@ export function StudioShell({
           {projectName ? (
             <button className="flex shrink-0 items-center gap-2 text-sm font-medium" type="button">{projectName}<ChevronDown className="size-4 text-slate-400" aria-hidden="true" /></button>
           ) : (
-            <div className="flex items-center gap-2 text-sm font-medium"><WandSparkles className="size-4 text-[#079db3]" aria-hidden="true" />AI 漫剧创作台</div>
+            <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-medium"><WandSparkles className="size-4 text-[#079db3]" aria-hidden="true" />AI 漫剧创作台</div>
           )}
           {typeof currentStep === "number" ? <ProductionProgress currentStep={currentStep} /> : <div className="flex-1" />}
           {topAction ?? (

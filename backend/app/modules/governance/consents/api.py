@@ -39,7 +39,7 @@ async def list_consents(
     workspace_id: UUID,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ApiResponse[PaginatedConsents]:
     return ApiResponse(
@@ -47,7 +47,7 @@ async def list_consents(
             session,
             claims,
             workspace_id,
-            limit=limit,
+            limit=limit or 20,
             offset=offset,
         )
     )

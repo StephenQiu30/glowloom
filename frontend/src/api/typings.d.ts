@@ -24,6 +24,10 @@ declare namespace API {
     data: CandidateDecisionResultResponse;
   };
 
+  type ApiResponseConsentDetailResponse_ = {
+    data: ConsentDetailResponse;
+  };
+
   type ApiResponseCurrentScriptVersionResponse_ = {
     data: CurrentScriptVersionResponse;
   };
@@ -84,6 +88,10 @@ declare namespace API {
 
   type ApiResponsePaginatedCandidateDecisions_ = {
     data: PaginatedCandidateDecisions;
+  };
+
+  type ApiResponsePaginatedConsents_ = {
+    data: PaginatedConsents;
   };
 
   type ApiResponsePaginatedExtractionCandidates_ = {
@@ -315,6 +323,98 @@ declare namespace API {
     {
       batch_id: string;
     };
+
+  type ConsentCreateRequest = {
+    /** Workspace Id */
+    workspace_id: string;
+    subject_identity: SubjectIdentity;
+    scope: MediaUsageScope;
+    /** Proof Media Version Ids */
+    proof_media_version_ids: string[];
+    /** Reason */
+    reason: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type ConsentDetailResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    subject_identity: SubjectIdentity;
+    status: ConsentStatus;
+    /** Revision */
+    revision: number;
+    /** Current Revision Id */
+    current_revision_id: string;
+    current_revision: ConsentRevisionResponse;
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+    /** Revisions */
+    revisions: ConsentRevisionResponse[];
+  };
+
+  type ConsentRevisionRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    scope: MediaUsageScope;
+    /** Proof Media Version Ids */
+    proof_media_version_ids: string[];
+    /** Reason */
+    reason: string;
+  };
+
+  type ConsentRevisionResponse = {
+    /** Id */
+    id: string;
+    /** Revision No */
+    revision_no: number;
+    /** Action */
+    action: "register" | "update" | "revoke";
+    scope: MediaUsageScope;
+    /** Proof Media Version Ids */
+    proof_media_version_ids: string[];
+    /** Reason */
+    reason: string;
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+  };
+
+  type ConsentRevokeRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Reason */
+    reason: string;
+  };
+
+  type ConsentStatus = "active" | "expired" | "revoked";
+
+  type ConsentSummaryResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    subject_identity: SubjectIdentity;
+    status: ConsentStatus;
+    /** Revision */
+    revision: number;
+    /** Current Revision Id */
+    current_revision_id: string;
+    current_revision: ConsentRevisionResponse;
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+  };
 
   type ContinuityCandidateProposal = {
     /** Kind */
@@ -611,6 +711,10 @@ declare namespace API {
     created_at: string;
   };
 
+  type getConsentApiV1ConsentsConsentIdGetParams = {
+    consent_id: string;
+  };
+
   type getEpisodeApiV1EpisodesEpisodeIdGetParams = {
     episode_id: string;
   };
@@ -677,6 +781,12 @@ declare namespace API {
       limit: number | null | null;
       offset: number | null;
     };
+
+  type listConsentsApiV1ConsentsGetParams = {
+    workspace_id: string;
+    limit: number | null | null;
+    offset: number | null;
+  };
 
   type listEpisodesApiV1ProjectsProjectIdEpisodesGetParams = {
     project_id: string;
@@ -794,6 +904,28 @@ declare namespace API {
     revision: number;
   };
 
+  type MediaUsageScope = {
+    /** Type */
+    type: "media_usage";
+    subject_type: SubjectType;
+    /** Subject Id */
+    subject_id: string;
+    /** Rights Holder Role */
+    rights_holder_role: string;
+    /** Rights Types */
+    rights_types: string[];
+    /** Authorized Purposes */
+    authorized_purposes: string[];
+    /** Channels */
+    channels: string[];
+    /** Regions */
+    regions: string[];
+    /** Valid From */
+    valid_from: string;
+    /** Valid To */
+    valid_to: string;
+  };
+
   type MediaVersionResponse = {
     /** Id */
     id: string;
@@ -859,6 +991,17 @@ declare namespace API {
   type PaginatedCandidateDecisions = {
     /** Items */
     items: CandidateDecisionEvidenceResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
+  type PaginatedConsents = {
+    /** Items */
+    items: ConsentSummaryResponse[];
     /** Total */
     total: number;
     /** Limit */
@@ -1084,9 +1227,17 @@ declare namespace API {
     pending: number | null;
   };
 
+  type reviseConsentApiV1ConsentsConsentIdRevisionsPostParams = {
+    consent_id: string;
+  };
+
   type RevocationResponse = {
     /** Revoked */
     revoked: true | null;
+  };
+
+  type revokeConsentApiV1ConsentsConsentIdRevokePostParams = {
+    consent_id: string;
   };
 
   type SceneCandidateProposal = {
@@ -1267,6 +1418,27 @@ declare namespace API {
     /** Scenes */
     scenes: SceneResponse[];
   };
+
+  type SubjectIdentity = {
+    /** Reference */
+    reference: string;
+    kind: SubjectIdentityKind;
+  };
+
+  type SubjectIdentityKind =
+    | "adult"
+    | "fictional_adult"
+    | "organization"
+    | "minor";
+
+  type SubjectType =
+    | "SCRIPT_VERSION"
+    | "ASSET_VERSION"
+    | "SHOT_SPEC_VERSION"
+    | "CANDIDATE"
+    | "MEDIA_VERSION"
+    | "TIMELINE_VERSION"
+    | "DELIVERY";
 
   type TaskErrorResponse = {
     /** Code */

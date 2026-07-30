@@ -58,7 +58,7 @@ const scope: API.MediaUsageScope = {
   channels: ["lanverse_preview", "lanverse_download"],
   regions: ["CN"],
   valid_from: "2026-07-01T00:00:00Z",
-  valid_to: "2027-07-01T00:00:00Z",
+  valid_to: "2027-07-30T23:59:59.999Z",
 };
 
 const revision: API.ConsentRevisionResponse = {
@@ -181,7 +181,8 @@ describe("governance consent workspace", () => {
       await screen.findByRole("heading", { name: "授权治理" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("synthetic-subject-adult-a")).toBeInTheDocument();
-    expect(screen.getByText("角色形象与声音授权")).toBeInTheDocument();
+    expect(await screen.findByText("角色形象与声音授权")).toBeInTheDocument();
+    expect(await screen.findByText(/2027年7月30日/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "新建授权" }));
     await user.clear(screen.getByLabelText("权利主体引用"));
@@ -232,5 +233,35 @@ describe("governance consent workspace", () => {
       { expected_revision: 1, reason: "权利人撤回授权" },
     );
     expect(await screen.findByRole("status")).toHaveTextContent("授权已撤销");
+  });
+
+  it("appends a revision instead of replacing consent history", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <GovernanceWorkspace />
+      </AppProviders>,
+    );
+
+    await screen.findByText("角色形象与声音授权");
+    await user.click(screen.getByRole("button", { name: "修改范围" }));
+    await user.clear(screen.getByLabelText("修订说明"));
+    await user.type(screen.getByLabelText("修订说明"), "缩小授权渠道");
+    await user.click(screen.getByRole("button", { name: "保存新修订" }));
+
+    await waitFor(() => expect(apiMocks.reviseConsent).toHaveBeenCalledTimes(1));
+    expect(apiMocks.reviseConsent).toHaveBeenCalledWith(
+      { consent_id: consentId },
+      expect.objectContaining({
+        expected_revision: 1,
+        reason: "缩小授权渠道",
+        scope: expect.objectContaining({
+          subject_type: "MEDIA_VERSION",
+          subject_id: subjectId,
+        }),
+        proof_media_version_ids: [proofId],
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("新修订 r2 已保存");
   });
 });
