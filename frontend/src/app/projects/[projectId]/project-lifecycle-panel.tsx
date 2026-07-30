@@ -1,7 +1,6 @@
 "use client";
 
 import { Archive, RotateCcw, Save, Trash2, WalletCards } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -19,7 +18,6 @@ import {
 } from "@/lib/server-state";
 
 export function ProjectLifecyclePanel({ project }: { project: API.ProjectResponse }) {
-  const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [deleteCheck, setDeleteCheck] = useState<API.DeletePreflightResponse | null>(null);
@@ -109,7 +107,7 @@ export function ProjectLifecyclePanel({ project }: { project: API.ProjectRespons
         }).unwrap(),
       "项目已删除。",
     );
-    if (succeeded) router.replace("/projects");
+    if (succeeded) window.location.replace("/projects");
   }
 
   return (

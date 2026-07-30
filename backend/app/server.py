@@ -32,8 +32,8 @@ async def run_server(settings: Settings) -> None:
     api = uvicorn.Server(
         uvicorn.Config(
             "app.main:app",
-            host="0.0.0.0",
-            port=8000,
+            host=settings.api_host,
+            port=settings.api_port,
             access_log=False,
         )
     )

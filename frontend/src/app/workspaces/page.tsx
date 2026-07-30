@@ -5,11 +5,13 @@ import {
   Archive,
   ArrowRight,
   CheckCircle2,
+  KeyRound,
   LoaderCircle,
   Plus,
   RotateCcw,
   Save,
   Settings2,
+  UserX,
 } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
@@ -18,15 +20,20 @@ import { StudioShell } from "@/components/studio/studio-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
+import { clearAccessToken } from "@/lib/auth-session";
 import {
   appApiErrorMessage,
+  useChangePasswordMutation,
   useCreateWorkspaceMutation,
+  useDeactivateAccountMutation,
   useMeQuery,
   useSetWorkspaceArchivedMutation,
   useUpdateProfileMutation,
+  useUpdateWorkspaceMutation,
   useWorkspacesQuery,
 } from "@/lib/server-state";
 
@@ -43,7 +50,10 @@ export default function WorkspacesPage() {
   const workspacesQuery = useWorkspacesQuery(undefined, { skip: !authenticated });
   const [updateProfile, profileState] = useUpdateProfileMutation();
   const [createWorkspace, createState] = useCreateWorkspaceMutation();
+  const [updateWorkspace, updateWorkspaceState] = useUpdateWorkspaceMutation();
   const [setWorkspaceArchived, archiveState] = useSetWorkspaceArchivedMutation();
+  const [changePassword, passwordState] = useChangePasswordMutation();
+  const [deactivateAccount, deactivateState] = useDeactivateAccountMutation();
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -95,8 +105,61 @@ export default function WorkspacesPage() {
     });
   }
 
+  async function renameWorkspace(
+    event: FormEvent<HTMLFormElement>,
+    workspace: API.WorkspaceResponse,
+  ) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("workspaceName") ?? "").trim();
+    await runAction(async () => {
+      await updateWorkspace({
+        workspaceId: workspace.id,
+        body: { name, expected_revision: workspace.revision },
+      }).unwrap();
+      return `工作空间“${name}”已保存。`;
+    });
+  }
+
+  async function submitPasswordChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const completed = await runAction(async () => {
+      await changePassword({
+        current_password: String(form.get("currentPassword") ?? ""),
+        new_password: String(form.get("newPassword") ?? ""),
+      }).unwrap();
+      return "密码已修改，请重新登录。";
+    });
+    if (completed) {
+      clearAccessToken();
+      window.location.replace("/login");
+    }
+  }
+
+  async function submitDeactivation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const completed = await runAction(async () => {
+      await deactivateAccount({
+        confirmation: String(form.get("confirmation") ?? "") as "DEACTIVATE",
+      }).unwrap();
+      return "账户已停用。";
+    });
+    if (completed) {
+      clearAccessToken();
+      window.location.replace("/login");
+    }
+  }
+
   const pageError = me.error ?? workspacesQuery.error;
-  const busy = profileState.isLoading || createState.isLoading || archiveState.isLoading;
+  const busy =
+    profileState.isLoading ||
+    createState.isLoading ||
+    updateWorkspaceState.isLoading ||
+    archiveState.isLoading ||
+    passwordState.isLoading ||
+    deactivateState.isLoading;
   const currentWorkspaceId = me.data?.workspace.id;
 
   if (sessionState === "checking") {
@@ -160,10 +223,35 @@ export default function WorkspacesPage() {
                     <article className={`flex flex-wrap items-center gap-5 rounded-2xl border bg-white p-5 ${current ? "border-cyan-200 shadow-sm shadow-cyan-950/5" : "border-slate-200"}`} key={workspace.id}>
                       <span className="grid size-12 place-items-center rounded-xl bg-slate-100 text-[#079db3]"><Settings2 className="size-5" aria-hidden="true" /></span>
                       <div className="min-w-48 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{workspace.name}</h3>{current ? <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">当前空间</Badge> : null}{workspace.status === "archived" ? <Badge variant="secondary">已归档</Badge> : null}</div><p className="mt-1 text-xs text-slate-500">{roleLabels[workspace.role]} · revision {workspace.revision}</p></div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-1 flex-wrap items-end justify-end gap-2">
+                        {workspace.role === "owner" ? (
+                          <form className="flex min-w-64 flex-1 gap-2" onSubmit={(event) => renameWorkspace(event, workspace)}>
+                            <Input
+                              aria-label={`重命名 ${workspace.name}`}
+                              defaultValue={workspace.name}
+                              disabled={busy || workspace.status === "archived"}
+                              maxLength={120}
+                              name="workspaceName"
+                              required
+                            />
+                            <Button
+                              aria-label={`保存 ${workspace.name}`}
+                              disabled={busy || workspace.status === "archived"}
+                              type="submit"
+                              variant="outline"
+                            >
+                              <Save aria-hidden="true" />
+                            </Button>
+                          </form>
+                        ) : null}
                         <Button asChild variant="outline"><Link href={`/projects?workspace=${workspace.id}`}>查看项目</Link></Button>
                         {workspace.role === "owner" && !current ? (
-                          <Button disabled={busy} onClick={() => toggleArchived(workspace)} variant="outline">
+                          <Button
+                            aria-label={`${workspace.status === "active" ? "归档" : "恢复"} ${workspace.name}`}
+                            disabled={busy}
+                            onClick={() => toggleArchived(workspace)}
+                            variant="outline"
+                          >
                             {workspace.status === "active" ? <Archive aria-hidden="true" /> : <RotateCcw aria-hidden="true" />}
                             {workspace.status === "active" ? "归档" : "恢复"}
                           </Button>
@@ -173,6 +261,34 @@ export default function WorkspacesPage() {
                   );
                 })}
               </div>
+            </section>
+
+            <section className="mt-7 grid gap-5 lg:grid-cols-2" aria-label="账户安全">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><KeyRound className="size-5 text-[#079db3]" aria-hidden="true" />修改密码</CardTitle>
+                  <CardDescription>修改成功后当前令牌立即失效，需要重新登录。</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form className="grid gap-4" onSubmit={submitPasswordChange}>
+                    <div className="grid gap-2"><Label htmlFor="currentPassword">当前密码</Label><Input autoComplete="current-password" disabled={busy} id="currentPassword" minLength={12} name="currentPassword" required type="password" /></div>
+                    <div className="grid gap-2"><Label htmlFor="newPassword">新密码</Label><Input autoComplete="new-password" disabled={busy} id="newPassword" minLength={12} name="newPassword" required type="password" /></div>
+                    <Button disabled={busy} type="submit"><KeyRound aria-hidden="true" />修改密码</Button>
+                  </form>
+                </CardContent>
+              </Card>
+              <Card className="border-rose-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-rose-700"><UserX className="size-5" aria-hidden="true" />停用账户</CardTitle>
+                  <CardDescription>这会撤销当前凭据并禁止再次登录；已有业务事实依据留存规则保留。</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form className="grid gap-4" onSubmit={submitDeactivation}>
+                    <div className="grid gap-2"><Label htmlFor="deactivateConfirmation">输入 DEACTIVATE 确认</Label><Input disabled={busy} id="deactivateConfirmation" name="confirmation" pattern="DEACTIVATE" required /></div>
+                    <Button disabled={busy} type="submit" variant="destructive"><UserX aria-hidden="true" />停用账户</Button>
+                  </form>
+                </CardContent>
+              </Card>
             </section>
           </>
         )}

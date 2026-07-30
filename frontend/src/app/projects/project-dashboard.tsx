@@ -84,7 +84,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
         workspaceName: me.data.workspace.name,
       } : undefined}
     >
-      {notice ? <div className="fixed top-24 right-6 z-50 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg" role="status">{notice}</div> : null}
+      {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg" role="status">{notice}</div> : null}
       <div className="mx-auto max-w-[1280px] px-5 py-9 md:px-8">
         {!authenticated ? (
           <Alert className="border-amber-200 bg-amber-50 text-amber-800"><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription>登录后管理真实项目与单集。</AlertDescription></Alert>

@@ -39,6 +39,9 @@ import {
   useProjectSnapshotQuery,
 } from "@/lib/server-state";
 
+import { EpisodeLifecycleCard } from "./episode-lifecycle-card";
+import { ProjectLifecyclePanel } from "./project-lifecycle-panel";
+
 const stageLabels: Record<API.ProjectProductionSnapshot["current_stage"], string> = {
   project_setup: "项目设置",
   script_import: "剧本导入",
@@ -199,7 +202,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
       } : undefined}
     >
       {notice ? (
-        <div className="fixed top-24 right-6 z-50 flex max-w-md items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg" role="status">
+        <div className="pointer-events-none fixed top-24 right-6 z-50 flex max-w-md items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg" role="status">
           <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />{notice}
         </div>
       ) : null}
@@ -308,6 +311,22 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                 </Card>
               </aside>
             </div>
+            <ProjectLifecyclePanel project={project} />
+            <section className="mt-7 grid gap-5" aria-label="单集设置">
+              <div>
+                <h2 className="text-xl font-semibold">单集设置</h2>
+                <p className="mt-1 text-sm text-slate-500">编辑、排序、归档与安全删除均使用服务端 revision。</p>
+              </div>
+              {episodes.map((episode) => (
+                <EpisodeLifecycleCard
+                  activeEpisodes={activeEpisodes}
+                  episode={episode}
+                  episodeSnapshot={episodeSnapshots.get(episode.id)}
+                  key={episode.id}
+                  project={project}
+                />
+              ))}
+            </section>
           </>
         )}
       </div>

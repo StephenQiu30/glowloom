@@ -342,7 +342,7 @@ export function EpisodeProductionStudio({
       }
     >
       {notice ? (
-        <div className="fixed top-24 right-6 z-50 flex max-w-md items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg" role="status">
+        <div className="pointer-events-none fixed top-24 right-6 z-50 flex max-w-md items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg" role="status">
           <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />
           {notice}
         </div>

@@ -200,7 +200,7 @@ export function ComicProductionStudio() {
     >
       {notice ? (
         <div
-          className="fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10"
+          className="pointer-events-none fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10"
           role="status"
         >
           <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />

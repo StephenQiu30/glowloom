@@ -6,6 +6,7 @@ import {
   Check,
   Folder,
   Home,
+  LogOut,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -15,7 +16,9 @@ import Link from "next/link";
 import { type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { clearAccessToken } from "@/lib/auth-session";
 import { cn } from "@/lib/class-names";
+import { useLogoutMutation } from "@/lib/server-state";
 
 const productionStages = ["剧本", "资产", "分镜", "生成", "审核", "交付"];
 
@@ -69,6 +72,7 @@ export function StudioShell({
   topAction?: ReactNode;
   viewer?: { displayName: string; workspaceName: string };
 }) {
+  const [logout, logoutState] = useLogoutMutation();
   const navItems = [
     { id: "create" as const, label: "创作", icon: Home, href: "/" },
     { id: "projects" as const, label: "项目", icon: Folder, href: "/projects" },
@@ -80,6 +84,15 @@ export function StudioShell({
       href: "/governance",
     },
   ];
+
+  async function handleLogout() {
+    try {
+      await logout().unwrap();
+    } finally {
+      clearAccessToken();
+      window.location.replace("/login");
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#fbfcfd] text-slate-950">
@@ -101,19 +114,33 @@ export function StudioShell({
             </Link>
           ))}
         </nav>
-        <Link className={cn(
-          "mt-auto flex items-center justify-center gap-2 rounded-xl p-2 transition-colors hover:bg-slate-50 lg:justify-start",
-          active === "settings" && "bg-slate-100",
-        )} href="/workspaces">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full border border-cyan-100 bg-cyan-50 text-sm font-semibold text-[#087f91]" aria-hidden="true">
-            {(viewer?.displayName ?? "账户").slice(0, 1).toUpperCase()}
-          </span>
-          <span className="hidden min-w-0 lg:block">
-            <span className="block truncate text-sm font-medium">{viewer?.displayName ?? "账户"}</span>
-            <span className="block truncate text-xs text-slate-400">{viewer?.workspaceName ?? "工作空间"}</span>
-          </span>
-          <Settings className="ml-auto hidden size-4 text-slate-400 lg:block" aria-hidden="true" />
-        </Link>
+        <div className="mt-auto grid gap-2">
+          <Link className={cn(
+            "flex items-center justify-center gap-2 rounded-xl p-2 transition-colors hover:bg-slate-50 lg:justify-start",
+            active === "settings" && "bg-slate-100",
+          )} href="/workspaces">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full border border-cyan-100 bg-cyan-50 text-sm font-semibold text-[#087f91]" aria-hidden="true">
+              {(viewer?.displayName ?? "账户").slice(0, 1).toUpperCase()}
+            </span>
+            <span className="hidden min-w-0 lg:block">
+              <span className="block truncate text-sm font-medium">{viewer?.displayName ?? "账户"}</span>
+              <span className="block truncate text-xs text-slate-400">{viewer?.workspaceName ?? "工作空间"}</span>
+            </span>
+            <Settings className="ml-auto hidden size-4 text-slate-400 lg:block" aria-hidden="true" />
+          </Link>
+          {viewer ? (
+            <Button
+              aria-label="退出登录"
+              disabled={logoutState.isLoading}
+              onClick={handleLogout}
+              size="sm"
+              variant="ghost"
+            >
+              <LogOut aria-hidden="true" />
+              <span className="hidden lg:inline">退出登录</span>
+            </Button>
+          ) : null}
+        </div>
       </aside>
 
       <div className="min-h-screen pl-[76px] lg:pl-[156px]">

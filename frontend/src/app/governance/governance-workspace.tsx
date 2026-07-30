@@ -490,7 +490,7 @@ export function GovernanceWorkspace({
         )
       }
     >
-      {notice ? <div className="fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10" role="status"><Check className="size-4 text-emerald-600" aria-hidden="true" />{notice}</div> : null}
+      {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10" role="status"><Check className="size-4 text-emerald-600" aria-hidden="true" />{notice}</div> : null}
       <div className="mx-auto max-w-[1320px] px-5 py-8 md:px-8">
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div>
