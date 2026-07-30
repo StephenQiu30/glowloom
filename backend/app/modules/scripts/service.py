@@ -12,7 +12,7 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
-from app.modules.identity import Capability, actor_context, get_authenticated_user
+from app.modules.identity import Capability, actor_context
 from app.modules.production import repository as production_repository
 from app.modules.production import service as production_service
 from app.modules.production.schemas import (
@@ -102,6 +102,25 @@ def _version_response(version: ScriptVersion) -> ScriptVersionResponse:
 
 def _not_found(resource: str) -> ApiError:
     return ApiError(ErrorCode.NOT_FOUND, f"{resource} not found", status_code=404)
+
+
+async def _require_resource_access(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    workspace_id: UUID,
+    resource: str,
+) -> None:
+    try:
+        await actor_context(
+            session,
+            claims,
+            workspace_id,
+            Capability.CONTENT_READ,
+        )
+    except ApiError as error:
+        if error.code == ErrorCode.NOT_FOUND:
+            raise _not_found(resource) from error
+        raise
 
 
 def _current_response(
@@ -353,10 +372,12 @@ async def get_source(
     claims: AccessTokenClaims,
     source_id: UUID,
 ) -> ScriptSourceResponse:
-    user = await get_authenticated_user(session, claims)
-    source = await repository.find_source_for_user(session, user.id, source_id)
+    source = await repository.find_source(session, source_id)
     if source is None:
         raise _not_found("Script source")
+    await _require_resource_access(
+        session, claims, source.workspace_id, "Script source"
+    )
     return _source_response(source)
 
 
@@ -365,10 +386,12 @@ async def get_version(
     claims: AccessTokenClaims,
     version_id: UUID,
 ) -> ScriptVersionResponse:
-    user = await get_authenticated_user(session, claims)
-    version = await repository.find_version_for_user(session, user.id, version_id)
+    version = await repository.find_version(session, version_id)
     if version is None:
         raise _not_found("Script version")
+    await _require_resource_access(
+        session, claims, version.workspace_id, "Script version"
+    )
     return _version_response(version)
 
 
@@ -380,13 +403,15 @@ async def list_versions(
     limit: int,
     offset: int,
 ) -> PaginatedScriptVersions:
-    user = await get_authenticated_user(session, claims)
-    result = await repository.list_versions_for_user(
-        session, user.id, source_id, limit=limit, offset=offset
-    )
-    if result is None:
+    source = await repository.find_source(session, source_id)
+    if source is None:
         raise _not_found("Script source")
-    versions, total = result
+    await _require_resource_access(
+        session, claims, source.workspace_id, "Script source"
+    )
+    versions, total = await repository.list_versions(
+        session, source_id, limit=limit, offset=offset
+    )
     return PaginatedScriptVersions(
         items=[_version_response(version) for version in versions],
         total=total,
@@ -404,12 +429,12 @@ async def publish_version(
     content_hash = sha256(request.body.encode("utf-8")).hexdigest()
     now = datetime.now(UTC)
     async with session.begin():
-        user = await get_authenticated_user(session, claims)
-        source = await repository.find_source_for_user(
-            session, user.id, source_id, for_update=True
-        )
+        source = await repository.find_source(session, source_id, for_update=True)
         if source is None:
             raise _not_found("Script source")
+        await _require_resource_access(
+            session, claims, source.workspace_id, "Script source"
+        )
         if source.status != "active":
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
@@ -460,16 +485,18 @@ async def set_current_version(
         episode = await lock_active_episode_for_content_write(
             session, claims, episode_id
         )
-        version = await repository.find_version_for_user(
-            session, claims.sub, request.version_id
-        )
+        version = await repository.find_version(session, request.version_id)
         if version is None:
             raise _not_found("Script version")
-        source = await repository.find_source_for_user(
-            session, claims.sub, version.source_id
+        await _require_resource_access(
+            session, claims, version.workspace_id, "Script version"
         )
+        source = await repository.find_source(session, version.source_id)
         if source is None:
             raise _not_found("Script source")
+        await _require_resource_access(
+            session, claims, source.workspace_id, "Script source"
+        )
         if source.episode_id != episode.episode_id:
             raise ApiError(
                 ErrorCode.RESOURCE_CONFLICT,
@@ -503,12 +530,12 @@ async def set_source_archived(
 ) -> ScriptSourceResponse:
     expected_status = "active" if archived else "archived"
     async with session.begin():
-        user = await get_authenticated_user(session, claims)
-        source = await repository.find_source_for_user(
-            session, user.id, source_id, for_update=True
-        )
+        source = await repository.find_source(session, source_id, for_update=True)
         if source is None:
             raise _not_found("Script source")
+        await _require_resource_access(
+            session, claims, source.workspace_id, "Script source"
+        )
         await lock_active_episode_for_content_write(
             session, claims, source.episode_id
         )
@@ -533,15 +560,18 @@ async def diff_versions(
     version_id: UUID,
     other_version_id: UUID,
 ) -> ScriptVersionDiffResponse:
-    user = await get_authenticated_user(session, claims)
-    base = await repository.find_version_for_user(session, user.id, version_id)
+    base = await repository.find_version(session, version_id)
     if base is None:
         raise _not_found("Script version")
-    target = await repository.find_version_for_user(
-        session, user.id, other_version_id
+    await _require_resource_access(
+        session, claims, base.workspace_id, "Script version"
     )
+    target = await repository.find_version(session, other_version_id)
     if target is None:
         raise _not_found("Script version")
+    await _require_resource_access(
+        session, claims, target.workspace_id, "Script version"
+    )
     if base.source_id != target.source_id:
         raise ApiError(
             ErrorCode.RESOURCE_CONFLICT,
@@ -582,21 +612,26 @@ async def start_extraction(
 ) -> ExtractionBatchResponse:
     now = datetime.now(UTC)
     async with session.begin():
-        user = await get_authenticated_user(session, claims)
-        version = await repository.find_version_for_user(session, user.id, version_id)
+        version = await repository.find_version(session, version_id)
         if version is None:
             raise _not_found("Script version")
+        await _require_resource_access(
+            session, claims, version.workspace_id, "Script version"
+        )
         if version.status != "published":
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
                 "Only published script versions can be extracted",
                 status_code=409,
             )
-        source = await repository.find_source_for_user(
-            session, user.id, version.source_id, for_update=True
+        source = await repository.find_source(
+            session, version.source_id, for_update=True
         )
         if source is None:
             raise _not_found("Script source")
+        await _require_resource_access(
+            session, claims, source.workspace_id, "Script source"
+        )
         if source.status != "active":
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
@@ -686,12 +721,12 @@ async def get_extraction_batch(
     claims: AccessTokenClaims,
     batch_id: UUID,
 ) -> ExtractionBatchResponse:
-    user = await get_authenticated_user(session, claims)
-    batch = await repository.find_extraction_batch_for_user(
-        session, user.id, batch_id
-    )
+    batch = await repository.find_extraction_batch(session, batch_id)
     if batch is None or batch.task_id is None:
         raise _not_found("Extraction batch")
+    await _require_resource_access(
+        session, claims, batch.workspace_id, "Extraction batch"
+    )
     task = await production_service.get_task(session, claims, batch.task_id)
     return _batch_response(batch, task)
 
@@ -832,19 +867,20 @@ async def list_extraction_candidates(
     limit: int,
     offset: int,
 ) -> PaginatedExtractionCandidates:
-    user = await get_authenticated_user(session, claims)
-    result = await repository.list_extraction_candidates_for_user(
+    batch = await repository.find_extraction_batch(session, batch_id)
+    if batch is None:
+        raise _not_found("Extraction batch")
+    await _require_resource_access(
+        session, claims, batch.workspace_id, "Extraction batch"
+    )
+    candidates, total = await repository.list_extraction_candidates(
         session,
-        user.id,
         batch_id,
         kind=kind,
         status=status,
         limit=limit,
         offset=offset,
     )
-    if result is None:
-        raise _not_found("Extraction batch")
-    candidates, total = result
     return PaginatedExtractionCandidates(
         items=[_candidate_response(candidate) for candidate in candidates],
         total=total,
@@ -858,14 +894,12 @@ async def get_extraction_candidate(
     claims: AccessTokenClaims,
     candidate_id: UUID,
 ) -> ExtractionCandidateResponse:
-    user = await get_authenticated_user(session, claims)
-    candidate = await repository.find_extraction_candidate_for_user(
-        session,
-        user.id,
-        candidate_id,
-    )
+    candidate = await repository.find_extraction_candidate(session, candidate_id)
     if candidate is None:
         raise _not_found("Extraction candidate")
+    await _require_resource_access(
+        session, claims, candidate.workspace_id, "Extraction candidate"
+    )
     return _candidate_response(candidate)
 
 
@@ -876,15 +910,16 @@ async def decide_extraction_candidate(
     request: CandidateDecisionRequest,
 ) -> CandidateDecisionResultResponse:
     async with session.begin():
-        user = await get_authenticated_user(session, claims)
-        candidate = await repository.find_extraction_candidate_for_user(
+        candidate = await repository.find_extraction_candidate(
             session,
-            user.id,
             candidate_id,
             for_update=True,
         )
         if candidate is None:
             raise _not_found("Extraction candidate")
+        await _require_resource_access(
+            session, claims, candidate.workspace_id, "Extraction candidate"
+        )
         actor = await actor_context(
             session,
             claims,
@@ -994,17 +1029,18 @@ async def list_candidate_decisions(
     limit: int,
     offset: int,
 ) -> PaginatedCandidateDecisions:
-    user = await get_authenticated_user(session, claims)
-    result = await repository.list_candidate_decisions_for_user(
+    candidate = await repository.find_extraction_candidate(session, candidate_id)
+    if candidate is None:
+        raise _not_found("Extraction candidate")
+    await _require_resource_access(
+        session, claims, candidate.workspace_id, "Extraction candidate"
+    )
+    decisions, total = await repository.list_candidate_decisions(
         session,
-        user.id,
         candidate_id,
         limit=limit,
         offset=offset,
     )
-    if result is None:
-        raise _not_found("Extraction candidate")
-    decisions, total = result
     return PaginatedCandidateDecisions(
         items=[_decision_evidence(decision) for decision in decisions],
         total=total,

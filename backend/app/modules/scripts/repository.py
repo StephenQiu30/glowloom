@@ -3,7 +3,6 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.identity.models import Membership
 from app.modules.scripts.models import (
     CandidateDecision,
     ExtractionBatch,
@@ -38,24 +37,15 @@ async def find_initial_version(
     )
 
 
-async def find_source_for_user(
+async def find_source(
     session: AsyncSession,
-    user_id: UUID,
     source_id: UUID,
     *,
     for_update: bool = False,
 ) -> ScriptSource | None:
-    query = (
-        select(ScriptSource)
-        .join(Membership, Membership.workspace_id == ScriptSource.workspace_id)
-        .where(
-            ScriptSource.id == source_id,
-            Membership.user_id == user_id,
-            Membership.status == "active",
-        )
-    )
+    query = select(ScriptSource).where(ScriptSource.id == source_id)
     if for_update:
-        query = query.with_for_update(of=ScriptSource)
+        query = query.with_for_update()
     return await session.scalar(query)
 
 
@@ -71,23 +61,6 @@ async def latest_version_number(
     return latest or 0
 
 
-async def find_version_for_user(
-    session: AsyncSession,
-    user_id: UUID,
-    version_id: UUID,
-) -> ScriptVersion | None:
-    return await session.scalar(
-        select(ScriptVersion)
-        .join(ScriptSource, ScriptSource.id == ScriptVersion.source_id)
-        .join(Membership, Membership.workspace_id == ScriptVersion.workspace_id)
-        .where(
-            ScriptVersion.id == version_id,
-            Membership.user_id == user_id,
-            Membership.status == "active",
-        )
-    )
-
-
 async def find_version(
     session: AsyncSession,
     version_id: UUID,
@@ -97,17 +70,13 @@ async def find_version(
     )
 
 
-async def list_versions_for_user(
+async def list_versions(
     session: AsyncSession,
-    user_id: UUID,
     source_id: UUID,
     *,
     limit: int,
     offset: int,
-) -> tuple[list[ScriptVersion], int] | None:
-    source = await find_source_for_user(session, user_id, source_id)
-    if source is None:
-        return None
+) -> tuple[list[ScriptVersion], int]:
     total = await session.scalar(
         select(func.count())
         .select_from(ScriptVersion)
@@ -148,39 +117,15 @@ async def find_extraction_batch(
     return await session.scalar(query)
 
 
-async def find_extraction_batch_for_user(
+async def list_extraction_candidates(
     session: AsyncSession,
-    user_id: UUID,
-    batch_id: UUID,
-) -> ExtractionBatch | None:
-    return await session.scalar(
-        select(ExtractionBatch)
-        .join(
-            ScriptVersion,
-            ScriptVersion.id == ExtractionBatch.script_version_id,
-        )
-        .join(Membership, Membership.workspace_id == ExtractionBatch.workspace_id)
-        .where(
-            ExtractionBatch.id == batch_id,
-            Membership.user_id == user_id,
-            Membership.status == "active",
-        )
-    )
-
-
-async def list_extraction_candidates_for_user(
-    session: AsyncSession,
-    user_id: UUID,
     batch_id: UUID,
     *,
     kind: str | None,
     status: str | None,
     limit: int,
     offset: int,
-) -> tuple[list[ExtractionCandidate], int] | None:
-    batch = await find_extraction_batch_for_user(session, user_id, batch_id)
-    if batch is None:
-        return None
+) -> tuple[list[ExtractionCandidate], int]:
     filters = [ExtractionCandidate.batch_id == batch_id]
     if kind is not None:
         filters.append(ExtractionCandidate.kind == kind)
@@ -203,38 +148,16 @@ async def list_extraction_candidates_for_user(
     return list(candidates), total or 0
 
 
-async def find_extraction_candidate_for_user(
+async def find_extraction_candidate(
     session: AsyncSession,
-    user_id: UUID,
     candidate_id: UUID,
     *,
     for_update: bool = False,
 ) -> ExtractionCandidate | None:
-    query = (
-        select(ExtractionCandidate)
-        .join(
-            ExtractionBatch,
-            ExtractionBatch.id == ExtractionCandidate.batch_id,
-        )
-        .join(Membership, Membership.workspace_id == ExtractionCandidate.workspace_id)
-        .where(
-            ExtractionCandidate.id == candidate_id,
-            Membership.user_id == user_id,
-            Membership.status == "active",
-        )
-    )
+    query = select(ExtractionCandidate).where(ExtractionCandidate.id == candidate_id)
     if for_update:
-        query = query.with_for_update(of=ExtractionCandidate)
+        query = query.with_for_update()
     return await session.scalar(query)
-
-
-async def find_extraction_candidate(
-    session: AsyncSession,
-    candidate_id: UUID,
-) -> ExtractionCandidate | None:
-    return await session.scalar(
-        select(ExtractionCandidate).where(ExtractionCandidate.id == candidate_id)
-    )
 
 
 async def find_candidate_decision_by_key(
@@ -250,21 +173,13 @@ async def find_candidate_decision_by_key(
     )
 
 
-async def list_candidate_decisions_for_user(
+async def list_candidate_decisions(
     session: AsyncSession,
-    user_id: UUID,
     candidate_id: UUID,
     *,
     limit: int,
     offset: int,
-) -> tuple[list[CandidateDecision], int] | None:
-    candidate = await find_extraction_candidate_for_user(
-        session,
-        user_id,
-        candidate_id,
-    )
-    if candidate is None:
-        return None
+) -> tuple[list[CandidateDecision], int]:
     total = await session.scalar(
         select(func.count())
         .select_from(CandidateDecision)
