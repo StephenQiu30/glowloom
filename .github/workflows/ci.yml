@@ -64,7 +64,7 @@ jobs:
             --publish 127.0.0.1:9000:9000 \
             --env MINIO_ROOT_USER=lanverse \
             --env MINIO_ROOT_PASSWORD=lanverse-development-only \
-            minio/minio:latest server /data
+            minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1@sha256:13582eff79c6605a2d315bdd0e70164142ea7e98fc8411e9e10d089502a6d883 server /data
           for attempt in {1..60}; do
             if curl --fail --silent http://127.0.0.1:9000/minio/health/live; then
               exit 0

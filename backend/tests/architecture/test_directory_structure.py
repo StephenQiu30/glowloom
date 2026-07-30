@@ -54,14 +54,22 @@ def test_container_files_live_at_their_runtime_boundaries() -> None:
     for service in ("postgres", "redis", "rabbitmq", "minio"):
         assert f"  {service}:" in environment_compose
         assert f"container_name: lanverse-{service}" in environment_compose
-    for image in ("postgres:latest", "redis:latest", "rabbitmq:latest", "minio/minio:latest"):
+    for image in (
+        "postgres:18.4-alpine",
+        "redis:8.8.1-alpine",
+        "rabbitmq:4.3.4-alpine@sha256:c07a5e60f5429be18b3b7fd3a4dfa9a84c3372f88df084b6f2b22224192c360c",
+        "minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1@sha256:13582eff79c6605a2d315bdd0e70164142ea7e98fc8411e9e10d089502a6d883",
+    ):
         assert f"image: {image}\n" in environment_compose
-    assert "@sha256:" not in environment_compose
+    assert ":latest" not in environment_compose
 
     makefile = (ROOT / "Makefile").read_text()
     assert "services-up:" in makefile
     assert "services-down:" in makefile
     assert "docker compose -f docker-compose.yml up -d --build" in makefile
+    assert "MINIO_RELEASE := RELEASE.2025-09-07T16-13-09Z" in makefile
+    assert "minio-version-check:" in makefile
+    assert 'docker ps -q --filter "publish=9000"' in makefile
     assert "business-up:" not in makefile
     assert "business-down:" not in makefile
 
@@ -113,7 +121,12 @@ def test_ci_executes_the_real_media_stack_contract() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
     assert "name: Start MinIO contract service" in workflow
-    assert "minio/minio:latest server /data" in workflow
+    assert (
+        "minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1@sha256:"
+        "13582eff79c6605a2d315bdd0e70164142ea7e98fc8411e9e10d089502a6d883 "
+        "server /data"
+    ) in workflow
+    assert "minio/minio:latest" not in workflow
     assert "ffprobe -version" in workflow
     assert "make contract-media-stack" in workflow
     assert "name: Stop MinIO contract service" in workflow

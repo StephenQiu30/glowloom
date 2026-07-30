@@ -1,8 +1,9 @@
 SHELL := /bin/sh
 PYTHON ?= python3.11
 VENV_PYTHON := backend/.venv/bin/python
+MINIO_RELEASE := RELEASE.2025-09-07T16-13-09Z
 
-.PHONY: setup lock-backend dev-api dev-frontend scheduler worker-io worker-media db-init generate-api lint typecheck test hygiene check docker-build services-up services-down minio-up minio-down env-up env-down contract-minio contract-rabbitmq contract-ffprobe contract-media-stack e2e-install e2e
+.PHONY: setup lock-backend dev-api dev-frontend scheduler worker-io worker-media db-init generate-api lint typecheck test hygiene check docker-build services-up services-down minio-up minio-version-check minio-down env-up env-down contract-minio contract-rabbitmq contract-ffprobe contract-media-stack e2e-install e2e
 
 $(VENV_PYTHON):
 	@$(PYTHON) --version | grep -q 'Python 3.11.15'
@@ -77,8 +78,27 @@ services-down:
 	docker compose -f docker-compose.yml down
 
 minio-up:
-	@curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1 || \
-		docker compose -f docker-compose-env.yml up -d minio
+	@if ! curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then \
+		docker compose -f docker-compose-env.yml up -d minio; \
+		for attempt in 1 2 3 4 5 6 7 8 9 10; do \
+			curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1 && break; \
+			sleep 1; \
+		done; \
+	fi
+	@$(MAKE) minio-version-check
+
+minio-version-check:
+	@container_ids="$$(docker ps -q --filter "publish=9000")"; \
+		set -- $$container_ids; \
+		if [ "$$#" -ne 1 ]; then \
+			echo "expected exactly one running MinIO container publishing port 9000" >&2; \
+			exit 1; \
+		fi; \
+		if ! docker exec "$$1" minio --version | grep -Fq "minio version $(MINIO_RELEASE)"; then \
+			echo "expected MinIO $(MINIO_RELEASE)" >&2; \
+			docker exec "$$1" minio --version | sed -n '1p' >&2; \
+			exit 1; \
+		fi
 
 minio-down:
 	docker compose -f docker-compose-env.yml stop minio
