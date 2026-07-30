@@ -142,6 +142,17 @@ async def test_text_import_is_idempotent_private_and_creates_immutable_version(
     assert fetched_source.status_code == 200
     assert fetched_source.json()["data"] == source
 
+    sources = await client.get(
+        f"/api/v1/episodes/{episode['id']}/script-sources", headers=headers
+    )
+    assert sources.status_code == 200
+    assert sources.json()["data"] == {
+        "items": [source],
+        "total": 1,
+        "limit": 20,
+        "offset": 0,
+    }
+
     history = await client.get(
         f"/api/v1/script-sources/{source['id']}/versions",
         headers=headers,
