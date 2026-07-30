@@ -3,15 +3,84 @@ from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid6 import uuid7
 
 from app.modules.messaging.contracts import MessageEnvelope, OutboxEventCommand
-from app.modules.messaging.models import OutboxEvent
+from app.modules.messaging.models import InboxDelivery, OutboxEvent
 
 
 class MessagePublisher(Protocol):
     async def publish(self, envelope: MessageEnvelope, routing_key: str) -> None: ...
+
+
+async def start_inbox_delivery(
+    session: AsyncSession,
+    envelope: MessageEnvelope,
+    *,
+    consumer_name: str,
+    now: datetime,
+) -> bool:
+    delivery_id = uuid7()
+    inserted_id = await session.scalar(
+        insert(InboxDelivery)
+        .values(
+            id=delivery_id,
+            workspace_id=envelope.workspace_id,
+            event_id=envelope.event_id,
+            event_type=envelope.event_type,
+            consumer_name=consumer_name,
+            trace_id=envelope.trace_id,
+            status="processing",
+            attempt_count=1,
+            received_at=now,
+        )
+        .on_conflict_do_nothing(constraint="uq_sys_inbox_event_consumer")
+        .returning(InboxDelivery.id)
+    )
+    if inserted_id is not None:
+        return True
+    existing = await session.scalar(
+        select(InboxDelivery)
+        .where(
+            InboxDelivery.event_id == envelope.event_id,
+            InboxDelivery.consumer_name == consumer_name,
+        )
+        .with_for_update()
+    )
+    if existing is None:
+        raise RuntimeError("inbox delivery is unavailable")
+    existing.attempt_count += 1
+    await session.flush()
+    return False
+
+
+async def finish_inbox_delivery(
+    session: AsyncSession,
+    envelope: MessageEnvelope,
+    *,
+    consumer_name: str,
+    task_id: UUID | None,
+    status: str,
+    error_code: str | None,
+    now: datetime,
+) -> None:
+    delivery = await session.scalar(
+        select(InboxDelivery)
+        .where(
+            InboxDelivery.event_id == envelope.event_id,
+            InboxDelivery.consumer_name == consumer_name,
+        )
+        .with_for_update()
+    )
+    if delivery is None:
+        raise RuntimeError("inbox delivery is unavailable")
+    delivery.task_id = task_id
+    delivery.status = status
+    delivery.last_error = error_code
+    delivery.processed_at = now
+    await session.flush()
 
 
 async def enqueue_outbox_event(

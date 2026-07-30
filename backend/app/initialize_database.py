@@ -2,6 +2,7 @@ import asyncio
 
 from app.core.database import engine, initialize_empty_database
 from app.modules.identity import models as identity_models
+from app.modules.media import models as media_models
 from app.modules.messaging import models as messaging_models
 from app.modules.production import models as production_models
 from app.modules.projects import models as project_models
@@ -11,6 +12,7 @@ from app.modules.scripts import models as script_models
 _ = (
     identity_models,
     messaging_models,
+    media_models,
     production_models,
     project_models,
     script_models,

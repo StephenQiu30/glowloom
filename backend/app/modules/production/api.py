@@ -19,7 +19,7 @@ async def list_tasks(
     workspace_id: UUID,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
-    task_type: Literal["script_extraction"] | None = None,
+    task_type: Literal["script_extraction", "media_probe"] | None = None,
     status: TaskStatus | None = None,
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,

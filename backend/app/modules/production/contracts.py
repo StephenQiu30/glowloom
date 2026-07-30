@@ -13,6 +13,8 @@ TaskStatus = Literal[
     "cancelled",
     "unknown",
 ]
+TaskType = Literal["script_extraction", "media_probe"]
+TaskRequestType = Literal["extraction_batch", "media_version"]
 
 
 class TaskScopeResponse(BaseModel):
@@ -33,8 +35,8 @@ class TaskErrorResponse(BaseModel):
 class TaskResponse(BaseModel):
     id: UUID
     workspace_id: UUID
-    task_type: Literal["script_extraction"]
-    request_type: Literal["extraction_batch"]
+    task_type: TaskType
+    request_type: TaskRequestType
     request_id: UUID
     scope: TaskScopeResponse
     status: TaskStatus
@@ -53,6 +55,14 @@ class ScriptExtractionTaskCommand(BaseModel):
     request_id: UUID
     input_version_id: UUID
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class MediaProbeTaskCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace_id: UUID
+    media_version_id: UUID
     idempotency_key: str = Field(min_length=1, max_length=200)
 
 

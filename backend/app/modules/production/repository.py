@@ -39,7 +39,7 @@ async def list_tasks(
     session: AsyncSession,
     workspace_id: UUID,
     *,
-    task_type: Literal["script_extraction"] | None,
+    task_type: Literal["script_extraction", "media_probe"] | None,
     status: TaskStatus | None,
     limit: int,
     offset: int,

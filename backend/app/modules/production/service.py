@@ -17,12 +17,15 @@ from app.modules.identity import (
 from app.modules.messaging import OutboxEventCommand, enqueue_outbox_event
 from app.modules.production import repository
 from app.modules.production.contracts import (
+    MediaProbeTaskCommand,
     ScriptExtractionTaskCommand,
     TaskContext,
     TaskErrorResponse,
+    TaskRequestType,
     TaskResponse,
     TaskScopeResponse,
     TaskStatus,
+    TaskType,
 )
 from app.modules.production.models import Task
 from app.modules.production.schemas import PaginatedTasks
@@ -41,8 +44,8 @@ def task_response(task: Task) -> TaskResponse:
     return TaskResponse(
         id=task.id,
         workspace_id=task.workspace_id,
-        task_type=cast(Literal["script_extraction"], task.task_type),
-        request_type=cast(Literal["extraction_batch"], task.request_type),
+        task_type=cast(TaskType, task.task_type),
+        request_type=cast(TaskRequestType, task.request_type),
         request_id=task.request_id,
         scope=TaskScopeResponse(
             episode_id=task.episode_id,
@@ -81,6 +84,15 @@ def _same_command(task: Task, command: ScriptExtractionTaskCommand) -> bool:
         and task.episode_id == command.episode_id
         and task.input_version_id == command.input_version_id
         and task.input_hash == command.input_hash
+    )
+
+
+def _same_media_probe_command(task: Task, command: MediaProbeTaskCommand) -> bool:
+    return (
+        task.request_id == command.media_version_id
+        and task.input_version_id == command.media_version_id
+        and task.usage_type == "media_version"
+        and task.usage_id == command.media_version_id
     )
 
 
@@ -184,6 +196,66 @@ async def complete_script_extraction_task(
     return changed
 
 
+async def fail_media_probe_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    error_code: str,
+    error_summary: str,
+    now: datetime,
+    retryable: bool = True,
+    next_action: str = "retry_probe",
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "media_probe":
+        raise ValueError("task is not a media probe task")
+    if task.status in {"succeeded", "failed", "cancelled"}:
+        return False
+    task.status = "failed"
+    task.progress_stage = "blocked"
+    task.error_code = error_code
+    task.error_retryable = retryable
+    task.error_summary = error_summary
+    task.next_action = next_action
+    task.revision += 1
+    task.updated_at = now
+    await session.flush()
+    return True
+
+
+async def complete_media_probe_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "media_probe":
+        raise ValueError("task is not a media probe task")
+    if task.status == "succeeded":
+        return False
+    if task.status in {"failed", "cancelled"}:
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Task cannot be completed from its current state",
+            status_code=409,
+        )
+    task.status = "succeeded"
+    task.progress_stage = "completed"
+    task.error_code = None
+    task.error_retryable = None
+    task.error_summary = None
+    task.next_action = "review_media"
+    task.revision += 1
+    task.updated_at = now
+    await session.flush()
+    return True
+
+
 async def create_script_extraction_task(
     session: AsyncSession,
     actor: ActorContext,
@@ -269,6 +341,100 @@ async def create_script_extraction_task(
     return task_response(task)
 
 
+async def create_media_probe_task(
+    session: AsyncSession,
+    actor: ActorContext,
+    command: MediaProbeTaskCommand,
+    *,
+    trace_id: str,
+) -> TaskResponse:
+    if actor.workspace_id != command.workspace_id:
+        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403)
+    try:
+        require_workspace_capability(
+            actor.role, actor.workspace_status, Capability.CONTENT_WRITE
+        )
+    except PermissionError as error:
+        raise ApiError(
+            ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403
+        ) from error
+    if not trace_id or len(trace_id) > 64:
+        raise ApiError(ErrorCode.INVALID_REQUEST, "Invalid trace identifier", status_code=422)
+
+    task_id = uuid7()
+    now = datetime.now(UTC)
+    inserted_id = await session.scalar(
+        insert(Task)
+        .values(
+            id=task_id,
+            workspace_id=command.workspace_id,
+            task_type="media_probe",
+            request_type="media_version",
+            request_id=command.media_version_id,
+            usage_type="media_version",
+            usage_id=command.media_version_id,
+            input_version_id=command.media_version_id,
+            status="queued",
+            progress_stage="queued",
+            next_action="poll_task",
+            cancel_status="none",
+            idempotency_key=command.idempotency_key,
+            requested_by=actor.user_id,
+            revision=1,
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(constraint="uq_prod_task_idempotency")
+        .returning(Task.id)
+    )
+    if inserted_id is None:
+        existing = await repository.find_idempotent_task(
+            session,
+            command.workspace_id,
+            "media_probe",
+            command.idempotency_key,
+        )
+        if existing is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500
+            )
+        if not _same_media_probe_command(existing, command):
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Idempotency key was used with different input",
+                status_code=409,
+            )
+        return task_response(existing)
+
+    await enqueue_outbox_event(
+        session,
+        OutboxEventCommand(
+            workspace_id=command.workspace_id,
+            event_type="media_probe.requested",
+            schema_version=1,
+            aggregate_type="task",
+            aggregate_id=inserted_id,
+            routing_key="media.probe",
+            payload={"task_id": str(inserted_id)},
+            trace_id=trace_id,
+            available_at=now,
+            occurred_at=now,
+        ),
+    )
+    await session.flush()
+    task = await repository.find_task(session, inserted_id)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    return task_response(task)
+
+
+async def get_internal_task(session: AsyncSession, task_id: UUID) -> TaskResponse:
+    task = await repository.find_task(session, task_id)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    return task_response(task)
+
+
 async def get_task(
     session: AsyncSession,
     claims: AccessTokenClaims,
@@ -293,7 +459,7 @@ async def list_tasks(
     claims: AccessTokenClaims,
     workspace_id: UUID,
     *,
-    task_type: Literal["script_extraction"] | None,
+    task_type: Literal["script_extraction", "media_probe"] | None,
     status: TaskStatus | None,
     limit: int,
     offset: int,

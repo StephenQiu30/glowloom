@@ -1,1 +1,5 @@
-"""Media storage contract required by the S0 infrastructure baseline."""
+"""Public media probe contracts."""
+
+from app.modules.media.contracts import MediaProbeError, MediaProbePort, MediaProbeResult
+
+__all__ = ["MediaProbeError", "MediaProbePort", "MediaProbeResult"]

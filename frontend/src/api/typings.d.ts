@@ -66,6 +66,18 @@ declare namespace API {
     data: WorkspaceResponse[];
   };
 
+  type ApiResponseMediaAccessResponse_ = {
+    data: MediaAccessResponse;
+  };
+
+  type ApiResponseMediaObjectResponse_ = {
+    data: MediaObjectResponse;
+  };
+
+  type ApiResponseMediaVersionResponse_ = {
+    data: MediaVersionResponse;
+  };
+
   type ApiResponseMeResponse_ = {
     data: MeResponse;
   };
@@ -76,6 +88,10 @@ declare namespace API {
 
   type ApiResponsePaginatedExtractionCandidates_ = {
     data: PaginatedExtractionCandidates;
+  };
+
+  type ApiResponsePaginatedMedia_ = {
+    data: PaginatedMedia;
   };
 
   type ApiResponsePaginatedProjects_ = {
@@ -134,12 +150,48 @@ declare namespace API {
     data: TaskResponse;
   };
 
+  type ApiResponseUploadCompletionResponse_ = {
+    data: UploadCompletionResponse;
+  };
+
+  type ApiResponseUploadInitializationResponse_ = {
+    data: UploadInitializationResponse;
+  };
+
   type ApiResponseWorkspaceResponse_ = {
     data: WorkspaceResponse;
   };
 
+  type AppendVersionRequest = {
+    /** Workspace Id */
+    workspace_id: string;
+    /** Kind */
+    kind: "image" | "video" | "audio" | "subtitle" | "delivery";
+    /** Filename */
+    filename: string;
+    /** Size Bytes */
+    size_bytes: number;
+    /** Mime Type */
+    mime_type: string;
+    /** Sha256 */
+    sha256: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Expected Current Version Id */
+    expected_current_version_id: string;
+  };
+
   type archiveEpisodeApiV1EpisodesEpisodeIdArchivePostParams = {
     episode_id: string;
+  };
+
+  type archiveMediaApiV1MediaObjectsMediaObjectIdArchivePostParams = {
+    media_object_id: string;
+  };
+
+  type ArchiveMediaRequest = {
+    /** Expected Revision */
+    expected_revision: number;
   };
 
   type archiveProjectApiV1ProjectsProjectIdArchivePostParams = {
@@ -255,6 +307,10 @@ declare namespace API {
     new_password: string;
   };
 
+  type completeUploadApiV1MediaUploadsUploadSessionIdCompletePostParams = {
+    upload_session_id: string;
+  };
+
   type confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePostParams =
     {
       batch_id: string;
@@ -280,6 +336,10 @@ declare namespace API {
     reserved: string | null;
     /** Used */
     used: string | null;
+  };
+
+  type createAccessApiV1MediaVersionIdAccessPostParams = {
+    version_id: string;
   };
 
   type createEpisodeApiV1ProjectsProjectIdEpisodesPostParams = {
@@ -563,6 +623,10 @@ declare namespace API {
     candidate_id: string;
   };
 
+  type getMediaApiV1MediaVersionIdGetParams = {
+    version_id: string;
+  };
+
   type getProjectApiV1ProjectsProjectIdGetParams = {
     project_id: string;
   };
@@ -602,6 +666,11 @@ declare namespace API {
     episode_id: string;
   };
 
+  type initializeVersionUploadApiV1MediaObjectsMediaObjectIdVersionsPostParams =
+    {
+      media_object_id: string;
+    };
+
   type listCandidateDecisionsApiV1ExtractionCandidatesCandidateIdDecisionsGetParams =
     {
       candidate_id: string;
@@ -637,6 +706,17 @@ declare namespace API {
       offset: number | null;
     };
 
+  type listMediaApiV1MediaGetParams = {
+    workspace_id: string;
+    kind: "image" | "video" | "audio" | "subtitle" | "delivery" | null | null;
+    source_type: "upload" | "generated" | "rendered" | null | null;
+    include_archived: boolean | null;
+    created_from: string | null | null;
+    created_to: string | null | null;
+    limit: number | null | null;
+    offset: number | null;
+  };
+
   type listProjectsApiV1ProjectsGetParams = {
     workspace_id: string;
     include_archived: boolean | null;
@@ -649,7 +729,7 @@ declare namespace API {
 
   type listTasksApiV1TasksGetParams = {
     workspace_id: string;
-    task_type: "script_extraction" | null | null;
+    task_type: "script_extraction" | "media_probe" | null | null;
     status:
       | "queued"
       | "running"
@@ -679,6 +759,80 @@ declare namespace API {
     email: string;
     /** Password */
     password: string;
+  };
+
+  type MediaAccessRequest = {
+    /** Purpose */
+    purpose: "preview" | "download";
+  };
+
+  type MediaAccessResponse = {
+    /** Method */
+    method: "GET" | null;
+    /** Url */
+    url: string;
+    /** Purpose */
+    purpose: "preview" | "download";
+    /** Expires At */
+    expires_at: string;
+  };
+
+  type MediaObjectResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Kind */
+    kind: "image" | "video" | "audio" | "subtitle" | "delivery";
+    /** Source Type */
+    source_type: "upload" | "generated" | "rendered";
+    /** Status */
+    status: "active" | "archived";
+    /** Current Version Id */
+    current_version_id: string | null;
+    /** Revision */
+    revision: number;
+  };
+
+  type MediaVersionResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Media Object Id */
+    media_object_id: string;
+    /** Version No */
+    version_no: number;
+    /** Filename */
+    filename: string;
+    /** Sha256 */
+    sha256: string;
+    /** Size Bytes */
+    size_bytes: number;
+    /** Mime Type */
+    mime_type: string;
+    /** Probe Status */
+    probe_status: "pending" | "ready" | "failed" | "quarantined";
+    /** Probe Attempt */
+    probe_attempt: number;
+    /** Probe Error Code */
+    probe_error_code: string | null;
+    /** Probe Error Summary */
+    probe_error_summary: string | null;
+    /** Probe Next Action */
+    probe_next_action: string | null;
+    /** Width */
+    width: number | null;
+    /** Height */
+    height: number | null;
+    /** Duration Ms */
+    duration_ms: number | null;
+    /** Codec */
+    codec: string | null;
+    /** Container */
+    container: string | null;
+    /** Created At */
+    created_at: string;
   };
 
   type MeResponse = {
@@ -716,6 +870,17 @@ declare namespace API {
   type PaginatedExtractionCandidates = {
     /** Items */
     items: ExtractionCandidateResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
+  type PaginatedMedia = {
+    /** Items */
+    items: MediaVersionResponse[];
     /** Total */
     total: number;
     /** Limit */
@@ -764,6 +929,11 @@ declare namespace API {
     code: string;
     /** Summary */
     summary: string;
+  };
+
+  type ProbeRetryRequest = {
+    /** Idempotency Key */
+    idempotency_key: string;
   };
 
   type ProfileUpdateRequest = {
@@ -901,6 +1071,10 @@ declare namespace API {
 
   type restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePostParams = {
     workspace_id: string;
+  };
+
+  type retryProbeApiV1MediaVersionIdProbeRetryPostParams = {
+    version_id: string;
   };
 
   type ReviewSummary = {
@@ -1109,9 +1283,9 @@ declare namespace API {
     /** Workspace Id */
     workspace_id: string;
     /** Task Type */
-    task_type: "script_extraction";
+    task_type: "script_extraction" | "media_probe";
     /** Request Type */
-    request_type: "extraction_batch";
+    request_type: "extraction_batch" | "media_version";
     /** Request Id */
     request_id: string;
     scope: TaskScopeResponse;
@@ -1173,6 +1347,68 @@ declare namespace API {
 
   type updateWorkspaceApiV1WorkspacesWorkspaceIdPatchParams = {
     workspace_id: string;
+  };
+
+  type UploadCapabilityResponse = {
+    /** Method */
+    method: "PUT" | null;
+    /** Url */
+    url: string;
+    /** Headers */
+    headers: Record<string, any>;
+    /** Expires At */
+    expires_at: string;
+  };
+
+  type UploadCompletionResponse = {
+    media_object: MediaObjectResponse;
+    version: MediaVersionResponse;
+    probe_task: TaskResponse;
+  };
+
+  type UploadDeclaration = {
+    /** Workspace Id */
+    workspace_id: string;
+    /** Kind */
+    kind: "image" | "video" | "audio" | "subtitle" | "delivery";
+    /** Filename */
+    filename: string;
+    /** Size Bytes */
+    size_bytes: number;
+    /** Mime Type */
+    mime_type: string;
+    /** Sha256 */
+    sha256: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type UploadInitializationResponse = {
+    upload_session: UploadSessionResponse;
+    upload: UploadCapabilityResponse;
+  };
+
+  type UploadSessionResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Media Object Id */
+    media_object_id: string | null;
+    /** Status */
+    status: "pending" | "completed" | "expired" | "failed";
+    /** Kind */
+    kind: "image" | "video" | "audio" | "subtitle" | "delivery";
+    /** Filename */
+    filename: string;
+    /** Size Bytes */
+    size_bytes: number;
+    /** Mime Type */
+    mime_type: string;
+    /** Sha256 */
+    sha256: string;
+    /** Expires At */
+    expires_at: string;
   };
 
   type UserResponse = {

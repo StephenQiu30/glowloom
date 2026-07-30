@@ -16,6 +16,7 @@ from app.integrations.minio import MinioObjectStorage
 from app.integrations.rabbitmq import rabbitmq_ping
 from app.integrations.redis import redis_ping
 from app.modules.identity.api import router as identity_router
+from app.modules.media.api import router as media_router
 from app.modules.production.api import router as production_router
 from app.modules.projects.api import router as projects_router
 from app.modules.scripts.api import router as scripts_router
@@ -44,6 +45,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     register_exception_handlers(app)
     app.include_router(identity_router)
+    app.include_router(media_router)
     app.include_router(projects_router)
     app.include_router(production_router)
     app.include_router(scripts_router)

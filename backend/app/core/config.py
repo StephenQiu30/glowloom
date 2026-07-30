@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     minio_secure: bool = False
     infrastructure_timeout_seconds: float = Field(default=1.5, gt=0, le=10)
     storage_thread_limit: int = Field(default=4, ge=1, le=32)
+    media_max_upload_bytes: int = Field(default=2 * 1024 * 1024 * 1024, ge=1)
+    media_upload_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    media_access_ttl_seconds: int = Field(default=300, ge=30, le=900)
+    media_probe_timeout_seconds: int = Field(default=120, ge=5, le=600)
 
     jwt_secret_key: SecretStr = SecretStr(
         "development-only-jwt-secret-change-before-production"

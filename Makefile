@@ -2,7 +2,7 @@ SHELL := /bin/sh
 PYTHON ?= python3.11
 VENV_PYTHON := backend/.venv/bin/python
 
-.PHONY: setup lock-backend dev-api dev-frontend scheduler worker-io db-init generate-api lint typecheck test hygiene check docker-build services-up services-down minio-up minio-down env-up env-down contract-minio contract-rabbitmq e2e-install e2e
+.PHONY: setup lock-backend dev-api dev-frontend scheduler worker-io worker-media db-init generate-api lint typecheck test hygiene check docker-build services-up services-down minio-up minio-down env-up env-down contract-minio contract-rabbitmq contract-ffprobe e2e-install e2e
 
 $(VENV_PYTHON):
 	@$(PYTHON) --version | grep -q 'Python 3.11.15'
@@ -35,6 +35,9 @@ scheduler:
 
 worker-io:
 	cd backend && .venv/bin/python -m app.io_worker
+
+worker-media:
+	cd backend && .venv/bin/python -m app.media_worker
 
 db-init:
 	cd backend && .venv/bin/python -m app.initialize_database
@@ -87,10 +90,13 @@ env-down:
 	docker compose -f docker-compose-env.yml down
 
 contract-minio:
-	cd backend && LANVERSE_RUN_MINIO_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_minio_port.py
+	cd backend && LANVERSE_RUN_MINIO_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_minio_port.py tests/contract/test_media_minio_flow.py
 
 contract-rabbitmq:
 	cd backend && LANVERSE_RUN_RABBITMQ_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_rabbitmq_publisher.py tests/contract/test_rabbitmq_worker.py
+
+contract-ffprobe:
+	cd backend && LANVERSE_RUN_FFPROBE_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_ffprobe_media.py
 
 e2e-install:
 	cd frontend && npx playwright install chromium
