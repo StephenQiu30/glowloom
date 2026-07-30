@@ -175,3 +175,18 @@ def test_integration_database_and_client_fixtures_are_shared() -> None:
         if "async def session_factory" in source or "async def client(" in source:
             duplicate_definitions.append(path)
     assert not duplicate_definitions
+
+
+def test_projects_and_identity_integration_tests_follow_capability_boundaries() -> None:
+    integration = ROOT / "backend/tests/integration"
+    expected = (
+        integration / "identity/authentication/test_authentication_api.py",
+        integration / "identity/workspaces/test_workspaces_api.py",
+        integration / "projects/projects/test_projects_api.py",
+        integration / "projects/episodes/test_episodes_api.py",
+        integration / "projects/snapshots/test_snapshots_api.py",
+    )
+    assert all(path.is_file() for path in expected)
+    assert not (integration / "test_identity_api.py").exists()
+    assert not (integration / "test_projects_api.py").exists()
+    assert (ROOT / "backend/tests/support/project_builders.py").is_file()
