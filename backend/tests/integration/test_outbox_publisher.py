@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -7,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
-from app.core.database import Base, create_engine, validate_test_database_url
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.messaging import (
@@ -17,26 +15,6 @@ from app.modules.messaging import (
 from app.modules.messaging.models import OutboxEvent
 from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
 from app.scheduler import publish_outbox_batch
-
-TEST_DATABASE_URL = validate_test_database_url(
-    "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
-    "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse",
-)
-
-
-@pytest.fixture
-async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    engine = create_engine(TEST_DATABASE_URL)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    try:
-        yield factory
-    finally:
-        async with engine.begin() as connection:
-            await connection.run_sync(Base.metadata.drop_all)
-        await engine.dispose()
 
 
 async def _actor(session_factory: async_sessionmaker[AsyncSession]) -> ActorContext:

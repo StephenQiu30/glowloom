@@ -1,61 +1,14 @@
-from collections.abc import AsyncIterator
 from decimal import Decimal
 from uuid import UUID
 
 import httpx
 import pytest
-from pydantic import SecretStr
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
-from app.core.config import Settings
-from app.core.database import Base, create_engine, get_async_session, validate_test_database_url
-from app.main import create_app
 from app.modules.identity.models import Membership
 from app.modules.projects.models import Episode
-
-TEST_DATABASE_URL = validate_test_database_url(
-    "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
-    "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse",
-)
-
-
-@pytest.fixture
-async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    engine = create_engine(TEST_DATABASE_URL)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    try:
-        yield factory
-    finally:
-        async with engine.begin() as connection:
-            await connection.run_sync(Base.metadata.drop_all)
-        await engine.dispose()
-
-
-@pytest.fixture
-async def client(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> AsyncIterator[httpx.AsyncClient]:
-    async def _test_session() -> AsyncIterator[AsyncSession]:
-        async with session_factory() as session:
-            yield session
-
-    app = create_app(
-        Settings(
-            environment="test",
-            database_url=TEST_DATABASE_URL,
-            jwt_secret_key=SecretStr("project-test-secret-with-at-least-32-bytes"),
-        )
-    )
-    app.dependency_overrides[get_async_session] = _test_session
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as test_client:
-        yield test_client
 
 
 async def _identity(

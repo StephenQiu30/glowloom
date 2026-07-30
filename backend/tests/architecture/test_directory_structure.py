@@ -159,3 +159,19 @@ def test_identity_is_split_by_authentication_and_workspaces_capabilities() -> No
     api = (module / "api.py").read_text()
     assert "include_router(authentication_router)" in api
     assert "include_router(workspaces_router)" in api
+
+
+def test_integration_database_and_client_fixtures_are_shared() -> None:
+    tests = ROOT / "backend/tests"
+    conftest = tests / "conftest.py"
+    assert conftest.is_file()
+    fixture_source = conftest.read_text()
+    assert "async def session_factory" in fixture_source
+    assert "async def client" in fixture_source
+
+    duplicate_definitions: list[Path] = []
+    for path in (tests / "integration").rglob("test_*.py"):
+        source = path.read_text()
+        if "async def session_factory" in source or "async def client(" in source:
+            duplicate_definitions.append(path)
+    assert not duplicate_definitions
