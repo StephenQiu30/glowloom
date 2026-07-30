@@ -455,6 +455,83 @@ async def test_configured_worker_records_real_adapter_result_once(
 
 
 @pytest.mark.asyncio
+async def test_worker_redelivery_after_result_commit_failure_does_not_call_provider_again(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="extraction-unknown-worker@example.com"
+    )
+    _, _, published = await _published_script(
+        client,
+        headers,
+        workspace_id,
+        import_key="unknown-worker-import",
+    )
+    started = await client.post(
+        f"/api/v1/script-versions/{published['id']}/extractions",
+        headers=headers,
+        json=_extraction_payload(idempotency_key="unknown-worker-extraction"),
+    )
+    assert started.status_code == 202
+    batch = started.json()["data"]
+    async with session_factory() as session:
+        event = await session.scalar(
+            select(OutboxEvent).where(
+                OutboxEvent.aggregate_id == batch["task"]["id"]
+            )
+        )
+        assert event is not None
+        body = envelope_from_event(event).model_dump_json().encode()
+
+    extractor = _RecordingScriptExtractor()
+    real_finalize = io_worker.finalize_extraction_success
+
+    async def fail_result_commit(*_: object, **__: object) -> None:
+        raise RuntimeError("synthetic result commit failure")
+
+    monkeypatch.setattr(io_worker, "finalize_extraction_success", fail_result_commit)
+    first_message = _RecordingExtractionMessage(body)
+    first_result = await io_worker.process_incoming_message(
+        first_message,
+        session_factory,
+        extractor=extractor,
+    )
+
+    assert first_result == "requeued"
+    assert first_message.ack_count == 0
+    assert first_message.nack_requeues == [True]
+    assert extractor.inputs == [published["body"]]
+
+    monkeypatch.setattr(io_worker, "finalize_extraction_success", real_finalize)
+    redelivery = _RecordingExtractionMessage(body)
+    redelivery_result = await io_worker.process_incoming_message(
+        redelivery,
+        session_factory,
+        extractor=extractor,
+    )
+
+    assert redelivery_result == "completed"
+    assert redelivery.ack_count == 1
+    assert redelivery.nack_requeues == []
+    assert extractor.inputs == [published["body"]]
+    fetched = await client.get(
+        f"/api/v1/extraction-batches/{batch['id']}", headers=headers
+    )
+    assert fetched.status_code == 200
+    unknown = fetched.json()["data"]
+    assert unknown["status"] == "unknown"
+    assert unknown["task"]["status"] == "unknown"
+    assert unknown["task"]["error"] == {
+        "code": "ai_result_unknown",
+        "retryable": False,
+        "summary": "DeepSeek response outcome is unknown",
+    }
+    assert unknown["task"]["next_action"] == "start_new_extraction"
+
+
+@pytest.mark.asyncio
 async def test_extraction_candidates_are_typed_idempotent_paginated_and_private(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],

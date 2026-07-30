@@ -64,6 +64,7 @@ async def test_deepseek_extractor_uses_fixed_non_thinking_structured_contract(
     assert result == ScriptExtractionResult.model_validate(_structured_result())
     constructor = created["constructor"]
     assert constructor["model"] == "deepseek-v4-pro"
+    assert constructor["base_url"] == "https://api.deepseek.com"
     assert constructor["temperature"] == 0
     assert constructor["max_retries"] == 0
     assert constructor["timeout"] == 120
@@ -74,8 +75,8 @@ async def test_deepseek_extractor_uses_fixed_non_thinking_structured_contract(
 
     messages = created["messages"]
     assert len(messages) == 2
-    system_content = getattr(messages[0], "content")
-    user_content = getattr(messages[1], "content")
+    system_content = messages[0].content
+    user_content = messages[1].content
     assert "JSON" in system_content
     assert '"candidates"' in system_content
     assert "只提取" in system_content

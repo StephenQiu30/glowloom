@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from pydantic import SecretStr
 
 from app.core.config import REPOSITORY_ENV_FILE, Settings
@@ -42,9 +41,10 @@ def test_outbox_resource_limits_are_bounded() -> None:
 
 
 def test_deepseek_key_is_optional_and_secret() -> None:
-    assert Settings(_env_file=None).deepseek_api_key is None
+    assert Settings.model_validate({}).deepseek_api_key is None
+    assert Settings.model_validate({"deepseek_api_key": ""}).deepseek_api_key is None
 
-    configured = Settings(_env_file=None, deepseek_api_key="test-deepseek-key")
+    configured = Settings.model_validate({"deepseek_api_key": "test-deepseek-key"})
 
     assert isinstance(configured.deepseek_api_key, SecretStr)
     assert str(configured.deepseek_api_key) == "**********"

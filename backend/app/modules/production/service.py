@@ -127,6 +127,7 @@ def _fail_script_extraction_task(
     error_code: str,
     error_summary: str,
     next_action: str,
+    retryable: bool,
     now: datetime,
 ) -> bool:
     if task.task_type != "script_extraction":
@@ -136,9 +137,41 @@ def _fail_script_extraction_task(
     task.status = "failed"
     task.progress_stage = "blocked"
     task.error_code = error_code
-    task.error_retryable = False
+    task.error_retryable = retryable
     task.error_summary = error_summary
     task.next_action = next_action
+    task.revision += 1
+    task.updated_at = now
+    return True
+
+
+def _start_script_extraction_task(task: Task, *, now: datetime) -> bool:
+    if task.task_type != "script_extraction":
+        raise ValueError("task is not a script extraction task")
+    if task.status != "queued":
+        return False
+    task.status = "running"
+    task.progress_stage = "calling_provider"
+    task.error_code = None
+    task.error_retryable = None
+    task.error_summary = None
+    task.next_action = "poll_task"
+    task.revision += 1
+    task.updated_at = now
+    return True
+
+
+def _mark_script_extraction_task_unknown(task: Task, *, now: datetime) -> bool:
+    if task.task_type != "script_extraction":
+        raise ValueError("task is not a script extraction task")
+    if task.status in {"succeeded", "failed", "cancelled", "unknown"}:
+        return False
+    task.status = "unknown"
+    task.progress_stage = "reconciliation_required"
+    task.error_code = "ai_result_unknown"
+    task.error_retryable = False
+    task.error_summary = "DeepSeek response outcome is unknown"
+    task.next_action = "start_new_extraction"
     task.revision += 1
     task.updated_at = now
     return True
@@ -182,6 +215,7 @@ async def fail_script_extraction_task(
     error_summary: str,
     next_action: str,
     now: datetime,
+    retryable: bool = False,
 ) -> bool:
     task = await repository.find_task(session, task_id, for_update=True)
     if task is None:
@@ -195,8 +229,47 @@ async def fail_script_extraction_task(
         error_code=error_code,
         error_summary=error_summary,
         next_action=next_action,
+        retryable=retryable,
         now=now,
     )
+    if changed:
+        await session.flush()
+    return changed
+
+
+async def start_script_extraction_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Task state is unavailable",
+            status_code=500,
+        )
+    changed = _start_script_extraction_task(task, now=now)
+    if changed:
+        await session.flush()
+    return changed
+
+
+async def mark_script_extraction_task_unknown(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Task state is unavailable",
+            status_code=500,
+        )
+    changed = _mark_script_extraction_task_unknown(task, now=now)
     if changed:
         await session.flush()
     return changed

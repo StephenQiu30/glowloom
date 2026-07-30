@@ -28,7 +28,8 @@ from app.modules.scripts.authorization import (
     require_resource_access,
     resource_not_found,
 )
-from app.modules.scripts.contracts import ScriptProductionSummary
+from app.modules.scripts.contracts import ScriptExtractionInput, ScriptProductionSummary
+from app.modules.scripts.extractions.ports import SCRIPT_STRUCTURE_EXTRACTOR_VERSION
 from app.modules.scripts.extractions.schemas import (
     AcceptWithChangesDecision,
     AssetCandidateProposal,
@@ -118,7 +119,6 @@ async def summarize_current_scripts(
         )
     return summaries
 
-SCRIPT_STRUCTURE_EXTRACTOR_VERSION = "script-structure-v1"
 _CANDIDATE_PROPOSAL_ADAPTER: TypeAdapter[CandidateProposal] = TypeAdapter(
     CandidateProposal
 )
@@ -383,6 +383,39 @@ async def synchronize_extraction_batch_status(
     batch.status = status
     batch.updated_at = now
     await session.flush()
+
+
+async def get_script_extraction_input(
+    session: AsyncSession,
+    batch_id: UUID,
+    task_id: UUID,
+) -> ScriptExtractionInput:
+    batch = await repository.find_extraction_batch(session, batch_id)
+    if batch is None or batch.task_id != task_id:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Extraction batch state is unavailable",
+            status_code=500,
+        )
+    version = await repository.find_version(session, batch.script_version_id)
+    if (
+        version is None
+        or version.workspace_id != batch.workspace_id
+        or version.content_hash != batch.input_hash
+        or sha256(version.body.encode()).hexdigest() != batch.input_hash
+    ):
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Extraction input version is unavailable",
+            status_code=500,
+        )
+    return ScriptExtractionInput(
+        batch_id=batch.id,
+        task_id=task_id,
+        workspace_id=batch.workspace_id,
+        script_version_id=version.id,
+        body=version.body,
+    )
 
 
 async def record_extraction_result(

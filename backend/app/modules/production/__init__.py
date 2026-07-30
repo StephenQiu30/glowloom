@@ -18,6 +18,8 @@ from app.modules.production.service import (
     get_internal_task,
     get_task,
     lock_task,
+    mark_script_extraction_task_unknown,
+    start_script_extraction_task,
     summarize_episode_tasks,
 )
 
@@ -37,5 +39,7 @@ __all__ = [
     "get_internal_task",
     "get_task",
     "lock_task",
+    "mark_script_extraction_task_unknown",
+    "start_script_extraction_task",
     "summarize_episode_tasks",
 ]

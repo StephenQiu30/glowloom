@@ -14,7 +14,10 @@ annotated-types==0.8.0
     # via pydantic
 anyio==4.14.2
     # via
+    #   httpx
+    #   langsmith
     #   lanverse-backend (pyproject.toml)
+    #   openai
     #   starlette
     #   watchfiles
 argon2-cffi==25.1.0
@@ -26,11 +29,21 @@ argon2-cffi-bindings==25.1.0
 asyncpg==0.31.0
     # via lanverse-backend (pyproject.toml)
 certifi==2026.7.22
-    # via minio
+    # via
+    #   httpcore
+    #   httpx
+    #   minio
+    #   requests
 cffi==2.1.0
     # via argon2-cffi-bindings
+charset-normalizer==3.4.9
+    # via requests
 click==8.4.2
     # via uvicorn
+distro==1.9.0
+    # via
+    #   langsmith
+    #   openai
 dnspython==2.8.0
     # via email-validator
 email-validator==2.3.0
@@ -40,18 +53,48 @@ fastapi==0.140.12
 greenlet==3.5.4
     # via sqlalchemy
 h11==0.16.0
-    # via uvicorn
+    # via
+    #   httpcore
+    #   uvicorn
+httpcore==1.0.9
+    # via httpx
 httptools==0.8.0
     # via uvicorn
+httpx==0.28.1
+    # via
+    #   langsmith
+    #   openai
 idna==3.18
     # via
     #   anyio
     #   email-validator
+    #   httpx
+    #   requests
     #   yarl
+jiter==0.16.0
+    # via openai
+jsonpatch==1.33
+    # via langchain-core
+jsonpointer==3.1.1
+    # via jsonpatch
+langchain-core==1.5.2
+    # via
+    #   langchain-deepseek
+    #   langchain-openai
+langchain-deepseek==1.1.0
+    # via lanverse-backend (pyproject.toml)
+langchain-openai==1.4.1
+    # via langchain-deepseek
+langchain-protocol==0.0.18
+    # via langchain-core
+langsmith==0.10.12
+    # via langchain-core
 minio==7.2.20
     # via lanverse-backend (pyproject.toml)
 multidict==6.7.1
     # via yarl
+openai==2.50.0
+    # via langchain-openai
 opentelemetry-api==1.44.0
     # via
     #   lanverse-backend (pyproject.toml)
@@ -61,6 +104,12 @@ opentelemetry-sdk==1.44.0
     # via lanverse-backend (pyproject.toml)
 opentelemetry-semantic-conventions==0.65b0
     # via opentelemetry-sdk
+orjson==3.11.9
+    # via langsmith
+packaging==26.2
+    # via
+    #   langchain-core
+    #   langsmith
 pamqp==4.0.1
     # via aiormq
 prometheus-client==0.26.0
@@ -76,7 +125,10 @@ pycryptodome==3.23.0
 pydantic==2.13.4
     # via
     #   fastapi
+    #   langchain-core
+    #   langsmith
     #   lanverse-backend (pyproject.toml)
+    #   openai
     #   pydantic-settings
 pydantic-core==2.46.4
     # via pydantic
@@ -89,18 +141,43 @@ python-dotenv==1.2.2
     #   pydantic-settings
     #   uvicorn
 pyyaml==6.0.3
-    # via uvicorn
+    # via
+    #   langchain-core
+    #   uvicorn
 redis==8.0.1
     # via lanverse-backend (pyproject.toml)
+regex==2026.7.19
+    # via tiktoken
+requests==2.34.2
+    # via
+    #   langsmith
+    #   requests-toolbelt
+    #   tiktoken
+requests-toolbelt==1.0.0
+    # via langsmith
+sniffio==1.3.1
+    # via
+    #   langsmith
+    #   openai
 sqlalchemy==2.0.51
     # via lanverse-backend (pyproject.toml)
 starlette==1.3.1
     # via fastapi
+tenacity==9.1.4
+    # via langchain-core
+tiktoken==0.13.0
+    # via langchain-openai
+tqdm==4.70.0
+    # via openai
 typing-extensions==4.16.0
     # via
     #   anyio
     #   fastapi
+    #   langchain-core
+    #   langchain-protocol
+    #   langsmith
     #   minio
+    #   openai
     #   opentelemetry-api
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
@@ -115,7 +192,13 @@ typing-inspection==0.4.2
     #   pydantic
     #   pydantic-settings
 urllib3==2.7.0
-    # via minio
+    # via
+    #   minio
+    #   requests
+uuid-utils==0.17.0
+    # via
+    #   langchain-core
+    #   langsmith
 uuid6==2025.0.1
     # via lanverse-backend (pyproject.toml)
 uvicorn==0.51.0
@@ -125,8 +208,14 @@ uvloop==0.22.1
 watchfiles==1.2.0
     # via uvicorn
 websockets==17.0
-    # via uvicorn
+    # via
+    #   langsmith
+    #   uvicorn
+xxhash==3.8.1
+    # via langsmith
 yarl==1.24.5
     # via
     #   aio-pika
     #   aiormq
+zstandard==0.25.0
+    # via langsmith

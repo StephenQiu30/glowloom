@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPOSITORY_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     jwt_issuer: str = "lanverse-api"
     jwt_audience: str = "lanverse-web"
     jwt_access_token_minutes: int = Field(default=30, ge=5, le=1440)
+    deepseek_api_key: SecretStr | None = None
+
+    @field_validator("deepseek_api_key", mode="before")
+    @classmethod
+    def empty_deepseek_key_is_unconfigured(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @model_validator(mode="after")
     def reject_development_jwt_secret_in_production(self) -> "Settings":
