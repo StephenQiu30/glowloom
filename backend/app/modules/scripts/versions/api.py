@@ -16,6 +16,7 @@ from app.modules.scripts.versions.schemas import (
     ScriptImportResponse,
     ScriptSourceResponse,
     ScriptSourceStateRequest,
+    ScriptVersionDeleteResponse,
     ScriptVersionDiffResponse,
     ScriptVersionPublishRequest,
     ScriptVersionPublishResponse,
@@ -133,6 +134,26 @@ async def restore_source(
     return ApiResponse(
         data=await service.set_source_archived(
             session, claims, source_id, payload, archived=False
+        )
+    )
+
+
+@router.delete(
+    "/script-versions/{version_id}",
+    response_model=ApiResponse[ScriptVersionDeleteResponse],
+)
+async def delete_draft_version(
+    version_id: UUID,
+    confirm: Annotated[bool, Query()],
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ScriptVersionDeleteResponse]:
+    return ApiResponse(
+        data=await service.delete_draft_version(
+            session,
+            claims,
+            version_id,
+            confirmed=confirm,
         )
     )
 

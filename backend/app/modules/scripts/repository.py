@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.scripts.models import (
@@ -67,10 +67,13 @@ async def latest_version_number(
 async def find_version(
     session: AsyncSession,
     version_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> ScriptVersion | None:
-    return await session.scalar(
-        select(ScriptVersion).where(ScriptVersion.id == version_id)
-    )
+    query = select(ScriptVersion).where(ScriptVersion.id == version_id)
+    if for_update:
+        query = query.with_for_update()
+    return await session.scalar(query)
 
 
 async def list_versions(
@@ -118,6 +121,23 @@ async def find_extraction_batch(
     if for_update:
         query = query.with_for_update()
     return await session.scalar(query)
+
+
+async def list_extraction_batches_referencing_version(
+    session: AsyncSession,
+    version_id: UUID,
+) -> list[ExtractionBatch]:
+    batches = await session.scalars(
+        select(ExtractionBatch)
+        .where(
+            or_(
+                ExtractionBatch.script_version_id == version_id,
+                ExtractionBatch.confirmed_script_version_id == version_id,
+            )
+        )
+        .order_by(ExtractionBatch.created_at, ExtractionBatch.id)
+    )
+    return list(batches)
 
 
 async def list_extraction_candidates(

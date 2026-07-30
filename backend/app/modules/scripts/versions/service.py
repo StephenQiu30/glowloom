@@ -19,7 +19,7 @@ from app.modules.scripts.authorization import (
     require_resource_access,
     resource_not_found,
 )
-from app.modules.scripts.models import ScriptSource, ScriptVersion
+from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
 from app.modules.scripts.versions.schemas import (
     CurrentScriptVersionRequest,
     CurrentScriptVersionResponse,
@@ -28,7 +28,10 @@ from app.modules.scripts.versions.schemas import (
     ScriptImportResponse,
     ScriptSourceResponse,
     ScriptSourceStateRequest,
+    ScriptVersionDeleteBlocker,
+    ScriptVersionDeleteResponse,
     ScriptVersionDiffResponse,
+    ScriptVersionImpactResponse,
     ScriptVersionPublishRequest,
     ScriptVersionPublishResponse,
     ScriptVersionResponse,
@@ -66,13 +69,20 @@ def _version_response(version: ScriptVersion) -> ScriptVersionResponse:
 
 def _current_response(
     episode_id: UUID,
+    previous_script_version_id: UUID | None,
     current_script_version_id: UUID,
     episode_revision: int,
+    affected_shot_ids: list[UUID],
 ) -> CurrentScriptVersionResponse:
     return CurrentScriptVersionResponse(
         episode_id=episode_id,
         current_script_version_id=current_script_version_id,
         episode_revision=episode_revision,
+        impact=ScriptVersionImpactResponse(
+            previous_script_version_id=previous_script_version_id,
+            current_script_version_id=current_script_version_id,
+            affected_shot_ids=affected_shot_ids,
+        ),
     )
 
 
@@ -299,8 +309,10 @@ async def publish_version(
         version=_version_response(version),
         current=_current_response(
             current.episode_id,
+            request.expected_current_version_id,
             version.id,
             current.revision,
+            [],
         ),
     )
 
@@ -347,7 +359,13 @@ async def set_current_version(
             version.id,
         )
         await session.flush()
-    return _current_response(current.episode_id, version.id, current.revision)
+    return _current_response(
+        current.episode_id,
+        request.expected_current_version_id,
+        version.id,
+        current.revision,
+        [],
+    )
 
 
 async def set_source_archived(
@@ -382,6 +400,136 @@ async def set_source_archived(
         source.revision += 1
         await session.flush()
     return _source_response(source)
+
+
+def _delete_blockers(
+    version: ScriptVersion,
+    episode_id: UUID,
+    current_script_version_id: UUID | None,
+    batches: list[ExtractionBatch],
+) -> list[ScriptVersionDeleteBlocker]:
+    blockers: list[ScriptVersionDeleteBlocker] = []
+    if version.status != "draft":
+        blockers.append(
+            ScriptVersionDeleteBlocker(
+                code="VERSION_NOT_DRAFT",
+                resource_type="script_version",
+                resource_id=version.id,
+                summary="只有未引用的草稿版本可以硬删除",
+            )
+        )
+    if current_script_version_id == version.id:
+        blockers.append(
+            ScriptVersionDeleteBlocker(
+                code="CURRENT_VERSION",
+                resource_type="episode",
+                resource_id=episode_id,
+                summary="该版本是单集当前剧本",
+            )
+        )
+    for batch in batches:
+        if batch.script_version_id == version.id:
+            blockers.append(
+                ScriptVersionDeleteBlocker(
+                    code="HAS_EXTRACTION_BATCH",
+                    resource_type="extraction_batch",
+                    resource_id=batch.id,
+                    summary="该版本已用于结构提取",
+                )
+            )
+        if batch.confirmed_script_version_id == version.id:
+            blockers.append(
+                ScriptVersionDeleteBlocker(
+                    code="CONFIRMED_STRUCTURE_VERSION",
+                    resource_type="extraction_batch",
+                    resource_id=batch.id,
+                    summary="该版本是结构确认结果",
+                )
+            )
+    return blockers
+
+
+async def delete_draft_version(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    version_id: UUID,
+    *,
+    confirmed: bool,
+) -> ScriptVersionDeleteResponse:
+    if not confirmed:
+        raise ApiError(
+            ErrorCode.INVALID_REQUEST,
+            "Draft version deletion must be explicitly confirmed",
+            status_code=422,
+        )
+    async with session.begin():
+        version = await repository.find_version(session, version_id)
+        if version is None:
+            raise resource_not_found("Script version")
+        await require_resource_access(
+            session,
+            claims,
+            version.workspace_id,
+            "Script version",
+        )
+        source = await repository.find_source(
+            session,
+            version.source_id,
+            for_update=True,
+        )
+        if source is None or source.workspace_id != version.workspace_id:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Script source is unavailable",
+                status_code=500,
+            )
+        episode = await lock_active_episode_for_content_write(
+            session,
+            claims,
+            source.episode_id,
+        )
+        locked_version = await repository.find_version(
+            session,
+            version_id,
+            for_update=True,
+        )
+        if locked_version is None:
+            raise resource_not_found("Script version")
+        if (
+            locked_version.source_id != source.id
+            or locked_version.workspace_id != source.workspace_id
+        ):
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Script version state is unavailable",
+                status_code=500,
+            )
+        batches = await repository.list_extraction_batches_referencing_version(
+            session,
+            locked_version.id,
+        )
+        blockers = _delete_blockers(
+            locked_version,
+            episode.episode_id,
+            episode.current_script_version_id,
+            batches,
+        )
+        if blockers:
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Script version cannot be deleted",
+                status_code=409,
+                next_action="review_script_version_delete_blockers",
+                details={
+                    "script_version_id": str(locked_version.id),
+                    "blockers": [
+                        blocker.model_dump(mode="json") for blocker in blockers
+                    ],
+                },
+            )
+        await session.delete(locked_version)
+        await session.flush()
+    return ScriptVersionDeleteResponse(script_version_id=version_id)
 
 
 async def diff_versions(

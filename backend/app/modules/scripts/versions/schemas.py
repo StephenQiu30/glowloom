@@ -85,10 +85,17 @@ class CurrentScriptVersionRequest(CommandModel):
     expected_current_version_id: UUID | None
 
 
+class ScriptVersionImpactResponse(BaseModel):
+    previous_script_version_id: UUID | None
+    current_script_version_id: UUID
+    affected_shot_ids: list[UUID]
+
+
 class CurrentScriptVersionResponse(BaseModel):
     episode_id: UUID
     current_script_version_id: UUID
     episode_revision: int
+    impact: ScriptVersionImpactResponse
 
 
 class ScriptVersionPublishResponse(BaseModel):
@@ -98,6 +105,23 @@ class ScriptVersionPublishResponse(BaseModel):
 
 class ScriptSourceStateRequest(CommandModel):
     expected_revision: int = Field(ge=1)
+
+
+class ScriptVersionDeleteBlocker(BaseModel):
+    code: Literal[
+        "VERSION_NOT_DRAFT",
+        "CURRENT_VERSION",
+        "HAS_EXTRACTION_BATCH",
+        "CONFIRMED_STRUCTURE_VERSION",
+    ]
+    resource_type: Literal["script_version", "episode", "extraction_batch"]
+    resource_id: UUID
+    summary: str
+
+
+class ScriptVersionDeleteResponse(BaseModel):
+    deleted: Literal[True] = True
+    script_version_id: UUID
 
 
 class ScriptVersionDiffResponse(BaseModel):

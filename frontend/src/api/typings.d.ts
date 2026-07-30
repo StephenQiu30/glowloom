@@ -110,6 +110,10 @@ declare namespace API {
     data: ScriptSourceResponse;
   };
 
+  type ApiResponseScriptVersionDeleteResponse_ = {
+    data: ScriptVersionDeleteResponse;
+  };
+
   type ApiResponseScriptVersionDiffResponse_ = {
     data: ScriptVersionDiffResponse;
   };
@@ -296,6 +300,7 @@ declare namespace API {
     current_script_version_id: string;
     /** Episode Revision */
     episode_revision: number;
+    impact: ScriptVersionImpactResponse;
   };
 
   type DeactivateAccountRequest = {
@@ -317,6 +322,11 @@ declare namespace API {
     resource_id: string;
     /** Summary */
     summary: string;
+  };
+
+  type deleteDraftVersionApiV1ScriptVersionsVersionIdDeleteParams = {
+    version_id: string;
+    confirm: boolean;
   };
 
   type deleteEpisodeApiV1EpisodesEpisodeIdDeleteParams = {
@@ -993,6 +1003,13 @@ declare namespace API {
     expected_revision: number;
   };
 
+  type ScriptVersionDeleteResponse = {
+    /** Deleted */
+    deleted: true | null;
+    /** Script Version Id */
+    script_version_id: string;
+  };
+
   type ScriptVersionDiffResponse = {
     /** Base Version Id */
     base_version_id: string;
@@ -1004,6 +1021,15 @@ declare namespace API {
     removed_lines: number;
     /** Diff Lines */
     diff_lines: string[];
+  };
+
+  type ScriptVersionImpactResponse = {
+    /** Previous Script Version Id */
+    previous_script_version_id: string | null;
+    /** Current Script Version Id */
+    current_script_version_id: string;
+    /** Affected Shot Ids */
+    affected_shot_ids: string[];
   };
 
   type ScriptVersionPublishRequest = {
