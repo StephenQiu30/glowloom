@@ -3,9 +3,9 @@
 from app.modules.production.contracts import (
     ScriptExtractionTaskCommand,
     TaskContext,
+    TaskResponse,
     TaskStatus,
 )
-from app.modules.production.schemas import TaskResponse
 from app.modules.production.service import (
     complete_script_extraction_task,
     create_script_extraction_task,

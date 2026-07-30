@@ -19,15 +19,13 @@ from app.modules.production import repository
 from app.modules.production.contracts import (
     ScriptExtractionTaskCommand,
     TaskContext,
-    TaskStatus,
-)
-from app.modules.production.models import Task
-from app.modules.production.schemas import (
-    PaginatedTasks,
     TaskErrorResponse,
     TaskResponse,
     TaskScopeResponse,
+    TaskStatus,
 )
+from app.modules.production.models import Task
+from app.modules.production.schemas import PaginatedTasks
 
 
 def task_response(task: Task) -> TaskResponse:

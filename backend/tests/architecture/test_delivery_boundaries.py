@@ -46,3 +46,14 @@ def test_task_and_message_delivery_remain_current_flat_lifecycles() -> None:
     assert not (messaging / "inbox").exists()
     assert _model_classes("production") == {"Task"}
     assert _model_classes("messaging") == {"InboxDelivery", "OutboxEvent"}
+
+
+def test_public_delivery_results_have_no_schema_reexport_layer() -> None:
+    production_contracts = (MODULES / "production/contracts.py").read_text()
+    production_schemas = (MODULES / "production/schemas.py").read_text()
+
+    assert "class TaskResponse" in production_contracts
+    assert "class TaskResponse" not in production_schemas
+    assert "ScriptExtractionTaskCommand" not in production_schemas
+    assert "TaskStatus" not in production_schemas
+    assert not (MODULES / "messaging/schemas.py").exists()

@@ -8,7 +8,8 @@ from app.core.auth import AccessTokenClaims, get_access_token_claims
 from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
 from app.modules.production import service
-from app.modules.production.schemas import PaginatedTasks, TaskResponse, TaskStatus
+from app.modules.production.contracts import TaskResponse, TaskStatus
+from app.modules.production.schemas import PaginatedTasks
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
