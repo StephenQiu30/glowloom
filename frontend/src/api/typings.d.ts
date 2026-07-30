@@ -138,6 +138,10 @@ declare namespace API {
     data: PaginatedProjects;
   };
 
+  type ApiResponsePaginatedScriptSources_ = {
+    data: PaginatedScriptSources;
+  };
+
   type ApiResponsePaginatedScriptVersions_ = {
     data: PaginatedScriptVersions;
   };
@@ -423,6 +427,25 @@ declare namespace API {
   type AssetStateRequest = {
     /** Expected Revision */
     expected_revision: number;
+  };
+
+  type AssetSummary = {
+    /** Status */
+    status: "not_started" | "draft" | "blocked" | "ready" | "unavailable";
+    /** Total */
+    total: number | null;
+    /** Versioned */
+    versioned: number | null;
+    /** Ready */
+    ready: number | null;
+    /** Draft */
+    draft: number | null;
+    /** Blocked */
+    blocked: number | null;
+    /** Ready Kinds */
+    ready_kinds: string[];
+    /** Required Kinds */
+    required_kinds: string[];
   };
 
   type AssetUpdateRequest = {
@@ -896,13 +919,19 @@ declare namespace API {
     /** Episode Id */
     episode_id: string;
     /** Current Stage */
-    current_stage: "script_import";
+    current_stage:
+      | "script_import"
+      | "structure_review"
+      | "asset_preparation"
+      | "storyboard_preparation";
     /** Completion */
     completion: number;
     /** Blocking Reasons */
     blocking_reasons: BlockingReason[];
     /** Next Actions */
     next_actions: NextAction[];
+    script_summary: ScriptSummary;
+    asset_summary: AssetSummary;
     task_summary: TaskSummary;
     review_summary: ReviewSummary;
     cost_summary: CostSummary;
@@ -1192,6 +1221,12 @@ declare namespace API {
     offset: number | null;
   };
 
+  type listSourcesApiV1EpisodesEpisodeIdScriptSourcesGetParams = {
+    episode_id: string;
+    limit: number | null | null;
+    offset: number | null;
+  };
+
   type listTasksApiV1TasksGetParams = {
     workspace_id: string;
     task_type: "script_extraction" | "media_probe" | null | null;
@@ -1433,6 +1468,17 @@ declare namespace API {
     offset: number;
   };
 
+  type PaginatedScriptSources = {
+    /** Items */
+    items: ScriptSourceResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
   type PaginatedScriptVersions = {
     /** Items */
     items: ScriptVersionResponse[];
@@ -1497,7 +1543,12 @@ declare namespace API {
     /** Project Id */
     project_id: string;
     /** Current Stage */
-    current_stage: "project_setup" | "script_import";
+    current_stage:
+      | "project_setup"
+      | "script_import"
+      | "structure_review"
+      | "asset_preparation"
+      | "storyboard_preparation";
     /** Completion */
     completion: number;
     /** Blocking Reasons */
@@ -1629,7 +1680,7 @@ declare namespace API {
 
   type ReviewSummary = {
     /** Status */
-    status: "not_started" | null;
+    status: "not_started" | "pending" | "completed" | "unavailable";
     /** Pending */
     pending: number | null;
   };
@@ -1733,6 +1784,26 @@ declare namespace API {
   type ScriptSourceStateRequest = {
     /** Expected Revision */
     expected_revision: number;
+  };
+
+  type ScriptSummary = {
+    /** Status */
+    status:
+      | "not_started"
+      | "published"
+      | "extracting"
+      | "extraction_blocked"
+      | "review_required"
+      | "confirmation_required"
+      | "set_current_required"
+      | "confirmed"
+      | "unavailable";
+    /** Current Version Id */
+    current_version_id: string | null;
+    /** Extraction Batch Id */
+    extraction_batch_id: string | null;
+    /** Pending Required Candidates */
+    pending_required_candidates: number | null;
   };
 
   type ScriptVersionDeleteResponse = {
@@ -1922,11 +1993,15 @@ declare namespace API {
 
   type TaskSummary = {
     /** Status */
-    status: "not_started" | null;
+    status: "not_started" | "running" | "failed" | "succeeded" | "unavailable";
     /** Running */
     running: number | null;
     /** Failed */
     failed: number | null;
+    /** Succeeded */
+    succeeded: number | null;
+    /** Unknown */
+    unknown: number | null;
   };
 
   type updateAssetApiV1AssetsAssetIdPatchParams = {

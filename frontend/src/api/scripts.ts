@@ -24,6 +24,25 @@ export async function setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersio
   );
 }
 
+/** List Sources GET /api/v1/episodes/${param0}/script-sources */
+export async function listSourcesApiV1EpisodesEpisodeIdScriptSourcesGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listSourcesApiV1EpisodesEpisodeIdScriptSourcesGetParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponsePaginatedScriptSources_>(
+    `/api/v1/episodes/${param0}/script-sources`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
+      ...(options || {}),
+    }
+  );
+}
+
 /** Import Text Source POST /api/v1/episodes/${param0}/script-sources */
 export async function importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

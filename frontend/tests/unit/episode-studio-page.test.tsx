@@ -294,8 +294,11 @@ describe("单集统一生产工作台", () => {
     expect(
       await screen.findByRole("heading", { name: "第一集 · 雨巷相逢" }),
     ).toBeInTheDocument();
-    expect(await screen.findByDisplayValue(version.body)).toBeInTheDocument();
-    expect(screen.getByText("结构确认")).toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.getVersion).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMocks.listVersions).toHaveBeenCalledTimes(1));
+    const editor = await screen.findByLabelText("当前剧本文本");
+    await waitFor(() => expect(editor).toHaveValue(version.body));
+    expect(screen.getAllByText("结构确认").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "开始结构提取" }));
     await waitFor(() => expect(apiMocks.startExtraction).toHaveBeenCalledTimes(1));

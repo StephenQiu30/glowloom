@@ -30,7 +30,12 @@ import {
   updateMeApiV1MePatch,
   updateWorkspaceApiV1WorkspacesWorkspaceIdPatch,
 } from "@/api/identity";
-import { listMediaApiV1MediaGet } from "@/api/media";
+import {
+  completeUploadApiV1MediaUploadsUploadSessionIdCompletePost,
+  initializeUploadApiV1MediaUploadsPost,
+  listMediaApiV1MediaGet,
+  retryProbeApiV1MediaVersionIdProbeRetryPost,
+} from "@/api/media";
 import {
   archiveEpisodeApiV1EpisodesEpisodeIdArchivePost,
   archiveProjectApiV1ProjectsProjectIdArchivePost,
@@ -40,6 +45,8 @@ import {
   deletePreflightApiV1ProjectsProjectIdDeletePreflightPost,
   deleteProjectApiV1ProjectsProjectIdDelete,
   episodeDeletePreflightApiV1EpisodesEpisodeIdDeletePreflightPost,
+  episodeProductionSnapshotApiV1EpisodesEpisodeIdProductionSnapshotGet,
+  getEpisodeApiV1EpisodesEpisodeIdGet,
   getProjectApiV1ProjectsProjectIdGet,
   listEpisodesApiV1ProjectsProjectIdEpisodesGet,
   listProjectsApiV1ProjectsGet,
@@ -51,6 +58,20 @@ import {
   updateEpisodeApiV1EpisodesEpisodeIdPatch,
   updateProjectApiV1ProjectsProjectIdPatch,
 } from "@/api/projects";
+import {
+  confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePost,
+  decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPost,
+  getExtractionBatchApiV1ExtractionBatchesBatchIdGet,
+  getVersionApiV1ScriptVersionsVersionIdGet,
+  importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPost,
+  listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGet,
+  listSourcesApiV1EpisodesEpisodeIdScriptSourcesGet,
+  listVersionsApiV1ScriptSourcesSourceIdVersionsGet,
+  publishVersionApiV1ScriptSourcesSourceIdVersionsPost,
+  setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost,
+  startExtractionApiV1ScriptVersionsVersionIdExtractionsPost,
+} from "@/api/scripts";
+import { listTasksApiV1TasksGet } from "@/api/tasks";
 import { ApiClientError } from "@/lib/api-request";
 
 export type AppApiError = {
@@ -109,6 +130,12 @@ export const appApi = createApi({
     "Asset",
     "AssetVersions",
     "AssetReadiness",
+    "ScriptSources",
+    "ScriptVersions",
+    "ScriptVersion",
+    "Tasks",
+    "ExtractionBatch",
+    "ExtractionCandidates",
   ],
   endpoints: (builder) => ({
     login: builder.mutation<API.AuthResponse, API.LoginRequest>({
@@ -375,6 +402,256 @@ export const appApi = createApi({
         ),
       providesTags: (_result, _error, projectId) => [{ type: "Snapshot", id: projectId }],
     }),
+    episode: builder.query<API.EpisodeResponse, string>({
+      queryFn: (episodeId) =>
+        runRequest(() =>
+          getEpisodeApiV1EpisodesEpisodeIdGet({ episode_id: episodeId }),
+        ),
+      providesTags: (_result, _error, episodeId) => [
+        { type: "Episodes", id: episodeId },
+      ],
+    }),
+    episodeSnapshot: builder.query<API.EpisodeProductionSnapshot, string>({
+      queryFn: (episodeId) =>
+        runRequest(() =>
+          episodeProductionSnapshotApiV1EpisodesEpisodeIdProductionSnapshotGet({
+            episode_id: episodeId,
+          }),
+        ),
+      providesTags: (_result, _error, episodeId) => [
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    scriptSources: builder.query<API.PaginatedScriptSources, string>({
+      queryFn: (episodeId) =>
+        runRequest(() =>
+          listSourcesApiV1EpisodesEpisodeIdScriptSourcesGet({
+            episode_id: episodeId,
+            limit: 100,
+            offset: 0,
+          }),
+        ),
+      providesTags: (_result, _error, episodeId) => [
+        { type: "ScriptSources", id: episodeId },
+      ],
+    }),
+    scriptVersion: builder.query<API.ScriptVersionResponse, string>({
+      queryFn: (versionId) =>
+        runRequest(() =>
+          getVersionApiV1ScriptVersionsVersionIdGet({ version_id: versionId }),
+        ),
+      providesTags: (_result, _error, versionId) => [
+        { type: "ScriptVersion", id: versionId },
+      ],
+    }),
+    scriptVersions: builder.query<API.PaginatedScriptVersions, string>({
+      queryFn: (sourceId) =>
+        runRequest(() =>
+          listVersionsApiV1ScriptSourcesSourceIdVersionsGet({
+            source_id: sourceId,
+            limit: 100,
+            offset: 0,
+          }),
+        ),
+      providesTags: (_result, _error, sourceId) => [
+        { type: "ScriptVersions", id: sourceId },
+      ],
+    }),
+    tasks: builder.query<API.PaginatedTasks, string>({
+      queryFn: (workspaceId) =>
+        runRequest(() =>
+          listTasksApiV1TasksGet({
+            workspace_id: workspaceId,
+            task_type: null,
+            status: null,
+            limit: 100,
+            offset: 0,
+          }),
+        ),
+      providesTags: (_result, _error, workspaceId) => [
+        { type: "Tasks", id: workspaceId },
+      ],
+    }),
+    extractionBatch: builder.query<API.ExtractionBatchResponse, string>({
+      queryFn: (batchId) =>
+        runRequest(() =>
+          getExtractionBatchApiV1ExtractionBatchesBatchIdGet({ batch_id: batchId }),
+        ),
+      providesTags: (_result, _error, batchId) => [
+        { type: "ExtractionBatch", id: batchId },
+      ],
+    }),
+    extractionCandidates: builder.query<API.PaginatedExtractionCandidates, string>({
+      queryFn: (batchId) =>
+        runRequest(() =>
+          listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGet({
+            batch_id: batchId,
+            kind: null,
+            status: null,
+            limit: 100,
+            offset: 0,
+          }),
+        ),
+      providesTags: (_result, _error, batchId) => [
+        { type: "ExtractionCandidates", id: batchId },
+      ],
+    }),
+    importScript: builder.mutation<
+      API.ScriptImportResponse,
+      { episodeId: string; body: API.ScriptImportRequest }
+    >({
+      queryFn: ({ episodeId, body }) =>
+        runRequest(() =>
+          importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPost(
+            { episode_id: episodeId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "ScriptSources", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    publishScriptVersion: builder.mutation<
+      API.ScriptVersionPublishResponse,
+      { episodeId: string; sourceId: string; body: API.ScriptVersionPublishRequest }
+    >({
+      queryFn: ({ sourceId, body }) =>
+        runRequest(() =>
+          publishVersionApiV1ScriptSourcesSourceIdVersionsPost(
+            { source_id: sourceId },
+            body,
+          ),
+        ),
+      invalidatesTags: (result, _error, { episodeId, sourceId }) => [
+        { type: "ScriptVersions", id: sourceId },
+        { type: "Episodes", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+        ...(result
+          ? [{ type: "ScriptVersion" as const, id: result.version.id }]
+          : []),
+      ],
+    }),
+    setCurrentScriptVersion: builder.mutation<
+      API.CurrentScriptVersionResponse,
+      { episodeId: string; body: API.CurrentScriptVersionRequest }
+    >({
+      queryFn: ({ episodeId, body }) =>
+        runRequest(() =>
+          setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost(
+            { episode_id: episodeId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Episodes", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    startExtraction: builder.mutation<
+      API.ExtractionBatchResponse,
+      { episodeId: string; workspaceId: string; versionId: string; body: API.ScriptExtractionRequest }
+    >({
+      queryFn: ({ versionId, body }) =>
+        runRequest(() =>
+          startExtractionApiV1ScriptVersionsVersionIdExtractionsPost(
+            { version_id: versionId },
+            body,
+          ),
+        ),
+      invalidatesTags: (result, _error, { episodeId, workspaceId }) => [
+        { type: "Snapshot", id: episodeId },
+        { type: "Tasks", id: workspaceId },
+        ...(result
+          ? [{ type: "ExtractionBatch" as const, id: result.id }]
+          : []),
+      ],
+    }),
+    decideExtractionCandidate: builder.mutation<
+      API.CandidateDecisionResultResponse,
+      { candidateId: string; batchId: string; episodeId: string; projectId: string; body: API.CandidateDecisionRequest }
+    >({
+      queryFn: ({ candidateId, body }) =>
+        runRequest(() =>
+          decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPost(
+            { candidate_id: candidateId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { batchId, episodeId, projectId }) => [
+        { type: "ExtractionCandidates", id: batchId },
+        { type: "ExtractionBatch", id: batchId },
+        { type: "Snapshot", id: episodeId },
+        { type: "Assets", id: projectId },
+      ],
+    }),
+    confirmStructure: builder.mutation<
+      API.StructureConfirmationResponse,
+      { batchId: string; episodeId: string }
+    >({
+      queryFn: ({ batchId }) =>
+        runRequest(() =>
+          confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePost({
+            batch_id: batchId,
+          }),
+        ),
+      invalidatesTags: (result, _error, { batchId, episodeId }) => [
+        { type: "ExtractionBatch", id: batchId },
+        { type: "Snapshot", id: episodeId },
+        ...(result
+          ? [
+              {
+                type: "ScriptVersion" as const,
+                id: result.confirmed_version.id,
+              },
+              {
+                type: "ScriptVersions" as const,
+                id: result.confirmed_version.source_id,
+              },
+            ]
+          : []),
+      ],
+    }),
+    initializeMediaUpload: builder.mutation<
+      API.UploadInitializationResponse,
+      API.UploadDeclaration
+    >({
+      queryFn: (body) =>
+        runRequest(() => initializeUploadApiV1MediaUploadsPost(body)),
+    }),
+    completeMediaUpload: builder.mutation<
+      API.UploadCompletionResponse,
+      { uploadSessionId: string; workspaceId: string }
+    >({
+      queryFn: ({ uploadSessionId }) =>
+        runRequest(() =>
+          completeUploadApiV1MediaUploadsUploadSessionIdCompletePost({
+            upload_session_id: uploadSessionId,
+          }),
+        ),
+      invalidatesTags: (_result, _error, { workspaceId }) => [
+        { type: "Media", id: workspaceId },
+        { type: "Tasks", id: workspaceId },
+        "AssetReadiness",
+      ],
+    }),
+    retryMediaProbe: builder.mutation<
+      API.TaskResponse,
+      { versionId: string; workspaceId: string; body: API.ProbeRetryRequest }
+    >({
+      queryFn: ({ versionId, body }) =>
+        runRequest(() =>
+          retryProbeApiV1MediaVersionIdProbeRetryPost(
+            { version_id: versionId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { workspaceId }) => [
+        { type: "Media", id: workspaceId },
+        { type: "Tasks", id: workspaceId },
+        "AssetReadiness",
+      ],
+    }),
     mediaVersions: builder.query<API.PaginatedMedia, string>({
       queryFn: (workspaceId) =>
         runRequest(() =>
@@ -594,6 +871,8 @@ export const {
   useAssetsQuery,
   useAssetVersionsQuery,
   useChangePasswordMutation,
+  useCompleteMediaUploadMutation,
+  useConfirmStructureMutation,
   useConsentQuery,
   useConsentsQuery,
   useCreateConsentMutation,
@@ -604,7 +883,14 @@ export const {
   useDeleteEpisodeMutation,
   useDeleteProjectMutation,
   useDeactivateAccountMutation,
+  useDecideExtractionCandidateMutation,
+  useEpisodeQuery,
+  useEpisodeSnapshotQuery,
   useEpisodesQuery,
+  useExtractionBatchQuery,
+  useExtractionCandidatesQuery,
+  useImportScriptMutation,
+  useInitializeMediaUploadMutation,
   useLoginMutation,
   useLogoutMutation,
   useMeQuery,
@@ -613,13 +899,16 @@ export const {
   useProjectDeletePreflightMutation,
   useProjectSnapshotQuery,
   useProjectsQuery,
+  usePublishScriptVersionMutation,
   useRegisterMutation,
+  useRetryMediaProbeMutation,
   useReviseConsentMutation,
   useRevokeConsentMutation,
   useReorderEpisodesMutation,
   useEpisodeDeletePreflightMutation,
   useSetEpisodeArchivedMutation,
   useSetAssetArchivedMutation,
+  useSetCurrentScriptVersionMutation,
   useSetProjectArchivedMutation,
   useSetWorkspaceArchivedMutation,
   useUpdateProfileMutation,
@@ -628,4 +917,9 @@ export const {
   useUpdateProjectMutation,
   useUpdateWorkspaceMutation,
   useWorkspacesQuery,
+  useScriptSourcesQuery,
+  useScriptVersionQuery,
+  useScriptVersionsQuery,
+  useStartExtractionMutation,
+  useTasksQuery,
 } = appApi;
