@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
+from app import io_worker
 from app.core.database import Base
 from app.core.errors import ApiError, ErrorCode
 from app.modules.identity import ActorContext
@@ -122,7 +123,9 @@ async def test_start_extraction_is_atomic_concurrent_and_body_free(
     assert batch["workspace_id"] == workspace_id
     assert batch["script_version_id"] == published["id"]
     assert batch["scope"] == "full"
-    assert batch["extractor_version"] == "script-structure-v1"
+    assert batch["extractor_version"] == (
+        "deepseek-v4-pro:thinking-off:lc-deepseek-1.1.0:prompt-v1:schema-v1"
+    )
     assert batch["input_hash"] == published["content_hash"]
     assert batch["status"] == "queued"
     assert batch["confirmed_script_version_id"] is None
@@ -354,6 +357,101 @@ def _typed_extraction_result() -> dict[str, Any]:
             },
         ]
     }
+
+
+class _RecordingExtractionMessage:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+        self.ack_count = 0
+        self.nack_requeues: list[bool] = []
+
+    async def ack(self) -> None:
+        self.ack_count += 1
+
+    async def nack(self, *, requeue: bool) -> None:
+        self.nack_requeues.append(requeue)
+
+
+class _RecordingScriptExtractor:
+    def __init__(self) -> None:
+        self.inputs: list[str] = []
+
+    async def extract(self, script_body: str) -> script_schemas.ScriptExtractionResult:
+        self.inputs.append(script_body)
+        return script_schemas.ScriptExtractionResult.model_validate(
+            _typed_extraction_result()
+        )
+
+
+@pytest.mark.asyncio
+async def test_configured_worker_records_real_adapter_result_once(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="extraction-configured-worker@example.com"
+    )
+    _, _, published = await _published_script(
+        client,
+        headers,
+        workspace_id,
+        import_key="configured-worker-import",
+    )
+    started = await client.post(
+        f"/api/v1/script-versions/{published['id']}/extractions",
+        headers=headers,
+        json=_extraction_payload(idempotency_key="configured-worker-extraction"),
+    )
+    assert started.status_code == 202
+    batch = started.json()["data"]
+    async with session_factory() as session:
+        event = await session.scalar(
+            select(OutboxEvent).where(
+                OutboxEvent.aggregate_id == batch["task"]["id"]
+            )
+        )
+        assert event is not None
+        body = envelope_from_event(event).model_dump_json().encode()
+
+    extractor = _RecordingScriptExtractor()
+    first_message = _RecordingExtractionMessage(body)
+    first_result = await io_worker.process_incoming_message(
+        first_message,
+        session_factory,
+        extractor=extractor,
+    )
+
+    assert first_result == "completed"
+    assert first_message.ack_count == 1
+    assert first_message.nack_requeues == []
+    assert extractor.inputs == [published["body"]]
+
+    fetched = await client.get(
+        f"/api/v1/extraction-batches/{batch['id']}", headers=headers
+    )
+    assert fetched.status_code == 200
+    completed = fetched.json()["data"]
+    assert completed["status"] == "succeeded"
+    assert completed["candidate_count"] == 5
+    assert completed["task"]["status"] == "succeeded"
+    assert completed["task"]["next_action"] == "review_candidates"
+
+    duplicate_message = _RecordingExtractionMessage(body)
+    duplicate_result = await io_worker.process_incoming_message(
+        duplicate_message,
+        session_factory,
+        extractor=extractor,
+    )
+
+    assert duplicate_result == "duplicate"
+    assert duplicate_message.ack_count == 1
+    assert duplicate_message.nack_requeues == []
+    assert extractor.inputs == [published["body"]]
+    async with session_factory() as session:
+        inbox = await session.scalar(select(InboxDelivery))
+        assert inbox is not None
+        assert inbox.status == "completed"
+        assert inbox.attempt_count == 2
 
 
 @pytest.mark.asyncio
