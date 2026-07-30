@@ -3,7 +3,7 @@ PYTHON ?= python3.11
 VENV_PYTHON := backend/.venv/bin/python
 MINIO_RELEASE := RELEASE.2025-09-07T16-13-09Z
 
-.PHONY: setup lock-backend dev-api dev-frontend scheduler worker-io worker-media db-init generate-api lint typecheck test hygiene check docker-build services-up services-down minio-up minio-version-check minio-down env-up env-down contract-minio contract-rabbitmq contract-ffprobe contract-media-stack e2e-install e2e
+.PHONY: setup lock-backend dev-api dev-frontend scheduler worker-io worker-media db-init generate-api lint typecheck test hygiene check docker-build services-up services-down minio-up minio-version-check minio-down env-up env-down contract-minio contract-rabbitmq contract-ffprobe contract-media-stack contract-deepseek e2e-install e2e
 
 $(VENV_PYTHON):
 	@$(PYTHON) --version | grep -q 'Python 3.11.15'
@@ -120,6 +120,9 @@ contract-ffprobe:
 
 contract-media-stack:
 	cd backend && LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_media_stack.py
+
+contract-deepseek:
+	cd backend && LANVERSE_RUN_DEEPSEEK_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_deepseek_extraction.py
 
 e2e-install:
 	cd frontend && npx playwright install chromium
