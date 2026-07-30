@@ -124,3 +124,21 @@ def test_scripts_is_split_by_versions_and_extractions_capabilities() -> None:
     api = (scripts / "api.py").read_text()
     assert "include_router(versions_router)" in api
     assert "include_router(extractions_router)" in api
+
+
+def test_projects_is_split_by_project_episode_and_snapshot_capabilities() -> None:
+    module = ROOT / "backend/app/modules/projects"
+    for capability in ("projects", "episodes", "snapshots"):
+        package = module / capability
+        assert (package / "__init__.py").is_file()
+        assert (package / "api.py").is_file()
+        assert (package / "schemas.py").is_file()
+        assert (package / "service.py").is_file()
+
+    assert not (module / "schemas.py").exists()
+    assert not (module / "service.py").exists()
+
+    api = (module / "api.py").read_text()
+    assert "include_router(projects_router)" in api
+    assert "include_router(episodes_router)" in api
+    assert "include_router(snapshots_router)" in api
