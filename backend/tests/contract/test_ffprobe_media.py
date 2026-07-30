@@ -1,15 +1,10 @@
-import base64
 import os
 from collections.abc import AsyncIterator
 
 import pytest
 
 from app.integrations.ffprobe import FfprobeMediaProbe
-
-ONE_PIXEL_PNG = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42Y"
-    "AAAAASUVORK5CYII="
-)
+from tests.support.media_fixtures import ONE_PIXEL_PNG
 
 
 @pytest.mark.skipif(
