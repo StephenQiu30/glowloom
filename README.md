@@ -4,13 +4,13 @@ Lanverse 是面向 AI 短剧生产的模块化单体应用。当前工程从可�
 
 ## 本地环境
 
-- Python 3.11.15、uv 0.11.32
+- Python 3.11.15、标准 venv/pip（PyCharm Project venv）
 - Node.js 22.23.1、npm 10.9.8
 - PostgreSQL 18.4、Redis 8.8.1、RabbitMQ 4.3.4（本机 Homebrew 服务）
 - MinIO `RELEASE.2025-09-07T16-13-09Z`（Docker 容器）
 - Docker 29.6.2、Compose 5.3.1（仅容器化运行或本机缺少基础设施时需要）
 
-所有依赖均安装在项目目录，不修改系统 Python 或全局 npm。首次执行：
+后端以 `backend/.venv` 作为 PyCharm 项目解释器，依赖由 pip 按提交的 requirements 锁安装；前端基于 Vercel 官方 `create-next-app@16.2.12` 生成的 TypeScript/App Router/src 模板。所有依赖均安装在项目目录，不修改系统 Python 或全局 npm。首次执行：
 
 ```bash
 make setup

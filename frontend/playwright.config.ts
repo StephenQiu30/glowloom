@@ -12,7 +12,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "cd ../backend && uv run --frozen --no-python-downloads python -m app.initialize_database && uv run --frozen --no-python-downloads uvicorn app.main:app --host 127.0.0.1 --port 8000",
+        "cd ../backend && .venv/bin/python -m app.initialize_database && .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000",
       env: {
         DATABASE_URL: "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
         ENVIRONMENT: "test",

@@ -1,16 +1,12 @@
-FROM ghcr.io/astral-sh/uv:0.11.32 AS uv
 FROM python:3.11.15-slim
 
-COPY --from=uv /uv /uvx /bin/
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    UV_PYTHON_DOWNLOADS=never \
-    PATH="/app/.venv/bin:$PATH"
+    PYTHONUNBUFFERED=1
 
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project --python /usr/local/bin/python
+COPY requirements.txt ./
+RUN python -m pip install --no-cache-dir --requirement requirements.txt
 
 COPY app ./app
 

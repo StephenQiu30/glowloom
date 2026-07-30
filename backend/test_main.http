@@ -1,0 +1,14 @@
+# PyCharm HTTP Client requests for the local FastAPI application.
+
+GET http://127.0.0.1:8000/healthz
+Accept: application/json
+
+###
+
+GET http://127.0.0.1:8000/readyz
+Accept: application/json
+
+###
+
+GET http://127.0.0.1:8000/openapi.json
+Accept: application/json

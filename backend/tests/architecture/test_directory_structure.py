@@ -80,3 +80,30 @@ def test_environment_configuration_has_one_repository_entrypoint() -> None:
     next_config = (ROOT / "frontend/next.config.ts").read_text()
     assert "process.loadEnvFile(repositoryEnvironmentFile)" in next_config
     assert 'resolve(process.cwd(), "../.env")' in next_config
+
+
+def test_backend_uses_pycharm_venv_and_pip_lock_baseline() -> None:
+    assert (ROOT / "backend/test_main.http").is_file()
+    assert (ROOT / "backend/requirements.txt").is_file()
+    assert (ROOT / "backend/requirements-dev.txt").is_file()
+    assert not (ROOT / "backend/uv.lock").exists()
+
+    pyproject = (ROOT / "backend/pyproject.toml").read_text()
+    assert "[tool.uv]" not in pyproject
+    assert "[project.optional-dependencies]" in pyproject
+    assert 'venvPath = "."' in pyproject
+    assert 'venv = ".venv"' in pyproject
+
+    makefile = (ROOT / "Makefile").read_text()
+    assert "PYTHON ?= python3.11" in makefile
+    assert "$(PYTHON) -m venv backend/.venv" in makefile
+    assert "$(VENV_PYTHON) -m pip install 'pip==26.1.2'" in makefile
+    assert "uv sync" not in makefile
+    assert "uv run" not in makefile
+
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    dockerfile = (ROOT / "backend/Dockerfile").read_text()
+    playwright = (ROOT / "frontend/playwright.config.ts").read_text()
+    assert "setup-uv" not in workflow
+    assert "ghcr.io/astral-sh/uv" not in dockerfile
+    assert "uv run" not in playwright

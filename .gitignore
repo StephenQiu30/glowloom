@@ -10,6 +10,7 @@ skills-lock.json
 *.crt
 
 .venv/
+.idea/
 __pycache__/
 *.py[cod]
 .pytest_cache/
