@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings, get_settings
 from app.core.database import session_factory
 from app.integrations.rabbitmq import RabbitMQPublisher
+from app.model_registry import register_implemented_models
 from app.modules.messaging import (
     MessagePublisher,
     claim_outbox_events,
@@ -64,6 +65,7 @@ async def publish_outbox_batch(
 
 
 async def run_scheduler(settings: Settings) -> None:
+    register_implemented_models()
     publisher = RabbitMQPublisher(settings.rabbitmq_url)
     publisher_id = f"{socket.gethostname()}:{os.getpid()}"
     await publisher.connect()

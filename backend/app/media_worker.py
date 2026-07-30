@@ -10,6 +10,7 @@ from app.core.database import session_factory
 from app.integrations.ffprobe import FfprobeMediaProbe
 from app.integrations.minio import MinioObjectStorage
 from app.integrations.rabbitmq import declare_task_topology
+from app.model_registry import register_implemented_models
 from app.modules.media import MediaProbePort
 from app.modules.media.consumer import consume_media_probe
 from app.modules.media.storage import ObjectStoragePort
@@ -60,6 +61,7 @@ async def process_incoming_message(
 
 
 async def run_media_worker(settings: Settings) -> None:
+    register_implemented_models()
     storage = MinioObjectStorage(
         settings.minio_endpoint,
         settings.minio_access_key,

@@ -6,6 +6,7 @@ import uvicorn
 
 from app.core.config import Settings, get_settings
 from app.io_worker import run_io_worker
+from app.media_worker import run_media_worker
 from app.scheduler import run_scheduler
 
 Service = Callable[[], Awaitable[None]]
@@ -40,6 +41,7 @@ async def run_server(settings: Settings) -> None:
         api.serve,
         partial(run_scheduler, settings),
         partial(run_io_worker, settings),
+        partial(run_media_worker, settings),
     )
 
 
