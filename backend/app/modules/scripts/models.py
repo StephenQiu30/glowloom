@@ -95,6 +95,77 @@ class ScriptVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
+class Scene(Base):
+    __tablename__ = "scr_scenes"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["script_version_id", "workspace_id"],
+            ["scr_script_versions.id", "scr_script_versions.workspace_id"],
+            name="fk_scr_scene_version_workspace",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("position >= 1", name="ck_scr_scene_position"),
+        CheckConstraint("source_start >= 0", name="ck_scr_scene_source_start"),
+        CheckConstraint("source_end > source_start", name="ck_scr_scene_source_range"),
+        UniqueConstraint("id", "workspace_id", name="uq_scr_scene_id_workspace"),
+        UniqueConstraint(
+            "script_version_id",
+            "position",
+            name="uq_scr_scene_version_position",
+        ),
+        Index("ix_scr_scene_version_range", "script_version_id", "source_start"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    script_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    position: Mapped[int] = mapped_column(Integer)
+    heading: Mapped[str] = mapped_column(String(200))
+    location: Mapped[str] = mapped_column(String(200))
+    time_of_day: Mapped[str] = mapped_column(String(100))
+    summary: Mapped[str] = mapped_column(Text)
+    source_start: Mapped[int] = mapped_column(Integer)
+    source_end: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
+class Dialogue(Base):
+    __tablename__ = "scr_dialogues"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["scene_id", "workspace_id"],
+            ["scr_scenes.id", "scr_scenes.workspace_id"],
+            name="fk_scr_dialogue_scene_workspace",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("position >= 1", name="ck_scr_dialogue_position"),
+        CheckConstraint(
+            "dialogue_kind IN ('spoken', 'narration', 'internal', 'voice_over')",
+            name="ck_scr_dialogue_kind",
+        ),
+        CheckConstraint("source_start >= 0", name="ck_scr_dialogue_source_start"),
+        CheckConstraint(
+            "source_end > source_start",
+            name="ck_scr_dialogue_source_range",
+        ),
+        UniqueConstraint("id", "workspace_id", name="uq_scr_dialogue_id_workspace"),
+        UniqueConstraint("scene_id", "position", name="uq_scr_dialogue_scene_position"),
+        Index("ix_scr_dialogue_scene_range", "scene_id", "source_start"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    scene_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    position: Mapped[int] = mapped_column(Integer)
+    speaker_candidate: Mapped[str] = mapped_column(String(200))
+    dialogue_kind: Mapped[str] = mapped_column(String(30))
+    text: Mapped[str] = mapped_column(Text)
+    performance_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_start: Mapped[int] = mapped_column(Integer)
+    source_end: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
 class ExtractionBatch(Base):
     __tablename__ = "scr_extraction_batches"
     __table_args__ = (
@@ -102,6 +173,11 @@ class ExtractionBatch(Base):
             ["script_version_id", "workspace_id"],
             ["scr_script_versions.id", "scr_script_versions.workspace_id"],
             name="fk_scr_batch_version_workspace",
+        ),
+        ForeignKeyConstraint(
+            ["confirmed_script_version_id", "workspace_id"],
+            ["scr_script_versions.id", "scr_script_versions.workspace_id"],
+            name="fk_scr_batch_confirmed_version_workspace",
         ),
         ForeignKeyConstraint(
             ["task_id", "workspace_id"],

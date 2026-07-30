@@ -82,6 +82,23 @@ export async function listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandi
   );
 }
 
+/** Confirm Structure POST /api/v1/extraction-batches/${param0}/confirm-structure */
+export async function confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePostParams,
+  options?: RequestOptions
+) {
+  const { batch_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseStructureConfirmationResponse_>(
+    `/api/v1/extraction-batches/${param0}/confirm-structure`,
+    {
+      method: "POST",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
 /** Get Extraction Candidate GET /api/v1/extraction-candidates/${param0} */
 export async function getExtractionCandidateApiV1ExtractionCandidatesCandidateIdGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

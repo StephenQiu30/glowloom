@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -5,8 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.scripts.models import (
     CandidateDecision,
+    Dialogue,
     ExtractionBatch,
     ExtractionCandidate,
+    Scene,
     ScriptSource,
     ScriptVersion,
 )
@@ -160,6 +163,29 @@ async def find_extraction_candidate(
     return await session.scalar(query)
 
 
+async def list_structure_candidates(
+    session: AsyncSession,
+    batch_id: UUID,
+    *,
+    for_update: bool = False,
+) -> list[ExtractionCandidate]:
+    query = (
+        select(ExtractionCandidate)
+        .where(
+            ExtractionCandidate.batch_id == batch_id,
+            ExtractionCandidate.kind.in_(("scene", "dialogue", "continuity")),
+        )
+        .order_by(
+            ExtractionCandidate.source_start,
+            ExtractionCandidate.source_end,
+            ExtractionCandidate.id,
+        )
+    )
+    if for_update:
+        query = query.with_for_update()
+    return list(await session.scalars(query))
+
+
 async def find_candidate_decision_by_key(
     session: AsyncSession,
     candidate_id: UUID,
@@ -193,3 +219,47 @@ async def list_candidate_decisions(
         .offset(offset)
     )
     return list(decisions), total or 0
+
+
+async def list_candidate_decisions_for_candidates(
+    session: AsyncSession,
+    candidate_ids: Sequence[UUID],
+) -> list[CandidateDecision]:
+    if not candidate_ids:
+        return []
+    decisions = await session.scalars(
+        select(CandidateDecision)
+        .where(CandidateDecision.candidate_id.in_(candidate_ids))
+        .order_by(
+            CandidateDecision.candidate_id,
+            CandidateDecision.sequence,
+            CandidateDecision.id,
+        )
+    )
+    return list(decisions)
+
+
+async def list_scenes(
+    session: AsyncSession,
+    script_version_id: UUID,
+) -> list[Scene]:
+    scenes = await session.scalars(
+        select(Scene)
+        .where(Scene.script_version_id == script_version_id)
+        .order_by(Scene.position, Scene.id)
+    )
+    return list(scenes)
+
+
+async def list_dialogues(
+    session: AsyncSession,
+    scene_ids: Sequence[UUID],
+) -> list[Dialogue]:
+    if not scene_ids:
+        return []
+    dialogues = await session.scalars(
+        select(Dialogue)
+        .where(Dialogue.scene_id.in_(scene_ids))
+        .order_by(Dialogue.scene_id, Dialogue.position, Dialogue.id)
+    )
+    return list(dialogues)

@@ -122,6 +122,10 @@ declare namespace API {
     data: ScriptVersionResponse;
   };
 
+  type ApiResponseStructureConfirmationResponse_ = {
+    data: StructureConfirmationResponse;
+  };
+
   type ApiResponseTaskResponse_ = {
     data: TaskResponse;
   };
@@ -247,6 +251,11 @@ declare namespace API {
     new_password: string;
   };
 
+  type confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePostParams =
+    {
+      batch_id: string;
+    };
+
   type ContinuityCandidateProposal = {
     /** Kind */
     kind: "continuity";
@@ -358,6 +367,26 @@ declare namespace API {
     text: string;
     /** Performance Note */
     performance_note: string | null | null;
+  };
+
+  type DialogueResponse = {
+    /** Id */
+    id: string;
+    /** Scene Id */
+    scene_id: string;
+    /** Position */
+    position: number;
+    /** Speaker Candidate */
+    speaker_candidate: string;
+    /** Dialogue Kind */
+    dialogue_kind: "spoken" | "narration" | "internal" | "voice_over";
+    /** Text */
+    text: string;
+    /** Performance Note */
+    performance_note: string | null;
+    source_range: CandidateSourceRange;
+    /** Created At */
+    created_at: string;
   };
 
   type diffVersionsApiV1ScriptVersionsVersionIdDiffGetParams = {
@@ -889,6 +918,28 @@ declare namespace API {
     summary: string;
   };
 
+  type SceneResponse = {
+    /** Id */
+    id: string;
+    /** Script Version Id */
+    script_version_id: string;
+    /** Position */
+    position: number;
+    /** Heading */
+    heading: string;
+    /** Location */
+    location: string;
+    /** Time Of Day */
+    time_of_day: string;
+    /** Summary */
+    summary: string;
+    source_range: CandidateSourceRange;
+    /** Dialogues */
+    dialogues: DialogueResponse[];
+    /** Created At */
+    created_at: string;
+  };
+
   type ScriptExtractionRequest = {
     /** Scope */
     scope: "full";
@@ -1005,6 +1056,16 @@ declare namespace API {
 
   type startExtractionApiV1ScriptVersionsVersionIdExtractionsPostParams = {
     version_id: string;
+  };
+
+  type StructureConfirmationResponse = {
+    /** Batch Id */
+    batch_id: string;
+    /** Source Script Version Id */
+    source_script_version_id: string;
+    confirmed_version: ScriptVersionResponse;
+    /** Scenes */
+    scenes: SceneResponse[];
   };
 
   type TaskErrorResponse = {
