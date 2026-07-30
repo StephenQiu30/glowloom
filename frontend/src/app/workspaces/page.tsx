@@ -1,73 +1,181 @@
 "use client";
 
-import { Archive, ArrowRight, Check, HardDrive, Plus, Save, Settings2, Users } from "lucide-react";
-import Image from "next/image";
+import {
+  AlertCircle,
+  Archive,
+  ArrowRight,
+  CheckCircle2,
+  LoaderCircle,
+  Plus,
+  RotateCcw,
+  Save,
+  Settings2,
+} from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 
 import { StudioShell } from "@/components/studio/studio-shell";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { mockWorkspaces } from "@/lib/mock-studio-data";
+import { useAuthSessionState } from "@/hooks/use-auth-session";
+import {
+  appApiErrorMessage,
+  useCreateWorkspaceMutation,
+  useMeQuery,
+  useSetWorkspaceArchivedMutation,
+  useUpdateProfileMutation,
+  useWorkspacesQuery,
+} from "@/lib/server-state";
+
+const roleLabels: Record<API.WorkspaceResponse["role"], string> = {
+  owner: "所有者",
+  editor: "编辑者",
+  viewer: "查看者",
+};
 
 export default function WorkspacesPage() {
-  const [message, setMessage] = useState<string | null>(null);
-  const [workspaces, setWorkspaces] = useState(mockWorkspaces);
+  const sessionState = useAuthSessionState();
+  const authenticated = sessionState === "authenticated";
+  const me = useMeQuery(undefined, { skip: !authenticated });
+  const workspacesQuery = useWorkspacesQuery(undefined, { skip: !authenticated });
+  const [updateProfile, profileState] = useUpdateProfileMutation();
+  const [createWorkspace, createState] = useCreateWorkspaceMutation();
+  const [setWorkspaceArchived, archiveState] = useSetWorkspaceArchivedMutation();
+  const [notice, setNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  function saveProfile(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMessage("个人资料已保存。");
+  async function runAction(action: () => Promise<string>): Promise<boolean> {
+    setNotice(null);
+    setActionError(null);
+    try {
+      setNotice(await action());
+      return true;
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+      return false;
+    }
   }
 
-  function createWorkspace(event: FormEvent<HTMLFormElement>) {
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const name = String(data.get("workspaceName"));
-    if (!name) return;
-    setWorkspaces((items) => [...items, { id: `mock-${items.length}`, name, role: "所有者", projects: 0, members: 1, storage: "0 GB", active: false }]);
-    setMessage(`工作空间“${name}”已创建。`);
-    form.reset();
+    const form = new FormData(event.currentTarget);
+    await runAction(async () => {
+      await updateProfile({
+        display_name: String(form.get("displayName") ?? "").trim() || null,
+        avatar_url: me.data?.user.avatar_url ?? null,
+      }).unwrap();
+      return "个人资料已保存。";
+    });
+  }
+
+  async function createNewWorkspace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const name = String(form.get("workspaceName") ?? "").trim();
+    const completed = await runAction(async () => {
+      const created = await createWorkspace({ name }).unwrap();
+      return `工作空间“${created.name}”已创建。`;
+    });
+    if (completed) formElement.reset();
+  }
+
+  async function toggleArchived(workspace: API.WorkspaceResponse) {
+    await runAction(async () => {
+      const archived = workspace.status === "active";
+      await setWorkspaceArchived({
+        workspaceId: workspace.id,
+        expectedRevision: workspace.revision,
+        archived,
+      }).unwrap();
+      return `工作空间“${workspace.name}”已${archived ? "归档" : "恢复"}。`;
+    });
+  }
+
+  const pageError = me.error ?? workspacesQuery.error;
+  const busy = profileState.isLoading || createState.isLoading || archiveState.isLoading;
+  const currentWorkspaceId = me.data?.workspace.id;
+
+  if (sessionState === "checking") {
+    return <div className="grid min-h-screen place-items-center"><LoaderCircle aria-label="正在读取登录状态" className="animate-spin text-[#079db3]" /></div>;
   }
 
   return (
-    <StudioShell active="settings" topAction={<Button asChild className="h-10 bg-[#079db3] px-4 text-white hover:bg-[#078da0]"><Link href="/projects">返回项目<ArrowRight aria-hidden="true" /></Link></Button>}>
+    <StudioShell
+      active="settings"
+      topAction={<Button asChild><Link href="/projects">返回项目<ArrowRight aria-hidden="true" /></Link></Button>}
+      viewer={me.data ? {
+        displayName: me.data.user.display_name?.trim() || me.data.user.email,
+        workspaceName: me.data.workspace.name,
+      } : undefined}
+    >
       <div className="mx-auto max-w-[1120px] px-5 py-9 md:px-8">
-        <div><Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">账户设置</Badge><h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em]">账户与工作空间</h1><p className="mt-2 text-sm text-slate-500">管理个人资料、创作空间和团队资源。</p></div>
-        {message ? <div className="mt-6 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status"><Check className="size-4" aria-hidden="true" />{message}</div> : null}
+        {!authenticated ? (
+          <Alert className="border-amber-200 bg-amber-50 text-amber-800"><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription><Link className="underline" href="/login">登录后管理账户与工作空间</Link></AlertDescription></Alert>
+        ) : pageError ? (
+          <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>账户设置暂时无法读取</AlertTitle><AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription></Alert>
+        ) : !me.data || !workspacesQuery.data ? (
+          <div className="grid min-h-96 place-items-center"><LoaderCircle aria-label="正在加载账户设置" className="animate-spin text-[#079db3]" /></div>
+        ) : (
+          <>
+            <header>
+              <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">账户设置</Badge>
+              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em]">账户与工作空间</h1>
+              <p className="mt-2 text-sm text-slate-500">管理服务端个人资料，以及有权限访问的创作空间。</p>
+            </header>
 
-        <div className="mt-7 grid gap-6 lg:grid-cols-[1fr_340px]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-6">
-            <div className="flex items-center gap-4"><span className="relative size-16 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"><Image alt="Stephen 头像" fill sizes="64px" src="/assets/lanverse-studio/lu-chenzhou-portrait.png" className="object-cover" /></span><div><h2 className="text-lg font-semibold">个人资料</h2><p className="mt-1 text-sm text-slate-500">creator@lanverse.ai</p></div></div>
-            <form className="mt-6 grid gap-5 sm:grid-cols-2" onSubmit={saveProfile}>
-              <div className="grid gap-2"><Label htmlFor="displayName">显示名称</Label><Input id="displayName" defaultValue="Stephen" /></div>
-              <div className="grid gap-2"><Label htmlFor="creatorRole">创作角色</Label><Input id="creatorRole" defaultValue="导演 / 制片人" /></div>
-              <div className="grid gap-2 sm:col-span-2"><Label htmlFor="bio">个人简介</Label><Input id="bio" defaultValue="专注东方幻想与悬疑题材的 AI 漫剧创作者" /></div>
-              <div className="sm:col-span-2"><Button className="bg-[#079db3] text-white hover:bg-[#078da0]" type="submit"><Save aria-hidden="true" />保存个人资料</Button></div>
-            </form>
-          </section>
+            {notice ? <div className="mt-6 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status"><CheckCircle2 className="size-4" aria-hidden="true" />{notice}</div> : null}
+            {actionError ? <Alert className="mt-6" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
 
-          <aside className="rounded-2xl border border-slate-200 bg-white p-6">
-            <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-slate-100 text-[#079db3]"><Plus className="size-5" aria-hidden="true" /></span><div><h2 className="font-semibold">创建工作空间</h2><p className="mt-1 text-xs text-slate-500">组织项目和团队成员</p></div></div>
-            <form className="mt-6 grid gap-4" onSubmit={createWorkspace}><div className="grid gap-2"><Label htmlFor="workspaceName">空间名称</Label><Input id="workspaceName" name="workspaceName" placeholder="例如：青墨工作室" required /></div><Button className="h-10 bg-[#079db3] text-white hover:bg-[#078da0]" type="submit"><Plus aria-hidden="true" />创建工作空间</Button></form>
-          </aside>
-        </div>
+            <div className="mt-7 grid gap-6 lg:grid-cols-[1fr_340px]">
+              <section className="rounded-2xl border border-slate-200 bg-white p-6">
+                <div className="flex items-center gap-4">
+                  <span className="grid size-14 place-items-center rounded-2xl border border-cyan-100 bg-cyan-50 text-xl font-semibold text-[#087f91]" aria-hidden="true">{(me.data.user.display_name || me.data.user.email).slice(0, 1).toUpperCase()}</span>
+                  <div><h2 className="text-lg font-semibold">个人资料</h2><p className="mt-1 text-sm text-slate-500">{me.data.user.email}</p></div>
+                </div>
+                <form className="mt-6 grid gap-5" onSubmit={saveProfile}>
+                  <div className="grid gap-2"><Label htmlFor="displayName">显示名称</Label><Input defaultValue={me.data.user.display_name ?? ""} id="displayName" name="displayName" maxLength={120} /></div>
+                  <div><Button disabled={busy} type="submit"><Save aria-hidden="true" />保存个人资料</Button></div>
+                </form>
+              </section>
 
-        <section className="mt-7">
-          <div className="mb-4 flex items-end justify-between"><div><h2 className="text-xl font-semibold">我的工作空间</h2><p className="mt-1 text-sm text-slate-500">Mock 数据展示空间切换、成员与存储状态。</p></div><span className="text-sm text-slate-400">{workspaces.length} 个空间</span></div>
-          <div className="grid gap-4">
-            {workspaces.map((workspace) => (
-              <div className={`flex flex-wrap items-center gap-5 rounded-2xl border bg-white p-5 ${workspace.active ? "border-cyan-200 shadow-sm shadow-cyan-950/5" : "border-slate-200"}`} key={workspace.id}>
-                <span className="grid size-12 place-items-center rounded-xl bg-slate-100 text-[#079db3]"><Settings2 className="size-5" aria-hidden="true" /></span>
-                <div className="min-w-48 flex-1"><div className="flex items-center gap-2"><h3 className="font-semibold">{workspace.name}</h3>{workspace.active ? <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">当前空间</Badge> : null}{workspace.archived ? <Badge variant="outline">已归档</Badge> : null}</div><p className="mt-1 text-xs text-slate-500">{workspace.role}</p></div>
-                <div className="flex gap-6 text-sm text-slate-500"><span className="flex items-center gap-1.5"><Archive className="size-4" aria-hidden="true" />{workspace.projects} 项目</span><span className="flex items-center gap-1.5"><Users className="size-4" aria-hidden="true" />{workspace.members} 成员</span><span className="flex items-center gap-1.5"><HardDrive className="size-4" aria-hidden="true" />{workspace.storage}</span></div>
-                <Button disabled={workspace.active || workspace.archived} variant="outline">切换到此空间</Button>
+              <aside className="rounded-2xl border border-slate-200 bg-white p-6">
+                <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-slate-100 text-[#079db3]"><Plus className="size-5" aria-hidden="true" /></span><div><h2 className="font-semibold">创建工作空间</h2><p className="mt-1 text-xs text-slate-500">隔离不同团队与项目</p></div></div>
+                <form className="mt-6 grid gap-4" onSubmit={createNewWorkspace}>
+                  <div className="grid gap-2"><Label htmlFor="workspaceName">空间名称</Label><Input id="workspaceName" name="workspaceName" placeholder="例如：青墨工作室" required maxLength={120} /></div>
+                  <Button disabled={busy} type="submit"><Plus aria-hidden="true" />创建工作空间</Button>
+                </form>
+              </aside>
+            </div>
+
+            <section className="mt-7">
+              <div className="mb-4 flex items-end justify-between"><div><h2 className="text-xl font-semibold">我的工作空间</h2><p className="mt-1 text-sm text-slate-500">角色与状态均来自当前账号权限。</p></div><span className="text-sm text-slate-400">{workspacesQuery.data.length} 个空间</span></div>
+              <div className="grid gap-4">
+                {workspacesQuery.data.map((workspace) => {
+                  const current = workspace.id === currentWorkspaceId;
+                  return (
+                    <article className={`flex flex-wrap items-center gap-5 rounded-2xl border bg-white p-5 ${current ? "border-cyan-200 shadow-sm shadow-cyan-950/5" : "border-slate-200"}`} key={workspace.id}>
+                      <span className="grid size-12 place-items-center rounded-xl bg-slate-100 text-[#079db3]"><Settings2 className="size-5" aria-hidden="true" /></span>
+                      <div className="min-w-48 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{workspace.name}</h3>{current ? <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">当前空间</Badge> : null}{workspace.status === "archived" ? <Badge variant="secondary">已归档</Badge> : null}</div><p className="mt-1 text-xs text-slate-500">{roleLabels[workspace.role]} · revision {workspace.revision}</p></div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button asChild variant="outline"><Link href={`/projects?workspace=${workspace.id}`}>查看项目</Link></Button>
+                        {workspace.role === "owner" && !current ? (
+                          <Button disabled={busy} onClick={() => toggleArchived(workspace)} variant="outline">
+                            {workspace.status === "active" ? <Archive aria-hidden="true" /> : <RotateCcw aria-hidden="true" />}
+                            {workspace.status === "active" ? "归档" : "恢复"}
+                          </Button>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </section>
+            </section>
+          </>
+        )}
       </div>
     </StudioShell>
   );
