@@ -7,9 +7,13 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
-from app.modules.identity import service as identity_service
+from app.modules.identity import (
+    Capability,
+    actor_context,
+    get_authenticated_user,
+    require_workspace_capability,
+)
 from app.modules.identity.models import Membership
-from app.modules.identity.policy import Capability, require_workspace_capability
 from app.modules.projects import repository
 from app.modules.projects.models import Episode, Project
 from app.modules.projects.schemas import (
@@ -96,7 +100,7 @@ async def _owned_project(
     for_update: bool = False,
     allow_archived_command: bool = False,
 ) -> tuple[Project, Membership]:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     result = await repository.find_project_for_user(
         session, user.id, project_id, for_update=for_update
     )
@@ -120,7 +124,7 @@ async def create_project(
     request: ProjectCreateRequest,
 ) -> ProjectResponse:
     async with session.begin():
-        await identity_service.actor_context(
+        await actor_context(
             session, claims, request.workspace_id, Capability.CONTENT_WRITE
         )
         project = Project(
@@ -150,7 +154,7 @@ async def list_projects(
     limit: int,
     offset: int,
 ) -> PaginatedProjects:
-    await identity_service.actor_context(session, claims, workspace_id, Capability.CONTENT_READ)
+    await actor_context(session, claims, workspace_id, Capability.CONTENT_READ)
     projects, total = await repository.list_projects(
         session,
         workspace_id,
@@ -338,7 +342,7 @@ async def _owned_episode(
     *,
     for_update: bool,
 ) -> tuple[Episode, Project, Membership]:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     result = await repository.find_episode_for_user(
         session, user.id, episode_id, for_update=for_update
     )
@@ -447,7 +451,7 @@ async def list_episodes(
 async def get_episode(
     session: AsyncSession, claims: AccessTokenClaims, episode_id: UUID
 ) -> EpisodeResponse:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     result = await repository.find_episode_for_user(session, user.id, episode_id)
     if result is None:
         raise _episode_not_found()
@@ -570,7 +574,7 @@ async def set_episode_archived(
 async def episode_delete_preflight(
     session: AsyncSession, claims: AccessTokenClaims, episode_id: UUID
 ) -> DeletePreflightResponse:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     result = await repository.find_episode_for_user(session, user.id, episode_id)
     if result is None:
         raise _episode_not_found()
@@ -647,7 +651,7 @@ async def episode_production_snapshot(
     claims: AccessTokenClaims,
     episode_id: UUID,
 ) -> EpisodeProductionSnapshot:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     result = await repository.find_episode_for_user(session, user.id, episode_id)
     if result is None:
         raise _episode_not_found()

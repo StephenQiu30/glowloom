@@ -12,10 +12,9 @@ from app.core.auth import AccessTokenClaims, create_access_token
 from app.core.config import Settings
 from app.core.errors import ApiError, ErrorCode
 from app.modules.identity import repository
+from app.modules.identity.contracts import ActorContext, AuthenticatedUser, Capability
 from app.modules.identity.models import Membership, UserAccount, Workspace
 from app.modules.identity.policy import (
-    ActorContext,
-    Capability,
     require_capability,
     require_workspace_capability,
 )
@@ -147,6 +146,13 @@ async def authenticated_user(
     if user is None or user.status != "active" or user.token_version != claims.ver:
         raise _unauthenticated()
     return user
+
+
+async def get_authenticated_user(
+    session: AsyncSession, claims: AccessTokenClaims
+) -> AuthenticatedUser:
+    user = await authenticated_user(session, claims)
+    return AuthenticatedUser(id=user.id)
 
 
 async def me(session: AsyncSession, claims: AccessTokenClaims) -> MeResponse:

@@ -8,8 +8,8 @@ from uuid6 import uuid7
 
 from app import io_worker
 from app.core.database import Base, create_engine, validate_test_database_url
+from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
-from app.modules.identity.policy import ActorContext
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.messaging.service import envelope_from_event
 from app.modules.production.models import Task

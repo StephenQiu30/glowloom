@@ -13,7 +13,7 @@ from app.core.config import Settings
 from app.core.database import Base, create_engine, get_async_session, validate_test_database_url
 from app.core.errors import ApiError, ErrorCode
 from app.main import create_app
-from app.modules.identity.policy import ActorContext
+from app.modules.identity import ActorContext
 from app.modules.messaging.models import OutboxEvent
 from app.modules.production.models import Task
 from app.modules.production.schemas import ScriptExtractionTaskCommand

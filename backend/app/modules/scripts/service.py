@@ -12,8 +12,7 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
-from app.modules.identity import service as identity_service
-from app.modules.identity.policy import Capability
+from app.modules.identity import Capability, actor_context, get_authenticated_user
 from app.modules.production import repository as production_repository
 from app.modules.production import service as production_service
 from app.modules.production.schemas import (
@@ -351,7 +350,7 @@ async def get_source(
     claims: AccessTokenClaims,
     source_id: UUID,
 ) -> ScriptSourceResponse:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     source = await repository.find_source_for_user(session, user.id, source_id)
     if source is None:
         raise _not_found("Script source")
@@ -363,7 +362,7 @@ async def get_version(
     claims: AccessTokenClaims,
     version_id: UUID,
 ) -> ScriptVersionResponse:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     version = await repository.find_version_for_user(session, user.id, version_id)
     if version is None:
         raise _not_found("Script version")
@@ -378,7 +377,7 @@ async def list_versions(
     limit: int,
     offset: int,
 ) -> PaginatedScriptVersions:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     result = await repository.list_versions_for_user(
         session, user.id, source_id, limit=limit, offset=offset
     )
@@ -402,7 +401,7 @@ async def publish_version(
     content_hash = sha256(request.body.encode("utf-8")).hexdigest()
     now = datetime.now(UTC)
     async with session.begin():
-        user = await identity_service.authenticated_user(session, claims)
+        user = await get_authenticated_user(session, claims)
         source = await repository.find_source_for_user(
             session, user.id, source_id, for_update=True
         )
@@ -497,7 +496,7 @@ async def set_source_archived(
 ) -> ScriptSourceResponse:
     expected_status = "active" if archived else "archived"
     async with session.begin():
-        user = await identity_service.authenticated_user(session, claims)
+        user = await get_authenticated_user(session, claims)
         source = await repository.find_source_for_user(
             session, user.id, source_id, for_update=True
         )
@@ -527,7 +526,7 @@ async def diff_versions(
     version_id: UUID,
     other_version_id: UUID,
 ) -> ScriptVersionDiffResponse:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     base = await repository.find_version_for_user(session, user.id, version_id)
     if base is None:
         raise _not_found("Script version")
@@ -576,7 +575,7 @@ async def start_extraction(
 ) -> ExtractionBatchResponse:
     now = datetime.now(UTC)
     async with session.begin():
-        user = await identity_service.authenticated_user(session, claims)
+        user = await get_authenticated_user(session, claims)
         version = await repository.find_version_for_user(session, user.id, version_id)
         if version is None:
             raise _not_found("Script version")
@@ -600,7 +599,7 @@ async def start_extraction(
         episode = await projects_service.lock_active_episode_for_content_write(
             session, claims, source.episode_id
         )
-        actor = await identity_service.actor_context(
+        actor = await actor_context(
             session,
             claims,
             source.workspace_id,
@@ -680,7 +679,7 @@ async def get_extraction_batch(
     claims: AccessTokenClaims,
     batch_id: UUID,
 ) -> ExtractionBatchResponse:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     batch = await repository.find_extraction_batch_for_user(
         session, user.id, batch_id
     )
@@ -826,7 +825,7 @@ async def list_extraction_candidates(
     limit: int,
     offset: int,
 ) -> PaginatedExtractionCandidates:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     result = await repository.list_extraction_candidates_for_user(
         session,
         user.id,
@@ -852,7 +851,7 @@ async def get_extraction_candidate(
     claims: AccessTokenClaims,
     candidate_id: UUID,
 ) -> ExtractionCandidateResponse:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     candidate = await repository.find_extraction_candidate_for_user(
         session,
         user.id,
@@ -870,7 +869,7 @@ async def decide_extraction_candidate(
     request: CandidateDecisionRequest,
 ) -> CandidateDecisionResultResponse:
     async with session.begin():
-        user = await identity_service.authenticated_user(session, claims)
+        user = await get_authenticated_user(session, claims)
         candidate = await repository.find_extraction_candidate_for_user(
             session,
             user.id,
@@ -879,7 +878,7 @@ async def decide_extraction_candidate(
         )
         if candidate is None:
             raise _not_found("Extraction candidate")
-        actor = await identity_service.actor_context(
+        actor = await actor_context(
             session,
             claims,
             candidate.workspace_id,
@@ -988,7 +987,7 @@ async def list_candidate_decisions(
     limit: int,
     offset: int,
 ) -> PaginatedCandidateDecisions:
-    user = await identity_service.authenticated_user(session, claims)
+    user = await get_authenticated_user(session, claims)
     result = await repository.list_candidate_decisions_for_user(
         session,
         user.id,

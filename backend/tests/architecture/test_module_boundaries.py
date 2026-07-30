@@ -6,23 +6,11 @@ KNOWN_INTERNAL_IMPORTS = {
     "messaging/consumer.py:app.modules.production.models:Task",
     "messaging/consumer.py:app.modules.production.service:fail_script_extraction_task",
     "messaging/consumer.py:app.modules.scripts:service",
-    (
-        "production/service.py:app.modules.identity.policy:"
-        "ActorContext,Capability,require_workspace_capability"
-    ),
-    "production/service.py:app.modules.identity:service",
     "production/service.py:app.modules.messaging.models:OutboxEvent",
     "projects/repository.py:app.modules.identity.models:Membership,Workspace",
     "projects/service.py:app.modules.identity.models:Membership",
-    (
-        "projects/service.py:app.modules.identity.policy:"
-        "Capability,require_workspace_capability"
-    ),
-    "projects/service.py:app.modules.identity:service",
     "scripts/repository.py:app.modules.identity.models:Membership",
     "scripts/schemas.py:app.modules.production.schemas:TaskResponse,TaskStatus",
-    "scripts/service.py:app.modules.identity.policy:Capability",
-    "scripts/service.py:app.modules.identity:service",
     (
         "scripts/service.py:app.modules.production.schemas:"
         "ScriptExtractionTaskCommand,TaskResponse,TaskStatus"

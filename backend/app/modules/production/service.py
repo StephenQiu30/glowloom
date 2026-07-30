@@ -8,10 +8,10 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
-from app.modules.identity import service as identity_service
-from app.modules.identity.policy import (
+from app.modules.identity import (
     ActorContext,
     Capability,
+    actor_context,
     require_workspace_capability,
 )
 from app.modules.messaging.models import OutboxEvent
@@ -214,7 +214,7 @@ async def get_task(
     if task is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Task not found", status_code=404)
     try:
-        await identity_service.actor_context(
+        await actor_context(
             session, claims, task.workspace_id, Capability.CONTENT_READ
         )
     except ApiError as error:
@@ -234,7 +234,7 @@ async def list_tasks(
     limit: int,
     offset: int,
 ) -> PaginatedTasks:
-    await identity_service.actor_context(
+    await actor_context(
         session, claims, workspace_id, Capability.CONTENT_READ
     )
     tasks, total = await repository.list_tasks(

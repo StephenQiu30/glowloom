@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
 from app.core.database import Base, create_engine, validate_test_database_url
+from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
-from app.modules.identity.policy import ActorContext
 from app.modules.messaging.models import OutboxEvent
 from app.modules.messaging.schemas import MessageEnvelope
 from app.modules.messaging.service import claim_outbox_events
