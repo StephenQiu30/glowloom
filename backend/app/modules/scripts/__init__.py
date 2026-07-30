@@ -1,6 +1,6 @@
 """Public script extraction application use cases."""
 
-from app.modules.scripts.service import (
+from app.modules.scripts.extractions.service import (
     record_extraction_result,
     synchronize_extraction_batch_status,
 )

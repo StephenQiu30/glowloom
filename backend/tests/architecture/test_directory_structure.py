@@ -107,3 +107,20 @@ def test_backend_uses_pycharm_venv_and_pip_lock_baseline() -> None:
     assert "setup-uv" not in workflow
     assert "ghcr.io/astral-sh/uv" not in dockerfile
     assert "uv run" not in playwright
+
+
+def test_scripts_is_split_by_versions_and_extractions_capabilities() -> None:
+    scripts = ROOT / "backend/app/modules/scripts"
+    for capability in ("versions", "extractions"):
+        package = scripts / capability
+        assert (package / "__init__.py").is_file()
+        assert (package / "api.py").is_file()
+        assert (package / "schemas.py").is_file()
+        assert (package / "service.py").is_file()
+
+    assert not (scripts / "schemas.py").exists()
+    assert not (scripts / "service.py").exists()
+
+    api = (scripts / "api.py").read_text()
+    assert "include_router(versions_router)" in api
+    assert "include_router(extractions_router)" in api

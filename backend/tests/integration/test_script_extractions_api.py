@@ -20,8 +20,8 @@ from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.messaging.service import envelope_from_event
 from app.modules.production import ScriptExtractionTaskCommand, TaskResponse
 from app.modules.production.models import Task
-from app.modules.scripts import schemas as script_schemas
-from app.modules.scripts import service as scripts_service
+from app.modules.scripts.extractions import schemas as script_schemas
+from app.modules.scripts.extractions import service as scripts_service
 
 TEST_DATABASE_URL = validate_test_database_url(
     "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
