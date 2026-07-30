@@ -1,6 +1,7 @@
 """Public production task contracts and application use cases."""
 
 from app.modules.production.contracts import (
+    EpisodeTaskSummary,
     MediaProbeTaskCommand,
     ScriptExtractionTaskCommand,
     TaskContext,
@@ -17,10 +18,12 @@ from app.modules.production.service import (
     get_internal_task,
     get_task,
     lock_task,
+    summarize_episode_tasks,
 )
 
 __all__ = [
     "MediaProbeTaskCommand",
+    "EpisodeTaskSummary",
     "ScriptExtractionTaskCommand",
     "TaskContext",
     "TaskResponse",
@@ -34,4 +37,5 @@ __all__ = [
     "get_internal_task",
     "get_task",
     "lock_task",
+    "summarize_episode_tasks",
 ]

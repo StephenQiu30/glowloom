@@ -20,13 +20,43 @@ class NextAction(BaseModel):
 
 
 class TaskSummary(BaseModel):
-    status: Literal["not_started"] = "not_started"
+    status: Literal["not_started", "running", "failed", "succeeded", "unavailable"]
     running: int = 0
     failed: int = 0
+    succeeded: int = 0
+    unknown: int = 0
+
+
+class ScriptSummary(BaseModel):
+    status: Literal[
+        "not_started",
+        "published",
+        "extracting",
+        "extraction_blocked",
+        "review_required",
+        "confirmation_required",
+        "set_current_required",
+        "confirmed",
+        "unavailable",
+    ]
+    current_version_id: UUID | None
+    extraction_batch_id: UUID | None
+    pending_required_candidates: int = 0
+
+
+class AssetSummary(BaseModel):
+    status: Literal["not_started", "draft", "blocked", "ready", "unavailable"]
+    total: int = 0
+    versioned: int = 0
+    ready: int = 0
+    draft: int = 0
+    blocked: int = 0
+    ready_kinds: list[str]
+    required_kinds: list[str]
 
 
 class ReviewSummary(BaseModel):
-    status: Literal["not_started"] = "not_started"
+    status: Literal["not_started", "pending", "completed", "unavailable"]
     pending: int = 0
 
 
@@ -45,10 +75,17 @@ class PartialFailure(BaseModel):
 
 class EpisodeProductionSnapshot(BaseModel):
     episode_id: UUID
-    current_stage: Literal["script_import"]
+    current_stage: Literal[
+        "script_import",
+        "structure_review",
+        "asset_preparation",
+        "storyboard_preparation",
+    ]
     completion: int = Field(ge=0, le=100)
     blocking_reasons: list[BlockingReason]
     next_actions: list[NextAction]
+    script_summary: ScriptSummary
+    asset_summary: AssetSummary
     task_summary: TaskSummary
     review_summary: ReviewSummary
     cost_summary: CostSummary
@@ -58,7 +95,13 @@ class EpisodeProductionSnapshot(BaseModel):
 
 class ProjectProductionSnapshot(BaseModel):
     project_id: UUID
-    current_stage: Literal["project_setup", "script_import"]
+    current_stage: Literal[
+        "project_setup",
+        "script_import",
+        "structure_review",
+        "asset_preparation",
+        "storyboard_preparation",
+    ]
     completion: int = Field(ge=0, le=100)
     blocking_reasons: list[BlockingReason]
     next_actions: list[NextAction]

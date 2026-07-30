@@ -67,6 +67,24 @@ async def list_assets(
     return list(rows), total or 0
 
 
+async def list_active_assets_with_current_version(
+    session: AsyncSession,
+    project_id: UUID,
+) -> tuple[list[tuple[Asset, AssetVersion]], int]:
+    total = await session.scalar(
+        select(func.count())
+        .select_from(Asset)
+        .where(Asset.project_id == project_id, Asset.status == "active")
+    )
+    rows = await session.execute(
+        select(Asset, AssetVersion)
+        .join(AssetVersion, AssetVersion.id == Asset.current_version_id)
+        .where(Asset.project_id == project_id, Asset.status == "active")
+        .order_by(Asset.kind, Asset.id)
+    )
+    return [(asset, version) for asset, version in rows], total or 0
+
+
 async def find_version(
     session: AsyncSession,
     version_id: UUID,

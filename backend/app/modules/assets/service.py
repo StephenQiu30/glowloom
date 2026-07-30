@@ -15,6 +15,7 @@ from app.modules.assets.contracts import (
     AssetCandidateCommand,
     AssetCandidateResult,
     AssetVersionReference,
+    ProjectAssetSummary,
 )
 from app.modules.assets.models import Asset, AssetMediaReference, AssetVersion
 from app.modules.assets.schemas import (
@@ -839,6 +840,76 @@ async def get_readiness(
         channel=channel,
         region=region,
         at_time=datetime.now(UTC),
+    )
+
+
+async def summarize_project_assets(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_id: UUID,
+    *,
+    purpose: str,
+    channel: str,
+    region: str,
+) -> ProjectAssetSummary:
+    rows, total = await repository.list_active_assets_with_current_version(
+        session, project_id
+    )
+    if any(asset.workspace_id != workspace_id for asset, _version in rows):
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Asset summary scope is inconsistent",
+            status_code=503,
+        )
+    references = await repository.list_media_references(
+        session, [version.id for _asset, version in rows]
+    )
+    references_by_version: dict[UUID, list[AssetMediaReference]] = {}
+    for reference in references:
+        references_by_version.setdefault(reference.asset_version_id, []).append(reference)
+    evaluated_at = datetime.now(UTC)
+    evaluated = [
+        (
+            asset.kind,
+            await _evaluate_readiness(
+                session,
+                asset,
+                version,
+                references_by_version.get(version.id, []),
+                purpose=purpose,
+                channel=channel,
+                region=region,
+                at_time=evaluated_at,
+            ),
+        )
+        for asset, version in rows
+    ]
+    ready_kinds = tuple(
+        sorted({kind for kind, readiness in evaluated if readiness.status == "ready"})
+    )
+    ready = sum(readiness.status == "ready" for _kind, readiness in evaluated)
+    draft = sum(readiness.status == "draft" for _kind, readiness in evaluated)
+    blocked = sum(readiness.status == "blocked" for _kind, readiness in evaluated)
+    required_kinds = ("character", "location", "voice")
+    if set(required_kinds).issubset(ready_kinds):
+        status = "ready"
+    elif blocked:
+        status = "blocked"
+    elif total:
+        status = "draft"
+    else:
+        status = "not_started"
+    return ProjectAssetSummary(
+        status=cast(
+            Literal["not_started", "draft", "blocked", "ready", "unavailable"],
+            status,
+        ),
+        total=total,
+        versioned=len(rows),
+        ready=ready,
+        draft=draft,
+        blocked=blocked,
+        ready_kinds=ready_kinds,
     )
 
 

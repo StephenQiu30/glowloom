@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 from uuid import UUID
 
 
@@ -30,3 +31,15 @@ class AssetCandidateCommand:
 class AssetCandidateResult:
     asset_id: UUID
     asset_version_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectAssetSummary:
+    status: Literal["not_started", "draft", "blocked", "ready", "unavailable"]
+    total: int
+    versioned: int
+    ready: int
+    draft: int
+    blocked: int
+    ready_kinds: tuple[str, ...]
+    required_kinds: tuple[str, ...] = ("character", "location", "voice")

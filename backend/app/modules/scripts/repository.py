@@ -140,6 +140,43 @@ async def list_extraction_batches_referencing_version(
     return list(batches)
 
 
+async def list_extraction_batches_for_current_versions(
+    session: AsyncSession,
+    version_ids: list[UUID],
+) -> list[ExtractionBatch]:
+    if not version_ids:
+        return []
+    rows = await session.scalars(
+        select(ExtractionBatch)
+        .where(
+            or_(
+                ExtractionBatch.script_version_id.in_(version_ids),
+                ExtractionBatch.confirmed_script_version_id.in_(version_ids),
+            )
+        )
+        .order_by(ExtractionBatch.created_at.desc(), ExtractionBatch.id.desc())
+    )
+    return list(rows)
+
+
+async def count_pending_required_candidates(
+    session: AsyncSession,
+    batch_ids: list[UUID],
+) -> dict[UUID, int]:
+    if not batch_ids:
+        return {}
+    rows = await session.execute(
+        select(ExtractionCandidate.batch_id, func.count())
+        .where(
+            ExtractionCandidate.batch_id.in_(batch_ids),
+            ExtractionCandidate.required.is_(True),
+            ExtractionCandidate.status == "pending",
+        )
+        .group_by(ExtractionCandidate.batch_id)
+    )
+    return {batch_id: count for batch_id, count in rows}
+
+
 async def list_extraction_candidates(
     session: AsyncSession,
     batch_id: UUID,

@@ -28,6 +28,7 @@ from app.modules.scripts.authorization import (
     require_resource_access,
     resource_not_found,
 )
+from app.modules.scripts.contracts import ScriptProductionSummary
 from app.modules.scripts.extractions.schemas import (
     AcceptWithChangesDecision,
     AssetCandidateProposal,
@@ -54,6 +55,68 @@ from app.modules.scripts.models import (
     ExtractionCandidate,
     ScriptVersion,
 )
+
+
+async def summarize_current_scripts(
+    session: AsyncSession,
+    current_versions_by_episode: dict[UUID, UUID | None],
+) -> dict[UUID, ScriptProductionSummary]:
+    current_to_episode = {
+        version_id: episode_id
+        for episode_id, version_id in current_versions_by_episode.items()
+        if version_id is not None
+    }
+    batches = await repository.list_extraction_batches_for_current_versions(
+        session, list(current_to_episode)
+    )
+    latest_by_episode: dict[UUID, ExtractionBatch] = {}
+    for batch in batches:
+        episode_id = (
+            current_to_episode.get(batch.confirmed_script_version_id)
+            if batch.confirmed_script_version_id is not None
+            else None
+        )
+        if episode_id is None:
+            episode_id = current_to_episode.get(batch.script_version_id)
+        if episode_id is not None and episode_id not in latest_by_episode:
+            latest_by_episode[episode_id] = batch
+    pending_counts = await repository.count_pending_required_candidates(
+        session, [batch.id for batch in latest_by_episode.values()]
+    )
+
+    summaries: dict[UUID, ScriptProductionSummary] = {}
+    for episode_id, current_version_id in current_versions_by_episode.items():
+        if current_version_id is None:
+            summaries[episode_id] = ScriptProductionSummary(
+                status="not_started", current_version_id=None
+            )
+            continue
+        batch = latest_by_episode.get(episode_id)
+        if batch is None:
+            summaries[episode_id] = ScriptProductionSummary(
+                status="published", current_version_id=current_version_id
+            )
+            continue
+        pending = pending_counts.get(batch.id, 0)
+        if batch.confirmed_script_version_id == current_version_id:
+            status = "confirmed"
+        elif batch.confirmed_script_version_id is not None:
+            status = "set_current_required"
+        elif batch.status in {"queued", "running", "waiting_provider"}:
+            status = "extracting"
+        elif batch.status in {"failed", "cancelled", "unknown"}:
+            status = "extraction_blocked"
+        elif pending:
+            status = "review_required"
+        else:
+            status = "confirmation_required"
+        summaries[episode_id] = ScriptProductionSummary(
+            status=status,
+            current_version_id=current_version_id,
+            extraction_batch_id=batch.id,
+            pending_required_candidates=pending,
+        )
+    return summaries
 
 SCRIPT_STRUCTURE_EXTRACTOR_VERSION = "script-structure-v1"
 _CANDIDATE_PROPOSAL_ADAPTER: TypeAdapter[CandidateProposal] = TypeAdapter(

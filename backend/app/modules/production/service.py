@@ -17,6 +17,7 @@ from app.modules.identity import (
 from app.modules.messaging import OutboxEventCommand, enqueue_outbox_event
 from app.modules.production import repository
 from app.modules.production.contracts import (
+    EpisodeTaskSummary,
     MediaProbeTaskCommand,
     ScriptExtractionTaskCommand,
     TaskContext,
@@ -65,6 +66,30 @@ def task_response(task: Task) -> TaskResponse:
         ),
         revision=task.revision,
     )
+
+
+async def summarize_episode_tasks(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_ids: list[UUID],
+) -> dict[UUID, EpisodeTaskSummary]:
+    counts: dict[UUID, dict[str, int]] = {episode_id: {} for episode_id in episode_ids}
+    for episode_id, status, count in await repository.count_task_statuses_by_episode(
+        session, workspace_id, episode_ids
+    ):
+        counts[episode_id][status] = count
+    return {
+        episode_id: EpisodeTaskSummary(
+            running=sum(
+                statuses.get(status, 0)
+                for status in ("queued", "running", "waiting_provider")
+            ),
+            failed=statuses.get("failed", 0) + statuses.get("cancelled", 0),
+            succeeded=statuses.get("succeeded", 0),
+            unknown=statuses.get("unknown", 0),
+        )
+        for episode_id, statuses in counts.items()
+    }
 
 
 def _task_context(task: Task) -> TaskContext:

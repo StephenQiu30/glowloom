@@ -74,3 +74,11 @@ class TaskContext:
     task_type: str
     request_type: str
     status: TaskStatus
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeTaskSummary:
+    running: int = 0
+    failed: int = 0
+    succeeded: int = 0
+    unknown: int = 0

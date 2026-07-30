@@ -58,3 +58,25 @@ async def list_tasks(
         .offset(offset)
     )
     return list(rows), total or 0
+
+
+async def count_task_statuses_by_episode(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_ids: list[UUID],
+) -> list[tuple[UUID, str, int]]:
+    if not episode_ids:
+        return []
+    rows = await session.execute(
+        select(Task.episode_id, Task.status, func.count())
+        .where(
+            Task.workspace_id == workspace_id,
+            Task.episode_id.in_(episode_ids),
+        )
+        .group_by(Task.episode_id, Task.status)
+    )
+    return [
+        (episode_id, status, count)
+        for episode_id, status, count in rows
+        if episode_id is not None
+    ]
