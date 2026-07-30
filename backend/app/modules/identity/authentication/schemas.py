@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, SecretStr
 
+from app.modules.identity.workspaces.schemas import WorkspaceResponse
+
 
 class CommandModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -33,14 +35,6 @@ class UserResponse(BaseModel):
     avatar_url: str | None
 
 
-class WorkspaceResponse(BaseModel):
-    id: UUID
-    name: str
-    status: Literal["active", "archived"]
-    role: Literal["owner", "editor", "viewer"]
-    revision: int
-
-
 class AuthResponse(BaseModel):
     user: UserResponse
     workspace: WorkspaceResponse
@@ -61,19 +55,6 @@ class RevocationResponse(BaseModel):
 class ProfileUpdateRequest(CommandModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=80)
     avatar_url: HttpUrl | None = None
-
-
-class WorkspaceCreateRequest(CommandModel):
-    name: str = Field(min_length=1, max_length=120)
-
-
-class WorkspaceUpdateRequest(CommandModel):
-    name: str = Field(min_length=1, max_length=120)
-    expected_revision: int = Field(ge=1)
-
-
-class WorkspaceStateRequest(CommandModel):
-    expected_revision: int = Field(ge=1)
 
 
 class DeactivateAccountRequest(CommandModel):

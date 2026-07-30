@@ -1,6 +1,4 @@
 from datetime import UTC, datetime
-from typing import Literal, cast
-from uuid import UUID
 
 from pwdlib import PasswordHash
 from pydantic import SecretStr
@@ -12,13 +10,7 @@ from app.core.auth import AccessTokenClaims, create_access_token
 from app.core.config import Settings
 from app.core.errors import ApiError, ErrorCode
 from app.modules.identity import repository
-from app.modules.identity.contracts import ActorContext, AuthenticatedUser, Capability
-from app.modules.identity.models import Membership, UserAccount, Workspace
-from app.modules.identity.policy import (
-    require_capability,
-    require_workspace_capability,
-)
-from app.modules.identity.schemas import (
+from app.modules.identity.authentication.schemas import (
     AuthResponse,
     ChangePasswordRequest,
     DeactivateAccountRequest,
@@ -27,11 +19,10 @@ from app.modules.identity.schemas import (
     ProfileUpdateRequest,
     RegisterRequest,
     UserResponse,
-    WorkspaceCreateRequest,
-    WorkspaceResponse,
-    WorkspaceStateRequest,
-    WorkspaceUpdateRequest,
 )
+from app.modules.identity.contracts import AuthenticatedUser
+from app.modules.identity.models import Membership, UserAccount, Workspace
+from app.modules.identity.presenters import workspace_response
 
 _password_hash = PasswordHash.recommended()
 _dummy_password_hash = _password_hash.hash("not-a-real-lanverse-password")
@@ -61,16 +52,6 @@ def _user_response(user: UserAccount) -> UserResponse:
     )
 
 
-def _workspace_response(workspace: Workspace, membership: Membership) -> WorkspaceResponse:
-    return WorkspaceResponse(
-        id=workspace.id,
-        name=workspace.name,
-        status=cast(Literal["active", "archived"], workspace.status),
-        role=cast(Literal["owner", "editor", "viewer"], membership.role),
-        revision=workspace.revision,
-    )
-
-
 def _auth_response(
     user: UserAccount,
     workspace: Workspace,
@@ -79,7 +60,7 @@ def _auth_response(
 ) -> AuthResponse:
     return AuthResponse(
         user=_user_response(user),
-        workspace=_workspace_response(workspace, membership),
+        workspace=workspace_response(workspace, membership),
         access_token=create_access_token(user.id, user.token_version, settings),
         expires_in=settings.jwt_access_token_minutes * 60,
     )
@@ -116,9 +97,7 @@ async def register(
     return _auth_response(user, workspace, membership, settings)
 
 
-async def login(
-    session: AsyncSession, request: LoginRequest, settings: Settings
-) -> AuthResponse:
+async def login(session: AsyncSession, request: LoginRequest, settings: Settings) -> AuthResponse:
     email = _normalize_email(str(request.email))
     password = request.password.get_secret_value()
     async with session.begin():
@@ -139,9 +118,7 @@ async def login(
     return _auth_response(user, primary[0], primary[1], settings)
 
 
-async def authenticated_user(
-    session: AsyncSession, claims: AccessTokenClaims
-) -> UserAccount:
+async def authenticated_user(session: AsyncSession, claims: AccessTokenClaims) -> UserAccount:
     user = await repository.find_user_by_id(session, claims.sub)
     if user is None or user.status != "active" or user.token_version != claims.ver:
         raise _unauthenticated()
@@ -166,7 +143,7 @@ async def me(session: AsyncSession, claims: AccessTokenClaims) -> MeResponse:
         )
     return MeResponse(
         user=_user_response(user),
-        workspace=_workspace_response(primary[0], primary[1]),
+        workspace=workspace_response(primary[0], primary[1]),
     )
 
 
@@ -203,27 +180,6 @@ def _unauthenticated() -> ApiError:
     )
 
 
-def _workspace_not_found() -> ApiError:
-    return ApiError(ErrorCode.NOT_FOUND, "Workspace not found", status_code=404)
-
-
-def _require_owner(membership: Membership) -> None:
-    try:
-        require_capability(membership.role, Capability.WORKSPACE_MANAGE)
-    except PermissionError as error:
-        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403) from error
-
-
-def _require_revision(workspace: Workspace, expected_revision: int) -> None:
-    if workspace.revision != expected_revision:
-        raise ApiError(
-            ErrorCode.VERSION_CONFLICT,
-            "Workspace has changed",
-            status_code=409,
-            details={"current_revision": workspace.revision},
-        )
-
-
 async def update_profile(
     session: AsyncSession,
     claims: AccessTokenClaims,
@@ -247,134 +203,8 @@ async def update_profile(
         await session.flush()
     return MeResponse(
         user=_user_response(user),
-        workspace=_workspace_response(primary[0], primary[1]),
+        workspace=workspace_response(primary[0], primary[1]),
     )
-
-
-async def list_workspaces(
-    session: AsyncSession,
-    claims: AccessTokenClaims,
-    *,
-    include_archived: bool,
-) -> list[WorkspaceResponse]:
-    user = await authenticated_user(session, claims)
-    workspaces = await repository.list_workspaces(
-        session, user.id, include_archived=include_archived
-    )
-    return [_workspace_response(workspace, membership) for workspace, membership in workspaces]
-
-
-async def get_workspace(
-    session: AsyncSession,
-    claims: AccessTokenClaims,
-    workspace_id: UUID,
-) -> WorkspaceResponse:
-    user = await authenticated_user(session, claims)
-    result = await repository.find_workspace_for_user(session, user.id, workspace_id)
-    if result is None:
-        raise _workspace_not_found()
-    return _workspace_response(result[0], result[1])
-
-
-async def actor_context(
-    session: AsyncSession,
-    claims: AccessTokenClaims,
-    workspace_id: UUID,
-    capability: Capability,
-) -> ActorContext:
-    user = await authenticated_user(session, claims)
-    result = await repository.find_workspace_for_user(session, user.id, workspace_id)
-    if result is None:
-        raise _workspace_not_found()
-    workspace, membership = result
-    try:
-        require_workspace_capability(membership.role, workspace.status, capability)
-    except PermissionError as error:
-        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403) from error
-    return ActorContext(
-        user_id=user.id,
-        workspace_id=workspace.id,
-        membership_id=membership.id,
-        role=membership.role,
-        workspace_status=workspace.status,
-    )
-
-
-async def create_workspace(
-    session: AsyncSession,
-    claims: AccessTokenClaims,
-    request: WorkspaceCreateRequest,
-) -> WorkspaceResponse:
-    workspace_id = uuid7()
-    async with session.begin():
-        user = await authenticated_user(session, claims)
-        workspace = Workspace(id=workspace_id, name=request.name.strip())
-        membership = Membership(
-            user_id=user.id,
-            workspace_id=workspace_id,
-            role="owner",
-        )
-        session.add(workspace)
-        await session.flush()
-        session.add(membership)
-        await session.flush()
-    return _workspace_response(workspace, membership)
-
-
-async def update_workspace(
-    session: AsyncSession,
-    claims: AccessTokenClaims,
-    workspace_id: UUID,
-    request: WorkspaceUpdateRequest,
-) -> WorkspaceResponse:
-    async with session.begin():
-        user = await authenticated_user(session, claims)
-        result = await repository.find_workspace_for_user(
-            session, user.id, workspace_id, for_update=True
-        )
-        if result is None:
-            raise _workspace_not_found()
-        workspace, membership = result
-        _require_owner(membership)
-        _require_revision(workspace, request.expected_revision)
-        if workspace.status != "active":
-            raise ApiError(ErrorCode.STATE_CONFLICT, "Workspace is archived", status_code=409)
-        workspace.name = request.name.strip()
-        workspace.revision += 1
-        await session.flush()
-    return _workspace_response(workspace, membership)
-
-
-async def set_workspace_archived(
-    session: AsyncSession,
-    claims: AccessTokenClaims,
-    workspace_id: UUID,
-    request: WorkspaceStateRequest,
-    *,
-    archived: bool,
-) -> WorkspaceResponse:
-    expected_status = "active" if archived else "archived"
-    async with session.begin():
-        user = await authenticated_user(session, claims)
-        result = await repository.find_workspace_for_user(
-            session, user.id, workspace_id, for_update=True
-        )
-        if result is None:
-            raise _workspace_not_found()
-        workspace, membership = result
-        _require_owner(membership)
-        _require_revision(workspace, request.expected_revision)
-        if workspace.status != expected_status:
-            raise ApiError(
-                ErrorCode.STATE_CONFLICT,
-                "Workspace state does not allow this action",
-                status_code=409,
-            )
-        workspace.status = "archived" if archived else "active"
-        workspace.archived_at = datetime.now(UTC) if archived else None
-        workspace.revision += 1
-        await session.flush()
-    return _workspace_response(workspace, membership)
 
 
 async def deactivate_account(
