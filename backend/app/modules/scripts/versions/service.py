@@ -12,6 +12,7 @@ from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.projects import (
     compare_and_set_current_script_version,
+    episode_for_content_read,
     lock_active_episode_for_content_write,
 )
 from app.modules.scripts import repository
@@ -23,6 +24,7 @@ from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVers
 from app.modules.scripts.versions.schemas import (
     CurrentScriptVersionRequest,
     CurrentScriptVersionResponse,
+    PaginatedScriptSources,
     PaginatedScriptVersions,
     ScriptImportRequest,
     ScriptImportResponse,
@@ -219,6 +221,26 @@ async def get_source(
         session, claims, source.workspace_id, "Script source"
     )
     return _source_response(source)
+
+
+async def list_sources(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    episode_id: UUID,
+    *,
+    limit: int,
+    offset: int,
+) -> PaginatedScriptSources:
+    await episode_for_content_read(session, claims, episode_id)
+    sources, total = await repository.list_sources(
+        session, episode_id, limit=limit, offset=offset
+    )
+    return PaginatedScriptSources(
+        items=[_source_response(source) for source in sources],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 async def get_version(

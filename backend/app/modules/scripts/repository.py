@@ -52,6 +52,28 @@ async def find_source(
     return await session.scalar(query)
 
 
+async def list_sources(
+    session: AsyncSession,
+    episode_id: UUID,
+    *,
+    limit: int,
+    offset: int,
+) -> tuple[list[ScriptSource], int]:
+    total = await session.scalar(
+        select(func.count())
+        .select_from(ScriptSource)
+        .where(ScriptSource.episode_id == episode_id)
+    )
+    rows = await session.scalars(
+        select(ScriptSource)
+        .where(ScriptSource.episode_id == episode_id)
+        .order_by(ScriptSource.created_at.desc(), ScriptSource.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(rows), total or 0
+
+
 async def latest_version_number(
     session: AsyncSession,
     source_id: UUID,

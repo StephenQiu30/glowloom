@@ -63,6 +63,13 @@ class ScriptSourceResponse(BaseModel):
     created_at: datetime
 
 
+class PaginatedScriptSources(BaseModel):
+    items: list[ScriptSourceResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 class ScriptVersionResponse(BaseModel):
     id: UUID
     workspace_id: UUID

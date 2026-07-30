@@ -11,6 +11,7 @@ from app.modules.scripts.versions import service
 from app.modules.scripts.versions.schemas import (
     CurrentScriptVersionRequest,
     CurrentScriptVersionResponse,
+    PaginatedScriptSources,
     PaginatedScriptVersions,
     ScriptImportRequest,
     ScriptImportResponse,
@@ -40,6 +41,24 @@ async def import_text_source(
 ) -> ApiResponse[ScriptImportResponse]:
     return ApiResponse(
         data=await service.import_text_source(session, claims, episode_id, payload)
+    )
+
+
+@router.get(
+    "/episodes/{episode_id}/script-sources",
+    response_model=ApiResponse[PaginatedScriptSources],
+)
+async def list_sources(
+    episode_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ApiResponse[PaginatedScriptSources]:
+    return ApiResponse(
+        data=await service.list_sources(
+            session, claims, episode_id, limit=limit or 20, offset=offset
+        )
     )
 
 

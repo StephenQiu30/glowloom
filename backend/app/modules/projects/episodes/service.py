@@ -137,6 +137,15 @@ async def lock_active_episode_for_content_write(
     return _episode_content_context(episode)
 
 
+async def episode_for_content_read(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    episode_id: UUID,
+) -> EpisodeContentContext:
+    episode, _, _ = await episode_for_read(session, claims, episode_id)
+    return _episode_content_context(episode)
+
+
 async def compare_and_set_current_script_version(
     session: AsyncSession,
     claims: AccessTokenClaims,
