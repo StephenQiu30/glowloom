@@ -1,7 +1,22 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const runDeepSeekE2E = process.env.LANVERSE_RUN_DEEPSEEK_E2E === "1";
+const deepSeekApiKey = runDeepSeekE2E
+  ? (process.env.DEEPSEEK_API_KEY ?? "")
+  : "";
+
+if (runDeepSeekE2E && !deepSeekApiKey) {
+  throw new Error(
+    "DEEPSEEK_API_KEY is required when LANVERSE_RUN_DEEPSEEK_E2E=1",
+  );
+}
+
 export default defineConfig({
   testDir: "./tests/e2e",
+  testIgnore: runDeepSeekE2E ? [] : ["**/s2-deepseek-provider.spec.ts"],
+  testMatch: runDeepSeekE2E
+    ? ["**/s2-deepseek-provider.spec.ts"]
+    : ["**/*.spec.ts"],
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -18,7 +33,7 @@ export default defineConfig({
         API_HOST: "127.0.0.1",
         API_PORT: "8001",
         DATABASE_URL: "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
-        DEEPSEEK_API_KEY: "",
+        DEEPSEEK_API_KEY: deepSeekApiKey,
         ENVIRONMENT: "test",
         JWT_SECRET_KEY: "playwright-only-jwt-secret-with-at-least-32-bytes",
         MINIO_BUCKET: "lanverse-e2e",

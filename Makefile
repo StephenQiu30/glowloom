@@ -122,7 +122,8 @@ contract-media-stack:
 	cd backend && LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_media_stack.py
 
 contract-deepseek:
-	cd backend && LANVERSE_RUN_DEEPSEEK_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_deepseek_extraction.py
+	@test -n "$${DEEPSEEK_API_KEY:-}" || (echo 'DEEPSEEK_API_KEY is required for the real DeepSeek E2E contract' >&2; exit 1)
+	cd frontend && LANVERSE_RUN_DEEPSEEK_E2E=1 npx playwright test
 
 e2e-install:
 	cd frontend && npx playwright install chromium
