@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.modules.messaging.models import OutboxEvent
 from app.modules.projects.models import Episode
-from app.modules.scripts.models import ScriptSource, ScriptVersion
+from app.modules.scripts.models import Dialogue, Scene, ScriptSource, ScriptVersion
 
 
 async def _identity(
@@ -274,6 +274,11 @@ async def test_publish_appends_immutable_version_and_switches_episode_current(
         "episode_id": episode["id"],
         "current_script_version_id": published["id"],
         "episode_revision": 2,
+        "impact": {
+            "previous_script_version_id": None,
+            "current_script_version_id": published["id"],
+            "affected_shot_ids": [],
+        },
     }
 
     fetched_episode = await client.get(
@@ -419,6 +424,11 @@ async def test_current_switch_accepts_only_published_version_from_same_episode(
         "episode_id": episode["id"],
         "current_script_version_id": second["id"],
         "episode_revision": 4,
+        "impact": {
+            "previous_script_version_id": third["id"],
+            "current_script_version_id": second["id"],
+            "affected_shot_ids": [],
+        },
     }
 
     draft_rejected = await client.post(
@@ -481,6 +491,191 @@ async def test_current_switch_accepts_only_published_version_from_same_episode(
         },
     )
     assert hidden.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_concurrent_current_switch_reports_winner_without_mutating_versions(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="script-current-concurrent@example.com"
+    )
+    episode = await _episode(client, headers, workspace_id)
+    imported = await _import_script(client, headers, episode["id"])
+    source_id = imported["source"]["id"]
+    current_id: str | None = None
+    published_versions: list[dict[str, Any]] = []
+    for body in ("已发布版本二", "已发布版本三", "已发布版本四"):
+        response = await client.post(
+            f"/api/v1/script-sources/{source_id}/versions",
+            headers=headers,
+            json=_publish_payload(body, current_id),
+        )
+        assert response.status_code == 201
+        version = response.json()["data"]["version"]
+        published_versions.append(version)
+        current_id = version["id"]
+
+    second, third, fourth = published_versions
+    endpoint = f"/api/v1/episodes/{episode['id']}/current-script-version"
+    first_response, second_response = await asyncio.gather(
+        client.post(
+            endpoint,
+            headers=headers,
+            json={
+                "version_id": second["id"],
+                "expected_current_version_id": fourth["id"],
+            },
+        ),
+        client.post(
+            endpoint,
+            headers=headers,
+            json={
+                "version_id": third["id"],
+                "expected_current_version_id": fourth["id"],
+            },
+        ),
+    )
+    responses = [first_response, second_response]
+    assert sorted(response.status_code for response in responses) == [200, 409]
+    winner = next(response for response in responses if response.status_code == 200)
+    conflict = next(response for response in responses if response.status_code == 409)
+    result = winner.json()["data"]
+    assert result["current_script_version_id"] in {second["id"], third["id"]}
+    assert result["episode_revision"] == 5
+    assert result["impact"] == {
+        "previous_script_version_id": fourth["id"],
+        "current_script_version_id": result["current_script_version_id"],
+        "affected_shot_ids": [],
+    }
+    assert conflict.json()["error"]["code"] == "version_conflict"
+    assert (
+        conflict.json()["error"]["details"]["current_script_version_id"]
+        == result["current_script_version_id"]
+    )
+
+    async with session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(ScriptVersion)) == 4
+        assert await session.scalar(select(func.count()).select_from(Scene)) == 0
+        assert await session.scalar(select(func.count()).select_from(Dialogue)) == 0
+        stored_episode = await session.get(Episode, episode["id"])
+        assert stored_episode is not None
+        assert (
+            str(stored_episode.current_script_version_id)
+            == result["current_script_version_id"]
+        )
+
+
+@pytest.mark.asyncio
+async def test_delete_draft_version_requires_confirmation_and_is_private(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="script-delete-draft@example.com"
+    )
+    episode = await _episode(client, headers, workspace_id)
+    imported = await _import_script(client, headers, episode["id"])
+    draft = imported["version"]
+    endpoint = f"/api/v1/script-versions/{draft['id']}"
+
+    unconfirmed = await client.delete(endpoint, headers=headers)
+    assert unconfirmed.status_code == 422
+    declined = await client.delete(
+        endpoint,
+        headers=headers,
+        params={"confirm": "false"},
+    )
+    assert declined.status_code == 422
+    assert declined.json()["error"]["code"] == "invalid_request"
+    assert (await client.get(endpoint, headers=headers)).status_code == 200
+
+    stranger_headers, _ = await _identity(
+        client, email="script-delete-draft-stranger@example.com"
+    )
+    hidden = await client.delete(
+        endpoint,
+        headers=stranger_headers,
+        params={"confirm": "true"},
+    )
+    assert hidden.status_code == 404
+
+    deleted = await client.delete(
+        endpoint,
+        headers=headers,
+        params={"confirm": "true"},
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["data"] == {
+        "deleted": True,
+        "script_version_id": draft["id"],
+    }
+    assert (await client.get(endpoint, headers=headers)).status_code == 404
+    async with session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(ScriptVersion)) == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_version_returns_current_and_extraction_blockers(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="script-delete-blockers@example.com"
+    )
+    episode = await _episode(client, headers, workspace_id)
+    imported = await _import_script(client, headers, episode["id"])
+    source_id = imported["source"]["id"]
+    published_response = await client.post(
+        f"/api/v1/script-sources/{source_id}/versions",
+        headers=headers,
+        json=_publish_payload("已提取版本", None),
+    )
+    assert published_response.status_code == 201
+    extracted_version = published_response.json()["data"]["version"]
+    extraction_response = await client.post(
+        f"/api/v1/script-versions/{extracted_version['id']}/extractions",
+        headers=headers,
+        json={"scope": "full", "idempotency_key": "delete-blocker-extraction"},
+    )
+    assert extraction_response.status_code == 202
+    batch = extraction_response.json()["data"]
+    next_response = await client.post(
+        f"/api/v1/script-sources/{source_id}/versions",
+        headers=headers,
+        json=_publish_payload("当前版本", extracted_version["id"]),
+    )
+    assert next_response.status_code == 201
+    current_version = next_response.json()["data"]["version"]
+
+    extracted_delete = await client.delete(
+        f"/api/v1/script-versions/{extracted_version['id']}",
+        headers=headers,
+        params={"confirm": "true"},
+    )
+    assert extracted_delete.status_code == 409
+    extracted_error = extracted_delete.json()["error"]
+    assert extracted_error["code"] == "state_conflict"
+    assert extracted_error["next_action"] == "review_script_version_delete_blockers"
+    assert [
+        blocker["code"] for blocker in extracted_error["details"]["blockers"]
+    ] == ["VERSION_NOT_DRAFT", "HAS_EXTRACTION_BATCH"]
+    assert extracted_error["details"]["blockers"][1]["resource_id"] == batch["id"]
+
+    current_delete = await client.delete(
+        f"/api/v1/script-versions/{current_version['id']}",
+        headers=headers,
+        params={"confirm": "true"},
+    )
+    assert current_delete.status_code == 409
+    assert [
+        blocker["code"]
+        for blocker in current_delete.json()["error"]["details"]["blockers"]
+    ] == ["VERSION_NOT_DRAFT", "CURRENT_VERSION"]
+
+    async with session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(ScriptVersion)) == 3
 
 
 @pytest.mark.asyncio

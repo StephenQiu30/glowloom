@@ -398,6 +398,16 @@ async def test_confirm_structure_is_concurrent_idempotent_ordered_and_private(
         batch_response.json()["data"]["confirmed_script_version_id"]
         == confirmed_version["id"]
     )
+    confirmed_delete = await client.delete(
+        f"/api/v1/script-versions/{confirmed_version['id']}",
+        headers=headers,
+        params={"confirm": "true"},
+    )
+    assert confirmed_delete.status_code == 409
+    assert [
+        blocker["code"]
+        for blocker in confirmed_delete.json()["error"]["details"]["blockers"]
+    ] == ["VERSION_NOT_DRAFT", "CONFIRMED_STRUCTURE_VERSION"]
     stranger = await register_identity_response(
         client,
         email="structure-stranger@example.com",
