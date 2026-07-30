@@ -109,6 +109,18 @@ def test_backend_uses_pycharm_venv_and_pip_lock_baseline() -> None:
     assert "uv run" not in playwright
 
 
+def test_ci_executes_the_real_media_stack_contract() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+
+    assert "name: Start MinIO contract service" in workflow
+    assert "minio/minio:latest server /data" in workflow
+    assert "ffprobe -version" in workflow
+    assert "make contract-media-stack" in workflow
+    assert "name: Stop MinIO contract service" in workflow
+    assert "if: always()" in workflow
+    assert "docker rm --force lanverse-ci-minio" in workflow
+
+
 def test_scripts_is_split_by_capability() -> None:
     scripts = ROOT / "backend/app/modules/scripts"
     for capability in ("versions", "extractions", "structure"):
