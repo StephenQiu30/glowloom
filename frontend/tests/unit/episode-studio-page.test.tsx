@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -89,6 +89,10 @@ const projectId = "019fb2c0-a000-7000-8000-000000000002";
 const episodeId = "019fb2c0-a000-7000-8000-000000000003";
 const sourceId = "019fb2c0-a000-7000-8000-000000000004";
 const versionId = "019fb2c0-a000-7000-8000-000000000005";
+const batchId = "019fb2c0-a000-7000-8000-000000000007";
+const taskId = "019fb2c0-a000-7000-8000-000000000008";
+const firstCandidateId = "019fb2c0-a000-7000-8000-000000000009";
+const secondCandidateId = "019fb2c0-a000-7000-8000-000000000010";
 const now = "2026-07-30T09:00:00Z";
 
 const episode: API.EpisodeResponse = {
@@ -143,6 +147,93 @@ const version: API.ScriptVersionResponse = {
   created_by: "019fb2c0-a000-7000-8000-000000000006",
   created_at: now,
 };
+
+function extractionBatch(
+  status: API.TaskResponse["status"] = "succeeded",
+): API.ExtractionBatchResponse {
+  const failed = status === "failed";
+  return {
+    id: batchId,
+    workspace_id: workspaceId,
+    script_version_id: versionId,
+    scope: "full",
+    extractor_version:
+      "deepseek-v4-pro:thinking-off:lc-deepseek-1.1.0:prompt-v1:schema-v1",
+    input_hash: version.content_hash,
+    status,
+    confirmed_script_version_id: null,
+    candidate_count: status === "succeeded" ? 2 : 0,
+    task: {
+      id: taskId,
+      workspace_id: workspaceId,
+      task_type: "script_extraction",
+      request_type: "extraction_batch",
+      request_id: batchId,
+      scope: {
+        episode_id: episodeId,
+        render_snapshot_id: null,
+        usage_type: null,
+        usage_id: null,
+        input_version_id: versionId,
+        input_hash: version.content_hash,
+      },
+      status,
+      progress_stage: failed ? "blocked" : "completed",
+      error: failed
+        ? {
+            code: "ai_service_unavailable",
+            retryable: true,
+            summary: "DeepSeek service is temporarily unavailable",
+          }
+        : null,
+      next_action: failed ? "start_new_extraction" : "review_candidates",
+      cancel_status: "none",
+      revision: 2,
+    },
+    created_at: now,
+  };
+}
+
+const sceneCandidates: API.ExtractionCandidateResponse[] = [
+  {
+    id: firstCandidateId,
+    batch_id: batchId,
+    candidate_key: "scene-001",
+    kind: "scene",
+    source_range: { start: 0, end: 5 },
+    proposal: {
+      kind: "scene",
+      heading: "第一场",
+      location: "雨巷",
+      time_of_day: "夜",
+      summary: "顾清禾等候来客",
+    },
+    confidence_note: "场景明确",
+    required: true,
+    status: "pending",
+    revision: 1,
+    created_at: now,
+  },
+  {
+    id: secondCandidateId,
+    batch_id: batchId,
+    candidate_key: "scene-002",
+    kind: "scene",
+    source_range: { start: 6, end: 12 },
+    proposal: {
+      kind: "scene",
+      heading: "第二场",
+      location: "雨巷",
+      time_of_day: "夜",
+      summary: "来客出现",
+    },
+    confidence_note: null,
+    required: true,
+    status: "pending",
+    revision: 1,
+    created_at: now,
+  },
+];
 
 function snapshot(
   scriptStatus: API.ScriptSummary["status"] = "published",
@@ -339,6 +430,146 @@ describe("单集统一生产工作台", () => {
         title: "第一集",
         rights_declaration: "原创测试文本",
         body: "第一场\n顾清禾：开始吧。",
+      }),
+    );
+  });
+
+  it("允许对失败批次显式创建新的提取任务", async () => {
+    const user = userEvent.setup();
+    apiMocks.getSnapshot.mockResolvedValue({
+      data: {
+        ...snapshot("extraction_blocked"),
+        script_summary: {
+          status: "extraction_blocked",
+          current_version_id: versionId,
+          extraction_batch_id: batchId,
+          pending_required_candidates: 0,
+        },
+      },
+    });
+    apiMocks.getBatch.mockResolvedValue({ data: extractionBatch("failed") });
+    apiMocks.listCandidates.mockResolvedValue({
+      data: { items: [], total: 0, limit: 100, offset: 0 },
+    });
+
+    render(
+      <AppProviders>
+        <EpisodeProductionStudio episodeId={episodeId} initialPanel="script" />
+      </AppProviders>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "重新提取结构" }),
+    );
+
+    await waitFor(() => expect(apiMocks.startExtraction).toHaveBeenCalledTimes(1));
+    expect(apiMocks.startExtraction).toHaveBeenCalledWith(
+      { version_id: versionId },
+      expect.objectContaining({
+        scope: "full",
+        idempotency_key: expect.stringMatching(
+          new RegExp(`^studio-extraction:${versionId}:`),
+        ),
+      }),
+    );
+  });
+
+  it("允许在人工决议前修改候选内容", async () => {
+    const user = userEvent.setup();
+    apiMocks.getSnapshot.mockResolvedValue({
+      data: {
+        ...snapshot("review_required"),
+        blocking_reasons: [],
+        next_actions: [],
+        script_summary: {
+          status: "review_required",
+          current_version_id: versionId,
+          extraction_batch_id: batchId,
+          pending_required_candidates: 2,
+        },
+      },
+    });
+    apiMocks.getBatch.mockResolvedValue({ data: extractionBatch() });
+    apiMocks.listCandidates.mockResolvedValue({
+      data: { items: sceneCandidates, total: 2, limit: 100, offset: 0 },
+    });
+    apiMocks.decideCandidate.mockResolvedValue({ data: {} });
+
+    render(
+      <AppProviders>
+        <EpisodeProductionStudio episodeId={episodeId} initialPanel="script" />
+      </AppProviders>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "修改 scene-001 后接受" }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "修改后接受" });
+    const summaryInput = within(dialog).getByLabelText("候选说明");
+    await user.clear(summaryInput);
+    await user.type(summaryInput, "顾清禾在雨巷等待重要来客");
+    await user.click(within(dialog).getByRole("button", { name: "保存并接受" }));
+
+    await waitFor(() => expect(apiMocks.decideCandidate).toHaveBeenCalledTimes(1));
+    expect(apiMocks.decideCandidate).toHaveBeenCalledWith(
+      { candidate_id: firstCandidateId },
+      expect.objectContaining({
+        expected_revision: 1,
+        decision: {
+          action: "accept_with_changes",
+          proposal: {
+            ...sceneCandidates[0].proposal,
+            summary: "顾清禾在雨巷等待重要来客",
+          },
+        },
+      }),
+    );
+  });
+
+  it("允许将同类型候选合并到明确目标", async () => {
+    const user = userEvent.setup();
+    apiMocks.getSnapshot.mockResolvedValue({
+      data: {
+        ...snapshot("review_required"),
+        blocking_reasons: [],
+        next_actions: [],
+        script_summary: {
+          status: "review_required",
+          current_version_id: versionId,
+          extraction_batch_id: batchId,
+          pending_required_candidates: 2,
+        },
+      },
+    });
+    apiMocks.getBatch.mockResolvedValue({ data: extractionBatch() });
+    apiMocks.listCandidates.mockResolvedValue({
+      data: { items: sceneCandidates, total: 2, limit: 100, offset: 0 },
+    });
+    apiMocks.decideCandidate.mockResolvedValue({ data: {} });
+
+    render(
+      <AppProviders>
+        <EpisodeProductionStudio episodeId={episodeId} initialPanel="script" />
+      </AppProviders>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "合并 scene-001" }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "合并候选" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "合并到 scene-002" }),
+    );
+
+    await waitFor(() => expect(apiMocks.decideCandidate).toHaveBeenCalledTimes(1));
+    expect(apiMocks.decideCandidate).toHaveBeenCalledWith(
+      { candidate_id: firstCandidateId },
+      expect.objectContaining({
+        expected_revision: 1,
+        decision: {
+          action: "merge_into",
+          target_candidate_id: secondCandidateId,
+        },
       }),
     );
   });
