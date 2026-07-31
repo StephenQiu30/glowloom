@@ -1,4 +1,5 @@
-from typing import Any
+from copy import deepcopy
+from typing import Any, cast
 from uuid import UUID
 
 import httpx
@@ -567,3 +568,209 @@ async def test_confirmed_candidate_creation_and_safe_delete_preserve_evidence(
     assert [item["id"] for item in deleted.json()["data"]["order"]["items"]] == [
         candidate_shot["id"]
     ]
+
+
+def _split_target_spec(
+    refs: dict[str, UUID],
+    *,
+    purpose: str,
+    duration_ms: int,
+    include_dialogue: bool,
+) -> dict[str, object]:
+    spec = deepcopy(_spec_payload(refs, purpose=purpose))
+    spec["duration_ms"] = duration_ms
+    if not include_dialogue:
+        script_reference = dict(cast(dict[str, object], spec["script_reference"]))
+        script_reference["dialogue_ids"] = []
+        spec["script_reference"] = script_reference
+        spec["dialogue_or_narration"] = []
+    return spec
+
+
+@pytest.mark.asyncio
+async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await _episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="storyboard-transform@example.com",
+    )
+    endpoint = f"/api/v1/episodes/{episode['id']}/shots"
+    created = await client.post(
+        endpoint,
+        headers=headers,
+        json=_create_shot_payload(
+            refs,
+            title="待变换镜头",
+            creation_key="transform-source",
+        ),
+    )
+    assert created.status_code == 201
+    source = created.json()["data"]
+    saved = await client.post(
+        f"/api/v1/shots/{source['id']}/spec-versions",
+        headers=headers,
+        json={
+            "expected_current_spec_version_id": None,
+            "spec": _spec_payload(refs, purpose="建立车站悬疑氛围"),
+            "asset_references": [],
+        },
+    )
+    assert saved.status_code == 201
+    source_spec = saved.json()["data"]["version"]
+    initial_order = (await client.get(endpoint, headers=headers)).json()["data"]
+
+    copy_payload = {
+        "title": "待变换镜头副本",
+        "expected_source_spec_version_id": source_spec["id"],
+        "expected_order_hash": initial_order["order_hash"],
+        "idempotency_key": "copy-transform-001",
+    }
+    copied_response = await client.post(
+        f"/api/v1/shots/{source['id']}/copy",
+        headers=headers,
+        json=copy_payload,
+    )
+    assert copied_response.status_code == 201
+    copied = copied_response.json()["data"]
+    assert copied["transform"]["operation"] == "copy"
+    assert copied["transform"]["source_shot_ids"] == [source["id"]]
+    assert len(copied["shots"]) == 1
+    assert copied["shots"][0]["source_candidate_id"] is None
+    assert copied["spec_versions"][0]["content_hash"] == source_spec[
+        "content_hash"
+    ]
+    assert [item["id"] for item in copied["order"]["items"]] == [
+        source["id"],
+        copied["shots"][0]["id"],
+    ]
+    repeated_copy = await client.post(
+        f"/api/v1/shots/{source['id']}/copy",
+        headers=headers,
+        json=copy_payload,
+    )
+    assert repeated_copy.status_code == 201
+    assert repeated_copy.json()["data"] == copied
+    conflicting_copy = await client.post(
+        f"/api/v1/shots/{source['id']}/copy",
+        headers=headers,
+        json=copy_payload | {"title": "同键不同输入"},
+    )
+    assert conflicting_copy.status_code == 409
+    assert conflicting_copy.json()["error"]["code"] == "resource_conflict"
+
+    split_preflight_payload = {
+        "expected_source_spec_version_id": source_spec["id"],
+        "expected_order_hash": copied["order"]["order_hash"],
+    }
+    split_preflight_response = await client.post(
+        f"/api/v1/shots/{source['id']}/split-preflight",
+        headers=headers,
+        json=split_preflight_payload,
+    )
+    assert split_preflight_response.status_code == 200
+    split_preflight = split_preflight_response.json()["data"]
+    assert split_preflight["operation"] == "split"
+    assert split_preflight["source_spec_version_ids"] == [source_spec["id"]]
+    assert len(split_preflight["impact_hash"]) == 64
+    assert split_preflight["downstream_evidence"] == {
+        "generation_request_ids": [],
+        "candidate_ids": [],
+        "review_ids": [],
+        "issue_ids": [],
+        "timeline_source_ids": [],
+    }
+
+    split_payload: dict[str, object] = {
+        **split_preflight_payload,
+        "impact_hash": split_preflight["impact_hash"],
+        "idempotency_key": "split-transform-001",
+        "targets": [
+            {
+                "title": "进入月台",
+                "spec": _split_target_spec(
+                    refs,
+                    purpose="主角进入月台并说话",
+                    duration_ms=1500,
+                    include_dialogue=True,
+                ),
+                "asset_references": [],
+            },
+            {
+                "title": "观察灯箱",
+                "spec": _split_target_spec(
+                    refs,
+                    purpose="主角观察异常灯箱",
+                    duration_ms=1500,
+                    include_dialogue=False,
+                ),
+                "asset_references": [],
+            },
+        ],
+    }
+    split_response = await client.post(
+        f"/api/v1/shots/{source['id']}/split",
+        headers=headers,
+        json=split_payload,
+    )
+    assert split_response.status_code == 201
+    split = split_response.json()["data"]
+    assert split["transform"]["operation"] == "split"
+    assert len(split["shots"]) == 2
+    assert [item["position"] for item in split["shots"]] == [1, 2]
+    archived_source = await client.get(
+        f"/api/v1/shots/{source['id']}", headers=headers
+    )
+    assert archived_source.status_code == 200
+    assert archived_source.json()["data"]["status"] == "archived"
+    repeated_split = await client.post(
+        f"/api/v1/shots/{source['id']}/split",
+        headers=headers,
+        json=split_payload,
+    )
+    assert repeated_split.status_code == 201
+    assert repeated_split.json()["data"] == split
+
+    merge_preflight_payload = {
+        "shot_ids": [shot["id"] for shot in split["shots"]],
+        "expected_spec_version_ids": [
+            version["id"] for version in split["spec_versions"]
+        ],
+        "expected_order_hash": split["order"]["order_hash"],
+    }
+    merge_preflight_response = await client.post(
+        "/api/v1/shots/merge-preflight",
+        headers=headers,
+        json=merge_preflight_payload,
+    )
+    assert merge_preflight_response.status_code == 200
+    merge_preflight = merge_preflight_response.json()["data"]
+    assert merge_preflight["operation"] == "merge"
+    merged_response = await client.post(
+        "/api/v1/shots/merge",
+        headers=headers,
+        json={
+            **merge_preflight_payload,
+            "impact_hash": merge_preflight["impact_hash"],
+            "idempotency_key": "merge-transform-001",
+            "target": {
+                "title": "进入并观察月台",
+                "spec": _spec_payload(refs, purpose="合并后的完整叙事目标"),
+                "asset_references": [],
+            },
+        },
+    )
+    assert merged_response.status_code == 201
+    merged = merged_response.json()["data"]
+    assert merged["transform"]["operation"] == "merge"
+    assert len(merged["shots"]) == 1
+    assert merged["shots"][0]["position"] == 1
+    assert merged["spec_versions"][0]["spec"]["duration_ms"] == 3000
+    assert [item["status"] for item in split["shots"]] == ["active", "active"]
+    for split_shot in split["shots"]:
+        persisted = await client.get(
+            f"/api/v1/shots/{split_shot['id']}", headers=headers
+        )
+        assert persisted.json()["data"]["status"] == "archived"
