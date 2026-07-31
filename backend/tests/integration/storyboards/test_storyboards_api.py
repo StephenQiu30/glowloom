@@ -565,6 +565,31 @@ async def test_manual_shot_is_idempotent_ordered_and_lifecycle_safe(
     second = second_response.json()["data"]
     assert second["position"] == 2
 
+    renamed_response = await client.patch(
+        f"/api/v1/shots/{first['id']}",
+        headers=headers,
+        json={
+            "expected_revision": first["revision"],
+            "title": "进入雨夜车站",
+        },
+    )
+    assert renamed_response.status_code == 200
+    first = renamed_response.json()["data"]
+    assert first["title"] == "进入雨夜车站"
+    assert first["revision"] == 2
+
+    stale_rename = await client.patch(
+        f"/api/v1/shots/{first['id']}",
+        headers=headers,
+        json={
+            "expected_revision": 1,
+            "title": "陈旧标题不能覆盖",
+        },
+    )
+    assert stale_rename.status_code == 409
+    assert stale_rename.json()["error"]["code"] == "version_conflict"
+    assert stale_rename.json()["error"]["details"]["current_revision"] == 2
+
     listed = await client.get(endpoint, headers=headers)
     assert listed.status_code == 200
     order = listed.json()["data"]

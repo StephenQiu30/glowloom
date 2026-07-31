@@ -226,10 +226,30 @@ const assets: API.AssetResponse[] = [
   },
 ];
 
+const acceptedShotCandidate: API.ExtractionCandidateResponse = {
+  id: "019fb2c0-a000-7000-8000-000000000013",
+  batch_id: "019fb2c0-a000-7000-8000-000000000014",
+  candidate_key: "shot-001",
+  kind: "shot",
+  source_range: { start: 36, end: 52 },
+  proposal: {
+    kind: "shot",
+    scene_candidate_key: "scene-001",
+    title: "雨中回望",
+    purpose: "交代角色发现远处来客",
+  },
+  confidence_note: "镜头意图明确",
+  required: false,
+  status: "accepted",
+  revision: 2,
+  created_at: now,
+};
+
 describe("分镜工作台", () => {
   it("展示服务端准备度并执行建镜、规格版本、顺序和生命周期操作", async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn().mockResolvedValue(true);
+    const onCreateFromCandidate = vi.fn().mockResolvedValue(true);
     const onSaveSpec = vi.fn().mockResolvedValue(true);
     const onReorder = vi.fn().mockResolvedValue(undefined);
     const onSelectShot = vi.fn();
@@ -245,12 +265,14 @@ describe("分镜工作台", () => {
     const onSplit = vi.fn().mockResolvedValue(false);
     const onSplitPreflight = vi.fn().mockResolvedValue(undefined);
     const onToggleArchived = vi.fn().mockResolvedValue(undefined);
+    const onUpdate = vi.fn().mockResolvedValue(true);
 
     render(
       <StoryboardWorkspace
         archivedShots={archivedShots}
         assets={assets}
         busy={false}
+        confirmedShotCandidates={[acceptedShotCandidate]}
         order={shots}
         readiness={readiness}
         selectedShotId={firstShotId}
@@ -258,6 +280,7 @@ describe("分镜工作台", () => {
         versions={versions}
         onCopy={onCopy}
         onCreate={onCreate}
+        onCreateFromCandidate={onCreateFromCandidate}
         onDelete={onDelete}
         onDeletePreflight={onDeletePreflight}
         onMerge={onMerge}
@@ -269,6 +292,7 @@ describe("分镜工作台", () => {
         onSplit={onSplit}
         onSplitPreflight={onSplitPreflight}
         onToggleArchived={onToggleArchived}
+        onUpdate={onUpdate}
       />,
     );
 
@@ -280,6 +304,14 @@ describe("分镜工作台", () => {
     expect(screen.getByRole("button", { name: "合并" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "删除检查" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "v1 · 当前" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "修改镜头标题" }));
+    await user.clear(screen.getByLabelText("镜头标题"));
+    await user.type(screen.getByLabelText("镜头标题"), "雨夜车站全景");
+    await user.click(screen.getByRole("button", { name: "保存标题" }));
+    await waitFor(() =>
+      expect(onUpdate).toHaveBeenCalledWith(shots.items[0], "雨夜车站全景"),
+    );
 
     await user.clear(screen.getByLabelText("镜头目的"));
     await user.type(screen.getByLabelText("镜头目的"), "强调人物进入未知空间");
@@ -320,6 +352,14 @@ describe("分镜工作台", () => {
     expect(onToggleArchived).toHaveBeenCalledWith(archivedShots[0]);
 
     await user.click(screen.getByRole("button", { name: "新建镜头" }));
+    await user.click(
+      screen.getByRole("button", { name: "从候选建立 雨中回望" }),
+    );
+    await waitFor(() =>
+      expect(onCreateFromCandidate).toHaveBeenCalledWith(acceptedShotCandidate),
+    );
+
+    await user.click(screen.getByRole("button", { name: "新建镜头" }));
     await user.type(screen.getByLabelText("新镜头标题"), "远处灯箱闪烁");
     await user.click(screen.getByRole("button", { name: "创建空镜头" }));
     await waitFor(() =>
@@ -339,11 +379,13 @@ describe("分镜工作台", () => {
         archivedShots={[]}
         assets={[]}
         busy={false}
+        confirmedShotCandidates={[]}
         order={{ items: [], order_hash: "a".repeat(64) }}
         selectedShotId={null}
         versions={[]}
         onCopy={vi.fn()}
         onCreate={vi.fn()}
+        onCreateFromCandidate={vi.fn()}
         onDelete={vi.fn()}
         onDeletePreflight={vi.fn()}
         onMerge={vi.fn()}
@@ -355,6 +397,7 @@ describe("分镜工作台", () => {
         onSplit={vi.fn()}
         onSplitPreflight={vi.fn()}
         onToggleArchived={vi.fn()}
+        onUpdate={vi.fn()}
       />,
     );
 
@@ -379,6 +422,7 @@ describe("分镜工作台", () => {
         archivedShots={[]}
         assets={assets}
         busy={false}
+        confirmedShotCandidates={[]}
         order={{ ...shots, items: [shots.items[0]] }}
         readiness={{ ...readiness, items: [readiness.items[0]] }}
         selectedShotId={firstShotId}
@@ -386,6 +430,7 @@ describe("分镜工作台", () => {
         versions={[historicalVersion, versions[0]]}
         onCopy={vi.fn()}
         onCreate={vi.fn()}
+        onCreateFromCandidate={vi.fn()}
         onDelete={vi.fn()}
         onDeletePreflight={vi.fn()}
         onMerge={vi.fn()}
@@ -397,6 +442,7 @@ describe("分镜工作台", () => {
         onSplit={vi.fn()}
         onSplitPreflight={vi.fn()}
         onToggleArchived={vi.fn()}
+        onUpdate={vi.fn()}
       />,
     );
 
