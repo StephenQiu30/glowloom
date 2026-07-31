@@ -9,6 +9,7 @@ import * as media from "./media";
 import * as projects from "./projects";
 import * as tasks from "./tasks";
 import * as scripts from "./scripts";
+import * as storyboards from "./storyboards";
 import * as system from "./system";
 export default {
   assets,
@@ -18,5 +19,6 @@ export default {
   projects,
   tasks,
   scripts,
+  storyboards,
   system,
 };

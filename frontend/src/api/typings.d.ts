@@ -16,6 +16,15 @@ declare namespace API {
       | ContinuityCandidateProposal;
   };
 
+  type ActionBeat = {
+    /** Beat Key */
+    beat_key: string;
+    /** Order */
+    order: number;
+    /** Description */
+    description: string;
+  };
+
   type ApiResponseAssetDeletePreflightResponse_ = {
     data: AssetDeletePreflightResponse;
   };
@@ -30,6 +39,14 @@ declare namespace API {
 
   type ApiResponseAssetResponse_ = {
     data: AssetResponse;
+  };
+
+  type ApiResponseAssetUpgradeApplyResponse_ = {
+    data: AssetUpgradeApplyResponse;
+  };
+
+  type ApiResponseAssetUpgradePreflightResponse_ = {
+    data: AssetUpgradePreflightResponse;
   };
 
   type ApiResponseAssetVersionCreateResponse_ = {
@@ -89,6 +106,11 @@ declare namespace API {
     data: EpisodeResponse[];
   };
 
+  type ApiResponseListShotSpecVersionResponse_ = {
+    /** Data */
+    data: ShotSpecVersionResponse[];
+  };
+
   type ApiResponseListWorkspaceResponse_ = {
     /** Data */
     data: WorkspaceResponse[];
@@ -112,6 +134,10 @@ declare namespace API {
 
   type ApiResponsePaginatedAssets_ = {
     data: PaginatedAssets;
+  };
+
+  type ApiResponsePaginatedAssetShotUsages_ = {
+    data: PaginatedAssetShotUsages;
   };
 
   type ApiResponsePaginatedAssetVersions_ = {
@@ -186,6 +212,50 @@ declare namespace API {
     data: ScriptVersionResponse;
   };
 
+  type ApiResponseShotDeletePreflightResponse_ = {
+    data: ShotDeletePreflightResponse;
+  };
+
+  type ApiResponseShotDeleteResponse_ = {
+    data: ShotDeleteResponse;
+  };
+
+  type ApiResponseShotOrderResponse_ = {
+    data: ShotOrderResponse;
+  };
+
+  type ApiResponseShotReadinessBatchResponse_ = {
+    data: ShotReadinessBatchResponse;
+  };
+
+  type ApiResponseShotReadinessResponse_ = {
+    data: ShotReadinessResponse;
+  };
+
+  type ApiResponseShotResponse_ = {
+    data: ShotResponse;
+  };
+
+  type ApiResponseShotSpecCreateResponse_ = {
+    data: ShotSpecCreateResponse;
+  };
+
+  type ApiResponseShotSpecVersionResponse_ = {
+    data: ShotSpecVersionResponse;
+  };
+
+  type ApiResponseShotStateResponse_ = {
+    data: ShotStateResponse;
+  };
+
+  type ApiResponseShotTransformPreflightResponse_ = {
+    data: ShotTransformPreflightResponse;
+  };
+
+  type ApiResponseShotTransformResponse_ = {
+    data: ShotTransformResponse;
+  };
+
   type ApiResponseStructureConfirmationResponse_ = {
     data: StructureConfirmationResponse;
   };
@@ -210,6 +280,10 @@ declare namespace API {
     asset_id: string;
   };
 
+  type appendSpecVersionApiV1ShotsShotIdSpecVersionsPostParams = {
+    shot_id: string;
+  };
+
   type AppendVersionRequest = {
     /** Workspace Id */
     workspace_id: string;
@@ -227,6 +301,10 @@ declare namespace API {
     idempotency_key: string;
     /** Expected Current Version Id */
     expected_current_version_id: string;
+  };
+
+  type applyAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePostParams = {
+    asset_version_id: string;
   };
 
   type archiveAssetApiV1AssetsAssetIdArchivePostParams = {
@@ -248,6 +326,10 @@ declare namespace API {
 
   type archiveProjectApiV1ProjectsProjectIdArchivePostParams = {
     project_id: string;
+  };
+
+  type archiveShotApiV1ShotsShotIdArchivePostParams = {
+    shot_id: string;
   };
 
   type archiveSourceApiV1ScriptSourcesSourceIdArchivePostParams = {
@@ -389,6 +471,40 @@ declare namespace API {
     dependency_snapshot: AssetReadinessDependencySnapshot;
   };
 
+  type AssetReferenceRequest = {
+    /** Slot Key */
+    slot_key: string;
+    /** Role */
+    role:
+      | "location"
+      | "character"
+      | "prop"
+      | "costume"
+      | "visual_style"
+      | "voice";
+    /** Asset Version Id */
+    asset_version_id: string;
+    /** Subject Key */
+    subject_key: string | null | null;
+  };
+
+  type AssetReferenceResponse = {
+    /** Slot Key */
+    slot_key: string;
+    /** Role */
+    role:
+      | "location"
+      | "character"
+      | "prop"
+      | "costume"
+      | "visual_style"
+      | "voice";
+    /** Asset Version Id */
+    asset_version_id: string;
+    /** Subject Key */
+    subject_key: string | null;
+  };
+
   type AssetResponse = {
     /** Id */
     id: string;
@@ -424,6 +540,23 @@ declare namespace API {
     warnings: "duplicate_name"[] | null;
   };
 
+  type AssetShotUsageResponse = {
+    /** Shot Id */
+    shot_id: string;
+    /** Shot Title */
+    shot_title: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Spec Version Id */
+    spec_version_id: string;
+    /** Spec Version No */
+    spec_version_no: number;
+    /** Slot Keys */
+    slot_keys: string[];
+    /** Is Current */
+    is_current: boolean;
+  };
+
   type AssetStateRequest = {
     /** Expected Revision */
     expected_revision: number;
@@ -457,6 +590,53 @@ declare namespace API {
     aliases: string[] | null | null;
     /** Tags */
     tags: string[] | null | null;
+  };
+
+  type AssetUpgradeApplyRequest = {
+    /** New Asset Version Id */
+    new_asset_version_id: string;
+    /** Targets */
+    targets: AssetUpgradeTargetRequest[];
+    /** Preflight Hash */
+    preflight_hash: string;
+  };
+
+  type AssetUpgradeApplyResponse = {
+    /** Shots */
+    shots: ShotResponse[];
+    /** Spec Versions */
+    spec_versions: ShotSpecVersionResponse[];
+  };
+
+  type AssetUpgradePreflightRequest = {
+    /** New Asset Version Id */
+    new_asset_version_id: string;
+    /** Shot Ids */
+    shot_ids: string[];
+  };
+
+  type AssetUpgradePreflightResponse = {
+    /** Old Asset Version Id */
+    old_asset_version_id: string;
+    /** New Asset Version Id */
+    new_asset_version_id: string;
+    /** Targets */
+    targets: AssetUpgradeTargetRequest[];
+    /** Preflight Hash */
+    preflight_hash: string;
+  };
+
+  type AssetUpgradeTargetRequest = {
+    /** Shot Id */
+    shot_id: string;
+    /** Expected Spec Version Id */
+    expected_spec_version_id: string;
+    /** Expected Shot Revision */
+    expected_shot_revision: number;
+    /** Slot Keys */
+    slot_keys: string[];
+    /** New Input Hash */
+    new_input_hash: string;
   };
 
   type AssetVersionCreateRequest = {
@@ -521,6 +701,13 @@ declare namespace API {
     created_by: string;
     /** Created At */
     created_at: string;
+  };
+
+  type AudioIntent = {
+    /** Ambient */
+    ambient: string | null | null;
+    /** Sound Effects */
+    sound_effects: string[] | null;
   };
 
   type AuthResponse = {
@@ -738,6 +925,21 @@ declare namespace API {
     suggestion: string;
   };
 
+  type copyShotApiV1ShotsShotIdCopyPostParams = {
+    shot_id: string;
+  };
+
+  type CopyShotRequest = {
+    /** Title */
+    title: string;
+    /** Expected Source Spec Version Id */
+    expected_source_spec_version_id: string;
+    /** Expected Order Hash */
+    expected_order_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
   type CostSummary = {
     /** Status */
     status: "not_started" | null;
@@ -772,6 +974,15 @@ declare namespace API {
 
   type createEpisodeApiV1ProjectsProjectIdEpisodesPostParams = {
     project_id: string;
+  };
+
+  type createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPostParams =
+    {
+      candidate_id: string;
+    };
+
+  type createManualShotApiV1EpisodesEpisodeIdShotsPostParams = {
+    episode_id: string;
   };
 
   type CurrentScriptVersionRequest = {
@@ -848,6 +1059,12 @@ declare namespace API {
     deleted: true | null;
   };
 
+  type deleteShotApiV1ShotsShotIdDeleteParams = {
+    shot_id: string;
+    expected_revision: number;
+    expected_order_hash: string;
+  };
+
   type DependencyStatus = {
     /** Critical */
     critical: boolean;
@@ -868,6 +1085,19 @@ declare namespace API {
     dialogue_kind: "spoken" | "narration" | "internal" | "voice_over";
     /** Text */
     text: string;
+    /** Performance Note */
+    performance_note: string | null | null;
+  };
+
+  type DialogueOrNarration = {
+    /** Source Dialogue Id */
+    source_dialogue_id: string;
+    /** Beat Key */
+    beat_key: string | null | null;
+    /** Speaker Subject Key */
+    speaker_subject_key: string | null | null;
+    /** Render As Audio */
+    render_as_audio: boolean | null;
     /** Performance Note */
     performance_note: string | null | null;
   };
@@ -895,6 +1125,19 @@ declare namespace API {
   type diffVersionsApiV1ScriptVersionsVersionIdDiffGetParams = {
     version_id: string;
     other_version_id: string;
+  };
+
+  type DownstreamEvidenceResponse = {
+    /** Generation Request Ids */
+    generation_request_ids: string[] | null;
+    /** Candidate Ids */
+    candidate_ids: string[] | null;
+    /** Review Ids */
+    review_ids: string[] | null;
+    /** Issue Ids */
+    issue_ids: string[] | null;
+    /** Timeline Source Ids */
+    timeline_source_ids: string[] | null;
   };
 
   type EpisodeCreateRequest = {
@@ -1050,6 +1293,17 @@ declare namespace API {
     created_at: string;
   };
 
+  type GenerationIntent = {
+    /** Mode */
+    mode: "keyframe_then_video" | "reference_to_video" | "text_to_video";
+    /** First Frame */
+    first_frame: string | null | null;
+    /** Last Frame */
+    last_frame: string | null | null;
+    /** Keyframe Notes */
+    keyframe_notes: string | null | null;
+  };
+
   type getAssetApiV1AssetsAssetIdGetParams = {
     asset_id: string;
   };
@@ -1073,6 +1327,10 @@ declare namespace API {
     episode_id: string;
   };
 
+  type getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGetParams = {
+    episode_id: string;
+  };
+
   type getExtractionBatchApiV1ExtractionBatchesBatchIdGetParams = {
     batch_id: string;
   };
@@ -1089,8 +1347,21 @@ declare namespace API {
     project_id: string;
   };
 
+  type getReadinessApiV1ShotsShotIdReadinessGetParams = {
+    shot_id: string;
+    version_id: string | null | null;
+  };
+
+  type getShotApiV1ShotsShotIdGetParams = {
+    shot_id: string;
+  };
+
   type getSourceApiV1ScriptSourcesSourceIdGetParams = {
     source_id: string;
+  };
+
+  type getSpecVersionApiV1ShotSpecVersionsVersionIdGetParams = {
+    version_id: string;
   };
 
   type getTaskApiV1TasksTaskIdGetParams = {
@@ -1152,6 +1423,13 @@ declare namespace API {
     limit: number | null | null;
     offset: number | null;
   };
+
+  type listAssetShotUsagesApiV1AssetVersionsAssetVersionIdShotUsagesGetParams =
+    {
+      asset_version_id: string;
+      limit: number | null | null;
+      offset: number | null;
+    };
 
   type listAssetVersionsApiV1AssetsAssetIdVersionsGetParams = {
     asset_id: string;
@@ -1221,10 +1499,18 @@ declare namespace API {
     offset: number | null;
   };
 
+  type listShotsApiV1EpisodesEpisodeIdShotsGetParams = {
+    episode_id: string;
+  };
+
   type listSourcesApiV1EpisodesEpisodeIdScriptSourcesGetParams = {
     episode_id: string;
     limit: number | null | null;
     offset: number | null;
+  };
+
+  type listSpecVersionsApiV1ShotsShotIdSpecVersionsGetParams = {
+    shot_id: string;
   };
 
   type listTasksApiV1TasksGetParams = {
@@ -1382,6 +1668,36 @@ declare namespace API {
     target_candidate_id: string;
   };
 
+  type MergePreflightRequest = {
+    /** Shot Ids */
+    shot_ids: string[];
+    /** Expected Spec Version Ids */
+    expected_spec_version_ids: string[];
+    /** Expected Order Hash */
+    expected_order_hash: string;
+  };
+
+  type MergeShotRequest = {
+    /** Shot Ids */
+    shot_ids: string[];
+    /** Expected Spec Version Ids */
+    expected_spec_version_ids: string[];
+    /** Expected Order Hash */
+    expected_order_hash: string;
+    /** Impact Hash */
+    impact_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+    target: TargetShotSpecRequest;
+  };
+
+  type NarrativeSpec = {
+    /** Purpose */
+    purpose: string;
+    /** Continuity Note */
+    continuity_note: string | null | null;
+  };
+
   type NextAction = {
     /** Code */
     code: string;
@@ -1394,6 +1710,17 @@ declare namespace API {
   type PaginatedAssets = {
     /** Items */
     items: AssetResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
+  type PaginatedAssetShotUsages = {
+    /** Items */
+    items: AssetShotUsageResponse[];
     /** Total */
     total: number;
     /** Limit */
@@ -1509,6 +1836,11 @@ declare namespace API {
     /** Summary */
     summary: string;
   };
+
+  type preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPostParams =
+    {
+      asset_version_id: string;
+    };
 
   type ProbeRetryRequest = {
     /** Idempotency Key */
@@ -1654,6 +1986,10 @@ declare namespace API {
     project_id: string;
   };
 
+  type reorderShotsApiV1EpisodesEpisodeIdShotsReorderPostParams = {
+    episode_id: string;
+  };
+
   type restoreAssetApiV1AssetsAssetIdRestorePostParams = {
     asset_id: string;
   };
@@ -1664,6 +2000,10 @@ declare namespace API {
 
   type restoreProjectApiV1ProjectsProjectIdRestorePostParams = {
     project_id: string;
+  };
+
+  type restoreShotApiV1ShotsShotIdRestorePostParams = {
+    shot_id: string;
   };
 
   type restoreSourceApiV1ScriptSourcesSourceIdRestorePostParams = {
@@ -1756,6 +2096,15 @@ declare namespace API {
   type ScriptImportResponse = {
     source: ScriptSourceResponse;
     version: ScriptVersionResponse;
+  };
+
+  type ScriptReference = {
+    /** Confirmed Script Version Id */
+    confirmed_script_version_id: string;
+    /** Scene Id */
+    scene_id: string;
+    /** Dialogue Ids */
+    dialogue_ids: string[] | null;
   };
 
   type ScriptSourceResponse = {
@@ -1872,6 +2221,10 @@ declare namespace API {
     asset_id: string;
   };
 
+  type setCurrentSpecVersionApiV1ShotsShotIdCurrentSpecVersionPostParams = {
+    shot_id: string;
+  };
+
   type setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPostParams = {
     episode_id: string;
   };
@@ -1885,6 +2238,341 @@ declare namespace API {
     title: string;
     /** Purpose */
     purpose: string;
+  };
+
+  type ShotCreateRequest = {
+    /** Title */
+    title: string;
+    /** Source Script Version Id */
+    source_script_version_id: string;
+    /** Source Scene Id */
+    source_scene_id: string;
+    /** Creation Key */
+    creation_key: string;
+  };
+
+  type ShotCurrentSpecRequest = {
+    /** Version Id */
+    version_id: string;
+    /** Expected Current Spec Version Id */
+    expected_current_spec_version_id: string | null;
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type ShotDeleteBlocker = {
+    /** Code */
+    code: "SOURCE_CANDIDATE_EVIDENCE" | "SPEC_VERSION_EVIDENCE";
+    /** Summary */
+    summary: string;
+  };
+
+  type shotDeletePreflightApiV1ShotsShotIdDeletePreflightGetParams = {
+    shot_id: string;
+  };
+
+  type ShotDeletePreflightResponse = {
+    /** Allowed */
+    allowed: boolean;
+    /** Blockers */
+    blockers: ShotDeleteBlocker[];
+  };
+
+  type ShotDeleteResponse = {
+    /** Deleted */
+    deleted: true | null;
+    order: ShotOrderResponse;
+  };
+
+  type ShotOrderResponse = {
+    /** Items */
+    items: ShotResponse[];
+    /** Order Hash */
+    order_hash: string;
+  };
+
+  type ShotReadinessBatchResponse = {
+    /** Episode Id */
+    episode_id: string;
+    /** Items */
+    items: ShotReadinessResponse[];
+    summary: ShotReadinessSummary;
+    /** Evaluation Hash */
+    evaluation_hash: string;
+  };
+
+  type ShotReadinessDependencies = {
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string | null;
+    /** Confirmed Script Version Id */
+    confirmed_script_version_id: string;
+    /** Scene Id */
+    scene_id: string;
+    /** Dialogue Ids */
+    dialogue_ids: string[];
+    /** Asset Version Ids */
+    asset_version_ids: string[];
+    /** Media Version Ids */
+    media_version_ids: string[];
+    /** Consent Ids */
+    consent_ids: string[];
+    /** Asset Evaluation Hashes */
+    asset_evaluation_hashes: Record<string, any>;
+  };
+
+  type ShotReadinessIssue = {
+    /** Code */
+    code:
+      | "CURRENT_SPEC_MISSING"
+      | "SPEC_FIELD_MISSING"
+      | "DURATION_OUT_OF_RANGE"
+      | "SCRIPT_VERSION_UNAVAILABLE"
+      | "SOURCE_SCENE_INVALID"
+      | "SOURCE_DIALOGUE_INVALID"
+      | "LOCATION_REFERENCE_MISSING"
+      | "CHARACTER_REFERENCE_MISSING"
+      | "VOICE_REFERENCE_MISSING"
+      | "ASSET_KIND_MISMATCH"
+      | "ASSET_VERSION_UNAVAILABLE"
+      | "ASSET_NOT_READY"
+      | "MEDIA_REFERENCE_UNAVAILABLE"
+      | "RIGHTS_BLOCKED"
+      | "DEPENDENCY_UNAVAILABLE";
+    /** Field Path */
+    field_path: string | null | null;
+    /** Dependency Type */
+    dependency_type: string | null | null;
+    /** Dependency Id */
+    dependency_id: string | null | null;
+    /** Summary */
+    summary: string;
+    /** Next Action */
+    next_action: string;
+  };
+
+  type ShotReadinessResponse = {
+    /** Shot Id */
+    shot_id: string;
+    /** Status */
+    status: "ready" | "blocked" | "unavailable";
+    /** Ready */
+    ready: boolean;
+    /** Blocking Reasons */
+    blocking_reasons: ShotReadinessIssue[];
+    /** Warnings */
+    warnings: ShotReadinessWarning[];
+    /** Next Actions */
+    next_actions: string[];
+    evaluated_dependencies: ShotReadinessDependencies;
+    /** Evaluation Hash */
+    evaluation_hash: string;
+  };
+
+  type ShotReadinessSummary = {
+    /** Total */
+    total: number;
+    /** Ready */
+    ready: number;
+    /** Blocked */
+    blocked: number;
+    /** Unavailable */
+    unavailable: number;
+  };
+
+  type ShotReadinessWarning = {
+    /** Code */
+    code:
+      | "DURATION_ABOVE_RECOMMENDED"
+      | "ACTION_DENSITY_HIGH"
+      | "STYLE_REFERENCE_MISSING";
+    /** Field Path */
+    field_path: string | null | null;
+    /** Summary */
+    summary: string;
+    /** Next Action */
+    next_action: string;
+  };
+
+  type ShotReorderRequest = {
+    /** Shot Ids */
+    shot_ids: string[];
+    /** Expected Order Hash */
+    expected_order_hash: string;
+  };
+
+  type ShotResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Position */
+    position: number;
+    /** Title */
+    title: string;
+    /** Source Script Version Id */
+    source_script_version_id: string;
+    /** Source Scene Id */
+    source_scene_id: string;
+    /** Source Candidate Id */
+    source_candidate_id: string | null;
+    /** Status */
+    status: "active" | "archived";
+    /** Current Spec Version Id */
+    current_spec_version_id: string | null;
+    /** Revision */
+    revision: number;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+  };
+
+  type ShotSpec = {
+    /** Schema Version */
+    schema_version: 1 | null;
+    script_reference: ScriptReference;
+    narrative: NarrativeSpec;
+    visual: VisualSpec;
+    /** Action Beats */
+    action_beats: ActionBeat[];
+    /** Dialogue Or Narration */
+    dialogue_or_narration: DialogueOrNarration[] | null;
+    /** Duration Ms */
+    duration_ms: number | null;
+    audio_intent: AudioIntent | null | null;
+    generation_intent: GenerationIntent;
+  };
+
+  type ShotSpecCreateRequest = {
+    /** Expected Current Spec Version Id */
+    expected_current_spec_version_id: string | null;
+    spec: ShotSpec;
+    /** Asset References */
+    asset_references: AssetReferenceRequest[] | null;
+  };
+
+  type ShotSpecCreateResponse = {
+    shot: ShotResponse;
+    version: ShotSpecVersionResponse;
+  };
+
+  type ShotSpecVersionResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Shot Id */
+    shot_id: string;
+    /** Version No */
+    version_no: number;
+    /** Schema Version */
+    schema_version: 1;
+    spec: ShotSpec;
+    /** Content Hash */
+    content_hash: string;
+    /** Input Hash */
+    input_hash: string;
+    /** Asset References */
+    asset_references: AssetReferenceResponse[];
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+  };
+
+  type ShotStateRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Expected Order Hash */
+    expected_order_hash: string;
+  };
+
+  type ShotStateResponse = {
+    shot: ShotResponse;
+    order: ShotOrderResponse;
+  };
+
+  type ShotTransformEvidenceResponse = {
+    /** Id */
+    id: string;
+    /** Operation */
+    operation: "copy" | "split" | "merge";
+    /** Source Shot Ids */
+    source_shot_ids: string[];
+    /** Source Spec Version Ids */
+    source_spec_version_ids: string[];
+    /** Result Shot Ids */
+    result_shot_ids: string[];
+    /** Impact Hash */
+    impact_hash: string;
+    /** Input Hash */
+    input_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Actor Id */
+    actor_id: string;
+    /** Created At */
+    created_at: string;
+  };
+
+  type ShotTransformPreflightResponse = {
+    /** Operation */
+    operation: "split" | "merge";
+    /** Source Shot Ids */
+    source_shot_ids: string[];
+    /** Source Spec Version Ids */
+    source_spec_version_ids: string[];
+    /** Order Hash */
+    order_hash: string;
+    downstream_evidence: DownstreamEvidenceResponse;
+    /** Impact Hash */
+    impact_hash: string;
+  };
+
+  type ShotTransformResponse = {
+    transform: ShotTransformEvidenceResponse;
+    /** Shots */
+    shots: ShotResponse[];
+    /** Spec Versions */
+    spec_versions: ShotSpecVersionResponse[];
+    order: ShotOrderResponse;
+  };
+
+  type ShotUpdateRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Title */
+    title: string;
+  };
+
+  type splitPreflightApiV1ShotsShotIdSplitPreflightPostParams = {
+    shot_id: string;
+  };
+
+  type SplitPreflightRequest = {
+    /** Expected Source Spec Version Id */
+    expected_source_spec_version_id: string;
+    /** Expected Order Hash */
+    expected_order_hash: string;
+  };
+
+  type splitShotApiV1ShotsShotIdSplitPostParams = {
+    shot_id: string;
+  };
+
+  type SplitShotRequest = {
+    /** Expected Source Spec Version Id */
+    expected_source_spec_version_id: string;
+    /** Expected Order Hash */
+    expected_order_hash: string;
+    /** Impact Hash */
+    impact_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Targets */
+    targets: TargetShotSpecRequest[];
   };
 
   type startExtractionApiV1ScriptVersionsVersionIdExtractionsPostParams = {
@@ -1926,6 +2614,13 @@ declare namespace API {
     | "organization"
     | "minor";
 
+  type SubjectPlacement = {
+    /** Subject Key */
+    subject_key: string;
+    /** Placement */
+    placement: string;
+  };
+
   type SubjectType =
     | "SCRIPT_VERSION"
     | "ASSET_VERSION"
@@ -1934,6 +2629,14 @@ declare namespace API {
     | "MEDIA_VERSION"
     | "TIMELINE_VERSION"
     | "DELIVERY";
+
+  type TargetShotSpecRequest = {
+    /** Title */
+    title: string;
+    spec: ShotSpec;
+    /** Asset References */
+    asset_references: AssetReferenceRequest[] | null;
+  };
 
   type TaskErrorResponse = {
     /** Code */
@@ -2018,6 +2721,10 @@ declare namespace API {
 
   type updateProjectApiV1ProjectsProjectIdPatchParams = {
     project_id: string;
+  };
+
+  type updateShotApiV1ShotsShotIdPatchParams = {
+    shot_id: string;
   };
 
   type updateWorkspaceApiV1WorkspacesWorkspaceIdPatchParams = {
@@ -2108,6 +2815,39 @@ declare namespace API {
     input: any | null;
     /** Context */
     ctx: Record<string, any> | null;
+  };
+
+  type VisualSpec = {
+    /** Shot Size */
+    shot_size:
+      | "extreme_wide"
+      | "wide"
+      | "full"
+      | "medium"
+      | "medium_close_up"
+      | "close_up"
+      | "extreme_close_up";
+    /** Camera Angle */
+    camera_angle: "eye_level" | "high" | "low" | "bird_eye" | "dutch";
+    /** Camera Movement */
+    camera_movement:
+      | "static"
+      | "pan"
+      | "tilt"
+      | "dolly"
+      | "truck"
+      | "pedestal"
+      | "zoom"
+      | "handheld"
+      | "orbit";
+    /** Composition */
+    composition: string;
+    /** Environment */
+    environment: string;
+    /** Subject Placements */
+    subject_placements: SubjectPlacement[] | null;
+    /** Mood Lighting */
+    mood_lighting: string;
   };
 
   type VoiceSpec = {
