@@ -167,6 +167,24 @@ async def create_manual_shot(
 
 
 @router.get(
+    "/episodes/{episode_id}/archived-shots",
+    response_model=ApiResponse[list[ShotResponse]],
+)
+async def list_archived_shots(
+    episode_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[list[ShotResponse]]:
+    return ApiResponse(
+        data=await service.list_archived_shots(
+            session,
+            claims,
+            episode_id,
+        )
+    )
+
+
+@router.get(
     "/episodes/{episode_id}/shots",
     response_model=ApiResponse[ShotOrderResponse],
 )

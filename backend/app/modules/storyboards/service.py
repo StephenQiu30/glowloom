@@ -545,6 +545,18 @@ async def list_shots(
     return _order_response(await repository.list_active_shots(session, episode_id))
 
 
+async def list_archived_shots(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    episode_id: UUID,
+) -> list[ShotResponse]:
+    await episode_for_content_read(session, claims, episode_id)
+    return [
+        _shot_response(shot)
+        for shot in await repository.list_archived_shots(session, episode_id)
+    ]
+
+
 async def get_shot(
     session: AsyncSession,
     claims: AccessTokenClaims,

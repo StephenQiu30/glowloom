@@ -65,6 +65,19 @@ async def list_active_shots(
     return list(await session.scalars(query))
 
 
+async def list_archived_shots(
+    session: AsyncSession,
+    episode_id: UUID,
+) -> list[Shot]:
+    return list(
+        await session.scalars(
+            select(Shot)
+            .where(Shot.episode_id == episode_id, Shot.status == "archived")
+            .order_by(Shot.updated_at.desc(), Shot.id.desc())
+        )
+    )
+
+
 async def list_active_shots_with_current_specs(
     session: AsyncSession,
     episode_id: UUID,
