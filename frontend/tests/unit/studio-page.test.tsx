@@ -3,15 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
+  applyAssetUpgrade: vi.fn(),
   appendAssetVersion: vi.fn(),
   archiveAsset: vi.fn(),
   createAsset: vi.fn(),
   getAssetReadiness: vi.fn(),
   listAssets: vi.fn(),
+  listAssetShotUsages: vi.fn(),
   listAssetVersions: vi.fn(),
   listMedia: vi.fn(),
   listProjects: vi.fn(),
   me: vi.fn(),
+  preflightAssetUpgrade: vi.fn(),
   restoreAsset: vi.fn(),
 }));
 
@@ -50,6 +53,21 @@ vi.mock("@/api/assets", async () => {
   };
 });
 
+vi.mock("@/api/storyboards", async () => {
+  const actual = await vi.importActual<typeof import("@/api/storyboards")>(
+    "@/api/storyboards",
+  );
+  return {
+    ...actual,
+    applyAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePost:
+      apiMocks.applyAssetUpgrade,
+    listAssetShotUsagesApiV1AssetVersionsAssetVersionIdShotUsagesGet:
+      apiMocks.listAssetShotUsages,
+    preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPost:
+      apiMocks.preflightAssetUpgrade,
+  };
+});
+
 import { AppProviders } from "@/app/providers";
 import { ComicProductionStudio } from "@/app/studio/comic-production-studio";
 import { setAccessToken } from "@/lib/auth-session";
@@ -58,7 +76,11 @@ const workspaceId = "019fb1e0-a00a-70f6-99dc-0b4e9e085565";
 const projectId = "019fb1e0-a010-70f6-99dc-0b4e9e085566";
 const assetId = "019fb1e0-a020-70f6-99dc-0b4e9e085567";
 const versionId = "019fb1e0-a030-70f6-99dc-0b4e9e085568";
+const oldVersionId = "019fb1e0-a030-70f6-99dc-0b4e9e085560";
 const mediaVersionId = "019fb1e0-a040-70f6-99dc-0b4e9e085569";
+const episodeId = "019fb1e0-a060-70f6-99dc-0b4e9e085570";
+const shotId = "019fb1e0-a070-70f6-99dc-0b4e9e085571";
+const shotSpecVersionId = "019fb1e0-a080-70f6-99dc-0b4e9e085572";
 const now = "2026-07-30T08:00:00Z";
 
 const asset: API.AssetResponse = {
@@ -99,6 +121,13 @@ const version: API.AssetVersionResponse = {
   ],
   created_by: "019fb1e0-a000-7000-8000-000000000001",
   created_at: now,
+};
+
+const oldVersion: API.AssetVersionResponse = {
+  ...version,
+  id: oldVersionId,
+  version_no: 2,
+  content_hash: "c".repeat(64),
 };
 
 const readiness: API.AssetReadinessResponse = {
@@ -172,7 +201,73 @@ describe("AI 漫剧资产工作台", () => {
       data: { items: [asset], total: 1, limit: 100, offset: 0 },
     });
     apiMocks.listAssetVersions.mockResolvedValue({
-      data: { items: [version], total: 1, limit: 100, offset: 0 },
+      data: { items: [version, oldVersion], total: 2, limit: 100, offset: 0 },
+    });
+    apiMocks.listAssetShotUsages.mockResolvedValue({
+      data: {
+        items: [
+          {
+            shot_id: shotId,
+            shot_title: "雨夜相逢",
+            episode_id: episodeId,
+            spec_version_id: shotSpecVersionId,
+            spec_version_no: 2,
+            slot_keys: ["character-main"],
+            is_current: true,
+          },
+          {
+            shot_id: shotId,
+            shot_title: "雨夜相逢",
+            episode_id: episodeId,
+            spec_version_id: "019fb1e0-a080-70f6-99dc-0b4e9e085573",
+            spec_version_no: 1,
+            slot_keys: ["character-main"],
+            is_current: false,
+          },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+    apiMocks.preflightAssetUpgrade.mockResolvedValue({
+      data: {
+        old_asset_version_id: oldVersionId,
+        new_asset_version_id: versionId,
+        targets: [
+          {
+            shot_id: shotId,
+            expected_spec_version_id: shotSpecVersionId,
+            expected_shot_revision: 3,
+            slot_keys: ["character-main"],
+            new_input_hash: "d".repeat(64),
+          },
+        ],
+        preflight_hash: "e".repeat(64),
+      },
+    });
+    apiMocks.applyAssetUpgrade.mockResolvedValue({
+      data: {
+        shots: [
+          {
+            id: shotId,
+            workspace_id: workspaceId,
+            episode_id: episodeId,
+            position: 1,
+            title: "雨夜相逢",
+            source_script_version_id: null,
+            source_scene_id: null,
+            source_candidate_id: null,
+            creation_key: "asset-upgrade-shot-1",
+            status: "active",
+            current_spec_version_id: "019fb1e0-a080-70f6-99dc-0b4e9e085574",
+            revision: 4,
+            created_at: now,
+            updated_at: now,
+          },
+        ],
+        spec_versions: [],
+      },
     });
     apiMocks.getAssetReadiness.mockResolvedValue({ data: readiness });
     apiMocks.listMedia.mockResolvedValue({
@@ -303,5 +398,67 @@ describe("AI 漫剧资产工作台", () => {
       }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent("版本 v4 已保存");
+  });
+
+  it("检查历史资产版本的分镜引用并在预检后批量升级", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <ComicProductionStudio />
+      </AppProviders>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "分镜引用与版本升级" }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.listAssetShotUsages).toHaveBeenCalledWith({
+        asset_version_id: oldVersionId,
+        limit: 20,
+        offset: 0,
+      }),
+    );
+    expect(
+      await screen.findByText("历史规格引用，不参与批量升级"),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: "选择镜头 雨夜相逢" }));
+    await user.click(screen.getByRole("button", { name: "生成升级预检" }));
+
+    await waitFor(() =>
+      expect(apiMocks.preflightAssetUpgrade).toHaveBeenCalledWith(
+        { asset_version_id: oldVersionId },
+        { new_asset_version_id: versionId, shot_ids: [shotId] },
+      ),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "确认资产版本升级" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("旧规格和历史引用会继续保留")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "应用升级并创建新规格版本" }),
+    );
+    await waitFor(() =>
+      expect(apiMocks.applyAssetUpgrade).toHaveBeenCalledWith(
+        { asset_version_id: oldVersionId },
+        {
+          new_asset_version_id: versionId,
+          targets: [
+            {
+              shot_id: shotId,
+              expected_spec_version_id: shotSpecVersionId,
+              expected_shot_revision: 3,
+              slot_keys: ["character-main"],
+              new_input_hash: "d".repeat(64),
+            },
+          ],
+          preflight_hash: "e".repeat(64),
+        },
+      ),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "已为 1 个镜头创建新的规格版本",
+    );
   });
 });
