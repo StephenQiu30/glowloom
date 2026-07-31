@@ -8,7 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
 from app.modules.projects.models import Episode
-from app.modules.scripts.models import Dialogue, Scene, ScriptSource, ScriptVersion
+from app.modules.scripts.models import (
+    CandidateDecision,
+    Dialogue,
+    ExtractionBatch,
+    ExtractionCandidate,
+    Scene,
+    ScriptSource,
+    ScriptVersion,
+)
 from tests.support.identity_builders import register_identity_response
 from tests.support.project_builders import project_payload
 
@@ -175,6 +183,95 @@ def _spec_payload(refs: dict[str, UUID], *, purpose: str) -> dict[str, object]:
             "keyframe_notes": None,
         },
     }
+
+
+async def _seed_confirmed_shot_candidate(
+    session_factory: async_sessionmaker[AsyncSession],
+    refs: dict[str, UUID],
+) -> UUID:
+    batch_id = uuid7()
+    scene_candidate_id = uuid7()
+    shot_candidate_id = uuid7()
+    async with session_factory() as session, session.begin():
+        batch = ExtractionBatch(
+            id=batch_id,
+            workspace_id=refs["workspace_id"],
+            script_version_id=refs["script_version_id"],
+            scope="full",
+            extractor_version="test-confirmed-structure",
+            input_hash="2" * 64,
+            status="succeeded",
+            confirmed_script_version_id=refs["script_version_id"],
+            candidate_count=2,
+            idempotency_key=f"confirmed-shot-{batch_id}",
+            created_by=refs["actor_id"],
+        )
+        session.add(batch)
+        await session.flush()
+        scene_candidate = ExtractionCandidate(
+            id=scene_candidate_id,
+            workspace_id=refs["workspace_id"],
+            batch_id=batch_id,
+            candidate_key="scene-001",
+            kind="scene",
+            source_start=0,
+            source_end=10,
+            proposal={
+                "kind": "scene",
+                "heading": "雨夜车站",
+                "location": "旧车站月台",
+                "time_of_day": "夜",
+                "summary": "林澈进入空无一人的月台",
+            },
+            required=True,
+            status="accepted",
+            revision=2,
+        )
+        shot_candidate = ExtractionCandidate(
+            id=shot_candidate_id,
+            workspace_id=refs["workspace_id"],
+            batch_id=batch_id,
+            candidate_key="shot-001",
+            kind="shot",
+            source_start=0,
+            source_end=10,
+            proposal={
+                "kind": "shot",
+                "scene_candidate_key": "scene-001",
+                "title": "AI 候选：进入车站",
+                "purpose": "建立雨夜车站环境与人物状态",
+            },
+            required=False,
+            status="accepted",
+            revision=2,
+        )
+        session.add_all([scene_candidate, shot_candidate])
+        await session.flush()
+        session.add_all(
+            [
+                CandidateDecision(
+                    id=uuid7(),
+                    workspace_id=refs["workspace_id"],
+                    candidate_id=scene_candidate_id,
+                    sequence=1,
+                    decision_key="accept-scene",
+                    action="accept_new",
+                    payload={},
+                    actor_id=refs["actor_id"],
+                ),
+                CandidateDecision(
+                    id=uuid7(),
+                    workspace_id=refs["workspace_id"],
+                    candidate_id=shot_candidate_id,
+                    sequence=1,
+                    decision_key="accept-shot",
+                    action="accept_new",
+                    payload={},
+                    actor_id=refs["actor_id"],
+                ),
+            ]
+        )
+    return shot_candidate_id
 
 
 @pytest.mark.asyncio
@@ -397,3 +494,76 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
     )
     assert rejected.status_code == 422
     assert rejected.json()["error"]["code"] == "validation_failed"
+
+
+@pytest.mark.asyncio
+async def test_confirmed_candidate_creation_and_safe_delete_preserve_evidence(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await _episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="storyboard-candidate-delete@example.com",
+    )
+    candidate_id = await _seed_confirmed_shot_candidate(session_factory, refs)
+
+    candidate_created = await client.post(
+        f"/api/v1/extraction-candidates/{candidate_id}/shot",
+        headers=headers,
+    )
+    assert candidate_created.status_code == 201
+    candidate_shot = candidate_created.json()["data"]
+    assert candidate_shot["source_candidate_id"] == str(candidate_id)
+    assert candidate_shot["title"] == "AI 候选：进入车站"
+    repeated = await client.post(
+        f"/api/v1/extraction-candidates/{candidate_id}/shot",
+        headers=headers,
+    )
+    assert repeated.status_code == 201
+    assert repeated.json()["data"] == candidate_shot
+
+    candidate_preflight = await client.get(
+        f"/api/v1/shots/{candidate_shot['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert candidate_preflight.status_code == 200
+    assert candidate_preflight.json()["data"]["allowed"] is False
+    assert [
+        blocker["code"] for blocker in candidate_preflight.json()["data"]["blockers"]
+    ] == ["SOURCE_CANDIDATE_EVIDENCE"]
+
+    endpoint = f"/api/v1/episodes/{episode['id']}/shots"
+    empty_response = await client.post(
+        endpoint,
+        headers=headers,
+        json=_create_shot_payload(
+            refs,
+            title="可删除空镜头",
+            creation_key="empty-delete-shot",
+        ),
+    )
+    assert empty_response.status_code == 201
+    empty = empty_response.json()["data"]
+    listed = await client.get(endpoint, headers=headers)
+    order = listed.json()["data"]
+
+    empty_preflight = await client.get(
+        f"/api/v1/shots/{empty['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert empty_preflight.status_code == 200
+    assert empty_preflight.json()["data"] == {"allowed": True, "blockers": []}
+    deleted = await client.delete(
+        f"/api/v1/shots/{empty['id']}",
+        headers=headers,
+        params={
+            "expected_revision": empty["revision"],
+            "expected_order_hash": order["order_hash"],
+        },
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["data"]["deleted"] is True
+    assert [item["id"] for item in deleted.json()["data"]["order"]["items"]] == [
+        candidate_shot["id"]
+    ]
