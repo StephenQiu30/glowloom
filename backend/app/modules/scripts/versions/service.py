@@ -20,6 +20,7 @@ from app.modules.scripts.authorization import (
     require_resource_access,
     resource_not_found,
 )
+from app.modules.scripts.contracts import ConfirmedStructureReference
 from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
 from app.modules.scripts.versions.schemas import (
     CurrentScriptVersionRequest,
@@ -262,6 +263,53 @@ async def script_version_exists(
 ) -> bool:
     version = await repository.find_version(session, version_id)
     return version is not None and version.workspace_id == workspace_id
+
+
+async def resolve_confirmed_structure(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    episode_id: UUID,
+    script_version_id: UUID,
+    scene_id: UUID,
+    dialogue_ids: list[UUID],
+) -> ConfirmedStructureReference | None:
+    version = await repository.find_version(session, script_version_id)
+    if (
+        version is None
+        or version.workspace_id != workspace_id
+        or version.status != "published"
+        or not version.structure_summary.get("confirmation_batch_id")
+    ):
+        return None
+    source = await repository.find_source(session, version.source_id)
+    if (
+        source is None
+        or source.workspace_id != workspace_id
+        or source.episode_id != episode_id
+        or source.status != "active"
+    ):
+        return None
+    scene = await repository.find_scene(session, scene_id)
+    if (
+        scene is None
+        or scene.workspace_id != workspace_id
+        or scene.script_version_id != script_version_id
+    ):
+        return None
+    dialogues = await repository.list_dialogues(session, [scene_id])
+    available_ids = {dialogue.id for dialogue in dialogues}
+    if len(set(dialogue_ids)) != len(dialogue_ids) or not set(dialogue_ids).issubset(
+        available_ids
+    ):
+        return None
+    return ConfirmedStructureReference(
+        workspace_id=workspace_id,
+        episode_id=episode_id,
+        script_version_id=script_version_id,
+        scene_id=scene_id,
+        dialogue_ids=tuple(dialogue_ids),
+    )
 
 
 async def list_versions(

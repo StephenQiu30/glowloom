@@ -1,0 +1,180 @@
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.auth import AccessTokenClaims, get_access_token_claims
+from app.core.database import get_async_session
+from app.core.schemas import ApiResponse
+from app.modules.storyboards import service
+from app.modules.storyboards.schemas import (
+    ShotCreateRequest,
+    ShotCurrentSpecRequest,
+    ShotOrderResponse,
+    ShotReorderRequest,
+    ShotResponse,
+    ShotSpecCreateRequest,
+    ShotSpecCreateResponse,
+    ShotSpecVersionResponse,
+    ShotStateRequest,
+    ShotStateResponse,
+    ShotUpdateRequest,
+)
+
+router = APIRouter(prefix="/api/v1", tags=["storyboards"])
+
+
+@router.post(
+    "/episodes/{episode_id}/shots",
+    response_model=ApiResponse[ShotResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_manual_shot(
+    episode_id: UUID,
+    payload: ShotCreateRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotResponse]:
+    return ApiResponse(
+        data=await service.create_manual_shot(session, claims, episode_id, payload)
+    )
+
+
+@router.get(
+    "/episodes/{episode_id}/shots",
+    response_model=ApiResponse[ShotOrderResponse],
+)
+async def list_shots(
+    episode_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotOrderResponse]:
+    return ApiResponse(data=await service.list_shots(session, claims, episode_id))
+
+
+@router.post(
+    "/episodes/{episode_id}/shots/reorder",
+    response_model=ApiResponse[ShotOrderResponse],
+)
+async def reorder_shots(
+    episode_id: UUID,
+    payload: ShotReorderRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotOrderResponse]:
+    return ApiResponse(
+        data=await service.reorder_shots(session, claims, episode_id, payload)
+    )
+
+
+@router.get("/shots/{shot_id}", response_model=ApiResponse[ShotResponse])
+async def get_shot(
+    shot_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotResponse]:
+    return ApiResponse(data=await service.get_shot(session, claims, shot_id))
+
+
+@router.patch("/shots/{shot_id}", response_model=ApiResponse[ShotResponse])
+async def update_shot(
+    shot_id: UUID,
+    payload: ShotUpdateRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotResponse]:
+    return ApiResponse(data=await service.update_shot(session, claims, shot_id, payload))
+
+
+@router.post(
+    "/shots/{shot_id}/archive",
+    response_model=ApiResponse[ShotStateResponse],
+)
+async def archive_shot(
+    shot_id: UUID,
+    payload: ShotStateRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotStateResponse]:
+    return ApiResponse(
+        data=await service.set_shot_archived(
+            session, claims, shot_id, payload, archived=True
+        )
+    )
+
+
+@router.post(
+    "/shots/{shot_id}/restore",
+    response_model=ApiResponse[ShotStateResponse],
+)
+async def restore_shot(
+    shot_id: UUID,
+    payload: ShotStateRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotStateResponse]:
+    return ApiResponse(
+        data=await service.set_shot_archived(
+            session, claims, shot_id, payload, archived=False
+        )
+    )
+
+
+@router.post(
+    "/shots/{shot_id}/spec-versions",
+    response_model=ApiResponse[ShotSpecCreateResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def append_spec_version(
+    shot_id: UUID,
+    payload: ShotSpecCreateRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotSpecCreateResponse]:
+    return ApiResponse(
+        data=await service.append_spec_version(session, claims, shot_id, payload)
+    )
+
+
+@router.get(
+    "/shots/{shot_id}/spec-versions",
+    response_model=ApiResponse[list[ShotSpecVersionResponse]],
+)
+async def list_spec_versions(
+    shot_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[list[ShotSpecVersionResponse]]:
+    return ApiResponse(
+        data=await service.list_spec_versions(session, claims, shot_id)
+    )
+
+
+@router.get(
+    "/shot-spec-versions/{version_id}",
+    response_model=ApiResponse[ShotSpecVersionResponse],
+)
+async def get_spec_version(
+    version_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotSpecVersionResponse]:
+    return ApiResponse(
+        data=await service.get_spec_version(session, claims, version_id)
+    )
+
+
+@router.post(
+    "/shots/{shot_id}/current-spec-version",
+    response_model=ApiResponse[ShotResponse],
+)
+async def set_current_spec_version(
+    shot_id: UUID,
+    payload: ShotCurrentSpecRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotResponse]:
+    return ApiResponse(
+        data=await service.set_current_spec_version(session, claims, shot_id, payload)
+    )

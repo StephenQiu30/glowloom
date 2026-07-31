@@ -31,3 +31,12 @@ class ScriptExtractionInput:
     workspace_id: UUID
     script_version_id: UUID
     body: str
+
+
+@dataclass(frozen=True, slots=True)
+class ConfirmedStructureReference:
+    workspace_id: UUID
+    episode_id: UUID
+    script_version_id: UUID
+    scene_id: UUID
+    dialogue_ids: tuple[UUID, ...]

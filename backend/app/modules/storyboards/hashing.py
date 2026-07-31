@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass
 from hashlib import sha256
+from uuid import UUID
 
 from app.modules.storyboards.schemas import AssetReferenceRequest, ShotSpec
 
@@ -44,3 +45,7 @@ def storyboard_content_hashes(
         }
     )
     return StoryboardHashes(content_hash=content_hash, input_hash=input_hash)
+
+
+def shot_order_hash(shot_ids: list[UUID]) -> str:
+    return _canonical_hash([str(shot_id) for shot_id in shot_ids])

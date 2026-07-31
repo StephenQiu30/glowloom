@@ -330,6 +330,13 @@ async def list_scenes(
     return list(scenes)
 
 
+async def find_scene(
+    session: AsyncSession,
+    scene_id: UUID,
+) -> Scene | None:
+    return await session.scalar(select(Scene).where(Scene.id == scene_id))
+
+
 async def list_dialogues(
     session: AsyncSession,
     scene_ids: Sequence[UUID],

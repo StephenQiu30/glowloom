@@ -22,6 +22,7 @@ from app.modules.media.api import router as media_router
 from app.modules.production.api import router as production_router
 from app.modules.projects.api import router as projects_router
 from app.modules.scripts.api import router as scripts_router
+from app.modules.storyboards.api import router as storyboards_router
 
 Check = Callable[[], Awaitable[None]]
 
@@ -53,6 +54,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(projects_router)
     app.include_router(production_router)
     app.include_router(scripts_router)
+    app.include_router(storyboards_router)
 
     @app.get("/healthz", response_model=HealthResponse, tags=["system"])
     # FastAPI registers route functions through decorators at runtime.

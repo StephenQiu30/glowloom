@@ -170,3 +170,81 @@ class ShotSpecVersionResponse(BaseModel):
     asset_references: list[AssetReferenceResponse]
     created_by: UUID
     created_at: datetime
+
+
+class ShotCreateRequest(CommandModel):
+    title: str = Field(min_length=1, max_length=200)
+    source_script_version_id: UUID
+    source_scene_id: UUID
+    creation_key: str = Field(min_length=1, max_length=200)
+
+
+class ShotUpdateRequest(CommandModel):
+    expected_revision: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=200)
+
+
+class ShotStateRequest(CommandModel):
+    expected_revision: int = Field(ge=1)
+    expected_order_hash: str = Field(min_length=64, max_length=64)
+
+
+class ShotResponse(BaseModel):
+    id: UUID
+    workspace_id: UUID
+    episode_id: UUID
+    position: int
+    title: str
+    source_script_version_id: UUID
+    source_scene_id: UUID
+    source_candidate_id: UUID | None
+    status: Literal["active", "archived"]
+    current_spec_version_id: UUID | None
+    revision: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ShotOrderResponse(BaseModel):
+    items: list[ShotResponse]
+    order_hash: str
+
+
+class ShotReorderRequest(CommandModel):
+    shot_ids: list[UUID] = Field(min_length=1, max_length=120)
+    expected_order_hash: str = Field(min_length=64, max_length=64)
+
+    @model_validator(mode="after")
+    def validate_unique_shots(self) -> "ShotReorderRequest":
+        if len(set(self.shot_ids)) != len(self.shot_ids):
+            raise ValueError("shot IDs must be unique")
+        return self
+
+
+class ShotStateResponse(BaseModel):
+    shot: ShotResponse
+    order: ShotOrderResponse
+
+
+class ShotSpecCreateRequest(CommandModel):
+    expected_current_spec_version_id: UUID | None
+    spec: ShotSpec
+    asset_references: list[AssetReferenceRequest] = Field(default=[], max_length=100)
+
+    @model_validator(mode="after")
+    def validate_reference_keys(self) -> "ShotSpecCreateRequest":
+        slot_keys = [reference.slot_key for reference in self.asset_references]
+        if len(set(slot_keys)) != len(slot_keys):
+            raise ValueError("asset reference slot keys must be unique")
+        return self
+
+
+class ShotSpecCreateResponse(BaseModel):
+    shot: ShotResponse
+    version: ShotSpecVersionResponse
+
+
+class ShotCurrentSpecRequest(CommandModel):
+    version_id: UUID
+    expected_current_spec_version_id: UUID | None
+    expected_revision: int = Field(ge=1)

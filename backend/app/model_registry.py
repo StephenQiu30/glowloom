@@ -8,6 +8,7 @@ def register_implemented_models() -> None:
     from app.modules.production import models as production_models
     from app.modules.projects import models as project_models
     from app.modules.scripts import models as script_models
+    from app.modules.storyboards import models as storyboard_models
 
     _ = (
         assets_models,
@@ -18,4 +19,5 @@ def register_implemented_models() -> None:
         production_models,
         project_models,
         script_models,
+        storyboard_models,
     )
