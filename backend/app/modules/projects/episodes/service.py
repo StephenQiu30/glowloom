@@ -146,6 +146,25 @@ async def episode_for_content_read(
     return _episode_content_context(episode)
 
 
+async def resolve_episode_content_context(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_id: UUID,
+) -> EpisodeContentContext | None:
+    result = await repository.find_episode(session, episode_id)
+    if result is None:
+        return None
+    episode, project = result
+    if (
+        episode.workspace_id != workspace_id
+        or project.workspace_id != workspace_id
+        or episode.status != "active"
+        or project.status != "active"
+    ):
+        return None
+    return _episode_content_context(episode)
+
+
 async def compare_and_set_current_script_version(
     session: AsyncSession,
     claims: AccessTokenClaims,

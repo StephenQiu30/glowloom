@@ -19,6 +19,7 @@ from app.modules.projects import (
     EpisodeContentContext,
     episode_for_content_read,
     lock_active_episode_for_content_write,
+    resolve_episode_content_context,
 )
 from app.modules.scripts import (
     ConfirmedStructureQuery,
@@ -27,6 +28,11 @@ from app.modules.scripts import (
     resolve_confirmed_structures,
 )
 from app.modules.storyboards import repository
+from app.modules.storyboards.contracts import (
+    ShotAssetReferenceSnapshot,
+    ShotProductionSnapshot,
+    ShotSpecRef,
+)
 from app.modules.storyboards.hashing import (
     canonical_payload_hash,
     shot_order_hash,
@@ -2319,3 +2325,78 @@ async def apply_asset_upgrade(
             ],
         )
     return result
+
+
+async def get_production_snapshot(
+    session: AsyncSession,
+    workspace_id: UUID,
+    version_id: UUID,
+) -> ShotProductionSnapshot | None:
+    version_result = await repository.find_spec_version(session, version_id)
+    if version_result is None:
+        return None
+    version, shot = version_result
+    if version.workspace_id != workspace_id or shot.workspace_id != workspace_id:
+        return None
+    episode = await resolve_episode_content_context(
+        session,
+        workspace_id,
+        shot.episode_id,
+    )
+    if episode is None:
+        return None
+    references = await repository.list_asset_references(session, [version.id])
+    structure_states, asset_snapshots, assets_unavailable = (
+        await _resolve_readiness_dependencies(
+            session,
+            episode,
+            [version],
+            references,
+        )
+    )
+    readiness = _evaluate_loaded_readiness(
+        shot,
+        version,
+        references,
+        structure_available=structure_states.get(version.id),
+        asset_snapshots=asset_snapshots,
+        assets_unavailable=assets_unavailable,
+    )
+    spec = ShotSpec.model_validate(version.spec)
+    return ShotProductionSnapshot(
+        spec_ref=ShotSpecRef(
+            workspace_id=workspace_id,
+            episode_id=shot.episode_id,
+            shot_id=shot.id,
+            shot_spec_version_id=version.id,
+            schema_version=version.schema_version,
+            content_hash=version.content_hash,
+            input_hash=version.input_hash,
+        ),
+        shot_status=cast(Literal["active", "archived"], shot.status),
+        spec=spec.model_dump(mode="json"),
+        asset_references=tuple(
+            ShotAssetReferenceSnapshot(
+                slot_key=reference.slot_key,
+                role=cast(
+                    Literal[
+                        "location",
+                        "character",
+                        "prop",
+                        "costume",
+                        "visual_style",
+                        "voice",
+                    ],
+                    reference.role,
+                ),
+                asset_version_id=reference.asset_version_id,
+                subject_key=reference.subject_key,
+            )
+            for reference in references
+        ),
+        readiness_status=readiness.status,
+        ready=readiness.ready,
+        blocking_codes=tuple(issue.code for issue in readiness.blocking_reasons),
+        warning_codes=tuple(warning.code for warning in readiness.warnings),
+        evaluation_hash=readiness.evaluation_hash,
+    )
