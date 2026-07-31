@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Copy,
   Film,
+  GripVertical,
   History,
   Plus,
   RotateCcw,
@@ -170,6 +171,22 @@ function readinessClass(status: API.ShotReadinessResponse["status"]): string {
   if (status === "ready") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "unavailable") return "border-rose-200 bg-rose-50 text-rose-700";
   return "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+function reorderShotIds(
+  shots: API.ShotResponse[],
+  draggedShotId: string,
+  targetShotId: string,
+): string[] {
+  const shotIds = shots.map((shot) => shot.id);
+  const draggedIndex = shotIds.indexOf(draggedShotId);
+  const targetIndex = shotIds.indexOf(targetShotId);
+  if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) {
+    return shotIds;
+  }
+  const [draggedId] = shotIds.splice(draggedIndex, 1);
+  shotIds.splice(targetIndex, 0, draggedId);
+  return shotIds;
 }
 
 function defaultSpec(
@@ -816,6 +833,8 @@ export function StoryboardWorkspace({
   onSplitPreflight,
   onToggleArchived,
 }: StoryboardWorkspaceProps) {
+  const [draggedShotId, setDraggedShotId] = useState<string | null>(null);
+  const [dragOverShotId, setDragOverShotId] = useState<string | null>(null);
   const selectedShot =
     order.items.find((shot) => shot.id === selectedShotId) ?? order.items[0];
   const currentVersion = versions.find(
@@ -848,6 +867,15 @@ export function StoryboardWorkspace({
     const ids = order.items.map((shot) => shot.id);
     [ids[index], ids[target]] = [ids[target], ids[index]];
     await onReorder(ids);
+  }
+
+  async function dropShot(targetShotId: string) {
+    const sourceShotId = draggedShotId;
+    setDraggedShotId(null);
+    setDragOverShotId(null);
+    if (busy || !sourceShotId || sourceShotId === targetShotId) return;
+    onSelectShot(sourceShotId);
+    await onReorder(reorderShotIds(order.items, sourceShotId, targetShotId));
   }
 
   return (
@@ -883,49 +911,95 @@ export function StoryboardWorkspace({
           <Card>
             <CardHeader>
               <CardTitle>镜头顺序</CardTitle>
-              <CardDescription>顺序由服务端 order hash 并发保护</CardDescription>
+              <CardDescription>
+                拖动把手调整；键盘可使用右侧上移/下移。顺序由服务端 order hash 并发保护。
+              </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-2">
+            <CardContent aria-label="镜头顺序列表" className="grid gap-2" role="list">
               {order.items.length ? (
                 order.items.map((shot) => {
                   const shotReadiness = readinessByShot.get(shot.id);
                   const active = shot.id === selectedShot?.id;
                   return (
-                    <Button
+                    <div
+                      aria-label={`镜头 ${shot.title} 顺序项`}
                       className={cn(
-                        "h-auto w-full justify-start gap-3 whitespace-normal px-3 py-3 text-left [content-visibility:auto]",
-                        active && "ring-2 ring-primary/25",
+                        "flex items-stretch gap-1 rounded-xl [content-visibility:auto]",
+                        dragOverShotId === shot.id &&
+                          draggedShotId !== shot.id &&
+                          "bg-primary/5 ring-2 ring-primary/30",
                       )}
                       key={shot.id}
-                      onClick={() => onSelectShot(shot.id)}
-                      type="button"
-                      variant={active ? "secondary" : "ghost"}
+                      onDragOver={(event) => {
+                        if (busy || !draggedShotId) return;
+                        event.preventDefault();
+                        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                        setDragOverShotId(shot.id);
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        void dropShot(shot.id);
+                      }}
+                      role="listitem"
                     >
-                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-background text-xs font-semibold ring-1 ring-foreground/10">
-                        {String(shot.position).padStart(2, "0")}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{shot.title}</span>
-                        <span className="mt-1 flex items-center gap-2">
-                          <Badge
-                            className={shotReadiness ? readinessClass(shotReadiness.status) : undefined}
-                            variant="outline"
-                          >
-                            {shotReadiness ? readinessLabels[shotReadiness.status] : "读取中"}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {shot.current_spec_version_id ? "已有规格" : "空镜头"}
-                          </span>
+                      <Button
+                        aria-label={`拖动镜头 ${shot.title}`}
+                        className="h-auto w-8 cursor-grab self-stretch rounded-lg px-0 active:cursor-grabbing"
+                        disabled={busy}
+                        draggable={!busy}
+                        onDragEnd={() => {
+                          setDraggedShotId(null);
+                          setDragOverShotId(null);
+                        }}
+                        onDragStart={(event) => {
+                          if (event.dataTransfer) {
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData("text/plain", shot.id);
+                          }
+                          setDraggedShotId(shot.id);
+                        }}
+                        size="icon-sm"
+                        title="拖动排序"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <GripVertical aria-hidden="true" />
+                      </Button>
+                      <Button
+                        className={cn(
+                          "h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal px-3 py-3 text-left",
+                          active && "ring-2 ring-primary/25",
+                        )}
+                        onClick={() => onSelectShot(shot.id)}
+                        type="button"
+                        variant={active ? "secondary" : "ghost"}
+                      >
+                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-background text-xs font-semibold ring-1 ring-foreground/10">
+                          {String(shot.position).padStart(2, "0")}
                         </span>
-                        {shotReadiness?.blocking_reasons[0] ? (
-                          <span className="mt-1.5 block text-xs text-amber-700">
-                            {readinessIssueSummary(
-                              shotReadiness.blocking_reasons[0],
-                            )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">{shot.title}</span>
+                          <span className="mt-1 flex items-center gap-2">
+                            <Badge
+                              className={shotReadiness ? readinessClass(shotReadiness.status) : undefined}
+                              variant="outline"
+                            >
+                              {shotReadiness ? readinessLabels[shotReadiness.status] : "读取中"}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {shot.current_spec_version_id ? "已有规格" : "空镜头"}
+                            </span>
                           </span>
-                        ) : null}
-                      </span>
-                    </Button>
+                          {shotReadiness?.blocking_reasons[0] ? (
+                            <span className="mt-1.5 block text-xs text-amber-700">
+                              {readinessIssueSummary(
+                                shotReadiness.blocking_reasons[0],
+                              )}
+                            </span>
+                          ) : null}
+                        </span>
+                      </Button>
+                    </div>
                   );
                 })
               ) : (
