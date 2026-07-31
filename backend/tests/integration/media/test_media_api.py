@@ -6,11 +6,11 @@ from uuid import UUID
 
 import httpx
 import pytest
-from app.modules.media.models import MediaObject, MediaVersion, UploadSession
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.integrations.minio import MinioObjectStorage
+from app.modules.media.models import MediaObject, MediaVersion, UploadSession
 from app.modules.media.storage import StorageObjectNotFound, StorageUnavailable
 from app.modules.messaging.models import OutboxEvent
 from app.modules.production.models import Task

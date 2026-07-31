@@ -3,9 +3,10 @@ from typing import cast
 from uuid import UUID
 
 import pytest
+from pydantic import ValidationError
+
 from app.modules.storyboards.hashing import storyboard_content_hashes
 from app.modules.storyboards.schemas import AssetReferenceRequest, ShotSpec
-from pydantic import ValidationError
 
 SCRIPT_VERSION_ID = UUID("018f0f4f-7b28-7f7c-8b5a-2d4fd6341001")
 SCENE_ID = UUID("018f0f4f-7b28-7f7c-8b5a-2d4fd6341002")

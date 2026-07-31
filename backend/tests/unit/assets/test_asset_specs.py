@@ -1,4 +1,7 @@
 import pytest
+from pydantic import ValidationError
+from uuid6 import uuid7
+
 from app.modules.assets.schemas import (
     CharacterSpec,
     CostumeSpec,
@@ -8,8 +11,6 @@ from app.modules.assets.schemas import (
     VoiceSpec,
     parse_asset_spec,
 )
-from pydantic import ValidationError
-from uuid6 import uuid7
 
 
 @pytest.mark.parametrize(

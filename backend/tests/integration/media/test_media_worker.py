@@ -3,7 +3,6 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from uuid import UUID
 
 import pytest
-from app.modules.media.models import MediaLocation, MediaObject, MediaVersion
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
@@ -12,6 +11,7 @@ from app import media_worker
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.media import MediaProbeError, MediaProbeResult
+from app.modules.media.models import MediaLocation, MediaObject, MediaVersion
 from app.modules.media.storage import ObjectStoragePort
 from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
