@@ -508,6 +508,35 @@ function ShotSpecEditor({
   const [references, setReferences] = useState<API.AssetReferenceRequest[]>(
     currentVersion?.asset_references.map((reference) => ({ ...reference })) ?? [],
   );
+  const [subjectPlacements, setSubjectPlacements] = useState<
+    API.SubjectPlacement[]
+  >(initial.visual.subject_placements ?? []);
+  const [dialogueVoiceById, setDialogueVoiceById] = useState<
+    Record<string, string | null>
+  >(() =>
+    Object.fromEntries(
+      (initial.dialogue_or_narration ?? []).map((dialogue) => [
+        dialogue.source_dialogue_id,
+        dialogue.render_as_audio ? dialogue.speaker_subject_key : null,
+      ]),
+    ),
+  );
+  const [dialoguePerformanceById, setDialoguePerformanceById] = useState<
+    Record<string, string>
+  >(() =>
+    Object.fromEntries(
+      (initial.dialogue_or_narration ?? []).map((dialogue) => [
+        dialogue.source_dialogue_id,
+        dialogue.performance_note ?? "",
+      ]),
+    ),
+  );
+  const [firstFrame, setFirstFrame] = useState(
+    initial.generation_intent.first_frame ?? "",
+  );
+  const [lastFrame, setLastFrame] = useState(
+    initial.generation_intent.last_frame ?? "",
+  );
   const scene = structure?.scenes.find(
     (item) => item.id === initial.script_reference.scene_id,
   );
@@ -515,6 +544,30 @@ function ShotSpecEditor({
     (asset) => asset.status === "active" && asset.current_version_id,
   );
   const assetsByKind = Object.groupBy(activeAssets, (asset) => asset.kind);
+  const assetsByVersion = new Map(
+    activeAssets.flatMap((asset) =>
+      asset.current_version_id ? [[asset.current_version_id, asset] as const] : [],
+    ),
+  );
+  const characterReferences = references.filter(
+    (reference) => reference.role === "character" && reference.subject_key,
+  );
+  const voiceReferences = references.filter(
+    (reference) => reference.role === "voice" && reference.subject_key,
+  );
+  const initialDialogueById = new Map(
+    (initial.dialogue_or_narration ?? []).map((dialogue) => [
+      dialogue.source_dialogue_id,
+      dialogue,
+    ]),
+  );
+
+  function referenceName(reference: API.AssetReferenceRequest): string {
+    return (
+      assetsByVersion.get(reference.asset_version_id)?.name ??
+      `${assetKindLabels[reference.role]} ${reference.asset_version_id.slice(-8)}`
+    );
+  }
 
   function toggleDialogue(id: string) {
     setDialogueIds((current) =>
@@ -527,24 +580,62 @@ function ShotSpecEditor({
   function toggleAsset(asset: API.AssetResponse) {
     const versionId = asset.current_version_id;
     if (!versionId) return;
-    setReferences((current) => {
-      if (current.some((item) => item.asset_version_id === versionId)) {
-        return current.filter((item) => item.asset_version_id !== versionId);
+    const existing = references.find(
+      (reference) => reference.asset_version_id === versionId,
+    );
+    if (existing) {
+      setReferences((current) =>
+        current.filter((reference) => reference.asset_version_id !== versionId),
+      );
+      if (existing.role === "character" && existing.subject_key) {
+        setSubjectPlacements((current) =>
+          current.filter(
+            (placement) => placement.subject_key !== existing.subject_key,
+          ),
+        );
       }
-      const suffix = asset.id.slice(-8);
-      return [
-        ...current,
-        {
-          slot_key: `${asset.kind}-${suffix}`,
-          role: asset.kind,
-          asset_version_id: versionId,
-          subject_key:
-            asset.kind === "character" || asset.kind === "voice"
-              ? `subject-${suffix}`
-              : null,
-        },
-      ];
-    });
+      if (existing.role === "voice" && existing.subject_key) {
+        setDialogueVoiceById((current) =>
+          Object.fromEntries(
+            Object.entries(current).map(([dialogueId, subjectKey]) => [
+              dialogueId,
+              subjectKey === existing.subject_key ? null : subjectKey,
+            ]),
+          ),
+        );
+      }
+      return;
+    }
+    const suffix = asset.id.slice(-8);
+    const subjectKey =
+      asset.kind === "character" || asset.kind === "voice"
+        ? `subject-${suffix}`
+        : null;
+    setReferences((current) => [
+      ...current,
+      {
+        slot_key: `${asset.kind}-${suffix}`,
+        role: asset.kind,
+        asset_version_id: versionId,
+        subject_key: subjectKey,
+      },
+    ]);
+    if (asset.kind === "character" && subjectKey) {
+      setSubjectPlacements((current) => [
+        ...current.filter((placement) => placement.subject_key !== subjectKey),
+        { subject_key: subjectKey, placement: "主体位于画面视觉中心" },
+      ]);
+    }
+  }
+
+  function setSubjectPlacement(subjectKey: string, placement: string) {
+    setSubjectPlacements((current) =>
+      current.some((item) => item.subject_key === subjectKey)
+        ? current.map((item) =>
+            item.subject_key === subjectKey ? { ...item, placement } : item,
+          )
+        : [...current, { subject_key: subjectKey, placement }],
+    );
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -562,12 +653,6 @@ function ShotSpecEditor({
       order: index + 1,
       description,
     }));
-    const existingDialogue = new Map(
-      (initial.dialogue_or_narration ?? []).map((item) => [
-        item.source_dialogue_id,
-        item,
-      ]),
-    );
     await onSaveSpec(shot.id, {
       expected_current_spec_version_id: shot.current_spec_version_id,
       spec: {
@@ -587,22 +672,40 @@ function ShotSpecEditor({
           camera_movement: movement,
           composition: composition.trim(),
           environment: environment.trim(),
-          subject_placements: initial.visual.subject_placements ?? [],
+          subject_placements: characterReferences.flatMap((reference) => {
+            if (!reference.subject_key) return [];
+            const placement = subjectPlacements.find(
+              (item) => item.subject_key === reference.subject_key,
+            );
+            return placement
+              ? [{ ...placement, placement: placement.placement.trim() }]
+              : [];
+          }),
           mood_lighting: lighting.trim(),
         },
         action_beats: actionBeats,
         dialogue_or_narration: dialogueIds.map((dialogueId) => {
-          const existing = existingDialogue.get(dialogueId);
+          const existing = initialDialogueById.get(dialogueId);
+          const speakerSubjectKey = dialogueVoiceById[dialogueId] ?? null;
+          const sceneDialogue = scene?.dialogues.find(
+            (item) => item.id === dialogueId,
+          );
+          const performanceNote =
+            dialoguePerformanceById[dialogueId] ??
+            existing?.performance_note ??
+            sceneDialogue?.performance_note ??
+            "";
+          const existingBeatKey = existing?.beat_key;
           return {
             source_dialogue_id: dialogueId,
-            beat_key: existing?.beat_key ?? actionBeats[0].beat_key,
-            speaker_subject_key: existing?.speaker_subject_key ?? null,
-            render_as_audio: existing?.render_as_audio ?? false,
-            performance_note:
-              existing?.performance_note ??
-              scene?.dialogues.find((item) => item.id === dialogueId)
-                ?.performance_note ??
-              null,
+            beat_key:
+              existingBeatKey &&
+              actionBeats.some((beat) => beat.beat_key === existingBeatKey)
+                ? existingBeatKey
+                : actionBeats[0].beat_key,
+            speaker_subject_key: speakerSubjectKey,
+            render_as_audio: Boolean(speakerSubjectKey),
+            performance_note: performanceNote.trim() || null,
           };
         }),
         duration_ms: duration,
@@ -616,8 +719,8 @@ function ShotSpecEditor({
         },
         generation_intent: {
           mode: generationMode,
-          first_frame: initial.generation_intent.first_frame ?? null,
-          last_frame: initial.generation_intent.last_frame ?? null,
+          first_frame: firstFrame.trim() || null,
+          last_frame: lastFrame.trim() || null,
           keyframe_notes: keyframeNotes.trim() || null,
         },
       },
@@ -850,6 +953,100 @@ function ShotSpecEditor({
                 当前场次没有可引用对白。
               </p>
             )}
+            {dialogueIds.length ? (
+              <div className="mt-2 grid gap-3 border-t pt-3">
+                {dialogueIds.map((dialogueId) => {
+                  const dialogue = scene?.dialogues.find(
+                    (item) => item.id === dialogueId,
+                  );
+                  if (!dialogue) return null;
+                  const selectedVoiceSubject =
+                    dialogueVoiceById[dialogueId] ?? null;
+                  const performanceNote =
+                    dialoguePerformanceById[dialogueId] ??
+                    initialDialogueById.get(dialogueId)?.performance_note ??
+                    dialogue.performance_note ??
+                    "";
+                  return (
+                    <div className="grid gap-2 rounded-xl bg-muted/50 p-3" key={dialogueId}>
+                      <div>
+                        <p className="text-sm font-medium">
+                          {dialogue.speaker_candidate}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {dialogue.text}
+                        </p>
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label>对白声音</Label>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            aria-label={`对白 ${dialogue.speaker_candidate} 仅文本`}
+                            aria-pressed={!selectedVoiceSubject}
+                            onClick={() =>
+                              setDialogueVoiceById((current) => ({
+                                ...current,
+                                [dialogueId]: null,
+                              }))
+                            }
+                            size="sm"
+                            type="button"
+                            variant={!selectedVoiceSubject ? "secondary" : "outline"}
+                          >
+                            仅文本
+                          </Button>
+                          {voiceReferences.map((reference) => {
+                            const subjectKey = reference.subject_key;
+                            if (!subjectKey) return null;
+                            const voiceName = referenceName(reference);
+                            const selected = selectedVoiceSubject === subjectKey;
+                            return (
+                              <Button
+                                aria-label={`为对白 ${dialogue.speaker_candidate} 选择声音 ${voiceName}`}
+                                aria-pressed={selected}
+                                key={reference.slot_key}
+                                onClick={() =>
+                                  setDialogueVoiceById((current) => ({
+                                    ...current,
+                                    [dialogueId]: subjectKey,
+                                  }))
+                                }
+                                size="sm"
+                                type="button"
+                                variant={selected ? "secondary" : "outline"}
+                              >
+                                {voiceName}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        {voiceReferences.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            选择声音资产后，才能把这句对白标记为有声。
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label htmlFor={`dialogue-performance-${dialogueId}`}>
+                          {dialogue.speaker_candidate}表演提示
+                        </Label>
+                        <Input
+                          id={`dialogue-performance-${dialogueId}`}
+                          maxLength={1_000}
+                          onChange={(event) =>
+                            setDialoguePerformanceById((current) => ({
+                              ...current,
+                              [dialogueId]: event.target.value,
+                            }))
+                          }
+                          value={performanceNote}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -895,6 +1092,44 @@ function ShotSpecEditor({
             ),
           )}
         </div>
+        {characterReferences.length ? (
+          <div className="grid gap-3 rounded-xl border p-4">
+            <div>
+              <p className="text-sm font-medium">主体站位</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                每个画面主体都绑定固定角色版本与稳定 subject key。
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {characterReferences.map((reference) => {
+                const subjectKey = reference.subject_key;
+                if (!subjectKey) return null;
+                const characterName = referenceName(reference);
+                const placement =
+                  subjectPlacements.find(
+                    (item) => item.subject_key === subjectKey,
+                  )?.placement ?? "";
+                return (
+                  <div className="grid gap-2" key={reference.slot_key}>
+                    <Label htmlFor={`subject-placement-${subjectKey}`}>
+                      {characterName}画面位置
+                    </Label>
+                    <Input
+                      id={`subject-placement-${subjectKey}`}
+                      maxLength={500}
+                      onChange={(event) =>
+                        setSubjectPlacement(subjectKey, event.target.value)
+                      }
+                      placeholder="例如：画面左侧，面向镜头外"
+                      required
+                      value={placement}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <Separator />
@@ -949,6 +1184,26 @@ function ShotSpecEditor({
               maxLength={2_000}
               onChange={(event) => setKeyframeNotes(event.target.value)}
               value={keyframeNotes}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="firstFrame">首帧意图</Label>
+            <Input
+              id="firstFrame"
+              maxLength={1_000}
+              onChange={(event) => setFirstFrame(event.target.value)}
+              placeholder="可选：首帧画面与构图约束"
+              value={firstFrame}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="lastFrame">尾帧意图</Label>
+            <Input
+              id="lastFrame"
+              maxLength={1_000}
+              onChange={(event) => setLastFrame(event.target.value)}
+              placeholder="可选：尾帧落点与连续性约束"
+              value={lastFrame}
             />
           </div>
         </div>
