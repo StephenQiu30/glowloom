@@ -63,14 +63,16 @@ def test_scope_guards_remain_explicit() -> None:
 
 
 def test_s3_local_engineering_and_product_acceptance_states_do_not_drift() -> None:
+    slice_prd = (DOCS / "prd/002-MVP纵向交付切片.md").read_text(encoding="utf-8")
     prd = (DOCS / "prd/008-创作生产模块PRD任务.md").read_text(encoding="utf-8")
     prd_index = (DOCS / "prd/产品需求索引.md").read_text(encoding="utf-8")
     plan_index = (DOCS / "plan/计划索引.md").read_text(encoding="utf-8")
 
-    for source in (prd, prd_index, plan_index):
+    for source in (slice_prd, prd, prd_index, plan_index):
         assert "PT-SBD-001～006/PT-AST-004 本地工程证据完成" in source
         assert "S2/S3 产品保持 `in_progress`" in source
         assert "真实 DeepSeek" in source
 
+    assert "S3 本地实现 in_progress" not in slice_prd
     assert "S3 本地实现 in_progress" not in prd_index
     assert "PT-SBD-001～006/PT-AST-004 本地实现 in_progress" not in prd_index
