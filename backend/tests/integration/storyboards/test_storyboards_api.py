@@ -612,6 +612,13 @@ async def test_manual_shot_is_idempotent_ordered_and_lifecycle_safe(
         second["id"]
     ]
 
+    archived_list = await client.get(
+        f"/api/v1/episodes/{episode['id']}/archived-shots",
+        headers=headers,
+    )
+    assert archived_list.status_code == 200
+    assert [item["id"] for item in archived_list.json()["data"]] == [first["id"]]
+
     restored = await client.post(
         f"/api/v1/shots/{first['id']}/restore",
         headers=headers,
@@ -622,6 +629,12 @@ async def test_manual_shot_is_idempotent_ordered_and_lifecycle_safe(
     )
     assert restored.status_code == 200
     assert restored.json()["data"]["shot"]["position"] == 2
+    assert (
+        await client.get(
+            f"/api/v1/episodes/{episode['id']}/archived-shots",
+            headers=headers,
+        )
+    ).json()["data"] == []
 
 
 @pytest.mark.asyncio
