@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const apiMocks = vi.hoisted(() => ({
   completeUpload: vi.fn(),
   confirmStructure: vi.fn(),
+  createShotFromCandidate: vi.fn(),
   decideCandidate: vi.fn(),
+  getConfirmedStructure: vi.fn(),
   getBatch: vi.fn(),
   getEpisode: vi.fn(),
   getProject: vi.fn(),
@@ -18,6 +20,10 @@ const apiMocks = vi.hoisted(() => ({
   listEpisodes: vi.fn(),
   listMedia: vi.fn(),
   listSources: vi.fn(),
+  listArchivedShots: vi.fn(),
+  listShotReadiness: vi.fn(),
+  listShots: vi.fn(),
+  listShotSpecVersions: vi.fn(),
   listTasks: vi.fn(),
   listVersions: vi.fn(),
   me: vi.fn(),
@@ -25,6 +31,7 @@ const apiMocks = vi.hoisted(() => ({
   retryProbe: vi.fn(),
   setCurrentVersion: vi.fn(),
   startExtraction: vi.fn(),
+  updateShot: vi.fn(),
 }));
 
 vi.mock("@/api/identity", async () => ({
@@ -48,6 +55,8 @@ vi.mock("@/api/scripts", async () => ({
   decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPost:
     apiMocks.decideCandidate,
   getExtractionBatchApiV1ExtractionBatchesBatchIdGet: apiMocks.getBatch,
+  getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGet:
+    apiMocks.getConfirmedStructure,
   getVersionApiV1ScriptVersionsVersionIdGet: apiMocks.getVersion,
   importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPost: apiMocks.importScript,
   listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGet:
@@ -59,6 +68,22 @@ vi.mock("@/api/scripts", async () => ({
     apiMocks.setCurrentVersion,
   startExtractionApiV1ScriptVersionsVersionIdExtractionsPost:
     apiMocks.startExtraction,
+}));
+
+vi.mock("@/api/storyboards", async () => ({
+  ...(await vi.importActual<typeof import("@/api/storyboards")>(
+    "@/api/storyboards",
+  )),
+  createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPost:
+    apiMocks.createShotFromCandidate,
+  getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet:
+    apiMocks.listShotReadiness,
+  listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet:
+    apiMocks.listArchivedShots,
+  listShotsApiV1EpisodesEpisodeIdShotsGet: apiMocks.listShots,
+  listSpecVersionsApiV1ShotsShotIdSpecVersionsGet:
+    apiMocks.listShotSpecVersions,
+  updateShotApiV1ShotsShotIdPatch: apiMocks.updateShot,
 }));
 
 vi.mock("@/api/tasks", async () => ({
@@ -93,6 +118,9 @@ const batchId = "019fb2c0-a000-7000-8000-000000000007";
 const taskId = "019fb2c0-a000-7000-8000-000000000008";
 const firstCandidateId = "019fb2c0-a000-7000-8000-000000000009";
 const secondCandidateId = "019fb2c0-a000-7000-8000-000000000010";
+const shotCandidateId = "019fb2c0-a000-7000-8000-000000000011";
+const sceneId = "019fb2c0-a000-7000-8000-000000000012";
+const shotId = "019fb2c0-a000-7000-8000-000000000013";
 const now = "2026-07-30T09:00:00Z";
 
 const episode: API.EpisodeResponse = {
@@ -234,6 +262,41 @@ const sceneCandidates: API.ExtractionCandidateResponse[] = [
     created_at: now,
   },
 ];
+
+const acceptedShotCandidate: API.ExtractionCandidateResponse = {
+  id: shotCandidateId,
+  batch_id: batchId,
+  candidate_key: "shot-001",
+  kind: "shot",
+  source_range: { start: 13, end: 24 },
+  proposal: {
+    kind: "shot",
+    scene_candidate_key: "scene-001",
+    title: "雨中回望",
+    purpose: "交代角色发现来客",
+  },
+  confidence_note: "镜头意图明确",
+  required: false,
+  status: "accepted",
+  revision: 2,
+  created_at: now,
+};
+
+const storyboardShot: API.ShotResponse = {
+  id: shotId,
+  workspace_id: workspaceId,
+  episode_id: episodeId,
+  position: 1,
+  title: "雨巷建立镜头",
+  source_script_version_id: versionId,
+  source_scene_id: sceneId,
+  source_candidate_id: null,
+  status: "active",
+  current_spec_version_id: null,
+  revision: 1,
+  created_at: now,
+  updated_at: now,
+};
 
 function snapshot(
   scriptStatus: API.ScriptSummary["status"] = "published",
@@ -572,5 +635,112 @@ describe("单集统一生产工作台", () => {
         },
       }),
     );
+  });
+
+  it("在分镜工作台接入候选建镜和标题修改命令", async () => {
+    const user = userEvent.setup();
+    apiMocks.getSnapshot.mockResolvedValue({
+      data: {
+        ...snapshot("confirmed"),
+        current_stage: "storyboard_preparation",
+        blocking_reasons: [],
+        next_actions: [],
+        script_summary: {
+          status: "confirmed",
+          current_version_id: versionId,
+          extraction_batch_id: batchId,
+          pending_required_candidates: 0,
+        },
+      },
+    });
+    apiMocks.getBatch.mockResolvedValue({
+      data: {
+        ...extractionBatch(),
+        confirmed_script_version_id: versionId,
+      },
+    });
+    apiMocks.listCandidates.mockResolvedValue({
+      data: {
+        items: [acceptedShotCandidate],
+        total: 1,
+        limit: 100,
+        offset: 0,
+      },
+    });
+    apiMocks.getConfirmedStructure.mockResolvedValue({
+      data: {
+        script_version_id: versionId,
+        scenes: [
+          {
+            id: sceneId,
+            script_version_id: versionId,
+            position: 1,
+            heading: "第一场 · 雨巷",
+            location: "雨巷",
+            time_of_day: "夜",
+            summary: "顾清禾等待来客",
+            source_range: { start: 0, end: 24 },
+            dialogues: [],
+            created_at: now,
+          },
+        ],
+      },
+    });
+    apiMocks.listShots.mockResolvedValue({
+      data: { items: [storyboardShot], order_hash: "a".repeat(64) },
+    });
+    apiMocks.listArchivedShots.mockResolvedValue({ data: [] });
+    apiMocks.listShotSpecVersions.mockResolvedValue({ data: [] });
+    apiMocks.listShotReadiness.mockResolvedValue({
+      data: {
+        episode_id: episodeId,
+        summary: { total: 1, ready: 0, blocked: 1, unavailable: 0 },
+        items: [],
+        evaluation_hash: "b".repeat(64),
+      },
+    });
+    apiMocks.updateShot.mockResolvedValue({
+      data: { ...storyboardShot, title: "雨巷全景", revision: 2 },
+    });
+    apiMocks.createShotFromCandidate.mockResolvedValue({
+      data: {
+        ...storyboardShot,
+        id: "019fb2c0-a000-7000-8000-000000000014",
+        position: 2,
+        title: "雨中回望",
+        source_candidate_id: shotCandidateId,
+      },
+    });
+
+    render(
+      <AppProviders>
+        <EpisodeProductionStudio episodeId={episodeId} initialPanel="storyboard" />
+      </AppProviders>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "分镜设计" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "修改镜头标题" }));
+    const titleInput = screen.getByLabelText("镜头标题");
+    await user.clear(titleInput);
+    await user.type(titleInput, "雨巷全景");
+    await user.click(screen.getByRole("button", { name: "保存标题" }));
+    await waitFor(() => expect(apiMocks.updateShot).toHaveBeenCalledTimes(1));
+    expect(apiMocks.updateShot).toHaveBeenCalledWith(
+      { shot_id: shotId },
+      { expected_revision: 1, title: "雨巷全景" },
+    );
+
+    await user.click(screen.getByRole("button", { name: "新建镜头" }));
+    await user.click(
+      screen.getByRole("button", { name: "从候选建立 雨中回望" }),
+    );
+    await waitFor(() =>
+      expect(apiMocks.createShotFromCandidate).toHaveBeenCalledTimes(1),
+    );
+    expect(apiMocks.createShotFromCandidate).toHaveBeenCalledWith({
+      candidate_id: shotCandidateId,
+    });
   });
 });
