@@ -191,6 +191,46 @@ def _spec_payload(refs: dict[str, UUID], *, purpose: str) -> dict[str, object]:
     }
 
 
+async def _asset_version_consent(
+    client: httpx.AsyncClient,
+    *,
+    headers: dict[str, str],
+    refs: dict[str, UUID],
+    version_id: UUID,
+    proof_media_version_id: UUID,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    now = datetime.now(UTC)
+    consent_response = await client.post(
+        "/api/v1/consents",
+        headers=headers,
+        json={
+            "workspace_id": str(refs["workspace_id"]),
+            "subject_identity": {
+                "reference": f"synthetic-storyboard-asset-{version_id}",
+                "kind": "fictional_adult",
+            },
+            "scope": {
+                "type": "media_usage",
+                "subject_type": "ASSET_VERSION",
+                "subject_id": str(version_id),
+                "rights_holder_role": "synthetic_creator",
+                "rights_types": ["copyright", "image"],
+                "authorized_purposes": ["ai_short_drama_generation"],
+                "channels": ["lanverse_preview"],
+                "regions": ["CN"],
+                "valid_from": (now - timedelta(days=1)).isoformat(),
+                "valid_to": (now + timedelta(days=365)).isoformat(),
+            },
+            "proof_media_version_ids": [str(proof_media_version_id)],
+            "reason": "分镜准备度资产授权验收",
+            "idempotency_key": idempotency_key,
+        },
+    )
+    assert consent_response.status_code == 201
+    return consent_response.json()["data"]
+
+
 async def _ready_location_asset(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
@@ -246,35 +286,61 @@ async def _ready_location_asset(
     )
     assert version_response.status_code == 201
     version = version_response.json()["data"]["version"]
-    now = datetime.now(UTC)
-    consent_response = await client.post(
-        "/api/v1/consents",
+    consent = await _asset_version_consent(
+        client,
+        headers=headers,
+        refs=refs,
+        version_id=UUID(version["id"]),
+        proof_media_version_id=media_version_id,
+        idempotency_key=f"storyboard-location-consent-{version['id']}",
+    )
+    return version, consent
+
+
+async def _append_ready_location_version(
+    client: httpx.AsyncClient,
+    *,
+    headers: dict[str, str],
+    refs: dict[str, UUID],
+    current_version: dict[str, Any],
+) -> dict[str, Any]:
+    media_version_id = UUID(current_version["media_references"][0]["media_version_id"])
+    response = await client.post(
+        f"/api/v1/assets/{current_version['asset_id']}/versions",
         headers=headers,
         json={
-            "workspace_id": str(refs["workspace_id"]),
-            "subject_identity": {
-                "reference": "synthetic-storyboard-location",
-                "kind": "fictional_adult",
+            "spec": {
+                "kind": "location",
+                "spatial_description": "封闭的旧车站月台",
+                "time_weather": "暴雨深夜",
+                "visual_elements": ["修复后的旧灯箱", "积水"],
+                "lighting": "更新后的冷蓝侧逆光",
             },
-            "scope": {
-                "type": "media_usage",
-                "subject_type": "ASSET_VERSION",
-                "subject_id": version["id"],
-                "rights_holder_role": "synthetic_creator",
-                "rights_types": ["copyright", "image"],
-                "authorized_purposes": ["ai_short_drama_generation"],
-                "channels": ["lanverse_preview"],
-                "regions": ["CN"],
-                "valid_from": (now - timedelta(days=1)).isoformat(),
-                "valid_to": (now + timedelta(days=365)).isoformat(),
-            },
-            "proof_media_version_ids": [str(media_version_id)],
-            "reason": "分镜准备度资产授权验收",
-            "idempotency_key": f"storyboard-location-consent-{version['id']}",
+            "prompt_description": "固定升级后的雨夜旧车站空间和光线",
+            "media_references": [
+                {
+                    "media_version_id": str(media_version_id),
+                    "purpose": "environment",
+                    "position": 1,
+                }
+            ],
+            "source_type": "manual",
+            "source_id": None,
+            "expected_current_version_id": current_version["id"],
+            "set_as_current": True,
         },
     )
-    assert consent_response.status_code == 201
-    return version, consent_response.json()["data"]
+    assert response.status_code == 201
+    version = response.json()["data"]["version"]
+    await _asset_version_consent(
+        client,
+        headers=headers,
+        refs=refs,
+        version_id=UUID(version["id"]),
+        proof_media_version_id=media_version_id,
+        idempotency_key=f"storyboard-upgrade-consent-{version['id']}",
+    )
+    return version
 
 
 async def _seed_ready_storyboard_shots(
@@ -1121,3 +1187,180 @@ async def test_batch_readiness_has_constant_query_bound_for_36_shots(
     assert all(item["status"] == "ready" for item in result["items"])
     assert len(result["evaluation_hash"]) == 64
     assert len(statements) <= 12, [statement.splitlines()[0] for statement in statements]
+
+
+@pytest.mark.asyncio
+async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await _episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="storyboard-asset-upgrade@example.com",
+    )
+    old_version, _ = await _ready_location_asset(
+        client,
+        session_factory,
+        headers=headers,
+        project_id=UUID(episode["project_id"]),
+        refs=refs,
+    )
+    new_version = await _append_ready_location_version(
+        client,
+        headers=headers,
+        refs=refs,
+        current_version=old_version,
+    )
+    ready_spec = deepcopy(_spec_payload(refs, purpose="资产升级前的固定镜头"))
+    visual = dict(cast(dict[str, object], ready_spec["visual"]))
+    visual["subject_placements"] = []
+    ready_spec["visual"] = visual
+    ready_spec["dialogue_or_narration"] = []
+
+    shots: list[dict[str, Any]] = []
+    saved_versions: list[dict[str, Any]] = []
+    for index in range(2):
+        created = await client.post(
+            f"/api/v1/episodes/{episode['id']}/shots",
+            headers=headers,
+            json=_create_shot_payload(
+                refs,
+                title=f"资产升级镜头 {index + 1}",
+                creation_key=f"asset-upgrade-shot-{index + 1}",
+            ),
+        )
+        assert created.status_code == 201
+        shot = created.json()["data"]
+        saved = await client.post(
+            f"/api/v1/shots/{shot['id']}/spec-versions",
+            headers=headers,
+            json={
+                "expected_current_spec_version_id": None,
+                "spec": ready_spec,
+                "asset_references": [
+                    {
+                        "slot_key": "location-main",
+                        "role": "location",
+                        "asset_version_id": old_version["id"],
+                        "subject_key": None,
+                    }
+                ],
+            },
+        )
+        assert saved.status_code == 201
+        shots.append(saved.json()["data"]["shot"])
+        saved_versions.append(saved.json()["data"]["version"])
+
+    usage_response = await client.get(
+        f"/api/v1/asset-versions/{old_version['id']}/shot-usages",
+        headers=headers,
+    )
+    assert usage_response.status_code == 200
+    usage = usage_response.json()["data"]
+    assert usage["total"] == 2
+    assert all(item["is_current"] for item in usage["items"])
+    assert {item["shot_id"] for item in usage["items"]} == {
+        shot["id"] for shot in shots
+    }
+
+    preflight_payload = {
+        "new_asset_version_id": new_version["id"],
+        "shot_ids": [shot["id"] for shot in shots],
+    }
+    preflight_response = await client.post(
+        f"/api/v1/asset-versions/{old_version['id']}/upgrade-preflight",
+        headers=headers,
+        json=preflight_payload,
+    )
+    assert preflight_response.status_code == 200
+    preflight = preflight_response.json()["data"]
+    assert len(preflight["targets"]) == 2
+    assert all(len(target["new_input_hash"]) == 64 for target in preflight["targets"])
+    assert len(preflight["preflight_hash"]) == 64
+
+    changed_spec = deepcopy(ready_spec)
+    changed_spec["narrative"] = {
+        "purpose": "并发修改第二个镜头但仍引用旧资产",
+        "continuity_note": None,
+    }
+    concurrent_change = await client.post(
+        f"/api/v1/shots/{shots[1]['id']}/spec-versions",
+        headers=headers,
+        json={
+            "expected_current_spec_version_id": saved_versions[1]["id"],
+            "spec": changed_spec,
+            "asset_references": [
+                {
+                    "slot_key": "location-main",
+                    "role": "location",
+                    "asset_version_id": old_version["id"],
+                    "subject_key": None,
+                }
+            ],
+        },
+    )
+    assert concurrent_change.status_code == 201
+
+    stale_apply = await client.post(
+        f"/api/v1/asset-versions/{old_version['id']}/upgrade",
+        headers=headers,
+        json={
+            "new_asset_version_id": new_version["id"],
+            "targets": preflight["targets"],
+            "preflight_hash": preflight["preflight_hash"],
+        },
+    )
+    assert stale_apply.status_code == 409
+    assert stale_apply.json()["error"]["code"] == "version_conflict"
+    first_history = await client.get(
+        f"/api/v1/shots/{shots[0]['id']}/spec-versions",
+        headers=headers,
+    )
+    assert len(first_history.json()["data"]) == 1
+    assert first_history.json()["data"][0]["asset_references"][0][
+        "asset_version_id"
+    ] == old_version["id"]
+
+    fresh_preflight_response = await client.post(
+        f"/api/v1/asset-versions/{old_version['id']}/upgrade-preflight",
+        headers=headers,
+        json=preflight_payload,
+    )
+    assert fresh_preflight_response.status_code == 200
+    fresh = fresh_preflight_response.json()["data"]
+    applied_response = await client.post(
+        f"/api/v1/asset-versions/{old_version['id']}/upgrade",
+        headers=headers,
+        json={
+            "new_asset_version_id": new_version["id"],
+            "targets": fresh["targets"],
+            "preflight_hash": fresh["preflight_hash"],
+        },
+    )
+    assert applied_response.status_code == 201
+    applied = applied_response.json()["data"]
+    assert len(applied["spec_versions"]) == 2
+    assert all(
+        version["asset_references"][0]["asset_version_id"] == new_version["id"]
+        for version in applied["spec_versions"]
+    )
+
+    old_spec = await client.get(
+        f"/api/v1/shot-spec-versions/{saved_versions[0]['id']}",
+        headers=headers,
+    )
+    assert old_spec.status_code == 200
+    assert old_spec.json()["data"] == saved_versions[0]
+    old_usage = await client.get(
+        f"/api/v1/asset-versions/{old_version['id']}/shot-usages",
+        headers=headers,
+    )
+    new_usage = await client.get(
+        f"/api/v1/asset-versions/{new_version['id']}/shot-usages",
+        headers=headers,
+    )
+    assert old_usage.json()["data"]["total"] == 3
+    assert all(not item["is_current"] for item in old_usage.json()["data"]["items"])
+    assert new_usage.json()["data"]["total"] == 2
+    assert all(item["is_current"] for item in new_usage.json()["data"]["items"])
