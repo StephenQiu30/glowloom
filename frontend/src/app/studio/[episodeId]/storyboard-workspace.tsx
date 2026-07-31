@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Save,
   ShieldAlert,
+  TriangleAlert,
 } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 
@@ -169,8 +170,18 @@ const readinessIssueLabels: Record<API.ShotReadinessIssue["code"], string> = {
   DEPENDENCY_UNAVAILABLE: "生产依赖暂时不可用",
 };
 
+const readinessWarningLabels: Record<API.ShotReadinessWarning["code"], string> = {
+  DURATION_ABOVE_RECOMMENDED: "镜头时长超过 8 秒建议值",
+  ACTION_DENSITY_HIGH: "镜头动作密度较高",
+  STYLE_REFERENCE_MISSING: "尚未固定可选的视觉风格参考",
+};
+
 function readinessIssueSummary(issue: API.ShotReadinessIssue): string {
   return readinessIssueLabels[issue.code];
+}
+
+function readinessWarningSummary(warning: API.ShotReadinessWarning): string {
+  return readinessWarningLabels[warning.code];
 }
 
 function readinessClass(status: API.ShotReadinessResponse["status"]): string {
@@ -632,6 +643,25 @@ function ShotSpecEditor({
           <AlertTitle>当前规格可进入生产预检</AlertTitle>
           <AlertDescription>
             准备度由服务端按固定结构、资产版本、媒体与授权实时计算。
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {readiness?.warnings.length ? (
+        <Alert className="border-cyan-200 bg-cyan-50 text-cyan-800">
+          <TriangleAlert aria-hidden="true" />
+          <AlertTitle>进入生产前需要确认</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc space-y-1 pl-4">
+              {readiness.warnings.map((warning) => (
+                <li key={`${warning.code}:${warning.field_path ?? "general"}`}>
+                  {readinessWarningSummary(warning)}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2">
+              警告不阻止保存；后续进入生产预检时需要逐项确认。
+            </p>
           </AlertDescription>
         </Alert>
       ) : null}
