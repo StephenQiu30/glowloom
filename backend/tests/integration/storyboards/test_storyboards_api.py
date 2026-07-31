@@ -5,8 +5,8 @@ from uuid import UUID
 
 import httpx
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import event, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
 from app.modules.projects.models import Episode
@@ -19,6 +19,9 @@ from app.modules.scripts.models import (
     ScriptSource,
     ScriptVersion,
 )
+from app.modules.storyboards.hashing import storyboard_content_hashes
+from app.modules.storyboards.models import AssetReference, Shot, ShotSpecVersion
+from app.modules.storyboards.schemas import AssetReferenceRequest, ShotSpec
 from tests.support.identity_builders import register_identity_response
 from tests.support.media_builders import seed_ready_media_version
 from tests.support.project_builders import project_payload
@@ -272,6 +275,81 @@ async def _ready_location_asset(
     )
     assert consent_response.status_code == 201
     return version, consent_response.json()["data"]
+
+
+async def _seed_ready_storyboard_shots(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    refs: dict[str, UUID],
+    location_version_id: UUID,
+    count: int,
+) -> None:
+    spec_payload = deepcopy(_spec_payload(refs, purpose="批量准备度性能基线"))
+    visual = dict(cast(dict[str, object], spec_payload["visual"]))
+    visual["subject_placements"] = []
+    spec_payload["visual"] = visual
+    spec_payload["dialogue_or_narration"] = []
+    spec = ShotSpec.model_validate(spec_payload)
+    reference_request = AssetReferenceRequest(
+        slot_key="location-main",
+        role="location",
+        asset_version_id=location_version_id,
+        subject_key=None,
+    )
+    hashes = storyboard_content_hashes(spec, [reference_request])
+    async with session_factory() as session, session.begin():
+        shots: list[Shot] = []
+        versions: list[ShotSpecVersion] = []
+        references: list[AssetReference] = []
+        for position in range(1, count + 1):
+            shot_id = uuid7()
+            spec_version_id = uuid7()
+            shots.append(
+                Shot(
+                    id=shot_id,
+                    workspace_id=refs["workspace_id"],
+                    episode_id=refs["episode_id"],
+                    position=position,
+                    title=f"批量准备度镜头 {position:03d}",
+                    source_script_version_id=refs["script_version_id"],
+                    source_scene_id=refs["scene_id"],
+                    source_candidate_id=None,
+                    creation_key=f"batch-readiness-{position:03d}",
+                    status="active",
+                    current_spec_version_id=spec_version_id,
+                    revision=1,
+                    created_by=refs["actor_id"],
+                )
+            )
+            versions.append(
+                ShotSpecVersion(
+                    id=spec_version_id,
+                    workspace_id=refs["workspace_id"],
+                    shot_id=shot_id,
+                    version_no=1,
+                    schema_version=1,
+                    spec=spec.model_dump(mode="json"),
+                    content_hash=hashes.content_hash,
+                    input_hash=hashes.input_hash,
+                    created_by=refs["actor_id"],
+                )
+            )
+            references.append(
+                AssetReference(
+                    id=uuid7(),
+                    workspace_id=refs["workspace_id"],
+                    shot_spec_version_id=spec_version_id,
+                    slot_key="location-main",
+                    role="location",
+                    asset_version_id=location_version_id,
+                    subject_key=None,
+                )
+            )
+        session.add_all(shots)
+        await session.flush()
+        session.add_all(versions)
+        await session.flush()
+        session.add_all(references)
 
 
 async def _seed_confirmed_shot_candidate(
@@ -982,3 +1060,64 @@ async def test_readiness_is_deterministic_and_reacts_to_rights_without_mutating_
     )
     assert persisted_spec.status_code == 200
     assert persisted_spec.json()["data"] == spec_version
+
+
+@pytest.mark.asyncio
+async def test_batch_readiness_has_constant_query_bound_for_36_shots(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await _episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="storyboard-batch-readiness@example.com",
+    )
+    location_version, _ = await _ready_location_asset(
+        client,
+        session_factory,
+        headers=headers,
+        project_id=UUID(episode["project_id"]),
+        refs=refs,
+    )
+    await _seed_ready_storyboard_shots(
+        session_factory,
+        refs=refs,
+        location_version_id=UUID(location_version["id"]),
+        count=36,
+    )
+
+    engine = session_factory.kw.get("bind")
+    assert isinstance(engine, AsyncEngine)
+    statements: list[str] = []
+
+    def _count_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: object,
+    ) -> None:
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", _count_statement)
+    try:
+        response = await client.get(
+            f"/api/v1/episodes/{episode['id']}/shot-readiness",
+            headers=headers,
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", _count_statement)
+
+    assert response.status_code == 200
+    result = response.json()["data"]
+    assert len(result["items"]) == 36
+    assert result["summary"] == {
+        "total": 36,
+        "ready": 36,
+        "blocked": 0,
+        "unavailable": 0,
+    }
+    assert all(item["status"] == "ready" for item in result["items"])
+    assert len(result["evaluation_hash"]) == 64
+    assert len(statements) <= 12, [statement.splitlines()[0] for statement in statements]
