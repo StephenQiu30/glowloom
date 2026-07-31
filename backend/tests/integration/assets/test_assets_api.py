@@ -307,6 +307,7 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
     assert delete_preflight.status_code == 200
     assert delete_preflight.json()["data"]["allowed"] is False
     assert delete_preflight.json()["data"]["blockers"][0]["code"] == "asset_has_versions"
+    assert delete_preflight.json()["data"]["blockers"][0]["version_count"] == 2
 
     async with session_factory() as session:
         original = await session.scalar(

@@ -514,6 +514,22 @@ describe("AI 漫剧资产工作台", () => {
     });
   });
 
+  it("使用结构化版本数量展示本地化删除阻塞", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <ComicProductionStudio />
+      </AppProviders>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "删除资产身份" }));
+    const dialog = await screen.findByRole("dialog", { name: "删除资产身份" });
+    expect(dialog).toHaveTextContent("资产包含 2 个不可变版本，不能删除。");
+    expect(
+      screen.queryByRole("button", { name: "确认删除空资产" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("检查历史资产版本的分镜引用并在预检后批量升级", async () => {
     const user = userEvent.setup();
     render(

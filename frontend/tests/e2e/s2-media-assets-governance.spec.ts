@@ -189,6 +189,51 @@ test("S2 媒体、三类资产与授权准备度联合闭环", async ({ page }) 
   await expect(page.getByLabel("生产摘要").getByText("3 / 3")).toBeVisible();
   await expect(page.getByText("已有 ready 版本")).toHaveCount(3);
 
+  const character = fixtures[0];
+  const renamedCharacter = `${character.name}（雨巷）`;
+  await page.goto("/studio");
+  await page.getByRole("tab", { name: character.tabName }).click();
+  await page.getByRole("button", { name: `选择资产 ${character.name}` }).click();
+
+  await page.getByRole("button", { name: "编辑资产身份" }).click();
+  const editDialog = page.getByRole("dialog", { name: "编辑资产身份" });
+  await editDialog.getByLabel("资产名称").fill(renamedCharacter);
+  await editDialog.getByLabel("别名（逗号分隔）").fill("清禾，顾小姐");
+  await editDialog.getByLabel("标签（逗号分隔）").fill("S2验收，雨巷主角");
+  await editDialog.getByRole("button", { name: "保存身份信息" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    `资产身份已更新：${renamedCharacter}`,
+  );
+
+  await page.getByRole("button", { name: "添加新版本" }).click();
+  await fillAssetSpec(page, character);
+  await page.getByLabel("参考媒体").selectOption({
+    label: `${characterMediaName} · v1 · ready`,
+  });
+  await page.getByLabel("提示词描述").fill("雨巷造型调整，旧版本保持可追溯。");
+  await page.getByRole("button", { name: "保存版本" }).click();
+  await expect(page.getByRole("status")).toContainText("版本 v2 已保存");
+
+  await page.getByRole("button", { name: "设为当前资产版本 v1" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "资产已切换到版本 v1；既有镜头引用保持不变。",
+  );
+
+  await page.getByRole("button", { name: "归档", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("资产已归档。");
+  await expect(page.getByRole("button", { name: "恢复", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "恢复", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("资产已恢复。");
+
+  await page.getByRole("button", { name: "删除资产身份" }).click();
+  const deleteDialog = page.getByRole("dialog", { name: "删除资产身份" });
+  await expect(deleteDialog.getByText("当前不能删除")).toBeVisible();
+  await expect(deleteDialog.getByText(/2 个不可变版本/)).toBeVisible();
+  await expect(
+    deleteDialog.getByRole("button", { name: "确认删除空资产" }),
+  ).toHaveCount(0);
+  await deleteDialog.getByRole("button", { name: "取消" }).click();
+
   const revoked = fixtures[2];
   await page.goto("/governance");
   await page.getByRole("button", { name: revoked.consentReference }).click();
