@@ -658,9 +658,18 @@ async def test_fixed_storyboard_performance_profile(
                         session_factory,
                         shot_count=shot_count,
                     )
-                    for shot_count in (36, 120)
+                    for shot_count in (12, 36, 120)
                 }
-                for shot_count, (headers, episode_id) in episodes.items():
+                headers_12, episode_12 = episodes[12]
+                await _request_profile_pair(
+                    client,
+                    episode_id=episode_12,
+                    headers=headers_12,
+                    request_prefix="perf-12-smoke",
+                    expected_count=12,
+                )
+                for shot_count in (36, 120):
+                    headers, episode_id = episodes[shot_count]
                     for index in range(10):
                         await _request_profile_pair(
                             client,
@@ -708,6 +717,7 @@ async def test_fixed_storyboard_performance_profile(
             "python": platform.python_version(),
         },
         "protocol": {
+            "fixture_sizes": [12, 36, 120],
             "warmups": 10,
             "samples": 50,
             "reorders_120": 30,
