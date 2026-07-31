@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AccessTokenClaims, get_access_token_claims
@@ -11,6 +11,8 @@ from app.modules.storyboards import service
 from app.modules.storyboards.schemas import (
     ShotCreateRequest,
     ShotCurrentSpecRequest,
+    ShotDeletePreflightResponse,
+    ShotDeleteResponse,
     ShotOrderResponse,
     ShotReorderRequest,
     ShotResponse,
@@ -23,6 +25,25 @@ from app.modules.storyboards.schemas import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["storyboards"])
+
+
+@router.post(
+    "/extraction-candidates/{candidate_id}/shot",
+    response_model=ApiResponse[ShotResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_from_confirmed_candidate(
+    candidate_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotResponse]:
+    return ApiResponse(
+        data=await service.create_from_confirmed_candidate(
+            session,
+            claims,
+            candidate_id,
+        )
+    )
 
 
 @router.post(
@@ -177,4 +198,38 @@ async def set_current_spec_version(
 ) -> ApiResponse[ShotResponse]:
     return ApiResponse(
         data=await service.set_current_spec_version(session, claims, shot_id, payload)
+    )
+
+
+@router.get(
+    "/shots/{shot_id}/delete-preflight",
+    response_model=ApiResponse[ShotDeletePreflightResponse],
+)
+async def shot_delete_preflight(
+    shot_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotDeletePreflightResponse]:
+    return ApiResponse(data=await service.delete_preflight(session, claims, shot_id))
+
+
+@router.delete(
+    "/shots/{shot_id}",
+    response_model=ApiResponse[ShotDeleteResponse],
+)
+async def delete_shot(
+    shot_id: UUID,
+    expected_revision: Annotated[int, Query(ge=1)],
+    expected_order_hash: Annotated[str, Query(min_length=64, max_length=64)],
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotDeleteResponse]:
+    return ApiResponse(
+        data=await service.delete_shot(
+            session,
+            claims,
+            shot_id,
+            expected_revision=expected_revision,
+            expected_order_hash=expected_order_hash,
+        )
     )

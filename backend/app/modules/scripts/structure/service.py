@@ -15,11 +15,13 @@ from app.modules.scripts.authorization import (
     require_resource_access,
     resource_not_found,
 )
+from app.modules.scripts.contracts import ConfirmedShotCandidateReference
 from app.modules.scripts.extractions.schemas import (
     CandidateProposal,
     CandidateSourceRange,
     DialogueCandidateProposal,
     SceneCandidateProposal,
+    ShotCandidateProposal,
 )
 from app.modules.scripts.models import (
     CandidateDecision,
@@ -459,3 +461,75 @@ async def confirm_structure(
         batch.updated_at = now
         await session.flush()
     return _confirmation_response(batch, confirmed_version, scenes, dialogues)
+
+
+async def resolve_confirmed_shot_candidate(
+    session: AsyncSession,
+    candidate_id: UUID,
+) -> ConfirmedShotCandidateReference | None:
+    candidate = await repository.find_extraction_candidate(session, candidate_id)
+    if candidate is None or candidate.kind != "shot" or candidate.status != "accepted":
+        return None
+    batch = await repository.find_extraction_batch(session, candidate.batch_id)
+    if (
+        batch is None
+        or batch.status != "succeeded"
+        or batch.confirmed_script_version_id is None
+    ):
+        return None
+    structure_candidates = await repository.list_structure_candidates(session, batch.id)
+    scene_candidates = [
+        item for item in structure_candidates if item.kind == "scene"
+    ]
+    decisions = _latest_decisions(
+        await repository.list_candidate_decisions_for_candidates(
+            session,
+            [candidate.id, *(item.id for item in scene_candidates)],
+        )
+    )
+    proposal = _proposal_for(candidate, decisions)
+    if not isinstance(proposal, ShotCandidateProposal):
+        return None
+    scene_by_key = {item.candidate_key: item for item in scene_candidates}
+    referenced_scene = scene_by_key.get(proposal.scene_candidate_key)
+    if referenced_scene is None:
+        return None
+    try:
+        resolved_scene_candidate = _resolve_scene_candidate(
+            referenced_scene,
+            {item.id: item for item in scene_candidates},
+            decisions,
+        )
+    except ApiError:
+        return None
+    confirmed_scenes = await repository.list_scenes(
+        session,
+        batch.confirmed_script_version_id,
+    )
+    matches = [
+        scene
+        for scene in confirmed_scenes
+        if scene.source_start == resolved_scene_candidate.source_start
+        and scene.source_end == resolved_scene_candidate.source_end
+    ]
+    if len(matches) != 1:
+        return None
+    confirmed_version = await repository.find_version(
+        session,
+        batch.confirmed_script_version_id,
+    )
+    if confirmed_version is None:
+        return None
+    source = await repository.find_source(session, confirmed_version.source_id)
+    if source is None or source.workspace_id != candidate.workspace_id:
+        return None
+    scene = matches[0]
+    return ConfirmedShotCandidateReference(
+        candidate_id=candidate.id,
+        workspace_id=candidate.workspace_id,
+        episode_id=source.episode_id,
+        script_version_id=confirmed_version.id,
+        scene_id=scene.id,
+        title=proposal.title,
+        purpose=proposal.purpose,
+    )

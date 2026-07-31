@@ -248,3 +248,18 @@ class ShotCurrentSpecRequest(CommandModel):
     version_id: UUID
     expected_current_spec_version_id: UUID | None
     expected_revision: int = Field(ge=1)
+
+
+class ShotDeleteBlocker(BaseModel):
+    code: Literal["SOURCE_CANDIDATE_EVIDENCE", "SPEC_VERSION_EVIDENCE"]
+    summary: str
+
+
+class ShotDeletePreflightResponse(BaseModel):
+    allowed: bool
+    blockers: list[ShotDeleteBlocker]
+
+
+class ShotDeleteResponse(BaseModel):
+    deleted: Literal[True] = True
+    order: ShotOrderResponse

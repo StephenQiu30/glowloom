@@ -40,3 +40,14 @@ class ConfirmedStructureReference:
     script_version_id: UUID
     scene_id: UUID
     dialogue_ids: tuple[UUID, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ConfirmedShotCandidateReference:
+    candidate_id: UUID
+    workspace_id: UUID
+    episode_id: UUID
+    script_version_id: UUID
+    scene_id: UUID
+    title: str
+    purpose: str

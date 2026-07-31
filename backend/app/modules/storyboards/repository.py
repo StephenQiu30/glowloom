@@ -31,6 +31,19 @@ async def find_shot_by_creation_key(
     )
 
 
+async def find_shot_by_candidate(
+    session: AsyncSession,
+    workspace_id: UUID,
+    candidate_id: UUID,
+) -> Shot | None:
+    return await session.scalar(
+        select(Shot).where(
+            Shot.workspace_id == workspace_id,
+            Shot.source_candidate_id == candidate_id,
+        )
+    )
+
+
 async def list_active_shots(
     session: AsyncSession,
     episode_id: UUID,
@@ -56,6 +69,17 @@ async def latest_spec_version_number(
             select(func.coalesce(func.max(ShotSpecVersion.version_no), 0)).where(
                 ShotSpecVersion.shot_id == shot_id
             )
+        )
+        or 0
+    )
+
+
+async def count_spec_versions(session: AsyncSession, shot_id: UUID) -> int:
+    return (
+        await session.scalar(
+            select(func.count())
+            .select_from(ShotSpecVersion)
+            .where(ShotSpecVersion.shot_id == shot_id)
         )
         or 0
     )

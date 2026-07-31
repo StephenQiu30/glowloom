@@ -13,7 +13,10 @@ from app.modules.projects import (
     episode_for_content_read,
     lock_active_episode_for_content_write,
 )
-from app.modules.scripts import resolve_confirmed_structure
+from app.modules.scripts import (
+    resolve_confirmed_shot_candidate,
+    resolve_confirmed_structure,
+)
 from app.modules.storyboards import repository
 from app.modules.storyboards.hashing import shot_order_hash, storyboard_content_hashes
 from app.modules.storyboards.models import AssetReference, Shot, ShotSpecVersion
@@ -22,6 +25,9 @@ from app.modules.storyboards.schemas import (
     AssetReferenceResponse,
     ShotCreateRequest,
     ShotCurrentSpecRequest,
+    ShotDeleteBlocker,
+    ShotDeletePreflightResponse,
+    ShotDeleteResponse,
     ShotOrderResponse,
     ShotReorderRequest,
     ShotResponse,
@@ -249,6 +255,72 @@ async def create_manual_shot(
             source_script_version_id=request.source_script_version_id,
             source_scene_id=request.source_scene_id,
             creation_key=request.creation_key,
+            status="active",
+            revision=1,
+            created_by=claims.sub,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(shot)
+        await session.flush()
+    return _shot_response(shot)
+
+
+async def create_from_confirmed_candidate(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    candidate_id: UUID,
+) -> ShotResponse:
+    async with session.begin():
+        reference = await resolve_confirmed_shot_candidate(session, candidate_id)
+        if reference is None:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Shot candidate is not accepted against a confirmed structure",
+                status_code=422,
+                next_action="confirm_script_structure",
+            )
+        episode = await lock_active_episode_for_content_write(
+            session,
+            claims,
+            reference.episode_id,
+        )
+        confirmed = await resolve_confirmed_shot_candidate(session, candidate_id)
+        if (
+            confirmed is None
+            or confirmed.workspace_id != episode.workspace_id
+            or confirmed.episode_id != episode.episode_id
+        ):
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT,
+                "Shot candidate confirmation has changed",
+                status_code=409,
+                next_action="reload_script_candidates",
+            )
+        existing = await repository.find_shot_by_candidate(
+            session,
+            episode.workspace_id,
+            candidate_id,
+        )
+        if existing is not None:
+            return _shot_response(existing)
+        shots = await repository.list_active_shots(
+            session,
+            episode.episode_id,
+            for_update=True,
+        )
+        _require_capacity(shots)
+        now = datetime.now(UTC)
+        shot = Shot(
+            id=uuid7(),
+            workspace_id=episode.workspace_id,
+            episode_id=episode.episode_id,
+            position=len(shots) + 1,
+            title=confirmed.title.strip(),
+            source_script_version_id=confirmed.script_version_id,
+            source_scene_id=confirmed.scene_id,
+            source_candidate_id=confirmed.candidate_id,
+            creation_key=None,
             status="active",
             revision=1,
             created_by=claims.sub,
@@ -541,3 +613,78 @@ async def set_current_spec_version(
         shot.revision += 1
         await session.flush()
     return _shot_response(shot)
+
+
+async def delete_preflight(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    shot_id: UUID,
+) -> ShotDeletePreflightResponse:
+    shot = await repository.find_shot(session, shot_id)
+    if shot is None:
+        raise _not_found("Shot")
+    await episode_for_content_read(session, claims, shot.episode_id)
+    blockers: list[ShotDeleteBlocker] = []
+    if shot.source_candidate_id is not None:
+        blockers.append(
+            ShotDeleteBlocker(
+                code="SOURCE_CANDIDATE_EVIDENCE",
+                summary="Shot created from a confirmed candidate must retain source evidence",
+            )
+        )
+    if await repository.count_spec_versions(session, shot.id):
+        blockers.append(
+            ShotDeleteBlocker(
+                code="SPEC_VERSION_EVIDENCE",
+                summary="Shot with immutable spec versions cannot be deleted",
+            )
+        )
+    return ShotDeletePreflightResponse(allowed=not blockers, blockers=blockers)
+
+
+async def delete_shot(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    shot_id: UUID,
+    *,
+    expected_revision: int,
+    expected_order_hash: str,
+) -> ShotDeleteResponse:
+    async with session.begin():
+        shot = await _locked_shot_for_write(session, claims, shot_id)
+        if shot.status != "active":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Only an active empty shot can be deleted",
+                status_code=409,
+                next_action="restore_shot",
+            )
+        _require_revision(shot, expected_revision)
+        active = await repository.list_active_shots(
+            session,
+            shot.episode_id,
+            for_update=True,
+        )
+        _require_order(active, expected_order_hash)
+        preflight = await delete_preflight(session, claims, shot.id)
+        if not preflight.allowed:
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Shot evidence prevents deletion",
+                status_code=409,
+                next_action="archive_shot",
+                details={
+                    "blockers": [blocker.model_dump() for blocker in preflight.blockers]
+                },
+            )
+        temporary_start = len(active) * 2 + 1
+        for offset, active_shot in enumerate(active):
+            active_shot.position = temporary_start + offset
+        await session.flush()
+        remaining = [active_shot for active_shot in active if active_shot.id != shot.id]
+        await session.delete(shot)
+        await session.flush()
+        for position, active_shot in enumerate(remaining, start=1):
+            active_shot.position = position
+        await session.flush()
+    return ShotDeleteResponse(order=_order_response(remaining))
