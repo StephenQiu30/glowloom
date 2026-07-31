@@ -5,10 +5,12 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from uuid6 import uuid7
 
 from app.modules.messaging.models import OutboxEvent
 from app.modules.projects.models import Episode
 from app.modules.scripts.models import Dialogue, Scene, ScriptSource, ScriptVersion
+from app.modules.storyboards.models import Shot
 
 
 async def _identity(
@@ -502,6 +504,83 @@ async def test_current_switch_accepts_only_published_version_from_same_episode(
         },
     )
     assert hidden.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_publishing_new_current_version_reports_active_shots_with_older_script(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await _identity(
+        client, email="script-impact-owner@example.com"
+    )
+    episode = await _episode(client, headers, workspace_id)
+    imported = await _import_script(client, headers, episode["id"])
+    published_response = await client.post(
+        f"/api/v1/script-sources/{imported['source']['id']}/versions",
+        headers=headers,
+        json=_publish_payload("第一场\n角色甲：旧版镜头。", None),
+    )
+    assert published_response.status_code == 201
+    published = published_response.json()["data"]["version"]
+
+    scene_id = uuid7()
+    shot_id = uuid7()
+    async with session_factory() as session, session.begin():
+        stored_version = await session.get(ScriptVersion, published["id"])
+        assert stored_version is not None
+        session.add(
+            Scene(
+                id=scene_id,
+                workspace_id=stored_version.workspace_id,
+                script_version_id=stored_version.id,
+                position=1,
+                heading="第一场",
+                location="雨巷",
+                time_of_day="夜",
+                summary="旧版本镜头来源",
+                source_start=0,
+                source_end=len(stored_version.body),
+            )
+        )
+        await session.flush()
+        session.add(
+            Shot(
+                id=shot_id,
+                workspace_id=stored_version.workspace_id,
+                episode_id=episode["id"],
+                position=1,
+                title="仍引用旧剧本的镜头",
+                source_script_version_id=stored_version.id,
+                source_scene_id=scene_id,
+                source_candidate_id=None,
+                creation_key="script-impact-shot",
+                status="active",
+                current_spec_version_id=None,
+                revision=1,
+                created_by=stored_version.created_by,
+            )
+        )
+
+    next_response = await client.post(
+        f"/api/v1/script-sources/{imported['source']['id']}/versions",
+        headers=headers,
+        json=_publish_payload("第一场\n角色甲：新版镜头。", published["id"]),
+    )
+
+    assert next_response.status_code == 201
+    result = next_response.json()["data"]
+    assert result["current"]["impact"] == {
+        "previous_script_version_id": published["id"],
+        "current_script_version_id": result["version"]["id"],
+        "affected_shot_ids": [str(shot_id)],
+    }
+
+    async with session_factory() as session:
+        stored_shot = await session.get(Shot, shot_id)
+        assert stored_shot is not None
+        assert str(stored_shot.source_script_version_id) == published["id"]
+        assert stored_shot.current_spec_version_id is None
 
 
 @pytest.mark.asyncio

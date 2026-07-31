@@ -3,10 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
+  archiveSource: vi.fn(),
   completeUpload: vi.fn(),
   confirmStructure: vi.fn(),
   createShotFromCandidate: vi.fn(),
   decideCandidate: vi.fn(),
+  deleteDraftVersion: vi.fn(),
+  diffVersions: vi.fn(),
   getConfirmedStructure: vi.fn(),
   getBatch: vi.fn(),
   getEpisode: vi.fn(),
@@ -29,6 +32,7 @@ const apiMocks = vi.hoisted(() => ({
   me: vi.fn(),
   publishVersion: vi.fn(),
   retryProbe: vi.fn(),
+  restoreSource: vi.fn(),
   setCurrentVersion: vi.fn(),
   startExtraction: vi.fn(),
   updateShot: vi.fn(),
@@ -50,10 +54,14 @@ vi.mock("@/api/projects", async () => ({
 
 vi.mock("@/api/scripts", async () => ({
   ...(await vi.importActual<typeof import("@/api/scripts")>("@/api/scripts")),
+  archiveSourceApiV1ScriptSourcesSourceIdArchivePost: apiMocks.archiveSource,
   confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePost:
     apiMocks.confirmStructure,
   decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPost:
     apiMocks.decideCandidate,
+  deleteDraftVersionApiV1ScriptVersionsVersionIdDelete:
+    apiMocks.deleteDraftVersion,
+  diffVersionsApiV1ScriptVersionsVersionIdDiffGet: apiMocks.diffVersions,
   getExtractionBatchApiV1ExtractionBatchesBatchIdGet: apiMocks.getBatch,
   getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGet:
     apiMocks.getConfirmedStructure,
@@ -64,6 +72,7 @@ vi.mock("@/api/scripts", async () => ({
   listSourcesApiV1EpisodesEpisodeIdScriptSourcesGet: apiMocks.listSources,
   listVersionsApiV1ScriptSourcesSourceIdVersionsGet: apiMocks.listVersions,
   publishVersionApiV1ScriptSourcesSourceIdVersionsPost: apiMocks.publishVersion,
+  restoreSourceApiV1ScriptSourcesSourceIdRestorePost: apiMocks.restoreSource,
   setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost:
     apiMocks.setCurrentVersion,
   startExtractionApiV1ScriptVersionsVersionIdExtractionsPost:
@@ -461,6 +470,119 @@ describe("单集统一生产工作台", () => {
       expect.objectContaining({ scope: "full" }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent("提取任务已创建");
+  });
+
+  it("版本历史支持服务端差异、影响确认与安全清理", async () => {
+    const user = userEvent.setup();
+    const draftVersion: API.ScriptVersionResponse = {
+      ...version,
+      id: "019fb2c0-a000-7000-8000-000000000021",
+      version_no: 1,
+      status: "draft",
+      body: "第一场 雨巷\n顾清禾：初稿。",
+      content_hash: "b".repeat(64),
+    };
+    const previousVersion: API.ScriptVersionResponse = {
+      ...version,
+      id: "019fb2c0-a000-7000-8000-000000000022",
+      version_no: 2,
+      body: "第一场 雨巷\n顾清禾：旧版本。",
+      content_hash: "c".repeat(64),
+    };
+    const currentVersion = { ...version, version_no: 3 };
+    apiMocks.getVersion.mockResolvedValue({ data: currentVersion });
+    apiMocks.listVersions.mockResolvedValue({
+      data: {
+        items: [draftVersion, previousVersion, currentVersion],
+        total: 3,
+        limit: 100,
+        offset: 0,
+      },
+    });
+    apiMocks.diffVersions.mockResolvedValue({
+      data: {
+        base_version_id: previousVersion.id,
+        target_version_id: currentVersion.id,
+        added_lines: 1,
+        removed_lines: 1,
+        diff_lines: [
+          "--- version-2",
+          "+++ version-3",
+          "-顾清禾：旧版本。",
+          "+顾清禾：你终于来了。",
+        ],
+      },
+    });
+    apiMocks.setCurrentVersion.mockResolvedValue({
+      data: {
+        episode_id: episodeId,
+        current_script_version_id: previousVersion.id,
+        episode_revision: 3,
+        impact: {
+          previous_script_version_id: currentVersion.id,
+          current_script_version_id: previousVersion.id,
+          affected_shot_ids: [shotId],
+        },
+      },
+    });
+    apiMocks.deleteDraftVersion.mockResolvedValue({
+      data: { deleted: true, script_version_id: draftVersion.id },
+    });
+    apiMocks.archiveSource.mockResolvedValue({
+      data: { ...source, status: "archived", revision: 2 },
+    });
+
+    render(
+      <AppProviders>
+        <EpisodeProductionStudio episodeId={episodeId} initialPanel="script" />
+      </AppProviders>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "比较 v2 与当前版本" }),
+    );
+    const diffDialog = await screen.findByRole("dialog", {
+      name: "剧本版本差异",
+    });
+    expect(within(diffDialog).getByText("新增 1 行 · 删除 1 行")).toBeInTheDocument();
+    expect(within(diffDialog).getByText("+顾清禾：你终于来了。")).toBeInTheDocument();
+    expect(apiMocks.diffVersions).toHaveBeenCalledWith({
+      version_id: previousVersion.id,
+      other_version_id: currentVersion.id,
+    });
+    await user.click(within(diffDialog).getByRole("button", { name: "关闭" }));
+
+    await user.click(screen.getByRole("button", { name: "设为当前 v2" }));
+    const impactDialog = await screen.findByRole("dialog", {
+      name: "版本切换影响",
+    });
+    expect(within(impactDialog).getByText("1 个镜头仍引用其他剧本版本")).toBeInTheDocument();
+    expect(apiMocks.setCurrentVersion).toHaveBeenCalledWith(
+      { episode_id: episodeId },
+      {
+        version_id: previousVersion.id,
+        expected_current_version_id: currentVersion.id,
+      },
+    );
+    await user.click(within(impactDialog).getByRole("button", { name: "知道了" }));
+
+    await user.click(screen.getByRole("button", { name: "删除草稿 v1" }));
+    const deleteDialog = await screen.findByRole("dialog", {
+      name: "删除剧本草稿",
+    });
+    await user.click(
+      within(deleteDialog).getByRole("button", { name: "确认删除 v1 草稿" }),
+    );
+    await waitFor(() => expect(apiMocks.deleteDraftVersion).toHaveBeenCalledWith({
+      version_id: draftVersion.id,
+      confirm: true,
+    }));
+
+    await user.click(screen.getByRole("button", { name: "归档剧本来源" }));
+    await waitFor(() => expect(apiMocks.archiveSource).toHaveBeenCalledWith(
+      { source_id: sourceId },
+      { expected_revision: 1 },
+    ));
   });
 
   it("在没有 current 剧本时导入真实文本来源", async () => {
