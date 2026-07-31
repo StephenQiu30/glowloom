@@ -1,9 +1,11 @@
 SHELL := /bin/sh
 PYTHON ?= python3.11
 VENV_PYTHON := backend/.venv/bin/python
-MINIO_RELEASE := RELEASE.2025-09-07T16-13-09Z
+PROD_ENV_FILE ?= .env.production
+PROD_COMPOSE := docker compose --env-file $(PROD_ENV_FILE) -f docker-compose.yml -f docker-compose.prod.yml
+PROD_EXAMPLE_COMPOSE := docker compose --env-file .env.production.example -f docker-compose.yml -f docker-compose.prod.yml
 
-.PHONY: setup lock-backend dev-api dev-frontend scheduler worker-io worker-media db-init generate-api lint typecheck test hygiene check docker-build services-up services-down minio-up minio-version-check minio-down env-up env-down contract-minio contract-rabbitmq contract-ffprobe contract-media-stack contract-deepseek e2e-install e2e
+.PHONY: setup lock-backend dev-api dev-frontend scheduler worker-io worker-media db-init generate-api lint typecheck test hygiene check docker-build docker-dev-up docker-dev-down docker-dev-logs docker-prod-up docker-prod-down docker-prod-logs minio-up minio-down contract-minio contract-rabbitmq contract-ffprobe contract-media-stack contract-deepseek e2e-install e2e
 
 $(VENV_PYTHON):
 	@$(PYTHON) --version | grep -q 'Python 3.11.15'
@@ -59,55 +61,46 @@ test:
 	cd frontend && npm run test
 
 hygiene:
-	@! git ls-files | grep -E '(^|/)(\.env($|\.)|.*\.(pem|key|log)$$|data/|logs/|playwright-report/|test-results/)' | grep -v '\.env\.example$$' || (echo 'tracked secret/data/report artifact detected' >&2; exit 1)
+	@! git ls-files | grep -E '(^|/)(\.env($|\.)|.*\.(pem|key|log)$$|data/|logs/|playwright-report/|test-results/)' | grep -v -E '\.env(\.production)?\.example$$' || (echo 'tracked secret/data/report artifact detected' >&2; exit 1)
 
 check: lint typecheck test hygiene
 	$(VENV_PYTHON) -m pip check
 	test -f frontend/src/api/index.ts
 	cd frontend && npm run build
-	docker compose -f docker-compose.yml config >/dev/null
-	docker compose -f docker-compose-env.yml config >/dev/null
+	docker compose --env-file .env.example config >/dev/null
+	POSTGRES_PASSWORD=check-only RABBITMQ_DEFAULT_PASS=check-only MINIO_ACCESS_KEY=check-only MINIO_SECRET_KEY=check-only JWT_SECRET_KEY=check-only-production-secret $(PROD_EXAMPLE_COMPOSE) config >/dev/null
 
 docker-build:
-	docker compose -f docker-compose.yml build server web
+	docker compose build server web
 
-services-up:
-	docker compose -f docker-compose.yml up -d --build
+docker-dev-up:
+	docker compose up -d --build --wait
 
-services-down:
-	docker compose -f docker-compose.yml down
+docker-dev-down:
+	docker compose down
+
+docker-dev-logs:
+	docker compose logs --follow
+
+docker-prod-up:
+	@test -f $(PROD_ENV_FILE) || (echo 'copy .env.production.example to $(PROD_ENV_FILE) and configure production values' >&2; exit 1)
+	$(PROD_COMPOSE) up -d --no-build --pull always --wait
+
+docker-prod-down:
+	$(PROD_COMPOSE) down
+
+docker-prod-logs:
+	$(PROD_COMPOSE) logs --follow
 
 minio-up:
-	@if ! curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then \
-		docker compose -f docker-compose-env.yml up -d minio; \
-		for attempt in 1 2 3 4 5 6 7 8 9 10; do \
-			curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1 && break; \
-			sleep 1; \
-		done; \
+	@if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then \
+		echo "MinIO is already available at 127.0.0.1:9000"; \
+	else \
+		docker compose up -d --wait minio; \
 	fi
-	@$(MAKE) minio-version-check
-
-minio-version-check:
-	@container_ids="$$(docker ps -q --filter "publish=9000")"; \
-		set -- $$container_ids; \
-		if [ "$$#" -ne 1 ]; then \
-			echo "expected exactly one running MinIO container publishing port 9000" >&2; \
-			exit 1; \
-		fi; \
-		if ! docker exec "$$1" minio --version | grep -Fq "minio version $(MINIO_RELEASE)"; then \
-			echo "expected MinIO $(MINIO_RELEASE)" >&2; \
-			docker exec "$$1" minio --version | sed -n '1p' >&2; \
-			exit 1; \
-		fi
 
 minio-down:
-	docker compose -f docker-compose-env.yml stop minio
-
-env-up:
-	docker compose -f docker-compose-env.yml up -d
-
-env-down:
-	docker compose -f docker-compose-env.yml down
+	docker compose stop minio
 
 contract-minio:
 	cd backend && LANVERSE_RUN_MINIO_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_minio_port.py tests/contract/test_media_minio_flow.py

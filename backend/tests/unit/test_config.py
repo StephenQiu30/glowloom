@@ -9,9 +9,53 @@ from app.core.database import validate_test_database_url
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def _read_environment_example(filename: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in (ROOT / filename).read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            key, _, value = line.partition("=")
+            values[key] = value
+    return values
+
+
 def test_settings_load_only_the_repository_environment_file() -> None:
     assert Settings.model_config.get("env_file") == REPOSITORY_ENV_FILE
     assert REPOSITORY_ENV_FILE == ROOT / ".env"
+
+
+def test_repository_environment_example_covers_all_backend_settings() -> None:
+    environment_keys = set(_read_environment_example(".env.example"))
+
+    assert {name.upper() for name in Settings.model_fields} <= environment_keys
+
+
+def test_production_environment_example_is_fail_closed() -> None:
+    development_values = _read_environment_example(".env.example")
+    production_values = _read_environment_example(".env.production.example")
+
+    assert production_values.keys() == development_values.keys()
+    assert production_values["ENVIRONMENT"] == "production"
+    assert production_values["NEXT_PUBLIC_API_BASE_URL"].startswith("https://")
+    assert {
+        "DATABASE_URL",
+        "TEST_DATABASE_URL",
+        "POSTGRES_DB",
+        "POSTGRES_USER",
+        "POSTGRES_PASSWORD",
+        "POSTGRES_PORT",
+    } <= production_values.keys()
+    for secret in (
+        "DATABASE_URL",
+        "TEST_DATABASE_URL",
+        "POSTGRES_PASSWORD",
+        "RABBITMQ_URL",
+        "RABBITMQ_DEFAULT_PASS",
+        "MINIO_ACCESS_KEY",
+        "MINIO_SECRET_KEY",
+        "JWT_SECRET_KEY",
+        "DEEPSEEK_API_KEY",
+    ):
+        assert production_values[secret] == ""
 
 
 def test_test_database_must_be_explicit() -> None:

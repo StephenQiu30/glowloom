@@ -1,0 +1,20 @@
+services:
+  postgres:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  rabbitmq:
+    ports: !reset []
+
+  minio:
+    ports: !reset []
+
+  server:
+    build: !reset null
+    environment:
+      ENVIRONMENT: production
+
+  web:
+    build: !reset null

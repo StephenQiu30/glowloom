@@ -24,54 +24,56 @@ def test_forbidden_overdesigned_directories_do_not_exist() -> None:
     assert not [path for path in forbidden if path.exists()]
 
 
-def test_container_files_live_at_their_runtime_boundaries() -> None:
+def test_environment_specific_compose_supports_robust_full_stack_startup() -> None:
     assert (ROOT / "backend/Dockerfile").is_file()
     assert (ROOT / "frontend/Dockerfile").is_file()
     assert (ROOT / "docker-compose.yml").is_file()
-    assert (ROOT / "docker-compose-env.yml").is_file()
+    assert (ROOT / "docker-compose.prod.yml").is_file()
+    assert not (ROOT / "docker-compose-env.yml").exists()
 
-    business_compose = (ROOT / "docker-compose.yml").read_text()
-    environment_compose = (ROOT / "docker-compose-env.yml").read_text()
+    compose = (ROOT / "docker-compose.yml").read_text()
+    production_compose = (ROOT / "docker-compose.prod.yml").read_text()
 
-    assert "name: lanverse-services" in business_compose
-    assert "  server:" in business_compose
-    assert "  web:" in business_compose
-    assert "  api:" not in business_compose
-    assert "  scheduler:" not in business_compose
-    assert "  io-worker:" not in business_compose
-    assert business_compose.count("image: lanverse-backend:local") == 1
-    assert "  postgres:" not in business_compose
-    assert "  redis:" not in business_compose
-    assert "  rabbitmq:" not in business_compose
-    assert "  minio:" not in business_compose
-
-    for container_name in ("lanverse-server", "lanverse-web"):
-        assert f"container_name: {container_name}" in business_compose
-
-    assert "name: lanverse-environment" in environment_compose
-    assert "  server:" not in environment_compose
-    assert "  web:" not in environment_compose
-    for service in ("postgres", "redis", "rabbitmq", "minio"):
-        assert f"  {service}:" in environment_compose
-        assert f"container_name: lanverse-{service}" in environment_compose
+    for service in ("postgres", "redis", "rabbitmq", "minio", "server", "web"):
+        assert f"  {service}:" in compose
     for image in (
-        "postgres:18.4-alpine",
-        "redis:8.8.1-alpine",
-        "rabbitmq:4.3.4-alpine@sha256:c07a5e60f5429be18b3b7fd3a4dfa9a84c3372f88df084b6f2b22224192c360c",
-        "minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1@sha256:13582eff79c6605a2d315bdd0e70164142ea7e98fc8411e9e10d089502a6d883",
+        "postgres:latest",
+        "redis:latest",
+        "rabbitmq:latest",
+        "minio/minio:latest",
     ):
-        assert f"image: {image}\n" in environment_compose
-    assert ":latest" not in environment_compose
+        assert f"image: {image}" in compose
+    assert "@sha256:" not in compose
+    assert "container_name:" not in compose
+    assert compose.count("healthcheck:") == 6
+    assert compose.count("restart: unless-stopped") == 6
+    assert "condition: service_healthy" in compose
+    assert "@postgres:5432/" in compose
+    assert "redis://redis:6379/0" in compose
+    assert "@rabbitmq:5672/" in compose
+    assert "MINIO_ENDPOINT: minio:9000" in compose
+    assert "python -m app.initialize_database && exec python -m app.server" in compose
+    assert production_compose.count("ports: !reset []") == 4
+    assert production_compose.count("build: !reset null") == 2
+    assert "ENVIRONMENT: production" in production_compose
 
     makefile = (ROOT / "Makefile").read_text()
-    assert "services-up:" in makefile
-    assert "services-down:" in makefile
-    assert "docker compose -f docker-compose.yml up -d --build" in makefile
-    assert "MINIO_RELEASE := RELEASE.2025-09-07T16-13-09Z" in makefile
-    assert "minio-version-check:" in makefile
-    assert 'docker ps -q --filter "publish=9000"' in makefile
-    assert "business-up:" not in makefile
-    assert "business-down:" not in makefile
+    assert "docker compose build server web" in makefile
+    assert "docker-dev-up:" in makefile
+    assert "docker-prod-up:" in makefile
+    assert "--env-file $(PROD_ENV_FILE)" in makefile
+    assert "-f docker-compose.prod.yml" in makefile
+    assert "up -d --no-build --pull always --wait" in makefile
+    assert "docker compose up -d --wait minio" in makefile
+    assert "docker compose stop minio" in makefile
+    for removed_target in (
+        "services-up:",
+        "services-down:",
+        "env-up:",
+        "env-down:",
+        "minio-version-check:",
+    ):
+        assert removed_target not in makefile
 
     backend_dockerfile = (ROOT / "backend/Dockerfile").read_text()
     assert 'CMD ["python", "-m", "app.server"]' in backend_dockerfile
@@ -79,6 +81,7 @@ def test_container_files_live_at_their_runtime_boundaries() -> None:
 
 def test_environment_configuration_has_one_repository_entrypoint() -> None:
     assert (ROOT / ".env.example").is_file()
+    assert (ROOT / ".env.production.example").is_file()
     assert not (ROOT / "backend/.env.example").exists()
     assert not (ROOT / "frontend/.env.example").exists()
 
@@ -121,12 +124,9 @@ def test_ci_executes_the_real_media_stack_contract() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
     assert "name: Start MinIO contract service" in workflow
-    assert (
-        "minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1@sha256:"
-        "13582eff79c6605a2d315bdd0e70164142ea7e98fc8411e9e10d089502a6d883 "
-        "server /data"
-    ) in workflow
-    assert "minio/minio:latest" not in workflow
+    assert "minio/minio:latest server /data" in workflow
+    assert "minio/minio:RELEASE." not in workflow
+    assert "@sha256:" not in workflow
     assert "ffprobe -version" in workflow
     assert "make contract-media-stack" in workflow
     assert "name: Stop MinIO contract service" in workflow

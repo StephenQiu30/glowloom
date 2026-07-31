@@ -4,6 +4,7 @@ skills-lock.json
 .env
 .env.*
 !.env.example
+!.env.production.example
 *.log
 *.pem
 *.key
