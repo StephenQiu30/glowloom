@@ -31,6 +31,7 @@ import { cn } from "@/lib/class-names";
 import { appApiErrorMessage } from "@/lib/server-state";
 
 import { formatDate, shortId, typeConfig } from "./asset-workspace-model";
+import { AssetVersionUsage } from "./asset-version-usage";
 
 export function AssetList({
   assets,
@@ -368,6 +369,8 @@ export function AssetDetail({
   mediaById,
   onAddVersion,
   onToggleArchive,
+  onUpgradeCompleted,
+  onUpgradeError,
   readiness,
   readinessError,
   readinessLoading,
@@ -379,6 +382,8 @@ export function AssetDetail({
   mediaById: Map<string, API.MediaVersionResponse>;
   onAddVersion: () => void;
   onToggleArchive: () => void;
+  onUpgradeCompleted: (shotCount: number) => void;
+  onUpgradeError: (message: string) => void;
   readiness?: API.AssetReadinessResponse;
   readinessError: unknown;
   readinessLoading: boolean;
@@ -485,6 +490,13 @@ export function AssetDetail({
           )}
         </CardContent>
       </Card>
+
+      <AssetVersionUsage
+        asset={asset}
+        onCompleted={onUpgradeCompleted}
+        onError={onUpgradeError}
+        versions={versions}
+      />
     </div>
   );
 }

@@ -388,6 +388,11 @@ export function ComicProductionStudio() {
                   mediaById={mediaById}
                   onAddVersion={() => setVersionOpen(true)}
                   onToggleArchive={toggleArchive}
+                  onUpgradeCompleted={(shotCount) => {
+                    setActionError(null);
+                    setNotice(`已为 ${shotCount} 个镜头创建新的规格版本。`);
+                  }}
+                  onUpgradeError={(message) => setActionError(message || null)}
                   readiness={currentVersion ? readiness.data : undefined}
                   readinessError={currentVersion ? readiness.error : undefined}
                   readinessLoading={currentVersion ? readiness.isLoading : false}

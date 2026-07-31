@@ -73,6 +73,7 @@ import {
   startExtractionApiV1ScriptVersionsVersionIdExtractionsPost,
 } from "@/api/scripts";
 import {
+  applyAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePost,
   appendSpecVersionApiV1ShotsShotIdSpecVersionsPost,
   archiveShotApiV1ShotsShotIdArchivePost,
   copyShotApiV1ShotsShotIdCopyPost,
@@ -80,11 +81,13 @@ import {
   deleteShotApiV1ShotsShotIdDelete,
   getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet,
   getSpecVersionApiV1ShotSpecVersionsVersionIdGet,
+  listAssetShotUsagesApiV1AssetVersionsAssetVersionIdShotUsagesGet,
   listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet,
   listShotsApiV1EpisodesEpisodeIdShotsGet,
   listSpecVersionsApiV1ShotsShotIdSpecVersionsGet,
   mergePreflightApiV1ShotsMergePreflightPost,
   mergeShotsApiV1ShotsMergePost,
+  preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPost,
   reorderShotsApiV1EpisodesEpisodeIdShotsReorderPost,
   restoreShotApiV1ShotsShotIdRestorePost,
   setCurrentSpecVersionApiV1ShotsShotIdCurrentSpecVersionPost,
@@ -151,6 +154,7 @@ export const appApi = createApi({
     "Asset",
     "AssetVersions",
     "AssetReadiness",
+    "AssetShotUsages",
     "ScriptSources",
     "ScriptVersions",
     "ScriptVersion",
@@ -551,6 +555,56 @@ export const appApi = createApi({
         ),
       providesTags: (_result, _error, episodeId) => [
         { type: "ArchivedShots", id: episodeId },
+      ],
+    }),
+    assetShotUsages: builder.query<
+      API.PaginatedAssetShotUsages,
+      { assetVersionId: string; limit: number; offset: number }
+    >({
+      queryFn: ({ assetVersionId, limit, offset }) =>
+        runRequest(() =>
+          listAssetShotUsagesApiV1AssetVersionsAssetVersionIdShotUsagesGet({
+            asset_version_id: assetVersionId,
+            limit,
+            offset,
+          }),
+        ),
+      providesTags: (_result, _error, { assetVersionId }) => [
+        { type: "AssetShotUsages", id: assetVersionId },
+      ],
+    }),
+    assetUpgradePreflight: builder.mutation<
+      API.AssetUpgradePreflightResponse,
+      { assetVersionId: string; body: API.AssetUpgradePreflightRequest }
+    >({
+      queryFn: ({ assetVersionId, body }) =>
+        runRequest(() =>
+          preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPost(
+            { asset_version_id: assetVersionId },
+            body,
+          ),
+        ),
+    }),
+    applyAssetUpgrade: builder.mutation<
+      API.AssetUpgradeApplyResponse,
+      { assetVersionId: string; body: API.AssetUpgradeApplyRequest }
+    >({
+      queryFn: ({ assetVersionId, body }) =>
+        runRequest(() =>
+          applyAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePost(
+            { asset_version_id: assetVersionId },
+            body,
+          ),
+        ),
+      invalidatesTags: (result, _error, { assetVersionId, body }) => [
+        { type: "AssetShotUsages", id: assetVersionId },
+        { type: "AssetShotUsages", id: body.new_asset_version_id },
+        ...(result?.shots.flatMap((shot) => [
+          { type: "Shots" as const, id: shot.episode_id },
+          { type: "ShotSpecs" as const, id: shot.id },
+          { type: "ShotReadiness" as const, id: shot.episode_id },
+          { type: "Snapshot" as const, id: shot.episode_id },
+        ]) ?? []),
       ],
     }),
     shotReadiness: builder.query<API.ShotReadinessBatchResponse, string>({
@@ -1143,10 +1197,13 @@ export const appApi = createApi({
 });
 
 export const {
+  useApplyAssetUpgradeMutation,
   useAppendAssetVersionMutation,
   useAppendShotSpecMutation,
   useArchivedShotsQuery,
   useAssetReadinessQuery,
+  useAssetShotUsagesQuery,
+  useAssetUpgradePreflightMutation,
   useAssetsQuery,
   useAssetVersionsQuery,
   useChangePasswordMutation,
