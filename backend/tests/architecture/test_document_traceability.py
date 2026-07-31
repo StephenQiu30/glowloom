@@ -76,3 +76,37 @@ def test_s3_local_engineering_and_product_acceptance_states_do_not_drift() -> No
     assert "S3 本地实现 in_progress" not in slice_prd
     assert "S3 本地实现 in_progress" not in prd_index
     assert "PT-SBD-001～006/PT-AST-004 本地实现 in_progress" not in prd_index
+
+
+def test_ark_public_contract_is_revalidated_without_premature_sdk_install() -> None:
+    admission = (DOCS / "design/005-S2供应商与合规准入设计.md").read_text(
+        encoding="utf-8"
+    )
+    production = (DOCS / "design/模块设计/009-生产模块详细设计.md").read_text(
+        encoding="utf-8"
+    )
+    execution = (DOCS / "prd/003-MVP执行计划与追踪矩阵.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "公开 SDK 复核日期：2026-07-31" in admission
+    for contract in (
+        "volcengine-python-sdk[ark]==5.0.43",
+        "volcenginesdkarkruntime.AsyncArk",
+        "https://ark.cn-beijing.volces.com/api/v3",
+        "/images/generations",
+        "/contents/generations/tasks",
+    ):
+        assert contract in admission
+
+    for source in (admission, production, execution):
+        assert "公开 SDK 不证明模型开通" in source
+        assert "D-004 仍保持 open" in source
+        assert "真实账号" in source
+
+    dependency_sources = (
+        (ROOT / "backend/pyproject.toml").read_text(encoding="utf-8"),
+        (ROOT / "backend/requirements.txt").read_text(encoding="utf-8"),
+        (ROOT / "backend/requirements-dev.txt").read_text(encoding="utf-8"),
+    )
+    assert all("volcengine-python-sdk" not in source for source in dependency_sources)
