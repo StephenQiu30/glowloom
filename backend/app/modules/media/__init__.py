@@ -10,6 +10,7 @@ from app.modules.media.service import (
     media_version_accessible,
     media_version_exists,
     resolve_media_version_reference,
+    resolve_media_version_references,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "media_version_accessible",
     "media_version_exists",
     "resolve_media_version_reference",
+    "resolve_media_version_references",
 ]

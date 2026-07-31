@@ -630,6 +630,30 @@ async def resolve_media_version_reference(
     )
 
 
+async def resolve_media_version_references(
+    session: AsyncSession,
+    workspace_id: UUID,
+    version_ids: list[UUID],
+) -> dict[UUID, MediaVersionReference]:
+    unique_ids = list(dict.fromkeys(version_ids))
+    rows = await repository.find_media_versions_with_active_locations(
+        session,
+        unique_ids,
+    )
+    return {
+        version.id: MediaVersionReference(
+            id=version.id,
+            workspace_id=version.workspace_id,
+            kind=media_object.kind,
+            object_status=media_object.status,
+            probe_status=version.probe_status,
+            has_active_location=location is not None,
+        )
+        for version, media_object, location in rows
+        if version.workspace_id == workspace_id
+    }
+
+
 async def create_access(
     session: AsyncSession,
     claims: AccessTokenClaims,

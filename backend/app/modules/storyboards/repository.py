@@ -65,6 +65,23 @@ async def list_active_shots(
     return list(await session.scalars(query))
 
 
+async def list_active_shots_with_current_specs(
+    session: AsyncSession,
+    episode_id: UUID,
+) -> list[tuple[Shot, ShotSpecVersion | None]]:
+    rows = await session.execute(
+        select(Shot, ShotSpecVersion)
+        .outerjoin(
+            ShotSpecVersion,
+            (ShotSpecVersion.id == Shot.current_spec_version_id)
+            & (ShotSpecVersion.workspace_id == Shot.workspace_id),
+        )
+        .where(Shot.episode_id == episode_id, Shot.status == "active")
+        .order_by(Shot.position, Shot.id)
+    )
+    return [(row[0], row[1]) for row in rows]
+
+
 async def latest_spec_version_number(
     session: AsyncSession,
     shot_id: UUID,

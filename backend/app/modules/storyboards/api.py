@@ -17,6 +17,7 @@ from app.modules.storyboards.schemas import (
     ShotDeletePreflightResponse,
     ShotDeleteResponse,
     ShotOrderResponse,
+    ShotReadinessBatchResponse,
     ShotReadinessResponse,
     ShotReorderRequest,
     ShotResponse,
@@ -107,6 +108,24 @@ async def list_shots(
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotOrderResponse]:
     return ApiResponse(data=await service.list_shots(session, claims, episode_id))
+
+
+@router.get(
+    "/episodes/{episode_id}/shot-readiness",
+    response_model=ApiResponse[ShotReadinessBatchResponse],
+)
+async def get_episode_readiness(
+    episode_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotReadinessBatchResponse]:
+    return ApiResponse(
+        data=await service.get_episode_readiness(
+            session,
+            claims,
+            episode_id,
+        )
+    )
 
 
 @router.post(

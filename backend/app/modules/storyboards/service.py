@@ -12,15 +12,18 @@ from app.core.errors import ApiError, ErrorCode
 from app.modules.assets import (
     AssetVersionReadinessReference,
     resolve_asset_version,
-    resolve_asset_version_readiness,
+    resolve_asset_versions_readiness,
 )
 from app.modules.projects import (
+    EpisodeContentContext,
     episode_for_content_read,
     lock_active_episode_for_content_write,
 )
 from app.modules.scripts import (
+    ConfirmedStructureQuery,
     resolve_confirmed_shot_candidate,
     resolve_confirmed_structure,
+    resolve_confirmed_structures,
 )
 from app.modules.storyboards import repository
 from app.modules.storyboards.hashing import (
@@ -47,9 +50,11 @@ from app.modules.storyboards.schemas import (
     ShotDeletePreflightResponse,
     ShotDeleteResponse,
     ShotOrderResponse,
+    ShotReadinessBatchResponse,
     ShotReadinessDependencies,
     ShotReadinessIssue,
     ShotReadinessResponse,
+    ShotReadinessSummary,
     ShotReadinessWarning,
     ShotReorderRequest,
     ShotResponse,
@@ -1608,29 +1613,16 @@ def _finalize_readiness(
     )
 
 
-async def get_readiness(
-    session: AsyncSession,
-    claims: AccessTokenClaims,
-    shot_id: UUID,
+def _evaluate_loaded_readiness(
+    shot: Shot,
+    version: ShotSpecVersion | None,
+    references: list[AssetReference],
     *,
-    version_id: UUID | None = None,
+    structure_available: bool | None,
+    asset_snapshots: dict[UUID, AssetVersionReadinessReference],
+    assets_unavailable: bool,
 ) -> ShotReadinessResponse:
-    shot = await repository.find_shot(session, shot_id)
-    if shot is None:
-        raise _not_found("Shot")
-    episode = await episode_for_content_read(session, claims, shot.episode_id)
-    selected_version_id = version_id or shot.current_spec_version_id
-    if selected_version_id is None:
-        dependencies = ShotReadinessDependencies(
-            shot_spec_version_id=None,
-            confirmed_script_version_id=shot.source_script_version_id,
-            scene_id=shot.source_scene_id,
-            dialogue_ids=[],
-            asset_version_ids=[],
-            media_version_ids=[],
-            consent_ids=[],
-            asset_evaluation_hashes={},
-        )
+    if version is None:
         return _finalize_readiness(
             shot_id=shot.id,
             issues=[
@@ -1642,30 +1634,22 @@ async def get_readiness(
                 )
             ],
             warnings=[],
-            dependencies=dependencies,
+            dependencies=ShotReadinessDependencies(
+                shot_spec_version_id=None,
+                confirmed_script_version_id=shot.source_script_version_id,
+                scene_id=shot.source_scene_id,
+                dialogue_ids=[],
+                asset_version_ids=[],
+                media_version_ids=[],
+                consent_ids=[],
+                asset_evaluation_hashes={},
+            ),
         )
 
-    version_result = await repository.find_spec_version(session, selected_version_id)
-    if version_result is None or version_result[0].shot_id != shot.id:
-        raise _not_found("Shot spec version")
-    version = version_result[0]
     spec = ShotSpec.model_validate(version.spec)
-    references = await repository.list_asset_references(session, [version.id])
     issues: list[ShotReadinessIssue] = []
     warnings: list[ShotReadinessWarning] = []
-
-    try:
-        confirmed = await resolve_confirmed_structure(
-            session,
-            workspace_id=shot.workspace_id,
-            episode_id=shot.episode_id,
-            script_version_id=spec.script_reference.confirmed_script_version_id,
-            scene_id=spec.script_reference.scene_id,
-            dialogue_ids=spec.script_reference.dialogue_ids,
-        )
-    except (SQLAlchemyError, ApiError) as error:
-        if isinstance(error, ApiError) and error.code != ErrorCode.DEPENDENCY_UNAVAILABLE:
-            raise
+    if structure_available is None:
         issues.append(
             ShotReadinessIssue(
                 code="DEPENDENCY_UNAVAILABLE",
@@ -1674,23 +1658,19 @@ async def get_readiness(
                 next_action="retry_readiness",
             )
         )
-    else:
-        if confirmed is None:
-            issues.append(
-                ShotReadinessIssue(
-                    code="SCRIPT_VERSION_UNAVAILABLE",
-                    field_path="spec.script_reference",
-                    dependency_type="SCRIPT_VERSION",
-                    dependency_id=spec.script_reference.confirmed_script_version_id,
-                    summary="The fixed confirmed script structure is unavailable",
-                    next_action="select_confirmed_script_structure",
-                )
+    elif not structure_available:
+        issues.append(
+            ShotReadinessIssue(
+                code="SCRIPT_VERSION_UNAVAILABLE",
+                field_path="spec.script_reference",
+                dependency_type="SCRIPT_VERSION",
+                dependency_id=spec.script_reference.confirmed_script_version_id,
+                summary="The fixed confirmed script structure is unavailable",
+                next_action="select_confirmed_script_structure",
             )
+        )
 
-    location_references = [
-        reference for reference in references if reference.role == "location"
-    ]
-    if len(location_references) != 1:
+    if sum(reference.role == "location" for reference in references) != 1:
         issues.append(
             ShotReadinessIssue(
                 code="LOCATION_REFERENCE_MISSING",
@@ -1729,19 +1709,18 @@ async def get_readiness(
                     next_action="select_voice_asset",
                 )
             )
-
-    asset_snapshots: dict[UUID, AssetVersionReadinessReference] = {}
-    try:
-        for reference in references:
-            readiness = await resolve_asset_version_readiness(
-                session,
-                shot.workspace_id,
-                episode.project_id,
-                reference.asset_version_id,
-                purpose="ai_short_drama_generation",
-                channel="lanverse_preview",
-                region="CN",
+    if assets_unavailable:
+        issues.append(
+            ShotReadinessIssue(
+                code="DEPENDENCY_UNAVAILABLE",
+                dependency_type="ASSETS",
+                summary="Asset readiness dependency is unavailable",
+                next_action="retry_readiness",
             )
+        )
+    else:
+        for reference in references:
+            readiness = asset_snapshots.get(reference.asset_version_id)
             if readiness is None:
                 issues.append(
                     ShotReadinessIssue(
@@ -1753,20 +1732,8 @@ async def get_readiness(
                         next_action="replace_asset_reference",
                     )
                 )
-                continue
-            asset_snapshots[readiness.id] = readiness
-            issues.extend(_asset_readiness_issues(reference, readiness))
-    except (SQLAlchemyError, ApiError) as error:
-        if isinstance(error, ApiError) and error.code != ErrorCode.DEPENDENCY_UNAVAILABLE:
-            raise
-        issues.append(
-            ShotReadinessIssue(
-                code="DEPENDENCY_UNAVAILABLE",
-                dependency_type="ASSETS",
-                summary="Asset readiness dependency is unavailable",
-                next_action="retry_readiness",
-            )
-        )
+            else:
+                issues.extend(_asset_readiness_issues(reference, readiness))
 
     if spec.duration_ms > 8000:
         warnings.append(
@@ -1797,6 +1764,11 @@ async def get_readiness(
             )
         )
 
+    used_snapshots = {
+        reference.asset_version_id: asset_snapshots[reference.asset_version_id]
+        for reference in references
+        if reference.asset_version_id in asset_snapshots
+    }
     dependencies = ShotReadinessDependencies(
         shot_spec_version_id=version.id,
         confirmed_script_version_id=spec.script_reference.confirmed_script_version_id,
@@ -1806,7 +1778,7 @@ async def get_readiness(
         media_version_ids=sorted(
             {
                 media_id
-                for snapshot in asset_snapshots.values()
+                for snapshot in used_snapshots.values()
                 for media_id in snapshot.media_version_ids
             },
             key=str,
@@ -1814,14 +1786,14 @@ async def get_readiness(
         consent_ids=sorted(
             {
                 consent_id
-                for snapshot in asset_snapshots.values()
+                for snapshot in used_snapshots.values()
                 for consent_id in snapshot.consent_ids
             },
             key=str,
         ),
         asset_evaluation_hashes={
-            asset_id: asset_snapshots[asset_id].evaluation_hash
-            for asset_id in sorted(asset_snapshots, key=str)
+            asset_id: used_snapshots[asset_id].evaluation_hash
+            for asset_id in sorted(used_snapshots, key=str)
         },
     )
     return _finalize_readiness(
@@ -1829,4 +1801,162 @@ async def get_readiness(
         issues=issues,
         warnings=warnings,
         dependencies=dependencies,
+    )
+
+
+async def _resolve_readiness_dependencies(
+    session: AsyncSession,
+    episode: EpisodeContentContext,
+    versions: list[ShotSpecVersion],
+    references: list[AssetReference],
+) -> tuple[
+    dict[UUID, bool | None],
+    dict[UUID, AssetVersionReadinessReference],
+    bool,
+]:
+    queries_by_version: dict[UUID, ConfirmedStructureQuery] = {}
+    for version in versions:
+        spec = ShotSpec.model_validate(version.spec)
+        queries_by_version[version.id] = ConfirmedStructureQuery(
+            script_version_id=spec.script_reference.confirmed_script_version_id,
+            scene_id=spec.script_reference.scene_id,
+            dialogue_ids=tuple(spec.script_reference.dialogue_ids),
+        )
+    structure_states: dict[UUID, bool | None]
+    try:
+        structures = await resolve_confirmed_structures(
+            session,
+            workspace_id=episode.workspace_id,
+            episode_id=episode.episode_id,
+            queries=list(queries_by_version.values()),
+        )
+    except (SQLAlchemyError, ApiError) as error:
+        if isinstance(error, ApiError) and error.code != ErrorCode.DEPENDENCY_UNAVAILABLE:
+            raise
+        structure_states = {version.id: None for version in versions}
+    else:
+        structure_states = {
+            version_id: structures.get(query) is not None
+            for version_id, query in queries_by_version.items()
+        }
+
+    asset_ids = list(
+        dict.fromkeys(reference.asset_version_id for reference in references)
+    )
+    assets_unavailable = False
+    try:
+        asset_snapshots = await resolve_asset_versions_readiness(
+            session,
+            episode.workspace_id,
+            episode.project_id,
+            asset_ids,
+            purpose="ai_short_drama_generation",
+            channel="lanverse_preview",
+            region="CN",
+        )
+    except (SQLAlchemyError, ApiError) as error:
+        if isinstance(error, ApiError) and error.code != ErrorCode.DEPENDENCY_UNAVAILABLE:
+            raise
+        asset_snapshots = {}
+        assets_unavailable = True
+    return structure_states, asset_snapshots, assets_unavailable
+
+
+async def get_readiness(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    shot_id: UUID,
+    *,
+    version_id: UUID | None = None,
+) -> ShotReadinessResponse:
+    shot = await repository.find_shot(session, shot_id)
+    if shot is None:
+        raise _not_found("Shot")
+    episode = await episode_for_content_read(session, claims, shot.episode_id)
+    selected_version_id = version_id or shot.current_spec_version_id
+    version: ShotSpecVersion | None = None
+    references: list[AssetReference] = []
+    if selected_version_id is not None:
+        version_result = await repository.find_spec_version(session, selected_version_id)
+        if version_result is None or version_result[0].shot_id != shot.id:
+            raise _not_found("Shot spec version")
+        version = version_result[0]
+        references = await repository.list_asset_references(session, [version.id])
+    structure_states, asset_snapshots, assets_unavailable = (
+        await _resolve_readiness_dependencies(
+            session,
+            episode,
+            [version] if version is not None else [],
+            references,
+        )
+    )
+    return _evaluate_loaded_readiness(
+        shot,
+        version,
+        references,
+        structure_available=(
+            structure_states.get(version.id) if version is not None else False
+        ),
+        asset_snapshots=asset_snapshots,
+        assets_unavailable=assets_unavailable,
+    )
+
+
+async def get_episode_readiness(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    episode_id: UUID,
+) -> ShotReadinessBatchResponse:
+    episode = await episode_for_content_read(session, claims, episode_id)
+    rows = await repository.list_active_shots_with_current_specs(session, episode_id)
+    versions = [version for _shot, version in rows if version is not None]
+    references = await repository.list_asset_references(
+        session,
+        [version.id for version in versions],
+    )
+    references_by_version: dict[UUID, list[AssetReference]] = defaultdict(list)
+    for reference in references:
+        references_by_version[reference.shot_spec_version_id].append(reference)
+    structure_states, asset_snapshots, assets_unavailable = (
+        await _resolve_readiness_dependencies(
+            session,
+            episode,
+            versions,
+            references,
+        )
+    )
+    items = [
+        _evaluate_loaded_readiness(
+            shot,
+            version,
+            references_by_version.get(version.id, []) if version is not None else [],
+            structure_available=(
+                structure_states.get(version.id) if version is not None else False
+            ),
+            asset_snapshots=asset_snapshots,
+            assets_unavailable=assets_unavailable,
+        )
+        for shot, version in rows
+    ]
+    summary = ShotReadinessSummary(
+        total=len(items),
+        ready=sum(item.status == "ready" for item in items),
+        blocked=sum(item.status == "blocked" for item in items),
+        unavailable=sum(item.status == "unavailable" for item in items),
+    )
+    evaluation_hash = canonical_payload_hash(
+        {
+            "episode_id": str(episode_id),
+            "items": [
+                {"shot_id": str(item.shot_id), "evaluation_hash": item.evaluation_hash}
+                for item in items
+            ],
+            "summary": summary.model_dump(mode="json"),
+        }
+    )
+    return ShotReadinessBatchResponse(
+        episode_id=episode_id,
+        items=items,
+        summary=summary,
+        evaluation_hash=evaluation_hash,
     )

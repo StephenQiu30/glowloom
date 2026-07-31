@@ -7,7 +7,10 @@ from app.modules.governance.contracts import (
     SubjectReference,
     SubjectType,
 )
-from app.modules.governance.service import check_rights
+from app.modules.governance.service import (
+    check_rights,
+    check_rights_for_resolved_subjects,
+)
 
 __all__ = [
     "RightsBlocker",
@@ -16,4 +19,5 @@ __all__ = [
     "SubjectReference",
     "SubjectType",
     "check_rights",
+    "check_rights_for_resolved_subjects",
 ]

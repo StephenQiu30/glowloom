@@ -43,13 +43,19 @@ from app.modules.assets.schemas import (
     spec_to_json,
 )
 from app.modules.governance import (
+    RightsGateResult,
     RightsUsage,
     SubjectReference,
     SubjectType,
     check_rights,
+    check_rights_for_resolved_subjects,
 )
 from app.modules.identity import ActorContext
-from app.modules.media import MediaVersionReference, resolve_media_version_reference
+from app.modules.media import (
+    MediaVersionReference,
+    resolve_media_version_reference,
+    resolve_media_version_references,
+)
 from app.modules.projects import (
     lock_active_project_for_content_write,
     project_for_content_read,
@@ -574,55 +580,39 @@ def _media_blockers(
     )
 
 
-async def _evaluate_readiness(
-    session: AsyncSession,
+def _readiness_prerequisites(
     asset: Asset,
     version: AssetVersion,
     references: list[AssetMediaReference],
     *,
-    purpose: str,
-    channel: str,
-    region: str,
-    at_time: datetime,
-    known_media: dict[UUID, MediaVersionReference] | None = None,
-) -> AssetReadinessResponse:
+    media: dict[UUID, MediaVersionReference],
+) -> tuple[list[AssetReadinessBlocker], bool]:
     spec = parse_asset_spec(asset.kind, version.spec)
     blockers = _missing_spec_blockers(spec)
     draft = bool(blockers)
-    media: dict[UUID, MediaVersionReference] = known_media or {}
-    for reference in references:
-        if reference.media_version_id not in media:
-            resolved = await resolve_media_version_reference(
-                session, asset.workspace_id, reference.media_version_id
-            )
-            if resolved is not None:
-                media[resolved.id] = resolved
     media_blockers, required_media_missing = _media_blockers(
         asset.kind, references, media
     )
     blockers.extend(media_blockers)
     draft = draft or required_media_missing
-    consent_ids: list[UUID] = []
+    return blockers, draft
 
-    if not draft and not media_blockers and asset.status == "active":
-        try:
-            rights = await check_rights(
-                session,
-                workspace_id=asset.workspace_id,
-                subject=SubjectReference(
-                    subject_type=SubjectType.ASSET_VERSION,
-                    subject_id=version.id,
-                ),
-                usage=RightsUsage(
-                    purpose=purpose,
-                    channel=channel,
-                    region=region,
-                    at_time=at_time,
-                ),
-            )
-        except (SQLAlchemyError, ApiError) as error:
-            if isinstance(error, ApiError) and error.code != ErrorCode.DEPENDENCY_UNAVAILABLE:
-                raise
+
+def _compose_readiness(
+    asset: Asset,
+    version: AssetVersion,
+    references: list[AssetMediaReference],
+    *,
+    blockers: list[AssetReadinessBlocker],
+    draft: bool,
+    rights: RightsGateResult | None,
+    rights_unavailable: bool,
+    at_time: datetime,
+) -> AssetReadinessResponse:
+    blockers = list(blockers)
+    consent_ids: list[UUID] = []
+    if not draft and asset.status == "active":
+        if rights_unavailable:
             blockers.append(
                 AssetReadinessBlocker(
                     code="rights_dependency_unavailable",
@@ -631,7 +621,7 @@ async def _evaluate_readiness(
                     next_action="retry_readiness",
                 )
             )
-        else:
+        elif rights is not None:
             consent_ids = list(rights.consent_ids)
             blockers.extend(
                 AssetReadinessBlocker(
@@ -667,6 +657,66 @@ async def _evaluate_readiness(
             consent_ids=consent_ids,
             evaluated_at=at_time,
         ),
+    )
+
+
+async def _evaluate_readiness(
+    session: AsyncSession,
+    asset: Asset,
+    version: AssetVersion,
+    references: list[AssetMediaReference],
+    *,
+    purpose: str,
+    channel: str,
+    region: str,
+    at_time: datetime,
+    known_media: dict[UUID, MediaVersionReference] | None = None,
+) -> AssetReadinessResponse:
+    media: dict[UUID, MediaVersionReference] = known_media or {}
+    for reference in references:
+        if reference.media_version_id not in media:
+            resolved = await resolve_media_version_reference(
+                session, asset.workspace_id, reference.media_version_id
+            )
+            if resolved is not None:
+                media[resolved.id] = resolved
+    blockers, draft = _readiness_prerequisites(
+        asset,
+        version,
+        references,
+        media=media,
+    )
+    rights: RightsGateResult | None = None
+    rights_unavailable = False
+    if not draft and asset.status == "active":
+        try:
+            rights = await check_rights(
+                session,
+                workspace_id=asset.workspace_id,
+                subject=SubjectReference(
+                    subject_type=SubjectType.ASSET_VERSION,
+                    subject_id=version.id,
+                ),
+                usage=RightsUsage(
+                    purpose=purpose,
+                    channel=channel,
+                    region=region,
+                    at_time=at_time,
+                ),
+            )
+        except (SQLAlchemyError, ApiError) as error:
+            if isinstance(error, ApiError) and error.code != ErrorCode.DEPENDENCY_UNAVAILABLE:
+                raise
+            rights_unavailable = True
+    return _compose_readiness(
+        asset,
+        version,
+        references,
+        blockers=blockers,
+        draft=draft,
+        rights=rights,
+        rights_unavailable=rights_unavailable,
+        at_time=at_time,
     )
 
 
@@ -944,33 +994,11 @@ async def resolve_asset_version(
     )
 
 
-async def resolve_asset_version_readiness(
-    session: AsyncSession,
-    workspace_id: UUID,
-    project_id: UUID,
-    version_id: UUID,
-    *,
-    purpose: str,
-    channel: str,
-    region: str,
-) -> AssetVersionReadinessReference | None:
-    result = await repository.find_version(session, version_id)
-    if result is None:
-        return None
-    version, asset = result
-    if version.workspace_id != workspace_id or asset.project_id != project_id:
-        return None
-    references = await repository.list_media_references(session, [version.id])
-    readiness = await _evaluate_readiness(
-        session,
-        asset,
-        version,
-        references,
-        purpose=purpose,
-        channel=channel,
-        region=region,
-        at_time=datetime.now(UTC),
-    )
+def _readiness_reference(
+    asset: Asset,
+    version: AssetVersion,
+    readiness: AssetReadinessResponse,
+) -> AssetVersionReadinessReference:
     blocker_codes = tuple(blocker.code for blocker in readiness.blockers)
     status: Literal["draft", "ready", "blocked", "unavailable"] = readiness.status
     if "rights_dependency_unavailable" in blocker_codes:
@@ -1012,6 +1040,119 @@ async def resolve_asset_version_readiness(
         consent_ids=tuple(readiness.dependency_snapshot.consent_ids),
         evaluation_hash=evaluation_hash,
     )
+
+
+async def resolve_asset_versions_readiness(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_id: UUID,
+    version_ids: list[UUID],
+    *,
+    purpose: str,
+    channel: str,
+    region: str,
+) -> dict[UUID, AssetVersionReadinessReference]:
+    unique_ids = list(dict.fromkeys(version_ids))
+    rows = await repository.find_versions(session, unique_ids)
+    scoped = [
+        (version, asset)
+        for version, asset in rows
+        if version.workspace_id == workspace_id and asset.project_id == project_id
+    ]
+    references = await repository.list_media_references(
+        session,
+        [version.id for version, _asset in scoped],
+    )
+    by_version: dict[UUID, list[AssetMediaReference]] = {}
+    for reference in references:
+        by_version.setdefault(reference.asset_version_id, []).append(reference)
+    media = await resolve_media_version_references(
+        session,
+        workspace_id,
+        [reference.media_version_id for reference in references],
+    )
+    prerequisites: dict[
+        UUID,
+        tuple[list[AssetReadinessBlocker], bool],
+    ] = {}
+    rights_subjects: list[SubjectReference] = []
+    for version, asset in scoped:
+        version_references = by_version.get(version.id, [])
+        blockers, draft = _readiness_prerequisites(
+            asset,
+            version,
+            version_references,
+            media=media,
+        )
+        prerequisites[version.id] = (blockers, draft)
+        if not draft and asset.status == "active":
+            rights_subjects.append(
+                SubjectReference(
+                    subject_type=SubjectType.ASSET_VERSION,
+                    subject_id=version.id,
+                )
+            )
+    at_time = datetime.now(UTC)
+    rights_by_subject: dict[SubjectReference, RightsGateResult] = {}
+    rights_unavailable = False
+    if rights_subjects:
+        try:
+            rights_by_subject = await check_rights_for_resolved_subjects(
+                session,
+                workspace_id=workspace_id,
+                subjects=rights_subjects,
+                usage=RightsUsage(
+                    purpose=purpose,
+                    channel=channel,
+                    region=region,
+                    at_time=at_time,
+                ),
+            )
+        except (SQLAlchemyError, ApiError) as error:
+            if isinstance(error, ApiError) and error.code != ErrorCode.DEPENDENCY_UNAVAILABLE:
+                raise
+            rights_unavailable = True
+    results: dict[UUID, AssetVersionReadinessReference] = {}
+    for version, asset in scoped:
+        blockers, draft = prerequisites[version.id]
+        subject = SubjectReference(
+            subject_type=SubjectType.ASSET_VERSION,
+            subject_id=version.id,
+        )
+        readiness = _compose_readiness(
+            asset,
+            version,
+            by_version.get(version.id, []),
+            blockers=blockers,
+            draft=draft,
+            rights=rights_by_subject.get(subject),
+            rights_unavailable=rights_unavailable and subject in rights_subjects,
+            at_time=at_time,
+        )
+        results[version.id] = _readiness_reference(asset, version, readiness)
+    return results
+
+
+async def resolve_asset_version_readiness(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_id: UUID,
+    version_id: UUID,
+    *,
+    purpose: str,
+    channel: str,
+    region: str,
+) -> AssetVersionReadinessReference | None:
+    results = await resolve_asset_versions_readiness(
+        session,
+        workspace_id,
+        project_id,
+        [version_id],
+        purpose=purpose,
+        channel=channel,
+        region=region,
+    )
+    return results.get(version_id)
 
 
 def _candidate_spec(command: AssetCandidateCommand) -> AssetSpec:

@@ -64,6 +64,30 @@ async def find_media_version(
     return None if row is None else (row[0], row[1])
 
 
+async def find_media_versions_with_active_locations(
+    session: AsyncSession,
+    version_ids: list[UUID],
+) -> list[tuple[MediaVersion, MediaObject, MediaLocation | None]]:
+    if not version_ids:
+        return []
+    rows = await session.execute(
+        select(MediaVersion, MediaObject, MediaLocation)
+        .join(
+            MediaObject,
+            (MediaObject.id == MediaVersion.media_object_id)
+            & (MediaObject.workspace_id == MediaVersion.workspace_id),
+        )
+        .outerjoin(
+            MediaLocation,
+            (MediaLocation.media_version_id == MediaVersion.id)
+            & (MediaLocation.workspace_id == MediaVersion.workspace_id)
+            & (MediaLocation.status == "active"),
+        )
+        .where(MediaVersion.id.in_(version_ids))
+    )
+    return [(row[0], row[1], row[2]) for row in rows]
+
+
 async def find_active_location(
     session: AsyncSession, version_id: UUID
 ) -> MediaLocation | None:

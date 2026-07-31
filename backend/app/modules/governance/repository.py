@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.governance.models import Consent, ConsentProof, ConsentRevision
@@ -71,6 +71,34 @@ async def list_current_consents_for_subject(
         .order_by(Consent.created_at, Consent.id)
     )
     return [(row[0], row[1]) for row in rows]
+
+
+async def list_current_consents_with_proofs_for_subjects(
+    session: AsyncSession,
+    workspace_id: UUID,
+    subject_keys: list[tuple[str, UUID]],
+) -> list[tuple[Consent, ConsentRevision, ConsentProof | None]]:
+    if not subject_keys:
+        return []
+    rows = await session.execute(
+        select(Consent, ConsentRevision, ConsentProof)
+        .join(
+            ConsentRevision,
+            (ConsentRevision.id == Consent.current_revision_id)
+            & (ConsentRevision.workspace_id == Consent.workspace_id),
+        )
+        .outerjoin(
+            ConsentProof,
+            (ConsentProof.consent_revision_id == ConsentRevision.id)
+            & (ConsentProof.workspace_id == ConsentRevision.workspace_id),
+        )
+        .where(
+            Consent.workspace_id == workspace_id,
+            tuple_(Consent.subject_type, Consent.subject_id).in_(subject_keys),
+        )
+        .order_by(Consent.created_at, Consent.id, ConsentProof.position)
+    )
+    return [(row[0], row[1], row[2]) for row in rows]
 
 
 async def find_revision(

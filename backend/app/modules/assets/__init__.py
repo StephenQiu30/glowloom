@@ -12,6 +12,7 @@ from app.modules.assets.service import (
     create_or_link_candidate,
     resolve_asset_version,
     resolve_asset_version_readiness,
+    resolve_asset_versions_readiness,
     summarize_project_assets,
 )
 
@@ -25,5 +26,6 @@ __all__ = [
     "create_or_link_candidate",
     "resolve_asset_version",
     "resolve_asset_version_readiness",
+    "resolve_asset_versions_readiness",
     "summarize_project_assets",
 ]

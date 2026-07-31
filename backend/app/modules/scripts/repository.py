@@ -337,6 +337,25 @@ async def find_scene(
     return await session.scalar(select(Scene).where(Scene.id == scene_id))
 
 
+async def find_structure_rows(
+    session: AsyncSession,
+    script_version_ids: Sequence[UUID],
+    scene_ids: Sequence[UUID],
+) -> list[tuple[ScriptVersion, ScriptSource, Scene]]:
+    if not script_version_ids or not scene_ids:
+        return []
+    rows = await session.execute(
+        select(ScriptVersion, ScriptSource, Scene)
+        .join(ScriptSource, ScriptSource.id == ScriptVersion.source_id)
+        .join(Scene, Scene.script_version_id == ScriptVersion.id)
+        .where(
+            ScriptVersion.id.in_(script_version_ids),
+            Scene.id.in_(scene_ids),
+        )
+    )
+    return [(row[0], row[1], row[2]) for row in rows]
+
+
 async def list_dialogues(
     session: AsyncSession,
     scene_ids: Sequence[UUID],

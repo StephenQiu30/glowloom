@@ -43,6 +43,13 @@ class ConfirmedStructureReference:
 
 
 @dataclass(frozen=True, slots=True)
+class ConfirmedStructureQuery:
+    script_version_id: UUID
+    scene_id: UUID
+    dialogue_ids: tuple[UUID, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ConfirmedShotCandidateReference:
     candidate_id: UUID
     workspace_id: UUID

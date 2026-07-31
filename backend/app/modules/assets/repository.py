@@ -99,6 +99,21 @@ async def find_version(
     return None if row is None else (row[0], row[1])
 
 
+async def find_versions(
+    session: AsyncSession,
+    version_ids: list[UUID],
+) -> list[tuple[AssetVersion, Asset]]:
+    if not version_ids:
+        return []
+    rows = await session.execute(
+        select(AssetVersion, Asset)
+        .join(Asset, Asset.id == AssetVersion.asset_id)
+        .where(AssetVersion.id.in_(version_ids))
+    )
+    by_id = {row[0].id: (row[0], row[1]) for row in rows}
+    return [by_id[version_id] for version_id in version_ids if version_id in by_id]
+
+
 async def list_versions(
     session: AsyncSession,
     asset_id: UUID,

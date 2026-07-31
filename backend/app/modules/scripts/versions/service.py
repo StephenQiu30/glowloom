@@ -20,7 +20,10 @@ from app.modules.scripts.authorization import (
     require_resource_access,
     resource_not_found,
 )
-from app.modules.scripts.contracts import ConfirmedStructureReference
+from app.modules.scripts.contracts import (
+    ConfirmedStructureQuery,
+    ConfirmedStructureReference,
+)
 from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
 from app.modules.scripts.versions.schemas import (
     CurrentScriptVersionRequest,
@@ -310,6 +313,64 @@ async def resolve_confirmed_structure(
         scene_id=scene_id,
         dialogue_ids=tuple(dialogue_ids),
     )
+
+
+async def resolve_confirmed_structures(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    episode_id: UUID,
+    queries: list[ConfirmedStructureQuery],
+) -> dict[ConfirmedStructureQuery, ConfirmedStructureReference | None]:
+    unique_queries = list(dict.fromkeys(queries))
+    rows = await repository.find_structure_rows(
+        session,
+        [query.script_version_id for query in unique_queries],
+        [query.scene_id for query in unique_queries],
+    )
+    by_pair = {
+        (version.id, scene.id): (version, source, scene)
+        for version, source, scene in rows
+    }
+    dialogues = await repository.list_dialogues(
+        session,
+        [scene.id for _version, _source, scene in rows],
+    )
+    dialogue_ids_by_scene: dict[UUID, set[UUID]] = {}
+    for dialogue in dialogues:
+        dialogue_ids_by_scene.setdefault(dialogue.scene_id, set()).add(dialogue.id)
+    results: dict[ConfirmedStructureQuery, ConfirmedStructureReference | None] = {}
+    for query in unique_queries:
+        row = by_pair.get((query.script_version_id, query.scene_id))
+        if row is None:
+            results[query] = None
+            continue
+        version, source, scene = row
+        valid = (
+            version.workspace_id == workspace_id
+            and version.status == "published"
+            and bool(version.structure_summary.get("confirmation_batch_id"))
+            and source.workspace_id == workspace_id
+            and source.episode_id == episode_id
+            and source.status == "active"
+            and scene.workspace_id == workspace_id
+            and len(set(query.dialogue_ids)) == len(query.dialogue_ids)
+            and set(query.dialogue_ids).issubset(
+                dialogue_ids_by_scene.get(scene.id, set())
+            )
+        )
+        results[query] = (
+            ConfirmedStructureReference(
+                workspace_id=workspace_id,
+                episode_id=episode_id,
+                script_version_id=version.id,
+                scene_id=scene.id,
+                dialogue_ids=query.dialogue_ids,
+            )
+            if valid
+            else None
+        )
+    return results
 
 
 async def list_versions(

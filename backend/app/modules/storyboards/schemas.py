@@ -409,3 +409,17 @@ class ShotReadinessResponse(BaseModel):
     next_actions: list[str]
     evaluated_dependencies: ShotReadinessDependencies
     evaluation_hash: str
+
+
+class ShotReadinessSummary(BaseModel):
+    total: int
+    ready: int
+    blocked: int
+    unavailable: int
+
+
+class ShotReadinessBatchResponse(BaseModel):
+    episode_id: UUID
+    items: list[ShotReadinessResponse]
+    summary: ShotReadinessSummary
+    evaluation_hash: str
