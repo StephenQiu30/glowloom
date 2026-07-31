@@ -163,7 +163,14 @@ const readiness: API.ShotReadinessBatchResponse = {
       status: "ready",
       ready: true,
       blocking_reasons: [],
-      warnings: [],
+      warnings: [
+        {
+          code: "STYLE_REFERENCE_MISSING",
+          field_path: "asset_references",
+          summary: "Optional visual style reference is missing",
+          next_action: "acknowledge_warning",
+        },
+      ],
       next_actions: [],
       evaluated_dependencies: {
         shot_spec_version_id: specVersionId,
@@ -300,6 +307,7 @@ describe("分镜工作台", () => {
     expect(screen.getByText("2 个镜头")).toBeInTheDocument();
     expect(screen.getByText("1 可生成")).toBeInTheDocument();
     expect(screen.getByText("尚未保存镜头规格")).toBeInTheDocument();
+    expect(screen.getByText("尚未固定可选的视觉风格参考")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "拆分" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "合并" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "删除检查" })).toBeInTheDocument();
