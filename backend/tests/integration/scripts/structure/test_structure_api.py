@@ -391,6 +391,21 @@ async def test_confirm_structure_is_concurrent_idempotent_ordered_and_private(
     assert dialogue["source_range"] == {"start": 21, "end": 30}
     assert scenes[1]["dialogues"] == []
 
+    structure_response = await client.get(
+        f"/api/v1/script-versions/{confirmed_version['id']}/structure",
+        headers=headers,
+    )
+    assert structure_response.status_code == 200
+    structure = structure_response.json()["data"]
+    assert structure["script_version_id"] == confirmed_version["id"]
+    assert structure["scenes"] == scenes
+    assert (
+        await client.get(
+            f"/api/v1/script-versions/{input_version['id']}/structure",
+            headers=headers,
+        )
+    ).status_code == 404
+
     batch_response = await client.get(
         f"/api/v1/extraction-batches/{batch_id}", headers=headers
     )
@@ -419,6 +434,12 @@ async def test_confirm_structure_is_concurrent_idempotent_ordered_and_private(
         "authorization": f"Bearer {stranger.json()['data']['access_token']}"
     }
     assert (await client.post(endpoint, headers=stranger_headers)).status_code == 404
+    assert (
+        await client.get(
+            f"/api/v1/script-versions/{confirmed_version['id']}/structure",
+            headers=stranger_headers,
+        )
+    ).status_code == 404
 
     async with session_factory() as session:
         version_table = Base.metadata.tables["scr_script_versions"]
