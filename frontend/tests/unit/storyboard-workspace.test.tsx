@@ -233,6 +233,16 @@ describe("分镜工作台", () => {
     const onSaveSpec = vi.fn().mockResolvedValue(true);
     const onReorder = vi.fn().mockResolvedValue(undefined);
     const onCopy = vi.fn().mockResolvedValue(undefined);
+    const onDelete = vi.fn().mockResolvedValue(false);
+    const onDeletePreflight = vi.fn().mockResolvedValue({
+      allowed: false,
+      blockers: [],
+    });
+    const onMerge = vi.fn().mockResolvedValue(false);
+    const onMergePrepare = vi.fn().mockResolvedValue(undefined);
+    const onSetCurrentSpec = vi.fn().mockResolvedValue(undefined);
+    const onSplit = vi.fn().mockResolvedValue(false);
+    const onSplitPreflight = vi.fn().mockResolvedValue(undefined);
     const onToggleArchived = vi.fn().mockResolvedValue(undefined);
 
     render(
@@ -247,9 +257,16 @@ describe("分镜工作台", () => {
         versions={versions}
         onCopy={onCopy}
         onCreate={onCreate}
+        onDelete={onDelete}
+        onDeletePreflight={onDeletePreflight}
+        onMerge={onMerge}
+        onMergePrepare={onMergePrepare}
         onReorder={onReorder}
         onSaveSpec={onSaveSpec}
         onSelectShot={vi.fn()}
+        onSetCurrentSpec={onSetCurrentSpec}
+        onSplit={onSplit}
+        onSplitPreflight={onSplitPreflight}
         onToggleArchived={onToggleArchived}
       />,
     );
@@ -258,6 +275,10 @@ describe("分镜工作台", () => {
     expect(screen.getByText("2 个镜头")).toBeInTheDocument();
     expect(screen.getByText("1 可生成")).toBeInTheDocument();
     expect(screen.getByText("尚未保存镜头规格")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "拆分" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "合并" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除检查" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "v1 · 当前" })).toBeDisabled();
 
     await user.clear(screen.getByLabelText("镜头目的"));
     await user.type(screen.getByLabelText("镜头目的"), "强调人物进入未知空间");
@@ -308,9 +329,16 @@ describe("分镜工作台", () => {
         versions={[]}
         onCopy={vi.fn()}
         onCreate={vi.fn()}
+        onDelete={vi.fn()}
+        onDeletePreflight={vi.fn()}
+        onMerge={vi.fn()}
+        onMergePrepare={vi.fn()}
         onReorder={vi.fn()}
         onSaveSpec={vi.fn()}
         onSelectShot={vi.fn()}
+        onSetCurrentSpec={vi.fn()}
+        onSplit={vi.fn()}
+        onSplitPreflight={vi.fn()}
         onToggleArchived={vi.fn()}
       />,
     );
@@ -319,5 +347,48 @@ describe("分镜工作台", () => {
     expect(
       screen.getByText("需先确认剧本结构并设为当前版本，才能建立镜头。"),
     ).toBeInTheDocument();
+  });
+
+  it("允许显式把历史规格设为当前版本", async () => {
+    const user = userEvent.setup();
+    const historicalVersion: API.ShotSpecVersionResponse = {
+      ...versions[0],
+      id: "019fb2c0-a000-7000-8000-000000000099",
+      version_no: 2,
+      content_hash: "9".repeat(64),
+      input_hash: "8".repeat(64),
+    };
+    const onSetCurrentSpec = vi.fn().mockResolvedValue(undefined);
+    render(
+      <StoryboardWorkspace
+        archivedShots={[]}
+        assets={assets}
+        busy={false}
+        order={{ ...shots, items: [shots.items[0]] }}
+        readiness={{ ...readiness, items: [readiness.items[0]] }}
+        selectedShotId={firstShotId}
+        structure={structure}
+        versions={[historicalVersion, versions[0]]}
+        onCopy={vi.fn()}
+        onCreate={vi.fn()}
+        onDelete={vi.fn()}
+        onDeletePreflight={vi.fn()}
+        onMerge={vi.fn()}
+        onMergePrepare={vi.fn()}
+        onReorder={vi.fn()}
+        onSaveSpec={vi.fn()}
+        onSelectShot={vi.fn()}
+        onSetCurrentSpec={onSetCurrentSpec}
+        onSplit={vi.fn()}
+        onSplitPreflight={vi.fn()}
+        onToggleArchived={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "v2 · 设为当前" }));
+    expect(onSetCurrentSpec).toHaveBeenCalledWith(
+      shots.items[0],
+      historicalVersion,
+    );
   });
 });

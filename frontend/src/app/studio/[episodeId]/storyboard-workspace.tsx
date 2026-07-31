@@ -47,6 +47,14 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/class-names";
 
+import {
+  DeleteShotDialog,
+  type MergePreparation,
+  MergeShotsDialog,
+  type ShotTransformSource,
+  SplitShotDialog,
+} from "./storyboard-shot-operations";
+
 type StoryboardWorkspaceProps = {
   archivedShots: API.ShotResponse[];
   assets: API.AssetResponse[];
@@ -58,12 +66,30 @@ type StoryboardWorkspaceProps = {
   versions: API.ShotSpecVersionResponse[];
   onCopy: (shot: API.ShotResponse) => Promise<void>;
   onCreate: (request: API.ShotCreateRequest) => Promise<boolean>;
+  onDelete: (shot: API.ShotResponse) => Promise<boolean>;
+  onDeletePreflight: (
+    shotId: string,
+  ) => Promise<API.ShotDeletePreflightResponse | undefined>;
+  onMerge: (request: API.MergeShotRequest) => Promise<boolean>;
+  onMergePrepare: (
+    source: API.ShotResponse,
+    partner: API.ShotResponse,
+  ) => Promise<MergePreparation | undefined>;
   onReorder: (shotIds: string[]) => Promise<void>;
   onSaveSpec: (
     shotId: string,
     request: API.ShotSpecCreateRequest,
   ) => Promise<boolean>;
   onSelectShot: (shotId: string) => void;
+  onSetCurrentSpec: (
+    shot: API.ShotResponse,
+    version: API.ShotSpecVersionResponse,
+  ) => Promise<void>;
+  onSplit: (shotId: string, request: API.SplitShotRequest) => Promise<boolean>;
+  onSplitPreflight: (
+    shotId: string,
+    request: API.SplitPreflightRequest,
+  ) => Promise<API.ShotTransformPreflightResponse | undefined>;
   onToggleArchived: (shot: API.ShotResponse) => Promise<void>;
 };
 
@@ -778,9 +804,16 @@ export function StoryboardWorkspace({
   versions,
   onCopy,
   onCreate,
+  onDelete,
+  onDeletePreflight,
+  onMerge,
+  onMergePrepare,
   onReorder,
   onSaveSpec,
   onSelectShot,
+  onSetCurrentSpec,
+  onSplit,
+  onSplitPreflight,
   onToggleArchived,
 }: StoryboardWorkspaceProps) {
   const selectedShot =
@@ -795,6 +828,17 @@ export function StoryboardWorkspace({
   const selectedReadiness = selectedShot
     ? readinessByShot.get(selectedShot.id)
     : undefined;
+  const transformSource: ShotTransformSource | undefined =
+    selectedShot && currentVersion
+      ? { shot: selectedShot, version: currentVersion }
+      : undefined;
+  const mergeCandidates = selectedShot
+    ? order.items.filter(
+        (shot) =>
+          Math.abs(shot.position - selectedShot.position) === 1 &&
+          Boolean(shot.current_spec_version_id),
+      )
+    : [];
 
   async function moveSelected(direction: -1 | 1) {
     if (!selectedShot) return;
@@ -973,6 +1017,26 @@ export function StoryboardWorkspace({
                   >
                     <Copy aria-hidden="true" />复制镜头
                   </Button>
+                  {transformSource ? (
+                    <>
+                      <SplitShotDialog
+                        busy={busy}
+                        key={`split:${selectedShot.id}:${transformSource.version.id}:${order.order_hash}`}
+                        orderHash={order.order_hash}
+                        source={transformSource}
+                        onApply={onSplit}
+                        onPreflight={onSplitPreflight}
+                      />
+                      <MergeShotsDialog
+                        busy={busy}
+                        candidates={mergeCandidates}
+                        key={`merge:${selectedShot.id}:${transformSource.version.id}:${order.order_hash}`}
+                        source={transformSource}
+                        onApply={onMerge}
+                        onPrepare={onMergePrepare}
+                      />
+                    </>
+                  ) : null}
                   <Button
                     disabled={busy}
                     onClick={() => void onToggleArchived(selectedShot)}
@@ -981,10 +1045,52 @@ export function StoryboardWorkspace({
                   >
                     <Archive aria-hidden="true" />归档镜头
                   </Button>
+                  <DeleteShotDialog
+                    busy={busy}
+                    key={`delete:${selectedShot.id}:${selectedShot.revision}:${order.order_hash}`}
+                    shot={selectedShot}
+                    onDelete={onDelete}
+                    onPreflight={onDeletePreflight}
+                  />
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="grid gap-6">
+              {versions.length ? (
+                <section aria-labelledby="shot-history-title">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-medium" id="shot-history-title">
+                        历史规格
+                      </h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        切换 current 只改变后续入口，不覆盖任何历史版本。
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {versions.map((version) => {
+                        const current = version.id === currentVersion?.id;
+                        return (
+                          <Button
+                            disabled={busy || current}
+                            key={version.id}
+                            onClick={() =>
+                              void onSetCurrentSpec(selectedShot, version)
+                            }
+                            size="sm"
+                            type="button"
+                            variant={current ? "secondary" : "outline"}
+                          >
+                            v{version.version_no}
+                            {current ? " · 当前" : " · 设为当前"}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <Separator className="mt-5" />
+                </section>
+              ) : null}
               <ShotSpecEditor
                 assets={assets}
                 busy={busy}

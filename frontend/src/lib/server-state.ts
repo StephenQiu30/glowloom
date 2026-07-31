@@ -77,12 +77,20 @@ import {
   archiveShotApiV1ShotsShotIdArchivePost,
   copyShotApiV1ShotsShotIdCopyPost,
   createManualShotApiV1EpisodesEpisodeIdShotsPost,
+  deleteShotApiV1ShotsShotIdDelete,
   getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet,
+  getSpecVersionApiV1ShotSpecVersionsVersionIdGet,
   listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet,
   listShotsApiV1EpisodesEpisodeIdShotsGet,
   listSpecVersionsApiV1ShotsShotIdSpecVersionsGet,
+  mergePreflightApiV1ShotsMergePreflightPost,
+  mergeShotsApiV1ShotsMergePost,
   reorderShotsApiV1EpisodesEpisodeIdShotsReorderPost,
   restoreShotApiV1ShotsShotIdRestorePost,
+  setCurrentSpecVersionApiV1ShotsShotIdCurrentSpecVersionPost,
+  shotDeletePreflightApiV1ShotsShotIdDeletePreflightGet,
+  splitPreflightApiV1ShotsShotIdSplitPreflightPost,
+  splitShotApiV1ShotsShotIdSplitPost,
 } from "@/api/storyboards";
 import { listTasksApiV1TasksGet } from "@/api/tasks";
 import { ApiClientError } from "@/lib/api-request";
@@ -565,6 +573,17 @@ export const appApi = createApi({
         { type: "ShotSpecs", id: shotId },
       ],
     }),
+    shotSpecVersion: builder.query<API.ShotSpecVersionResponse, string>({
+      queryFn: (versionId) =>
+        runRequest(() =>
+          getSpecVersionApiV1ShotSpecVersionsVersionIdGet({
+            version_id: versionId,
+          }),
+        ),
+      providesTags: (result, _error, versionId) => [
+        { type: "ShotSpecs", id: result?.shot_id ?? versionId },
+      ],
+    }),
     createShot: builder.mutation<
       API.ShotResponse,
       { episodeId: string; body: API.ShotCreateRequest }
@@ -600,6 +619,28 @@ export const appApi = createApi({
         { type: "Snapshot", id: episodeId },
       ],
     }),
+    setCurrentShotSpec: builder.mutation<
+      API.ShotResponse,
+      {
+        episodeId: string;
+        shotId: string;
+        body: API.ShotCurrentSpecRequest;
+      }
+    >({
+      queryFn: ({ shotId, body }) =>
+        runRequest(() =>
+          setCurrentSpecVersionApiV1ShotsShotIdCurrentSpecVersionPost(
+            { shot_id: shotId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId, shotId }) => [
+        { type: "Shots", id: episodeId },
+        { type: "ShotSpecs", id: shotId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
     reorderShots: builder.mutation<
       API.ShotOrderResponse,
       { episodeId: string; body: API.ShotReorderRequest }
@@ -622,6 +663,87 @@ export const appApi = createApi({
       queryFn: ({ shotId, body }) =>
         runRequest(() =>
           copyShotApiV1ShotsShotIdCopyPost({ shot_id: shotId }, body),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Shots", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    splitShotPreflight: builder.mutation<
+      API.ShotTransformPreflightResponse,
+      { shotId: string; body: API.SplitPreflightRequest }
+    >({
+      queryFn: ({ shotId, body }) =>
+        runRequest(() =>
+          splitPreflightApiV1ShotsShotIdSplitPreflightPost(
+            { shot_id: shotId },
+            body,
+          ),
+        ),
+    }),
+    splitShot: builder.mutation<
+      API.ShotTransformResponse,
+      { episodeId: string; shotId: string; body: API.SplitShotRequest }
+    >({
+      queryFn: ({ shotId, body }) =>
+        runRequest(() =>
+          splitShotApiV1ShotsShotIdSplitPost({ shot_id: shotId }, body),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Shots", id: episodeId },
+        { type: "ArchivedShots", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    mergeShotsPreflight: builder.mutation<
+      API.ShotTransformPreflightResponse,
+      API.MergePreflightRequest
+    >({
+      queryFn: (body) =>
+        runRequest(() => mergePreflightApiV1ShotsMergePreflightPost(body)),
+    }),
+    mergeShots: builder.mutation<
+      API.ShotTransformResponse,
+      { episodeId: string; body: API.MergeShotRequest }
+    >({
+      queryFn: ({ body }) =>
+        runRequest(() => mergeShotsApiV1ShotsMergePost(body)),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Shots", id: episodeId },
+        { type: "ArchivedShots", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    shotDeletePreflight: builder.mutation<
+      API.ShotDeletePreflightResponse,
+      string
+    >({
+      queryFn: (shotId) =>
+        runRequest(() =>
+          shotDeletePreflightApiV1ShotsShotIdDeletePreflightGet({
+            shot_id: shotId,
+          }),
+        ),
+    }),
+    deleteShot: builder.mutation<
+      API.ShotDeleteResponse,
+      {
+        episodeId: string;
+        shotId: string;
+        expectedRevision: number;
+        expectedOrderHash: string;
+      }
+    >({
+      queryFn: ({ shotId, expectedRevision, expectedOrderHash }) =>
+        runRequest(() =>
+          deleteShotApiV1ShotsShotIdDelete({
+            shot_id: shotId,
+            expected_revision: expectedRevision,
+            expected_order_hash: expectedOrderHash,
+          }),
         ),
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Shots", id: episodeId },
@@ -1039,6 +1161,7 @@ export const {
   useCreateEpisodeMutation,
   useCreateProjectMutation,
   useCreateWorkspaceMutation,
+  useDeleteShotMutation,
   useDeleteEpisodeMutation,
   useDeleteProjectMutation,
   useDeactivateAccountMutation,
@@ -1052,7 +1175,10 @@ export const {
   useInitializeMediaUploadMutation,
   useLoginMutation,
   useLogoutMutation,
+  useLazyShotSpecVersionQuery,
   useMeQuery,
+  useMergeShotsMutation,
+  useMergeShotsPreflightMutation,
   useMediaVersionsQuery,
   useProjectQuery,
   useProjectDeletePreflightMutation,
@@ -1068,6 +1194,7 @@ export const {
   useSetEpisodeArchivedMutation,
   useSetAssetArchivedMutation,
   useSetCurrentScriptVersionMutation,
+  useSetCurrentShotSpecMutation,
   useSetShotArchivedMutation,
   useSetProjectArchivedMutation,
   useSetWorkspaceArchivedMutation,
@@ -1085,6 +1212,9 @@ export const {
   useReorderShotsMutation,
   useShotOrderQuery,
   useShotReadinessQuery,
+  useShotDeletePreflightMutation,
   useShotSpecVersionsQuery,
+  useSplitShotMutation,
+  useSplitShotPreflightMutation,
   useTasksQuery,
 } = appApi;

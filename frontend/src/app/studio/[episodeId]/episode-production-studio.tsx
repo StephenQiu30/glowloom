@@ -30,6 +30,7 @@ import {
   useConfirmedStructureQuery,
   useCopyShotMutation,
   useCreateShotMutation,
+  useDeleteShotMutation,
   useDecideExtractionCandidateMutation,
   useEpisodeQuery,
   useEpisodeSnapshotQuery,
@@ -38,7 +39,10 @@ import {
   useExtractionCandidatesQuery,
   useImportScriptMutation,
   useInitializeMediaUploadMutation,
+  useLazyShotSpecVersionQuery,
   useMeQuery,
+  useMergeShotsMutation,
+  useMergeShotsPreflightMutation,
   useMediaVersionsQuery,
   useProjectQuery,
   usePublishScriptVersionMutation,
@@ -48,10 +52,14 @@ import {
   useScriptVersionQuery,
   useScriptVersionsQuery,
   useSetCurrentScriptVersionMutation,
+  useSetCurrentShotSpecMutation,
   useSetShotArchivedMutation,
+  useShotDeletePreflightMutation,
   useShotOrderQuery,
   useShotReadinessQuery,
   useShotSpecVersionsQuery,
+  useSplitShotMutation,
+  useSplitShotPreflightMutation,
   useStartExtractionMutation,
   useTasksQuery,
 } from "@/lib/server-state";
@@ -65,6 +73,7 @@ import {
 } from "./episode-studio-model";
 import { MediaWorkspace } from "./media-workspace";
 import { ScriptWorkspace } from "./script-workspace";
+import { type MergePreparation } from "./storyboard-shot-operations";
 import { StoryboardWorkspace } from "./storyboard-workspace";
 import { TaskWorkspace } from "./task-workspace";
 
@@ -186,6 +195,19 @@ export function EpisodeProductionStudio({
   const [reorderShots, reorderShotsState] = useReorderShotsMutation();
   const [copyShot, copyShotState] = useCopyShotMutation();
   const [setShotArchived, shotArchiveState] = useSetShotArchivedMutation();
+  const [setCurrentShotSpec, currentShotSpecState] =
+    useSetCurrentShotSpecMutation();
+  const [splitShotPreflight, splitPreflightState] =
+    useSplitShotPreflightMutation();
+  const [splitShot, splitShotState] = useSplitShotMutation();
+  const [mergeShotsPreflight, mergePreflightState] =
+    useMergeShotsPreflightMutation();
+  const [mergeShots, mergeShotsState] = useMergeShotsMutation();
+  const [shotDeletePreflight, shotDeletePreflightState] =
+    useShotDeletePreflightMutation();
+  const [deleteShot, deleteShotState] = useDeleteShotMutation();
+  const [loadShotSpecVersion, shotSpecLookupState] =
+    useLazyShotSpecVersionQuery();
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -204,6 +226,14 @@ export function EpisodeProductionStudio({
     reorderShotsState,
     copyShotState,
     shotArchiveState,
+    currentShotSpecState,
+    splitPreflightState,
+    splitShotState,
+    mergePreflightState,
+    mergeShotsState,
+    shotDeletePreflightState,
+    deleteShotState,
+    shotSpecLookupState,
   ].some((state) => state.isLoading);
 
   async function runAction(action: () => Promise<string>) {
@@ -415,6 +445,135 @@ export function EpisodeProductionStudio({
     });
   }
 
+  async function handleSetCurrentShotSpec(
+    shot: API.ShotResponse,
+    version: API.ShotSpecVersionResponse,
+  ) {
+    await runAction(async () => {
+      await setCurrentShotSpec({
+        episodeId,
+        shotId: shot.id,
+        body: {
+          version_id: version.id,
+          expected_current_spec_version_id: shot.current_spec_version_id,
+          expected_revision: shot.revision,
+        },
+      }).unwrap();
+      return `镜头“${shot.title}”已切换到规格 v${version.version_no}。`;
+    });
+  }
+
+  async function handleSplitPreflight(
+    shotId: string,
+    request: API.SplitPreflightRequest,
+  ): Promise<API.ShotTransformPreflightResponse | undefined> {
+    let result: API.ShotTransformPreflightResponse | undefined;
+    await runAction(async () => {
+      result = await splitShotPreflight({ shotId, body: request }).unwrap();
+      return "拆分影响已固定，请确认两个目标镜头。";
+    });
+    return result;
+  }
+
+  async function handleSplitShot(
+    shotId: string,
+    request: API.SplitShotRequest,
+  ): Promise<boolean> {
+    let succeeded = false;
+    await runAction(async () => {
+      const result = await splitShot({ episodeId, shotId, body: request }).unwrap();
+      const firstResultId = result.transform.result_shot_ids[0];
+      if (firstResultId) setSelectedShotId(firstResultId);
+      succeeded = true;
+      return "镜头已拆分为两个目标，来源镜头及其证据已归档保留。";
+    });
+    return succeeded;
+  }
+
+  async function handleMergePrepare(
+    source: API.ShotResponse,
+    partner: API.ShotResponse,
+  ): Promise<MergePreparation | undefined> {
+    const order = shotOrderQuery.data;
+    const sourceSpecId = source.current_spec_version_id;
+    const partnerSpecId = partner.current_spec_version_id;
+    if (!order || !sourceSpecId || !partnerSpecId) return undefined;
+    const orderedShots = [source, partner].sort((left, right) =>
+      left.position - right.position
+    );
+    const orderedSpecIds = orderedShots.map((shot) => {
+      const specId = shot.current_spec_version_id;
+      if (!specId) throw new Error("相邻镜头缺少当前规格");
+      return specId;
+    });
+    let result: MergePreparation | undefined;
+    await runAction(async () => {
+      const [firstVersion, secondVersion] = await Promise.all([
+        loadShotSpecVersion(orderedSpecIds[0], true).unwrap(),
+        loadShotSpecVersion(orderedSpecIds[1], true).unwrap(),
+      ]);
+      const preflight = await mergeShotsPreflight({
+        shot_ids: orderedShots.map((shot) => shot.id),
+        expected_spec_version_ids: orderedSpecIds,
+        expected_order_hash: order.order_hash,
+      }).unwrap();
+      result = {
+        preflight,
+        sources: [
+          { shot: orderedShots[0], version: firstVersion },
+          { shot: orderedShots[1], version: secondVersion },
+        ],
+      };
+      return "合并影响已固定，请确认目标镜头规格。";
+    });
+    return result;
+  }
+
+  async function handleMergeShots(
+    request: API.MergeShotRequest,
+  ): Promise<boolean> {
+    let succeeded = false;
+    await runAction(async () => {
+      const result = await mergeShots({ episodeId, body: request }).unwrap();
+      const resultId = result.transform.result_shot_ids[0];
+      if (resultId) setSelectedShotId(resultId);
+      succeeded = true;
+      return "相邻镜头已合并，两个来源及其证据已归档保留。";
+    });
+    return succeeded;
+  }
+
+  async function handleShotDeletePreflight(
+    shotId: string,
+  ): Promise<API.ShotDeletePreflightResponse | undefined> {
+    let result: API.ShotDeletePreflightResponse | undefined;
+    await runAction(async () => {
+      result = await shotDeletePreflight(shotId).unwrap();
+      return result.allowed
+        ? "删除条件已确认。"
+        : "镜头已有稳定证据，不能永久删除。";
+    });
+    return result;
+  }
+
+  async function handleDeleteShot(shot: API.ShotResponse): Promise<boolean> {
+    const order = shotOrderQuery.data;
+    if (!order) return false;
+    let succeeded = false;
+    await runAction(async () => {
+      const result = await deleteShot({
+        episodeId,
+        shotId: shot.id,
+        expectedRevision: shot.revision,
+        expectedOrderHash: order.order_hash,
+      }).unwrap();
+      setSelectedShotId(result.order.items[0]?.id ?? null);
+      succeeded = true;
+      return `空镜头“${shot.title}”已永久删除。`;
+    });
+    return succeeded;
+  }
+
   async function handleToggleShotArchived(shot: API.ShotResponse) {
     const order = shotOrderQuery.data;
     if (!order) return;
@@ -608,9 +767,16 @@ export function EpisodeProductionStudio({
                   versions={shotSpecVersionsQuery.currentData ?? []}
                   onCopy={handleCopyShot}
                   onCreate={handleCreateShot}
+                  onDelete={handleDeleteShot}
+                  onDeletePreflight={handleShotDeletePreflight}
+                  onMerge={handleMergeShots}
+                  onMergePrepare={handleMergePrepare}
                   onReorder={handleReorderShots}
                   onSaveSpec={handleSaveShotSpec}
                   onSelectShot={setSelectedShotId}
+                  onSetCurrentSpec={handleSetCurrentShotSpec}
+                  onSplit={handleSplitShot}
+                  onSplitPreflight={handleSplitPreflight}
                   onToggleArchived={handleToggleShotArchived}
                 />
               ) : initialPanel === "media" ? (
