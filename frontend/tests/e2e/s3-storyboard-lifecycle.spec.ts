@@ -3,6 +3,14 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+import {
+  ONE_PIXEL_PNG,
+  createReadyAsset,
+  fillAssetSpec,
+  uploadAndWait,
+  type AssetFixture,
+} from "./asset-support";
+
 const e2eDatabaseUrl =
   "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test";
 
@@ -31,9 +39,17 @@ function seedConfirmedStructure(episodeId: string) {
 }
 
 test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `S3-分镜契约-${unique}`;
+  const locationMediaName = `storyboard-location-${unique}.png`;
+  const locationFixture: AssetFixture = {
+    kind: "location",
+    tabName: "场景",
+    name: `月台场景-${unique}`,
+    mediaName: locationMediaName,
+    consentReference: `fictional-storyboard-location-v1-${unique}`,
+  };
 
   await page.goto("/register");
   await page.getByLabel("显示名称").fill("S3 验收创作者");
@@ -54,6 +70,46 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   expect(episodeHref).toMatch(/^\/studio\/[0-9a-f-]+\/script$/);
   const episodeId = episodeHref!.split("/")[2];
   seedConfirmedStructure(episodeId);
+
+  await page.goto(`/studio/${episodeId}/media`);
+  await uploadAndWait(page, {
+    name: locationMediaName,
+    mimeType: "image/png",
+    buffer: ONE_PIXEL_PNG,
+  });
+  await createReadyAsset(page, locationFixture);
+  await page
+    .getByRole("button", { name: `选择资产 ${locationFixture.name}` })
+    .click();
+
+  await page.getByRole("button", { name: "添加新版本" }).click();
+  await fillAssetSpec(page, locationFixture);
+  await page.getByLabel("参考媒体").selectOption({
+    label: `${locationMediaName} · v1 · ready`,
+  });
+  await page.getByLabel("提示词描述").fill("月台灯箱亮起，保留旧版本历史。");
+  await page.getByRole("button", { name: "保存版本" }).click();
+  await expect(page.getByRole("status")).toContainText("版本 v2 已保存");
+  await expect(page.getByText("缺少覆盖当前用途的有效授权")).toBeVisible();
+
+  await page.getByRole("link", { name: "前往授权治理" }).click();
+  await page
+    .getByLabel("权利主体引用")
+    .fill(`fictional-storyboard-location-v2-${unique}`);
+  await page.getByLabel("登记说明").fill("场景资产 v2 用于分镜升级验收");
+  await page.getByRole("button", { name: "登记授权" }).click();
+  await expect(page.getByRole("status")).toContainText("授权已登记");
+
+  await page.goto("/studio");
+  await page.getByRole("tab", { name: locationFixture.tabName }).click();
+  await page
+    .getByRole("button", { name: `选择资产 ${locationFixture.name}` })
+    .click();
+  await expect(page.getByText("媒体、字段与授权范围均满足当前用途")).toBeVisible();
+  await page.getByRole("button", { name: "设为当前资产版本 v1" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "资产已切换到版本 v1；既有镜头引用保持不变。",
+  );
 
   await page.goto(`/studio/${episodeId}/storyboard`);
   await expect(page.getByRole("heading", { name: "分镜设计" })).toBeVisible();
@@ -78,16 +134,52 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   await page.getByLabel("镜头目的").fill("建立角色对空旷月台的警觉反应");
   await page.getByLabel("动作节拍").fill("林澈停下脚步\n抬头寻找声音来源");
   await page.getByRole("button", { name: /林澈.*有人吗/ }).click();
+  await page
+    .getByRole("region", { name: "固定资产版本" })
+    .getByRole("button", { name: locationFixture.name, exact: true })
+    .click();
   await page.getByLabel("首帧意图").fill("冷蓝月台全景，角色从画面右侧进入");
   await page.getByLabel("尾帧意图").fill("角色停在灯箱下方并回头");
   await page.getByRole("button", { name: "保存为新版本" }).click();
   await expect(page.getByRole("status")).toContainText("镜头规格 v1 已保存");
 
-  await page.getByLabel("镜头目的").fill("强化角色听见异响后的停顿与回望");
-  await page.getByRole("button", { name: "保存为新版本" }).click();
-  await expect(page.getByRole("status")).toContainText("镜头规格 v2 已保存");
+  await page.goto("/studio");
+  await page.getByRole("tab", { name: locationFixture.tabName }).click();
+  await page
+    .getByRole("button", { name: `选择资产 ${locationFixture.name}` })
+    .click();
+  await page.getByRole("button", { name: "设为当前资产版本 v2" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "资产已切换到版本 v2；既有镜头引用保持不变。",
+  );
+  await page.getByRole("checkbox", { name: "选择镜头 车站警觉" }).click();
+  await page.getByRole("button", { name: "生成升级预检" }).click();
+  const upgradeDialog = page.getByRole("dialog", { name: "确认资产版本升级" });
+  await expect(upgradeDialog.getByText("旧规格和历史引用会继续保留")).toBeVisible();
+  await expect(upgradeDialog.getByText("系统将为 1 个镜头")).toBeVisible();
+  await upgradeDialog
+    .getByRole("button", { name: "应用升级并创建新规格版本" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "已为 1 个镜头创建新的规格版本",
+  );
+  await expect(page.getByText("本页历史引用 1")).toBeVisible();
+  await expect(page.getByText("本页当前引用 0")).toBeVisible();
+  await page.getByLabel("检查引用的资产版本").selectOption({
+    label: "v2（资产当前版本）",
+  });
+  await expect(page.getByText("本页当前引用 1")).toBeVisible();
+
+  await page.goto(`/studio/${episodeId}/storyboard`);
+  await expect(page.getByRole("button", { name: "v2 · 当前" })).toBeDisabled();
+  await expect(page.getByText("当前规格可进入生产预检")).toBeVisible();
   await page.getByRole("button", { name: "v1 · 设为当前" }).click();
   await expect(page.getByRole("status")).toContainText("已切换到规格 v1");
+  await page.getByLabel("镜头目的").fill("强化角色听见异响后的停顿与回望");
+  await page.getByRole("button", { name: "保存为新版本" }).click();
+  await expect(page.getByRole("status")).toContainText("镜头规格 v3 已保存");
+  await page.getByRole("button", { name: "v2 · 设为当前" }).click();
+  await expect(page.getByRole("status")).toContainText("已切换到规格 v2");
 
   await page.getByRole("button", { name: "复制镜头" }).click();
   await expect(page.getByRole("status")).toContainText(
@@ -144,5 +236,6 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   await expect(
     shotOrder.getByText(`${mergedTitle} · 后段`, { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("2 个阻塞", { exact: true })).toBeVisible();
+  await expect(page.getByText("0 个阻塞", { exact: true })).toBeVisible();
+  await expect(page.getByText("2 可生成", { exact: true })).toBeVisible();
 });
