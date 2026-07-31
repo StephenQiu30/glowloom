@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
@@ -19,6 +20,7 @@ from app.modules.scripts.models import (
     ScriptVersion,
 )
 from tests.support.identity_builders import register_identity_response
+from tests.support.media_builders import seed_ready_media_version
 from tests.support.project_builders import project_payload
 
 
@@ -184,6 +186,92 @@ def _spec_payload(refs: dict[str, UUID], *, purpose: str) -> dict[str, object]:
             "keyframe_notes": None,
         },
     }
+
+
+async def _ready_location_asset(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    headers: dict[str, str],
+    project_id: UUID,
+    refs: dict[str, UUID],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    media_version_id = await seed_ready_media_version(
+        session_factory,
+        workspace_id=refs["workspace_id"],
+        actor_id=refs["actor_id"],
+        kind="image",
+        filename="storyboard-location.png",
+        mime_type="image/png",
+    )
+    asset_response = await client.post(
+        f"/api/v1/projects/{project_id}/assets",
+        headers=headers,
+        json={
+            "kind": "location",
+            "name": "雨夜旧车站",
+            "aliases": [],
+            "tags": ["分镜验收"],
+        },
+    )
+    assert asset_response.status_code == 201
+    asset = asset_response.json()["data"]
+    version_response = await client.post(
+        f"/api/v1/assets/{asset['id']}/versions",
+        headers=headers,
+        json={
+            "spec": {
+                "kind": "location",
+                "spatial_description": "封闭的旧车站月台",
+                "time_weather": "雨夜",
+                "visual_elements": ["旧灯箱", "积水"],
+                "lighting": "冷蓝顶光",
+            },
+            "prompt_description": "固定雨夜旧车站空间和光线",
+            "media_references": [
+                {
+                    "media_version_id": str(media_version_id),
+                    "purpose": "environment",
+                    "position": 1,
+                }
+            ],
+            "source_type": "manual",
+            "source_id": None,
+            "expected_current_version_id": None,
+            "set_as_current": True,
+        },
+    )
+    assert version_response.status_code == 201
+    version = version_response.json()["data"]["version"]
+    now = datetime.now(UTC)
+    consent_response = await client.post(
+        "/api/v1/consents",
+        headers=headers,
+        json={
+            "workspace_id": str(refs["workspace_id"]),
+            "subject_identity": {
+                "reference": "synthetic-storyboard-location",
+                "kind": "fictional_adult",
+            },
+            "scope": {
+                "type": "media_usage",
+                "subject_type": "ASSET_VERSION",
+                "subject_id": version["id"],
+                "rights_holder_role": "synthetic_creator",
+                "rights_types": ["copyright", "image"],
+                "authorized_purposes": ["ai_short_drama_generation"],
+                "channels": ["lanverse_preview"],
+                "regions": ["CN"],
+                "valid_from": (now - timedelta(days=1)).isoformat(),
+                "valid_to": (now + timedelta(days=365)).isoformat(),
+            },
+            "proof_media_version_ids": [str(media_version_id)],
+            "reason": "分镜准备度资产授权验收",
+            "idempotency_key": f"storyboard-location-consent-{version['id']}",
+        },
+    )
+    assert consent_response.status_code == 201
+    return version, consent_response.json()["data"]
 
 
 async def _seed_confirmed_shot_candidate(
@@ -774,3 +862,123 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
             f"/api/v1/shots/{split_shot['id']}", headers=headers
         )
         assert persisted.json()["data"]["status"] == "archived"
+
+
+@pytest.mark.asyncio
+async def test_readiness_is_deterministic_and_reacts_to_rights_without_mutating_spec(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await _episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="storyboard-readiness@example.com",
+    )
+    created = await client.post(
+        f"/api/v1/episodes/{episode['id']}/shots",
+        headers=headers,
+        json=_create_shot_payload(
+            refs,
+            title="准备度镜头",
+            creation_key="readiness-shot-001",
+        ),
+    )
+    assert created.status_code == 201
+    shot = created.json()["data"]
+
+    missing_response = await client.get(
+        f"/api/v1/shots/{shot['id']}/readiness",
+        headers=headers,
+    )
+    assert missing_response.status_code == 200
+    missing = missing_response.json()["data"]
+    assert missing["status"] == "blocked"
+    assert missing["ready"] is False
+    assert [item["code"] for item in missing["blocking_reasons"]] == [
+        "CURRENT_SPEC_MISSING"
+    ]
+    assert missing["next_actions"] == ["save_shot_spec"]
+    assert len(missing["evaluation_hash"]) == 64
+
+    location_version, consent = await _ready_location_asset(
+        client,
+        session_factory,
+        headers=headers,
+        project_id=UUID(episode["project_id"]),
+        refs=refs,
+    )
+    ready_spec = deepcopy(_spec_payload(refs, purpose="建立雨夜车站空间"))
+    visual = dict(cast(dict[str, object], ready_spec["visual"]))
+    visual["subject_placements"] = []
+    ready_spec["visual"] = visual
+    ready_spec["dialogue_or_narration"] = []
+    saved_response = await client.post(
+        f"/api/v1/shots/{shot['id']}/spec-versions",
+        headers=headers,
+        json={
+            "expected_current_spec_version_id": None,
+            "spec": ready_spec,
+            "asset_references": [
+                {
+                    "slot_key": "location-main",
+                    "role": "location",
+                    "asset_version_id": location_version["id"],
+                    "subject_key": None,
+                }
+            ],
+        },
+    )
+    assert saved_response.status_code == 201
+    spec_version = saved_response.json()["data"]["version"]
+
+    first_response = await client.get(
+        f"/api/v1/shots/{shot['id']}/readiness",
+        headers=headers,
+    )
+    second_response = await client.get(
+        f"/api/v1/shots/{shot['id']}/readiness",
+        headers=headers,
+    )
+    assert first_response.status_code == second_response.status_code == 200
+    first = first_response.json()["data"]
+    second = second_response.json()["data"]
+    assert first["status"] == "ready"
+    assert first["ready"] is True
+    assert first["blocking_reasons"] == []
+    assert [item["code"] for item in first["warnings"]] == [
+        "STYLE_REFERENCE_MISSING"
+    ]
+    assert first["evaluation_hash"] == second["evaluation_hash"]
+    assert first["evaluated_dependencies"]["shot_spec_version_id"] == spec_version[
+        "id"
+    ]
+    assert first["evaluated_dependencies"]["asset_version_ids"] == [
+        location_version["id"]
+    ]
+    assert first["evaluated_dependencies"]["consent_ids"] == [consent["id"]]
+
+    revoked = await client.post(
+        f"/api/v1/consents/{consent['id']}/revoke",
+        headers=headers,
+        json={"expected_revision": 1, "reason": "撤销分镜生成授权"},
+    )
+    assert revoked.status_code == 200
+    blocked_response = await client.get(
+        f"/api/v1/shots/{shot['id']}/readiness",
+        headers=headers,
+    )
+    assert blocked_response.status_code == 200
+    blocked = blocked_response.json()["data"]
+    assert blocked["status"] == "blocked"
+    assert blocked["ready"] is False
+    assert [item["code"] for item in blocked["blocking_reasons"]] == [
+        "RIGHTS_BLOCKED"
+    ]
+    assert blocked["evaluation_hash"] != first["evaluation_hash"]
+
+    persisted_spec = await client.get(
+        f"/api/v1/shot-spec-versions/{spec_version['id']}",
+        headers=headers,
+    )
+    assert persisted_spec.status_code == 200
+    assert persisted_spec.json()["data"] == spec_version
