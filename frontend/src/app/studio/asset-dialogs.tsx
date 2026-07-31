@@ -46,6 +46,13 @@ function DialogHeading({
   );
 }
 
+function assetDeleteBlockerMessage(blocker: API.AssetDeleteBlocker): string {
+  if (blocker.code === "asset_has_versions" && blocker.version_count) {
+    return `资产包含 ${blocker.version_count} 个不可变版本，不能删除。`;
+  }
+  return blocker.summary;
+}
+
 export function CreateAssetDialog({
   currentKind,
   isSubmitting,
@@ -239,7 +246,7 @@ export function DeleteAssetDialog({
                 <p className="text-sm font-medium">当前不能删除</p>
                 <ul className="mt-2 grid gap-1 text-sm text-slate-500">
                   {preflight.blockers.map((blocker) => (
-                    <li key={blocker.code}>{blocker.summary}</li>
+                    <li key={blocker.code}>{assetDeleteBlockerMessage(blocker)}</li>
                   ))}
                 </ul>
               </div>

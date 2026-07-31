@@ -340,7 +340,11 @@ describe("AI 漫剧资产工作台", () => {
       data: {
         allowed: false,
         blockers: [
-          { code: "asset_has_versions", summary: "Asset has 2 immutable version(s)" },
+          {
+            code: "asset_has_versions",
+            summary: "Asset has 2 immutable version(s)",
+            version_count: 2,
+          },
         ],
       },
     });

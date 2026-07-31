@@ -397,6 +397,8 @@ declare namespace API {
     code: string;
     /** Summary */
     summary: string;
+    /** Version Count */
+    version_count: number;
   };
 
   type assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGetParams = {

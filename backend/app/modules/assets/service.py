@@ -426,6 +426,7 @@ async def delete_preflight(
             AssetDeleteBlocker(
                 code="asset_has_versions",
                 summary=f"Asset has {version_count} immutable version(s)",
+                version_count=version_count,
             )
         ]
         if version_count

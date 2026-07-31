@@ -244,6 +244,7 @@ class AssetVersionCreateResponse(BaseModel):
 class AssetDeleteBlocker(BaseModel):
     code: str
     summary: str
+    version_count: int = Field(ge=1)
 
 
 class AssetDeletePreflightResponse(BaseModel):
