@@ -32,6 +32,7 @@ from app.modules.scripts.models import (
     ScriptVersion,
 )
 from app.modules.scripts.structure.schemas import (
+    ConfirmedStructureResponse,
     DialogueResponse,
     SceneResponse,
     StructureConfirmationResponse,
@@ -55,61 +56,68 @@ def _version_response(version: ScriptVersion) -> ScriptVersionResponse:
     )
 
 
+def _scene_responses(
+    scenes: list[Scene],
+    dialogues: list[Dialogue],
+) -> list[SceneResponse]:
+    dialogues_by_scene: dict[UUID, list[Dialogue]] = defaultdict(list)
+    for dialogue in dialogues:
+        dialogues_by_scene[dialogue.scene_id].append(dialogue)
+    return [
+        SceneResponse(
+            id=scene.id,
+            script_version_id=scene.script_version_id,
+            position=scene.position,
+            heading=scene.heading,
+            location=scene.location,
+            time_of_day=scene.time_of_day,
+            summary=scene.summary,
+            source_range=CandidateSourceRange(
+                start=scene.source_start,
+                end=scene.source_end,
+            ),
+            dialogues=[
+                DialogueResponse(
+                    id=dialogue.id,
+                    scene_id=dialogue.scene_id,
+                    position=dialogue.position,
+                    speaker_candidate=dialogue.speaker_candidate,
+                    dialogue_kind=cast(
+                        Literal[
+                            "spoken",
+                            "narration",
+                            "internal",
+                            "voice_over",
+                        ],
+                        dialogue.dialogue_kind,
+                    ),
+                    text=dialogue.text,
+                    performance_note=dialogue.performance_note,
+                    source_range=CandidateSourceRange(
+                        start=dialogue.source_start,
+                        end=dialogue.source_end,
+                    ),
+                    created_at=dialogue.created_at,
+                )
+                for dialogue in dialogues_by_scene[scene.id]
+            ],
+            created_at=scene.created_at,
+        )
+        for scene in scenes
+    ]
+
+
 def _confirmation_response(
     batch: ExtractionBatch,
     confirmed_version: ScriptVersion,
     scenes: list[Scene],
     dialogues: list[Dialogue],
 ) -> StructureConfirmationResponse:
-    dialogues_by_scene: dict[UUID, list[Dialogue]] = defaultdict(list)
-    for dialogue in dialogues:
-        dialogues_by_scene[dialogue.scene_id].append(dialogue)
     return StructureConfirmationResponse(
         batch_id=batch.id,
         source_script_version_id=batch.script_version_id,
         confirmed_version=_version_response(confirmed_version),
-        scenes=[
-            SceneResponse(
-                id=scene.id,
-                script_version_id=scene.script_version_id,
-                position=scene.position,
-                heading=scene.heading,
-                location=scene.location,
-                time_of_day=scene.time_of_day,
-                summary=scene.summary,
-                source_range=CandidateSourceRange(
-                    start=scene.source_start,
-                    end=scene.source_end,
-                ),
-                dialogues=[
-                    DialogueResponse(
-                        id=dialogue.id,
-                        scene_id=dialogue.scene_id,
-                        position=dialogue.position,
-                        speaker_candidate=dialogue.speaker_candidate,
-                        dialogue_kind=cast(
-                            Literal[
-                                "spoken",
-                                "narration",
-                                "internal",
-                                "voice_over",
-                            ],
-                            dialogue.dialogue_kind,
-                        ),
-                        text=dialogue.text,
-                        performance_note=dialogue.performance_note,
-                        source_range=CandidateSourceRange(
-                            start=dialogue.source_start,
-                            end=dialogue.source_end,
-                        ),
-                        created_at=dialogue.created_at,
-                    )
-                    for dialogue in dialogues_by_scene[scene.id]
-                ],
-                created_at=scene.created_at,
-            )
-            for scene in scenes
-        ],
+        scenes=_scene_responses(scenes, dialogues),
     )
 
 
@@ -461,6 +469,35 @@ async def confirm_structure(
         batch.updated_at = now
         await session.flush()
     return _confirmation_response(batch, confirmed_version, scenes, dialogues)
+
+
+async def get_confirmed_structure(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    version_id: UUID,
+) -> ConfirmedStructureResponse:
+    version = await repository.find_version(session, version_id)
+    if (
+        version is None
+        or version.status != "published"
+        or not version.structure_summary.get("confirmation_batch_id")
+    ):
+        raise resource_not_found("Confirmed structure")
+    await require_resource_access(
+        session,
+        claims,
+        version.workspace_id,
+        "Confirmed structure",
+    )
+    scenes = await repository.list_scenes(session, version.id)
+    dialogues = await repository.list_dialogues(
+        session,
+        [scene.id for scene in scenes],
+    )
+    return ConfirmedStructureResponse(
+        script_version_id=version.id,
+        scenes=_scene_responses(scenes, dialogues),
+    )
 
 
 async def resolve_confirmed_shot_candidate(

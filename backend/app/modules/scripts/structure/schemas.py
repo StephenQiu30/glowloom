@@ -38,3 +38,8 @@ class StructureConfirmationResponse(BaseModel):
     source_script_version_id: UUID
     confirmed_version: ScriptVersionResponse
     scenes: list[SceneResponse]
+
+
+class ConfirmedStructureResponse(BaseModel):
+    script_version_id: UUID
+    scenes: list[SceneResponse]
