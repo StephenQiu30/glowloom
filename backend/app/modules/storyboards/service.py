@@ -18,11 +18,24 @@ from app.modules.scripts import (
     resolve_confirmed_structure,
 )
 from app.modules.storyboards import repository
-from app.modules.storyboards.hashing import shot_order_hash, storyboard_content_hashes
-from app.modules.storyboards.models import AssetReference, Shot, ShotSpecVersion
+from app.modules.storyboards.hashing import (
+    canonical_payload_hash,
+    shot_order_hash,
+    storyboard_content_hashes,
+)
+from app.modules.storyboards.models import (
+    AssetReference,
+    Shot,
+    ShotSpecVersion,
+    ShotTransform,
+)
 from app.modules.storyboards.schemas import (
     AssetReferenceRequest,
     AssetReferenceResponse,
+    CopyShotRequest,
+    DownstreamEvidenceResponse,
+    MergePreflightRequest,
+    MergeShotRequest,
     ShotCreateRequest,
     ShotCurrentSpecRequest,
     ShotDeleteBlocker,
@@ -37,7 +50,13 @@ from app.modules.storyboards.schemas import (
     ShotSpecVersionResponse,
     ShotStateRequest,
     ShotStateResponse,
+    ShotTransformEvidenceResponse,
+    ShotTransformPreflightResponse,
+    ShotTransformResponse,
     ShotUpdateRequest,
+    SplitPreflightRequest,
+    SplitShotRequest,
+    TargetShotSpecRequest,
 )
 
 MAX_ACTIVE_SHOTS = 120
@@ -108,6 +127,163 @@ def _spec_response(
         created_by=version.created_by,
         created_at=version.created_at,
     )
+
+
+def _transform_evidence_response(
+    transform: ShotTransform,
+) -> ShotTransformEvidenceResponse:
+    return ShotTransformEvidenceResponse(
+        id=transform.id,
+        operation=cast(Literal["copy", "split", "merge"], transform.operation),
+        source_shot_ids=transform.source_shot_ids,
+        source_spec_version_ids=transform.source_spec_version_ids,
+        result_shot_ids=transform.result_shot_ids,
+        impact_hash=transform.impact_hash,
+        input_hash=transform.input_hash,
+        idempotency_key=transform.idempotency_key,
+        actor_id=transform.actor_id,
+        created_at=transform.created_at,
+    )
+
+
+def _transform_input_hash(
+    operation: Literal["copy", "split", "merge"],
+    payload: object,
+) -> str:
+    return canonical_payload_hash({"operation": operation, "payload": payload})
+
+
+def _impact_hash(
+    operation: Literal["copy", "split", "merge"],
+    shots: list[Shot],
+    specs: list[ShotSpecVersion],
+    order_hash: str,
+) -> str:
+    return canonical_payload_hash(
+        {
+            "operation": operation,
+            "sources": [
+                {
+                    "shot_id": str(shot.id),
+                    "revision": shot.revision,
+                    "status": shot.status,
+                    "current_spec_version_id": (
+                        str(shot.current_spec_version_id)
+                        if shot.current_spec_version_id is not None
+                        else None
+                    ),
+                }
+                for shot in shots
+            ],
+            "source_spec_version_ids": [str(spec.id) for spec in specs],
+            "order_hash": order_hash,
+            "downstream_evidence": DownstreamEvidenceResponse().model_dump(mode="json"),
+        }
+    )
+
+
+async def _current_spec(
+    session: AsyncSession,
+    shot: Shot,
+    expected_spec_version_id: UUID,
+) -> ShotSpecVersion:
+    if shot.current_spec_version_id != expected_spec_version_id:
+        raise ApiError(
+            ErrorCode.VERSION_CONFLICT,
+            "Shot spec version has changed",
+            status_code=409,
+            details={
+                "current_spec_version_id": (
+                    str(shot.current_spec_version_id)
+                    if shot.current_spec_version_id is not None
+                    else None
+                )
+            },
+        )
+    result = await repository.find_spec_version(session, expected_spec_version_id)
+    if result is None or result[0].shot_id != shot.id:
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Shot spec version is unavailable",
+            status_code=409,
+            next_action="save_shot_spec",
+        )
+    return result[0]
+
+
+async def _references_for_spec(
+    session: AsyncSession,
+    version_id: UUID,
+) -> list[AssetReference]:
+    return await repository.list_asset_references(session, [version_id])
+
+
+async def _transform_result(
+    session: AsyncSession,
+    transform: ShotTransform,
+) -> ShotTransformResponse:
+    shots = await repository.find_shots(session, transform.result_shot_ids)
+    if len(shots) != len(transform.result_shot_ids):
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Storyboard transform result is unavailable",
+            status_code=500,
+        )
+    versions: list[ShotSpecVersion] = []
+    for shot in shots:
+        if shot.current_spec_version_id is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Storyboard transform spec is unavailable",
+                status_code=500,
+            )
+        result = await repository.find_spec_version(session, shot.current_spec_version_id)
+        if result is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Storyboard transform spec is unavailable",
+                status_code=500,
+            )
+        versions.append(result[0])
+    references = await repository.list_asset_references(
+        session,
+        [version.id for version in versions],
+    )
+    by_version: dict[UUID, list[AssetReference]] = defaultdict(list)
+    for reference in references:
+        by_version[reference.shot_spec_version_id].append(reference)
+    order = await repository.list_active_shots(session, shots[0].episode_id)
+    return ShotTransformResponse(
+        transform=_transform_evidence_response(transform),
+        shots=[_shot_response(shot) for shot in shots],
+        spec_versions=[
+            _spec_response(version, by_version[version.id]) for version in versions
+        ],
+        order=_order_response(order),
+    )
+
+
+async def _idempotent_transform(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    idempotency_key: str,
+    input_hash: str,
+) -> ShotTransformResponse | None:
+    existing = await repository.find_transform_by_idempotency(
+        session,
+        workspace_id,
+        idempotency_key,
+    )
+    if existing is None:
+        return None
+    if existing.input_hash != input_hash:
+        raise ApiError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "Idempotency key was used with different transform input",
+            status_code=409,
+        )
+    return await _transform_result(session, existing)
 
 
 def _require_revision(shot: Shot, expected_revision: int) -> None:
@@ -477,6 +653,94 @@ async def _validate_asset_references(
             )
 
 
+async def _validate_target(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    episode_id: UUID,
+    project_id: UUID,
+    target: TargetShotSpecRequest,
+) -> None:
+    script = target.spec.script_reference
+    await _require_confirmed_structure(
+        session,
+        workspace_id=workspace_id,
+        episode_id=episode_id,
+        script_version_id=script.confirmed_script_version_id,
+        scene_id=script.scene_id,
+        dialogue_ids=script.dialogue_ids,
+    )
+    await _validate_asset_references(
+        session,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        references=target.asset_references,
+    )
+
+
+async def _create_target(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    episode_id: UUID,
+    position: int,
+    target: TargetShotSpecRequest,
+    actor_id: UUID,
+    now: datetime,
+) -> tuple[Shot, ShotSpecVersion, list[AssetReference]]:
+    script = target.spec.script_reference
+    shot = Shot(
+        id=uuid7(),
+        workspace_id=workspace_id,
+        episode_id=episode_id,
+        position=position,
+        title=target.title.strip(),
+        source_script_version_id=script.confirmed_script_version_id,
+        source_scene_id=script.scene_id,
+        source_candidate_id=None,
+        creation_key=None,
+        status="active",
+        revision=1,
+        created_by=actor_id,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(shot)
+    await session.flush()
+    hashes = storyboard_content_hashes(target.spec, target.asset_references)
+    version = ShotSpecVersion(
+        id=uuid7(),
+        workspace_id=workspace_id,
+        shot_id=shot.id,
+        version_no=1,
+        schema_version=target.spec.schema_version,
+        spec=target.spec.model_dump(mode="json"),
+        content_hash=hashes.content_hash,
+        input_hash=hashes.input_hash,
+        created_by=actor_id,
+        created_at=now,
+    )
+    session.add(version)
+    await session.flush()
+    references = [
+        AssetReference(
+            id=uuid7(),
+            workspace_id=workspace_id,
+            shot_spec_version_id=version.id,
+            slot_key=reference.slot_key,
+            role=reference.role,
+            asset_version_id=reference.asset_version_id,
+            subject_key=reference.subject_key,
+            created_at=now,
+        )
+        for reference in target.asset_references
+    ]
+    session.add_all(references)
+    shot.current_spec_version_id = version.id
+    await session.flush()
+    return shot, version, references
+
+
 async def append_spec_version(
     session: AsyncSession,
     claims: AccessTokenClaims,
@@ -688,3 +952,507 @@ async def delete_shot(
             active_shot.position = position
         await session.flush()
     return ShotDeleteResponse(order=_order_response(remaining))
+
+
+async def copy_shot(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    shot_id: UUID,
+    request: CopyShotRequest,
+) -> ShotTransformResponse:
+    input_hash = _transform_input_hash(
+        "copy",
+        {"source_shot_id": str(shot_id), **request.model_dump(mode="json")},
+    )
+    async with session.begin():
+        source = await _locked_shot_for_write(session, claims, shot_id)
+        repeated = await _idempotent_transform(
+            session,
+            workspace_id=source.workspace_id,
+            idempotency_key=request.idempotency_key,
+            input_hash=input_hash,
+        )
+        if repeated is not None:
+            return repeated
+        if source.status != "active":
+            raise ApiError(ErrorCode.STATE_CONFLICT, "Shot is archived", status_code=409)
+        active = await repository.list_active_shots(
+            session,
+            source.episode_id,
+            for_update=True,
+        )
+        _require_order(active, request.expected_order_hash)
+        _require_capacity(active)
+        source_spec = await _current_spec(
+            session,
+            source,
+            request.expected_source_spec_version_id,
+        )
+        source_references = await _references_for_spec(session, source_spec.id)
+        reference_requests = [
+            AssetReferenceRequest(
+                slot_key=reference.slot_key,
+                role=cast(
+                    Literal[
+                        "location",
+                        "character",
+                        "prop",
+                        "costume",
+                        "visual_style",
+                        "voice",
+                    ],
+                    reference.role,
+                ),
+                asset_version_id=reference.asset_version_id,
+                subject_key=reference.subject_key,
+            )
+            for reference in source_references
+        ]
+        target = TargetShotSpecRequest(
+            title=request.title,
+            spec=ShotSpec.model_validate(source_spec.spec),
+            asset_references=reference_requests,
+        )
+        source_index = next(
+            index for index, active_shot in enumerate(active) if active_shot.id == source.id
+        )
+        temporary_start = len(active) * 2 + 1
+        for offset, active_shot in enumerate(active):
+            active_shot.position = temporary_start + offset
+        await session.flush()
+        now = datetime.now(UTC)
+        result_shot, result_spec, _ = await _create_target(
+            session,
+            workspace_id=source.workspace_id,
+            episode_id=source.episode_id,
+            position=source_index + 2,
+            target=target,
+            actor_id=claims.sub,
+            now=now,
+        )
+        ordered = [*active[: source_index + 1], result_shot, *active[source_index + 1 :]]
+        for position, active_shot in enumerate(ordered, start=1):
+            active_shot.position = position
+        impact_hash = _impact_hash(
+            "copy",
+            [source],
+            [source_spec],
+            request.expected_order_hash,
+        )
+        transform = ShotTransform(
+            id=uuid7(),
+            workspace_id=source.workspace_id,
+            operation="copy",
+            source_shot_ids=[source.id],
+            source_spec_version_ids=[source_spec.id],
+            result_shot_ids=[result_shot.id],
+            impact_hash=impact_hash,
+            input_hash=input_hash,
+            idempotency_key=request.idempotency_key,
+            actor_id=claims.sub,
+            created_at=now,
+        )
+        session.add(transform)
+        await session.flush()
+        result = ShotTransformResponse(
+            transform=_transform_evidence_response(transform),
+            shots=[_shot_response(result_shot)],
+            spec_versions=[_spec_response(result_spec, source_references)],
+            order=_order_response(ordered),
+        )
+    return result
+
+
+async def split_preflight(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    shot_id: UUID,
+    request: SplitPreflightRequest,
+) -> ShotTransformPreflightResponse:
+    source = await repository.find_shot(session, shot_id)
+    if source is None:
+        raise _not_found("Shot")
+    await episode_for_content_read(session, claims, source.episode_id)
+    if source.status != "active":
+        raise ApiError(ErrorCode.STATE_CONFLICT, "Shot is archived", status_code=409)
+    active = await repository.list_active_shots(session, source.episode_id)
+    _require_order(active, request.expected_order_hash)
+    source_spec = await _current_spec(
+        session,
+        source,
+        request.expected_source_spec_version_id,
+    )
+    impact_hash = _impact_hash(
+        "split",
+        [source],
+        [source_spec],
+        request.expected_order_hash,
+    )
+    return ShotTransformPreflightResponse(
+        operation="split",
+        source_shot_ids=[source.id],
+        source_spec_version_ids=[source_spec.id],
+        order_hash=request.expected_order_hash,
+        downstream_evidence=DownstreamEvidenceResponse(),
+        impact_hash=impact_hash,
+    )
+
+
+async def split_shot(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    shot_id: UUID,
+    request: SplitShotRequest,
+) -> ShotTransformResponse:
+    input_hash = _transform_input_hash(
+        "split",
+        {"source_shot_id": str(shot_id), **request.model_dump(mode="json")},
+    )
+    async with session.begin():
+        source = await _locked_shot_for_write(session, claims, shot_id)
+        repeated = await _idempotent_transform(
+            session,
+            workspace_id=source.workspace_id,
+            idempotency_key=request.idempotency_key,
+            input_hash=input_hash,
+        )
+        if repeated is not None:
+            return repeated
+        if source.status != "active":
+            raise ApiError(ErrorCode.STATE_CONFLICT, "Shot is archived", status_code=409)
+        episode = await episode_for_content_read(session, claims, source.episode_id)
+        active = await repository.list_active_shots(
+            session,
+            source.episode_id,
+            for_update=True,
+        )
+        _require_order(active, request.expected_order_hash)
+        _require_capacity(active, additional=1)
+        source_spec = await _current_spec(
+            session,
+            source,
+            request.expected_source_spec_version_id,
+        )
+        expected_impact_hash = _impact_hash(
+            "split",
+            [source],
+            [source_spec],
+            request.expected_order_hash,
+        )
+        if request.impact_hash != expected_impact_hash:
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT,
+                "Split impact has changed",
+                status_code=409,
+                next_action="repeat_split_preflight",
+                details={"current_impact_hash": expected_impact_hash},
+            )
+        source_model = ShotSpec.model_validate(source_spec.spec)
+        source_dialogues = set(source_model.script_reference.dialogue_ids)
+        target_dialogue_sets: list[set[UUID]] = []
+        for target in request.targets:
+            script = target.spec.script_reference
+            if (
+                script.confirmed_script_version_id != source.source_script_version_id
+                or script.scene_id != source.source_scene_id
+                or not set(script.dialogue_ids).issubset(source_dialogues)
+            ):
+                raise ApiError(
+                    ErrorCode.VALIDATION_FAILED,
+                    "Split target must preserve the source script and dialogue subset",
+                    status_code=422,
+                )
+            await _validate_target(
+                session,
+                workspace_id=source.workspace_id,
+                episode_id=source.episode_id,
+                project_id=episode.project_id,
+                target=target,
+            )
+            target_dialogue_sets.append(set(script.dialogue_ids))
+        if target_dialogue_sets[0] & target_dialogue_sets[1]:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "A source dialogue cannot be assigned to both split targets",
+                status_code=422,
+            )
+        if sum(target.spec.duration_ms for target in request.targets) != source_model.duration_ms:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Split target durations must equal the source duration",
+                status_code=422,
+            )
+        source_index = next(
+            index for index, active_shot in enumerate(active) if active_shot.id == source.id
+        )
+        temporary_start = len(active) * 2 + 2
+        for offset, active_shot in enumerate(active):
+            active_shot.position = temporary_start + offset
+        await session.flush()
+        now = datetime.now(UTC)
+        results: list[Shot] = []
+        versions: list[ShotSpecVersion] = []
+        references: list[list[AssetReference]] = []
+        for offset, target in enumerate(request.targets):
+            result_shot, version, target_references = await _create_target(
+                session,
+                workspace_id=source.workspace_id,
+                episode_id=source.episode_id,
+                position=source_index + offset + 1,
+                target=target,
+                actor_id=claims.sub,
+                now=now,
+            )
+            results.append(result_shot)
+            versions.append(version)
+            references.append(target_references)
+        source.status = "archived"
+        source.archived_at = now
+        source.archived_by = claims.sub
+        source.revision += 1
+        ordered = [*active[:source_index], *results, *active[source_index + 1 :]]
+        for position, active_shot in enumerate(ordered, start=1):
+            active_shot.position = position
+        transform = ShotTransform(
+            id=uuid7(),
+            workspace_id=source.workspace_id,
+            operation="split",
+            source_shot_ids=[source.id],
+            source_spec_version_ids=[source_spec.id],
+            result_shot_ids=[shot.id for shot in results],
+            impact_hash=expected_impact_hash,
+            input_hash=input_hash,
+            idempotency_key=request.idempotency_key,
+            actor_id=claims.sub,
+            created_at=now,
+        )
+        session.add(transform)
+        await session.flush()
+        result = ShotTransformResponse(
+            transform=_transform_evidence_response(transform),
+            shots=[_shot_response(shot) for shot in results],
+            spec_versions=[
+                _spec_response(version, target_references)
+                for version, target_references in zip(
+                    versions,
+                    references,
+                    strict=True,
+                )
+            ],
+            order=_order_response(ordered),
+        )
+    return result
+
+
+async def _merge_sources(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    request: MergePreflightRequest,
+    *,
+    for_update: bool,
+) -> tuple[list[Shot], list[ShotSpecVersion], list[Shot]]:
+    shots = await repository.find_shots(
+        session,
+        request.shot_ids,
+        for_update=for_update,
+    )
+    if len(shots) != 2:
+        raise _not_found("Shot")
+    if shots[0].episode_id != shots[1].episode_id:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Merge sources must belong to one episode",
+            status_code=422,
+        )
+    if for_update:
+        await lock_active_episode_for_content_write(session, claims, shots[0].episode_id)
+        shots = await repository.find_shots(session, request.shot_ids, for_update=True)
+    else:
+        await episode_for_content_read(session, claims, shots[0].episode_id)
+    if any(shot.status != "active" for shot in shots):
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Merge sources must be active",
+            status_code=409,
+        )
+    active = await repository.list_active_shots(
+        session,
+        shots[0].episode_id,
+        for_update=for_update,
+    )
+    _require_order(active, request.expected_order_hash)
+    positions = [shot.position for shot in shots]
+    if positions[1] != positions[0] + 1:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Merge sources must be adjacent and ordered",
+            status_code=422,
+        )
+    specs = [
+        await _current_spec(session, shot, expected_id)
+        for shot, expected_id in zip(
+            shots,
+            request.expected_spec_version_ids,
+            strict=True,
+        )
+    ]
+    return shots, specs, active
+
+
+async def merge_preflight(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    request: MergePreflightRequest,
+) -> ShotTransformPreflightResponse:
+    shots, specs, _ = await _merge_sources(
+        session,
+        claims,
+        request,
+        for_update=False,
+    )
+    impact_hash = _impact_hash(
+        "merge",
+        shots,
+        specs,
+        request.expected_order_hash,
+    )
+    return ShotTransformPreflightResponse(
+        operation="merge",
+        source_shot_ids=[shot.id for shot in shots],
+        source_spec_version_ids=[spec.id for spec in specs],
+        order_hash=request.expected_order_hash,
+        downstream_evidence=DownstreamEvidenceResponse(),
+        impact_hash=impact_hash,
+    )
+
+
+async def merge_shots(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    request: MergeShotRequest,
+) -> ShotTransformResponse:
+    input_hash = _transform_input_hash("merge", request.model_dump(mode="json"))
+    async with session.begin():
+        initial = await repository.find_shots(session, request.shot_ids)
+        if len(initial) != 2:
+            raise _not_found("Shot")
+        episode = await lock_active_episode_for_content_write(
+            session,
+            claims,
+            initial[0].episode_id,
+        )
+        repeated = await _idempotent_transform(
+            session,
+            workspace_id=episode.workspace_id,
+            idempotency_key=request.idempotency_key,
+            input_hash=input_hash,
+        )
+        if repeated is not None:
+            return repeated
+        shots, specs, active = await _merge_sources(
+            session,
+            claims,
+            request,
+            for_update=True,
+        )
+        expected_impact_hash = _impact_hash(
+            "merge",
+            shots,
+            specs,
+            request.expected_order_hash,
+        )
+        if request.impact_hash != expected_impact_hash:
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT,
+                "Merge impact has changed",
+                status_code=409,
+                next_action="repeat_merge_preflight",
+                details={"current_impact_hash": expected_impact_hash},
+            )
+        source_models = [ShotSpec.model_validate(spec.spec) for spec in specs]
+        source_script_ids = {
+            model.script_reference.confirmed_script_version_id
+            for model in source_models
+        }
+        if len(source_script_ids) != 1:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Merge sources must use the same confirmed script version",
+                status_code=422,
+            )
+        if (
+            request.target.spec.script_reference.confirmed_script_version_id
+            not in source_script_ids
+        ):
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Merge target must preserve the source script version",
+                status_code=422,
+            )
+        if request.target.spec.duration_ms != sum(
+            model.duration_ms for model in source_models
+        ):
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Merge target duration must equal the source durations",
+                status_code=422,
+            )
+        await _validate_target(
+            session,
+            workspace_id=episode.workspace_id,
+            episode_id=episode.episode_id,
+            project_id=episode.project_id,
+            target=request.target,
+        )
+        first_index = next(
+            index for index, active_shot in enumerate(active) if active_shot.id == shots[0].id
+        )
+        temporary_start = len(active) * 2 + 1
+        for offset, active_shot in enumerate(active):
+            active_shot.position = temporary_start + offset
+        await session.flush()
+        now = datetime.now(UTC)
+        result_shot, result_spec, result_references = await _create_target(
+            session,
+            workspace_id=episode.workspace_id,
+            episode_id=episode.episode_id,
+            position=first_index + 1,
+            target=request.target,
+            actor_id=claims.sub,
+            now=now,
+        )
+        source_ids = {shot.id for shot in shots}
+        for shot in shots:
+            shot.status = "archived"
+            shot.archived_at = now
+            shot.archived_by = claims.sub
+            shot.revision += 1
+        ordered = [
+            *active[:first_index],
+            result_shot,
+            *(shot for shot in active[first_index:] if shot.id not in source_ids),
+        ]
+        for position, active_shot in enumerate(ordered, start=1):
+            active_shot.position = position
+        transform = ShotTransform(
+            id=uuid7(),
+            workspace_id=episode.workspace_id,
+            operation="merge",
+            source_shot_ids=[shot.id for shot in shots],
+            source_spec_version_ids=[spec.id for spec in specs],
+            result_shot_ids=[result_shot.id],
+            impact_hash=expected_impact_hash,
+            input_hash=input_hash,
+            idempotency_key=request.idempotency_key,
+            actor_id=claims.sub,
+            created_at=now,
+        )
+        session.add(transform)
+        await session.flush()
+        result = ShotTransformResponse(
+            transform=_transform_evidence_response(transform),
+            shots=[_shot_response(result_shot)],
+            spec_versions=[_spec_response(result_spec, result_references)],
+            order=_order_response(ordered),
+        )
+    return result

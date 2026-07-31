@@ -49,3 +49,7 @@ def storyboard_content_hashes(
 
 def shot_order_hash(shot_ids: list[UUID]) -> str:
     return _canonical_hash([str(shot_id) for shot_id in shot_ids])
+
+
+def canonical_payload_hash(payload: object) -> str:
+    return _canonical_hash(payload)

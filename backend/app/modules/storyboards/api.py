@@ -9,6 +9,9 @@ from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
 from app.modules.storyboards import service
 from app.modules.storyboards.schemas import (
+    CopyShotRequest,
+    MergePreflightRequest,
+    MergeShotRequest,
     ShotCreateRequest,
     ShotCurrentSpecRequest,
     ShotDeletePreflightResponse,
@@ -21,7 +24,11 @@ from app.modules.storyboards.schemas import (
     ShotSpecVersionResponse,
     ShotStateRequest,
     ShotStateResponse,
+    ShotTransformPreflightResponse,
+    ShotTransformResponse,
     ShotUpdateRequest,
+    SplitPreflightRequest,
+    SplitShotRequest,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["storyboards"])
@@ -44,6 +51,33 @@ async def create_from_confirmed_candidate(
             candidate_id,
         )
     )
+
+
+@router.post(
+    "/shots/merge-preflight",
+    response_model=ApiResponse[ShotTransformPreflightResponse],
+)
+async def merge_preflight(
+    payload: MergePreflightRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotTransformPreflightResponse]:
+    return ApiResponse(
+        data=await service.merge_preflight(session, claims, payload)
+    )
+
+
+@router.post(
+    "/shots/merge",
+    response_model=ApiResponse[ShotTransformResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def merge_shots(
+    payload: MergeShotRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotTransformResponse]:
+    return ApiResponse(data=await service.merge_shots(session, claims, payload))
 
 
 @router.post(
@@ -139,6 +173,51 @@ async def restore_shot(
         data=await service.set_shot_archived(
             session, claims, shot_id, payload, archived=False
         )
+    )
+
+
+@router.post(
+    "/shots/{shot_id}/copy",
+    response_model=ApiResponse[ShotTransformResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def copy_shot(
+    shot_id: UUID,
+    payload: CopyShotRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotTransformResponse]:
+    return ApiResponse(data=await service.copy_shot(session, claims, shot_id, payload))
+
+
+@router.post(
+    "/shots/{shot_id}/split-preflight",
+    response_model=ApiResponse[ShotTransformPreflightResponse],
+)
+async def split_preflight(
+    shot_id: UUID,
+    payload: SplitPreflightRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotTransformPreflightResponse]:
+    return ApiResponse(
+        data=await service.split_preflight(session, claims, shot_id, payload)
+    )
+
+
+@router.post(
+    "/shots/{shot_id}/split",
+    response_model=ApiResponse[ShotTransformResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def split_shot(
+    shot_id: UUID,
+    payload: SplitShotRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[ShotTransformResponse]:
+    return ApiResponse(
+        data=await service.split_shot(session, claims, shot_id, payload)
     )
 
 

@@ -3,7 +3,12 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.storyboards.models import AssetReference, Shot, ShotSpecVersion
+from app.modules.storyboards.models import (
+    AssetReference,
+    Shot,
+    ShotSpecVersion,
+    ShotTransform,
+)
 
 
 async def find_shot(
@@ -125,3 +130,31 @@ async def list_asset_references(
             .order_by(AssetReference.shot_spec_version_id, AssetReference.slot_key)
         )
     )
+
+
+async def find_transform_by_idempotency(
+    session: AsyncSession,
+    workspace_id: UUID,
+    idempotency_key: str,
+) -> ShotTransform | None:
+    return await session.scalar(
+        select(ShotTransform).where(
+            ShotTransform.workspace_id == workspace_id,
+            ShotTransform.idempotency_key == idempotency_key,
+        )
+    )
+
+
+async def find_shots(
+    session: AsyncSession,
+    shot_ids: list[UUID],
+    *,
+    for_update: bool = False,
+) -> list[Shot]:
+    if not shot_ids:
+        return []
+    query = select(Shot).where(Shot.id.in_(shot_ids))
+    if for_update:
+        query = query.with_for_update()
+    rows = {shot.id: shot for shot in await session.scalars(query)}
+    return [rows[shot_id] for shot_id in shot_ids if shot_id in rows]

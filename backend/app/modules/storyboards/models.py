@@ -14,7 +14,7 @@ from sqlalchemy import (
     Uuid,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from uuid6 import uuid7
 
@@ -184,6 +184,43 @@ class AssetReference(Base):
     role: Mapped[str] = mapped_column(String(30))
     asset_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     subject_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now
+    )
+
+
+class ShotTransform(Base):
+    __tablename__ = "sbd_shot_transforms"
+    __table_args__ = (
+        CheckConstraint(
+            "operation IN ('copy', 'split', 'merge')",
+            name="ck_sbd_transform_operation",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "idempotency_key",
+            name="uq_sbd_transform_workspace_idempotency",
+        ),
+        Index("ix_sbd_transform_input_hash", "input_hash"),
+        Index("ix_sbd_transform_created", "workspace_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_workspaces.id"), nullable=False
+    )
+    operation: Mapped[str] = mapped_column(String(20))
+    source_shot_ids: Mapped[list[UUID]] = mapped_column(ARRAY(Uuid()), nullable=False)
+    source_spec_version_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(Uuid()), nullable=False
+    )
+    result_shot_ids: Mapped[list[UUID]] = mapped_column(ARRAY(Uuid()), nullable=False)
+    impact_hash: Mapped[str] = mapped_column(String(64))
+    input_hash: Mapped[str] = mapped_column(String(64))
+    idempotency_key: Mapped[str] = mapped_column(String(200))
+    actor_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now
     )

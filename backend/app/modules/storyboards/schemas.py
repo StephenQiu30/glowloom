@@ -263,3 +263,91 @@ class ShotDeletePreflightResponse(BaseModel):
 class ShotDeleteResponse(BaseModel):
     deleted: Literal[True] = True
     order: ShotOrderResponse
+
+
+class TargetShotSpecRequest(CommandModel):
+    title: str = Field(min_length=1, max_length=200)
+    spec: ShotSpec
+    asset_references: list[AssetReferenceRequest] = Field(default=[], max_length=100)
+
+    @model_validator(mode="after")
+    def validate_reference_keys(self) -> "TargetShotSpecRequest":
+        keys = [reference.slot_key for reference in self.asset_references]
+        if len(set(keys)) != len(keys):
+            raise ValueError("asset reference slot keys must be unique")
+        return self
+
+
+class CopyShotRequest(CommandModel):
+    title: str = Field(min_length=1, max_length=200)
+    expected_source_spec_version_id: UUID
+    expected_order_hash: str = Field(min_length=64, max_length=64)
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class SplitPreflightRequest(CommandModel):
+    expected_source_spec_version_id: UUID
+    expected_order_hash: str = Field(min_length=64, max_length=64)
+
+
+class SplitShotRequest(SplitPreflightRequest):
+    impact_hash: str = Field(min_length=64, max_length=64)
+    idempotency_key: str = Field(min_length=1, max_length=200)
+    targets: list[TargetShotSpecRequest] = Field(min_length=2, max_length=2)
+
+
+class MergePreflightRequest(CommandModel):
+    shot_ids: list[UUID] = Field(min_length=2, max_length=2)
+    expected_spec_version_ids: list[UUID] = Field(min_length=2, max_length=2)
+    expected_order_hash: str = Field(min_length=64, max_length=64)
+
+    @model_validator(mode="after")
+    def validate_sources(self) -> "MergePreflightRequest":
+        if len(set(self.shot_ids)) != 2:
+            raise ValueError("merge requires two unique shot IDs")
+        if len(set(self.expected_spec_version_ids)) != 2:
+            raise ValueError("merge requires two unique spec version IDs")
+        return self
+
+
+class MergeShotRequest(MergePreflightRequest):
+    impact_hash: str = Field(min_length=64, max_length=64)
+    idempotency_key: str = Field(min_length=1, max_length=200)
+    target: TargetShotSpecRequest
+
+
+class DownstreamEvidenceResponse(BaseModel):
+    generation_request_ids: list[UUID] = []
+    candidate_ids: list[UUID] = []
+    review_ids: list[UUID] = []
+    issue_ids: list[UUID] = []
+    timeline_source_ids: list[UUID] = []
+
+
+class ShotTransformPreflightResponse(BaseModel):
+    operation: Literal["split", "merge"]
+    source_shot_ids: list[UUID]
+    source_spec_version_ids: list[UUID]
+    order_hash: str
+    downstream_evidence: DownstreamEvidenceResponse
+    impact_hash: str
+
+
+class ShotTransformEvidenceResponse(BaseModel):
+    id: UUID
+    operation: Literal["copy", "split", "merge"]
+    source_shot_ids: list[UUID]
+    source_spec_version_ids: list[UUID]
+    result_shot_ids: list[UUID]
+    impact_hash: str
+    input_hash: str
+    idempotency_key: str
+    actor_id: UUID
+    created_at: datetime
+
+
+class ShotTransformResponse(BaseModel):
+    transform: ShotTransformEvidenceResponse
+    shots: list[ShotResponse]
+    spec_versions: list[ShotSpecVersionResponse]
+    order: ShotOrderResponse
