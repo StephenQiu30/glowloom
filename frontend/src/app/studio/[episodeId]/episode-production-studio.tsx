@@ -533,6 +533,10 @@ export function EpisodeProductionStudio({
         shotId,
         body: request,
       }).unwrap();
+      await Promise.all([
+        shotOrderQuery.refetch(),
+        shotSpecVersionsQuery.refetch(),
+      ]);
       succeeded = true;
       return `镜头规格 v${result.version.version_no} 已保存，准备度将按最新事实刷新。`;
     });
