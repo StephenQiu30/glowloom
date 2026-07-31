@@ -23,6 +23,7 @@ from app.modules.scripts.authorization import (
 from app.modules.scripts.contracts import (
     ConfirmedStructureQuery,
     ConfirmedStructureReference,
+    ScriptVersionImpactReader,
 )
 from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
 from app.modules.scripts.versions.schemas import (
@@ -403,6 +404,7 @@ async def publish_version(
     claims: AccessTokenClaims,
     source_id: UUID,
     request: ScriptVersionPublishRequest,
+    impact_reader: ScriptVersionImpactReader,
 ) -> ScriptVersionPublishResponse:
     content_hash = sha256(request.body.encode("utf-8")).hexdigest()
     now = datetime.now(UTC)
@@ -443,6 +445,10 @@ async def publish_version(
         )
         session.add(version)
         await session.flush()
+        affected_shot_ids = await impact_reader(
+            episode_id=current.episode_id,
+            current_script_version_id=version.id,
+        )
     return ScriptVersionPublishResponse(
         version=_version_response(version),
         current=_current_response(
@@ -450,7 +456,7 @@ async def publish_version(
             request.expected_current_version_id,
             version.id,
             current.revision,
-            [],
+            affected_shot_ids,
         ),
     )
 
@@ -460,6 +466,7 @@ async def set_current_version(
     claims: AccessTokenClaims,
     episode_id: UUID,
     request: CurrentScriptVersionRequest,
+    impact_reader: ScriptVersionImpactReader,
 ) -> CurrentScriptVersionResponse:
     async with session.begin():
         episode = await lock_active_episode_for_content_write(
@@ -497,12 +504,16 @@ async def set_current_version(
             version.id,
         )
         await session.flush()
+        affected_shot_ids = await impact_reader(
+            episode_id=current.episode_id,
+            current_script_version_id=version.id,
+        )
     return _current_response(
         current.episode_id,
         request.expected_current_version_id,
         version.id,
         current.revision,
-        [],
+        affected_shot_ids,
     )
 
 

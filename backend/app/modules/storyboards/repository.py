@@ -78,6 +78,24 @@ async def list_archived_shots(
     )
 
 
+async def list_active_shot_ids_not_using_script_version(
+    session: AsyncSession,
+    episode_id: UUID,
+    current_script_version_id: UUID,
+) -> list[UUID]:
+    return list(
+        await session.scalars(
+            select(Shot.id)
+            .where(
+                Shot.episode_id == episode_id,
+                Shot.status == "active",
+                Shot.source_script_version_id != current_script_version_id,
+            )
+            .order_by(Shot.position, Shot.id)
+        )
+    )
+
+
 async def list_active_shots_with_current_specs(
     session: AsyncSession,
     episode_id: UUID,

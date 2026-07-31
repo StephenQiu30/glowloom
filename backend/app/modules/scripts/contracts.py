@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol
 from uuid import UUID
 
 ScriptProductionStatus = Literal[
@@ -13,6 +13,15 @@ ScriptProductionStatus = Literal[
     "confirmed",
     "unavailable",
 ]
+
+
+class ScriptVersionImpactReader(Protocol):
+    async def __call__(
+        self,
+        *,
+        episode_id: UUID,
+        current_script_version_id: UUID,
+    ) -> list[UUID]: ...
 
 
 @dataclass(frozen=True, slots=True)

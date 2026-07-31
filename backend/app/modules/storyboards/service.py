@@ -90,6 +90,20 @@ from app.modules.storyboards.schemas import (
 MAX_ACTIVE_SHOTS = 120
 
 
+async def list_script_version_affected_shot_ids(
+    session: AsyncSession,
+    *,
+    episode_id: UUID,
+    current_script_version_id: UUID,
+) -> list[UUID]:
+    """Return active shots whose immutable source does not match the new current script."""
+    return await repository.list_active_shot_ids_not_using_script_version(
+        session,
+        episode_id,
+        current_script_version_id,
+    )
+
+
 def _not_found(resource: str) -> ApiError:
     return ApiError(ErrorCode.NOT_FOUND, f"{resource} not found", status_code=404)
 

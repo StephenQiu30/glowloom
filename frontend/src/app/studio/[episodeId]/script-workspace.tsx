@@ -1,16 +1,21 @@
 "use client";
 
 import {
+  Archive,
   CheckCircle2,
+  Eye,
   FilePenLine,
   FileInput,
   GitCompareArrows,
   LoaderCircle,
   Merge,
   Play,
+  RotateCcw,
   Save,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
+import Link from "next/link";
 import { type FormEvent, useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,6 +28,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -62,9 +76,12 @@ export function ScriptWorkspace({
   onImport,
   onPublish,
   onStartExtraction,
+  onCompareVersions,
   onDecide,
   onConfirm,
   onSetCurrent,
+  onDeleteDraft,
+  onSetSourceArchived,
 }: {
   episode: API.EpisodeResponse;
   snapshot: API.EpisodeProductionSnapshot;
@@ -78,14 +95,31 @@ export function ScriptWorkspace({
   onImport: (request: API.ScriptImportRequest) => Promise<void>;
   onPublish: (body: string) => Promise<void>;
   onStartExtraction: () => Promise<void>;
+  onCompareVersions: (
+    versionId: string,
+    otherVersionId: string,
+  ) => Promise<API.ScriptVersionDiffResponse | undefined>;
   onDecide: (
     candidate: API.ExtractionCandidateResponse,
     decision: CandidateDecision,
   ) => Promise<boolean>;
   onConfirm: () => Promise<void>;
-  onSetCurrent: () => Promise<void>;
+  onSetCurrent: (
+    versionId: string,
+  ) => Promise<API.CurrentScriptVersionResponse | undefined>;
+  onDeleteDraft: (version: API.ScriptVersionResponse) => Promise<boolean>;
+  onSetSourceArchived: (source: API.ScriptSourceResponse) => Promise<boolean>;
 }) {
   const [editorBody, setEditorBody] = useState(editableVersion?.body ?? "");
+  const [selectedVersionId, setSelectedVersionId] = useState(
+    editableVersion?.id ?? null,
+  );
+  const [diffResult, setDiffResult] =
+    useState<API.ScriptVersionDiffResponse | null>(null);
+  const [versionImpact, setVersionImpact] =
+    useState<API.ScriptVersionImpactResponse | null>(null);
+  const [draftToDelete, setDraftToDelete] =
+    useState<API.ScriptVersionResponse | null>(null);
   const [linkedAssets, setLinkedAssets] = useState<Record<string, string>>({});
   const [editingCandidate, setEditingCandidate] =
     useState<API.ExtractionCandidateResponse | null>(null);
@@ -104,6 +138,32 @@ export function ScriptWorkspace({
     }
     return grouped;
   }, [candidates]);
+
+  const selectedVersion =
+    versions.find((version) => version.id === selectedVersionId) ??
+    editableVersion;
+
+  function viewVersion(version: API.ScriptVersionResponse) {
+    setSelectedVersionId(version.id);
+    setEditorBody(version.body);
+  }
+
+  async function compareVersion(version: API.ScriptVersionResponse) {
+    const currentVersionId = episode.current_script_version_id;
+    if (!currentVersionId || currentVersionId === version.id) return;
+    const result = await onCompareVersions(version.id, currentVersionId);
+    if (result) setDiffResult(result);
+  }
+
+  async function setCurrentVersion(versionId: string) {
+    const result = await onSetCurrent(versionId);
+    if (result) setVersionImpact(result.impact);
+  }
+
+  async function deleteDraft() {
+    if (!draftToDelete) return;
+    if (await onDeleteDraft(draftToDelete)) setDraftToDelete(null);
+  }
 
   async function submitImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -181,21 +241,43 @@ export function ScriptWorkspace({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{source?.title ?? "剧本来源"}</Badge>
+                {source ? (
+                  <Badge variant={source.status === "active" ? "secondary" : "outline"}>
+                    {source.status === "active" ? "使用中" : "已归档"}
+                  </Badge>
+                ) : null}
                 <Badge className="border-cyan-200 bg-cyan-50 text-[#087f91]" variant="outline">
                   {scriptStatusLabels[snapshot.script_summary.status]}
                 </Badge>
               </div>
               <CardTitle className="mt-3">当前剧本文本</CardTitle>
               <CardDescription>
-                v{editableVersion?.version_no ?? "-"} · {editableVersion?.status === "published" ? "已发布" : "草稿"}
+                正在编辑 v{selectedVersion?.version_no ?? "-"} · {selectedVersion?.status === "published" ? "已发布" : "草稿"}
               </CardDescription>
             </div>
-            <Button
-              disabled={busy || !source || !editorBody.trim()}
-              onClick={() => onPublish(editorBody)}
-            >
-              <Save aria-hidden="true" />发布新版本
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {source ? (
+                <Button
+                  aria-label={source.status === "active" ? "归档剧本来源" : "恢复剧本来源"}
+                  disabled={busy}
+                  variant="outline"
+                  onClick={() => void onSetSourceArchived(source)}
+                >
+                  {source.status === "active" ? (
+                    <Archive aria-hidden="true" />
+                  ) : (
+                    <RotateCcw aria-hidden="true" />
+                  )}
+                  {source.status === "active" ? "归档来源" : "恢复来源"}
+                </Button>
+              ) : null}
+              <Button
+                disabled={busy || !source || source.status !== "active" || !editorBody.trim()}
+                onClick={() => onPublish(editorBody)}
+              >
+                <Save aria-hidden="true" />发布新版本
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <Label className="sr-only" htmlFor="currentScriptBody">剧本文本</Label>
@@ -226,7 +308,10 @@ export function ScriptWorkspace({
                   </Button>
                 ) : null}
                 {confirmedVersionId && confirmedVersionId !== episode.current_script_version_id ? (
-                  <Button disabled={busy} onClick={onSetCurrent}>
+                  <Button
+                    disabled={busy || source?.status !== "active"}
+                    onClick={() => void setCurrentVersion(confirmedVersionId)}
+                  >
                     <GitCompareArrows aria-hidden="true" />使用确认版本
                   </Button>
                 ) : null}
@@ -412,15 +497,66 @@ export function ScriptWorkspace({
             <CardDescription>{versions.length} 个不可变版本</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2">
-            {versions.map((version) => (
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2" key={version.id}>
-                <div>
-                  <p className="text-sm font-medium">v{version.version_no}</p>
-                  <p className="text-xs text-slate-500">{version.status === "published" ? "已发布" : "草稿"}</p>
+            {versions.map((version) => {
+              const current = version.id === episode.current_script_version_id;
+              return (
+                <div className="rounded-lg border border-slate-200 px-3 py-3" key={version.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">v{version.version_no}</p>
+                      <p className="text-xs text-slate-500">
+                        {version.status === "published" ? "已发布" : "草稿"}
+                      </p>
+                    </div>
+                    {current ? <Badge>当前</Badge> : null}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <Button
+                      aria-label={`查看 v${version.version_no}`}
+                      disabled={busy}
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => viewVersion(version)}
+                    >
+                      <Eye aria-hidden="true" />查看
+                    </Button>
+                    {!current && episode.current_script_version_id ? (
+                      <Button
+                        aria-label={`比较 v${version.version_no} 与当前版本`}
+                        disabled={busy}
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void compareVersion(version)}
+                      >
+                        <GitCompareArrows aria-hidden="true" />比较
+                      </Button>
+                    ) : null}
+                    {!current && version.status === "published" ? (
+                      <Button
+                        aria-label={`设为当前 v${version.version_no}`}
+                        disabled={busy || source?.status !== "active"}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void setCurrentVersion(version.id)}
+                      >
+                        设为当前
+                      </Button>
+                    ) : null}
+                    {!current && version.status === "draft" ? (
+                      <Button
+                        aria-label={`删除草稿 v${version.version_no}`}
+                        disabled={busy}
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDraftToDelete(version)}
+                      >
+                        <Trash2 aria-hidden="true" />删除
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-                {version.id === episode.current_script_version_id ? <Badge>当前</Badge> : null}
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       </aside>
@@ -443,6 +579,91 @@ export function ScriptWorkspace({
           onDecide={onDecide}
         />
       ) : null}
+
+      <Dialog open={Boolean(diffResult)} onOpenChange={(open) => !open && setDiffResult(null)}>
+        <DialogContent className="sm:max-w-2xl" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>剧本版本差异</DialogTitle>
+            <DialogDescription>
+              差异由服务端基于不可变正文计算，不会修改任一版本。
+            </DialogDescription>
+          </DialogHeader>
+          {diffResult ? (
+            <div className="grid gap-3">
+              <p className="text-sm font-medium">
+                新增 {diffResult.added_lines} 行 · 删除 {diffResult.removed_lines} 行
+              </p>
+              <div className="max-h-96 overflow-auto rounded-lg bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-200">
+                {diffResult.diff_lines.map((line, index) => (
+                  <p
+                    className={
+                      line.startsWith("+") && !line.startsWith("+++")
+                        ? "text-emerald-300"
+                        : line.startsWith("-") && !line.startsWith("---")
+                          ? "text-rose-300"
+                          : "text-slate-400"
+                    }
+                    key={`${index}:${line}`}
+                  >
+                    {line || " "}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(versionImpact)} onOpenChange={(open) => !open && setVersionImpact(null)}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>版本切换影响</DialogTitle>
+            <DialogDescription>
+              当前指针已经切换；系统没有修改任何既有镜头或规格版本。
+            </DialogDescription>
+          </DialogHeader>
+          {versionImpact ? (
+            <div className="grid gap-3">
+              <p className="font-medium">
+                {versionImpact.affected_shot_ids.length} 个镜头仍引用其他剧本版本
+              </p>
+              <p className="text-sm leading-6 text-slate-500">
+                这些镜头会保留原始 ScriptVersion、Scene 和 ShotSpec 引用，需在分镜工作台逐项判断是否升级。
+              </p>
+              {versionImpact.affected_shot_ids.length ? (
+                <Button asChild variant="outline">
+                  <Link href={`/studio/${episode.id}/storyboard`}>前往分镜检查</Link>
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button onClick={() => setVersionImpact(null)}>知道了</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(draftToDelete)} onOpenChange={(open) => !open && setDraftToDelete(null)}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>删除剧本草稿</DialogTitle>
+            <DialogDescription>
+              只有未发布、未提取且未被引用的草稿可以删除；服务端会再次检查全部阻塞项。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">取消</Button>
+            </DialogClose>
+            <Button disabled={busy} variant="destructive" onClick={() => void deleteDraft()}>
+              确认删除 v{draftToDelete?.version_no} 草稿
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

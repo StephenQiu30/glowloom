@@ -23,6 +23,7 @@ from app.modules.scripts.versions.schemas import (
     ScriptVersionPublishResponse,
     ScriptVersionResponse,
 )
+from app.modules.storyboards import list_script_version_affected_shot_ids
 
 router = APIRouter(prefix="/api/v1", tags=["scripts"])
 lookup_router = APIRouter(prefix="/api/v1", tags=["scripts"])
@@ -103,8 +104,23 @@ async def publish_version(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ScriptVersionPublishResponse]:
+    async def read_impact(
+        *, episode_id: UUID, current_script_version_id: UUID
+    ) -> list[UUID]:
+        return await list_script_version_affected_shot_ids(
+            session,
+            episode_id=episode_id,
+            current_script_version_id=current_script_version_id,
+        )
+
     return ApiResponse(
-        data=await service.publish_version(session, claims, source_id, payload)
+        data=await service.publish_version(
+            session,
+            claims,
+            source_id,
+            payload,
+            read_impact,
+        )
     )
 
 
@@ -118,8 +134,23 @@ async def set_current_version(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[CurrentScriptVersionResponse]:
+    async def read_impact(
+        *, episode_id: UUID, current_script_version_id: UUID
+    ) -> list[UUID]:
+        return await list_script_version_affected_shot_ids(
+            session,
+            episode_id=episode_id,
+            current_script_version_id=current_script_version_id,
+        )
+
     return ApiResponse(
-        data=await service.set_current_version(session, claims, episode_id, payload)
+        data=await service.set_current_version(
+            session,
+            claims,
+            episode_id,
+            payload,
+            read_impact,
+        )
     )
 
 

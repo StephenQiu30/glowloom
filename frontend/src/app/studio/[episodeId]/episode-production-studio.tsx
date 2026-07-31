@@ -31,6 +31,7 @@ import {
   useCopyShotMutation,
   useCreateShotMutation,
   useCreateShotFromCandidateMutation,
+  useDeleteScriptVersionMutation,
   useDeleteShotMutation,
   useDecideExtractionCandidateMutation,
   useEpisodeQuery,
@@ -41,6 +42,7 @@ import {
   useImportScriptMutation,
   useInitializeMediaUploadMutation,
   useLazyShotSpecVersionQuery,
+  useLazyScriptVersionDiffQuery,
   useMeQuery,
   useMergeShotsMutation,
   useMergeShotsPreflightMutation,
@@ -53,6 +55,7 @@ import {
   useScriptVersionQuery,
   useScriptVersionsQuery,
   useSetCurrentScriptVersionMutation,
+  useSetScriptSourceArchivedMutation,
   useSetCurrentShotSpecMutation,
   useSetShotArchivedMutation,
   useShotDeletePreflightMutation,
@@ -210,6 +213,12 @@ export function EpisodeProductionStudio({
   const [decideCandidate, decisionState] = useDecideExtractionCandidateMutation();
   const [confirmStructure, confirmationState] = useConfirmStructureMutation();
   const [setCurrentVersion, currentState] = useSetCurrentScriptVersionMutation();
+  const [loadScriptVersionDiff, scriptDiffState] =
+    useLazyScriptVersionDiffQuery();
+  const [setScriptSourceArchived, scriptSourceState] =
+    useSetScriptSourceArchivedMutation();
+  const [deleteScriptVersion, scriptDeleteState] =
+    useDeleteScriptVersionMutation();
   const [initializeUpload, initializationState] = useInitializeMediaUploadMutation();
   const [completeUpload, completionState] = useCompleteMediaUploadMutation();
   const [retryProbe, retryState] = useRetryMediaProbeMutation();
@@ -244,6 +253,9 @@ export function EpisodeProductionStudio({
     decisionState,
     confirmationState,
     currentState,
+    scriptDiffState,
+    scriptSourceState,
+    scriptDeleteState,
     initializationState,
     completionState,
     retryState,
@@ -347,20 +359,75 @@ export function EpisodeProductionStudio({
     });
   }
 
-  async function handleSetCurrent() {
-    const confirmedVersionId = batchQuery.data?.confirmed_script_version_id;
-    if (!confirmedVersionId || !episode) return;
+  async function handleSetCurrent(
+    versionId: string,
+  ): Promise<API.CurrentScriptVersionResponse | undefined> {
+    if (!episode) return undefined;
+    let result: API.CurrentScriptVersionResponse | undefined;
     await runAction(async () => {
-      await setCurrentVersion({
+      result = await setCurrentVersion({
         episodeId,
         body: {
-          version_id: confirmedVersionId,
+          version_id: versionId,
           expected_current_version_id: episode.current_script_version_id,
         },
       }).unwrap();
       setStartedBatchId(null);
-      return "已确认结构的剧本版本已设为当前入口。";
+      const affected = result.impact.affected_shot_ids.length;
+      return affected
+        ? `剧本版本已切换；${affected} 个镜头仍引用其他版本。`
+        : "剧本版本已切换；现有镜头均引用该版本。";
     });
+    return result;
+  }
+
+  async function handleCompareVersions(
+    versionId: string,
+    otherVersionId: string,
+  ): Promise<API.ScriptVersionDiffResponse | undefined> {
+    let result: API.ScriptVersionDiffResponse | undefined;
+    await runAction(async () => {
+      result = await loadScriptVersionDiff(
+        { versionId, otherVersionId },
+        true,
+      ).unwrap();
+      return "剧本版本差异已加载。";
+    });
+    return result;
+  }
+
+  async function handleSetScriptSourceArchived(
+    source: API.ScriptSourceResponse,
+  ): Promise<boolean> {
+    let succeeded = false;
+    await runAction(async () => {
+      const archived = source.status === "active";
+      await setScriptSourceArchived({
+        episodeId,
+        sourceId: source.id,
+        expectedRevision: source.revision,
+        archived,
+      }).unwrap();
+      succeeded = true;
+      return archived ? "剧本来源已归档，历史版本仍可读取。" : "剧本来源已恢复。";
+    });
+    return succeeded;
+  }
+
+  async function handleDeleteScriptDraft(
+    version: API.ScriptVersionResponse,
+  ): Promise<boolean> {
+    if (!activeSource) return false;
+    let succeeded = false;
+    await runAction(async () => {
+      await deleteScriptVersion({
+        sourceId: activeSource.id,
+        versionId: version.id,
+      }).unwrap();
+      succeeded = true;
+      return `剧本草稿 v${version.version_no} 已删除。`;
+    });
+    return succeeded;
   }
 
   async function handleUpload(
@@ -808,10 +875,13 @@ export function EpisodeProductionStudio({
                   source={activeSource}
                   versions={versions}
                   onConfirm={handleConfirm}
+                  onCompareVersions={handleCompareVersions}
                   onDecide={handleDecision}
+                  onDeleteDraft={handleDeleteScriptDraft}
                   onImport={handleImport}
                   onPublish={handlePublish}
                   onSetCurrent={handleSetCurrent}
+                  onSetSourceArchived={handleSetScriptSourceArchived}
                   onStartExtraction={handleStartExtraction}
                 />
               ) : initialPanel === "assets" ? (

@@ -59,8 +59,11 @@ import {
   updateProjectApiV1ProjectsProjectIdPatch,
 } from "@/api/projects";
 import {
+  archiveSourceApiV1ScriptSourcesSourceIdArchivePost,
   confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePost,
   decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPost,
+  deleteDraftVersionApiV1ScriptVersionsVersionIdDelete,
+  diffVersionsApiV1ScriptVersionsVersionIdDiffGet,
   getExtractionBatchApiV1ExtractionBatchesBatchIdGet,
   getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGet,
   getVersionApiV1ScriptVersionsVersionIdGet,
@@ -69,6 +72,7 @@ import {
   listSourcesApiV1EpisodesEpisodeIdScriptSourcesGet,
   listVersionsApiV1ScriptSourcesSourceIdVersionsGet,
   publishVersionApiV1ScriptSourcesSourceIdVersionsPost,
+  restoreSourceApiV1ScriptSourcesSourceIdRestorePost,
   setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost,
   startExtractionApiV1ScriptVersionsVersionIdExtractionsPost,
 } from "@/api/scripts";
@@ -909,6 +913,57 @@ export const appApi = createApi({
         { type: "Snapshot", id: episodeId },
       ],
     }),
+    scriptVersionDiff: builder.query<
+      API.ScriptVersionDiffResponse,
+      { versionId: string; otherVersionId: string }
+    >({
+      queryFn: ({ versionId, otherVersionId }) =>
+        runRequest(() =>
+          diffVersionsApiV1ScriptVersionsVersionIdDiffGet({
+            version_id: versionId,
+            other_version_id: otherVersionId,
+          }),
+        ),
+    }),
+    setScriptSourceArchived: builder.mutation<
+      API.ScriptSourceResponse,
+      {
+        episodeId: string;
+        sourceId: string;
+        expectedRevision: number;
+        archived: boolean;
+      }
+    >({
+      queryFn: ({ sourceId, expectedRevision, archived }) => {
+        const params = { source_id: sourceId };
+        const body = { expected_revision: expectedRevision };
+        return runRequest(() =>
+          archived
+            ? archiveSourceApiV1ScriptSourcesSourceIdArchivePost(params, body)
+            : restoreSourceApiV1ScriptSourcesSourceIdRestorePost(params, body),
+        );
+      },
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "ScriptSources", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    deleteScriptVersion: builder.mutation<
+      API.ScriptVersionDeleteResponse,
+      { sourceId: string; versionId: string }
+    >({
+      queryFn: ({ versionId }) =>
+        runRequest(() =>
+          deleteDraftVersionApiV1ScriptVersionsVersionIdDelete({
+            version_id: versionId,
+            confirm: true,
+          }),
+        ),
+      invalidatesTags: (_result, _error, { sourceId, versionId }) => [
+        { type: "ScriptVersions", id: sourceId },
+        { type: "ScriptVersion", id: versionId },
+      ],
+    }),
     startExtraction: builder.mutation<
       API.ExtractionBatchResponse,
       { episodeId: string; workspaceId: string; versionId: string; body: API.ScriptExtractionRequest }
@@ -1249,6 +1304,7 @@ export const {
   useCreateEpisodeMutation,
   useCreateProjectMutation,
   useCreateWorkspaceMutation,
+  useDeleteScriptVersionMutation,
   useDeleteShotMutation,
   useDeleteEpisodeMutation,
   useDeleteProjectMutation,
@@ -1264,6 +1320,7 @@ export const {
   useLoginMutation,
   useLogoutMutation,
   useLazyShotSpecVersionQuery,
+  useLazyScriptVersionDiffQuery,
   useMeQuery,
   useMergeShotsMutation,
   useMergeShotsPreflightMutation,
@@ -1282,6 +1339,7 @@ export const {
   useSetEpisodeArchivedMutation,
   useSetAssetArchivedMutation,
   useSetCurrentScriptVersionMutation,
+  useSetScriptSourceArchivedMutation,
   useSetCurrentShotSpecMutation,
   useSetShotArchivedMutation,
   useSetProjectArchivedMutation,
