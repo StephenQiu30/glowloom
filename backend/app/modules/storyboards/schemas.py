@@ -423,3 +423,64 @@ class ShotReadinessBatchResponse(BaseModel):
     items: list[ShotReadinessResponse]
     summary: ShotReadinessSummary
     evaluation_hash: str
+
+
+class AssetShotUsageResponse(BaseModel):
+    shot_id: UUID
+    shot_title: str
+    episode_id: UUID
+    spec_version_id: UUID
+    spec_version_no: int
+    slot_keys: list[str]
+    is_current: bool
+
+
+class PaginatedAssetShotUsages(BaseModel):
+    items: list[AssetShotUsageResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class AssetUpgradePreflightRequest(CommandModel):
+    new_asset_version_id: UUID
+    shot_ids: list[UUID] = Field(min_length=1, max_length=120)
+
+    @model_validator(mode="after")
+    def validate_unique_shots(self) -> "AssetUpgradePreflightRequest":
+        if len(set(self.shot_ids)) != len(self.shot_ids):
+            raise ValueError("asset upgrade shot IDs must be unique")
+        return self
+
+
+class AssetUpgradeTargetRequest(CommandModel):
+    shot_id: UUID
+    expected_spec_version_id: UUID
+    expected_shot_revision: int = Field(ge=1)
+    slot_keys: list[str] = Field(min_length=1, max_length=100)
+    new_input_hash: str = Field(min_length=64, max_length=64)
+
+
+class AssetUpgradePreflightResponse(BaseModel):
+    old_asset_version_id: UUID
+    new_asset_version_id: UUID
+    targets: list[AssetUpgradeTargetRequest]
+    preflight_hash: str
+
+
+class AssetUpgradeApplyRequest(CommandModel):
+    new_asset_version_id: UUID
+    targets: list[AssetUpgradeTargetRequest] = Field(min_length=1, max_length=120)
+    preflight_hash: str = Field(min_length=64, max_length=64)
+
+    @model_validator(mode="after")
+    def validate_unique_targets(self) -> "AssetUpgradeApplyRequest":
+        shot_ids = [target.shot_id for target in self.targets]
+        if len(set(shot_ids)) != len(shot_ids):
+            raise ValueError("asset upgrade target shot IDs must be unique")
+        return self
+
+
+class AssetUpgradeApplyResponse(BaseModel):
+    shots: list[ShotResponse]
+    spec_versions: list[ShotSpecVersionResponse]

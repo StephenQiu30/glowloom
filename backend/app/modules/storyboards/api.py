@@ -9,9 +9,14 @@ from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
 from app.modules.storyboards import service
 from app.modules.storyboards.schemas import (
+    AssetUpgradeApplyRequest,
+    AssetUpgradeApplyResponse,
+    AssetUpgradePreflightRequest,
+    AssetUpgradePreflightResponse,
     CopyShotRequest,
     MergePreflightRequest,
     MergeShotRequest,
+    PaginatedAssetShotUsages,
     ShotCreateRequest,
     ShotCurrentSpecRequest,
     ShotDeletePreflightResponse,
@@ -34,6 +39,69 @@ from app.modules.storyboards.schemas import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["storyboards"])
+
+
+@router.get(
+    "/asset-versions/{asset_version_id}/shot-usages",
+    response_model=ApiResponse[PaginatedAssetShotUsages],
+)
+async def list_asset_shot_usages(
+    asset_version_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ApiResponse[PaginatedAssetShotUsages]:
+    return ApiResponse(
+        data=await service.list_asset_shot_usages(
+            session,
+            claims,
+            asset_version_id,
+            limit=limit or 20,
+            offset=offset,
+        )
+    )
+
+
+@router.post(
+    "/asset-versions/{asset_version_id}/upgrade-preflight",
+    response_model=ApiResponse[AssetUpgradePreflightResponse],
+)
+async def preflight_asset_upgrade(
+    asset_version_id: UUID,
+    payload: AssetUpgradePreflightRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetUpgradePreflightResponse]:
+    return ApiResponse(
+        data=await service.preflight_asset_upgrade(
+            session,
+            claims,
+            asset_version_id,
+            payload,
+        )
+    )
+
+
+@router.post(
+    "/asset-versions/{asset_version_id}/upgrade",
+    response_model=ApiResponse[AssetUpgradeApplyResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def apply_asset_upgrade(
+    asset_version_id: UUID,
+    payload: AssetUpgradeApplyRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetUpgradeApplyResponse]:
+    return ApiResponse(
+        data=await service.apply_asset_upgrade(
+            session,
+            claims,
+            asset_version_id,
+            payload,
+        )
+    )
 
 
 @router.post(

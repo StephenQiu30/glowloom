@@ -9,6 +9,7 @@ from app.modules.assets.contracts import (
 )
 from app.modules.assets.service import (
     asset_version_exists,
+    asset_version_for_content_read,
     create_or_link_candidate,
     resolve_asset_version,
     resolve_asset_version_readiness,
@@ -23,6 +24,7 @@ __all__ = [
     "AssetVersionReference",
     "ProjectAssetSummary",
     "asset_version_exists",
+    "asset_version_for_content_read",
     "create_or_link_candidate",
     "resolve_asset_version",
     "resolve_asset_version_readiness",

@@ -11,6 +11,7 @@ from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.assets import (
     AssetVersionReadinessReference,
+    asset_version_for_content_read,
     resolve_asset_version,
     resolve_asset_versions_readiness,
 )
@@ -40,10 +41,17 @@ from app.modules.storyboards.models import (
 from app.modules.storyboards.schemas import (
     AssetReferenceRequest,
     AssetReferenceResponse,
+    AssetShotUsageResponse,
+    AssetUpgradeApplyRequest,
+    AssetUpgradeApplyResponse,
+    AssetUpgradePreflightRequest,
+    AssetUpgradePreflightResponse,
+    AssetUpgradeTargetRequest,
     CopyShotRequest,
     DownstreamEvidenceResponse,
     MergePreflightRequest,
     MergeShotRequest,
+    PaginatedAssetShotUsages,
     ShotCreateRequest,
     ShotCurrentSpecRequest,
     ShotDeleteBlocker,
@@ -1960,3 +1968,354 @@ async def get_episode_readiness(
         summary=summary,
         evaluation_hash=evaluation_hash,
     )
+
+
+async def list_asset_shot_usages(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    asset_version_id: UUID,
+    *,
+    limit: int,
+    offset: int,
+) -> PaginatedAssetShotUsages:
+    await asset_version_for_content_read(session, claims, asset_version_id)
+    rows, total = await repository.list_asset_version_usages(
+        session,
+        asset_version_id,
+        limit=limit,
+        offset=offset,
+    )
+    return PaginatedAssetShotUsages(
+        items=[
+            AssetShotUsageResponse(
+                shot_id=shot.id,
+                shot_title=shot.title,
+                episode_id=shot.episode_id,
+                spec_version_id=version.id,
+                spec_version_no=version.version_no,
+                slot_keys=slot_keys,
+                is_current=shot.current_spec_version_id == version.id,
+            )
+            for version, shot, slot_keys in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def _replacement_reference_requests(
+    references: list[AssetReference],
+    *,
+    old_asset_version_id: UUID,
+    new_asset_version_id: UUID,
+) -> list[AssetReferenceRequest]:
+    return [
+        AssetReferenceRequest(
+            slot_key=reference.slot_key,
+            role=cast(
+                Literal[
+                    "location",
+                    "character",
+                    "prop",
+                    "costume",
+                    "visual_style",
+                    "voice",
+                ],
+                reference.role,
+            ),
+            asset_version_id=(
+                new_asset_version_id
+                if reference.asset_version_id == old_asset_version_id
+                else reference.asset_version_id
+            ),
+            subject_key=reference.subject_key,
+        )
+        for reference in references
+    ]
+
+
+async def _asset_upgrade_snapshot(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    *,
+    old_asset_version_id: UUID,
+    new_asset_version_id: UUID,
+    shot_ids: list[UUID],
+    for_update: bool,
+) -> tuple[
+    AssetUpgradePreflightResponse,
+    list[tuple[Shot, ShotSpecVersion]],
+    dict[UUID, list[AssetReference]],
+]:
+    old_asset = await asset_version_for_content_read(
+        session,
+        claims,
+        old_asset_version_id,
+    )
+    new_asset = await asset_version_for_content_read(
+        session,
+        claims,
+        new_asset_version_id,
+    )
+    if old_asset_version_id == new_asset_version_id:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Asset upgrade requires a different target version",
+            status_code=422,
+            next_action="select_new_asset_version",
+        )
+    if old_asset.asset_id != new_asset.asset_id:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Asset upgrade versions must belong to the same asset",
+            status_code=422,
+            next_action="select_version_of_same_asset",
+        )
+    initial = await repository.find_shots_with_current_specs(session, shot_ids)
+    if len(initial) != len(shot_ids):
+        raise _not_found("Shot")
+    episode_ids = sorted({shot.episode_id for shot, _version in initial}, key=str)
+    contexts: dict[UUID, EpisodeContentContext] = {}
+    for episode_id in episode_ids:
+        context = (
+            await lock_active_episode_for_content_write(session, claims, episode_id)
+            if for_update
+            else await episode_for_content_read(session, claims, episode_id)
+        )
+        contexts[episode_id] = context
+    if for_update:
+        initial = await repository.find_shots_with_current_specs(
+            session,
+            shot_ids,
+            for_update=True,
+        )
+    typed_rows: list[tuple[Shot, ShotSpecVersion]] = []
+    for shot, version in initial:
+        context = contexts[shot.episode_id]
+        if (
+            context.workspace_id != old_asset.workspace_id
+            or context.project_id != old_asset.project_id
+        ):
+            raise _not_found("Shot")
+        if shot.status != "active" or version is None:
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT if for_update else ErrorCode.STATE_CONFLICT,
+                "Asset upgrade target has no active current specification",
+                status_code=409,
+                next_action="repeat_asset_upgrade_preflight",
+            )
+        typed_rows.append((shot, version))
+
+    readiness = await resolve_asset_versions_readiness(
+        session,
+        old_asset.workspace_id,
+        old_asset.project_id,
+        [new_asset_version_id],
+        purpose="ai_short_drama_generation",
+        channel="lanverse_preview",
+        region="CN",
+    )
+    new_readiness = readiness.get(new_asset_version_id)
+    if new_readiness is None or new_readiness.status != "ready":
+        raise ApiError(
+            ErrorCode.VERSION_CONFLICT if for_update else ErrorCode.STATE_CONFLICT,
+            "New asset version is not ready for generation",
+            status_code=409,
+            next_action=(
+                "repeat_asset_upgrade_preflight"
+                if for_update
+                else "complete_new_asset_version"
+            ),
+            details={
+                "asset_version_id": str(new_asset_version_id),
+                "blocker_codes": (
+                    list(new_readiness.blocker_codes)
+                    if new_readiness is not None
+                    else ["asset_version_unavailable"]
+                ),
+            },
+        )
+    references = await repository.list_asset_references(
+        session,
+        [version.id for _shot, version in typed_rows],
+    )
+    references_by_version: dict[UUID, list[AssetReference]] = defaultdict(list)
+    for reference in references:
+        references_by_version[reference.shot_spec_version_id].append(reference)
+    targets: list[AssetUpgradeTargetRequest] = []
+    for shot, version in typed_rows:
+        version_references = references_by_version[version.id]
+        slot_keys = [
+            reference.slot_key
+            for reference in version_references
+            if reference.asset_version_id == old_asset_version_id
+        ]
+        if not slot_keys:
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT if for_update else ErrorCode.VALIDATION_FAILED,
+                "Asset upgrade target does not currently use the old version",
+                status_code=409 if for_update else 422,
+                next_action="repeat_asset_upgrade_preflight",
+            )
+        replacement_references = _replacement_reference_requests(
+            version_references,
+            old_asset_version_id=old_asset_version_id,
+            new_asset_version_id=new_asset_version_id,
+        )
+        hashes = storyboard_content_hashes(
+            ShotSpec.model_validate(version.spec),
+            replacement_references,
+        )
+        targets.append(
+            AssetUpgradeTargetRequest(
+                shot_id=shot.id,
+                expected_spec_version_id=version.id,
+                expected_shot_revision=shot.revision,
+                slot_keys=slot_keys,
+                new_input_hash=hashes.input_hash,
+            )
+        )
+    preflight_hash = canonical_payload_hash(
+        {
+            "old_asset_version_id": str(old_asset_version_id),
+            "new_asset_version_id": str(new_asset_version_id),
+            "new_asset_evaluation_hash": new_readiness.evaluation_hash,
+            "targets": [target.model_dump(mode="json") for target in targets],
+        }
+    )
+    return (
+        AssetUpgradePreflightResponse(
+            old_asset_version_id=old_asset_version_id,
+            new_asset_version_id=new_asset_version_id,
+            targets=targets,
+            preflight_hash=preflight_hash,
+        ),
+        typed_rows,
+        references_by_version,
+    )
+
+
+async def preflight_asset_upgrade(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    old_asset_version_id: UUID,
+    request: AssetUpgradePreflightRequest,
+) -> AssetUpgradePreflightResponse:
+    preflight, _rows, _references = await _asset_upgrade_snapshot(
+        session,
+        claims,
+        old_asset_version_id=old_asset_version_id,
+        new_asset_version_id=request.new_asset_version_id,
+        shot_ids=request.shot_ids,
+        for_update=False,
+    )
+    return preflight
+
+
+async def apply_asset_upgrade(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    old_asset_version_id: UUID,
+    request: AssetUpgradeApplyRequest,
+) -> AssetUpgradeApplyResponse:
+    async with session.begin():
+        current, rows, references_by_version = await _asset_upgrade_snapshot(
+            session,
+            claims,
+            old_asset_version_id=old_asset_version_id,
+            new_asset_version_id=request.new_asset_version_id,
+            shot_ids=[target.shot_id for target in request.targets],
+            for_update=True,
+        )
+        if current.preflight_hash != request.preflight_hash or (
+            current.targets != request.targets
+        ):
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT,
+                "Asset upgrade preflight has changed",
+                status_code=409,
+                next_action="repeat_asset_upgrade_preflight",
+                details={"current_preflight": current.model_dump(mode="json")},
+            )
+        latest_numbers = await repository.latest_spec_version_numbers(
+            session,
+            [shot.id for shot, _version in rows],
+        )
+        now = datetime.now(UTC)
+        versions: list[ShotSpecVersion] = []
+        stored_references: list[list[AssetReference]] = []
+        replacement_requests_by_version: list[list[AssetReferenceRequest]] = []
+        for (shot, source_version), target in zip(
+            rows,
+            request.targets,
+            strict=True,
+        ):
+            source_references = references_by_version[source_version.id]
+            replacement_requests = _replacement_reference_requests(
+                source_references,
+                old_asset_version_id=old_asset_version_id,
+                new_asset_version_id=request.new_asset_version_id,
+            )
+            spec = ShotSpec.model_validate(source_version.spec)
+            hashes = storyboard_content_hashes(spec, replacement_requests)
+            if hashes.input_hash != target.new_input_hash:
+                raise ApiError(
+                    ErrorCode.VERSION_CONFLICT,
+                    "Asset upgrade input has changed",
+                    status_code=409,
+                    next_action="repeat_asset_upgrade_preflight",
+                )
+            version = ShotSpecVersion(
+                id=uuid7(),
+                workspace_id=shot.workspace_id,
+                shot_id=shot.id,
+                version_no=latest_numbers[shot.id] + 1,
+                schema_version=source_version.schema_version,
+                spec=spec.model_dump(mode="json"),
+                content_hash=hashes.content_hash,
+                input_hash=hashes.input_hash,
+                created_by=claims.sub,
+                created_at=now,
+            )
+            versions.append(version)
+            replacement_requests_by_version.append(replacement_requests)
+            session.add(version)
+        await session.flush()
+        for (shot, _source_version), version, replacement_requests in zip(
+            rows,
+            versions,
+            replacement_requests_by_version,
+            strict=True,
+        ):
+            references = [
+                AssetReference(
+                    id=uuid7(),
+                    workspace_id=shot.workspace_id,
+                    shot_spec_version_id=version.id,
+                    slot_key=reference.slot_key,
+                    role=reference.role,
+                    asset_version_id=reference.asset_version_id,
+                    subject_key=reference.subject_key,
+                    created_at=now,
+                )
+                for reference in replacement_requests
+            ]
+            session.add_all(references)
+            stored_references.append(references)
+            shot.current_spec_version_id = version.id
+            shot.revision += 1
+            shot.updated_at = now
+        await session.flush()
+        result = AssetUpgradeApplyResponse(
+            shots=[_shot_response(shot) for shot, _version in rows],
+            spec_versions=[
+                _spec_response(version, references)
+                for version, references in zip(
+                    versions,
+                    stored_references,
+                    strict=True,
+                )
+            ],
+        )
+    return result

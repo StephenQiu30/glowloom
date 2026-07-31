@@ -175,3 +175,95 @@ async def find_shots(
         query = query.with_for_update()
     rows = {shot.id: shot for shot in await session.scalars(query)}
     return [rows[shot_id] for shot_id in shot_ids if shot_id in rows]
+
+
+async def find_shots_with_current_specs(
+    session: AsyncSession,
+    shot_ids: list[UUID],
+    *,
+    for_update: bool = False,
+) -> list[tuple[Shot, ShotSpecVersion | None]]:
+    if not shot_ids:
+        return []
+    query = (
+        select(Shot, ShotSpecVersion)
+        .outerjoin(
+            ShotSpecVersion,
+            (ShotSpecVersion.id == Shot.current_spec_version_id)
+            & (ShotSpecVersion.workspace_id == Shot.workspace_id),
+        )
+        .where(Shot.id.in_(shot_ids))
+    )
+    if for_update:
+        query = query.with_for_update(of=Shot)
+    rows = {
+        row[0].id: (row[0], row[1]) for row in await session.execute(query)
+    }
+    return [rows[shot_id] for shot_id in shot_ids if shot_id in rows]
+
+
+async def latest_spec_version_numbers(
+    session: AsyncSession,
+    shot_ids: list[UUID],
+) -> dict[UUID, int]:
+    if not shot_ids:
+        return {}
+    rows = await session.execute(
+        select(
+            ShotSpecVersion.shot_id,
+            func.max(ShotSpecVersion.version_no),
+        )
+        .where(ShotSpecVersion.shot_id.in_(shot_ids))
+        .group_by(ShotSpecVersion.shot_id)
+    )
+    return {row[0]: row[1] for row in rows}
+
+
+async def list_asset_version_usages(
+    session: AsyncSession,
+    asset_version_id: UUID,
+    *,
+    limit: int,
+    offset: int,
+) -> tuple[list[tuple[ShotSpecVersion, Shot, list[str]]], int]:
+    version_ids_query = (
+        select(ShotSpecVersion.id)
+        .join(
+            AssetReference,
+            AssetReference.shot_spec_version_id == ShotSpecVersion.id,
+        )
+        .where(AssetReference.asset_version_id == asset_version_id)
+        .distinct()
+    )
+    total = await session.scalar(
+        select(func.count()).select_from(version_ids_query.subquery())
+    )
+    version_ids = list(
+        await session.scalars(
+            version_ids_query.order_by(ShotSpecVersion.id).limit(limit).offset(offset)
+        )
+    )
+    if not version_ids:
+        return [], total or 0
+    rows = await session.execute(
+        select(ShotSpecVersion, Shot)
+        .join(Shot, Shot.id == ShotSpecVersion.shot_id)
+        .where(ShotSpecVersion.id.in_(version_ids))
+    )
+    by_version = {row[0].id: (row[0], row[1]) for row in rows}
+    references = await list_asset_references(session, version_ids)
+    slot_keys_by_version: dict[UUID, list[str]] = {}
+    for reference in references:
+        if reference.asset_version_id == asset_version_id:
+            slot_keys_by_version.setdefault(
+                reference.shot_spec_version_id,
+                [],
+            ).append(reference.slot_key)
+    return [
+        (
+            by_version[version_id][0],
+            by_version[version_id][1],
+            slot_keys_by_version.get(version_id, []),
+        )
+        for version_id in version_ids
+    ], total or 0

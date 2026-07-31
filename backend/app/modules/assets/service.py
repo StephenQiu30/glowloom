@@ -994,6 +994,26 @@ async def resolve_asset_version(
     )
 
 
+async def asset_version_for_content_read(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    version_id: UUID,
+) -> AssetVersionReference:
+    result = await repository.find_version(session, version_id)
+    if result is None:
+        raise _not_found("Asset version")
+    version, asset = result
+    await _asset_for_read(session, claims, asset.id)
+    return AssetVersionReference(
+        id=version.id,
+        workspace_id=version.workspace_id,
+        project_id=asset.project_id,
+        asset_id=asset.id,
+        kind=asset.kind,
+        asset_status=asset.status,
+    )
+
+
 def _readiness_reference(
     asset: Asset,
     version: AssetVersion,
