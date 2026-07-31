@@ -17,8 +17,10 @@ from app.modules.identity.models import Membership
 from app.modules.production.models import Task
 from app.modules.projects.models import Episode
 from app.modules.scripts.models import (
+    CandidateDecision,
     Dialogue,
     ExtractionBatch,
+    ExtractionCandidate,
     Scene,
     ScriptSource,
     ScriptVersion,
@@ -74,6 +76,8 @@ async def seed_confirmed_structure(episode_id: UUID) -> None:
             dialogue_id = uuid7()
             batch_id = uuid7()
             task_id = uuid7()
+            scene_candidate_id = uuid7()
+            shot_candidate_id = uuid7()
             body = "雨夜车站\n林澈：有人吗？"
             content_hash = sha256(body.encode()).hexdigest()
             session.add(
@@ -172,24 +176,92 @@ async def seed_confirmed_structure(episode_id: UUID) -> None:
                 )
             )
             await session.flush()
-            session.add(
-                ExtractionBatch(
-                    id=batch_id,
-                    workspace_id=episode.workspace_id,
-                    script_version_id=source_version_id,
-                    task_id=task_id,
-                    scope="full",
-                    extractor_version="test-confirmed-structure",
-                    input_hash=content_hash,
-                    status="succeeded",
-                    confirmed_script_version_id=confirmed_version_id,
-                    result_hash=sha256(
-                        f"confirmed:{confirmed_version_id}".encode()
-                    ).hexdigest(),
-                    candidate_count=0,
-                    idempotency_key=f"storyboard-e2e-confirmation:{episode.id}",
-                    created_by=actor_id,
-                )
+            batch = ExtractionBatch(
+                id=batch_id,
+                workspace_id=episode.workspace_id,
+                script_version_id=source_version_id,
+                task_id=task_id,
+                scope="full",
+                extractor_version="test-confirmed-structure",
+                input_hash=content_hash,
+                status="succeeded",
+                confirmed_script_version_id=confirmed_version_id,
+                result_hash=sha256(
+                    f"confirmed:{confirmed_version_id}".encode()
+                ).hexdigest(),
+                candidate_count=2,
+                idempotency_key=f"storyboard-e2e-confirmation:{episode.id}",
+                created_by=actor_id,
+            )
+            session.add(batch)
+            await session.flush()
+            session.add_all(
+                [
+                    ExtractionCandidate(
+                        id=scene_candidate_id,
+                        workspace_id=episode.workspace_id,
+                        batch_id=batch_id,
+                        candidate_key="test-scene-001",
+                        kind="scene",
+                        source_start=0,
+                        source_end=4,
+                        proposal={
+                            "kind": "scene",
+                            "heading": "雨夜车站",
+                            "location": "旧车站月台",
+                            "time_of_day": "夜",
+                            "summary": "林澈进入空无一人的月台",
+                        },
+                        confidence_note="测试确认结构中的本地候选，不代表模型输出",
+                        required=True,
+                        status="accepted",
+                        revision=2,
+                    ),
+                    ExtractionCandidate(
+                        id=shot_candidate_id,
+                        workspace_id=episode.workspace_id,
+                        batch_id=batch_id,
+                        candidate_key="test-shot-001",
+                        kind="shot",
+                        source_start=0,
+                        source_end=4,
+                        proposal={
+                            "kind": "shot",
+                            "scene_candidate_key": "test-scene-001",
+                            "title": "本地候选：进入车站",
+                            "purpose": "验证已确认候选到稳定镜头身份的本地业务链路",
+                        },
+                        confidence_note="测试确认结构中的本地候选，不代表模型输出",
+                        required=False,
+                        status="accepted",
+                        revision=2,
+                    ),
+                ]
+            )
+            await session.flush()
+            session.add_all(
+                [
+                    CandidateDecision(
+                        id=uuid7(),
+                        workspace_id=episode.workspace_id,
+                        candidate_id=scene_candidate_id,
+                        sequence=1,
+                        decision_key=f"storyboard-e2e-scene:{episode.id}",
+                        action="accept_new",
+                        payload={},
+                        actor_id=actor_id,
+                    ),
+                    CandidateDecision(
+                        id=uuid7(),
+                        workspace_id=episode.workspace_id,
+                        candidate_id=shot_candidate_id,
+                        sequence=1,
+                        decision_key=f"storyboard-e2e-shot:{episode.id}",
+                        action="accept_new",
+                        payload={},
+                        actor_id=actor_id,
+                    ),
+                ]
             )
             episode.current_script_version_id = confirmed_version_id
             episode.revision += 1

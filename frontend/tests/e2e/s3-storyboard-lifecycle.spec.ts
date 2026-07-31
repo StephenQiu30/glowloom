@@ -116,6 +116,20 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   await expect(page.getByText("0 个镜头", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "新建镜头" }).click();
+  await page
+    .getByRole("button", { name: "从候选建立 本地候选：进入车站" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "已确认候选“本地候选：进入车站”已加入镜头清单",
+  );
+  await expect(page.getByText("1 个镜头", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "归档镜头" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "镜头“本地候选：进入车站”已归档",
+  );
+  await expect(page.getByText("0 个镜头", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "新建镜头" }).click();
   await page.getByLabel("新镜头标题").fill("月台警觉");
   await page.getByRole("button", { name: "创建空镜头" }).click();
   await expect(page.getByRole("status")).toContainText(
@@ -186,9 +200,23 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
     "镜头“车站警觉”已复制",
   );
   await expect(page.getByText("2 个镜头", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "上移镜头" }).click();
+  await page
+    .getByRole("button", { name: "拖动镜头 车站警觉 · 副本" })
+    .dragTo(
+      page.getByRole("listitem", { name: "镜头 车站警觉 顺序项" }),
+    );
   await expect(page.getByRole("status")).toContainText("镜头顺序已更新");
   const shotOrder = page.getByRole("list", { name: "镜头顺序列表" });
+  await expect(shotOrder.getByRole("listitem").first()).toContainText(
+    "车站警觉 · 副本",
+  );
+  await page.getByRole("button", { name: "下移镜头" }).click();
+  await expect(page.getByRole("status")).toContainText("镜头顺序已更新");
+  await expect(shotOrder.getByRole("listitem").first()).toContainText(
+    "车站警觉",
+  );
+  await page.getByRole("button", { name: "上移镜头" }).click();
+  await expect(page.getByRole("status")).toContainText("镜头顺序已更新");
   await expect(shotOrder.getByRole("listitem").first()).toContainText(
     "车站警觉 · 副本",
   );
@@ -238,4 +266,28 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   ).toBeVisible();
   await expect(page.getByText("0 个阻塞", { exact: true })).toBeVisible();
   await expect(page.getByText("2 可生成", { exact: true })).toBeVisible();
+
+  await page.goto("/studio");
+  await page.getByRole("tab", { name: locationFixture.tabName }).click();
+  await page
+    .getByRole("button", { name: `选择资产 ${locationFixture.name}` })
+    .click();
+  await page.getByRole("button", { name: "设为当前资产版本 v1" }).click();
+  await expect(page.getByText("本页当前引用 2")).toBeVisible();
+  await expect(page.getByText("本页历史引用 3")).toBeVisible();
+  await page.getByRole("button", { name: "全选当前引用" }).click();
+  await page.getByRole("button", { name: "生成升级预检" }).click();
+  const finalUpgradeDialog = page.getByRole("dialog", {
+    name: "确认资产版本升级",
+  });
+  await expect(finalUpgradeDialog.getByText("系统将为 2 个镜头")).toBeVisible();
+  await finalUpgradeDialog
+    .getByRole("button", { name: "返回检查" })
+    .click();
+  await page.getByRole("button", { name: "设为当前资产版本 v2" }).click();
+  await expect(page.getByText("本页当前引用 0")).toBeVisible();
+  await expect(page.getByText("已选择 0 个当前镜头")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "生成升级预检" }),
+  ).toBeDisabled();
 });
