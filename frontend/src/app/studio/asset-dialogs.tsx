@@ -132,6 +132,140 @@ export function CreateAssetDialog({
   );
 }
 
+export function EditAssetDialog({
+  asset,
+  isSubmitting,
+  onOpenChange,
+  onSubmit,
+  open,
+}: {
+  asset: API.AssetResponse;
+  isSubmitting: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (request: API.AssetUpdateRequest) => Promise<boolean>;
+  open: boolean;
+}) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    await onSubmit({
+      expected_revision: asset.revision,
+      name: textValue(form, "name"),
+      aliases: splitValues(form.get("aliases")),
+      tags: splitValues(form.get("tags")),
+    });
+  }
+
+  return (
+    <Dialog.Root onOpenChange={onOpenChange} open={open}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
+        <Dialog.Content className={dialogClassName}>
+          <DialogHeading
+            description="只修改资产身份信息；资产类型、不可变版本和既有镜头引用不会改变。"
+            title="编辑资产身份"
+          />
+          <form className="mt-6 grid gap-5" onSubmit={submit}>
+            <div className="grid gap-2">
+              <Label htmlFor="assetName">资产名称</Label>
+              <Input defaultValue={asset.name} id="assetName" name="name" required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="assetAliases">别名（逗号分隔）</Label>
+              <Input
+                defaultValue={asset.aliases.join(", ")}
+                id="assetAliases"
+                name="aliases"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="assetTags">标签（逗号分隔）</Label>
+              <Input
+                defaultValue={asset.tags.join(", ")}
+                id="assetTags"
+                name="tags"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline">取消</Button>
+              </Dialog.Close>
+              <Button disabled={isSubmitting} type="submit">
+                {isSubmitting ? "保存中…" : "保存身份信息"}
+              </Button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+export function DeleteAssetDialog({
+  asset,
+  isDeleting,
+  isLoading,
+  onConfirm,
+  onOpenChange,
+  open,
+  preflight,
+}: {
+  asset: API.AssetResponse;
+  isDeleting: boolean;
+  isLoading: boolean;
+  onConfirm: () => Promise<void>;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  preflight?: API.AssetDeletePreflightResponse;
+}) {
+  return (
+    <Dialog.Root onOpenChange={onOpenChange} open={open}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
+        <Dialog.Content className={dialogClassName}>
+          <DialogHeading
+            description={`删除“${asset.name}”的资产身份；本操作只允许无版本、无引用的空资产。`}
+            title="删除资产身份"
+          />
+          <div className="mt-6 grid gap-4">
+            {isLoading ? (
+              <p className="text-sm text-slate-500">正在检查删除阻塞项…</p>
+            ) : preflight?.allowed ? (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                删除后该空资产身份无法恢复；不会删除任何媒体、授权或下游版本。
+              </p>
+            ) : preflight ? (
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-medium">当前不能删除</p>
+                <ul className="mt-2 grid gap-1 text-sm text-slate-500">
+                  {preflight.blockers.map((blocker) => (
+                    <li key={blocker.code}>{blocker.summary}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline">取消</Button>
+              </Dialog.Close>
+              {preflight?.allowed ? (
+                <Button
+                  disabled={isDeleting}
+                  type="button"
+                  variant="destructive"
+                  onClick={() => void onConfirm()}
+                >
+                  {isDeleting ? "删除中…" : "确认删除空资产"}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 function TextField({
   id,
   label,

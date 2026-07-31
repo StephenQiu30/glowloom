@@ -3,11 +3,15 @@ import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import {
   appendAssetVersionApiV1AssetsAssetIdVersionsPost,
   archiveAssetApiV1AssetsAssetIdArchivePost,
+  assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGet,
   createAssetApiV1ProjectsProjectIdAssetsPost,
+  deleteAssetApiV1AssetsAssetIdDelete,
   getAssetReadinessApiV1AssetVersionsVersionIdReadinessGet,
   listAssetsApiV1ProjectsProjectIdAssetsGet,
   listAssetVersionsApiV1AssetsAssetIdVersionsGet,
   restoreAssetApiV1AssetsAssetIdRestorePost,
+  setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPost,
+  updateAssetApiV1AssetsAssetIdPatch,
 } from "@/api/assets";
 import {
   createConsentApiV1ConsentsPost,
@@ -1174,6 +1178,73 @@ export const appApi = createApi({
           : []),
       ],
     }),
+    updateAsset: builder.mutation<
+      API.AssetResponse,
+      { projectId: string; assetId: string; body: API.AssetUpdateRequest }
+    >({
+      queryFn: ({ assetId, body }) =>
+        runRequest(() =>
+          updateAssetApiV1AssetsAssetIdPatch({ asset_id: assetId }, body),
+        ),
+      invalidatesTags: (_result, _error, { projectId, assetId }) => [
+        { type: "Assets", id: projectId },
+        { type: "Asset", id: assetId },
+      ],
+    }),
+    setCurrentAssetVersion: builder.mutation<
+      API.AssetResponse,
+      { projectId: string; assetId: string; body: API.AssetCurrentVersionRequest }
+    >({
+      queryFn: ({ assetId, body }) =>
+        runRequest(() =>
+          setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPost(
+            { asset_id: assetId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId, assetId, body }) => [
+        { type: "Assets", id: projectId },
+        { type: "Asset", id: assetId },
+        { type: "AssetVersions", id: assetId },
+        { type: "AssetReadiness", id: body.version_id },
+        ...(body.expected_current_version_id &&
+        body.expected_current_version_id !== body.version_id
+          ? [
+              {
+                type: "AssetReadiness" as const,
+                id: body.expected_current_version_id,
+              },
+            ]
+          : []),
+      ],
+    }),
+    assetDeletePreflight: builder.mutation<
+      API.AssetDeletePreflightResponse,
+      string
+    >({
+      queryFn: (assetId) =>
+        runRequest(() =>
+          assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGet({
+            asset_id: assetId,
+          }),
+        ),
+    }),
+    deleteAsset: builder.mutation<
+      API.AssetDeleteResponse,
+      { projectId: string; assetId: string; expectedRevision: number }
+    >({
+      queryFn: ({ assetId, expectedRevision }) =>
+        runRequest(() =>
+          deleteAssetApiV1AssetsAssetIdDelete({
+            asset_id: assetId,
+            expected_revision: expectedRevision,
+          }),
+        ),
+      invalidatesTags: (_result, _error, { projectId, assetId }) => [
+        { type: "Assets", id: projectId },
+        { type: "Asset", id: assetId },
+      ],
+    }),
     setAssetArchived: builder.mutation<
       API.AssetResponse,
       { assetId: string; expectedRevision: number; archived: boolean }
@@ -1289,6 +1360,7 @@ export const {
   useAssetReadinessQuery,
   useAssetShotUsagesQuery,
   useAssetUpgradePreflightMutation,
+  useAssetDeletePreflightMutation,
   useAssetsQuery,
   useAssetVersionsQuery,
   useChangePasswordMutation,
@@ -1305,6 +1377,7 @@ export const {
   useCreateProjectMutation,
   useCreateWorkspaceMutation,
   useDeleteScriptVersionMutation,
+  useDeleteAssetMutation,
   useDeleteShotMutation,
   useDeleteEpisodeMutation,
   useDeleteProjectMutation,
@@ -1338,6 +1411,7 @@ export const {
   useEpisodeDeletePreflightMutation,
   useSetEpisodeArchivedMutation,
   useSetAssetArchivedMutation,
+  useSetCurrentAssetVersionMutation,
   useSetCurrentScriptVersionMutation,
   useSetScriptSourceArchivedMutation,
   useSetCurrentShotSpecMutation,
@@ -1345,6 +1419,7 @@ export const {
   useSetProjectArchivedMutation,
   useSetWorkspaceArchivedMutation,
   useUpdateProfileMutation,
+  useUpdateAssetMutation,
   useUpdateShotMutation,
   useUpdateEpisodeMutation,
   useUpdateProjectBudgetMutation,

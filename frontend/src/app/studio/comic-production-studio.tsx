@@ -32,17 +32,26 @@ import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
   useAppendAssetVersionMutation,
+  useAssetDeletePreflightMutation,
   useAssetReadinessQuery,
   useAssetsQuery,
   useAssetVersionsQuery,
   useCreateAssetMutation,
+  useDeleteAssetMutation,
   useMeQuery,
   useMediaVersionsQuery,
   useProjectsQuery,
   useSetAssetArchivedMutation,
+  useSetCurrentAssetVersionMutation,
+  useUpdateAssetMutation,
 } from "@/lib/server-state";
 
-import { CreateAssetDialog, VersionDialog } from "./asset-dialogs";
+import {
+  CreateAssetDialog,
+  DeleteAssetDialog,
+  EditAssetDialog,
+  VersionDialog,
+} from "./asset-dialogs";
 import { AssetDetail, AssetList } from "./asset-panels";
 import {
   type AssetKind,
@@ -97,8 +106,18 @@ export function ComicProductionStudio() {
   const [createAsset, createState] = useCreateAssetMutation();
   const [appendVersion, appendState] = useAppendAssetVersionMutation();
   const [setAssetArchived, archiveState] = useSetAssetArchivedMutation();
+  const [updateAsset, updateState] = useUpdateAssetMutation();
+  const [setCurrentAssetVersion, currentVersionState] =
+    useSetCurrentAssetVersionMutation();
+  const [loadDeletePreflight, deletePreflightState] =
+    useAssetDeletePreflightMutation();
+  const [deleteAsset, deleteState] = useDeleteAssetMutation();
   const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePreflight, setDeletePreflight] =
+    useState<API.AssetDeletePreflightResponse>();
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const mediaVersions = media.data?.items ?? [];
@@ -161,6 +180,73 @@ export function ComicProductionStudio() {
         archived: selectedAsset.status === "active",
       }).unwrap();
       setNotice(updated.status === "archived" ? "资产已归档。" : "资产已恢复。");
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+    }
+  }
+
+  async function submitEdit(request: API.AssetUpdateRequest): Promise<boolean> {
+    if (!selectedAsset || !effectiveProject) return false;
+    setActionError(null);
+    try {
+      const updated = await updateAsset({
+        projectId: effectiveProject.id,
+        assetId: selectedAsset.id,
+        body: request,
+      }).unwrap();
+      setEditOpen(false);
+      setNotice(`资产身份已更新：${updated.name}`);
+      return true;
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+      return false;
+    }
+  }
+
+  async function selectCurrentVersion(version: API.AssetVersionResponse) {
+    if (!selectedAsset || !effectiveProject) return;
+    setActionError(null);
+    try {
+      await setCurrentAssetVersion({
+        projectId: effectiveProject.id,
+        assetId: selectedAsset.id,
+        body: {
+          version_id: version.id,
+          expected_current_version_id: selectedAsset.current_version_id,
+          expected_revision: selectedAsset.revision,
+        },
+      }).unwrap();
+      setNotice(`资产已切换到版本 v${version.version_no}；既有镜头引用保持不变。`);
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+    }
+  }
+
+  async function prepareDelete() {
+    if (!selectedAsset) return;
+    setDeletePreflight(undefined);
+    setDeleteOpen(true);
+    setActionError(null);
+    try {
+      setDeletePreflight(await loadDeletePreflight(selectedAsset.id).unwrap());
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+    }
+  }
+
+  async function confirmDelete() {
+    if (!selectedAsset || !effectiveProject || !deletePreflight?.allowed) return;
+    setActionError(null);
+    try {
+      await deleteAsset({
+        projectId: effectiveProject.id,
+        assetId: selectedAsset.id,
+        expectedRevision: selectedAsset.revision,
+      }).unwrap();
+      setDeleteOpen(false);
+      setDeletePreflight(undefined);
+      setSelectedAssetId(null);
+      setNotice(`空资产“${selectedAsset.name}”已删除。`);
     } catch (error: unknown) {
       setActionError(appApiErrorMessage(error));
     }
@@ -385,8 +471,12 @@ export function ComicProductionStudio() {
                 <AssetDetail
                   asset={selectedAsset}
                   isArchiving={archiveState.isLoading}
+                  isChangingCurrent={currentVersionState.isLoading}
                   mediaById={mediaById}
                   onAddVersion={() => setVersionOpen(true)}
+                  onDelete={() => void prepareDelete()}
+                  onEdit={() => setEditOpen(true)}
+                  onSetCurrent={(version) => void selectCurrentVersion(version)}
                   onToggleArchive={toggleArchive}
                   onUpgradeCompleted={(shotCount) => {
                     setActionError(null);
@@ -431,15 +521,36 @@ export function ComicProductionStudio() {
         open={createOpen}
       />
       {selectedAsset ? (
-        <VersionDialog
-          asset={selectedAsset}
-          characters={characterAssets}
-          isSubmitting={appendState.isLoading}
-          mediaVersions={mediaVersions}
-          onOpenChange={setVersionOpen}
-          onSubmit={submitVersion}
-          open={versionOpen}
-        />
+        <>
+          <EditAssetDialog
+            asset={selectedAsset}
+            isSubmitting={updateState.isLoading}
+            onOpenChange={setEditOpen}
+            onSubmit={submitEdit}
+            open={editOpen}
+          />
+          <VersionDialog
+            asset={selectedAsset}
+            characters={characterAssets}
+            isSubmitting={appendState.isLoading}
+            mediaVersions={mediaVersions}
+            onOpenChange={setVersionOpen}
+            onSubmit={submitVersion}
+            open={versionOpen}
+          />
+          <DeleteAssetDialog
+            asset={selectedAsset}
+            isDeleting={deleteState.isLoading}
+            isLoading={deletePreflightState.isLoading}
+            onConfirm={confirmDelete}
+            onOpenChange={(open) => {
+              setDeleteOpen(open);
+              if (!open) setDeletePreflight(undefined);
+            }}
+            open={deleteOpen}
+            preflight={deletePreflight}
+          />
+        </>
       ) : null}
     </StudioShell>
   );

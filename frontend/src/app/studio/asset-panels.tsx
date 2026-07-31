@@ -8,8 +8,10 @@ import {
   FileImage,
   History,
   Layers3,
+  Pencil,
   Plus,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -325,10 +327,16 @@ function VersionDetail({
 }
 
 function VersionHistory({
+  assetStatus,
   currentVersionId,
+  isChangingCurrent,
+  onSetCurrent,
   versions,
 }: {
+  assetStatus: API.AssetResponse["status"];
   currentVersionId: string | null;
+  isChangingCurrent: boolean;
+  onSetCurrent: (version: API.AssetVersionResponse) => void;
   versions: API.AssetVersionResponse[];
 }) {
   return (
@@ -354,9 +362,22 @@ function VersionHistory({
               {version.source_type === "candidate" ? "脚本候选交接" : "手动创建"} · {shortId(version.content_hash)}
             </p>
           </div>
-          <time className="text-xs text-slate-400" dateTime={version.created_at}>
-            {formatDate(version.created_at)}
-          </time>
+          <div className="grid justify-items-end gap-2">
+            <time className="text-xs text-slate-400" dateTime={version.created_at}>
+              {formatDate(version.created_at)}
+            </time>
+            {currentVersionId !== version.id ? (
+              <Button
+                aria-label={`设为当前资产版本 v${version.version_no}`}
+                disabled={assetStatus === "archived" || isChangingCurrent}
+                size="sm"
+                variant="outline"
+                onClick={() => onSetCurrent(version)}
+              >
+                设为当前
+              </Button>
+            ) : null}
+          </div>
         </div>
       ))}
     </div>
@@ -366,8 +387,12 @@ function VersionHistory({
 export function AssetDetail({
   asset,
   isArchiving,
+  isChangingCurrent,
   mediaById,
   onAddVersion,
+  onDelete,
+  onEdit,
+  onSetCurrent,
   onToggleArchive,
   onUpgradeCompleted,
   onUpgradeError,
@@ -379,8 +404,12 @@ export function AssetDetail({
 }: {
   asset: API.AssetResponse;
   isArchiving: boolean;
+  isChangingCurrent: boolean;
   mediaById: Map<string, API.MediaVersionResponse>;
   onAddVersion: () => void;
+  onDelete: () => void;
+  onEdit: () => void;
+  onSetCurrent: (version: API.AssetVersionResponse) => void;
   onToggleArchive: () => void;
   onUpgradeCompleted: (shotCount: number) => void;
   onUpgradeError: (message: string) => void;
@@ -432,6 +461,9 @@ export function AssetDetail({
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button aria-label="编辑资产身份" onClick={onEdit} variant="outline">
+                <Pencil aria-hidden="true" />编辑身份
+              </Button>
               <Button
                 disabled={asset.status === "archived"}
                 onClick={onAddVersion}
@@ -442,6 +474,9 @@ export function AssetDetail({
               <Button disabled={isArchiving} onClick={onToggleArchive} variant="ghost">
                 <Archive aria-hidden="true" />
                 {asset.status === "active" ? "归档" : "恢复"}
+              </Button>
+              <Button aria-label="删除资产身份" onClick={onDelete} variant="ghost">
+                <Trash2 aria-hidden="true" />删除
               </Button>
             </div>
           </div>
@@ -484,7 +519,13 @@ export function AssetDetail({
         </CardHeader>
         <CardContent className="px-5 py-1">
           {versions.length > 0 ? (
-            <VersionHistory currentVersionId={asset.current_version_id} versions={versions} />
+            <VersionHistory
+              assetStatus={asset.status}
+              currentVersionId={asset.current_version_id}
+              isChangingCurrent={isChangingCurrent}
+              versions={versions}
+              onSetCurrent={onSetCurrent}
+            />
           ) : (
             <p className="py-5 text-sm text-slate-500">暂无版本记录。</p>
           )}
