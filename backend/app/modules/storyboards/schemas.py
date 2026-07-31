@@ -351,3 +351,61 @@ class ShotTransformResponse(BaseModel):
     shots: list[ShotResponse]
     spec_versions: list[ShotSpecVersionResponse]
     order: ShotOrderResponse
+
+
+class ShotReadinessIssue(BaseModel):
+    code: Literal[
+        "CURRENT_SPEC_MISSING",
+        "SPEC_FIELD_MISSING",
+        "DURATION_OUT_OF_RANGE",
+        "SCRIPT_VERSION_UNAVAILABLE",
+        "SOURCE_SCENE_INVALID",
+        "SOURCE_DIALOGUE_INVALID",
+        "LOCATION_REFERENCE_MISSING",
+        "CHARACTER_REFERENCE_MISSING",
+        "VOICE_REFERENCE_MISSING",
+        "ASSET_KIND_MISMATCH",
+        "ASSET_VERSION_UNAVAILABLE",
+        "ASSET_NOT_READY",
+        "MEDIA_REFERENCE_UNAVAILABLE",
+        "RIGHTS_BLOCKED",
+        "DEPENDENCY_UNAVAILABLE",
+    ]
+    field_path: str | None = None
+    dependency_type: str | None = None
+    dependency_id: UUID | None = None
+    summary: str
+    next_action: str
+
+
+class ShotReadinessWarning(BaseModel):
+    code: Literal[
+        "DURATION_ABOVE_RECOMMENDED",
+        "ACTION_DENSITY_HIGH",
+        "STYLE_REFERENCE_MISSING",
+    ]
+    field_path: str | None = None
+    summary: str
+    next_action: str
+
+
+class ShotReadinessDependencies(BaseModel):
+    shot_spec_version_id: UUID | None
+    confirmed_script_version_id: UUID
+    scene_id: UUID
+    dialogue_ids: list[UUID]
+    asset_version_ids: list[UUID]
+    media_version_ids: list[UUID]
+    consent_ids: list[UUID]
+    asset_evaluation_hashes: dict[UUID, str]
+
+
+class ShotReadinessResponse(BaseModel):
+    shot_id: UUID
+    status: Literal["ready", "blocked", "unavailable"]
+    ready: bool
+    blocking_reasons: list[ShotReadinessIssue]
+    warnings: list[ShotReadinessWarning]
+    next_actions: list[str]
+    evaluated_dependencies: ShotReadinessDependencies
+    evaluation_hash: str

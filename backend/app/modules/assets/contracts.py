@@ -14,6 +14,19 @@ class AssetVersionReference:
 
 
 @dataclass(frozen=True, slots=True)
+class AssetVersionReadinessReference:
+    id: UUID
+    asset_id: UUID
+    kind: str
+    asset_status: str
+    status: Literal["draft", "ready", "blocked", "unavailable"]
+    blocker_codes: tuple[str, ...]
+    media_version_ids: tuple[UUID, ...]
+    consent_ids: tuple[UUID, ...]
+    evaluation_hash: str
+
+
+@dataclass(frozen=True, slots=True)
 class AssetCandidateCommand:
     workspace_id: UUID
     project_id: UUID

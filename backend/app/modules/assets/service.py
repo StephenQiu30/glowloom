@@ -14,6 +14,7 @@ from app.modules.assets import repository
 from app.modules.assets.contracts import (
     AssetCandidateCommand,
     AssetCandidateResult,
+    AssetVersionReadinessReference,
     AssetVersionReference,
     ProjectAssetSummary,
 )
@@ -940,6 +941,76 @@ async def resolve_asset_version(
         asset_id=asset.id,
         kind=asset.kind,
         asset_status=asset.status,
+    )
+
+
+async def resolve_asset_version_readiness(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_id: UUID,
+    version_id: UUID,
+    *,
+    purpose: str,
+    channel: str,
+    region: str,
+) -> AssetVersionReadinessReference | None:
+    result = await repository.find_version(session, version_id)
+    if result is None:
+        return None
+    version, asset = result
+    if version.workspace_id != workspace_id or asset.project_id != project_id:
+        return None
+    references = await repository.list_media_references(session, [version.id])
+    readiness = await _evaluate_readiness(
+        session,
+        asset,
+        version,
+        references,
+        purpose=purpose,
+        channel=channel,
+        region=region,
+        at_time=datetime.now(UTC),
+    )
+    blocker_codes = tuple(blocker.code for blocker in readiness.blockers)
+    status: Literal["draft", "ready", "blocked", "unavailable"] = readiness.status
+    if "rights_dependency_unavailable" in blocker_codes:
+        status = "unavailable"
+    stable_snapshot = {
+        "asset_version_id": str(version.id),
+        "asset_id": str(asset.id),
+        "asset_status": asset.status,
+        "content_hash": version.content_hash,
+        "status": status,
+        "blockers": [
+            blocker.model_dump(mode="json", exclude_none=True)
+            for blocker in readiness.blockers
+        ],
+        "media_version_ids": [
+            str(media_id)
+            for media_id in readiness.dependency_snapshot.media_version_ids
+        ],
+        "consent_ids": [
+            str(consent_id) for consent_id in readiness.dependency_snapshot.consent_ids
+        ],
+    }
+    evaluation_hash = sha256(
+        json.dumps(
+            stable_snapshot,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    return AssetVersionReadinessReference(
+        id=version.id,
+        asset_id=asset.id,
+        kind=asset.kind,
+        asset_status=asset.status,
+        status=status,
+        blocker_codes=blocker_codes,
+        media_version_ids=tuple(readiness.dependency_snapshot.media_version_ids),
+        consent_ids=tuple(readiness.dependency_snapshot.consent_ids),
+        evaluation_hash=evaluation_hash,
     )
 
 

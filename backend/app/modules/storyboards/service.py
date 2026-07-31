@@ -3,12 +3,17 @@ from datetime import UTC, datetime
 from typing import Literal, cast
 from uuid import UUID
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
-from app.modules.assets import resolve_asset_version
+from app.modules.assets import (
+    AssetVersionReadinessReference,
+    resolve_asset_version,
+    resolve_asset_version_readiness,
+)
 from app.modules.projects import (
     episode_for_content_read,
     lock_active_episode_for_content_write,
@@ -42,6 +47,10 @@ from app.modules.storyboards.schemas import (
     ShotDeletePreflightResponse,
     ShotDeleteResponse,
     ShotOrderResponse,
+    ShotReadinessDependencies,
+    ShotReadinessIssue,
+    ShotReadinessResponse,
+    ShotReadinessWarning,
     ShotReorderRequest,
     ShotResponse,
     ShotSpec,
@@ -1456,3 +1465,368 @@ async def merge_shots(
             order=_order_response(ordered),
         )
     return result
+
+
+def _unique_readiness_issues(
+    issues: list[ShotReadinessIssue],
+) -> list[ShotReadinessIssue]:
+    unique: list[ShotReadinessIssue] = []
+    seen: set[tuple[str, str | None, UUID | None]] = set()
+    for issue in issues:
+        key = (issue.code, issue.field_path, issue.dependency_id)
+        if key not in seen:
+            seen.add(key)
+            unique.append(issue)
+    return unique
+
+
+def _asset_readiness_issues(
+    reference: AssetReference,
+    readiness: AssetVersionReadinessReference,
+) -> list[ShotReadinessIssue]:
+    issues: list[ShotReadinessIssue] = []
+    if readiness.kind != reference.role:
+        issues.append(
+            ShotReadinessIssue(
+                code="ASSET_KIND_MISMATCH",
+                field_path=f"asset_references.{reference.slot_key}",
+                dependency_type="ASSET_VERSION",
+                dependency_id=reference.asset_version_id,
+                summary="Asset kind does not match the fixed reference role",
+                next_action="replace_asset_reference",
+            )
+        )
+        return issues
+    if readiness.status == "unavailable":
+        issues.append(
+            ShotReadinessIssue(
+                code="DEPENDENCY_UNAVAILABLE",
+                field_path=f"asset_references.{reference.slot_key}",
+                dependency_type="ASSET_READINESS",
+                dependency_id=reference.asset_version_id,
+                summary="Asset readiness dependency is unavailable",
+                next_action="retry_readiness",
+            )
+        )
+        return issues
+    for blocker_code in readiness.blocker_codes:
+        if blocker_code == "asset_archived":
+            code = "ASSET_VERSION_UNAVAILABLE"
+            summary = "The fixed asset version belongs to an archived asset"
+            next_action = "replace_or_restore_asset"
+        elif blocker_code.startswith("media_") or blocker_code == "required_media_missing":
+            code = "MEDIA_REFERENCE_UNAVAILABLE"
+            summary = "The fixed asset version has unavailable required media"
+            next_action = "review_asset_media"
+        elif blocker_code in {
+            "consent_missing",
+            "consent_revoked",
+            "consent_not_yet_valid",
+            "consent_expired",
+            "purpose_not_covered",
+            "channel_not_covered",
+            "region_not_covered",
+            "proof_unavailable",
+            "minor_not_supported",
+        }:
+            code = "RIGHTS_BLOCKED"
+            summary = "The fixed asset version is not authorized for generation"
+            next_action = "review_asset_consent"
+        else:
+            code = "ASSET_NOT_READY"
+            summary = "The fixed asset version is not ready"
+            next_action = "complete_asset_version"
+        issues.append(
+            ShotReadinessIssue(
+                code=code,
+                field_path=f"asset_references.{reference.slot_key}",
+                dependency_type="ASSET_VERSION",
+                dependency_id=reference.asset_version_id,
+                summary=summary,
+                next_action=next_action,
+            )
+        )
+    if readiness.status != "ready" and not readiness.blocker_codes:
+        issues.append(
+            ShotReadinessIssue(
+                code="ASSET_NOT_READY",
+                field_path=f"asset_references.{reference.slot_key}",
+                dependency_type="ASSET_VERSION",
+                dependency_id=reference.asset_version_id,
+                summary="The fixed asset version is not ready",
+                next_action="complete_asset_version",
+            )
+        )
+    return issues
+
+
+def _finalize_readiness(
+    *,
+    shot_id: UUID,
+    issues: list[ShotReadinessIssue],
+    warnings: list[ShotReadinessWarning],
+    dependencies: ShotReadinessDependencies,
+) -> ShotReadinessResponse:
+    blocking_reasons = _unique_readiness_issues(issues)
+    status: Literal["ready", "blocked", "unavailable"]
+    if any(issue.code == "DEPENDENCY_UNAVAILABLE" for issue in blocking_reasons):
+        status = "unavailable"
+    elif blocking_reasons:
+        status = "blocked"
+    else:
+        status = "ready"
+    next_actions = list(
+        dict.fromkeys(
+            [issue.next_action for issue in blocking_reasons]
+            + [warning.next_action for warning in warnings]
+        )
+    )
+    evaluation_hash = canonical_payload_hash(
+        {
+            "shot_id": str(shot_id),
+            "status": status,
+            "blocking_reasons": [
+                issue.model_dump(mode="json", exclude_none=True)
+                for issue in blocking_reasons
+            ],
+            "warnings": [
+                warning.model_dump(mode="json", exclude_none=True)
+                for warning in warnings
+            ],
+            "evaluated_dependencies": dependencies.model_dump(mode="json"),
+        }
+    )
+    return ShotReadinessResponse(
+        shot_id=shot_id,
+        status=status,
+        ready=status == "ready",
+        blocking_reasons=blocking_reasons,
+        warnings=warnings,
+        next_actions=next_actions,
+        evaluated_dependencies=dependencies,
+        evaluation_hash=evaluation_hash,
+    )
+
+
+async def get_readiness(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    shot_id: UUID,
+    *,
+    version_id: UUID | None = None,
+) -> ShotReadinessResponse:
+    shot = await repository.find_shot(session, shot_id)
+    if shot is None:
+        raise _not_found("Shot")
+    episode = await episode_for_content_read(session, claims, shot.episode_id)
+    selected_version_id = version_id or shot.current_spec_version_id
+    if selected_version_id is None:
+        dependencies = ShotReadinessDependencies(
+            shot_spec_version_id=None,
+            confirmed_script_version_id=shot.source_script_version_id,
+            scene_id=shot.source_scene_id,
+            dialogue_ids=[],
+            asset_version_ids=[],
+            media_version_ids=[],
+            consent_ids=[],
+            asset_evaluation_hashes={},
+        )
+        return _finalize_readiness(
+            shot_id=shot.id,
+            issues=[
+                ShotReadinessIssue(
+                    code="CURRENT_SPEC_MISSING",
+                    field_path="current_spec_version_id",
+                    summary="Shot has no selected specification version",
+                    next_action="save_shot_spec",
+                )
+            ],
+            warnings=[],
+            dependencies=dependencies,
+        )
+
+    version_result = await repository.find_spec_version(session, selected_version_id)
+    if version_result is None or version_result[0].shot_id != shot.id:
+        raise _not_found("Shot spec version")
+    version = version_result[0]
+    spec = ShotSpec.model_validate(version.spec)
+    references = await repository.list_asset_references(session, [version.id])
+    issues: list[ShotReadinessIssue] = []
+    warnings: list[ShotReadinessWarning] = []
+
+    try:
+        confirmed = await resolve_confirmed_structure(
+            session,
+            workspace_id=shot.workspace_id,
+            episode_id=shot.episode_id,
+            script_version_id=spec.script_reference.confirmed_script_version_id,
+            scene_id=spec.script_reference.scene_id,
+            dialogue_ids=spec.script_reference.dialogue_ids,
+        )
+    except (SQLAlchemyError, ApiError) as error:
+        if isinstance(error, ApiError) and error.code != ErrorCode.DEPENDENCY_UNAVAILABLE:
+            raise
+        issues.append(
+            ShotReadinessIssue(
+                code="DEPENDENCY_UNAVAILABLE",
+                dependency_type="SCRIPTS",
+                summary="Confirmed script dependency is unavailable",
+                next_action="retry_readiness",
+            )
+        )
+    else:
+        if confirmed is None:
+            issues.append(
+                ShotReadinessIssue(
+                    code="SCRIPT_VERSION_UNAVAILABLE",
+                    field_path="spec.script_reference",
+                    dependency_type="SCRIPT_VERSION",
+                    dependency_id=spec.script_reference.confirmed_script_version_id,
+                    summary="The fixed confirmed script structure is unavailable",
+                    next_action="select_confirmed_script_structure",
+                )
+            )
+
+    location_references = [
+        reference for reference in references if reference.role == "location"
+    ]
+    if len(location_references) != 1:
+        issues.append(
+            ShotReadinessIssue(
+                code="LOCATION_REFERENCE_MISSING",
+                field_path="asset_references",
+                summary="Exactly one location asset reference is required",
+                next_action="select_location_asset",
+            )
+        )
+    character_subjects = {
+        reference.subject_key
+        for reference in references
+        if reference.role == "character" and reference.subject_key is not None
+    }
+    for index, placement in enumerate(spec.visual.subject_placements):
+        if placement.subject_key not in character_subjects:
+            issues.append(
+                ShotReadinessIssue(
+                    code="CHARACTER_REFERENCE_MISSING",
+                    field_path=f"spec.visual.subject_placements.{index}",
+                    summary="A placed subject requires a matching character asset",
+                    next_action="select_character_asset",
+                )
+            )
+    voice_subjects = {
+        reference.subject_key
+        for reference in references
+        if reference.role == "voice" and reference.subject_key is not None
+    }
+    for index, dialogue in enumerate(spec.dialogue_or_narration):
+        if dialogue.render_as_audio and dialogue.speaker_subject_key not in voice_subjects:
+            issues.append(
+                ShotReadinessIssue(
+                    code="VOICE_REFERENCE_MISSING",
+                    field_path=f"spec.dialogue_or_narration.{index}",
+                    summary="An audible dialogue requires a matching voice asset",
+                    next_action="select_voice_asset",
+                )
+            )
+
+    asset_snapshots: dict[UUID, AssetVersionReadinessReference] = {}
+    try:
+        for reference in references:
+            readiness = await resolve_asset_version_readiness(
+                session,
+                shot.workspace_id,
+                episode.project_id,
+                reference.asset_version_id,
+                purpose="ai_short_drama_generation",
+                channel="lanverse_preview",
+                region="CN",
+            )
+            if readiness is None:
+                issues.append(
+                    ShotReadinessIssue(
+                        code="ASSET_VERSION_UNAVAILABLE",
+                        field_path=f"asset_references.{reference.slot_key}",
+                        dependency_type="ASSET_VERSION",
+                        dependency_id=reference.asset_version_id,
+                        summary="The fixed asset version is unavailable",
+                        next_action="replace_asset_reference",
+                    )
+                )
+                continue
+            asset_snapshots[readiness.id] = readiness
+            issues.extend(_asset_readiness_issues(reference, readiness))
+    except (SQLAlchemyError, ApiError) as error:
+        if isinstance(error, ApiError) and error.code != ErrorCode.DEPENDENCY_UNAVAILABLE:
+            raise
+        issues.append(
+            ShotReadinessIssue(
+                code="DEPENDENCY_UNAVAILABLE",
+                dependency_type="ASSETS",
+                summary="Asset readiness dependency is unavailable",
+                next_action="retry_readiness",
+            )
+        )
+
+    if spec.duration_ms > 8000:
+        warnings.append(
+            ShotReadinessWarning(
+                code="DURATION_ABOVE_RECOMMENDED",
+                field_path="spec.duration_ms",
+                summary="Shot duration is above the recommended eight seconds",
+                next_action="confirm_long_shot",
+            )
+        )
+    beats_per_second = len(spec.action_beats) / (spec.duration_ms / 1000)
+    if len(spec.action_beats) > 4 or beats_per_second > 1:
+        warnings.append(
+            ShotReadinessWarning(
+                code="ACTION_DENSITY_HIGH",
+                field_path="spec.action_beats",
+                summary="Shot action density may reduce generation consistency",
+                next_action="confirm_action_density",
+            )
+        )
+    if not any(reference.role == "visual_style" for reference in references):
+        warnings.append(
+            ShotReadinessWarning(
+                code="STYLE_REFERENCE_MISSING",
+                field_path="asset_references",
+                summary="An optional visual style reference is not fixed",
+                next_action="add_optional_style_reference",
+            )
+        )
+
+    dependencies = ShotReadinessDependencies(
+        shot_spec_version_id=version.id,
+        confirmed_script_version_id=spec.script_reference.confirmed_script_version_id,
+        scene_id=spec.script_reference.scene_id,
+        dialogue_ids=spec.script_reference.dialogue_ids,
+        asset_version_ids=[reference.asset_version_id for reference in references],
+        media_version_ids=sorted(
+            {
+                media_id
+                for snapshot in asset_snapshots.values()
+                for media_id in snapshot.media_version_ids
+            },
+            key=str,
+        ),
+        consent_ids=sorted(
+            {
+                consent_id
+                for snapshot in asset_snapshots.values()
+                for consent_id in snapshot.consent_ids
+            },
+            key=str,
+        ),
+        asset_evaluation_hashes={
+            asset_id: asset_snapshots[asset_id].evaluation_hash
+            for asset_id in sorted(asset_snapshots, key=str)
+        },
+    )
+    return _finalize_readiness(
+        shot_id=shot.id,
+        issues=issues,
+        warnings=warnings,
+        dependencies=dependencies,
+    )
