@@ -1,12 +1,13 @@
 import {
   Blocks,
+  Clapperboard,
   FileText,
   ImageIcon,
   ListChecks,
   type LucideIcon,
 } from "lucide-react";
 
-export type EpisodePanel = "script" | "assets" | "media" | "tasks";
+export type EpisodePanel = "script" | "assets" | "storyboard" | "media" | "tasks";
 
 export const episodePanels: Array<{
   id: EpisodePanel;
@@ -16,6 +17,7 @@ export const episodePanels: Array<{
 }> = [
   { id: "script", label: "剧本结构", description: "版本、提取与人工决议", icon: FileText },
   { id: "assets", label: "资产准备", description: "角色、场景与声音", icon: Blocks },
+  { id: "storyboard", label: "分镜设计", description: "镜头、规格与准备度", icon: Clapperboard },
   { id: "media", label: "媒体", description: "私有上传与探测", icon: ImageIcon },
   { id: "tasks", label: "任务", description: "状态恢复与失败原因", icon: ListChecks },
 ];

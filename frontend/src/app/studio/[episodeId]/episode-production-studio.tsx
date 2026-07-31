@@ -23,8 +23,13 @@ import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
   useAssetsQuery,
+  useAppendShotSpecMutation,
+  useArchivedShotsQuery,
   useCompleteMediaUploadMutation,
   useConfirmStructureMutation,
+  useConfirmedStructureQuery,
+  useCopyShotMutation,
+  useCreateShotMutation,
   useDecideExtractionCandidateMutation,
   useEpisodeQuery,
   useEpisodeSnapshotQuery,
@@ -38,10 +43,15 @@ import {
   useProjectQuery,
   usePublishScriptVersionMutation,
   useRetryMediaProbeMutation,
+  useReorderShotsMutation,
   useScriptSourcesQuery,
   useScriptVersionQuery,
   useScriptVersionsQuery,
   useSetCurrentScriptVersionMutation,
+  useSetShotArchivedMutation,
+  useShotOrderQuery,
+  useShotReadinessQuery,
+  useShotSpecVersionsQuery,
   useStartExtractionMutation,
   useTasksQuery,
 } from "@/lib/server-state";
@@ -55,6 +65,7 @@ import {
 } from "./episode-studio-model";
 import { MediaWorkspace } from "./media-workspace";
 import { ScriptWorkspace } from "./script-workspace";
+import { StoryboardWorkspace } from "./storyboard-workspace";
 import { TaskWorkspace } from "./task-workspace";
 
 const stageSteps: Record<API.EpisodeProductionSnapshot["current_stage"], number> = {
@@ -129,6 +140,37 @@ export function EpisodeProductionStudio({
   });
   const assetsQuery = useAssetsQuery(episode?.project_id ?? "", { skip: !episode });
   const mediaQuery = useMediaVersionsQuery(workspaceId ?? "", { skip: !workspaceId });
+  const storyboardActive = initialPanel === "storyboard";
+  const shotOrderQuery = useShotOrderQuery(episodeId, {
+    skip: !authenticated || !storyboardActive,
+  });
+  const archivedShotsQuery = useArchivedShotsQuery(episodeId, {
+    skip: !authenticated || !storyboardActive,
+  });
+  const shotReadinessQuery = useShotReadinessQuery(episodeId, {
+    pollingInterval: 5_000,
+    skip: !authenticated || !storyboardActive,
+  });
+  const confirmedVersionId =
+    snapshot?.script_summary.status === "confirmed"
+      ? episode?.current_script_version_id
+      : null;
+  const structureQuery = useConfirmedStructureQuery(confirmedVersionId ?? "", {
+    skip: !confirmedVersionId || !storyboardActive,
+  });
+  const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
+  const selectedShot =
+    shotOrderQuery.data?.items.find((shot) => shot.id === selectedShotId) ??
+    shotOrderQuery.data?.items[0];
+  const shotSpecVersionsQuery = useShotSpecVersionsQuery(selectedShot?.id ?? "", {
+    skip: !selectedShot || !storyboardActive,
+  });
+  const storyboardLoading =
+    storyboardActive &&
+    (shotOrderQuery.isLoading ||
+      archivedShotsQuery.isLoading ||
+      shotReadinessQuery.isLoading ||
+      structureQuery.isLoading);
 
   const [importScript, importState] = useImportScriptMutation();
   const [publishVersion, publishState] = usePublishScriptVersionMutation();
@@ -139,6 +181,11 @@ export function EpisodeProductionStudio({
   const [initializeUpload, initializationState] = useInitializeMediaUploadMutation();
   const [completeUpload, completionState] = useCompleteMediaUploadMutation();
   const [retryProbe, retryState] = useRetryMediaProbeMutation();
+  const [createShot, createShotState] = useCreateShotMutation();
+  const [appendShotSpec, appendShotSpecState] = useAppendShotSpecMutation();
+  const [reorderShots, reorderShotsState] = useReorderShotsMutation();
+  const [copyShot, copyShotState] = useCopyShotMutation();
+  const [setShotArchived, shotArchiveState] = useSetShotArchivedMutation();
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -152,6 +199,11 @@ export function EpisodeProductionStudio({
     initializationState,
     completionState,
     retryState,
+    createShotState,
+    appendShotSpecState,
+    reorderShotsState,
+    copyShotState,
+    shotArchiveState,
   ].some((state) => state.isLoading);
 
   async function runAction(action: () => Promise<string>) {
@@ -301,6 +353,90 @@ export function EpisodeProductionStudio({
     });
   }
 
+  async function handleCreateShot(request: API.ShotCreateRequest): Promise<boolean> {
+    let succeeded = false;
+    await runAction(async () => {
+      const created = await createShot({ episodeId, body: request }).unwrap();
+      setSelectedShotId(created.id);
+      succeeded = true;
+      return `镜头“${created.title}”已加入清单。`;
+    });
+    return succeeded;
+  }
+
+  async function handleSaveShotSpec(
+    shotId: string,
+    request: API.ShotSpecCreateRequest,
+  ): Promise<boolean> {
+    let succeeded = false;
+    await runAction(async () => {
+      const result = await appendShotSpec({
+        episodeId,
+        shotId,
+        body: request,
+      }).unwrap();
+      succeeded = true;
+      return `镜头规格 v${result.version.version_no} 已保存，准备度将按最新事实刷新。`;
+    });
+    return succeeded;
+  }
+
+  async function handleReorderShots(shotIds: string[]) {
+    const order = shotOrderQuery.data;
+    if (!order) return;
+    if (selectedShot) setSelectedShotId(selectedShot.id);
+    await runAction(async () => {
+      await reorderShots({
+        episodeId,
+        body: { shot_ids: shotIds, expected_order_hash: order.order_hash },
+      }).unwrap();
+      return "镜头顺序已更新。";
+    });
+  }
+
+  async function handleCopyShot(shot: API.ShotResponse) {
+    const order = shotOrderQuery.data;
+    const sourceSpecVersionId = shot.current_spec_version_id;
+    if (!order || !sourceSpecVersionId) return;
+    await runAction(async () => {
+      const result = await copyShot({
+        episodeId,
+        shotId: shot.id,
+        body: {
+          title: `${shot.title} · 副本`,
+          expected_source_spec_version_id: sourceSpecVersionId,
+          expected_order_hash: order.order_hash,
+          idempotency_key: `studio-copy:${shot.id}:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      const copiedId = result.transform.result_shot_ids[0];
+      if (copiedId) setSelectedShotId(copiedId);
+      return `镜头“${shot.title}”已复制，历史生产证据不会被继承。`;
+    });
+  }
+
+  async function handleToggleShotArchived(shot: API.ShotResponse) {
+    const order = shotOrderQuery.data;
+    if (!order) return;
+    const archived = shot.status === "active";
+    await runAction(async () => {
+      const result = await setShotArchived({
+        episodeId,
+        shotId: shot.id,
+        archived,
+        body: {
+          expected_revision: shot.revision,
+          expected_order_hash: order.order_hash,
+        },
+      }).unwrap();
+      if (archived && selectedShotId === shot.id) {
+        setSelectedShotId(result.order.items[0]?.id ?? null);
+      }
+      if (!archived) setSelectedShotId(result.shot.id);
+      return archived ? `镜头“${shot.title}”已归档。` : `镜头“${shot.title}”已恢复到清单末尾。`;
+    });
+  }
+
   const pageError =
     me.error ??
     episodeQuery.error ??
@@ -315,6 +451,13 @@ export function EpisodeProductionStudio({
     candidatesQuery.error ??
     assetsQuery.error ??
     mediaQuery.error;
+  const storyboardError = storyboardActive
+    ? shotOrderQuery.error ??
+      archivedShotsQuery.error ??
+      shotReadinessQuery.error ??
+      structureQuery.error ??
+      shotSpecVersionsQuery.error
+    : undefined;
 
   if (sessionState === "checking") {
     return <div className="grid min-h-screen place-items-center"><LoaderCircle className="animate-spin text-[#079db3]" aria-label="正在读取登录状态" /></div>;
@@ -354,13 +497,13 @@ export function EpisodeProductionStudio({
             <AlertTitle>需要登录</AlertTitle>
             <AlertDescription><Link className="underline" href="/login">登录后进入单集生产工作台</Link></AlertDescription>
           </Alert>
-        ) : pageError ? (
+        ) : pageError || storyboardError ? (
           <Alert variant="destructive">
             <AlertCircle aria-hidden="true" />
             <AlertTitle>生产事实暂时无法读取</AlertTitle>
-            <AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription>
+            <AlertDescription>{appApiErrorMessage(pageError ?? storyboardError)}</AlertDescription>
           </Alert>
-        ) : !episode || !project || !snapshot ? (
+        ) : !episode || !project || !snapshot || storyboardLoading ? (
           <div className="grid min-h-96 place-items-center"><LoaderCircle className="animate-spin text-[#079db3]" aria-label="正在加载生产工作台" /></div>
         ) : (
           <>
@@ -417,7 +560,7 @@ export function EpisodeProductionStudio({
               </Alert>
             ) : null}
 
-            <nav className="mt-7 grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="单集制作模块">
+            <nav className="mt-7 grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 sm:grid-cols-2 xl:grid-cols-5" aria-label="单集制作模块">
               {episodePanels.map((panel) => (
                 <Link
                   aria-current={panel.id === initialPanel ? "page" : undefined}
@@ -453,6 +596,23 @@ export function EpisodeProductionStudio({
                 />
               ) : initialPanel === "assets" ? (
                 <EpisodeAssetOverview assets={assetsQuery.data?.items ?? []} summary={snapshot.asset_summary} />
+              ) : initialPanel === "storyboard" ? (
+                <StoryboardWorkspace
+                  archivedShots={archivedShotsQuery.data ?? []}
+                  assets={assetsQuery.data?.items ?? []}
+                  busy={busy}
+                  order={shotOrderQuery.data ?? { items: [], order_hash: "" }}
+                  readiness={shotReadinessQuery.data}
+                  selectedShotId={selectedShot?.id ?? null}
+                  structure={structureQuery.data}
+                  versions={shotSpecVersionsQuery.currentData ?? []}
+                  onCopy={handleCopyShot}
+                  onCreate={handleCreateShot}
+                  onReorder={handleReorderShots}
+                  onSaveSpec={handleSaveShotSpec}
+                  onSelectShot={setSelectedShotId}
+                  onToggleArchived={handleToggleShotArchived}
+                />
               ) : initialPanel === "media" ? (
                 <MediaWorkspace busy={busy} media={mediaQuery.data?.items ?? []} onRetry={handleRetry} onUpload={handleUpload} />
               ) : (

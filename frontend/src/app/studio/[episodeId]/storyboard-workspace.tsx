@@ -1,0 +1,1016 @@
+"use client";
+
+import {
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  Copy,
+  Film,
+  History,
+  Plus,
+  RotateCcw,
+  Save,
+  ShieldAlert,
+} from "lucide-react";
+import { type FormEvent, useMemo, useState } from "react";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/class-names";
+
+type StoryboardWorkspaceProps = {
+  archivedShots: API.ShotResponse[];
+  assets: API.AssetResponse[];
+  busy: boolean;
+  order: API.ShotOrderResponse;
+  readiness?: API.ShotReadinessBatchResponse;
+  selectedShotId: string | null;
+  structure?: API.ConfirmedStructureResponse;
+  versions: API.ShotSpecVersionResponse[];
+  onCopy: (shot: API.ShotResponse) => Promise<void>;
+  onCreate: (request: API.ShotCreateRequest) => Promise<boolean>;
+  onReorder: (shotIds: string[]) => Promise<void>;
+  onSaveSpec: (
+    shotId: string,
+    request: API.ShotSpecCreateRequest,
+  ) => Promise<boolean>;
+  onSelectShot: (shotId: string) => void;
+  onToggleArchived: (shot: API.ShotResponse) => Promise<void>;
+};
+
+const shotSizeLabels: Record<API.VisualSpec["shot_size"], string> = {
+  extreme_wide: "大远景",
+  wide: "远景",
+  full: "全景",
+  medium: "中景",
+  medium_close_up: "中近景",
+  close_up: "近景",
+  extreme_close_up: "特写",
+};
+
+const angleLabels: Record<API.VisualSpec["camera_angle"], string> = {
+  eye_level: "平视",
+  high: "俯拍",
+  low: "仰拍",
+  bird_eye: "鸟瞰",
+  dutch: "荷兰角",
+};
+
+const movementLabels: Record<API.VisualSpec["camera_movement"], string> = {
+  static: "固定",
+  pan: "横摇",
+  tilt: "纵摇",
+  dolly: "推拉",
+  truck: "横移",
+  pedestal: "升降",
+  zoom: "变焦",
+  handheld: "手持",
+  orbit: "环绕",
+};
+
+const generationModeLabels: Record<API.GenerationIntent["mode"], string> = {
+  keyframe_then_video: "关键帧转视频",
+  reference_to_video: "参考图转视频",
+  text_to_video: "文本生成视频",
+};
+
+const assetKindLabels: Record<API.AssetResponse["kind"], string> = {
+  character: "角色",
+  location: "场景",
+  prop: "道具",
+  costume: "服装",
+  visual_style: "视觉风格",
+  voice: "声音",
+};
+
+const readinessLabels: Record<API.ShotReadinessResponse["status"], string> = {
+  ready: "可生成",
+  blocked: "待完善",
+  unavailable: "依赖不可用",
+};
+
+const readinessIssueLabels: Record<API.ShotReadinessIssue["code"], string> = {
+  CURRENT_SPEC_MISSING: "尚未保存镜头规格",
+  SPEC_FIELD_MISSING: "镜头规格字段不完整",
+  DURATION_OUT_OF_RANGE: "镜头时长超出支持范围",
+  SCRIPT_VERSION_UNAVAILABLE: "已确认剧本版本不可用",
+  SOURCE_SCENE_INVALID: "来源场次与已确认剧本不一致",
+  SOURCE_DIALOGUE_INVALID: "对白引用与已确认场次不一致",
+  LOCATION_REFERENCE_MISSING: "需要且只能固定一个场景资产版本",
+  CHARACTER_REFERENCE_MISSING: "画面角色尚未固定对应的角色资产版本",
+  VOICE_REFERENCE_MISSING: "启用语音的对白尚未固定声音资产版本",
+  ASSET_KIND_MISMATCH: "资产类型与镜头引用槽位不一致",
+  ASSET_VERSION_UNAVAILABLE: "固定的资产版本不可用",
+  ASSET_NOT_READY: "固定资产尚未达到生产就绪状态",
+  MEDIA_REFERENCE_UNAVAILABLE: "资产所需的媒体版本不可用",
+  RIGHTS_BLOCKED: "资产授权尚未满足本次生产用途",
+  DEPENDENCY_UNAVAILABLE: "生产依赖暂时不可用",
+};
+
+function readinessIssueSummary(issue: API.ShotReadinessIssue): string {
+  return readinessIssueLabels[issue.code];
+}
+
+function readinessClass(status: API.ShotReadinessResponse["status"]): string {
+  if (status === "ready") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "unavailable") return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+function defaultSpec(
+  shot: API.ShotResponse,
+  structure?: API.ConfirmedStructureResponse,
+): API.ShotSpec {
+  const scene = structure?.scenes.find((item) => item.id === shot.source_scene_id);
+  return {
+    schema_version: 1,
+    script_reference: {
+      confirmed_script_version_id: shot.source_script_version_id,
+      scene_id: shot.source_scene_id,
+      dialogue_ids: [],
+    },
+    narrative: { purpose: shot.title, continuity_note: null },
+    visual: {
+      shot_size: "medium",
+      camera_angle: "eye_level",
+      camera_movement: "static",
+      composition: "主体位于画面视觉中心，保留明确的前后景层次",
+      environment: scene
+        ? `${scene.location} · ${scene.time_of_day} · ${scene.summary}`
+        : "待补充镜头环境",
+      subject_placements: [],
+      mood_lighting: "延续项目视觉风格与场景光线",
+    },
+    action_beats: [
+      { beat_key: "beat-1", order: 1, description: "完成本镜头的主要动作" },
+    ],
+    dialogue_or_narration: [],
+    duration_ms: 3_000,
+    audio_intent: { ambient: null, sound_effects: [] },
+    generation_intent: {
+      mode: "text_to_video",
+      first_frame: null,
+      last_frame: null,
+      keyframe_notes: null,
+    },
+  };
+}
+
+function NewShotDialog({
+  busy,
+  structure,
+  onCreate,
+}: Pick<StoryboardWorkspaceProps, "busy" | "structure" | "onCreate">) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [sceneId, setSceneId] = useState(structure?.scenes[0]?.id ?? "");
+  const scene = structure?.scenes.find((item) => item.id === sceneId);
+  const canCreate = Boolean(structure?.scenes.length);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!structure || !scene || !title.trim()) return;
+    const succeeded = await onCreate({
+      title: title.trim(),
+      source_script_version_id: structure.script_version_id,
+      source_scene_id: scene.id,
+      creation_key: `studio-shot:${scene.id}:${crypto.randomUUID()}`,
+    });
+    if (succeeded) {
+      setTitle("");
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div className="grid justify-items-end gap-1.5">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button disabled={!canCreate || busy}>
+            <Plus aria-hidden="true" />新建镜头
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-lg">
+          <form onSubmit={submit}>
+            <DialogHeader>
+              <DialogTitle>从已确认场次新建镜头</DialogTitle>
+              <DialogDescription>
+                先建立稳定镜头身份，再在工作台保存完整规格版本。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-5 grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="newShotTitle">镜头标题</Label>
+                <Input
+                  id="newShotTitle"
+                  aria-label="新镜头标题"
+                  maxLength={200}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="例如：远处灯箱闪烁"
+                  required
+                  value={title}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>来源场次</Label>
+                <Select value={sceneId} onValueChange={setSceneId}>
+                  <SelectTrigger aria-label="来源场次" className="h-10 w-full">
+                    <SelectValue placeholder="选择已确认场次" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(structure?.scenes ?? []).map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        第 {item.position} 场 · {item.heading}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {scene ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {scene.location} · {scene.time_of_day} · {scene.summary}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <DialogFooter className="mt-5">
+              <Button disabled={busy || !scene || !title.trim()} type="submit">
+                创建空镜头
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {!canCreate ? (
+        <p className="max-w-xs text-right text-xs leading-5 text-muted-foreground">
+          需先确认剧本结构并设为当前版本，才能建立镜头。
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ShotSpecEditor({
+  assets,
+  busy,
+  currentVersion,
+  readiness,
+  shot,
+  structure,
+  onSaveSpec,
+}: {
+  assets: API.AssetResponse[];
+  busy: boolean;
+  currentVersion?: API.ShotSpecVersionResponse;
+  readiness?: API.ShotReadinessResponse;
+  shot: API.ShotResponse;
+  structure?: API.ConfirmedStructureResponse;
+  onSaveSpec: StoryboardWorkspaceProps["onSaveSpec"];
+}) {
+  const initial = currentVersion?.spec ?? defaultSpec(shot, structure);
+  const [purpose, setPurpose] = useState(initial.narrative.purpose);
+  const [continuity, setContinuity] = useState(
+    initial.narrative.continuity_note ?? "",
+  );
+  const [shotSize, setShotSize] = useState(initial.visual.shot_size);
+  const [angle, setAngle] = useState(initial.visual.camera_angle);
+  const [movement, setMovement] = useState(initial.visual.camera_movement);
+  const [composition, setComposition] = useState(initial.visual.composition);
+  const [environment, setEnvironment] = useState(initial.visual.environment);
+  const [lighting, setLighting] = useState(initial.visual.mood_lighting);
+  const [beats, setBeats] = useState(
+    initial.action_beats.map((beat) => beat.description).join("\n"),
+  );
+  const [duration, setDuration] = useState(initial.duration_ms ?? 3_000);
+  const [ambient, setAmbient] = useState(initial.audio_intent?.ambient ?? "");
+  const [soundEffects, setSoundEffects] = useState(
+    (initial.audio_intent?.sound_effects ?? []).join("，"),
+  );
+  const [generationMode, setGenerationMode] = useState(
+    initial.generation_intent.mode,
+  );
+  const [keyframeNotes, setKeyframeNotes] = useState(
+    initial.generation_intent.keyframe_notes ?? "",
+  );
+  const [dialogueIds, setDialogueIds] = useState(
+    initial.script_reference.dialogue_ids ?? [],
+  );
+  const [references, setReferences] = useState<API.AssetReferenceRequest[]>(
+    currentVersion?.asset_references.map((reference) => ({ ...reference })) ?? [],
+  );
+  const scene = structure?.scenes.find(
+    (item) => item.id === initial.script_reference.scene_id,
+  );
+  const activeAssets = assets.filter(
+    (asset) => asset.status === "active" && asset.current_version_id,
+  );
+  const assetsByKind = Object.groupBy(activeAssets, (asset) => asset.kind);
+
+  function toggleDialogue(id: string) {
+    setDialogueIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
+  }
+
+  function toggleAsset(asset: API.AssetResponse) {
+    const versionId = asset.current_version_id;
+    if (!versionId) return;
+    setReferences((current) => {
+      if (current.some((item) => item.asset_version_id === versionId)) {
+        return current.filter((item) => item.asset_version_id !== versionId);
+      }
+      const suffix = asset.id.slice(-8);
+      return [
+        ...current,
+        {
+          slot_key: `${asset.kind}-${suffix}`,
+          role: asset.kind,
+          asset_version_id: versionId,
+          subject_key:
+            asset.kind === "character" || asset.kind === "voice"
+              ? `subject-${suffix}`
+              : null,
+        },
+      ];
+    });
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const beatDescriptions = beats
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    const actionBeats = (beatDescriptions.length
+      ? beatDescriptions
+      : ["完成本镜头的主要动作"]
+    ).map((description, index) => ({
+      beat_key: `beat-${index + 1}`,
+      order: index + 1,
+      description,
+    }));
+    const existingDialogue = new Map(
+      (initial.dialogue_or_narration ?? []).map((item) => [
+        item.source_dialogue_id,
+        item,
+      ]),
+    );
+    await onSaveSpec(shot.id, {
+      expected_current_spec_version_id: shot.current_spec_version_id,
+      spec: {
+        schema_version: 1,
+        script_reference: {
+          confirmed_script_version_id: shot.source_script_version_id,
+          scene_id: shot.source_scene_id,
+          dialogue_ids: dialogueIds,
+        },
+        narrative: {
+          purpose: purpose.trim(),
+          continuity_note: continuity.trim() || null,
+        },
+        visual: {
+          shot_size: shotSize,
+          camera_angle: angle,
+          camera_movement: movement,
+          composition: composition.trim(),
+          environment: environment.trim(),
+          subject_placements: initial.visual.subject_placements ?? [],
+          mood_lighting: lighting.trim(),
+        },
+        action_beats: actionBeats,
+        dialogue_or_narration: dialogueIds.map((dialogueId) => {
+          const existing = existingDialogue.get(dialogueId);
+          return {
+            source_dialogue_id: dialogueId,
+            beat_key: existing?.beat_key ?? actionBeats[0].beat_key,
+            speaker_subject_key: existing?.speaker_subject_key ?? null,
+            render_as_audio: existing?.render_as_audio ?? false,
+            performance_note:
+              existing?.performance_note ??
+              scene?.dialogues.find((item) => item.id === dialogueId)
+                ?.performance_note ??
+              null,
+          };
+        }),
+        duration_ms: duration,
+        audio_intent: {
+          ambient: ambient.trim() || null,
+          sound_effects: soundEffects
+            .split(/[，,]/)
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .slice(0, 8),
+        },
+        generation_intent: {
+          mode: generationMode,
+          first_frame: initial.generation_intent.first_frame ?? null,
+          last_frame: initial.generation_intent.last_frame ?? null,
+          keyframe_notes: keyframeNotes.trim() || null,
+        },
+      },
+      asset_references: references,
+    });
+  }
+
+  return (
+    <form className="grid gap-6" onSubmit={submit}>
+      {readiness?.blocking_reasons.length ? (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-800">
+          <ShieldAlert aria-hidden="true" />
+          <AlertTitle>当前规格仍有生产阻塞</AlertTitle>
+          <AlertDescription>
+            {readiness.blocking_reasons
+              .map(readinessIssueSummary)
+              .join("；")}
+          </AlertDescription>
+        </Alert>
+      ) : readiness?.ready ? (
+        <Alert className="border-emerald-200 bg-emerald-50 text-emerald-800">
+          <CheckCircle2 aria-hidden="true" />
+          <AlertTitle>当前规格可进入生产预检</AlertTitle>
+          <AlertDescription>
+            准备度由服务端按固定结构、资产版本、媒体与授权实时计算。
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <section className="grid gap-4" aria-labelledby="narrative-title">
+        <div>
+          <h3 className="font-medium" id="narrative-title">叙事与时长</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            固定本镜头要完成的叙事任务，不复制整段剧本文本。
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-2 lg:col-span-2">
+            <Label htmlFor="shotPurpose">镜头目的</Label>
+            <Textarea
+              id="shotPurpose"
+              maxLength={500}
+              onChange={(event) => setPurpose(event.target.value)}
+              required
+              value={purpose}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="shotDuration">时长（毫秒）</Label>
+            <Input
+              id="shotDuration"
+              max={15_000}
+              min={500}
+              onChange={(event) => setDuration(Number(event.target.value))}
+              required
+              step={100}
+              type="number"
+              value={duration}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="continuityNote">连续性备注</Label>
+            <Input
+              id="continuityNote"
+              maxLength={500}
+              onChange={(event) => setContinuity(event.target.value)}
+              placeholder="可选：与前后镜头的方向、动作或光线关系"
+              value={continuity}
+            />
+          </div>
+        </div>
+      </section>
+
+      <Separator />
+
+      <section className="grid gap-4" aria-labelledby="visual-title">
+        <div>
+          <h3 className="font-medium" id="visual-title">画面设计</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            使用受控枚举形成供应商无关的镜头语言。
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-2">
+            <Label>景别</Label>
+            <Select
+              value={shotSize}
+              onValueChange={(value) =>
+                setShotSize(value as API.VisualSpec["shot_size"])
+              }
+            >
+              <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(shotSizeLabels).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label>机位</Label>
+            <Select
+              value={angle}
+              onValueChange={(value) =>
+                setAngle(value as API.VisualSpec["camera_angle"])
+              }
+            >
+              <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(angleLabels).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label>运镜</Label>
+            <Select
+              value={movement}
+              onValueChange={(value) =>
+                setMovement(value as API.VisualSpec["camera_movement"])
+              }
+            >
+              <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(movementLabels).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2 md:col-span-3">
+            <Label htmlFor="shotComposition">构图</Label>
+            <Textarea
+              id="shotComposition"
+              maxLength={1_000}
+              onChange={(event) => setComposition(event.target.value)}
+              required
+              value={composition}
+            />
+          </div>
+          <div className="grid gap-2 md:col-span-2">
+            <Label htmlFor="shotEnvironment">环境</Label>
+            <Textarea
+              id="shotEnvironment"
+              maxLength={1_000}
+              onChange={(event) => setEnvironment(event.target.value)}
+              required
+              value={environment}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="shotLighting">情绪与光线</Label>
+            <Textarea
+              id="shotLighting"
+              maxLength={1_000}
+              onChange={(event) => setLighting(event.target.value)}
+              required
+              value={lighting}
+            />
+          </div>
+        </div>
+      </section>
+
+      <Separator />
+
+      <section className="grid gap-4" aria-labelledby="beats-title">
+        <div>
+          <h3 className="font-medium" id="beats-title">动作与对白</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            每行一个动作节拍，最多 8 个；对白引用保持原文稳定 ID。
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="actionBeats">动作节拍</Label>
+            <Textarea
+              className="min-h-32"
+              id="actionBeats"
+              onChange={(event) => setBeats(event.target.value)}
+              value={beats}
+            />
+          </div>
+          <div className="grid content-start gap-2">
+            <Label>场次对白 / 旁白</Label>
+            {scene?.dialogues.length ? (
+              <div className="grid gap-2">
+                {scene.dialogues.map((dialogue) => {
+                  const selected = dialogueIds.includes(dialogue.id);
+                  return (
+                    <Button
+                      aria-pressed={selected}
+                      className="h-auto justify-start whitespace-normal px-3 py-2 text-left"
+                      key={dialogue.id}
+                      onClick={() => toggleDialogue(dialogue.id)}
+                      type="button"
+                      variant={selected ? "secondary" : "outline"}
+                    >
+                      <span>
+                        <span className="block font-medium">{dialogue.speaker_candidate}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {dialogue.text}
+                        </span>
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+                当前场次没有可引用对白。
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <Separator />
+
+      <section className="grid gap-4" aria-labelledby="asset-reference-title">
+        <div>
+          <h3 className="font-medium" id="asset-reference-title">固定资产版本</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            选择会固定当前 AssetVersion；后续资产升级会创建新的镜头规格版本。
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {(Object.keys(assetKindLabels) as API.AssetResponse["kind"][]).map(
+            (kind) => (
+              <div className="grid content-start gap-2" key={kind}>
+                <Label>{assetKindLabels[kind]}</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(assetsByKind[kind] ?? []).map((asset) => {
+                    const selected = references.some(
+                      (reference) =>
+                        reference.asset_version_id === asset.current_version_id,
+                    );
+                    return (
+                      <Button
+                        aria-pressed={selected}
+                        key={asset.id}
+                        onClick={() => toggleAsset(asset)}
+                        size="sm"
+                        type="button"
+                        variant={selected ? "secondary" : "outline"}
+                      >
+                        {asset.name}
+                      </Button>
+                    );
+                  })}
+                  {(assetsByKind[kind] ?? []).length === 0 ? (
+                    <span className="text-xs text-muted-foreground">暂无可选当前版本</span>
+                  ) : null}
+                </div>
+              </div>
+            ),
+          )}
+        </div>
+      </section>
+
+      <Separator />
+
+      <section className="grid gap-4" aria-labelledby="generation-title">
+        <div>
+          <h3 className="font-medium" id="generation-title">声音与生成意图</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            只描述镜头意图，不暴露模型、供应商参数或费用字段。
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="ambient">环境声</Label>
+            <Input
+              id="ambient"
+              maxLength={1_000}
+              onChange={(event) => setAmbient(event.target.value)}
+              placeholder="例如：雨声、风声、远处列车声"
+              value={ambient}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="soundEffects">音效（逗号分隔）</Label>
+            <Input
+              id="soundEffects"
+              onChange={(event) => setSoundEffects(event.target.value)}
+              placeholder="脚步声，灯箱电流声"
+              value={soundEffects}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label>生成方式</Label>
+            <Select
+              value={generationMode}
+              onValueChange={(value) =>
+                setGenerationMode(value as API.GenerationIntent["mode"])
+              }
+            >
+              <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(generationModeLabels).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="keyframeNotes">关键帧备注</Label>
+            <Input
+              id="keyframeNotes"
+              maxLength={2_000}
+              onChange={(event) => setKeyframeNotes(event.target.value)}
+              value={keyframeNotes}
+            />
+          </div>
+        </div>
+      </section>
+
+      <div className="sticky bottom-4 z-10 flex items-center justify-between gap-4 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur">
+        <div className="text-xs text-muted-foreground">
+          {currentVersion
+            ? `当前 v${currentVersion.version_no} · 输入 ${currentVersion.input_hash.slice(0, 10)}…`
+            : "尚未保存规格版本"}
+        </div>
+        <Button disabled={busy} type="submit">
+          <Save aria-hidden="true" />保存为新版本
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export function StoryboardWorkspace({
+  archivedShots,
+  assets,
+  busy,
+  order,
+  readiness,
+  selectedShotId,
+  structure,
+  versions,
+  onCopy,
+  onCreate,
+  onReorder,
+  onSaveSpec,
+  onSelectShot,
+  onToggleArchived,
+}: StoryboardWorkspaceProps) {
+  const selectedShot =
+    order.items.find((shot) => shot.id === selectedShotId) ?? order.items[0];
+  const currentVersion = versions.find(
+    (version) => version.id === selectedShot?.current_spec_version_id,
+  );
+  const readinessByShot = useMemo(
+    () => new Map(readiness?.items.map((item) => [item.shot_id, item]) ?? []),
+    [readiness?.items],
+  );
+  const selectedReadiness = selectedShot
+    ? readinessByShot.get(selectedShot.id)
+    : undefined;
+
+  async function moveSelected(direction: -1 | 1) {
+    if (!selectedShot) return;
+    const index = order.items.findIndex((shot) => shot.id === selectedShot.id);
+    const target = index + direction;
+    if (target < 0 || target >= order.items.length) return;
+    const ids = order.items.map((shot) => shot.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    await onReorder(ids);
+  }
+
+  return (
+    <div className="grid gap-5">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium text-primary">
+            <Film className="size-4" aria-hidden="true" />
+            S3 · 稳定镜头规格
+          </div>
+          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.025em]">分镜设计</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+            以已确认剧本结构建立镜头，固定叙事、画面、动作、声音和资产版本。
+          </p>
+        </div>
+        <NewShotDialog
+          busy={busy}
+          key={structure?.script_version_id ?? "no-structure"}
+          structure={structure}
+          onCreate={onCreate}
+        />
+      </div>
+
+      <section className="grid gap-3 sm:grid-cols-4" aria-label="分镜准备度摘要">
+        <Card size="sm"><CardHeader><CardDescription>镜头清单</CardDescription><CardTitle>{order.items.length} 个镜头</CardTitle></CardHeader></Card>
+        <Card size="sm"><CardHeader><CardDescription>可进入生产</CardDescription><CardTitle className="text-emerald-700">{readiness?.summary.ready ?? 0} 可生成</CardTitle></CardHeader></Card>
+        <Card size="sm"><CardHeader><CardDescription>需要完善</CardDescription><CardTitle className="text-amber-700">{readiness?.summary.blocked ?? 0} 个阻塞</CardTitle></CardHeader></Card>
+        <Card size="sm"><CardHeader><CardDescription>依赖故障</CardDescription><CardTitle className="text-rose-700">{readiness?.summary.unavailable ?? 0} 个不可用</CardTitle></CardHeader></Card>
+      </section>
+
+      <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="grid gap-4 xl:sticky xl:top-24">
+          <Card>
+            <CardHeader>
+              <CardTitle>镜头顺序</CardTitle>
+              <CardDescription>顺序由服务端 order hash 并发保护</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-2">
+              {order.items.length ? (
+                order.items.map((shot) => {
+                  const shotReadiness = readinessByShot.get(shot.id);
+                  const active = shot.id === selectedShot?.id;
+                  return (
+                    <Button
+                      className={cn(
+                        "h-auto w-full justify-start gap-3 whitespace-normal px-3 py-3 text-left [content-visibility:auto]",
+                        active && "ring-2 ring-primary/25",
+                      )}
+                      key={shot.id}
+                      onClick={() => onSelectShot(shot.id)}
+                      type="button"
+                      variant={active ? "secondary" : "ghost"}
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-background text-xs font-semibold ring-1 ring-foreground/10">
+                        {String(shot.position).padStart(2, "0")}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{shot.title}</span>
+                        <span className="mt-1 flex items-center gap-2">
+                          <Badge
+                            className={shotReadiness ? readinessClass(shotReadiness.status) : undefined}
+                            variant="outline"
+                          >
+                            {shotReadiness ? readinessLabels[shotReadiness.status] : "读取中"}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {shot.current_spec_version_id ? "已有规格" : "空镜头"}
+                          </span>
+                        </span>
+                        {shotReadiness?.blocking_reasons[0] ? (
+                          <span className="mt-1.5 block text-xs text-amber-700">
+                            {readinessIssueSummary(
+                              shotReadiness.blocking_reasons[0],
+                            )}
+                          </span>
+                        ) : null}
+                      </span>
+                    </Button>
+                  );
+                })
+              ) : (
+                <div className="grid min-h-40 place-items-center rounded-xl border border-dashed p-5 text-center">
+                  <div>
+                    <Film className="mx-auto size-6 text-muted-foreground" aria-hidden="true" />
+                    <p className="mt-2 text-sm font-medium">还没有镜头</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      从已确认场次建立第一个手工镜头。
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {archivedShots.length ? (
+            <Card size="sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><History className="size-4" aria-hidden="true" />已归档</CardTitle>
+                <CardDescription>历史规格与证据仍保留</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2">
+                {archivedShots.map((shot) => (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2" key={shot.id}>
+                    <span className="min-w-0 truncate text-sm">{shot.title}</span>
+                    <Button
+                      aria-label={`恢复${shot.title}`}
+                      disabled={busy}
+                      onClick={() => void onToggleArchived(shot)}
+                      size="icon-sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <RotateCcw aria-hidden="true" />
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+
+        {selectedShot ? (
+          <Card className="min-w-0">
+            <CardHeader className="border-b">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <CardDescription>镜头 {String(selectedShot.position).padStart(2, "0")}</CardDescription>
+                  <CardTitle className="mt-1 text-xl">{selectedShot.title}</CardTitle>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span>revision {selectedShot.revision}</span>
+                    <span>·</span>
+                    <span>{versions.length} 个历史规格</span>
+                    {selectedReadiness ? (
+                      <>
+                        <span>·</span>
+                        <span>{readinessLabels[selectedReadiness.status]}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    aria-label="上移镜头"
+                    disabled={busy || selectedShot.position === 1}
+                    onClick={() => void moveSelected(-1)}
+                    size="icon"
+                    type="button"
+                    variant="outline"
+                  >
+                    <ArrowUp aria-hidden="true" />
+                  </Button>
+                  <Button
+                    aria-label="下移镜头"
+                    disabled={busy || selectedShot.position === order.items.length}
+                    onClick={() => void moveSelected(1)}
+                    size="icon"
+                    type="button"
+                    variant="outline"
+                  >
+                    <ArrowDown aria-hidden="true" />
+                  </Button>
+                  <Button
+                    disabled={busy || !selectedShot.current_spec_version_id}
+                    onClick={() => void onCopy(selectedShot)}
+                    type="button"
+                    variant="outline"
+                  >
+                    <Copy aria-hidden="true" />复制镜头
+                  </Button>
+                  <Button
+                    disabled={busy}
+                    onClick={() => void onToggleArchived(selectedShot)}
+                    type="button"
+                    variant="outline"
+                  >
+                    <Archive aria-hidden="true" />归档镜头
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ShotSpecEditor
+                assets={assets}
+                busy={busy}
+                currentVersion={currentVersion}
+                key={`${selectedShot.id}:${currentVersion?.id ?? "draft"}`}
+                readiness={selectedReadiness}
+                shot={selectedShot}
+                structure={structure}
+                onSaveSpec={onSaveSpec}
+              />
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="grid min-h-96 place-items-center text-center">
+              <div>
+                <Film className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-medium">建立镜头后开始设计</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  规格将以不可变版本保存，历史版本不会被覆盖。
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -187,7 +187,7 @@ const readiness: API.ShotReadinessBatchResponse = {
           field_path: null,
           dependency_type: null,
           dependency_id: null,
-          summary: "尚未保存镜头规格",
+          summary: "Current shot spec is missing",
           next_action: "save_shot_spec",
         },
       ],
@@ -295,5 +295,29 @@ describe("分镜工作台", () => {
         }),
       ),
     );
+  });
+
+  it("在剧本结构尚未确认时解释为什么不能新建镜头", () => {
+    render(
+      <StoryboardWorkspace
+        archivedShots={[]}
+        assets={[]}
+        busy={false}
+        order={{ items: [], order_hash: "a".repeat(64) }}
+        selectedShotId={null}
+        versions={[]}
+        onCopy={vi.fn()}
+        onCreate={vi.fn()}
+        onReorder={vi.fn()}
+        onSaveSpec={vi.fn()}
+        onSelectShot={vi.fn()}
+        onToggleArchived={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "新建镜头" })).toBeDisabled();
+    expect(
+      screen.getByText("需先确认剧本结构并设为当前版本，才能建立镜头。"),
+    ).toBeInTheDocument();
   });
 });

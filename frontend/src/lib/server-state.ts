@@ -62,6 +62,7 @@ import {
   confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePost,
   decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPost,
   getExtractionBatchApiV1ExtractionBatchesBatchIdGet,
+  getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGet,
   getVersionApiV1ScriptVersionsVersionIdGet,
   importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPost,
   listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGet,
@@ -71,6 +72,18 @@ import {
   setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost,
   startExtractionApiV1ScriptVersionsVersionIdExtractionsPost,
 } from "@/api/scripts";
+import {
+  appendSpecVersionApiV1ShotsShotIdSpecVersionsPost,
+  archiveShotApiV1ShotsShotIdArchivePost,
+  copyShotApiV1ShotsShotIdCopyPost,
+  createManualShotApiV1EpisodesEpisodeIdShotsPost,
+  getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet,
+  listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet,
+  listShotsApiV1EpisodesEpisodeIdShotsGet,
+  listSpecVersionsApiV1ShotsShotIdSpecVersionsGet,
+  reorderShotsApiV1EpisodesEpisodeIdShotsReorderPost,
+  restoreShotApiV1ShotsShotIdRestorePost,
+} from "@/api/storyboards";
 import { listTasksApiV1TasksGet } from "@/api/tasks";
 import { ApiClientError } from "@/lib/api-request";
 
@@ -136,6 +149,11 @@ export const appApi = createApi({
     "Tasks",
     "ExtractionBatch",
     "ExtractionCandidates",
+    "ConfirmedStructure",
+    "Shots",
+    "ArchivedShots",
+    "ShotSpecs",
+    "ShotReadiness",
   ],
   endpoints: (builder) => ({
     login: builder.mutation<API.AuthResponse, API.LoginRequest>({
@@ -444,6 +462,17 @@ export const appApi = createApi({
         { type: "ScriptVersion", id: versionId },
       ],
     }),
+    confirmedStructure: builder.query<API.ConfirmedStructureResponse, string>({
+      queryFn: (versionId) =>
+        runRequest(() =>
+          getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGet({
+            version_id: versionId,
+          }),
+        ),
+      providesTags: (_result, _error, versionId) => [
+        { type: "ConfirmedStructure", id: versionId },
+      ],
+    }),
     scriptVersions: builder.query<API.PaginatedScriptVersions, string>({
       queryFn: (sourceId) =>
         runRequest(() =>
@@ -494,6 +523,132 @@ export const appApi = createApi({
         ),
       providesTags: (_result, _error, batchId) => [
         { type: "ExtractionCandidates", id: batchId },
+      ],
+    }),
+    shotOrder: builder.query<API.ShotOrderResponse, string>({
+      queryFn: (episodeId) =>
+        runRequest(() =>
+          listShotsApiV1EpisodesEpisodeIdShotsGet({ episode_id: episodeId }),
+        ),
+      providesTags: (_result, _error, episodeId) => [
+        { type: "Shots", id: episodeId },
+      ],
+    }),
+    archivedShots: builder.query<API.ShotResponse[], string>({
+      queryFn: (episodeId) =>
+        runRequest(() =>
+          listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet({
+            episode_id: episodeId,
+          }),
+        ),
+      providesTags: (_result, _error, episodeId) => [
+        { type: "ArchivedShots", id: episodeId },
+      ],
+    }),
+    shotReadiness: builder.query<API.ShotReadinessBatchResponse, string>({
+      queryFn: (episodeId) =>
+        runRequest(() =>
+          getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet({
+            episode_id: episodeId,
+          }),
+        ),
+      providesTags: (_result, _error, episodeId) => [
+        { type: "ShotReadiness", id: episodeId },
+      ],
+    }),
+    shotSpecVersions: builder.query<API.ShotSpecVersionResponse[], string>({
+      queryFn: (shotId) =>
+        runRequest(() =>
+          listSpecVersionsApiV1ShotsShotIdSpecVersionsGet({ shot_id: shotId }),
+        ),
+      providesTags: (_result, _error, shotId) => [
+        { type: "ShotSpecs", id: shotId },
+      ],
+    }),
+    createShot: builder.mutation<
+      API.ShotResponse,
+      { episodeId: string; body: API.ShotCreateRequest }
+    >({
+      queryFn: ({ episodeId, body }) =>
+        runRequest(() =>
+          createManualShotApiV1EpisodesEpisodeIdShotsPost(
+            { episode_id: episodeId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Shots", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    appendShotSpec: builder.mutation<
+      API.ShotSpecCreateResponse,
+      { episodeId: string; shotId: string; body: API.ShotSpecCreateRequest }
+    >({
+      queryFn: ({ shotId, body }) =>
+        runRequest(() =>
+          appendSpecVersionApiV1ShotsShotIdSpecVersionsPost(
+            { shot_id: shotId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId, shotId }) => [
+        { type: "Shots", id: episodeId },
+        { type: "ShotSpecs", id: shotId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    reorderShots: builder.mutation<
+      API.ShotOrderResponse,
+      { episodeId: string; body: API.ShotReorderRequest }
+    >({
+      queryFn: ({ episodeId, body }) =>
+        runRequest(() =>
+          reorderShotsApiV1EpisodesEpisodeIdShotsReorderPost(
+            { episode_id: episodeId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Shots", id: episodeId },
+      ],
+    }),
+    copyShot: builder.mutation<
+      API.ShotTransformResponse,
+      { episodeId: string; shotId: string; body: API.CopyShotRequest }
+    >({
+      queryFn: ({ shotId, body }) =>
+        runRequest(() =>
+          copyShotApiV1ShotsShotIdCopyPost({ shot_id: shotId }, body),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Shots", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    setShotArchived: builder.mutation<
+      API.ShotStateResponse,
+      {
+        episodeId: string;
+        shotId: string;
+        archived: boolean;
+        body: API.ShotStateRequest;
+      }
+    >({
+      queryFn: ({ shotId, archived, body }) =>
+        runRequest(() =>
+          archived
+            ? archiveShotApiV1ShotsShotIdArchivePost({ shot_id: shotId }, body)
+            : restoreShotApiV1ShotsShotIdRestorePost({ shot_id: shotId }, body),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Shots", id: episodeId },
+        { type: "ArchivedShots", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
       ],
     }),
     importScript: builder.mutation<
@@ -867,16 +1022,20 @@ export const appApi = createApi({
 
 export const {
   useAppendAssetVersionMutation,
+  useAppendShotSpecMutation,
+  useArchivedShotsQuery,
   useAssetReadinessQuery,
   useAssetsQuery,
   useAssetVersionsQuery,
   useChangePasswordMutation,
   useCompleteMediaUploadMutation,
   useConfirmStructureMutation,
+  useConfirmedStructureQuery,
   useConsentQuery,
   useConsentsQuery,
   useCreateConsentMutation,
   useCreateAssetMutation,
+  useCreateShotMutation,
   useCreateEpisodeMutation,
   useCreateProjectMutation,
   useCreateWorkspaceMutation,
@@ -909,6 +1068,7 @@ export const {
   useSetEpisodeArchivedMutation,
   useSetAssetArchivedMutation,
   useSetCurrentScriptVersionMutation,
+  useSetShotArchivedMutation,
   useSetProjectArchivedMutation,
   useSetWorkspaceArchivedMutation,
   useUpdateProfileMutation,
@@ -921,5 +1081,10 @@ export const {
   useScriptVersionQuery,
   useScriptVersionsQuery,
   useStartExtractionMutation,
+  useCopyShotMutation,
+  useReorderShotsMutation,
+  useShotOrderQuery,
+  useShotReadinessQuery,
+  useShotSpecVersionsQuery,
   useTasksQuery,
 } = appApi;
