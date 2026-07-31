@@ -383,6 +383,7 @@ describe("分镜工作台", () => {
               expect.objectContaining({
                 source_dialogue_id: dialogueId,
                 render_as_audio: true,
+                speaker_subject_key: "subject-00000018",
                 performance_note: "克制而警觉",
               }),
             ],
@@ -395,10 +396,12 @@ describe("分镜工作台", () => {
             expect.objectContaining({
               role: "character",
               asset_version_id: characterVersionId,
+              subject_key: "subject-00000017",
             }),
             expect.objectContaining({
               role: "voice",
               asset_version_id: voiceVersionId,
+              subject_key: "subject-00000018",
             }),
           ]),
         }),
