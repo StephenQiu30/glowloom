@@ -6,7 +6,9 @@ const apiMocks = vi.hoisted(() => ({
   applyAssetUpgrade: vi.fn(),
   appendAssetVersion: vi.fn(),
   archiveAsset: vi.fn(),
+  assetDeletePreflight: vi.fn(),
   createAsset: vi.fn(),
+  deleteAsset: vi.fn(),
   getAssetReadiness: vi.fn(),
   listAssets: vi.fn(),
   listAssetShotUsages: vi.fn(),
@@ -16,6 +18,8 @@ const apiMocks = vi.hoisted(() => ({
   me: vi.fn(),
   preflightAssetUpgrade: vi.fn(),
   restoreAsset: vi.fn(),
+  setCurrentAssetVersion: vi.fn(),
+  updateAsset: vi.fn(),
 }));
 
 vi.mock("@/api/identity", async () => {
@@ -44,12 +48,18 @@ vi.mock("@/api/assets", async () => {
     appendAssetVersionApiV1AssetsAssetIdVersionsPost:
       apiMocks.appendAssetVersion,
     archiveAssetApiV1AssetsAssetIdArchivePost: apiMocks.archiveAsset,
+    assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGet:
+      apiMocks.assetDeletePreflight,
     createAssetApiV1ProjectsProjectIdAssetsPost: apiMocks.createAsset,
+    deleteAssetApiV1AssetsAssetIdDelete: apiMocks.deleteAsset,
     getAssetReadinessApiV1AssetVersionsVersionIdReadinessGet:
       apiMocks.getAssetReadiness,
     listAssetsApiV1ProjectsProjectIdAssetsGet: apiMocks.listAssets,
     listAssetVersionsApiV1AssetsAssetIdVersionsGet: apiMocks.listAssetVersions,
     restoreAssetApiV1AssetsAssetIdRestorePost: apiMocks.restoreAsset,
+    setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPost:
+      apiMocks.setCurrentAssetVersion,
+    updateAssetApiV1AssetsAssetIdPatch: apiMocks.updateAsset,
   };
 });
 
@@ -314,6 +324,27 @@ describe("AI 漫剧资产工作台", () => {
       data: { ...asset, status: "archived", revision: 4 },
     });
     apiMocks.restoreAsset.mockResolvedValue({ data: asset });
+    apiMocks.updateAsset.mockResolvedValue({
+      data: {
+        ...asset,
+        name: "顾清禾（雨巷）",
+        aliases: ["清禾", "顾小姐"],
+        tags: ["主角", "雨巷"],
+        revision: 4,
+      },
+    });
+    apiMocks.setCurrentAssetVersion.mockResolvedValue({
+      data: { ...asset, current_version_id: oldVersionId, revision: 4 },
+    });
+    apiMocks.assetDeletePreflight.mockResolvedValue({
+      data: {
+        allowed: false,
+        blockers: [
+          { code: "asset_has_versions", summary: "Asset has 2 immutable version(s)" },
+        ],
+      },
+    });
+    apiMocks.deleteAsset.mockResolvedValue({ data: { deleted: true } });
   });
 
   it("读取真实资产事实并创建新的资产身份", async () => {
@@ -398,6 +429,89 @@ describe("AI 漫剧资产工作台", () => {
       }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent("版本 v4 已保存");
+  });
+
+  it("编辑资产身份并显式切换历史当前版本", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <ComicProductionStudio />
+      </AppProviders>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "编辑资产身份" }));
+    const name = screen.getByLabelText("资产名称");
+    await user.clear(name);
+    await user.type(name, "顾清禾（雨巷）");
+    const aliases = screen.getByLabelText("别名（逗号分隔）");
+    await user.clear(aliases);
+    await user.type(aliases, "清禾, 顾小姐");
+    const tags = screen.getByLabelText("标签（逗号分隔）");
+    await user.clear(tags);
+    await user.type(tags, "主角, 雨巷");
+    await user.click(screen.getByRole("button", { name: "保存身份信息" }));
+
+    await waitFor(() => expect(apiMocks.updateAsset).toHaveBeenCalledWith(
+      { asset_id: assetId },
+      {
+        expected_revision: 3,
+        name: "顾清禾（雨巷）",
+        aliases: ["清禾", "顾小姐"],
+        tags: ["主角", "雨巷"],
+      },
+    ));
+
+    await user.click(screen.getByRole("button", { name: "设为当前资产版本 v2" }));
+    await waitFor(() => expect(apiMocks.setCurrentAssetVersion).toHaveBeenCalledWith(
+      { asset_id: assetId },
+      {
+        version_id: oldVersionId,
+        expected_current_version_id: versionId,
+        expected_revision: 3,
+      },
+    ));
+  });
+
+  it("仅在删除预检允许时删除空资产身份", async () => {
+    const user = userEvent.setup();
+    const emptyAsset: API.AssetResponse = {
+      ...asset,
+      id: "019fb1e0-a020-70f6-99dc-0b4e9e085599",
+      name: "临时空角色",
+      aliases: [],
+      tags: [],
+      current_version_id: null,
+      revision: 1,
+    };
+    apiMocks.listAssets.mockResolvedValue({
+      data: { items: [emptyAsset], total: 1, limit: 100, offset: 0 },
+    });
+    apiMocks.listAssetVersions.mockResolvedValue({
+      data: { items: [], total: 0, limit: 100, offset: 0 },
+    });
+    apiMocks.assetDeletePreflight.mockResolvedValue({
+      data: { allowed: true, blockers: [] },
+    });
+
+    render(
+      <AppProviders>
+        <ComicProductionStudio />
+      </AppProviders>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "删除资产身份" }));
+    expect(
+      await screen.findByRole("dialog", { name: "删除资产身份" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "确认删除空资产" }));
+
+    await waitFor(() => expect(apiMocks.assetDeletePreflight).toHaveBeenCalledWith({
+      asset_id: emptyAsset.id,
+    }));
+    expect(apiMocks.deleteAsset).toHaveBeenCalledWith({
+      asset_id: emptyAsset.id,
+      expected_revision: 1,
+    });
   });
 
   it("检查历史资产版本的分镜引用并在预检后批量升级", async () => {
