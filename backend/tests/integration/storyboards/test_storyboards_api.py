@@ -1152,14 +1152,16 @@ async def test_readiness_is_deterministic_and_reacts_to_rights_without_mutating_
 
 
 @pytest.mark.asyncio
-async def test_batch_readiness_has_constant_query_bound_for_36_shots(
+@pytest.mark.parametrize("shot_count", [36, 120])
+async def test_batch_readiness_has_constant_query_bound(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
+    shot_count: int,
 ) -> None:
     headers, episode, refs = await _episode_with_confirmed_structure(
         client,
         session_factory,
-        email="storyboard-batch-readiness@example.com",
+        email=f"storyboard-batch-readiness-{shot_count}@example.com",
     )
     location_version, _ = await _ready_location_asset(
         client,
@@ -1172,7 +1174,7 @@ async def test_batch_readiness_has_constant_query_bound_for_36_shots(
         session_factory,
         refs=refs,
         location_version_id=UUID(location_version["id"]),
-        count=36,
+        count=shot_count,
     )
 
     engine = session_factory.kw.get("bind")
@@ -1200,10 +1202,10 @@ async def test_batch_readiness_has_constant_query_bound_for_36_shots(
 
     assert response.status_code == 200
     result = response.json()["data"]
-    assert len(result["items"]) == 36
+    assert len(result["items"]) == shot_count
     assert result["summary"] == {
-        "total": 36,
-        "ready": 36,
+        "total": shot_count,
+        "ready": shot_count,
         "blocked": 0,
         "unavailable": 0,
     }
