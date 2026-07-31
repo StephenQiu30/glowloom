@@ -110,6 +110,11 @@ declare namespace API {
     data: EpisodeResponse[];
   };
 
+  type ApiResponseListShotResponse_ = {
+    /** Data */
+    data: ShotResponse[];
+  };
+
   type ApiResponseListShotSpecVersionResponse_ = {
     /** Data */
     data: ShotSpecVersionResponse[];
@@ -1420,6 +1425,10 @@ declare namespace API {
     action: "link_existing";
     /** Downstream Id */
     downstream_id: string;
+  };
+
+  type listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGetParams = {
+    episode_id: string;
   };
 
   type listAssetsApiV1ProjectsProjectIdAssetsGetParams = {

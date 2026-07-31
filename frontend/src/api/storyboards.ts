@@ -65,6 +65,23 @@ export async function preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgra
   );
 }
 
+/** List Archived Shots GET /api/v1/episodes/${param0}/archived-shots */
+export async function listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGetParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseListShotResponse_>(
+    `/api/v1/episodes/${param0}/archived-shots`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
 /** Get Episode Readiness GET /api/v1/episodes/${param0}/shot-readiness */
 export async function getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
