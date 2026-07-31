@@ -73,12 +73,14 @@ export function ScriptWorkspace({
   candidates,
   assets,
   busy,
+  versionImpact,
   onImport,
   onPublish,
   onStartExtraction,
   onCompareVersions,
   onDecide,
   onConfirm,
+  onDismissVersionImpact,
   onSetCurrent,
   onDeleteDraft,
   onSetSourceArchived,
@@ -92,6 +94,7 @@ export function ScriptWorkspace({
   candidates: API.ExtractionCandidateResponse[];
   assets: API.AssetResponse[];
   busy: boolean;
+  versionImpact: API.ScriptVersionImpactResponse | null;
   onImport: (request: API.ScriptImportRequest) => Promise<void>;
   onPublish: (body: string) => Promise<void>;
   onStartExtraction: () => Promise<void>;
@@ -104,6 +107,7 @@ export function ScriptWorkspace({
     decision: CandidateDecision,
   ) => Promise<boolean>;
   onConfirm: () => Promise<void>;
+  onDismissVersionImpact: () => void;
   onSetCurrent: (
     versionId: string,
   ) => Promise<API.CurrentScriptVersionResponse | undefined>;
@@ -116,8 +120,6 @@ export function ScriptWorkspace({
   );
   const [diffResult, setDiffResult] =
     useState<API.ScriptVersionDiffResponse | null>(null);
-  const [versionImpact, setVersionImpact] =
-    useState<API.ScriptVersionImpactResponse | null>(null);
   const [draftToDelete, setDraftToDelete] =
     useState<API.ScriptVersionResponse | null>(null);
   const [linkedAssets, setLinkedAssets] = useState<Record<string, string>>({});
@@ -156,8 +158,7 @@ export function ScriptWorkspace({
   }
 
   async function setCurrentVersion(versionId: string) {
-    const result = await onSetCurrent(versionId);
-    if (result) setVersionImpact(result.impact);
+    await onSetCurrent(versionId);
   }
 
   async function deleteDraft() {
@@ -615,7 +616,10 @@ export function ScriptWorkspace({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(versionImpact)} onOpenChange={(open) => !open && setVersionImpact(null)}>
+      <Dialog
+        open={Boolean(versionImpact)}
+        onOpenChange={(open) => !open && onDismissVersionImpact()}
+      >
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>版本切换影响</DialogTitle>
@@ -640,7 +644,7 @@ export function ScriptWorkspace({
           ) : null}
           <DialogFooter>
             <DialogClose asChild>
-              <Button onClick={() => setVersionImpact(null)}>知道了</Button>
+              <Button onClick={onDismissVersionImpact}>知道了</Button>
             </DialogClose>
           </DialogFooter>
         </DialogContent>

@@ -831,7 +831,9 @@ function ShotSpecEditor({
                 setShotSize(value as API.VisualSpec["shot_size"])
               }
             >
-              <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="景别" className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {Object.entries(shotSizeLabels).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -847,7 +849,9 @@ function ShotSpecEditor({
                 setAngle(value as API.VisualSpec["camera_angle"])
               }
             >
-              <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="机位" className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {Object.entries(angleLabels).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -863,7 +867,9 @@ function ShotSpecEditor({
                 setMovement(value as API.VisualSpec["camera_movement"])
               }
             >
-              <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="运镜" className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {Object.entries(movementLabels).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -1169,7 +1175,9 @@ function ShotSpecEditor({
                 setGenerationMode(value as API.GenerationIntent["mode"])
               }
             >
-              <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="生成方式" className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {Object.entries(generationModeLabels).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>

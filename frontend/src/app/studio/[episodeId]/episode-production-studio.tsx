@@ -245,6 +245,8 @@ export function EpisodeProductionStudio({
     useLazyShotSpecVersionQuery();
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [scriptVersionImpact, setScriptVersionImpact] =
+    useState<API.ScriptVersionImpactResponse | null>(null);
 
   const busy = [
     importState,
@@ -372,6 +374,7 @@ export function EpisodeProductionStudio({
           expected_current_version_id: episode.current_script_version_id,
         },
       }).unwrap();
+      setScriptVersionImpact(result.impact);
       setStartedBatchId(null);
       const affected = result.impact.affected_shot_ids.length;
       return affected
@@ -877,6 +880,7 @@ export function EpisodeProductionStudio({
                   key={editableVersion?.id ?? activeSource?.id ?? "script-import"}
                   snapshot={snapshot}
                   source={activeSource}
+                  versionImpact={scriptVersionImpact}
                   versions={versions}
                   onConfirm={handleConfirm}
                   onCompareVersions={handleCompareVersions}
@@ -884,6 +888,7 @@ export function EpisodeProductionStudio({
                   onDeleteDraft={handleDeleteScriptDraft}
                   onImport={handleImport}
                   onPublish={handlePublish}
+                  onDismissVersionImpact={() => setScriptVersionImpact(null)}
                   onSetCurrent={handleSetCurrent}
                   onSetSourceArchived={handleSetScriptSourceArchived}
                   onStartExtraction={handleStartExtraction}

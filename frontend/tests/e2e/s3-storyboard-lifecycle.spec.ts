@@ -7,6 +7,7 @@ import {
   ONE_PIXEL_PNG,
   createReadyAsset,
   fillAssetSpec,
+  testToneWav,
   uploadAndWait,
   type AssetFixture,
 } from "./asset-support";
@@ -42,13 +43,29 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   test.setTimeout(120_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `S3-分镜契约-${unique}`;
+  const characterMediaName = `storyboard-character-${unique}.png`;
   const locationMediaName = `storyboard-location-${unique}.png`;
+  const voiceMediaName = `storyboard-voice-${unique}.wav`;
+  const characterFixture: AssetFixture = {
+    kind: "character",
+    tabName: "角色",
+    name: `林澈角色-${unique}`,
+    mediaName: characterMediaName,
+    consentReference: `fictional-storyboard-character-${unique}`,
+  };
   const locationFixture: AssetFixture = {
     kind: "location",
     tabName: "场景",
     name: `月台场景-${unique}`,
     mediaName: locationMediaName,
     consentReference: `fictional-storyboard-location-v1-${unique}`,
+  };
+  const voiceFixture: AssetFixture = {
+    kind: "voice",
+    tabName: "声音",
+    name: `林澈声线-${unique}`,
+    mediaName: voiceMediaName,
+    consentReference: `fictional-storyboard-voice-${unique}`,
   };
 
   await page.goto("/register");
@@ -73,10 +90,22 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
 
   await page.goto(`/studio/${episodeId}/media`);
   await uploadAndWait(page, {
+    name: characterMediaName,
+    mimeType: "image/png",
+    buffer: ONE_PIXEL_PNG,
+  });
+  await uploadAndWait(page, {
     name: locationMediaName,
     mimeType: "image/png",
     buffer: ONE_PIXEL_PNG,
   });
+  await uploadAndWait(page, {
+    name: voiceMediaName,
+    mimeType: "audio/wav",
+    buffer: testToneWav(),
+  });
+  await createReadyAsset(page, characterFixture);
+  await createReadyAsset(page, voiceFixture);
   await createReadyAsset(page, locationFixture);
   await page
     .getByRole("button", { name: `选择资产 ${locationFixture.name}` })
@@ -146,12 +175,45 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   );
 
   await page.getByLabel("镜头目的").fill("建立角色对空旷月台的警觉反应");
+  await page.getByLabel("时长（毫秒）").fill("4800");
+  await page.getByLabel("连续性备注").fill("承接入站动作，保持人物朝向");
+  await page.getByRole("combobox", { name: "景别" }).click();
+  await page.getByRole("option", { name: "中近景" }).click();
+  await page.getByRole("combobox", { name: "机位" }).click();
+  await page.getByRole("option", { name: "仰拍" }).click();
+  await page.getByRole("combobox", { name: "运镜" }).click();
+  await page.getByRole("option", { name: "推拉" }).click();
+  await page.getByLabel("构图").fill("人物位于右侧三分线，灯箱形成纵深引导");
+  await page
+    .getByLabel("环境", { exact: true })
+    .fill("深夜旧车站月台，雨水沿顶棚滴落");
+  await page.getByLabel("情绪与光线").fill("冷蓝环境光与暖色灯箱形成反差");
   await page.getByLabel("动作节拍").fill("林澈停下脚步\n抬头寻找声音来源");
   await page.getByRole("button", { name: /林澈.*有人吗/ }).click();
+  const fixedAssets = page.getByRole("region", { name: "固定资产版本" });
+  await fixedAssets
+    .getByRole("button", { name: characterFixture.name, exact: true })
+    .click();
   await page
-    .getByRole("region", { name: "固定资产版本" })
+    .getByLabel(`${characterFixture.name}画面位置`)
+    .fill("画面右侧，面向月台深处");
+  await fixedAssets
+    .getByRole("button", { name: voiceFixture.name, exact: true })
+    .click();
+  await page
+    .getByRole("button", {
+      name: `为对白 林澈 选择声音 ${voiceFixture.name}`,
+    })
+    .click();
+  await page.getByLabel("林澈表演提示").fill("压低声音，短暂停顿后试探询问");
+  await fixedAssets
     .getByRole("button", { name: locationFixture.name, exact: true })
     .click();
+  await page.getByLabel("环境声").fill("雨声与远处列车低鸣");
+  await page.getByLabel("音效（逗号分隔）").fill("脚步声，灯箱电流声");
+  await page.getByRole("combobox", { name: "生成方式" }).click();
+  await page.getByRole("option", { name: "参考图转视频" }).click();
+  await page.getByLabel("关键帧备注").fill("以角色与月台固定资产版本约束关键帧");
   await page.getByLabel("首帧意图").fill("冷蓝月台全景，角色从画面右侧进入");
   await page.getByLabel("尾帧意图").fill("角色停在灯箱下方并回头");
   await page.getByRole("button", { name: "保存为新版本" }).click();
@@ -266,6 +328,19 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   ).toBeVisible();
   await expect(page.getByText("0 个阻塞", { exact: true })).toBeVisible();
   await expect(page.getByText("2 可生成", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("构图")).toHaveValue(
+    /人物位于右侧三分线，灯箱形成纵深引导/,
+  );
+  await expect(
+    page.getByLabel(`${characterFixture.name}画面位置`),
+  ).toHaveValue("画面右侧，面向月台深处");
+  await expect(page.getByLabel("林澈表演提示")).toHaveValue(
+    "压低声音，短暂停顿后试探询问",
+  );
+  await expect(page.getByLabel("环境声")).toHaveValue(/雨声与远处列车低鸣/);
+  await expect(page.getByRole("combobox", { name: "生成方式" })).toHaveText(
+    "参考图转视频",
+  );
 
   await page.goto("/studio");
   await page.getByRole("tab", { name: locationFixture.tabName }).click();
@@ -290,4 +365,27 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   await expect(
     page.getByRole("button", { name: "生成升级预检" }),
   ).toBeDisabled();
+
+  await page.goto(`/studio/${episodeId}/script`);
+  await page.getByRole("button", { name: "设为当前 v1" }).click();
+  const scriptImpactDialog = page.getByRole("dialog", {
+    name: "版本切换影响",
+  });
+  await expect(
+    scriptImpactDialog.getByText("2 个镜头仍引用其他剧本版本"),
+  ).toBeVisible();
+  await expect(
+    scriptImpactDialog.getByText(
+      "当前指针已经切换；系统没有修改任何既有镜头或规格版本。",
+    ),
+  ).toBeVisible();
+  await scriptImpactDialog.getByRole("button", { name: "知道了" }).click();
+  await page.getByRole("button", { name: "设为当前 v2" }).click();
+  const restoredImpactDialog = page.getByRole("dialog", {
+    name: "版本切换影响",
+  });
+  await expect(
+    restoredImpactDialog.getByText("0 个镜头仍引用其他剧本版本"),
+  ).toBeVisible();
+  await restoredImpactDialog.getByRole("button", { name: "知道了" }).click();
 });
