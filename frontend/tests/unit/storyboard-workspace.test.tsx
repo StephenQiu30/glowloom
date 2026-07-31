@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -232,6 +232,7 @@ describe("分镜工作台", () => {
     const onCreate = vi.fn().mockResolvedValue(true);
     const onSaveSpec = vi.fn().mockResolvedValue(true);
     const onReorder = vi.fn().mockResolvedValue(undefined);
+    const onSelectShot = vi.fn();
     const onCopy = vi.fn().mockResolvedValue(undefined);
     const onDelete = vi.fn().mockResolvedValue(false);
     const onDeletePreflight = vi.fn().mockResolvedValue({
@@ -263,7 +264,7 @@ describe("分镜工作台", () => {
         onMergePrepare={onMergePrepare}
         onReorder={onReorder}
         onSaveSpec={onSaveSpec}
-        onSelectShot={vi.fn()}
+        onSelectShot={onSelectShot}
         onSetCurrentSpec={onSetCurrentSpec}
         onSplit={onSplit}
         onSplitPreflight={onSplitPreflight}
@@ -297,6 +298,20 @@ describe("分镜工作台", () => {
 
     await user.click(screen.getByRole("button", { name: "下移镜头" }));
     expect(onReorder).toHaveBeenCalledWith([secondShotId, firstShotId]);
+
+    fireEvent.dragStart(
+      screen.getByRole("button", { name: "拖动镜头 建立雨夜车站" }),
+    );
+    const secondShotRow = screen.getByRole("listitem", {
+      name: "镜头 角色走入画面 顺序项",
+    });
+    fireEvent.dragOver(secondShotRow);
+    fireEvent.drop(secondShotRow);
+    await waitFor(() => {
+      expect(onReorder).toHaveBeenLastCalledWith([secondShotId, firstShotId]);
+      expect(onSelectShot).toHaveBeenCalledWith(firstShotId);
+    });
+
     await user.click(screen.getByRole("button", { name: "复制镜头" }));
     expect(onCopy).toHaveBeenCalledWith(shots.items[0]);
     await user.click(screen.getByRole("button", { name: "归档镜头" }));
