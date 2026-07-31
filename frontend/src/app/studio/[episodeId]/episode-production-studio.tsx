@@ -30,6 +30,7 @@ import {
   useConfirmedStructureQuery,
   useCopyShotMutation,
   useCreateShotMutation,
+  useCreateShotFromCandidateMutation,
   useDeleteShotMutation,
   useDecideExtractionCandidateMutation,
   useEpisodeQuery,
@@ -62,6 +63,7 @@ import {
   useSplitShotPreflightMutation,
   useStartExtractionMutation,
   useTasksQuery,
+  useUpdateShotMutation,
 } from "@/lib/server-state";
 
 import { EpisodeAssetOverview } from "./episode-asset-overview";
@@ -171,6 +173,27 @@ export function EpisodeProductionStudio({
   const selectedShot =
     shotOrderQuery.data?.items.find((shot) => shot.id === selectedShotId) ??
     shotOrderQuery.data?.items[0];
+  const confirmedShotCandidates = useMemo(() => {
+    const usedCandidateIds = new Set(
+      [
+        ...(shotOrderQuery.data?.items ?? []),
+        ...(archivedShotsQuery.data ?? []),
+      ].flatMap((shot) =>
+        shot.source_candidate_id ? [shot.source_candidate_id] : [],
+      ),
+    );
+    return (candidatesQuery.data?.items ?? []).filter(
+      (candidate) =>
+        candidate.kind === "shot" &&
+        candidate.proposal.kind === "shot" &&
+        candidate.status === "accepted" &&
+        !usedCandidateIds.has(candidate.id),
+    );
+  }, [
+    archivedShotsQuery.data,
+    candidatesQuery.data?.items,
+    shotOrderQuery.data?.items,
+  ]);
   const shotSpecVersionsQuery = useShotSpecVersionsQuery(selectedShot?.id ?? "", {
     skip: !selectedShot || !storyboardActive,
   });
@@ -191,6 +214,9 @@ export function EpisodeProductionStudio({
   const [completeUpload, completionState] = useCompleteMediaUploadMutation();
   const [retryProbe, retryState] = useRetryMediaProbeMutation();
   const [createShot, createShotState] = useCreateShotMutation();
+  const [createShotFromCandidate, createShotFromCandidateState] =
+    useCreateShotFromCandidateMutation();
+  const [updateShot, updateShotState] = useUpdateShotMutation();
   const [appendShotSpec, appendShotSpecState] = useAppendShotSpecMutation();
   const [reorderShots, reorderShotsState] = useReorderShotsMutation();
   const [copyShot, copyShotState] = useCopyShotMutation();
@@ -222,6 +248,8 @@ export function EpisodeProductionStudio({
     completionState,
     retryState,
     createShotState,
+    createShotFromCandidateState,
+    updateShotState,
     appendShotSpecState,
     reorderShotsState,
     copyShotState,
@@ -390,6 +418,39 @@ export function EpisodeProductionStudio({
       setSelectedShotId(created.id);
       succeeded = true;
       return `镜头“${created.title}”已加入清单。`;
+    });
+    return succeeded;
+  }
+
+  async function handleCreateShotFromCandidate(
+    candidate: API.ExtractionCandidateResponse,
+  ): Promise<boolean> {
+    let succeeded = false;
+    await runAction(async () => {
+      const created = await createShotFromCandidate({
+        candidateId: candidate.id,
+        episodeId,
+      }).unwrap();
+      setSelectedShotId(created.id);
+      succeeded = true;
+      return `已确认候选“${created.title}”已加入镜头清单。`;
+    });
+    return succeeded;
+  }
+
+  async function handleUpdateShot(
+    shot: API.ShotResponse,
+    title: string,
+  ): Promise<boolean> {
+    let succeeded = false;
+    await runAction(async () => {
+      const updated = await updateShot({
+        episodeId,
+        shotId: shot.id,
+        body: { expected_revision: shot.revision, title },
+      }).unwrap();
+      succeeded = true;
+      return `镜头标题已更新为“${updated.title}”。`;
     });
     return succeeded;
   }
@@ -760,6 +821,7 @@ export function EpisodeProductionStudio({
                   archivedShots={archivedShotsQuery.data ?? []}
                   assets={assetsQuery.data?.items ?? []}
                   busy={busy}
+                  confirmedShotCandidates={confirmedShotCandidates}
                   order={shotOrderQuery.data ?? { items: [], order_hash: "" }}
                   readiness={shotReadinessQuery.data}
                   selectedShotId={selectedShot?.id ?? null}
@@ -767,6 +829,7 @@ export function EpisodeProductionStudio({
                   versions={shotSpecVersionsQuery.currentData ?? []}
                   onCopy={handleCopyShot}
                   onCreate={handleCreateShot}
+                  onCreateFromCandidate={handleCreateShotFromCandidate}
                   onDelete={handleDeleteShot}
                   onDeletePreflight={handleShotDeletePreflight}
                   onMerge={handleMergeShots}
@@ -778,6 +841,7 @@ export function EpisodeProductionStudio({
                   onSplit={handleSplitShot}
                   onSplitPreflight={handleSplitPreflight}
                   onToggleArchived={handleToggleShotArchived}
+                  onUpdate={handleUpdateShot}
                 />
               ) : initialPanel === "media" ? (
                 <MediaWorkspace busy={busy} media={mediaQuery.data?.items ?? []} onRetry={handleRetry} onUpload={handleUpload} />

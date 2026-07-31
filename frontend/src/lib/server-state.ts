@@ -78,6 +78,7 @@ import {
   archiveShotApiV1ShotsShotIdArchivePost,
   copyShotApiV1ShotsShotIdCopyPost,
   createManualShotApiV1EpisodesEpisodeIdShotsPost,
+  createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPost,
   deleteShotApiV1ShotsShotIdDelete,
   getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet,
   getSpecVersionApiV1ShotSpecVersionsVersionIdGet,
@@ -94,6 +95,7 @@ import {
   shotDeletePreflightApiV1ShotsShotIdDeletePreflightGet,
   splitPreflightApiV1ShotsShotIdSplitPreflightPost,
   splitShotApiV1ShotsShotIdSplitPost,
+  updateShotApiV1ShotsShotIdPatch,
 } from "@/api/storyboards";
 import { listTasksApiV1TasksGet } from "@/api/tasks";
 import { ApiClientError } from "@/lib/api-request";
@@ -653,6 +655,34 @@ export const appApi = createApi({
         { type: "Shots", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    createShotFromCandidate: builder.mutation<
+      API.ShotResponse,
+      { candidateId: string; episodeId: string }
+    >({
+      queryFn: ({ candidateId }) =>
+        runRequest(() =>
+          createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPost({
+            candidate_id: candidateId,
+          }),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Shots", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    updateShot: builder.mutation<
+      API.ShotResponse,
+      { episodeId: string; shotId: string; body: API.ShotUpdateRequest }
+    >({
+      queryFn: ({ shotId, body }) =>
+        runRequest(() =>
+          updateShotApiV1ShotsShotIdPatch({ shot_id: shotId }, body),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Shots", id: episodeId },
       ],
     }),
     appendShotSpec: builder.mutation<
@@ -1215,6 +1245,7 @@ export const {
   useCreateConsentMutation,
   useCreateAssetMutation,
   useCreateShotMutation,
+  useCreateShotFromCandidateMutation,
   useCreateEpisodeMutation,
   useCreateProjectMutation,
   useCreateWorkspaceMutation,
@@ -1256,6 +1287,7 @@ export const {
   useSetProjectArchivedMutation,
   useSetWorkspaceArchivedMutation,
   useUpdateProfileMutation,
+  useUpdateShotMutation,
   useUpdateEpisodeMutation,
   useUpdateProjectBudgetMutation,
   useUpdateProjectMutation,

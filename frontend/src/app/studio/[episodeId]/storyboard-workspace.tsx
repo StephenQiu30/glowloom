@@ -9,6 +9,7 @@ import {
   Film,
   GripVertical,
   History,
+  PencilLine,
   Plus,
   RotateCcw,
   Save,
@@ -60,6 +61,7 @@ type StoryboardWorkspaceProps = {
   archivedShots: API.ShotResponse[];
   assets: API.AssetResponse[];
   busy: boolean;
+  confirmedShotCandidates: API.ExtractionCandidateResponse[];
   order: API.ShotOrderResponse;
   readiness?: API.ShotReadinessBatchResponse;
   selectedShotId: string | null;
@@ -67,6 +69,9 @@ type StoryboardWorkspaceProps = {
   versions: API.ShotSpecVersionResponse[];
   onCopy: (shot: API.ShotResponse) => Promise<void>;
   onCreate: (request: API.ShotCreateRequest) => Promise<boolean>;
+  onCreateFromCandidate: (
+    candidate: API.ExtractionCandidateResponse,
+  ) => Promise<boolean>;
   onDelete: (shot: API.ShotResponse) => Promise<boolean>;
   onDeletePreflight: (
     shotId: string,
@@ -92,6 +97,7 @@ type StoryboardWorkspaceProps = {
     request: API.SplitPreflightRequest,
   ) => Promise<API.ShotTransformPreflightResponse | undefined>;
   onToggleArchived: (shot: API.ShotResponse) => Promise<void>;
+  onUpdate: (shot: API.ShotResponse, title: string) => Promise<boolean>;
 };
 
 const shotSizeLabels: Record<API.VisualSpec["shot_size"], string> = {
@@ -230,9 +236,18 @@ function defaultSpec(
 
 function NewShotDialog({
   busy,
+  confirmedShotCandidates,
   structure,
   onCreate,
-}: Pick<StoryboardWorkspaceProps, "busy" | "structure" | "onCreate">) {
+  onCreateFromCandidate,
+}: Pick<
+  StoryboardWorkspaceProps,
+  | "busy"
+  | "confirmedShotCandidates"
+  | "structure"
+  | "onCreate"
+  | "onCreateFromCandidate"
+>) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [sceneId, setSceneId] = useState(structure?.scenes[0]?.id ?? "");
@@ -254,6 +269,10 @@ function NewShotDialog({
     }
   }
 
+  async function createFromCandidate(candidate: API.ExtractionCandidateResponse) {
+    if (await onCreateFromCandidate(candidate)) setOpen(false);
+  }
+
   return (
     <div className="grid justify-items-end gap-1.5">
       <Dialog open={open} onOpenChange={setOpen}>
@@ -265,12 +284,54 @@ function NewShotDialog({
         <DialogContent className="sm:max-w-lg">
           <form onSubmit={submit}>
             <DialogHeader>
-              <DialogTitle>从已确认场次新建镜头</DialogTitle>
+              <DialogTitle>建立镜头</DialogTitle>
               <DialogDescription>
-                先建立稳定镜头身份，再在工作台保存完整规格版本。
+                优先复用已确认的镜头候选，也可以从场次手工建立稳定镜头身份。
               </DialogDescription>
             </DialogHeader>
             <div className="mt-5 grid gap-4">
+              {confirmedShotCandidates.length ? (
+                <section className="grid gap-2" aria-labelledby="confirmed-shot-candidates">
+                  <div>
+                    <h3 className="text-sm font-medium" id="confirmed-shot-candidates">
+                      已确认的镜头候选
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      来源与场次已经确认，加入后仍需在工作台完善规格。
+                    </p>
+                  </div>
+                  {confirmedShotCandidates.map((candidate) => {
+                    if (candidate.proposal.kind !== "shot") return null;
+                    return (
+                      <div
+                        className="flex items-start justify-between gap-3 rounded-xl border p-3"
+                        key={candidate.id}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {candidate.proposal.title}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            {candidate.proposal.purpose}
+                          </p>
+                        </div>
+                        <Button
+                          aria-label={`从候选建立 ${candidate.proposal.title}`}
+                          disabled={busy}
+                          onClick={() => void createFromCandidate(candidate)}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          加入清单
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </section>
+              ) : null}
+              {confirmedShotCandidates.length ? <Separator /> : null}
+              <p className="text-sm font-medium">手工镜头</p>
               <div className="grid gap-2">
                 <Label htmlFor="newShotTitle">镜头标题</Label>
                 <Input
@@ -318,6 +379,73 @@ function NewShotDialog({
         </p>
       ) : null}
     </div>
+  );
+}
+
+function ShotTitleDialog({
+  busy,
+  shot,
+  onUpdate,
+}: Pick<StoryboardWorkspaceProps, "busy" | "onUpdate"> & {
+  shot: API.ShotResponse;
+}) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState(shot.title);
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) setTitle(shot.title);
+    setOpen(nextOpen);
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextTitle = title.trim();
+    if (!nextTitle || nextTitle === shot.title) return;
+    if (await onUpdate(shot, nextTitle)) setOpen(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button
+          aria-label="修改镜头标题"
+          disabled={busy}
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+        >
+          <PencilLine aria-hidden="true" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={submit}>
+          <DialogHeader>
+            <DialogTitle>修改镜头标题</DialogTitle>
+            <DialogDescription>
+              标题用于清单识别，不改变已保存的镜头规格和生产证据。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-5 grid gap-2">
+            <Label htmlFor="shotTitle">镜头标题</Label>
+            <Input
+              id="shotTitle"
+              maxLength={200}
+              onChange={(event) => setTitle(event.target.value)}
+              required
+              value={title}
+            />
+          </div>
+          <DialogFooter className="mt-5">
+            <Button
+              disabled={busy || !title.trim() || title.trim() === shot.title}
+              type="submit"
+            >
+              保存标题
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -814,6 +942,7 @@ export function StoryboardWorkspace({
   archivedShots,
   assets,
   busy,
+  confirmedShotCandidates,
   order,
   readiness,
   selectedShotId,
@@ -821,6 +950,7 @@ export function StoryboardWorkspace({
   versions,
   onCopy,
   onCreate,
+  onCreateFromCandidate,
   onDelete,
   onDeletePreflight,
   onMerge,
@@ -832,6 +962,7 @@ export function StoryboardWorkspace({
   onSplit,
   onSplitPreflight,
   onToggleArchived,
+  onUpdate,
 }: StoryboardWorkspaceProps) {
   const [draggedShotId, setDraggedShotId] = useState<string | null>(null);
   const [dragOverShotId, setDragOverShotId] = useState<string | null>(null);
@@ -893,9 +1024,11 @@ export function StoryboardWorkspace({
         </div>
         <NewShotDialog
           busy={busy}
+          confirmedShotCandidates={confirmedShotCandidates}
           key={structure?.script_version_id ?? "no-structure"}
           structure={structure}
           onCreate={onCreate}
+          onCreateFromCandidate={onCreateFromCandidate}
         />
       </div>
 
@@ -1049,7 +1182,15 @@ export function StoryboardWorkspace({
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <CardDescription>镜头 {String(selectedShot.position).padStart(2, "0")}</CardDescription>
-                  <CardTitle className="mt-1 text-xl">{selectedShot.title}</CardTitle>
+                  <div className="mt-1 flex items-center gap-1">
+                    <CardTitle className="text-xl">{selectedShot.title}</CardTitle>
+                    <ShotTitleDialog
+                      busy={busy}
+                      key={`${selectedShot.id}:${selectedShot.revision}`}
+                      shot={selectedShot}
+                      onUpdate={onUpdate}
+                    />
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <span>revision {selectedShot.revision}</span>
                     <span>·</span>
