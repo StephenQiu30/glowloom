@@ -1,6 +1,7 @@
+from collections.abc import Awaitable
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 import httpx
@@ -25,6 +26,15 @@ from app.modules.storyboards.schemas import AssetReferenceRequest, ShotSpec
 from tests.support.identity_builders import register_identity_response
 from tests.support.media_builders import seed_ready_media_version
 from tests.support.project_builders import project_payload
+
+
+class _SnapshotReader(Protocol):
+    def __call__(
+        self,
+        session: AsyncSession,
+        workspace_id: UUID,
+        version_id: UUID,
+    ) -> Awaitable[Any]: ...
 
 
 async def _episode_with_confirmed_structure(
@@ -1364,3 +1374,108 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
     assert all(not item["is_current"] for item in old_usage.json()["data"]["items"])
     assert new_usage.json()["data"]["total"] == 2
     assert all(item["is_current"] for item in new_usage.json()["data"]["items"])
+
+
+@pytest.mark.asyncio
+async def test_production_snapshot_is_stable_scoped_and_provider_agnostic(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await _episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="storyboard-production-snapshot@example.com",
+    )
+    location_version, consent = await _ready_location_asset(
+        client,
+        session_factory,
+        headers=headers,
+        project_id=UUID(episode["project_id"]),
+        refs=refs,
+    )
+    created = await client.post(
+        f"/api/v1/episodes/{episode['id']}/shots",
+        headers=headers,
+        json=_create_shot_payload(
+            refs,
+            title="生产快照镜头",
+            creation_key="production-snapshot-shot",
+        ),
+    )
+    assert created.status_code == 201
+    shot = created.json()["data"]
+    spec_payload = deepcopy(_spec_payload(refs, purpose="形成稳定生产输入"))
+    visual = dict(cast(dict[str, object], spec_payload["visual"]))
+    visual["subject_placements"] = []
+    spec_payload["visual"] = visual
+    spec_payload["dialogue_or_narration"] = []
+    saved = await client.post(
+        f"/api/v1/shots/{shot['id']}/spec-versions",
+        headers=headers,
+        json={
+            "expected_current_spec_version_id": None,
+            "spec": spec_payload,
+            "asset_references": [
+                {
+                    "slot_key": "location-main",
+                    "role": "location",
+                    "asset_version_id": location_version["id"],
+                    "subject_key": None,
+                }
+            ],
+        },
+    )
+    assert saved.status_code == 201
+    version = saved.json()["data"]["version"]
+
+    from app.modules import storyboards
+
+    snapshot_reader = cast(
+        _SnapshotReader | None,
+        getattr(storyboards, "get_production_snapshot", None),
+    )
+    assert snapshot_reader is not None
+    async with session_factory() as session:
+        snapshot = await snapshot_reader(
+            session,
+            refs["workspace_id"],
+            UUID(version["id"]),
+        )
+        hidden = await snapshot_reader(
+            session,
+            uuid7(),
+            UUID(version["id"]),
+        )
+    assert hidden is None
+    assert snapshot is not None
+    assert snapshot.spec_ref.shot_id == UUID(shot["id"])
+    assert snapshot.spec_ref.shot_spec_version_id == UUID(version["id"])
+    assert snapshot.spec_ref.input_hash == version["input_hash"]
+    assert snapshot.readiness_status == "ready"
+    assert snapshot.ready is True
+    assert snapshot.asset_references[0].asset_version_id == UUID(
+        location_version["id"]
+    )
+    assert snapshot.spec["generation_intent"]["mode"] == "text_to_video"
+    serialized = str(snapshot).lower()
+    assert "provider" not in serialized
+    assert "model_id" not in serialized
+    assert "cost" not in serialized
+
+    revoked = await client.post(
+        f"/api/v1/consents/{consent['id']}/revoke",
+        headers=headers,
+        json={"expected_revision": 1, "reason": "撤销生产快照授权"},
+    )
+    assert revoked.status_code == 200
+    async with session_factory() as session:
+        blocked = await snapshot_reader(
+            session,
+            refs["workspace_id"],
+            UUID(version["id"]),
+        )
+    assert blocked is not None
+    assert blocked.readiness_status == "blocked"
+    assert blocked.ready is False
+    assert blocked.spec_ref == snapshot.spec_ref
+    assert blocked.evaluation_hash != snapshot.evaluation_hash
