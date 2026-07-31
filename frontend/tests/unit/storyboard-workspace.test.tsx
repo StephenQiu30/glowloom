@@ -14,6 +14,8 @@ const secondShotId = "019fb2c0-a000-7000-8000-000000000007";
 const archivedShotId = "019fb2c0-a000-7000-8000-000000000008";
 const specVersionId = "019fb2c0-a000-7000-8000-000000000009";
 const locationVersionId = "019fb2c0-a000-7000-8000-000000000010";
+const characterVersionId = "019fb2c0-a000-7000-8000-000000000015";
+const voiceVersionId = "019fb2c0-a000-7000-8000-000000000016";
 const now = "2026-07-31T10:00:00Z";
 
 const shots: API.ShotOrderResponse = {
@@ -231,6 +233,36 @@ const assets: API.AssetResponse[] = [
     updated_at: now,
     warnings: [],
   },
+  {
+    id: "019fb2c0-a000-7000-8000-000000000017",
+    workspace_id: workspaceId,
+    project_id: "019fb2c0-a000-7000-8000-000000000012",
+    kind: "character",
+    name: "顾清禾",
+    aliases: [],
+    tags: [],
+    status: "active",
+    current_version_id: characterVersionId,
+    revision: 1,
+    created_at: now,
+    updated_at: now,
+    warnings: [],
+  },
+  {
+    id: "019fb2c0-a000-7000-8000-000000000018",
+    workspace_id: workspaceId,
+    project_id: "019fb2c0-a000-7000-8000-000000000012",
+    kind: "voice",
+    name: "顾清禾声线",
+    aliases: [],
+    tags: [],
+    status: "active",
+    current_version_id: voiceVersionId,
+    revision: 1,
+    created_at: now,
+    updated_at: now,
+    warnings: [],
+  },
 ];
 
 const acceptedShotCandidate: API.ExtractionCandidateResponse = {
@@ -323,6 +355,17 @@ describe("分镜工作台", () => {
 
     await user.clear(screen.getByLabelText("镜头目的"));
     await user.type(screen.getByLabelText("镜头目的"), "强调人物进入未知空间");
+    await user.click(screen.getByRole("button", { name: "顾清禾" }));
+    await user.clear(screen.getByLabelText("顾清禾画面位置"));
+    await user.type(screen.getByLabelText("顾清禾画面位置"), "画面左侧，面向站台深处");
+    await user.click(screen.getByRole("button", { name: "顾清禾声线" }));
+    await user.click(
+      screen.getByRole("button", { name: "为对白 顾清禾 选择声音 顾清禾声线" }),
+    );
+    await user.clear(screen.getByLabelText("顾清禾表演提示"));
+    await user.type(screen.getByLabelText("顾清禾表演提示"), "克制而警觉");
+    await user.type(screen.getByLabelText("首帧意图"), "雨幕中的空站台");
+    await user.type(screen.getByLabelText("尾帧意图"), "角色停在灯箱前");
     await user.click(screen.getByRole("button", { name: "保存为新版本" }));
     await waitFor(() =>
       expect(onSaveSpec).toHaveBeenCalledWith(
@@ -331,7 +374,33 @@ describe("分镜工作台", () => {
           expected_current_spec_version_id: specVersionId,
           spec: expect.objectContaining({
             narrative: expect.objectContaining({ purpose: "强调人物进入未知空间" }),
+            visual: expect.objectContaining({
+              subject_placements: [
+                expect.objectContaining({ placement: "画面左侧，面向站台深处" }),
+              ],
+            }),
+            dialogue_or_narration: [
+              expect.objectContaining({
+                source_dialogue_id: dialogueId,
+                render_as_audio: true,
+                performance_note: "克制而警觉",
+              }),
+            ],
+            generation_intent: expect.objectContaining({
+              first_frame: "雨幕中的空站台",
+              last_frame: "角色停在灯箱前",
+            }),
           }),
+          asset_references: expect.arrayContaining([
+            expect.objectContaining({
+              role: "character",
+              asset_version_id: characterVersionId,
+            }),
+            expect.objectContaining({
+              role: "voice",
+              asset_version_id: voiceVersionId,
+            }),
+          ]),
         }),
       ),
     );
