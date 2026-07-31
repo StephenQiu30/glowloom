@@ -65,6 +65,10 @@ declare namespace API {
     data: CandidateDecisionResultResponse;
   };
 
+  type ApiResponseConfirmedStructureResponse_ = {
+    data: ConfirmedStructureResponse;
+  };
+
   type ApiResponseConsentDetailResponse_ = {
     data: ConsentDetailResponse;
   };
@@ -817,6 +821,13 @@ declare namespace API {
     upload_session_id: string;
   };
 
+  type ConfirmedStructureResponse = {
+    /** Script Version Id */
+    script_version_id: string;
+    /** Scenes */
+    scenes: SceneResponse[];
+  };
+
   type confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePostParams =
     {
       batch_id: string;
@@ -1316,6 +1327,10 @@ declare namespace API {
   };
 
   type getAssetVersionApiV1AssetVersionsVersionIdGetParams = {
+    version_id: string;
+  };
+
+  type getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGetParams = {
     version_id: string;
   };
 
