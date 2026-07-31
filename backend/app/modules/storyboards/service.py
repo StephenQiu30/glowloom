@@ -2026,7 +2026,10 @@ async def list_asset_shot_usages(
                 spec_version_id=version.id,
                 spec_version_no=version.version_no,
                 slot_keys=slot_keys,
-                is_current=shot.current_spec_version_id == version.id,
+                is_current=(
+                    shot.status == "active"
+                    and shot.current_spec_version_id == version.id
+                ),
             )
             for version, shot, slot_keys in rows
         ],

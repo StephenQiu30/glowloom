@@ -57,7 +57,10 @@ export function AssetVersionUsage({
 }) {
   const [sourceChoice, setSourceChoice] = useState<string | null>(null);
   const [targetChoice, setTargetChoice] = useState<string | null>(null);
-  const [selectedShotIds, setSelectedShotIds] = useState<string[]>([]);
+  const [selection, setSelection] = useState<{
+    sourceVersionId: string | null;
+    shotIds: string[];
+  }>({ sourceVersionId: null, shotIds: [] });
   const [usageOffset, setUsageOffset] = useState(0);
   const [preflight, setPreflight] =
     useState<API.AssetUpgradePreflightResponse | null>(null);
@@ -93,6 +96,8 @@ export function AssetVersionUsage({
   const usageItems = usages.data?.items ?? [];
   const currentUsages = usageItems.filter((usage) => usage.is_current);
   const historicalUsages = usageItems.filter((usage) => !usage.is_current);
+  const selectedShotIds =
+    selection.sourceVersionId === sourceVersion?.id ? selection.shotIds : [];
   const busy = preflightState.isLoading || applyState.isLoading;
 
   function resetReview() {
@@ -103,7 +108,7 @@ export function AssetVersionUsage({
   function changeSource(versionId: string) {
     setSourceChoice(versionId);
     setTargetChoice(null);
-    setSelectedShotIds([]);
+    setSelection({ sourceVersionId: null, shotIds: [] });
     setUsageOffset(0);
     resetReview();
   }
@@ -114,11 +119,16 @@ export function AssetVersionUsage({
   }
 
   function toggleShot(shotId: string) {
-    setSelectedShotIds((current) =>
-      current.includes(shotId)
-        ? current.filter((candidate) => candidate !== shotId)
-        : [...current, shotId],
-    );
+    setSelection((current) => {
+      const currentShotIds =
+        current.sourceVersionId === sourceVersion?.id ? current.shotIds : [];
+      return {
+        sourceVersionId: sourceVersion?.id ?? null,
+        shotIds: currentShotIds.includes(shotId)
+          ? currentShotIds.filter((candidate) => candidate !== shotId)
+          : [...currentShotIds, shotId],
+      };
+    });
     resetReview();
   }
 
@@ -154,7 +164,7 @@ export function AssetVersionUsage({
       }).unwrap();
       setReviewOpen(false);
       setPreflight(null);
-      setSelectedShotIds([]);
+      setSelection({ sourceVersionId: null, shotIds: [] });
       onCompleted(result.shots.length);
     } catch (error: unknown) {
       setReviewOpen(false);
@@ -230,8 +240,9 @@ export function AssetVersionUsage({
                   <Button
                     disabled={busy}
                     onClick={() => {
-                      setSelectedShotIds(
-                        currentUsages.every((usage) =>
+                      setSelection({
+                        sourceVersionId: sourceVersion?.id ?? null,
+                        shotIds: currentUsages.every((usage) =>
                           selectedShotIds.includes(usage.shot_id),
                         )
                           ? selectedShotIds.filter(
@@ -246,7 +257,7 @@ export function AssetVersionUsage({
                                 ...currentUsages.map((usage) => usage.shot_id),
                               ]),
                             ),
-                      );
+                      });
                       resetReview();
                     }}
                     size="sm"

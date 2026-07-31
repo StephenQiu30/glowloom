@@ -79,6 +79,7 @@ vi.mock("@/api/storyboards", async () => {
 });
 
 import { AppProviders } from "@/app/providers";
+import { AssetVersionUsage } from "@/app/studio/asset-version-usage";
 import { ComicProductionStudio } from "@/app/studio/comic-production-studio";
 import { setAccessToken } from "@/lib/auth-session";
 
@@ -594,5 +595,47 @@ describe("AI 漫剧资产工作台", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "已为 1 个镜头创建新的规格版本",
     );
+  });
+
+  it("来源版本随资产当前版本变化时不沿用旧选择", async () => {
+    const user = userEvent.setup();
+    const onCompleted = vi.fn();
+    const onError = vi.fn();
+    const view = render(
+      <AppProviders>
+        <AssetVersionUsage
+          asset={asset}
+          onCompleted={onCompleted}
+          onError={onError}
+          versions={[version, oldVersion]}
+        />
+      </AppProviders>,
+    );
+
+    await user.click(
+      await screen.findByRole("checkbox", { name: "选择镜头 雨夜相逢" }),
+    );
+    const preflightButton = screen.getByRole("button", {
+      name: "生成升级预检",
+    });
+    expect(preflightButton.parentElement).toHaveTextContent(
+      "已选择 1 个当前镜头",
+    );
+
+    view.rerender(
+      <AppProviders>
+        <AssetVersionUsage
+          asset={{ ...asset, current_version_id: oldVersionId, revision: 4 }}
+          onCompleted={onCompleted}
+          onError={onError}
+          versions={[version, oldVersion]}
+        />
+      </AppProviders>,
+    );
+
+    expect(preflightButton.parentElement).toHaveTextContent(
+      "已选择 0 个当前镜头",
+    );
+    expect(preflightButton).toBeDisabled();
   });
 });

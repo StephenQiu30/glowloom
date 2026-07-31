@@ -1415,6 +1415,32 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
     assert new_usage.json()["data"]["total"] == 2
     assert all(item["is_current"] for item in new_usage.json()["data"]["items"])
 
+    shot_order = await client.get(
+        f"/api/v1/episodes/{episode['id']}/shots",
+        headers=headers,
+    )
+    assert shot_order.status_code == 200
+    archived = await client.post(
+        f"/api/v1/shots/{shots[0]['id']}/archive",
+        headers=headers,
+        json={
+            "expected_revision": applied["shots"][0]["revision"],
+            "expected_order_hash": shot_order.json()["data"]["order_hash"],
+        },
+    )
+    assert archived.status_code == 200
+    usage_after_archive = await client.get(
+        f"/api/v1/asset-versions/{new_version['id']}/shot-usages",
+        headers=headers,
+    )
+    assert usage_after_archive.status_code == 200
+    usage_by_shot_id = {
+        item["shot_id"]: item
+        for item in usage_after_archive.json()["data"]["items"]
+    }
+    assert usage_by_shot_id[shots[0]["id"]]["is_current"] is False
+    assert usage_by_shot_id[shots[1]["id"]]["is_current"] is True
+
 
 @pytest.mark.asyncio
 async def test_production_snapshot_is_stable_scoped_and_provider_agnostic(
