@@ -292,7 +292,11 @@ async def test_consent_registration_read_revision_and_revoke_are_append_only(
     audited = await client.get(
         "/api/v1/audit-events",
         headers=headers,
-        params={"workspace_id": str(workspace_id)},
+        params={
+            "workspace_id": str(workspace_id),
+            "target_type": "consent",
+            "target_id": consent_id,
+        },
     )
     assert audited.status_code == 200
     audit_data = audited.json()["data"]

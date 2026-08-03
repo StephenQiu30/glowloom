@@ -26,6 +26,21 @@ async def test_profile_and_workspace_lifecycle_are_versioned_and_isolated(
     )
     assert updated_profile.status_code == 200
     assert updated_profile.json()["data"]["user"]["display_name"] == "新名称"
+    profile_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": registered.json()["data"]["workspace"]["id"],
+            "action": "identity.profile_updated",
+        },
+    )
+    assert profile_audit.status_code == 200
+    assert profile_audit.json()["data"]["total"] == 1
+    assert profile_audit.json()["data"]["items"][0]["metadata"] == {
+        "changed_fields": ["display_name", "avatar_url"]
+    }
+    assert "新名称" not in str(profile_audit.json()["data"])
+    assert "avatar.png" not in str(profile_audit.json()["data"])
 
     created = await client.post(
         "/api/v1/workspaces",
@@ -70,6 +85,34 @@ async def test_profile_and_workspace_lifecycle_are_versioned_and_isolated(
     assert restored.status_code == 200
     assert restored.json()["data"]["status"] == "active"
     assert restored.json()["data"]["revision"] == 4
+
+    audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "target_type": "workspace",
+            "target_id": workspace_id,
+        },
+    )
+    assert audit.status_code == 200
+    assert [item["action"] for item in audit.json()["data"]["items"]] == [
+        "workspace.restored",
+        "workspace.archived",
+        "workspace.updated",
+        "workspace.created",
+    ]
+    assert [item["metadata"]["revision"] for item in audit.json()["data"]["items"]] == [
+        4,
+        3,
+        2,
+        1,
+    ]
+    assert audit.json()["data"]["items"][2]["metadata"]["changed_fields"] == [
+        "name"
+    ]
+    assert "第二工作空间" not in str(audit.json()["data"])
+    assert "正式空间" not in str(audit.json()["data"])
 
     listed = await client.get("/api/v1/workspaces", headers=headers)
     assert listed.status_code == 200

@@ -47,6 +47,16 @@ test("S1 用户管理资料、工作空间和账户凭据", async ({ page }) => 
   await page.getByRole("button", { name: "登录" }).click();
   await expect(page).toHaveURL(/\/projects$/);
 
+  await page.goto("/governance");
+  const auditTrail = page.getByRole("region", { name: "操作审计" });
+  await expect(auditTrail.getByText("登录成功").first()).toBeVisible();
+  await expect(auditTrail.getByText("密码修改")).toBeVisible();
+  await expect(auditTrail.getByText("资料更新")).toBeVisible();
+  await auditTrail.getByRole("button", { name: "筛选" }).click();
+  await auditTrail.getByLabel("动作").selectOption("identity.password_changed");
+  await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
+  await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
+
   await page.locator('a[href="/workspaces"]').click();
   await page.getByLabel("输入 DEACTIVATE 确认").fill("DEACTIVATE");
   await page.getByRole("button", { name: "停用账户" }).click();

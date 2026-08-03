@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.modules.governance.audit.models import AuditEvent
 from app.modules.identity.models import Membership, UserAccount, Workspace
 from tests.support.identity_builders import register_identity_response
 
@@ -27,6 +28,29 @@ async def test_registration_creates_one_atomic_personal_workspace(
     assert payload["access_token"]
     assert payload["token_type"] == "bearer"
 
+    audit = await client.get(
+        "/api/v1/audit-events",
+        headers={"authorization": f"Bearer {payload['access_token']}"},
+        params={
+            "workspace_id": payload["workspace"]["id"],
+            "target_type": "user_account",
+            "target_id": payload["user"]["id"],
+        },
+    )
+    assert audit.status_code == 200
+    assert audit.json()["data"]["total"] == 1
+    registered_event = audit.json()["data"]["items"][0]
+    assert registered_event["action"] == "identity.registered"
+    assert registered_event["actor_id"] == payload["user"]["id"]
+    assert registered_event["result"] == "succeeded"
+    assert registered_event["trace_id"]
+    assert registered_event["metadata"] == {
+        "token_version": 1,
+        "workspace_revision": 1,
+    }
+    assert "email" not in str(registered_event).lower()
+    assert "password" not in str(registered_event).lower()
+
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(UserAccount)) == 1
         assert await session.scalar(select(func.count()).select_from(Workspace)) == 1
@@ -41,7 +65,7 @@ async def test_registration_creates_one_atomic_personal_workspace(
 async def test_login_does_not_reveal_whether_an_account_exists(
     client: httpx.AsyncClient,
 ) -> None:
-    await register_identity_response(client)
+    registered = await register_identity_response(client)
     headers = {"x-request-id": "same-request"}
     wrong_password = await client.post(
         "/api/v1/auth/login",
@@ -58,10 +82,24 @@ async def test_login_does_not_reveal_whether_an_account_exists(
     assert wrong_password.json() == missing_account.json()
     assert "wrong-password-value" not in wrong_password.text
 
+    audit = await client.get(
+        "/api/v1/audit-events",
+        headers={
+            "authorization": f"Bearer {registered.json()['data']['access_token']}"
+        },
+        params={
+            "workspace_id": registered.json()["data"]["workspace"]["id"],
+            "action": "identity.login_succeeded",
+        },
+    )
+    assert audit.status_code == 200
+    assert audit.json()["data"]["total"] == 0
+
 
 @pytest.mark.asyncio
 async def test_logout_and_password_change_revoke_previous_tokens(
     client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     registered = await register_identity_response(client)
     first_token = registered.json()["data"]["access_token"]
@@ -99,6 +137,42 @@ async def test_logout_and_password_change_revoke_previous_tokens(
     assert old_login.status_code == 401
     assert new_login.status_code == 200
 
+    audit = await client.get(
+        "/api/v1/audit-events",
+        headers={
+            "authorization": f"Bearer {new_login.json()['data']['access_token']}"
+        },
+        params={
+            "workspace_id": registered.json()["data"]["workspace"]["id"],
+            "target_type": "user_account",
+            "target_id": registered.json()["data"]["user"]["id"],
+        },
+    )
+    assert audit.status_code == 200
+    actions = [item["action"] for item in audit.json()["data"]["items"]]
+    assert actions == [
+        "identity.login_succeeded",
+        "identity.password_changed",
+        "identity.login_succeeded",
+        "identity.logged_out",
+        "identity.registered",
+    ]
+    assert all(
+        set(item["metadata"])
+        <= {"token_version", "previous_token_version", "workspace_revision"}
+        for item in audit.json()["data"]["items"]
+    )
+
+    async with session_factory() as session:
+        events = list(
+            await session.scalars(
+                select(AuditEvent).order_by(
+                    AuditEvent.occurred_at.asc(), AuditEvent.id.asc()
+                )
+            )
+        )
+        assert len(events) == 5
+
 
 @pytest.mark.asyncio
 async def test_account_deactivation_preserves_history_and_revokes_access(
@@ -128,3 +202,24 @@ async def test_account_deactivation_preserves_history_and_revokes_access(
         assert user is not None and user.status == "deactivated"
         assert await session.scalar(select(func.count()).select_from(Workspace)) == 1
         assert await session.scalar(select(func.count()).select_from(Membership)) == 1
+        events = list(
+            await session.scalars(
+                select(AuditEvent).order_by(
+                    AuditEvent.occurred_at.asc(), AuditEvent.id.asc()
+                )
+            )
+        )
+        assert [event.action for event in events] == [
+            "identity.registered",
+            "identity.account_deactivated",
+        ]
+        deactivated_event = events[-1]
+        assert str(deactivated_event.workspace_id) == registered.json()["data"]["workspace"]["id"]
+        assert deactivated_event.actor_id == user.id
+        assert deactivated_event.target_id == user.id
+        assert deactivated_event.event_metadata == {
+            "previous_status": "active",
+            "status": "deactivated",
+            "previous_token_version": 1,
+            "token_version": 2,
+        }

@@ -46,3 +46,21 @@ def test_audit_metadata_is_restricted_by_registered_action() -> None:
         "subject_type": "MEDIA_VERSION",
     }
     session.add.assert_called_once_with(event)
+
+    with pytest.raises(ValueError, match="password_hash"):
+        append_audit_event(
+            session,
+            workspace_id=common["workspace_id"],
+            actor_id=common["actor_id"],
+            action="identity.account_deactivated",
+            target_type="user_account",
+            target_id=common["target_id"],
+            trace_id=common["trace_id"],
+            metadata={
+                "previous_status": "active",
+                "status": "deactivated",
+                "previous_token_version": 1,
+                "token_version": 2,
+                "password_hash": "must-not-be-recorded",
+            },
+        )

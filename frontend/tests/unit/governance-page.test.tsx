@@ -53,6 +53,22 @@ const now = "2026-07-30T08:00:00Z";
 
 const auditEvents: API.AuditEventResponse[] = [
   {
+    id: "019fb1e0-a060-7000-8000-000000000000",
+    workspace_id: workspaceId,
+    actor_id: "019fb1e0-a000-7000-8000-000000000001",
+    action: "workspace.archived",
+    target_type: "workspace",
+    target_id: workspaceId,
+    result: "succeeded",
+    trace_id: "019fb1e0-a061-7000-8000-000000000000",
+    metadata: {
+      revision: 3,
+      previous_status: "active",
+      status: "archived",
+    },
+    occurred_at: now,
+  },
+  {
     id: "019fb1e0-a060-7000-8000-000000000001",
     workspace_id: workspaceId,
     actor_id: "019fb1e0-a000-7000-8000-000000000001",
@@ -200,7 +216,7 @@ describe("governance consent workspace", () => {
       data: { items: [detail], total: 1, limit: 50, offset: 0 },
     });
     apiMocks.listAuditEvents.mockResolvedValue({
-      data: { items: auditEvents, total: 2, limit: 50, offset: 0 },
+      data: { items: auditEvents, total: 3, limit: 50, offset: 0 },
     });
     apiMocks.getConsent.mockResolvedValue({ data: detail });
     apiMocks.listMedia.mockResolvedValue({
@@ -268,7 +284,9 @@ describe("governance consent workspace", () => {
 
     const audit = await screen.findByRole("region", { name: "操作审计" });
     expect(await within(audit).findByText("授权撤销")).toBeInTheDocument();
-    expect(within(audit).getByText("revision 3")).toBeInTheDocument();
+    expect(within(audit).getByText("工作空间归档")).toBeInTheDocument();
+    expect(within(audit).getByText("active → archived")).toBeInTheDocument();
+    expect(within(audit).getAllByText("revision 3")).toHaveLength(2);
     expect(within(audit).getAllByText(/MEDIA_VERSION/)).toHaveLength(2);
 
     await user.click(within(audit).getByRole("button", { name: "筛选" }));
