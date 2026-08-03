@@ -23,6 +23,16 @@ export type AuditFilters = {
 };
 
 const auditActionLabels: Record<string, string> = {
+  "identity.registered": "账户注册",
+  "identity.login_succeeded": "登录成功",
+  "identity.logged_out": "全局登出",
+  "identity.password_changed": "密码修改",
+  "identity.profile_updated": "资料更新",
+  "identity.account_deactivated": "账户停用",
+  "workspace.created": "工作空间创建",
+  "workspace.updated": "工作空间更新",
+  "workspace.archived": "工作空间归档",
+  "workspace.restored": "工作空间恢复",
   "consent.registered": "授权登记",
   "consent.revised": "授权修订",
   "consent.revoked": "授权撤销",
@@ -44,6 +54,18 @@ function utcBoundary(value: FormDataEntryValue | null, end: boolean) {
 }
 
 function eventSummary(event: API.AuditEventResponse): string {
+  if (Array.isArray(event.metadata.changed_fields)) {
+    return `变更字段：${event.metadata.changed_fields.map(String).join("、")}`;
+  }
+  if (event.metadata.previous_status && event.metadata.status) {
+    return `${String(event.metadata.previous_status)} → ${String(event.metadata.status)}`;
+  }
+  if (event.metadata.previous_token_version && event.metadata.token_version) {
+    return `token v${String(event.metadata.previous_token_version)} → v${String(event.metadata.token_version)}`;
+  }
+  if (event.metadata.token_version) {
+    return `token version ${String(event.metadata.token_version)}`;
+  }
   if (event.metadata.subject_type) return String(event.metadata.subject_type);
   if (event.metadata.version_no) {
     return `${String(event.metadata.kind ?? "媒体")} · v${String(event.metadata.version_no)}`;

@@ -7,6 +7,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.governance.audit.models import AuditEvent
 
 _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
+    "identity.registered": frozenset({"token_version", "workspace_revision"}),
+    "identity.login_succeeded": frozenset({"token_version"}),
+    "identity.logged_out": frozenset(
+        {"previous_token_version", "token_version"}
+    ),
+    "identity.password_changed": frozenset(
+        {"previous_token_version", "token_version"}
+    ),
+    "identity.profile_updated": frozenset({"changed_fields"}),
+    "identity.account_deactivated": frozenset(
+        {
+            "previous_status",
+            "status",
+            "previous_token_version",
+            "token_version",
+        }
+    ),
+    "workspace.created": frozenset({"revision", "status"}),
+    "workspace.updated": frozenset({"revision", "changed_fields"}),
+    "workspace.archived": frozenset({"revision", "previous_status", "status"}),
+    "workspace.restored": frozenset({"revision", "previous_status", "status"}),
     "consent.registered": frozenset({"revision", "subject_type"}),
     "consent.revised": frozenset({"revision", "subject_type"}),
     "consent.revoked": frozenset({"revision", "subject_type"}),

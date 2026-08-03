@@ -6,6 +6,7 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
+from app.modules.governance.audit import append_audit_event
 from app.modules.identity import repository
 from app.modules.identity.authentication.service import authenticated_user
 from app.modules.identity.contracts import ActorContext, Capability
@@ -94,8 +95,11 @@ async def create_workspace(
     session: AsyncSession,
     claims: AccessTokenClaims,
     request: WorkspaceCreateRequest,
+    *,
+    trace_id: str,
 ) -> WorkspaceResponse:
     workspace_id = uuid7()
+    now = datetime.now(UTC)
     async with session.begin():
         user = await authenticated_user(session, claims)
         workspace = Workspace(id=workspace_id, name=request.name.strip())
@@ -107,6 +111,17 @@ async def create_workspace(
         session.add(workspace)
         await session.flush()
         session.add(membership)
+        append_audit_event(
+            session,
+            workspace_id=workspace.id,
+            actor_id=user.id,
+            action="workspace.created",
+            target_type="workspace",
+            target_id=workspace.id,
+            trace_id=trace_id,
+            metadata={"revision": workspace.revision, "status": workspace.status},
+            occurred_at=now,
+        )
         await session.flush()
     return workspace_response(workspace, membership)
 
@@ -116,6 +131,8 @@ async def update_workspace(
     claims: AccessTokenClaims,
     workspace_id: UUID,
     request: WorkspaceUpdateRequest,
+    *,
+    trace_id: str,
 ) -> WorkspaceResponse:
     async with session.begin():
         user = await authenticated_user(session, claims)
@@ -131,6 +148,16 @@ async def update_workspace(
             raise ApiError(ErrorCode.STATE_CONFLICT, "Workspace is archived", status_code=409)
         workspace.name = request.name.strip()
         workspace.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=workspace.id,
+            actor_id=user.id,
+            action="workspace.updated",
+            target_type="workspace",
+            target_id=workspace.id,
+            trace_id=trace_id,
+            metadata={"revision": workspace.revision, "changed_fields": ["name"]},
+        )
         await session.flush()
     return workspace_response(workspace, membership)
 
@@ -142,6 +169,7 @@ async def set_workspace_archived(
     request: WorkspaceStateRequest,
     *,
     archived: bool,
+    trace_id: str,
 ) -> WorkspaceResponse:
     expected_status = "active" if archived else "archived"
     async with session.begin():
@@ -160,8 +188,25 @@ async def set_workspace_archived(
                 "Workspace state does not allow this action",
                 status_code=409,
             )
+        previous_status = workspace.status
+        now = datetime.now(UTC)
         workspace.status = "archived" if archived else "active"
-        workspace.archived_at = datetime.now(UTC) if archived else None
+        workspace.archived_at = now if archived else None
         workspace.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=workspace.id,
+            actor_id=user.id,
+            action="workspace.archived" if archived else "workspace.restored",
+            target_type="workspace",
+            target_id=workspace.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": workspace.revision,
+                "previous_status": previous_status,
+                "status": workspace.status,
+            },
+            occurred_at=now,
+        )
         await session.flush()
     return workspace_response(workspace, membership)

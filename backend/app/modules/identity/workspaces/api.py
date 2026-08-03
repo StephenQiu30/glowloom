@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AccessTokenClaims, get_access_token_claims
@@ -40,10 +40,18 @@ async def list_workspaces(
 )
 async def create_workspace(
     payload: WorkspaceCreateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[WorkspaceResponse]:
-    return ApiResponse(data=await service.create_workspace(session, claims, payload))
+    return ApiResponse(
+        data=await service.create_workspace(
+            session,
+            claims,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
 
 
 @router.get("/workspaces/{workspace_id}", response_model=ApiResponse[WorkspaceResponse])
@@ -59,10 +67,19 @@ async def get_workspace(
 async def update_workspace(
     workspace_id: UUID,
     payload: WorkspaceUpdateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[WorkspaceResponse]:
-    return ApiResponse(data=await service.update_workspace(session, claims, workspace_id, payload))
+    return ApiResponse(
+        data=await service.update_workspace(
+            session,
+            claims,
+            workspace_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
 
 
 @router.post(
@@ -72,6 +89,7 @@ async def update_workspace(
 async def archive_workspace(
     workspace_id: UUID,
     payload: WorkspaceStateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[WorkspaceResponse]:
@@ -82,6 +100,7 @@ async def archive_workspace(
             workspace_id,
             payload,
             archived=True,
+            trace_id=str(request.state.request_id),
         )
     )
 
@@ -93,6 +112,7 @@ async def archive_workspace(
 async def restore_workspace(
     workspace_id: UUID,
     payload: WorkspaceStateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[WorkspaceResponse]:
@@ -103,5 +123,6 @@ async def restore_workspace(
             workspace_id,
             payload,
             archived=False,
+            trace_id=str(request.state.request_id),
         )
     )

@@ -9,6 +9,7 @@ from uuid6 import uuid7
 from app.core.auth import AccessTokenClaims, create_access_token
 from app.core.config import Settings
 from app.core.errors import ApiError, ErrorCode
+from app.modules.governance.audit import append_audit_event
 from app.modules.identity import repository
 from app.modules.identity.authentication.schemas import (
     AuthResponse,
@@ -67,18 +68,23 @@ def _auth_response(
 
 
 async def register(
-    session: AsyncSession, request: RegisterRequest, settings: Settings
+    session: AsyncSession,
+    request: RegisterRequest,
+    settings: Settings,
+    *,
+    trace_id: str,
 ) -> AuthResponse:
     email = _normalize_email(str(request.email))
     password = _plain_password(request.password)
     user_id = uuid7()
     workspace_id = uuid7()
+    now = datetime.now(UTC)
     user = UserAccount(
         id=user_id,
         email_normalized=email,
         password_hash=_password_hash.hash(password),
         display_name=request.display_name.strip(),
-        last_login_at=datetime.now(UTC),
+        last_login_at=now,
     )
     workspace = Workspace(id=workspace_id, name=f"{request.display_name.strip()}的工作空间")
     membership = Membership(user_id=user_id, workspace_id=workspace_id, role="owner")
@@ -87,6 +93,21 @@ async def register(
             session.add_all((user, workspace))
             await session.flush()
             session.add(membership)
+            await session.flush()
+            append_audit_event(
+                session,
+                workspace_id=workspace.id,
+                actor_id=user.id,
+                action="identity.registered",
+                target_type="user_account",
+                target_id=user.id,
+                trace_id=trace_id,
+                metadata={
+                    "token_version": user.token_version,
+                    "workspace_revision": workspace.revision,
+                },
+                occurred_at=now,
+            )
             await session.flush()
     except IntegrityError as error:
         raise ApiError(
@@ -97,7 +118,13 @@ async def register(
     return _auth_response(user, workspace, membership, settings)
 
 
-async def login(session: AsyncSession, request: LoginRequest, settings: Settings) -> AuthResponse:
+async def login(
+    session: AsyncSession,
+    request: LoginRequest,
+    settings: Settings,
+    *,
+    trace_id: str,
+) -> AuthResponse:
     email = _normalize_email(str(request.email))
     password = request.password.get_secret_value()
     async with session.begin():
@@ -113,7 +140,19 @@ async def login(session: AsyncSession, request: LoginRequest, settings: Settings
                 "Account workspace is unavailable",
                 status_code=500,
             )
-        user.last_login_at = datetime.now(UTC)
+        now = datetime.now(UTC)
+        user.last_login_at = now
+        append_audit_event(
+            session,
+            workspace_id=primary[0].id,
+            actor_id=user.id,
+            action="identity.login_succeeded",
+            target_type="user_account",
+            target_id=user.id,
+            trace_id=trace_id,
+            metadata={"token_version": user.token_version},
+            occurred_at=now,
+        )
         await session.flush()
     return _auth_response(user, primary[0], primary[1], settings)
 
@@ -147,10 +186,36 @@ async def me(session: AsyncSession, claims: AccessTokenClaims) -> MeResponse:
     )
 
 
-async def logout(session: AsyncSession, claims: AccessTokenClaims) -> None:
+async def logout(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    *,
+    trace_id: str,
+) -> None:
     async with session.begin():
         user = await authenticated_user(session, claims)
+        primary = await repository.find_primary_workspace(session, user.id)
+        if primary is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Account workspace is unavailable",
+                status_code=500,
+            )
+        previous_token_version = user.token_version
         user.token_version += 1
+        append_audit_event(
+            session,
+            workspace_id=primary[0].id,
+            actor_id=user.id,
+            action="identity.logged_out",
+            target_type="user_account",
+            target_id=user.id,
+            trace_id=trace_id,
+            metadata={
+                "previous_token_version": previous_token_version,
+                "token_version": user.token_version,
+            },
+        )
         await session.flush()
 
 
@@ -158,6 +223,8 @@ async def change_password(
     session: AsyncSession,
     claims: AccessTokenClaims,
     request: ChangePasswordRequest,
+    *,
+    trace_id: str,
 ) -> None:
     new_password = _plain_password(request.new_password)
     async with session.begin():
@@ -166,8 +233,29 @@ async def change_password(
             request.current_password.get_secret_value(), user.password_hash
         ):
             raise _unauthenticated()
+        primary = await repository.find_primary_workspace(session, user.id)
+        if primary is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Account workspace is unavailable",
+                status_code=500,
+            )
+        previous_token_version = user.token_version
         user.password_hash = _password_hash.hash(new_password)
         user.token_version += 1
+        append_audit_event(
+            session,
+            workspace_id=primary[0].id,
+            actor_id=user.id,
+            action="identity.password_changed",
+            target_type="user_account",
+            target_id=user.id,
+            trace_id=trace_id,
+            metadata={
+                "previous_token_version": previous_token_version,
+                "token_version": user.token_version,
+            },
+        )
         await session.flush()
 
 
@@ -184,15 +272,20 @@ async def update_profile(
     session: AsyncSession,
     claims: AccessTokenClaims,
     request: ProfileUpdateRequest,
+    *,
+    trace_id: str,
 ) -> MeResponse:
     if request.display_name is None and request.avatar_url is None:
         raise ApiError(ErrorCode.INVALID_REQUEST, "No profile changes supplied", status_code=422)
     async with session.begin():
         user = await authenticated_user(session, claims)
+        changed_fields: list[str] = []
         if request.display_name is not None:
             user.display_name = request.display_name.strip()
+            changed_fields.append("display_name")
         if request.avatar_url is not None:
             user.avatar_url = str(request.avatar_url)
+            changed_fields.append("avatar_url")
         primary = await repository.find_primary_workspace(session, user.id)
         if primary is None:
             raise ApiError(
@@ -200,6 +293,16 @@ async def update_profile(
                 "Account workspace is unavailable",
                 status_code=500,
             )
+        append_audit_event(
+            session,
+            workspace_id=primary[0].id,
+            actor_id=user.id,
+            action="identity.profile_updated",
+            target_type="user_account",
+            target_id=user.id,
+            trace_id=trace_id,
+            metadata={"changed_fields": changed_fields},
+        )
         await session.flush()
     return MeResponse(
         user=_user_response(user),
@@ -211,9 +314,35 @@ async def deactivate_account(
     session: AsyncSession,
     claims: AccessTokenClaims,
     _: DeactivateAccountRequest,
+    *,
+    trace_id: str,
 ) -> None:
     async with session.begin():
         user = await authenticated_user(session, claims)
+        primary = await repository.find_primary_workspace(session, user.id)
+        if primary is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Account workspace is unavailable",
+                status_code=500,
+            )
+        previous_status = user.status
+        previous_token_version = user.token_version
         user.status = "deactivated"
         user.token_version += 1
+        append_audit_event(
+            session,
+            workspace_id=primary[0].id,
+            actor_id=user.id,
+            action="identity.account_deactivated",
+            target_type="user_account",
+            target_id=user.id,
+            trace_id=trace_id,
+            metadata={
+                "previous_status": previous_status,
+                "status": user.status,
+                "previous_token_version": previous_token_version,
+                "token_version": user.token_version,
+            },
+        )
         await session.flush()
