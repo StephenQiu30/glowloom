@@ -1,6 +1,10 @@
 import httpx
 import pytest
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.core.errors import ApiError, ErrorCode
+from app.modules.projects.snapshots import service as snapshot_service
 from tests.support.project_builders import project_payload, register_project_owner
 
 
@@ -179,3 +183,130 @@ async def test_snapshot_follows_current_script_and_latest_task_facts(
     assert project_data["current_stage"] == "structure_review"
     assert project_data["completion"] == 30
     assert project_data["episodes"][0]["script_summary"]["extraction_batch_id"] == batch_id
+
+
+@pytest.mark.asyncio
+async def test_storyboard_summary_failure_is_explicit_and_fail_closed(
+    client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, workspace_id = await register_project_owner(
+        client,
+        email="snapshot-storyboard-unavailable@example.com",
+    )
+    project = await client.post(
+        "/api/v1/projects",
+        headers=headers,
+        json=project_payload(workspace_id, "分镜摘要故障项目"),
+    )
+    project_id = project.json()["data"]["id"]
+    episode = await client.post(
+        f"/api/v1/projects/{project_id}/episodes",
+        headers=headers,
+        json={"name": "分镜摘要故障单集", "target_duration_ms": 90_000},
+    )
+    episode_id = episode.json()["data"]["id"]
+
+    async def unavailable_storyboards(*_: object, **__: object) -> object:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Storyboard summary dependency is unavailable",
+            status_code=503,
+        )
+
+    monkeypatch.setattr(
+        snapshot_service,
+        "summarize_episode_storyboards",
+        unavailable_storyboards,
+    )
+
+    response = await client.get(
+        f"/api/v1/episodes/{episode_id}/production-snapshot",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["storyboard_summary"] == {
+        "status": "unavailable",
+        "total": 0,
+        "ready": 0,
+        "blocked": 0,
+        "unavailable": 0,
+    }
+    assert data["partial_failures"] == [
+        {
+            "module": "storyboards",
+            "code": "STORYBOARD_SUMMARY_UNAVAILABLE",
+            "summary": "分镜摘要暂时不可用",
+        }
+    ]
+    assert data["current_stage"] == "script_import"
+    assert data["blocking_reasons"][0]["code"] == "SCRIPT_MISSING"
+
+
+@pytest.mark.asyncio
+async def test_project_snapshot_batches_a_typical_episode_list(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await register_project_owner(
+        client,
+        email="snapshot-batch-owner@example.com",
+    )
+    project = await client.post(
+        "/api/v1/projects",
+        headers=headers,
+        json=project_payload(workspace_id, "批量生产概览项目"),
+    )
+    project_id = project.json()["data"]["id"]
+    for position in range(1, 13):
+        episode = await client.post(
+            f"/api/v1/projects/{project_id}/episodes",
+            headers=headers,
+            json={
+                "name": f"批量单集 {position}",
+                "target_duration_ms": 90_000,
+            },
+        )
+        assert episode.status_code == 201
+
+    engine = session_factory.kw.get("bind")
+    assert isinstance(engine, AsyncEngine)
+    statements: list[str] = []
+
+    def count_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: object,
+    ) -> None:
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", count_statement)
+    try:
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/production-snapshot",
+            headers=headers,
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", count_statement)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert len(data["episodes"]) == 12
+    assert all(
+        episode["storyboard_summary"]
+        == {
+            "status": "not_started",
+            "total": 0,
+            "ready": 0,
+            "blocked": 0,
+            "unavailable": 0,
+        }
+        for episode in data["episodes"]
+    )
+    assert len(statements) <= 18, [
+        statement.splitlines()[0] for statement in statements
+    ]

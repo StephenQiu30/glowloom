@@ -495,8 +495,18 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
     auditTrail.locator("article").first().getByText("分镜当前规格切换"),
   ).toBeVisible();
 
+  const episodeSummary = page.getByRole("region", { name: "生产摘要" });
+  await expect(
+    episodeSummary.getByText("Ready 分镜").locator(".."),
+  ).toContainText("6 / 6");
+  await expect(page.getByText(/服务端计算 90%/)).toBeVisible();
+
   await page.goto("/projects");
   await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
+  const projectSummary = page.getByRole("region", { name: "项目生产摘要" });
+  await expect(
+    projectSummary.getByText("Ready 分镜").locator(".."),
+  ).toContainText("6");
   await page.getByRole("button", { name: "检查删除 第一集 分镜" }).click();
   await expect(
     page.getByText("单集已有 6 个分镜镜头（7 个规格版本）"),

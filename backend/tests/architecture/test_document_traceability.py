@@ -363,3 +363,34 @@ def test_latest_real_infrastructure_and_e2e_gates_are_recorded() -> None:
     assert "36 镜头 P95 10.93 ms" in storyboard_acceptance
     assert "120 镜头 P95 41.22 ms" in storyboard_acceptance
     assert "120 镜头连续重排 30/30 成功" in storyboard_acceptance
+
+
+def test_storyboard_readiness_is_traced_into_production_snapshot() -> None:
+    project_design = (
+        DOCS / "design/模块设计/003-项目模块详细设计.md"
+    ).read_text(encoding="utf-8")
+    project_prd = (DOCS / "prd/007-基础业务模块PRD任务.md").read_text(
+        encoding="utf-8"
+    )
+    project_plan = (
+        DOCS / "plan/007-基础业务模块产品任务执行计划.md"
+    ).read_text(encoding="utf-8")
+    production_plan = (
+        DOCS / "plan/008-创作生产模块产品任务执行计划.md"
+    ).read_text(encoding="utf-8")
+    frontend_acceptance = (
+        DOCS / "acceptance/005-S2统一前端增量验收.md"
+    ).read_text(encoding="utf-8")
+    storyboard_acceptance = (
+        DOCS / "acceptance/006-S3分镜本地工程增量验收.md"
+    ).read_text(encoding="utf-8")
+
+    assert "EpisodeStoryboardSummary" in project_design
+    assert "STORYBOARD_SUMMARY_UNAVAILABLE" in project_design
+    assert "storyboards 的跨 Episode 批量 readiness 摘要" in project_prd
+    assert "12 个 Episode" in project_plan
+    assert "ProductionSnapshot 显示 Ready 分镜" in production_plan
+    assert "Project 级资产数不按 Episode 重复累加" in frontend_acceptance
+    assert "36/120 镜头的 ProductionSnapshot" in storyboard_acceptance
+    assert "36 镜头 P95 16.96 ms" in storyboard_acceptance
+    assert "120 镜头 P95 44.47 ms" in storyboard_acceptance

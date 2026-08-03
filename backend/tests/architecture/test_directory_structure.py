@@ -66,6 +66,8 @@ def test_environment_specific_compose_supports_robust_full_stack_startup() -> No
     assert "up -d --no-build --pull always --wait" in makefile
     assert "docker compose up -d --wait minio" in makefile
     assert "docker compose stop minio" in makefile
+    assert "docker compose ps --status running -q minio" in makefile
+    assert "is occupied by a MinIO outside this Compose project" in makefile
     for removed_target in (
         "services-up:",
         "services-down:",

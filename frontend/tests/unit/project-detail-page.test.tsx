@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -60,6 +60,13 @@ const episode: API.EpisodeResponse = {
   current_timeline_version_id: null,
 };
 
+const secondEpisode: API.EpisodeResponse = {
+  ...episode,
+  id: "019fb2d0-a000-7000-8000-000000000005",
+  name: "第二集 · 城门旧事",
+  position: 2,
+};
+
 const episodeSnapshot: API.EpisodeProductionSnapshot = {
   episode_id: episodeId,
   current_stage: "script_import",
@@ -82,14 +89,21 @@ const episodeSnapshot: API.EpisodeProductionSnapshot = {
     pending_required_candidates: 0,
   },
   asset_summary: {
-    status: "not_started",
-    total: 0,
-    versioned: 0,
-    ready: 0,
+    status: "ready",
+    total: 3,
+    versioned: 3,
+    ready: 3,
     draft: 0,
     blocked: 0,
-    ready_kinds: [],
+    ready_kinds: ["character", "location", "voice"],
     required_kinds: ["character", "location", "voice"],
+  },
+  storyboard_summary: {
+    status: "blocked",
+    total: 2,
+    ready: 1,
+    blocked: 1,
+    unavailable: 0,
   },
   task_summary: {
     status: "not_started",
@@ -132,7 +146,7 @@ describe("真实项目生产入口", () => {
       },
     });
     apiMocks.getProject.mockResolvedValue({ data: project });
-    apiMocks.listEpisodes.mockResolvedValue({ data: [episode] });
+    apiMocks.listEpisodes.mockResolvedValue({ data: [episode, secondEpisode] });
     apiMocks.getSnapshot.mockResolvedValue({
       data: {
         project_id: projectId,
@@ -140,13 +154,30 @@ describe("真实项目生产入口", () => {
         completion: 0,
         blocking_reasons: episodeSnapshot.blocking_reasons,
         next_actions: episodeSnapshot.next_actions,
-        episodes: [episodeSnapshot],
+        episodes: [
+          episodeSnapshot,
+          {
+            ...episodeSnapshot,
+            episode_id: secondEpisode.id,
+            storyboard_summary: {
+              status: "ready",
+              total: 2,
+              ready: 2,
+              blocked: 0,
+              unavailable: 0,
+            },
+          },
+        ],
         partial_failures: [],
         computed_at: "2026-07-30T09:00:00Z",
       } satisfies API.ProjectProductionSnapshot,
     });
     apiMocks.createEpisode.mockResolvedValue({
-      data: { ...episode, id: "019fb2d0-a000-7000-8000-000000000005", position: 2 },
+      data: {
+        ...episode,
+        id: "019fb2d0-a000-7000-8000-000000000006",
+        position: 3,
+      },
     });
   });
 
@@ -162,6 +193,13 @@ describe("真实项目生产入口", () => {
     expect(screen.getByRole("link", { name: "进入第一集 · 雨巷相逢" })).toHaveAttribute(
       "href",
       `/studio/${episodeId}/script`,
+    );
+    const summary = screen.getByRole("region", { name: "项目生产摘要" });
+    expect(within(summary).getByText("Ready 资产").nextElementSibling).toHaveTextContent(
+      "3",
+    );
+    expect(within(summary).getByText("Ready 分镜").nextElementSibling).toHaveTextContent(
+      "3",
     );
   });
 
@@ -182,6 +220,6 @@ describe("真实项目生产入口", () => {
       { project_id: projectId },
       { name: "第二集 · 城门旧事", target_duration_ms: 90_000 },
     );
-    expect(await screen.findByRole("status")).toHaveTextContent("第 2 集已创建");
+    expect(await screen.findByRole("status")).toHaveTextContent("第 3 集已创建");
   });
 });

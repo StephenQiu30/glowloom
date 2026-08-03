@@ -1473,6 +1473,47 @@ async def test_batch_readiness_has_constant_query_bound(
     assert len(result["evaluation_hash"]) == 64
     assert len(statements) <= 12, [statement.splitlines()[0] for statement in statements]
 
+    snapshot_statements: list[str] = []
+
+    def _count_snapshot_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: object,
+    ) -> None:
+        snapshot_statements.append(statement)
+
+    event.listen(
+        engine.sync_engine,
+        "before_cursor_execute",
+        _count_snapshot_statement,
+    )
+    try:
+        snapshot_response = await client.get(
+            f"/api/v1/episodes/{episode['id']}/production-snapshot",
+            headers=headers,
+        )
+    finally:
+        event.remove(
+            engine.sync_engine,
+            "before_cursor_execute",
+            _count_snapshot_statement,
+        )
+
+    assert snapshot_response.status_code == 200
+    assert snapshot_response.json()["data"]["storyboard_summary"] == {
+        "status": "ready",
+        "total": shot_count,
+        "ready": shot_count,
+        "blocked": 0,
+        "unavailable": 0,
+    }
+    assert len(snapshot_statements) <= 24, [
+        statement.splitlines()[0] for statement in snapshot_statements
+    ]
+
 
 @pytest.mark.asyncio
 async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(

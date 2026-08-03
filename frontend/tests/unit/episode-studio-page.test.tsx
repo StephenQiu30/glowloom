@@ -398,6 +398,13 @@ function snapshot(
       ready_kinds: [],
       required_kinds: ["character", "location", "voice"],
     },
+    storyboard_summary: {
+      status: "not_started",
+      total: 0,
+      ready: 0,
+      blocked: 0,
+      unavailable: 0,
+    },
     task_summary: {
       status: "not_started",
       running: 0,
