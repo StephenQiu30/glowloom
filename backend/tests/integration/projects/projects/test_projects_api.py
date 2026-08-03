@@ -1,10 +1,13 @@
+import asyncio
 from decimal import Decimal
 from uuid import UUID
 
 import httpx
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.modules.assets.models import Asset
 from app.modules.identity.models import Membership
 from tests.support.project_builders import project_payload, register_project_owner
 
@@ -298,3 +301,183 @@ async def test_empty_project_can_be_preflighted_and_deleted(
         "revision": 1,
         "status": "active",
     }
+
+
+@pytest.mark.asyncio
+async def test_project_asset_facts_are_itemized_and_block_project_delete(
+    client: httpx.AsyncClient,
+) -> None:
+    headers, workspace_id = await register_project_owner(
+        client,
+        email="project-asset-delete-blocker@example.com",
+    )
+    created = await client.post(
+        "/api/v1/projects",
+        headers=headers,
+        json=project_payload(workspace_id, "仅包含资产的项目"),
+    )
+    assert created.status_code == 201
+    project = created.json()["data"]
+    assets_endpoint = f"/api/v1/projects/{project['id']}/assets"
+
+    active_response = await client.post(
+        assets_endpoint,
+        headers=headers,
+        json={"kind": "character", "name": "活动角色", "aliases": [], "tags": []},
+    )
+    archived_response = await client.post(
+        assets_endpoint,
+        headers=headers,
+        json={"kind": "location", "name": "归档场景", "aliases": [], "tags": []},
+    )
+    assert active_response.status_code == 201
+    assert archived_response.status_code == 201
+    active_asset = active_response.json()["data"]
+    archived_asset = archived_response.json()["data"]
+
+    active_version = await client.post(
+        f"/api/v1/assets/{active_asset['id']}/versions",
+        headers=headers,
+        json={
+            "spec": {
+                "kind": "character",
+                "identity": "主角",
+                "appearance": "黑发",
+                "age_impression": "青年",
+                "temperament": ["克制"],
+            },
+            "prompt_description": "保留角色版本",
+            "media_references": [],
+            "source_type": "manual",
+            "source_id": None,
+            "expected_current_version_id": None,
+            "set_as_current": True,
+        },
+    )
+    archived_version = await client.post(
+        f"/api/v1/assets/{archived_asset['id']}/versions",
+        headers=headers,
+        json={
+            "spec": {
+                "kind": "location",
+                "spatial_description": "雨夜街口",
+                "time_weather": "夜间暴雨",
+                "visual_elements": ["霓虹"],
+                "lighting": "冷色逆光",
+            },
+            "prompt_description": "保留场景版本",
+            "media_references": [],
+            "source_type": "manual",
+            "source_id": None,
+            "expected_current_version_id": None,
+            "set_as_current": True,
+        },
+    )
+    assert active_version.status_code == 201
+    assert archived_version.status_code == 201
+
+    archived = await client.post(
+        f"/api/v1/assets/{archived_asset['id']}/archive",
+        headers=headers,
+        json={"expected_revision": 2},
+    )
+    assert archived.status_code == 200
+    assert archived.json()["data"]["status"] == "archived"
+
+    preflight = await client.post(
+        f"/api/v1/projects/{project['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert preflight.status_code == 200
+    assert preflight.json()["data"] == {
+        "allowed": False,
+        "blockers": [
+            {
+                "code": "HAS_ASSETS",
+                "resource_type": "project",
+                "resource_id": project["id"],
+                "summary": "项目已有 2 个资产（2 个版本）",
+            }
+        ],
+    }
+
+    blocked_delete = await client.delete(
+        f"/api/v1/projects/{project['id']}",
+        headers=headers,
+        params={"expected_revision": project["revision"]},
+    )
+    assert blocked_delete.status_code == 409
+    assert blocked_delete.json()["error"]["code"] == "state_conflict"
+    assert blocked_delete.json()["error"]["message"] == "Project has dependent assets"
+    assert (
+        blocked_delete.json()["error"]["next_action"]
+        == "review_delete_blockers"
+    )
+    assert (
+        await client.get(f"/api/v1/assets/{active_asset['id']}", headers=headers)
+    ).status_code == 200
+    assert (
+        await client.get(
+            f"/api/v1/asset-versions/{archived_version.json()['data']['version']['id']}",
+            headers=headers,
+        )
+    ).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_concurrent_first_asset_creation_and_project_delete_are_serialized(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await register_project_owner(
+        client,
+        email="project-asset-delete-race@example.com",
+    )
+    created = await client.post(
+        "/api/v1/projects",
+        headers=headers,
+        json=project_payload(workspace_id, "资产创建删除竞争"),
+    )
+    assert created.status_code == 201
+    project = created.json()["data"]
+
+    asset_response, delete_response = await asyncio.gather(
+        client.post(
+            f"/api/v1/projects/{project['id']}/assets",
+            headers=headers,
+            json={
+                "kind": "visual_style",
+                "name": "并发创建的风格",
+                "aliases": [],
+                "tags": [],
+            },
+        ),
+        client.delete(
+            f"/api/v1/projects/{project['id']}",
+            headers=headers,
+            params={"expected_revision": project["revision"]},
+        ),
+    )
+
+    assert (asset_response.status_code, delete_response.status_code) in {
+        (201, 409),
+        (404, 200),
+    }
+    async with session_factory() as session:
+        persisted_asset_id = await session.scalar(
+            select(Asset.id).where(Asset.project_id == UUID(project["id"]))
+        )
+    if asset_response.status_code == 201:
+        assert delete_response.json()["error"]["message"] == (
+            "Project has dependent assets"
+        )
+        assert persisted_asset_id == UUID(asset_response.json()["data"]["id"])
+        assert (
+            await client.get(f"/api/v1/projects/{project['id']}", headers=headers)
+        ).status_code == 200
+    else:
+        assert delete_response.json()["data"]["deleted"] is True
+        assert persisted_asset_id is None
+        assert (
+            await client.get(f"/api/v1/projects/{project['id']}", headers=headers)
+        ).status_code == 404

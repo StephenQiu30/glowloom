@@ -204,6 +204,155 @@ async def test_asset_identity_lifecycle_duplicate_hint_and_safe_delete(
 
 
 @pytest.mark.asyncio
+async def test_related_asset_version_blocks_deleting_an_empty_character(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, _, project = await _identity_project(
+        client,
+        email="asset-related-delete-guard@example.com",
+    )
+    endpoint = f"/api/v1/projects/{project['id']}/assets"
+    character_response = await client.post(
+        endpoint,
+        headers=headers,
+        json={"kind": "character", "name": "被道具引用的角色"},
+    )
+    prop_response = await client.post(
+        endpoint,
+        headers=headers,
+        json={"kind": "prop", "name": "角色佩剑"},
+    )
+    assert character_response.status_code == prop_response.status_code == 201
+    character = character_response.json()["data"]
+    prop = prop_response.json()["data"]
+
+    version_response = await client.post(
+        f"/api/v1/assets/{prop['id']}/versions",
+        headers=headers,
+        json={
+            "spec": {
+                "kind": "prop",
+                "appearance": "青铜剑身",
+                "material": "青铜",
+                "usage_context": "角色随身佩戴",
+                "holder_character_id": character["id"],
+            },
+            "expected_current_version_id": None,
+        },
+    )
+    assert version_response.status_code == 201
+
+    preflight = await client.get(
+        f"/api/v1/assets/{character['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert preflight.status_code == 200
+    assert preflight.json()["data"] == {
+        "allowed": False,
+        "blockers": [
+            {
+                "code": "asset_has_related_versions",
+                "summary": "Asset is referenced by 1 related asset version(s)",
+                "version_count": 0,
+                "decision_count": 0,
+                "related_version_count": 1,
+            }
+        ],
+    }
+
+    deleted = await client.delete(
+        f"/api/v1/assets/{character['id']}",
+        headers=headers,
+        params={"expected_revision": character["revision"]},
+    )
+    assert deleted.status_code == 409
+    error = deleted.json()["error"]
+    assert error["message"] == "Asset has related asset version references"
+    assert error["next_action"] == "review_delete_blockers"
+
+    async with session_factory() as session:
+        assert await session.get(Asset, UUID(character["id"])) is not None
+        versions = list(await session.scalars(select(AssetVersion)))
+        assert [
+            version.id
+            for version in versions
+            if version.spec.get("holder_character_id") == character["id"]
+        ] == [UUID(version_response.json()["data"]["version"]["id"])]
+
+
+@pytest.mark.asyncio
+async def test_related_asset_version_append_and_character_delete_are_serialized(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, _, project = await _identity_project(
+        client,
+        email="asset-related-delete-race@example.com",
+    )
+    endpoint = f"/api/v1/projects/{project['id']}/assets"
+    for attempt in range(3):
+        character_response = await client.post(
+            endpoint,
+            headers=headers,
+            json={"kind": "character", "name": f"并发引用角色 {attempt}"},
+        )
+        prop_response = await client.post(
+            endpoint,
+            headers=headers,
+            json={"kind": "prop", "name": f"并发引用道具 {attempt}"},
+        )
+        assert character_response.status_code == prop_response.status_code == 201
+        character = character_response.json()["data"]
+        prop = prop_response.json()["data"]
+
+        appended, deleted = await asyncio.gather(
+            client.post(
+                f"/api/v1/assets/{prop['id']}/versions",
+                headers=headers,
+                json={
+                    "spec": {
+                        "kind": "prop",
+                        "appearance": "并发测试道具",
+                        "material": "木质",
+                        "usage_context": "角色持有",
+                        "holder_character_id": character["id"],
+                    },
+                    "expected_current_version_id": None,
+                },
+            ),
+            client.delete(
+                f"/api/v1/assets/{character['id']}",
+                headers=headers,
+                params={"expected_revision": character["revision"]},
+            ),
+        )
+
+        assert (appended.status_code, deleted.status_code) in {
+            (201, 409),
+            (422, 200),
+        }
+        async with session_factory() as session:
+            stored_character = await session.get(Asset, UUID(character["id"]))
+            versions = list(await session.scalars(select(AssetVersion)))
+            related_versions = [
+                version
+                for version in versions
+                if version.spec.get("holder_character_id") == character["id"]
+            ]
+        if appended.status_code == 201:
+            assert stored_character is not None
+            assert len(related_versions) == 1
+            assert deleted.json()["error"]["message"] == (
+                "Asset has related asset version references"
+            )
+        else:
+            assert stored_character is None
+            assert related_versions == []
+            assert deleted.json()["data"]["deleted"] is True
+
+
+@pytest.mark.asyncio
 async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],

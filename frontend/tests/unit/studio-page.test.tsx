@@ -345,6 +345,8 @@ describe("AI 漫剧资产工作台", () => {
             code: "asset_has_versions",
             summary: "Asset has 2 immutable version(s)",
             version_count: 2,
+            decision_count: 0,
+            related_version_count: 0,
           },
         ],
       },
@@ -530,6 +532,70 @@ describe("AI 漫剧资产工作台", () => {
     await user.click(await screen.findByRole("button", { name: "删除资产身份" }));
     const dialog = await screen.findByRole("dialog", { name: "删除资产身份" });
     expect(dialog).toHaveTextContent("资产包含 2 个不可变版本，不能删除。");
+    expect(
+      screen.queryByRole("button", { name: "确认删除空资产" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("展示剧本候选决议关联并引导归档资产", async () => {
+    const user = userEvent.setup();
+    apiMocks.assetDeletePreflight.mockResolvedValue({
+      data: {
+        allowed: false,
+        blockers: [
+          {
+            code: "asset_has_candidate_decisions",
+            summary: "Asset is linked from 1 script candidate decision(s)",
+            version_count: 0,
+            decision_count: 1,
+            related_version_count: 0,
+          },
+        ],
+      },
+    });
+    render(
+      <AppProviders>
+        <ComicProductionStudio />
+      </AppProviders>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "删除资产身份" }));
+    const dialog = await screen.findByRole("dialog", { name: "删除资产身份" });
+    expect(dialog).toHaveTextContent(
+      "资产已被 1 条剧本候选决议关联，只能归档。",
+    );
+    expect(
+      screen.queryByRole("button", { name: "确认删除空资产" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("展示道具或服装历史版本引用并引导归档角色", async () => {
+    const user = userEvent.setup();
+    apiMocks.assetDeletePreflight.mockResolvedValue({
+      data: {
+        allowed: false,
+        blockers: [
+          {
+            code: "asset_has_related_versions",
+            summary: "Asset is referenced by 1 related asset version(s)",
+            version_count: 0,
+            decision_count: 0,
+            related_version_count: 1,
+          },
+        ],
+      },
+    });
+    render(
+      <AppProviders>
+        <ComicProductionStudio />
+      </AppProviders>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "删除资产身份" }));
+    const dialog = await screen.findByRole("dialog", { name: "删除资产身份" });
+    expect(dialog).toHaveTextContent(
+      "资产已被 1 个道具或服装版本引用，只能归档。",
+    );
     expect(
       screen.queryByRole("button", { name: "确认删除空资产" }),
     ).not.toBeInTheDocument();

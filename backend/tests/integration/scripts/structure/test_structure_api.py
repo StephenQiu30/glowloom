@@ -12,6 +12,7 @@ from app.modules.assets.models import Asset, AssetVersion
 from app.modules.projects.models import Episode
 from app.modules.scripts.extractions import schemas as extraction_schemas
 from app.modules.scripts.extractions import service as extraction_service
+from app.modules.scripts.models import CandidateDecision
 from tests.support.identity_builders import register_identity_response
 from tests.support.project_builders import project_payload
 
@@ -260,6 +261,38 @@ async def _decide(
         },
     )
     assert response.status_code == 201
+
+
+async def _confirm_ordered_structure(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    rows: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    by_key = {candidate["candidate_key"]: candidate for candidate in rows}
+    await _decide(client, headers, by_key["scene-early"], {"action": "accept_new"})
+    await _decide(client, headers, by_key["scene-late"], {"action": "accept_new"})
+    await _decide(
+        client,
+        headers,
+        by_key["scene-alias"],
+        {
+            "action": "merge_into",
+            "target_candidate_id": by_key["scene-early"]["id"],
+        },
+    )
+    await _decide(
+        client,
+        headers,
+        by_key["dialogue-alias"],
+        {"action": "accept_new"},
+    )
+    await _decide(client, headers, by_key["dialogue-ignore"], {"action": "ignore"})
+    confirmed = await client.post(
+        f"/api/v1/extraction-batches/{by_key['scene-early']['batch_id']}/confirm-structure",
+        headers=headers,
+    )
+    assert confirmed.status_code == 201
+    return by_key
 
 
 @pytest.mark.asyncio
@@ -557,3 +590,152 @@ async def test_confirmed_asset_candidates_create_or_link_idempotently(
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Asset)) == 1
         assert await session.scalar(select(func.count()).select_from(AssetVersion)) == 1
+
+
+@pytest.mark.asyncio
+async def test_candidate_link_blocks_deleting_an_asset_without_versions(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, _, rows = await _completed_batch(
+        client,
+        session_factory,
+        email="asset-delete-guard@example.com",
+        key="asset-delete-guard",
+        candidates=_ordered_candidates(),
+    )
+    by_key = await _confirm_ordered_structure(client, headers, rows)
+
+    created = await client.post(
+        f"/api/v1/projects/{episode['project_id']}/assets",
+        headers=headers,
+        json={"kind": "character", "name": "待关联角色"},
+    )
+    assert created.status_code == 201
+    asset = created.json()["data"]
+    assert asset["current_version_id"] is None
+
+    linked = await client.post(
+        f"/api/v1/extraction-candidates/{by_key['asset-pending']['id']}/decisions",
+        headers=headers,
+        json={
+            "decision_key": "link-empty-asset",
+            "expected_revision": 1,
+            "decision": {
+                "action": "link_existing",
+                "downstream_id": asset["id"],
+            },
+        },
+    )
+    assert linked.status_code == 201
+    assert linked.json()["data"]["evidence"]["downstream_id"] == asset["id"]
+
+    preflight = await client.get(
+        f"/api/v1/assets/{asset['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert preflight.status_code == 200
+    assert preflight.json()["data"] == {
+        "allowed": False,
+        "blockers": [
+            {
+                "code": "asset_has_candidate_decisions",
+                "summary": "Asset is linked from 1 script candidate decision(s)",
+                    "version_count": 0,
+                    "decision_count": 1,
+                    "related_version_count": 0,
+            }
+        ],
+    }
+
+    deleted = await client.delete(
+        f"/api/v1/assets/{asset['id']}",
+        headers=headers,
+        params={"expected_revision": asset["revision"]},
+    )
+    assert deleted.status_code == 409
+    error = deleted.json()["error"]
+    assert error["code"] == "state_conflict"
+    assert error["message"] == "Asset has candidate decision references"
+    assert error["next_action"] == "review_delete_blockers"
+
+    async with session_factory() as session:
+        assert await session.get(Asset, UUID(asset["id"])) is not None
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(CandidateDecision)
+                .where(
+                    CandidateDecision.downstream_type == "ASSET",
+                    CandidateDecision.downstream_id == UUID(asset["id"]),
+                )
+            )
+            == 1
+        )
+
+
+@pytest.mark.asyncio
+async def test_candidate_link_and_asset_delete_are_serialized(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, _, rows = await _completed_batch(
+        client,
+        session_factory,
+        email="asset-delete-race@example.com",
+        key="asset-delete-race",
+        candidates=_ordered_candidates(),
+    )
+    by_key = await _confirm_ordered_structure(client, headers, rows)
+    created = await client.post(
+        f"/api/v1/projects/{episode['project_id']}/assets",
+        headers=headers,
+        json={"kind": "character", "name": "并发关联角色"},
+    )
+    assert created.status_code == 201
+    asset = created.json()["data"]
+
+    linked, deleted = await asyncio.gather(
+        client.post(
+            f"/api/v1/extraction-candidates/{by_key['asset-pending']['id']}/decisions",
+            headers=headers,
+            json={
+                "decision_key": "race-link-empty-asset",
+                "expected_revision": 1,
+                "decision": {
+                    "action": "link_existing",
+                    "downstream_id": asset["id"],
+                },
+            },
+        ),
+        client.delete(
+            f"/api/v1/assets/{asset['id']}",
+            headers=headers,
+            params={"expected_revision": asset["revision"]},
+        ),
+    )
+
+    assert (linked.status_code, deleted.status_code) in {
+        (201, 409),
+        (404, 200),
+    }
+    async with session_factory() as session:
+        stored_asset = await session.get(Asset, UUID(asset["id"]))
+        decision_count = await session.scalar(
+            select(func.count())
+            .select_from(CandidateDecision)
+            .where(
+                CandidateDecision.downstream_type == "ASSET",
+                CandidateDecision.downstream_id == UUID(asset["id"]),
+            )
+        )
+    if linked.status_code == 201:
+        assert stored_asset is not None
+        assert decision_count == 1
+        assert deleted.json()["error"]["message"] == (
+            "Asset has candidate decision references"
+        )
+    else:
+        assert stored_asset is None
+        assert decision_count == 0
+        assert deleted.json()["data"]["deleted"] is True

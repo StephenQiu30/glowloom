@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Awaitable
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -660,6 +661,177 @@ async def test_manual_shot_is_idempotent_ordered_and_lifecycle_safe(
             headers=headers,
         )
     ).json()["data"] == []
+
+
+@pytest.mark.asyncio
+async def test_storyboard_facts_are_itemized_in_episode_and_project_delete_guards(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await _episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="storyboard-delete-blocker@example.com",
+    )
+    shots_endpoint = f"/api/v1/episodes/{episode['id']}/shots"
+    first_response = await client.post(
+        shots_endpoint,
+        headers=headers,
+        json=_create_shot_payload(
+            refs,
+            title="保留规格历史的镜头",
+            creation_key="storyboard-delete-first",
+        ),
+    )
+    second_response = await client.post(
+        shots_endpoint,
+        headers=headers,
+        json=_create_shot_payload(
+            refs,
+            title="归档后仍需保留的镜头",
+            creation_key="storyboard-delete-second",
+        ),
+    )
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+    first = first_response.json()["data"]
+    second = second_response.json()["data"]
+
+    first_spec = await client.post(
+        f"/api/v1/shots/{first['id']}/spec-versions",
+        headers=headers,
+        json={
+            "expected_current_spec_version_id": None,
+            "spec": _spec_payload(refs, purpose="固定第一版制作规格"),
+            "asset_references": [],
+        },
+    )
+    assert first_spec.status_code == 201
+    second_spec = await client.post(
+        f"/api/v1/shots/{first['id']}/spec-versions",
+        headers=headers,
+        json={
+            "expected_current_spec_version_id": first_spec.json()["data"]["version"]["id"],
+            "spec": _spec_payload(refs, purpose="保留不可变历史规格"),
+            "asset_references": [],
+        },
+    )
+    assert second_spec.status_code == 201
+
+    order = await client.get(shots_endpoint, headers=headers)
+    assert order.status_code == 200
+    archived = await client.post(
+        f"/api/v1/shots/{second['id']}/archive",
+        headers=headers,
+        json={
+            "expected_revision": second["revision"],
+            "expected_order_hash": order.json()["data"]["order_hash"],
+        },
+    )
+    assert archived.status_code == 200
+    assert archived.json()["data"]["shot"]["status"] == "archived"
+
+    episode_preflight = await client.post(
+        f"/api/v1/episodes/{episode['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert episode_preflight.status_code == 200
+    assert {
+        blocker["code"]: blocker["summary"]
+        for blocker in episode_preflight.json()["data"]["blockers"]
+    } == {
+        "HAS_SCRIPT_VERSIONS": "单集已有 1 个剧本版本",
+        "HAS_STORYBOARD_SHOTS": "单集已有 2 个分镜镜头（2 个规格版本）",
+    }
+
+    project_preflight = await client.post(
+        f"/api/v1/projects/{episode['project_id']}/delete-preflight",
+        headers=headers,
+    )
+    assert project_preflight.status_code == 200
+    assert {
+        blocker["code"]: blocker["summary"]
+        for blocker in project_preflight.json()["data"]["blockers"]
+    } == {
+        "HAS_EPISODES": "项目包含 1 个单集",
+        "HAS_SCRIPT_VERSIONS": "项目关联 1 个剧本版本",
+        "HAS_STORYBOARD_SHOTS": "项目关联 2 个分镜镜头（2 个规格版本）",
+    }
+
+    current_episode = await client.get(
+        f"/api/v1/episodes/{episode['id']}", headers=headers
+    )
+    assert current_episode.status_code == 200
+    blocked_delete = await client.delete(
+        f"/api/v1/episodes/{episode['id']}",
+        headers=headers,
+        params={"expected_revision": current_episode.json()["data"]["revision"]},
+    )
+    assert blocked_delete.status_code == 409
+    assert blocked_delete.json()["error"]["code"] == "state_conflict"
+    assert (
+        blocked_delete.json()["error"]["message"]
+        == "Episode has dependent storyboard facts"
+    )
+    assert (
+        blocked_delete.json()["error"]["next_action"]
+        == "review_delete_blockers"
+    )
+    assert (
+        await client.get(
+            f"/api/v1/shot-spec-versions/{first_spec.json()['data']['version']['id']}",
+            headers=headers,
+        )
+    ).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_concurrent_first_shot_creation_and_episode_delete_are_serialized(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await _episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="storyboard-delete-race@example.com",
+    )
+    current_episode = await client.get(
+        f"/api/v1/episodes/{episode['id']}", headers=headers
+    )
+    assert current_episode.status_code == 200
+
+    create_response, delete_response = await asyncio.gather(
+        client.post(
+            f"/api/v1/episodes/{episode['id']}/shots",
+            headers=headers,
+            json=_create_shot_payload(
+                refs,
+                title="并发创建镜头",
+                creation_key="storyboard-delete-race",
+            ),
+        ),
+        client.delete(
+            f"/api/v1/episodes/{episode['id']}",
+            headers=headers,
+            params={
+                "expected_revision": current_episode.json()["data"]["revision"]
+            },
+        ),
+    )
+
+    assert create_response.status_code == 201
+    assert delete_response.status_code == 409
+    assert delete_response.json()["error"]["message"] in {
+        "Episode has dependent storyboard facts",
+        "Episode has dependent script versions",
+    }
+    listed = await client.get(
+        f"/api/v1/episodes/{episode['id']}/shots", headers=headers
+    )
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()["data"]["items"]] == [
+        create_response.json()["data"]["id"]
+    ]
 
 
 @pytest.mark.asyncio

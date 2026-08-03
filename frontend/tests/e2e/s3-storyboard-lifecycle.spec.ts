@@ -39,6 +39,32 @@ function seedConfirmedStructure(episodeId: string) {
   );
 }
 
+function seedAssetCandidateReference(episodeId: string, assetId: string) {
+  const backendDirectory = path.resolve(process.cwd(), "../backend");
+  execFileSync(
+    path.join(backendDirectory, ".venv/bin/python"),
+    [
+      "-m",
+      "tests.support.seed_storyboard_e2e",
+      "--episode-id",
+      episodeId,
+      "--asset-id",
+      assetId,
+    ],
+    {
+      cwd: backendDirectory,
+      env: {
+        ...process.env,
+        DATABASE_URL: e2eDatabaseUrl,
+        DEEPSEEK_API_KEY: "",
+        ENVIRONMENT: "test",
+        JWT_SECRET_KEY: "playwright-only-jwt-secret-with-at-least-32-bytes",
+      },
+      stdio: "pipe",
+    },
+  );
+}
+
 test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({ page }) => {
   test.setTimeout(120_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
@@ -107,6 +133,65 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   await createReadyAsset(page, characterFixture);
   await createReadyAsset(page, voiceFixture);
   await createReadyAsset(page, locationFixture);
+
+  const referencedEmptyAssetName = `候选引用空角色-${unique}`;
+  await page.getByRole("button", { name: "新建资产" }).click();
+  const emptyAssetDialog = page.getByRole("dialog", { name: "新建资产身份" });
+  await emptyAssetDialog.getByLabel("资产类型").selectOption("character");
+  await emptyAssetDialog.getByLabel("资产名称").fill(referencedEmptyAssetName);
+  const emptyAssetResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /\/api\/v1\/projects\/[0-9a-f-]+\/assets$/.test(response.url()),
+  );
+  await emptyAssetDialog.getByRole("button", { name: "创建资产" }).click();
+  const emptyAssetId = (await (await emptyAssetResponse).json()).data.id as string;
+  await expect(page.getByRole("status")).toContainText("资产身份已创建");
+  seedAssetCandidateReference(episodeId, emptyAssetId);
+  await page.getByRole("button", { name: "删除资产身份" }).click();
+  const deleteAssetDialog = page.getByRole("dialog", { name: "删除资产身份" });
+  await expect(deleteAssetDialog).toContainText(
+    "资产已被 1 条剧本候选决议关联，只能归档。",
+  );
+  await expect(
+    deleteAssetDialog.getByRole("button", { name: "确认删除空资产" }),
+  ).toHaveCount(0);
+  await deleteAssetDialog.getByRole("button", { name: "关闭" }).click();
+
+  const relatedPropName = `角色佩剑-${unique}`;
+  await page.getByRole("tab", { name: "道具" }).click();
+  await page.getByRole("button", { name: "新建资产" }).click();
+  const propDialog = page.getByRole("dialog", { name: "新建资产身份" });
+  await propDialog.getByLabel("资产类型").selectOption("prop");
+  await propDialog.getByLabel("资产名称").fill(relatedPropName);
+  await propDialog.getByRole("button", { name: "创建资产" }).click();
+  await expect(page.getByRole("status")).toContainText("资产身份已创建");
+  await page.getByRole("button", { name: "添加新版本" }).click();
+  const propVersionDialog = page.getByRole("dialog", { name: "添加道具版本" });
+  await propVersionDialog.getByLabel("外观描述").fill("青铜剑身，深色皮革剑柄");
+  await propVersionDialog.getByLabel("材质").fill("青铜与皮革");
+  await propVersionDialog.getByLabel("使用场景").fill("角色随身佩戴");
+  await propVersionDialog
+    .getByLabel("持有角色")
+    .selectOption({ label: referencedEmptyAssetName });
+  await propVersionDialog.getByRole("button", { name: "保存版本" }).click();
+  await expect(page.getByRole("status")).toContainText("版本 v1 已保存");
+
+  await page.getByRole("tab", { name: "角色" }).click();
+  await page
+    .getByRole("button", { name: `选择资产 ${referencedEmptyAssetName}` })
+    .click();
+  await page.getByRole("button", { name: "删除资产身份" }).click();
+  const relatedDeleteDialog = page.getByRole("dialog", { name: "删除资产身份" });
+  await expect(relatedDeleteDialog).toContainText(
+    "资产已被 1 个道具或服装版本引用，只能归档。",
+  );
+  await expect(
+    relatedDeleteDialog.getByRole("button", { name: "确认删除空资产" }),
+  ).toHaveCount(0);
+  await relatedDeleteDialog.getByRole("button", { name: "关闭" }).click();
+
+  await page.getByRole("tab", { name: locationFixture.tabName }).click();
   await page
     .getByRole("button", { name: `选择资产 ${locationFixture.name}` })
     .click();
@@ -408,5 +493,19 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
   await expect(auditTrail.getByText(/2 条只追加事件/)).toBeVisible();
   await expect(
     auditTrail.locator("article").first().getByText("分镜当前规格切换"),
+  ).toBeVisible();
+
+  await page.goto("/projects");
+  await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
+  await page.getByRole("button", { name: "检查删除 第一集 分镜" }).click();
+  await expect(
+    page.getByText("单集已有 6 个分镜镜头（7 个规格版本）"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "检查项目删除条件" }).click();
+  await expect(
+    page.getByText("项目关联 6 个分镜镜头（7 个规格版本）"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("项目已有 5 个资产（5 个版本）"),
   ).toBeVisible();
 });

@@ -53,9 +53,11 @@ test("S2 导入发布剧本并在 DeepSeek 未配置时可恢复地失败", asyn
   await page.goto("/projects");
   await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
   await page.getByRole("button", { name: "检查删除 第一集 雨夜" }).click();
+  await expect(page.getByText("单集已有 2 个剧本版本")).toBeVisible();
   await expect(page.getByText("单集已有 1 个任务")).toBeVisible();
   await page.getByRole("button", { name: "检查项目删除条件" }).click();
   await expect(page.getByText("项目包含 1 个单集")).toBeVisible();
+  await expect(page.getByText("项目关联 2 个剧本版本")).toBeVisible();
   await expect(page.getByText("项目关联 1 个任务")).toBeVisible();
 
   await page.goto("/governance");

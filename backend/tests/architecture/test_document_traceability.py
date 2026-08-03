@@ -220,3 +220,146 @@ def test_task_references_are_traced_into_project_delete_guards() -> None:
     assert "Task 引用进入删除预检" in plan
     assert "HAS_TASKS" in s1_acceptance
     assert "单集已有 1 个任务" in s2_acceptance
+
+
+def test_script_versions_are_traced_into_project_delete_guards() -> None:
+    design = (DOCS / "design/模块设计/003-项目模块详细设计.md").read_text(
+        encoding="utf-8"
+    )
+    prd = (DOCS / "prd/007-基础业务模块PRD任务.md").read_text(
+        encoding="utf-8"
+    )
+    plan = (DOCS / "plan/007-基础业务模块产品任务执行计划.md").read_text(
+        encoding="utf-8"
+    )
+    s1_acceptance = (DOCS / "acceptance/002-S1单人立项验收.md").read_text(
+        encoding="utf-8"
+    )
+    s2_acceptance = (DOCS / "acceptance/005-S2统一前端增量验收.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "HAS_SCRIPT_VERSIONS" in design
+    assert "草稿和归档来源下的历史版本" in design
+    assert "剧本版本引用已通过 scripts 公开批量计数" in prd
+    assert "剧本版本进入删除预检" in plan
+    assert "HAS_SCRIPT_VERSIONS" in s1_acceptance
+    assert "单集已有 2 个剧本版本" in s2_acceptance
+
+
+def test_storyboard_facts_are_traced_into_project_delete_guards() -> None:
+    project_design = (
+        DOCS / "design/模块设计/003-项目模块详细设计.md"
+    ).read_text(encoding="utf-8")
+    storyboard_design = (
+        DOCS / "design/模块设计/008-分镜模块详细设计.md"
+    ).read_text(encoding="utf-8")
+    project_prd = (DOCS / "prd/007-基础业务模块PRD任务.md").read_text(
+        encoding="utf-8"
+    )
+    project_plan = (
+        DOCS / "plan/007-基础业务模块产品任务执行计划.md"
+    ).read_text(encoding="utf-8")
+    storyboard_plan = (
+        DOCS / "plan/008-创作生产模块产品任务执行计划.md"
+    ).read_text(encoding="utf-8")
+    acceptance = (
+        DOCS / "acceptance/006-S3分镜本地工程增量验收.md"
+    ).read_text(encoding="utf-8")
+
+    assert "HAS_STORYBOARD_SHOTS" in project_design
+    assert "active/archived Shot" in storyboard_design
+    assert "Shot/ShotSpec 引用已通过 storyboards 公开批量摘要" in project_prd
+    assert "Shot/ShotSpec 进入删除预检" in project_plan
+    assert "Project/Episode 删除影响汇总" in storyboard_plan
+    assert "单集已有 6 个分镜镜头（7 个规格版本）" in acceptance
+
+
+def test_asset_facts_are_traced_into_project_delete_guards() -> None:
+    project_design = (
+        DOCS / "design/模块设计/003-项目模块详细设计.md"
+    ).read_text(encoding="utf-8")
+    asset_design = (
+        DOCS / "design/模块设计/007-资产模块详细设计.md"
+    ).read_text(encoding="utf-8")
+    project_prd = (DOCS / "prd/007-基础业务模块PRD任务.md").read_text(
+        encoding="utf-8"
+    )
+    project_plan = (
+        DOCS / "plan/007-基础业务模块产品任务执行计划.md"
+    ).read_text(encoding="utf-8")
+    production_plan = (
+        DOCS / "plan/008-创作生产模块产品任务执行计划.md"
+    ).read_text(encoding="utf-8")
+    acceptance = (
+        DOCS / "acceptance/006-S3分镜本地工程增量验收.md"
+    ).read_text(encoding="utf-8")
+
+    assert "HAS_ASSETS" in project_design
+    assert "active/archived Asset" in asset_design
+    assert "Asset/AssetVersion 引用已通过 assets 公开批量摘要" in project_prd
+    assert "Asset/AssetVersion 进入删除预检" in project_plan
+    assert "Project 级资产删除影响汇总" in production_plan
+    assert "项目已有 5 个资产（5 个版本）" in acceptance
+
+
+def test_asset_candidate_decisions_are_traced_into_asset_delete_guards() -> None:
+    asset_design = (
+        DOCS / "design/模块设计/007-资产模块详细设计.md"
+    ).read_text(encoding="utf-8")
+    script_design = (
+        DOCS / "design/模块设计/006-剧本模块详细设计.md"
+    ).read_text(encoding="utf-8")
+    prd = (DOCS / "prd/008-创作生产模块PRD任务.md").read_text(
+        encoding="utf-8"
+    )
+    plan = (
+        DOCS / "plan/008-创作生产模块产品任务执行计划.md"
+    ).read_text(encoding="utf-8")
+    acceptance = (
+        DOCS / "acceptance/004-S2资产增量验收.md"
+    ).read_text(encoding="utf-8")
+
+    assert "asset_has_candidate_decisions" in asset_design
+    assert "ASSET downstream_id" in script_design
+    assert "有版本或决议时不能硬删" in prd
+    assert "有版本/决议不硬删" in plan
+    assert "资产已被 1 条剧本候选决议关联，只能归档。" in acceptance
+
+
+def test_related_asset_versions_are_traced_into_asset_delete_guards() -> None:
+    asset_design = (
+        DOCS / "design/模块设计/007-资产模块详细设计.md"
+    ).read_text(encoding="utf-8")
+    prd = (DOCS / "prd/008-创作生产模块PRD任务.md").read_text(
+        encoding="utf-8"
+    )
+    plan = (
+        DOCS / "plan/008-创作生产模块产品任务执行计划.md"
+    ).read_text(encoding="utf-8")
+    acceptance = (
+        DOCS / "acceptance/004-S2资产增量验收.md"
+    ).read_text(encoding="utf-8")
+
+    assert "asset_has_related_versions" in asset_design
+    assert "Project → Asset" in asset_design
+    assert "被道具/服装历史版本引用时同样只能归档" in prd
+    assert "被道具/服装历史版本引用时同样只能归档" in plan
+    assert "资产已被 1 个道具或服装版本引用，只能归档。" in acceptance
+
+
+def test_latest_real_infrastructure_and_e2e_gates_are_recorded() -> None:
+    frontend_acceptance = (
+        DOCS / "acceptance/005-S2统一前端增量验收.md"
+    ).read_text(encoding="utf-8")
+    storyboard_acceptance = (
+        DOCS / "acceptance/006-S3分镜本地工程增量验收.md"
+    ).read_text(encoding="utf-8")
+
+    for source in (frontend_acceptance, storyboard_acceptance):
+        assert "2026-08-03 最新显式复核" in source
+        assert "2/2、2/2、1/1、1/1" in source
+        assert "42.7 秒" in source
+    assert "36 镜头 P95 10.93 ms" in storyboard_acceptance
+    assert "120 镜头 P95 41.22 ms" in storyboard_acceptance
+    assert "120 镜头连续重排 30/30 成功" in storyboard_acceptance

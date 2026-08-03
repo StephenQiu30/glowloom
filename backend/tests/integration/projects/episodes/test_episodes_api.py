@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 import httpx
@@ -12,6 +13,7 @@ from app.modules.identity import ActorContext
 from app.modules.identity.models import Membership
 from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
 from app.modules.projects.models import Episode
+from app.modules.scripts.models import ScriptSource
 from tests.support.project_builders import project_payload, register_project_owner
 
 
@@ -278,7 +280,7 @@ async def test_task_created_after_preflight_blocks_episode_and_project_deletion(
                 role="owner",
                 workspace_status="active",
             )
-            task = await create_script_extraction_task(
+            await create_script_extraction_task(
                 session,
                 actor,
                 ScriptExtractionTaskCommand(
@@ -346,3 +348,192 @@ async def test_task_created_after_preflight_blocks_episode_and_project_deletion(
             )
             == 0
         )
+
+
+@pytest.mark.asyncio
+async def test_archived_script_versions_created_after_preflight_block_deletion(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await register_project_owner(
+        client,
+        email="script-delete-blocker@example.com",
+    )
+    project_response = await client.post(
+        "/api/v1/projects",
+        headers=headers,
+        json=project_payload(workspace_id, "剧本版本删除门禁"),
+    )
+    project = project_response.json()["data"]
+    episode_response = await client.post(
+        f"/api/v1/projects/{project['id']}/episodes",
+        headers=headers,
+        json={"name": "剧本引用单集", "target_duration_ms": 90000},
+    )
+    episode = episode_response.json()["data"]
+
+    initial_preflight = await client.post(
+        f"/api/v1/episodes/{episode['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert initial_preflight.status_code == 200
+    assert initial_preflight.json()["data"] == {"allowed": True, "blockers": []}
+
+    imported_versions: list[dict[str, object]] = []
+    imported_sources: list[dict[str, object]] = []
+    for number in range(1, 3):
+        imported_response = await client.post(
+            f"/api/v1/episodes/{episode['id']}/script-sources",
+            headers=headers,
+            json={
+                "input_type": "text",
+                "title": f"第 {number} 份草稿",
+                "body": f"第 {number} 场\n角色甲：继续。",
+                "rights_declaration": "确认拥有该测试文本的使用权",
+                "idempotency_key": f"script-delete-blocker-{number}",
+            },
+        )
+        assert imported_response.status_code == 201
+        imported_sources.append(imported_response.json()["data"]["source"])
+        imported_versions.append(imported_response.json()["data"]["version"])
+
+    archived_source = await client.post(
+        f"/api/v1/script-sources/{imported_sources[0]['id']}/archive",
+        headers=headers,
+        json={"expected_revision": 1},
+    )
+    assert archived_source.status_code == 200
+    assert archived_source.json()["data"]["status"] == "archived"
+
+    episode_after_import = await client.get(
+        f"/api/v1/episodes/{episode['id']}", headers=headers
+    )
+    assert episode_after_import.status_code == 200
+    assert episode_after_import.json()["data"]["current_script_version_id"] is None
+
+    episode_preflight = await client.post(
+        f"/api/v1/episodes/{episode['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert episode_preflight.status_code == 200
+    assert episode_preflight.json()["data"] == {
+        "allowed": False,
+        "blockers": [
+            {
+                "code": "HAS_SCRIPT_VERSIONS",
+                "resource_type": "episode",
+                "resource_id": episode["id"],
+                "summary": "单集已有 2 个剧本版本",
+            }
+        ],
+    }
+
+    project_preflight = await client.post(
+        f"/api/v1/projects/{project['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert project_preflight.status_code == 200
+    assert project_preflight.json()["data"]["allowed"] is False
+    assert {
+        blocker["code"]: blocker["summary"]
+        for blocker in project_preflight.json()["data"]["blockers"]
+    } == {
+        "HAS_EPISODES": "项目包含 1 个单集",
+        "HAS_SCRIPT_VERSIONS": "项目关联 2 个剧本版本",
+    }
+
+    blocked_delete = await client.delete(
+        f"/api/v1/episodes/{episode['id']}",
+        headers=headers,
+        params={"expected_revision": episode["revision"]},
+    )
+    assert blocked_delete.status_code == 409
+    assert blocked_delete.json()["error"]["next_action"] == "review_delete_blockers"
+    assert (
+        await client.get(
+            f"/api/v1/script-versions/{imported_versions[0]['id']}",
+            headers=headers,
+        )
+    ).status_code == 200
+
+    async with session_factory() as session:
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.action == "episode.deleted",
+                    AuditEvent.target_id == UUID(episode["id"]),
+                )
+            )
+            == 0
+        )
+
+
+@pytest.mark.asyncio
+async def test_concurrent_script_import_and_episode_delete_never_orphan_versions(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await register_project_owner(
+        client,
+        email="script-delete-race@example.com",
+    )
+    project_response = await client.post(
+        "/api/v1/projects",
+        headers=headers,
+        json=project_payload(workspace_id, "剧本删除并发门禁"),
+    )
+    project = project_response.json()["data"]
+    episode_response = await client.post(
+        f"/api/v1/projects/{project['id']}/episodes",
+        headers=headers,
+        json={"name": "并发争用单集", "target_duration_ms": 90000},
+    )
+    episode = episode_response.json()["data"]
+
+    import_response, delete_response = await asyncio.gather(
+        client.post(
+            f"/api/v1/episodes/{episode['id']}/script-sources",
+            headers=headers,
+            json={
+                "input_type": "text",
+                "title": "并发导入草稿",
+                "body": "第一场\n角色甲：不能留下孤立版本。",
+                "rights_declaration": "确认拥有该测试文本的使用权",
+                "idempotency_key": "script-delete-race",
+            },
+        ),
+        client.delete(
+            f"/api/v1/episodes/{episode['id']}",
+            headers=headers,
+            params={"expected_revision": episode["revision"]},
+        ),
+    )
+
+    outcomes = (import_response.status_code, delete_response.status_code)
+    assert outcomes in {(201, 409), (404, 200)}
+    episode_after_race = await client.get(
+        f"/api/v1/episodes/{episode['id']}", headers=headers
+    )
+    if outcomes == (201, 409):
+        assert delete_response.json()["error"]["next_action"] == "review_delete_blockers"
+        assert episode_after_race.status_code == 200
+        imported_version_id = import_response.json()["data"]["version"]["id"]
+        assert (
+            await client.get(
+                f"/api/v1/script-versions/{imported_version_id}",
+                headers=headers,
+            )
+        ).status_code == 200
+    else:
+        assert episode_after_race.status_code == 404
+        async with session_factory() as session:
+            assert (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(ScriptSource)
+                    .where(ScriptSource.episode_id == UUID(episode["id"]))
+                )
+                == 0
+            )

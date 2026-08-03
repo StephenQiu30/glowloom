@@ -13,6 +13,7 @@ from uuid6 import uuid7
 
 from app.core.database import create_engine
 from app.model_registry import register_implemented_models
+from app.modules.assets.models import Asset
 from app.modules.identity.models import Membership
 from app.modules.production.models import Task
 from app.modules.projects.models import Episode
@@ -269,11 +270,115 @@ async def seed_confirmed_structure(episode_id: UUID) -> None:
         await engine.dispose()
 
 
+async def seed_asset_candidate_reference(episode_id: UUID, asset_id: UUID) -> None:
+    register_implemented_models()
+    engine = create_engine(_validated_database_url())
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with session_factory() as session, session.begin():
+            episode = await session.get(Episode, episode_id)
+            asset = await session.scalar(
+                select(Asset).where(Asset.id == asset_id).with_for_update()
+            )
+            if episode is None or asset is None:
+                raise RuntimeError("episode or asset does not exist")
+            if (
+                asset.workspace_id != episode.workspace_id
+                or asset.project_id != episode.project_id
+                or asset.kind != "character"
+                or asset.current_version_id is not None
+            ):
+                raise RuntimeError("asset is not an empty character in the episode project")
+            existing = await session.scalar(
+                select(CandidateDecision.id).where(
+                    CandidateDecision.workspace_id == episode.workspace_id,
+                    CandidateDecision.downstream_type == "ASSET",
+                    CandidateDecision.downstream_id == asset.id,
+                )
+            )
+            if existing is not None:
+                return
+            if episode.current_script_version_id is None:
+                raise RuntimeError("episode has no confirmed script structure")
+            current_version = await session.get(
+                ScriptVersion,
+                episode.current_script_version_id,
+            )
+            if current_version is None:
+                raise RuntimeError("confirmed script version does not exist")
+            raw_batch_id = current_version.structure_summary.get(
+                "confirmation_batch_id"
+            )
+            if not raw_batch_id:
+                raise RuntimeError("script structure is not confirmed")
+            batch = await session.scalar(
+                select(ExtractionBatch)
+                .where(ExtractionBatch.id == UUID(str(raw_batch_id)))
+                .with_for_update()
+            )
+            if batch is None:
+                raise RuntimeError("confirmed extraction batch does not exist")
+            actor_id = await session.scalar(
+                select(Membership.user_id).where(
+                    Membership.workspace_id == episode.workspace_id,
+                    Membership.role == "owner",
+                    Membership.status == "active",
+                )
+            )
+            if actor_id is None:
+                raise RuntimeError("episode workspace has no active owner")
+
+            candidate_id = uuid7()
+            session.add(
+                ExtractionCandidate(
+                    id=candidate_id,
+                    workspace_id=episode.workspace_id,
+                    batch_id=batch.id,
+                    candidate_key=f"test-asset-reference:{asset.id}",
+                    kind="asset",
+                    source_start=0,
+                    source_end=1,
+                    proposal={
+                        "kind": "asset",
+                        "asset_kind": asset.kind,
+                        "name": asset.name,
+                        "description": "本地浏览器验收引用，不代表模型输出",
+                    },
+                    confidence_note="本地测试事实，不代表模型输出",
+                    required=False,
+                    status="linked",
+                    revision=2,
+                )
+            )
+            await session.flush()
+            session.add(
+                CandidateDecision(
+                    id=uuid7(),
+                    workspace_id=episode.workspace_id,
+                    candidate_id=candidate_id,
+                    sequence=1,
+                    decision_key=f"storyboard-e2e-asset-reference:{asset.id}",
+                    action="link_existing",
+                    payload={"downstream_id": str(asset.id)},
+                    downstream_type="ASSET",
+                    downstream_id=asset.id,
+                    actor_id=actor_id,
+                )
+            )
+            batch.candidate_count += 1
+    finally:
+        await engine.dispose()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--episode-id", required=True, type=UUID)
+    parser.add_argument("--asset-id", type=UUID)
     args = parser.parse_args()
-    asyncio.run(seed_confirmed_structure(args.episode_id))
+    if args.asset_id is None:
+        asyncio.run(seed_confirmed_structure(args.episode_id))
+    else:
+        asyncio.run(seed_asset_candidate_reference(args.episode_id, args.asset_id))
 
 
 if __name__ == "__main__":
