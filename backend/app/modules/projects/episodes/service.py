@@ -19,6 +19,8 @@ from app.modules.projects.contracts import (
     DeleteBlocker,
     DeletePreflightResponse,
     EpisodeContentContext,
+    EpisodeScriptVersionCountReader,
+    EpisodeStoryboardReferenceReader,
 )
 from app.modules.projects.episodes.schemas import (
     EpisodeCreateRequest,
@@ -437,17 +439,56 @@ async def set_episode_archived(
 
 
 async def episode_delete_preflight(
-    session: AsyncSession, claims: AccessTokenClaims, episode_id: UUID
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    episode_id: UUID,
+    read_script_version_counts: EpisodeScriptVersionCountReader,
+    read_storyboard_references: EpisodeStoryboardReferenceReader,
 ) -> DeletePreflightResponse:
     episode, _, _ = await episode_for_read(session, claims, episode_id)
     blockers: list[DeleteBlocker] = []
-    if episode.current_script_version_id or episode.current_timeline_version_id:
+    script_version_count = (
+        await read_script_version_counts(
+            workspace_id=episode.workspace_id,
+            episode_ids=[episode.id],
+        )
+    )[episode.id]
+    if episode.current_timeline_version_id or (
+        episode.current_script_version_id and not script_version_count
+    ):
         blockers.append(
             DeleteBlocker(
                 code="HAS_VERSION_REFERENCE",
                 resource_type="episode",
                 resource_id=episode.id,
                 summary="单集已有版本引用",
+            )
+        )
+    if script_version_count:
+        blockers.append(
+            DeleteBlocker(
+                code="HAS_SCRIPT_VERSIONS",
+                resource_type="episode",
+                resource_id=episode.id,
+                summary=f"单集已有 {script_version_count} 个剧本版本",
+            )
+        )
+    storyboard = (
+        await read_storyboard_references(
+            workspace_id=episode.workspace_id,
+            episode_ids=[episode.id],
+        )
+    )[episode.id]
+    if storyboard.shot_count:
+        blockers.append(
+            DeleteBlocker(
+                code="HAS_STORYBOARD_SHOTS",
+                resource_type="episode",
+                resource_id=episode.id,
+                summary=(
+                    f"单集已有 {storyboard.shot_count} 个分镜镜头"
+                    f"（{storyboard.spec_version_count} 个规格版本）"
+                ),
             )
         )
     task_count = (
@@ -474,17 +515,46 @@ async def delete_episode(
     claims: AccessTokenClaims,
     episode_id: UUID,
     expected_revision: int,
+    read_script_version_counts: EpisodeScriptVersionCountReader,
+    read_storyboard_references: EpisodeStoryboardReferenceReader,
     *,
     trace_id: str,
 ) -> None:
     async with session.begin():
         episode, project, _ = await _owned_episode(session, claims, episode_id, for_update=True)
         _episode_revision(episode, expected_revision)
+        storyboard = (
+            await read_storyboard_references(
+                workspace_id=episode.workspace_id,
+                episode_ids=[episode.id],
+            )
+        )[episode.id]
+        if storyboard.shot_count:
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Episode has dependent storyboard facts",
+                status_code=409,
+                next_action="review_delete_blockers",
+            )
+        script_version_count = (
+            await read_script_version_counts(
+                workspace_id=episode.workspace_id,
+                episode_ids=[episode.id],
+            )
+        )[episode.id]
+        if script_version_count:
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Episode has dependent script versions",
+                status_code=409,
+                next_action="review_delete_blockers",
+            )
         if episode.current_script_version_id or episode.current_timeline_version_id:
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
                 "Episode has version references",
                 status_code=409,
+                next_action="review_delete_blockers",
             )
         task_count = (
             await count_episode_task_references(

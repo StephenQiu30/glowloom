@@ -78,6 +78,32 @@ async def list_archived_shots(
     )
 
 
+async def count_storyboard_references_by_episode(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_ids: list[UUID],
+) -> list[tuple[UUID, int, int]]:
+    if not episode_ids:
+        return []
+    rows = await session.execute(
+        select(
+            Shot.episode_id,
+            func.count(func.distinct(Shot.id)),
+            func.count(ShotSpecVersion.id),
+        )
+        .outerjoin(ShotSpecVersion, ShotSpecVersion.shot_id == Shot.id)
+        .where(
+            Shot.workspace_id == workspace_id,
+            Shot.episode_id.in_(episode_ids),
+        )
+        .group_by(Shot.episode_id)
+    )
+    return [
+        (episode_id, shot_count, spec_version_count)
+        for episode_id, shot_count, spec_version_count in rows
+    ]
+
+
 async def list_active_shot_ids_not_using_script_version(
     session: AsyncSession,
     episode_id: UUID,

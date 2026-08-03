@@ -18,6 +18,9 @@ from app.modules.projects.authorization import (
 from app.modules.projects.contracts import (
     DeleteBlocker,
     DeletePreflightResponse,
+    EpisodeScriptVersionCountReader,
+    EpisodeStoryboardReferenceReader,
+    ProjectAssetReferenceReader,
     ProjectContentContext,
 )
 from app.modules.projects.models import Project
@@ -246,7 +249,12 @@ async def set_archived(
 
 
 async def delete_preflight(
-    session: AsyncSession, claims: AccessTokenClaims, project_id: UUID
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    project_id: UUID,
+    read_script_version_counts: EpisodeScriptVersionCountReader,
+    read_storyboard_references: EpisodeStoryboardReferenceReader,
+    read_asset_references: ProjectAssetReferenceReader,
 ) -> DeletePreflightResponse:
     project, _ = await owned_project(session, claims, project_id, Capability.WORKSPACE_MANAGE)
     episodes = await repository.list_episodes(
@@ -255,6 +263,27 @@ async def delete_preflight(
         include_archived=True,
     )
     episode_ids = [episode.id for episode in episodes]
+    script_version_counts = await read_script_version_counts(
+        workspace_id=project.workspace_id,
+        episode_ids=episode_ids,
+    )
+    script_version_count = sum(script_version_counts.values())
+    storyboard_references = await read_storyboard_references(
+        workspace_id=project.workspace_id,
+        episode_ids=episode_ids,
+    )
+    storyboard_shot_count = sum(
+        summary.shot_count for summary in storyboard_references.values()
+    )
+    storyboard_spec_version_count = sum(
+        summary.spec_version_count for summary in storyboard_references.values()
+    )
+    asset_references = (
+        await read_asset_references(
+            workspace_id=project.workspace_id,
+            project_ids=[project.id],
+        )
+    )[project.id]
     task_counts = await count_episode_task_references(
         session,
         project.workspace_id,
@@ -269,6 +298,39 @@ async def delete_preflight(
                 resource_type="project",
                 resource_id=project.id,
                 summary=f"项目包含 {len(episodes)} 个单集",
+            )
+        )
+    if script_version_count:
+        blockers.append(
+            DeleteBlocker(
+                code="HAS_SCRIPT_VERSIONS",
+                resource_type="project",
+                resource_id=project.id,
+                summary=f"项目关联 {script_version_count} 个剧本版本",
+            )
+        )
+    if storyboard_shot_count:
+        blockers.append(
+            DeleteBlocker(
+                code="HAS_STORYBOARD_SHOTS",
+                resource_type="project",
+                resource_id=project.id,
+                summary=(
+                    f"项目关联 {storyboard_shot_count} 个分镜镜头"
+                    f"（{storyboard_spec_version_count} 个规格版本）"
+                ),
+            )
+        )
+    if asset_references.asset_count:
+        blockers.append(
+            DeleteBlocker(
+                code="HAS_ASSETS",
+                resource_type="project",
+                resource_id=project.id,
+                summary=(
+                    f"项目已有 {asset_references.asset_count} 个资产"
+                    f"（{asset_references.version_count} 个版本）"
+                ),
             )
         )
     if task_count:
@@ -288,6 +350,7 @@ async def delete_project(
     claims: AccessTokenClaims,
     project_id: UUID,
     expected_revision: int,
+    read_asset_references: ProjectAssetReferenceReader,
     *,
     trace_id: str,
 ) -> None:
@@ -305,6 +368,19 @@ async def delete_project(
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
                 "Project has dependent episodes",
+                status_code=409,
+                next_action="review_delete_blockers",
+            )
+        asset_references = (
+            await read_asset_references(
+                workspace_id=project.workspace_id,
+                project_ids=[project.id],
+            )
+        )[project.id]
+        if asset_references.asset_count:
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Project has dependent assets",
                 status_code=409,
                 next_action="review_delete_blockers",
             )

@@ -14,7 +14,7 @@ async def find_asset(
 ) -> Asset | None:
     query = select(Asset).where(Asset.id == asset_id)
     if for_update:
-        query = query.with_for_update()
+        query = query.with_for_update().execution_options(populate_existing=True)
     return await session.scalar(query)
 
 
@@ -83,6 +83,61 @@ async def list_active_assets_with_current_version(
         .order_by(Asset.kind, Asset.id)
     )
     return [(asset, version) for asset, version in rows], total or 0
+
+
+async def count_asset_references_by_project(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_ids: list[UUID],
+) -> list[tuple[UUID, int, int]]:
+    if not project_ids:
+        return []
+    rows = await session.execute(
+        select(
+            Asset.project_id,
+            func.count(func.distinct(Asset.id)),
+            func.count(AssetVersion.id),
+        )
+        .outerjoin(AssetVersion, AssetVersion.asset_id == Asset.id)
+        .where(
+            Asset.workspace_id == workspace_id,
+            Asset.project_id.in_(project_ids),
+        )
+        .group_by(Asset.project_id)
+    )
+    return [
+        (project_id, asset_count, version_count)
+        for project_id, asset_count, version_count in rows
+    ]
+
+
+async def count_related_asset_versions(
+    session: AsyncSession,
+    workspace_id: UUID,
+    asset_ids: list[UUID],
+) -> dict[UUID, int]:
+    if not asset_ids:
+        return {}
+    reference_ids = [str(asset_id) for asset_id in asset_ids]
+    holder_id = AssetVersion.spec["holder_character_id"].astext
+    wearer_id = AssetVersion.spec["wearer_character_id"].astext
+    related_id = func.coalesce(holder_id, wearer_id)
+    rows = await session.execute(
+        select(related_id, func.count())
+        .where(
+            AssetVersion.workspace_id == workspace_id,
+            or_(
+                holder_id.in_(reference_ids),
+                wearer_id.in_(reference_ids),
+            ),
+        )
+        .group_by(related_id)
+    )
+    return {
+        UUID(related_asset_id): count
+        for related_asset_id, count in rows
+        if related_asset_id is not None
+    }
 
 
 async def find_version(

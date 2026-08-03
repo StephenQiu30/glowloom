@@ -5,6 +5,7 @@ from app.modules.assets.contracts import (
     AssetCandidateResult,
     AssetVersionReadinessReference,
     AssetVersionReference,
+    ProjectAssetReferenceSummary,
     ProjectAssetSummary,
 )
 from app.modules.assets.service import (
@@ -14,6 +15,7 @@ from app.modules.assets.service import (
     resolve_asset_version,
     resolve_asset_version_readiness,
     resolve_asset_versions_readiness,
+    summarize_project_asset_references,
     summarize_project_assets,
 )
 
@@ -22,6 +24,7 @@ __all__ = [
     "AssetCandidateResult",
     "AssetVersionReadinessReference",
     "AssetVersionReference",
+    "ProjectAssetReferenceSummary",
     "ProjectAssetSummary",
     "asset_version_exists",
     "asset_version_for_content_read",
@@ -29,5 +32,6 @@ __all__ = [
     "resolve_asset_version",
     "resolve_asset_version_readiness",
     "resolve_asset_versions_readiness",
+    "summarize_project_asset_references",
     "summarize_project_assets",
 ]

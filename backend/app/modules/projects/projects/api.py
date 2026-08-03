@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import AccessTokenClaims, get_access_token_claims
 from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
-from app.modules.projects.contracts import DeletePreflightResponse, DeleteResponse
+from app.modules.assets import summarize_project_asset_references
+from app.modules.projects.contracts import (
+    DeletePreflightResponse,
+    DeleteResponse,
+    EpisodeStoryboardReferenceSummary,
+    ProjectAssetReferenceSummary,
+)
 from app.modules.projects.projects import service
 from app.modules.projects.projects.schemas import (
     BudgetLimitRequest,
@@ -17,6 +23,8 @@ from app.modules.projects.projects.schemas import (
     ProjectStateRequest,
     ProjectUpdateRequest,
 )
+from app.modules.scripts import count_episode_script_versions
+from app.modules.storyboards import summarize_episode_storyboard_references
 
 router = APIRouter(prefix="/api/v1", tags=["projects"])
 
@@ -165,7 +173,53 @@ async def delete_preflight(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[DeletePreflightResponse]:
-    return ApiResponse(data=await service.delete_preflight(session, claims, project_id))
+    async def read_script_version_counts(
+        *, workspace_id: UUID, episode_ids: list[UUID]
+    ) -> dict[UUID, int]:
+        return await count_episode_script_versions(session, workspace_id, episode_ids)
+
+    async def read_storyboard_references(
+        *, workspace_id: UUID, episode_ids: list[UUID]
+    ) -> dict[UUID, EpisodeStoryboardReferenceSummary]:
+        summaries = await summarize_episode_storyboard_references(
+            session,
+            workspace_id,
+            episode_ids,
+        )
+        return {
+            episode_id: EpisodeStoryboardReferenceSummary(
+                shot_count=summary.shot_count,
+                spec_version_count=summary.spec_version_count,
+            )
+            for episode_id, summary in summaries.items()
+        }
+
+    async def read_asset_references(
+        *, workspace_id: UUID, project_ids: list[UUID]
+    ) -> dict[UUID, ProjectAssetReferenceSummary]:
+        summaries = await summarize_project_asset_references(
+            session,
+            workspace_id,
+            project_ids,
+        )
+        return {
+            project_id: ProjectAssetReferenceSummary(
+                asset_count=summary.asset_count,
+                version_count=summary.version_count,
+            )
+            for project_id, summary in summaries.items()
+        }
+
+    return ApiResponse(
+        data=await service.delete_preflight(
+            session,
+            claims,
+            project_id,
+            read_script_version_counts,
+            read_storyboard_references,
+            read_asset_references,
+        )
+    )
 
 
 @router.delete("/projects/{project_id}", response_model=ApiResponse[DeleteResponse])
@@ -176,11 +230,28 @@ async def delete_project(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[DeleteResponse]:
+    async def read_asset_references(
+        *, workspace_id: UUID, project_ids: list[UUID]
+    ) -> dict[UUID, ProjectAssetReferenceSummary]:
+        summaries = await summarize_project_asset_references(
+            session,
+            workspace_id,
+            project_ids,
+        )
+        return {
+            project_id: ProjectAssetReferenceSummary(
+                asset_count=summary.asset_count,
+                version_count=summary.version_count,
+            )
+            for project_id, summary in summaries.items()
+        }
+
     await service.delete_project(
         session,
         claims,
         project_id,
         expected_revision,
+        read_asset_references,
         trace_id=str(request.state.request_id),
     )
     return ApiResponse(data=DeleteResponse())

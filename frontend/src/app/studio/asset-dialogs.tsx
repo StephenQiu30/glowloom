@@ -50,6 +50,18 @@ function assetDeleteBlockerMessage(blocker: API.AssetDeleteBlocker): string {
   if (blocker.code === "asset_has_versions" && blocker.version_count) {
     return `资产包含 ${blocker.version_count} 个不可变版本，不能删除。`;
   }
+  if (
+    blocker.code === "asset_has_candidate_decisions" &&
+    blocker.decision_count
+  ) {
+    return `资产已被 ${blocker.decision_count} 条剧本候选决议关联，只能归档。`;
+  }
+  if (
+    blocker.code === "asset_has_related_versions" &&
+    blocker.related_version_count
+  ) {
+    return `资产已被 ${blocker.related_version_count} 个道具或服装版本引用，只能归档。`;
+  }
   return blocker.summary;
 }
 

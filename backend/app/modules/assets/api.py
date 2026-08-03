@@ -160,8 +160,20 @@ async def asset_delete_preflight(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetDeletePreflightResponse]:
+    async def read_candidate_decision_counts(
+        *, workspace_id: UUID, asset_ids: list[UUID]
+    ) -> dict[UUID, int]:
+        from app.modules.scripts import count_asset_candidate_decisions
+
+        return await count_asset_candidate_decisions(session, workspace_id, asset_ids)
+
     return ApiResponse(
-        data=await service.delete_preflight(session, claims, asset_id)
+        data=await service.delete_preflight(
+            session,
+            claims,
+            asset_id,
+            read_candidate_decision_counts,
+        )
     )
 
 
@@ -175,11 +187,19 @@ async def delete_asset(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetDeleteResponse]:
+    async def read_candidate_decision_counts(
+        *, workspace_id: UUID, asset_ids: list[UUID]
+    ) -> dict[UUID, int]:
+        from app.modules.scripts import count_asset_candidate_decisions
+
+        return await count_asset_candidate_decisions(session, workspace_id, asset_ids)
+
     await service.delete_asset(
         session,
         claims,
         asset_id,
         expected_revision,
+        read_candidate_decision_counts,
         trace_id=str(request.state.request_id),
     )
     return ApiResponse(data=AssetDeleteResponse())

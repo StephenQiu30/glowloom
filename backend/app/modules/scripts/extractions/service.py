@@ -58,6 +58,18 @@ from app.modules.scripts.models import (
 )
 
 
+async def count_asset_candidate_decisions(
+    session: AsyncSession,
+    workspace_id: UUID,
+    asset_ids: list[UUID],
+) -> dict[UUID, int]:
+    return await repository.count_asset_candidate_decisions(
+        session,
+        workspace_id,
+        asset_ids,
+    )
+
+
 async def summarize_current_scripts(
     session: AsyncSession,
     current_versions_by_episode: dict[UUID, UUID | None],

@@ -13,6 +13,7 @@ from app.modules.scripts.extractions.ports import (
 )
 from app.modules.scripts.extractions.schemas import ScriptExtractionResult
 from app.modules.scripts.extractions.service import (
+    count_asset_candidate_decisions,
     get_script_extraction_input,
     record_extraction_result,
     summarize_current_scripts,
@@ -20,16 +21,19 @@ from app.modules.scripts.extractions.service import (
 )
 from app.modules.scripts.structure.service import resolve_confirmed_shot_candidate
 from app.modules.scripts.versions.service import (
+    count_episode_script_versions,
     resolve_confirmed_structure,
     resolve_confirmed_structures,
     script_version_exists,
 )
 
 __all__ = [
+    "count_asset_candidate_decisions",
     "record_extraction_result",
     "ConfirmedStructureReference",
     "ConfirmedStructureQuery",
     "ConfirmedShotCandidateReference",
+    "count_episode_script_versions",
     "get_script_extraction_input",
     "ScriptExtractionInput",
     "ScriptExtractionProviderError",

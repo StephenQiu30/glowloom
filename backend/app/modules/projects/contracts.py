@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -19,6 +19,45 @@ class DeletePreflightResponse(BaseModel):
 
 class DeleteResponse(BaseModel):
     deleted: Literal[True] = True
+
+
+class EpisodeScriptVersionCountReader(Protocol):
+    async def __call__(
+        self,
+        *,
+        workspace_id: UUID,
+        episode_ids: list[UUID],
+    ) -> dict[UUID, int]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeStoryboardReferenceSummary:
+    shot_count: int
+    spec_version_count: int
+
+
+class EpisodeStoryboardReferenceReader(Protocol):
+    async def __call__(
+        self,
+        *,
+        workspace_id: UUID,
+        episode_ids: list[UUID],
+    ) -> dict[UUID, EpisodeStoryboardReferenceSummary]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectAssetReferenceSummary:
+    asset_count: int
+    version_count: int
+
+
+class ProjectAssetReferenceReader(Protocol):
+    async def __call__(
+        self,
+        *,
+        workspace_id: UUID,
+        project_ids: list[UUID],
+    ) -> dict[UUID, ProjectAssetReferenceSummary]: ...
 
 
 @dataclass(frozen=True, slots=True)

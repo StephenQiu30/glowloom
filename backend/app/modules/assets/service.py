@@ -13,9 +13,11 @@ from app.core.errors import ApiError, ErrorCode
 from app.modules.assets import repository
 from app.modules.assets.contracts import (
     AssetCandidateCommand,
+    AssetCandidateDecisionCountReader,
     AssetCandidateResult,
     AssetVersionReadinessReference,
     AssetVersionReference,
+    ProjectAssetReferenceSummary,
     ProjectAssetSummary,
 )
 from app.modules.assets.models import Asset, AssetMediaReference, AssetVersion
@@ -257,18 +259,23 @@ async def _locked_asset_for_write(
     claims: AccessTokenClaims,
     asset_id: UUID,
 ) -> Asset:
-    asset = await repository.find_asset(session, asset_id, for_update=True)
-    if asset is None:
+    asset_reference = await repository.find_asset(session, asset_id)
+    if asset_reference is None:
         raise _not_found()
     try:
         context = await lock_active_project_for_content_write(
-            session, claims, asset.project_id
+            session, claims, asset_reference.project_id
         )
     except ApiError as error:
         if error.code == ErrorCode.NOT_FOUND:
             raise _not_found() from error
         raise
-    if context.workspace_id != asset.workspace_id:
+    asset = await repository.find_asset(session, asset_id, for_update=True)
+    if (
+        asset is None
+        or asset.project_id != context.project_id
+        or context.workspace_id != asset.workspace_id
+    ):
         raise _not_found()
     return asset
 
@@ -470,20 +477,60 @@ async def delete_preflight(
     session: AsyncSession,
     claims: AccessTokenClaims,
     asset_id: UUID,
+    read_candidate_decision_counts: AssetCandidateDecisionCountReader,
 ) -> AssetDeletePreflightResponse:
     asset = await _asset_for_read(session, claims, asset_id)
     version_count = await repository.count_versions(session, asset.id)
-    blockers = (
-        [
+    decision_count = (
+        await read_candidate_decision_counts(
+            workspace_id=asset.workspace_id,
+            asset_ids=[asset.id],
+        )
+    ).get(asset.id, 0)
+    related_version_count = (
+        await repository.count_related_asset_versions(
+            session,
+            asset.workspace_id,
+            [asset.id],
+        )
+    ).get(asset.id, 0)
+    blockers: list[AssetDeleteBlocker] = []
+    if version_count:
+        blockers.append(
             AssetDeleteBlocker(
                 code="asset_has_versions",
                 summary=f"Asset has {version_count} immutable version(s)",
                 version_count=version_count,
+                decision_count=0,
+                related_version_count=0,
             )
-        ]
-        if version_count
-        else []
-    )
+        )
+    if related_version_count:
+        blockers.append(
+            AssetDeleteBlocker(
+                code="asset_has_related_versions",
+                summary=(
+                    f"Asset is referenced by {related_version_count} related "
+                    "asset version(s)"
+                ),
+                version_count=0,
+                decision_count=0,
+                related_version_count=related_version_count,
+            )
+        )
+    if decision_count:
+        blockers.append(
+            AssetDeleteBlocker(
+                code="asset_has_candidate_decisions",
+                summary=(
+                    f"Asset is linked from {decision_count} script candidate "
+                    "decision(s)"
+                ),
+                version_count=0,
+                decision_count=decision_count,
+                related_version_count=0,
+            )
+        )
     return AssetDeletePreflightResponse(allowed=not blockers, blockers=blockers)
 
 
@@ -492,6 +539,7 @@ async def delete_asset(
     claims: AccessTokenClaims,
     asset_id: UUID,
     expected_revision: int,
+    read_candidate_decision_counts: AssetCandidateDecisionCountReader,
     *,
     trace_id: str,
 ) -> None:
@@ -502,6 +550,33 @@ async def delete_asset(
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
                 "Asset has immutable versions",
+                status_code=409,
+                next_action="review_delete_blockers",
+            )
+        related_version_count = (
+            await repository.count_related_asset_versions(
+                session,
+                asset.workspace_id,
+                [asset.id],
+            )
+        ).get(asset.id, 0)
+        if related_version_count:
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Asset has related asset version references",
+                status_code=409,
+                next_action="review_delete_blockers",
+            )
+        decision_count = (
+            await read_candidate_decision_counts(
+                workspace_id=asset.workspace_id,
+                asset_ids=[asset.id],
+            )
+        ).get(asset.id, 0)
+        if decision_count:
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Asset has candidate decision references",
                 status_code=409,
                 next_action="review_delete_blockers",
             )
@@ -534,7 +609,7 @@ async def _validate_related_assets(
         related_id = spec.wearer_character_id
     if related_id is None:
         return
-    related = await repository.find_asset(session, related_id)
+    related = await repository.find_asset(session, related_id, for_update=True)
     if (
         related is None
         or related.workspace_id != asset.workspace_id
@@ -1085,6 +1160,31 @@ async def summarize_project_assets(
         blocked=blocked,
         ready_kinds=ready_kinds,
     )
+
+
+async def summarize_project_asset_references(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_ids: list[UUID],
+) -> dict[UUID, ProjectAssetReferenceSummary]:
+    summaries = {
+        project_id: ProjectAssetReferenceSummary(asset_count=0, version_count=0)
+        for project_id in project_ids
+    }
+    for (
+        project_id,
+        asset_count,
+        version_count,
+    ) in await repository.count_asset_references_by_project(
+        session,
+        workspace_id,
+        project_ids,
+    ):
+        summaries[project_id] = ProjectAssetReferenceSummary(
+            asset_count=asset_count,
+            version_count=version_count,
+        )
+    return summaries
 
 
 async def asset_version_exists(

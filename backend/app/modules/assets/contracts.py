@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol
 from uuid import UUID
 
 
@@ -56,3 +56,18 @@ class ProjectAssetSummary:
     blocked: int
     ready_kinds: tuple[str, ...]
     required_kinds: tuple[str, ...] = ("character", "location", "voice")
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectAssetReferenceSummary:
+    asset_count: int
+    version_count: int
+
+
+class AssetCandidateDecisionCountReader(Protocol):
+    async def __call__(
+        self,
+        *,
+        workspace_id: UUID,
+        asset_ids: list[UUID],
+    ) -> dict[UUID, int]: ...

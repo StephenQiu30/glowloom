@@ -94,6 +94,21 @@ def _current_response(
     )
 
 
+async def count_episode_script_versions(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_ids: list[UUID],
+) -> dict[UUID, int]:
+    counts = {episode_id: 0 for episode_id in episode_ids}
+    for episode_id, count in await repository.count_versions_by_episode(
+        session,
+        workspace_id,
+        episode_ids,
+    ):
+        counts[episode_id] = count
+    return counts
+
+
 def _source_revision(source: ScriptSource, expected_revision: int) -> None:
     if source.revision != expected_revision:
         raise ApiError(

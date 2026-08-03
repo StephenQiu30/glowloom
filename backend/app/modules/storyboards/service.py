@@ -33,6 +33,7 @@ from app.modules.storyboards.contracts import (
     ShotAssetReferenceSnapshot,
     ShotProductionSnapshot,
     ShotSpecRef,
+    StoryboardReferenceSummary,
 )
 from app.modules.storyboards.hashing import (
     canonical_payload_hash,
@@ -89,6 +90,31 @@ from app.modules.storyboards.schemas import (
 )
 
 MAX_ACTIVE_SHOTS = 120
+
+
+async def summarize_episode_storyboard_references(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_ids: list[UUID],
+) -> dict[UUID, StoryboardReferenceSummary]:
+    summaries = {
+        episode_id: StoryboardReferenceSummary(shot_count=0, spec_version_count=0)
+        for episode_id in episode_ids
+    }
+    for (
+        episode_id,
+        shot_count,
+        spec_version_count,
+    ) in await repository.count_storyboard_references_by_episode(
+        session,
+        workspace_id,
+        episode_ids,
+    ):
+        summaries[episode_id] = StoryboardReferenceSummary(
+            shot_count=shot_count,
+            spec_version_count=spec_version_count,
+        )
+    return summaries
 
 
 async def list_script_version_affected_shot_ids(

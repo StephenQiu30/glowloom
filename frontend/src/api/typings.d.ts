@@ -403,6 +403,10 @@ declare namespace API {
     summary: string;
     /** Version Count */
     version_count: number;
+    /** Decision Count */
+    decision_count: number;
+    /** Related Version Count */
+    related_version_count: number;
   };
 
   type assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGetParams = {

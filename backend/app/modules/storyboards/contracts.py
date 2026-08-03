@@ -40,3 +40,9 @@ class ShotProductionSnapshot:
     blocking_codes: tuple[str, ...]
     warning_codes: tuple[str, ...]
     evaluation_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class StoryboardReferenceSummary:
+    shot_count: int
+    spec_version_count: int

@@ -74,6 +74,25 @@ async def list_sources(
     return list(rows), total or 0
 
 
+async def count_versions_by_episode(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_ids: list[UUID],
+) -> list[tuple[UUID, int]]:
+    if not episode_ids:
+        return []
+    rows = await session.execute(
+        select(ScriptSource.episode_id, func.count(ScriptVersion.id))
+        .join(ScriptVersion, ScriptVersion.source_id == ScriptSource.id)
+        .where(
+            ScriptSource.workspace_id == workspace_id,
+            ScriptSource.episode_id.in_(episode_ids),
+        )
+        .group_by(ScriptSource.episode_id)
+    )
+    return [(episode_id, count) for episode_id, count in rows]
+
+
 async def latest_version_number(
     session: AsyncSession,
     source_id: UUID,
@@ -197,6 +216,29 @@ async def count_pending_required_candidates(
         .group_by(ExtractionCandidate.batch_id)
     )
     return {batch_id: count for batch_id, count in rows}
+
+
+async def count_asset_candidate_decisions(
+    session: AsyncSession,
+    workspace_id: UUID,
+    asset_ids: list[UUID],
+) -> dict[UUID, int]:
+    if not asset_ids:
+        return {}
+    rows = await session.execute(
+        select(CandidateDecision.downstream_id, func.count())
+        .where(
+            CandidateDecision.workspace_id == workspace_id,
+            CandidateDecision.downstream_type == "ASSET",
+            CandidateDecision.downstream_id.in_(asset_ids),
+        )
+        .group_by(CandidateDecision.downstream_id)
+    )
+    return {
+        asset_id: count
+        for asset_id, count in rows
+        if asset_id is not None
+    }
 
 
 async def list_extraction_candidates(

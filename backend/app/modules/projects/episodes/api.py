@@ -7,7 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import AccessTokenClaims, get_access_token_claims
 from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
-from app.modules.projects.contracts import DeletePreflightResponse, DeleteResponse
+from app.modules.projects.contracts import (
+    DeletePreflightResponse,
+    DeleteResponse,
+    EpisodeStoryboardReferenceSummary,
+)
 from app.modules.projects.episodes import service
 from app.modules.projects.episodes.schemas import (
     EpisodeCreateRequest,
@@ -17,6 +21,8 @@ from app.modules.projects.episodes.schemas import (
     EpisodeStateRequest,
     EpisodeUpdateRequest,
 )
+from app.modules.scripts import count_episode_script_versions
+from app.modules.storyboards import summarize_episode_storyboard_references
 
 router = APIRouter(prefix="/api/v1", tags=["projects"])
 
@@ -160,7 +166,36 @@ async def episode_delete_preflight(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[DeletePreflightResponse]:
-    return ApiResponse(data=await service.episode_delete_preflight(session, claims, episode_id))
+    async def read_script_version_counts(
+        *, workspace_id: UUID, episode_ids: list[UUID]
+    ) -> dict[UUID, int]:
+        return await count_episode_script_versions(session, workspace_id, episode_ids)
+
+    async def read_storyboard_references(
+        *, workspace_id: UUID, episode_ids: list[UUID]
+    ) -> dict[UUID, EpisodeStoryboardReferenceSummary]:
+        summaries = await summarize_episode_storyboard_references(
+            session,
+            workspace_id,
+            episode_ids,
+        )
+        return {
+            episode_id: EpisodeStoryboardReferenceSummary(
+                shot_count=summary.shot_count,
+                spec_version_count=summary.spec_version_count,
+            )
+            for episode_id, summary in summaries.items()
+        }
+
+    return ApiResponse(
+        data=await service.episode_delete_preflight(
+            session,
+            claims,
+            episode_id,
+            read_script_version_counts,
+            read_storyboard_references,
+        )
+    )
 
 
 @router.delete("/episodes/{episode_id}", response_model=ApiResponse[DeleteResponse])
@@ -171,11 +206,34 @@ async def delete_episode(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[DeleteResponse]:
+    async def read_script_version_counts(
+        *, workspace_id: UUID, episode_ids: list[UUID]
+    ) -> dict[UUID, int]:
+        return await count_episode_script_versions(session, workspace_id, episode_ids)
+
+    async def read_storyboard_references(
+        *, workspace_id: UUID, episode_ids: list[UUID]
+    ) -> dict[UUID, EpisodeStoryboardReferenceSummary]:
+        summaries = await summarize_episode_storyboard_references(
+            session,
+            workspace_id,
+            episode_ids,
+        )
+        return {
+            episode_id: EpisodeStoryboardReferenceSummary(
+                shot_count=summary.shot_count,
+                spec_version_count=summary.spec_version_count,
+            )
+            for episode_id, summary in summaries.items()
+        }
+
     await service.delete_episode(
         session,
         claims,
         episode_id,
         expected_revision,
+        read_script_version_counts,
+        read_storyboard_references,
         trace_id=str(request.state.request_id),
     )
     return ApiResponse(data=DeleteResponse())
