@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
+  archiveMedia: vi.fn(),
   archiveSource: vi.fn(),
   completeUpload: vi.fn(),
   confirmStructure: vi.fn(),
@@ -18,6 +19,7 @@ const apiMocks = vi.hoisted(() => ({
   getVersion: vi.fn(),
   importScript: vi.fn(),
   initializeUpload: vi.fn(),
+  initializeVersionUpload: vi.fn(),
   listAssets: vi.fn(),
   listCandidates: vi.fn(),
   listEpisodes: vi.fn(),
@@ -32,7 +34,9 @@ const apiMocks = vi.hoisted(() => ({
   me: vi.fn(),
   publishVersion: vi.fn(),
   retryProbe: vi.fn(),
+  restoreMedia: vi.fn(),
   restoreSource: vi.fn(),
+  setCurrentMediaVersion: vi.fn(),
   setCurrentVersion: vi.fn(),
   startExtraction: vi.fn(),
   updateShot: vi.fn(),
@@ -102,11 +106,17 @@ vi.mock("@/api/tasks", async () => ({
 
 vi.mock("@/api/media", async () => ({
   ...(await vi.importActual<typeof import("@/api/media")>("@/api/media")),
+  archiveMediaApiV1MediaObjectsMediaObjectIdArchivePost: apiMocks.archiveMedia,
   completeUploadApiV1MediaUploadsUploadSessionIdCompletePost:
     apiMocks.completeUpload,
   initializeUploadApiV1MediaUploadsPost: apiMocks.initializeUpload,
+  initializeVersionUploadApiV1MediaObjectsMediaObjectIdVersionsPost:
+    apiMocks.initializeVersionUpload,
   listMediaApiV1MediaGet: apiMocks.listMedia,
   retryProbeApiV1MediaVersionIdProbeRetryPost: apiMocks.retryProbe,
+  restoreMediaApiV1MediaObjectsMediaObjectIdRestorePost: apiMocks.restoreMedia,
+  setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPost:
+    apiMocks.setCurrentMediaVersion,
 }));
 
 vi.mock("@/api/assets", async () => ({
@@ -130,7 +140,47 @@ const secondCandidateId = "019fb2c0-a000-7000-8000-000000000010";
 const shotCandidateId = "019fb2c0-a000-7000-8000-000000000011";
 const sceneId = "019fb2c0-a000-7000-8000-000000000012";
 const shotId = "019fb2c0-a000-7000-8000-000000000013";
+const mediaObjectId = "019fb2c0-a000-7000-8000-000000000014";
+const firstMediaVersionId = "019fb2c0-a000-7000-8000-000000000015";
+const secondMediaVersionId = "019fb2c0-a000-7000-8000-000000000016";
 const now = "2026-07-30T09:00:00Z";
+
+function mediaVersion(
+  id: string,
+  versionNo: number,
+  objectState: {
+    currentVersionId: string;
+    revision: number;
+    status: API.MediaObjectResponse["status"];
+  },
+): API.MediaVersionResponse {
+  return {
+    id,
+    workspace_id: workspaceId,
+    media_object_id: mediaObjectId,
+    media_object_kind: "image",
+    media_object_source_type: "upload",
+    media_object_status: objectState.status,
+    media_object_current_version_id: objectState.currentVersionId,
+    media_object_revision: objectState.revision,
+    version_no: versionNo,
+    filename: `角色参考-v${versionNo}.png`,
+    sha256: String(versionNo).repeat(64),
+    size_bytes: 2048,
+    mime_type: "image/png",
+    probe_status: "ready",
+    probe_attempt: 1,
+    probe_error_code: null,
+    probe_error_summary: null,
+    probe_next_action: null,
+    width: 1024,
+    height: 1024,
+    duration_ms: null,
+    codec: null,
+    container: "png",
+    created_at: now,
+  };
+}
 
 const episode: API.EpisodeResponse = {
   id: episodeId,
@@ -864,5 +914,97 @@ describe("单集统一生产工作台", () => {
     expect(apiMocks.createShotFromCandidate).toHaveBeenCalledWith({
       candidate_id: shotCandidateId,
     });
+  });
+
+  it("通过生成客户端切换媒体当前版本并完成归档恢复", async () => {
+    const user = userEvent.setup();
+    const objectState: {
+      currentVersionId: string;
+      revision: number;
+      status: API.MediaObjectResponse["status"];
+    } = {
+      currentVersionId: secondMediaVersionId,
+      revision: 2,
+      status: "active",
+    };
+    const objectResponse = (): API.MediaObjectResponse => ({
+      id: mediaObjectId,
+      workspace_id: workspaceId,
+      kind: "image",
+      source_type: "upload",
+      status: objectState.status,
+      current_version_id: objectState.currentVersionId,
+      revision: objectState.revision,
+    });
+    apiMocks.listMedia.mockImplementation(async () => ({
+      data: {
+        items: [
+          mediaVersion(secondMediaVersionId, 2, objectState),
+          mediaVersion(firstMediaVersionId, 1, objectState),
+        ],
+        total: 2,
+        limit: 100,
+        offset: 0,
+      },
+    }));
+    apiMocks.setCurrentMediaVersion.mockImplementation(
+      async (_params: unknown, body: API.CurrentMediaVersionRequest) => {
+        objectState.currentVersionId = body.version_id;
+        objectState.revision += 1;
+        return { data: objectResponse() };
+      },
+    );
+    apiMocks.archiveMedia.mockImplementation(async () => {
+      objectState.status = "archived";
+      objectState.revision += 1;
+      return { data: objectResponse() };
+    });
+    apiMocks.restoreMedia.mockImplementation(async () => {
+      objectState.status = "active";
+      objectState.revision += 1;
+      return { data: objectResponse() };
+    });
+
+    render(
+      <AppProviders>
+        <EpisodeProductionStudio episodeId={episodeId} initialPanel="media" />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByText("当前版本 v2")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "设为当前媒体版本 v1" }),
+    );
+    await waitFor(() =>
+      expect(apiMocks.setCurrentMediaVersion).toHaveBeenCalledWith(
+        { media_object_id: mediaObjectId },
+        {
+          version_id: firstMediaVersionId,
+          expected_current_version_id: secondMediaVersionId,
+          expected_revision: 2,
+        },
+      ),
+    );
+    expect(await screen.findByText("当前版本 v1")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "归档媒体" }));
+    await waitFor(() =>
+      expect(apiMocks.archiveMedia).toHaveBeenCalledWith(
+        { media_object_id: mediaObjectId },
+        { expected_revision: 3 },
+      ),
+    );
+    expect(await screen.findByText("已归档")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "恢复媒体" }));
+    await waitFor(() =>
+      expect(apiMocks.restoreMedia).toHaveBeenCalledWith(
+        { media_object_id: mediaObjectId },
+        { expected_revision: 4 },
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText("已归档")).not.toBeInTheDocument(),
+    );
   });
 });

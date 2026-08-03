@@ -34,6 +34,8 @@ def _cross_module_internal_imports() -> set[str]:
             imported = ",".join(sorted(alias.name for alias in node.names))
             if target == f"app.modules.{target_module}.contracts":
                 continue
+            if target == "app.modules.governance.audit":
+                continue
             if target == f"app.modules.{target_module}" and not any(
                 alias.name in {"api", "models", "repository", "service"}
                 for alias in node.names

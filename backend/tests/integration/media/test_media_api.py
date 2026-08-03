@@ -391,15 +391,56 @@ async def test_append_version_uses_current_pointer_cas_and_archive_preserves_his
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(MediaVersion)) == 2
 
+    switched = await client.post(
+        f"/api/v1/media-objects/{object_id}/current-version",
+        headers=headers,
+        json={
+            "version_id": first_version_id,
+            "expected_current_version_id": current_version_id,
+            "expected_revision": 2,
+        },
+    )
+    assert switched.status_code == 200
+    assert switched.json()["data"]["current_version_id"] == first_version_id
+    assert switched.json()["data"]["revision"] == 3
+
+    stale_switch = await client.post(
+        f"/api/v1/media-objects/{object_id}/current-version",
+        headers=headers,
+        json={
+            "version_id": current_version_id,
+            "expected_current_version_id": current_version_id,
+            "expected_revision": 2,
+        },
+    )
+    assert stale_switch.status_code == 409
+    assert stale_switch.json()["error"]["code"] == "version_conflict"
+    assert stale_switch.json()["error"]["details"] == {
+        "current_revision": 3,
+        "current_version_id": first_version_id,
+    }
+
+    switched_back = await client.post(
+        f"/api/v1/media-objects/{object_id}/current-version",
+        headers=headers,
+        json={
+            "version_id": current_version_id,
+            "expected_current_version_id": first_version_id,
+            "expected_revision": 3,
+        },
+    )
+    assert switched_back.status_code == 200
+    assert switched_back.json()["data"]["revision"] == 4
+
     archived = await client.post(
         f"/api/v1/media-objects/{object_id}/archive",
         headers=headers,
-        json={"expected_revision": 2},
+        json={"expected_revision": 4},
     )
     assert archived.status_code == 200
     archived_object = archived.json()["data"]
     assert archived_object["status"] == "archived"
-    assert archived_object["revision"] == 3
+    assert archived_object["revision"] == 5
 
     hidden = await client.get(
         "/api/v1/media",
@@ -415,12 +456,82 @@ async def test_append_version_uses_current_pointer_cas_and_archive_preserves_his
     )
     assert historical.status_code == 200
     assert [item["version_no"] for item in historical.json()["data"]["items"]] == [2, 1]
+    assert all(
+        item["media_object_status"] == "archived"
+        and item["media_object_current_version_id"] == current_version_id
+        and item["media_object_revision"] == 5
+        for item in historical.json()["data"]["items"]
+    )
     access = await client.post(
         f"/api/v1/media/{first_version_id}/access",
         headers=headers,
         json={"purpose": "download"},
     )
     assert access.status_code == 200
+
+    cannot_switch_archived = await client.post(
+        f"/api/v1/media-objects/{object_id}/current-version",
+        headers=headers,
+        json={
+            "version_id": first_version_id,
+            "expected_current_version_id": current_version_id,
+            "expected_revision": 5,
+        },
+    )
+    assert cannot_switch_archived.status_code == 409
+    assert cannot_switch_archived.json()["error"]["next_action"] == "restore_media"
+
+    restored = await client.post(
+        f"/api/v1/media-objects/{object_id}/restore",
+        headers=headers,
+        json={"expected_revision": 5},
+    )
+    assert restored.status_code == 200
+    assert restored.json()["data"]["status"] == "active"
+    assert restored.json()["data"]["revision"] == 6
+    visible_again = await client.get(
+        "/api/v1/media",
+        headers=headers,
+        params={"workspace_id": str(workspace_id)},
+    )
+    assert visible_again.status_code == 200
+    assert visible_again.json()["data"]["total"] == 2
+
+    rearchived = await client.post(
+        f"/api/v1/media-objects/{object_id}/archive",
+        headers=headers,
+        json={"expected_revision": 6},
+    )
+    assert rearchived.status_code == 200
+    assert rearchived.json()["data"]["revision"] == 7
+    audited = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": str(workspace_id),
+            "target_type": "media_object",
+            "target_id": object_id,
+        },
+    )
+    assert audited.status_code == 200
+    audit_data = audited.json()["data"]
+    assert audit_data["total"] == 7
+    assert [item["action"] for item in audit_data["items"]] == [
+        "media.archived",
+        "media.restored",
+        "media.archived",
+        "media.current_changed",
+        "media.current_changed",
+        "media.version_created",
+        "media.version_created",
+    ]
+    assert all(
+        item["target_id"] == object_id
+        and "filename" not in item["metadata"]
+        and "sha256" not in item["metadata"]
+        and "url" not in item["metadata"]
+        for item in audit_data["items"]
+    )
     cannot_replace = await client.post(
         f"/api/v1/media-objects/{object_id}/versions",
         headers=headers,
@@ -434,6 +545,7 @@ async def test_append_version_uses_current_pointer_cas_and_archive_preserves_his
         },
     )
     assert cannot_replace.status_code == 409
+    assert cannot_replace.json()["error"]["next_action"] == "restore_media"
     assert (
         await client.delete(f"/api/v1/media/{first_version_id}", headers=headers)
     ).status_code == 405

@@ -110,3 +110,50 @@ def test_ark_public_contract_is_revalidated_without_premature_sdk_install() -> N
         (ROOT / "backend/requirements-dev.txt").read_text(encoding="utf-8"),
     )
     assert all("volcengine-python-sdk" not in source for source in dependency_sources)
+
+
+def test_minio_acceptance_evidence_tracks_the_latest_compose_decision() -> None:
+    compose_acceptance = (
+        DOCS / "acceptance/008-D006全栈Compose部署验收.md"
+    ).read_text(encoding="utf-8")
+    assert "基础镜像使用 `latest`" in compose_acceptance
+    assert "不固定 tag、digest 或二进制发行版" in compose_acceptance
+
+    for filename in (
+        "003-S2授权治理增量验收.md",
+        "004-S2资产增量验收.md",
+        "005-S2统一前端增量验收.md",
+        "006-S3分镜本地工程增量验收.md",
+    ):
+        source = (DOCS / "acceptance" / filename).read_text(encoding="utf-8")
+        assert "ACC-008" in source
+        assert "minio-version-check" not in source
+        assert "RELEASE.2025-09-07T16-13-09Z" not in source
+        assert "固定版本 MinIO" not in source
+        assert "精确版本守卫" not in source
+
+
+def test_media_version_lifecycle_traceability_is_explicit() -> None:
+    requirement = (DOCS / "requirement/004-媒体模块需求.md").read_text(
+        encoding="utf-8"
+    )
+    prd = (DOCS / "prd/007-基础业务模块PRD任务.md").read_text(encoding="utf-8")
+    design = (DOCS / "design/模块设计/004-媒体模块详细设计.md").read_text(
+        encoding="utf-8"
+    )
+    plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(encoding="utf-8")
+    acceptance = (DOCS / "acceptance/005-S2统一前端增量验收.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "active ↔ archived" in requirement
+    assert "比较切换 current、归档、恢复" in prd
+    for endpoint in (
+        "/api/v1/media-objects/{id}/current-version",
+        "/api/v1/media-objects/{id}/restore",
+    ):
+        assert endpoint in design
+        assert f"`{endpoint}`" in plan
+    assert "expected_current_version_id" in design
+    assert "expected_revision" in design
+    assert "追加 v2 → 探测 ready → current 切回 v1 → 归档 → 恢复" in acceptance

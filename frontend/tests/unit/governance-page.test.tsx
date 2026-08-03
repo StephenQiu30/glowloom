@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
   createConsent: vi.fn(),
   getConsent: vi.fn(),
+  listAuditEvents: vi.fn(),
   listConsents: vi.fn(),
   listMedia: vi.fn(),
   me: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock("@/api/governance", async () => {
     ...actual,
     createConsentApiV1ConsentsPost: apiMocks.createConsent,
     getConsentApiV1ConsentsConsentIdGet: apiMocks.getConsent,
+    listAuditEventsApiV1AuditEventsGet: apiMocks.listAuditEvents,
     listConsentsApiV1ConsentsGet: apiMocks.listConsents,
     reviseConsentApiV1ConsentsConsentIdRevisionsPost: apiMocks.reviseConsent,
     revokeConsentApiV1ConsentsConsentIdRevokePost: apiMocks.revokeConsent,
@@ -48,6 +50,33 @@ const proofId = "019fb1e0-a044-73cd-8f84-781bef25b92b";
 const assetVersionId = "019fb1e0-a045-73cd-8f84-781bef25b92c";
 const consentId = "019fb1e0-a052-7d45-9b43-6821b3b33440";
 const now = "2026-07-30T08:00:00Z";
+
+const auditEvents: API.AuditEventResponse[] = [
+  {
+    id: "019fb1e0-a060-7000-8000-000000000001",
+    workspace_id: workspaceId,
+    actor_id: "019fb1e0-a000-7000-8000-000000000001",
+    action: "consent.revoked",
+    target_type: "consent",
+    target_id: consentId,
+    result: "succeeded",
+    trace_id: "019fb1e0-a061-7000-8000-000000000001",
+    metadata: { revision: 3, subject_type: "MEDIA_VERSION" },
+    occurred_at: now,
+  },
+  {
+    id: "019fb1e0-a060-7000-8000-000000000002",
+    workspace_id: workspaceId,
+    actor_id: "019fb1e0-a000-7000-8000-000000000001",
+    action: "consent.registered",
+    target_type: "consent",
+    target_id: consentId,
+    result: "succeeded",
+    trace_id: "019fb1e0-a061-7000-8000-000000000002",
+    metadata: { revision: 1, subject_type: "MEDIA_VERSION" },
+    occurred_at: now,
+  },
+];
 
 const scope: API.MediaUsageScope = {
   type: "media_usage",
@@ -95,6 +124,11 @@ const media: API.MediaVersionResponse[] = [
     id: subjectId,
     workspace_id: workspaceId,
     media_object_id: "019fb1e0-a040-7000-8000-000000000001",
+    media_object_kind: "image",
+    media_object_source_type: "upload",
+    media_object_status: "active",
+    media_object_current_version_id: subjectId,
+    media_object_revision: 2,
     version_no: 2,
     filename: "character-reference.png",
     sha256: "a".repeat(64),
@@ -116,6 +150,11 @@ const media: API.MediaVersionResponse[] = [
     id: proofId,
     workspace_id: workspaceId,
     media_object_id: "019fb1e0-a041-7000-8000-000000000001",
+    media_object_kind: "image",
+    media_object_source_type: "upload",
+    media_object_status: "active",
+    media_object_current_version_id: proofId,
+    media_object_revision: 1,
     version_no: 1,
     filename: "consent-proof.png",
     sha256: "b".repeat(64),
@@ -159,6 +198,9 @@ describe("governance consent workspace", () => {
     });
     apiMocks.listConsents.mockResolvedValue({
       data: { items: [detail], total: 1, limit: 50, offset: 0 },
+    });
+    apiMocks.listAuditEvents.mockResolvedValue({
+      data: { items: auditEvents, total: 2, limit: 50, offset: 0 },
     });
     apiMocks.getConsent.mockResolvedValue({ data: detail });
     apiMocks.listMedia.mockResolvedValue({
@@ -214,6 +256,36 @@ describe("governance consent workspace", () => {
       }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent("授权已登记");
+  });
+
+  it("lets the owner inspect and filter append-only audit events", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <GovernanceWorkspace />
+      </AppProviders>,
+    );
+
+    const audit = await screen.findByRole("region", { name: "操作审计" });
+    expect(await within(audit).findByText("授权撤销")).toBeInTheDocument();
+    expect(within(audit).getByText("revision 3")).toBeInTheDocument();
+    expect(within(audit).getAllByText(/MEDIA_VERSION/)).toHaveLength(2);
+
+    await user.click(within(audit).getByRole("button", { name: "筛选" }));
+    await user.selectOptions(within(audit).getByLabelText("动作"), "consent.revoked");
+    await user.type(within(audit).getByLabelText("目标 UUID"), consentId);
+    await user.click(
+      within(audit).getByRole("button", { name: "应用审计筛选" }),
+    );
+
+    await waitFor(() => expect(apiMocks.listAuditEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        workspace_id: workspaceId,
+        action: "consent.revoked",
+        target_id: consentId,
+        target_type: null,
+      }),
+    ));
   });
 
   it("prefills an asset-version consent from the readiness blocker handoff", async () => {

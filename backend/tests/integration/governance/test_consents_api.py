@@ -289,6 +289,44 @@ async def test_consent_registration_read_revision_and_revoke_are_append_only(
     assert blocked.allowed is False
     assert [blocker.code for blocker in blocked.blockers] == ["consent_revoked"]
 
+    audited = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={"workspace_id": str(workspace_id)},
+    )
+    assert audited.status_code == 200
+    audit_data = audited.json()["data"]
+    assert audit_data["total"] == 3
+    assert [item["action"] for item in audit_data["items"]] == [
+        "consent.revoked",
+        "consent.revised",
+        "consent.registered",
+    ]
+    assert all(
+        item["actor_id"] == str(actor_id)
+        and item["target_type"] == "consent"
+        and item["target_id"] == consent_id
+        and item["result"] == "succeeded"
+        and item["trace_id"]
+        and set(item["metadata"]) <= {"revision", "subject_type"}
+        for item in audit_data["items"]
+    )
+    assert "Permission withdrawn" not in str(audit_data)
+    assert str(proof_id) not in str(audit_data)
+
+    filtered_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": str(workspace_id),
+            "action": "consent.revoked",
+            "target_type": "consent",
+            "target_id": consent_id,
+        },
+    )
+    assert filtered_audit.status_code == 200
+    assert filtered_audit.json()["data"]["total"] == 1
+
 
 @pytest.mark.asyncio
 async def test_consent_commands_enforce_schema_capabilities_and_workspace_isolation(
@@ -387,6 +425,12 @@ async def test_consent_commands_enforce_schema_capabilities_and_workspace_isolat
     )
     assert forbidden.status_code == 403
     assert forbidden.json()["error"]["code"] == "forbidden"
+    audit_forbidden = await client.get(
+        "/api/v1/audit-events",
+        headers=other_headers,
+        params={"workspace_id": str(workspace_id)},
+    )
+    assert audit_forbidden.status_code == 403
 
 
 @pytest.mark.asyncio

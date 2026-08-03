@@ -4,6 +4,10 @@ const runDeepSeekE2E = process.env.LANVERSE_RUN_DEEPSEEK_E2E === "1";
 const deepSeekApiKey = runDeepSeekE2E
   ? (process.env.DEEPSEEK_API_KEY ?? "")
   : "";
+const backendPort = process.env.LANVERSE_E2E_BACKEND_PORT ?? "8001";
+const frontendPort = process.env.LANVERSE_E2E_FRONTEND_PORT ?? "3000";
+const backendBaseUrl = `http://127.0.0.1:${backendPort}`;
+const frontendBaseUrl = `http://127.0.0.1:${frontendPort}`;
 
 if (runDeepSeekE2E && !deepSeekApiKey) {
   throw new Error(
@@ -22,7 +26,7 @@ export default defineConfig({
   retries: 0,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: frontendBaseUrl,
     trace: "retain-on-failure",
   },
   webServer: [
@@ -31,7 +35,8 @@ export default defineConfig({
         "cd ../backend && .venv/bin/python -m app.initialize_database && .venv/bin/python -m app.server",
       env: {
         API_HOST: "127.0.0.1",
-        API_PORT: "8001",
+        API_PORT: backendPort,
+        CORS_ORIGINS: JSON.stringify([frontendBaseUrl]),
         DATABASE_URL: "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
         DEEPSEEK_API_KEY: deepSeekApiKey,
         ENVIRONMENT: "test",
@@ -40,17 +45,19 @@ export default defineConfig({
         RABBITMQ_URL:
           "amqp://guest:guest@127.0.0.1:5672/lanverse_contract",
       },
-      url: "http://127.0.0.1:8001/readyz",
+      url: `${backendBaseUrl}/readyz`,
       reuseExistingServer: false,
       timeout: 60_000,
     },
     {
       command:
-        "npm run build && mkdir -p .next/standalone/.next && cp -R .next/static .next/standalone/.next/static && cp -R public .next/standalone/public && HOSTNAME=127.0.0.1 PORT=3000 node .next/standalone/server.js",
+        "npm run build && mkdir -p .next/standalone/.next && cp -R .next/static .next/standalone/.next/static && cp -R public .next/standalone/public && node .next/standalone/server.js",
       env: {
-        NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:8001",
+        HOSTNAME: "127.0.0.1",
+        PORT: frontendPort,
+        NEXT_PUBLIC_API_BASE_URL: backendBaseUrl,
       },
-      url: "http://127.0.0.1:3000",
+      url: frontendBaseUrl,
       reuseExistingServer: false,
       timeout: 60_000,
     },

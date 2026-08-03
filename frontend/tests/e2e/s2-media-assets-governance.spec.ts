@@ -14,6 +14,7 @@ test("S2 媒体、三类资产与授权准备度联合闭环", async ({ page }) 
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `S2-资产契约-${unique}`;
   const characterMediaName = `character-${unique}.png`;
+  const characterMediaV2Name = `character-v2-${unique}.png`;
   const locationMediaName = `location-${unique}.png`;
   const voiceMediaName = `voice-${unique}.wav`;
 
@@ -40,6 +41,68 @@ test("S2 媒体、三类资产与授权准备度联合闭环", async ({ page }) 
     mimeType: "image/png",
     buffer: ONE_PIXEL_PNG,
   });
+  const characterMedia = page
+    .locator("article")
+    .filter({ hasText: characterMediaName });
+  await characterMedia
+    .getByRole("button", { name: "追加媒体版本" })
+    .click();
+  const appendDialog = page.getByRole("dialog", { name: "追加媒体版本" });
+  await appendDialog.getByLabel("选择新的媒体文件").setInputFiles({
+    name: characterMediaV2Name,
+    mimeType: "image/png",
+    buffer: ONE_PIXEL_PNG,
+  });
+  await appendDialog.getByRole("button", { name: "上传为新版本" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    `${characterMediaV2Name} 已追加为 v2`,
+  );
+  await expect
+    .poll(
+      async () => {
+        await page.reload();
+        return await page
+          .locator("article")
+          .filter({ hasText: characterMediaV2Name })
+          .textContent({ timeout: 2_000 })
+          .catch(() => "");
+      },
+      { timeout: 20_000 },
+    )
+    .toContain("可用");
+
+  const versionedCharacterMedia = page
+    .locator("article")
+    .filter({ hasText: characterMediaV2Name });
+  await versionedCharacterMedia
+    .getByRole("button", { name: "设为当前媒体版本 v1" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    `${characterMediaName} 已设为当前媒体版本`,
+  );
+  await expect(versionedCharacterMedia.getByText("当前版本 v1")).toBeVisible();
+
+  await versionedCharacterMedia
+    .getByRole("button", { name: "归档媒体" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    `${characterMediaName} 已归档`,
+  );
+  await expect(versionedCharacterMedia.getByText("已归档")).toBeVisible();
+  await expect(
+    versionedCharacterMedia.getByRole("button", { name: "追加媒体版本" }),
+  ).toHaveCount(0);
+
+  await versionedCharacterMedia
+    .getByRole("button", { name: "恢复媒体" })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    `${characterMediaName} 已恢复`,
+  );
+  await expect(
+    versionedCharacterMedia.getByRole("button", { name: "追加媒体版本" }),
+  ).toBeVisible();
+
   await uploadAndWait(page, {
     name: locationMediaName,
     mimeType: "image/png",
@@ -132,6 +195,12 @@ test("S2 媒体、三类资产与授权准备度联合闭环", async ({ page }) 
   await page.getByLabel("撤销原因").fill("验收回归：权利人撤回授权");
   await page.getByRole("button", { name: "确认撤销" }).click();
   await expect(page.getByRole("status")).toContainText("授权已撤销");
+  const auditTrail = page.getByRole("region", { name: "操作审计" });
+  await expect(auditTrail.getByText("授权撤销")).toBeVisible();
+  await auditTrail.getByRole("button", { name: "筛选" }).click();
+  await auditTrail.getByLabel("动作").selectOption("consent.revoked");
+  await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
+  await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
 
   await page.goto("/studio");
   await page.getByRole("tab", { name: revoked.tabName }).click();
