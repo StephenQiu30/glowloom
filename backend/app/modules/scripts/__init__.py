@@ -4,6 +4,7 @@ from app.modules.scripts.contracts import (
     ConfirmedShotCandidateReference,
     ConfirmedStructureQuery,
     ConfirmedStructureReference,
+    EpisodeConfirmedStructureQuery,
     ScriptExtractionInput,
     ScriptProductionSummary,
 )
@@ -24,6 +25,7 @@ from app.modules.scripts.versions.service import (
     count_episode_script_versions,
     resolve_confirmed_structure,
     resolve_confirmed_structures,
+    resolve_episode_confirmed_structures,
     script_version_exists,
 )
 
@@ -32,6 +34,7 @@ __all__ = [
     "record_extraction_result",
     "ConfirmedStructureReference",
     "ConfirmedStructureQuery",
+    "EpisodeConfirmedStructureQuery",
     "ConfirmedShotCandidateReference",
     "count_episode_script_versions",
     "get_script_extraction_input",
@@ -42,6 +45,7 @@ __all__ = [
     "ScriptStructureExtractor",
     "resolve_confirmed_structure",
     "resolve_confirmed_structures",
+    "resolve_episode_confirmed_structures",
     "resolve_confirmed_shot_candidate",
     "script_version_exists",
     "summarize_current_scripts",

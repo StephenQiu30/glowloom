@@ -1233,6 +1233,7 @@ declare namespace API {
     next_actions: NextAction[];
     script_summary: ScriptSummary;
     asset_summary: AssetSummary;
+    storyboard_summary: StoryboardSummary;
     task_summary: TaskSummary;
     review_summary: ReviewSummary;
     cost_summary: CostSummary;
@@ -2685,6 +2686,19 @@ declare namespace API {
 
   type startExtractionApiV1ScriptVersionsVersionIdExtractionsPostParams = {
     version_id: string;
+  };
+
+  type StoryboardSummary = {
+    /** Status */
+    status: "not_started" | "blocked" | "ready" | "unavailable";
+    /** Total */
+    total: number | null;
+    /** Ready */
+    ready: number | null;
+    /** Blocked */
+    blocked: number | null;
+    /** Unavailable */
+    unavailable: number | null;
   };
 
   type StructureConfirmationResponse = {

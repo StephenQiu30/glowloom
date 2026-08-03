@@ -24,12 +24,14 @@ from app.modules.projects import (
 )
 from app.modules.scripts import (
     ConfirmedStructureQuery,
+    EpisodeConfirmedStructureQuery,
     resolve_confirmed_shot_candidate,
     resolve_confirmed_structure,
-    resolve_confirmed_structures,
+    resolve_episode_confirmed_structures,
 )
 from app.modules.storyboards import repository
 from app.modules.storyboards.contracts import (
+    EpisodeStoryboardSummary,
     ShotAssetReferenceSnapshot,
     ShotProductionSnapshot,
     ShotSpecRef,
@@ -1968,9 +1970,12 @@ def _evaluate_loaded_readiness(
     )
 
 
-async def _resolve_readiness_dependencies(
+async def _resolve_project_readiness_dependencies(
     session: AsyncSession,
-    episode: EpisodeContentContext,
+    *,
+    workspace_id: UUID,
+    project_id: UUID,
+    episode_id_by_version: dict[UUID, UUID],
     versions: list[ShotSpecVersion],
     references: list[AssetReference],
 ) -> tuple[
@@ -1978,20 +1983,22 @@ async def _resolve_readiness_dependencies(
     dict[UUID, AssetVersionReadinessReference],
     bool,
 ]:
-    queries_by_version: dict[UUID, ConfirmedStructureQuery] = {}
+    queries_by_version: dict[UUID, EpisodeConfirmedStructureQuery] = {}
     for version in versions:
         spec = ShotSpec.model_validate(version.spec)
-        queries_by_version[version.id] = ConfirmedStructureQuery(
-            script_version_id=spec.script_reference.confirmed_script_version_id,
-            scene_id=spec.script_reference.scene_id,
-            dialogue_ids=tuple(spec.script_reference.dialogue_ids),
+        queries_by_version[version.id] = EpisodeConfirmedStructureQuery(
+            episode_id=episode_id_by_version[version.id],
+            structure=ConfirmedStructureQuery(
+                script_version_id=spec.script_reference.confirmed_script_version_id,
+                scene_id=spec.script_reference.scene_id,
+                dialogue_ids=tuple(spec.script_reference.dialogue_ids),
+            ),
         )
     structure_states: dict[UUID, bool | None]
     try:
-        structures = await resolve_confirmed_structures(
+        structures = await resolve_episode_confirmed_structures(
             session,
-            workspace_id=episode.workspace_id,
-            episode_id=episode.episode_id,
+            workspace_id=workspace_id,
             queries=list(queries_by_version.values()),
         )
     except (SQLAlchemyError, ApiError) as error:
@@ -2011,8 +2018,8 @@ async def _resolve_readiness_dependencies(
     try:
         asset_snapshots = await resolve_asset_versions_readiness(
             session,
-            episode.workspace_id,
-            episode.project_id,
+            workspace_id,
+            project_id,
             asset_ids,
             purpose="ai_short_drama_generation",
             channel="lanverse_preview",
@@ -2024,6 +2031,28 @@ async def _resolve_readiness_dependencies(
         asset_snapshots = {}
         assets_unavailable = True
     return structure_states, asset_snapshots, assets_unavailable
+
+
+async def _resolve_readiness_dependencies(
+    session: AsyncSession,
+    episode: EpisodeContentContext,
+    versions: list[ShotSpecVersion],
+    references: list[AssetReference],
+) -> tuple[
+    dict[UUID, bool | None],
+    dict[UUID, AssetVersionReadinessReference],
+    bool,
+]:
+    return await _resolve_project_readiness_dependencies(
+        session,
+        workspace_id=episode.workspace_id,
+        project_id=episode.project_id,
+        episode_id_by_version={
+            version.id: episode.episode_id for version in versions
+        },
+        versions=versions,
+        references=references,
+    )
 
 
 async def get_readiness(
@@ -2124,6 +2153,95 @@ async def get_episode_readiness(
         summary=summary,
         evaluation_hash=evaluation_hash,
     )
+
+
+async def summarize_episode_storyboards(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_id: UUID,
+    episode_ids: list[UUID],
+) -> dict[UUID, EpisodeStoryboardSummary]:
+    unique_episode_ids = list(dict.fromkeys(episode_ids))
+    summaries = {
+        episode_id: EpisodeStoryboardSummary(
+            status="not_started",
+            total=0,
+            ready=0,
+            blocked=0,
+            unavailable=0,
+        )
+        for episode_id in unique_episode_ids
+    }
+    rows = await repository.list_active_shots_with_current_specs_for_episodes(
+        session,
+        workspace_id=workspace_id,
+        episode_ids=unique_episode_ids,
+    )
+    if not rows:
+        return summaries
+
+    versions = [version for _shot, version in rows if version is not None]
+    references = await repository.list_asset_references(
+        session,
+        [version.id for version in versions],
+    )
+    references_by_version: dict[UUID, list[AssetReference]] = defaultdict(list)
+    for reference in references:
+        references_by_version[reference.shot_spec_version_id].append(reference)
+    structure_states, asset_snapshots, assets_unavailable = (
+        await _resolve_project_readiness_dependencies(
+            session,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            episode_id_by_version={
+                version.id: shot.episode_id
+                for shot, version in rows
+                if version is not None
+            },
+            versions=versions,
+            references=references,
+        )
+    )
+    items_by_episode: dict[UUID, list[ShotReadinessResponse]] = defaultdict(list)
+    for shot, version in rows:
+        items_by_episode[shot.episode_id].append(
+            _evaluate_loaded_readiness(
+                shot,
+                version,
+                (
+                    references_by_version.get(version.id, [])
+                    if version is not None
+                    else []
+                ),
+                structure_available=(
+                    structure_states.get(version.id)
+                    if version is not None
+                    else False
+                ),
+                asset_snapshots=asset_snapshots,
+                assets_unavailable=assets_unavailable,
+            )
+        )
+
+    for episode_id, items in items_by_episode.items():
+        ready = sum(item.status == "ready" for item in items)
+        blocked = sum(item.status == "blocked" for item in items)
+        unavailable = sum(item.status == "unavailable" for item in items)
+        status: Literal["not_started", "blocked", "ready", "unavailable"]
+        if unavailable:
+            status = "unavailable"
+        elif ready == len(items):
+            status = "ready"
+        else:
+            status = "blocked"
+        summaries[episode_id] = EpisodeStoryboardSummary(
+            status=status,
+            total=len(items),
+            ready=ready,
+            blocked=blocked,
+            unavailable=unavailable,
+        )
+    return summaries
 
 
 async def list_asset_shot_usages(

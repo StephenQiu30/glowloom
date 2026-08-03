@@ -24,9 +24,14 @@ from app.modules.projects.snapshots.schemas import (
     ProjectProductionSnapshot,
     ReviewSummary,
     ScriptSummary,
+    StoryboardSummary,
     TaskSummary,
 )
 from app.modules.scripts import ScriptProductionSummary, summarize_current_scripts
+from app.modules.storyboards import (
+    EpisodeStoryboardSummary,
+    summarize_episode_storyboards,
+)
 
 _STAGE_ORDER = {
     "script_import": 0,
@@ -52,6 +57,16 @@ def _unavailable_assets() -> ProjectAssetSummary:
     )
 
 
+def _unavailable_storyboard() -> EpisodeStoryboardSummary:
+    return EpisodeStoryboardSummary(
+        status="unavailable",
+        total=0,
+        ready=0,
+        blocked=0,
+        unavailable=0,
+    )
+
+
 def _script_response(summary: ScriptProductionSummary) -> ScriptSummary:
     return ScriptSummary(
         status=summary.status,
@@ -71,6 +86,16 @@ def _asset_response(summary: ProjectAssetSummary) -> AssetSummary:
         blocked=summary.blocked,
         ready_kinds=list(summary.ready_kinds),
         required_kinds=list(summary.required_kinds),
+    )
+
+
+def _storyboard_response(summary: EpisodeStoryboardSummary) -> StoryboardSummary:
+    return StoryboardSummary(
+        status=summary.status,
+        total=summary.total,
+        ready=summary.ready,
+        blocked=summary.blocked,
+        unavailable=summary.unavailable,
     )
 
 
@@ -117,6 +142,7 @@ def _episode_snapshot(
     computed_at: datetime,
     script: ScriptProductionSummary,
     assets: ProjectAssetSummary,
+    storyboards: EpisodeStoryboardSummary,
     tasks: EpisodeTaskSummary | None,
     partial_failures: list[PartialFailure],
 ) -> EpisodeProductionSnapshot:
@@ -178,15 +204,7 @@ def _episode_snapshot(
         blockers = [_reason(episode, "ASSETS_UNAVAILABLE", "资产准备度暂时不可用")]
         actions = [_action(episode, "retry_snapshot", "重试读取", "assets")]
         review_status = "completed"
-    elif assets.status == "ready":
-        stage = "storyboard_preparation"
-        completion = 75
-        blockers = [
-            _reason(episode, "STORYBOARD_NOT_STARTED", "角色、场景和声音已就绪，可以开始分镜")
-        ]
-        actions = [_action(episode, "prepare_storyboard", "开始分镜", "storyboard")]
-        review_status = "completed"
-    else:
+    elif assets.status != "ready":
         stage = "asset_preparation"
         completion = 60
         missing_kinds = sorted(set(assets.required_kinds) - set(assets.ready_kinds))
@@ -200,6 +218,38 @@ def _episode_snapshot(
         blockers = [_reason(episode, code, summary)]
         actions = [_action(episode, "prepare_assets", "完善资产", "assets")]
         review_status = "completed"
+    elif storyboards.status == "unavailable":
+        stage = "storyboard_preparation"
+        completion = 75
+        blockers = [_reason(episode, "STORYBOARD_UNAVAILABLE", "分镜准备度暂时不可用")]
+        actions = [_action(episode, "retry_snapshot", "重试读取", "storyboard")]
+        review_status = "completed"
+    elif storyboards.status == "not_started":
+        stage = "storyboard_preparation"
+        completion = 75
+        blockers = [
+            _reason(episode, "STORYBOARD_NOT_STARTED", "角色、场景和声音已就绪，可以开始分镜")
+        ]
+        actions = [_action(episode, "prepare_storyboard", "开始分镜", "storyboard")]
+        review_status = "completed"
+    elif storyboards.status == "blocked":
+        stage = "storyboard_preparation"
+        completion = 80
+        blockers = [
+            _reason(
+                episode,
+                "STORYBOARD_BLOCKED",
+                f"仍有 {storyboards.blocked} 个分镜未满足生产准备度",
+            )
+        ]
+        actions = [_action(episode, "complete_storyboard", "完善分镜", "storyboard")]
+        review_status = "completed"
+    else:
+        stage = "storyboard_preparation"
+        completion = 90
+        blockers = []
+        actions = [_action(episode, "review_storyboard", "检查分镜", "storyboard")]
+        review_status = "completed"
 
     return EpisodeProductionSnapshot(
         episode_id=episode.id,
@@ -209,6 +259,7 @@ def _episode_snapshot(
         next_actions=actions,
         script_summary=_script_response(script),
         asset_summary=_asset_response(assets),
+        storyboard_summary=_storyboard_response(storyboards),
         task_summary=_task_response(tasks),
         review_summary=ReviewSummary(
             status=review_status,
@@ -278,6 +329,37 @@ async def _compose_snapshots(
                 summary="任务摘要暂时不可用",
             )
         )
+    try:
+        storyboard_summaries = await summarize_episode_storyboards(
+            session,
+            workspace_id,
+            project_id,
+            [episode.id for episode in episodes],
+        )
+    except (ApiError, SQLAlchemyError):
+        storyboard_summaries = {
+            episode.id: _unavailable_storyboard() for episode in episodes
+        }
+        partial_failures.append(
+            PartialFailure(
+                module="storyboards",
+                code="STORYBOARD_SUMMARY_UNAVAILABLE",
+                summary="分镜摘要暂时不可用",
+            )
+        )
+    else:
+        if any(
+            storyboard_summaries.get(episode.id, _unavailable_storyboard()).status
+            == "unavailable"
+            for episode in episodes
+        ):
+            partial_failures.append(
+                PartialFailure(
+                    module="storyboards",
+                    code="STORYBOARD_SUMMARY_UNAVAILABLE",
+                    summary="分镜摘要暂时不可用",
+                )
+            )
     return [
         _episode_snapshot(
             episode,
@@ -285,6 +367,7 @@ async def _compose_snapshots(
             computed_at,
             scripts.get(episode.id, _unavailable_script(episode.current_script_version_id)),
             assets,
+            storyboard_summaries.get(episode.id, _unavailable_storyboard()),
             task_summaries.get(episode.id),
             partial_failures,
         )

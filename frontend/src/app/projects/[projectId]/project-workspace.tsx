@@ -151,8 +151,9 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   );
   const activeEpisodes = episodes.filter((episode) => episode.status === "active");
   const firstEpisode = activeEpisodes[0];
-  const readyAssets = snapshot?.episodes.reduce(
-    (total, episode) => total + (episode.asset_summary.ready ?? 0),
+  const readyAssets = snapshot?.episodes[0]?.asset_summary.ready ?? 0;
+  const readyStoryboards = snapshot?.episodes.reduce(
+    (total, episode) => total + (episode.storyboard_summary.ready ?? 0),
     0,
   ) ?? 0;
   const runningTasks = snapshot?.episodes.reduce(
@@ -237,10 +238,11 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
               <Button onClick={() => setCreateOpen(true)} variant="outline"><Plus aria-hidden="true" />创建单集</Button>
             </header>
 
-            <section aria-label="项目生产摘要" className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <section aria-label="项目生产摘要" className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <Card><CardHeader><CardDescription>项目进度</CardDescription><CardTitle className="text-3xl">{snapshot.completion}%</CardTitle></CardHeader></Card>
               <Card><CardHeader><CardDescription>活跃单集</CardDescription><CardTitle className="text-3xl">{activeEpisodes.length}</CardTitle></CardHeader></Card>
               <Card><CardHeader><CardDescription>Ready 资产</CardDescription><CardTitle className="text-3xl text-emerald-700">{readyAssets}</CardTitle></CardHeader></Card>
+              <Card><CardHeader><CardDescription>Ready 分镜</CardDescription><CardTitle className="text-3xl text-emerald-700">{readyStoryboards}</CardTitle></CardHeader></Card>
               <Card><CardHeader><CardDescription>进行中任务</CardDescription><CardTitle className="text-3xl text-[#087f91]">{runningTasks}</CardTitle></CardHeader></Card>
             </section>
 

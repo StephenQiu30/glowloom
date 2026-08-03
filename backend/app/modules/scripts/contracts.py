@@ -59,6 +59,12 @@ class ConfirmedStructureQuery:
 
 
 @dataclass(frozen=True, slots=True)
+class EpisodeConfirmedStructureQuery:
+    episode_id: UUID
+    structure: ConfirmedStructureQuery
+
+
+@dataclass(frozen=True, slots=True)
 class ConfirmedShotCandidateReference:
     candidate_id: UUID
     workspace_id: UUID

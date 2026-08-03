@@ -24,6 +24,7 @@ from app.modules.scripts.authorization import (
 from app.modules.scripts.contracts import (
     ConfirmedStructureQuery,
     ConfirmedStructureReference,
+    EpisodeConfirmedStructureQuery,
     ScriptVersionImpactReader,
 )
 from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
@@ -357,11 +358,32 @@ async def resolve_confirmed_structures(
     episode_id: UUID,
     queries: list[ConfirmedStructureQuery],
 ) -> dict[ConfirmedStructureQuery, ConfirmedStructureReference | None]:
+    scoped_queries = [
+        EpisodeConfirmedStructureQuery(
+            episode_id=episode_id,
+            structure=query,
+        )
+        for query in dict.fromkeys(queries)
+    ]
+    results = await resolve_episode_confirmed_structures(
+        session,
+        workspace_id=workspace_id,
+        queries=scoped_queries,
+    )
+    return {scoped.structure: results[scoped] for scoped in scoped_queries}
+
+
+async def resolve_episode_confirmed_structures(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    queries: list[EpisodeConfirmedStructureQuery],
+) -> dict[EpisodeConfirmedStructureQuery, ConfirmedStructureReference | None]:
     unique_queries = list(dict.fromkeys(queries))
     rows = await repository.find_structure_rows(
         session,
-        [query.script_version_id for query in unique_queries],
-        [query.scene_id for query in unique_queries],
+        [query.structure.script_version_id for query in unique_queries],
+        [query.structure.scene_id for query in unique_queries],
     )
     by_pair = {
         (version.id, scene.id): (version, source, scene)
@@ -374,11 +396,15 @@ async def resolve_confirmed_structures(
     dialogue_ids_by_scene: dict[UUID, set[UUID]] = {}
     for dialogue in dialogues:
         dialogue_ids_by_scene.setdefault(dialogue.scene_id, set()).add(dialogue.id)
-    results: dict[ConfirmedStructureQuery, ConfirmedStructureReference | None] = {}
-    for query in unique_queries:
+    results: dict[
+        EpisodeConfirmedStructureQuery,
+        ConfirmedStructureReference | None,
+    ] = {}
+    for scoped_query in unique_queries:
+        query = scoped_query.structure
         row = by_pair.get((query.script_version_id, query.scene_id))
         if row is None:
-            results[query] = None
+            results[scoped_query] = None
             continue
         version, source, scene = row
         valid = (
@@ -386,7 +412,7 @@ async def resolve_confirmed_structures(
             and version.status == "published"
             and bool(version.structure_summary.get("confirmation_batch_id"))
             and source.workspace_id == workspace_id
-            and source.episode_id == episode_id
+            and source.episode_id == scoped_query.episode_id
             and source.status == "active"
             and scene.workspace_id == workspace_id
             and len(set(query.dialogue_ids)) == len(query.dialogue_ids)
@@ -394,10 +420,10 @@ async def resolve_confirmed_structures(
                 dialogue_ids_by_scene.get(scene.id, set())
             )
         )
-        results[query] = (
+        results[scoped_query] = (
             ConfirmedStructureReference(
                 workspace_id=workspace_id,
-                episode_id=episode_id,
+                episode_id=scoped_query.episode_id,
                 script_version_id=version.id,
                 scene_id=scene.id,
                 dialogue_ids=query.dialogue_ids,

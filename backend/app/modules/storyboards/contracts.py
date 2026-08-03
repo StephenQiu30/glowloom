@@ -46,3 +46,12 @@ class ShotProductionSnapshot:
 class StoryboardReferenceSummary:
     shot_count: int
     spec_version_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeStoryboardSummary:
+    status: Literal["not_started", "blocked", "ready", "unavailable"]
+    total: int
+    ready: int
+    blocked: int
+    unavailable: int

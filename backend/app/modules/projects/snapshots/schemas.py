@@ -55,6 +55,14 @@ class AssetSummary(BaseModel):
     required_kinds: list[str]
 
 
+class StoryboardSummary(BaseModel):
+    status: Literal["not_started", "blocked", "ready", "unavailable"]
+    total: int = 0
+    ready: int = 0
+    blocked: int = 0
+    unavailable: int = 0
+
+
 class ReviewSummary(BaseModel):
     status: Literal["not_started", "pending", "completed", "unavailable"]
     pending: int = 0
@@ -86,6 +94,7 @@ class EpisodeProductionSnapshot(BaseModel):
     next_actions: list[NextAction]
     script_summary: ScriptSummary
     asset_summary: AssetSummary
+    storyboard_summary: StoryboardSummary
     task_summary: TaskSummary
     review_summary: ReviewSummary
     cost_summary: CostSummary

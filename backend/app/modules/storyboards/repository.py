@@ -126,6 +126,24 @@ async def list_active_shots_with_current_specs(
     session: AsyncSession,
     episode_id: UUID,
 ) -> list[tuple[Shot, ShotSpecVersion | None]]:
+    return await list_active_shots_with_current_specs_for_episodes(
+        session,
+        workspace_id=None,
+        episode_ids=[episode_id],
+    )
+
+
+async def list_active_shots_with_current_specs_for_episodes(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID | None,
+    episode_ids: list[UUID],
+) -> list[tuple[Shot, ShotSpecVersion | None]]:
+    if not episode_ids:
+        return []
+    conditions = [Shot.episode_id.in_(episode_ids), Shot.status == "active"]
+    if workspace_id is not None:
+        conditions.append(Shot.workspace_id == workspace_id)
     rows = await session.execute(
         select(Shot, ShotSpecVersion)
         .outerjoin(
@@ -133,8 +151,8 @@ async def list_active_shots_with_current_specs(
             (ShotSpecVersion.id == Shot.current_spec_version_id)
             & (ShotSpecVersion.workspace_id == Shot.workspace_id),
         )
-        .where(Shot.episode_id == episode_id, Shot.status == "active")
-        .order_by(Shot.position, Shot.id)
+        .where(*conditions)
+        .order_by(Shot.episode_id, Shot.position, Shot.id)
     )
     return [(row[0], row[1]) for row in rows]
 

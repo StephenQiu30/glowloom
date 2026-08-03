@@ -917,10 +917,11 @@ export function EpisodeProductionStudio({
               </div>
             </header>
 
-            <section className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="生产摘要">
+            <section className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="生产摘要">
               <Card><CardHeader><CardDescription>当前阶段</CardDescription><CardTitle>{stageLabels[snapshot.current_stage]}</CardTitle></CardHeader></Card>
               <Card><CardHeader><CardDescription>剧本状态</CardDescription><CardTitle>v{editableVersion?.version_no ?? "-"}</CardTitle></CardHeader></Card>
               <Card><CardHeader><CardDescription>Ready 资产</CardDescription><CardTitle>{snapshot.asset_summary.ready} / {snapshot.asset_summary.total}</CardTitle></CardHeader></Card>
+              <Card><CardHeader><CardDescription>Ready 分镜</CardDescription><CardTitle>{snapshot.storyboard_summary.ready ?? 0} / {snapshot.storyboard_summary.total ?? 0}</CardTitle></CardHeader></Card>
               <Card><CardHeader><CardDescription>进行中任务</CardDescription><CardTitle>{snapshot.task_summary.running}</CardTitle></CardHeader></Card>
             </section>
 
