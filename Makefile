@@ -1,6 +1,7 @@
 SHELL := /bin/sh
 PYTHON ?= python3.11
 VENV_PYTHON := backend/.venv/bin/python
+MINIO_API_PORT ?= 9000
 PROD_ENV_FILE ?= .env.production
 PROD_COMPOSE := docker compose --env-file $(PROD_ENV_FILE) -f docker-compose.yml -f docker-compose.prod.yml
 PROD_EXAMPLE_COMPOSE := docker compose --env-file .env.production.example -f docker-compose.yml -f docker-compose.prod.yml
@@ -93,8 +94,12 @@ docker-prod-logs:
 	$(PROD_COMPOSE) logs --follow
 
 minio-up:
-	@if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then \
-		echo "MinIO is already available at 127.0.0.1:9000"; \
+	@running_id="$$(docker compose ps --status running -q minio)"; \
+	if [ -n "$$running_id" ] && curl --fail --silent http://127.0.0.1:$(MINIO_API_PORT)/minio/health/live >/dev/null 2>&1; then \
+		echo "Lanverse MinIO is already available at 127.0.0.1:$(MINIO_API_PORT)"; \
+	elif [ -z "$$running_id" ] && curl --fail --silent http://127.0.0.1:$(MINIO_API_PORT)/minio/health/live >/dev/null 2>&1; then \
+		echo "Port $(MINIO_API_PORT) is occupied by a MinIO outside this Compose project" >&2; \
+		exit 1; \
 	else \
 		docker compose up -d --wait minio; \
 	fi
