@@ -9,6 +9,7 @@ from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.governance.audit import append_audit_event
 from app.modules.identity import ActorContext, Capability, actor_context
+from app.modules.production import count_episode_task_references
 from app.modules.projects import repository
 from app.modules.projects.authorization import (
     owned_project,
@@ -449,6 +450,22 @@ async def episode_delete_preflight(
                 summary="单集已有版本引用",
             )
         )
+    task_count = (
+        await count_episode_task_references(
+            session,
+            episode.workspace_id,
+            [episode.id],
+        )
+    )[episode.id]
+    if task_count:
+        blockers.append(
+            DeleteBlocker(
+                code="HAS_TASKS",
+                resource_type="episode",
+                resource_id=episode.id,
+                summary=f"单集已有 {task_count} 个任务",
+            )
+        )
     return DeletePreflightResponse(allowed=not blockers, blockers=blockers)
 
 
@@ -468,6 +485,20 @@ async def delete_episode(
                 ErrorCode.STATE_CONFLICT,
                 "Episode has version references",
                 status_code=409,
+            )
+        task_count = (
+            await count_episode_task_references(
+                session,
+                episode.workspace_id,
+                [episode.id],
+            )
+        )[episode.id]
+        if task_count:
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Episode has dependent tasks",
+                status_code=409,
+                next_action="review_delete_blockers",
             )
         await session.delete(episode)
         await session.flush()

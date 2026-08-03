@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
 from app import media_worker
+from app.modules.governance.audit.models import AuditEvent
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.media import MediaProbeError, MediaProbeResult
@@ -226,6 +227,34 @@ async def test_media_worker_commits_probe_before_ack_and_is_idempotent(
     )
     assert duplicate.ack_count == 1
     assert probe.calls == 1
+    async with session_factory() as session:
+        task = await session.get(Task, task_id)
+        assert task is not None
+        audit_events = list(
+            await session.scalars(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.target_type == "task",
+                    AuditEvent.target_id == task_id,
+                )
+                .order_by(AuditEvent.occurred_at, AuditEvent.id)
+            )
+        )
+        assert [item.action for item in audit_events] == [
+            "task.created",
+            "task.succeeded",
+        ]
+        assert audit_events[-1].trace_id == "media-worker-test"
+        assert audit_events[-1].event_metadata == {
+            "revision": 2,
+            "task_type": "media_probe",
+            "request_type": "media_version",
+            "request_id": str(version_id),
+            "previous_status": "queued",
+            "status": "succeeded",
+            "progress_stage": "completed",
+            "next_action": "review_media",
+        }
 
 
 @pytest.mark.asyncio
@@ -257,3 +286,20 @@ async def test_probe_failure_keeps_confirmed_bytes_and_can_be_retried(
         assert task is not None and task.status == "failed"
         assert task.error_retryable is True
         assert location is not None and location.status == "active"
+        audit_events = list(
+            await session.scalars(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.target_type == "task",
+                    AuditEvent.target_id == task_id,
+                )
+                .order_by(AuditEvent.occurred_at, AuditEvent.id)
+            )
+        )
+        assert [item.action for item in audit_events] == [
+            "task.created",
+            "task.failed",
+        ]
+        assert audit_events[-1].event_metadata["error_code"] == "unsupported_media"
+        assert audit_events[-1].event_metadata["retryable"] is True
+        assert "Unable to inspect media" not in str(audit_events[-1].event_metadata)

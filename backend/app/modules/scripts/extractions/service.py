@@ -422,6 +422,8 @@ async def record_extraction_result(
     session: AsyncSession,
     batch_id: UUID,
     result: ScriptExtractionResult,
+    *,
+    trace_id: str,
 ) -> None:
     snapshot = await repository.find_extraction_batch(session, batch_id)
     if snapshot is None or snapshot.task_id is None:
@@ -515,7 +517,12 @@ async def record_extraction_result(
             for candidate in result.candidates
         ]
     )
-    await complete_script_extraction_task(session, task.id, now=now)
+    await complete_script_extraction_task(
+        session,
+        task.id,
+        now=now,
+        trace_id=trace_id,
+    )
     batch.status = "succeeded"
     batch.result_hash = result_hash
     batch.candidate_count = len(result.candidates)

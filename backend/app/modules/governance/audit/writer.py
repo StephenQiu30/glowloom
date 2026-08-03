@@ -6,6 +6,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.governance.audit.models import AuditEvent
 
+_TASK_TRANSITION_METADATA_FIELDS = frozenset(
+    {
+        "revision",
+        "task_type",
+        "request_type",
+        "request_id",
+        "previous_status",
+        "status",
+        "progress_stage",
+        "error_code",
+        "retryable",
+        "next_action",
+    }
+)
+
 _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
     "identity.registered": frozenset({"token_version", "workspace_revision"}),
     "identity.login_succeeded": frozenset({"token_version"}),
@@ -134,6 +149,10 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
     "task.created": frozenset(
         {"revision", "task_type", "request_type", "request_id"}
     ),
+    "task.started": _TASK_TRANSITION_METADATA_FIELDS,
+    "task.succeeded": _TASK_TRANSITION_METADATA_FIELDS,
+    "task.failed": _TASK_TRANSITION_METADATA_FIELDS,
+    "task.unknown": _TASK_TRANSITION_METADATA_FIELDS,
 }
 
 

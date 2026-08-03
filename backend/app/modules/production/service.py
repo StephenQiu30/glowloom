@@ -93,6 +93,21 @@ async def summarize_episode_tasks(
     }
 
 
+async def count_episode_task_references(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_ids: list[UUID],
+) -> dict[UUID, int]:
+    counts = {episode_id: 0 for episode_id in episode_ids}
+    for episode_id, _, count in await repository.count_task_statuses_by_episode(
+        session,
+        workspace_id,
+        episode_ids,
+    ):
+        counts[episode_id] += count
+    return counts
+
+
 def _task_context(task: Task) -> TaskContext:
     return TaskContext(
         id=task.id,
@@ -119,6 +134,41 @@ def _same_media_probe_command(task: Task, command: MediaProbeTaskCommand) -> boo
         and task.input_version_id == command.media_version_id
         and task.usage_type == "media_version"
         and task.usage_id == command.media_version_id
+    )
+
+
+def _append_task_transition_audit(
+    session: AsyncSession,
+    task: Task,
+    *,
+    action: Literal["task.started", "task.succeeded", "task.failed", "task.unknown"],
+    previous_status: str,
+    trace_id: str,
+    now: datetime,
+) -> None:
+    metadata: dict[str, object] = {
+        "revision": task.revision,
+        "task_type": task.task_type,
+        "request_type": task.request_type,
+        "request_id": str(task.request_id),
+        "previous_status": previous_status,
+        "status": task.status,
+        "progress_stage": task.progress_stage,
+        "next_action": task.next_action,
+    }
+    if task.error_code is not None:
+        metadata["error_code"] = task.error_code
+        metadata["retryable"] = bool(task.error_retryable)
+    append_audit_event(
+        session,
+        workspace_id=task.workspace_id,
+        actor_id=task.requested_by,
+        action=action,
+        target_type="task",
+        target_id=task.id,
+        trace_id=trace_id,
+        metadata=metadata,
+        occurred_at=now,
     )
 
 
@@ -216,6 +266,7 @@ async def fail_script_extraction_task(
     error_summary: str,
     next_action: str,
     now: datetime,
+    trace_id: str,
     retryable: bool = False,
 ) -> bool:
     task = await repository.find_task(session, task_id, for_update=True)
@@ -225,6 +276,7 @@ async def fail_script_extraction_task(
             "Task state is unavailable",
             status_code=500,
         )
+    previous_status = task.status
     changed = _fail_script_extraction_task(
         task,
         error_code=error_code,
@@ -234,6 +286,14 @@ async def fail_script_extraction_task(
         now=now,
     )
     if changed:
+        _append_task_transition_audit(
+            session,
+            task,
+            action="task.failed",
+            previous_status=previous_status,
+            trace_id=trace_id,
+            now=now,
+        )
         await session.flush()
     return changed
 
@@ -243,6 +303,7 @@ async def start_script_extraction_task(
     task_id: UUID,
     *,
     now: datetime,
+    trace_id: str,
 ) -> bool:
     task = await repository.find_task(session, task_id, for_update=True)
     if task is None:
@@ -251,8 +312,17 @@ async def start_script_extraction_task(
             "Task state is unavailable",
             status_code=500,
         )
+    previous_status = task.status
     changed = _start_script_extraction_task(task, now=now)
     if changed:
+        _append_task_transition_audit(
+            session,
+            task,
+            action="task.started",
+            previous_status=previous_status,
+            trace_id=trace_id,
+            now=now,
+        )
         await session.flush()
     return changed
 
@@ -262,6 +332,7 @@ async def mark_script_extraction_task_unknown(
     task_id: UUID,
     *,
     now: datetime,
+    trace_id: str,
 ) -> bool:
     task = await repository.find_task(session, task_id, for_update=True)
     if task is None:
@@ -270,8 +341,17 @@ async def mark_script_extraction_task_unknown(
             "Task state is unavailable",
             status_code=500,
         )
+    previous_status = task.status
     changed = _mark_script_extraction_task_unknown(task, now=now)
     if changed:
+        _append_task_transition_audit(
+            session,
+            task,
+            action="task.unknown",
+            previous_status=previous_status,
+            trace_id=trace_id,
+            now=now,
+        )
         await session.flush()
     return changed
 
@@ -281,6 +361,7 @@ async def complete_script_extraction_task(
     task_id: UUID,
     *,
     now: datetime,
+    trace_id: str,
 ) -> bool:
     task = await repository.find_task(session, task_id, for_update=True)
     if task is None:
@@ -289,8 +370,17 @@ async def complete_script_extraction_task(
             "Task state is unavailable",
             status_code=500,
         )
+    previous_status = task.status
     changed = _complete_script_extraction_task(task, now=now)
     if changed:
+        _append_task_transition_audit(
+            session,
+            task,
+            action="task.succeeded",
+            previous_status=previous_status,
+            trace_id=trace_id,
+            now=now,
+        )
         await session.flush()
     return changed
 
@@ -302,6 +392,7 @@ async def fail_media_probe_task(
     error_code: str,
     error_summary: str,
     now: datetime,
+    trace_id: str,
     retryable: bool = True,
     next_action: str = "retry_probe",
 ) -> bool:
@@ -312,6 +403,7 @@ async def fail_media_probe_task(
         raise ValueError("task is not a media probe task")
     if task.status in {"succeeded", "failed", "cancelled"}:
         return False
+    previous_status = task.status
     task.status = "failed"
     task.progress_stage = "blocked"
     task.error_code = error_code
@@ -320,6 +412,14 @@ async def fail_media_probe_task(
     task.next_action = next_action
     task.revision += 1
     task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.failed",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
     await session.flush()
     return True
 
@@ -329,6 +429,7 @@ async def complete_media_probe_task(
     task_id: UUID,
     *,
     now: datetime,
+    trace_id: str,
 ) -> bool:
     task = await repository.find_task(session, task_id, for_update=True)
     if task is None:
@@ -343,6 +444,7 @@ async def complete_media_probe_task(
             "Task cannot be completed from its current state",
             status_code=409,
         )
+    previous_status = task.status
     task.status = "succeeded"
     task.progress_stage = "completed"
     task.error_code = None
@@ -351,6 +453,14 @@ async def complete_media_probe_task(
     task.next_action = "review_media"
     task.revision += 1
     task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.succeeded",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
     await session.flush()
     return True
 

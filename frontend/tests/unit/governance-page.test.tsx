@@ -181,6 +181,29 @@ const auditEvents: API.AuditEventResponse[] = [
     metadata: { revision: 1, subject_type: "MEDIA_VERSION" },
     occurred_at: now,
   },
+  {
+    id: "019fb1e0-a060-7000-8000-000000000008",
+    workspace_id: workspaceId,
+    actor_id: "019fb1e0-a000-7000-8000-000000000001",
+    action: "task.failed",
+    target_type: "task",
+    target_id: "019fb1e0-a0a0-7000-8000-000000000001",
+    result: "succeeded",
+    trace_id: "019fb1e0-a0a1-7000-8000-000000000001",
+    metadata: {
+      revision: 2,
+      task_type: "script_extraction",
+      request_type: "extraction_batch",
+      request_id: "019fb1e0-a0a2-7000-8000-000000000001",
+      previous_status: "queued",
+      status: "failed",
+      progress_stage: "blocked",
+      error_code: "ai_service_unavailable",
+      retryable: false,
+      next_action: "configure_ai_service",
+    },
+    occurred_at: now,
+  },
 ];
 
 const scope: API.MediaUsageScope = {
@@ -305,7 +328,7 @@ describe("governance consent workspace", () => {
       data: { items: [detail], total: 1, limit: 50, offset: 0 },
     });
     apiMocks.listAuditEvents.mockResolvedValue({
-      data: { items: auditEvents, total: 8, limit: 50, offset: 0 },
+      data: { items: auditEvents, total: 9, limit: 50, offset: 0 },
     });
     apiMocks.getConsent.mockResolvedValue({ data: detail });
     apiMocks.listMedia.mockResolvedValue({
@@ -379,6 +402,8 @@ describe("governance consent workspace", () => {
     expect(within(audit).getByText("变更字段：description、name")).toBeInTheDocument();
     expect(within(audit).getByText("单集排序")).toBeInTheDocument();
     expect(within(audit).getByText("2 个单集")).toBeInTheDocument();
+    expect(within(audit).getByText("任务失败")).toBeInTheDocument();
+    expect(within(audit).getByText("queued → failed")).toBeInTheDocument();
     expect(within(audit).getByText("剧本版本发布")).toBeInTheDocument();
     expect(within(audit).getByText("剧本 · v2")).toBeInTheDocument();
     expect(within(audit).getByText("资产版本创建")).toBeInTheDocument();

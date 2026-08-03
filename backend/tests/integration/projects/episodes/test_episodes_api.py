@@ -2,10 +2,15 @@ from uuid import UUID
 
 import httpx
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
+from app.modules.governance.audit.models import AuditEvent
+from app.modules.identity import ActorContext
+from app.modules.identity.models import Membership
+from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
 from app.modules.projects.models import Episode
 from tests.support.project_builders import project_payload, register_project_owner
 
@@ -227,3 +232,117 @@ async def test_database_rejects_episode_with_mismatched_workspace(
                     )
                 )
                 await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_task_created_after_preflight_blocks_episode_and_project_deletion(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, workspace_id = await register_project_owner(
+        client,
+        email="task-delete-blocker@example.com",
+    )
+    project_response = await client.post(
+        "/api/v1/projects",
+        headers=headers,
+        json=project_payload(workspace_id, "任务删除门禁"),
+    )
+    project = project_response.json()["data"]
+    episode_response = await client.post(
+        f"/api/v1/projects/{project['id']}/episodes",
+        headers=headers,
+        json={"name": "任务引用单集", "target_duration_ms": 90000},
+    )
+    episode = episode_response.json()["data"]
+
+    initial_preflight = await client.post(
+        f"/api/v1/episodes/{episode['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert initial_preflight.status_code == 200
+    assert initial_preflight.json()["data"] == {"allowed": True, "blockers": []}
+
+    async with session_factory() as session:
+        async with session.begin():
+            membership = await session.scalar(
+                select(Membership).where(
+                    Membership.workspace_id == UUID(workspace_id)
+                )
+            )
+            assert membership is not None
+            actor = ActorContext(
+                user_id=membership.user_id,
+                workspace_id=membership.workspace_id,
+                membership_id=membership.id,
+                role="owner",
+                workspace_status="active",
+            )
+            task = await create_script_extraction_task(
+                session,
+                actor,
+                ScriptExtractionTaskCommand(
+                    workspace_id=UUID(workspace_id),
+                    episode_id=UUID(episode["id"]),
+                    request_id=uuid7(),
+                    input_version_id=uuid7(),
+                    input_hash="d" * 64,
+                    idempotency_key="task-delete-blocker",
+                ),
+                trace_id="task-delete-blocker-trace",
+            )
+
+    episode_preflight = await client.post(
+        f"/api/v1/episodes/{episode['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert episode_preflight.status_code == 200
+    assert episode_preflight.json()["data"] == {
+        "allowed": False,
+        "blockers": [
+            {
+                "code": "HAS_TASKS",
+                "resource_type": "episode",
+                "resource_id": episode["id"],
+                "summary": "单集已有 1 个任务",
+            }
+        ],
+    }
+
+    project_preflight = await client.post(
+        f"/api/v1/projects/{project['id']}/delete-preflight",
+        headers=headers,
+    )
+    assert project_preflight.status_code == 200
+    assert project_preflight.json()["data"]["allowed"] is False
+    assert {
+        blocker["code"]: blocker["summary"]
+        for blocker in project_preflight.json()["data"]["blockers"]
+    } == {
+        "HAS_EPISODES": "项目包含 1 个单集",
+        "HAS_TASKS": "项目关联 1 个任务",
+    }
+
+    blocked_delete = await client.delete(
+        f"/api/v1/episodes/{episode['id']}",
+        headers=headers,
+        params={"expected_revision": episode["revision"]},
+    )
+    assert blocked_delete.status_code == 409
+    assert blocked_delete.json()["error"]["next_action"] == "review_delete_blockers"
+    assert (
+        await client.get(f"/api/v1/episodes/{episode['id']}", headers=headers)
+    ).status_code == 200
+
+    async with session_factory() as session:
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.action == "episode.deleted",
+                    AuditEvent.target_id == UUID(episode["id"]),
+                )
+            )
+            == 0
+        )

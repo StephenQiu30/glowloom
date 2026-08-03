@@ -9,6 +9,7 @@ from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.governance.audit import append_audit_event
 from app.modules.identity import Capability, actor_context
+from app.modules.production import count_episode_task_references
 from app.modules.projects import repository
 from app.modules.projects.authorization import (
     owned_project,
@@ -248,19 +249,37 @@ async def delete_preflight(
     session: AsyncSession, claims: AccessTokenClaims, project_id: UUID
 ) -> DeletePreflightResponse:
     project, _ = await owned_project(session, claims, project_id, Capability.WORKSPACE_MANAGE)
-    count = await repository.count_episodes(session, project_id)
-    blockers = (
-        [
+    episodes = await repository.list_episodes(
+        session,
+        project_id,
+        include_archived=True,
+    )
+    episode_ids = [episode.id for episode in episodes]
+    task_counts = await count_episode_task_references(
+        session,
+        project.workspace_id,
+        episode_ids,
+    )
+    task_count = sum(task_counts.values())
+    blockers: list[DeleteBlocker] = []
+    if episodes:
+        blockers.append(
             DeleteBlocker(
                 code="HAS_EPISODES",
                 resource_type="project",
                 resource_id=project.id,
-                summary=f"项目包含 {count} 个单集",
+                summary=f"项目包含 {len(episodes)} 个单集",
             )
-        ]
-        if count
-        else []
-    )
+        )
+    if task_count:
+        blockers.append(
+            DeleteBlocker(
+                code="HAS_TASKS",
+                resource_type="project",
+                resource_id=project.id,
+                summary=f"项目关联 {task_count} 个任务",
+            )
+        )
     return DeletePreflightResponse(allowed=not blockers, blockers=blockers)
 
 

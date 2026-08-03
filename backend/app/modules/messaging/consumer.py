@@ -138,6 +138,7 @@ async def _mark_interrupted_delivery_unknown(
         session,
         task.id,
         now=now,
+        trace_id=delivery.trace_id,
     )
     if changed:
         await synchronize_extraction_batch_status(
@@ -188,6 +189,7 @@ async def _prepare_envelope(
             error_summary="Message schema is not supported",
             next_action="contact_support",
             now=now,
+            trace_id=envelope.trace_id,
         )
         if changed:
             await synchronize_extraction_batch_status(
@@ -206,6 +208,7 @@ async def _prepare_envelope(
             error_summary="Message payload does not match the task",
             next_action="contact_support",
             now=now,
+            trace_id=envelope.trace_id,
         )
         if changed:
             await synchronize_extraction_batch_status(
@@ -227,6 +230,7 @@ async def _prepare_envelope(
             error_summary="AI extraction service is not configured",
             next_action="configure_ai_service",
             now=now,
+            trace_id=envelope.trace_id,
         )
         if changed:
             await synchronize_extraction_batch_status(
@@ -236,7 +240,12 @@ async def _prepare_envelope(
         await session.flush()
         return "completed"
 
-    changed = await start_script_extraction_task(session, task.id, now=now)
+    changed = await start_script_extraction_task(
+        session,
+        task.id,
+        now=now,
+        trace_id=envelope.trace_id,
+    )
     if not changed:
         _complete_delivery(delivery, now=now)
         await session.flush()
@@ -302,6 +311,7 @@ async def finalize_extraction_success(
         session,
         prepared.extraction_input.batch_id,
         result,
+        trace_id=delivery.trace_id,
     )
     _complete_delivery(delivery, now=datetime.now(UTC))
     await session.flush()
@@ -322,6 +332,7 @@ async def finalize_extraction_failure(
             session,
             prepared.extraction_input.task_id,
             now=now,
+            trace_id=delivery.trace_id,
         )
         status: Literal["failed", "unknown"] = "unknown"
     else:
@@ -333,6 +344,7 @@ async def finalize_extraction_failure(
             next_action=error.next_action,
             retryable=error.retryable,
             now=now,
+            trace_id=delivery.trace_id,
         )
         status = "failed"
     if changed:

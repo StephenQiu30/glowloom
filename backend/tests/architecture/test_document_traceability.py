@@ -177,6 +177,10 @@ def test_audit_slices_are_traced_without_premature_acceptance() -> None:
         "project.deleted",
         "episode.reordered",
         "episode.deleted",
+        "task.started",
+        "task.succeeded",
+        "task.failed",
+        "task.unknown",
         "script.version_published",
         "script.current_changed",
         "asset.version_created",
@@ -191,3 +195,28 @@ def test_audit_slices_are_traced_without_premature_acceptance() -> None:
         in plan
     )
     assert "PT-GOV-006 | accepted" not in prd
+
+
+def test_task_references_are_traced_into_project_delete_guards() -> None:
+    design = (DOCS / "design/模块设计/003-项目模块详细设计.md").read_text(
+        encoding="utf-8"
+    )
+    prd = (DOCS / "prd/007-基础业务模块PRD任务.md").read_text(
+        encoding="utf-8"
+    )
+    plan = (DOCS / "plan/007-基础业务模块产品任务执行计划.md").read_text(
+        encoding="utf-8"
+    )
+    s1_acceptance = (DOCS / "acceptance/002-S1单人立项验收.md").read_text(
+        encoding="utf-8"
+    )
+    s2_acceptance = (DOCS / "acceptance/005-S2统一前端增量验收.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Project 只有无 Episode、版本、任务、费用、审核和交付时可删" in design
+    assert "HAS_TASKS" in design
+    assert "有版本、任务、费用、审核或交付时返回逐项 blocker" in prd
+    assert "Task 引用进入删除预检" in plan
+    assert "HAS_TASKS" in s1_acceptance
+    assert "单集已有 1 个任务" in s2_acceptance

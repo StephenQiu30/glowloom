@@ -233,6 +233,7 @@ async def _completed_batch(
                 session,
                 UUID(batch["id"]),
                 result,
+                trace_id=f"structure-fixture-{key}",
             )
     candidate_response = await client.get(
         f"/api/v1/extraction-batches/{batch['id']}/candidates",

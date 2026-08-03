@@ -68,6 +68,10 @@ const auditActionLabels: Record<string, string> = {
   "media.archived": "媒体归档",
   "media.restored": "媒体恢复",
   "task.created": "任务创建",
+  "task.started": "任务开始",
+  "task.succeeded": "任务完成",
+  "task.failed": "任务失败",
+  "task.unknown": "任务结果待对账",
 };
 
 function shortId(value: string): string {

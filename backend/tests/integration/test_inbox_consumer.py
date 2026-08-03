@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
+from app.modules.governance.audit.models import AuditEvent
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.messaging import envelope_from_event
@@ -110,6 +111,38 @@ async def test_duplicate_delivery_has_one_business_effect(
         assert inbox.attempt_count == 2
         assert inbox.last_error is None
         assert count == 1
+        audit_events = list(
+            await session.scalars(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.target_type == "task",
+                    AuditEvent.target_id == task_id,
+                )
+                .order_by(AuditEvent.occurred_at, AuditEvent.id)
+            )
+        )
+        assert [item.action for item in audit_events] == [
+            "task.created",
+            "task.failed",
+        ]
+        assert audit_events[-1].trace_id == envelope.trace_id
+        assert audit_events[-1].event_metadata == {
+            "revision": 2,
+            "task_type": "script_extraction",
+            "request_type": "extraction_batch",
+            "request_id": str(task.request_id),
+            "previous_status": "queued",
+            "status": "failed",
+            "progress_stage": "blocked",
+            "error_code": "ai_service_unavailable",
+            "retryable": False,
+            "next_action": "configure_ai_service",
+        }
+        assert "AI extraction service is not configured" not in str(
+            audit_events[-1].event_metadata
+        )
+        assert task.input_hash is not None
+        assert task.input_hash not in str(audit_events[-1].event_metadata)
 
 
 @pytest.mark.asyncio
@@ -162,10 +195,16 @@ async def test_database_rollback_leaves_message_safe_to_redeliver(
     async with session_factory() as session:
         task = await session.get(Task, task_id)
         count = await session.scalar(select(func.count()).select_from(InboxDelivery))
+        audit_count = await session.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.target_id == task_id)
+        )
         assert task is not None
         assert task.status == "queued"
         assert task.revision == 1
         assert count == 0
+        assert audit_count == 1
 
     async with session_factory() as session:
         async with session.begin():

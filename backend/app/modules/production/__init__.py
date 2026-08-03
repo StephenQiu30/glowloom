@@ -11,6 +11,7 @@ from app.modules.production.contracts import (
 from app.modules.production.service import (
     complete_media_probe_task,
     complete_script_extraction_task,
+    count_episode_task_references,
     create_media_probe_task,
     create_script_extraction_task,
     fail_media_probe_task,
@@ -32,6 +33,7 @@ __all__ = [
     "TaskStatus",
     "complete_media_probe_task",
     "complete_script_extraction_task",
+    "count_episode_task_references",
     "create_media_probe_task",
     "create_script_extraction_task",
     "fail_media_probe_task",

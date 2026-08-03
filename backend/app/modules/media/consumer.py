@@ -90,6 +90,7 @@ async def consume_media_probe(
             error_code="invalid_probe_message",
             error_summary="Media probe message is invalid",
             now=now,
+            trace_id=envelope.trace_id,
             retryable=False,
             next_action="contact_support",
         )
@@ -117,6 +118,7 @@ async def consume_media_probe(
             error_code="media_version_not_found",
             error_summary="Media version is unavailable",
             now=now,
+            trace_id=envelope.trace_id,
             retryable=False,
             next_action="contact_support",
         )
@@ -140,7 +142,12 @@ async def consume_media_probe(
             now=now,
         )
     if version.probe_status == "ready":
-        await complete_media_probe_task(session, task.id, now=now)
+        await complete_media_probe_task(
+            session,
+            task.id,
+            now=now,
+            trace_id=envelope.trace_id,
+        )
     else:
         location = await repository.find_active_location(session, version.id)
         quarantined = False
@@ -178,7 +185,12 @@ async def consume_media_probe(
                 version.duration_ms = result.duration_ms
                 version.codec = result.codec
                 version.container = result.container
-                await complete_media_probe_task(session, task.id, now=now)
+                await complete_media_probe_task(
+                    session,
+                    task.id,
+                    now=now,
+                    trace_id=envelope.trace_id,
+                )
         if error is not None:
             version.probe_status = "quarantined" if quarantined else "failed"
             version.probe_error_code = error.code
@@ -194,6 +206,7 @@ async def consume_media_probe(
                 error_code=error.code,
                 error_summary=error.summary,
                 now=now,
+                trace_id=envelope.trace_id,
                 retryable=not quarantined,
                 next_action="contact_support" if quarantined else "retry_probe",
             )

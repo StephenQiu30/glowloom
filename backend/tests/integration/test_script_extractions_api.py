@@ -12,6 +12,7 @@ from uuid6 import uuid7
 from app import io_worker
 from app.core.database import Base
 from app.core.errors import ApiError, ErrorCode
+from app.modules.governance.audit.models import AuditEvent
 from app.modules.identity import ActorContext
 from app.modules.messaging.consumer import IO_SCRIPT_EXTRACTION_CONSUMER, consume_envelope
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
@@ -452,6 +453,26 @@ async def test_configured_worker_records_real_adapter_result_once(
         assert inbox is not None
         assert inbox.status == "completed"
         assert inbox.attempt_count == 2
+        audit_events = list(
+            await session.scalars(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.target_type == "task",
+                    AuditEvent.target_id == UUID(batch["task"]["id"]),
+                )
+                .order_by(AuditEvent.occurred_at, AuditEvent.id)
+            )
+        )
+        assert [item.action for item in audit_events] == [
+            "task.created",
+            "task.started",
+            "task.succeeded",
+        ]
+        assert {item.trace_id for item in audit_events[1:]} == {event.trace_id}
+        assert audit_events[1].event_metadata["previous_status"] == "queued"
+        assert audit_events[1].event_metadata["status"] == "running"
+        assert audit_events[2].event_metadata["previous_status"] == "running"
+        assert audit_events[2].event_metadata["status"] == "succeeded"
 
 
 @pytest.mark.asyncio
@@ -529,6 +550,28 @@ async def test_worker_redelivery_after_result_commit_failure_does_not_call_provi
         "summary": "DeepSeek response outcome is unknown",
     }
     assert unknown["task"]["next_action"] == "start_new_extraction"
+    async with session_factory() as session:
+        audit_events = list(
+            await session.scalars(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.target_type == "task",
+                    AuditEvent.target_id == UUID(batch["task"]["id"]),
+                )
+                .order_by(AuditEvent.occurred_at, AuditEvent.id)
+            )
+        )
+        assert [item.action for item in audit_events] == [
+            "task.created",
+            "task.started",
+            "task.unknown",
+        ]
+        assert audit_events[-1].trace_id == event.trace_id
+        assert audit_events[-1].event_metadata["previous_status"] == "running"
+        assert audit_events[-1].event_metadata["error_code"] == "ai_result_unknown"
+        assert "DeepSeek response outcome is unknown" not in str(
+            audit_events[-1].event_metadata
+        )
 
 
 @pytest.mark.asyncio
@@ -575,7 +618,12 @@ async def test_extraction_candidates_are_typed_idempotent_paginated_and_private(
     for _ in range(2):
         async with session_factory() as session:
             async with session.begin():
-                await record_result(session, UUID(batch["id"]), result)
+                await record_result(
+                    session,
+                    UUID(batch["id"]),
+                    result,
+                    trace_id="candidate-result-replay",
+                )
 
     listed = await client.get(
         f"/api/v1/extraction-batches/{batch['id']}/candidates",
@@ -651,6 +699,17 @@ async def test_extraction_candidates_are_typed_idempotent_paginated_and_private(
             await session.scalar(select(func.count()).select_from(candidate_table))
             == 5
         )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.target_id == UUID(batch["task"]["id"]),
+                    AuditEvent.action == "task.succeeded",
+                )
+            )
+            == 1
+        )
 
 
 @pytest.mark.asyncio
@@ -683,13 +742,19 @@ async def test_extraction_result_rejects_invalid_ranges_and_changed_replay(
                     session,
                     UUID(batch["id"]),
                     result_model.model_validate(invalid),
+                    trace_id="candidate-invalid-range",
                 )
         assert invalid_error.value.code == ErrorCode.INVALID_REQUEST
 
     valid = result_model.model_validate(_typed_extraction_result())
     async with session_factory() as session:
         async with session.begin():
-            await record_result(session, UUID(batch["id"]), valid)
+            await record_result(
+                session,
+                UUID(batch["id"]),
+                valid,
+                trace_id="candidate-valid-result",
+            )
 
     changed = _typed_extraction_result()
     changed["candidates"][0]["proposal"]["summary"] = "不同的重放结果"
@@ -700,6 +765,7 @@ async def test_extraction_result_rejects_invalid_ranges_and_changed_replay(
                     session,
                     UUID(batch["id"]),
                     result_model.model_validate(changed),
+                    trace_id="candidate-changed-replay",
                 )
         assert conflict_error.value.code == ErrorCode.RESOURCE_CONFLICT
 
@@ -755,6 +821,7 @@ async def _completed_candidate_batch(
                 session,
                 UUID(batch["id"]),
                 result,
+                trace_id=f"fixture-result-{key}",
             )
     listed = await client.get(
         f"/api/v1/extraction-batches/{batch['id']}/candidates",

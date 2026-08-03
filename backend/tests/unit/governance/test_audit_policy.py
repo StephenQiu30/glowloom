@@ -102,6 +102,30 @@ def test_audit_metadata_is_restricted_by_registered_action() -> None:
             },
         )
 
+    with pytest.raises(ValueError, match="error_summary"):
+        append_audit_event(
+            session,
+            workspace_id=common["workspace_id"],
+            actor_id=common["actor_id"],
+            action="task.failed",
+            target_type="task",
+            target_id=common["target_id"],
+            trace_id=common["trace_id"],
+            metadata={
+                "revision": 2,
+                "task_type": "script_extraction",
+                "request_type": "extraction_batch",
+                "request_id": str(uuid7()),
+                "previous_status": "running",
+                "status": "failed",
+                "progress_stage": "blocked",
+                "error_code": "provider_error",
+                "retryable": False,
+                "next_action": "start_new_extraction",
+                "error_summary": "must-not-be-recorded",
+            },
+        )
+
     with pytest.raises(ValueError, match="spec"):
         append_audit_event(
             session,

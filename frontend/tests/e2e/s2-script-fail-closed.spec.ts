@@ -50,13 +50,23 @@ test("S2 导入发布剧本并在 DeepSeek 未配置时可恢复地失败", asyn
   ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "重新提取结构" })).toBeVisible();
 
+  await page.goto("/projects");
+  await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
+  await page.getByRole("button", { name: "检查删除 第一集 雨夜" }).click();
+  await expect(page.getByText("单集已有 1 个任务")).toBeVisible();
+  await page.getByRole("button", { name: "检查项目删除条件" }).click();
+  await expect(page.getByText("项目包含 1 个单集")).toBeVisible();
+  await expect(page.getByText("项目关联 1 个任务")).toBeVisible();
+
   await page.goto("/governance");
   const auditTrail = page.getByRole("region", { name: "操作审计" });
   await expect(auditTrail.getByText("剧本初始版本创建")).toBeVisible();
   await expect(auditTrail.getByText("剧本版本发布")).toBeVisible();
   await expect(auditTrail.getByText("任务创建")).toBeVisible();
+  await expect(auditTrail.getByText("任务失败")).toBeVisible();
   await auditTrail.getByRole("button", { name: "筛选" }).click();
-  await auditTrail.getByLabel("动作").selectOption("script.version_published");
+  await auditTrail.getByLabel("动作").selectOption("task.failed");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
+  await expect(auditTrail.getByText("queued → failed")).toBeVisible();
 });
