@@ -18,6 +18,7 @@ from app.modules.media.dependencies import get_media_storage
 from app.modules.media.schemas import (
     AppendVersionRequest,
     ArchiveMediaRequest,
+    CurrentMediaVersionRequest,
     MediaAccessRequest,
     MediaAccessResponse,
     MediaKind,
@@ -189,9 +190,60 @@ async def retry_probe(
 async def archive_media(
     media_object_id: UUID,
     payload: ArchiveMediaRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[MediaObjectResponse]:
     return ApiResponse(
-        data=await service.archive_media(session, claims, media_object_id, payload)
+        data=await service.archive_media(
+            session,
+            claims,
+            media_object_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
+
+
+@router.post(
+    "/media-objects/{media_object_id}/restore",
+    response_model=ApiResponse[MediaObjectResponse],
+)
+async def restore_media(
+    media_object_id: UUID,
+    payload: ArchiveMediaRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[MediaObjectResponse]:
+    return ApiResponse(
+        data=await service.restore_media(
+            session,
+            claims,
+            media_object_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
+
+
+@router.post(
+    "/media-objects/{media_object_id}/current-version",
+    response_model=ApiResponse[MediaObjectResponse],
+)
+async def set_current_media_version(
+    media_object_id: UUID,
+    payload: CurrentMediaVersionRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[MediaObjectResponse]:
+    return ApiResponse(
+        data=await service.set_current_version(
+            session,
+            claims,
+            media_object_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
     )

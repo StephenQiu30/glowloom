@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AccessTokenClaims, get_access_token_claims
@@ -26,11 +26,17 @@ router = APIRouter()
 )
 async def create_consent(
     payload: ConsentCreateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ConsentDetailResponse]:
     return ApiResponse(
-        data=await service.create_consent(session, claims, payload)
+        data=await service.create_consent(
+            session,
+            claims,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 
@@ -75,12 +81,17 @@ async def get_consent(
 async def revise_consent(
     consent_id: UUID,
     payload: ConsentRevisionRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ConsentDetailResponse]:
     return ApiResponse(
         data=await service.revise_consent(
-            session, claims, consent_id, payload
+            session,
+            claims,
+            consent_id,
+            payload,
+            trace_id=str(request.state.request_id),
         )
     )
 
@@ -92,11 +103,16 @@ async def revise_consent(
 async def revoke_consent(
     consent_id: UUID,
     payload: ConsentRevokeRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ConsentDetailResponse]:
     return ApiResponse(
         data=await service.revoke_consent(
-            session, claims, consent_id, payload
+            session,
+            claims,
+            consent_id,
+            payload,
+            trace_id=str(request.state.request_id),
         )
     )

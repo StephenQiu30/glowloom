@@ -23,6 +23,10 @@ import {
   ConsentFormDialog,
   type ConsentFormValue,
 } from "@/app/governance/consent-form-dialog";
+import {
+  AuditTrail,
+  type AuditFilters,
+} from "@/app/governance/audit-trail";
 import { StudioShell } from "@/components/studio/studio-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +42,7 @@ import { Label } from "@/components/ui/label";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
+  useAuditEventsQuery,
   useConsentQuery,
   useConsentsQuery,
   useCreateConsentMutation,
@@ -382,8 +387,17 @@ export function GovernanceWorkspace({
   const authenticated = sessionState === "authenticated";
   const me = useMeQuery(undefined, { skip: !authenticated });
   const workspaceId = me.data?.workspace.id;
+  const auditVisible = me.data?.workspace.role === "owner";
   const consents = useConsentsQuery(workspaceId ?? "", { skip: !workspaceId });
   const media = useMediaVersionsQuery(workspaceId ?? "", { skip: !workspaceId });
+  const [auditFilters, setAuditFilters] = useState<AuditFilters>({});
+  const audit = useAuditEventsQuery(
+    {
+      workspaceId: workspaceId ?? "",
+      ...auditFilters,
+    },
+    { skip: !workspaceId || !auditVisible },
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const items = consents.data?.items ?? [];
   const effectiveSelectedId = items.some((item) => item.id === selectedId)
@@ -524,6 +538,22 @@ export function GovernanceWorkspace({
               {consents.isLoading ? <Card><CardContent className="p-6 text-sm text-slate-500">正在读取授权列表…</CardContent></Card> : <ConsentList consents={items} onSelect={setSelectedId} selectedId={effectiveSelectedId} />}
               {items.length === 0 && !consents.isLoading ? <EmptyConsent onCreate={() => setCreateOpen(true)} /> : detail.isLoading ? <LoadingWorkspace /> : detail.data ? <ConsentDetail consent={detail.data} isRevoking={revokeState.isLoading} onEdit={() => setReviseOpen(true)} onRevoke={submitRevoke} /> : null}
             </div>
+            {auditVisible ? (
+              audit.error ? (
+                <Alert className="mt-8 border-rose-200 bg-rose-50 p-4 text-rose-800" variant="destructive">
+                  <AlertCircle aria-hidden="true" />
+                  <AlertTitle>审计事实暂时无法读取</AlertTitle>
+                  <AlertDescription>{appApiErrorMessage(audit.error)}</AlertDescription>
+                </Alert>
+              ) : (
+                <AuditTrail
+                  events={audit.data?.items ?? []}
+                  loading={audit.isLoading || audit.isFetching}
+                  total={audit.data?.total ?? 0}
+                  onFilter={setAuditFilters}
+                />
+              )
+            ) : null}
           </>
         ) : null}
       </div>

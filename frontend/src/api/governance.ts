@@ -2,6 +2,21 @@
 /* eslint-disable */
 import request, { type RequestOptions } from "@/lib/api-request";
 
+/** List Audit Events GET /api/v1/audit-events */
+export async function listAuditEventsApiV1AuditEventsGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listAuditEventsApiV1AuditEventsGetParams,
+  options?: RequestOptions
+) {
+  return request<API.ApiResponsePaginatedAuditEvents_>("/api/v1/audit-events", {
+    method: "GET",
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
+
 /** List Consents GET /api/v1/consents */
 export async function listConsentsApiV1ConsentsGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

@@ -10,6 +10,7 @@ from uuid6 import uuid7
 from app.core.auth import AccessTokenClaims
 from app.core.config import Settings
 from app.core.errors import ApiError, ErrorCode
+from app.modules.governance.audit import append_audit_event
 from app.modules.identity import ActorContext, Capability, actor_context
 from app.modules.media import repository
 from app.modules.media.contracts import MediaVersionReference
@@ -17,6 +18,7 @@ from app.modules.media.models import MediaLocation, MediaObject, MediaVersion, U
 from app.modules.media.schemas import (
     AppendVersionRequest,
     ArchiveMediaRequest,
+    CurrentMediaVersionRequest,
     MediaAccessRequest,
     MediaAccessResponse,
     MediaKind,
@@ -69,11 +71,20 @@ def _media_object_response(media_object: MediaObject) -> MediaObjectResponse:
     )
 
 
-def _media_version_response(version: MediaVersion) -> MediaVersionResponse:
+def _media_version_response(
+    version: MediaVersion, media_object: MediaObject
+) -> MediaVersionResponse:
     return MediaVersionResponse(
         id=version.id,
         workspace_id=version.workspace_id,
         media_object_id=version.media_object_id,
+        media_object_kind=cast(MediaKind, media_object.kind),
+        media_object_source_type=cast(MediaSource, media_object.source_type),
+        media_object_status=cast(
+            Literal["active", "archived"], media_object.status
+        ),
+        media_object_current_version_id=media_object.current_version_id,
+        media_object_revision=media_object.revision,
         version_no=version.version_no,
         filename=version.filename,
         sha256=version.sha256,
@@ -318,6 +329,7 @@ async def initialize_version_upload(
                 ErrorCode.STATE_CONFLICT,
                 "Archived media cannot accept new versions",
                 status_code=409,
+                next_action="restore_media",
             )
         if media_object.current_version_id != request.expected_current_version_id:
             raise ApiError(
@@ -413,7 +425,7 @@ async def complete_upload(
             task = await get_internal_task(session, upload.completed_probe_task_id)
             return UploadCompletionResponse(
                 media_object=_media_object_response(media_object),
-                version=_media_version_response(version),
+                version=_media_version_response(version, media_object),
                 probe_task=task,
             )
         if upload.status != "pending":
@@ -468,6 +480,7 @@ async def complete_upload(
                             ErrorCode.STATE_CONFLICT,
                             "Archived media cannot accept new versions",
                             status_code=409,
+                            next_action="restore_media",
                         )
                     if media_object.current_version_id != upload.expected_current_version_id:
                         raise ApiError(
@@ -537,8 +550,25 @@ async def complete_upload(
                 upload.error_code = None
                 result = UploadCompletionResponse(
                     media_object=_media_object_response(media_object),
-                    version=_media_version_response(version),
+                    version=_media_version_response(version, media_object),
                     probe_task=task,
+                )
+                append_audit_event(
+                    session,
+                    workspace_id=media_object.workspace_id,
+                    actor_id=actor.user_id,
+                    action="media.version_created",
+                    target_type="media_object",
+                    target_id=media_object.id,
+                    trace_id=trace_id,
+                    metadata={
+                        "revision": media_object.revision,
+                        "version_id": str(version.id),
+                        "version_no": version.version_no,
+                        "kind": media_object.kind,
+                        "source_type": media_object.source_type,
+                    },
+                    occurred_at=now,
                 )
         await session.flush()
     if deferred_error is not None:
@@ -574,7 +604,10 @@ async def list_media(
         offset=offset,
     )
     return PaginatedMedia(
-        items=[_media_version_response(version) for version in versions],
+        items=[
+            _media_version_response(version, media_object)
+            for version, media_object in versions
+        ],
         total=total,
         limit=limit,
         offset=offset,
@@ -584,10 +617,10 @@ async def list_media(
 async def get_media(
     session: AsyncSession, claims: AccessTokenClaims, version_id: UUID
 ) -> MediaVersionResponse:
-    version, _, _ = await _owned_media_version(
+    version, media_object, _ = await _owned_media_version(
         session, claims, version_id, Capability.CONTENT_READ
     )
-    return _media_version_response(version)
+    return _media_version_response(version, media_object)
 
 
 async def media_version_exists(
@@ -698,6 +731,8 @@ async def archive_media(
     claims: AccessTokenClaims,
     media_object_id: UUID,
     request: ArchiveMediaRequest,
+    *,
+    trace_id: str,
 ) -> MediaObjectResponse:
     async with session.begin():
         media_object, _ = await _owned_media_object(
@@ -720,10 +755,145 @@ async def archive_media(
                 "Media object is already archived",
                 status_code=409,
             )
+        now = datetime.now(UTC)
         media_object.status = "archived"
-        media_object.archived_at = datetime.now(UTC)
+        media_object.archived_at = now
         media_object.archived_by = claims.sub
         media_object.revision += 1
+        media_object.updated_at = now
+        append_audit_event(
+            session,
+            workspace_id=media_object.workspace_id,
+            actor_id=claims.sub,
+            action="media.archived",
+            target_type="media_object",
+            target_id=media_object.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": media_object.revision,
+                "current_version_id": str(media_object.current_version_id),
+            },
+            occurred_at=now,
+        )
+        await session.flush()
+    return _media_object_response(media_object)
+
+
+async def restore_media(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    media_object_id: UUID,
+    request: ArchiveMediaRequest,
+    *,
+    trace_id: str,
+) -> MediaObjectResponse:
+    async with session.begin():
+        media_object, _ = await _owned_media_object(
+            session,
+            claims,
+            media_object_id,
+            Capability.CONTENT_WRITE,
+            for_update=True,
+        )
+        if media_object.revision != request.expected_revision:
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT,
+                "Media object revision has changed",
+                status_code=409,
+                details={"current_revision": media_object.revision},
+            )
+        if media_object.status != "archived":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Media object is already active",
+                status_code=409,
+            )
+        now = datetime.now(UTC)
+        media_object.status = "active"
+        media_object.archived_at = None
+        media_object.archived_by = None
+        media_object.revision += 1
+        media_object.updated_at = now
+        append_audit_event(
+            session,
+            workspace_id=media_object.workspace_id,
+            actor_id=claims.sub,
+            action="media.restored",
+            target_type="media_object",
+            target_id=media_object.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": media_object.revision,
+                "current_version_id": str(media_object.current_version_id),
+            },
+            occurred_at=now,
+        )
+        await session.flush()
+    return _media_object_response(media_object)
+
+
+async def set_current_version(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    media_object_id: UUID,
+    request: CurrentMediaVersionRequest,
+    *,
+    trace_id: str,
+) -> MediaObjectResponse:
+    async with session.begin():
+        media_object, _ = await _owned_media_object(
+            session,
+            claims,
+            media_object_id,
+            Capability.CONTENT_WRITE,
+            for_update=True,
+        )
+        if media_object.status != "active":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Archived media cannot change its current version",
+                status_code=409,
+                next_action="restore_media",
+            )
+        if (
+            media_object.revision != request.expected_revision
+            or media_object.current_version_id
+            != request.expected_current_version_id
+        ):
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT,
+                "Media object has changed",
+                status_code=409,
+                details={
+                    "current_revision": media_object.revision,
+                    "current_version_id": str(media_object.current_version_id),
+                },
+            )
+        target = await repository.find_media_version(session, request.version_id)
+        if target is None or target[0].media_object_id != media_object.id:
+            raise ApiError(
+                ErrorCode.NOT_FOUND, "Media version not found", status_code=404
+            )
+        previous_version_id = media_object.current_version_id
+        now = datetime.now(UTC)
+        media_object.current_version_id = request.version_id
+        media_object.revision += 1
+        media_object.updated_at = now
+        append_audit_event(
+            session,
+            workspace_id=media_object.workspace_id,
+            actor_id=claims.sub,
+            action="media.current_changed",
+            target_type="media_object",
+            target_id=media_object.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": media_object.revision,
+                "previous_version_id": str(previous_version_id),
+                "current_version_id": str(media_object.current_version_id),
+            },
+            occurred_at=now,
+        )
         await session.flush()
     return _media_object_response(media_object)
 

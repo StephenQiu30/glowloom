@@ -110,7 +110,7 @@ async def list_media_versions(
     created_to: datetime | None,
     limit: int,
     offset: int,
-) -> tuple[list[MediaVersion], int]:
+) -> tuple[list[tuple[MediaVersion, MediaObject]], int]:
     filters = [MediaVersion.workspace_id == workspace_id]
     if kind is not None:
         filters.append(MediaObject.kind == kind)
@@ -123,7 +123,7 @@ async def list_media_versions(
     if created_to is not None:
         filters.append(MediaVersion.created_at <= created_to)
     base = (
-        select(MediaVersion)
+        select(MediaVersion, MediaObject)
         .join(
             MediaObject,
             (MediaObject.id == MediaVersion.media_object_id)
@@ -134,9 +134,9 @@ async def list_media_versions(
     total = await session.scalar(
         select(func.count()).select_from(base.order_by(None).subquery())
     )
-    rows = await session.scalars(
+    rows = await session.execute(
         base.order_by(MediaVersion.created_at.desc(), MediaVersion.version_no.desc())
         .limit(limit)
         .offset(offset)
     )
-    return list(rows), total or 0
+    return [(row[0], row[1]) for row in rows], total or 0

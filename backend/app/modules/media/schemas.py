@@ -66,6 +66,11 @@ class MediaVersionResponse(BaseModel):
     id: UUID
     workspace_id: UUID
     media_object_id: UUID
+    media_object_kind: MediaKind
+    media_object_source_type: MediaSource
+    media_object_status: Literal["active", "archived"]
+    media_object_current_version_id: UUID | None
+    media_object_revision: int
     version_no: int
     filename: str
     sha256: str
@@ -113,6 +118,14 @@ class MediaAccessResponse(BaseModel):
 class ArchiveMediaRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    expected_revision: int = Field(ge=1)
+
+
+class CurrentMediaVersionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version_id: UUID
+    expected_current_version_id: UUID
     expected_revision: int = Field(ge=1)
 
 

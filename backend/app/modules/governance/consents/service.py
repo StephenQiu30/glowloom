@@ -11,6 +11,7 @@ from uuid6 import uuid7
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.governance import repository
+from app.modules.governance.audit import append_audit_event
 from app.modules.governance.consents.schemas import (
     ConsentCreateRequest,
     ConsentDetailResponse,
@@ -279,6 +280,8 @@ async def create_consent(
     session: AsyncSession,
     claims: AccessTokenClaims,
     request: ConsentCreateRequest,
+    *,
+    trace_id: str,
 ) -> ConsentDetailResponse:
     now = datetime.now(UTC)
     async with session.begin():
@@ -362,6 +365,20 @@ async def create_consent(
                         now,
                     )
                 )
+                append_audit_event(
+                    session,
+                    workspace_id=consent.workspace_id,
+                    actor_id=actor.user_id,
+                    action="consent.registered",
+                    target_type="consent",
+                    target_id=consent.id,
+                    trace_id=trace_id,
+                    metadata={
+                        "revision": consent.revision,
+                        "subject_type": str(consent.subject_type),
+                    },
+                    occurred_at=now,
+                )
                 await session.flush()
     return await _load_detail(session, consent)
 
@@ -440,6 +457,8 @@ async def revise_consent(
     claims: AccessTokenClaims,
     consent_id: UUID,
     request: ConsentRevisionRequest,
+    *,
+    trace_id: str,
 ) -> ConsentDetailResponse:
     now = datetime.now(UTC)
     async with session.begin():
@@ -487,6 +506,20 @@ async def revise_consent(
                 now,
             )
         )
+        append_audit_event(
+            session,
+            workspace_id=consent.workspace_id,
+            actor_id=actor.user_id,
+            action="consent.revised",
+            target_type="consent",
+            target_id=consent.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": consent.revision,
+                "subject_type": str(consent.subject_type),
+            },
+            occurred_at=now,
+        )
         await session.flush()
     return await _load_detail(session, consent)
 
@@ -496,6 +529,8 @@ async def revoke_consent(
     claims: AccessTokenClaims,
     consent_id: UUID,
     request: ConsentRevokeRequest,
+    *,
+    trace_id: str,
 ) -> ConsentDetailResponse:
     now = datetime.now(UTC)
     async with session.begin():
@@ -551,6 +586,20 @@ async def revoke_consent(
                 [proof.media_version_id for proof in current_proofs],
                 now,
             )
+        )
+        append_audit_event(
+            session,
+            workspace_id=consent.workspace_id,
+            actor_id=actor.user_id,
+            action="consent.revoked",
+            target_type="consent",
+            target_id=consent.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": consent.revision,
+                "subject_type": str(consent.subject_type),
+            },
+            occurred_at=now,
         )
         await session.flush()
     return await _load_detail(session, consent)

@@ -41,6 +41,7 @@ import {
   useExtractionCandidatesQuery,
   useImportScriptMutation,
   useInitializeMediaUploadMutation,
+  useInitializeMediaVersionUploadMutation,
   useLazyShotSpecVersionQuery,
   useLazyScriptVersionDiffQuery,
   useMeQuery,
@@ -55,9 +56,11 @@ import {
   useScriptVersionQuery,
   useScriptVersionsQuery,
   useSetCurrentScriptVersionMutation,
+  useSetCurrentMediaVersionMutation,
   useSetScriptSourceArchivedMutation,
   useSetCurrentShotSpecMutation,
   useSetShotArchivedMutation,
+  useSetMediaArchivedMutation,
   useShotDeletePreflightMutation,
   useShotOrderQuery,
   useShotReadinessQuery,
@@ -220,8 +223,13 @@ export function EpisodeProductionStudio({
   const [deleteScriptVersion, scriptDeleteState] =
     useDeleteScriptVersionMutation();
   const [initializeUpload, initializationState] = useInitializeMediaUploadMutation();
+  const [initializeVersionUpload, versionInitializationState] =
+    useInitializeMediaVersionUploadMutation();
   const [completeUpload, completionState] = useCompleteMediaUploadMutation();
   const [retryProbe, retryState] = useRetryMediaProbeMutation();
+  const [setCurrentMediaVersion, mediaCurrentState] =
+    useSetCurrentMediaVersionMutation();
+  const [setMediaArchived, mediaArchiveState] = useSetMediaArchivedMutation();
   const [createShot, createShotState] = useCreateShotMutation();
   const [createShotFromCandidate, createShotFromCandidateState] =
     useCreateShotFromCandidateMutation();
@@ -259,8 +267,11 @@ export function EpisodeProductionStudio({
     scriptSourceState,
     scriptDeleteState,
     initializationState,
+    versionInitializationState,
     completionState,
     retryState,
+    mediaCurrentState,
+    mediaArchiveState,
     createShotState,
     createShotFromCandidateState,
     updateShotState,
@@ -450,23 +461,97 @@ export function EpisodeProductionStudio({
         sha256,
         idempotency_key: `studio-upload:${sha256}:${file.name}`,
       }).unwrap();
-      if (!initialized.upload.url || !initialized.upload.method) {
-        throw new Error("对象存储未返回有效的上传地址");
-      }
-      const uploaded = await fetch(initialized.upload.url, {
-        method: initialized.upload.method,
-        headers: initialized.upload.headers as HeadersInit,
-        body: file,
-      });
-      if (!uploaded.ok) throw new Error(`对象存储返回 ${uploaded.status}`);
-      const result = await completeUpload({
-        uploadSessionId: initialized.upload_session.id,
-        workspaceId,
-      }).unwrap();
+      const result = await uploadAndComplete(initialized, file, workspaceId);
       succeeded = true;
       return `${result.version.filename} 已上传，媒体探测任务已创建。`;
     });
     return succeeded;
+  }
+
+  async function uploadAndComplete(
+    initialized: API.UploadInitializationResponse,
+    file: File,
+    activeWorkspaceId: string,
+  ) {
+    if (!initialized.upload.url || !initialized.upload.method) {
+      throw new Error("对象存储未返回有效的上传地址");
+    }
+    const uploaded = await fetch(initialized.upload.url, {
+      method: initialized.upload.method,
+      headers: initialized.upload.headers as HeadersInit,
+      body: file,
+    });
+    if (!uploaded.ok) throw new Error(`对象存储返回 ${uploaded.status}`);
+    return completeUpload({
+      uploadSessionId: initialized.upload_session.id,
+      workspaceId: activeWorkspaceId,
+    }).unwrap();
+  }
+
+  async function handleAppendMediaVersion(
+    current: API.MediaVersionResponse,
+    file: File,
+  ): Promise<boolean> {
+    if (!workspaceId || !current.media_object_current_version_id) return false;
+    const expectedCurrentVersionId = current.media_object_current_version_id;
+    let succeeded = false;
+    await runAction(async () => {
+      const sha256 = await sha256File(file);
+      const initialized = await initializeVersionUpload({
+        mediaObjectId: current.media_object_id,
+        body: {
+          workspace_id: workspaceId,
+          kind: current.media_object_kind,
+          filename: file.name,
+          size_bytes: file.size,
+          mime_type: file.type || "application/octet-stream",
+          sha256,
+          idempotency_key: `studio-media-version:${current.media_object_id}:${sha256}:${file.name}`,
+          expected_current_version_id: expectedCurrentVersionId,
+        },
+      }).unwrap();
+      const result = await uploadAndComplete(initialized, file, workspaceId);
+      succeeded = true;
+      return `${result.version.filename} 已追加为 v${result.version.version_no} 并设为当前版本。`;
+    });
+    return succeeded;
+  }
+
+  async function handleSetCurrentMediaVersion(
+    version: API.MediaVersionResponse,
+  ) {
+    if (!workspaceId || !version.media_object_current_version_id) return;
+    const expectedCurrentVersionId = version.media_object_current_version_id;
+    await runAction(async () => {
+      await setCurrentMediaVersion({
+        mediaObjectId: version.media_object_id,
+        workspaceId,
+        body: {
+          version_id: version.id,
+          expected_current_version_id: expectedCurrentVersionId,
+          expected_revision: version.media_object_revision,
+        },
+      }).unwrap();
+      return `${version.filename} 已设为当前媒体版本。`;
+    });
+  }
+
+  async function handleToggleMediaArchived(
+    current: API.MediaVersionResponse,
+  ) {
+    if (!workspaceId) return;
+    const archived = current.media_object_status === "active";
+    await runAction(async () => {
+      await setMediaArchived({
+        mediaObjectId: current.media_object_id,
+        workspaceId,
+        archived,
+        body: { expected_revision: current.media_object_revision },
+      }).unwrap();
+      return archived
+        ? `${current.filename} 已归档，历史固定引用仍可读取。`
+        : `${current.filename} 已恢复，可继续追加版本和建立新引用。`;
+    });
   }
 
   async function handleRetry(version: API.MediaVersionResponse) {
@@ -923,7 +1008,15 @@ export function EpisodeProductionStudio({
                   onUpdate={handleUpdateShot}
                 />
               ) : initialPanel === "media" ? (
-                <MediaWorkspace busy={busy} media={mediaQuery.data?.items ?? []} onRetry={handleRetry} onUpload={handleUpload} />
+                <MediaWorkspace
+                  busy={busy}
+                  media={mediaQuery.data?.items ?? []}
+                  onAppendVersion={handleAppendMediaVersion}
+                  onRetry={handleRetry}
+                  onSetCurrent={handleSetCurrentMediaVersion}
+                  onToggleArchived={handleToggleMediaArchived}
+                  onUpload={handleUpload}
+                />
               ) : (
                 <TaskWorkspace tasks={episodeTasks} />
               )}

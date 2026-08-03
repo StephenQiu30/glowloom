@@ -153,6 +153,10 @@ declare namespace API {
     data: PaginatedAssetVersions;
   };
 
+  type ApiResponsePaginatedAuditEvents_ = {
+    data: PaginatedAuditEvents;
+  };
+
   type ApiResponsePaginatedCandidateDecisions_ = {
     data: PaginatedCandidateDecisions;
   };
@@ -721,6 +725,29 @@ declare namespace API {
     sound_effects: string[] | null;
   };
 
+  type AuditEventResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Actor Id */
+    actor_id: string;
+    /** Action */
+    action: string;
+    /** Target Type */
+    target_type: string;
+    /** Target Id */
+    target_id: string;
+    /** Result */
+    result: "succeeded" | "denied" | "failed";
+    /** Trace Id */
+    trace_id: string;
+    /** Metadata */
+    metadata: Record<string, any>;
+    /** Occurred At */
+    occurred_at: string;
+  };
+
   type AuthResponse = {
     user: UserResponse;
     workspace: WorkspaceResponse;
@@ -1001,6 +1028,15 @@ declare namespace API {
 
   type createManualShotApiV1EpisodesEpisodeIdShotsPostParams = {
     episode_id: string;
+  };
+
+  type CurrentMediaVersionRequest = {
+    /** Version Id */
+    version_id: string;
+    /** Expected Current Version Id */
+    expected_current_version_id: string;
+    /** Expected Revision */
+    expected_revision: number;
   };
 
   type CurrentScriptVersionRequest = {
@@ -1463,6 +1499,18 @@ declare namespace API {
     offset: number | null;
   };
 
+  type listAuditEventsApiV1AuditEventsGetParams = {
+    workspace_id: string;
+    actor_id: string | null | null;
+    target_type: string | null | null;
+    target_id: string | null | null;
+    action: string | null | null;
+    occurred_from: string | null | null;
+    occurred_to: string | null | null;
+    limit: number | null | null;
+    offset: number | null;
+  };
+
   type listCandidateDecisionsApiV1ExtractionCandidatesCandidateIdDecisionsGetParams =
     {
       candidate_id: string;
@@ -1648,6 +1696,16 @@ declare namespace API {
     workspace_id: string;
     /** Media Object Id */
     media_object_id: string;
+    /** Media Object Kind */
+    media_object_kind: "image" | "video" | "audio" | "subtitle" | "delivery";
+    /** Media Object Source Type */
+    media_object_source_type: "upload" | "generated" | "rendered";
+    /** Media Object Status */
+    media_object_status: "active" | "archived";
+    /** Media Object Current Version Id */
+    media_object_current_version_id: string | null;
+    /** Media Object Revision */
+    media_object_revision: number;
     /** Version No */
     version_no: number;
     /** Filename */
@@ -1758,6 +1816,17 @@ declare namespace API {
   type PaginatedAssetVersions = {
     /** Items */
     items: AssetVersionResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
+  type PaginatedAuditEvents = {
+    /** Items */
+    items: AuditEventResponse[];
     /** Total */
     total: number;
     /** Limit */
@@ -2024,6 +2093,10 @@ declare namespace API {
     episode_id: string;
   };
 
+  type restoreMediaApiV1MediaObjectsMediaObjectIdRestorePostParams = {
+    media_object_id: string;
+  };
+
   type restoreProjectApiV1ProjectsProjectIdRestorePostParams = {
     project_id: string;
   };
@@ -2246,6 +2319,11 @@ declare namespace API {
   type setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPostParams = {
     asset_id: string;
   };
+
+  type setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPostParams =
+    {
+      media_object_id: string;
+    };
 
   type setCurrentSpecVersionApiV1ShotsShotIdCurrentSpecVersionPostParams = {
     shot_id: string;

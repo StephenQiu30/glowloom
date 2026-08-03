@@ -16,6 +16,7 @@ import {
 import {
   createConsentApiV1ConsentsPost,
   getConsentApiV1ConsentsConsentIdGet,
+  listAuditEventsApiV1AuditEventsGet,
   listConsentsApiV1ConsentsGet,
   reviseConsentApiV1ConsentsConsentIdRevisionsPost,
   revokeConsentApiV1ConsentsConsentIdRevokePost,
@@ -35,10 +36,14 @@ import {
   updateWorkspaceApiV1WorkspacesWorkspaceIdPatch,
 } from "@/api/identity";
 import {
+  archiveMediaApiV1MediaObjectsMediaObjectIdArchivePost,
   completeUploadApiV1MediaUploadsUploadSessionIdCompletePost,
   initializeUploadApiV1MediaUploadsPost,
+  initializeVersionUploadApiV1MediaObjectsMediaObjectIdVersionsPost,
   listMediaApiV1MediaGet,
+  restoreMediaApiV1MediaObjectsMediaObjectIdRestorePost,
   retryProbeApiV1MediaVersionIdProbeRetryPost,
+  setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPost,
 } from "@/api/media";
 import {
   archiveEpisodeApiV1EpisodesEpisodeIdArchivePost,
@@ -159,6 +164,7 @@ export const appApi = createApi({
     "Snapshot",
     "Consents",
     "Consent",
+    "AuditEvents",
     "Media",
     "Assets",
     "Asset",
@@ -1039,6 +1045,18 @@ export const appApi = createApi({
       queryFn: (body) =>
         runRequest(() => initializeUploadApiV1MediaUploadsPost(body)),
     }),
+    initializeMediaVersionUpload: builder.mutation<
+      API.UploadInitializationResponse,
+      { mediaObjectId: string; body: API.AppendVersionRequest }
+    >({
+      queryFn: ({ mediaObjectId, body }) =>
+        runRequest(() =>
+          initializeVersionUploadApiV1MediaObjectsMediaObjectIdVersionsPost(
+            { media_object_id: mediaObjectId },
+            body,
+          ),
+        ),
+    }),
     completeMediaUpload: builder.mutation<
       API.UploadCompletionResponse,
       { uploadSessionId: string; workspaceId: string }
@@ -1052,6 +1070,7 @@ export const appApi = createApi({
       invalidatesTags: (_result, _error, { workspaceId }) => [
         { type: "Media", id: workspaceId },
         { type: "Tasks", id: workspaceId },
+        { type: "AuditEvents", id: workspaceId },
         "AssetReadiness",
       ],
     }),
@@ -1072,6 +1091,47 @@ export const appApi = createApi({
         "AssetReadiness",
       ],
     }),
+    setCurrentMediaVersion: builder.mutation<
+      API.MediaObjectResponse,
+      {
+        mediaObjectId: string;
+        workspaceId: string;
+        body: API.CurrentMediaVersionRequest;
+      }
+    >({
+      queryFn: ({ mediaObjectId, body }) =>
+        runRequest(() =>
+          setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPost(
+            { media_object_id: mediaObjectId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { workspaceId }) => [
+        { type: "Media", id: workspaceId },
+        { type: "AuditEvents", id: workspaceId },
+      ],
+    }),
+    setMediaArchived: builder.mutation<
+      API.MediaObjectResponse,
+      {
+        mediaObjectId: string;
+        workspaceId: string;
+        archived: boolean;
+        body: API.ArchiveMediaRequest;
+      }
+    >({
+      queryFn: ({ mediaObjectId, archived, body }) =>
+        runRequest(() => {
+          const params = { media_object_id: mediaObjectId };
+          return archived
+            ? archiveMediaApiV1MediaObjectsMediaObjectIdArchivePost(params, body)
+            : restoreMediaApiV1MediaObjectsMediaObjectIdRestorePost(params, body);
+        }),
+      invalidatesTags: (_result, _error, { workspaceId }) => [
+        { type: "Media", id: workspaceId },
+        { type: "AuditEvents", id: workspaceId },
+      ],
+    }),
     mediaVersions: builder.query<API.PaginatedMedia, string>({
       queryFn: (workspaceId) =>
         runRequest(() =>
@@ -1079,7 +1139,7 @@ export const appApi = createApi({
             workspace_id: workspaceId,
             kind: null,
             source_type: null,
-            include_archived: false,
+            include_archived: true,
             created_from: null,
             created_to: null,
             limit: 100,
@@ -1300,6 +1360,44 @@ export const appApi = createApi({
         { type: "Consent", id: consentId },
       ],
     }),
+    auditEvents: builder.query<
+      API.PaginatedAuditEvents,
+      {
+        workspaceId: string;
+        actorId?: string;
+        targetId?: string;
+        targetType?: string;
+        action?: string;
+        occurredFrom?: string;
+        occurredTo?: string;
+      }
+    >({
+      queryFn: ({
+        workspaceId,
+        actorId,
+        targetId,
+        targetType,
+        action,
+        occurredFrom,
+        occurredTo,
+      }) =>
+        runRequest(() =>
+          listAuditEventsApiV1AuditEventsGet({
+            workspace_id: workspaceId,
+            actor_id: actorId ?? null,
+            target_id: targetId ?? null,
+            target_type: targetType ?? null,
+            action: action ?? null,
+            occurred_from: occurredFrom ?? null,
+            occurred_to: occurredTo ?? null,
+            limit: 50,
+            offset: 0,
+          }),
+        ),
+      providesTags: (_result, _error, { workspaceId }) => [
+        { type: "AuditEvents", id: workspaceId },
+      ],
+    }),
     createConsent: builder.mutation<
       API.ConsentDetailResponse,
       API.ConsentCreateRequest
@@ -1308,6 +1406,7 @@ export const appApi = createApi({
         runRequest(() => createConsentApiV1ConsentsPost(body)),
       invalidatesTags: (_result, _error, body) => [
         { type: "Consents", id: body.workspace_id },
+        { type: "AuditEvents", id: body.workspace_id },
         "AssetReadiness",
       ],
     }),
@@ -1326,7 +1425,10 @@ export const appApi = createApi({
         { type: "Consent", id: consentId },
         "AssetReadiness",
         ...(result
-          ? [{ type: "Consents" as const, id: result.workspace_id }]
+          ? [
+              { type: "Consents" as const, id: result.workspace_id },
+              { type: "AuditEvents" as const, id: result.workspace_id },
+            ]
           : []),
       ],
     }),
@@ -1345,7 +1447,10 @@ export const appApi = createApi({
         { type: "Consent", id: consentId },
         "AssetReadiness",
         ...(result
-          ? [{ type: "Consents" as const, id: result.workspace_id }]
+          ? [
+              { type: "Consents" as const, id: result.workspace_id },
+              { type: "AuditEvents" as const, id: result.workspace_id },
+            ]
           : []),
       ],
     }),
@@ -1356,6 +1461,7 @@ export const {
   useApplyAssetUpgradeMutation,
   useAppendAssetVersionMutation,
   useAppendShotSpecMutation,
+  useAuditEventsQuery,
   useArchivedShotsQuery,
   useAssetReadinessQuery,
   useAssetShotUsagesQuery,
@@ -1390,6 +1496,7 @@ export const {
   useExtractionCandidatesQuery,
   useImportScriptMutation,
   useInitializeMediaUploadMutation,
+  useInitializeMediaVersionUploadMutation,
   useLoginMutation,
   useLogoutMutation,
   useLazyShotSpecVersionQuery,
@@ -1412,10 +1519,12 @@ export const {
   useSetEpisodeArchivedMutation,
   useSetAssetArchivedMutation,
   useSetCurrentAssetVersionMutation,
+  useSetCurrentMediaVersionMutation,
   useSetCurrentScriptVersionMutation,
   useSetScriptSourceArchivedMutation,
   useSetCurrentShotSpecMutation,
   useSetShotArchivedMutation,
+  useSetMediaArchivedMutation,
   useSetProjectArchivedMutation,
   useSetWorkspaceArchivedMutation,
   useUpdateProfileMutation,

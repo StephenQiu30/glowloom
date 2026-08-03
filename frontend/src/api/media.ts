@@ -39,6 +39,50 @@ export async function archiveMediaApiV1MediaObjectsMediaObjectIdArchivePost(
   );
 }
 
+/** Set Current Media Version POST /api/v1/media-objects/${param0}/current-version */
+export async function setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPostParams,
+  body: API.CurrentMediaVersionRequest,
+  options?: RequestOptions
+) {
+  const { media_object_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseMediaObjectResponse_>(
+    `/api/v1/media-objects/${param0}/current-version`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Restore Media POST /api/v1/media-objects/${param0}/restore */
+export async function restoreMediaApiV1MediaObjectsMediaObjectIdRestorePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.restoreMediaApiV1MediaObjectsMediaObjectIdRestorePostParams,
+  body: API.ArchiveMediaRequest,
+  options?: RequestOptions
+) {
+  const { media_object_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseMediaObjectResponse_>(
+    `/api/v1/media-objects/${param0}/restore`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** Initialize Version Upload POST /api/v1/media-objects/${param0}/versions */
 export async function initializeVersionUploadApiV1MediaObjectsMediaObjectIdVersionsPost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

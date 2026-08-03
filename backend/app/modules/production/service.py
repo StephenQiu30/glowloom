@@ -8,6 +8,7 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
+from app.modules.governance.audit import append_audit_event
 from app.modules.identity import (
     ActorContext,
     Capability,
@@ -432,6 +433,22 @@ async def create_script_extraction_task(
             occurred_at=now,
         ),
     )
+    append_audit_event(
+        session,
+        workspace_id=command.workspace_id,
+        actor_id=actor.user_id,
+        action="task.created",
+        target_type="task",
+        target_id=inserted_id,
+        trace_id=trace_id,
+        metadata={
+            "revision": 1,
+            "task_type": "script_extraction",
+            "request_type": "extraction_batch",
+            "request_id": str(command.request_id),
+        },
+        occurred_at=now,
+    )
     await session.flush()
     task = await repository.find_task(session, inserted_id)
     if task is None:
@@ -518,6 +535,22 @@ async def create_media_probe_task(
             available_at=now,
             occurred_at=now,
         ),
+    )
+    append_audit_event(
+        session,
+        workspace_id=command.workspace_id,
+        actor_id=actor.user_id,
+        action="task.created",
+        target_type="task",
+        target_id=inserted_id,
+        trace_id=trace_id,
+        metadata={
+            "revision": 1,
+            "task_type": "media_probe",
+            "request_type": "media_version",
+            "request_id": str(command.media_version_id),
+        },
+        occurred_at=now,
     )
     await session.flush()
     task = await repository.find_task(session, inserted_id)
