@@ -28,6 +28,64 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
     "workspace.updated": frozenset({"revision", "changed_fields"}),
     "workspace.archived": frozenset({"revision", "previous_status", "status"}),
     "workspace.restored": frozenset({"revision", "previous_status", "status"}),
+    "script.version_created": frozenset(
+        {"source_id", "episode_id", "version_no", "status"}
+    ),
+    "script.version_published": frozenset(
+        {
+            "source_id",
+            "episode_id",
+            "version_no",
+            "previous_version_id",
+            "current_version_id",
+            "episode_revision",
+        }
+    ),
+    "script.current_changed": frozenset(
+        {"episode_revision", "previous_version_id", "current_version_id"}
+    ),
+    "script.source_archived": frozenset(
+        {"revision", "previous_status", "status", "episode_id"}
+    ),
+    "script.source_restored": frozenset(
+        {"revision", "previous_status", "status", "episode_id"}
+    ),
+    "script.version_deleted": frozenset(
+        {"source_id", "episode_id", "version_no", "status"}
+    ),
+    "asset.created": frozenset({"revision", "kind", "project_id"}),
+    "asset.updated": frozenset({"revision", "changed_fields"}),
+    "asset.archived": frozenset({"revision", "previous_status", "status"}),
+    "asset.restored": frozenset({"revision", "previous_status", "status"}),
+    "asset.deleted": frozenset({"revision", "kind", "project_id"}),
+    "asset.version_created": frozenset(
+        {
+            "asset_id",
+            "asset_revision",
+            "version_no",
+            "kind",
+            "set_as_current",
+            "previous_version_id",
+            "current_version_id",
+        }
+    ),
+    "asset.current_changed": frozenset(
+        {"revision", "previous_version_id", "current_version_id"}
+    ),
+    "shot.spec_version_created": frozenset(
+        {
+            "shot_id",
+            "episode_id",
+            "version_no",
+            "shot_revision",
+            "source",
+            "previous_version_id",
+            "current_version_id",
+        }
+    ),
+    "shot.current_spec_changed": frozenset(
+        {"episode_id", "revision", "previous_version_id", "current_version_id"}
+    ),
     "consent.registered": frozenset({"revision", "subject_type"}),
     "consent.revised": frozenset({"revision", "subject_type"}),
     "consent.revoked": frozenset({"revision", "subject_type"}),

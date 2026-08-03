@@ -33,6 +33,21 @@ const auditActionLabels: Record<string, string> = {
   "workspace.updated": "工作空间更新",
   "workspace.archived": "工作空间归档",
   "workspace.restored": "工作空间恢复",
+  "script.version_created": "剧本初始版本创建",
+  "script.version_published": "剧本版本发布",
+  "script.current_changed": "剧本当前版本切换",
+  "script.source_archived": "剧本来源归档",
+  "script.source_restored": "剧本来源恢复",
+  "script.version_deleted": "剧本草稿删除",
+  "asset.created": "资产创建",
+  "asset.updated": "资产更新",
+  "asset.archived": "资产归档",
+  "asset.restored": "资产恢复",
+  "asset.deleted": "资产删除",
+  "asset.version_created": "资产版本创建",
+  "asset.current_changed": "资产当前版本切换",
+  "shot.spec_version_created": "分镜规格版本创建",
+  "shot.current_spec_changed": "分镜当前规格切换",
   "consent.registered": "授权登记",
   "consent.revised": "授权修订",
   "consent.revoked": "授权撤销",
@@ -68,7 +83,12 @@ function eventSummary(event: API.AuditEventResponse): string {
   }
   if (event.metadata.subject_type) return String(event.metadata.subject_type);
   if (event.metadata.version_no) {
-    return `${String(event.metadata.kind ?? "媒体")} · v${String(event.metadata.version_no)}`;
+    const versionKind = event.action.startsWith("script.")
+      ? "剧本"
+      : event.action.startsWith("shot.")
+        ? "分镜规格"
+        : String(event.metadata.kind ?? "媒体");
+    return `${versionKind} · v${String(event.metadata.version_no)}`;
   }
   if (event.metadata.task_type) {
     return `${String(event.metadata.task_type)} · ${String(event.metadata.request_type ?? "request")}`;

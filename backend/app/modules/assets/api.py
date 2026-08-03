@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AccessTokenClaims, get_access_token_claims
@@ -36,11 +36,18 @@ router = APIRouter(prefix="/api/v1", tags=["assets"])
 async def create_asset(
     project_id: UUID,
     payload: AssetCreateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetResponse]:
     return ApiResponse(
-        data=await service.create_asset(session, claims, project_id, payload)
+        data=await service.create_asset(
+            session,
+            claims,
+            project_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 
@@ -85,11 +92,18 @@ async def get_asset(
 async def update_asset(
     asset_id: UUID,
     payload: AssetUpdateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetResponse]:
     return ApiResponse(
-        data=await service.update_asset(session, claims, asset_id, payload)
+        data=await service.update_asset(
+            session,
+            claims,
+            asset_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 
@@ -99,12 +113,18 @@ async def update_asset(
 async def archive_asset(
     asset_id: UUID,
     payload: AssetStateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetResponse]:
     return ApiResponse(
         data=await service.set_asset_archived(
-            session, claims, asset_id, payload, archived=True
+            session,
+            claims,
+            asset_id,
+            payload,
+            archived=True,
+            trace_id=str(request.state.request_id),
         )
     )
 
@@ -115,12 +135,18 @@ async def archive_asset(
 async def restore_asset(
     asset_id: UUID,
     payload: AssetStateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetResponse]:
     return ApiResponse(
         data=await service.set_asset_archived(
-            session, claims, asset_id, payload, archived=False
+            session,
+            claims,
+            asset_id,
+            payload,
+            archived=False,
+            trace_id=str(request.state.request_id),
         )
     )
 
@@ -145,10 +171,17 @@ async def asset_delete_preflight(
 async def delete_asset(
     asset_id: UUID,
     expected_revision: Annotated[int, Query(ge=1)],
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetDeleteResponse]:
-    await service.delete_asset(session, claims, asset_id, expected_revision)
+    await service.delete_asset(
+        session,
+        claims,
+        asset_id,
+        expected_revision,
+        trace_id=str(request.state.request_id),
+    )
     return ApiResponse(data=AssetDeleteResponse())
 
 
@@ -160,11 +193,18 @@ async def delete_asset(
 async def append_asset_version(
     asset_id: UUID,
     payload: AssetVersionCreateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetVersionCreateResponse]:
     return ApiResponse(
-        data=await service.append_version(session, claims, asset_id, payload)
+        data=await service.append_version(
+            session,
+            claims,
+            asset_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 
@@ -207,11 +247,18 @@ async def get_asset_version(
 async def set_current_asset_version(
     asset_id: UUID,
     payload: AssetCurrentVersionRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetResponse]:
     return ApiResponse(
-        data=await service.set_current_version(session, claims, asset_id, payload)
+        data=await service.set_current_version(
+            session,
+            claims,
+            asset_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 

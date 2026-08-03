@@ -197,7 +197,15 @@ test("S2 媒体、三类资产与授权准备度联合闭环", async ({ page }) 
   await expect(page.getByRole("status")).toContainText("授权已撤销");
   const auditTrail = page.getByRole("region", { name: "操作审计" });
   await expect(auditTrail.getByText("授权撤销")).toBeVisible();
+  await expect(auditTrail.getByText("资产更新")).toBeVisible();
+  await expect(auditTrail.getByText("资产当前版本切换")).toBeVisible();
+  await expect(auditTrail.getByText("资产归档")).toBeVisible();
+  await expect(auditTrail.getByText("资产恢复")).toBeVisible();
+  await expect(auditTrail.getByText("资产版本创建").first()).toBeVisible();
   await auditTrail.getByRole("button", { name: "筛选" }).click();
+  await auditTrail.getByLabel("动作").selectOption("asset.current_changed");
+  await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
+  await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
   await auditTrail.getByLabel("动作").selectOption("consent.revoked");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();

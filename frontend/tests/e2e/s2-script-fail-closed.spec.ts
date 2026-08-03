@@ -49,4 +49,14 @@ test("S2 导入发布剧本并在 DeepSeek 未配置时可恢复地失败", asyn
     page.getByText("提取未完成", { exact: true }),
   ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "重新提取结构" })).toBeVisible();
+
+  await page.goto("/governance");
+  const auditTrail = page.getByRole("region", { name: "操作审计" });
+  await expect(auditTrail.getByText("剧本初始版本创建")).toBeVisible();
+  await expect(auditTrail.getByText("剧本版本发布")).toBeVisible();
+  await expect(auditTrail.getByText("任务创建")).toBeVisible();
+  await auditTrail.getByRole("button", { name: "筛选" }).click();
+  await auditTrail.getByLabel("动作").selectOption("script.version_published");
+  await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
+  await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
 });

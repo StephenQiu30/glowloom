@@ -388,4 +388,25 @@ test("S3 从本地确认结构完成镜头规格与生命周期闭环", async ({
     restoredImpactDialog.getByText("0 个镜头仍引用其他剧本版本"),
   ).toBeVisible();
   await restoredImpactDialog.getByRole("button", { name: "知道了" }).click();
+
+  await page.goto("/governance");
+  const auditTrail = page.getByRole("region", { name: "操作审计" });
+  await auditTrail.getByRole("button", { name: "筛选" }).click();
+  await auditTrail
+    .getByLabel("动作")
+    .selectOption("shot.spec_version_created");
+  await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
+  await expect(auditTrail.getByText(/7 条只追加事件/)).toBeVisible();
+  await expect(
+    auditTrail.locator("article").first().getByText("分镜规格版本创建"),
+  ).toBeVisible();
+
+  await auditTrail
+    .getByLabel("动作")
+    .selectOption("shot.current_spec_changed");
+  await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
+  await expect(auditTrail.getByText(/2 条只追加事件/)).toBeVisible();
+  await expect(
+    auditTrail.locator("article").first().getByText("分镜当前规格切换"),
+  ).toBeVisible();
 });

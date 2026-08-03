@@ -10,6 +10,7 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
+from app.modules.governance.audit import append_audit_event
 from app.modules.projects import (
     compare_and_set_current_script_version,
     episode_for_content_read,
@@ -123,6 +124,8 @@ async def import_text_source(
     claims: AccessTokenClaims,
     episode_id: UUID,
     request: ScriptImportRequest,
+    *,
+    trace_id: str,
 ) -> ScriptImportResponse:
     title = request.title.strip()
     rights_declaration = request.rights_declaration.strip()
@@ -207,6 +210,22 @@ async def import_text_source(
             created_at=now,
         )
         session.add(version)
+        append_audit_event(
+            session,
+            workspace_id=source.workspace_id,
+            actor_id=claims.sub,
+            action="script.version_created",
+            target_type="script_version",
+            target_id=version.id,
+            trace_id=trace_id,
+            metadata={
+                "source_id": str(source.id),
+                "episode_id": str(source.episode_id),
+                "version_no": version.version_no,
+                "status": version.status,
+            },
+            occurred_at=now,
+        )
         await session.flush()
     return ScriptImportResponse(
         source=_source_response(source),
@@ -405,6 +424,8 @@ async def publish_version(
     source_id: UUID,
     request: ScriptVersionPublishRequest,
     impact_reader: ScriptVersionImpactReader,
+    *,
+    trace_id: str,
 ) -> ScriptVersionPublishResponse:
     content_hash = sha256(request.body.encode("utf-8")).hexdigest()
     now = datetime.now(UTC)
@@ -444,6 +465,28 @@ async def publish_version(
             version.id,
         )
         session.add(version)
+        append_audit_event(
+            session,
+            workspace_id=source.workspace_id,
+            actor_id=claims.sub,
+            action="script.version_published",
+            target_type="script_version",
+            target_id=version.id,
+            trace_id=trace_id,
+            metadata={
+                "source_id": str(source.id),
+                "episode_id": str(current.episode_id),
+                "version_no": version.version_no,
+                "previous_version_id": (
+                    str(request.expected_current_version_id)
+                    if request.expected_current_version_id is not None
+                    else None
+                ),
+                "current_version_id": str(version.id),
+                "episode_revision": current.revision,
+            },
+            occurred_at=now,
+        )
         await session.flush()
         affected_shot_ids = await impact_reader(
             episode_id=current.episode_id,
@@ -467,6 +510,8 @@ async def set_current_version(
     episode_id: UUID,
     request: CurrentScriptVersionRequest,
     impact_reader: ScriptVersionImpactReader,
+    *,
+    trace_id: str,
 ) -> CurrentScriptVersionResponse:
     async with session.begin():
         episode = await lock_active_episode_for_content_write(
@@ -503,6 +548,24 @@ async def set_current_version(
             request.expected_current_version_id,
             version.id,
         )
+        append_audit_event(
+            session,
+            workspace_id=source.workspace_id,
+            actor_id=claims.sub,
+            action="script.current_changed",
+            target_type="episode",
+            target_id=current.episode_id,
+            trace_id=trace_id,
+            metadata={
+                "episode_revision": current.revision,
+                "previous_version_id": (
+                    str(request.expected_current_version_id)
+                    if request.expected_current_version_id is not None
+                    else None
+                ),
+                "current_version_id": str(version.id),
+            },
+        )
         await session.flush()
         affected_shot_ids = await impact_reader(
             episode_id=current.episode_id,
@@ -524,6 +587,7 @@ async def set_source_archived(
     request: ScriptSourceStateRequest,
     *,
     archived: bool,
+    trace_id: str,
 ) -> ScriptSourceResponse:
     expected_status = "active" if archived else "archived"
     async with session.begin():
@@ -543,10 +607,32 @@ async def set_source_archived(
                 "Script source state conflict",
                 status_code=409,
             )
+        previous_status = source.status
+        now = datetime.now(UTC)
         source.status = "archived" if archived else "active"
-        source.archived_at = datetime.now(UTC) if archived else None
+        source.archived_at = now if archived else None
         source.archived_by = claims.sub if archived else None
         source.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=source.workspace_id,
+            actor_id=claims.sub,
+            action=(
+                "script.source_archived"
+                if archived
+                else "script.source_restored"
+            ),
+            target_type="script_source",
+            target_id=source.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": source.revision,
+                "previous_status": previous_status,
+                "status": source.status,
+                "episode_id": str(source.episode_id),
+            },
+            occurred_at=now,
+        )
         await session.flush()
     return _source_response(source)
 
@@ -604,6 +690,7 @@ async def delete_draft_version(
     version_id: UUID,
     *,
     confirmed: bool,
+    trace_id: str,
 ) -> ScriptVersionDeleteResponse:
     if not confirmed:
         raise ApiError(
@@ -676,6 +763,21 @@ async def delete_draft_version(
                     ],
                 },
             )
+        append_audit_event(
+            session,
+            workspace_id=locked_version.workspace_id,
+            actor_id=claims.sub,
+            action="script.version_deleted",
+            target_type="script_version",
+            target_id=locked_version.id,
+            trace_id=trace_id,
+            metadata={
+                "source_id": str(source.id),
+                "episode_id": str(episode.episode_id),
+                "version_no": locked_version.version_no,
+                "status": locked_version.status,
+            },
+        )
         await session.delete(locked_version)
         await session.flush()
     return ScriptVersionDeleteResponse(script_version_id=version_id)

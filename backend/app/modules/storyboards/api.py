@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AccessTokenClaims, get_access_token_claims
@@ -91,6 +91,7 @@ async def preflight_asset_upgrade(
 async def apply_asset_upgrade(
     asset_version_id: UUID,
     payload: AssetUpgradeApplyRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetUpgradeApplyResponse]:
@@ -100,6 +101,7 @@ async def apply_asset_upgrade(
             claims,
             asset_version_id,
             payload,
+            trace_id=str(request.state.request_id),
         )
     )
 
@@ -144,10 +146,18 @@ async def merge_preflight(
 )
 async def merge_shots(
     payload: MergeShotRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotTransformResponse]:
-    return ApiResponse(data=await service.merge_shots(session, claims, payload))
+    return ApiResponse(
+        data=await service.merge_shots(
+            session,
+            claims,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
 
 
 @router.post(
@@ -310,10 +320,19 @@ async def restore_shot(
 async def copy_shot(
     shot_id: UUID,
     payload: CopyShotRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotTransformResponse]:
-    return ApiResponse(data=await service.copy_shot(session, claims, shot_id, payload))
+    return ApiResponse(
+        data=await service.copy_shot(
+            session,
+            claims,
+            shot_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
 
 
 @router.post(
@@ -339,11 +358,18 @@ async def split_preflight(
 async def split_shot(
     shot_id: UUID,
     payload: SplitShotRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotTransformResponse]:
     return ApiResponse(
-        data=await service.split_shot(session, claims, shot_id, payload)
+        data=await service.split_shot(
+            session,
+            claims,
+            shot_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 
@@ -355,11 +381,18 @@ async def split_shot(
 async def append_spec_version(
     shot_id: UUID,
     payload: ShotSpecCreateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotSpecCreateResponse]:
     return ApiResponse(
-        data=await service.append_spec_version(session, claims, shot_id, payload)
+        data=await service.append_spec_version(
+            session,
+            claims,
+            shot_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 
@@ -398,11 +431,18 @@ async def get_spec_version(
 async def set_current_spec_version(
     shot_id: UUID,
     payload: ShotCurrentSpecRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotResponse]:
     return ApiResponse(
-        data=await service.set_current_spec_version(session, claims, shot_id, payload)
+        data=await service.set_current_spec_version(
+            session,
+            claims,
+            shot_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 

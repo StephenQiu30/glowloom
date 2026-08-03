@@ -15,6 +15,7 @@ from app.modules.assets import (
     resolve_asset_version,
     resolve_asset_versions_readiness,
 )
+from app.modules.governance.audit import append_audit_event
 from app.modules.projects import (
     EpisodeContentContext,
     episode_for_content_read,
@@ -741,6 +742,8 @@ async def _create_target(
     target: TargetShotSpecRequest,
     actor_id: UUID,
     now: datetime,
+    trace_id: str,
+    audit_source: Literal["copy", "split", "merge"],
 ) -> tuple[Shot, ShotSpecVersion, list[AssetReference]]:
     script = target.spec.script_reference
     shot = Shot(
@@ -791,8 +794,54 @@ async def _create_target(
     ]
     session.add_all(references)
     shot.current_spec_version_id = version.id
+    _append_spec_version_audit(
+        session,
+        shot=shot,
+        version=version,
+        actor_id=actor_id,
+        trace_id=trace_id,
+        source=audit_source,
+        previous_version_id=None,
+        occurred_at=now,
+    )
     await session.flush()
     return shot, version, references
+
+
+def _append_spec_version_audit(
+    session: AsyncSession,
+    *,
+    shot: Shot,
+    version: ShotSpecVersion,
+    actor_id: UUID,
+    trace_id: str,
+    source: Literal["manual_save", "copy", "split", "merge", "asset_upgrade"],
+    previous_version_id: UUID | None,
+    occurred_at: datetime,
+) -> None:
+    append_audit_event(
+        session,
+        workspace_id=shot.workspace_id,
+        actor_id=actor_id,
+        action="shot.spec_version_created",
+        target_type="shot_spec_version",
+        target_id=version.id,
+        trace_id=trace_id,
+        metadata={
+            "shot_id": str(shot.id),
+            "episode_id": str(shot.episode_id),
+            "version_no": version.version_no,
+            "shot_revision": shot.revision,
+            "source": source,
+            "previous_version_id": (
+                str(previous_version_id)
+                if previous_version_id is not None
+                else None
+            ),
+            "current_version_id": str(version.id),
+        },
+        occurred_at=occurred_at,
+    )
 
 
 async def append_spec_version(
@@ -800,6 +849,8 @@ async def append_spec_version(
     claims: AccessTokenClaims,
     shot_id: UUID,
     request: ShotSpecCreateRequest,
+    *,
+    trace_id: str,
 ) -> ShotSpecCreateResponse:
     async with session.begin():
         current = await repository.find_shot(session, shot_id)
@@ -840,6 +891,8 @@ async def append_spec_version(
             references=request.asset_references,
         )
         hashes = storyboard_content_hashes(request.spec, request.asset_references)
+        previous_version_id = shot.current_spec_version_id
+        now = datetime.now(UTC)
         version = ShotSpecVersion(
             id=uuid7(),
             workspace_id=shot.workspace_id,
@@ -850,6 +903,7 @@ async def append_spec_version(
             content_hash=hashes.content_hash,
             input_hash=hashes.input_hash,
             created_by=claims.sub,
+            created_at=now,
         )
         session.add(version)
         await session.flush()
@@ -868,6 +922,16 @@ async def append_spec_version(
         session.add_all(references)
         shot.current_spec_version_id = version.id
         shot.revision += 1
+        _append_spec_version_audit(
+            session,
+            shot=shot,
+            version=version,
+            actor_id=claims.sub,
+            trace_id=trace_id,
+            source="manual_save",
+            previous_version_id=previous_version_id,
+            occurred_at=now,
+        )
         await session.flush()
     return ShotSpecCreateResponse(
         shot=_shot_response(shot),
@@ -913,6 +977,8 @@ async def set_current_spec_version(
     claims: AccessTokenClaims,
     shot_id: UUID,
     request: ShotCurrentSpecRequest,
+    *,
+    trace_id: str,
 ) -> ShotResponse:
     async with session.begin():
         shot = await _locked_shot_for_write(session, claims, shot_id)
@@ -927,8 +993,28 @@ async def set_current_spec_version(
                 "Shot spec version belongs to another shot",
                 status_code=422,
             )
+        previous_version_id = shot.current_spec_version_id
         shot.current_spec_version_id = request.version_id
         shot.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=shot.workspace_id,
+            actor_id=claims.sub,
+            action="shot.current_spec_changed",
+            target_type="shot",
+            target_id=shot.id,
+            trace_id=trace_id,
+            metadata={
+                "episode_id": str(shot.episode_id),
+                "revision": shot.revision,
+                "previous_version_id": (
+                    str(previous_version_id)
+                    if previous_version_id is not None
+                    else None
+                ),
+                "current_version_id": str(request.version_id),
+            },
+        )
         await session.flush()
     return _shot_response(shot)
 
@@ -1013,6 +1099,8 @@ async def copy_shot(
     claims: AccessTokenClaims,
     shot_id: UUID,
     request: CopyShotRequest,
+    *,
+    trace_id: str,
 ) -> ShotTransformResponse:
     input_hash = _transform_input_hash(
         "copy",
@@ -1083,6 +1171,8 @@ async def copy_shot(
             target=target,
             actor_id=claims.sub,
             now=now,
+            trace_id=trace_id,
+            audit_source="copy",
         )
         ordered = [*active[: source_index + 1], result_shot, *active[source_index + 1 :]]
         for position, active_shot in enumerate(ordered, start=1):
@@ -1157,6 +1247,8 @@ async def split_shot(
     claims: AccessTokenClaims,
     shot_id: UUID,
     request: SplitShotRequest,
+    *,
+    trace_id: str,
 ) -> ShotTransformResponse:
     input_hash = _transform_input_hash(
         "split",
@@ -1256,6 +1348,8 @@ async def split_shot(
                 target=target,
                 actor_id=claims.sub,
                 now=now,
+                trace_id=trace_id,
+                audit_source="split",
             )
             results.append(result_shot)
             versions.append(version)
@@ -1384,6 +1478,8 @@ async def merge_shots(
     session: AsyncSession,
     claims: AccessTokenClaims,
     request: MergeShotRequest,
+    *,
+    trace_id: str,
 ) -> ShotTransformResponse:
     input_hash = _transform_input_hash("merge", request.model_dump(mode="json"))
     async with session.begin():
@@ -1474,6 +1570,8 @@ async def merge_shots(
             target=request.target,
             actor_id=claims.sub,
             now=now,
+            trace_id=trace_id,
+            audit_source="merge",
         )
         source_ids = {shot.id for shot in shots}
         for shot in shots:
@@ -2253,6 +2351,8 @@ async def apply_asset_upgrade(
     claims: AccessTokenClaims,
     old_asset_version_id: UUID,
     request: AssetUpgradeApplyRequest,
+    *,
+    trace_id: str,
 ) -> AssetUpgradeApplyResponse:
     async with session.begin():
         current, rows, references_by_version = await _asset_upgrade_snapshot(
@@ -2317,7 +2417,7 @@ async def apply_asset_upgrade(
             replacement_requests_by_version.append(replacement_requests)
             session.add(version)
         await session.flush()
-        for (shot, _source_version), version, replacement_requests in zip(
+        for (shot, source_version), version, replacement_requests in zip(
             rows,
             versions,
             replacement_requests_by_version,
@@ -2341,6 +2441,16 @@ async def apply_asset_upgrade(
             shot.current_spec_version_id = version.id
             shot.revision += 1
             shot.updated_at = now
+            _append_spec_version_audit(
+                session,
+                shot=shot,
+                version=version,
+                actor_id=claims.sub,
+                trace_id=trace_id,
+                source="asset_upgrade",
+                previous_version_id=source_version.id,
+                occurred_at=now,
+            )
         await session.flush()
         result = AssetUpgradeApplyResponse(
             shots=[_shot_response(shot) for shot, _version in rows],

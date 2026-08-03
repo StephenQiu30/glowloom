@@ -64,3 +64,61 @@ def test_audit_metadata_is_restricted_by_registered_action() -> None:
                 "password_hash": "must-not-be-recorded",
             },
         )
+
+    with pytest.raises(ValueError, match="body"):
+        append_audit_event(
+            session,
+            workspace_id=common["workspace_id"],
+            actor_id=common["actor_id"],
+            action="script.version_published",
+            target_type="script_version",
+            target_id=common["target_id"],
+            trace_id=common["trace_id"],
+            metadata={
+                "source_id": str(uuid7()),
+                "episode_id": str(uuid7()),
+                "version_no": 2,
+                "previous_version_id": None,
+                "current_version_id": str(uuid7()),
+                "episode_revision": 2,
+                "body": "must-not-be-recorded",
+            },
+        )
+
+    with pytest.raises(ValueError, match="name"):
+        append_audit_event(
+            session,
+            workspace_id=common["workspace_id"],
+            actor_id=common["actor_id"],
+            action="asset.created",
+            target_type="asset",
+            target_id=common["target_id"],
+            trace_id=common["trace_id"],
+            metadata={
+                "revision": 1,
+                "kind": "character",
+                "project_id": str(uuid7()),
+                "name": "must-not-be-recorded",
+            },
+        )
+
+    with pytest.raises(ValueError, match="spec"):
+        append_audit_event(
+            session,
+            workspace_id=common["workspace_id"],
+            actor_id=common["actor_id"],
+            action="shot.spec_version_created",
+            target_type="shot_spec_version",
+            target_id=common["target_id"],
+            trace_id=common["trace_id"],
+            metadata={
+                "shot_id": str(uuid7()),
+                "episode_id": str(uuid7()),
+                "version_no": 1,
+                "shot_revision": 2,
+                "source": "manual_save",
+                "previous_version_id": None,
+                "current_version_id": str(uuid7()),
+                "spec": {"must": "not be recorded"},
+            },
+        )

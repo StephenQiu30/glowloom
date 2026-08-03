@@ -159,7 +159,7 @@ def test_media_version_lifecycle_traceability_is_explicit() -> None:
     assert "追加 v2 → 探测 ready → current 切回 v1 → 归档 → 恢复" in acceptance
 
 
-def test_identity_audit_slice_is_traced_without_premature_acceptance() -> None:
+def test_audit_slices_are_traced_without_premature_acceptance() -> None:
     prd = (DOCS / "prd/007-基础业务模块PRD任务.md").read_text(encoding="utf-8")
     plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(encoding="utf-8")
     acceptance = (DOCS / "acceptance/005-S2统一前端增量验收.md").read_text(
@@ -173,8 +173,14 @@ def test_identity_audit_slice_is_traced_without_premature_acceptance() -> None:
         "identity.account_deactivated",
         "workspace.created",
         "workspace.restored",
+        "script.version_published",
+        "script.current_changed",
+        "asset.version_created",
+        "asset.current_changed",
+        "shot.spec_version_created",
+        "shot.current_spec_changed",
     ):
         assert action in acceptance
-    assert "业务版本、审核和交付动作仍待接入" in acceptance
-    assert "身份与 Workspace 审计纵向切片" in plan
+    assert "审核和交付动作仍待对应 S5 真实实体接入" in acceptance
+    assert "身份、Workspace、授权、媒体、任务、剧本、资产及 S3 分镜规格纵向切片" in plan
     assert "PT-GOV-006 | accepted" not in prd

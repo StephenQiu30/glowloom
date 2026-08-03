@@ -50,6 +50,7 @@ from app.modules.governance import (
     check_rights,
     check_rights_for_resolved_subjects,
 )
+from app.modules.governance.audit import append_audit_event
 from app.modules.identity import ActorContext
 from app.modules.media import (
     MediaVersionReference,
@@ -277,6 +278,8 @@ async def create_asset(
     claims: AccessTokenClaims,
     project_id: UUID,
     request: AssetCreateRequest,
+    *,
+    trace_id: str,
 ) -> AssetResponse:
     name = request.name.strip()
     if not name:
@@ -306,6 +309,20 @@ async def create_asset(
             created_by=claims.sub,
         )
         session.add(asset)
+        append_audit_event(
+            session,
+            workspace_id=asset.workspace_id,
+            actor_id=claims.sub,
+            action="asset.created",
+            target_type="asset",
+            target_id=asset.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": asset.revision,
+                "kind": asset.kind,
+                "project_id": str(asset.project_id),
+            },
+        )
         await session.flush()
     return _asset_response(asset, duplicate=duplicate)
 
@@ -352,6 +369,8 @@ async def update_asset(
     claims: AccessTokenClaims,
     asset_id: UUID,
     request: AssetUpdateRequest,
+    *,
+    trace_id: str,
 ) -> AssetResponse:
     changes = request.model_dump(exclude={"expected_revision"}, exclude_unset=True)
     if not changes:
@@ -383,8 +402,23 @@ async def update_asset(
             asset.aliases = _clean_values(request.aliases)
         if request.tags is not None:
             asset.tags = _clean_values(request.tags)
+        now = datetime.now(UTC)
         asset.revision += 1
-        asset.updated_at = datetime.now(UTC)
+        asset.updated_at = now
+        append_audit_event(
+            session,
+            workspace_id=asset.workspace_id,
+            actor_id=claims.sub,
+            action="asset.updated",
+            target_type="asset",
+            target_id=asset.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": asset.revision,
+                "changed_fields": sorted(changes),
+            },
+            occurred_at=now,
+        )
         await session.flush()
     return _asset_response(asset, duplicate=duplicate)
 
@@ -396,6 +430,7 @@ async def set_asset_archived(
     request: AssetStateRequest,
     *,
     archived: bool,
+    trace_id: str,
 ) -> AssetResponse:
     expected_status = "active" if archived else "archived"
     async with session.begin():
@@ -405,11 +440,28 @@ async def set_asset_archived(
             raise ApiError(
                 ErrorCode.STATE_CONFLICT, "Asset state conflict", status_code=409
             )
+        previous_status = asset.status
+        now = datetime.now(UTC)
         asset.status = "archived" if archived else "active"
-        asset.archived_at = datetime.now(UTC) if archived else None
+        asset.archived_at = now if archived else None
         asset.archived_by = claims.sub if archived else None
         asset.revision += 1
-        asset.updated_at = datetime.now(UTC)
+        asset.updated_at = now
+        append_audit_event(
+            session,
+            workspace_id=asset.workspace_id,
+            actor_id=claims.sub,
+            action="asset.archived" if archived else "asset.restored",
+            target_type="asset",
+            target_id=asset.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": asset.revision,
+                "previous_status": previous_status,
+                "status": asset.status,
+            },
+            occurred_at=now,
+        )
         await session.flush()
     return _asset_response(asset)
 
@@ -440,6 +492,8 @@ async def delete_asset(
     claims: AccessTokenClaims,
     asset_id: UUID,
     expected_revision: int,
+    *,
+    trace_id: str,
 ) -> None:
     async with session.begin():
         asset = await _locked_asset_for_write(session, claims, asset_id)
@@ -451,6 +505,20 @@ async def delete_asset(
                 status_code=409,
                 next_action="review_delete_blockers",
             )
+        append_audit_event(
+            session,
+            workspace_id=asset.workspace_id,
+            actor_id=claims.sub,
+            action="asset.deleted",
+            target_type="asset",
+            target_id=asset.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": asset.revision,
+                "kind": asset.kind,
+                "project_id": str(asset.project_id),
+            },
+        )
         await session.delete(asset)
 
 
@@ -726,6 +794,8 @@ async def append_version(
     claims: AccessTokenClaims,
     asset_id: UUID,
     request: AssetVersionCreateRequest,
+    *,
+    trace_id: str,
 ) -> AssetVersionCreateResponse:
     async with session.begin():
         asset = await _locked_asset_for_write(session, claims, asset_id)
@@ -736,6 +806,7 @@ async def append_version(
                 status_code=409,
                 next_action="restore_asset",
             )
+        previous_version_id = asset.current_version_id
         _require_expected_current(asset, request.expected_current_version_id)
         if request.spec.kind != asset.kind:
             raise ApiError(
@@ -801,6 +872,34 @@ async def append_version(
             at_time=now,
             known_media=media,
         )
+        append_audit_event(
+            session,
+            workspace_id=asset.workspace_id,
+            actor_id=claims.sub,
+            action="asset.version_created",
+            target_type="asset_version",
+            target_id=version.id,
+            trace_id=trace_id,
+            metadata={
+                "asset_id": str(asset.id),
+                "asset_revision": asset.revision,
+                "version_no": version.version_no,
+                "kind": asset.kind,
+                "set_as_current": request.set_as_current,
+                "previous_version_id": (
+                    str(previous_version_id)
+                    if previous_version_id is not None
+                    else None
+                ),
+                "current_version_id": (
+                    str(asset.current_version_id)
+                    if asset.current_version_id is not None
+                    else None
+                ),
+            },
+            occurred_at=now,
+        )
+        await session.flush()
     return AssetVersionCreateResponse(
         asset=_asset_response(asset),
         version=_version_response(version, stored_references),
@@ -853,6 +952,8 @@ async def set_current_version(
     claims: AccessTokenClaims,
     asset_id: UUID,
     request: AssetCurrentVersionRequest,
+    *,
+    trace_id: str,
 ) -> AssetResponse:
     async with session.begin():
         asset = await _locked_asset_for_write(session, claims, asset_id)
@@ -861,9 +962,30 @@ async def set_current_version(
         result = await repository.find_version(session, request.version_id)
         if result is None or result[0].asset_id != asset.id:
             raise _not_found("Asset version")
+        previous_version_id = asset.current_version_id
+        now = datetime.now(UTC)
         asset.current_version_id = request.version_id
         asset.revision += 1
-        asset.updated_at = datetime.now(UTC)
+        asset.updated_at = now
+        append_audit_event(
+            session,
+            workspace_id=asset.workspace_id,
+            actor_id=claims.sub,
+            action="asset.current_changed",
+            target_type="asset",
+            target_id=asset.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": asset.revision,
+                "previous_version_id": (
+                    str(previous_version_id)
+                    if previous_version_id is not None
+                    else None
+                ),
+                "current_version_id": str(asset.current_version_id),
+            },
+            occurred_at=now,
+        )
         await session.flush()
     return _asset_response(asset)
 

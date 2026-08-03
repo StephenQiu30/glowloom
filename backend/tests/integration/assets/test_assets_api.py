@@ -96,7 +96,7 @@ async def test_asset_identity_lifecycle_duplicate_hint_and_safe_delete(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, _, project = await _identity_project(
+    headers, identity, project = await _identity_project(
         client,
         email="asset-lifecycle@example.com",
     )
@@ -135,17 +135,29 @@ async def test_asset_identity_lifecycle_duplicate_hint_and_safe_delete(
     )
     assert changed_kind.status_code == 422
 
+    updated = await client.patch(
+        f"/api/v1/assets/{asset['id']}",
+        headers=headers,
+        json={
+            "expected_revision": 1,
+            "name": "林澈（定稿）",
+            "aliases": ["阿澈", "主角"],
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["data"]["revision"] == 2
+
     archived = await client.post(
         f"/api/v1/assets/{asset['id']}/archive",
         headers=headers,
-        json={"expected_revision": 1},
+        json={"expected_revision": 2},
     )
     assert archived.status_code == 200
     assert archived.json()["data"]["status"] == "archived"
     restored = await client.post(
         f"/api/v1/assets/{asset['id']}/restore",
         headers=headers,
-        json={"expected_revision": 2},
+        json={"expected_revision": 3},
     )
     assert restored.status_code == 200
     assert restored.json()["data"]["status"] == "active"
@@ -159,10 +171,33 @@ async def test_asset_identity_lifecycle_duplicate_hint_and_safe_delete(
     deleted = await client.delete(
         f"/api/v1/assets/{asset['id']}",
         headers=headers,
-        params={"expected_revision": 3},
+        params={"expected_revision": 4},
     )
     assert deleted.status_code == 200
     assert deleted.json()["data"] == {"deleted": True}
+
+    audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": identity["workspace"]["id"],
+            "target_type": "asset",
+            "target_id": asset["id"],
+        },
+    )
+    assert audit.status_code == 200
+    assert [item["action"] for item in audit.json()["data"]["items"]] == [
+        "asset.deleted",
+        "asset.restored",
+        "asset.archived",
+        "asset.updated",
+        "asset.created",
+    ]
+    assert "林澈" not in str(audit.json()["data"])
+    assert audit.json()["data"]["items"][3]["metadata"] == {
+        "revision": 2,
+        "changed_fields": ["aliases", "name"],
+    }
 
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Asset)) == 1
@@ -280,6 +315,59 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
     versions = await client.get(endpoint, headers=headers)
     assert versions.status_code == 200
     assert versions.json()["data"]["total"] == 2
+    winner = first if first.status_code == 201 else second
+    current = winner.json()["data"]["version"]
+    version_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": str(workspace_id),
+            "action": "asset.version_created",
+        },
+    )
+    assert version_audit.status_code == 200
+    assert version_audit.json()["data"]["total"] == 2
+    assert all(
+        set(item["metadata"])
+        <= {
+            "asset_id",
+            "asset_revision",
+            "version_no",
+            "kind",
+            "set_as_current",
+            "previous_version_id",
+            "current_version_id",
+        }
+        for item in version_audit.json()["data"]["items"]
+    )
+
+    switched = await client.post(
+        f"/api/v1/assets/{asset['id']}/current-version",
+        headers=headers,
+        json={
+            "version_id": version["id"],
+            "expected_current_version_id": current["id"],
+            "expected_revision": winner.json()["data"]["asset"]["revision"],
+        },
+    )
+    assert switched.status_code == 200
+    assert switched.json()["data"]["current_version_id"] == version["id"]
+    current_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": str(workspace_id),
+            "action": "asset.current_changed",
+            "target_id": asset["id"],
+        },
+    )
+    assert current_audit.status_code == 200
+    assert current_audit.json()["data"]["total"] == 1
+    assert current_audit.json()["data"]["items"][0]["metadata"] == {
+        "revision": switched.json()["data"]["revision"],
+        "previous_version_id": current["id"],
+        "current_version_id": version["id"],
+    }
 
     revoked = await client.post(
         f"/api/v1/consents/{consent_data['id']}/revoke",

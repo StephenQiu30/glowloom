@@ -138,6 +138,29 @@ async def test_text_import_is_idempotent_private_and_creates_immutable_version(
     assert conflicting.status_code == 409
     assert conflicting.json()["error"]["code"] == "resource_conflict"
 
+    imported_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "target_type": "script_version",
+            "target_id": version["id"],
+        },
+    )
+    assert imported_audit.status_code == 200
+    assert imported_audit.json()["data"]["total"] == 1
+    assert imported_audit.json()["data"]["items"][0]["action"] == (
+        "script.version_created"
+    )
+    assert imported_audit.json()["data"]["items"][0]["metadata"] == {
+        "source_id": source["id"],
+        "episode_id": episode["id"],
+        "version_no": 1,
+        "status": "draft",
+    }
+    assert "body" not in str(imported_audit.json()["data"])
+    assert "content_hash" not in str(imported_audit.json()["data"])
+
     fetched_source = await client.get(
         f"/api/v1/script-sources/{source['id']}", headers=headers
     )
@@ -383,6 +406,18 @@ async def test_concurrent_publish_creates_exactly_one_new_version(
         conflict.json()["error"]["details"]["current_script_version_id"]
         == current_version_id
     )
+    published_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "action": "script.version_published",
+            "target_id": current_version_id,
+        },
+    )
+    assert published_audit.status_code == 200
+    assert published_audit.json()["data"]["total"] == 1
+    assert published_audit.json()["data"]["items"][0]["metadata"]["version_no"] == 2
 
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(ScriptVersion)) == 2
@@ -442,6 +477,23 @@ async def test_current_switch_accepts_only_published_version_from_same_episode(
             "current_script_version_id": second["id"],
             "affected_shot_ids": [],
         },
+    }
+    current_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "action": "script.current_changed",
+            "target_type": "episode",
+            "target_id": episode["id"],
+        },
+    )
+    assert current_audit.status_code == 200
+    assert current_audit.json()["data"]["total"] == 1
+    assert current_audit.json()["data"]["items"][0]["metadata"] == {
+        "episode_revision": 4,
+        "previous_version_id": third["id"],
+        "current_version_id": second["id"],
     }
 
     draft_rejected = await client.post(
@@ -702,6 +754,17 @@ async def test_delete_draft_version_requires_confirmation_and_is_private(
         "script_version_id": draft["id"],
     }
     assert (await client.get(endpoint, headers=headers)).status_code == 404
+    deleted_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "action": "script.version_deleted",
+            "target_id": draft["id"],
+        },
+    )
+    assert deleted_audit.status_code == 200
+    assert deleted_audit.json()["data"]["total"] == 1
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(ScriptVersion)) == 0
 
@@ -838,6 +901,23 @@ async def test_source_archive_restore_keeps_versions_and_current_reference(
     restored = restored_response.json()["data"]
     assert restored["status"] == "active"
     assert restored["revision"] == 3
+    lifecycle_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "target_type": "script_source",
+            "target_id": source["id"],
+        },
+    )
+    assert lifecycle_audit.status_code == 200
+    assert [
+        item["action"] for item in lifecycle_audit.json()["data"]["items"]
+    ] == ["script.source_restored", "script.source_archived"]
+    assert [
+        item["metadata"]["revision"]
+        for item in lifecycle_audit.json()["data"]["items"]
+    ] == [3, 2]
     next_publish = await client.post(
         f"/api/v1/script-sources/{source['id']}/versions",
         headers=headers,

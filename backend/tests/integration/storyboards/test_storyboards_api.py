@@ -776,6 +776,50 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
     assert rejected.status_code == 422
     assert rejected.json()["error"]["code"] == "validation_failed"
 
+    version_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": str(refs["workspace_id"]),
+            "action": "shot.spec_version_created",
+        },
+    )
+    assert version_audit.status_code == 200
+    assert version_audit.json()["data"]["total"] == 2
+    assert [
+        item["metadata"]["version_no"]
+        for item in reversed(version_audit.json()["data"]["items"])
+    ] == [1, 2]
+    assert all(
+        item["metadata"]["source"] == "manual_save"
+        for item in version_audit.json()["data"]["items"]
+    )
+    assert all(
+        "spec" not in item["metadata"]
+        and "content_hash" not in item["metadata"]
+        and "input_hash" not in item["metadata"]
+        for item in version_audit.json()["data"]["items"]
+    )
+
+    current_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": str(refs["workspace_id"]),
+            "action": "shot.current_spec_changed",
+            "target_type": "shot",
+            "target_id": shot["id"],
+        },
+    )
+    assert current_audit.status_code == 200
+    assert current_audit.json()["data"]["total"] == 1
+    assert current_audit.json()["data"]["items"][0]["metadata"] == {
+        "episode_id": episode["id"],
+        "revision": switched.json()["data"]["revision"],
+        "previous_version_id": second["version"]["id"],
+        "current_version_id": first["version"]["id"],
+    }
+
 
 @pytest.mark.asyncio
 async def test_confirmed_candidate_creation_and_safe_delete_preserve_evidence(
@@ -1054,6 +1098,25 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
             f"/api/v1/shots/{split_shot['id']}", headers=headers
         )
         assert persisted.json()["data"]["status"] == "archived"
+
+    transform_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": str(refs["workspace_id"]),
+            "action": "shot.spec_version_created",
+        },
+    )
+    assert transform_audit.status_code == 200
+    assert transform_audit.json()["data"]["total"] == 5
+    sources = [
+        item["metadata"]["source"]
+        for item in transform_audit.json()["data"]["items"]
+    ]
+    assert sources.count("manual_save") == 1
+    assert sources.count("copy") == 1
+    assert sources.count("split") == 2
+    assert sources.count("merge") == 1
 
 
 @pytest.mark.asyncio
@@ -1413,6 +1476,23 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
     assert old_usage.json()["data"]["total"] == 3
     assert all(not item["is_current"] for item in old_usage.json()["data"]["items"])
     assert new_usage.json()["data"]["total"] == 2
+
+    upgrade_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": str(refs["workspace_id"]),
+            "action": "shot.spec_version_created",
+        },
+    )
+    assert upgrade_audit.status_code == 200
+    assert upgrade_audit.json()["data"]["total"] == 5
+    upgrade_sources = [
+        item["metadata"]["source"]
+        for item in upgrade_audit.json()["data"]["items"]
+    ]
+    assert upgrade_sources.count("manual_save") == 3
+    assert upgrade_sources.count("asset_upgrade") == 2
     assert all(item["is_current"] for item in new_usage.json()["data"]["items"])
 
     shot_order = await client.get(

@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AccessTokenClaims, get_access_token_claims
@@ -37,11 +37,18 @@ lookup_router = APIRouter(prefix="/api/v1", tags=["scripts"])
 async def import_text_source(
     episode_id: UUID,
     payload: ScriptImportRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ScriptImportResponse]:
     return ApiResponse(
-        data=await service.import_text_source(session, claims, episode_id, payload)
+        data=await service.import_text_source(
+            session,
+            claims,
+            episode_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 
@@ -101,6 +108,7 @@ async def list_versions(
 async def publish_version(
     source_id: UUID,
     payload: ScriptVersionPublishRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ScriptVersionPublishResponse]:
@@ -120,6 +128,7 @@ async def publish_version(
             source_id,
             payload,
             read_impact,
+            trace_id=str(request.state.request_id),
         )
     )
 
@@ -131,6 +140,7 @@ async def publish_version(
 async def set_current_version(
     episode_id: UUID,
     payload: CurrentScriptVersionRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[CurrentScriptVersionResponse]:
@@ -150,6 +160,7 @@ async def set_current_version(
             episode_id,
             payload,
             read_impact,
+            trace_id=str(request.state.request_id),
         )
     )
 
@@ -161,12 +172,18 @@ async def set_current_version(
 async def archive_source(
     source_id: UUID,
     payload: ScriptSourceStateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ScriptSourceResponse]:
     return ApiResponse(
         data=await service.set_source_archived(
-            session, claims, source_id, payload, archived=True
+            session,
+            claims,
+            source_id,
+            payload,
+            archived=True,
+            trace_id=str(request.state.request_id),
         )
     )
 
@@ -178,12 +195,18 @@ async def archive_source(
 async def restore_source(
     source_id: UUID,
     payload: ScriptSourceStateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ScriptSourceResponse]:
     return ApiResponse(
         data=await service.set_source_archived(
-            session, claims, source_id, payload, archived=False
+            session,
+            claims,
+            source_id,
+            payload,
+            archived=False,
+            trace_id=str(request.state.request_id),
         )
     )
 
@@ -195,6 +218,7 @@ async def restore_source(
 async def delete_draft_version(
     version_id: UUID,
     confirm: Annotated[bool, Query()],
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ScriptVersionDeleteResponse]:
@@ -204,6 +228,7 @@ async def delete_draft_version(
             claims,
             version_id,
             confirmed=confirm,
+            trace_id=str(request.state.request_id),
         )
     )
 
