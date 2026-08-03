@@ -7,6 +7,7 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
+from app.modules.governance.audit import append_audit_event
 from app.modules.identity import ActorContext, Capability, actor_context
 from app.modules.projects import repository
 from app.modules.projects.authorization import (
@@ -211,6 +212,8 @@ async def create_episode(
     claims: AccessTokenClaims,
     project_id: UUID,
     request: EpisodeCreateRequest,
+    *,
+    trace_id: str,
 ) -> EpisodeResponse:
     async with session.begin():
         project, _ = await owned_project(
@@ -230,6 +233,22 @@ async def create_episode(
         )
         session.add(episode)
         project.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=episode.workspace_id,
+            actor_id=claims.sub,
+            action="episode.created",
+            target_type="episode",
+            target_id=episode.id,
+            trace_id=trace_id,
+            metadata={
+                "project_id": str(project.id),
+                "project_revision": project.revision,
+                "revision": episode.revision,
+                "position": episode.position,
+                "status": episode.status,
+            },
+        )
         await session.flush()
     return _episode_response(episode)
 
@@ -260,6 +279,8 @@ async def update_episode(
     claims: AccessTokenClaims,
     episode_id: UUID,
     request: EpisodeUpdateRequest,
+    *,
+    trace_id: str,
 ) -> EpisodeResponse:
     values = request.model_dump(exclude={"expected_revision"}, exclude_unset=True)
     if not values:
@@ -272,6 +293,20 @@ async def update_episode(
         for field, value in values.items():
             setattr(episode, field, value.strip() if isinstance(value, str) else value)
         episode.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=episode.workspace_id,
+            actor_id=claims.sub,
+            action="episode.updated",
+            target_type="episode",
+            target_id=episode.id,
+            trace_id=trace_id,
+            metadata={
+                "project_id": str(episode.project_id),
+                "revision": episode.revision,
+                "changed_fields": sorted(values),
+            },
+        )
         await session.flush()
     return _episode_response(episode)
 
@@ -281,6 +316,8 @@ async def reorder_episodes(
     claims: AccessTokenClaims,
     project_id: UUID,
     request: EpisodeReorderRequest,
+    *,
+    trace_id: str,
 ) -> EpisodeOrderResponse:
     if len(request.episode_ids) != len(set(request.episode_ids)):
         raise ApiError(ErrorCode.INVALID_REQUEST, "Episode IDs must be unique", status_code=422)
@@ -312,6 +349,19 @@ async def reorder_episodes(
         for position, episode in enumerate(ordered, start=1):
             episode.position = position
         project.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=project.workspace_id,
+            actor_id=claims.sub,
+            action="episode.reordered",
+            target_type="project",
+            target_id=project.id,
+            trace_id=trace_id,
+            metadata={
+                "project_revision": project.revision,
+                "episode_count": len(ordered),
+            },
+        )
         await session.flush()
     return EpisodeOrderResponse(
         items=[_episode_response(episode) for episode in ordered],
@@ -339,6 +389,7 @@ async def set_episode_archived(
     request: EpisodeStateRequest,
     *,
     archived: bool,
+    trace_id: str,
 ) -> EpisodeResponse:
     expected_status = "active" if archived else "archived"
     async with session.begin():
@@ -346,9 +397,11 @@ async def set_episode_archived(
         _episode_revision(episode, request.expected_revision)
         if episode.status != expected_status:
             raise ApiError(ErrorCode.STATE_CONFLICT, "Episode state conflict", status_code=409)
+        previous_status = episode.status
+        now = datetime.now(UTC)
         if archived:
             episode.status = "archived"
-            episode.archived_at = datetime.now(UTC)
+            episode.archived_at = now
             episode.archived_by = claims.sub
             await session.flush()
             await _compact_episode_positions(session, project.id)
@@ -360,6 +413,24 @@ async def set_episode_archived(
             episode.archived_by = None
         episode.revision += 1
         project.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=episode.workspace_id,
+            actor_id=claims.sub,
+            action="episode.archived" if archived else "episode.restored",
+            target_type="episode",
+            target_id=episode.id,
+            trace_id=trace_id,
+            metadata={
+                "project_id": str(project.id),
+                "project_revision": project.revision,
+                "revision": episode.revision,
+                "position": episode.position,
+                "previous_status": previous_status,
+                "status": episode.status,
+            },
+            occurred_at=now,
+        )
         await session.flush()
     return _episode_response(episode)
 
@@ -386,6 +457,8 @@ async def delete_episode(
     claims: AccessTokenClaims,
     episode_id: UUID,
     expected_revision: int,
+    *,
+    trace_id: str,
 ) -> None:
     async with session.begin():
         episode, project, _ = await _owned_episode(session, claims, episode_id, for_update=True)
@@ -400,3 +473,19 @@ async def delete_episode(
         await session.flush()
         await _compact_episode_positions(session, project.id)
         project.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=episode.workspace_id,
+            actor_id=claims.sub,
+            action="episode.deleted",
+            target_type="episode",
+            target_id=episode.id,
+            trace_id=trace_id,
+            metadata={
+                "project_id": str(project.id),
+                "project_revision": project.revision,
+                "revision": episode.revision,
+                "position": episode.position,
+                "status": episode.status,
+            },
+        )

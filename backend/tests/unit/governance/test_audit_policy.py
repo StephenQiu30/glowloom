@@ -122,3 +122,36 @@ def test_audit_metadata_is_restricted_by_registered_action() -> None:
                 "spec": {"must": "not be recorded"},
             },
         )
+
+    with pytest.raises(ValueError, match="budget_limit"):
+        append_audit_event(
+            session,
+            workspace_id=common["workspace_id"],
+            actor_id=common["actor_id"],
+            action="project.budget_updated",
+            target_type="project",
+            target_id=common["target_id"],
+            trace_id=common["trace_id"],
+            metadata={
+                "revision": 2,
+                "changed_fields": ["budget_limit", "currency"],
+                "budget_limit": "must-not-be-recorded",
+            },
+        )
+
+    with pytest.raises(ValueError, match="name"):
+        append_audit_event(
+            session,
+            workspace_id=common["workspace_id"],
+            actor_id=common["actor_id"],
+            action="episode.updated",
+            target_type="episode",
+            target_id=common["target_id"],
+            trace_id=common["trace_id"],
+            metadata={
+                "project_id": str(uuid7()),
+                "revision": 2,
+                "changed_fields": ["name"],
+                "name": "must-not-be-recorded",
+            },
+        )

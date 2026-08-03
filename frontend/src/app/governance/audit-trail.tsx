@@ -33,6 +33,18 @@ const auditActionLabels: Record<string, string> = {
   "workspace.updated": "工作空间更新",
   "workspace.archived": "工作空间归档",
   "workspace.restored": "工作空间恢复",
+  "project.created": "项目创建",
+  "project.updated": "项目更新",
+  "project.budget_updated": "项目预算更新",
+  "project.archived": "项目归档",
+  "project.restored": "项目恢复",
+  "project.deleted": "项目删除",
+  "episode.created": "单集创建",
+  "episode.updated": "单集更新",
+  "episode.reordered": "单集排序",
+  "episode.archived": "单集归档",
+  "episode.restored": "单集恢复",
+  "episode.deleted": "单集删除",
   "script.version_created": "剧本初始版本创建",
   "script.version_published": "剧本版本发布",
   "script.current_changed": "剧本当前版本切换",
@@ -82,6 +94,12 @@ function eventSummary(event: API.AuditEventResponse): string {
     return `token version ${String(event.metadata.token_version)}`;
   }
   if (event.metadata.subject_type) return String(event.metadata.subject_type);
+  if (event.metadata.episode_count) {
+    return `${String(event.metadata.episode_count)} 个单集`;
+  }
+  if (event.metadata.position && event.metadata.status) {
+    return `位置 ${String(event.metadata.position)} · ${String(event.metadata.status)}`;
+  }
   if (event.metadata.version_no) {
     const versionKind = event.action.startsWith("script.")
       ? "剧本"
@@ -228,7 +246,9 @@ export function AuditTrail({
                     <Badge variant="outline">
                       {auditActionLabels[event.action] ?? event.action}
                     </Badge>
-                    <Badge variant="secondary">revision {String(event.metadata.revision ?? "—")}</Badge>
+                    <Badge variant="secondary">
+                      revision {String(event.metadata.revision ?? event.metadata.project_revision ?? "—")}
+                    </Badge>
                     <time className="text-xs text-slate-400" dateTime={event.occurred_at}>
                       {new Date(event.occurred_at).toLocaleString("zh-CN", { timeZone: "UTC" })}
                     </time>

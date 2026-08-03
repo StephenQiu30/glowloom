@@ -88,6 +88,47 @@ async def test_project_crud_budget_and_lifecycle_use_explicit_revisions(
     assert restored.status_code == 200
     assert restored.json()["data"]["status"] == "active"
 
+    audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "target_type": "project",
+            "target_id": project_id,
+        },
+    )
+    assert audit.status_code == 200
+    assert [item["action"] for item in audit.json()["data"]["items"]] == [
+        "project.restored",
+        "project.archived",
+        "project.budget_updated",
+        "project.updated",
+        "project.created",
+    ]
+    assert [item["metadata"]["revision"] for item in audit.json()["data"]["items"]] == [
+        5,
+        4,
+        3,
+        2,
+        1,
+    ]
+    assert audit.json()["data"]["items"][2]["metadata"]["changed_fields"] == [
+        "budget_limit",
+        "currency",
+    ]
+    assert audit.json()["data"]["items"][3]["metadata"]["changed_fields"] == [
+        "aspect_ratio",
+        "description",
+        "language",
+        "name",
+        "target_duration_ms",
+        "visual_style",
+    ]
+    audit_payload = str(audit.json()["data"])
+    assert "第一季" not in audit_payload
+    assert "修改后的简介" not in audit_payload
+    assert "99.990000" not in audit_payload
+
 
 @pytest.mark.asyncio
 async def test_project_lists_are_bounded_and_cross_workspace_is_hidden(
@@ -242,3 +283,18 @@ async def test_empty_project_can_be_preflighted_and_deleted(
     assert deleted.status_code == 200
     assert deleted.json()["data"]["deleted"] is True
     assert (await client.get(f"/api/v1/projects/{project_id}", headers=headers)).status_code == 404
+    deleted_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "action": "project.deleted",
+            "target_id": project_id,
+        },
+    )
+    assert deleted_audit.status_code == 200
+    assert deleted_audit.json()["data"]["total"] == 1
+    assert deleted_audit.json()["data"]["items"][0]["metadata"] == {
+        "revision": 1,
+        "status": "active",
+    }

@@ -28,6 +28,40 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
     "workspace.updated": frozenset({"revision", "changed_fields"}),
     "workspace.archived": frozenset({"revision", "previous_status", "status"}),
     "workspace.restored": frozenset({"revision", "previous_status", "status"}),
+    "project.created": frozenset({"revision", "status"}),
+    "project.updated": frozenset({"revision", "changed_fields"}),
+    "project.budget_updated": frozenset({"revision", "changed_fields"}),
+    "project.archived": frozenset({"revision", "previous_status", "status"}),
+    "project.restored": frozenset({"revision", "previous_status", "status"}),
+    "project.deleted": frozenset({"revision", "status"}),
+    "episode.created": frozenset(
+        {"project_id", "project_revision", "revision", "position", "status"}
+    ),
+    "episode.updated": frozenset({"project_id", "revision", "changed_fields"}),
+    "episode.reordered": frozenset({"project_revision", "episode_count"}),
+    "episode.archived": frozenset(
+        {
+            "project_id",
+            "project_revision",
+            "revision",
+            "position",
+            "previous_status",
+            "status",
+        }
+    ),
+    "episode.restored": frozenset(
+        {
+            "project_id",
+            "project_revision",
+            "revision",
+            "position",
+            "previous_status",
+            "status",
+        }
+    ),
+    "episode.deleted": frozenset(
+        {"project_id", "project_revision", "revision", "position", "status"}
+    ),
     "script.version_created": frozenset(
         {"source_id", "episode_id", "version_no", "status"}
     ),

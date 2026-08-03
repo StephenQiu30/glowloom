@@ -66,6 +66,42 @@ async def test_episode_positions_reorder_and_parent_guards_are_atomic(
     assert updated.status_code == 200
     assert updated.json()["data"]["revision"] == 2
 
+    reordered_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "action": "episode.reordered",
+            "target_type": "project",
+            "target_id": project_id,
+        },
+    )
+    assert reordered_audit.status_code == 200
+    assert reordered_audit.json()["data"]["total"] == 1
+    assert reordered_audit.json()["data"]["items"][0]["metadata"] == {
+        "project_revision": 5,
+        "episode_count": 3,
+    }
+
+    updated_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "target_type": "episode",
+            "target_id": episode_ids[0],
+        },
+    )
+    assert updated_audit.status_code == 200
+    assert [item["action"] for item in updated_audit.json()["data"]["items"]] == [
+        "episode.updated",
+        "episode.created",
+    ]
+    assert updated_audit.json()["data"]["items"][0]["metadata"][
+        "changed_fields"
+    ] == ["name", "target_duration_ms"]
+    assert "改名后的单集" not in str(updated_audit.json()["data"])
+
     project_preflight = await client.post(
         f"/api/v1/projects/{project_id}/delete-preflight", headers=headers
     )
@@ -136,6 +172,29 @@ async def test_episode_archive_restore_and_empty_delete_preserve_contiguous_orde
         params={"expected_revision": 3},
     )
     assert deleted.status_code == 200
+    lifecycle_audit = await client.get(
+        "/api/v1/audit-events",
+        headers=headers,
+        params={
+            "workspace_id": workspace_id,
+            "target_type": "episode",
+            "target_id": str(episodes[0]["id"]),
+        },
+    )
+    assert lifecycle_audit.status_code == 200
+    assert [item["action"] for item in lifecycle_audit.json()["data"]["items"]] == [
+        "episode.deleted",
+        "episode.restored",
+        "episode.archived",
+        "episode.created",
+    ]
+    assert lifecycle_audit.json()["data"]["items"][0]["metadata"] == {
+        "project_id": project_id,
+        "project_revision": 6,
+        "revision": 3,
+        "position": 2,
+        "status": "active",
+    }
     remaining = await client.get(f"/api/v1/projects/{project_id}/episodes", headers=headers)
     assert [(item["name"], item["position"]) for item in remaining.json()["data"]] == [("B", 1)]
 

@@ -72,6 +72,36 @@ const auditEvents: API.AuditEventResponse[] = [
     id: "019fb1e0-a060-7000-8000-000000000001",
     workspace_id: workspaceId,
     actor_id: "019fb1e0-a000-7000-8000-000000000001",
+    action: "project.updated",
+    target_type: "project",
+    target_id: "019fb1e0-a065-7000-8000-000000000001",
+    result: "succeeded",
+    trace_id: "019fb1e0-a066-7000-8000-000000000001",
+    metadata: {
+      revision: 4,
+      changed_fields: ["description", "name"],
+    },
+    occurred_at: now,
+  },
+  {
+    id: "019fb1e0-a060-7000-8000-000000000002",
+    workspace_id: workspaceId,
+    actor_id: "019fb1e0-a000-7000-8000-000000000001",
+    action: "episode.reordered",
+    target_type: "project",
+    target_id: "019fb1e0-a065-7000-8000-000000000001",
+    result: "succeeded",
+    trace_id: "019fb1e0-a066-7000-8000-000000000002",
+    metadata: {
+      project_revision: 5,
+      episode_count: 2,
+    },
+    occurred_at: now,
+  },
+  {
+    id: "019fb1e0-a060-7000-8000-000000000003",
+    workspace_id: workspaceId,
+    actor_id: "019fb1e0-a000-7000-8000-000000000001",
     action: "script.version_published",
     target_type: "script_version",
     target_id: "019fb1e0-a070-7000-8000-000000000001",
@@ -88,7 +118,7 @@ const auditEvents: API.AuditEventResponse[] = [
     occurred_at: now,
   },
   {
-    id: "019fb1e0-a060-7000-8000-000000000002",
+    id: "019fb1e0-a060-7000-8000-000000000004",
     workspace_id: workspaceId,
     actor_id: "019fb1e0-a000-7000-8000-000000000001",
     action: "asset.version_created",
@@ -108,7 +138,7 @@ const auditEvents: API.AuditEventResponse[] = [
     occurred_at: now,
   },
   {
-    id: "019fb1e0-a060-7000-8000-000000000003",
+    id: "019fb1e0-a060-7000-8000-000000000005",
     workspace_id: workspaceId,
     actor_id: "019fb1e0-a000-7000-8000-000000000001",
     action: "shot.spec_version_created",
@@ -128,7 +158,7 @@ const auditEvents: API.AuditEventResponse[] = [
     occurred_at: now,
   },
   {
-    id: "019fb1e0-a060-7000-8000-000000000004",
+    id: "019fb1e0-a060-7000-8000-000000000006",
     workspace_id: workspaceId,
     actor_id: "019fb1e0-a000-7000-8000-000000000001",
     action: "consent.revoked",
@@ -140,7 +170,7 @@ const auditEvents: API.AuditEventResponse[] = [
     occurred_at: now,
   },
   {
-    id: "019fb1e0-a060-7000-8000-000000000005",
+    id: "019fb1e0-a060-7000-8000-000000000007",
     workspace_id: workspaceId,
     actor_id: "019fb1e0-a000-7000-8000-000000000001",
     action: "consent.registered",
@@ -275,7 +305,7 @@ describe("governance consent workspace", () => {
       data: { items: [detail], total: 1, limit: 50, offset: 0 },
     });
     apiMocks.listAuditEvents.mockResolvedValue({
-      data: { items: auditEvents, total: 6, limit: 50, offset: 0 },
+      data: { items: auditEvents, total: 8, limit: 50, offset: 0 },
     });
     apiMocks.getConsent.mockResolvedValue({ data: detail });
     apiMocks.listMedia.mockResolvedValue({
@@ -345,6 +375,10 @@ describe("governance consent workspace", () => {
     expect(await within(audit).findByText("授权撤销")).toBeInTheDocument();
     expect(within(audit).getByText("工作空间归档")).toBeInTheDocument();
     expect(within(audit).getByText("active → archived")).toBeInTheDocument();
+    expect(within(audit).getByText("项目更新")).toBeInTheDocument();
+    expect(within(audit).getByText("变更字段：description、name")).toBeInTheDocument();
+    expect(within(audit).getByText("单集排序")).toBeInTheDocument();
+    expect(within(audit).getByText("2 个单集")).toBeInTheDocument();
     expect(within(audit).getByText("剧本版本发布")).toBeInTheDocument();
     expect(within(audit).getByText("剧本 · v2")).toBeInTheDocument();
     expect(within(audit).getByText("资产版本创建")).toBeInTheDocument();

@@ -1,7 +1,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AccessTokenClaims, get_access_token_claims
@@ -55,10 +55,15 @@ async def list_projects(
 )
 async def create_project(
     payload: ProjectCreateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ProjectResponse]:
-    return ApiResponse(data=await service.create_project(session, claims, payload))
+    return ApiResponse(
+        data=await service.create_project(
+            session, claims, payload, trace_id=str(request.state.request_id)
+        )
+    )
 
 
 @router.get("/projects/{project_id}", response_model=ApiResponse[ProjectResponse])
@@ -74,10 +79,19 @@ async def get_project(
 async def update_project(
     project_id: UUID,
     payload: ProjectUpdateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ProjectResponse]:
-    return ApiResponse(data=await service.update_project(session, claims, project_id, payload))
+    return ApiResponse(
+        data=await service.update_project(
+            session,
+            claims,
+            project_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
 
 
 @router.post(
@@ -87,21 +101,38 @@ async def update_project(
 async def update_budget_limit(
     project_id: UUID,
     payload: BudgetLimitRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ProjectResponse]:
-    return ApiResponse(data=await service.update_budget(session, claims, project_id, payload))
+    return ApiResponse(
+        data=await service.update_budget(
+            session,
+            claims,
+            project_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
 
 
 @router.post("/projects/{project_id}/archive", response_model=ApiResponse[ProjectResponse])
 async def archive_project(
     project_id: UUID,
     payload: ProjectStateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ProjectResponse]:
     return ApiResponse(
-        data=await service.set_archived(session, claims, project_id, payload, archived=True)
+        data=await service.set_archived(
+            session,
+            claims,
+            project_id,
+            payload,
+            archived=True,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 
@@ -109,11 +140,19 @@ async def archive_project(
 async def restore_project(
     project_id: UUID,
     payload: ProjectStateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ProjectResponse]:
     return ApiResponse(
-        data=await service.set_archived(session, claims, project_id, payload, archived=False)
+        data=await service.set_archived(
+            session,
+            claims,
+            project_id,
+            payload,
+            archived=False,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 
@@ -133,8 +172,15 @@ async def delete_preflight(
 async def delete_project(
     project_id: UUID,
     expected_revision: Annotated[int, Query(ge=1)],
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[DeleteResponse]:
-    await service.delete_project(session, claims, project_id, expected_revision)
+    await service.delete_project(
+        session,
+        claims,
+        project_id,
+        expected_revision,
+        trace_id=str(request.state.request_id),
+    )
     return ApiResponse(data=DeleteResponse())

@@ -173,6 +173,10 @@ def test_audit_slices_are_traced_without_premature_acceptance() -> None:
         "identity.account_deactivated",
         "workspace.created",
         "workspace.restored",
+        "project.budget_updated",
+        "project.deleted",
+        "episode.reordered",
+        "episode.deleted",
         "script.version_published",
         "script.current_changed",
         "asset.version_created",
@@ -182,5 +186,8 @@ def test_audit_slices_are_traced_without_premature_acceptance() -> None:
     ):
         assert action in acceptance
     assert "审核和交付动作仍待对应 S5 真实实体接入" in acceptance
-    assert "身份、Workspace、授权、媒体、任务、剧本、资产及 S3 分镜规格纵向切片" in plan
+    assert (
+        "身份、Workspace、Project/Episode、授权、媒体、任务、剧本、资产及 S3 分镜规格纵向切片"
+        in plan
+    )
     assert "PT-GOV-006 | accepted" not in prd

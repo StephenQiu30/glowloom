@@ -68,4 +68,24 @@ test("S1 创作者管理项目和单集完整生命周期", async ({ page }) => 
   await page.getByRole("button", { name: "确认删除项目" }).click();
   await expect(page).toHaveURL(/\/projects$/);
   await expect(page.getByRole("link", { name: `打开项目 ${projectName}-更新` })).toHaveCount(0);
+
+  await page.goto("/governance");
+  const auditTrail = page.getByRole("region", { name: "操作审计" });
+  await expect(auditTrail.getByText("项目预算更新")).toBeVisible();
+  await expect(auditTrail.getByText("单集排序")).toBeVisible();
+  await expect(auditTrail.getByText("项目删除")).toBeVisible();
+  await expect(auditTrail.getByText("单集删除").first()).toBeVisible();
+  await auditTrail.getByRole("button", { name: "筛选" }).click();
+  await auditTrail.getByLabel("动作").selectOption("episode.deleted");
+  await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
+  await expect(auditTrail.getByText(/2 条只追加事件/)).toBeVisible();
+  await expect(
+    auditTrail.locator("article").first().getByText("单集删除"),
+  ).toBeVisible();
+  await auditTrail.getByLabel("动作").selectOption("project.deleted");
+  await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
+  await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
+  await expect(
+    auditTrail.locator("article").first().getByText("项目删除"),
+  ).toBeVisible();
 });

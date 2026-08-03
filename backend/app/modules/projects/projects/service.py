@@ -7,6 +7,7 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
+from app.modules.governance.audit import append_audit_event
 from app.modules.identity import Capability, actor_context
 from app.modules.projects import repository
 from app.modules.projects.authorization import (
@@ -50,6 +51,8 @@ async def create_project(
     session: AsyncSession,
     claims: AccessTokenClaims,
     request: ProjectCreateRequest,
+    *,
+    trace_id: str,
 ) -> ProjectResponse:
     async with session.begin():
         await actor_context(session, claims, request.workspace_id, Capability.CONTENT_WRITE)
@@ -64,6 +67,17 @@ async def create_project(
             target_duration_ms=request.target_duration_ms,
         )
         session.add(project)
+        await session.flush()
+        append_audit_event(
+            session,
+            workspace_id=project.workspace_id,
+            actor_id=claims.sub,
+            action="project.created",
+            target_type="project",
+            target_id=project.id,
+            trace_id=trace_id,
+            metadata={"revision": project.revision, "status": project.status},
+        )
         await session.flush()
     return _response(project)
 
@@ -111,6 +125,8 @@ async def update_project(
     claims: AccessTokenClaims,
     project_id: UUID,
     request: ProjectUpdateRequest,
+    *,
+    trace_id: str,
 ) -> ProjectResponse:
     values = request.model_dump(exclude={"expected_revision"}, exclude_unset=True)
     if not values:
@@ -127,6 +143,19 @@ async def update_project(
         for field, value in values.items():
             setattr(project, field, value.strip() if isinstance(value, str) else value)
         project.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=project.workspace_id,
+            actor_id=claims.sub,
+            action="project.updated",
+            target_type="project",
+            target_id=project.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": project.revision,
+                "changed_fields": sorted(values),
+            },
+        )
         await session.flush()
     return _response(project)
 
@@ -136,6 +165,8 @@ async def update_budget(
     claims: AccessTokenClaims,
     project_id: UUID,
     request: BudgetLimitRequest,
+    *,
+    trace_id: str,
 ) -> ProjectResponse:
     async with session.begin():
         project, _ = await owned_project(
@@ -149,6 +180,19 @@ async def update_budget(
         project.budget_limit = request.amount
         project.currency = request.currency
         project.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=project.workspace_id,
+            actor_id=claims.sub,
+            action="project.budget_updated",
+            target_type="project",
+            target_id=project.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": project.revision,
+                "changed_fields": ["budget_limit", "currency"],
+            },
+        )
         await session.flush()
     return _response(project)
 
@@ -160,6 +204,7 @@ async def set_archived(
     request: ProjectStateRequest,
     *,
     archived: bool,
+    trace_id: str,
 ) -> ProjectResponse:
     expected_status = "active" if archived else "archived"
     async with session.begin():
@@ -174,10 +219,27 @@ async def set_archived(
         require_project_revision(project, request.expected_revision)
         if project.status != expected_status:
             raise ApiError(ErrorCode.STATE_CONFLICT, "Project state conflict", status_code=409)
+        previous_status = project.status
+        now = datetime.now(UTC)
         project.status = "archived" if archived else "active"
-        project.archived_at = datetime.now(UTC) if archived else None
+        project.archived_at = now if archived else None
         project.archived_by = claims.sub if archived else None
         project.revision += 1
+        append_audit_event(
+            session,
+            workspace_id=project.workspace_id,
+            actor_id=claims.sub,
+            action="project.archived" if archived else "project.restored",
+            target_type="project",
+            target_id=project.id,
+            trace_id=trace_id,
+            metadata={
+                "revision": project.revision,
+                "previous_status": previous_status,
+                "status": project.status,
+            },
+            occurred_at=now,
+        )
         await session.flush()
     return _response(project)
 
@@ -207,6 +269,8 @@ async def delete_project(
     claims: AccessTokenClaims,
     project_id: UUID,
     expected_revision: int,
+    *,
+    trace_id: str,
 ) -> None:
     async with session.begin():
         project, _ = await owned_project(
@@ -225,6 +289,16 @@ async def delete_project(
                 status_code=409,
                 next_action="review_delete_blockers",
             )
+        append_audit_event(
+            session,
+            workspace_id=project.workspace_id,
+            actor_id=claims.sub,
+            action="project.deleted",
+            target_type="project",
+            target_id=project.id,
+            trace_id=trace_id,
+            metadata={"revision": project.revision, "status": project.status},
+        )
         await session.delete(project)
 
 

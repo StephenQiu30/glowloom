@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AccessTokenClaims, get_access_token_claims
@@ -46,10 +46,19 @@ async def list_episodes(
 async def create_episode(
     project_id: UUID,
     payload: EpisodeCreateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[EpisodeResponse]:
-    return ApiResponse(data=await service.create_episode(session, claims, project_id, payload))
+    return ApiResponse(
+        data=await service.create_episode(
+            session,
+            claims,
+            project_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
 
 
 @router.post(
@@ -59,10 +68,19 @@ async def create_episode(
 async def reorder_episodes(
     project_id: UUID,
     payload: EpisodeReorderRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[EpisodeOrderResponse]:
-    return ApiResponse(data=await service.reorder_episodes(session, claims, project_id, payload))
+    return ApiResponse(
+        data=await service.reorder_episodes(
+            session,
+            claims,
+            project_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
 
 
 @router.get("/episodes/{episode_id}", response_model=ApiResponse[EpisodeResponse])
@@ -78,21 +96,38 @@ async def get_episode(
 async def update_episode(
     episode_id: UUID,
     payload: EpisodeUpdateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[EpisodeResponse]:
-    return ApiResponse(data=await service.update_episode(session, claims, episode_id, payload))
+    return ApiResponse(
+        data=await service.update_episode(
+            session,
+            claims,
+            episode_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
 
 
 @router.post("/episodes/{episode_id}/archive", response_model=ApiResponse[EpisodeResponse])
 async def archive_episode(
     episode_id: UUID,
     payload: EpisodeStateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[EpisodeResponse]:
     return ApiResponse(
-        data=await service.set_episode_archived(session, claims, episode_id, payload, archived=True)
+        data=await service.set_episode_archived(
+            session,
+            claims,
+            episode_id,
+            payload,
+            archived=True,
+            trace_id=str(request.state.request_id),
+        )
     )
 
 
@@ -100,12 +135,18 @@ async def archive_episode(
 async def restore_episode(
     episode_id: UUID,
     payload: EpisodeStateRequest,
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[EpisodeResponse]:
     return ApiResponse(
         data=await service.set_episode_archived(
-            session, claims, episode_id, payload, archived=False
+            session,
+            claims,
+            episode_id,
+            payload,
+            archived=False,
+            trace_id=str(request.state.request_id),
         )
     )
 
@@ -126,8 +167,15 @@ async def episode_delete_preflight(
 async def delete_episode(
     episode_id: UUID,
     expected_revision: Annotated[int, Query(ge=1)],
+    request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[DeleteResponse]:
-    await service.delete_episode(session, claims, episode_id, expected_revision)
+    await service.delete_episode(
+        session,
+        claims,
+        episode_id,
+        expected_revision,
+        trace_id=str(request.state.request_id),
+    )
     return ApiResponse(data=DeleteResponse())
