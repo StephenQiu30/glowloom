@@ -223,6 +223,61 @@ def test_queued_generation_cancellation_is_traced_without_provider_acceptance() 
     assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
 
 
+def test_generation_attempt_fail_closed_is_traced_without_provider_acceptance() -> None:
+    production_requirement = (
+        DOCS / "requirement/009-生产模块需求.md"
+    ).read_text(encoding="utf-8")
+    messaging_requirement = (
+        DOCS / "requirement/011-消息队列与异步投递需求.md"
+    ).read_text(encoding="utf-8")
+    production_design = (
+        DOCS / "design/模块设计/009-生产模块详细设计.md"
+    ).read_text(encoding="utf-8")
+    database_design = (
+        DOCS / "design/模块设计/011-数据库表与数据生命周期详细设计.md"
+    ).read_text(encoding="utf-8")
+    messaging_design = (
+        DOCS / "design/模块设计/012-消息队列详细设计.md"
+    ).read_text(encoding="utf-8")
+    prd = (
+        DOCS / "prd/009-剪辑交付与平台保障PRD任务.md"
+    ).read_text(encoding="utf-8")
+    plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(
+        encoding="utf-8"
+    )
+    acceptance = (
+        DOCS / "acceptance/025-生成Attempt预持久化与无Provider失败收敛验收.md"
+    ).read_text(encoding="utf-8")
+
+    for source in (
+        production_requirement,
+        messaging_requirement,
+        production_design,
+        database_design,
+        messaging_design,
+        prd,
+        plan,
+        acceptance,
+    ):
+        assert "Attempt" in source
+        assert "Provider" in source
+    assert "## 9. 当前 Attempt 预持久化增量边界" in production_requirement
+    assert "### 4.2 Attempt 预持久化与无 Provider 失败收敛" in production_design
+    assert "lanverse.io.generation.v1" in messaging_requirement
+    assert "prod_attempts" in database_design
+    assert "PreparedGenerationAttempt" in plan
+    assert "增量已完成并 accepted" in prd
+    assert (
+        "状态：accepted（仅 DEV-S4-02 当前 Attempt `prepared → failed` 无 Provider 增量；"
+        "PT-PROD-005/006、PT-MQ-003、DEV-S4-02 与 S4 整体保持 in_progress）"
+        in acceptance
+    )
+    assert "make contract-rabbitmq" in acceptance
+    assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
+    assert "没有 Ark SDK" in acceptance
+    assert "没有在线迁移框架" in acceptance
+
+
 def test_minio_acceptance_evidence_tracks_the_latest_compose_decision() -> None:
     compose_acceptance = (
         DOCS / "acceptance/008-D006全栈Compose部署验收.md"

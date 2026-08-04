@@ -7,7 +7,7 @@ from uuid6 import uuid7
 
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.messaging.models import OutboxEvent
-from app.modules.production.models import Task
+from app.modules.production.models import GenerationAttempt, Task
 from app.modules.projects.models import Episode, Project
 from app.modules.scheduling.models import Schedule, ScheduleFire
 from app.modules.storyboards.models import ShotTransform
@@ -158,6 +158,135 @@ async def test_database_rejects_shot_transform_with_cross_workspace_episode(
                         input_hash="b" * 64,
                         idempotency_key="cross-workspace-transform",
                         actor_id=owner_id,
+                    )
+                )
+                await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_database_rejects_generation_attempt_with_cross_workspace_task(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    owner_id = uuid7()
+    workspace_id = uuid7()
+    other_workspace_id = uuid7()
+    task_id = uuid7()
+    now = datetime.now(UTC)
+
+    async with session_factory() as session:
+        async with session.begin():
+            session.add_all(
+                (
+                    UserAccount(
+                        id=owner_id,
+                        email_normalized=f"attempt-integrity-{owner_id}@example.com",
+                        password_hash="synthetic-not-used",
+                        display_name="Attempt Integrity Fixture",
+                    ),
+                    Workspace(id=workspace_id, name="Attempt Workspace"),
+                    Workspace(id=other_workspace_id, name="Foreign Attempt Workspace"),
+                )
+            )
+            await session.flush()
+            session.add(
+                Task(
+                    id=task_id,
+                    workspace_id=workspace_id,
+                    task_type="image_generation",
+                    request_type="generation_request",
+                    request_id=uuid7(),
+                    input_hash="a" * 64,
+                    idempotency_key="attempt-integrity-task",
+                    requested_by=owner_id,
+                )
+            )
+            await session.flush()
+
+        with pytest.raises(IntegrityError):
+            async with session.begin():
+                session.add(
+                    GenerationAttempt(
+                        workspace_id=other_workspace_id,
+                        task_id=task_id,
+                        sequence=1,
+                        provider_request_key="b" * 64,
+                        status="prepared",
+                        request_snapshot_hash="a" * 64,
+                        prepared_at=now,
+                        updated_at=now,
+                    )
+                )
+                await session.flush()
+
+
+@pytest.mark.parametrize(
+    ("second_sequence", "second_provider_key"),
+    ((1, "c" * 64), (2, "b" * 64)),
+)
+@pytest.mark.asyncio
+async def test_database_rejects_duplicate_generation_attempt_identity(
+    session_factory: async_sessionmaker[AsyncSession],
+    second_sequence: int,
+    second_provider_key: str,
+) -> None:
+    owner_id = uuid7()
+    workspace_id = uuid7()
+    task_id = uuid7()
+    now = datetime.now(UTC)
+
+    async with session_factory() as session:
+        async with session.begin():
+            session.add_all(
+                (
+                    UserAccount(
+                        id=owner_id,
+                        email_normalized=f"attempt-unique-{owner_id}@example.com",
+                        password_hash="synthetic-not-used",
+                        display_name="Attempt Unique Fixture",
+                    ),
+                    Workspace(id=workspace_id, name="Attempt Unique Workspace"),
+                )
+            )
+            await session.flush()
+            session.add(
+                Task(
+                    id=task_id,
+                    workspace_id=workspace_id,
+                    task_type="image_generation",
+                    request_type="generation_request",
+                    request_id=uuid7(),
+                    input_hash="a" * 64,
+                    idempotency_key="attempt-unique-task",
+                    requested_by=owner_id,
+                )
+            )
+            await session.flush()
+            session.add(
+                GenerationAttempt(
+                    workspace_id=workspace_id,
+                    task_id=task_id,
+                    sequence=1,
+                    provider_request_key="b" * 64,
+                    status="prepared",
+                    request_snapshot_hash="a" * 64,
+                    prepared_at=now,
+                    updated_at=now,
+                )
+            )
+            await session.flush()
+
+        with pytest.raises(IntegrityError):
+            async with session.begin():
+                session.add(
+                    GenerationAttempt(
+                        workspace_id=workspace_id,
+                        task_id=task_id,
+                        sequence=second_sequence,
+                        provider_request_key=second_provider_key,
+                        status="prepared",
+                        request_snapshot_hash="a" * 64,
+                        prepared_at=now,
+                        updated_at=now,
                     )
                 )
                 await session.flush()

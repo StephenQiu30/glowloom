@@ -1,11 +1,13 @@
 import asyncio
 import os
 from datetime import UTC, datetime
+from uuid import UUID
 
 import aio_pika
+import httpx
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
 from app.core.database import Base, create_engine, validate_test_database_url
@@ -17,7 +19,8 @@ from app.modules.identity.models import UserAccount, Workspace
 from app.modules.messaging import MessageEnvelope, envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
-from app.modules.production.models import Task
+from app.modules.production.models import CostEntry, GenerationAttempt, Reservation, Task
+from tests.integration.test_generation_task_cancellation import submit_queued_generation
 from tests.support.external_contracts import rabbitmq_contract_url
 
 
@@ -139,6 +142,84 @@ async def test_worker_commits_inbox_before_manual_ack_on_real_queue() -> None:
         await publisher.close()
         await observer.close()
         await engine.dispose()
+
+
+@pytest.mark.skipif(
+    os.getenv("LANVERSE_RUN_RABBITMQ_CONTRACT") != "1",
+    reason="set LANVERSE_RUN_RABBITMQ_CONTRACT=1 with an isolated RabbitMQ vhost",
+)
+@pytest.mark.asyncio
+async def test_real_generation_message_persists_attempt_and_releases_without_provider(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    rabbitmq_url = rabbitmq_contract_url()
+    publisher = RabbitMQPublisher(rabbitmq_url)
+    observer = await aio_pika.connect_robust(rabbitmq_url, timeout=3)
+    message: aio_pika.abc.AbstractIncomingMessage | None = None
+    try:
+        await publisher.connect()
+        channel = await observer.channel()
+        queue = await channel.declare_queue(IO_QUEUE, durable=True)
+        if queue.declaration_result.message_count != 0:
+            pytest.skip("lanverse.io is not empty; refusing to consume existing messages")
+
+        _, _, submitted = await submit_queued_generation(
+            client,
+            session_factory,
+            submission_key="real-rabbit-generation-attempt",
+        )
+        task_id = UUID(submitted["task"]["id"])
+        reservation_id = UUID(submitted["reservation"]["id"])
+        async with session_factory() as session:
+            event = await session.scalar(
+                select(OutboxEvent).where(
+                    OutboxEvent.aggregate_id == task_id,
+                    OutboxEvent.event_type == "generation.requested",
+                )
+            )
+            assert event is not None
+            envelope = envelope_from_event(event)
+
+        await publisher.publish(envelope, "io.provider.submit")
+        message = await queue.get(timeout=3, fail=False)
+        assert message is not None
+        assert message.message_id == str(envelope.event_id)
+
+        assert await process_incoming_message(message, session_factory) == "completed"
+        assert message.processed is True
+        queue_state = await channel.declare_queue(IO_QUEUE, durable=True, passive=True)
+        assert queue_state.declaration_result.message_count == 0
+
+        async with session_factory() as session:
+            task = await session.get(Task, task_id)
+            attempt = await session.scalar(
+                select(GenerationAttempt).where(GenerationAttempt.task_id == task_id)
+            )
+            reservation = await session.get(
+                Reservation,
+                reservation_id,
+            )
+            release = await session.scalar(
+                select(CostEntry).where(
+                    CostEntry.reservation_id == reservation_id,
+                    CostEntry.entry_type == "release",
+                )
+            )
+            inbox = await session.scalar(
+                select(InboxDelivery).where(InboxDelivery.task_id == task_id)
+            )
+            assert task is not None and task.status == "failed"
+            assert attempt is not None and attempt.status == "failed"
+            assert reservation is not None and reservation.status == "released"
+            assert release is not None and release.attempt_id == attempt.id
+            assert inbox is not None and inbox.status == "completed"
+        await channel.close()
+    finally:
+        if message is not None and not message.processed:
+            await message.nack(requeue=True)
+        await publisher.close()
+        await observer.close()
 
 
 @pytest.mark.parametrize(
