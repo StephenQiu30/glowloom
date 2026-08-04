@@ -6,7 +6,7 @@ from uuid import UUID
 import aio_pika
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
@@ -218,6 +218,92 @@ async def test_real_generation_message_persists_attempt_and_releases_without_pro
     finally:
         if message is not None and not message.processed:
             await message.nack(requeue=True)
+        await publisher.close()
+        await observer.close()
+
+
+@pytest.mark.skipif(
+    os.getenv("LANVERSE_RUN_RABBITMQ_CONTRACT") != "1",
+    reason="set LANVERSE_RUN_RABBITMQ_CONTRACT=1 with an isolated RabbitMQ vhost",
+)
+@pytest.mark.asyncio
+async def test_real_generation_protocol_error_acks_after_manual_attention_release(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    rabbitmq_url = rabbitmq_contract_url()
+    publisher = RabbitMQPublisher(rabbitmq_url)
+    observer = await aio_pika.connect_robust(rabbitmq_url, timeout=3)
+    received: list[aio_pika.abc.AbstractIncomingMessage] = []
+    try:
+        await publisher.connect()
+        channel = await observer.channel()
+        queue = await channel.declare_queue(IO_QUEUE, durable=True)
+        if queue.declaration_result.message_count != 0:
+            pytest.skip("lanverse.io is not empty; refusing to consume existing messages")
+
+        _, _, submitted = await submit_queued_generation(
+            client,
+            session_factory,
+            submission_key="real-rabbit-generation-protocol-error",
+        )
+        task_id = UUID(submitted["task"]["id"])
+        reservation_id = UUID(submitted["reservation"]["id"])
+        async with session_factory() as session:
+            event = await session.scalar(
+                select(OutboxEvent).where(
+                    OutboxEvent.aggregate_id == task_id,
+                    OutboxEvent.event_type == "generation.requested",
+                )
+            )
+            assert event is not None
+            envelope = envelope_from_event(event).model_copy(
+                update={"schema_version": 99}
+            )
+
+        await publisher.publish(envelope, "io.provider.submit")
+        await publisher.publish(envelope, "io.provider.submit")
+        first = await queue.get(timeout=3, fail=False)
+        second = await queue.get(timeout=3, fail=False)
+        assert first is not None and second is not None
+        received.extend((first, second))
+
+        assert await process_incoming_message(first, session_factory) == "rejected"
+        assert await process_incoming_message(second, session_factory) == "duplicate"
+        assert first.processed is True and second.processed is True
+        queue_state = await channel.declare_queue(IO_QUEUE, durable=True, passive=True)
+        assert queue_state.declaration_result.message_count == 0
+
+        async with session_factory() as session:
+            task = await session.get(Task, task_id)
+            reservation = await session.get(Reservation, reservation_id)
+            release = await session.scalar(
+                select(CostEntry).where(
+                    CostEntry.reservation_id == reservation_id,
+                    CostEntry.entry_type == "release",
+                )
+            )
+            attempt_count = await session.scalar(
+                select(func.count())
+                .select_from(GenerationAttempt)
+                .where(GenerationAttempt.task_id == task_id)
+            )
+            inbox = await session.scalar(
+                select(InboxDelivery).where(InboxDelivery.event_id == envelope.event_id)
+            )
+            assert task is not None and task.status == "failed"
+            assert task.progress_stage == "manual_attention"
+            assert task.error_code == "unsupported_message_schema"
+            assert reservation is not None and reservation.status == "released"
+            assert release is not None and release.attempt_id is None
+            assert attempt_count == 0
+            assert inbox is not None and inbox.status == "manual_attention"
+            assert inbox.attempt_count == 2
+        await channel.close()
+    finally:
+        for message in received:
+            if not message.processed:
+                await message.nack(requeue=True)
         await publisher.close()
         await observer.close()
 

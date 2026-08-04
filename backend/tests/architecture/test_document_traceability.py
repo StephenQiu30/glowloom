@@ -278,6 +278,54 @@ def test_generation_attempt_fail_closed_is_traced_without_provider_acceptance() 
     assert "没有在线迁移框架" in acceptance
 
 
+def test_generation_protocol_poison_is_traced_without_full_retry_acceptance() -> None:
+    production_requirement = (
+        DOCS / "requirement/009-生产模块需求.md"
+    ).read_text(encoding="utf-8")
+    messaging_requirement = (
+        DOCS / "requirement/011-消息队列与异步投递需求.md"
+    ).read_text(encoding="utf-8")
+    production_design = (
+        DOCS / "design/模块设计/009-生产模块详细设计.md"
+    ).read_text(encoding="utf-8")
+    messaging_design = (
+        DOCS / "design/模块设计/012-消息队列详细设计.md"
+    ).read_text(encoding="utf-8")
+    prd = (DOCS / "prd/009-剪辑交付与平台保障PRD任务.md").read_text(
+        encoding="utf-8"
+    )
+    plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(
+        encoding="utf-8"
+    )
+    acceptance = (
+        DOCS / "acceptance/026-generation协议毒消息终止收敛验收.md"
+    ).read_text(encoding="utf-8")
+
+    for source in (
+        production_requirement,
+        messaging_requirement,
+        production_design,
+        messaging_design,
+        prd,
+        plan,
+        acceptance,
+    ):
+        assert "generation" in source
+        assert "manual_attention" in source
+    for source in (messaging_requirement, prd, plan, acceptance):
+        assert "PT-MQ-003" in source
+    assert "## 10. 当前生成协议错误收敛边界" in production_requirement
+    assert "## 9. 当前 generation 协议毒消息终止收敛边界" in messaging_requirement
+    assert "### 4.3 generation 协议毒消息终止收敛" in production_design
+    assert "GenerationProtocolErrorCode" in acceptance
+    assert "make contract-rabbitmq" in acceptance
+    assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
+    assert "没有 Ollama、Ark SDK 或 fake Provider 成功" in acceptance
+    assert "PT-MQ-003、DEV-S4-02 与 S4 整体保持 in_progress" in acceptance
+    assert "未知 event type" in acceptance
+    assert "PostgreSQL available_at/重试上限" in acceptance
+
+
 def test_minio_acceptance_evidence_tracks_the_latest_compose_decision() -> None:
     compose_acceptance = (
         DOCS / "acceptance/008-D006全栈Compose部署验收.md"

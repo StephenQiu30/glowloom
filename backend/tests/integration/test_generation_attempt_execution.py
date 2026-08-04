@@ -6,10 +6,11 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from uuid6 import uuid7
 
 from app import io_worker
 from app.modules.governance.audit.models import AuditEvent
-from app.modules.messaging import envelope_from_event
+from app.modules.messaging import MessageEnvelope, envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production.models import (
     CostEntry,
@@ -213,6 +214,119 @@ async def test_generation_dispatch_redelivery_is_fact_idempotent(
             select(InboxDelivery).where(InboxDelivery.task_id == task_id)
         )
         assert inbox is not None and inbox.attempt_count == 2
+
+
+@pytest.mark.parametrize(
+    ("envelope_update", "error_code"),
+    (
+        ({"schema_version": 99}, "unsupported_message_schema"),
+        (
+            {"payload": {"task_id": "00000000-0000-0000-0000-000000000000"}},
+            "invalid_message_payload",
+        ),
+    ),
+)
+@pytest.mark.asyncio
+async def test_generation_protocol_error_enters_manual_attention_and_releases_once(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    envelope_update: dict[str, Any],
+    error_code: str,
+) -> None:
+    _, submitted, body = await _submitted_generation_body(
+        client,
+        session_factory,
+        submission_key=f"generation-protocol-{error_code}",
+    )
+    task_id = UUID(submitted["task"]["id"])
+    reservation_id = UUID(submitted["reservation"]["id"])
+    envelope = MessageEnvelope.model_validate_json(body).model_copy(
+        update=envelope_update
+    )
+    protocol_error_body = envelope.model_dump_json().encode("utf-8")
+
+    async def assert_committed_before_ack() -> None:
+        async with session_factory() as session:
+            task = await session.get(Task, task_id)
+            reservation = await session.get(Reservation, reservation_id)
+            release = await session.scalar(
+                select(CostEntry).where(
+                    CostEntry.reservation_id == reservation_id,
+                    CostEntry.entry_type == "release",
+                )
+            )
+            inbox = await session.scalar(
+                select(InboxDelivery).where(InboxDelivery.event_id == envelope.event_id)
+            )
+            attempt_count = await session.scalar(
+                select(func.count())
+                .select_from(GenerationAttempt)
+                .where(GenerationAttempt.task_id == task_id)
+            )
+            assert task is not None and task.status == "failed"
+            assert task.progress_stage == "manual_attention"
+            assert task.error_code == error_code
+            assert task.error_retryable is False
+            assert task.next_action == "contact_support"
+            assert reservation is not None and reservation.status == "released"
+            assert release is not None and release.attempt_id is None
+            assert inbox is not None and inbox.status == "manual_attention"
+            assert inbox.last_error == error_code
+            assert attempt_count == 0
+
+    first = RecordingMessage(
+        protocol_error_body,
+        on_ack=assert_committed_before_ack,
+    )
+    second = RecordingMessage(protocol_error_body)
+    late_envelope = envelope.model_copy(update={"event_id": uuid7()})
+    late = RecordingMessage(late_envelope.model_dump_json().encode("utf-8"))
+
+    assert await io_worker.process_incoming_message(first, session_factory) == "rejected"
+    assert await io_worker.process_incoming_message(second, session_factory) == "duplicate"
+    assert await io_worker.process_incoming_message(late, session_factory) == "rejected"
+    assert first.ack_count == second.ack_count == 1
+    assert late.ack_count == 1
+    assert first.nack_requeues == second.nack_requeues == late.nack_requeues == []
+
+    async with session_factory() as session:
+        task = await session.get(Task, task_id)
+        reservation = await session.get(Reservation, reservation_id)
+        release_count = await session.scalar(
+            select(func.count())
+            .select_from(CostEntry)
+            .where(
+                CostEntry.reservation_id == reservation_id,
+                CostEntry.entry_type == "release",
+            )
+        )
+        attempt_count = await session.scalar(
+            select(func.count())
+            .select_from(GenerationAttempt)
+            .where(GenerationAttempt.task_id == task_id)
+        )
+        audit_count = await session.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(
+                AuditEvent.target_id == task_id,
+                AuditEvent.action == "task.failed",
+            )
+        )
+        inbox = await session.scalar(
+            select(InboxDelivery).where(InboxDelivery.event_id == envelope.event_id)
+        )
+        late_inbox = await session.scalar(
+            select(InboxDelivery).where(InboxDelivery.event_id == late_envelope.event_id)
+        )
+        assert task is not None and task.revision == 2
+        assert reservation is not None and reservation.revision == 2
+        assert release_count == 1
+        assert attempt_count == 0
+        assert audit_count == 1
+        assert inbox is not None and inbox.attempt_count == 2
+        assert late_inbox is not None and late_inbox.status == "rejected"
+        assert late_inbox.last_error == error_code
 
 
 @pytest.mark.asyncio
