@@ -151,6 +151,12 @@ class TaskContext:
 
 
 @dataclass(frozen=True, slots=True)
+class PreparedGenerationAttempt:
+    task_id: UUID
+    attempt_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
 class EpisodeTaskSummary:
     running: int = 0
     failed: int = 0

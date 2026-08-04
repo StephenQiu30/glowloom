@@ -29,6 +29,11 @@ from app.modules.messaging.consumer import (
     finalize_extraction_success,
     prepare_configured_extraction,
 )
+from app.modules.messaging.generation_consumer import (
+    PreparedGenerationDispatch,
+    finalize_generation_dispatch_unavailable,
+    prepare_generation_dispatch,
+)
 from app.modules.messaging.metrics import (
     initialize_worker_metrics,
     message_event_type_label,
@@ -171,6 +176,13 @@ async def _process_valid_envelope(
     extractor: ScriptStructureExtractor | None,
 ) -> WorkerResult:
 
+    if envelope.event_type == "generation.requested":
+        return await _process_generation_envelope(
+            message,
+            envelope,
+            factory,
+        )
+
     if extractor is None:
         try:
             async with factory() as session:
@@ -236,6 +248,38 @@ async def _process_valid_envelope(
                         prepared,
                         provider_error,
                     )
+    except Exception:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    await message.ack()
+    return result
+
+
+async def _process_generation_envelope(
+    message: IncomingMessage,
+    envelope: MessageEnvelope,
+    factory: async_sessionmaker[AsyncSession],
+) -> WorkerResult:
+    try:
+        async with factory() as session:
+            async with session.begin():
+                prepared = await prepare_generation_dispatch(session, envelope)
+    except Exception:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    if not isinstance(prepared, PreparedGenerationDispatch):
+        await message.ack()
+        return prepared
+
+    try:
+        async with factory() as session:
+            async with session.begin():
+                result = await finalize_generation_dispatch_unavailable(
+                    session,
+                    prepared,
+                )
     except Exception:
         await message.nack(requeue=True)
         return "requeued"

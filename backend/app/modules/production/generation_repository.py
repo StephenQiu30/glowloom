@@ -8,6 +8,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.modules.production.models import (
     CostEntry,
+    GenerationAttempt,
     GenerationRequest,
     ModelCapability,
     Reservation,
@@ -122,6 +123,51 @@ async def find_generation_task_for_cancellation(
     return await session.scalar(
         select(Task)
         .where(Task.id == task_id, Task.workspace_id == workspace_id)
+        .with_for_update()
+    )
+
+
+async def find_generation_task_for_execution(
+    session: AsyncSession,
+    task_id: UUID,
+) -> Task | None:
+    return await session.scalar(
+        select(Task).where(Task.id == task_id).with_for_update()
+    )
+
+
+async def find_latest_generation_attempt(
+    session: AsyncSession,
+    workspace_id: UUID,
+    task_id: UUID,
+    *,
+    for_update: bool = False,
+) -> GenerationAttempt | None:
+    query = (
+        select(GenerationAttempt)
+        .where(
+            GenerationAttempt.workspace_id == workspace_id,
+            GenerationAttempt.task_id == task_id,
+        )
+        .order_by(GenerationAttempt.sequence.desc())
+        .limit(1)
+    )
+    if for_update:
+        query = query.with_for_update()
+    return await session.scalar(query)
+
+
+async def find_generation_attempt_for_update(
+    session: AsyncSession,
+    workspace_id: UUID,
+    attempt_id: UUID,
+) -> GenerationAttempt | None:
+    return await session.scalar(
+        select(GenerationAttempt)
+        .where(
+            GenerationAttempt.id == attempt_id,
+            GenerationAttempt.workspace_id == workspace_id,
+        )
         .with_for_update()
     )
 

@@ -6,6 +6,7 @@ from app.modules.production.contracts import (
     MediaLocationRetirementTaskCommand,
     MediaLocationTaskDispatch,
     MediaProbeTaskCommand,
+    PreparedGenerationAttempt,
     ScriptExtractionTaskCommand,
     TaskContext,
     TaskResponse,
@@ -14,6 +15,10 @@ from app.modules.production.contracts import (
     UploadCleanupTaskDispatch,
     UploadExpirationTaskCommand,
     UploadExpirationTaskDispatch,
+)
+from app.modules.production.generation_execution import (
+    fail_generation_attempt_without_provider,
+    prepare_generation_attempt,
 )
 from app.modules.production.service import (
     complete_media_location_task,
@@ -43,6 +48,7 @@ from app.modules.production.service import (
 
 __all__ = [
     "MediaProbeTaskCommand",
+    "PreparedGenerationAttempt",
     "MediaLocationMigrationTaskCommand",
     "MediaLocationRetirementTaskCommand",
     "MediaLocationTaskDispatch",
@@ -68,6 +74,7 @@ __all__ = [
     "create_upload_cleanup_task",
     "create_upload_expiration_task",
     "fail_media_probe_task",
+    "fail_generation_attempt_without_provider",
     "fail_media_location_task",
     "fail_script_extraction_task",
     "fail_upload_cleanup_task",
@@ -76,6 +83,7 @@ __all__ = [
     "get_task",
     "lock_task",
     "mark_script_extraction_task_unknown",
+    "prepare_generation_attempt",
     "start_script_extraction_task",
     "summarize_episode_tasks",
 ]

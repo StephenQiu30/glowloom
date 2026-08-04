@@ -195,6 +195,11 @@ class CostEntry(Base):
             ("prod_reservations.id", "prod_reservations.workspace_id"),
             name="fk_prod_cost_reservation_workspace",
         ),
+        ForeignKeyConstraint(
+            ("attempt_id", "workspace_id"),
+            ("prod_attempts.id", "prod_attempts.workspace_id"),
+            name="fk_prod_cost_attempt_workspace",
+        ),
         CheckConstraint(
             "entry_type IN ('reserve', 'settle', 'release', 'adjust')",
             name="ck_prod_cost_entry_type",
@@ -273,6 +278,53 @@ class Task(Base):
     )
     revision: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
+    )
+
+
+class GenerationAttempt(Base):
+    __tablename__ = "prod_attempts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ("task_id", "workspace_id"),
+            ("prod_tasks.id", "prod_tasks.workspace_id"),
+            name="fk_prod_attempt_task_workspace",
+        ),
+        CheckConstraint("sequence >= 1", name="ck_prod_attempt_sequence"),
+        CheckConstraint(
+            "status IN ('prepared', 'submitting', 'accepted', 'polling', "
+            "'succeeded', 'failed', 'cancelled', 'unknown')",
+            name="ck_prod_attempt_status",
+        ),
+        UniqueConstraint("id", "workspace_id", name="uq_prod_attempt_id_workspace"),
+        UniqueConstraint("task_id", "sequence", name="uq_prod_attempt_task_sequence"),
+        UniqueConstraint(
+            "provider_request_key",
+            name="uq_prod_attempt_provider_request_key",
+        ),
+        Index("ix_prod_attempt_workspace_status", "workspace_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    task_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer)
+    provider_request_key: Mapped[str] = mapped_column(String(64))
+    provider_task_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="prepared")
+    request_snapshot_hash: Mapped[str] = mapped_column(String(64))
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    reconcile_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prepared_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
     )

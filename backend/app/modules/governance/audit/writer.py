@@ -169,6 +169,17 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
         "release_cost_entry_id",
     },
     "task.unknown": _TASK_TRANSITION_METADATA_FIELDS,
+    "attempt.prepared": frozenset({"task_id", "sequence", "status"}),
+    "attempt.failed": frozenset(
+        {
+            "task_id",
+            "sequence",
+            "previous_status",
+            "status",
+            "error_code",
+            "external_side_effect",
+        }
+    ),
     "schedule.paused": frozenset({"revision", "handler_name"}),
     "schedule.resumed": frozenset(
         {"revision", "handler_name", "misfire_policy", "max_catch_up"}

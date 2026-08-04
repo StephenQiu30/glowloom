@@ -3,12 +3,15 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid6 import uuid7
 
 from app.modules.messaging.contracts import MessageEnvelope
+from app.modules.messaging.delivery import (
+    complete_inbox_delivery,
+    lock_inbox_delivery,
+    reject_inbox_delivery,
+    start_inbox_delivery,
+)
 from app.modules.messaging.models import InboxDelivery
 from app.modules.production import (
     fail_script_extraction_task,
@@ -38,91 +41,6 @@ class PreparedScriptExtraction:
 PreparationResult = ConsumerResult | PreparedScriptExtraction
 
 
-async def _start_delivery(
-    session: AsyncSession,
-    envelope: MessageEnvelope,
-    consumer_name: str,
-    now: datetime,
-) -> tuple[InboxDelivery, bool]:
-    delivery_id = uuid7()
-    inserted_id = await session.scalar(
-        insert(InboxDelivery)
-        .values(
-            id=delivery_id,
-            workspace_id=envelope.workspace_id,
-            event_id=envelope.event_id,
-            event_type=envelope.event_type,
-            consumer_name=consumer_name,
-            trace_id=envelope.trace_id,
-            status="processing",
-            attempt_count=1,
-            received_at=now,
-        )
-        .on_conflict_do_nothing(constraint="uq_sys_inbox_event_consumer")
-        .returning(InboxDelivery.id)
-    )
-    if inserted_id is None:
-        existing = await session.scalar(
-            select(InboxDelivery)
-            .where(
-                InboxDelivery.event_id == envelope.event_id,
-                InboxDelivery.consumer_name == consumer_name,
-            )
-            .with_for_update()
-        )
-        if existing is None:
-            raise RuntimeError("inbox delivery is unavailable")
-        existing.attempt_count += 1
-        await session.flush()
-        return existing, False
-
-    delivery = await session.scalar(
-        select(InboxDelivery)
-        .where(InboxDelivery.id == inserted_id)
-        .with_for_update()
-    )
-    if delivery is None:
-        raise RuntimeError("inbox delivery is unavailable")
-    return delivery, True
-
-
-def _reject(
-    delivery: InboxDelivery,
-    *,
-    error_code: str,
-    now: datetime,
-) -> ConsumerResult:
-    delivery.status = "rejected"
-    delivery.last_error = error_code
-    delivery.processed_at = now
-    return "rejected"
-
-
-def _complete_delivery(
-    delivery: InboxDelivery,
-    *,
-    now: datetime,
-    last_error: str | None = None,
-) -> None:
-    delivery.status = "completed"
-    delivery.last_error = last_error
-    delivery.processed_at = now
-
-
-async def _lock_delivery(
-    session: AsyncSession,
-    delivery_id: UUID,
-) -> InboxDelivery:
-    delivery = await session.scalar(
-        select(InboxDelivery)
-        .where(InboxDelivery.id == delivery_id)
-        .with_for_update()
-    )
-    if delivery is None:
-        raise RuntimeError("inbox delivery is unavailable")
-    return delivery
-
-
 async def _mark_interrupted_delivery_unknown(
     session: AsyncSession,
     delivery: InboxDelivery,
@@ -130,10 +48,10 @@ async def _mark_interrupted_delivery_unknown(
     now: datetime,
 ) -> ConsumerResult:
     if delivery.task_id is None:
-        return _reject(delivery, error_code="task_not_found", now=now)
+        return reject_inbox_delivery(delivery, error_code="task_not_found", now=now)
     task = await lock_task(session, delivery.task_id)
     if task is None:
-        return _reject(delivery, error_code="task_not_found", now=now)
+        return reject_inbox_delivery(delivery, error_code="task_not_found", now=now)
     changed = await mark_script_extraction_task_unknown(
         session,
         task.id,
@@ -147,7 +65,7 @@ async def _mark_interrupted_delivery_unknown(
             "unknown",
             now=now,
         )
-    _complete_delivery(delivery, now=now, last_error="ai_result_unknown")
+    complete_inbox_delivery(delivery, now=now, last_error="ai_result_unknown")
     await session.flush()
     return "completed"
 
@@ -160,7 +78,7 @@ async def _prepare_envelope(
     extraction_configured: bool,
 ) -> PreparationResult:
     now = datetime.now(UTC)
-    delivery, is_first_delivery = await _start_delivery(
+    delivery, is_first_delivery = await start_inbox_delivery(
         session, envelope, consumer_name, now
     )
     if not is_first_delivery:
@@ -174,13 +92,15 @@ async def _prepare_envelope(
 
     task = await lock_task(session, envelope.aggregate_id)
     if task is None:
-        return _reject(delivery, error_code="task_not_found", now=now)
+        return reject_inbox_delivery(delivery, error_code="task_not_found", now=now)
     if task.workspace_id != envelope.workspace_id:
-        return _reject(delivery, error_code="workspace_mismatch", now=now)
+        return reject_inbox_delivery(delivery, error_code="workspace_mismatch", now=now)
     delivery.task_id = task.id
 
     if envelope.event_type != "script_extraction.requested":
-        return _reject(delivery, error_code="unsupported_message_type", now=now)
+        return reject_inbox_delivery(
+            delivery, error_code="unsupported_message_type", now=now
+        )
     if envelope.schema_version != 1:
         changed = await fail_script_extraction_task(
             session,
@@ -195,7 +115,7 @@ async def _prepare_envelope(
             await synchronize_extraction_batch_status(
                 session, task.request_id, "failed", now=now
             )
-        return _reject(
+        return reject_inbox_delivery(
             delivery,
             error_code="unsupported_message_schema",
             now=now,
@@ -214,11 +134,15 @@ async def _prepare_envelope(
             await synchronize_extraction_batch_status(
                 session, task.request_id, "failed", now=now
             )
-        return _reject(delivery, error_code="invalid_message_payload", now=now)
+        return reject_inbox_delivery(
+            delivery, error_code="invalid_message_payload", now=now
+        )
     if task.task_type != "script_extraction" or task.request_type != "extraction_batch":
-        return _reject(delivery, error_code="unsupported_task_type", now=now)
+        return reject_inbox_delivery(
+            delivery, error_code="unsupported_task_type", now=now
+        )
     if task.status in {"succeeded", "failed", "cancelled", "unknown"}:
-        _complete_delivery(delivery, now=now)
+        complete_inbox_delivery(delivery, now=now)
         await session.flush()
         return "completed"
 
@@ -236,7 +160,7 @@ async def _prepare_envelope(
             await synchronize_extraction_batch_status(
                 session, task.request_id, "failed", now=now
             )
-        _complete_delivery(delivery, now=now)
+        complete_inbox_delivery(delivery, now=now)
         await session.flush()
         return "completed"
 
@@ -247,7 +171,7 @@ async def _prepare_envelope(
         trace_id=envelope.trace_id,
     )
     if not changed:
-        _complete_delivery(delivery, now=now)
+        complete_inbox_delivery(delivery, now=now)
         await session.flush()
         return "completed"
     await synchronize_extraction_batch_status(
@@ -304,7 +228,7 @@ async def finalize_extraction_success(
     prepared: PreparedScriptExtraction,
     result: ScriptExtractionResult,
 ) -> ConsumerResult:
-    delivery = await _lock_delivery(session, prepared.delivery_id)
+    delivery = await lock_inbox_delivery(session, prepared.delivery_id)
     if delivery.status != "processing":
         return "duplicate"
     await record_extraction_result(
@@ -313,7 +237,7 @@ async def finalize_extraction_success(
         result,
         trace_id=delivery.trace_id,
     )
-    _complete_delivery(delivery, now=datetime.now(UTC))
+    complete_inbox_delivery(delivery, now=datetime.now(UTC))
     await session.flush()
     return "completed"
 
@@ -323,7 +247,7 @@ async def finalize_extraction_failure(
     prepared: PreparedScriptExtraction,
     error: ScriptExtractionProviderError,
 ) -> ConsumerResult:
-    delivery = await _lock_delivery(session, prepared.delivery_id)
+    delivery = await lock_inbox_delivery(session, prepared.delivery_id)
     if delivery.status != "processing":
         return "duplicate"
     now = datetime.now(UTC)
@@ -354,6 +278,6 @@ async def finalize_extraction_failure(
             status,
             now=now,
         )
-    _complete_delivery(delivery, now=now, last_error=error.code)
+    complete_inbox_delivery(delivery, now=now, last_error=error.code)
     await session.flush()
     return "completed"
