@@ -1,6 +1,10 @@
+import asyncio
 import json
+import logging
+import time
 from collections.abc import AsyncIterator, Callable
-from contextlib import suppress
+from contextlib import contextmanager, suppress
+from dataclasses import dataclass
 from datetime import timedelta
 from functools import partial
 from io import BytesIO
@@ -11,7 +15,15 @@ from anyio.to_thread import run_sync
 from minio import Minio
 from minio.commonconfig import CopySource
 from minio.error import S3Error
+from opentelemetry.trace import SpanKind, Status, StatusCode
 
+from app.core.logging import log_event
+from app.core.telemetry import span_identifiers, start_span
+from app.modules.media.metrics import (
+    observe_storage_operation,
+    storage_operation_label,
+    storage_profile_label,
+)
 from app.modules.media.storage import (
     StorageAccessDenied,
     StorageObjectMetadata,
@@ -32,6 +44,76 @@ _ACCESS_DENIED_CODES = {
 _NOT_FOUND_CODES = {"NoSuchKey", "NoSuchObject", "NotFound"}
 _MAX_OBJECT_KEY_LENGTH = 1024
 _MAX_PRESIGN_EXPIRY_SECONDS = 7 * 24 * 60 * 60
+_LOGGER = logging.getLogger("lanverse.storage")
+
+
+@dataclass(slots=True)
+class _StorageObservation:
+    bytes_processed: int | None = None
+
+
+def _storage_result(error: BaseException) -> str:
+    if isinstance(error, StorageObjectNotFound):
+        return "not_found"
+    if isinstance(error, StorageAccessDenied):
+        return "access_denied"
+    if isinstance(error, StorageUnavailable):
+        return "unavailable"
+    if isinstance(error, ValueError):
+        return "rejected"
+    if isinstance(error, (asyncio.CancelledError, GeneratorExit)):
+        return "cancelled"
+    return "failed"
+
+
+def _record_storage_observation(
+    *,
+    trace_id: str,
+    span_id: str,
+    storage_profile: str,
+    operation: str,
+    result: str,
+    duration_seconds: float,
+    bytes_processed: int | None,
+) -> None:
+    observe_storage_operation(
+        storage_profile=storage_profile,
+        operation=operation,
+        result=result,
+        duration_seconds=duration_seconds,
+        bytes_processed=bytes_processed,
+    )
+    event_name = (
+        "storage.operation.completed"
+        if result == "succeeded"
+        else "storage.operation.failed"
+    )
+    attributes: dict[str, object] = {
+        "trace_id": trace_id,
+        "span_id": span_id,
+        "storage_profile": storage_profile,
+        "operation": operation,
+        "result": result,
+        "duration_ms": round(max(duration_seconds, 0) * 1000, 3),
+    }
+    if result == "succeeded" and bytes_processed is not None:
+        attributes["bytes_processed"] = bytes_processed
+    elif result != "succeeded":
+        attributes["error_code"] = result
+    try:
+        log_event(
+            _LOGGER,
+            logging.INFO if result == "succeeded" else logging.WARNING,
+            event_name,
+            (
+                "object storage operation completed"
+                if result == "succeeded"
+                else "object storage operation failed"
+            ),
+            **attributes,
+        )
+    except Exception:
+        pass
 
 
 def _validate_object_key(object_key: str) -> None:
@@ -119,6 +201,7 @@ class MinioObjectStorage:
         bucket: str,
         *,
         secure: bool,
+        storage_profile: str = "default",
         thread_limit: int = 4,
         operation_timeout_seconds: float = 3,
     ) -> None:
@@ -129,8 +212,52 @@ class MinioObjectStorage:
             secure=secure,
         )
         self._bucket = bucket
+        self._storage_profile = storage_profile_label(storage_profile)
         self._limiter = CapacityLimiter(thread_limit)
         self._operation_timeout_seconds = operation_timeout_seconds
+
+    @contextmanager
+    def _observe(self, operation: str):
+        normalized_operation = storage_operation_label(operation)
+        started = time.perf_counter()
+        with start_span(
+            "storage.minio",
+            kind=SpanKind.CLIENT,
+            attributes={
+                "storage.system": "minio",
+                "storage.profile": self._storage_profile,
+                "storage.operation": normalized_operation,
+            },
+        ) as span:
+            trace_id, span_id = span_identifiers(span)
+            observation = _StorageObservation()
+            try:
+                yield observation
+            except BaseException as error:
+                result = _storage_result(error)
+                span.set_attribute("storage.result", result)
+                span.set_status(Status(StatusCode.ERROR, result))
+                _record_storage_observation(
+                    trace_id=trace_id,
+                    span_id=span_id,
+                    storage_profile=self._storage_profile,
+                    operation=normalized_operation,
+                    result=result,
+                    duration_seconds=time.perf_counter() - started,
+                    bytes_processed=None,
+                )
+                raise
+            else:
+                span.set_attribute("storage.result", "succeeded")
+                _record_storage_observation(
+                    trace_id=trace_id,
+                    span_id=span_id,
+                    storage_profile=self._storage_profile,
+                    operation=normalized_operation,
+                    result="succeeded",
+                    duration_seconds=time.perf_counter() - started,
+                    bytes_processed=observation.bytes_processed,
+                )
 
     async def _run(self, function: Callable[[], T]) -> T:
         try:
@@ -144,129 +271,141 @@ class MinioObjectStorage:
             raise StorageUnavailable("object storage is unavailable") from error
 
     async def ensure_bucket(self) -> None:
-        try:
-            exists = await self._run(partial(self._client.bucket_exists, self._bucket))
-            if not exists:
-                await self._run(partial(self._client.make_bucket, self._bucket))
+        with self._observe("ensure_bucket"):
             try:
-                policy = await self._run(
-                    partial(self._client.get_bucket_policy, self._bucket)
-                )
-            except S3Error as error:
-                if error.code == "NoSuchBucketPolicy":
-                    return
-                raise
-            if _policy_allows_anonymous_read(policy):
-                raise StorageAccessDenied("object storage bucket must be private")
-        except Exception as error:
-            _raise_storage_error(error)
+                exists = await self._run(partial(self._client.bucket_exists, self._bucket))
+                if not exists:
+                    await self._run(partial(self._client.make_bucket, self._bucket))
+                try:
+                    policy = await self._run(
+                        partial(self._client.get_bucket_policy, self._bucket)
+                    )
+                except S3Error as error:
+                    if error.code == "NoSuchBucketPolicy":
+                        return
+                    raise
+                if _policy_allows_anonymous_read(policy):
+                    raise StorageAccessDenied("object storage bucket must be private")
+            except Exception as error:
+                _raise_storage_error(error)
 
     async def presign_upload(self, object_key: str, expires_seconds: int) -> str:
-        _validate_object_key(object_key)
-        _validate_expiry(expires_seconds)
-        try:
-            result = await self._run(
-                partial(
-                    self._client.presigned_put_object,
-                    self._bucket,
-                    object_key,
-                    timedelta(seconds=expires_seconds),
+        with self._observe("presign_upload"):
+            _validate_object_key(object_key)
+            _validate_expiry(expires_seconds)
+            try:
+                result = await self._run(
+                    partial(
+                        self._client.presigned_put_object,
+                        self._bucket,
+                        object_key,
+                        timedelta(seconds=expires_seconds),
+                    )
                 )
-            )
-        except Exception as error:
-            _raise_storage_error(error)
-        return str(result)
+            except Exception as error:
+                _raise_storage_error(error)
+            return str(result)
 
     async def presign_download(self, object_key: str, expires_seconds: int) -> str:
-        _validate_object_key(object_key)
-        _validate_expiry(expires_seconds)
-        try:
-            result = await self._run(
-                partial(
-                    self._client.presigned_get_object,
-                    self._bucket,
-                    object_key,
-                    timedelta(seconds=expires_seconds),
+        with self._observe("presign_download"):
+            _validate_object_key(object_key)
+            _validate_expiry(expires_seconds)
+            try:
+                result = await self._run(
+                    partial(
+                        self._client.presigned_get_object,
+                        self._bucket,
+                        object_key,
+                        timedelta(seconds=expires_seconds),
+                    )
                 )
-            )
-        except Exception as error:
-            _raise_storage_error(error)
-        return str(result)
+            except Exception as error:
+                _raise_storage_error(error)
+            return str(result)
 
     async def stat(self, object_key: str) -> StorageObjectMetadata:
-        _validate_object_key(object_key)
-        try:
-            result = await self._run(
-                partial(self._client.stat_object, self._bucket, object_key)
+        with self._observe("stat"):
+            _validate_object_key(object_key)
+            try:
+                result = await self._run(
+                    partial(self._client.stat_object, self._bucket, object_key)
+                )
+            except Exception as error:
+                _raise_storage_error(error)
+            if result.size is None:
+                raise StorageUnavailable("object storage returned no object size")
+            return StorageObjectMetadata(
+                size_bytes=result.size,
+                content_type=result.content_type,
+                etag=result.etag,
             )
-        except Exception as error:
-            _raise_storage_error(error)
-        if result.size is None:
-            raise StorageUnavailable("object storage returned no object size")
-        return StorageObjectMetadata(
-            size_bytes=result.size,
-            content_type=result.content_type,
-            etag=result.etag,
-        )
 
     async def put(self, object_key: str, data: bytes, content_type: str) -> None:
-        _validate_object_key(object_key)
-        stream = BytesIO(data)
-        try:
-            await self._run(
-                partial(
-                    self._client.put_object,
-                    self._bucket,
-                    object_key,
-                    stream,
-                    len(data),
-                    content_type,
+        with self._observe("put") as observation:
+            _validate_object_key(object_key)
+            stream = BytesIO(data)
+            try:
+                await self._run(
+                    partial(
+                        self._client.put_object,
+                        self._bucket,
+                        object_key,
+                        stream,
+                        len(data),
+                        content_type,
+                    )
                 )
-            )
-        except Exception as error:
-            _raise_storage_error(error)
+            except Exception as error:
+                _raise_storage_error(error)
+            observation.bytes_processed = len(data)
 
     async def copy(self, source_key: str, target_key: str) -> None:
-        _validate_object_key(source_key)
-        _validate_object_key(target_key)
-        try:
-            await self._run(
-                partial(
-                    self._client.copy_object,
-                    self._bucket,
-                    target_key,
-                    CopySource(self._bucket, source_key),
+        with self._observe("copy"):
+            _validate_object_key(source_key)
+            _validate_object_key(target_key)
+            try:
+                await self._run(
+                    partial(
+                        self._client.copy_object,
+                        self._bucket,
+                        target_key,
+                        CopySource(self._bucket, source_key),
+                    )
                 )
-            )
-        except Exception as error:
-            _raise_storage_error(error)
+            except Exception as error:
+                _raise_storage_error(error)
 
     async def stream(self, object_key: str) -> AsyncIterator[bytes]:
-        _validate_object_key(object_key)
-        try:
-            response = await self._run(
-                partial(self._client.get_object, self._bucket, object_key)
-            )
-        except Exception as error:
-            _raise_storage_error(error)
-        try:
-            while True:
-                try:
-                    chunk = await self._run(partial(response.read, 1024 * 1024))
-                except Exception as error:
-                    _raise_storage_error(error)
-                if not chunk:
-                    break
-                yield chunk
-        finally:
-            with suppress(StorageUnavailable):
-                await self._run(partial(response.close))
-            with suppress(StorageUnavailable):
-                await self._run(partial(response.release_conn))
+        with self._observe("stream") as observation:
+            _validate_object_key(object_key)
+            try:
+                response = await self._run(
+                    partial(self._client.get_object, self._bucket, object_key)
+                )
+            except Exception as error:
+                _raise_storage_error(error)
+            bytes_processed = 0
+            try:
+                while True:
+                    try:
+                        chunk = await self._run(partial(response.read, 1024 * 1024))
+                    except Exception as error:
+                        _raise_storage_error(error)
+                    if not chunk:
+                        break
+                    bytes_processed += len(chunk)
+                    yield chunk
+                observation.bytes_processed = bytes_processed
+            finally:
+                with suppress(StorageUnavailable):
+                    await self._run(partial(response.close))
+                with suppress(StorageUnavailable):
+                    await self._run(partial(response.release_conn))
 
     async def delete(self, object_key: str) -> None:
-        _validate_object_key(object_key)
-        try:
-            await self._run(partial(self._client.remove_object, self._bucket, object_key))
-        except Exception as error:
-            _raise_storage_error(error)
+        with self._observe("delete"):
+            _validate_object_key(object_key)
+            try:
+                await self._run(partial(self._client.remove_object, self._bucket, object_key))
+            except Exception as error:
+                _raise_storage_error(error)

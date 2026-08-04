@@ -117,7 +117,11 @@ def start_span(
     parent_traceparent: str | None = None,
     attributes: Mapping[str, SpanAttribute] | None = None,
 ) -> Generator[Span]:
-    parent_context = context_from_traceparent(parent_traceparent)
+    parent_context = (
+        context_from_traceparent(parent_traceparent)
+        if parent_traceparent is not None
+        else None
+    )
     with get_tracer().start_as_current_span(
         name,
         context=parent_context,

@@ -1,15 +1,107 @@
+import asyncio
 import json
+import logging
 import os
 import tempfile
+import time
 from collections.abc import AsyncIterator
+from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
 from typing import Any, cast
 
 from anyio import fail_after, open_file, run_process
 from anyio.to_thread import run_sync
+from opentelemetry.trace import SpanKind, Status, StatusCode
 
+from app.core.logging import log_event
+from app.core.telemetry import span_identifiers, start_span
 from app.modules.media import MediaProbeError, MediaProbeResult
+from app.modules.media.metrics import (
+    media_kind_label,
+    media_probe_result_label,
+    observe_media_probe,
+)
+
+_LOGGER = logging.getLogger("lanverse.media.probe")
+
+
+def _probe_observation_result(error: BaseException) -> str:
+    if isinstance(error, MediaProbeError):
+        return media_probe_result_label(error.code)
+    if isinstance(error, (asyncio.CancelledError, GeneratorExit)):
+        return "cancelled"
+    return "failed"
+
+
+def _record_probe_observation(
+    *,
+    trace_id: str,
+    span_id: str,
+    kind: str,
+    result: str,
+    duration_seconds: float,
+) -> None:
+    observe_media_probe(
+        kind=kind,
+        result=result,
+        duration_seconds=duration_seconds,
+    )
+    event_name = "media.probe.completed" if result == "succeeded" else "media.probe.failed"
+    attributes: dict[str, object] = {
+        "trace_id": trace_id,
+        "span_id": span_id,
+        "kind": kind,
+        "result": result,
+        "duration_ms": round(max(duration_seconds, 0) * 1000, 3),
+    }
+    if result != "succeeded":
+        attributes["error_code"] = result
+    try:
+        log_event(
+            _LOGGER,
+            logging.INFO if result == "succeeded" else logging.WARNING,
+            event_name,
+            "media probe completed" if result == "succeeded" else "media probe failed",
+            **attributes,
+        )
+    except Exception:
+        pass
+
+
+@contextmanager
+def _observe_probe(kind: str):
+    normalized_kind = media_kind_label(kind)
+    started = time.perf_counter()
+    with start_span(
+        "media.ffprobe",
+        kind=SpanKind.CLIENT,
+        attributes={"media.tool": "ffprobe", "media.kind": normalized_kind},
+    ) as span:
+        trace_id, span_id = span_identifiers(span)
+        try:
+            yield
+        except BaseException as error:
+            result = _probe_observation_result(error)
+            span.set_attribute("media.result", result)
+            span.set_status(Status(StatusCode.ERROR, result))
+            _record_probe_observation(
+                trace_id=trace_id,
+                span_id=span_id,
+                kind=normalized_kind,
+                result=result,
+                duration_seconds=time.perf_counter() - started,
+            )
+            raise
+        else:
+            span.set_attribute("media.result", "succeeded")
+            _record_probe_observation(
+                trace_id=trace_id,
+                span_id=span_id,
+                kind=normalized_kind,
+                result="succeeded",
+                duration_seconds=time.perf_counter() - started,
+            )
 
 
 class FfprobeMediaProbe:
@@ -24,49 +116,50 @@ class FfprobeMediaProbe:
         kind: str,
         mime_type: str,
     ) -> MediaProbeResult:
-        suffix = Path("placeholder" + _suffix_for_mime(mime_type)).suffix
-        descriptor, path = await run_sync(partial(tempfile.mkstemp, suffix=suffix))
-        await run_sync(partial(os.close, descriptor))
-        try:
-            async with await open_file(path, "wb") as target:
-                async for chunk in content:
-                    await target.write(chunk)
+        with _observe_probe(kind):
+            suffix = Path("placeholder" + _suffix_for_mime(mime_type)).suffix
+            descriptor, path = await run_sync(partial(tempfile.mkstemp, suffix=suffix))
+            await run_sync(partial(os.close, descriptor))
             try:
-                with fail_after(self._timeout_seconds):
-                    completed = await run_process(
-                        [
-                            self._executable,
-                            "-v",
-                            "error",
-                            "-print_format",
-                            "json",
-                            "-show_format",
-                            "-show_streams",
-                            path,
-                        ],
-                        check=False,
+                async with await open_file(path, "wb") as target:
+                    async for chunk in content:
+                        await target.write(chunk)
+                try:
+                    with fail_after(self._timeout_seconds):
+                        completed = await run_process(
+                            [
+                                self._executable,
+                                "-v",
+                                "error",
+                                "-print_format",
+                                "json",
+                                "-show_format",
+                                "-show_streams",
+                                path,
+                            ],
+                            check=False,
+                        )
+                except TimeoutError as error:
+                    raise MediaProbeError(
+                        "probe_timeout", "Media inspection exceeded its time limit"
+                    ) from error
+                except FileNotFoundError as error:
+                    raise MediaProbeError(
+                        "probe_tool_unavailable", "Media inspection tool is unavailable"
+                    ) from error
+                if completed.returncode != 0:
+                    raise MediaProbeError(
+                        "unsupported_media", "Unable to inspect the uploaded media"
                     )
-            except TimeoutError as error:
-                raise MediaProbeError(
-                    "probe_timeout", "Media inspection exceeded its time limit"
-                ) from error
-            except FileNotFoundError as error:
-                raise MediaProbeError(
-                    "probe_tool_unavailable", "Media inspection tool is unavailable"
-                ) from error
-            if completed.returncode != 0:
-                raise MediaProbeError(
-                    "unsupported_media", "Unable to inspect the uploaded media"
-                )
-            try:
-                payload = cast(dict[str, Any], json.loads(completed.stdout))
-            except (TypeError, ValueError, UnicodeDecodeError) as error:
-                raise MediaProbeError(
-                    "invalid_probe_output", "Media inspection returned invalid metadata"
-                ) from error
-            return _probe_result(payload, kind=kind)
-        finally:
-            await run_sync(partial(Path(path).unlink, missing_ok=True))
+                try:
+                    payload = cast(dict[str, Any], json.loads(completed.stdout))
+                except (TypeError, ValueError, UnicodeDecodeError) as error:
+                    raise MediaProbeError(
+                        "invalid_probe_output", "Media inspection returned invalid metadata"
+                    ) from error
+                return _probe_result(payload, kind=kind)
+            finally:
+                await run_sync(partial(Path(path).unlink, missing_ok=True))
 
 
 def _suffix_for_mime(mime_type: str) -> str:

@@ -116,6 +116,47 @@ EVENT_ATTRIBUTE_ALLOWLIST: dict[str, frozenset[str]] = {
             "error_type",
         }
     ),
+    "storage.operation.completed": frozenset(
+        {
+            "trace_id",
+            "span_id",
+            "storage_profile",
+            "operation",
+            "result",
+            "duration_ms",
+            "bytes_processed",
+        }
+    ),
+    "storage.operation.failed": frozenset(
+        {
+            "trace_id",
+            "span_id",
+            "storage_profile",
+            "operation",
+            "result",
+            "duration_ms",
+            "error_code",
+        }
+    ),
+    "media.probe.completed": frozenset(
+        {
+            "trace_id",
+            "span_id",
+            "kind",
+            "result",
+            "duration_ms",
+        }
+    ),
+    "media.probe.failed": frozenset(
+        {
+            "trace_id",
+            "span_id",
+            "kind",
+            "result",
+            "duration_ms",
+            "error_code",
+        }
+    ),
 }
 TELEMETRY_REDACTION_DROPS = Counter(
     "lanverse_telemetry_redaction_drops_total",
