@@ -1,12 +1,19 @@
 import hashlib
+import logging
 import os
+from collections.abc import AsyncGenerator
+from typing import Protocol, cast
 from urllib.parse import quote
 from uuid import uuid4
 
 import httpx
 import pytest
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from prometheus_client import REGISTRY
 
 from app.core.config import Settings
+from app.core.telemetry import configure_telemetry
 from app.integrations.minio import MinioObjectStorage
 from app.modules.media.storage import (
     StorageAccessDenied,
@@ -22,6 +29,11 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+class _EventLogRecord(Protocol):
+    event_name: str
+    context: dict[str, object]
+
+
 def _storage(settings: Settings, *, operation_timeout_seconds: float = 3) -> MinioObjectStorage:
     return MinioObjectStorage(
         settings.minio_endpoint,
@@ -35,7 +47,9 @@ def _storage(settings: Settings, *, operation_timeout_seconds: float = 3) -> Min
 
 
 @pytest.mark.asyncio
-async def test_private_minio_supports_the_complete_eight_operation_contract() -> None:
+async def test_private_minio_supports_the_complete_eight_operation_contract(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     settings = Settings()
     storage = _storage(settings)
     namespace = f"contract/{uuid4()}"
@@ -45,6 +59,24 @@ async def test_private_minio_supports_the_complete_eight_operation_contract() ->
     missing_key = f"{namespace}/missing.txt"
     keys = (source_key, copied_key, upload_key, missing_key)
     content = b"lanverse-private-storage"
+    provider = configure_telemetry(
+        service_name="lanverse-minio-contract",
+        environment="test",
+    )
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    exporter.clear()
+    put_labels = {
+        "storage_profile": "default",
+        "operation": "put",
+        "result": "succeeded",
+    }
+    put_before = REGISTRY.get_sample_value(
+        "lanverse_storage_operations_total", put_labels
+    ) or 0
+    byte_labels = {"storage_profile": "default", "operation": "put"}
+    bytes_before = REGISTRY.get_sample_value("lanverse_storage_bytes_total", byte_labels) or 0
+    caplog.set_level(logging.INFO, logger="lanverse.storage")
     await storage.ensure_bucket()
     try:
         await storage.put(source_key, content, "text/plain")
@@ -94,6 +126,50 @@ async def test_private_minio_supports_the_complete_eight_operation_contract() ->
         for key in keys:
             await storage.delete(key)
 
+    assert REGISTRY.get_sample_value("lanverse_storage_operations_total", put_labels) == (
+        put_before + 1
+    )
+    assert REGISTRY.get_sample_value("lanverse_storage_bytes_total", byte_labels) == (
+        bytes_before + len(content)
+    )
+    spans = [span for span in exporter.get_finished_spans() if span.name == "storage.minio"]
+    span_operations: set[str] = set()
+    for span in spans:
+        assert span.attributes is not None
+        span_operations.add(str(span.attributes["storage.operation"]))
+    assert span_operations == {
+        "ensure_bucket",
+        "presign_upload",
+        "presign_download",
+        "stat",
+        "put",
+        "copy",
+        "stream",
+        "delete",
+    }
+    for span in spans:
+        assert span.attributes is not None
+        assert set(span.attributes) == {
+            "storage.system",
+            "storage.profile",
+            "storage.operation",
+            "storage.result",
+        }
+        rendered = str(span.attributes)
+        assert namespace not in rendered
+        assert settings.minio_endpoint not in rendered
+        assert settings.minio_bucket not in rendered
+    storage_events = [
+        cast(_EventLogRecord, record)
+        for record in caplog.records
+        if str(getattr(record, "event_name", "")).startswith("storage.operation.")
+    ]
+    assert storage_events
+    rendered_events = str([vars(record) for record in storage_events])
+    assert namespace not in rendered_events
+    assert settings.minio_endpoint not in rendered_events
+    assert settings.minio_bucket not in rendered_events
+
 
 @pytest.mark.asyncio
 async def test_minio_multipart_etag_is_not_the_platform_content_hash() -> None:
@@ -130,8 +206,77 @@ async def test_minio_multipart_etag_is_not_the_platform_content_hash() -> None:
 
 
 @pytest.mark.asyncio
-async def test_minio_maps_access_denied_and_unavailable_without_sdk_errors() -> None:
+async def test_partially_consumed_minio_stream_does_not_report_successful_bytes() -> None:
     settings = Settings()
+    storage = _storage(settings)
+    key = f"contract/{uuid4()}/partial-stream.bin"
+    content = b"x" * (1024 * 1024 + 17)
+    byte_labels = {"storage_profile": "default", "operation": "stream"}
+    succeeded_labels = {
+        **byte_labels,
+        "result": "succeeded",
+    }
+    cancelled_labels = {
+        **byte_labels,
+        "result": "cancelled",
+    }
+    await storage.ensure_bucket()
+    try:
+        await storage.put(key, content, "application/octet-stream")
+        bytes_before = (
+            REGISTRY.get_sample_value("lanverse_storage_bytes_total", byte_labels) or 0
+        )
+        succeeded_before = (
+            REGISTRY.get_sample_value(
+                "lanverse_storage_operations_total", succeeded_labels
+            )
+            or 0
+        )
+        cancelled_before = (
+            REGISTRY.get_sample_value(
+                "lanverse_storage_operations_total", cancelled_labels
+            )
+            or 0
+        )
+
+        stream = cast(AsyncGenerator[bytes, None], storage.stream(key))
+        first_chunk = await anext(stream)
+        assert first_chunk
+        await stream.aclose()
+
+        assert (
+            REGISTRY.get_sample_value("lanverse_storage_bytes_total", byte_labels)
+            == bytes_before
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "lanverse_storage_operations_total", succeeded_labels
+            )
+            == succeeded_before
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "lanverse_storage_operations_total", cancelled_labels
+            )
+            == cancelled_before + 1
+        )
+    finally:
+        await storage.delete(key)
+
+
+@pytest.mark.asyncio
+async def test_minio_maps_access_denied_and_unavailable_without_sdk_errors(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    settings = Settings()
+    provider = configure_telemetry(
+        service_name="lanverse-minio-contract",
+        environment="test",
+    )
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    exporter.clear()
+    caplog.set_level(logging.WARNING, logger="lanverse.storage")
     denied = MinioObjectStorage(
         settings.minio_endpoint,
         f"invalid-{uuid4()}",
@@ -153,6 +298,26 @@ async def test_minio_maps_access_denied_and_unavailable_without_sdk_errors() -> 
     )
     with pytest.raises(StorageUnavailable, match="object storage is unavailable"):
         await unavailable.ensure_bucket()
+
+    results: list[str] = []
+    for span in exporter.get_finished_spans():
+        if span.name != "storage.minio":
+            continue
+        assert span.attributes is not None
+        results.append(str(span.attributes["storage.result"]))
+    assert results == ["access_denied", "unavailable"]
+    events = [
+        cast(_EventLogRecord, record)
+        for record in caplog.records
+        if getattr(record, "event_name", None) == "storage.operation.failed"
+    ]
+    assert [record.context["error_code"] for record in events] == [
+        "access_denied",
+        "unavailable",
+    ]
+    rendered = str([vars(record) for record in events])
+    assert "invalid-contract-secret" not in rendered
+    assert "127.0.0.1:1" not in rendered
 
 
 @pytest.mark.asyncio

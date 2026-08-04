@@ -94,6 +94,67 @@ def test_registered_log_event_drops_unknown_fields_and_counts_them(
     assert after == before + 2
 
 
+def test_storage_and_probe_events_only_keep_registered_attributes(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    object_key = "private/workspace/media-version.bin"
+    endpoint = "127.0.0.1:9000"
+    caplog.set_level(logging.INFO)
+
+    log_event(
+        logging.getLogger("lanverse.storage"),
+        logging.WARNING,
+        "storage.operation.failed",
+        "object storage operation failed",
+        trace_id="1" * 32,
+        span_id="2" * 16,
+        storage_profile="default",
+        operation="stat",
+        result="not_found",
+        duration_ms=1.25,
+        error_code="not_found",
+        object_key=object_key,
+        endpoint=endpoint,
+    )
+    storage_record = cast(_EventLogRecord, caplog.records[-1])
+    assert storage_record.context == {
+        "trace_id": "1" * 32,
+        "span_id": "2" * 16,
+        "storage_profile": "default",
+        "operation": "stat",
+        "result": "not_found",
+        "duration_ms": 1.25,
+        "error_code": "not_found",
+    }
+
+    log_event(
+        logging.getLogger("lanverse.media.probe"),
+        logging.INFO,
+        "media.probe.completed",
+        "media probe completed",
+        trace_id="3" * 32,
+        span_id="4" * 16,
+        kind="image",
+        result="succeeded",
+        duration_ms=2.5,
+        temporary_path="/tmp/private-input.png",
+        stderr="private diagnostic",
+    )
+    probe_record = cast(_EventLogRecord, caplog.records[-1])
+    assert probe_record.context == {
+        "trace_id": "3" * 32,
+        "span_id": "4" * 16,
+        "kind": "image",
+        "result": "succeeded",
+        "duration_ms": 2.5,
+    }
+    rendered_records = str([vars(record) for record in caplog.records])
+    assert object_key not in rendered_records
+    assert endpoint not in rendered_records
+    assert "/tmp/private-input.png" not in rendered_records
+    assert "private diagnostic" not in rendered_records
+
+
 def test_process_logging_configuration_is_first_writer_wins(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

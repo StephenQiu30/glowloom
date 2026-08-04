@@ -276,6 +276,42 @@ def test_minio_port_is_accepted_without_claiming_conditional_oss() -> None:
     assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
 
 
+def test_minio_and_ffprobe_observability_is_traced_without_premature_acceptance() -> None:
+    requirement = (
+        DOCS / "requirement/012-日志与可观测性需求.md"
+    ).read_text(encoding="utf-8")
+    design = (
+        DOCS / "design/模块设计/013-日志与可观测性详细设计.md"
+    ).read_text(encoding="utf-8")
+    prd = (
+        DOCS / "prd/009-剪辑交付与平台保障PRD任务.md"
+    ).read_text(encoding="utf-8")
+    plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(
+        encoding="utf-8"
+    )
+    acceptance = (
+        DOCS / "acceptance/023-MinIO与媒体探测可观测性验收.md"
+    ).read_text(encoding="utf-8")
+
+    for source in (requirement, design, prd, plan, acceptance):
+        assert "MinIO" in source
+        assert "ffprobe" in source
+        assert "PT-OBS-002" in source
+    assert "lanverse_storage_operations_total" in requirement
+    assert "storage.minio" in design and "media.ffprobe" in design
+    assert "MinIO 与 ffprobe 可观测性”增量已完成并 accepted" in prd
+    assert "第四个无 Key 增量已完成" in plan
+    assert (
+        "状态：accepted（仅 PT-OBS-002 当前 MinIO/ffprobe 遥测增量；"
+        "PT-OBS-002 整体保持 in_progress" in acceptance
+    )
+    assert "make contract-minio" in acceptance
+    assert "make contract-ffprobe" in acceptance
+    assert "make contract-media-stack" in acceptance
+    assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
+    assert "FFmpeg render" in acceptance and "尚无真实实现" in acceptance
+
+
 def test_media_version_lifecycle_traceability_is_explicit() -> None:
     requirement = (DOCS / "requirement/004-媒体模块需求.md").read_text(
         encoding="utf-8"

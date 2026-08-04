@@ -8,10 +8,13 @@ from uuid import UUID
 import aio_pika
 import httpx
 import pytest
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
+from app.core.telemetry import configure_telemetry
 from app.integrations.ffprobe import FfprobeMediaProbe
 from app.integrations.minio import MinioObjectStorage
 from app.integrations.rabbitmq import MEDIA_QUEUE, RabbitMQPublisher
@@ -52,6 +55,13 @@ async def test_private_upload_reaches_ready_through_the_real_media_stack(
     test_settings: Settings,
 ) -> None:
     rabbitmq_url = rabbitmq_contract_url()
+    provider = configure_telemetry(
+        service_name="lanverse-media-stack-contract",
+        environment="test",
+    )
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    exporter.clear()
     storage = MinioObjectStorage(
         test_settings.minio_endpoint,
         test_settings.minio_access_key,
@@ -142,6 +152,32 @@ async def test_private_upload_reaches_ready_through_the_real_media_stack(
             == "completed"
         )
         assert message.processed is True
+
+        spans = exporter.get_finished_spans()
+        consumer_span = next(
+            span for span in spans if span.name == "messaging.message.consume"
+        )
+        probe_span = next(span for span in spans if span.name == "media.ffprobe")
+        stream_spans = [
+            span
+            for span in spans
+            if span.name == "storage.minio"
+            and span.attributes is not None
+            and span.attributes.get("storage.operation") == "stream"
+        ]
+        assert consumer_span.context is not None
+        assert probe_span.context is not None and probe_span.parent is not None
+        assert probe_span.context.trace_id == consumer_span.context.trace_id
+        assert probe_span.parent.span_id == consumer_span.context.span_id
+        stream_span = next(
+            span
+            for span in stream_spans
+            if span.parent is not None
+            and span.parent.span_id == probe_span.context.span_id
+        )
+        assert stream_span.context is not None and stream_span.parent is not None
+        assert stream_span.context.trace_id == consumer_span.context.trace_id
+        assert stream_span.parent.span_id == probe_span.context.span_id
 
         detail = await client.get(f"/api/v1/media/{version_id}", headers=headers)
         assert detail.status_code == 200
