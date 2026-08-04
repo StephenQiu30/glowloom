@@ -4,11 +4,12 @@ from typing import cast
 from uuid import UUID
 
 import pytest
-from prometheus_client import generate_latest
+from prometheus_client import REGISTRY, generate_latest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
+from app import scheduler
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.messaging import (
@@ -191,4 +192,50 @@ async def test_publish_batch_persists_confirm_and_sanitized_retry(
         'lanverse_outbox_publish_results_total{event_type="script_extraction.requested",'
         'queue="lanverse.io",result="retry_scheduled"}'
     ) in rendered_metrics
+    assert REGISTRY.get_sample_value(
+        "lanverse_outbox_events",
+        {"queue": "lanverse.io", "state": "pending"},
+    ) == 1
+    assert REGISTRY.get_sample_value(
+        "lanverse_outbox_events",
+        {"queue": "lanverse.io", "state": "claimed"},
+    ) == 0
+    oldest_age = REGISTRY.get_sample_value(
+        "lanverse_outbox_oldest_age_seconds",
+        {"queue": "lanverse.io", "state": "pending"},
+    )
+    assert oldest_age is not None and oldest_age >= 0
     assert "synthetic-secret" not in rendered_metrics
+
+
+@pytest.mark.asyncio
+async def test_backlog_observation_failure_does_not_replace_publish_result(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    actor = await _actor(session_factory)
+    task_id = await _task(
+        session_factory,
+        actor,
+        idempotency_key="backlog-observation-failure",
+    )
+    publisher = RecordingPublisher()
+
+    async def fail_backlog(_session: AsyncSession) -> list[object]:
+        raise RuntimeError("synthetic telemetry query failure")
+
+    monkeypatch.setattr(scheduler, "outbox_backlog", fail_backlog)
+    published = await publish_outbox_batch(
+        session_factory,
+        publisher,
+        publisher_id="publisher-observation-failure",
+        batch_size=10,
+        claim_timeout=timedelta(seconds=60),
+    )
+
+    assert published == 1
+    async with session_factory() as session:
+        event = await session.scalar(
+            select(OutboxEvent).where(OutboxEvent.aggregate_id == task_id)
+        )
+    assert event is not None and event.status == "published"

@@ -312,6 +312,51 @@ def test_minio_and_ffprobe_observability_is_traced_without_premature_acceptance(
     assert "FFmpeg render" in acceptance and "尚无真实实现" in acceptance
 
 
+def test_outbox_capacity_observability_is_traced_without_inventing_thresholds() -> None:
+    messaging_requirement = (
+        DOCS / "requirement/011-消息队列与异步投递需求.md"
+    ).read_text(encoding="utf-8")
+    observability_requirement = (
+        DOCS / "requirement/012-日志与可观测性需求.md"
+    ).read_text(encoding="utf-8")
+    messaging_design = (
+        DOCS / "design/模块设计/012-消息队列详细设计.md"
+    ).read_text(encoding="utf-8")
+    prd = (
+        DOCS / "prd/009-剪辑交付与平台保障PRD任务.md"
+    ).read_text(encoding="utf-8")
+    plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(
+        encoding="utf-8"
+    )
+    acceptance = (
+        DOCS / "acceptance/024-Outbox积压与Worker执行容量验收.md"
+    ).read_text(encoding="utf-8")
+
+    for source in (
+        messaging_requirement,
+        observability_requirement,
+        messaging_design,
+        prd,
+        plan,
+        acceptance,
+    ):
+        assert "PT-MQ-004" in source
+        assert "PT-OBS-002" in source
+    for source in (messaging_requirement, observability_requirement, messaging_design, acceptance):
+        assert "lanverse_outbox_events" in source
+    assert "增量已完成并 accepted" in prd
+    assert "第五个无 Key 增量已完成" in plan
+    assert (
+        "状态：accepted（仅 PT-MQ-004/PT-OBS-002 当前 backlog/inflight/prefetch 增量；"
+        "PT-MQ-004/PT-OBS-002 整体保持 in_progress" in acceptance
+    )
+    assert "make contract-rabbitmq" in acceptance
+    assert "make contract-scheduler-stack" in acceptance
+    assert "make contract-media-stack" in acceptance
+    assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
+    assert "D-007" in acceptance and "不把猜测默认值" in acceptance
+
+
 def test_media_version_lifecycle_traceability_is_explicit() -> None:
     requirement = (DOCS / "requirement/004-媒体模块需求.md").read_text(
         encoding="utf-8"
