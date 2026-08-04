@@ -2,6 +2,7 @@
 
 from app.modules.production.contracts import (
     EpisodeTaskSummary,
+    GenerationProtocolErrorCode,
     MediaLocationMigrationTaskCommand,
     MediaLocationRetirementTaskCommand,
     MediaLocationTaskDispatch,
@@ -18,6 +19,7 @@ from app.modules.production.contracts import (
 )
 from app.modules.production.generation_execution import (
     fail_generation_attempt_without_provider,
+    fail_generation_protocol_message,
     prepare_generation_attempt,
 )
 from app.modules.production.service import (
@@ -48,6 +50,7 @@ from app.modules.production.service import (
 
 __all__ = [
     "MediaProbeTaskCommand",
+    "GenerationProtocolErrorCode",
     "PreparedGenerationAttempt",
     "MediaLocationMigrationTaskCommand",
     "MediaLocationRetirementTaskCommand",
@@ -75,6 +78,7 @@ __all__ = [
     "create_upload_expiration_task",
     "fail_media_probe_task",
     "fail_generation_attempt_without_provider",
+    "fail_generation_protocol_message",
     "fail_media_location_task",
     "fail_script_extraction_task",
     "fail_upload_cleanup_task",

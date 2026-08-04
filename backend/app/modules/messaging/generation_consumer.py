@@ -9,14 +9,17 @@ from app.modules.messaging.delivery import (
     InboxResult,
     complete_inbox_delivery,
     lock_inbox_delivery,
+    mark_inbox_delivery_manual_attention,
     reject_inbox_delivery,
     start_inbox_delivery,
 )
 from app.modules.messaging.models import InboxDelivery
 from app.modules.production import (
+    GenerationProtocolErrorCode,
     PreparedGenerationAttempt,
     TaskContext,
     fail_generation_attempt_without_provider,
+    fail_generation_protocol_message,
     lock_task,
     prepare_generation_attempt,
 )
@@ -107,7 +110,13 @@ async def _prepare_or_resume_dispatch(
             now=now,
         )
     delivery.task_id = task.id
-    invalid = _validate_generation_envelope(delivery, envelope, task, now=now)
+    invalid = await _validate_generation_envelope(
+        session,
+        delivery,
+        envelope,
+        task,
+        now=now,
+    )
     if invalid is not None:
         return invalid
     if task.status in TERMINAL_TASK_STATUSES:
@@ -134,7 +143,8 @@ async def _prepare_or_resume_dispatch(
     )
 
 
-def _validate_generation_envelope(
+async def _validate_generation_envelope(
+    session: AsyncSession,
     delivery: InboxDelivery,
     envelope: MessageEnvelope,
     task: TaskContext,
@@ -147,22 +157,36 @@ def _validate_generation_envelope(
             error_code="unsupported_message_type",
             now=now,
         )
-    if envelope.schema_version != 1:
-        return reject_inbox_delivery(
-            delivery,
-            error_code="unsupported_message_schema",
-            now=now,
-        )
-    if envelope.payload != {"task_id": str(envelope.aggregate_id)}:
-        return reject_inbox_delivery(
-            delivery,
-            error_code="invalid_message_payload",
-            now=now,
-        )
     if task.task_type not in GENERATION_TASK_TYPES or task.request_type != "generation_request":
         return reject_inbox_delivery(
             delivery,
             error_code="unsupported_task_type",
+            now=now,
+        )
+    protocol_error: GenerationProtocolErrorCode | None = None
+    if envelope.schema_version != 1:
+        protocol_error = "unsupported_message_schema"
+    elif envelope.payload != {"task_id": str(envelope.aggregate_id)}:
+        protocol_error = "invalid_message_payload"
+    if protocol_error is not None:
+        changed = await fail_generation_protocol_message(
+            session,
+            workspace_id=task.workspace_id,
+            task_id=task.id,
+            event_id=envelope.event_id,
+            error_code=protocol_error,
+            trace_id=delivery.trace_id,
+            now=now,
+        )
+        if changed:
+            return mark_inbox_delivery_manual_attention(
+                delivery,
+                error_code=protocol_error,
+                now=now,
+            )
+        return reject_inbox_delivery(
+            delivery,
+            error_code=protocol_error,
             now=now,
         )
     return None

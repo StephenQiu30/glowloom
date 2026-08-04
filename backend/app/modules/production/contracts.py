@@ -31,6 +31,10 @@ TaskRequestType = Literal[
     "workspace",
     "media_location",
 ]
+GenerationProtocolErrorCode = Literal[
+    "unsupported_message_schema",
+    "invalid_message_payload",
+]
 
 
 class TaskScopeResponse(BaseModel):

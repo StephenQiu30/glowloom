@@ -8,7 +8,10 @@ from uuid6 import uuid7
 
 from app.modules.governance.audit import append_audit_event
 from app.modules.production import generation_repository as repository
-from app.modules.production.contracts import PreparedGenerationAttempt
+from app.modules.production.contracts import (
+    GenerationProtocolErrorCode,
+    PreparedGenerationAttempt,
+)
 from app.modules.production.models import (
     CostEntry,
     GenerationAttempt,
@@ -22,6 +25,10 @@ TERMINAL_TASK_STATUSES = frozenset(
     {"succeeded", "failed", "cancelled", "unknown"}
 )
 PROVIDER_UNAVAILABLE_CODE = "provider_dispatch_unavailable"
+GENERATION_PROTOCOL_ERROR_SUMMARIES: dict[GenerationProtocolErrorCode, str] = {
+    "unsupported_message_schema": "Generation message schema is not supported",
+    "invalid_message_payload": "Generation message payload does not match the task",
+}
 
 
 def generation_provider_request_key(
@@ -244,6 +251,86 @@ async def fail_generation_attempt_without_provider(
         occurred_at=failed_at,
     )
     await session.flush()
+
+
+async def fail_generation_protocol_message(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    task_id: UUID,
+    event_id: UUID,
+    error_code: GenerationProtocolErrorCode,
+    trace_id: str,
+    now: datetime | None = None,
+) -> bool:
+    failed_at = now or datetime.now(UTC)
+    task = await repository.find_generation_task_for_execution(session, task_id)
+    if task is None or task.workspace_id != workspace_id:
+        raise RuntimeError("generation task is unavailable")
+    if (
+        task.task_type not in GENERATION_TASK_TYPES
+        or task.request_type != "generation_request"
+    ):
+        raise RuntimeError("task is not a generation task")
+    if task.status != "queued":
+        return False
+
+    _, reservation = await _generation_execution_facts(session, task)
+    existing_attempt = await repository.find_latest_generation_attempt(
+        session,
+        workspace_id,
+        task.id,
+        for_update=True,
+    )
+    existing_release = await repository.find_release_cost_entry(
+        session,
+        workspace_id,
+        reservation.id,
+    )
+    if (
+        reservation.status != "active"
+        or existing_attempt is not None
+        or existing_release is not None
+    ):
+        raise RuntimeError("queued generation protocol failure facts are inconsistent")
+
+    previous_status = task.status
+    task.status = "failed"
+    task.progress_stage = "manual_attention"
+    task.error_code = error_code
+    task.error_retryable = False
+    task.error_summary = GENERATION_PROTOCOL_ERROR_SUMMARIES[error_code]
+    task.next_action = "contact_support"
+    task.revision += 1
+    task.updated_at = failed_at
+
+    reservation.status = "released"
+    reservation.revision += 1
+    reservation.updated_at = failed_at
+    session.add(
+        CostEntry(
+            id=uuid7(),
+            workspace_id=workspace_id,
+            reservation_id=reservation.id,
+            attempt_id=None,
+            entry_type="release",
+            amount=reservation.reserved_amount,
+            currency=reservation.currency,
+            provider_bill_ref=None,
+            idempotency_key=f"generation-protocol:{event_id}",
+            created_at=failed_at,
+        )
+    )
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.failed",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=failed_at,
+    )
+    await session.flush()
+    return True
 
 
 async def _generation_execution_facts(

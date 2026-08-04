@@ -73,6 +73,18 @@ def reject_inbox_delivery(
     return "rejected"
 
 
+def mark_inbox_delivery_manual_attention(
+    delivery: InboxDelivery,
+    *,
+    error_code: str,
+    now: datetime,
+) -> InboxResult:
+    delivery.status = "manual_attention"
+    delivery.last_error = error_code
+    delivery.processed_at = now
+    return "rejected"
+
+
 def complete_inbox_delivery(
     delivery: InboxDelivery,
     *,
