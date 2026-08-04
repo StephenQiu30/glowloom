@@ -24,10 +24,12 @@ from app.modules.messaging import (
     claim_outbox_events,
     envelope_from_event,
     mark_outbox_published,
+    outbox_backlog,
     release_outbox_for_retry,
 )
 from app.modules.messaging.metrics import (
     message_event_type_label,
+    observe_outbox_backlog,
     observe_outbox_publish_result,
     queue_label_for_routing_key,
 )
@@ -37,6 +39,37 @@ LOGGER = logging.getLogger("lanverse.outbox")
 
 
 async def publish_outbox_batch(
+    factory: async_sessionmaker[AsyncSession],
+    publisher: MessagePublisher,
+    *,
+    publisher_id: str,
+    batch_size: int,
+    claim_timeout: timedelta,
+) -> int:
+    try:
+        return await _publish_outbox_batch(
+            factory,
+            publisher,
+            publisher_id=publisher_id,
+            batch_size=batch_size,
+            claim_timeout=claim_timeout,
+        )
+    finally:
+        await refresh_outbox_backlog_metrics(factory)
+
+
+async def refresh_outbox_backlog_metrics(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    try:
+        async with factory() as session:
+            backlog = await outbox_backlog(session)
+        observe_outbox_backlog(backlog, observed_at=datetime.now(UTC))
+    except Exception:
+        pass
+
+
+async def _publish_outbox_batch(
     factory: async_sessionmaker[AsyncSession],
     publisher: MessagePublisher,
     *,

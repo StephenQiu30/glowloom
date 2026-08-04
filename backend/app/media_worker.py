@@ -30,8 +30,10 @@ from app.modules.media.retirement_consumer import consume_media_location_retirem
 from app.modules.media.storage import ObjectStoragePort
 from app.modules.messaging import MessageEnvelope
 from app.modules.messaging.metrics import (
+    initialize_worker_metrics,
     message_event_type_label,
     observe_message_result,
+    track_worker_inflight,
 )
 
 MEDIA_WORKER_MAX_IN_FLIGHT = 2
@@ -49,6 +51,7 @@ class IncomingMessage(Protocol):
     async def nack(self, *, requeue: bool) -> None: ...
 
 
+@track_worker_inflight(queue=QUEUE_NAME, capacity=MEDIA_WORKER_MAX_IN_FLIGHT)
 async def process_incoming_message(
     message: IncomingMessage,
     factory: async_sessionmaker[AsyncSession],
@@ -234,6 +237,7 @@ async def run_media_worker(settings: Settings) -> None:
         environment=settings.environment,
     )
     register_implemented_models()
+    initialize_worker_metrics(queue=QUEUE_NAME, capacity=MEDIA_WORKER_MAX_IN_FLIGHT)
     storage = MinioObjectStorage(
         settings.minio_endpoint,
         settings.minio_access_key,

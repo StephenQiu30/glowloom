@@ -30,8 +30,10 @@ from app.modules.messaging.consumer import (
     prepare_configured_extraction,
 )
 from app.modules.messaging.metrics import (
+    initialize_worker_metrics,
     message_event_type_label,
     observe_message_result,
+    track_worker_inflight,
 )
 from app.modules.scripts import (
     ScriptExtractionProviderError,
@@ -54,6 +56,7 @@ class IncomingMessage(Protocol):
     async def nack(self, *, requeue: bool) -> None: ...
 
 
+@track_worker_inflight(queue=QUEUE_NAME, capacity=IO_WORKER_MAX_IN_FLIGHT)
 async def process_incoming_message(
     message: IncomingMessage,
     factory: async_sessionmaker[AsyncSession],
@@ -252,6 +255,7 @@ async def run_io_worker(settings: Settings) -> None:
         environment=settings.environment,
     )
     register_implemented_models()
+    initialize_worker_metrics(queue=QUEUE_NAME, capacity=IO_WORKER_MAX_IN_FLIGHT)
     extractor = (
         DeepSeekScriptStructureExtractor(settings.deepseek_api_key)
         if settings.deepseek_api_key is not None

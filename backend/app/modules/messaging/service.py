@@ -1,8 +1,9 @@
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Protocol
+from typing import Literal, Protocol, cast
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid6 import uuid7
@@ -10,6 +11,16 @@ from uuid6 import uuid7
 from app.core.telemetry import persisted_traceparent
 from app.modules.messaging.contracts import MessageEnvelope, OutboxEventCommand
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
+
+OutboxBacklogState = Literal["pending", "claimed", "manual_attention"]
+
+
+@dataclass(frozen=True, slots=True)
+class OutboxBacklog:
+    routing_key: str
+    state: OutboxBacklogState
+    count: int
+    oldest_created_at: datetime
 
 
 class MessagePublisher(Protocol):
@@ -125,6 +136,36 @@ async def find_outbox_event_id(
             OutboxEvent.event_type == event_type,
         )
     )
+
+
+async def outbox_backlog(session: AsyncSession) -> list[OutboxBacklog]:
+    rows = await session.execute(
+        select(
+            OutboxEvent.routing_key,
+            OutboxEvent.status,
+            func.count(OutboxEvent.id),
+            func.min(OutboxEvent.created_at),
+        )
+        .where(OutboxEvent.status.in_(("pending", "claimed", "manual_attention")))
+        .group_by(OutboxEvent.routing_key, OutboxEvent.status)
+    )
+    backlog: list[OutboxBacklog] = []
+    for routing_key, state, count, oldest_created_at in rows.tuples():
+        if state not in {
+            "pending",
+            "claimed",
+            "manual_attention",
+        }:
+            raise RuntimeError("outbox backlog returned invalid dimensions")
+        backlog.append(
+            OutboxBacklog(
+                routing_key=routing_key,
+                state=cast(OutboxBacklogState, state),
+                count=int(count),
+                oldest_created_at=oldest_created_at,
+            )
+        )
+    return backlog
 
 
 def envelope_from_event(
