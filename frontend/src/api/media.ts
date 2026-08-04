@@ -144,6 +144,67 @@ export async function createAccessApiV1MediaVersionIdAccessPost(
   );
 }
 
+/** Request Media Location Migration POST /api/v1/media/${param0}/location-migrations */
+export async function requestMediaLocationMigrationApiV1MediaVersionIdLocationMigrationsPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.requestMediaLocationMigrationApiV1MediaVersionIdLocationMigrationsPostParams,
+  body: API.MediaLocationMigrationRequest,
+  options?: RequestOptions
+) {
+  const { version_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseTaskResponse_>(
+    `/api/v1/media/${param0}/location-migrations`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Request Media Location Rollback POST /api/v1/media/${param0}/location-rollbacks */
+export async function requestMediaLocationRollbackApiV1MediaVersionIdLocationRollbacksPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.requestMediaLocationRollbackApiV1MediaVersionIdLocationRollbacksPostParams,
+  body: API.MediaLocationRollbackRequest,
+  options?: RequestOptions
+) {
+  const { version_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseTaskResponse_>(
+    `/api/v1/media/${param0}/location-rollbacks`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** List Media Locations GET /api/v1/media/${param0}/locations */
+export async function listMediaLocationsApiV1MediaVersionIdLocationsGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listMediaLocationsApiV1MediaVersionIdLocationsGetParams,
+  options?: RequestOptions
+) {
+  const { version_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseMediaLocationsResponse_>(
+    `/api/v1/media/${param0}/locations`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
 /** Retry Probe POST /api/v1/media/${param0}/probe-retry */
 export async function retryProbeApiV1MediaVersionIdProbeRetryPost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

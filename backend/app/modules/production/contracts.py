@@ -13,8 +13,24 @@ TaskStatus = Literal[
     "cancelled",
     "unknown",
 ]
-TaskType = Literal["script_extraction", "media_probe"]
-TaskRequestType = Literal["extraction_batch", "media_version"]
+TaskType = Literal[
+    "script_extraction",
+    "image_generation",
+    "video_generation",
+    "media_probe",
+    "upload_expiration",
+    "upload_cleanup",
+    "media_location_migration",
+    "media_location_retirement",
+]
+TaskRequestType = Literal[
+    "extraction_batch",
+    "generation_request",
+    "media_version",
+    "upload_session",
+    "workspace",
+    "media_location",
+]
 
 
 class TaskScopeResponse(BaseModel):
@@ -66,6 +82,61 @@ class MediaProbeTaskCommand(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=200)
 
 
+class UploadExpirationTaskCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace_id: UUID
+    upload_session_id: UUID
+    requested_by: UUID
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class UploadCleanupTaskCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace_id: UUID
+    requested_by: UUID
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class MediaLocationMigrationTaskCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace_id: UUID
+    media_version_id: UUID
+    location_id: UUID
+    operation: Literal["migrate", "rollback"]
+    requested_by: UUID
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class MediaLocationRetirementTaskCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace_id: UUID
+    media_location_id: UUID
+    requested_by: UUID
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+@dataclass(frozen=True, slots=True)
+class UploadExpirationTaskDispatch:
+    task: TaskResponse
+    outbox_event_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class UploadCleanupTaskDispatch:
+    task: TaskResponse
+    outbox_event_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class MediaLocationTaskDispatch:
+    task: TaskResponse
+    outbox_event_id: UUID
+
+
 @dataclass(frozen=True, slots=True)
 class TaskContext:
     id: UUID
@@ -73,6 +144,9 @@ class TaskContext:
     request_id: UUID
     task_type: str
     request_type: str
+    usage_type: str | None
+    usage_id: UUID | None
+    requested_by: UUID
     status: TaskStatus
 
 

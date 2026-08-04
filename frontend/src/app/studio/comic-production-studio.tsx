@@ -173,12 +173,14 @@ export function ComicProductionStudio() {
   async function toggleArchive() {
     if (!selectedAsset) return;
     setActionError(null);
+    setNotice(null);
     try {
       const updated = await setAssetArchived({
         assetId: selectedAsset.id,
         expectedRevision: selectedAsset.revision,
         archived: selectedAsset.status === "active",
       }).unwrap();
+      await assets.refetch().unwrap();
       setNotice(updated.status === "archived" ? "资产已归档。" : "资产已恢复。");
     } catch (error: unknown) {
       setActionError(appApiErrorMessage(error));
@@ -206,6 +208,7 @@ export function ComicProductionStudio() {
   async function selectCurrentVersion(version: API.AssetVersionResponse) {
     if (!selectedAsset || !effectiveProject) return;
     setActionError(null);
+    setNotice(null);
     try {
       await setCurrentAssetVersion({
         projectId: effectiveProject.id,
@@ -216,6 +219,7 @@ export function ComicProductionStudio() {
           expected_revision: selectedAsset.revision,
         },
       }).unwrap();
+      await assets.refetch().unwrap();
       setNotice(`资产已切换到版本 v${version.version_no}；既有镜头引用保持不变。`);
     } catch (error: unknown) {
       setActionError(appApiErrorMessage(error));
@@ -470,7 +474,7 @@ export function ComicProductionStudio() {
               {selectedAsset ? (
                 <AssetDetail
                   asset={selectedAsset}
-                  isArchiving={archiveState.isLoading}
+                  isArchiving={archiveState.isLoading || assets.isFetching}
                   isChangingCurrent={currentVersionState.isLoading}
                   mediaById={mediaById}
                   onAddVersion={() => setVersionOpen(true)}

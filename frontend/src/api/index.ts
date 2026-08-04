@@ -8,7 +8,9 @@ import * as governance from "./governance";
 import * as media from "./media";
 import * as projects from "./projects";
 import * as tasks from "./tasks";
+import * as production from "./production";
 import * as scripts from "./scripts";
+import * as schedules from "./schedules";
 import * as storyboards from "./storyboards";
 import * as system from "./system";
 export default {
@@ -18,7 +20,9 @@ export default {
   media,
   projects,
   tasks,
+  production,
   scripts,
+  schedules,
   storyboards,
   system,
 };

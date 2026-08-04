@@ -8,6 +8,10 @@ from app.core.auth import AccessTokenClaims, get_access_token_claims
 from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
 from app.modules.identity.workspaces import service
+from app.modules.identity.workspaces.cache import (
+    WorkspaceDetailCache,
+    get_workspace_detail_cache,
+)
 from app.modules.identity.workspaces.schemas import (
     WorkspaceCreateRequest,
     WorkspaceResponse,
@@ -43,6 +47,7 @@ async def create_workspace(
     request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
+    cache: Annotated[WorkspaceDetailCache, Depends(get_workspace_detail_cache)],
 ) -> ApiResponse[WorkspaceResponse]:
     return ApiResponse(
         data=await service.create_workspace(
@@ -50,6 +55,7 @@ async def create_workspace(
             claims,
             payload,
             trace_id=str(request.state.request_id),
+            cache=cache,
         )
     )
 
@@ -59,8 +65,11 @@ async def get_workspace(
     workspace_id: UUID,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
+    cache: Annotated[WorkspaceDetailCache, Depends(get_workspace_detail_cache)],
 ) -> ApiResponse[WorkspaceResponse]:
-    return ApiResponse(data=await service.get_workspace(session, claims, workspace_id))
+    return ApiResponse(
+        data=await service.get_workspace(session, claims, workspace_id, cache)
+    )
 
 
 @router.patch("/workspaces/{workspace_id}", response_model=ApiResponse[WorkspaceResponse])
@@ -70,6 +79,7 @@ async def update_workspace(
     request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
+    cache: Annotated[WorkspaceDetailCache, Depends(get_workspace_detail_cache)],
 ) -> ApiResponse[WorkspaceResponse]:
     return ApiResponse(
         data=await service.update_workspace(
@@ -78,6 +88,7 @@ async def update_workspace(
             workspace_id,
             payload,
             trace_id=str(request.state.request_id),
+            cache=cache,
         )
     )
 
@@ -92,6 +103,7 @@ async def archive_workspace(
     request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
+    cache: Annotated[WorkspaceDetailCache, Depends(get_workspace_detail_cache)],
 ) -> ApiResponse[WorkspaceResponse]:
     return ApiResponse(
         data=await service.set_workspace_archived(
@@ -101,6 +113,7 @@ async def archive_workspace(
             payload,
             archived=True,
             trace_id=str(request.state.request_id),
+            cache=cache,
         )
     )
 
@@ -115,6 +128,7 @@ async def restore_workspace(
     request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
+    cache: Annotated[WorkspaceDetailCache, Depends(get_workspace_detail_cache)],
 ) -> ApiResponse[WorkspaceResponse]:
     return ApiResponse(
         data=await service.set_workspace_archived(
@@ -124,5 +138,6 @@ async def restore_workspace(
             payload,
             archived=False,
             trace_id=str(request.state.request_id),
+            cache=cache,
         )
     )

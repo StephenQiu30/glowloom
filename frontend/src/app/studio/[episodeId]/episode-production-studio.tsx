@@ -26,6 +26,9 @@ import {
   useAppendShotSpecMutation,
   useArchivedShotsQuery,
   useCompleteMediaUploadMutation,
+  useCancelGenerationTaskMutation,
+  useConfigureScheduleMutation,
+  useCostsQuery,
   useConfirmStructureMutation,
   useConfirmedStructureQuery,
   useCopyShotMutation,
@@ -47,10 +50,16 @@ import {
   useMeQuery,
   useMergeShotsMutation,
   useMergeShotsPreflightMutation,
+  useModelCapabilitiesQuery,
   useMediaVersionsQuery,
+  useMediaLocationsQuery,
   useProjectQuery,
   usePublishScriptVersionMutation,
+  usePauseScheduleMutation,
   useRetryMediaProbeMutation,
+  useRequestMediaLocationMigrationMutation,
+  useRequestMediaLocationRollbackMutation,
+  useResumeScheduleMutation,
   useReorderShotsMutation,
   useScriptSourcesQuery,
   useScriptVersionQuery,
@@ -68,7 +77,9 @@ import {
   useSplitShotMutation,
   useSplitShotPreflightMutation,
   useStartExtractionMutation,
+  useSchedulesQuery,
   useTasksQuery,
+  useTriggerScheduleMutation,
   useUpdateShotMutation,
 } from "@/lib/server-state";
 
@@ -134,12 +145,30 @@ export function EpisodeProductionStudio({
     pollingInterval: 4_000,
     skip: !workspaceId,
   });
+  const taskCenterActive = initialPanel === "tasks";
+  const modelCapabilitiesQuery = useModelCapabilitiesQuery(workspaceId ?? "", {
+    skip: !workspaceId || !taskCenterActive,
+  });
+  const costsQuery = useCostsQuery(
+    {
+      workspaceId: workspaceId ?? "",
+      projectId: episode?.project_id ?? "",
+    },
+    {
+      skip: !workspaceId || !episode?.project_id || !taskCenterActive,
+    },
+  );
+  const schedulesQuery = useSchedulesQuery(workspaceId ?? "", {
+    pollingInterval: 10_000,
+    skip: !workspaceId || !taskCenterActive,
+  });
+  const workspaceTasks = tasksQuery.data?.items;
   const episodeTasks = useMemo(
     () =>
-      (tasksQuery.data?.items ?? []).filter(
+      (workspaceTasks ?? []).filter(
         (task) => task.scope.episode_id === episodeId,
       ),
-    [episodeId, tasksQuery.data?.items],
+    [episodeId, workspaceTasks],
   );
   const [startedBatchId, setStartedBatchId] = useState<string | null>(null);
   const taskBatchId = episodeTasks.find(
@@ -157,6 +186,11 @@ export function EpisodeProductionStudio({
   });
   const assetsQuery = useAssetsQuery(episode?.project_id ?? "", { skip: !episode });
   const mediaQuery = useMediaVersionsQuery(workspaceId ?? "", { skip: !workspaceId });
+  const [locationVersionId, setLocationVersionId] = useState<string | null>(null);
+  const mediaLocationsQuery = useMediaLocationsQuery(locationVersionId ?? "", {
+    pollingInterval: locationVersionId ? 4_000 : 0,
+    skip: !locationVersionId,
+  });
   const storyboardActive = initialPanel === "storyboard";
   const shotOrderQuery = useShotOrderQuery(episodeId, {
     skip: !authenticated || !storyboardActive,
@@ -227,6 +261,17 @@ export function EpisodeProductionStudio({
     useInitializeMediaVersionUploadMutation();
   const [completeUpload, completionState] = useCompleteMediaUploadMutation();
   const [retryProbe, retryState] = useRetryMediaProbeMutation();
+  const [requestLocationMigration, locationMigrationState] =
+    useRequestMediaLocationMigrationMutation();
+  const [requestLocationRollback, locationRollbackState] =
+    useRequestMediaLocationRollbackMutation();
+  const [configureSchedule, configureScheduleState] =
+    useConfigureScheduleMutation();
+  const [pauseSchedule, pauseScheduleState] = usePauseScheduleMutation();
+  const [resumeSchedule, resumeScheduleState] = useResumeScheduleMutation();
+  const [triggerSchedule, triggerScheduleState] = useTriggerScheduleMutation();
+  const [cancelGenerationTask, cancelGenerationTaskState] =
+    useCancelGenerationTaskMutation();
   const [setCurrentMediaVersion, mediaCurrentState] =
     useSetCurrentMediaVersionMutation();
   const [setMediaArchived, mediaArchiveState] = useSetMediaArchivedMutation();
@@ -270,6 +315,13 @@ export function EpisodeProductionStudio({
     versionInitializationState,
     completionState,
     retryState,
+    locationMigrationState,
+    locationRollbackState,
+    configureScheduleState,
+    pauseScheduleState,
+    resumeScheduleState,
+    triggerScheduleState,
+    cancelGenerationTaskState,
     mediaCurrentState,
     mediaArchiveState,
     createShotState,
@@ -289,13 +341,15 @@ export function EpisodeProductionStudio({
     shotSpecLookupState,
   ].some((state) => state.isLoading);
 
-  async function runAction(action: () => Promise<string>) {
+  async function runAction(action: () => Promise<string>): Promise<boolean> {
     setActionError(null);
     setNotice(null);
     try {
       setNotice(await action());
+      return true;
     } catch (error: unknown) {
       setActionError(appApiErrorMessage(error));
+      return false;
     }
   }
 
@@ -303,6 +357,95 @@ export function EpisodeProductionStudio({
     await runAction(async () => {
       const result = await importScript({ episodeId, body: request }).unwrap();
       return `剧本《${result.source.title}》已导入为 v${result.version.version_no} 草稿。`;
+    });
+  }
+
+  async function handlePauseSchedule(schedule: API.ScheduleResponse) {
+    if (!workspaceId) return;
+    await runAction(async () => {
+      await pauseSchedule({
+        scheduleId: schedule.id,
+        workspaceId,
+        body: { expected_revision: schedule.revision },
+      }).unwrap();
+      return "上传过期清理计划已暂停；已创建的清理任务不会被取消。";
+    });
+  }
+
+  async function handleConfigureSchedule(
+    schedule: API.ScheduleResponse,
+    configuration: Omit<
+      API.ScheduleConfigurationRequest,
+      "expected_revision" | "effective_from"
+    >,
+  ): Promise<boolean> {
+    if (!workspaceId) return false;
+    return runAction(async () => {
+      await configureSchedule({
+        scheduleId: schedule.id,
+        workspaceId,
+        body: {
+          ...configuration,
+          expected_revision: schedule.revision,
+          effective_from: new Date().toISOString(),
+        },
+      }).unwrap();
+      return "补偿清理计划配置已保存；下一触发时刻由服务端时区规则计算。";
+    });
+  }
+
+  async function handleResumeSchedule(
+    schedule: API.ScheduleResponse,
+    misfirePolicy: API.ScheduleResumeRequest["misfire_policy"],
+    maxCatchUp: number,
+  ): Promise<boolean> {
+    if (!workspaceId) return false;
+    return runAction(async () => {
+      await resumeSchedule({
+        scheduleId: schedule.id,
+        workspaceId,
+        body: {
+          expected_revision: schedule.revision,
+          resume_from: new Date().toISOString(),
+          misfire_policy: misfirePolicy,
+          max_catch_up: maxCatchUp,
+        },
+      }).unwrap();
+      return `清理计划已恢复，并将按 ${misfirePolicy} 策略处理到期工作。`;
+    });
+  }
+
+  async function handleTriggerSchedule(schedule: API.ScheduleResponse) {
+    if (!workspaceId) return;
+    await runAction(async () => {
+      const fire = await triggerSchedule({
+        scheduleId: schedule.id,
+        workspaceId,
+        body: {
+          expected_revision: schedule.revision,
+          idempotency_key: `studio-schedule-trigger:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      return `清理任务已创建，任务 ID：${fire.task.id}`;
+    });
+  }
+
+  async function handleCancelGenerationTask(
+    task: API.TaskResponse,
+  ): Promise<boolean> {
+    if (!workspaceId || !episode) return false;
+    return runAction(async () => {
+      const result = await cancelGenerationTask({
+        taskId: task.id,
+        projectId: episode.project_id,
+        body: {
+          workspace_id: workspaceId,
+          expected_revision: task.revision,
+          idempotency_key: `studio-generation-cancel:${crypto.randomUUID()}`,
+          reason: "user_requested",
+        },
+      }).unwrap();
+      return `生成任务已取消，已释放 ${result.release_cost_entry.currency} ${result.release_cost_entry.amount} 预占。`;
     });
   }
 
@@ -566,6 +709,46 @@ export function EpisodeProductionStudio({
     });
   }
 
+  async function handleLocationMigration(
+    version: API.MediaVersionResponse,
+    activeLocationId: string,
+  ) {
+    if (!workspaceId) return;
+    const locationEpoch =
+      mediaLocationsQuery.data?.items.find(
+        (location) => location.id !== activeLocationId,
+      )?.id ?? "initial";
+    await runAction(async () => {
+      await requestLocationMigration({
+        versionId: version.id,
+        workspaceId,
+        body: {
+          idempotency_key: `studio-location-migrate:${version.id}:${activeLocationId}:${locationEpoch}`,
+        },
+      }).unwrap();
+      return `${version.filename} 的位置迁移任务已创建；校验完成前仍从原位置读取。`;
+    });
+  }
+
+  async function handleLocationRollback(
+    version: API.MediaVersionResponse,
+    targetLocationId: string,
+    activeLocationId: string,
+  ) {
+    if (!workspaceId) return;
+    await runAction(async () => {
+      await requestLocationRollback({
+        versionId: version.id,
+        workspaceId,
+        body: {
+          target_location_id: targetLocationId,
+          idempotency_key: `studio-location-rollback:${version.id}:${targetLocationId}:${activeLocationId}`,
+        },
+      }).unwrap();
+      return `${version.filename} 的位置回滚任务已创建；旧 active 会重新进入完整保护窗口。`;
+    });
+  }
+
   async function handleCreateShot(request: API.ShotCreateRequest): Promise<boolean> {
     let succeeded = false;
     await runAction(async () => {
@@ -826,6 +1009,7 @@ export function EpisodeProductionStudio({
     currentVersionQuery.error ??
     versionsQuery.error ??
     tasksQuery.error ??
+    schedulesQuery.error ??
     batchQuery.error ??
     candidatesQuery.error ??
     assetsQuery.error ??
@@ -1011,7 +1195,18 @@ export function EpisodeProductionStudio({
               ) : initialPanel === "media" ? (
                 <MediaWorkspace
                   busy={busy}
+                  locationBusy={
+                    mediaLocationsQuery.isFetching ||
+                    locationMigrationState.isLoading ||
+                    locationRollbackState.isLoading
+                  }
+                  locationVersionId={locationVersionId}
+                  locations={mediaLocationsQuery.data?.items ?? []}
                   media={mediaQuery.data?.items ?? []}
+                  onCloseLocations={() => setLocationVersionId(null)}
+                  onLocationMigration={handleLocationMigration}
+                  onLocationRollback={handleLocationRollback}
+                  onOpenLocations={(version) => setLocationVersionId(version.id)}
                   onAppendVersion={handleAppendMediaVersion}
                   onRetry={handleRetry}
                   onSetCurrent={handleSetCurrentMediaVersion}
@@ -1019,7 +1214,24 @@ export function EpisodeProductionStudio({
                   onUpload={handleUpload}
                 />
               ) : (
-                <TaskWorkspace tasks={episodeTasks} />
+                <TaskWorkspace
+                  busy={busy}
+                  capabilities={modelCapabilitiesQuery.data ?? []}
+                  costs={costsQuery.data ?? null}
+                  productionFactsLoading={
+                    modelCapabilitiesQuery.isLoading || costsQuery.isLoading
+                  }
+                  productionFactsUnavailable={
+                    modelCapabilitiesQuery.isError || costsQuery.isError
+                  }
+                  schedules={schedulesQuery.data?.items ?? []}
+                  tasks={workspaceTasks ?? []}
+                  onCancelGenerationTask={handleCancelGenerationTask}
+                  onConfigureSchedule={handleConfigureSchedule}
+                  onPauseSchedule={handlePauseSchedule}
+                  onResumeSchedule={handleResumeSchedule}
+                  onTriggerSchedule={handleTriggerSchedule}
+                />
               )}
             </section>
           </>

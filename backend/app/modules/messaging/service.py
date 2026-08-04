@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid6 import uuid7
 
+from app.core.telemetry import persisted_traceparent
 from app.modules.messaging.contracts import MessageEnvelope, OutboxEventCommand
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 
@@ -99,6 +100,7 @@ async def enqueue_outbox_event(
             routing_key=command.routing_key,
             payload=command.payload,
             trace_id=command.trace_id,
+            traceparent=persisted_traceparent(command.traceparent),
             causation_event_id=command.causation_event_id,
             status="pending",
             attempt_count=0,
@@ -111,7 +113,25 @@ async def enqueue_outbox_event(
     return event_id
 
 
-def envelope_from_event(event: OutboxEvent) -> MessageEnvelope:
+async def find_outbox_event_id(
+    session: AsyncSession,
+    *,
+    aggregate_id: UUID,
+    event_type: str,
+) -> UUID | None:
+    return await session.scalar(
+        select(OutboxEvent.id).where(
+            OutboxEvent.aggregate_id == aggregate_id,
+            OutboxEvent.event_type == event_type,
+        )
+    )
+
+
+def envelope_from_event(
+    event: OutboxEvent,
+    *,
+    traceparent: str | None = None,
+) -> MessageEnvelope:
     return MessageEnvelope(
         event_id=event.id,
         event_type=event.event_type,
@@ -120,6 +140,7 @@ def envelope_from_event(event: OutboxEvent) -> MessageEnvelope:
         workspace_id=event.workspace_id,
         occurred_at=event.occurred_at,
         trace_id=event.trace_id,
+        traceparent=traceparent or event.traceparent,
         causation_event_id=event.causation_event_id,
         payload={key: str(value) for key, value in event.payload.items()},
     )

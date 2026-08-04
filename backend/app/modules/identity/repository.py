@@ -71,3 +71,24 @@ async def find_workspace_for_user(
         query = query.with_for_update(of=Workspace)
     row = (await session.execute(query)).one_or_none()
     return None if row is None else (row[0], row[1])
+
+
+async def find_membership_for_user(
+    session: AsyncSession,
+    user_id: UUID,
+    workspace_id: UUID,
+) -> Membership | None:
+    return await session.scalar(
+        select(Membership).where(
+            Membership.workspace_id == workspace_id,
+            Membership.user_id == user_id,
+            Membership.status == "active",
+        )
+    )
+
+
+async def find_workspace_by_id(
+    session: AsyncSession,
+    workspace_id: UUID,
+) -> Workspace | None:
+    return await session.get(Workspace, workspace_id)

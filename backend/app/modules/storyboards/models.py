@@ -192,6 +192,11 @@ class AssetReference(Base):
 class ShotTransform(Base):
     __tablename__ = "sbd_shot_transforms"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ("episode_id", "workspace_id"),
+            ("prj_episodes.id", "prj_episodes.workspace_id"),
+            name="fk_sbd_transform_episode_workspace",
+        ),
         CheckConstraint(
             "operation IN ('copy', 'split', 'merge')",
             name="ck_sbd_transform_operation",
@@ -202,13 +207,14 @@ class ShotTransform(Base):
             name="uq_sbd_transform_workspace_idempotency",
         ),
         Index("ix_sbd_transform_input_hash", "input_hash"),
-        Index("ix_sbd_transform_created", "workspace_id", "created_at"),
+        Index("ix_sbd_transform_episode_created", "episode_id", "created_at"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
     workspace_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("idn_workspaces.id"), nullable=False
     )
+    episode_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     operation: Mapped[str] = mapped_column(String(20))
     source_shot_ids: Mapped[list[UUID]] = mapped_column(ARRAY(Uuid()), nullable=False)
     source_spec_version_ids: Mapped[list[UUID]] = mapped_column(

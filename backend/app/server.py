@@ -5,6 +5,8 @@ from functools import partial
 import uvicorn
 
 from app.core.config import Settings, get_settings
+from app.core.logging import configure_logging
+from app.core.telemetry import configure_telemetry
 from app.io_worker import run_io_worker
 from app.media_worker import run_media_worker
 from app.scheduler import run_scheduler
@@ -29,6 +31,15 @@ async def supervise_services(*services: Service) -> None:
 
 
 async def run_server(settings: Settings) -> None:
+    configure_logging(
+        settings.log_level,
+        service="lanverse-server",
+        environment=settings.environment,
+    )
+    configure_telemetry(
+        service_name="lanverse-server",
+        environment=settings.environment,
+    )
     api = uvicorn.Server(
         uvicorn.Config(
             "app.main:app",

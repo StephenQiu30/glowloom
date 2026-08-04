@@ -146,13 +146,44 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
     ),
     "media.archived": frozenset({"revision", "current_version_id"}),
     "media.restored": frozenset({"revision", "current_version_id"}),
+    "media.location_migrated": frozenset(
+        {"previous_location_id", "active_location_id", "media_version_id"}
+    ),
+    "media.location_rolled_back": frozenset(
+        {"previous_location_id", "active_location_id", "media_version_id"}
+    ),
+    "media.location_retired": frozenset(
+        {"media_location_id", "media_version_id"}
+    ),
     "task.created": frozenset(
         {"revision", "task_type", "request_type", "request_id"}
     ),
     "task.started": _TASK_TRANSITION_METADATA_FIELDS,
-    "task.succeeded": _TASK_TRANSITION_METADATA_FIELDS,
+    "task.succeeded": _TASK_TRANSITION_METADATA_FIELDS | {"cleaned_count"},
     "task.failed": _TASK_TRANSITION_METADATA_FIELDS,
+    "task.cancelled": _TASK_TRANSITION_METADATA_FIELDS
+    | {
+        "cancel_status",
+        "reason",
+        "reservation_id",
+        "release_cost_entry_id",
+    },
     "task.unknown": _TASK_TRANSITION_METADATA_FIELDS,
+    "schedule.paused": frozenset({"revision", "handler_name"}),
+    "schedule.resumed": frozenset(
+        {"revision", "handler_name", "misfire_policy", "max_catch_up"}
+    ),
+    "schedule.configured": frozenset(
+        {
+            "revision",
+            "handler_name",
+            "kind",
+            "timezone",
+            "misfire_policy",
+            "max_catch_up",
+        }
+    ),
+    "schedule.triggered": frozenset({"revision", "fire_id"}),
 }
 
 

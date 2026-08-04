@@ -185,14 +185,17 @@ async def count_spec_versions(session: AsyncSession, shot_id: UUID) -> int:
 async def find_spec_version(
     session: AsyncSession,
     version_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> tuple[ShotSpecVersion, Shot] | None:
-    row = (
-        await session.execute(
-            select(ShotSpecVersion, Shot)
-            .join(Shot, Shot.id == ShotSpecVersion.shot_id)
-            .where(ShotSpecVersion.id == version_id)
-        )
-    ).one_or_none()
+    query = (
+        select(ShotSpecVersion, Shot)
+        .join(Shot, Shot.id == ShotSpecVersion.shot_id)
+        .where(ShotSpecVersion.id == version_id)
+    )
+    if for_update:
+        query = query.with_for_update(of=(Shot, ShotSpecVersion))
+    row = (await session.execute(query)).one_or_none()
     return None if row is None else (row[0], row[1])
 
 
@@ -271,9 +274,7 @@ async def find_shots_with_current_specs(
     )
     if for_update:
         query = query.with_for_update(of=Shot)
-    rows = {
-        row[0].id: (row[0], row[1]) for row in await session.execute(query)
-    }
+    rows = {row[0].id: (row[0], row[1]) for row in await session.execute(query)}
     return [rows[shot_id] for shot_id in shot_ids if shot_id in rows]
 
 
@@ -310,9 +311,7 @@ async def list_asset_version_usages(
         .where(AssetReference.asset_version_id == asset_version_id)
         .distinct()
     )
-    total = await session.scalar(
-        select(func.count()).select_from(version_ids_query.subquery())
-    )
+    total = await session.scalar(select(func.count()).select_from(version_ids_query.subquery()))
     version_ids = list(
         await session.scalars(
             version_ids_query.order_by(ShotSpecVersion.id).limit(limit).offset(offset)

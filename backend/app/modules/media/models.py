@@ -169,6 +169,10 @@ class MediaLocation(Base):
     verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    migration_task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    retire_after: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     retired_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

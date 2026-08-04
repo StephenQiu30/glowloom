@@ -21,6 +21,7 @@ from app.modules.projects.contracts import (
     EpisodeContentContext,
     EpisodeScriptVersionCountReader,
     EpisodeStoryboardReferenceReader,
+    GenerationProjectContext,
 )
 from app.modules.projects.episodes.schemas import (
     EpisodeCreateRequest,
@@ -167,6 +168,32 @@ async def resolve_episode_content_context(
     ):
         return None
     return _episode_content_context(episode)
+
+
+async def resolve_episode_generation_context(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_id: UUID,
+    *,
+    for_update: bool = False,
+) -> GenerationProjectContext | None:
+    result = await repository.find_episode(session, episode_id, for_update=for_update)
+    if result is None:
+        return None
+    episode, project = result
+    if episode.workspace_id != workspace_id or project.workspace_id != workspace_id:
+        return None
+    return GenerationProjectContext(
+        project_id=project.id,
+        episode_id=episode.id,
+        workspace_id=workspace_id,
+        project_status=cast(Literal["active", "archived"], project.status),
+        episode_status=cast(Literal["active", "archived"], episode.status),
+        budget_limit=project.budget_limit,
+        currency=project.currency,
+        project_revision=project.revision,
+        episode_revision=episode.revision,
+    )
 
 
 async def compare_and_set_current_script_version(

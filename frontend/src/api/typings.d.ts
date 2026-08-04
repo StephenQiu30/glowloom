@@ -73,6 +73,10 @@ declare namespace API {
     data: ConsentDetailResponse;
   };
 
+  type ApiResponseCostQueryResponse_ = {
+    data: CostQueryResponse;
+  };
+
   type ApiResponseCurrentScriptVersionResponse_ = {
     data: CurrentScriptVersionResponse;
   };
@@ -105,9 +109,26 @@ declare namespace API {
     data: ExtractionCandidateResponse;
   };
 
+  type ApiResponseGenerationPreflightResponse_ = {
+    data: GenerationPreflightResponse;
+  };
+
+  type ApiResponseGenerationSubmissionResponse_ = {
+    data: GenerationSubmissionResponse;
+  };
+
+  type ApiResponseGenerationTaskCancellationResponse_ = {
+    data: GenerationTaskCancellationResponse;
+  };
+
   type ApiResponseListEpisodeResponse_ = {
     /** Data */
     data: EpisodeResponse[];
+  };
+
+  type ApiResponseListModelCapabilityResponse_ = {
+    /** Data */
+    data: ModelCapabilityResponse[];
   };
 
   type ApiResponseListShotResponse_ = {
@@ -127,6 +148,10 @@ declare namespace API {
 
   type ApiResponseMediaAccessResponse_ = {
     data: MediaAccessResponse;
+  };
+
+  type ApiResponseMediaLocationsResponse_ = {
+    data: MediaLocationsResponse;
   };
 
   type ApiResponseMediaObjectResponse_ = {
@@ -177,6 +202,10 @@ declare namespace API {
     data: PaginatedProjects;
   };
 
+  type ApiResponsePaginatedSchedules_ = {
+    data: PaginatedSchedules;
+  };
+
   type ApiResponsePaginatedScriptSources_ = {
     data: PaginatedScriptSources;
   };
@@ -199,6 +228,14 @@ declare namespace API {
 
   type ApiResponseRevocationResponse_ = {
     data: RevocationResponse;
+  };
+
+  type ApiResponseScheduleFireResponse_ = {
+    data: ScheduleFireResponse;
+  };
+
+  type ApiResponseScheduleResponse_ = {
+    data: ScheduleResponse;
   };
 
   type ApiResponseScriptImportResponse_ = {
@@ -783,6 +820,10 @@ declare namespace API {
     expected_revision: number;
   };
 
+  type cancelGenerationTaskApiV1TasksTaskIdCancelPostParams = {
+    task_id: string;
+  };
+
   type CandidateDecisionEvidenceResponse = {
     /** Id */
     id: string;
@@ -835,6 +876,17 @@ declare namespace API {
     end: number;
   };
 
+  type CapabilityPricingResponse = {
+    /** Unit */
+    unit: "per_request";
+    /** Amount */
+    amount: string;
+    /** Currency */
+    currency: string;
+    /** High Cost Threshold */
+    high_cost_threshold: string | null;
+  };
+
   type ChangePasswordRequest = {
     /** Current Password */
     current_password: string;
@@ -857,6 +909,10 @@ declare namespace API {
 
   type completeUploadApiV1MediaUploadsUploadSessionIdCompletePostParams = {
     upload_session_id: string;
+  };
+
+  type configureScheduleApiV1SchedulesScheduleIdConfigurationPutParams = {
+    schedule_id: string;
   };
 
   type ConfirmedStructureResponse = {
@@ -989,6 +1045,43 @@ declare namespace API {
     idempotency_key: string;
   };
 
+  type CostEntryResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Reservation Id */
+    reservation_id: string;
+    /** Request Id */
+    request_id: string;
+    /** Task Id */
+    task_id: string;
+    /** Entry Type */
+    entry_type: "reserve" | "settle" | "release" | "adjust";
+    /** Amount */
+    amount: string;
+    /** Currency */
+    currency: string;
+    /** Provider Bill Ref */
+    provider_bill_ref: string | null;
+    /** Created At */
+    created_at: string;
+  };
+
+  type CostQueryResponse = {
+    /** Currency */
+    currency: string;
+    summary: CostSummaryResponse;
+    /** Items */
+    items: CostEntryResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
   type CostSummary = {
     /** Status */
     status: "not_started" | null;
@@ -998,6 +1091,19 @@ declare namespace API {
     reserved: string | null;
     /** Used */
     used: string | null;
+  };
+
+  type CostSummaryResponse = {
+    /** Reserved */
+    reserved: string;
+    /** Settled */
+    settled: string;
+    /** Released */
+    released: string;
+    /** Adjustments */
+    adjustments: string;
+    /** Remaining Reserved */
+    remaining_reserved: string;
   };
 
   type CostumeSpec = {
@@ -1292,6 +1398,17 @@ declare namespace API {
     expected_revision: number;
   };
 
+  type EstimatedCostResponse = {
+    /** Amount */
+    amount: string;
+    /** Currency */
+    currency: string;
+    /** Pricing Version */
+    pricing_version: number;
+    /** Unit */
+    unit: "per_request" | null;
+  };
+
   type ExtractionBatchResponse = {
     /** Id */
     id: string;
@@ -1352,6 +1469,22 @@ declare namespace API {
     created_at: string;
   };
 
+  type GenerationBlocker = {
+    /** Code */
+    code: string;
+    /** Summary */
+    summary: string;
+    /** Next Action */
+    next_action: string;
+  };
+
+  type GenerationConfirmationRequirement = {
+    /** Code */
+    code: "ACKNOWLEDGE_WARNINGS" | "CONFIRM_HIGH_COST";
+    /** Warning Codes */
+    warning_codes: string[];
+  };
+
   type GenerationIntent = {
     /** Mode */
     mode: "keyframe_then_video" | "reference_to_video" | "text_to_video";
@@ -1361,6 +1494,127 @@ declare namespace API {
     last_frame: string | null | null;
     /** Keyframe Notes */
     keyframe_notes: string | null | null;
+  };
+
+  type GenerationPreflightRequest = {
+    /** Workspace Id */
+    workspace_id: string;
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string;
+    /** Capability Id */
+    capability_id: string;
+    /** Parameters */
+    parameters: Record<string, any>;
+  };
+
+  type GenerationPreflightResponse = {
+    /** Shot Id */
+    shot_id: string;
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string;
+    /** Capability Id */
+    capability_id: string;
+    /** Status */
+    status: "ready" | "blocked" | "unavailable";
+    /** Ready */
+    ready: boolean;
+    /** Blocking Reasons */
+    blocking_reasons: GenerationBlocker[];
+    /** Warning Codes */
+    warning_codes: string[];
+    /** Confirmation Requirements */
+    confirmation_requirements: GenerationConfirmationRequirement[];
+    estimated_cost: EstimatedCostResponse | null;
+    /** Preflight Hash */
+    preflight_hash: string;
+    /** Expires At */
+    expires_at: string;
+  };
+
+  type GenerationRequestResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Project Id */
+    project_id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Shot Id */
+    shot_id: string;
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string;
+    /** Capability Id */
+    capability_id: string;
+    /** Capability Config Version */
+    capability_config_version: number;
+    /** Parameter Snapshot */
+    parameter_snapshot: Record<string, any>;
+    /** Warning Acknowledgements */
+    warning_acknowledgements: string[];
+    /** Shot Spec Input Hash */
+    shot_spec_input_hash: string;
+    /** Input Hash */
+    input_hash: string;
+    /** High Cost Confirmed */
+    high_cost_confirmed: boolean;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Requested By */
+    requested_by: string;
+    /** Created At */
+    created_at: string;
+  };
+
+  type GenerationSubmissionRequest = {
+    /** Workspace Id */
+    workspace_id: string;
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string;
+    /** Capability Id */
+    capability_id: string;
+    /** Parameters */
+    parameters: Record<string, any>;
+    /** Preflight Hash */
+    preflight_hash: string;
+    /** Preflight Expires At */
+    preflight_expires_at: string;
+    /** Warning Acknowledgements */
+    warning_acknowledgements: string[] | null;
+    /** High Cost Confirmed */
+    high_cost_confirmed: boolean | null;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type GenerationSubmissionResponse = {
+    request: GenerationRequestResponse;
+    task: TaskResponse;
+    reservation: ReservationResponse;
+    initial_cost_entry: CostEntryResponse;
+    /** Outbox Event Id */
+    outbox_event_id: string;
+    /** Replayed */
+    replayed: boolean;
+  };
+
+  type GenerationTaskCancellationRequest = {
+    /** Workspace Id */
+    workspace_id: string;
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Reason */
+    reason: "user_requested" | "input_changed" | "budget_changed";
+  };
+
+  type GenerationTaskCancellationResponse = {
+    task: TaskResponse;
+    reservation: ReservationResponse;
+    release_cost_entry: CostEntryResponse;
+    /** Replayed */
+    replayed: boolean;
   };
 
   type getAssetApiV1AssetsAssetIdGetParams = {
@@ -1384,6 +1638,13 @@ declare namespace API {
 
   type getConsentApiV1ConsentsConsentIdGetParams = {
     consent_id: string;
+  };
+
+  type getCostsApiV1CostsGetParams = {
+    workspace_id: string;
+    project_id: string;
+    limit: number | null | null;
+    offset: number | null;
   };
 
   type getEpisodeApiV1EpisodesEpisodeIdGetParams = {
@@ -1568,12 +1829,35 @@ declare namespace API {
     offset: number | null;
   };
 
+  type listMediaLocationsApiV1MediaVersionIdLocationsGetParams = {
+    version_id: string;
+  };
+
+  type listModelCapabilitiesApiV1ModelCapabilitiesGetParams = {
+    workspace_id: string;
+    kind: "image" | "video" | null | null;
+    model: string | null | null;
+  };
+
   type listProjectsApiV1ProjectsGetParams = {
     workspace_id: string;
     include_archived: boolean | null;
     search: string | null | null;
     sort: "name" | "created_at" | "updated_at" | null | null;
     order: "asc" | "desc" | null | null;
+    limit: number | null | null;
+    offset: number | null;
+  };
+
+  type listSchedulesApiV1SchedulesGetParams = {
+    workspace_id: string;
+    status:
+      | "active"
+      | "paused"
+      | "completed"
+      | "manual_attention"
+      | null
+      | null;
     limit: number | null | null;
     offset: number | null;
   };
@@ -1594,7 +1878,17 @@ declare namespace API {
 
   type listTasksApiV1TasksGetParams = {
     workspace_id: string;
-    task_type: "script_extraction" | "media_probe" | null | null;
+    task_type:
+      | "script_extraction"
+      | "image_generation"
+      | "video_generation"
+      | "media_probe"
+      | "upload_expiration"
+      | "upload_cleanup"
+      | "media_location_migration"
+      | "media_location_retirement"
+      | null
+      | null;
     status:
       | "queued"
       | "running"
@@ -1653,6 +1947,42 @@ declare namespace API {
     purpose: "preview" | "download";
     /** Expires At */
     expires_at: string;
+  };
+
+  type MediaLocationMigrationRequest = {
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type MediaLocationResponse = {
+    /** Id */
+    id: string;
+    /** Media Version Id */
+    media_version_id: string;
+    /** Status */
+    status: "verified" | "active" | "retiring" | "retired" | "quarantined";
+    /** Rollback Available */
+    rollback_available: boolean;
+    /** Verified At */
+    verified_at: string | null;
+    /** Retire After */
+    retire_after: string | null;
+    /** Retired At */
+    retired_at: string | null;
+    /** Created At */
+    created_at: string;
+  };
+
+  type MediaLocationRollbackRequest = {
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Target Location Id */
+    target_location_id: string;
+  };
+
+  type MediaLocationsResponse = {
+    /** Items */
+    items: MediaLocationResponse[];
   };
 
   type MediaObjectResponse = {
@@ -1780,6 +2110,30 @@ declare namespace API {
     target: TargetShotSpecRequest;
   };
 
+  type ModelCapabilityResponse = {
+    /** Id */
+    id: string;
+    /** Provider */
+    provider: string;
+    /** Model */
+    model: string;
+    /** Kind */
+    kind: "image" | "video";
+    /** Config Version */
+    config_version: number;
+    /** Input Types */
+    input_types: string[];
+    /** Parameter Schema */
+    parameter_schema: Record<string, any>;
+    /** Limits */
+    limits: Record<string, any>;
+    pricing: CapabilityPricingResponse | null;
+    /** Status */
+    status: "active" | "inactive" | "unavailable";
+    /** Unavailable Reason */
+    unavailable_reason: string | null;
+  };
+
   type NarrativeSpec = {
     /** Purpose */
     purpose: string;
@@ -1895,6 +2249,17 @@ declare namespace API {
     offset: number;
   };
 
+  type PaginatedSchedules = {
+    /** Items */
+    items: ScheduleResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
   type PaginatedScriptSources = {
     /** Items */
     items: ScriptSourceResponse[];
@@ -1937,10 +2302,18 @@ declare namespace API {
     summary: string;
   };
 
+  type pauseScheduleApiV1SchedulesScheduleIdPausePostParams = {
+    schedule_id: string;
+  };
+
   type preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPostParams =
     {
       asset_version_id: string;
     };
+
+  type preflightGenerationApiV1ShotsShotIdGenerationPreflightPostParams = {
+    shot_id: string;
+  };
 
   type ProbeRetryRequest = {
     /** Idempotency Key */
@@ -2090,6 +2463,37 @@ declare namespace API {
     episode_id: string;
   };
 
+  type requestMediaLocationMigrationApiV1MediaVersionIdLocationMigrationsPostParams =
+    {
+      version_id: string;
+    };
+
+  type requestMediaLocationRollbackApiV1MediaVersionIdLocationRollbacksPostParams =
+    {
+      version_id: string;
+    };
+
+  type ReservationResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Request Id */
+    request_id: string;
+    /** Currency */
+    currency: string;
+    /** Estimated Amount */
+    estimated_amount: string;
+    /** Reserved Amount */
+    reserved_amount: string;
+    /** Status */
+    status: "active" | "settled" | "released";
+    /** Revision */
+    revision: number;
+    /** Created At */
+    created_at: string;
+  };
+
   type restoreAssetApiV1AssetsAssetIdRestorePostParams = {
     asset_id: string;
   };
@@ -2116,6 +2520,10 @@ declare namespace API {
 
   type restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePostParams = {
     workspace_id: string;
+  };
+
+  type resumeScheduleApiV1SchedulesScheduleIdResumePostParams = {
+    schedule_id: string;
   };
 
   type retryProbeApiV1MediaVersionIdProbeRetryPostParams = {
@@ -2175,6 +2583,138 @@ declare namespace API {
     dialogues: DialogueResponse[];
     /** Created At */
     created_at: string;
+  };
+
+  type ScheduleConfigurationRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Effective From */
+    effective_from: string;
+    /** Kind */
+    kind: "interval" | "cron";
+    /** Interval Seconds */
+    interval_seconds: number | null | null;
+    /** Cron Expression */
+    cron_expression: string | null | null;
+    /** Timezone */
+    timezone: string | null;
+    /** Misfire Policy */
+    misfire_policy: "skip" | "run_once" | "catch_up";
+    /** Max Catch Up */
+    max_catch_up: number | null;
+    /** Misfire Grace Seconds */
+    misfire_grace_seconds: number | null;
+  };
+
+  type ScheduleCronRuleResponse = {
+    /** Kind */
+    kind: "cron" | null;
+    /** Expression */
+    expression: string;
+    /** Misfire Grace Seconds */
+    misfire_grace_seconds: number;
+  };
+
+  type ScheduleFireResponse = {
+    /** Id */
+    id: string;
+    /** Schedule Id */
+    schedule_id: string;
+    /** Scheduled For */
+    scheduled_for: string;
+    /** Trigger Kind */
+    trigger_kind: "scheduled" | "manual";
+    task: TaskResponse;
+  };
+
+  type ScheduleIntervalRuleResponse = {
+    /** Kind */
+    kind: "interval" | null;
+    /** Seconds */
+    seconds: number;
+    /** Misfire Grace Seconds */
+    misfire_grace_seconds: number;
+  };
+
+  type ScheduleOneOffRuleResponse = {
+    /** Kind */
+    kind: "one_off" | null;
+    /** At */
+    at: string;
+    /** Misfire Grace Seconds */
+    misfire_grace_seconds: number;
+  };
+
+  type ScheduleResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Schedule Key */
+    schedule_key: string;
+    /** Handler Name */
+    handler_name:
+      | "expire_upload_session"
+      | "cleanup_expired_uploads"
+      | "retire_media_location"
+      | "unregistered";
+    scope: ScheduleScopeResponse;
+    /** Kind */
+    kind: "one_off" | "interval" | "cron";
+    /** Rule */
+    rule:
+      | ScheduleOneOffRuleResponse
+      | ScheduleIntervalRuleResponse
+      | ScheduleCronRuleResponse
+      | UnknownScheduleRuleResponse;
+    /** Timezone */
+    timezone: string;
+    /** Status */
+    status: "active" | "paused" | "completed" | "manual_attention";
+    /** Next Fire At */
+    next_fire_at: string | null;
+    /** Next Attempt At */
+    next_attempt_at: string | null;
+    /** Misfire Policy */
+    misfire_policy: "skip" | "run_once" | "catch_up";
+    /** Max Catch Up */
+    max_catch_up: number;
+    /** Failure Count */
+    failure_count: number;
+    /** Last Error */
+    last_error: string | null;
+    /** Revision */
+    revision: number;
+  };
+
+  type ScheduleResumeRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Resume From */
+    resume_from: string;
+    /** Misfire Policy */
+    misfire_policy: "skip" | "run_once" | "catch_up";
+    /** Max Catch Up */
+    max_catch_up: number | null;
+  };
+
+  type ScheduleScopeResponse = {
+    /** Usage Type */
+    usage_type: "upload_session" | "workspace" | "media_location";
+    /** Usage Id */
+    usage_id: string;
+  };
+
+  type ScheduleStateRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type ScheduleTriggerRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
   };
 
   type ScriptExtractionRequest = {
@@ -2752,6 +3292,10 @@ declare namespace API {
     | "TIMELINE_VERSION"
     | "DELIVERY";
 
+  type submitGenerationApiV1ShotsShotIdGenerationRequestsPostParams = {
+    shot_id: string;
+  };
+
   type TargetShotSpecRequest = {
     /** Title */
     title: string;
@@ -2775,9 +3319,23 @@ declare namespace API {
     /** Workspace Id */
     workspace_id: string;
     /** Task Type */
-    task_type: "script_extraction" | "media_probe";
+    task_type:
+      | "script_extraction"
+      | "image_generation"
+      | "video_generation"
+      | "media_probe"
+      | "upload_expiration"
+      | "upload_cleanup"
+      | "media_location_migration"
+      | "media_location_retirement";
     /** Request Type */
-    request_type: "extraction_batch" | "media_version";
+    request_type:
+      | "extraction_batch"
+      | "generation_request"
+      | "media_version"
+      | "upload_session"
+      | "workspace"
+      | "media_location";
     /** Request Id */
     request_id: string;
     scope: TaskScopeResponse;
@@ -2827,6 +3385,15 @@ declare namespace API {
     succeeded: number | null;
     /** Unknown */
     unknown: number | null;
+  };
+
+  type triggerScheduleApiV1SchedulesScheduleIdTriggerPostParams = {
+    schedule_id: string;
+  };
+
+  type UnknownScheduleRuleResponse = {
+    /** Kind */
+    kind: "unknown" | null;
   };
 
   type updateAssetApiV1AssetsAssetIdPatchParams = {

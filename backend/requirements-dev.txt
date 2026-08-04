@@ -239,6 +239,8 @@ typing-inspection==0.4.2
     #   fastapi
     #   pydantic
     #   pydantic-settings
+tzdata==2026.3
+    # via lanverse-backend (pyproject.toml)
 urllib3==2.7.0
     # via
     #   docker

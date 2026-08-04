@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Literal, cast
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from app.modules.identity.contracts import ActorContext, Capability
 from app.modules.identity.models import Membership, Workspace
 from app.modules.identity.policy import require_capability, require_workspace_capability
 from app.modules.identity.presenters import workspace_response
+from app.modules.identity.workspaces.cache import WorkspaceDetailCache
 from app.modules.identity.workspaces.schemas import (
     WorkspaceCreateRequest,
     WorkspaceResponse,
@@ -59,12 +61,28 @@ async def get_workspace(
     session: AsyncSession,
     claims: AccessTokenClaims,
     workspace_id: UUID,
+    cache: WorkspaceDetailCache,
 ) -> WorkspaceResponse:
     user = await authenticated_user(session, claims)
-    result = await repository.find_workspace_for_user(session, user.id, workspace_id)
-    if result is None:
+    membership = await repository.find_membership_for_user(
+        session, user.id, workspace_id
+    )
+    if membership is None:
         raise _workspace_not_found()
-    return workspace_response(result[0], result[1])
+    projection = await cache.get(workspace_id)
+    if projection is not None:
+        return WorkspaceResponse(
+            id=projection.workspace_id,
+            name=projection.name,
+            status=projection.status,
+            role=cast(Literal["owner", "editor", "viewer"], membership.role),
+            revision=projection.revision,
+        )
+    workspace = await repository.find_workspace_by_id(session, workspace_id)
+    if workspace is None:
+        raise _workspace_not_found()
+    await cache.store(workspace)
+    return workspace_response(workspace, membership)
 
 
 async def actor_context(
@@ -97,6 +115,7 @@ async def create_workspace(
     request: WorkspaceCreateRequest,
     *,
     trace_id: str,
+    cache: WorkspaceDetailCache,
 ) -> WorkspaceResponse:
     workspace_id = uuid7()
     now = datetime.now(UTC)
@@ -123,6 +142,7 @@ async def create_workspace(
             occurred_at=now,
         )
         await session.flush()
+    await cache.store(workspace)
     return workspace_response(workspace, membership)
 
 
@@ -133,6 +153,7 @@ async def update_workspace(
     request: WorkspaceUpdateRequest,
     *,
     trace_id: str,
+    cache: WorkspaceDetailCache,
 ) -> WorkspaceResponse:
     async with session.begin():
         user = await authenticated_user(session, claims)
@@ -159,6 +180,8 @@ async def update_workspace(
             metadata={"revision": workspace.revision, "changed_fields": ["name"]},
         )
         await session.flush()
+    await cache.invalidate(workspace.id)
+    await cache.store(workspace)
     return workspace_response(workspace, membership)
 
 
@@ -170,6 +193,7 @@ async def set_workspace_archived(
     *,
     archived: bool,
     trace_id: str,
+    cache: WorkspaceDetailCache,
 ) -> WorkspaceResponse:
     expected_status = "active" if archived else "archived"
     async with session.begin():
@@ -209,4 +233,6 @@ async def set_workspace_archived(
             occurred_at=now,
         )
         await session.flush()
+    await cache.invalidate(workspace.id)
+    await cache.store(workspace)
     return workspace_response(workspace, membership)

@@ -24,6 +24,10 @@ ALLOWED_ROUTING_KEYS = frozenset(
         "media.preview",
         "media.render",
         "media.label",
+        "media.upload.expire",
+        "media.upload.cleanup",
+        "media.location.migrate",
+        "media.location.retire",
     }
 )
 
@@ -31,9 +35,7 @@ ALLOWED_ROUTING_KEYS = frozenset(
 async def declare_task_topology(
     channel: AbstractChannel,
 ) -> tuple[AbstractExchange, AbstractQueue, AbstractQueue]:
-    exchange = await channel.declare_exchange(
-        EXCHANGE, aio_pika.ExchangeType.TOPIC, durable=True
-    )
+    exchange = await channel.declare_exchange(EXCHANGE, aio_pika.ExchangeType.TOPIC, durable=True)
     io_queue = await channel.declare_queue(IO_QUEUE, durable=True)
     media_queue = await channel.declare_queue(MEDIA_QUEUE, durable=True)
     await io_queue.bind(exchange, routing_key="io.#")
@@ -72,6 +74,9 @@ class RabbitMQPublisher:
                 message_id=str(envelope.event_id),
                 type=envelope.event_type,
                 correlation_id=envelope.trace_id,
+                headers={"traceparent": envelope.traceparent}
+                if envelope.traceparent is not None
+                else None,
             ),
             routing_key=routing_key,
             mandatory=True,

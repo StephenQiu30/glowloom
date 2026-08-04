@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Literal, Protocol
 from uuid import UUID
 
@@ -75,3 +76,16 @@ class ProjectContentContext:
     workspace_id: UUID
     status: Literal["active", "archived"]
     revision: int
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationProjectContext:
+    project_id: UUID
+    episode_id: UUID | None
+    workspace_id: UUID
+    project_status: Literal["active", "archived"]
+    episode_status: Literal["active", "archived"] | None
+    budget_limit: Decimal
+    currency: str
+    project_revision: int
+    episode_revision: int | None

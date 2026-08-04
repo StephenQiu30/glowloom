@@ -40,6 +40,11 @@ class OutboxEvent(Base):
             "schema_version",
             name="uq_sys_outbox_aggregate_event",
         ),
+        UniqueConstraint(
+            "id",
+            "workspace_id",
+            name="uq_sys_outbox_id_workspace",
+        ),
         Index("ix_sys_outbox_publishable", "status", "available_at"),
     )
 
@@ -54,6 +59,7 @@ class OutboxEvent(Base):
     routing_key: Mapped[str] = mapped_column(String(100))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
     trace_id: Mapped[str] = mapped_column(String(64))
+    traceparent: Mapped[str] = mapped_column(String(55), nullable=False)
     causation_event_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="pending")
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -100,7 +106,5 @@ class InboxDelivery(Base):
     status: Mapped[str] = mapped_column(String(30), default="processing")
     attempt_count: Mapped[int] = mapped_column(Integer, default=1)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
-    processed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(String(80), nullable=True)

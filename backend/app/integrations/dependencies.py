@@ -19,6 +19,7 @@ def get_media_storage(
             settings.minio_bucket,
             secure=settings.minio_secure,
             thread_limit=settings.storage_thread_limit,
+            operation_timeout_seconds=settings.storage_operation_timeout_seconds,
         ),
         profile="default",
         bucket=settings.minio_bucket,

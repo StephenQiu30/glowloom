@@ -327,9 +327,7 @@ async def _transform_result(
     return ShotTransformResponse(
         transform=_transform_evidence_response(transform),
         shots=[_shot_response(shot) for shot in shots],
-        spec_versions=[
-            _spec_response(version, by_version[version.id]) for version in versions
-        ],
+        spec_versions=[_spec_response(version, by_version[version.id]) for version in versions],
         order=_order_response(order),
     )
 
@@ -595,8 +593,7 @@ async def list_archived_shots(
 ) -> list[ShotResponse]:
     await episode_for_content_read(session, claims, episode_id)
     return [
-        _shot_response(shot)
-        for shot in await repository.list_archived_shots(session, episode_id)
+        _shot_response(shot) for shot in await repository.list_archived_shots(session, episode_id)
     ]
 
 
@@ -676,9 +673,7 @@ async def set_shot_archived(
                 f"Shot is already {'archived' if archived else 'active'}",
                 status_code=409,
             )
-        active = await repository.list_active_shots(
-            session, shot.episode_id, for_update=True
-        )
+        active = await repository.list_active_shots(session, shot.episode_id, for_update=True)
         _require_order(active, request.expected_order_hash)
         now = datetime.now(UTC)
         if archived:
@@ -862,9 +857,7 @@ def _append_spec_version_audit(
             "shot_revision": shot.revision,
             "source": source,
             "previous_version_id": (
-                str(previous_version_id)
-                if previous_version_id is not None
-                else None
+                str(previous_version_id) if previous_version_id is not None else None
             ),
             "current_version_id": str(version.id),
         },
@@ -884,9 +877,7 @@ async def append_spec_version(
         current = await repository.find_shot(session, shot_id)
         if current is None:
             raise _not_found("Shot")
-        episode = await lock_active_episode_for_content_write(
-            session, claims, current.episode_id
-        )
+        episode = await lock_active_episode_for_content_write(session, claims, current.episode_id)
         shot = await repository.find_shot(session, shot_id, for_update=True)
         if shot is None:
             raise _not_found("Shot")
@@ -1036,9 +1027,7 @@ async def set_current_spec_version(
                 "episode_id": str(shot.episode_id),
                 "revision": shot.revision,
                 "previous_version_id": (
-                    str(previous_version_id)
-                    if previous_version_id is not None
-                    else None
+                    str(previous_version_id) if previous_version_id is not None else None
                 ),
                 "current_version_id": str(request.version_id),
             },
@@ -1105,9 +1094,7 @@ async def delete_shot(
                 "Shot evidence prevents deletion",
                 status_code=409,
                 next_action="archive_shot",
-                details={
-                    "blockers": [blocker.model_dump() for blocker in preflight.blockers]
-                },
+                details={"blockers": [blocker.model_dump() for blocker in preflight.blockers]},
             )
         temporary_start = len(active) * 2 + 1
         for offset, active_shot in enumerate(active):
@@ -1214,6 +1201,7 @@ async def copy_shot(
         transform = ShotTransform(
             id=uuid7(),
             workspace_id=source.workspace_id,
+            episode_id=source.episode_id,
             operation="copy",
             source_shot_ids=[source.id],
             source_spec_version_ids=[source_spec.id],
@@ -1392,6 +1380,7 @@ async def split_shot(
         transform = ShotTransform(
             id=uuid7(),
             workspace_id=source.workspace_id,
+            episode_id=source.episode_id,
             operation="split",
             source_shot_ids=[source.id],
             source_spec_version_ids=[source_spec.id],
@@ -1549,8 +1538,7 @@ async def merge_shots(
             )
         source_models = [ShotSpec.model_validate(spec.spec) for spec in specs]
         source_script_ids = {
-            model.script_reference.confirmed_script_version_id
-            for model in source_models
+            model.script_reference.confirmed_script_version_id for model in source_models
         }
         if len(source_script_ids) != 1:
             raise ApiError(
@@ -1567,9 +1555,7 @@ async def merge_shots(
                 "Merge target must preserve the source script version",
                 status_code=422,
             )
-        if request.target.spec.duration_ms != sum(
-            model.duration_ms for model in source_models
-        ):
+        if request.target.spec.duration_ms != sum(model.duration_ms for model in source_models):
             raise ApiError(
                 ErrorCode.VALIDATION_FAILED,
                 "Merge target duration must equal the source durations",
@@ -1617,6 +1603,7 @@ async def merge_shots(
         transform = ShotTransform(
             id=uuid7(),
             workspace_id=episode.workspace_id,
+            episode_id=episode.episode_id,
             operation="merge",
             source_shot_ids=[shot.id for shot in shots],
             source_spec_version_ids=[spec.id for spec in specs],
@@ -1757,12 +1744,10 @@ def _finalize_readiness(
             "shot_id": str(shot_id),
             "status": status,
             "blocking_reasons": [
-                issue.model_dump(mode="json", exclude_none=True)
-                for issue in blocking_reasons
+                issue.model_dump(mode="json", exclude_none=True) for issue in blocking_reasons
             ],
             "warnings": [
-                warning.model_dump(mode="json", exclude_none=True)
-                for warning in warnings
+                warning.model_dump(mode="json", exclude_none=True) for warning in warnings
             ],
             "evaluated_dependencies": dependencies.model_dump(mode="json"),
         }
@@ -2011,9 +1996,7 @@ async def _resolve_project_readiness_dependencies(
             for version_id, query in queries_by_version.items()
         }
 
-    asset_ids = list(
-        dict.fromkeys(reference.asset_version_id for reference in references)
-    )
+    asset_ids = list(dict.fromkeys(reference.asset_version_id for reference in references))
     assets_unavailable = False
     try:
         asset_snapshots = await resolve_asset_versions_readiness(
@@ -2047,9 +2030,7 @@ async def _resolve_readiness_dependencies(
         session,
         workspace_id=episode.workspace_id,
         project_id=episode.project_id,
-        episode_id_by_version={
-            version.id: episode.episode_id for version in versions
-        },
+        episode_id_by_version={version.id: episode.episode_id for version in versions},
         versions=versions,
         references=references,
     )
@@ -2075,21 +2056,17 @@ async def get_readiness(
             raise _not_found("Shot spec version")
         version = version_result[0]
         references = await repository.list_asset_references(session, [version.id])
-    structure_states, asset_snapshots, assets_unavailable = (
-        await _resolve_readiness_dependencies(
-            session,
-            episode,
-            [version] if version is not None else [],
-            references,
-        )
+    structure_states, asset_snapshots, assets_unavailable = await _resolve_readiness_dependencies(
+        session,
+        episode,
+        [version] if version is not None else [],
+        references,
     )
     return _evaluate_loaded_readiness(
         shot,
         version,
         references,
-        structure_available=(
-            structure_states.get(version.id) if version is not None else False
-        ),
+        structure_available=(structure_states.get(version.id) if version is not None else False),
         asset_snapshots=asset_snapshots,
         assets_unavailable=assets_unavailable,
     )
@@ -2110,13 +2087,11 @@ async def get_episode_readiness(
     references_by_version: dict[UUID, list[AssetReference]] = defaultdict(list)
     for reference in references:
         references_by_version[reference.shot_spec_version_id].append(reference)
-    structure_states, asset_snapshots, assets_unavailable = (
-        await _resolve_readiness_dependencies(
-            session,
-            episode,
-            versions,
-            references,
-        )
+    structure_states, asset_snapshots, assets_unavailable = await _resolve_readiness_dependencies(
+        session,
+        episode,
+        versions,
+        references,
     )
     items = [
         _evaluate_loaded_readiness(
@@ -2188,19 +2163,19 @@ async def summarize_episode_storyboards(
     references_by_version: dict[UUID, list[AssetReference]] = defaultdict(list)
     for reference in references:
         references_by_version[reference.shot_spec_version_id].append(reference)
-    structure_states, asset_snapshots, assets_unavailable = (
-        await _resolve_project_readiness_dependencies(
-            session,
-            workspace_id=workspace_id,
-            project_id=project_id,
-            episode_id_by_version={
-                version.id: shot.episode_id
-                for shot, version in rows
-                if version is not None
-            },
-            versions=versions,
-            references=references,
-        )
+    (
+        structure_states,
+        asset_snapshots,
+        assets_unavailable,
+    ) = await _resolve_project_readiness_dependencies(
+        session,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        episode_id_by_version={
+            version.id: shot.episode_id for shot, version in rows if version is not None
+        },
+        versions=versions,
+        references=references,
     )
     items_by_episode: dict[UUID, list[ShotReadinessResponse]] = defaultdict(list)
     for shot, version in rows:
@@ -2208,15 +2183,9 @@ async def summarize_episode_storyboards(
             _evaluate_loaded_readiness(
                 shot,
                 version,
-                (
-                    references_by_version.get(version.id, [])
-                    if version is not None
-                    else []
-                ),
+                (references_by_version.get(version.id, []) if version is not None else []),
                 structure_available=(
-                    structure_states.get(version.id)
-                    if version is not None
-                    else False
+                    structure_states.get(version.id) if version is not None else False
                 ),
                 asset_snapshots=asset_snapshots,
                 assets_unavailable=assets_unavailable,
@@ -2268,10 +2237,7 @@ async def list_asset_shot_usages(
                 spec_version_id=version.id,
                 spec_version_no=version.version_no,
                 slot_keys=slot_keys,
-                is_current=(
-                    shot.status == "active"
-                    and shot.current_spec_version_id == version.id
-                ),
+                is_current=(shot.status == "active" and shot.current_spec_version_id == version.id),
             )
             for version, shot, slot_keys in rows
         ],
@@ -2400,9 +2366,7 @@ async def _asset_upgrade_snapshot(
             "New asset version is not ready for generation",
             status_code=409,
             next_action=(
-                "repeat_asset_upgrade_preflight"
-                if for_update
-                else "complete_new_asset_version"
+                "repeat_asset_upgrade_preflight" if for_update else "complete_new_asset_version"
             ),
             details={
                 "asset_version_id": str(new_asset_version_id),
@@ -2507,9 +2471,7 @@ async def apply_asset_upgrade(
             shot_ids=[target.shot_id for target in request.targets],
             for_update=True,
         )
-        if current.preflight_hash != request.preflight_hash or (
-            current.targets != request.targets
-        ):
+        if current.preflight_hash != request.preflight_hash or (current.targets != request.targets):
             raise ApiError(
                 ErrorCode.VERSION_CONFLICT,
                 "Asset upgrade preflight has changed",
@@ -2614,8 +2576,14 @@ async def get_production_snapshot(
     session: AsyncSession,
     workspace_id: UUID,
     version_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> ShotProductionSnapshot | None:
-    version_result = await repository.find_spec_version(session, version_id)
+    version_result = await repository.find_spec_version(
+        session,
+        version_id,
+        for_update=for_update,
+    )
     if version_result is None:
         return None
     version, shot = version_result
@@ -2629,13 +2597,11 @@ async def get_production_snapshot(
     if episode is None:
         return None
     references = await repository.list_asset_references(session, [version.id])
-    structure_states, asset_snapshots, assets_unavailable = (
-        await _resolve_readiness_dependencies(
-            session,
-            episode,
-            [version],
-            references,
-        )
+    structure_states, asset_snapshots, assets_unavailable = await _resolve_readiness_dependencies(
+        session,
+        episode,
+        [version],
+        references,
     )
     readiness = _evaluate_loaded_readiness(
         shot,
@@ -2657,6 +2623,8 @@ async def get_production_snapshot(
             input_hash=version.input_hash,
         ),
         shot_status=cast(Literal["active", "archived"], shot.status),
+        current_spec_version_id=shot.current_spec_version_id,
+        shot_revision=shot.revision,
         spec=spec.model_dump(mode="json"),
         asset_references=tuple(
             ShotAssetReferenceSnapshot(

@@ -1,4 +1,3 @@
-import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Literal, cast
 from uuid import UUID
@@ -22,6 +21,10 @@ from app.modules.media.schemas import (
     MediaAccessRequest,
     MediaAccessResponse,
     MediaKind,
+    MediaLocationMigrationRequest,
+    MediaLocationResponse,
+    MediaLocationRollbackRequest,
+    MediaLocationsResponse,
     MediaObjectResponse,
     MediaSource,
     MediaVersionResponse,
@@ -36,14 +39,24 @@ from app.modules.media.schemas import (
 )
 from app.modules.media.storage import (
     MediaStorage,
+    StorageAccessDenied,
+    StorageIntegrityMismatch,
     StorageObjectNotFound,
     StorageUnavailable,
+    verify_object_integrity,
 )
 from app.modules.production import (
+    MediaLocationMigrationTaskCommand,
     MediaProbeTaskCommand,
     TaskResponse,
+    create_media_location_migration_task,
     create_media_probe_task,
     get_internal_task,
+)
+from app.modules.scheduling import (
+    complete_upload_expiration_schedule,
+    ensure_upload_cleanup_schedule,
+    ensure_upload_expiration_schedule,
 )
 
 ALLOWED_MIME_TYPES: dict[str, frozenset[str]] = {
@@ -118,6 +131,28 @@ def _upload_session_response(upload: UploadSession) -> UploadSessionResponse:
         mime_type=upload.declared_mime_type,
         sha256=upload.declared_sha256,
         expires_at=upload.expires_at,
+    )
+
+
+def _media_location_response(location: MediaLocation) -> MediaLocationResponse:
+    return MediaLocationResponse(
+        id=location.id,
+        media_version_id=location.media_version_id,
+        status=cast(
+            Literal[
+                "verified", "active", "retiring", "retired", "quarantined"
+            ],
+            location.status,
+        ),
+        rollback_available=(
+            location.status == "retiring"
+            and location.retire_after is not None
+            and location.retire_after > datetime.now(UTC)
+        ),
+        verified_at=location.verified_at,
+        retire_after=location.retire_after,
+        retired_at=location.retired_at,
+        created_at=location.created_at,
     )
 
 
@@ -202,6 +237,19 @@ async def _create_upload_session(
             "Idempotency key was used with different input",
             status_code=409,
         )
+    await ensure_upload_expiration_schedule(
+        session,
+        actor,
+        upload_session_id=upload.id,
+        expires_at=upload.expires_at,
+        now=now,
+    )
+    await ensure_upload_cleanup_schedule(
+        session,
+        actor,
+        interval_seconds=settings.media_cleanup_interval_seconds,
+        now=now,
+    )
     return upload
 
 
@@ -360,20 +408,17 @@ async def initialize_version_upload(
 
 async def _verified_object_hash(upload: UploadSession, storage: MediaStorage) -> str:
     try:
-        actual_size, actual_mime = await storage.port.stat(upload.object_key)
-        normalized_mime = (actual_mime or "").split(";", 1)[0].strip().lower()
-        if (
-            actual_size != upload.declared_size_bytes
-            or normalized_mime != upload.declared_mime_type
-        ):
-            return ""
-        digest = hashlib.sha256()
-        async for chunk in storage.port.stream(upload.object_key):
-            digest.update(chunk)
-        return digest.hexdigest()
-    except StorageObjectNotFound:
+        await verify_object_integrity(
+            storage.port,
+            upload.object_key,
+            expected_size_bytes=upload.declared_size_bytes,
+            expected_sha256=upload.declared_sha256,
+            expected_content_type=upload.declared_mime_type,
+        )
+        return upload.declared_sha256
+    except (StorageIntegrityMismatch, StorageObjectNotFound):
         return ""
-    except StorageUnavailable as error:
+    except (StorageAccessDenied, StorageUnavailable) as error:
         raise _dependency_error() from error
     except Exception as error:
         raise _dependency_error() from error
@@ -548,6 +593,12 @@ async def complete_upload(
                 upload.completed_version_id = version.id
                 upload.completed_probe_task_id = task.id
                 upload.error_code = None
+                await complete_upload_expiration_schedule(
+                    session,
+                    workspace_id=upload.workspace_id,
+                    upload_session_id=upload.id,
+                    now=now,
+                )
                 result = UploadCompletionResponse(
                     media_object=_media_object_response(media_object),
                     version=_media_version_response(version, media_object),
@@ -621,6 +672,113 @@ async def get_media(
         session, claims, version_id, Capability.CONTENT_READ
     )
     return _media_version_response(version, media_object)
+
+
+async def list_media_locations(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    version_id: UUID,
+) -> MediaLocationsResponse:
+    version, _, _ = await _owned_media_version(
+        session, claims, version_id, Capability.WORKSPACE_MANAGE
+    )
+    locations = await repository.list_media_locations(session, version.id)
+    return MediaLocationsResponse(
+        items=[_media_location_response(location) for location in locations]
+    )
+
+
+async def request_media_location_migration(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    version_id: UUID,
+    request: MediaLocationMigrationRequest,
+    *,
+    trace_id: str,
+) -> TaskResponse:
+    async with session.begin():
+        version, _, actor = await _owned_media_version(
+            session,
+            claims,
+            version_id,
+            Capability.WORKSPACE_MANAGE,
+            for_update=True,
+        )
+        active = await repository.find_active_location(
+            session, version.id, for_update=True
+        )
+        if active is None:
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Media version has no active location",
+                status_code=409,
+            )
+        dispatch = await create_media_location_migration_task(
+            session,
+            MediaLocationMigrationTaskCommand(
+                workspace_id=version.workspace_id,
+                media_version_id=version.id,
+                location_id=active.id,
+                operation="migrate",
+                requested_by=actor.user_id,
+                idempotency_key=request.idempotency_key,
+            ),
+            trace_id=trace_id,
+        )
+    return dispatch.task
+
+
+async def request_media_location_rollback(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    version_id: UUID,
+    request: MediaLocationRollbackRequest,
+    *,
+    trace_id: str,
+) -> TaskResponse:
+    async with session.begin():
+        version, _, actor = await _owned_media_version(
+            session,
+            claims,
+            version_id,
+            Capability.WORKSPACE_MANAGE,
+            for_update=True,
+        )
+        target = await repository.find_media_location(
+            session, request.target_location_id, for_update=True
+        )
+        now = datetime.now(UTC)
+        if (
+            target is None
+            or target.workspace_id != version.workspace_id
+            or target.media_version_id != version.id
+        ):
+            raise ApiError(
+                ErrorCode.NOT_FOUND, "Media location not found", status_code=404
+            )
+        if (
+            target.status != "retiring"
+            or target.retire_after is None
+            or target.retire_after <= now
+        ):
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Media location is outside its rollback window",
+                status_code=409,
+            )
+        dispatch = await create_media_location_migration_task(
+            session,
+            MediaLocationMigrationTaskCommand(
+                workspace_id=version.workspace_id,
+                media_version_id=version.id,
+                location_id=target.id,
+                operation="rollback",
+                requested_by=actor.user_id,
+                idempotency_key=request.idempotency_key,
+            ),
+            trace_id=trace_id,
+        )
+    return dispatch.task
 
 
 async def media_version_exists(

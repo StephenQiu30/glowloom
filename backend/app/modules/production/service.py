@@ -15,10 +15,17 @@ from app.modules.identity import (
     actor_context,
     require_workspace_capability,
 )
-from app.modules.messaging import OutboxEventCommand, enqueue_outbox_event
+from app.modules.messaging import (
+    OutboxEventCommand,
+    enqueue_outbox_event,
+    find_outbox_event_id,
+)
 from app.modules.production import repository
 from app.modules.production.contracts import (
     EpisodeTaskSummary,
+    MediaLocationMigrationTaskCommand,
+    MediaLocationRetirementTaskCommand,
+    MediaLocationTaskDispatch,
     MediaProbeTaskCommand,
     ScriptExtractionTaskCommand,
     TaskContext,
@@ -28,6 +35,10 @@ from app.modules.production.contracts import (
     TaskScopeResponse,
     TaskStatus,
     TaskType,
+    UploadCleanupTaskCommand,
+    UploadCleanupTaskDispatch,
+    UploadExpirationTaskCommand,
+    UploadExpirationTaskDispatch,
 )
 from app.modules.production.models import Task
 from app.modules.production.schemas import PaginatedTasks
@@ -115,6 +126,9 @@ def _task_context(task: Task) -> TaskContext:
         request_id=task.request_id,
         task_type=task.task_type,
         request_type=task.request_type,
+        usage_type=task.usage_type,
+        usage_id=task.usage_id,
+        requested_by=task.requested_by,
         status=cast(TaskStatus, task.status),
     )
 
@@ -145,6 +159,7 @@ def _append_task_transition_audit(
     previous_status: str,
     trace_id: str,
     now: datetime,
+    additional_metadata: dict[str, object] | None = None,
 ) -> None:
     metadata: dict[str, object] = {
         "revision": task.revision,
@@ -159,6 +174,8 @@ def _append_task_transition_audit(
     if task.error_code is not None:
         metadata["error_code"] = task.error_code
         metadata["retryable"] = bool(task.error_retryable)
+    if additional_metadata is not None:
+        metadata.update(additional_metadata)
     append_audit_event(
         session,
         workspace_id=task.workspace_id,
@@ -465,6 +482,251 @@ async def complete_media_probe_task(
     return True
 
 
+async def fail_upload_expiration_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    error_code: str,
+    error_summary: str,
+    now: datetime,
+    trace_id: str,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "upload_expiration":
+        raise ValueError("task is not an upload expiration task")
+    if task.status in {"succeeded", "failed", "cancelled"}:
+        return False
+    previous_status = task.status
+    task.status = "failed"
+    task.progress_stage = "blocked"
+    task.error_code = error_code
+    task.error_retryable = False
+    task.error_summary = error_summary
+    task.next_action = "contact_support"
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.failed",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def complete_upload_expiration_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+    trace_id: str,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "upload_expiration":
+        raise ValueError("task is not an upload expiration task")
+    if task.status == "succeeded":
+        return False
+    if task.status in {"failed", "cancelled"}:
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Task cannot be completed from its current state",
+            status_code=409,
+        )
+    previous_status = task.status
+    task.status = "succeeded"
+    task.progress_stage = "completed"
+    task.error_code = None
+    task.error_retryable = None
+    task.error_summary = None
+    task.next_action = None
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.succeeded",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def fail_upload_cleanup_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    error_code: str,
+    error_summary: str,
+    now: datetime,
+    trace_id: str,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "upload_cleanup":
+        raise ValueError("task is not an upload cleanup task")
+    if task.status in {"succeeded", "failed", "cancelled"}:
+        return False
+    previous_status = task.status
+    task.status = "failed"
+    task.progress_stage = "blocked"
+    task.error_code = error_code
+    task.error_retryable = False
+    task.error_summary = error_summary
+    task.next_action = "contact_support"
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.failed",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def complete_upload_cleanup_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    cleaned_count: int,
+    now: datetime,
+    trace_id: str,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "upload_cleanup":
+        raise ValueError("task is not an upload cleanup task")
+    if task.status == "succeeded":
+        return False
+    if task.status in {"failed", "cancelled"}:
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Task cannot be completed from its current state",
+            status_code=409,
+        )
+    previous_status = task.status
+    task.status = "succeeded"
+    task.progress_stage = "completed"
+    task.error_code = None
+    task.error_retryable = None
+    task.error_summary = None
+    task.next_action = None
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.succeeded",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+        additional_metadata={"cleaned_count": cleaned_count},
+    )
+    await session.flush()
+    return True
+
+
+async def fail_media_location_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    error_code: str,
+    error_summary: str,
+    now: datetime,
+    trace_id: str,
+    retryable: bool,
+    next_action: str,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type not in {
+        "media_location_migration",
+        "media_location_retirement",
+    }:
+        raise ValueError("task is not a media location task")
+    if task.status in {"succeeded", "failed", "cancelled"}:
+        return False
+    previous_status = task.status
+    task.status = "failed"
+    task.progress_stage = "blocked"
+    task.error_code = error_code
+    task.error_retryable = retryable
+    task.error_summary = error_summary
+    task.next_action = next_action
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.failed",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def complete_media_location_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+    trace_id: str,
+    next_action: str | None = "review_media_locations",
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type not in {
+        "media_location_migration",
+        "media_location_retirement",
+    }:
+        raise ValueError("task is not a media location task")
+    if task.status == "succeeded":
+        return False
+    if task.status in {"failed", "cancelled"}:
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Task cannot be completed from its current state",
+            status_code=409,
+        )
+    previous_status = task.status
+    task.status = "succeeded"
+    task.progress_stage = "completed"
+    task.error_code = None
+    task.error_retryable = None
+    task.error_summary = None
+    task.next_action = next_action
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.succeeded",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
 async def create_script_extraction_task(
     session: AsyncSession,
     actor: ActorContext,
@@ -669,6 +931,383 @@ async def create_media_probe_task(
     return task_response(task)
 
 
+async def create_upload_expiration_task(
+    session: AsyncSession,
+    command: UploadExpirationTaskCommand,
+    *,
+    trace_id: str,
+) -> UploadExpirationTaskDispatch:
+    if not trace_id or len(trace_id) > 64:
+        raise ApiError(ErrorCode.INVALID_REQUEST, "Invalid trace identifier", status_code=422)
+    existing = await repository.find_idempotent_task(
+        session,
+        command.workspace_id,
+        "upload_expiration",
+        command.idempotency_key,
+    )
+    if existing is not None:
+        if (
+            existing.request_id != command.upload_session_id
+            or existing.requested_by != command.requested_by
+        ):
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Idempotency key was used with different input",
+                status_code=409,
+            )
+        raise ApiError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "Upload expiration task already exists without a fire record",
+            status_code=409,
+        )
+
+    now = datetime.now(UTC)
+    task = Task(
+        id=uuid7(),
+        workspace_id=command.workspace_id,
+        task_type="upload_expiration",
+        request_type="upload_session",
+        request_id=command.upload_session_id,
+        usage_type="upload_session",
+        usage_id=command.upload_session_id,
+        status="queued",
+        progress_stage="queued",
+        next_action="wait_for_cleanup",
+        cancel_status="none",
+        idempotency_key=command.idempotency_key,
+        requested_by=command.requested_by,
+        revision=1,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(task)
+    await session.flush()
+    outbox_event_id = await enqueue_outbox_event(
+        session,
+        OutboxEventCommand(
+            workspace_id=command.workspace_id,
+            event_type="upload_expiration.requested",
+            schema_version=1,
+            aggregate_type="task",
+            aggregate_id=task.id,
+            routing_key="media.upload.expire",
+            payload={"task_id": str(task.id)},
+            trace_id=trace_id,
+            available_at=now,
+            occurred_at=now,
+        ),
+    )
+    append_audit_event(
+        session,
+        workspace_id=command.workspace_id,
+        actor_id=command.requested_by,
+        action="task.created",
+        target_type="task",
+        target_id=task.id,
+        trace_id=trace_id,
+        metadata={
+            "revision": 1,
+            "task_type": "upload_expiration",
+            "request_type": "upload_session",
+            "request_id": str(command.upload_session_id),
+        },
+        occurred_at=now,
+    )
+    await session.flush()
+    return UploadExpirationTaskDispatch(
+        task=task_response(task), outbox_event_id=outbox_event_id
+    )
+
+
+async def create_upload_cleanup_task(
+    session: AsyncSession,
+    command: UploadCleanupTaskCommand,
+    *,
+    trace_id: str,
+) -> UploadCleanupTaskDispatch:
+    if not trace_id or len(trace_id) > 64:
+        raise ApiError(ErrorCode.INVALID_REQUEST, "Invalid trace identifier", status_code=422)
+    existing = await repository.find_idempotent_task(
+        session,
+        command.workspace_id,
+        "upload_cleanup",
+        command.idempotency_key,
+    )
+    if existing is not None:
+        if (
+            existing.request_id != command.workspace_id
+            or existing.requested_by != command.requested_by
+        ):
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Idempotency key was used with different input",
+                status_code=409,
+            )
+        raise ApiError(
+            ErrorCode.RESOURCE_CONFLICT,
+            "Upload cleanup task already exists without a fire record",
+            status_code=409,
+        )
+
+    now = datetime.now(UTC)
+    task = Task(
+        id=uuid7(),
+        workspace_id=command.workspace_id,
+        task_type="upload_cleanup",
+        request_type="workspace",
+        request_id=command.workspace_id,
+        usage_type="workspace",
+        usage_id=command.workspace_id,
+        status="queued",
+        progress_stage="queued",
+        next_action="wait_for_cleanup",
+        cancel_status="none",
+        idempotency_key=command.idempotency_key,
+        requested_by=command.requested_by,
+        revision=1,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(task)
+    await session.flush()
+    outbox_event_id = await enqueue_outbox_event(
+        session,
+        OutboxEventCommand(
+            workspace_id=command.workspace_id,
+            event_type="upload_cleanup.requested",
+            schema_version=1,
+            aggregate_type="task",
+            aggregate_id=task.id,
+            routing_key="media.upload.cleanup",
+            payload={"task_id": str(task.id)},
+            trace_id=trace_id,
+            available_at=now,
+            occurred_at=now,
+        ),
+    )
+    append_audit_event(
+        session,
+        workspace_id=command.workspace_id,
+        actor_id=command.requested_by,
+        action="task.created",
+        target_type="task",
+        target_id=task.id,
+        trace_id=trace_id,
+        metadata={
+            "revision": 1,
+            "task_type": "upload_cleanup",
+            "request_type": "workspace",
+            "request_id": str(command.workspace_id),
+        },
+        occurred_at=now,
+    )
+    await session.flush()
+    return UploadCleanupTaskDispatch(
+        task=task_response(task), outbox_event_id=outbox_event_id
+    )
+
+
+async def create_media_location_migration_task(
+    session: AsyncSession,
+    command: MediaLocationMigrationTaskCommand,
+    *,
+    trace_id: str,
+) -> MediaLocationTaskDispatch:
+    if not trace_id or len(trace_id) > 64:
+        raise ApiError(ErrorCode.INVALID_REQUEST, "Invalid trace identifier", status_code=422)
+    usage_type = (
+        "media_location_migration"
+        if command.operation == "migrate"
+        else "media_location_rollback"
+    )
+    existing = await repository.find_idempotent_task(
+        session,
+        command.workspace_id,
+        "media_location_migration",
+        command.idempotency_key,
+    )
+    if existing is not None:
+        if (
+            existing.request_id != command.media_version_id
+            or existing.requested_by != command.requested_by
+            or existing.usage_type != usage_type
+            or (
+                command.operation == "rollback"
+                and existing.usage_id != command.location_id
+            )
+        ):
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Idempotency key was used with different input",
+                status_code=409,
+            )
+        event_id = await find_outbox_event_id(
+            session,
+            aggregate_id=existing.id,
+            event_type="media_location_migration.requested",
+        )
+        if event_id is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Location migration event is unavailable",
+                status_code=500,
+            )
+        return MediaLocationTaskDispatch(
+            task=task_response(existing), outbox_event_id=event_id
+        )
+
+    now = datetime.now(UTC)
+    task = Task(
+        id=uuid7(),
+        workspace_id=command.workspace_id,
+        task_type="media_location_migration",
+        request_type="media_version",
+        request_id=command.media_version_id,
+        usage_type=usage_type,
+        usage_id=command.location_id,
+        input_version_id=command.media_version_id,
+        status="queued",
+        progress_stage="queued",
+        next_action="wait_for_location_migration",
+        cancel_status="none",
+        idempotency_key=command.idempotency_key,
+        requested_by=command.requested_by,
+        revision=1,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(task)
+    await session.flush()
+    event_id = await enqueue_outbox_event(
+        session,
+        OutboxEventCommand(
+            workspace_id=command.workspace_id,
+            event_type="media_location_migration.requested",
+            schema_version=1,
+            aggregate_type="task",
+            aggregate_id=task.id,
+            routing_key="media.location.migrate",
+            payload={"task_id": str(task.id)},
+            trace_id=trace_id,
+            available_at=now,
+            occurred_at=now,
+        ),
+    )
+    append_audit_event(
+        session,
+        workspace_id=command.workspace_id,
+        actor_id=command.requested_by,
+        action="task.created",
+        target_type="task",
+        target_id=task.id,
+        trace_id=trace_id,
+        metadata={
+            "revision": 1,
+            "task_type": task.task_type,
+            "request_type": task.request_type,
+            "request_id": str(task.request_id),
+        },
+        occurred_at=now,
+    )
+    await session.flush()
+    return MediaLocationTaskDispatch(task=task_response(task), outbox_event_id=event_id)
+
+
+async def create_media_location_retirement_task(
+    session: AsyncSession,
+    command: MediaLocationRetirementTaskCommand,
+    *,
+    trace_id: str,
+) -> MediaLocationTaskDispatch:
+    if not trace_id or len(trace_id) > 64:
+        raise ApiError(ErrorCode.INVALID_REQUEST, "Invalid trace identifier", status_code=422)
+    existing = await repository.find_idempotent_task(
+        session,
+        command.workspace_id,
+        "media_location_retirement",
+        command.idempotency_key,
+    )
+    if existing is not None:
+        if (
+            existing.request_id != command.media_location_id
+            or existing.requested_by != command.requested_by
+        ):
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Idempotency key was used with different input",
+                status_code=409,
+            )
+        event_id = await find_outbox_event_id(
+            session,
+            aggregate_id=existing.id,
+            event_type="media_location_retirement.requested",
+        )
+        if event_id is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Location retirement event is unavailable",
+                status_code=500,
+            )
+        return MediaLocationTaskDispatch(
+            task=task_response(existing), outbox_event_id=event_id
+        )
+
+    now = datetime.now(UTC)
+    task = Task(
+        id=uuid7(),
+        workspace_id=command.workspace_id,
+        task_type="media_location_retirement",
+        request_type="media_location",
+        request_id=command.media_location_id,
+        usage_type="media_location",
+        usage_id=command.media_location_id,
+        status="queued",
+        progress_stage="queued",
+        next_action="wait_for_location_retirement",
+        cancel_status="none",
+        idempotency_key=command.idempotency_key,
+        requested_by=command.requested_by,
+        revision=1,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(task)
+    await session.flush()
+    event_id = await enqueue_outbox_event(
+        session,
+        OutboxEventCommand(
+            workspace_id=command.workspace_id,
+            event_type="media_location_retirement.requested",
+            schema_version=1,
+            aggregate_type="task",
+            aggregate_id=task.id,
+            routing_key="media.location.retire",
+            payload={"task_id": str(task.id)},
+            trace_id=trace_id,
+            available_at=now,
+            occurred_at=now,
+        ),
+    )
+    append_audit_event(
+        session,
+        workspace_id=command.workspace_id,
+        actor_id=command.requested_by,
+        action="task.created",
+        target_type="task",
+        target_id=task.id,
+        trace_id=trace_id,
+        metadata={
+            "revision": 1,
+            "task_type": task.task_type,
+            "request_type": task.request_type,
+            "request_id": str(task.request_id),
+        },
+        occurred_at=now,
+    )
+    await session.flush()
+    return MediaLocationTaskDispatch(task=task_response(task), outbox_event_id=event_id)
+
+
 async def get_internal_task(session: AsyncSession, task_id: UUID) -> TaskResponse:
     task = await repository.find_task(session, task_id)
     if task is None:
@@ -700,7 +1339,17 @@ async def list_tasks(
     claims: AccessTokenClaims,
     workspace_id: UUID,
     *,
-    task_type: Literal["script_extraction", "media_probe"] | None,
+    task_type: Literal[
+        "script_extraction",
+        "image_generation",
+        "video_generation",
+        "media_probe",
+        "upload_expiration",
+        "upload_cleanup",
+        "media_location_migration",
+        "media_location_retirement",
+    ]
+    | None,
     status: TaskStatus | None,
     limit: int,
     offset: int,

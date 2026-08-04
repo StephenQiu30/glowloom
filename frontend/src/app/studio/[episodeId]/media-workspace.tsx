@@ -2,7 +2,9 @@
 
 import {
   Archive,
+  ArrowRightLeft,
   FileUp,
+  HardDrive,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -48,6 +50,14 @@ const probeLabels: Record<API.MediaVersionResponse["probe_status"], string> = {
   quarantined: "已隔离",
 };
 
+const locationLabels: Record<API.MediaLocationResponse["status"], string> = {
+  verified: "已校验",
+  active: "当前读取",
+  retiring: "回滚保护中",
+  retired: "已退役",
+  quarantined: "已隔离",
+};
+
 type MediaObjectView = {
   current: API.MediaVersionResponse;
   versions: API.MediaVersionResponse[];
@@ -79,14 +89,24 @@ function inputAccept(kind: API.UploadDeclaration["kind"]): string | undefined {
 export function MediaWorkspace({
   media,
   busy,
+  locations = [],
+  locationBusy = false,
+  locationVersionId = null,
   onUpload,
   onAppendVersion,
   onRetry,
   onSetCurrent,
   onToggleArchived,
+  onOpenLocations,
+  onCloseLocations,
+  onLocationMigration,
+  onLocationRollback,
 }: {
   media: API.MediaVersionResponse[];
   busy: boolean;
+  locations?: API.MediaLocationResponse[];
+  locationBusy?: boolean;
+  locationVersionId?: string | null;
   onUpload: (file: File, kind: API.UploadDeclaration["kind"]) => Promise<boolean>;
   onAppendVersion: (
     current: API.MediaVersionResponse,
@@ -95,12 +115,25 @@ export function MediaWorkspace({
   onRetry: (version: API.MediaVersionResponse) => Promise<void>;
   onSetCurrent: (version: API.MediaVersionResponse) => Promise<void>;
   onToggleArchived: (current: API.MediaVersionResponse) => Promise<void>;
+  onOpenLocations?: (version: API.MediaVersionResponse) => void;
+  onCloseLocations?: () => void;
+  onLocationMigration?: (
+    version: API.MediaVersionResponse,
+    activeLocationId: string,
+  ) => Promise<void>;
+  onLocationRollback?: (
+    version: API.MediaVersionResponse,
+    targetLocationId: string,
+    activeLocationId: string,
+  ) => Promise<void>;
 }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [kind, setKind] = useState<API.UploadDeclaration["kind"]>("image");
   const [appendTarget, setAppendTarget] = useState<API.MediaVersionResponse | null>(null);
   const [appendFile, setAppendFile] = useState<File | null>(null);
   const objects = useMemo(() => groupMediaObjects(media), [media]);
+  const locationVersion = media.find((version) => version.id === locationVersionId);
+  const activeLocation = locations.find((location) => location.status === "active");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -310,6 +343,17 @@ export function MediaWorkspace({
                                 <RefreshCw aria-hidden="true" />重试探测
                               </Button>
                             ) : null}
+                            {onOpenLocations ? (
+                              <Button
+                                aria-label={`管理媒体版本 v${version.version_no} 的存储位置`}
+                                disabled={busy}
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onOpenLocations(version)}
+                              >
+                                <HardDrive aria-hidden="true" />存储位置
+                              </Button>
+                            ) : null}
                           </div>
                         );
                       })}
@@ -370,6 +414,115 @@ export function MediaWorkspace({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(locationVersion)}
+        onOpenChange={(open) => {
+          if (!open) onCloseLocations?.();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>存储位置治理</DialogTitle>
+            <DialogDescription>
+              {locationVersion?.filename ?? "媒体版本"} 的业务 ID 与内容 hash 不会变化；只有校验通过的位置才能成为当前读取位置。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            {locationBusy && locations.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-500">
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+                正在读取位置状态
+              </div>
+            ) : locations.length === 0 ? (
+              <Alert variant="destructive">
+                <AlertTitle>位置状态不可用</AlertTitle>
+                <AlertDescription>
+                  当前没有可展示的位置事实，请稍后刷新或检查任务中心。
+                </AlertDescription>
+              </Alert>
+            ) : (
+              locations.map((location, index) => {
+                const rollbackAvailable = location.rollback_available;
+                return (
+                  <div
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                    key={location.id}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">位置 {index + 1}</p>
+                          <Badge
+                            className={
+                              location.status === "active"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : location.status === "retiring"
+                                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                                  : undefined
+                            }
+                            variant="outline"
+                          >
+                            {locationLabels[location.status]}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {location.retire_after
+                            ? `保护至 ${new Date(location.retire_after).toLocaleString("zh-CN")}`
+                            : location.verified_at
+                              ? `校验于 ${new Date(location.verified_at).toLocaleString("zh-CN")}`
+                              : "等待完整性校验"}
+                        </p>
+                      </div>
+                      {rollbackAvailable &&
+                      activeLocation &&
+                      locationVersion &&
+                      onLocationRollback ? (
+                        <Button
+                          disabled={locationBusy}
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void onLocationRollback(
+                              locationVersion,
+                              location.id,
+                              activeLocation.id,
+                            )
+                          }
+                        >
+                          <RotateCcw aria-hidden="true" />回滚到此位置
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onCloseLocations}>
+              关闭
+            </Button>
+            {locationVersion && activeLocation && onLocationMigration ? (
+              <Button
+                disabled={locationBusy}
+                onClick={() =>
+                  void onLocationMigration(locationVersion, activeLocation.id)
+                }
+              >
+                {locationBusy ? (
+                  <LoaderCircle className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <ArrowRightLeft aria-hidden="true" />
+                )}
+                迁移当前版本
+              </Button>
+            ) : null}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

@@ -20,6 +20,7 @@ from app.modules.projects.contracts import (
     DeletePreflightResponse,
     EpisodeScriptVersionCountReader,
     EpisodeStoryboardReferenceReader,
+    GenerationProjectContext,
     ProjectAssetReferenceReader,
     ProjectContentContext,
 )
@@ -48,6 +49,29 @@ def _response(project: Project) -> ProjectResponse:
         currency=project.currency,
         status=cast(Literal["active", "archived"], project.status),
         revision=project.revision,
+    )
+
+
+async def resolve_project_generation_context(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_id: UUID,
+    *,
+    for_update: bool = False,
+) -> GenerationProjectContext | None:
+    project = await repository.find_project(session, project_id, for_update=for_update)
+    if project is None or project.workspace_id != workspace_id:
+        return None
+    return GenerationProjectContext(
+        project_id=project.id,
+        episode_id=None,
+        workspace_id=workspace_id,
+        project_status=cast(Literal["active", "archived"], project.status),
+        episode_status=None,
+        budget_limit=project.budget_limit,
+        currency=project.currency,
+        project_revision=project.revision,
+        episode_revision=None,
     )
 
 
@@ -272,9 +296,7 @@ async def delete_preflight(
         workspace_id=project.workspace_id,
         episode_ids=episode_ids,
     )
-    storyboard_shot_count = sum(
-        summary.shot_count for summary in storyboard_references.values()
-    )
+    storyboard_shot_count = sum(summary.shot_count for summary in storyboard_references.values())
     storyboard_spec_version_count = sum(
         summary.spec_version_count for summary in storyboard_references.values()
     )
@@ -411,9 +433,7 @@ async def project_for_content_read(
     claims: AccessTokenClaims,
     project_id: UUID,
 ) -> ProjectContentContext:
-    project, _ = await owned_project(
-        session, claims, project_id, Capability.CONTENT_READ
-    )
+    project, _ = await owned_project(session, claims, project_id, Capability.CONTENT_READ)
     return _content_context(project)
 
 

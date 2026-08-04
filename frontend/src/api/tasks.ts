@@ -30,3 +30,25 @@ export async function getTaskApiV1TasksTaskIdGet(
     ...(options || {}),
   });
 }
+
+/** Cancel Generation Task POST /api/v1/tasks/${param0}/cancel */
+export async function cancelGenerationTaskApiV1TasksTaskIdCancelPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.cancelGenerationTaskApiV1TasksTaskIdCancelPostParams,
+  body: API.GenerationTaskCancellationRequest,
+  options?: RequestOptions
+) {
+  const { task_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseGenerationTaskCancellationResponse_>(
+    `/api/v1/tasks/${param0}/cancel`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}

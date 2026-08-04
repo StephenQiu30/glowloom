@@ -40,7 +40,10 @@ import {
   completeUploadApiV1MediaUploadsUploadSessionIdCompletePost,
   initializeUploadApiV1MediaUploadsPost,
   initializeVersionUploadApiV1MediaObjectsMediaObjectIdVersionsPost,
+  listMediaLocationsApiV1MediaVersionIdLocationsGet,
   listMediaApiV1MediaGet,
+  requestMediaLocationMigrationApiV1MediaVersionIdLocationMigrationsPost,
+  requestMediaLocationRollbackApiV1MediaVersionIdLocationRollbacksPost,
   restoreMediaApiV1MediaObjectsMediaObjectIdRestorePost,
   retryProbeApiV1MediaVersionIdProbeRetryPost,
   setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPost,
@@ -68,6 +71,10 @@ import {
   updateProjectApiV1ProjectsProjectIdPatch,
 } from "@/api/projects";
 import {
+  getCostsApiV1CostsGet,
+  listModelCapabilitiesApiV1ModelCapabilitiesGet,
+} from "@/api/production";
+import {
   archiveSourceApiV1ScriptSourcesSourceIdArchivePost,
   confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePost,
   decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPost,
@@ -85,6 +92,13 @@ import {
   setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost,
   startExtractionApiV1ScriptVersionsVersionIdExtractionsPost,
 } from "@/api/scripts";
+import {
+  configureScheduleApiV1SchedulesScheduleIdConfigurationPut,
+  listSchedulesApiV1SchedulesGet,
+  pauseScheduleApiV1SchedulesScheduleIdPausePost,
+  resumeScheduleApiV1SchedulesScheduleIdResumePost,
+  triggerScheduleApiV1SchedulesScheduleIdTriggerPost,
+} from "@/api/schedules";
 import {
   applyAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePost,
   appendSpecVersionApiV1ShotsShotIdSpecVersionsPost,
@@ -110,7 +124,10 @@ import {
   splitShotApiV1ShotsShotIdSplitPost,
   updateShotApiV1ShotsShotIdPatch,
 } from "@/api/storyboards";
-import { listTasksApiV1TasksGet } from "@/api/tasks";
+import {
+  cancelGenerationTaskApiV1TasksTaskIdCancelPost,
+  listTasksApiV1TasksGet,
+} from "@/api/tasks";
 import { ApiClientError } from "@/lib/api-request";
 
 export type AppApiError = {
@@ -166,6 +183,7 @@ export const appApi = createApi({
     "Consent",
     "AuditEvents",
     "Media",
+    "MediaLocations",
     "Assets",
     "Asset",
     "AssetVersions",
@@ -175,6 +193,9 @@ export const appApi = createApi({
     "ScriptVersions",
     "ScriptVersion",
     "Tasks",
+    "ModelCapabilities",
+    "Costs",
+    "Schedules",
     "ExtractionBatch",
     "ExtractionCandidates",
     "ConfirmedStructure",
@@ -526,6 +547,138 @@ export const appApi = createApi({
           }),
         ),
       providesTags: (_result, _error, workspaceId) => [
+        { type: "Tasks", id: workspaceId },
+      ],
+    }),
+    cancelGenerationTask: builder.mutation<
+      API.GenerationTaskCancellationResponse,
+      {
+        taskId: string;
+        projectId: string;
+        body: API.GenerationTaskCancellationRequest;
+      }
+    >({
+      queryFn: ({ taskId, body }) =>
+        runRequest(() =>
+          cancelGenerationTaskApiV1TasksTaskIdCancelPost(
+            { task_id: taskId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId, body }) => [
+        { type: "Tasks", id: body.workspace_id },
+        { type: "Costs", id: projectId },
+        { type: "AuditEvents", id: body.workspace_id },
+      ],
+    }),
+    modelCapabilities: builder.query<API.ModelCapabilityResponse[], string>({
+      queryFn: (workspaceId) =>
+        runRequest(() =>
+          listModelCapabilitiesApiV1ModelCapabilitiesGet({
+            workspace_id: workspaceId,
+            kind: null,
+            model: null,
+          }),
+        ),
+      providesTags: (_result, _error, workspaceId) => [
+        { type: "ModelCapabilities", id: workspaceId },
+      ],
+    }),
+    costs: builder.query<
+      API.CostQueryResponse,
+      { workspaceId: string; projectId: string }
+    >({
+      queryFn: ({ workspaceId, projectId }) =>
+        runRequest(() =>
+          getCostsApiV1CostsGet({
+            workspace_id: workspaceId,
+            project_id: projectId,
+            limit: 100,
+            offset: 0,
+          }),
+        ),
+      providesTags: (_result, _error, { projectId }) => [
+        { type: "Costs", id: projectId },
+      ],
+    }),
+    schedules: builder.query<API.PaginatedSchedules, string>({
+      queryFn: (workspaceId) =>
+        runRequest(() =>
+          listSchedulesApiV1SchedulesGet({
+            workspace_id: workspaceId,
+            status: null,
+            limit: 100,
+            offset: 0,
+          }),
+        ),
+      providesTags: (_result, _error, workspaceId) => [
+        { type: "Schedules", id: workspaceId },
+      ],
+    }),
+    configureSchedule: builder.mutation<
+      API.ScheduleResponse,
+      {
+        scheduleId: string;
+        workspaceId: string;
+        body: API.ScheduleConfigurationRequest;
+      }
+    >({
+      queryFn: ({ scheduleId, body }) =>
+        runRequest(() =>
+          configureScheduleApiV1SchedulesScheduleIdConfigurationPut(
+            { schedule_id: scheduleId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { workspaceId }) => [
+        { type: "Schedules", id: workspaceId },
+        { type: "AuditEvents", id: workspaceId },
+      ],
+    }),
+    pauseSchedule: builder.mutation<
+      API.ScheduleResponse,
+      { scheduleId: string; workspaceId: string; body: API.ScheduleStateRequest }
+    >({
+      queryFn: ({ scheduleId, body }) =>
+        runRequest(() =>
+          pauseScheduleApiV1SchedulesScheduleIdPausePost(
+            { schedule_id: scheduleId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { workspaceId }) => [
+        { type: "Schedules", id: workspaceId },
+      ],
+    }),
+    resumeSchedule: builder.mutation<
+      API.ScheduleResponse,
+      { scheduleId: string; workspaceId: string; body: API.ScheduleResumeRequest }
+    >({
+      queryFn: ({ scheduleId, body }) =>
+        runRequest(() =>
+          resumeScheduleApiV1SchedulesScheduleIdResumePost(
+            { schedule_id: scheduleId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { workspaceId }) => [
+        { type: "Schedules", id: workspaceId },
+        { type: "Tasks", id: workspaceId },
+      ],
+    }),
+    triggerSchedule: builder.mutation<
+      API.ScheduleFireResponse,
+      { scheduleId: string; workspaceId: string; body: API.ScheduleTriggerRequest }
+    >({
+      queryFn: ({ scheduleId, body }) =>
+        runRequest(() =>
+          triggerScheduleApiV1SchedulesScheduleIdTriggerPost(
+            { schedule_id: scheduleId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { workspaceId }) => [
+        { type: "Schedules", id: workspaceId },
         { type: "Tasks", id: workspaceId },
       ],
     }),
@@ -1091,6 +1244,59 @@ export const appApi = createApi({
         "AssetReadiness",
       ],
     }),
+    mediaLocations: builder.query<API.MediaLocationsResponse, string>({
+      queryFn: (versionId) =>
+        runRequest(() =>
+          listMediaLocationsApiV1MediaVersionIdLocationsGet({
+            version_id: versionId,
+          }),
+        ),
+      providesTags: (_result, _error, versionId) => [
+        { type: "MediaLocations", id: versionId },
+      ],
+    }),
+    requestMediaLocationMigration: builder.mutation<
+      API.TaskResponse,
+      {
+        versionId: string;
+        workspaceId: string;
+        body: API.MediaLocationMigrationRequest;
+      }
+    >({
+      queryFn: ({ versionId, body }) =>
+        runRequest(() =>
+          requestMediaLocationMigrationApiV1MediaVersionIdLocationMigrationsPost(
+            { version_id: versionId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { versionId, workspaceId }) => [
+        { type: "MediaLocations", id: versionId },
+        { type: "Tasks", id: workspaceId },
+        { type: "Schedules", id: workspaceId },
+      ],
+    }),
+    requestMediaLocationRollback: builder.mutation<
+      API.TaskResponse,
+      {
+        versionId: string;
+        workspaceId: string;
+        body: API.MediaLocationRollbackRequest;
+      }
+    >({
+      queryFn: ({ versionId, body }) =>
+        runRequest(() =>
+          requestMediaLocationRollbackApiV1MediaVersionIdLocationRollbacksPost(
+            { version_id: versionId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { versionId, workspaceId }) => [
+        { type: "MediaLocations", id: versionId },
+        { type: "Tasks", id: workspaceId },
+        { type: "Schedules", id: workspaceId },
+      ],
+    }),
     setCurrentMediaVersion: builder.mutation<
       API.MediaObjectResponse,
       {
@@ -1459,6 +1665,7 @@ export const appApi = createApi({
 
 export const {
   useApplyAssetUpgradeMutation,
+  useCancelGenerationTaskMutation,
   useAppendAssetVersionMutation,
   useAppendShotSpecMutation,
   useAuditEventsQuery,
@@ -1472,6 +1679,7 @@ export const {
   useChangePasswordMutation,
   useCompleteMediaUploadMutation,
   useConfirmStructureMutation,
+  useConfigureScheduleMutation,
   useConfirmedStructureQuery,
   useConsentQuery,
   useConsentsQuery,
@@ -1505,13 +1713,18 @@ export const {
   useMergeShotsMutation,
   useMergeShotsPreflightMutation,
   useMediaVersionsQuery,
+  useMediaLocationsQuery,
   useProjectQuery,
   useProjectDeletePreflightMutation,
   useProjectSnapshotQuery,
   useProjectsQuery,
   usePublishScriptVersionMutation,
+  usePauseScheduleMutation,
   useRegisterMutation,
   useRetryMediaProbeMutation,
+  useRequestMediaLocationMigrationMutation,
+  useRequestMediaLocationRollbackMutation,
+  useResumeScheduleMutation,
   useReviseConsentMutation,
   useRevokeConsentMutation,
   useReorderEpisodesMutation,
@@ -1548,4 +1761,8 @@ export const {
   useSplitShotMutation,
   useSplitShotPreflightMutation,
   useTasksQuery,
+  useModelCapabilitiesQuery,
+  useCostsQuery,
+  useSchedulesQuery,
+  useTriggerScheduleMutation,
 } = appApi;

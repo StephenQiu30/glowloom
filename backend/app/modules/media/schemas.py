@@ -133,3 +133,30 @@ class ProbeRetryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     idempotency_key: str = Field(min_length=1, max_length=120)
+
+
+class MediaLocationMigrationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class MediaLocationRollbackRequest(MediaLocationMigrationRequest):
+    target_location_id: UUID
+
+
+class MediaLocationResponse(BaseModel):
+    id: UUID
+    media_version_id: UUID
+    status: Literal[
+        "verified", "active", "retiring", "retired", "quarantined"
+    ]
+    rollback_available: bool
+    verified_at: datetime | None
+    retire_after: datetime | None
+    retired_at: datetime | None
+    created_at: datetime
+
+
+class MediaLocationsResponse(BaseModel):
+    items: list[MediaLocationResponse]

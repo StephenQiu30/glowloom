@@ -31,6 +31,28 @@ async def find_idempotent_upload(
     )
 
 
+async def lock_expired_pending_uploads(
+    session: AsyncSession,
+    workspace_id: UUID,
+    *,
+    now: datetime,
+    limit: int,
+) -> list[UploadSession]:
+    rows = await session.scalars(
+        select(UploadSession)
+        .where(
+            UploadSession.workspace_id == workspace_id,
+            UploadSession.status == "pending",
+            UploadSession.expires_at <= now,
+            UploadSession.completed_version_id.is_(None),
+        )
+        .order_by(UploadSession.expires_at, UploadSession.id)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    return list(rows)
+
+
 async def find_media_object(
     session: AsyncSession,
     media_object_id: UUID,
@@ -89,14 +111,54 @@ async def find_media_versions_with_active_locations(
 
 
 async def find_active_location(
-    session: AsyncSession, version_id: UUID
+    session: AsyncSession,
+    version_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> MediaLocation | None:
-    return await session.scalar(
-        select(MediaLocation).where(
-            MediaLocation.media_version_id == version_id,
-            MediaLocation.status == "active",
-        )
+    query = select(MediaLocation).where(
+        MediaLocation.media_version_id == version_id,
+        MediaLocation.status == "active",
     )
+    if for_update:
+        query = query.with_for_update()
+    return await session.scalar(query)
+
+
+async def find_media_location(
+    session: AsyncSession,
+    location_id: UUID,
+    *,
+    for_update: bool = False,
+) -> MediaLocation | None:
+    query = select(MediaLocation).where(MediaLocation.id == location_id)
+    if for_update:
+        query = query.with_for_update()
+    return await session.scalar(query)
+
+
+async def find_location_by_migration_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    for_update: bool = False,
+) -> MediaLocation | None:
+    query = select(MediaLocation).where(MediaLocation.migration_task_id == task_id)
+    if for_update:
+        query = query.with_for_update()
+    return await session.scalar(query)
+
+
+async def list_media_locations(
+    session: AsyncSession,
+    version_id: UUID,
+) -> list[MediaLocation]:
+    rows = await session.scalars(
+        select(MediaLocation)
+        .where(MediaLocation.media_version_id == version_id)
+        .order_by(MediaLocation.created_at.desc(), MediaLocation.id.desc())
+    )
+    return list(rows)
 
 
 async def list_media_versions(

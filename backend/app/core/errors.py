@@ -14,6 +14,7 @@ class ErrorCode(StrEnum):
     RESOURCE_CONFLICT = "resource_conflict"
     VERSION_CONFLICT = "version_conflict"
     STATE_CONFLICT = "state_conflict"
+    QUOTA_INSUFFICIENT = "quota_insufficient"
     DEPENDENCY_UNAVAILABLE = "dependency_unavailable"
     INTERNAL_ERROR = "internal_error"
 

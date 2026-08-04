@@ -33,6 +33,8 @@ class ShotAssetReferenceSnapshot:
 class ShotProductionSnapshot:
     spec_ref: ShotSpecRef
     shot_status: Literal["active", "archived"]
+    current_spec_version_id: UUID | None
+    shot_revision: int
     spec: dict[str, Any]
     asset_references: tuple[ShotAssetReferenceSnapshot, ...]
     readiness_status: Literal["ready", "blocked", "unavailable"]

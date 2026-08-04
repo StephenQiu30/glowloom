@@ -12,15 +12,17 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import RequestContextMiddleware, configure_logging
 from app.core.observability import MetricsMiddleware, metrics_response
 from app.core.schemas import DependencyStatus, HealthResponse, ReadinessResponse
+from app.core.telemetry import configure_telemetry
 from app.integrations.minio import MinioObjectStorage
 from app.integrations.rabbitmq import rabbitmq_ping
-from app.integrations.redis import redis_ping
+from app.integrations.redis import RedisCache, redis_ping
 from app.modules.assets.api import router as assets_router
 from app.modules.governance.api import router as governance_router
 from app.modules.identity.api import router as identity_router
 from app.modules.media.api import router as media_router
 from app.modules.production.api import router as production_router
 from app.modules.projects.api import router as projects_router
+from app.modules.scheduling.api import router as scheduling_router
 from app.modules.scripts.api import router as scripts_router
 from app.modules.storyboards.api import router as storyboards_router
 
@@ -28,15 +30,32 @@ Check = Callable[[], Awaitable[None]]
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    configure_logging(get_settings().log_level)
-    yield
+async def lifespan(app: FastAPI):
+    configure_logging(
+        app.state.settings.log_level,
+        environment=app.state.settings.environment,
+    )
+    try:
+        yield
+    finally:
+        await app.state.cache_port.close()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     active = settings or get_settings()
+    configure_telemetry(
+        service_name="lanverse-api",
+        environment=active.environment,
+    )
     app = FastAPI(title=active.app_name, version="0.1.0", lifespan=lifespan)
     app.state.settings = active
+    redis = RedisCache(
+        active.redis_url,
+        environment=active.environment,
+        socket_timeout_seconds=min(active.infrastructure_timeout_seconds, 0.25),
+    )
+    app.state.cache_port = redis
+    app.state.high_cost_guard = redis
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
@@ -54,6 +73,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(projects_router)
     app.include_router(production_router)
     app.include_router(scripts_router)
+    app.include_router(scheduling_router)
     app.include_router(storyboards_router)
 
     @app.get("/healthz", response_model=HealthResponse, tags=["system"])
@@ -77,6 +97,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             active.minio_bucket,
             secure=active.minio_secure,
             thread_limit=active.storage_thread_limit,
+            operation_timeout_seconds=active.storage_operation_timeout_seconds,
         )
         checks: dict[str, tuple[bool, Check]] = {
             "postgresql": (True, database_ping),

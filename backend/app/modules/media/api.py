@@ -13,8 +13,8 @@ from app.core.auth import (
 from app.core.config import Settings
 from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
+from app.integrations.dependencies import get_media_storage
 from app.modules.media import service
-from app.modules.media.dependencies import get_media_storage
 from app.modules.media.schemas import (
     AppendVersionRequest,
     ArchiveMediaRequest,
@@ -22,6 +22,9 @@ from app.modules.media.schemas import (
     MediaAccessRequest,
     MediaAccessResponse,
     MediaKind,
+    MediaLocationMigrationRequest,
+    MediaLocationRollbackRequest,
+    MediaLocationsResponse,
     MediaObjectResponse,
     MediaSource,
     MediaVersionResponse,
@@ -139,6 +142,66 @@ async def get_media(
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[MediaVersionResponse]:
     return ApiResponse(data=await service.get_media(session, claims, version_id))
+
+
+@router.get(
+    "/media/{version_id}/locations",
+    response_model=ApiResponse[MediaLocationsResponse],
+)
+async def list_media_locations(
+    version_id: UUID,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[MediaLocationsResponse]:
+    return ApiResponse(
+        data=await service.list_media_locations(session, claims, version_id)
+    )
+
+
+@router.post(
+    "/media/{version_id}/location-migrations",
+    response_model=ApiResponse[TaskResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def request_media_location_migration(
+    version_id: UUID,
+    payload: MediaLocationMigrationRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[TaskResponse]:
+    return ApiResponse(
+        data=await service.request_media_location_migration(
+            session,
+            claims,
+            version_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
+
+
+@router.post(
+    "/media/{version_id}/location-rollbacks",
+    response_model=ApiResponse[TaskResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def request_media_location_rollback(
+    version_id: UUID,
+    payload: MediaLocationRollbackRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[TaskResponse]:
+    return ApiResponse(
+        data=await service.request_media_location_rollback(
+            session,
+            claims,
+            version_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
 
 
 @router.post(

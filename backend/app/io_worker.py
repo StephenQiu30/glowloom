@@ -1,12 +1,22 @@
 import asyncio
+import logging
+import time
 from typing import Literal, Protocol
 
 import aio_pika
+from opentelemetry.trace import SpanKind, Status, StatusCode
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.database import session_factory
+from app.core.logging import configure_logging, log_event
+from app.core.telemetry import (
+    configure_telemetry,
+    span_identifiers,
+    start_span,
+    traceparent_from_headers,
+)
 from app.integrations.deepseek import DeepSeekScriptStructureExtractor
 from app.integrations.rabbitmq import declare_task_topology
 from app.model_registry import register_implemented_models
@@ -19,6 +29,10 @@ from app.modules.messaging.consumer import (
     finalize_extraction_success,
     prepare_configured_extraction,
 )
+from app.modules.messaging.metrics import (
+    message_event_type_label,
+    observe_message_result,
+)
 from app.modules.scripts import (
     ScriptExtractionProviderError,
     ScriptExtractionResult,
@@ -28,6 +42,8 @@ from app.modules.scripts import (
 IO_WORKER_MAX_IN_FLIGHT = 4
 MAX_MESSAGE_BYTES = 64 * 1024
 WorkerResult = Literal["completed", "duplicate", "rejected", "requeued"]
+QUEUE_NAME = "lanverse.io"
+LOGGER = logging.getLogger("lanverse.worker")
 
 
 class IncomingMessage(Protocol):
@@ -44,14 +60,113 @@ async def process_incoming_message(
     *,
     extractor: ScriptStructureExtractor | None = None,
 ) -> WorkerResult:
+    started = time.perf_counter()
     if len(message.body) > MAX_MESSAGE_BYTES:
         await message.ack()
+        _observe_invalid_message(started, error_type="MessageTooLarge")
         return "rejected"
     try:
         envelope = MessageEnvelope.model_validate_json(message.body)
     except ValidationError:
         await message.ack()
+        _observe_invalid_message(started, error_type="MessageValidationError")
         return "rejected"
+
+    event_type_label = message_event_type_label(envelope.event_type)
+    parent_traceparent = (
+        traceparent_from_headers(getattr(message, "headers", None)) or envelope.traceparent
+    )
+    with start_span(
+        "messaging.message.consume",
+        kind=SpanKind.CONSUMER,
+        parent_traceparent=parent_traceparent,
+        attributes={
+            "messaging.system": "rabbitmq",
+            "messaging.operation": "process",
+            "messaging.event.type": event_type_label,
+            "messaging.destination.name": QUEUE_NAME,
+        },
+    ) as span:
+        result = await _process_valid_envelope(
+            message,
+            envelope,
+            factory,
+            extractor=extractor,
+        )
+        span.set_attribute("messaging.operation.result", result)
+        if result == "requeued":
+            span.set_status(Status(StatusCode.ERROR))
+        duration_seconds = time.perf_counter() - started
+        trace_id, span_id = span_identifiers(span)
+        observe_message_result(
+            queue=QUEUE_NAME,
+            event_type=envelope.event_type,
+            result=result,
+            duration_seconds=duration_seconds,
+        )
+        failed = result in {"rejected", "requeued"}
+        common_attributes: dict[str, object] = {
+            "request_id": envelope.trace_id,
+            "trace_id": trace_id,
+            "span_id": span_id,
+            "event_id": str(envelope.event_id),
+            "event_type": event_type_label,
+            "queue": QUEUE_NAME,
+            "result": result,
+            "duration_ms": round(duration_seconds * 1000, 2),
+        }
+        if failed:
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "message.consume.failed",
+                "message consume failed",
+                **common_attributes,
+                retryable=result == "requeued",
+                error_type=(
+                    "MessageProcessingError" if result == "requeued" else "MessageRejected"
+                ),
+            )
+        else:
+            log_event(
+                LOGGER,
+                logging.INFO,
+                "message.consume.completed",
+                "message consume completed",
+                **common_attributes,
+            )
+        return result
+
+
+def _observe_invalid_message(started: float, *, error_type: str) -> None:
+    duration_seconds = time.perf_counter() - started
+    observe_message_result(
+        queue=QUEUE_NAME,
+        event_type="invalid",
+        result="rejected",
+        duration_seconds=duration_seconds,
+    )
+    log_event(
+        LOGGER,
+        logging.WARNING,
+        "message.consume.failed",
+        "message consume rejected",
+        event_type="invalid",
+        queue=QUEUE_NAME,
+        result="rejected",
+        duration_ms=round(duration_seconds * 1000, 2),
+        retryable=False,
+        error_type=error_type,
+    )
+
+
+async def _process_valid_envelope(
+    message: IncomingMessage,
+    envelope: MessageEnvelope,
+    factory: async_sessionmaker[AsyncSession],
+    *,
+    extractor: ScriptStructureExtractor | None,
+) -> WorkerResult:
 
     if extractor is None:
         try:
@@ -87,9 +202,7 @@ async def process_incoming_message(
 
     extraction_result: ScriptExtractionResult | None = None
     try:
-        extraction_result = await extractor.extract(
-            prepared.extraction_input.body
-        )
+        extraction_result = await extractor.extract(prepared.extraction_input.body)
     except ScriptExtractionProviderError as error:
         provider_error = error
     except Exception:
@@ -129,6 +242,15 @@ async def process_incoming_message(
 
 
 async def run_io_worker(settings: Settings) -> None:
+    configure_logging(
+        settings.log_level,
+        service="lanverse-io-worker",
+        environment=settings.environment,
+    )
+    configure_telemetry(
+        service_name="lanverse-io-worker",
+        environment=settings.environment,
+    )
     register_implemented_models()
     extractor = (
         DeepSeekScriptStructureExtractor(settings.deepseek_api_key)
