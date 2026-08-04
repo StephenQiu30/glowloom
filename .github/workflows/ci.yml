@@ -33,6 +33,15 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 12
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -60,6 +69,8 @@ jobs:
           OPENAPI_SCHEMA_URL=http://127.0.0.1:8000/openapi.json make generate-api
           git diff --exit-code -- frontend/src/api
       - run: make check
+      - name: Run the real Redis cache contract
+        run: make contract-redis
       - name: Start MinIO contract service
         run: |
           docker run --rm --detach --name lanverse-ci-minio \
@@ -92,6 +103,10 @@ jobs:
         run: docker rm --force lanverse-ci-minio || true
       - name: Run RabbitMQ publisher and worker contracts
         run: make contract-rabbitmq
+        env:
+          RABBITMQ_CONTRACT_URL: amqp://guest:guest@127.0.0.1:5672/lanverse_contract
+      - name: Run scheduler recovery stack contract
+        run: make contract-scheduler-stack
         env:
           RABBITMQ_CONTRACT_URL: amqp://guest:guest@127.0.0.1:5672/lanverse_contract
       - name: Install Playwright Chromium

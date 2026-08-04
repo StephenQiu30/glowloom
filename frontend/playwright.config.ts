@@ -17,9 +17,9 @@ if (runDeepSeekE2E && !deepSeekApiKey) {
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testIgnore: runDeepSeekE2E ? [] : ["**/s2-deepseek-provider.spec.ts"],
+  testIgnore: runDeepSeekE2E ? [] : ["**/deepseek-script-to-storyboard.spec.ts"],
   testMatch: runDeepSeekE2E
-    ? ["**/s2-deepseek-provider.spec.ts"]
+    ? ["**/deepseek-script-to-storyboard.spec.ts"]
     : ["**/*.spec.ts"],
   fullyParallel: false,
   workers: 1,

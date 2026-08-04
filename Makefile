@@ -2,11 +2,12 @@ SHELL := /bin/sh
 PYTHON ?= python3.11
 VENV_PYTHON := backend/.venv/bin/python
 MINIO_API_PORT ?= 9000
+MINIO_REUSE_EXTERNAL ?= 0
 PROD_ENV_FILE ?= .env.production
 PROD_COMPOSE := docker compose --env-file $(PROD_ENV_FILE) -f docker-compose.yml -f docker-compose.prod.yml
 PROD_EXAMPLE_COMPOSE := docker compose --env-file .env.production.example -f docker-compose.yml -f docker-compose.prod.yml
 
-.PHONY: setup lock-backend dev-api dev-frontend scheduler worker-io worker-media db-init generate-api lint typecheck test hygiene check docker-build docker-dev-up docker-dev-down docker-dev-logs docker-prod-up docker-prod-down docker-prod-logs minio-up minio-down contract-minio contract-rabbitmq contract-ffprobe contract-media-stack contract-deepseek e2e-install e2e
+.PHONY: setup lock-backend dev-api dev-frontend scheduler worker-io worker-media db-init cache-invalidate generate-api lint typecheck test hygiene check docker-build docker-dev-up docker-dev-down docker-dev-logs docker-prod-up docker-prod-down docker-prod-logs minio-up minio-down contract-minio contract-redis contract-rabbitmq contract-ffprobe contract-media-stack contract-scheduler-stack contract-deepseek e2e-install e2e
 
 $(VENV_PYTHON):
 	@$(PYTHON) --version | grep -q 'Python 3.11.15'
@@ -45,6 +46,10 @@ worker-media:
 
 db-init:
 	cd backend && .venv/bin/python -m app.initialize_database
+
+CACHE_NAMESPACE ?= workspace_detail
+cache-invalidate:
+	cd backend && .venv/bin/python -m app.cache_admin $(CACHE_NAMESPACE)
 
 generate-api:
 	cd frontend && npm run openapi2ts
@@ -98,7 +103,14 @@ minio-up:
 	if [ -n "$$running_id" ] && curl --fail --silent http://127.0.0.1:$(MINIO_API_PORT)/minio/health/live >/dev/null 2>&1; then \
 		echo "Lanverse MinIO is already available at 127.0.0.1:$(MINIO_API_PORT)"; \
 	elif [ -z "$$running_id" ] && curl --fail --silent http://127.0.0.1:$(MINIO_API_PORT)/minio/health/live >/dev/null 2>&1; then \
-		echo "Port $(MINIO_API_PORT) is occupied by a MinIO outside this Compose project" >&2; \
+		if [ "$(MINIO_REUSE_EXTERNAL)" = "1" ]; then \
+			echo "Explicitly reusing external MinIO at 127.0.0.1:$(MINIO_API_PORT)"; \
+		else \
+			echo "Port $(MINIO_API_PORT) is occupied by a MinIO outside this Compose project" >&2; \
+			exit 1; \
+		fi; \
+	elif [ -z "$$running_id" ] && [ "$(MINIO_REUSE_EXTERNAL)" = "1" ]; then \
+		echo "Requested external MinIO is not available at 127.0.0.1:$(MINIO_API_PORT)" >&2; \
 		exit 1; \
 	else \
 		docker compose up -d --wait minio; \
@@ -110,6 +122,9 @@ minio-down:
 contract-minio:
 	cd backend && LANVERSE_RUN_MINIO_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_minio_port.py tests/contract/test_media_minio_flow.py
 
+contract-redis:
+	cd backend && LANVERSE_RUN_REDIS_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_redis_cache.py tests/contract/test_generation_high_cost_guard.py
+
 contract-rabbitmq:
 	cd backend && LANVERSE_RUN_RABBITMQ_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_rabbitmq_publisher.py tests/contract/test_rabbitmq_worker.py
 
@@ -119,9 +134,11 @@ contract-ffprobe:
 contract-media-stack:
 	cd backend && LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_media_stack.py
 
+contract-scheduler-stack:
+	cd backend && LANVERSE_RUN_SCHEDULER_STACK_CONTRACT=1 .venv/bin/python -m pytest tests/contract/test_scheduler_recovery_stack.py
+
 contract-deepseek:
-	@test -n "$${DEEPSEEK_API_KEY:-}" || (echo 'DEEPSEEK_API_KEY is required for the real DeepSeek E2E contract' >&2; exit 1)
-	cd frontend && LANVERSE_RUN_DEEPSEEK_E2E=1 npx playwright test
+	cd frontend && LANVERSE_RUN_DEEPSEEK_E2E=1 node --env-file-if-exists=../.env node_modules/@playwright/test/cli.js test
 
 e2e-install:
 	cd frontend && npx playwright install chromium
