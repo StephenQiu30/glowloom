@@ -862,6 +862,10 @@ export function EpisodeProductionStudio({
           expected_revision: shot.revision,
         },
       }).unwrap();
+      await Promise.all([
+        shotOrderQuery.refetch(),
+        shotSpecVersionsQuery.refetch(),
+      ]);
       return `镜头“${shot.title}”已切换到规格 v${version.version_no}。`;
     });
   }
