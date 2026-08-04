@@ -115,4 +115,69 @@ describe("MediaWorkspace", () => {
     await user.click(screen.getByRole("button", { name: "恢复媒体" }));
     expect(onToggleArchived).toHaveBeenCalledWith(archived);
   });
+
+  it("shows safe location states and submits migration or rollback", async () => {
+    const user = userEvent.setup();
+    const version = mediaVersion(secondVersionId, 2);
+    const activeLocationId = "019fb3c0-a000-7000-8000-000000000005";
+    const retiringLocationId = "019fb3c0-a000-7000-8000-000000000006";
+    const onOpenLocations = vi.fn();
+    const onLocationMigration = vi.fn().mockResolvedValue(undefined);
+    const onLocationRollback = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <MediaWorkspace
+        busy={false}
+        locationBusy={false}
+        locationVersionId={version.id}
+        locations={[
+          {
+            id: activeLocationId,
+            media_version_id: version.id,
+            status: "active",
+            rollback_available: false,
+            verified_at: "2026-08-04T10:00:00Z",
+            retire_after: null,
+            retired_at: null,
+            created_at: "2026-08-04T10:00:00Z",
+          },
+          {
+            id: retiringLocationId,
+            media_version_id: version.id,
+            status: "retiring",
+            rollback_available: true,
+            verified_at: "2026-08-03T10:00:00Z",
+            retire_after: "2026-08-05T10:00:00Z",
+            retired_at: null,
+            created_at: "2026-08-03T10:00:00Z",
+          },
+        ]}
+        media={[version]}
+        onAppendVersion={vi.fn()}
+        onCloseLocations={vi.fn()}
+        onLocationMigration={onLocationMigration}
+        onLocationRollback={onLocationRollback}
+        onOpenLocations={onOpenLocations}
+        onRetry={vi.fn()}
+        onSetCurrent={vi.fn()}
+        onToggleArchived={vi.fn()}
+        onUpload={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("dialog", { name: "存储位置治理" })).toBeInTheDocument();
+    expect(screen.getByText("当前读取")).toBeInTheDocument();
+    expect(screen.getByText("回滚保护中")).toBeInTheDocument();
+    expect(screen.queryByText(/bucket|object_key/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "迁移当前版本" }));
+    expect(onLocationMigration).toHaveBeenCalledWith(version, activeLocationId);
+
+    await user.click(screen.getByRole("button", { name: "回滚到此位置" }));
+    expect(onLocationRollback).toHaveBeenCalledWith(
+      version,
+      retiringLocationId,
+      activeLocationId,
+    );
+  });
 });

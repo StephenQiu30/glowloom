@@ -523,18 +523,19 @@ async def _request_profile_pair(
     *,
     episode_id: str,
     headers: dict[str, str],
-    request_prefix: str,
     expected_count: int,
-) -> None:
+) -> tuple[str, str]:
+    list_request_id = str(uuid7())
+    readiness_request_id = str(uuid7())
     listed = await client.get(
         f"/api/v1/episodes/{episode_id}/shots",
-        headers={**headers, "x-request-id": f"{request_prefix}-list"},
+        headers={**headers, "x-request-id": list_request_id},
     )
     assert listed.status_code == 200, listed.text
     assert len(listed.json()["data"]["items"]) == expected_count
     readiness = await client.get(
         f"/api/v1/episodes/{episode_id}/shot-readiness",
-        headers={**headers, "x-request-id": f"{request_prefix}-readiness"},
+        headers={**headers, "x-request-id": readiness_request_id},
     )
     assert readiness.status_code == 200, readiness.text
     summary = readiness.json()["data"]["summary"]
@@ -544,6 +545,7 @@ async def _request_profile_pair(
         "blocked": 0,
         "unavailable": 0,
     }
+    return list_request_id, readiness_request_id
 
 
 async def _exercise_reorder(
@@ -555,21 +557,21 @@ async def _exercise_reorder(
     initial = _data(
         await client.get(
             f"/api/v1/episodes/{episode_id}/shots",
-            headers={**headers, "x-request-id": "perf-reorder-initial"},
+            headers={**headers, "x-request-id": str(uuid7())},
         ),
         expected_status=200,
     )
     shot_ids = [item["id"] for item in initial["items"]]
     order_hash = initial["order_hash"]
     assert len(shot_ids) == 120
-    for iteration in range(30):
+    for _ in range(30):
         shot_ids = [*shot_ids[1:], shot_ids[0]]
         reordered = _data(
             await client.post(
                 f"/api/v1/episodes/{episode_id}/shots/reorder",
                 headers={
                     **headers,
-                    "x-request-id": f"perf-reorder-{iteration:02d}",
+                    "x-request-id": str(uuid7()),
                 },
                 json={
                     "shot_ids": shot_ids,
@@ -626,10 +628,7 @@ async def test_fixed_storyboard_performance_profile(
         "DEEPSEEK_API_KEY": "",
         "LOG_LEVEL": "INFO",
     }
-    sample_prefixes = {
-        shot_count: [f"perf-{shot_count}-sample-{index:02d}" for index in range(50)]
-        for shot_count in (36, 120)
-    }
+    sample_request_ids: dict[int, list[tuple[str, str]]] = {36: [], 120: []}
 
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as server_log:
         process = await asyncio.create_subprocess_exec(
@@ -665,26 +664,25 @@ async def test_fixed_storyboard_performance_profile(
                     client,
                     episode_id=episode_12,
                     headers=headers_12,
-                    request_prefix="perf-12-smoke",
                     expected_count=12,
                 )
                 for shot_count in (36, 120):
                     headers, episode_id = episodes[shot_count]
-                    for index in range(10):
+                    for _ in range(10):
                         await _request_profile_pair(
                             client,
                             episode_id=episode_id,
                             headers=headers,
-                            request_prefix=f"perf-{shot_count}-warmup-{index:02d}",
                             expected_count=shot_count,
                         )
-                    for request_prefix in sample_prefixes[shot_count]:
-                        await _request_profile_pair(
-                            client,
-                            episode_id=episode_id,
-                            headers=headers,
-                            request_prefix=request_prefix,
-                            expected_count=shot_count,
+                    for _ in range(50):
+                        sample_request_ids[shot_count].append(
+                            await _request_profile_pair(
+                                client,
+                                episode_id=episode_id,
+                                headers=headers,
+                                expected_count=shot_count,
+                            )
                         )
                 headers_120, episode_120 = episodes[120]
                 await _exercise_reorder(
@@ -703,10 +701,10 @@ async def test_fixed_storyboard_performance_profile(
         durations = _server_durations(server_log.read())
 
     p95_results: dict[int, float] = {}
-    for shot_count, prefixes in sample_prefixes.items():
+    for shot_count, request_ids in sample_request_ids.items():
         combined_samples = [
-            durations[f"{prefix}-list"] + durations[f"{prefix}-readiness"]
-            for prefix in prefixes
+            durations[list_request_id] + durations[readiness_request_id]
+            for list_request_id, readiness_request_id in request_ids
         ]
         p95_results[shot_count] = _percentile_95(combined_samples)
 

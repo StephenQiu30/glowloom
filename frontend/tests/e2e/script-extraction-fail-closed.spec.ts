@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("S2 导入发布剧本并在 DeepSeek 未配置时可恢复地失败", async ({ page }) => {
+test("导入发布剧本并在 DeepSeek 未配置时可恢复地失败", async ({ page }) => {
   test.setTimeout(60_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `S2-剧本契约-${unique}`;

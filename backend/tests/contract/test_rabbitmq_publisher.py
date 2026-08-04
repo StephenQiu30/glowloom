@@ -27,6 +27,7 @@ async def test_rabbitmq_publishes_confirmed_persistent_versioned_envelope() -> N
         workspace_id=uuid7(),
         occurred_at=datetime.now(UTC),
         trace_id="rabbitmq-contract-trace",
+        traceparent="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
         causation_event_id=None,
         payload={"task_id": str(task_id)},
     )
@@ -56,6 +57,7 @@ async def test_rabbitmq_publishes_confirmed_persistent_versioned_envelope() -> N
         assert matched.content_type == "application/json"
         assert matched.type == envelope.event_type
         assert matched.correlation_id == envelope.trace_id
+        assert matched.headers["traceparent"] == envelope.traceparent
         assert MessageEnvelope.model_validate_json(matched.body) == envelope
         await matched.ack()
         await channel.close()

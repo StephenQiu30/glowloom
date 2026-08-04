@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("S1 创作者管理项目和单集完整生命周期", async ({ page }) => {
+test("创作者管理项目和单集完整生命周期", async ({ page }) => {
   test.setTimeout(60_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const email = `project-lifecycle-${unique}@example.com`;

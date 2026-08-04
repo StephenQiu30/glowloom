@@ -9,7 +9,7 @@ import {
   type AssetFixture,
 } from "./asset-support";
 
-test("S2 媒体、三类资产与授权准备度联合闭环", async ({ page }) => {
+test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => {
   test.setTimeout(120_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `S2-资产契约-${unique}`;
@@ -81,6 +81,34 @@ test("S2 媒体、三类资产与授权准备度联合闭环", async ({ page }) 
     `${characterMediaName} 已设为当前媒体版本`,
   );
   await expect(versionedCharacterMedia.getByText("当前版本 v1")).toBeVisible();
+
+  await versionedCharacterMedia
+    .getByRole("button", { name: "管理媒体版本 v1 的存储位置" })
+    .click();
+  const locationDialog = page.getByRole("dialog", { name: "存储位置治理" });
+  await expect(locationDialog.getByText("当前读取", { exact: true })).toBeVisible();
+  await locationDialog.getByRole("button", { name: "迁移当前版本" }).click();
+  await expect(page.locator('[role="status"]')).toContainText(
+    "位置迁移任务已创建",
+  );
+  await expect
+    .poll(async () => locationDialog.textContent(), { timeout: 20_000 })
+    .toContain("回滚保护中");
+  await locationDialog.getByRole("button", { name: "回滚到此位置" }).click();
+  await expect(page.locator('[role="status"]')).toContainText(
+    "位置回滚任务已创建",
+  );
+  await expect(
+    locationDialog.getByText("位置 2", { exact: true }).locator(".."),
+  ).toContainText("当前读取", { timeout: 20_000 });
+  await locationDialog.getByRole("button", { name: "迁移当前版本" }).click();
+  await expect(page.locator('[role="status"]')).toContainText(
+    "位置迁移任务已创建",
+  );
+  await expect(
+    locationDialog.getByText(/^\u4f4d\u7f6e \d+$/),
+  ).toHaveCount(3, { timeout: 20_000 });
+  await locationDialog.getByRole("button", { name: "关闭" }).first().click();
 
   await versionedCharacterMedia
     .getByRole("button", { name: "归档媒体" })

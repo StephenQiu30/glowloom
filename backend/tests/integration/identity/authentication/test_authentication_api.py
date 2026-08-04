@@ -4,6 +4,7 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from uuid6 import uuid7
 
 from app.modules.governance.audit.models import AuditEvent
 from app.modules.identity.models import Membership, UserAccount, Workspace
@@ -66,7 +67,7 @@ async def test_login_does_not_reveal_whether_an_account_exists(
     client: httpx.AsyncClient,
 ) -> None:
     registered = await register_identity_response(client)
-    headers = {"x-request-id": "same-request"}
+    headers = {"x-request-id": str(uuid7())}
     wrong_password = await client.post(
         "/api/v1/auth/login",
         headers=headers,

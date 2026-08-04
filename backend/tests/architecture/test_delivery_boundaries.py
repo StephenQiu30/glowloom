@@ -44,7 +44,14 @@ def test_task_and_message_delivery_remain_current_flat_lifecycles() -> None:
     assert not (production / "tasks").exists()
     assert not (messaging / "outbox").exists()
     assert not (messaging / "inbox").exists()
-    assert _model_classes("production") == {"Task"}
+    assert _model_classes("production") == {
+        "CostEntry",
+        "GenerationRequest",
+        "GenerationRequestAsset",
+        "ModelCapability",
+        "Reservation",
+        "Task",
+    }
     assert _model_classes("messaging") == {"InboxDelivery", "OutboxEvent"}
 
 

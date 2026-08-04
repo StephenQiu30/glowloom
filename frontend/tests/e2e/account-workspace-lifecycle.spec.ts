@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("S1 用户管理资料、工作空间和账户凭据", async ({ page }) => {
+test("用户管理资料、工作空间和账户凭据", async ({ page }) => {
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const email = `workspace-${unique}@example.com`;
   const firstPassword = "playwright-secure-password";

@@ -11,9 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.integrations.minio import MinioObjectStorage
 from app.modules.media.models import MediaObject, MediaVersion, UploadSession
-from app.modules.media.storage import StorageObjectNotFound, StorageUnavailable
+from app.modules.media.storage import (
+    StorageObjectMetadata,
+    StorageObjectNotFound,
+    StorageUnavailable,
+)
 from app.modules.messaging.models import OutboxEvent
 from app.modules.production.models import Task
+from app.modules.scheduling.models import Schedule
 from tests.support.identity_builders import register_identity_response
 
 
@@ -51,11 +56,15 @@ def stored_objects(monkeypatch: pytest.MonkeyPatch) -> StoredObjects:
 
     async def stat_object(
         _: MinioObjectStorage, object_key: str
-    ) -> tuple[int, str | None]:
+    ) -> StorageObjectMetadata:
         stored = state.objects.get(object_key)
         if stored is None:
             raise StorageObjectNotFound("object not found")
-        return len(stored[0]), stored[1]
+        return StorageObjectMetadata(
+            size_bytes=len(stored[0]),
+            content_type=stored[1],
+            etag="memory-etag",
+        )
 
     def stream_object(
         _: MinioObjectStorage, object_key: str
@@ -194,6 +203,12 @@ async def test_direct_upload_completion_is_atomic_idempotent_and_privately_acces
         assert await session.scalar(select(func.count()).select_from(MediaVersion)) == 1
         assert await session.scalar(select(func.count()).select_from(Task)) == 1
         assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+        schedule = await session.scalar(
+            select(Schedule).where(Schedule.handler_name == "expire_upload_session")
+        )
+        assert schedule is not None
+        assert schedule.status == "completed"
+        assert schedule.next_fire_at is None
         event = await session.scalar(select(OutboxEvent))
         assert event is not None
         assert event.event_type == "media_probe.requested"
@@ -231,6 +246,98 @@ async def test_direct_upload_completion_is_atomic_idempotent_and_privately_acces
             json={"purpose": "download"},
         )
     ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_owner_submits_idempotent_location_migration_and_reads_safe_status(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    stored_objects: StoredObjects,
+) -> None:
+    content = b"media-location-api-bytes"
+    headers, workspace_id = await _identity(
+        client, email="media-location-owner@example.com"
+    )
+    initialized = await _initialize_and_upload(
+        client,
+        headers,
+        workspace_id,
+        stored_objects,
+        content,
+        idempotency_key="media-location-upload",
+    )
+    completed = await client.post(
+        f"/api/v1/media/uploads/{initialized['upload_session']['id']}/complete",
+        headers=headers,
+        json={},
+    )
+    assert completed.status_code == 200
+    version_id = completed.json()["data"]["version"]["id"]
+
+    submitted = await client.post(
+        f"/api/v1/media/{version_id}/location-migrations",
+        headers=headers,
+        json={"idempotency_key": "relocate-primary-object"},
+    )
+    assert submitted.status_code == 202
+    task = submitted.json()["data"]
+    assert task["task_type"] == "media_location_migration"
+    assert task["request_type"] == "media_version"
+    assert task["request_id"] == version_id
+    assert task["scope"]["usage_type"] == "media_location_migration"
+
+    repeated = await client.post(
+        f"/api/v1/media/{version_id}/location-migrations",
+        headers=headers,
+        json={"idempotency_key": "relocate-primary-object"},
+    )
+    assert repeated.status_code == 202
+    assert repeated.json()["data"] == task
+
+    locations = await client.get(
+        f"/api/v1/media/{version_id}/locations", headers=headers
+    )
+    assert locations.status_code == 200
+    payload = locations.json()["data"]
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["status"] == "active"
+    assert "bucket" not in str(payload)
+    assert "object_key" not in str(payload)
+
+    rollback_active = await client.post(
+        f"/api/v1/media/{version_id}/location-rollbacks",
+        headers=headers,
+        json={
+            "target_location_id": payload["items"][0]["id"],
+            "idempotency_key": "cannot-rollback-active",
+        },
+    )
+    assert rollback_active.status_code == 409
+
+    other_headers, _ = await _identity(
+        client, email="media-location-other@example.com"
+    )
+    assert (
+        await client.get(
+            f"/api/v1/media/{version_id}/locations", headers=other_headers
+        )
+    ).status_code == 404
+
+    async with session_factory() as session:
+        migration_tasks = list(
+            await session.scalars(
+                select(Task).where(Task.task_type == "media_location_migration")
+            )
+        )
+        assert len(migration_tasks) == 1
+        event = await session.scalar(
+            select(OutboxEvent).where(
+                OutboxEvent.aggregate_id == migration_tasks[0].id
+            )
+        )
+        assert event is not None
+        assert event.event_type == "media_location_migration.requested"
+        assert event.routing_key == "media.location.migrate"
 
 
 @pytest.mark.asyncio

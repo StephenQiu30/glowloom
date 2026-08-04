@@ -1,7 +1,10 @@
+import logging
 from collections.abc import Awaitable, Callable
+from typing import cast
 from uuid import UUID
 
 import pytest
+from prometheus_client import generate_latest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
@@ -54,9 +57,7 @@ async def _task_and_body(
                 trace_id="worker-transaction-trace",
             )
             task_id = task.id
-        event = await session.scalar(
-            select(OutboxEvent).where(OutboxEvent.aggregate_id == task_id)
-        )
+        event = await session.scalar(select(OutboxEvent).where(OutboxEvent.aggregate_id == task_id))
         assert event is not None
         body = envelope_from_event(event).model_dump_json().encode("utf-8")
     return task_id, body
@@ -111,7 +112,9 @@ async def test_worker_ack_happens_after_database_commit(
 async def test_worker_nacks_database_failure_without_persisting_result(
     session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.INFO, logger="lanverse.worker")
     task_id, body = await _task_and_body(session_factory)
 
     async def fail_processing(*_: object, **__: object) -> None:
@@ -131,21 +134,30 @@ async def test_worker_nacks_database_failure_without_persisting_result(
         assert task.status == "queued"
         assert task.revision == 1
         assert count == 0
+    failed_record = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event_name", None) == "message.consume.failed"
+    )
+    context = cast(dict[str, object], failed_record.__dict__["context"])
+    assert context["queue"] == "lanverse.io"
+    assert context["event_type"] == "script_extraction.requested"
+    assert context["result"] == "requeued"
+    assert context["retryable"] is True
+    assert "synthetic database stage failure" not in str(context)
 
 
 @pytest.mark.asyncio
 async def test_worker_acknowledges_unparseable_or_oversized_poison_message(
     session_factory: async_sessionmaker[AsyncSession],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.INFO, logger="lanverse.worker")
     malformed = RecordingMessage(b"not-json-and-no-stable-message-identity")
     oversized = RecordingMessage(b"x" * (io_worker.MAX_MESSAGE_BYTES + 1))
 
-    malformed_result = await io_worker.process_incoming_message(
-        malformed, session_factory
-    )
-    oversized_result = await io_worker.process_incoming_message(
-        oversized, session_factory
-    )
+    malformed_result = await io_worker.process_incoming_message(malformed, session_factory)
+    oversized_result = await io_worker.process_incoming_message(oversized, session_factory)
 
     assert malformed_result == "rejected"
     assert oversized_result == "rejected"
@@ -153,3 +165,19 @@ async def test_worker_acknowledges_unparseable_or_oversized_poison_message(
     assert oversized.ack_count == 1
     assert malformed.nack_requeues == []
     assert oversized.nack_requeues == []
+    rejected_records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event_name", None) == "message.consume.failed"
+    ]
+    assert len(rejected_records) == 2
+    assert all(
+        cast(dict[str, object], record.__dict__["context"])["event_type"] == "invalid"
+        for record in rejected_records
+    )
+    assert "not-json-and-no-stable-message-identity" not in str(rejected_records)
+    rendered_metrics = generate_latest().decode("utf-8")
+    assert (
+        'lanverse_message_results_total{event_type="invalid",queue="lanverse.io",result="rejected"}'
+    ) in rendered_metrics
+    assert "not-json-and-no-stable-message-identity" not in rendered_metrics

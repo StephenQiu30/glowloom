@@ -54,6 +54,7 @@ def test_production_environment_example_is_fail_closed() -> None:
         "MINIO_SECRET_KEY",
         "JWT_SECRET_KEY",
         "DEEPSEEK_API_KEY",
+        "ARK_API_KEY",
     ):
         assert production_values[secret] == ""
 
@@ -84,6 +85,76 @@ def test_outbox_resource_limits_are_bounded() -> None:
     assert 0.1 <= settings.outbox_poll_seconds <= 60
 
 
+def test_workspace_cache_ttl_and_jitter_are_bounded() -> None:
+    settings = Settings()
+    assert 1 <= settings.workspace_cache_ttl_seconds <= 3600
+    assert 0 <= settings.cache_ttl_jitter_seconds < settings.workspace_cache_ttl_seconds
+
+    with pytest.raises(ValueError, match="must be lower"):
+        Settings.model_validate(
+            {
+                "workspace_cache_ttl_seconds": 10,
+                "cache_ttl_jitter_seconds": 10,
+            }
+        )
+
+
+def test_generation_high_cost_guard_limits_are_bounded_and_ordered() -> None:
+    settings = Settings()
+    assert settings.generation_high_cost_window_seconds == 60
+    assert settings.generation_high_cost_workspace_limit == 3
+    assert settings.generation_high_cost_global_limit == 20
+    assert settings.generation_high_cost_idempotency_ttl_seconds == 900
+
+    with pytest.raises(ValueError, match="GLOBAL_LIMIT"):
+        Settings.model_validate(
+            {
+                "generation_high_cost_workspace_limit": 4,
+                "generation_high_cost_global_limit": 3,
+            }
+        )
+    with pytest.raises(ValueError, match="IDEMPOTENCY_TTL_SECONDS"):
+        Settings.model_validate(
+            {
+                "generation_high_cost_window_seconds": 61,
+                "generation_high_cost_idempotency_ttl_seconds": 60,
+            }
+        )
+
+
+def test_media_cleanup_schedule_and_batch_are_bounded() -> None:
+    settings = Settings()
+
+    assert 60 <= settings.media_cleanup_interval_seconds <= 86400
+    assert 1 <= settings.media_cleanup_batch_size <= 500
+
+    with pytest.raises(ValueError):
+        Settings.model_validate({"media_cleanup_interval_seconds": 59})
+    with pytest.raises(ValueError):
+        Settings.model_validate({"media_cleanup_batch_size": 501})
+
+
+def test_media_location_rollback_window_is_bounded() -> None:
+    settings = Settings()
+
+    assert settings.media_location_rollback_seconds == 86400
+    with pytest.raises(ValueError):
+        Settings.model_validate({"media_location_rollback_seconds": 59})
+    with pytest.raises(ValueError):
+        Settings.model_validate({"media_location_rollback_seconds": 604801})
+
+
+def test_storage_concurrency_and_operation_timeout_are_bounded() -> None:
+    settings = Settings()
+
+    assert 1 <= settings.storage_thread_limit <= 32
+    assert 0.1 <= settings.storage_operation_timeout_seconds <= 30
+    with pytest.raises(ValueError):
+        Settings.model_validate({"storage_thread_limit": 0})
+    with pytest.raises(ValueError):
+        Settings.model_validate({"storage_operation_timeout_seconds": 0})
+
+
 def test_server_bind_address_is_explicit_and_validated() -> None:
     settings = Settings.model_validate(
         {"api_host": "127.0.0.1", "api_port": 8001}
@@ -96,11 +167,20 @@ def test_server_bind_address_is_explicit_and_validated() -> None:
         Settings.model_validate({"api_port": 0})
 
 
-def test_deepseek_key_is_optional_and_secret() -> None:
-    assert Settings.model_validate({}).deepseek_api_key is None
+def test_provider_keys_are_optional_and_secret() -> None:
+    assert Settings.model_validate({"deepseek_api_key": None}).deepseek_api_key is None
     assert Settings.model_validate({"deepseek_api_key": ""}).deepseek_api_key is None
+    assert Settings.model_validate({"ark_api_key": None}).ark_api_key is None
+    assert Settings.model_validate({"ark_api_key": ""}).ark_api_key is None
 
-    configured = Settings.model_validate({"deepseek_api_key": "test-deepseek-key"})
+    configured = Settings.model_validate(
+        {
+            "deepseek_api_key": "test-deepseek-key",
+            "ark_api_key": "test-ark-key",
+        }
+    )
 
     assert isinstance(configured.deepseek_api_key, SecretStr)
     assert str(configured.deepseek_api_key) == "**********"
+    assert isinstance(configured.ark_api_key, SecretStr)
+    assert str(configured.ark_api_key) == "**********"

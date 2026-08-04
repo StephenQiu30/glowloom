@@ -1,7 +1,22 @@
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_user_facing_documents_and_e2e_specs_use_semantic_filenames() -> None:
+    slice_token = re.compile(r"(^|[-_])s\d+", re.IGNORECASE)
+    candidates = [
+        *(ROOT / "docs").rglob("*.md"),
+        *(ROOT / "frontend/tests/e2e").glob("*.spec.ts"),
+    ]
+
+    assert [
+        path.relative_to(ROOT).as_posix()
+        for path in candidates
+        if slice_token.search(path.name)
+    ] == []
 
 
 def test_production_and_test_code_are_separate() -> None:
@@ -66,7 +81,12 @@ def test_environment_specific_compose_supports_robust_full_stack_startup() -> No
     assert "up -d --no-build --pull always --wait" in makefile
     assert "docker compose up -d --wait minio" in makefile
     assert "docker compose stop minio" in makefile
+    assert "cache-invalidate:" in makefile
+    assert "python -m app.cache_admin $(CACHE_NAMESPACE)" in makefile
+    assert "MINIO_REUSE_EXTERNAL ?= 0" in makefile
     assert "docker compose ps --status running -q minio" in makefile
+    assert "Explicitly reusing external MinIO" in makefile
+    assert "Requested external MinIO is not available" in makefile
     assert "is occupied by a MinIO outside this Compose project" in makefile
     for removed_target in (
         "services-up:",
@@ -89,6 +109,16 @@ def test_environment_configuration_has_one_repository_entrypoint() -> None:
 
     package = json.loads((ROOT / "frontend/package.json").read_text())
     assert "--env-file-if-exists=../.env" in package["scripts"]["openapi2ts"]
+
+    makefile = (ROOT / "Makefile").read_text()
+    assert (
+        "LANVERSE_RUN_DEEPSEEK_E2E=1 node --env-file-if-exists=../.env "
+        "node_modules/@playwright/test/cli.js test"
+    ) in makefile
+    assert "DEEPSEEK_API_KEY is required for the real DeepSeek E2E contract" not in makefile
+
+    compose = (ROOT / "docker-compose.yml").read_text()
+    assert "ARK_API_KEY: ${ARK_API_KEY:-}" in compose
 
     next_config = (ROOT / "frontend/next.config.ts").read_text()
     assert "process.loadEnvFile(repositoryEnvironmentFile)" in next_config
@@ -134,6 +164,8 @@ def test_ci_executes_the_real_media_stack_contract() -> None:
     assert "name: Stop MinIO contract service" in workflow
     assert "if: always()" in workflow
     assert "docker rm --force lanverse-ci-minio" in workflow
+    assert "image: redis:latest" in workflow
+    assert "make contract-redis" in workflow
 
 
 def test_scripts_is_split_by_capability() -> None:

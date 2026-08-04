@@ -38,7 +38,7 @@ class _SnapshotReader(Protocol):
     ) -> Awaitable[Any]: ...
 
 
-async def _episode_with_confirmed_structure(
+async def create_episode_with_confirmed_structure(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -135,17 +135,21 @@ async def _episode_with_confirmed_structure(
         persisted_episode.current_script_version_id = script_version_id
         persisted_episode.revision += 1
 
-    return headers, episode, {
-        "workspace_id": workspace_id,
-        "actor_id": actor_id,
-        "episode_id": episode_id,
-        "script_version_id": script_version_id,
-        "scene_id": scene_id,
-        "dialogue_id": dialogue_id,
-    }
+    return (
+        headers,
+        episode,
+        {
+            "workspace_id": workspace_id,
+            "actor_id": actor_id,
+            "episode_id": episode_id,
+            "script_version_id": script_version_id,
+            "scene_id": scene_id,
+            "dialogue_id": dialogue_id,
+        },
+    )
 
 
-def _create_shot_payload(
+def shot_creation_payload(
     refs: dict[str, UUID],
     *,
     title: str,
@@ -159,7 +163,7 @@ def _create_shot_payload(
     }
 
 
-def _spec_payload(refs: dict[str, UUID], *, purpose: str) -> dict[str, object]:
+def shot_spec_payload(refs: dict[str, UUID], *, purpose: str) -> dict[str, object]:
     return {
         "schema_version": 1,
         "script_reference": {
@@ -174,14 +178,10 @@ def _spec_payload(refs: dict[str, UUID], *, purpose: str) -> dict[str, object]:
             "camera_movement": "static",
             "composition": "林澈位于画面中心",
             "environment": "雨夜旧车站月台",
-            "subject_placements": [
-                {"subject_key": "hero", "placement": "画面中心"}
-            ],
+            "subject_placements": [{"subject_key": "hero", "placement": "画面中心"}],
             "mood_lighting": "冷蓝顶光",
         },
-        "action_beats": [
-            {"beat_key": "pause", "order": 1, "description": "林澈停下脚步"}
-        ],
+        "action_beats": [{"beat_key": "pause", "order": 1, "description": "林澈停下脚步"}],
         "dialogue_or_narration": [
             {
                 "source_dialogue_id": str(refs["dialogue_id"]),
@@ -242,7 +242,7 @@ async def _asset_version_consent(
     return consent_response.json()["data"]
 
 
-async def _ready_location_asset(
+async def create_ready_location_asset(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -361,7 +361,7 @@ async def _seed_ready_storyboard_shots(
     location_version_id: UUID,
     count: int,
 ) -> None:
-    spec_payload = deepcopy(_spec_payload(refs, purpose="批量准备度性能基线"))
+    spec_payload = deepcopy(shot_spec_payload(refs, purpose="批量准备度性能基线"))
     visual = dict(cast(dict[str, object], spec_payload["visual"]))
     visual["subject_placements"] = []
     spec_payload["visual"] = visual
@@ -523,13 +523,13 @@ async def test_manual_shot_is_idempotent_ordered_and_lifecycle_safe(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, refs = await _episode_with_confirmed_structure(
+    headers, episode, refs = await create_episode_with_confirmed_structure(
         client,
         session_factory,
         email="storyboard-lifecycle@example.com",
     )
     endpoint = f"/api/v1/episodes/{episode['id']}/shots"
-    first_payload = _create_shot_payload(
+    first_payload = shot_creation_payload(
         refs,
         title="进入车站",
         creation_key="manual-shot-001",
@@ -556,7 +556,7 @@ async def test_manual_shot_is_idempotent_ordered_and_lifecycle_safe(
     second_response = await client.post(
         endpoint,
         headers=headers,
-        json=_create_shot_payload(
+        json=shot_creation_payload(
             refs,
             title="发现灯箱",
             creation_key="manual-shot-002",
@@ -620,9 +620,7 @@ async def test_manual_shot_is_idempotent_ordered_and_lifecycle_safe(
     )
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "version_conflict"
-    assert stale.json()["error"]["details"]["current_order_hash"] == new_order[
-        "order_hash"
-    ]
+    assert stale.json()["error"]["details"]["current_order_hash"] == new_order["order_hash"]
 
     archived = await client.post(
         f"/api/v1/shots/{first['id']}/archive",
@@ -634,9 +632,7 @@ async def test_manual_shot_is_idempotent_ordered_and_lifecycle_safe(
     )
     assert archived.status_code == 200
     assert archived.json()["data"]["shot"]["status"] == "archived"
-    assert [item["id"] for item in archived.json()["data"]["order"]["items"]] == [
-        second["id"]
-    ]
+    assert [item["id"] for item in archived.json()["data"]["order"]["items"]] == [second["id"]]
 
     archived_list = await client.get(
         f"/api/v1/episodes/{episode['id']}/archived-shots",
@@ -668,7 +664,7 @@ async def test_storyboard_facts_are_itemized_in_episode_and_project_delete_guard
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, refs = await _episode_with_confirmed_structure(
+    headers, episode, refs = await create_episode_with_confirmed_structure(
         client,
         session_factory,
         email="storyboard-delete-blocker@example.com",
@@ -677,7 +673,7 @@ async def test_storyboard_facts_are_itemized_in_episode_and_project_delete_guard
     first_response = await client.post(
         shots_endpoint,
         headers=headers,
-        json=_create_shot_payload(
+        json=shot_creation_payload(
             refs,
             title="保留规格历史的镜头",
             creation_key="storyboard-delete-first",
@@ -686,7 +682,7 @@ async def test_storyboard_facts_are_itemized_in_episode_and_project_delete_guard
     second_response = await client.post(
         shots_endpoint,
         headers=headers,
-        json=_create_shot_payload(
+        json=shot_creation_payload(
             refs,
             title="归档后仍需保留的镜头",
             creation_key="storyboard-delete-second",
@@ -702,7 +698,7 @@ async def test_storyboard_facts_are_itemized_in_episode_and_project_delete_guard
         headers=headers,
         json={
             "expected_current_spec_version_id": None,
-            "spec": _spec_payload(refs, purpose="固定第一版制作规格"),
+            "spec": shot_spec_payload(refs, purpose="固定第一版制作规格"),
             "asset_references": [],
         },
     )
@@ -712,7 +708,7 @@ async def test_storyboard_facts_are_itemized_in_episode_and_project_delete_guard
         headers=headers,
         json={
             "expected_current_spec_version_id": first_spec.json()["data"]["version"]["id"],
-            "spec": _spec_payload(refs, purpose="保留不可变历史规格"),
+            "spec": shot_spec_payload(refs, purpose="保留不可变历史规格"),
             "asset_references": [],
         },
     )
@@ -758,9 +754,7 @@ async def test_storyboard_facts_are_itemized_in_episode_and_project_delete_guard
         "HAS_STORYBOARD_SHOTS": "项目关联 2 个分镜镜头（2 个规格版本）",
     }
 
-    current_episode = await client.get(
-        f"/api/v1/episodes/{episode['id']}", headers=headers
-    )
+    current_episode = await client.get(f"/api/v1/episodes/{episode['id']}", headers=headers)
     assert current_episode.status_code == 200
     blocked_delete = await client.delete(
         f"/api/v1/episodes/{episode['id']}",
@@ -769,14 +763,8 @@ async def test_storyboard_facts_are_itemized_in_episode_and_project_delete_guard
     )
     assert blocked_delete.status_code == 409
     assert blocked_delete.json()["error"]["code"] == "state_conflict"
-    assert (
-        blocked_delete.json()["error"]["message"]
-        == "Episode has dependent storyboard facts"
-    )
-    assert (
-        blocked_delete.json()["error"]["next_action"]
-        == "review_delete_blockers"
-    )
+    assert blocked_delete.json()["error"]["message"] == "Episode has dependent storyboard facts"
+    assert blocked_delete.json()["error"]["next_action"] == "review_delete_blockers"
     assert (
         await client.get(
             f"/api/v1/shot-spec-versions/{first_spec.json()['data']['version']['id']}",
@@ -790,21 +778,19 @@ async def test_concurrent_first_shot_creation_and_episode_delete_are_serialized(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, refs = await _episode_with_confirmed_structure(
+    headers, episode, refs = await create_episode_with_confirmed_structure(
         client,
         session_factory,
         email="storyboard-delete-race@example.com",
     )
-    current_episode = await client.get(
-        f"/api/v1/episodes/{episode['id']}", headers=headers
-    )
+    current_episode = await client.get(f"/api/v1/episodes/{episode['id']}", headers=headers)
     assert current_episode.status_code == 200
 
     create_response, delete_response = await asyncio.gather(
         client.post(
             f"/api/v1/episodes/{episode['id']}/shots",
             headers=headers,
-            json=_create_shot_payload(
+            json=shot_creation_payload(
                 refs,
                 title="并发创建镜头",
                 creation_key="storyboard-delete-race",
@@ -813,9 +799,7 @@ async def test_concurrent_first_shot_creation_and_episode_delete_are_serialized(
         client.delete(
             f"/api/v1/episodes/{episode['id']}",
             headers=headers,
-            params={
-                "expected_revision": current_episode.json()["data"]["revision"]
-            },
+            params={"expected_revision": current_episode.json()["data"]["revision"]},
         ),
     )
 
@@ -825,9 +809,7 @@ async def test_concurrent_first_shot_creation_and_episode_delete_are_serialized(
         "Episode has dependent storyboard facts",
         "Episode has dependent script versions",
     }
-    listed = await client.get(
-        f"/api/v1/episodes/{episode['id']}/shots", headers=headers
-    )
+    listed = await client.get(f"/api/v1/episodes/{episode['id']}/shots", headers=headers)
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()["data"]["items"]] == [
         create_response.json()["data"]["id"]
@@ -839,7 +821,7 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, refs = await _episode_with_confirmed_structure(
+    headers, episode, refs = await create_episode_with_confirmed_structure(
         client,
         session_factory,
         email="storyboard-spec@example.com",
@@ -847,7 +829,7 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
     created = await client.post(
         f"/api/v1/episodes/{episode['id']}/shots",
         headers=headers,
-        json=_create_shot_payload(
+        json=shot_creation_payload(
             refs,
             title="规格版本镜头",
             creation_key="manual-spec-shot",
@@ -862,7 +844,7 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
         headers=headers,
         json={
             "expected_current_spec_version_id": None,
-            "spec": _spec_payload(refs, purpose="交代主角停下观察"),
+            "spec": shot_spec_payload(refs, purpose="交代主角停下观察"),
             "asset_references": [],
         },
     )
@@ -877,22 +859,20 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
         headers=headers,
         json={
             "expected_current_spec_version_id": None,
-            "spec": _spec_payload(refs, purpose="不能覆盖并发版本"),
+            "spec": shot_spec_payload(refs, purpose="不能覆盖并发版本"),
             "asset_references": [],
         },
     )
     assert conflict.status_code == 409
     assert conflict.json()["error"]["code"] == "version_conflict"
-    assert conflict.json()["error"]["details"]["current_spec_version_id"] == first[
-        "version"
-    ]["id"]
+    assert conflict.json()["error"]["details"]["current_spec_version_id"] == first["version"]["id"]
 
     second_response = await client.post(
         versions_endpoint,
         headers=headers,
         json={
             "expected_current_spec_version_id": first["version"]["id"],
-            "spec": _spec_payload(refs, purpose="强化主角的警觉反应"),
+            "spec": shot_spec_payload(refs, purpose="强化主角的警觉反应"),
             "asset_references": [],
         },
     )
@@ -925,11 +905,9 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
         },
     )
     assert switched.status_code == 200
-    assert switched.json()["data"]["current_spec_version_id"] == first["version"][
-        "id"
-    ]
+    assert switched.json()["data"]["current_spec_version_id"] == first["version"]["id"]
 
-    invalid_dialogue = _spec_payload(refs, purpose="引用不属于场景的对白")
+    invalid_dialogue = shot_spec_payload(refs, purpose="引用不属于场景的对白")
     invalid_dialogue["script_reference"] = {
         "confirmed_script_version_id": str(refs["script_version_id"]),
         "scene_id": str(refs["scene_id"]),
@@ -959,8 +937,7 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
     assert version_audit.status_code == 200
     assert version_audit.json()["data"]["total"] == 2
     assert [
-        item["metadata"]["version_no"]
-        for item in reversed(version_audit.json()["data"]["items"])
+        item["metadata"]["version_no"] for item in reversed(version_audit.json()["data"]["items"])
     ] == [1, 2]
     assert all(
         item["metadata"]["source"] == "manual_save"
@@ -998,7 +975,7 @@ async def test_confirmed_candidate_creation_and_safe_delete_preserve_evidence(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, refs = await _episode_with_confirmed_structure(
+    headers, episode, refs = await create_episode_with_confirmed_structure(
         client,
         session_factory,
         email="storyboard-candidate-delete@example.com",
@@ -1026,15 +1003,15 @@ async def test_confirmed_candidate_creation_and_safe_delete_preserve_evidence(
     )
     assert candidate_preflight.status_code == 200
     assert candidate_preflight.json()["data"]["allowed"] is False
-    assert [
-        blocker["code"] for blocker in candidate_preflight.json()["data"]["blockers"]
-    ] == ["SOURCE_CANDIDATE_EVIDENCE"]
+    assert [blocker["code"] for blocker in candidate_preflight.json()["data"]["blockers"]] == [
+        "SOURCE_CANDIDATE_EVIDENCE"
+    ]
 
     endpoint = f"/api/v1/episodes/{episode['id']}/shots"
     empty_response = await client.post(
         endpoint,
         headers=headers,
-        json=_create_shot_payload(
+        json=shot_creation_payload(
             refs,
             title="可删除空镜头",
             creation_key="empty-delete-shot",
@@ -1073,7 +1050,7 @@ def _split_target_spec(
     duration_ms: int,
     include_dialogue: bool,
 ) -> dict[str, object]:
-    spec = deepcopy(_spec_payload(refs, purpose=purpose))
+    spec = deepcopy(shot_spec_payload(refs, purpose=purpose))
     spec["duration_ms"] = duration_ms
     if not include_dialogue:
         script_reference = dict(cast(dict[str, object], spec["script_reference"]))
@@ -1088,7 +1065,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, refs = await _episode_with_confirmed_structure(
+    headers, episode, refs = await create_episode_with_confirmed_structure(
         client,
         session_factory,
         email="storyboard-transform@example.com",
@@ -1097,7 +1074,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
     created = await client.post(
         endpoint,
         headers=headers,
-        json=_create_shot_payload(
+        json=shot_creation_payload(
             refs,
             title="待变换镜头",
             creation_key="transform-source",
@@ -1110,7 +1087,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
         headers=headers,
         json={
             "expected_current_spec_version_id": None,
-            "spec": _spec_payload(refs, purpose="建立车站悬疑氛围"),
+            "spec": shot_spec_payload(refs, purpose="建立车站悬疑氛围"),
             "asset_references": [],
         },
     )
@@ -1135,9 +1112,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
     assert copied["transform"]["source_shot_ids"] == [source["id"]]
     assert len(copied["shots"]) == 1
     assert copied["shots"][0]["source_candidate_id"] is None
-    assert copied["spec_versions"][0]["content_hash"] == source_spec[
-        "content_hash"
-    ]
+    assert copied["spec_versions"][0]["content_hash"] == source_spec["content_hash"]
     assert [item["id"] for item in copied["order"]["items"]] == [
         source["id"],
         copied["shots"][0]["id"],
@@ -1216,9 +1191,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
     assert split["transform"]["operation"] == "split"
     assert len(split["shots"]) == 2
     assert [item["position"] for item in split["shots"]] == [1, 2]
-    archived_source = await client.get(
-        f"/api/v1/shots/{source['id']}", headers=headers
-    )
+    archived_source = await client.get(f"/api/v1/shots/{source['id']}", headers=headers)
     assert archived_source.status_code == 200
     assert archived_source.json()["data"]["status"] == "archived"
     repeated_split = await client.post(
@@ -1231,9 +1204,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
 
     merge_preflight_payload = {
         "shot_ids": [shot["id"] for shot in split["shots"]],
-        "expected_spec_version_ids": [
-            version["id"] for version in split["spec_versions"]
-        ],
+        "expected_spec_version_ids": [version["id"] for version in split["spec_versions"]],
         "expected_order_hash": split["order"]["order_hash"],
     }
     merge_preflight_response = await client.post(
@@ -1253,7 +1224,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
             "idempotency_key": "merge-transform-001",
             "target": {
                 "title": "进入并观察月台",
-                "spec": _spec_payload(refs, purpose="合并后的完整叙事目标"),
+                "spec": shot_spec_payload(refs, purpose="合并后的完整叙事目标"),
                 "asset_references": [],
             },
         },
@@ -1266,9 +1237,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
     assert merged["spec_versions"][0]["spec"]["duration_ms"] == 3000
     assert [item["status"] for item in split["shots"]] == ["active", "active"]
     for split_shot in split["shots"]:
-        persisted = await client.get(
-            f"/api/v1/shots/{split_shot['id']}", headers=headers
-        )
+        persisted = await client.get(f"/api/v1/shots/{split_shot['id']}", headers=headers)
         assert persisted.json()["data"]["status"] == "archived"
 
     transform_audit = await client.get(
@@ -1281,10 +1250,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
     )
     assert transform_audit.status_code == 200
     assert transform_audit.json()["data"]["total"] == 5
-    sources = [
-        item["metadata"]["source"]
-        for item in transform_audit.json()["data"]["items"]
-    ]
+    sources = [item["metadata"]["source"] for item in transform_audit.json()["data"]["items"]]
     assert sources.count("manual_save") == 1
     assert sources.count("copy") == 1
     assert sources.count("split") == 2
@@ -1296,7 +1262,7 @@ async def test_readiness_is_deterministic_and_reacts_to_rights_without_mutating_
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, refs = await _episode_with_confirmed_structure(
+    headers, episode, refs = await create_episode_with_confirmed_structure(
         client,
         session_factory,
         email="storyboard-readiness@example.com",
@@ -1304,7 +1270,7 @@ async def test_readiness_is_deterministic_and_reacts_to_rights_without_mutating_
     created = await client.post(
         f"/api/v1/episodes/{episode['id']}/shots",
         headers=headers,
-        json=_create_shot_payload(
+        json=shot_creation_payload(
             refs,
             title="准备度镜头",
             creation_key="readiness-shot-001",
@@ -1321,20 +1287,18 @@ async def test_readiness_is_deterministic_and_reacts_to_rights_without_mutating_
     missing = missing_response.json()["data"]
     assert missing["status"] == "blocked"
     assert missing["ready"] is False
-    assert [item["code"] for item in missing["blocking_reasons"]] == [
-        "CURRENT_SPEC_MISSING"
-    ]
+    assert [item["code"] for item in missing["blocking_reasons"]] == ["CURRENT_SPEC_MISSING"]
     assert missing["next_actions"] == ["save_shot_spec"]
     assert len(missing["evaluation_hash"]) == 64
 
-    location_version, consent = await _ready_location_asset(
+    location_version, consent = await create_ready_location_asset(
         client,
         session_factory,
         headers=headers,
         project_id=UUID(episode["project_id"]),
         refs=refs,
     )
-    ready_spec = deepcopy(_spec_payload(refs, purpose="建立雨夜车站空间"))
+    ready_spec = deepcopy(shot_spec_payload(refs, purpose="建立雨夜车站空间"))
     visual = dict(cast(dict[str, object], ready_spec["visual"]))
     visual["subject_placements"] = []
     ready_spec["visual"] = visual
@@ -1372,16 +1336,10 @@ async def test_readiness_is_deterministic_and_reacts_to_rights_without_mutating_
     assert first["status"] == "ready"
     assert first["ready"] is True
     assert first["blocking_reasons"] == []
-    assert [item["code"] for item in first["warnings"]] == [
-        "STYLE_REFERENCE_MISSING"
-    ]
+    assert [item["code"] for item in first["warnings"]] == ["STYLE_REFERENCE_MISSING"]
     assert first["evaluation_hash"] == second["evaluation_hash"]
-    assert first["evaluated_dependencies"]["shot_spec_version_id"] == spec_version[
-        "id"
-    ]
-    assert first["evaluated_dependencies"]["asset_version_ids"] == [
-        location_version["id"]
-    ]
+    assert first["evaluated_dependencies"]["shot_spec_version_id"] == spec_version["id"]
+    assert first["evaluated_dependencies"]["asset_version_ids"] == [location_version["id"]]
     assert first["evaluated_dependencies"]["consent_ids"] == [consent["id"]]
 
     revoked = await client.post(
@@ -1398,9 +1356,7 @@ async def test_readiness_is_deterministic_and_reacts_to_rights_without_mutating_
     blocked = blocked_response.json()["data"]
     assert blocked["status"] == "blocked"
     assert blocked["ready"] is False
-    assert [item["code"] for item in blocked["blocking_reasons"]] == [
-        "RIGHTS_BLOCKED"
-    ]
+    assert [item["code"] for item in blocked["blocking_reasons"]] == ["RIGHTS_BLOCKED"]
     assert blocked["evaluation_hash"] != first["evaluation_hash"]
 
     persisted_spec = await client.get(
@@ -1418,12 +1374,12 @@ async def test_batch_readiness_has_constant_query_bound(
     session_factory: async_sessionmaker[AsyncSession],
     shot_count: int,
 ) -> None:
-    headers, episode, refs = await _episode_with_confirmed_structure(
+    headers, episode, refs = await create_episode_with_confirmed_structure(
         client,
         session_factory,
         email=f"storyboard-batch-readiness-{shot_count}@example.com",
     )
-    location_version, _ = await _ready_location_asset(
+    location_version, _ = await create_ready_location_asset(
         client,
         session_factory,
         headers=headers,
@@ -1520,12 +1476,12 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, refs = await _episode_with_confirmed_structure(
+    headers, episode, refs = await create_episode_with_confirmed_structure(
         client,
         session_factory,
         email="storyboard-asset-upgrade@example.com",
     )
-    old_version, _ = await _ready_location_asset(
+    old_version, _ = await create_ready_location_asset(
         client,
         session_factory,
         headers=headers,
@@ -1538,7 +1494,7 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
         refs=refs,
         current_version=old_version,
     )
-    ready_spec = deepcopy(_spec_payload(refs, purpose="资产升级前的固定镜头"))
+    ready_spec = deepcopy(shot_spec_payload(refs, purpose="资产升级前的固定镜头"))
     visual = dict(cast(dict[str, object], ready_spec["visual"]))
     visual["subject_placements"] = []
     ready_spec["visual"] = visual
@@ -1550,7 +1506,7 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
         created = await client.post(
             f"/api/v1/episodes/{episode['id']}/shots",
             headers=headers,
-            json=_create_shot_payload(
+            json=shot_creation_payload(
                 refs,
                 title=f"资产升级镜头 {index + 1}",
                 creation_key=f"asset-upgrade-shot-{index + 1}",
@@ -1586,9 +1542,7 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
     usage = usage_response.json()["data"]
     assert usage["total"] == 2
     assert all(item["is_current"] for item in usage["items"])
-    assert {item["shot_id"] for item in usage["items"]} == {
-        shot["id"] for shot in shots
-    }
+    assert {item["shot_id"] for item in usage["items"]} == {shot["id"] for shot in shots}
 
     preflight_payload = {
         "new_asset_version_id": new_version["id"],
@@ -1644,9 +1598,10 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
         headers=headers,
     )
     assert len(first_history.json()["data"]) == 1
-    assert first_history.json()["data"][0]["asset_references"][0][
-        "asset_version_id"
-    ] == old_version["id"]
+    assert (
+        first_history.json()["data"][0]["asset_references"][0]["asset_version_id"]
+        == old_version["id"]
+    )
 
     fresh_preflight_response = await client.post(
         f"/api/v1/asset-versions/{old_version['id']}/upgrade-preflight",
@@ -1700,10 +1655,7 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
     )
     assert upgrade_audit.status_code == 200
     assert upgrade_audit.json()["data"]["total"] == 5
-    upgrade_sources = [
-        item["metadata"]["source"]
-        for item in upgrade_audit.json()["data"]["items"]
-    ]
+    upgrade_sources = [item["metadata"]["source"] for item in upgrade_audit.json()["data"]["items"]]
     assert upgrade_sources.count("manual_save") == 3
     assert upgrade_sources.count("asset_upgrade") == 2
     assert all(item["is_current"] for item in new_usage.json()["data"]["items"])
@@ -1728,8 +1680,7 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
     )
     assert usage_after_archive.status_code == 200
     usage_by_shot_id = {
-        item["shot_id"]: item
-        for item in usage_after_archive.json()["data"]["items"]
+        item["shot_id"]: item for item in usage_after_archive.json()["data"]["items"]
     }
     assert usage_by_shot_id[shots[0]["id"]]["is_current"] is False
     assert usage_by_shot_id[shots[1]["id"]]["is_current"] is True
@@ -1740,12 +1691,12 @@ async def test_production_snapshot_is_stable_scoped_and_provider_agnostic(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, refs = await _episode_with_confirmed_structure(
+    headers, episode, refs = await create_episode_with_confirmed_structure(
         client,
         session_factory,
         email="storyboard-production-snapshot@example.com",
     )
-    location_version, consent = await _ready_location_asset(
+    location_version, consent = await create_ready_location_asset(
         client,
         session_factory,
         headers=headers,
@@ -1755,7 +1706,7 @@ async def test_production_snapshot_is_stable_scoped_and_provider_agnostic(
     created = await client.post(
         f"/api/v1/episodes/{episode['id']}/shots",
         headers=headers,
-        json=_create_shot_payload(
+        json=shot_creation_payload(
             refs,
             title="生产快照镜头",
             creation_key="production-snapshot-shot",
@@ -1763,7 +1714,7 @@ async def test_production_snapshot_is_stable_scoped_and_provider_agnostic(
     )
     assert created.status_code == 201
     shot = created.json()["data"]
-    spec_payload = deepcopy(_spec_payload(refs, purpose="形成稳定生产输入"))
+    spec_payload = deepcopy(shot_spec_payload(refs, purpose="形成稳定生产输入"))
     visual = dict(cast(dict[str, object], spec_payload["visual"]))
     visual["subject_placements"] = []
     spec_payload["visual"] = visual
@@ -1812,9 +1763,7 @@ async def test_production_snapshot_is_stable_scoped_and_provider_agnostic(
     assert snapshot.spec_ref.input_hash == version["input_hash"]
     assert snapshot.readiness_status == "ready"
     assert snapshot.ready is True
-    assert snapshot.asset_references[0].asset_version_id == UUID(
-        location_version["id"]
-    )
+    assert snapshot.asset_references[0].asset_version_id == UUID(location_version["id"])
     assert snapshot.spec["generation_intent"]["mode"] == "text_to_video"
     serialized = str(snapshot).lower()
     assert "provider" not in serialized

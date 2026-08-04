@@ -1,19 +1,25 @@
 import hashlib
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import cast
 from uuid import UUID
 
 import pytest
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from prometheus_client import generate_latest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
 from app import media_worker
+from app.core.telemetry import configure_telemetry
 from app.modules.governance.audit.models import AuditEvent
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.media import MediaProbeError, MediaProbeResult
 from app.modules.media.models import MediaLocation, MediaObject, MediaVersion
-from app.modules.media.storage import ObjectStoragePort
+from app.modules.media.storage import ObjectStoragePort, StorageObjectMetadata
 from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production import MediaProbeTaskCommand, create_media_probe_task
@@ -34,11 +40,14 @@ class MemoryStorage(ObjectStoragePort):
     async def presign_download(self, object_key: str, expires_seconds: int) -> str:
         raise AssertionError("worker must not presign downloads")
 
-    async def stat(self, object_key: str) -> tuple[int, str | None]:
-        return len(self.content), "video/mp4"
+    async def stat(self, object_key: str) -> StorageObjectMetadata:
+        return StorageObjectMetadata(len(self.content), "video/mp4", "memory-etag")
 
     async def put(self, object_key: str, data: bytes, content_type: str) -> None:
         raise AssertionError("worker must not overwrite media")
+
+    async def copy(self, source_key: str, target_key: str) -> None:
+        raise AssertionError("probe worker must not copy media")
 
     def stream(self, object_key: str) -> AsyncIterator[bytes]:
         async def chunks() -> AsyncIterator[bytes]:
@@ -165,9 +174,7 @@ async def _pending_probe(
                 ),
                 trace_id="media-worker-test",
             )
-        event = await session.scalar(
-            select(OutboxEvent).where(OutboxEvent.aggregate_id == task.id)
-        )
+        event = await session.scalar(select(OutboxEvent).where(OutboxEvent.aggregate_id == task.id))
         assert event is not None
         body = envelope_from_event(event).model_dump_json().encode()
     return task.id, version_id, body, MemoryStorage(key, b"worker-media-bytes")
@@ -176,7 +183,15 @@ async def _pending_probe(
 @pytest.mark.asyncio
 async def test_media_worker_commits_probe_before_ack_and_is_idempotent(
     session_factory: async_sessionmaker[AsyncSession],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.INFO, logger="lanverse.worker")
+    provider = configure_telemetry(
+        service_name="lanverse-media-worker-test",
+        environment="test",
+    )
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
     task_id, version_id, body, storage = await _pending_probe(session_factory)
     probe = RecordingProbe(
         MediaProbeResult(
@@ -214,6 +229,28 @@ async def test_media_worker_commits_probe_before_ack_and_is_idempotent(
     )
     assert first.ack_count == 1
     assert first.nack_requeues == []
+    consumer_spans = [
+        span for span in exporter.get_finished_spans() if span.name == "messaging.message.consume"
+    ]
+    assert len(consumer_spans) == 1
+    assert consumer_spans[0].kind.name == "CONSUMER"
+    completed_record = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event_name", None) == "message.consume.completed"
+    )
+    completed_context = cast(
+        dict[str, object],
+        completed_record.__dict__["context"],
+    )
+    assert completed_context["queue"] == "lanverse.media"
+    assert completed_context["event_type"] == "media_probe.requested"
+    assert completed_context["result"] == "completed"
+    rendered_metrics = generate_latest().decode("utf-8")
+    assert (
+        'lanverse_message_results_total{event_type="media_probe.requested",'
+        'queue="lanverse.media",result="completed"}'
+    ) in rendered_metrics
 
     duplicate = RecordingMessage(body)
     assert (

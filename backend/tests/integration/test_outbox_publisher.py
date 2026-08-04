@@ -1,7 +1,10 @@
+import logging
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import UUID
 
 import pytest
+from prometheus_client import generate_latest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
@@ -127,11 +130,11 @@ async def test_claim_is_exclusive_and_expired_claim_can_be_recovered(
 @pytest.mark.asyncio
 async def test_publish_batch_persists_confirm_and_sanitized_retry(
     session_factory: async_sessionmaker[AsyncSession],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.INFO, logger="lanverse.outbox")
     actor = await _actor(session_factory)
-    succeeded_task_id = await _task(
-        session_factory, actor, idempotency_key="publish-success"
-    )
+    succeeded_task_id = await _task(session_factory, actor, idempotency_key="publish-success")
     failed_task_id = await _task(session_factory, actor, idempotency_key="publish-failure")
     publisher = RecordingPublisher(failed_task_id)
     published = await publish_outbox_batch(
@@ -163,3 +166,29 @@ async def test_publish_batch_persists_confirm_and_sanitized_retry(
     assert failed.available_at > failed.created_at
     assert failed.last_error == "RuntimeError"
     assert "synthetic-secret" not in failed.last_error
+
+    records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event_name", "").startswith("outbox.publish.")
+    ]
+    assert [record.__dict__["event_name"] for record in records] == [
+        "outbox.publish.completed",
+        "outbox.publish.failed",
+    ]
+    failed_context = cast(dict[str, object], records[-1].__dict__["context"])
+    assert failed_context["result"] == "retry_scheduled"
+    assert failed_context["retryable"] is True
+    assert failed_context["error_type"] == "RuntimeError"
+    assert "synthetic-secret" not in str(failed_context)
+
+    rendered_metrics = generate_latest().decode("utf-8")
+    assert (
+        'lanverse_outbox_publish_results_total{event_type="script_extraction.requested",'
+        'queue="lanverse.io",result="published"}'
+    ) in rendered_metrics
+    assert (
+        'lanverse_outbox_publish_results_total{event_type="script_extraction.requested",'
+        'queue="lanverse.io",result="retry_scheduled"}'
+    ) in rendered_metrics
+    assert "synthetic-secret" not in rendered_metrics

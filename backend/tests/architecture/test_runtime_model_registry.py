@@ -26,3 +26,13 @@ def test_background_entrypoints_register_models_before_database_work() -> None:
 
     server = (ROOT / "backend/app/server.py").read_text()
     assert "partial(run_media_worker, settings)" in server
+
+
+def test_unified_server_configures_process_telemetry_before_child_roles() -> None:
+    server = (ROOT / "backend/app/server.py").read_text()
+
+    supervisor_position = server.index("await supervise_services(")
+    assert server.index("configure_logging(") < supervisor_position
+    assert server.index("configure_telemetry(") < supervisor_position
+    assert 'service="lanverse-server"' in server
+    assert 'service_name="lanverse-server"' in server

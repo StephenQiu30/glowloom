@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("S1 首登后创建项目和单集并恢复服务端事实", async ({ page }) => {
+test("首次登录后创建项目和单集并恢复服务端事实", async ({ page }) => {
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const email = `creator-${unique}@example.com`;
   const projectName = `海边来信-${unique}`;
