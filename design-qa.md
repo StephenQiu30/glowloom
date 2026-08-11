@@ -1,42 +1,41 @@
-# 项目管理无边框优化 Design QA
+# 登录态首页移除 Design QA
 
-- source visual truth：用户提供的现状截图 `/var/folders/r5/lm_1_1hd321dzlfq0lctjdnw0000gn/T/codex-clipboard-ff1a53db-e81c-49ff-aefc-0a7a0f46d99c.png`，以及 `docs/design/007-前端体验与视觉系统重设计.md` 的无边框界面原则。
-- source content crop：`/tmp/lanverse-borderless-preview/projects-source-content.png`。
-- implementation screenshot：`/tmp/lanverse-borderless-preview/projects-borderless-css1365x629.png`。
-- normalized implementation：`/tmp/lanverse-borderless-preview/projects-borderless-normalized.png`。
-- full-view comparison：`/tmp/lanverse-borderless-preview/projects-before-after.png`。
-- responsive evidence：`/tmp/lanverse-borderless-preview/projects-borderless-1024x768-after.png`。
-- state：浅色桌面端、owner、0 个项目；真实前端组件连接只读本机临时 API，不写入项目数据。
-- viewport：主比较实现为 `1365 × 629` CSS px、`devicePixelRatio = 1`；响应式复核为 `1024 × 768` CSS px。
-- density normalization：原始截图为 `2048 × 1179`，裁去浏览器 chrome 后得到 `2048 × 944`；现状截图的界面密度约为 1.5 倍，因此实现截图按 Lanczos 放大到 `2048 × 944` 后进行同画布比较。
+- source visual truth：用户提供的已登录欢迎页截图 `/var/folders/r5/lm_1_1hd321dzlfq0lctjdnw0000gn/T/codex-clipboard-58fb2277-6077-48c3-8f1d-2531f1f68725.png`，以及“已经登录后不需要首页”的明确修正要求。
+- source pixels：`3376 × 1942`，包含浏览器 chrome；截图中登录态仍显示“首页”导航和“欢迎回来”工作概览。
+- implementation closed：`/tmp/lanverse-logged-in-project.png`，`1673 × 787`；真实 owner 登录会话最终落在 `/projects`。
+- implementation command：`/tmp/lanverse-logged-in-project-command.png`，`1688 × 794`；真实 Command + Radix Dialog 打开态。
+- combined comparison：`/tmp/lanverse-logged-in-home-before-after.png`，上方为用户源图，下方为实现命令打开态；两张输入先归一到 `1688px` 宽后上下拼接。
+- test state：浅色模式、owner、零项目；使用用户现有本地登录会话，只执行读取、导航和命令面板打开/关闭，不写入业务数据。
 
 ## Findings
 
 - 无剩余 P0、P1 或 P2 问题。
-- P3：0 项目状态下，1024px 高度首屏只露出空状态说明的一部分；主操作仍在向下轻微滚动后可达，且顶栏“创建项目”始终可见，不阻断任务。
+- P3：Logo 的无障碍名称仍是“Lanverse 首页”，链接仍指向 `/`。这是有意保留的全局品牌入口；登录态点击后会立即路由替换到 `/projects`，不会显示欢迎页或在历史中增加首页步骤。
 
 ## 必查表面
 
-- 字体与层级：继续使用 Geist；工作空间、标题、描述、指标标签和值形成清楚的四级层次，标题未发生意外换行。
-- 间距与布局：标题、摘要、工具栏和空状态以留白和完整轻表面分区，不再连续堆叠横线；页面常驻内容无阴影。
-- 颜色与令牌：只使用既有黑白中性色和 `muted` 表面；选中筛选通过白色表面、字重和 `aria-pressed` 共同表达。
-- 图像与资产：Logo 继续使用项目真实 PNG；空状态和控件图标来自既有 Lucide 图标库，没有新增 CSS 图形、手写 SVG 或占位资产。
-- 文案与内容：空项目明确说明下一步并提供“创建第一个项目”；有数据但筛选无结果时提供“清除搜索和筛选”。
-- 可访问性：筛选声明为有名称的 `group`，按钮使用 `aria-pressed`；输入保留 label 与可见 focus ring；空状态标题通过 `aria-labelledby` 关联区域。
+- 字体与层级：登录用户直接进入“项目管理”事实页，继续使用 Geist 与既有标题层级；移除了重复的“欢迎回来”主标题，不引入新的排版系统。
+- 间距与布局：项目页内容和 Logo/主导航继续共用 `max-width: 1440px` 与同一组响应式左右内边距；移除首页项后，导航基线和入口间距保持稳定。
+- 颜色与令牌：没有新增色彩、边框或阴影。项目台账与命令浮层继续使用既有 `background`、`muted`、`popover` 与 foreground 令牌，符合无边框原则。
+- 图像与资产：Logo 继续使用真实品牌 PNG；项目、资产、治理和空间入口继续使用 Lucide 图标，没有自绘图形或文本符号。
+- 文案与内容：登录态不再出现“欢迎页”“欢迎回来”“开始创作”或首页项目摘要；项目页成为唯一默认工作落点，命令面板只提供“项目 / 资产 / 治理 / 空间”。
+- 可访问性：重定向期间提供“正在进入项目工作区”具名状态；导航和 Command 的 role/name 可被语义查询，移除首页项后键盘搜索、Escape 关闭与焦点返回仍通过测试。
 
 ## 比较历史
 
-1. 首轮现状截图显示标题、摘要上下边界、工具栏分隔线连续出现，页面被切成表格式条带；实现移除 `PageHeader`、`MetricGroup` 和项目工具栏的结构性分隔线，改为留白、排版和 `muted` 轻表面。
-2. 首轮 1024px 浏览器复核发现全局搜索与主导航同时占位，导航标签被压成两行，判定 P2；全局搜索改为 `xl` 才显示，导航标签固定单行。修正后 `1024 × 768` 下 Logo、四个导航、创建项目和账户入口均在一行可见，页面无水平溢出。
-3. 修正后重新捕获桌面与 1024px 证据；未发现新的 P0、P1 或 P2 问题。
+1. 源图的登录态同时存在“首页”导航与欢迎概览，用户需要再判断或点击才能进入真实工作面，构成 P1 信息架构冗余。
+2. 实现将 `/` 收敛为身份分流点：未登录继续展示产品首页，登录态只显示具名过渡状态并执行 `router.replace("/projects")`，不再请求 `/me` 或项目摘要来渲染欢迎页。
+3. 第一轮测试固定根路由重定向、角色导航和命令面板三条行为并如预期失败；实现后相关 10 个测试通过，全量 20 个测试文件、69 个测试通过。
+4. 最终组合对照显示：登录欢迎内容已被项目管理工作面替代；主导航移除“首页”，命令面板也没有旁路入口，项目页整体宽度与顶部导航保持一致。
 
 ## 主交互与浏览器验证
 
-- 状态筛选：点击“制作中”后 `aria-pressed=true`，可恢复“全部”。
-- 搜索：输入框可接收并清除关键词，焦点环可见。
-- 创建入口：顶部与空状态入口均可打开真实“创建漫剧项目”对话框；只验证打开和取消，没有提交数据。
-- 响应式：`1024 × 768` 下 `body.scrollWidth <= window.innerWidth`，主操作可见。
-- 控制台：页面来源没有 error；记录到的一条 error 来自用户 Chrome 的 Immersive Translate 扩展，不属于 Lanverse。
-- focused region comparison：本轮没有需要单独放大的图片、密集表格或精细资产；标题—摘要—工具栏—空状态已在全视图中清晰可读，因此不另做局部图。
+- 根路由：从真实登录项目页点击指向 `/` 的 Logo，页面最终地址为 `http://localhost:3000/projects`，未闪回营销或欢迎内容。
+- 主导航：真实 owner 会话仅生成“项目 / 资产 / 治理”，没有“首页”。权限单元测试同时覆盖 viewer、editor 与 owner。
+- 命令面板：点击“搜索或执行命令”打开具名 Dialog，结果仅含“项目 / 资产 / 治理 / 空间”，没有“首页”。
+- 数据请求：登录态根页面单元测试确认不调用首页 `/me` 和项目列表请求，只执行路由替换。
+- 错误恢复：登录态 503/403 状态改为“返回项目”并指向 `/projects`；未登录 401 仍可返回公开产品首页。
+- 控制台：Lanverse 页面来源没有 error 或 warn；记录到的 error 均来自 Immersive Translate Chrome 扩展，不属于项目代码。
+- 构建验证：`npm run lint`、`npm run typecheck`、`npm test -- --run`、`npm run build` 全部通过。
 
 final result: passed
