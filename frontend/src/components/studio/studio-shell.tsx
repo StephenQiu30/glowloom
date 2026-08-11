@@ -4,7 +4,6 @@ import {
   Bell,
   Check,
   ChevronDown,
-  CircleHelp,
   Folder,
   Home,
   LogOut,
@@ -14,10 +13,10 @@ import {
   SquareStack,
   UserRound,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode } from "react";
 
+import { StudioBrand } from "@/components/studio/studio-brand";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,33 +36,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  NavigationMenu,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+} from "@/components/ui/navigation-menu";
 import { Separator } from "@/components/ui/separator";
+import { useAuthSessionState } from "@/hooks/use-auth-session";
+import {
+  canAccessPage,
+  type StudioNavigation,
+  visiblePrimaryNavigation,
+  type WorkspaceRole,
+} from "@/lib/access-control";
 import { clearAccessToken } from "@/lib/auth-session";
 import { cn } from "@/lib/class-names";
-import { useLogoutMutation } from "@/lib/server-state";
+import { useLogoutMutation, useMeQuery } from "@/lib/server-state";
+
+export type { StudioNavigation } from "@/lib/access-control";
 
 const productionStages = ["剧本", "资产", "分镜", "生成", "审核", "交付"];
-
-const studioBrandSizes = {
-  l: "h-7",
-  lg: "h-9",
-  xl: "h-9.5",
-} as const;
-
-const studioBrandMediumSizes = {
-  l: "md:h-7",
-  lg: "md:h-9",
-  xl: "md:h-9.5",
-} as const;
-
-type StudioBrandSize = keyof typeof studioBrandSizes;
-
-export type StudioNavigation =
-  | "create"
-  | "projects"
-  | "assets"
-  | "governance"
-  | "settings";
 
 const navigationItems: Array<{
   id: StudioNavigation;
@@ -79,34 +72,11 @@ const navigationItems: Array<{
   { id: "settings", label: "空间", description: "账户与工作空间", href: "/workspaces", icon: Settings },
 ];
 
-export function StudioBrand({
-  size = "lg",
-  mdSize,
-}: {
-  size?: StudioBrandSize;
-  mdSize?: StudioBrandSize;
-}) {
-  return (
-    <Link
-      className="inline-flex shrink-0 items-center"
-      href="/"
-      aria-label="Lanverse 首页"
-    >
-      <Image
-        alt="Lanverse"
-        className={cn(
-          "w-auto",
-          studioBrandSizes[size],
-          mdSize ? studioBrandMediumSizes[mdSize] : null,
-        )}
-        height={402}
-        priority
-        src="/brand/lanverse-logo.png"
-        width={1667}
-      />
-    </Link>
-  );
-}
+const roleLabels: Record<WorkspaceRole, string> = {
+  owner: "所有者",
+  editor: "编辑者",
+  viewer: "查看者",
+};
 
 function ProductionProgress({ currentStep }: { currentStep: number }) {
   return (
@@ -136,7 +106,50 @@ function ProductionProgress({ currentStep }: { currentStep: number }) {
   );
 }
 
-function GlobalSearch() {
+function StudioNavigationMenu({
+  active,
+  role,
+  mobile = false,
+}: {
+  active: StudioNavigation;
+  role?: WorkspaceRole;
+  mobile?: boolean;
+}) {
+  const visibleIds = visiblePrimaryNavigation(role);
+  const visibleItems = navigationItems.filter((item) => visibleIds.includes(item.id));
+
+  return (
+    <NavigationMenu
+      aria-label={mobile ? "移动端导航" : "主导航"}
+      className={cn(mobile && "w-full max-w-none justify-start")}
+      viewport={false}
+    >
+      <NavigationMenuList className={cn("gap-1", mobile && "justify-start")}>
+        {visibleItems.map((item) => (
+          <NavigationMenuItem key={item.id}>
+            <NavigationMenuLink
+              active={active === item.id}
+              asChild
+              className={cn(
+                "h-8 px-2.5 py-1.5",
+                active === item.id && "bg-muted font-medium",
+              )}
+            >
+              <Link href={item.href}>
+                <item.icon className="size-3.5" aria-hidden="true" />
+                {item.label}
+              </Link>
+            </NavigationMenuLink>
+          </NavigationMenuItem>
+        ))}
+      </NavigationMenuList>
+    </NavigationMenu>
+  );
+}
+
+function GlobalSearch({ role }: { role: WorkspaceRole }) {
+  const visibleItems = navigationItems.filter((item) => canAccessPage(role, item.id));
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -157,7 +170,7 @@ function GlobalSearch() {
             <Input aria-label="全局搜索" className="h-10 pl-9" placeholder="搜索项目、剧本、资产或任务" autoFocus />
           </div>
           <nav className="mt-3 grid gap-1" aria-label="快速入口">
-            {navigationItems.map((item) => (
+            {visibleItems.map((item) => (
               <Link className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-muted" href={item.href} key={item.id}>
                 <item.icon className="size-4 text-muted-foreground" aria-hidden="true" />
                 <span>{item.label}</span>
@@ -186,7 +199,15 @@ export function StudioShell({
   topAction?: ReactNode;
   viewer?: { displayName: string; workspaceName: string };
 }) {
+  const sessionState = useAuthSessionState();
+  const authenticated = sessionState === "authenticated";
+  const me = useMeQuery(undefined, { skip: !authenticated });
   const [logout, logoutState] = useLogoutMutation();
+  const role = me.data?.workspace.role;
+  const resolvedViewer = viewer ?? (me.data ? {
+    displayName: me.data.user.display_name?.trim() || me.data.user.email,
+    workspaceName: me.data.workspace.name,
+  } : undefined);
 
   async function handleLogout() {
     try {
@@ -202,45 +223,38 @@ export function StudioShell({
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="mx-auto flex h-[72px] max-w-[1440px] items-center gap-6 px-5 md:px-8">
           <StudioBrand size="l" />
-          <nav className="hidden items-center gap-1 md:flex" aria-label="主导航">
-            {navigationItems.slice(0, 4).map((item) => (
-              <Button asChild key={item.id} size="sm" variant="ghost">
-                <Link className={cn(active === item.id && "bg-muted font-medium")} href={item.href}>
-                  {item.label}
-                </Link>
-              </Button>
-            ))}
-          </nav>
+          <div className="hidden md:block">
+            <StudioNavigationMenu active={active} role={role} />
+          </div>
 
           <div className="ml-auto flex items-center gap-1.5">
-            <GlobalSearch />
+            {role ? <GlobalSearch role={role} /> : null}
             {topAction ? <div className="flex items-center">{topAction}</div> : null}
-            <Button asChild aria-label="帮助" className="hidden sm:inline-flex" size="icon" variant="ghost">
-              <Link href="/governance"><CircleHelp aria-hidden="true" /></Link>
-            </Button>
-            <Button aria-label="任务通知" className="hidden sm:inline-flex" size="icon" variant="ghost">
-              <Bell aria-hidden="true" />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button className="gap-2 px-1.5" variant="ghost">
-                  <Avatar size="sm">
-                    <AvatarFallback>{(viewer?.displayName ?? "L").slice(0, 1).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <span className="hidden max-w-28 truncate text-sm md:block">{viewer?.displayName ?? "账户"}</span>
-                  <ChevronDown className="hidden size-3.5 text-muted-foreground sm:block" aria-hidden="true" />
+            {authenticated && role ? (
+              <>
+                <Button aria-label="任务通知" className="hidden sm:inline-flex" size="icon" variant="ghost">
+                  <Bell aria-hidden="true" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>
-                  <span className="block text-foreground">{viewer?.displayName ?? "Lanverse"}</span>
-                  <span className="mt-0.5 block font-normal">{viewer?.workspaceName ?? "工作空间"}</span>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><Link href="/workspaces"><UserRound aria-hidden="true" />账户与空间</Link></DropdownMenuItem>
-                <DropdownMenuItem asChild><Link href="/governance"><ShieldCheck aria-hidden="true" />治理与审计</Link></DropdownMenuItem>
-                {viewer ? (
-                  <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="gap-2 px-1.5" variant="ghost">
+                      <Avatar size="sm">
+                        <AvatarFallback>{(resolvedViewer?.displayName ?? "L").slice(0, 1).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <span className="hidden max-w-28 truncate text-sm md:block">{resolvedViewer?.displayName ?? "账户"}</span>
+                      <ChevronDown className="hidden size-3.5 text-muted-foreground sm:block" aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>
+                      <span className="block text-foreground">{resolvedViewer?.displayName ?? "Lanverse"}</span>
+                      <span className="mt-0.5 block font-normal">{resolvedViewer?.workspaceName ?? "工作空间"} · {roleLabels[role]}</span>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild><Link href="/workspaces"><UserRound aria-hidden="true" />账户与空间</Link></DropdownMenuItem>
+                    {canAccessPage(role, "governance") ? (
+                      <DropdownMenuItem asChild><Link href="/governance"><ShieldCheck aria-hidden="true" />治理与审计</Link></DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       disabled={logoutState.isLoading}
@@ -252,19 +266,15 @@ export function StudioShell({
                     >
                       <LogOut aria-hidden="true" />退出登录
                     </DropdownMenuItem>
-                  </>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : null}
           </div>
         </div>
 
-        <div className="flex h-11 items-center gap-1 overflow-x-auto border-t px-5 md:hidden" aria-label="移动端导航">
-          {navigationItems.slice(0, 4).map((item) => (
-            <Button asChild key={item.id} size="sm" variant={active === item.id ? "secondary" : "ghost"}>
-              <Link href={item.href}>{item.label}</Link>
-            </Button>
-          ))}
+        <div className="flex h-11 items-center overflow-x-auto border-t px-5 md:hidden">
+          <StudioNavigationMenu active={active} mobile role={role} />
         </div>
       </header>
 
