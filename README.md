@@ -1,33 +1,114 @@
 # Lanverse
 
-Lanverse 是面向 AI 短剧生产的模块化单体应用。当前工程从可验证的纵向切片逐步交付，后端使用 FastAPI，前端使用 Next.js App Router、shadcn/ui 与 Radix UI。
+Lanverse 是面向 AI 短剧生产的模块化单体应用。后端使用 FastAPI，前端使用 Next.js App Router、shadcn/ui 与 Radix UI。
 
-## 本地环境
+## 本地开发
 
-- Python 3.11.15、标准 venv/pip（PyCharm Project venv）
-- Node.js 22.23.1、npm 10.9.8
-- PostgreSQL 18.4、Redis 8.8.1、RabbitMQ 4.3.4（本机 Homebrew 服务）
-- MinIO（Docker Compose 使用 `minio/minio:latest`）
-- Docker 29.6.2、Compose 5.3.1（仅运行 MinIO、完整容器环境或验证镜像时需要）
+本地模式直接复用 Homebrew 安装的 PostgreSQL 18.4、Redis 8.8.1、RabbitMQ 4.3.4 和 MinIO；应用使用 Python 3.11.15、Node.js 22.23.1 与 npm 10.9.8。Docker 不是本地开发前置。
 
-后端以 `backend/.venv` 作为 PyCharm 项目解释器，依赖由 pip 按提交的 requirements 锁安装；前端基于 Vercel 官方 `create-next-app@16.2.12` 生成的 TypeScript/App Router/src 模板。所有依赖均安装在项目目录，不修改系统 Python 或全局 npm。首次执行：
+首次安装项目依赖：
 
 ```bash
-make setup
-make minio-up
-make db-init
-make dev-api
-make dev-frontend
+cp .env.example .env
+python3.11 -m venv backend/.venv
+backend/.venv/bin/python -m pip install 'pip==26.1.2'
+backend/.venv/bin/python -m pip install --requirement backend/requirements-dev.txt
+backend/.venv/bin/python -m pip check
+cd frontend && npm ci
 ```
 
-API 默认位于 `http://127.0.0.1:8000`，Web 默认位于 `http://127.0.0.1:3000`。完整质量门禁使用 `make check`；浏览器验收需显式执行 `make e2e-install` 与 `make e2e`。
+启动本机 PostgreSQL、Redis 和 RabbitMQ：
 
-## 配置
+```bash
+brew services start postgresql@18
+brew services start redis
+brew services start rabbitmq
+```
 
-首次使用时执行 `cp .env.example .env` 创建开发配置；后端、前端、OpenAPI 生成和基础 Docker Compose 均从根目录 `.env` 获取配置。生产部署执行 `cp .env.production.example .env.production`，再填写生产域名、镜像仓库和全部必需 secret。两个模板保持完全一致的变量集合，包含应用连接串、隔离测试数据库、PostgreSQL 初始化参数及其他基础设施配置，只在默认值和密钥策略上区分环境；两个真实环境文件都不得提交，也不得在 `backend/` 或 `frontend/` 中重复创建。前端只会收到明确列出的 `NEXT_PUBLIC_*` 公共变量，这些值会进入浏览器包，不能保存 secret。
+MinIO 不由项目启动或管理，直接复用本机通过 Homebrew 安装并已运行的实例。当前应用连接 `127.0.0.1:9000`，Console 位于 `127.0.0.1:9001`；确认端口即可：
 
-本地开发默认使用本机 PostgreSQL、Redis、RabbitMQ，MinIO 可由 `make minio-up` 按需提供；FastAPI、Scheduler、Worker 与 Next.js 继续使用上面的本地命令运行，不要求 Docker。需要快速启动完整开发环境时，根 `docker-compose.yml` 会构建并启动 PostgreSQL、Redis、RabbitMQ、MinIO、后端和前端；生产部署在该事实源上叠加很薄的 `docker-compose.prod.yml`，隐藏四项基础设施的宿主机端口、禁用现场构建并拉取已发布的 server/web 镜像。所有服务都有健康检查，应用只在依赖健康后启动。基础镜像参考 [`StephenQiu30/code-ark`](https://github.com/StephenQiu30/code-ark) 的直接配置方式使用 `latest`，不维护额外版本守卫。
+```bash
+lsof -nP -iTCP:9000 -sTCP:LISTEN
+```
 
-开发环境使用 `make docker-dev-up`，日志和停止命令分别为 `make docker-dev-logs`、`make docker-dev-down`。生产环境在镜像已发布且 `.env.production` 已填写后使用 `make docker-prod-up`，日志和停止命令分别为 `make docker-prod-logs`、`make docker-prod-down`；生产启动固定使用 `--no-build --pull always --wait`。真实凭据、媒体、日志和数据不得提交。
+`.env` 中的 `MINIO_ACCESS_KEY` 和 `MINIO_SECRET_KEY` 必须与该实例一致。项目不会重启、停止或修改这项本机服务。
 
-产品、架构、PRD 与执行计划分别位于 `docs/requirement`、`docs/design`、`docs/prd` 和 `docs/plan`。
+初始化数据库并启动完整后端角色：
+
+```bash
+cd backend
+.venv/bin/python -m app.initialize_database
+.venv/bin/python -m app.server
+```
+
+另开终端启动前端：
+
+```bash
+cd frontend
+npm run dev -- --port 3001
+```
+
+Web、API 文档和依赖就绪状态分别位于：
+
+- `http://127.0.0.1:3001`
+- `http://127.0.0.1:8000/docs`
+- `http://127.0.0.1:8000/readyz`
+
+## Docker 一键启动
+
+Docker Compose 保留完整六服务环境，包含 PostgreSQL、Redis、RabbitMQ、MinIO、server 和 web：
+
+```bash
+docker compose up -d --build --wait
+```
+
+查看日志与停止环境：
+
+```bash
+docker compose logs --follow
+docker compose down
+```
+
+为避免占用本机 MinIO 的 `9000/9001`，Compose 将自己的 MinIO 发布到宿主机 `9100/9101`；容器内部仍通过 `minio:9000` 通信。两套环境可以并存。
+
+生产环境在镜像已发布且 `.env.production` 已填写后执行：
+
+```bash
+docker compose \
+  --env-file .env.production \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  up -d --no-build --pull always --wait
+```
+
+## 验证
+
+后端：
+
+```bash
+cd backend
+.venv/bin/ruff check app tests
+.venv/bin/pyright
+.venv/bin/python -m pytest
+.venv/bin/python -m pip check
+```
+
+前端：
+
+```bash
+cd frontend
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+```
+
+Compose 配置：
+
+```bash
+docker compose --env-file .env.example config >/dev/null
+```
+
+需要真实外部依赖的契约通过对应 `LANVERSE_RUN_*` 环境变量显式开启；CI 中保留了 Redis、RabbitMQ、MinIO、ffprobe、Scheduler、媒体栈和浏览器的完整原生命令作为可执行事实源。
+
+产品、架构、PRD 与执行计划分别位于 `docs/requirement`、`docs/design`、`docs/prd` 和 `docs/plan`。真实凭据、媒体、日志和本地数据不得提交。

@@ -80,7 +80,7 @@ def test_workspace_cache_acceptance_tracks_real_redis_and_remaining_boundary() -
     assert "monotonic-revision" in design
     assert "PT-CCH-001 已以 Workspace 详情 cache-aside 接受" in prd
     assert "状态：accepted（PT-CCH-001）" in acceptance
-    assert "make contract-redis" in acceptance
+    assert "1/1" in acceptance and "真实 SET/GET/EXPIRE" in acceptance
     assert "PT-CCH-002" in acceptance and "继续保持未完成" in acceptance
 
 
@@ -272,7 +272,7 @@ def test_generation_attempt_fail_closed_is_traced_without_provider_acceptance() 
         "PT-PROD-005/006、PT-MQ-003、DEV-S4-02 与 S4 整体保持 in_progress）"
         in acceptance
     )
-    assert "make contract-rabbitmq" in acceptance
+    assert "5 passed" in acceptance
     assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
     assert "没有 Ark SDK" in acceptance
     assert "没有在线迁移框架" in acceptance
@@ -318,7 +318,7 @@ def test_generation_protocol_poison_is_traced_without_full_retry_acceptance() ->
     assert "## 9. 当前 generation 协议毒消息终止收敛边界" in messaging_requirement
     assert "### 4.3 generation 协议毒消息终止收敛" in production_design
     assert "GenerationProtocolErrorCode" in acceptance
-    assert "make contract-rabbitmq" in acceptance
+    assert "6/6" in acceptance and "真实 Broker" in acceptance
     assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
     assert "没有 Ollama、Ark SDK 或 fake Provider 成功" in acceptance
     assert "PT-MQ-003、DEV-S4-02 与 S4 整体保持 in_progress" in acceptance
@@ -373,8 +373,8 @@ def test_minio_port_is_accepted_without_claiming_conditional_oss() -> None:
     assert "PT-STO-001 已完成并 accepted" in prd
     assert "PT-STO-001 已完成真实 MinIO 收口" in plan
     assert "状态：accepted（PT-STO-001；PT-STO-002 conditional/not-applicable）" in acceptance
-    assert "make contract-minio" in acceptance
-    assert "make contract-media-stack" in acceptance
+    assert "6/6" in acceptance
+    assert "4/4" in acceptance
     assert "PT-STO-002 明确为 `conditional/not-applicable`" in acceptance
     assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
 
@@ -408,9 +408,9 @@ def test_minio_and_ffprobe_observability_is_traced_without_premature_acceptance(
         "状态：accepted（仅 PT-OBS-002 当前 MinIO/ffprobe 遥测增量；"
         "PT-OBS-002 整体保持 in_progress" in acceptance
     )
-    assert "make contract-minio" in acceptance
-    assert "make contract-ffprobe" in acceptance
-    assert "make contract-media-stack" in acceptance
+    assert "7 passed" in acceptance
+    assert "2 passed" in acceptance
+    assert "4 passed" in acceptance
     assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
     assert "FFmpeg render" in acceptance and "尚无真实实现" in acceptance
 
@@ -453,9 +453,9 @@ def test_outbox_capacity_observability_is_traced_without_inventing_thresholds() 
         "状态：accepted（仅 PT-MQ-004/PT-OBS-002 当前 backlog/inflight/prefetch 增量；"
         "PT-MQ-004/PT-OBS-002 整体保持 in_progress" in acceptance
     )
-    assert "make contract-rabbitmq" in acceptance
-    assert "make contract-scheduler-stack" in acceptance
-    assert "make contract-media-stack" in acceptance
+    assert "4 passed" in acceptance
+    assert "1 passed" in acceptance
+    assert "真实 PostgreSQL" in acceptance and "MinIO" in acceptance
     assert "DEEPSEEK_API_KEY='' ARK_API_KEY=''" in acceptance
     assert "D-007" in acceptance and "不把猜测默认值" in acceptance
 
@@ -729,7 +729,7 @@ def test_storyboard_readiness_is_traced_into_production_snapshot() -> None:
     assert "完整无密钥 E2E 7/7（46.3 秒）" in storyboard_acceptance
 
 
-def test_explicit_external_minio_reuse_is_traced() -> None:
+def test_homebrew_minio_and_full_compose_are_traced() -> None:
     engineering_design = (
         DOCS / "design/000-项目顶层结构与工程规范.md"
     ).read_text(encoding="utf-8")
@@ -738,6 +738,8 @@ def test_explicit_external_minio_reuse_is_traced() -> None:
     ).read_text(encoding="utf-8")
 
     for source in (engineering_design, compose_acceptance):
-        assert "MINIO_REUSE_EXTERNAL=1" in source
-        assert "默认仍拒绝" in source
-    assert "MinIO 真实契约 2/2" in compose_acceptance
+        assert "Homebrew" in source
+        assert "127.0.0.1:9000" in source
+        assert "docker compose up -d --build --wait" in source
+    assert "9100/9101" in engineering_design
+    assert "7 passed" in compose_acceptance

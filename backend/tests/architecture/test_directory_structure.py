@@ -72,30 +72,14 @@ def test_environment_specific_compose_supports_robust_full_stack_startup() -> No
     assert production_compose.count("build: !reset null") == 2
     assert "ENVIRONMENT: production" in production_compose
 
-    makefile = (ROOT / "Makefile").read_text()
-    assert "docker compose build server web" in makefile
-    assert "docker-dev-up:" in makefile
-    assert "docker-prod-up:" in makefile
-    assert "--env-file $(PROD_ENV_FILE)" in makefile
-    assert "-f docker-compose.prod.yml" in makefile
-    assert "up -d --no-build --pull always --wait" in makefile
-    assert "docker compose up -d --wait minio" in makefile
-    assert "docker compose stop minio" in makefile
-    assert "cache-invalidate:" in makefile
-    assert "python -m app.cache_admin $(CACHE_NAMESPACE)" in makefile
-    assert "MINIO_REUSE_EXTERNAL ?= 0" in makefile
-    assert "docker compose ps --status running -q minio" in makefile
-    assert "Explicitly reusing external MinIO" in makefile
-    assert "Requested external MinIO is not available" in makefile
-    assert "is occupied by a MinIO outside this Compose project" in makefile
-    for removed_target in (
-        "services-up:",
-        "services-down:",
-        "env-up:",
-        "env-down:",
-        "minio-version-check:",
-    ):
-        assert removed_target not in makefile
+    assert not (ROOT / "Makefile").exists()
+    assert not (ROOT / "backend/tools").exists()
+    readme = (ROOT / "README.md").read_text()
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    assert "docker compose up -d --build --wait" in readme
+    assert "up -d --no-build --pull always --wait" in readme
+    assert "docker compose build server web" in workflow
+    assert (ROOT / "backend/app/cache_admin.py").is_file()
 
     backend_dockerfile = (ROOT / "backend/Dockerfile").read_text()
     assert 'CMD ["python", "-m", "app.server"]' in backend_dockerfile
@@ -109,13 +93,6 @@ def test_environment_configuration_has_one_repository_entrypoint() -> None:
 
     package = json.loads((ROOT / "frontend/package.json").read_text())
     assert "--env-file-if-exists=../.env" in package["scripts"]["openapi2ts"]
-
-    makefile = (ROOT / "Makefile").read_text()
-    assert (
-        "LANVERSE_RUN_DEEPSEEK_E2E=1 node --env-file-if-exists=../.env "
-        "node_modules/@playwright/test/cli.js test"
-    ) in makefile
-    assert "DEEPSEEK_API_KEY is required for the real DeepSeek E2E contract" not in makefile
 
     compose = (ROOT / "docker-compose.yml").read_text()
     assert "ARK_API_KEY: ${ARK_API_KEY:-}" in compose
@@ -137,17 +114,15 @@ def test_backend_uses_pycharm_venv_and_pip_lock_baseline() -> None:
     assert 'venvPath = "."' in pyproject
     assert 'venv = ".venv"' in pyproject
 
-    makefile = (ROOT / "Makefile").read_text()
-    assert "PYTHON ?= python3.11" in makefile
-    assert "$(PYTHON) -m venv backend/.venv" in makefile
-    assert "$(VENV_PYTHON) -m pip install 'pip==26.1.2'" in makefile
-    assert "uv sync" not in makefile
-    assert "uv run" not in makefile
-
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
     dockerfile = (ROOT / "backend/Dockerfile").read_text()
     playwright = (ROOT / "frontend/playwright.config.ts").read_text()
     assert "setup-uv" not in workflow
+    assert "python -m venv backend/.venv" in workflow
+    assert "backend/.venv/bin/python -m pip install 'pip==26.1.2'" in workflow
+    assert "backend/.venv/bin/python -m pip install --requirement" in workflow
+    assert "uv sync" not in workflow
+    assert "uv run" not in workflow
     assert "ghcr.io/astral-sh/uv" not in dockerfile
     assert "uv run" not in playwright
 
@@ -160,12 +135,12 @@ def test_ci_executes_the_real_media_stack_contract() -> None:
     assert "minio/minio:RELEASE." not in workflow
     assert "@sha256:" not in workflow
     assert "ffprobe -version" in workflow
-    assert "make contract-media-stack" in workflow
+    assert "LANVERSE_RUN_MEDIA_STACK_CONTRACT=1" in workflow
     assert "name: Stop MinIO contract service" in workflow
     assert "if: always()" in workflow
     assert "docker rm --force lanverse-ci-minio" in workflow
     assert "image: redis:latest" in workflow
-    assert "make contract-redis" in workflow
+    assert "LANVERSE_RUN_REDIS_CONTRACT=1" in workflow
 
 
 def test_scripts_is_split_by_capability() -> None:
