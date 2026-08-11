@@ -13,11 +13,7 @@ describe("workspace page access", () => {
   });
 
   it("keeps viewer navigation read-only and excludes governance", () => {
-    expect(visiblePrimaryNavigation("viewer")).toEqual([
-      "create",
-      "projects",
-      "assets",
-    ]);
+    expect(visiblePrimaryNavigation("viewer")).toEqual(["projects", "assets"]);
     expect(canAccessPage("viewer", "projects")).toBe(true);
     expect(canAccessPage("viewer", "assets")).toBe(true);
     expect(canAccessPage("viewer", "governance")).toBe(false);
@@ -28,7 +24,6 @@ describe("workspace page access", () => {
     "allows %s to enter governance",
     (role) => {
       expect(visiblePrimaryNavigation(role)).toEqual([
-        "create",
         "projects",
         "assets",
         "governance",

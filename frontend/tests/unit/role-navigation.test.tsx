@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
@@ -56,7 +57,7 @@ describe("role-aware global navigation", () => {
 
     const navigation = await screen.findByRole("navigation", { name: "主导航" });
     await waitFor(() => {
-      expect(within(navigation).getByRole("link", { name: "首页" })).toBeInTheDocument();
+      expect(within(navigation).queryByRole("link", { name: "首页" })).not.toBeInTheDocument();
       expect(within(navigation).getByRole("link", { name: "项目" })).toBeInTheDocument();
       expect(within(navigation).getByRole("link", { name: "资产" })).toBeInTheDocument();
     });
@@ -93,5 +94,33 @@ describe("role-aware global navigation", () => {
       );
     });
     await waitFor(() => expect(apiMocks.me).toHaveBeenCalled());
+  });
+
+  it("opens a real command palette from the keyboard and navigates to a filtered destination", async () => {
+    const user = userEvent.setup();
+    mockMe("owner");
+    render(
+      <AppProviders>
+        <StudioShell active="projects">
+          <p>项目内容</p>
+        </StudioShell>
+      </AppProviders>,
+    );
+
+    const trigger = await screen.findByRole("button", { name: /搜索或执行命令/ });
+    expect(trigger.querySelectorAll("svg")).toHaveLength(2);
+    expect(trigger).not.toHaveTextContent("⌘");
+
+    await user.keyboard("{Control>}k{/Control}");
+    const dialog = await screen.findByRole("dialog", { name: "前往 Lanverse" });
+    expect(within(dialog).queryByRole("option", { name: /首页/ })).not.toBeInTheDocument();
+    const search = within(dialog).getByRole("combobox", { name: "全局搜索" });
+    await user.type(search, "治理");
+
+    const destination = within(dialog).getByRole("option", { name: /治理/ });
+    expect(within(destination).getByRole("link", { name: /治理/ })).toHaveAttribute("href", "/governance");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "前往 Lanverse" })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
   });
 });
