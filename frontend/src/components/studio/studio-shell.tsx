@@ -44,6 +44,20 @@ import { useLogoutMutation } from "@/lib/server-state";
 
 const productionStages = ["剧本", "资产", "分镜", "生成", "审核", "交付"];
 
+const studioBrandSizes = {
+  l: "h-7",
+  lg: "h-9",
+  xl: "h-9.5",
+} as const;
+
+const studioBrandMediumSizes = {
+  l: "md:h-7",
+  lg: "md:h-9",
+  xl: "md:h-9.5",
+} as const;
+
+type StudioBrandSize = keyof typeof studioBrandSizes;
+
 export type StudioNavigation =
   | "create"
   | "projects"
@@ -65,16 +79,30 @@ const navigationItems: Array<{
   { id: "settings", label: "空间", description: "账户与工作空间", href: "/workspaces", icon: Settings },
 ];
 
-export function StudioBrand() {
+export function StudioBrand({
+  size = "lg",
+  mdSize,
+}: {
+  size?: StudioBrandSize;
+  mdSize?: StudioBrandSize;
+}) {
   return (
-    <Link className="relative block h-9 w-[146px] shrink-0 overflow-hidden" href="/" aria-label="Lanverse 首页">
+    <Link
+      className="inline-flex shrink-0 items-center"
+      href="/"
+      aria-label="Lanverse 首页"
+    >
       <Image
         alt="Lanverse"
-        className="object-contain"
-        fill
+        className={cn(
+          "w-auto",
+          studioBrandSizes[size],
+          mdSize ? studioBrandMediumSizes[mdSize] : null,
+        )}
+        height={402}
         priority
-        sizes="146px"
         src="/brand/lanverse-logo.png"
+        width={1667}
       />
     </Link>
   );
@@ -173,7 +201,7 @@ export function StudioShell({
     <main className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="mx-auto flex h-[72px] max-w-[1440px] items-center gap-6 px-5 md:px-8">
-          <StudioBrand />
+          <StudioBrand size="l" />
           <nav className="hidden items-center gap-1 md:flex" aria-label="主导航">
             {navigationItems.slice(0, 4).map((item) => (
               <Button asChild key={item.id} size="sm" variant="ghost">
