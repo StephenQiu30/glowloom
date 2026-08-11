@@ -72,7 +72,7 @@ def test_workspace_cache_acceptance_tracks_real_redis_and_remaining_boundary() -
     prd = (DOCS / "prd/009-剪辑交付与平台保障PRD任务.md").read_text(
         encoding="utf-8"
     )
-    acceptance = (DOCS / "acceptance/011-工作空间详情缓存验收.md").read_text(
+    acceptance = (DOCS / "acceptance/arrived/011-工作空间详情缓存验收.md").read_text(
         encoding="utf-8"
     )
 
@@ -87,8 +87,8 @@ def test_workspace_cache_acceptance_tracks_real_redis_and_remaining_boundary() -
 def test_s2_s3_real_provider_acceptance_and_s4_gate_do_not_drift() -> None:
     slice_prd = (DOCS / "prd/002-MVP纵向交付切片.md").read_text(encoding="utf-8")
     prd = (DOCS / "prd/008-创作生产模块PRD任务.md").read_text(encoding="utf-8")
-    prd_index = (DOCS / "prd/产品需求索引.md").read_text(encoding="utf-8")
-    plan_index = (DOCS / "plan/计划索引.md").read_text(encoding="utf-8")
+    prd_index = (DOCS / "prd/README.md").read_text(encoding="utf-8")
+    plan_index = (DOCS / "plan/README.md").read_text(encoding="utf-8")
 
     for source in (slice_prd, prd, prd_index, plan_index):
         assert "S2/S3" in source
@@ -115,7 +115,7 @@ def test_ark_public_contract_is_revalidated_without_premature_sdk_install() -> N
     execution = (DOCS / "prd/003-MVP执行计划与追踪矩阵.md").read_text(
         encoding="utf-8"
     )
-    acceptance = (DOCS / "acceptance/007-D004方舟公开契约复核.md").read_text(
+    acceptance = (DOCS / "acceptance/arrived/007-D004方舟公开契约复核.md").read_text(
         encoding="utf-8"
     )
 
@@ -156,7 +156,7 @@ def test_generation_fact_layer_is_traced_without_premature_provider_acceptance()
     prd = (DOCS / "prd/008-创作生产模块PRD任务.md").read_text(encoding="utf-8")
     plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(encoding="utf-8")
     acceptance = (
-        DOCS / "acceptance/019-生成预检与费用预占事实层验收.md"
+        DOCS / "acceptance/arrived/019-生成预检与费用预占事实层验收.md"
     ).read_text(encoding="utf-8")
 
     for source in (requirement, design, prd, plan, acceptance):
@@ -182,7 +182,7 @@ def test_high_cost_guard_is_traced_without_premature_provider_acceptance() -> No
     ).read_text(encoding="utf-8")
     plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(encoding="utf-8")
     acceptance = (
-        DOCS / "acceptance/020-高成本生成原子限流与去抖验收.md"
+        DOCS / "acceptance/arrived/020-高成本生成原子限流与去抖验收.md"
     ).read_text(encoding="utf-8")
 
     for source in (requirement, design, prd, plan, acceptance):
@@ -208,7 +208,7 @@ def test_queued_generation_cancellation_is_traced_without_provider_acceptance() 
     prd = (DOCS / "prd/008-创作生产模块PRD任务.md").read_text(encoding="utf-8")
     plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(encoding="utf-8")
     acceptance = (
-        DOCS / "acceptance/021-排队生成取消与预占释放验收.md"
+        DOCS / "acceptance/arrived/021-排队生成取消与预占释放验收.md"
     ).read_text(encoding="utf-8")
 
     for source in (requirement, design, prd, plan, acceptance):
@@ -246,7 +246,7 @@ def test_generation_attempt_fail_closed_is_traced_without_provider_acceptance() 
         encoding="utf-8"
     )
     acceptance = (
-        DOCS / "acceptance/025-生成Attempt预持久化与无Provider失败收敛验收.md"
+        DOCS / "acceptance/arrived/025-生成Attempt预持久化与无Provider失败收敛验收.md"
     ).read_text(encoding="utf-8")
 
     for source in (
@@ -298,7 +298,7 @@ def test_generation_protocol_poison_is_traced_without_full_retry_acceptance() ->
         encoding="utf-8"
     )
     acceptance = (
-        DOCS / "acceptance/026-generation协议毒消息终止收敛验收.md"
+        DOCS / "acceptance/arrived/026-generation协议毒消息终止收敛验收.md"
     ).read_text(encoding="utf-8")
 
     for source in (
@@ -328,7 +328,7 @@ def test_generation_protocol_poison_is_traced_without_full_retry_acceptance() ->
 
 def test_minio_acceptance_evidence_tracks_the_latest_compose_decision() -> None:
     compose_acceptance = (
-        DOCS / "acceptance/008-D006全栈Compose部署验收.md"
+        DOCS / "acceptance/arrived/008-D006全栈Compose部署验收.md"
     ).read_text(encoding="utf-8")
     assert "基础镜像使用 `latest`" in compose_acceptance
     assert "不固定 tag、digest 或二进制发行版" in compose_acceptance
@@ -339,7 +339,9 @@ def test_minio_acceptance_evidence_tracks_the_latest_compose_decision() -> None:
         "005-剧本资产联合工作台验收.md",
         "006-分镜制作工作台验收.md",
     ):
-        source = (DOCS / "acceptance" / filename).read_text(encoding="utf-8")
+        source = (DOCS / "acceptance/arrived" / filename).read_text(
+            encoding="utf-8"
+        )
         assert "ACC-008" in source
         assert "minio-version-check" not in source
         assert "RELEASE.2025-09-07T16-13-09Z" not in source
@@ -361,7 +363,7 @@ def test_minio_port_is_accepted_without_claiming_conditional_oss() -> None:
         encoding="utf-8"
     )
     acceptance = (
-        DOCS / "acceptance/022-MinIO对象存储端口验收.md"
+        DOCS / "acceptance/arrived/022-MinIO对象存储端口验收.md"
     ).read_text(encoding="utf-8")
 
     for source in (requirement, design, prd, plan, acceptance):
@@ -393,7 +395,7 @@ def test_minio_and_ffprobe_observability_is_traced_without_premature_acceptance(
         encoding="utf-8"
     )
     acceptance = (
-        DOCS / "acceptance/023-MinIO与媒体探测可观测性验收.md"
+        DOCS / "acceptance/arrived/023-MinIO与媒体探测可观测性验收.md"
     ).read_text(encoding="utf-8")
 
     for source in (requirement, design, prd, plan, acceptance):
@@ -432,7 +434,7 @@ def test_outbox_capacity_observability_is_traced_without_inventing_thresholds() 
         encoding="utf-8"
     )
     acceptance = (
-        DOCS / "acceptance/024-Outbox积压与Worker执行容量验收.md"
+        DOCS / "acceptance/arrived/024-Outbox积压与Worker执行容量验收.md"
     ).read_text(encoding="utf-8")
 
     for source in (
@@ -469,7 +471,7 @@ def test_media_version_lifecycle_traceability_is_explicit() -> None:
         encoding="utf-8"
     )
     plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(encoding="utf-8")
-    acceptance = (DOCS / "acceptance/005-剧本资产联合工作台验收.md").read_text(
+    acceptance = (DOCS / "acceptance/arrived/005-剧本资产联合工作台验收.md").read_text(
         encoding="utf-8"
     )
 
@@ -489,7 +491,7 @@ def test_media_version_lifecycle_traceability_is_explicit() -> None:
 def test_audit_slices_are_traced_without_premature_acceptance() -> None:
     prd = (DOCS / "prd/007-基础业务模块PRD任务.md").read_text(encoding="utf-8")
     plan = (DOCS / "plan/000-MVP全栈实施总计划.md").read_text(encoding="utf-8")
-    acceptance = (DOCS / "acceptance/005-剧本资产联合工作台验收.md").read_text(
+    acceptance = (DOCS / "acceptance/arrived/005-剧本资产联合工作台验收.md").read_text(
         encoding="utf-8"
     )
 
@@ -534,10 +536,10 @@ def test_task_references_are_traced_into_project_delete_guards() -> None:
     plan = (DOCS / "plan/007-基础业务模块产品任务执行计划.md").read_text(
         encoding="utf-8"
     )
-    s1_acceptance = (DOCS / "acceptance/002-账号与项目立项验收.md").read_text(
+    s1_acceptance = (DOCS / "acceptance/arrived/002-账号与项目立项验收.md").read_text(
         encoding="utf-8"
     )
-    s2_acceptance = (DOCS / "acceptance/005-剧本资产联合工作台验收.md").read_text(
+    s2_acceptance = (DOCS / "acceptance/arrived/005-剧本资产联合工作台验收.md").read_text(
         encoding="utf-8"
     )
 
@@ -559,10 +561,10 @@ def test_script_versions_are_traced_into_project_delete_guards() -> None:
     plan = (DOCS / "plan/007-基础业务模块产品任务执行计划.md").read_text(
         encoding="utf-8"
     )
-    s1_acceptance = (DOCS / "acceptance/002-账号与项目立项验收.md").read_text(
+    s1_acceptance = (DOCS / "acceptance/arrived/002-账号与项目立项验收.md").read_text(
         encoding="utf-8"
     )
-    s2_acceptance = (DOCS / "acceptance/005-剧本资产联合工作台验收.md").read_text(
+    s2_acceptance = (DOCS / "acceptance/arrived/005-剧本资产联合工作台验收.md").read_text(
         encoding="utf-8"
     )
 
@@ -579,7 +581,7 @@ def test_storyboard_facts_are_traced_into_project_delete_guards() -> None:
         DOCS / "design/模块设计/003-项目模块详细设计.md"
     ).read_text(encoding="utf-8")
     storyboard_design = (
-        DOCS / "design/模块设计/008-分镜模块详细设计.md"
+        DOCS / "design/模块设计/arrived/008-分镜模块详细设计.md"
     ).read_text(encoding="utf-8")
     project_prd = (DOCS / "prd/007-基础业务模块PRD任务.md").read_text(
         encoding="utf-8"
@@ -591,7 +593,7 @@ def test_storyboard_facts_are_traced_into_project_delete_guards() -> None:
         DOCS / "plan/008-创作生产模块产品任务执行计划.md"
     ).read_text(encoding="utf-8")
     acceptance = (
-        DOCS / "acceptance/006-分镜制作工作台验收.md"
+        DOCS / "acceptance/arrived/006-分镜制作工作台验收.md"
     ).read_text(encoding="utf-8")
 
     assert "HAS_STORYBOARD_SHOTS" in project_design
@@ -607,7 +609,7 @@ def test_asset_facts_are_traced_into_project_delete_guards() -> None:
         DOCS / "design/模块设计/003-项目模块详细设计.md"
     ).read_text(encoding="utf-8")
     asset_design = (
-        DOCS / "design/模块设计/007-资产模块详细设计.md"
+        DOCS / "design/模块设计/arrived/007-资产模块详细设计.md"
     ).read_text(encoding="utf-8")
     project_prd = (DOCS / "prd/007-基础业务模块PRD任务.md").read_text(
         encoding="utf-8"
@@ -619,7 +621,7 @@ def test_asset_facts_are_traced_into_project_delete_guards() -> None:
         DOCS / "plan/008-创作生产模块产品任务执行计划.md"
     ).read_text(encoding="utf-8")
     acceptance = (
-        DOCS / "acceptance/006-分镜制作工作台验收.md"
+        DOCS / "acceptance/arrived/006-分镜制作工作台验收.md"
     ).read_text(encoding="utf-8")
 
     assert "HAS_ASSETS" in project_design
@@ -632,10 +634,10 @@ def test_asset_facts_are_traced_into_project_delete_guards() -> None:
 
 def test_asset_candidate_decisions_are_traced_into_asset_delete_guards() -> None:
     asset_design = (
-        DOCS / "design/模块设计/007-资产模块详细设计.md"
+        DOCS / "design/模块设计/arrived/007-资产模块详细设计.md"
     ).read_text(encoding="utf-8")
     script_design = (
-        DOCS / "design/模块设计/006-剧本模块详细设计.md"
+        DOCS / "design/模块设计/arrived/006-剧本模块详细设计.md"
     ).read_text(encoding="utf-8")
     prd = (DOCS / "prd/008-创作生产模块PRD任务.md").read_text(
         encoding="utf-8"
@@ -644,7 +646,7 @@ def test_asset_candidate_decisions_are_traced_into_asset_delete_guards() -> None
         DOCS / "plan/008-创作生产模块产品任务执行计划.md"
     ).read_text(encoding="utf-8")
     acceptance = (
-        DOCS / "acceptance/004-资产管理与准备度验收.md"
+        DOCS / "acceptance/arrived/004-资产管理与准备度验收.md"
     ).read_text(encoding="utf-8")
 
     assert "asset_has_candidate_decisions" in asset_design
@@ -656,7 +658,7 @@ def test_asset_candidate_decisions_are_traced_into_asset_delete_guards() -> None
 
 def test_related_asset_versions_are_traced_into_asset_delete_guards() -> None:
     asset_design = (
-        DOCS / "design/模块设计/007-资产模块详细设计.md"
+        DOCS / "design/模块设计/arrived/007-资产模块详细设计.md"
     ).read_text(encoding="utf-8")
     prd = (DOCS / "prd/008-创作生产模块PRD任务.md").read_text(
         encoding="utf-8"
@@ -665,7 +667,7 @@ def test_related_asset_versions_are_traced_into_asset_delete_guards() -> None:
         DOCS / "plan/008-创作生产模块产品任务执行计划.md"
     ).read_text(encoding="utf-8")
     acceptance = (
-        DOCS / "acceptance/004-资产管理与准备度验收.md"
+        DOCS / "acceptance/arrived/004-资产管理与准备度验收.md"
     ).read_text(encoding="utf-8")
 
     assert "asset_has_related_versions" in asset_design
@@ -677,10 +679,10 @@ def test_related_asset_versions_are_traced_into_asset_delete_guards() -> None:
 
 def test_latest_real_infrastructure_and_e2e_gates_are_recorded() -> None:
     frontend_acceptance = (
-        DOCS / "acceptance/005-剧本资产联合工作台验收.md"
+        DOCS / "acceptance/arrived/005-剧本资产联合工作台验收.md"
     ).read_text(encoding="utf-8")
     storyboard_acceptance = (
-        DOCS / "acceptance/006-分镜制作工作台验收.md"
+        DOCS / "acceptance/arrived/006-分镜制作工作台验收.md"
     ).read_text(encoding="utf-8")
 
     for source in (frontend_acceptance, storyboard_acceptance):
@@ -710,10 +712,10 @@ def test_storyboard_readiness_is_traced_into_production_snapshot() -> None:
         DOCS / "plan/008-创作生产模块产品任务执行计划.md"
     ).read_text(encoding="utf-8")
     frontend_acceptance = (
-        DOCS / "acceptance/005-剧本资产联合工作台验收.md"
+        DOCS / "acceptance/arrived/005-剧本资产联合工作台验收.md"
     ).read_text(encoding="utf-8")
     storyboard_acceptance = (
-        DOCS / "acceptance/006-分镜制作工作台验收.md"
+        DOCS / "acceptance/arrived/006-分镜制作工作台验收.md"
     ).read_text(encoding="utf-8")
 
     assert "EpisodeStoryboardSummary" in project_design
@@ -734,7 +736,7 @@ def test_homebrew_minio_and_full_compose_are_traced() -> None:
         DOCS / "design/000-项目顶层结构与工程规范.md"
     ).read_text(encoding="utf-8")
     compose_acceptance = (
-        DOCS / "acceptance/008-D006全栈Compose部署验收.md"
+        DOCS / "acceptance/arrived/008-D006全栈Compose部署验收.md"
     ).read_text(encoding="utf-8")
 
     for source in (engineering_design, compose_acceptance):
