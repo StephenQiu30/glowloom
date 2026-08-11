@@ -137,7 +137,7 @@ export function CreateAssetDialog({
                 </Button>
               </Dialog.Close>
               <Button
-                className="bg-[#079db3] text-white hover:bg-[#078da0]"
+                className="bg-primary text-white hover:bg-primary/85"
                 disabled={isSubmitting}
                 type="submit"
               >
@@ -553,7 +553,7 @@ export function VersionDialog({
                 </Button>
               </Dialog.Close>
               <Button
-                className="bg-[#079db3] text-white hover:bg-[#078da0]"
+                className="bg-primary text-white hover:bg-primary/85"
                 disabled={isSubmitting}
                 type="submit"
               >

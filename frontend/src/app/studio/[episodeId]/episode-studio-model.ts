@@ -90,7 +90,7 @@ export function taskTone(status: API.TaskResponse["status"]): string {
   if (status === "succeeded") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "failed" || status === "unknown") return "border-rose-200 bg-rose-50 text-rose-700";
   if (status === "cancelled") return "border-slate-200 bg-slate-100 text-slate-600";
-  return "border-cyan-200 bg-cyan-50 text-[#087f91]";
+  return "border-border bg-muted text-foreground";
 }
 
 export function mediaKindFromFile(file: File): API.UploadDeclaration["kind"] {

@@ -1,3 +1,4 @@
+import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
 
@@ -18,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={cn("font-sans", GeistSans.variable)}>
+    <html lang="zh-CN" className={cn("font-sans", GeistSans.variable, GeistMono.variable)}>
       <body>
         <AppProviders>{children}</AppProviders>
       </body>

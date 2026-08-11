@@ -1,13 +1,31 @@
 "use client";
 
-import { AlertCircle, FolderOpen, LoaderCircle, Plus, Search } from "lucide-react";
+import { AlertCircle, ArrowRight, LoaderCircle, MoreHorizontal, Plus, Search } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { StudioShell } from "@/components/studio/studio-shell";
+import { MetricGroup } from "@/components/studio/metric-group";
+import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
@@ -18,7 +36,6 @@ import {
 } from "@/lib/server-state";
 
 import { ProjectCreateDialog } from "./project-create-dialog";
-import { ProjectServerCard } from "./project-server-card";
 
 type ProjectFilter = "all" | "active" | "archived";
 
@@ -72,7 +89,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
   const pageError = me.error ?? workspacesQuery.error ?? projectsQuery.error;
 
   if (sessionState === "checking") {
-    return <div className="grid min-h-screen place-items-center"><LoaderCircle aria-label="正在读取登录状态" className="animate-spin text-[#079db3]" /></div>;
+    return <div className="grid min-h-screen place-items-center"><LoaderCircle aria-label="正在读取登录状态" className="animate-spin" /></div>;
   }
 
   return (
@@ -84,47 +101,83 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
         workspaceName: me.data.workspace.name,
       } : undefined}
     >
-      {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg" role="status">{notice}</div> : null}
-      <div className="mx-auto max-w-[1280px] px-5 py-9 md:px-8">
+      {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 bg-foreground px-4 py-3 text-sm text-background" role="status">{notice}</div> : null}
+      <div className="mx-auto max-w-[1440px] px-5 py-10 md:px-8">
         {!authenticated ? (
-          <Alert className="border-amber-200 bg-amber-50 text-amber-800"><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription>登录后管理真实项目与单集。</AlertDescription></Alert>
+          <Alert><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription>登录后管理真实项目与单集。</AlertDescription></Alert>
         ) : pageError ? (
           <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>项目库暂时无法读取</AlertTitle><AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription></Alert>
         ) : !workspace || !projectsQuery.data ? (
-          <div className="grid min-h-96 place-items-center"><LoaderCircle aria-label="正在加载项目库" className="animate-spin text-[#079db3]" /></div>
+          <div className="grid min-h-96 place-items-center"><LoaderCircle aria-label="正在加载项目库" className="animate-spin" /></div>
         ) : (
           <>
-            <header className="flex flex-wrap items-end justify-between gap-5">
-              <div>
-                <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">{workspace.name}</Badge>
-                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em]">项目库</h1>
-                <p className="mt-2 text-sm text-slate-500">管理漫剧项目，并进入每一集的真实生产阶段。</p>
-              </div>
-              <div className="flex gap-7 text-right">
-                <div><p className="text-2xl font-semibold">{projects.length}</p><p className="mt-1 text-xs text-slate-500">项目</p></div>
-                <div><p className="text-2xl font-semibold">{projects.filter((item) => item.status === "active").length}</p><p className="mt-1 text-xs text-slate-500">制作中</p></div>
-                <div><p className="text-2xl font-semibold">{projects.filter((item) => item.status === "archived").length}</p><p className="mt-1 text-xs text-slate-500">已归档</p></div>
-              </div>
-            </header>
+            <PageHeader
+              description="以项目和单集组织生产事实，继续当前阶段，或追踪归档内容。"
+              eyebrow={workspace.name}
+              title="项目管理"
+            />
+            <MetricGroup
+              className="mt-6"
+              columns={3}
+              items={[
+                { label: "全部", value: projects.length },
+                { label: "制作中", value: projects.filter((item) => item.status === "active").length },
+                { label: "已归档", value: projects.filter((item) => item.status === "archived").length },
+              ]}
+              label="项目数量摘要"
+            />
 
-            {actionError ? <Alert className="mt-5" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>创建失败</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
+            {actionError ? <Alert className="mt-6" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>创建失败</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
 
-            <div className="mt-8 flex flex-wrap items-center gap-3 border-b border-slate-200 pb-4">
-              <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
-                {filters.map((item) => (
-                  <button className={`rounded-lg px-3 py-1.5 text-sm transition ${filter === item.id ? "bg-white font-medium text-slate-900 shadow-sm" : "text-slate-500"}`} key={item.id} onClick={() => setFilter(item.id)} type="button">{item.label}</button>
-                ))}
-              </div>
-              <div className="relative ml-auto w-full sm:w-72">
-                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <div className="flex flex-wrap items-center gap-2 py-5">
+              {filters.map((item) => (
+                <Button key={item.id} onClick={() => setFilter(item.id)} size="sm" variant={filter === item.id ? "secondary" : "ghost"}>{item.label}</Button>
+              ))}
+              <div className="relative ml-auto w-full sm:w-80">
+                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input aria-label="搜索项目" className="pl-9" placeholder="按名称、简介或风格搜索" value={query} onChange={(event) => setQuery(event.target.value)} />
               </div>
             </div>
+            <Separator />
 
             {visibleProjects.length ? (
-              <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{visibleProjects.map((project) => <ProjectServerCard key={project.id} project={project} />)}</div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>项目</TableHead>
+                    <TableHead>规格</TableHead>
+                    <TableHead>视觉风格</TableHead>
+                    <TableHead>事实状态</TableHead>
+                    <TableHead>版本</TableHead>
+                    <TableHead className="text-right">操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleProjects.map((project) => (
+                    <TableRow key={project.id}>
+                      <TableCell className="min-w-72 whitespace-normal py-4">
+                        <p className="font-medium">{project.name}</p>
+                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{project.description || "尚未填写项目简介"}</p>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{project.aspect_ratio} · {Math.round(project.target_duration_ms / 1_000)}s</TableCell>
+                      <TableCell>{project.visual_style || "未设置"}</TableCell>
+                      <TableCell><Badge variant={project.status === "active" ? "secondary" : "outline"}>{project.status === "active" ? "制作中" : "已归档"}</Badge></TableCell>
+                      <TableCell className="font-mono text-xs">r{project.revision}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button asChild size="sm" variant="ghost"><Link aria-label={`打开项目 ${project.name}`} href={`/projects/${project.id}`}>打开<ArrowRight aria-hidden="true" /></Link></Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button aria-label={`${project.name} 更多操作`} size="icon-sm" variant="ghost"><MoreHorizontal aria-hidden="true" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end"><DropdownMenuItem asChild><Link href={`/projects/${project.id}`}>查看项目事实</Link></DropdownMenuItem></DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             ) : (
-              <div className="mt-16 text-center"><FolderOpen className="mx-auto size-8 text-slate-300" aria-hidden="true" /><p className="mt-3 font-medium">没有匹配的项目</p><p className="mt-1 text-sm text-slate-500">调整搜索或创建第一个漫剧项目。</p></div>
+              <div className="py-24 text-center"><p className="font-medium">没有匹配的项目</p><p className="mt-2 text-sm text-muted-foreground">调整搜索或创建第一个漫剧项目。</p></div>
             )}
           </>
         )}

@@ -6,19 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function ProjectServerCard({ project }: { project: API.ProjectResponse }) {
   return (
-    <Card className="group relative transition hover:border-cyan-200 hover:shadow-md hover:shadow-cyan-950/5">
+    <Card className="group relative transition hover:border-border hover:shadow-md hover:">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className={project.status === "active" ? "border-cyan-100 bg-cyan-50 text-[#087f91]" : ""} variant="outline">
+              <Badge className={project.status === "active" ? "border-border bg-muted text-foreground" : ""} variant="outline">
                 {project.status === "active" ? "制作中" : "已归档"}
               </Badge>
               <Badge variant="outline">{project.aspect_ratio}</Badge>
             </div>
             <CardTitle className="mt-4 truncate text-xl">{project.name}</CardTitle>
           </div>
-          <ArrowUpRight className="size-5 shrink-0 text-slate-300 transition group-hover:text-[#079db3]" aria-hidden="true" />
+          <ArrowUpRight className="size-5 shrink-0 text-slate-300 transition group-hover:text-foreground" aria-hidden="true" />
         </div>
       </CardHeader>
       <CardContent>
@@ -27,7 +27,7 @@ export function ProjectServerCard({ project }: { project: API.ProjectResponse })
           <span className="flex items-center gap-1.5"><Layers3 className="size-3.5" aria-hidden="true" />{project.visual_style ?? "未设视觉风格"}</span>
           <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{Math.round(project.target_duration_ms / 1_000)} 秒/集</span>
         </div>
-        <Link aria-label={`打开项目 ${project.name}`} className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#079db3]" href={`/projects/${project.id}`} />
+        <Link aria-label={`打开项目 ${project.name}`} className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" href={`/projects/${project.id}`} />
       </CardContent>
     </Card>
   );

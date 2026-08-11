@@ -73,9 +73,9 @@ export const assetTypes: AssetTypeConfig[] = [
 ];
 
 export const selectClassName =
-  "h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#079db3] focus:ring-3 focus:ring-cyan-500/10";
+  "h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-ring focus:ring-3 focus:ring-ring/20";
 export const textareaClassName =
-  "min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 outline-none transition focus:border-[#079db3] focus:ring-3 focus:ring-cyan-500/10";
+  "min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 outline-none transition focus:border-ring focus:ring-3 focus:ring-ring/20";
 export const dialogClassName =
   "fixed top-1/2 left-1/2 z-50 max-h-[88vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/10";
 

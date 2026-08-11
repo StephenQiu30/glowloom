@@ -1,21 +1,43 @@
 "use client";
 
 import {
-  ArrowRight,
-  Box,
+  Bell,
   Check,
+  ChevronDown,
+  CircleHelp,
   Folder,
   Home,
   LogOut,
+  Search,
   Settings,
   ShieldCheck,
-  Sparkles,
-  WandSparkles,
+  SquareStack,
+  UserRound,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode } from "react";
 
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { clearAccessToken } from "@/lib/auth-session";
 import { cn } from "@/lib/class-names";
 import { useLogoutMutation } from "@/lib/server-state";
@@ -29,31 +51,95 @@ export type StudioNavigation =
   | "governance"
   | "settings";
 
+const navigationItems: Array<{
+  id: StudioNavigation;
+  label: string;
+  description: string;
+  href: string;
+  icon: typeof Home;
+}> = [
+  { id: "create", label: "首页", description: "继续当前制作", href: "/", icon: Home },
+  { id: "projects", label: "项目", description: "项目与单集", href: "/projects", icon: Folder },
+  { id: "assets", label: "资产", description: "角色、场景与版本", href: "/studio", icon: SquareStack },
+  { id: "governance", label: "治理", description: "授权与审计", href: "/governance", icon: ShieldCheck },
+  { id: "settings", label: "空间", description: "账户与工作空间", href: "/workspaces", icon: Settings },
+];
+
 export function StudioBrand() {
   return (
-    <Link className="flex items-center gap-2 px-1 font-semibold tracking-tight" href="/">
-      <span className="grid size-8 place-items-center rounded-xl bg-[#09a6bc] text-white shadow-sm shadow-cyan-500/15">
-        <Sparkles className="size-[18px]" strokeWidth={2.3} aria-hidden="true" />
-      </span>
-      <span className="hidden text-[17px] lg:inline">Lanverse</span>
+    <Link className="relative block h-9 w-[146px] shrink-0 overflow-hidden" href="/" aria-label="Lanverse 首页">
+      <Image
+        alt="Lanverse"
+        className="object-contain"
+        fill
+        priority
+        sizes="146px"
+        src="/brand/lanverse-logo.png"
+      />
     </Link>
   );
 }
 
 function ProductionProgress({ currentStep }: { currentStep: number }) {
   return (
-    <ol className="hidden min-w-0 flex-1 items-center justify-center gap-2 xl:flex" aria-label="制作进度">
-      {productionStages.map((stage, index) => (
-        <li className="flex items-center gap-2" key={stage}>
-          <span className={cn(
-            "grid size-6 place-items-center rounded-full border text-xs font-medium",
-            index <= currentStep ? "border-[#079db3] bg-[#079db3] text-white" : "border-slate-300 text-slate-500",
-          )}>{index < currentStep ? <Check className="size-3.5" aria-hidden="true" /> : index + 1}</span>
-          <span className={cn("text-sm", index === currentStep ? "font-medium text-slate-900" : "text-slate-500")}>{stage}</span>
-          {index < productionStages.length - 1 ? <span className="mx-1 h-px w-8 bg-slate-200 2xl:w-12" /> : null}
-        </li>
-      ))}
-    </ol>
+    <div className="border-b bg-background" aria-label="制作进度">
+      <div className="mx-auto flex min-h-12 max-w-[1440px] items-center gap-4 overflow-x-auto px-5 md:px-8">
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">制作阶段</span>
+        <Separator className="h-4" orientation="vertical" />
+        <ol className="flex min-w-max flex-1 items-center gap-1">
+          {productionStages.map((stage, index) => (
+            <li className="flex items-center" key={stage}>
+              <span
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 px-2 text-xs",
+                  index === currentStep ? "font-medium text-foreground" : "text-muted-foreground",
+                )}
+                aria-current={index === currentStep ? "step" : undefined}
+              >
+                {index < currentStep ? <Check className="size-3.5" aria-hidden="true" /> : <span className="font-mono">0{index + 1}</span>}
+                {stage}
+              </span>
+              {index < productionStages.length - 1 ? <span className="mx-1 h-px w-5 bg-border lg:w-9" /> : null}
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+function GlobalSearch() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button className="hidden w-64 justify-start text-muted-foreground lg:flex" variant="outline">
+          <Search aria-hidden="true" />
+          <span>搜索或执行命令…</span>
+          <kbd className="ml-auto font-mono text-[11px] text-muted-foreground">⌘K</kbd>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg p-0">
+        <DialogHeader className="border-b p-4 pb-3">
+          <DialogTitle>前往 Lanverse</DialogTitle>
+          <DialogDescription>搜索页面，或直接选择一个工作区入口。</DialogDescription>
+        </DialogHeader>
+        <div className="p-3">
+          <div className="relative">
+            <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input aria-label="全局搜索" className="h-10 pl-9" placeholder="搜索项目、剧本、资产或任务" autoFocus />
+          </div>
+          <nav className="mt-3 grid gap-1" aria-label="快速入口">
+            {navigationItems.map((item) => (
+              <Link className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-muted" href={item.href} key={item.id}>
+                <item.icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                <span>{item.label}</span>
+                <span className="ml-auto text-xs text-muted-foreground">{item.description}</span>
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -73,17 +159,6 @@ export function StudioShell({
   viewer?: { displayName: string; workspaceName: string };
 }) {
   const [logout, logoutState] = useLogoutMutation();
-  const navItems = [
-    { id: "create" as const, label: "创作", icon: Home, href: "/" },
-    { id: "projects" as const, label: "项目", icon: Folder, href: "/projects" },
-    { id: "assets" as const, label: "资产", icon: Box, href: "/studio" },
-    {
-      id: "governance" as const,
-      label: "治理",
-      icon: ShieldCheck,
-      href: "/governance",
-    },
-  ];
 
   async function handleLogout() {
     try {
@@ -95,68 +170,89 @@ export function StudioShell({
   }
 
   return (
-    <main className="min-h-screen bg-[#fbfcfd] text-slate-950">
-      <aside className="fixed inset-y-0 left-0 z-30 flex w-[76px] flex-col border-r border-slate-200/80 bg-white px-3 py-5 lg:w-[156px]">
-        <StudioBrand />
-        <div className="mt-7">
-          <Button asChild className="h-10 w-full bg-[#079db3] text-white hover:bg-[#078da0]">
-            <Link href="/projects"><Folder aria-hidden="true" /><span className="hidden lg:inline">项目库</span></Link>
-          </Button>
-        </div>
-        <nav className="mt-7 grid gap-2" aria-label="主导航">
-          {navItems.map((item) => (
-            <Link className={cn(
-              "flex h-12 items-center justify-center gap-3 rounded-xl text-sm transition-colors lg:justify-start lg:px-4",
-              active === item.id ? "bg-slate-100 text-[#078fa5]" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
-            )} href={item.href} key={item.id}>
-              <item.icon className="size-5" strokeWidth={1.8} aria-hidden="true" />
-              <span className="hidden lg:inline">{item.label}</span>
-            </Link>
-          ))}
-        </nav>
-        <div className="mt-auto grid gap-2">
-          <Link className={cn(
-            "flex items-center justify-center gap-2 rounded-xl p-2 transition-colors hover:bg-slate-50 lg:justify-start",
-            active === "settings" && "bg-slate-100",
-          )} href="/workspaces">
-            <span className="grid size-9 shrink-0 place-items-center rounded-full border border-cyan-100 bg-cyan-50 text-sm font-semibold text-[#087f91]" aria-hidden="true">
-              {(viewer?.displayName ?? "账户").slice(0, 1).toUpperCase()}
-            </span>
-            <span className="hidden min-w-0 lg:block">
-              <span className="block truncate text-sm font-medium">{viewer?.displayName ?? "账户"}</span>
-              <span className="block truncate text-xs text-slate-400">{viewer?.workspaceName ?? "工作空间"}</span>
-            </span>
-            <Settings className="ml-auto hidden size-4 text-slate-400 lg:block" aria-hidden="true" />
-          </Link>
-          {viewer ? (
-            <Button
-              aria-label="退出登录"
-              disabled={logoutState.isLoading}
-              onClick={handleLogout}
-              size="sm"
-              variant="ghost"
-            >
-              <LogOut aria-hidden="true" />
-              <span className="hidden lg:inline">退出登录</span>
-            </Button>
-          ) : null}
-        </div>
-      </aside>
+    <main className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+        <div className="mx-auto flex h-[72px] max-w-[1440px] items-center gap-6 px-5 md:px-8">
+          <StudioBrand />
+          <nav className="hidden items-center gap-1 md:flex" aria-label="主导航">
+            {navigationItems.slice(0, 4).map((item) => (
+              <Button asChild key={item.id} size="sm" variant="ghost">
+                <Link className={cn(active === item.id && "bg-muted font-medium")} href={item.href}>
+                  {item.label}
+                </Link>
+              </Button>
+            ))}
+          </nav>
 
-      <div className="min-h-screen pl-[76px] lg:pl-[156px]">
-        <header className="sticky top-0 z-20 flex h-[76px] items-center gap-5 border-b border-slate-200/70 bg-white/95 px-5 backdrop-blur md:px-8">
+          <div className="ml-auto flex items-center gap-1.5">
+            <GlobalSearch />
+            {topAction ? <div className="flex items-center">{topAction}</div> : null}
+            <Button asChild aria-label="帮助" className="hidden sm:inline-flex" size="icon" variant="ghost">
+              <Link href="/governance"><CircleHelp aria-hidden="true" /></Link>
+            </Button>
+            <Button aria-label="任务通知" className="hidden sm:inline-flex" size="icon" variant="ghost">
+              <Bell aria-hidden="true" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="gap-2 px-1.5" variant="ghost">
+                  <Avatar size="sm">
+                    <AvatarFallback>{(viewer?.displayName ?? "L").slice(0, 1).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <span className="hidden max-w-28 truncate text-sm md:block">{viewer?.displayName ?? "账户"}</span>
+                  <ChevronDown className="hidden size-3.5 text-muted-foreground sm:block" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <span className="block text-foreground">{viewer?.displayName ?? "Lanverse"}</span>
+                  <span className="mt-0.5 block font-normal">{viewer?.workspaceName ?? "工作空间"}</span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild><Link href="/workspaces"><UserRound aria-hidden="true" />账户与空间</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/governance"><ShieldCheck aria-hidden="true" />治理与审计</Link></DropdownMenuItem>
+                {viewer ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={logoutState.isLoading}
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        void handleLogout();
+                      }}
+                      variant="destructive"
+                    >
+                      <LogOut aria-hidden="true" />退出登录
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <div className="flex h-11 items-center gap-1 overflow-x-auto border-t px-5 md:hidden" aria-label="移动端导航">
+          {navigationItems.slice(0, 4).map((item) => (
+            <Button asChild key={item.id} size="sm" variant={active === item.id ? "secondary" : "ghost"}>
+              <Link href={item.href}>{item.label}</Link>
+            </Button>
+          ))}
+        </div>
+      </header>
+
+      {projectName || typeof currentStep === "number" ? (
+        <div className="border-b bg-background">
           {projectName ? (
-            <div className="shrink-0 text-sm font-medium">{projectName}</div>
-          ) : (
-            <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-medium"><WandSparkles className="size-4 text-[#079db3]" aria-hidden="true" />AI 漫剧创作台</div>
-          )}
-          {typeof currentStep === "number" ? <ProductionProgress currentStep={currentStep} /> : <div className="flex-1" />}
-          {topAction ?? (
-            <Button asChild className="h-10 bg-[#079db3] px-4 text-white hover:bg-[#078da0]"><Link href="/projects">查看项目<ArrowRight aria-hidden="true" /></Link></Button>
-          )}
-        </header>
-        {children}
-      </div>
+            <div className="mx-auto flex min-h-11 max-w-[1440px] items-center gap-3 px-5 text-sm md:px-8">
+              <span className="text-muted-foreground">当前项目</span>
+              <span className="font-medium">{projectName}</span>
+            </div>
+          ) : null}
+          {typeof currentStep === "number" ? <ProductionProgress currentStep={currentStep} /> : null}
+        </div>
+      ) : null}
+
+      {children}
     </main>
   );
 }

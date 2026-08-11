@@ -108,7 +108,7 @@ function scheduleTone(status: API.ScheduleResponse["status"]): string {
   if (status === "completed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "manual_attention") return "border-rose-200 bg-rose-50 text-rose-700";
   if (status === "paused") return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-cyan-200 bg-cyan-50 text-[#087f91]";
+  return "border-border bg-muted text-foreground";
 }
 
 function formatDateTime(value: string | null): string {
@@ -253,7 +253,7 @@ export function TaskWorkspace({
     <div className="grid gap-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <Card><CardHeader><CardDescription>全部任务</CardDescription><CardTitle className="text-3xl">{tasks.length}</CardTitle></CardHeader></Card>
-        <Card><CardHeader><CardDescription>进行中</CardDescription><CardTitle className="text-3xl text-[#087f91]">{running}</CardTitle></CardHeader></Card>
+        <Card><CardHeader><CardDescription>进行中</CardDescription><CardTitle className="text-3xl text-foreground">{running}</CardTitle></CardHeader></Card>
         <Card><CardHeader><CardDescription>需处理</CardDescription><CardTitle className="text-3xl text-rose-700">{failed}</CardTitle></CardHeader></Card>
       </div>
 
@@ -291,7 +291,7 @@ export function TaskWorkspace({
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
-                        <div className="rounded-lg bg-cyan-50 p-2 text-[#087f91]">
+                        <div className="rounded-lg bg-muted p-2 text-foreground">
                           {capability.kind === "image" ? (
                             <ImageIcon className="size-4" aria-hidden="true" />
                           ) : (
@@ -331,7 +331,7 @@ export function TaskWorkspace({
 
               <div className="rounded-xl border border-slate-200 p-4">
                 <div className="flex items-center gap-2 text-slate-600">
-                  <Coins className="size-4 text-[#087f91]" aria-hidden="true" />
+                  <Coins className="size-4 text-foreground" aria-hidden="true" />
                   <h3 className="font-medium">项目费用账本</h3>
                 </div>
                 {costs ? (
@@ -350,7 +350,7 @@ export function TaskWorkspace({
                     </div>
                     <div className="flex items-center justify-between gap-4">
                       <dt className="text-slate-500">当前仍预占</dt>
-                      <dd className="font-medium text-[#087f91]">
+                      <dd className="font-medium text-foreground">
                         {formatMoney(
                           costs.summary.remaining_reserved,
                           costs.currency,
@@ -410,7 +410,7 @@ export function TaskWorkspace({
                     ) : task.status === "cancelled" ? (
                       <CircleX className="size-4 text-slate-500" aria-hidden="true" />
                     ) : (
-                      <RefreshCw className="size-4 animate-spin text-[#079db3]" aria-hidden="true" />
+                      <RefreshCw className="size-4 animate-spin text-foreground" aria-hidden="true" />
                     )}
                     {requestTypeLabels[task.request_type]}
                   </span>

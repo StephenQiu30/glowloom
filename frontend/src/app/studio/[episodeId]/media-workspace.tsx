@@ -196,10 +196,10 @@ export function MediaWorkspace({
                 </select>
               </div>
               {selectedFile ? (
-                <Alert className="border-cyan-100 bg-cyan-50 text-[#087f91]">
+                <Alert className="border-border bg-muted text-foreground">
                   <ShieldCheck aria-hidden="true" />
                   <AlertTitle>{selectedFile.name}</AlertTitle>
-                  <AlertDescription className="text-[#087f91]/80">
+                  <AlertDescription className="text-foreground/80">
                     {(selectedFile.size / 1024 / 1024).toFixed(2)} MB · 上传前在浏览器计算 SHA-256
                   </AlertDescription>
                 </Alert>
@@ -302,7 +302,7 @@ export function MediaWorkspace({
                                     version.probe_status === "ready"
                                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                                       : version.probe_status === "pending"
-                                        ? "border-cyan-200 bg-cyan-50 text-[#087f91]"
+                                        ? "border-border bg-muted text-foreground"
                                         : "border-rose-200 bg-rose-50 text-rose-700"
                                   }
                                   variant="outline"

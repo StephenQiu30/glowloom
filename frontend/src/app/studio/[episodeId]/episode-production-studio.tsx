@@ -3,22 +3,23 @@
 import {
   AlertCircle,
   CheckCircle2,
-  ChevronDown,
   LoaderCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { MetricGroup } from "@/components/studio/metric-group";
+import { PageHeader } from "@/components/studio/page-header";
 import { StudioShell } from "@/components/studio/studio-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
@@ -1027,7 +1028,7 @@ export function EpisodeProductionStudio({
     : undefined;
 
   if (sessionState === "checking") {
-    return <div className="grid min-h-screen place-items-center"><LoaderCircle className="animate-spin text-[#079db3]" aria-label="正在读取登录状态" /></div>;
+    return <div className="grid min-h-screen place-items-center"><LoaderCircle className="animate-spin text-foreground" aria-label="正在读取登录状态" /></div>;
   }
 
   return (
@@ -1071,47 +1072,46 @@ export function EpisodeProductionStudio({
             <AlertDescription>{appApiErrorMessage(pageError ?? storyboardError)}</AlertDescription>
           </Alert>
         ) : !episode || !project || !snapshot || storyboardLoading ? (
-          <div className="grid min-h-96 place-items-center"><LoaderCircle className="animate-spin text-[#079db3]" aria-label="正在加载生产工作台" /></div>
+          <div className="grid min-h-96 place-items-center"><LoaderCircle className="animate-spin text-foreground" aria-label="正在加载生产工作台" /></div>
         ) : (
           <>
-            <header className="flex flex-wrap items-start justify-between gap-5">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">
-                    {stageLabels[snapshot.current_stage]}
-                  </Badge>
-                  <Badge variant="outline">{project.aspect_ratio}</Badge>
-                  <Badge variant="outline">{project.visual_style ?? "未设视觉风格"}</Badge>
-                </div>
-                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em]">{episode.name}</h1>
-                <p className="mt-2 text-sm text-slate-500">
-                  第 {episode.position} 集 · 服务端计算 {snapshot.completion}% · revision {episode.revision}
-                </p>
-              </div>
-              <div className="relative">
-                <select
-                  aria-label="切换单集"
-                  className="h-10 min-w-48 appearance-none rounded-lg border border-slate-200 bg-white pr-10 pl-3 text-sm"
-                  value={episode.id}
-                  onChange={(event) => {
-                    window.location.href = `/studio/${event.target.value}/${initialPanel}`;
-                  }}
-                >
-                  {(episodesQuery.data ?? []).map((item) => (
-                    <option key={item.id} value={item.id}>第 {item.position} 集 · {item.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-              </div>
-            </header>
+            <PageHeader
+              accessibleTitle={episode.name}
+              actions={(
+                <Select value={episode.id} onValueChange={(value) => { window.location.href = `/studio/${value}/${initialPanel}`; }}>
+                  <SelectTrigger aria-label="切换单集" className="h-10 min-w-56"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(episodesQuery.data ?? []).map((item) => (
+                      <SelectItem key={item.id} value={item.id}>第 {item.position} 集 · {item.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              badges={[
+                { label: stageLabels[snapshot.current_stage] },
+                { label: project.aspect_ratio },
+                { label: project.visual_style ?? "未设视觉风格" },
+              ]}
+              breadcrumbs={[
+                { label: project.name, href: `/projects/${project.id}` },
+                { label: `第 ${episode.position} 集 · ${episode.name}` },
+              ]}
+              description={`${episode.name} · 服务端计算 ${snapshot.completion}% · revision ${episode.revision}`}
+              note="AI 候选经人工确认后才进入下游事实。"
+              title="今天，把这一集往前推进。"
+            />
 
-            <section className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="生产摘要">
-              <Card><CardHeader><CardDescription>当前阶段</CardDescription><CardTitle>{stageLabels[snapshot.current_stage]}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>剧本状态</CardDescription><CardTitle>v{editableVersion?.version_no ?? "-"}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>Ready 资产</CardDescription><CardTitle>{snapshot.asset_summary.ready} / {snapshot.asset_summary.total}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>Ready 分镜</CardDescription><CardTitle>{snapshot.storyboard_summary.ready ?? 0} / {snapshot.storyboard_summary.total ?? 0}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>进行中任务</CardDescription><CardTitle>{snapshot.task_summary.running}</CardTitle></CardHeader></Card>
-            </section>
+            <MetricGroup
+              className="mt-8"
+              items={[
+                { label: "当前阶段", value: stageLabels[snapshot.current_stage] },
+                { label: "剧本状态", value: `v${editableVersion?.version_no ?? "-"}` },
+                { label: "Ready 资产", value: `${snapshot.asset_summary.ready} / ${snapshot.asset_summary.total}` },
+                { label: "Ready 分镜", value: `${snapshot.storyboard_summary.ready ?? 0} / ${snapshot.storyboard_summary.total ?? 0}` },
+                { label: "进行中任务", value: snapshot.task_summary.running },
+              ]}
+              label="生产摘要"
+            />
 
             {snapshot.partial_failures.length ? (
               <Alert className="mt-5 border-rose-200 bg-rose-50 text-rose-800">
@@ -1128,11 +1128,11 @@ export function EpisodeProductionStudio({
               </Alert>
             ) : null}
 
-            <nav className="mt-7 grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 sm:grid-cols-2 xl:grid-cols-5" aria-label="单集制作模块">
+            <nav className="mt-7 grid border-y sm:grid-cols-2 xl:grid-cols-5 xl:divide-x" aria-label="单集制作模块">
               {episodePanels.map((panel) => (
                 <Link
                   aria-current={panel.id === initialPanel ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-xl px-4 py-3 transition ${panel.id === initialPanel ? "bg-slate-100 text-[#078fa5]" : "text-slate-600 hover:bg-slate-50"}`}
+                  className={`flex items-center gap-3 px-4 py-4 transition ${panel.id === initialPanel ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
                   href={`/studio/${episode.id}/${panel.id}`}
                   key={panel.id}
                 >

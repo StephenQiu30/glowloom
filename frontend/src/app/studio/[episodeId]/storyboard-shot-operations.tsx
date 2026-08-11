@@ -333,7 +333,7 @@ export function SplitShotDialog({
           </Alert>
         ) : preflight ? (
           <div className="grid gap-4">
-            <Alert className="border-cyan-200 bg-cyan-50 text-cyan-900">
+            <Alert className="border-border bg-muted text-foreground">
               <ShieldCheck aria-hidden="true" />
               <AlertTitle>影响已固定</AlertTitle>
               <AlertDescription>
@@ -499,7 +499,7 @@ export function MergeShotsDialog({
         </DialogHeader>
         {preparation ? (
           <div className="grid gap-4">
-            <Alert className="border-cyan-200 bg-cyan-50 text-cyan-900">
+            <Alert className="border-border bg-muted text-foreground">
               <ShieldCheck aria-hidden="true" />
               <AlertTitle>影响已固定</AlertTitle>
               <AlertDescription>

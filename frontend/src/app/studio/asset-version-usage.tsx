@@ -230,7 +230,7 @@ export function AssetVersionUsage({
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
-                  <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">
+                  <Badge className="border-border bg-muted text-foreground" variant="outline">
                     本页当前引用 {currentUsages.length}
                   </Badge>
                   <Badge variant="outline">本页历史引用 {historicalUsages.length}</Badge>
@@ -298,7 +298,7 @@ export function AssetVersionUsage({
                       <input
                         aria-label={`选择镜头 ${usage.shot_title}`}
                         checked={selectedShotIds.includes(usage.shot_id)}
-                        className="mt-1 size-4 accent-[#079db3]"
+                        className="mt-1 size-4 accent-black"
                         disabled={busy || !targetVersion}
                         onChange={() => toggleShot(usage.shot_id)}
                         type="checkbox"
@@ -401,7 +401,7 @@ export function AssetVersionUsage({
           </DialogHeader>
           {preflight ? (
             <div className="grid gap-4">
-              <Alert className="border-cyan-200 bg-cyan-50 text-cyan-900">
+              <Alert className="border-border bg-muted text-foreground">
                 <ShieldCheck aria-hidden="true" />
                 <AlertTitle>追加写入，不覆盖已有事实</AlertTitle>
                 <AlertDescription>

@@ -85,11 +85,11 @@ function CheckboxGroup({
       <div className="flex flex-wrap gap-2">
         {items.map((item) => (
           <label
-            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 has-checked:border-cyan-300 has-checked:bg-cyan-50 has-checked:text-[#087f91]"
+            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 has-checked:border-foreground/25 has-checked:bg-muted has-checked:text-foreground"
             key={item.value}
           >
             <input
-              className="size-4 accent-[#079db3]"
+              className="size-4 accent-black"
               defaultChecked={initialValues.includes(item.value)}
               name={name}
               type="checkbox"
@@ -186,7 +186,7 @@ export function ConsentFormDialog({
           <form className="grid gap-6 p-6" onChange={onDirty} onSubmit={submit}>
             <section className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="size-4 text-[#079db3]" aria-hidden="true" />
+                <ShieldCheck className="size-4 text-foreground" aria-hidden="true" />
                 <h2 className="font-semibold">权利主体与固定版本</h2>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -207,7 +207,7 @@ export function ConsentFormDialog({
                 <div className="grid gap-2">
                   <Label htmlFor={`${mode}-subjectKind`}>主体类型</Label>
                   <select
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#079db3] focus:ring-3 focus:ring-cyan-500/10 disabled:bg-slate-50"
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/20 disabled:bg-slate-50"
                     defaultValue={
                       initialConsent?.subject_identity.kind ?? "fictional_adult"
                     }
@@ -224,7 +224,7 @@ export function ConsentFormDialog({
                 <div className="grid gap-2">
                   <Label htmlFor={`${mode}-subjectType`}>版本类型</Label>
                   <select
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#079db3] focus:ring-3 focus:ring-cyan-500/10"
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/20"
                     id={`${mode}-subjectType`}
                     name="subjectType"
                     onChange={(event) => setSubjectType(event.target.value as API.SubjectType)}
@@ -240,7 +240,7 @@ export function ConsentFormDialog({
                     <>
                       <Label htmlFor={`${mode}-mediaSubjectId`}>固定版本</Label>
                       <select
-                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#079db3] focus:ring-3 focus:ring-cyan-500/10"
+                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/20"
                         defaultValue={effectiveInitialSubjectId}
                         id={`${mode}-mediaSubjectId`}
                         key={`media-subject-${effectiveInitialSubjectId}-${mediaVersions.length}`}
@@ -291,7 +291,7 @@ export function ConsentFormDialog({
 
             <section className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5">
               <div className="flex items-center gap-2">
-                <CalendarRange className="size-4 text-[#079db3]" aria-hidden="true" />
+                <CalendarRange className="size-4 text-foreground" aria-hidden="true" />
                 <h2 className="font-semibold">使用范围与有效期</h2>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -370,13 +370,13 @@ export function ConsentFormDialog({
 
             <section className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5">
               <div className="flex items-center gap-2">
-                <FileCheck2 className="size-4 text-[#079db3]" aria-hidden="true" />
+                <FileCheck2 className="size-4 text-foreground" aria-hidden="true" />
                 <h2 className="font-semibold">证明与说明</h2>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor={`${mode}-proofMediaVersionId`}>证明媒体</Label>
                 <select
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#079db3] focus:ring-3 focus:ring-cyan-500/10"
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/20"
                   defaultValue={effectiveInitialProofId}
                   id={`${mode}-proofMediaVersionId`}
                   key={`proof-${effectiveInitialProofId}-${mediaVersions.length}`}
@@ -395,7 +395,7 @@ export function ConsentFormDialog({
                   {mode === "create" ? "登记说明" : "修订说明"}
                 </Label>
                 <textarea
-                  className="min-h-24 resize-none rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-[#079db3] focus:ring-3 focus:ring-cyan-500/10"
+                  className="min-h-24 resize-none rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-ring focus:ring-3 focus:ring-ring/20"
                   defaultValue={mode === "revise" ? "调整授权使用范围" : "角色形象与声音授权"}
                   id={`${mode}-reason`}
                   maxLength={1000}
@@ -403,10 +403,10 @@ export function ConsentFormDialog({
                   required
                 />
               </div>
-              <Alert className="border-cyan-100 bg-cyan-50/70 px-4 py-3 text-[#087f91]">
+              <Alert className="border-border bg-muted/70 px-4 py-3 text-foreground">
                 <ShieldCheck aria-hidden="true" />
                 <AlertTitle>最小必要展示</AlertTitle>
-                <AlertDescription className="text-[#087f91]/80">
+                <AlertDescription className="text-foreground/80">
                   页面只保存 MediaVersion 引用，不展示或复制证明原文与存储地址。
                 </AlertDescription>
               </Alert>
@@ -417,7 +417,7 @@ export function ConsentFormDialog({
                 <Button type="button" variant="outline">取消</Button>
               </Dialog.Close>
               <Button
-                className="bg-[#079db3] px-5 text-white hover:bg-[#078da0]"
+                className="bg-primary px-5 text-white hover:bg-primary/85"
                 disabled={isSubmitting || mediaVersions.length === 0}
                 type="submit"
               >

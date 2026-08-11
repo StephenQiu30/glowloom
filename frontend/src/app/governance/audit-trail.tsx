@@ -159,7 +159,7 @@ export function AuditTrail({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <History className="size-4 text-[#079db3]" aria-hidden="true" />
+                <History className="size-4 text-foreground" aria-hidden="true" />
                 <CardTitle>操作审计</CardTitle>
               </div>
               <CardDescription className="mt-1">

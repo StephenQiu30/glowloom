@@ -28,6 +28,8 @@ import {
   type AuditFilters,
 } from "@/app/governance/audit-trail";
 import { StudioShell } from "@/components/studio/studio-shell";
+import { MetricGroup } from "@/components/studio/metric-group";
+import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,7 +128,7 @@ function LoadingWorkspace() {
   return (
     <div className="grid min-h-[520px] place-items-center">
       <div className="text-center text-sm text-slate-500">
-        <LoaderCircle className="mx-auto mb-3 size-6 animate-spin text-[#079db3]" aria-hidden="true" />
+        <LoaderCircle className="mx-auto mb-3 size-6 animate-spin text-foreground" aria-hidden="true" />
         正在读取授权事实…
       </div>
     </div>
@@ -137,14 +139,14 @@ function EmptyConsent({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="grid min-h-[460px] place-items-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
       <div className="max-w-sm">
-        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-cyan-50 text-[#079db3]">
+        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-muted text-foreground">
           <ShieldCheck className="size-6" aria-hidden="true" />
         </span>
         <h2 className="mt-5 text-lg font-semibold">还没有授权记录</h2>
         <p className="mt-2 text-sm leading-6 text-slate-500">
           从一个固定媒体或剧本版本开始，登记用途、地域、有效期与证明。
         </p>
-        <Button className="mt-5 bg-[#079db3] text-white hover:bg-[#078da0]" onClick={onCreate}>
+        <Button className="mt-5 bg-primary text-white hover:bg-primary/85" onClick={onCreate}>
           <Plus aria-hidden="true" />新建授权
         </Button>
       </div>
@@ -173,7 +175,7 @@ function ConsentList({
             aria-pressed={selectedId === consent.id}
             className={`grid min-w-0 gap-2 overflow-hidden rounded-xl border p-3 text-left transition ${
               selectedId === consent.id
-                ? "border-cyan-300 bg-cyan-50/70 shadow-sm"
+                ? "border-foreground/25 bg-muted/70 shadow-sm"
                 : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
             }`}
             key={consent.id}
@@ -333,15 +335,15 @@ function ConsentDetail({
           </div>
           <div className="grid content-start gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
             <div className="flex items-start gap-3">
-              <CalendarRange className="mt-0.5 size-4 text-[#079db3]" aria-hidden="true" />
+              <CalendarRange className="mt-0.5 size-4 text-foreground" aria-hidden="true" />
               <div><p className="text-sm font-medium">有效期</p><p className="mt-1 text-xs text-slate-500">{formatDate(scope.valid_from)} — {formatDate(scope.valid_to)}</p></div>
             </div>
             <div className="flex items-start gap-3">
-              <FileCheck2 className="mt-0.5 size-4 text-[#079db3]" aria-hidden="true" />
+              <FileCheck2 className="mt-0.5 size-4 text-foreground" aria-hidden="true" />
               <div><p className="text-sm font-medium">证明媒体</p><p className="mt-1 font-mono text-xs text-slate-500">{consent.current_revision.proof_media_version_ids.map(shortId).join("、")}</p></div>
             </div>
             <div className="flex items-start gap-3">
-              <Clock3 className="mt-0.5 size-4 text-[#079db3]" aria-hidden="true" />
+              <Clock3 className="mt-0.5 size-4 text-foreground" aria-hidden="true" />
               <div><p className="text-sm font-medium">地域</p><div className="mt-2"><ScopeTerms values={scope.regions} /></div></div>
             </div>
           </div>
@@ -350,13 +352,13 @@ function ConsentDetail({
 
       <Card className="gap-0 py-0">
         <CardHeader className="border-b py-4">
-          <div className="flex items-center gap-2"><History className="size-4 text-[#079db3]" aria-hidden="true" /><CardTitle>修订历史</CardTitle></div>
+          <div className="flex items-center gap-2"><History className="size-4 text-foreground" aria-hidden="true" /><CardTitle>修订历史</CardTitle></div>
           <CardDescription>所有事实只追加，旧范围与撤销原因始终可追溯。</CardDescription>
         </CardHeader>
         <CardContent className="divide-y divide-slate-100 p-0">
           {[...consent.revisions].reverse().map((revision) => (
             <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-4 px-5 py-4" key={revision.id}>
-              <span className={`mt-0.5 grid size-8 place-items-center rounded-full ${revision.action === "revoke" ? "bg-rose-50 text-rose-600" : "bg-cyan-50 text-[#079db3]"}`}>
+              <span className={`mt-0.5 grid size-8 place-items-center rounded-full ${revision.action === "revoke" ? "bg-rose-50 text-rose-600" : "bg-muted text-foreground"}`}>
                 {revision.action === "revoke" ? <ShieldX className="size-4" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
               </span>
               <div className="min-w-0">
@@ -496,24 +498,24 @@ export function GovernanceWorkspace({
       active="governance"
       topAction={
         authenticated ? (
-          <Button className="h-10 bg-[#079db3] px-4 text-white hover:bg-[#078da0]" onClick={() => setCreateOpen(true)}>
+          <Button className="h-10 bg-primary px-4 text-white hover:bg-primary/85" onClick={() => setCreateOpen(true)}>
             <Plus aria-hidden="true" />新建授权
           </Button>
         ) : (
-          <Button asChild className="h-10 bg-[#079db3] px-4 text-white hover:bg-[#078da0]"><Link href="/login">登录后管理</Link></Button>
+          <Button asChild className="h-10 bg-primary px-4 text-white hover:bg-primary/85"><Link href="/login">登录后管理</Link></Button>
         )
       }
     >
       {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10" role="status"><Check className="size-4 text-emerald-600" aria-hidden="true" />{notice}</div> : null}
       <div className="mx-auto max-w-[1320px] px-5 py-8 md:px-8">
-        <div className="flex flex-wrap items-end justify-between gap-5">
-          <div>
-            <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">合规事实层</Badge>
-            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em]">授权治理</h1>
-            <p className="mt-2 text-sm text-slate-500">登记固定版本的用途、地域、期限与证明，让生成和交付门禁基于可追溯事实。</p>
-          </div>
-          {workspaceId ? <p className="text-xs text-slate-400">Workspace {shortId(workspaceId)}</p> : null}
-        </div>
+        <PageHeader
+          badges={[
+            { label: "合规事实层" },
+            ...(workspaceId ? [{ label: `Workspace ${shortId(workspaceId)}` }] : []),
+          ]}
+          description="登记固定版本的用途、地域、期限与证明，让生成和交付门禁基于可追溯事实。"
+          title="授权治理"
+        />
 
         {sessionState === "checking" || (authenticated && me.isLoading) ? <LoadingWorkspace /> : null}
         {sessionState === "anonymous" ? (
@@ -525,11 +527,16 @@ export function GovernanceWorkspace({
 
         {workspaceId && !me.isLoading ? (
           <>
-            <section className="mt-7 grid gap-4 sm:grid-cols-3">
-              <Card><CardHeader><CardDescription>授权记录</CardDescription><CardTitle className="text-2xl">{consents.data?.total ?? 0}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>当前有效</CardDescription><CardTitle className="text-2xl text-emerald-700">{activeCount}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>已阻断 / 到期</CardDescription><CardTitle className="text-2xl text-amber-700">{blockedCount}</CardTitle></CardHeader></Card>
-            </section>
+            <MetricGroup
+              className="mt-7"
+              columns={3}
+              items={[
+                { label: "授权记录", value: consents.data?.total ?? 0 },
+                { label: "当前有效", value: activeCount },
+                { label: "已阻断 / 到期", value: blockedCount },
+              ]}
+              label="授权状态摘要"
+            />
 
             {actionError ? <Alert className="mt-5 border-rose-200 bg-rose-50 p-4 text-rose-800" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
             {mediaVersions.length === 0 ? <Alert className="mt-5 border-amber-200 bg-amber-50 p-4 text-amber-800"><FileCheck2 aria-hidden="true" /><AlertTitle>缺少可用证明媒体</AlertTitle><AlertDescription className="text-amber-700">先在资产或媒体流程完成一次私有上传，才能登记授权证明。</AlertDescription></Alert> : null}

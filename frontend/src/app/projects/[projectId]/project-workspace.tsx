@@ -10,16 +10,25 @@ import {
   Layers3,
   LoaderCircle,
   Plus,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useMemo, useState } from "react";
-import { Dialog } from "radix-ui";
 
 import { StudioShell } from "@/components/studio/studio-shell";
+import { MetricGroup } from "@/components/studio/metric-group";
+import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
@@ -83,21 +92,12 @@ function CreateEpisodeDialog({
   }
 
   return (
-    <Dialog.Root onOpenChange={onOpenChange} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/10">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Dialog.Title className="text-xl font-semibold tracking-tight">创建下一集</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm leading-6 text-slate-500">
-                单集按项目顺序创建，进入工作台后再导入固定剧本版本。
-              </Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <Button aria-label="关闭" size="icon" variant="ghost"><X aria-hidden="true" /></Button>
-            </Dialog.Close>
-          </div>
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent>
+          <DialogHeader>
+            <DialogTitle>创建下一集</DialogTitle>
+            <DialogDescription>单集按项目顺序创建，进入工作台后再导入固定剧本版本。</DialogDescription>
+          </DialogHeader>
           <form className="mt-6 grid gap-5" onSubmit={submit}>
             <div className="grid gap-2">
               <Label htmlFor="episodeName">单集名称</Label>
@@ -114,17 +114,16 @@ function CreateEpisodeDialog({
                 type="number"
               />
             </div>
-            <div className="flex justify-end gap-2">
-              <Dialog.Close asChild><Button type="button" variant="outline">取消</Button></Dialog.Close>
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="outline">取消</Button></DialogClose>
               <Button disabled={isSubmitting} type="submit">
                 {isSubmitting ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Plus aria-hidden="true" />}
                 确认创建
               </Button>
-            </div>
+            </DialogFooter>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -180,7 +179,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   if (sessionState === "checking") {
     return (
       <div className="grid min-h-screen place-items-center">
-        <LoaderCircle aria-label="正在读取登录状态" className="animate-spin text-[#079db3]" />
+        <LoaderCircle aria-label="正在读取登录状态" className="animate-spin text-foreground" />
       </div>
     );
   }
@@ -207,7 +206,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
           <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />{notice}
         </div>
       ) : null}
-      <div className="mx-auto max-w-[1280px] px-5 py-8 md:px-8">
+      <div className="mx-auto max-w-[1440px] px-5 py-10 md:px-8">
         {!authenticated ? (
           <Alert className="border-amber-200 bg-amber-50 text-amber-800">
             <AlertCircle aria-hidden="true" />
@@ -221,30 +220,34 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
             <AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription>
           </Alert>
         ) : !project || !snapshot ? (
-          <div className="grid min-h-96 place-items-center"><LoaderCircle aria-label="正在加载项目" className="animate-spin text-[#079db3]" /></div>
+          <div className="grid min-h-96 place-items-center"><LoaderCircle aria-label="正在加载项目" className="animate-spin text-foreground" /></div>
         ) : (
           <>
-            <header className="flex flex-wrap items-start justify-between gap-5">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">{stageLabels[snapshot.current_stage]}</Badge>
-                  <Badge variant="outline">{project.aspect_ratio}</Badge>
-                  <Badge variant="outline">{project.visual_style ?? "未设视觉风格"}</Badge>
-                  {project.status === "archived" ? <Badge variant="secondary">已归档</Badge> : null}
-                </div>
-                <h1 className="mt-4 text-3xl font-semibold tracking-[-0.035em]">{project.name}</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">{project.description || "尚未填写项目简介"}</p>
-              </div>
-              <Button onClick={() => setCreateOpen(true)} variant="outline"><Plus aria-hidden="true" />创建单集</Button>
-            </header>
+            <PageHeader
+              actions={<Button onClick={() => setCreateOpen(true)} variant="outline"><Plus aria-hidden="true" />创建单集</Button>}
+              badges={[
+                { label: stageLabels[snapshot.current_stage] },
+                { label: project.aspect_ratio },
+                { label: project.visual_style ?? "未设视觉风格" },
+                ...(project.status === "archived" ? [{ label: "已归档", variant: "secondary" as const }] : []),
+              ]}
+              breadcrumbs={[{ label: "项目", href: "/projects" }, { label: project.name }]}
+              description={project.description || "尚未填写项目简介"}
+              note="从已确认事实继续，而不是从头重来。"
+              title={project.name}
+            />
 
-            <section aria-label="项目生产摘要" className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <Card><CardHeader><CardDescription>项目进度</CardDescription><CardTitle className="text-3xl">{snapshot.completion}%</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>活跃单集</CardDescription><CardTitle className="text-3xl">{activeEpisodes.length}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>Ready 资产</CardDescription><CardTitle className="text-3xl text-emerald-700">{readyAssets}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>Ready 分镜</CardDescription><CardTitle className="text-3xl text-emerald-700">{readyStoryboards}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>进行中任务</CardDescription><CardTitle className="text-3xl text-[#087f91]">{runningTasks}</CardTitle></CardHeader></Card>
-            </section>
+            <MetricGroup
+              className="mt-8"
+              items={[
+                { label: "项目进度", value: `${snapshot.completion}%` },
+                { label: "活跃单集", value: activeEpisodes.length },
+                { label: "Ready 资产", value: readyAssets },
+                { label: "Ready 分镜", value: readyStoryboards },
+                { label: "进行中任务", value: runningTasks },
+              ]}
+              label="项目生产摘要"
+            />
 
             {actionError ? (
               <Alert className="mt-5" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert>
@@ -253,7 +256,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
               <Alert className="mt-5 border-rose-200 bg-rose-50 text-rose-800"><AlertCircle aria-hidden="true" /><AlertTitle>部分摘要不可用</AlertTitle><AlertDescription>{snapshot.partial_failures.map((item) => item.summary).join("；")}</AlertDescription></Alert>
             ) : null}
 
-            <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
               <Card>
                 <CardHeader className="border-b border-slate-100">
                   <CardTitle>单集生产</CardTitle>
@@ -271,7 +274,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                         href={`/studio/${episode.id}/script`}
                         key={episode.id}
                       >
-                        <span className="grid size-11 place-items-center rounded-xl bg-slate-100 text-sm font-semibold">{String(episode.position).padStart(2, "0")}</span>
+                        <span className="grid size-11 place-items-center bg-muted font-mono text-sm font-semibold">{String(episode.position).padStart(2, "0")}</span>
                         <span className="min-w-0">
                           <span className="block truncate font-medium">{episode.name}</span>
                           <span className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">

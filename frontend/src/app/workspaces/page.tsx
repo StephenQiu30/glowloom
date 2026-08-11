@@ -17,11 +17,14 @@ import Link from "next/link";
 import { type FormEvent, useState } from "react";
 
 import { StudioShell } from "@/components/studio/studio-shell";
+import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { Label } from "@/components/ui/label";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import { clearAccessToken } from "@/lib/auth-session";
@@ -163,7 +166,7 @@ export default function WorkspacesPage() {
   const currentWorkspaceId = me.data?.workspace.id;
 
   if (sessionState === "checking") {
-    return <div className="grid min-h-screen place-items-center"><LoaderCircle aria-label="正在读取登录状态" className="animate-spin text-[#079db3]" /></div>;
+    return <div className="grid min-h-screen place-items-center"><LoaderCircle aria-label="正在读取登录状态" className="animate-spin text-foreground" /></div>;
   }
 
   return (
@@ -181,37 +184,48 @@ export default function WorkspacesPage() {
         ) : pageError ? (
           <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>账户设置暂时无法读取</AlertTitle><AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription></Alert>
         ) : !me.data || !workspacesQuery.data ? (
-          <div className="grid min-h-96 place-items-center"><LoaderCircle aria-label="正在加载账户设置" className="animate-spin text-[#079db3]" /></div>
+          <div className="grid min-h-96 place-items-center"><LoaderCircle aria-label="正在加载账户设置" className="animate-spin text-foreground" /></div>
         ) : (
           <>
-            <header>
-              <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">账户设置</Badge>
-              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em]">账户与工作空间</h1>
-              <p className="mt-2 text-sm text-slate-500">管理服务端个人资料，以及有权限访问的创作空间。</p>
-            </header>
+            <PageHeader
+              badges={[{ label: "账户设置" }]}
+              description="管理服务端个人资料，以及有权限访问的创作空间。"
+              title="账户与工作空间"
+            />
 
             {notice ? <div className="mt-6 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status"><CheckCircle2 className="size-4" aria-hidden="true" />{notice}</div> : null}
             {actionError ? <Alert className="mt-6" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
 
             <div className="mt-7 grid gap-6 lg:grid-cols-[1fr_340px]">
-              <section className="rounded-2xl border border-slate-200 bg-white p-6">
-                <div className="flex items-center gap-4">
-                  <span className="grid size-14 place-items-center rounded-2xl border border-cyan-100 bg-cyan-50 text-xl font-semibold text-[#087f91]" aria-hidden="true">{(me.data.user.display_name || me.data.user.email).slice(0, 1).toUpperCase()}</span>
-                  <div><h2 className="text-lg font-semibold">个人资料</h2><p className="mt-1 text-sm text-slate-500">{me.data.user.email}</p></div>
-                </div>
+              <Card className="p-6">
+                <Item className="p-0">
+                  <ItemMedia>
+                    <Avatar size="lg"><AvatarFallback>{(me.data.user.display_name || me.data.user.email).slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
+                  </ItemMedia>
+                  <ItemContent>
+                    <ItemTitle className="text-lg">个人资料</ItemTitle>
+                    <ItemDescription>{me.data.user.email}</ItemDescription>
+                  </ItemContent>
+                </Item>
                 <form className="mt-6 grid gap-5" onSubmit={saveProfile}>
                   <div className="grid gap-2"><Label htmlFor="displayName">显示名称</Label><Input defaultValue={me.data.user.display_name ?? ""} id="displayName" name="displayName" maxLength={120} /></div>
                   <div><Button disabled={busy} type="submit"><Save aria-hidden="true" />保存个人资料</Button></div>
                 </form>
-              </section>
+              </Card>
 
-              <aside className="rounded-2xl border border-slate-200 bg-white p-6">
-                <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-slate-100 text-[#079db3]"><Plus className="size-5" aria-hidden="true" /></span><div><h2 className="font-semibold">创建工作空间</h2><p className="mt-1 text-xs text-slate-500">隔离不同团队与项目</p></div></div>
+              <Card className="p-6">
+                <Item className="p-0">
+                  <ItemMedia variant="icon"><Plus aria-hidden="true" /></ItemMedia>
+                  <ItemContent>
+                    <ItemTitle>创建工作空间</ItemTitle>
+                    <ItemDescription>隔离不同团队与项目</ItemDescription>
+                  </ItemContent>
+                </Item>
                 <form className="mt-6 grid gap-4" onSubmit={createNewWorkspace}>
                   <div className="grid gap-2"><Label htmlFor="workspaceName">空间名称</Label><Input id="workspaceName" name="workspaceName" placeholder="例如：青墨工作室" required maxLength={120} /></div>
                   <Button disabled={busy} type="submit"><Plus aria-hidden="true" />创建工作空间</Button>
                 </form>
-              </aside>
+              </Card>
             </div>
 
             <section className="mt-7">
@@ -220,9 +234,9 @@ export default function WorkspacesPage() {
                 {workspacesQuery.data.map((workspace) => {
                   const current = workspace.id === currentWorkspaceId;
                   return (
-                    <article className={`flex flex-wrap items-center gap-5 rounded-2xl border bg-white p-5 ${current ? "border-cyan-200 shadow-sm shadow-cyan-950/5" : "border-slate-200"}`} key={workspace.id}>
-                      <span className="grid size-12 place-items-center rounded-xl bg-slate-100 text-[#079db3]"><Settings2 className="size-5" aria-hidden="true" /></span>
-                      <div className="min-w-48 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{workspace.name}</h3>{current ? <Badge className="border-cyan-100 bg-cyan-50 text-[#087f91]" variant="outline">当前空间</Badge> : null}{workspace.status === "archived" ? <Badge variant="secondary">已归档</Badge> : null}</div><p className="mt-1 text-xs text-slate-500">{roleLabels[workspace.role]} · revision {workspace.revision}</p></div>
+                    <article className={`flex flex-wrap items-center gap-5 rounded-2xl border bg-white p-5 ${current ? "border-border shadow-sm " : "border-slate-200"}`} key={workspace.id}>
+                      <span className="grid size-12 place-items-center rounded-xl bg-slate-100 text-foreground"><Settings2 className="size-5" aria-hidden="true" /></span>
+                      <div className="min-w-48 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{workspace.name}</h3>{current ? <Badge className="border-border bg-muted text-foreground" variant="outline">当前空间</Badge> : null}{workspace.status === "archived" ? <Badge variant="secondary">已归档</Badge> : null}</div><p className="mt-1 text-xs text-slate-500">{roleLabels[workspace.role]} · revision {workspace.revision}</p></div>
                       <div className="flex flex-1 flex-wrap items-end justify-end gap-2">
                         {workspace.role === "owner" ? (
                           <form className="flex min-w-64 flex-1 gap-2" onSubmit={(event) => renameWorkspace(event, workspace)}>
@@ -266,7 +280,7 @@ export default function WorkspacesPage() {
             <section className="mt-7 grid gap-5 lg:grid-cols-2" aria-label="账户安全">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><KeyRound className="size-5 text-[#079db3]" aria-hidden="true" />修改密码</CardTitle>
+                  <CardTitle className="flex items-center gap-2"><KeyRound className="size-5 text-foreground" aria-hidden="true" />修改密码</CardTitle>
                   <CardDescription>修改成功后当前令牌立即失效，需要重新登录。</CardDescription>
                 </CardHeader>
                 <CardContent>

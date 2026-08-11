@@ -86,7 +86,7 @@ export function AssetList({
               className={cn(
                 "grid w-full grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border p-3 text-left transition",
                 selectedId === asset.id
-                  ? "border-[#75ccda] bg-[#f2fbfc] shadow-sm shadow-cyan-700/5"
+                  ? "border-foreground/25 bg-muted/70 shadow-sm "
                   : "border-transparent hover:border-slate-200 hover:bg-slate-50",
               )}
               key={asset.id}
@@ -346,7 +346,7 @@ function VersionHistory({
           className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 py-3"
           key={version.id}
         >
-          <span className="mt-0.5 grid size-8 place-items-center rounded-full bg-cyan-50 text-[#079db3]">
+          <span className="mt-0.5 grid size-8 place-items-center rounded-full bg-muted text-foreground">
             <History className="size-4" aria-hidden="true" />
           </span>
           <div className="min-w-0">
@@ -430,7 +430,7 @@ export function AssetDetail({
         <CardHeader className="border-b py-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-start gap-3">
-              <span className="grid size-11 place-items-center rounded-xl bg-cyan-50 text-[#079db3]">
+              <span className="grid size-11 place-items-center rounded-xl bg-muted text-foreground">
                 <Icon className="size-5" aria-hidden="true" />
               </span>
               <div>

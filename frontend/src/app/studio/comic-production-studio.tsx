@@ -11,13 +11,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { Tabs } from "radix-ui";
 
+import { PageHeader } from "@/components/studio/page-header";
 import { StudioShell } from "@/components/studio/studio-shell";
 import {
   Alert,
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,6 +28,13 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
@@ -56,7 +63,6 @@ import { AssetDetail, AssetList } from "./asset-panels";
 import {
   type AssetKind,
   assetTypes,
-  selectClassName,
   typeConfig,
 } from "./asset-workspace-model";
 
@@ -268,7 +274,7 @@ export function ComicProductionStudio() {
         authenticated ? (
           effectiveProject?.status === "active" ? (
             <Button
-              className="h-10 bg-[#079db3] px-4 text-white hover:bg-[#078da0]"
+              className="h-10 bg-primary px-4 text-white hover:bg-primary/85"
               onClick={() => setCreateOpen(true)}
             >
               <Plus aria-hidden="true" />新建资产
@@ -281,7 +287,7 @@ export function ComicProductionStudio() {
         ) : (
           <Button
             asChild
-            className="h-10 bg-[#079db3] px-4 text-white hover:bg-[#078da0]"
+            className="h-10 bg-primary px-4 text-white hover:bg-primary/85"
           >
             <Link href="/login">登录后管理</Link>
           </Button>
@@ -299,41 +305,32 @@ export function ComicProductionStudio() {
       ) : null}
 
       <div className="mx-auto max-w-[1420px] px-5 py-8 md:px-8">
-        <div className="flex flex-wrap items-end justify-between gap-5">
-          <div>
-            <Badge
-              className="border-cyan-100 bg-cyan-50 text-[#087f91]"
-              variant="outline"
-            >
-              生产事实层
-            </Badge>
-            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em]">资产库</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-              管理角色、场景、道具、服装、声音与视觉风格的稳定身份、不可变版本和生产准备度。
-            </p>
-          </div>
-          {projectItems.length > 0 ? (
+        <PageHeader
+          actions={projectItems.length > 0 ? (
             <div className="grid min-w-56 gap-2">
               <Label htmlFor="assetProject">当前项目</Label>
-              <select
-                className={selectClassName}
-                id="assetProject"
-                onChange={(event) => {
-                  setSelectedProjectId(event.target.value);
+              <Select
+                value={effectiveProject?.id ?? ""}
+                onValueChange={(value) => {
+                  setSelectedProjectId(value);
                   setSelectedAssetId(null);
                 }}
-                value={effectiveProject?.id ?? ""}
               >
-                {projectItems.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                    {project.status === "archived" ? "（已归档）" : ""}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="assetProject"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {projectItems.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}{project.status === "archived" ? "（已归档）" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           ) : null}
-        </div>
+          badges={[{ label: "生产事实层" }]}
+          description="管理角色、场景、道具、服装、声音与视觉风格的稳定身份、不可变版本和生产准备度。"
+          title="资产库"
+        />
 
         {sessionState === "checking" || (authenticated && me.isLoading) ? (
           <Card className="mt-7">
@@ -410,7 +407,7 @@ export function ComicProductionStudio() {
               <Card>
                 <CardHeader>
                   <CardDescription>已有当前版本</CardDescription>
-                  <CardTitle className="text-2xl text-[#087f91]">
+                  <CardTitle className="text-2xl text-foreground">
                     {versionedCount}
                   </CardTitle>
                 </CardHeader>
@@ -436,7 +433,7 @@ export function ComicProductionStudio() {
                   ).length;
                   return (
                     <Tabs.Trigger
-                      className="flex min-w-24 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-500 outline-none transition hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-medium data-[state=active]:text-[#078fa5]"
+                      className="flex min-w-24 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-500 outline-none transition hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-medium data-[state=active]:text-foreground"
                       key={item.id}
                       value={item.id}
                     >

@@ -751,7 +751,7 @@ function ShotSpecEditor({
       ) : null}
 
       {readiness?.warnings.length ? (
-        <Alert className="border-cyan-200 bg-cyan-50 text-cyan-800">
+        <Alert className="border-border bg-muted text-foreground">
           <TriangleAlert aria-hidden="true" />
           <AlertTitle>进入生产前需要确认</AlertTitle>
           <AlertDescription>
