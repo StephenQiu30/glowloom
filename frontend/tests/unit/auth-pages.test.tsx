@@ -68,6 +68,10 @@ describe("authentication pages", () => {
     expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
     expect(screen.getByLabelText("密码")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "登录" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "她从画中来项目画面" })).toHaveAttribute(
+      "src",
+      "/assets/lanverse-studio/painting-girl-cover.png",
+    );
   });
 
   it("renders the registration contract", () => {
