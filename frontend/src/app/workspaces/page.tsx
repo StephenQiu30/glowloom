@@ -172,7 +172,6 @@ export default function WorkspacesPage() {
   return (
     <StudioShell
       active="settings"
-      topAction={<Button asChild><Link href="/projects">返回项目<ArrowRight aria-hidden="true" /></Link></Button>}
       viewer={me.data ? {
         displayName: me.data.user.display_name?.trim() || me.data.user.email,
         workspaceName: me.data.workspace.name,
@@ -188,6 +187,7 @@ export default function WorkspacesPage() {
         ) : (
           <>
             <PageHeader
+              actions={<Button asChild><Link href="/projects">返回项目<ArrowRight aria-hidden="true" /></Link></Button>}
               badges={[{ label: "账户设置" }]}
               description="管理服务端个人资料，以及有权限访问的创作空间。"
               title="账户与工作空间"

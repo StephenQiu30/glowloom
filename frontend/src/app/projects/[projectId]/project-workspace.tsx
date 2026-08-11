@@ -189,13 +189,6 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
       active="projects"
       currentStep={snapshot ? stageSteps[snapshot.current_stage] : 0}
       projectName={project?.name}
-      topAction={
-        firstEpisode ? (
-          <Button asChild><Link href={`/studio/${firstEpisode.id}/script`}>继续制作<ArrowRight aria-hidden="true" /></Link></Button>
-        ) : (
-          <Button onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" />创建第一集</Button>
-        )
-      }
       viewer={me.data ? {
         displayName: me.data.user.display_name?.trim() || me.data.user.email,
         workspaceName: me.data.workspace.name,
@@ -224,7 +217,14 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
         ) : (
           <>
             <PageHeader
-              actions={<Button onClick={() => setCreateOpen(true)} variant="outline"><Plus aria-hidden="true" />创建单集</Button>}
+              actions={firstEpisode ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => setCreateOpen(true)} variant="outline"><Plus aria-hidden="true" />创建单集</Button>
+                  <Button asChild><Link href={`/studio/${firstEpisode.id}/script`}>继续制作<ArrowRight aria-hidden="true" /></Link></Button>
+                </div>
+              ) : (
+                <Button onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" />创建第一集</Button>
+              )}
               badges={[
                 { label: stageLabels[snapshot.current_stage] },
                 { label: project.aspect_ratio },

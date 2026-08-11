@@ -496,19 +496,17 @@ export function GovernanceWorkspace({
   return (
     <StudioShell
       active="governance"
-      topAction={
-        authenticated ? (
-          <Button className="h-10 bg-primary px-4 text-white hover:bg-primary/85" onClick={() => setCreateOpen(true)}>
-            <Plus aria-hidden="true" />新建授权
-          </Button>
-        ) : (
-          <Button asChild className="h-10 bg-primary px-4 text-white hover:bg-primary/85"><Link href="/login">登录后管理</Link></Button>
-        )
-      }
     >
       {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10" role="status"><Check className="size-4 text-emerald-600" aria-hidden="true" />{notice}</div> : null}
       <div className="mx-auto max-w-[1320px] px-5 py-8 md:px-8">
         <PageHeader
+          actions={authenticated ? (
+            <Button className="h-10 bg-primary px-4 text-white hover:bg-primary/85" onClick={() => setCreateOpen(true)}>
+              <Plus aria-hidden="true" />新建授权
+            </Button>
+          ) : (
+            <Button asChild className="h-10 bg-primary px-4 text-white hover:bg-primary/85"><Link href="/login">登录后管理</Link></Button>
+          )}
           badges={[
             { label: "合规事实层" },
             ...(workspaceId ? [{ label: `Workspace ${shortId(workspaceId)}` }] : []),

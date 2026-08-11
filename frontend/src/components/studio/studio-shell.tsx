@@ -4,6 +4,7 @@ import {
   Bell,
   Check,
   ChevronDown,
+  Command as CommandIcon,
   Folder,
   Home,
   LogOut,
@@ -14,19 +15,20 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { StudioBrand } from "@/components/studio/studio-brand";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +37,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -56,6 +57,8 @@ import { useLogoutMutation, useMeQuery } from "@/lib/server-state";
 
 export type { StudioNavigation } from "@/lib/access-control";
 
+export const studioContainerClassName = "mx-auto w-full max-w-[1440px] px-5 md:px-8";
+
 const productionStages = ["剧本", "资产", "分镜", "生成", "审核", "交付"];
 
 const navigationItems: Array<{
@@ -65,7 +68,7 @@ const navigationItems: Array<{
   href: string;
   icon: typeof Home;
 }> = [
-  { id: "create", label: "首页", description: "继续当前制作", href: "/", icon: Home },
+  { id: "create", label: "首页", description: "欢迎与工作概览", href: "/", icon: Home },
   { id: "projects", label: "项目", description: "项目与单集", href: "/projects", icon: Folder },
   { id: "assets", label: "资产", description: "角色、场景与版本", href: "/studio", icon: SquareStack },
   { id: "governance", label: "治理", description: "授权与审计", href: "/governance", icon: ShieldCheck },
@@ -81,7 +84,7 @@ const roleLabels: Record<WorkspaceRole, string> = {
 function ProductionProgress({ currentStep }: { currentStep: number }) {
   return (
     <div className="border-b bg-background" aria-label="制作进度">
-      <div className="mx-auto flex min-h-12 max-w-[1440px] items-center gap-4 overflow-x-auto px-5 md:px-8">
+      <div className={cn(studioContainerClassName, "flex min-h-12 items-center gap-4 overflow-x-auto")}>
         <span className="shrink-0 text-xs font-medium text-muted-foreground">制作阶段</span>
         <Separator className="h-4" orientation="vertical" />
         <ol className="flex min-w-max flex-1 items-center gap-1">
@@ -148,39 +151,80 @@ function StudioNavigationMenu({
 }
 
 function GlobalSearch({ role }: { role: WorkspaceRole }) {
-  const visibleItems = navigationItems.filter((item) => canAccessPage(role, item.id));
+  const [open, setOpen] = useState(false);
+  const visibleItems = navigationItems.filter(
+    (item) => item.id !== "create" && canAccessPage(role, item.id),
+  );
+
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setOpen((current) => !current);
+      }
+    }
+
+    document.addEventListener("keydown", handleShortcut);
+    return () => document.removeEventListener("keydown", handleShortcut);
+  }, []);
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button className="hidden w-64 justify-start text-muted-foreground xl:flex" variant="outline">
+    <CommandDialog
+      description="搜索页面，或直接选择一个工作区入口。"
+      onOpenChange={setOpen}
+      open={open}
+      title="前往 Lanverse"
+      trigger={(
+        <Button
+          aria-label="搜索或执行命令"
+          className="hidden w-64 justify-start text-muted-foreground xl:flex"
+          variant="outline"
+        >
           <Search aria-hidden="true" />
           <span>搜索或执行命令…</span>
-          <kbd className="ml-auto font-mono text-[11px] text-muted-foreground">⌘K</kbd>
+          <kbd className="ml-auto inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
+            <CommandIcon aria-hidden="true" className="size-3" />
+            <span className="font-mono">K</span>
+          </kbd>
         </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg p-0">
-        <DialogHeader className="border-b p-4 pb-3">
-          <DialogTitle>前往 Lanverse</DialogTitle>
-          <DialogDescription>搜索页面，或直接选择一个工作区入口。</DialogDescription>
-        </DialogHeader>
-        <div className="p-3">
-          <div className="relative">
-            <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <Input aria-label="全局搜索" className="h-10 pl-9" placeholder="搜索项目、剧本、资产或任务" autoFocus />
-          </div>
-          <nav className="mt-3 grid gap-1" aria-label="快速入口">
+      )}
+    >
+      <Command label="全局搜索">
+        <CommandInput aria-label="全局搜索" placeholder="搜索页面或命令…" />
+        <CommandList>
+          <CommandEmpty>没有匹配的页面或命令。</CommandEmpty>
+          <CommandGroup heading="快速入口">
             {visibleItems.map((item) => (
-              <Link className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-muted" href={item.href} key={item.id}>
-                <item.icon className="size-4 text-muted-foreground" aria-hidden="true" />
-                <span>{item.label}</span>
-                <span className="ml-auto text-xs text-muted-foreground">{item.description}</span>
-              </Link>
+              <CommandDestination item={item} key={item.id} onNavigate={() => setOpen(false)} />
             ))}
-          </nav>
-        </div>
-      </DialogContent>
-    </Dialog>
+          </CommandGroup>
+        </CommandList>
+      </Command>
+    </CommandDialog>
+  );
+}
+
+function CommandDestination({
+  item,
+  onNavigate,
+}: {
+  item: (typeof navigationItems)[number];
+  onNavigate: () => void;
+}) {
+  const linkRef = useRef<HTMLAnchorElement>(null);
+
+  return (
+    <CommandItem
+      keywords={[item.description]}
+      onSelect={() => linkRef.current?.click()}
+      value={`${item.label} ${item.description}`}
+    >
+      <Link className="flex min-w-0 flex-1 items-center gap-3" href={item.href} onClick={onNavigate} ref={linkRef}>
+        <item.icon className="size-4 text-muted-foreground" aria-hidden="true" />
+        <span>{item.label}</span>
+        <span className="ml-auto truncate text-xs text-muted-foreground">{item.description}</span>
+      </Link>
+    </CommandItem>
   );
 }
 
@@ -189,14 +233,12 @@ export function StudioShell({
   children,
   projectName,
   currentStep,
-  topAction,
   viewer,
 }: {
   active: StudioNavigation;
   children: ReactNode;
   projectName?: string;
   currentStep?: number;
-  topAction?: ReactNode;
   viewer?: { displayName: string; workspaceName: string };
 }) {
   const sessionState = useAuthSessionState();
@@ -221,7 +263,7 @@ export function StudioShell({
   return (
     <main className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
-        <div className="mx-auto flex h-[72px] max-w-[1440px] items-center gap-6 px-5 md:px-8">
+        <div className={cn(studioContainerClassName, "flex h-[72px] items-center gap-6")}>
           <StudioBrand size="l" />
           <div className="hidden md:block">
             <StudioNavigationMenu active={active} role={role} />
@@ -229,7 +271,7 @@ export function StudioShell({
 
           <div className="ml-auto flex items-center gap-1.5">
             {role ? <GlobalSearch role={role} /> : null}
-            {topAction ? <div className="flex items-center">{topAction}</div> : null}
+            {!authenticated ? <Button asChild><Link href="/login">登录</Link></Button> : null}
             {authenticated && role ? (
               <>
                 <Button aria-label="任务通知" className="hidden sm:inline-flex" size="icon" variant="ghost">
@@ -281,7 +323,7 @@ export function StudioShell({
       {projectName || typeof currentStep === "number" ? (
         <div className="border-b bg-background">
           {projectName ? (
-            <div className="mx-auto flex min-h-11 max-w-[1440px] items-center gap-3 px-5 text-sm md:px-8">
+            <div className={cn(studioContainerClassName, "flex min-h-11 items-center gap-3 text-sm")}>
               <span className="text-muted-foreground">当前项目</span>
               <span className="font-medium">{projectName}</span>
             </div>

@@ -49,7 +49,7 @@ export function ProtectedRoute({
     return (
       <SystemStatusPage
         description="暂时无法确认你的工作空间身份。系统不会在权限未知时显示受保护内容，请稍后重新进入。"
-        primaryAction={{ href: "/", label: "返回首页" }}
+        primaryAction={{ href: "/projects", label: "返回项目" }}
         status="503"
         title="权限服务暂时不可用"
       />
@@ -60,8 +60,7 @@ export function ProtectedRoute({
     return (
       <SystemStatusPage
         description="你当前的工作空间身份没有此页面所需权限。页面入口已从导航中隐藏，如需处理请联系空间所有者。"
-        primaryAction={{ href: "/", label: "返回首页" }}
-        secondaryAction={{ href: "/projects", label: "查看可访问项目" }}
+        primaryAction={{ href: "/projects", label: "返回项目" }}
         status="403"
         title="无权访问此页面"
       />

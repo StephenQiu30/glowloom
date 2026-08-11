@@ -4,7 +4,7 @@ import { AlertCircle, ArrowRight, FolderPlus, LoaderCircle, MoreHorizontal, Plus
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { StudioShell } from "@/components/studio/studio-shell";
+import { StudioShell, studioContainerClassName } from "@/components/studio/studio-shell";
 import { MetricGroup } from "@/components/studio/metric-group";
 import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -100,14 +100,13 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
   return (
     <StudioShell
       active="projects"
-      topAction={<Button disabled={!workspaceId} onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" />创建项目</Button>}
       viewer={me.data ? {
         displayName: me.data.user.display_name?.trim() || me.data.user.email,
         workspaceName: me.data.workspace.name,
       } : undefined}
     >
       {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 bg-foreground px-4 py-3 text-sm text-background" role="status">{notice}</div> : null}
-      <div className="mx-auto max-w-[1280px] px-5 py-12 md:px-8 md:py-14">
+      <div className={`${studioContainerClassName} py-12 md:py-14`}>
         {!authenticated ? (
           <Alert><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription>登录后管理真实项目与单集。</AlertDescription></Alert>
         ) : pageError ? (
@@ -117,6 +116,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
         ) : (
           <>
             <PageHeader
+              actions={<Button disabled={!workspaceId} onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" />创建项目</Button>}
               description="以项目和单集组织生产事实，继续当前阶段，或追踪归档内容。"
               eyebrow={workspace.name}
               title="项目管理"

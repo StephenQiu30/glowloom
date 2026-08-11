@@ -36,5 +36,7 @@ export function canAccessPage(
 export function visiblePrimaryNavigation(
   role: WorkspaceRole | undefined,
 ): StudioNavigation[] {
-  return primaryNavigation.filter((page) => canAccessPage(role, page));
+  return primaryNavigation.filter(
+    (page) => (!role || page !== "create") && canAccessPage(role, page),
+  );
 }

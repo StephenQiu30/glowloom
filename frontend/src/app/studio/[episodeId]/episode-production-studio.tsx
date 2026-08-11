@@ -1044,13 +1044,6 @@ export function EpisodeProductionStudio({
             }
           : undefined
       }
-      topAction={
-        episode ? (
-          <Button asChild variant="outline">
-            <Link href={`/projects/${episode.project_id}`}>项目概览</Link>
-          </Button>
-        ) : undefined
-      }
     >
       {notice ? (
         <div className="pointer-events-none fixed top-24 right-6 z-50 flex max-w-md items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg" role="status">
@@ -1078,14 +1071,17 @@ export function EpisodeProductionStudio({
             <PageHeader
               accessibleTitle={episode.name}
               actions={(
-                <Select value={episode.id} onValueChange={(value) => { window.location.href = `/studio/${value}/${initialPanel}`; }}>
-                  <SelectTrigger aria-label="切换单集" className="h-10 min-w-56"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(episodesQuery.data ?? []).map((item) => (
-                      <SelectItem key={item.id} value={item.id}>第 {item.position} 集 · {item.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button asChild variant="outline"><Link href={`/projects/${episode.project_id}`}>项目概览</Link></Button>
+                  <Select value={episode.id} onValueChange={(value) => { window.location.href = `/studio/${value}/${initialPanel}`; }}>
+                    <SelectTrigger aria-label="切换单集" className="h-10 min-w-56"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(episodesQuery.data ?? []).map((item) => (
+                        <SelectItem key={item.id} value={item.id}>第 {item.position} 集 · {item.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
               badges={[
                 { label: stageLabels[snapshot.current_stage] },

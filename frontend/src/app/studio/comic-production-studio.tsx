@@ -270,29 +270,6 @@ export function ComicProductionStudio() {
     <StudioShell
       active="assets"
       projectName={effectiveProject?.name}
-      topAction={
-        authenticated ? (
-          effectiveProject?.status === "active" ? (
-            <Button
-              className="h-10 bg-primary px-4 text-white hover:bg-primary/85"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus aria-hidden="true" />新建资产
-            </Button>
-          ) : (
-            <Button disabled className="h-10" variant="outline">
-              项目已归档
-            </Button>
-          )
-        ) : (
-          <Button
-            asChild
-            className="h-10 bg-primary px-4 text-white hover:bg-primary/85"
-          >
-            <Link href="/login">登录后管理</Link>
-          </Button>
-        )
-      }
     >
       {notice ? (
         <div
@@ -306,27 +283,42 @@ export function ComicProductionStudio() {
 
       <div className="mx-auto max-w-[1420px] px-5 py-8 md:px-8">
         <PageHeader
-          actions={projectItems.length > 0 ? (
-            <div className="grid min-w-56 gap-2">
-              <Label htmlFor="assetProject">当前项目</Label>
-              <Select
-                value={effectiveProject?.id ?? ""}
-                onValueChange={(value) => {
-                  setSelectedProjectId(value);
-                  setSelectedAssetId(null);
-                }}
-              >
-                <SelectTrigger id="assetProject"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {projectItems.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}{project.status === "archived" ? "（已归档）" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          actions={(
+            <div className="flex flex-wrap items-end gap-2">
+              {projectItems.length > 0 ? (
+                <div className="grid min-w-56 gap-2">
+                  <Label htmlFor="assetProject">当前项目</Label>
+                  <Select
+                    value={effectiveProject?.id ?? ""}
+                    onValueChange={(value) => {
+                      setSelectedProjectId(value);
+                      setSelectedAssetId(null);
+                    }}
+                  >
+                    <SelectTrigger id="assetProject"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {projectItems.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}{project.status === "archived" ? "（已归档）" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {authenticated ? (
+                effectiveProject?.status === "active" ? (
+                  <Button className="h-10 bg-primary px-4 text-white hover:bg-primary/85" onClick={() => setCreateOpen(true)}>
+                    <Plus aria-hidden="true" />新建资产
+                  </Button>
+                ) : (
+                  <Button disabled className="h-10" variant="outline">项目已归档</Button>
+                )
+              ) : (
+                <Button asChild className="h-10 bg-primary px-4 text-white hover:bg-primary/85"><Link href="/login">登录后管理</Link></Button>
+              )}
             </div>
-          ) : null}
+          )}
           badges={[{ label: "生产事实层" }]}
           description="管理角色、场景、道具、服装、声音与视觉风格的稳定身份、不可变版本和生产准备度。"
           title="资产库"
