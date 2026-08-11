@@ -103,6 +103,7 @@ jobs:
           MINIO_ACCESS_KEY=check-only \
           MINIO_SECRET_KEY=check-only \
           JWT_SECRET_KEY=check-only-production-secret \
+          EMAIL_VERIFICATION_HMAC_SECRET=check-only-registration-hmac-secret \
           docker compose \
             --env-file .env.production.example \
             -f docker-compose.yml \
@@ -113,7 +114,8 @@ jobs:
           cd backend
           LANVERSE_RUN_REDIS_CONTRACT=1 .venv/bin/python -m pytest \
             tests/contract/test_redis_cache.py \
-            tests/contract/test_generation_high_cost_guard.py
+            tests/contract/test_generation_high_cost_guard.py \
+            tests/contract/test_registration_verification_store.py
       - name: Start MinIO contract service
         run: |
           docker run --rm --detach --name lanverse-ci-minio \
