@@ -352,6 +352,7 @@ describe("governance consent workspace", () => {
     expect(
       await screen.findByRole("heading", { name: "授权治理" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "授权治理" }).closest(".mx-auto")).toHaveClass("max-w-[1440px]");
     expect(await screen.findByText("synthetic-subject-adult-a")).toBeInTheDocument();
     expect(await screen.findByText("角色形象与声音授权")).toBeInTheDocument();
     expect(await screen.findByText(/2027年7月30日/)).toBeInTheDocument();
@@ -384,6 +385,26 @@ describe("governance consent workspace", () => {
       }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent("授权已登记");
+  });
+
+  it("uses the shared borderless empty state instead of an empty master-detail frame", async () => {
+    apiMocks.listConsents.mockResolvedValue({
+      data: { items: [], total: 0, limit: 50, offset: 0 },
+    });
+    apiMocks.listMedia.mockResolvedValue({
+      data: { items: [], total: 0, limit: 100, offset: 0 },
+    });
+
+    render(
+      <AppProviders>
+        <GovernanceWorkspace />
+      </AppProviders>,
+    );
+
+    const emptyState = await screen.findByRole("region", { name: "还没有授权记录" });
+    expect(emptyState).toHaveClass("bg-muted/30");
+    expect(emptyState).not.toHaveClass("border");
+    expect(screen.queryByText("0 项 Workspace 事实")).not.toBeInTheDocument();
   });
 
   it("lets the owner inspect and filter append-only audit events", async () => {

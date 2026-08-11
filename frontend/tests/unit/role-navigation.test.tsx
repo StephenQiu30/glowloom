@@ -76,7 +76,8 @@ describe("role-aware global navigation", () => {
     expect(screen.queryByText("治理内容")).not.toBeInTheDocument();
   });
 
-  it("shows the governance destination for owners", async () => {
+  it("keeps governance out of primary navigation but reachable from the owner account menu", async () => {
+    const user = userEvent.setup();
     mockMe("owner");
     render(
       <AppProviders>
@@ -88,11 +89,11 @@ describe("role-aware global navigation", () => {
 
     const navigation = await screen.findByRole("navigation", { name: "主导航" });
     await waitFor(() => {
-      expect(within(navigation).getByRole("link", { name: "治理" })).toHaveAttribute(
-        "href",
-        "/governance",
-      );
+      expect(within(navigation).getByRole("link", { name: "项目" })).toBeInTheDocument();
+      expect(within(navigation).queryByRole("link", { name: "治理" })).not.toBeInTheDocument();
     });
+    await user.click(screen.getByRole("button", { name: /owner/ }));
+    expect(await screen.findByRole("menuitem", { name: "治理与审计" })).toHaveAttribute("href", "/governance");
     await waitFor(() => expect(apiMocks.me).toHaveBeenCalled());
   });
 

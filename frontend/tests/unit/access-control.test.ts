@@ -21,13 +21,9 @@ describe("workspace page access", () => {
   });
 
   it.each(["editor", "owner"] as const)(
-    "allows %s to enter governance",
+    "allows %s to enter governance without promoting it to primary navigation",
     (role) => {
-      expect(visiblePrimaryNavigation(role)).toEqual([
-        "projects",
-        "assets",
-        "governance",
-      ]);
+      expect(visiblePrimaryNavigation(role)).toEqual(["projects", "assets"]);
       expect(canAccessPage(role, "governance")).toBe(true);
     },
   );
