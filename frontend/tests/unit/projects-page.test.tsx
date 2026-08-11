@@ -95,6 +95,38 @@ describe("真实项目库", () => {
     expect(screen.queryByRole("link", { name: `打开项目 ${project.name}` })).not.toBeInTheDocument();
   });
 
+  it("搜索无结果时可以一键恢复全部项目", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <ProjectDashboard />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("link", { name: `打开项目 ${project.name}` })).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "搜索项目" }), "不存在");
+
+    expect(screen.getByRole("heading", { name: "没有匹配的项目" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "清除搜索和筛选" }));
+
+    expect(screen.getByRole("link", { name: `打开项目 ${project.name}` })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "搜索项目" })).toHaveValue("");
+  });
+
+  it("首次进入空项目库时提供就地创建入口", async () => {
+    apiMocks.listProjects.mockResolvedValue({
+      data: { items: [], total: 0, limit: 50, offset: 0 },
+    });
+    render(
+      <AppProviders>
+        <ProjectDashboard />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "还没有项目" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "创建第一个项目" })).toBeEnabled();
+  });
+
   it("通过真实接口创建项目", async () => {
     const user = userEvent.setup();
     render(
