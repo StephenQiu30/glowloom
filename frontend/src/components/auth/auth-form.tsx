@@ -89,7 +89,15 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       </section>
 
       <aside className="relative hidden min-h-screen overflow-hidden bg-black lg:block">
-        <Image alt="她从画中来项目画面" fill priority sizes="55vw" src="/assets/lanverse-studio/painting-girl-cover.png" className="object-cover opacity-70 grayscale" />
+        <Image
+          alt="她从画中来项目画面"
+          className="object-cover opacity-70 grayscale"
+          fill
+          priority
+          sizes="55vw"
+          src="/assets/lanverse-studio/painting-girl-cover.png"
+          unoptimized
+        />
         <div className="absolute inset-0 bg-linear-to-t from-black via-black/10 to-transparent" />
         <div className="absolute right-12 bottom-12 left-12 border-t border-white/30 pt-8 text-white">
           <p className="font-mono text-xs text-white/60">正在制作 · 她从画中来</p>
