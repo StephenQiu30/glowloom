@@ -22,7 +22,6 @@ const primaryNavigation: readonly StudioNavigation[] = [
   "create",
   "projects",
   "assets",
-  "governance",
 ];
 
 export function canAccessPage(

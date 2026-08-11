@@ -27,7 +27,7 @@ import {
   AuditTrail,
   type AuditFilters,
 } from "@/app/governance/audit-trail";
-import { StudioShell } from "@/components/studio/studio-shell";
+import { StudioShell, studioContainerClassName } from "@/components/studio/studio-shell";
 import { MetricGroup } from "@/components/studio/metric-group";
 import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -137,20 +137,23 @@ function LoadingWorkspace() {
 
 function EmptyConsent({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="grid min-h-[460px] place-items-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+    <section
+      aria-labelledby="governance-empty-title"
+      className="grid min-h-80 place-items-center bg-muted/30 px-6 py-16 text-center"
+    >
       <div className="max-w-sm">
-        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-muted text-foreground">
-          <ShieldCheck className="size-6" aria-hidden="true" />
+        <span className="mx-auto grid size-11 place-items-center rounded-full bg-background text-muted-foreground">
+          <ShieldCheck className="size-5" aria-hidden="true" />
         </span>
-        <h2 className="mt-5 text-lg font-semibold">还没有授权记录</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
+        <h2 className="mt-5 text-lg font-semibold tracking-tight" id="governance-empty-title">还没有授权记录</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
           从一个固定媒体或剧本版本开始，登记用途、地域、有效期与证明。
         </p>
-        <Button className="mt-5 bg-primary text-white hover:bg-primary/85" onClick={onCreate}>
+        <Button className="mt-5" onClick={onCreate}>
           <Plus aria-hidden="true" />新建授权
         </Button>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -164,19 +167,19 @@ function ConsentList({
   selectedId?: string;
 }) {
   return (
-    <Card className="min-w-0 gap-0 py-0">
-      <CardHeader className="border-b py-4">
+    <Card className="min-w-0 gap-0 border-0 bg-muted/30 py-0">
+      <CardHeader className="py-4">
         <CardTitle>授权记录</CardTitle>
         <CardDescription>{consents.length} 项 Workspace 事实</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-2 p-3">
+      <CardContent className="grid gap-1 p-2">
         {consents.map((consent) => (
           <button
             aria-pressed={selectedId === consent.id}
-            className={`grid min-w-0 gap-2 overflow-hidden rounded-xl border p-3 text-left transition ${
+            className={`grid min-w-0 gap-2 overflow-hidden rounded-md border-0 p-3 text-left transition ${
               selectedId === consent.id
-                ? "border-foreground/25 bg-muted/70 shadow-sm"
-                : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                ? "bg-background"
+                : "hover:bg-background/70"
             }`}
             key={consent.id}
             onClick={() => onSelect(consent.id)}
@@ -290,8 +293,8 @@ function ConsentDetail({
   const scope = consent.current_revision.scope;
   return (
     <div className="grid gap-5">
-      <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-5">
+      <Card className="gap-0 border-0 bg-muted/30 py-0">
+        <CardHeader className="py-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -333,7 +336,7 @@ function ConsentDetail({
               <div className="mt-2"><ScopeTerms values={[...scope.authorized_purposes, ...scope.channels]} /></div>
             </div>
           </div>
-          <div className="grid content-start gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="grid content-start gap-4 rounded-lg bg-background p-4">
             <div className="flex items-start gap-3">
               <CalendarRange className="mt-0.5 size-4 text-foreground" aria-hidden="true" />
               <div><p className="text-sm font-medium">有效期</p><p className="mt-1 text-xs text-slate-500">{formatDate(scope.valid_from)} — {formatDate(scope.valid_to)}</p></div>
@@ -350,8 +353,8 @@ function ConsentDetail({
         </CardContent>
       </Card>
 
-      <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-4">
+      <Card className="gap-0 border-0 bg-muted/30 py-0">
+        <CardHeader className="py-4">
           <div className="flex items-center gap-2"><History className="size-4 text-foreground" aria-hidden="true" /><CardTitle>修订历史</CardTitle></div>
           <CardDescription>所有事实只追加，旧范围与撤销原因始终可追溯。</CardDescription>
         </CardHeader>
@@ -498,7 +501,7 @@ export function GovernanceWorkspace({
       active="governance"
     >
       {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10" role="status"><Check className="size-4 text-emerald-600" aria-hidden="true" />{notice}</div> : null}
-      <div className="mx-auto max-w-[1320px] px-5 py-8 md:px-8">
+      <div className={`${studioContainerClassName} py-12 md:py-14`}>
         <PageHeader
           actions={authenticated ? (
             <Button className="h-10 bg-primary px-4 text-white hover:bg-primary/85" onClick={() => setCreateOpen(true)}>
@@ -507,26 +510,23 @@ export function GovernanceWorkspace({
           ) : (
             <Button asChild className="h-10 bg-primary px-4 text-white hover:bg-primary/85"><Link href="/login">登录后管理</Link></Button>
           )}
-          badges={[
-            { label: "合规事实层" },
-            ...(workspaceId ? [{ label: `Workspace ${shortId(workspaceId)}` }] : []),
-          ]}
           description="登记固定版本的用途、地域、期限与证明，让生成和交付门禁基于可追溯事实。"
+          eyebrow={me.data?.workspace.name ?? "授权与审计"}
           title="授权治理"
         />
 
         {sessionState === "checking" || (authenticated && me.isLoading) ? <LoadingWorkspace /> : null}
         {sessionState === "anonymous" ? (
-          <Alert className="mt-7 border-amber-200 bg-amber-50 p-5 text-amber-800"><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription className="text-amber-700">授权记录受 Workspace 隔离保护。<Link className="ml-1 font-medium underline" href="/login">前往登录</Link></AlertDescription></Alert>
+          <Alert className="mt-8 border-0 bg-amber-50/70 p-4 text-amber-800"><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription className="text-amber-700">授权记录受 Workspace 隔离保护。<Link className="ml-1 font-medium underline" href="/login">前往登录</Link></AlertDescription></Alert>
         ) : null}
         {authenticated && (me.error || consents.error || media.error) ? (
-          <Alert className="mt-7 border-rose-200 bg-rose-50 p-5 text-rose-800" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>授权事实暂时无法读取</AlertTitle><AlertDescription>{appApiErrorMessage(me.error ?? consents.error ?? media.error)}</AlertDescription></Alert>
+          <Alert className="mt-8 border-0 bg-rose-50 p-4 text-rose-800" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>授权事实暂时无法读取</AlertTitle><AlertDescription>{appApiErrorMessage(me.error ?? consents.error ?? media.error)}</AlertDescription></Alert>
         ) : null}
 
         {workspaceId && !me.isLoading ? (
           <>
             <MetricGroup
-              className="mt-7"
+              className="mt-8"
               columns={3}
               items={[
                 { label: "授权记录", value: consents.data?.total ?? 0 },
@@ -536,13 +536,21 @@ export function GovernanceWorkspace({
               label="授权状态摘要"
             />
 
-            {actionError ? <Alert className="mt-5 border-rose-200 bg-rose-50 p-4 text-rose-800" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
-            {mediaVersions.length === 0 ? <Alert className="mt-5 border-amber-200 bg-amber-50 p-4 text-amber-800"><FileCheck2 aria-hidden="true" /><AlertTitle>缺少可用证明媒体</AlertTitle><AlertDescription className="text-amber-700">先在资产或媒体流程完成一次私有上传，才能登记授权证明。</AlertDescription></Alert> : null}
+            {actionError ? <Alert className="mt-6 border-0 bg-rose-50 p-4 text-rose-800" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
+            {mediaVersions.length === 0 ? <Alert className="mt-6 border-0 bg-amber-50/70 p-4 text-amber-800"><FileCheck2 aria-hidden="true" /><AlertTitle>缺少可用证明媒体</AlertTitle><AlertDescription className="text-amber-700">先在资产或媒体流程完成一次私有上传，才能登记授权证明。</AlertDescription></Alert> : null}
 
-            <div className="mt-6 grid items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
-              {consents.isLoading ? <Card><CardContent className="p-6 text-sm text-slate-500">正在读取授权列表…</CardContent></Card> : <ConsentList consents={items} onSelect={setSelectedId} selectedId={effectiveSelectedId} />}
-              {items.length === 0 && !consents.isLoading ? <EmptyConsent onCreate={() => setCreateOpen(true)} /> : detail.isLoading ? <LoadingWorkspace /> : detail.data ? <ConsentDetail consent={detail.data} isRevoking={revokeState.isLoading} onEdit={() => setReviseOpen(true)} onRevoke={submitRevoke} /> : null}
-            </div>
+            {consents.isLoading ? (
+              <div className="mt-8 grid min-h-64 place-items-center bg-muted/30 text-sm text-muted-foreground">
+                <div className="text-center"><LoaderCircle className="mx-auto mb-3 size-5 animate-spin" aria-hidden="true" />正在读取授权列表…</div>
+              </div>
+            ) : items.length === 0 ? (
+              <div className="mt-8"><EmptyConsent onCreate={() => setCreateOpen(true)} /></div>
+            ) : (
+              <div className="mt-8 grid items-start gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+                <ConsentList consents={items} onSelect={setSelectedId} selectedId={effectiveSelectedId} />
+                {detail.isLoading ? <LoadingWorkspace /> : detail.data ? <ConsentDetail consent={detail.data} isRevoking={revokeState.isLoading} onEdit={() => setReviseOpen(true)} onRevoke={submitRevoke} /> : null}
+              </div>
+            )}
             {auditVisible ? (
               audit.error ? (
                 <Alert className="mt-8 border-rose-200 bg-rose-50 p-4 text-rose-800" variant="destructive">
