@@ -1,58 +1,42 @@
-# Lanverse 前端重设计 Design QA
+# 项目管理无边框优化 Design QA
 
-- source visual truth:
-  - 内容首页：`/Users/stephenqiu/.codex/generated_images/019ff010-4b8a-7383-80e4-aba44541e1a4/exec-62f72e33-6696-4519-85e5-1ae273c052db.png`
-  - 制作详情：`/Users/stephenqiu/.codex/generated_images/019ff010-4b8a-7383-80e4-aba44541e1a4/exec-97a42b11-babe-4308-96d1-220683bc2f41.png`
-  - 管理台账：`/Users/stephenqiu/.codex/generated_images/019ff010-4b8a-7383-80e4-aba44541e1a4/exec-fc3a7ad0-7fc7-4ad2-9151-80152530a99d.png`
-- implementation evidence: `/Users/stephenqiu/Desktop/StephenQiu/Lanverse/artifacts/product-design/redesign-2026/`
-- side-by-side comparisons: `home-comparison.png`、`detail-comparison.png`、`management-comparison.png`、`components-detail-comparison.png`、`components-management-comparison.png`
-- implementation screenshots: `home-1440-v2.png`、`studio-detail-unified.png`、`projects-unified.png`
-- responsive evidence: `home-390.png`、`projects-390-fixed.png`、`home-css-1024.png`
-- source pixels: 三张参考图均为 `1487 × 1058`
-- comparison normalization: 实现截图按源图纵横比居中裁切并归一为 `1487 × 1058`，参考和实现在同一张 `2974 × 1114` 图中判断
-- state: 浅色桌面端；首页同时覆盖未登录和已登录内容，详情与管理页使用只读 QA API 数据验证真实查询状态
+- source visual truth：用户提供的现状截图 `/var/folders/r5/lm_1_1hd321dzlfq0lctjdnw0000gn/T/codex-clipboard-ff1a53db-e81c-49ff-aefc-0a7a0f46d99c.png`，以及 `docs/design/007-前端体验与视觉系统重设计.md` 的无边框界面原则。
+- source content crop：`/tmp/lanverse-borderless-preview/projects-source-content.png`。
+- implementation screenshot：`/tmp/lanverse-borderless-preview/projects-borderless-css1365x629.png`。
+- normalized implementation：`/tmp/lanverse-borderless-preview/projects-borderless-normalized.png`。
+- full-view comparison：`/tmp/lanverse-borderless-preview/projects-before-after.png`。
+- responsive evidence：`/tmp/lanverse-borderless-preview/projects-borderless-1024x768-after.png`。
+- state：浅色桌面端、owner、0 个项目；真实前端组件连接只读本机临时 API，不写入项目数据。
+- viewport：主比较实现为 `1365 × 629` CSS px、`devicePixelRatio = 1`；响应式复核为 `1024 × 768` CSS px。
+- density normalization：原始截图为 `2048 × 1179`，裁去浏览器 chrome 后得到 `2048 × 944`；现状截图的界面密度约为 1.5 倍，因此实现截图按 Lanczos 放大到 `2048 × 944` 后进行同画布比较。
 
-## 设计意图与实现对齐
+## Findings
 
-这次不是对三张图做逐像素复制，而是按用户已确认的页面职责重新组织现有真实业务：方案 1 提供首页的内容编辑感和顶部布局，方案 2 提供“今天往前推进一集”的详情优先级，方案 3 提供高密度台账视角。实现继续使用服务端 `ProductionSnapshot`、版本、候选和人工确认事实，不用视觉稿的模拟数字覆盖真实状态。
-
-三类页面共用一个顶部导航、黑白 Logo、Geist 字体、中性色令牌、Lucide 图标和 shadcn/ui + Radix UI 交互原语。页面内容优先使用留白、排版和分隔线，只有 Dialog、DropdownMenu 等浮层使用阴影，没有回到卡片墙、彩色渐变或常驻侧栏。
-
-业务页标题与事实摘要已进一步收口为服务级组件：`PageHeader` 组合官方 `Item`、`Breadcrumb`、`Badge` 与 `Separator`，`MetricGroup` 组合 `ItemGroup` 与 `Item`。项目、单集、治理、空间和资产页面只传递标题、描述、状态、面包屑与操作，不再分别维护重复的 `h1/p` 样式块；创建项目与创建单集对话框也统一使用官方 Dialog、Select 和 Textarea 组件。
+- 无剩余 P0、P1 或 P2 问题。
+- P3：0 项目状态下，1024px 高度首屏只露出空状态说明的一部分；主操作仍在向下轻微滚动后可达，且顶栏“创建项目”始终可见，不阻断任务。
 
 ## 必查表面
 
-- 字体与层级：大标题、正文、元数据与版本 ID 分层清晰；390、1024 与 1440 宽度下未出现重叠或不可读截断。
-- 间距与布局：全局页边距、Hero 与台账行节奏一致；详情页从上下依次是项目上下文、生产阶段、当前事实、模块入口和主工作面。
-- 响应式：1440 桌面、1024 小桌面和 390 窄屏均已实测；窄屏顶栏保留 Logo、主操作、账户与导航，管理表格可受控横向滚动。
-- 颜色与表面：主色为近黑，背景为白，弱化文本为中性灰；业务页面无青色品牌色、无装饰渐变、无不必要阴影。
-- 图像与品牌：顶栏使用真实透明 PNG Logo；首页 9:16 画面使用项目已有的真实高清封面，灰度裁切与容器比例稳定；无 CSS 插画、手写 SVG 或 Emoji 资产。
-- 图标：可见图标统一来自 Lucide，线重、尺寸和光学对齐一致；图标按钮具有语义名称。
-- 状态与交互：全局搜索 Dialog、账户 DropdownMenu、项目搜索、归档筛选、项目跳转和单集切换均使用语义化控件；浏览器控制台无 warning/error。
-- 可访问性：导航、对话框、搜索和表格保持语义结构；图像有 alt，输入有 label，选中和状态不只靠颜色表达。
+- 字体与层级：继续使用 Geist；工作空间、标题、描述、指标标签和值形成清楚的四级层次，标题未发生意外换行。
+- 间距与布局：标题、摘要、工具栏和空状态以留白和完整轻表面分区，不再连续堆叠横线；页面常驻内容无阴影。
+- 颜色与令牌：只使用既有黑白中性色和 `muted` 表面；选中筛选通过白色表面、字重和 `aria-pressed` 共同表达。
+- 图像与资产：Logo 继续使用项目真实 PNG；空状态和控件图标来自既有 Lucide 图标库，没有新增 CSS 图形、手写 SVG 或占位资产。
+- 文案与内容：空项目明确说明下一步并提供“创建第一个项目”；有数据但筛选无结果时提供“清除搜索和筛选”。
+- 可访问性：筛选声明为有名称的 `group`，按钮使用 `aria-pressed`；输入保留 label 与可见 focus ring；空状态标题通过 `aria-labelledby` 关联区域。
 
-## 修正历史
+## 比较历史
 
-1. 首页首轮 1024 宽度验证中，Hero 三栏过早启用，标题换行影响层级，判定 P2；将中尺寸改为两栏、阶段列换行，并收紧标题字号后通过。
-2. Logo 生成稿的透明留白过多，顶栏字标视觉偏小，判定 P2；去除绿幕后按 alpha 边界裁切，复核无白边或色键残留。
-3. 390 宽度管理页首轮中，帮助、通知与账户控件挤出右边界，判定 P2；窄屏隐藏非核心帮助/通知按钮与账户箭头，保留可达账户入口后通过。
-4. 组件化回归测试发现 Breadcrumb 分隔符被嵌套在 `BreadcrumbItem` 内，产生无效 `li > li` 与 hydration 风险，判定 P2；按官方组合方式改为同级节点后，浏览器控制台无 warning/error。
-5. 组件化后单集页面的可访问标题层级一度不再满足既有语义测试，判定 P2；`PageHeader` 增加仅供辅助技术读取的上下文标题，保留视觉层级并恢复既有语义断言。
-6. 390 与 1440 宽度下重新验证项目详情、单集详情和管理页，并将新版与参考图放入同一比较输入；未发现新的 P0、P1 或 P2 问题。
+1. 首轮现状截图显示标题、摘要上下边界、工具栏分隔线连续出现，页面被切成表格式条带；实现移除 `PageHeader`、`MetricGroup` 和项目工具栏的结构性分隔线，改为留白、排版和 `muted` 轻表面。
+2. 首轮 1024px 浏览器复核发现全局搜索与主导航同时占位，导航标签被压成两行，判定 P2；全局搜索改为 `xl` 才显示，导航标签固定单行。修正后 `1024 × 768` 下 Logo、四个导航、创建项目和账户入口均在一行可见，页面无水平溢出。
+3. 修正后重新捕获桌面与 1024px 证据；未发现新的 P0、P1 或 P2 问题。
 
-## 剩余 Findings
+## 主交互与浏览器验证
 
-- 无剩余 P0、P1 或 P2 问题。
-- P3：390 px 窄屏的管理表格需横向滚动查看全部列；符合本轮“核心操作可达”的移动降级边界。
-- P3：参考详情图包含高密度视频候选和镜头数据，当前真实路由先呈现剧本与服务端生产事实；这是按已实现产品阶段的有意缩减，不伪造未存在的候选数据。
-
-## 主链路验证
-
-- 首页：已登录/未登录 CTA、生产阶段、当前项目与最近项目可正常呈现。
-- 管理：搜索“长安”后仅保留“长安夜航”；切换“已归档”后仅保留“逆光者”。
-- 全局命令：搜索 Dialog 打开后显示首页、项目、资产、治理与空间入口，可关闭。
-- 详情：项目详情与单集剧本工作面可从真实 API 查询状态正常渲染，当前版本、资产 readiness、分镜 readiness 与人工确认守则可见。
-- 浏览器：主要验证页面无控制台 warning/error，无破图、开发错误遮罩或不可操作主控件。
-- 组件回归：`PageHeader` 在 390 px 下操作区正常换行，`MetricGroup` 自动纵向堆叠；项目和单集详情在 1440 px 下保持参考图的内容优先级与信息密度。
+- 状态筛选：点击“制作中”后 `aria-pressed=true`，可恢复“全部”。
+- 搜索：输入框可接收并清除关键词，焦点环可见。
+- 创建入口：顶部与空状态入口均可打开真实“创建漫剧项目”对话框；只验证打开和取消，没有提交数据。
+- 响应式：`1024 × 768` 下 `body.scrollWidth <= window.innerWidth`，主操作可见。
+- 控制台：页面来源没有 error；记录到的一条 error 来自用户 Chrome 的 Immersive Translate 扩展，不属于 Lanverse。
+- focused region comparison：本轮没有需要单独放大的图片、密集表格或精细资产；标题—摘要—工具栏—空状态已在全视图中清晰可读，因此不另做局部图。
 
 final result: passed
