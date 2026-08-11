@@ -13,6 +13,7 @@ from app.modules.identity import ActorContext
 from app.modules.messaging.models import OutboxEvent
 from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
 from app.modules.production.models import Task
+from tests.support.identity_builders import register_identity_response
 
 
 async def _identity(
@@ -21,13 +22,11 @@ async def _identity(
     *,
     email: str = "task-owner@example.com",
 ) -> tuple[dict[str, str], ActorContext]:
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": email,
-            "password": "a-secure-task-password",
-            "display_name": "任务负责人",
-        },
+    response = await register_identity_response(
+        client,
+        email=email,
+        password="a-secure-task-password",
+        display_name="任务负责人",
     )
     assert response.status_code == 201
     data = response.json()["data"]

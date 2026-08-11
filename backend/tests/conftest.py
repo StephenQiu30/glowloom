@@ -23,6 +23,10 @@ from app.modules.caching.contracts import (
     HighCostGuardResult,
 )
 from app.modules.caching.dependencies import get_cache_port, get_high_cost_guard
+from tests.support.registration_verification import (
+    MemoryRegistrationVerificationStore,
+    RecordingRegistrationMailer,
+)
 
 TEST_DATABASE_URL = validate_test_database_url(
     "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
@@ -82,6 +86,9 @@ def test_settings() -> Settings:
         environment="test",
         database_url=TEST_DATABASE_URL,
         jwt_secret_key=SecretStr("integration-test-secret-with-at-least-32-bytes"),
+        email_verification_hmac_secret=SecretStr(
+            "integration-registration-secret-with-at-least-32-bytes"
+        ),
     )
 
 
@@ -93,6 +100,16 @@ def cache_port() -> CachePort:
 @pytest.fixture
 def high_cost_guard() -> AllowingTestHighCostGuard:
     return AllowingTestHighCostGuard()
+
+
+@pytest.fixture
+def registration_store() -> MemoryRegistrationVerificationStore:
+    return MemoryRegistrationVerificationStore()
+
+
+@pytest.fixture
+def registration_mailer() -> RecordingRegistrationMailer:
+    return RecordingRegistrationMailer()
 
 
 @pytest.fixture
@@ -117,6 +134,8 @@ def app(
     test_settings: Settings,
     cache_port: CachePort,
     high_cost_guard: AllowingTestHighCostGuard,
+    registration_store: MemoryRegistrationVerificationStore,
+    registration_mailer: RecordingRegistrationMailer,
 ) -> FastAPI:
     async def test_session() -> AsyncIterator[AsyncSession]:
         async with session_factory() as session:
@@ -126,6 +145,9 @@ def app(
     app.dependency_overrides[get_async_session] = test_session
     app.dependency_overrides[get_cache_port] = lambda: cache_port
     app.dependency_overrides[get_high_cost_guard] = lambda: high_cost_guard
+    app.state.registration_verification_store = registration_store
+    app.state.registration_mailer = registration_mailer
+    app.state.registration_code_generator = lambda: "123456"
     return app
 
 

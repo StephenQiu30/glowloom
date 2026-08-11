@@ -11,6 +11,7 @@ import {
   uploadAndWait,
   type AssetFixture,
 } from "./asset-support";
+import { registerUser } from "./auth-support";
 
 const e2eDatabaseUrl =
   "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test";
@@ -94,11 +95,10 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
     consentReference: `fictional-storyboard-voice-${unique}`,
   };
 
-  await page.goto("/register");
-  await page.getByLabel("显示名称").fill("S3 验收创作者");
-  await page.getByLabel("邮箱").fill(`s3-storyboard-${unique}@example.com`);
-  await page.getByLabel("密码").fill("playwright-secure-password");
-  await page.getByRole("button", { name: "注册并开始创作" }).click();
+  await registerUser(page, {
+    displayName: "S3 验收创作者",
+    email: `s3-storyboard-${unique}@example.com`,
+  });
 
   await page.getByRole("button", { name: "创建项目" }).click();
   await page.getByLabel("项目名称").fill(projectName);

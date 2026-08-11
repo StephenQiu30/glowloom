@@ -1,18 +1,17 @@
 import { expect, test } from "@playwright/test";
 
+import { registerUser } from "./auth-support";
+
 test("首次登录后创建项目和单集并恢复服务端事实", async ({ page }) => {
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const email = `creator-${unique}@example.com`;
   const projectName = `海边来信-${unique}`;
 
-  await page.goto("/register");
-  await page.getByLabel("显示名称").fill("验收创作者");
-  await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill("playwright-secure-password");
-  await page.getByRole("button", { name: "注册并开始创作" }).click();
+  await registerUser(page, { displayName: "验收创作者", email });
 
-  await expect(page).toHaveURL(/\/projects$/);
-  await expect(page.getByRole("heading", { name: "项目" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "项目管理", exact: true }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "创建项目" }).click();
   await page.getByLabel("项目名称").fill(projectName);
@@ -38,10 +37,14 @@ test("首次登录后创建项目和单集并恢复服务端事实", async ({ pa
   await expect(page.getByRole("link", { name: "进入第一集", exact: true })).toBeVisible();
   await expect(page.getByText("导入剧本", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "退出登录" }).click();
+  await page.getByRole("button", { name: "验收创作者" }).click();
+  await page.getByRole("menuitem", { name: "退出登录" }).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.goto(projectHref!);
-  await expect(page.getByRole("link", { name: "登录后查看项目生产事实" })).toHaveAttribute(
+  await expect(
+    page.getByRole("heading", { name: "需要登录后继续" }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "前往登录" })).toHaveAttribute(
     "href",
     "/login",
   );

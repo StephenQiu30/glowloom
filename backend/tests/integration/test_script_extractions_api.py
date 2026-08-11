@@ -21,6 +21,7 @@ from app.modules.production import ScriptExtractionTaskCommand, TaskResponse
 from app.modules.production.models import Task
 from app.modules.scripts.extractions import schemas as script_schemas
 from app.modules.scripts.extractions import service as scripts_service
+from tests.support.identity_builders import register_identity_response
 
 
 async def _identity(
@@ -28,13 +29,11 @@ async def _identity(
     *,
     email: str,
 ) -> tuple[dict[str, str], str]:
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": email,
-            "password": "a-secure-extraction-password",
-            "display_name": "提取负责人",
-        },
+    response = await register_identity_response(
+        client,
+        email=email,
+        password="a-secure-extraction-password",
+        display_name="提取负责人",
     )
     assert response.status_code == 201
     data = response.json()["data"]

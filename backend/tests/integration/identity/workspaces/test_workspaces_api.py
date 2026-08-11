@@ -118,13 +118,11 @@ async def test_profile_and_workspace_lifecycle_are_versioned_and_isolated(
     assert listed.status_code == 200
     assert len(listed.json()["data"]) == 2
 
-    other_registration = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "other@example.com",
-            "password": "another-secure-password",
-            "display_name": "其他用户",
-        },
+    other_registration = await register_identity_response(
+        client,
+        email="other@example.com",
+        password="another-secure-password",
+        display_name="其他用户",
     )
     other_token = other_registration.json()["data"]["access_token"]
     hidden = await client.get(

@@ -1,16 +1,17 @@
 import { expect, test } from "@playwright/test";
 
+import { registerUser } from "./auth-support";
+
 test("无 Ark Key 时任务中心明确阻断生成能力且费用保持零事实", async ({
   page,
 }) => {
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `生成预检项目-${unique}`;
 
-  await page.goto("/register");
-  await page.getByLabel("显示名称").fill("生成事实验收员");
-  await page.getByLabel("邮箱").fill(`generation-${unique}@example.com`);
-  await page.getByLabel("密码").fill("playwright-secure-password");
-  await page.getByRole("button", { name: "注册并开始创作" }).click();
+  await registerUser(page, {
+    displayName: "生成事实验收员",
+    email: `generation-${unique}@example.com`,
+  });
 
   await page.getByRole("button", { name: "创建项目" }).click();
   await page.getByLabel("项目名称").fill(projectName);

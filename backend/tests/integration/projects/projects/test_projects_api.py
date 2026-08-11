@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.modules.assets.models import Asset
 from app.modules.identity.models import Membership
+from tests.support.identity_builders import register_identity_response
 from tests.support.project_builders import project_payload, register_project_owner
 
 
@@ -175,13 +176,11 @@ async def test_project_permissions_and_workspace_archive_gate_existing_writes(
 
     actors: dict[str, tuple[UUID, str]] = {}
     for role in ("editor", "viewer"):
-        registered = await client.post(
-            "/api/v1/auth/register",
-            json={
-                "email": f"{role}@example.com",
-                "password": f"a-secure-{role}-password",
-                "display_name": role,
-            },
+        registered = await register_identity_response(
+            client,
+            email=f"{role}@example.com",
+            password=f"a-secure-{role}-password",
+            display_name=role,
         )
         actor = registered.json()["data"]
         actors[role] = UUID(actor["user"]["id"]), actor["access_token"]

@@ -32,7 +32,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "cd ../backend && .venv/bin/python -m app.initialize_database && .venv/bin/python -m app.server",
+        "cd ../backend && .venv/bin/python -m app.initialize_database && .venv/bin/python -m tests.support.e2e_server",
       env: {
         API_HOST: "127.0.0.1",
         API_PORT: backendPort,

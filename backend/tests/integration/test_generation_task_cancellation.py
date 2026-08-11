@@ -13,6 +13,7 @@ from tests.integration.test_generation_requests_api import (
     create_ready_generation_shot,
     seed_active_capability,
 )
+from tests.support.identity_builders import register_identity_response
 
 
 async def submit_queued_generation(
@@ -285,13 +286,11 @@ async def test_generation_cancel_is_workspace_isolated(
         session_factory,
         submission_key="queued-generation-for-isolation",
     )
-    registered = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "generation-cancel-other-owner@example.com",
-            "password": "a-secure-generation-cancel-password",
-            "display_name": "其他空间负责人",
-        },
+    registered = await register_identity_response(
+        client,
+        email="generation-cancel-other-owner@example.com",
+        password="a-secure-generation-cancel-password",
+        display_name="其他空间负责人",
     )
     assert registered.status_code == 201
     other = registered.json()["data"]

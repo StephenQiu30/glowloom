@@ -7,6 +7,7 @@ import {
   uploadAndWait,
   type AssetFixture,
 } from "./asset-support";
+import { registerUser } from "./auth-support";
 
 test("真实 DeepSeek 提取、人工决议并确认结构", async ({ page }) => {
   test.setTimeout(360_000);
@@ -37,12 +38,10 @@ test("真实 DeepSeek 提取、人工决议并确认结构", async ({ page }) =>
     consentReference: `fictional-deepseek-voice-${unique}`,
   };
 
-  await page.goto("/register");
-  await page.waitForLoadState("networkidle");
-  await page.getByLabel("显示名称").fill("S2 DeepSeek 验收创作者");
-  await page.getByLabel("邮箱").fill(`s2-deepseek-${unique}@example.com`);
-  await page.getByLabel("密码").fill("playwright-secure-password");
-  await page.getByRole("button", { name: "注册并开始创作" }).click();
+  await registerUser(page, {
+    displayName: "S2 DeepSeek 验收创作者",
+    email: `s2-deepseek-${unique}@example.com`,
+  });
 
   await page.getByRole("button", { name: "创建项目" }).click();
   await page.getByLabel("项目名称").fill(projectName);

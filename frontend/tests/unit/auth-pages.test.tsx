@@ -3,8 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
+  confirmRegistrationVerification: vi.fn(),
   login: vi.fn(),
   register: vi.fn(),
+  requestRegistrationVerification: vi.fn(),
 }));
 
 const routerReplace = vi.hoisted(() => vi.fn());
@@ -19,8 +21,12 @@ vi.mock("@/api/identity", async () => {
   );
   return {
     ...actual,
+    confirmRegistrationVerificationApiV1AuthRegistrationVerificationsConfirmPost:
+      apiMocks.confirmRegistrationVerification,
     loginApiV1AuthLoginPost: apiMocks.login,
     registerApiV1AuthRegisterPost: apiMocks.register,
+    requestRegistrationVerificationApiV1AuthRegistrationVerificationsPost:
+      apiMocks.requestRegistrationVerification,
   };
 });
 
@@ -53,8 +59,19 @@ describe("authentication pages", () => {
     routerReplace.mockReset();
     apiMocks.login.mockReset();
     apiMocks.register.mockReset();
+    apiMocks.requestRegistrationVerification.mockReset();
+    apiMocks.confirmRegistrationVerification.mockReset();
     apiMocks.login.mockResolvedValue({ data: authResponse });
     apiMocks.register.mockResolvedValue({ data: authResponse });
+    apiMocks.requestRegistrationVerification.mockResolvedValue({
+      data: { accepted: true, retry_after_seconds: 60 },
+    });
+    apiMocks.confirmRegistrationVerification.mockResolvedValue({
+      data: {
+        registration_ticket: "registration-ticket-with-more-than-forty-three-characters",
+        expires_in: 600,
+      },
+    });
   });
 
   it("renders the login contract", () => {
@@ -82,8 +99,9 @@ describe("authentication pages", () => {
     );
 
     expect(screen.getByRole("heading", { name: "创建账号" })).toBeInTheDocument();
-    expect(screen.getByLabelText("显示名称")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "注册并开始创作" })).toBeInTheDocument();
+    expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
+    expect(screen.queryByLabelText("显示名称")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "发送验证码" })).toBeInTheDocument();
   });
 
   it("logs in through the generated API and persists the returned access token", async () => {
@@ -111,7 +129,7 @@ describe("authentication pages", () => {
     expect(routerReplace).toHaveBeenCalledWith("/projects");
   });
 
-  it("registers through the generated API with the typed profile", async () => {
+  it("verifies the email before registering with a single-use ticket", async () => {
     const user = userEvent.setup();
     render(
       <AppProviders>
@@ -119,18 +137,36 @@ describe("authentication pages", () => {
       </AppProviders>,
     );
 
-    await user.type(screen.getByLabelText("显示名称"), "漫剧创作者");
     await user.clear(screen.getByLabelText("邮箱"));
     await user.type(screen.getByLabelText("邮箱"), "creator@example.com");
+    await user.click(screen.getByRole("button", { name: "发送验证码" }));
+
+    await waitFor(() =>
+      expect(apiMocks.requestRegistrationVerification).toHaveBeenCalledWith({
+        email: "creator@example.com",
+      }),
+    );
+    await user.type(screen.getByLabelText("验证码"), "123456");
+    await user.click(screen.getByRole("button", { name: "确认验证码" }));
+
+    await waitFor(() =>
+      expect(apiMocks.confirmRegistrationVerification).toHaveBeenCalledWith({
+        email: "creator@example.com",
+        code: "123456",
+      }),
+    );
+    await user.type(screen.getByLabelText("显示名称"), "漫剧创作者");
     await user.clear(screen.getByLabelText("密码"));
     await user.type(screen.getByLabelText("密码"), "secure-password-123");
+    await user.click(screen.getByRole("checkbox", { name: /服务协议与隐私政策/ }));
     await user.click(screen.getByRole("button", { name: "注册并开始创作" }));
 
     await waitFor(() => expect(apiMocks.register).toHaveBeenCalledTimes(1));
     expect(apiMocks.register).toHaveBeenCalledWith({
       display_name: "漫剧创作者",
-      email: "creator@example.com",
       password: "secure-password-123",
+      registration_ticket:
+        "registration-ticket-with-more-than-forty-three-characters",
     });
     expect(sessionStorage.getItem("lanverse.access-token")).toBe(
       "real-api-access-token",

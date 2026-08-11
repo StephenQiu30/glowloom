@@ -129,13 +129,11 @@ async def test_cache_is_never_read_before_membership_and_failures_do_not_change_
     headers = {"authorization": f"Bearer {data['access_token']}"}
     await client.get(f"/api/v1/workspaces/{workspace_id}", headers=headers)
 
-    other = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "workspace-cache-other@example.com",
-            "password": "another-secure-password",
-            "display_name": "缓存隔离用户",
-        },
+    other = await register_identity_response(
+        client,
+        email="workspace-cache-other@example.com",
+        password="another-secure-password",
+        display_name="缓存隔离用户",
     )
     other_headers = {
         "authorization": f"Bearer {other.json()['data']['access_token']}"

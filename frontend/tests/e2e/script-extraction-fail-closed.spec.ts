@@ -1,16 +1,16 @@
 import { expect, test } from "@playwright/test";
 
+import { registerUser } from "./auth-support";
+
 test("导入发布剧本并在 DeepSeek 未配置时可恢复地失败", async ({ page }) => {
   test.setTimeout(60_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `S2-剧本契约-${unique}`;
 
-  await page.goto("/register");
-  await page.waitForLoadState("networkidle");
-  await page.getByLabel("显示名称").fill("S2 验收创作者");
-  await page.getByLabel("邮箱").fill(`s2-script-${unique}@example.com`);
-  await page.getByLabel("密码").fill("playwright-secure-password");
-  await page.getByRole("button", { name: "注册并开始创作" }).click();
+  await registerUser(page, {
+    displayName: "S2 验收创作者",
+    email: `s2-script-${unique}@example.com`,
+  });
 
   await page.getByRole("button", { name: "创建项目" }).click();
   await page.getByLabel("项目名称").fill(projectName);

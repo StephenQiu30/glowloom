@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
+import { registerUser } from "./auth-support";
+
 const backendPort = process.env.LANVERSE_E2E_BACKEND_PORT ?? "8001";
 const backendBaseUrl = `http://127.0.0.1:${backendPort}`;
 
@@ -10,11 +12,10 @@ test("上传到期计划可暂停、立即触发、恢复并从任务事实收�
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `上传调度-${unique}`;
 
-  await page.goto("/register");
-  await page.getByLabel("显示名称").fill("调度验收创作者");
-  await page.getByLabel("邮箱").fill(`schedule-${unique}@example.com`);
-  await page.getByLabel("密码").fill("playwright-secure-password");
-  await page.getByRole("button", { name: "注册并开始创作" }).click();
+  await registerUser(page, {
+    displayName: "调度验收创作者",
+    email: `schedule-${unique}@example.com`,
+  });
 
   await page.getByRole("button", { name: "创建项目" }).click();
   await page.getByLabel("项目名称").fill(projectName);

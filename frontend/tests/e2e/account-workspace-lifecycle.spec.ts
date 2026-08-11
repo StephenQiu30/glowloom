@@ -1,17 +1,18 @@
 import { expect, test } from "@playwright/test";
 
+import { registerUser } from "./auth-support";
+
 test("用户管理资料、工作空间和账户凭据", async ({ page }) => {
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const email = `workspace-${unique}@example.com`;
   const firstPassword = "playwright-secure-password";
   const secondPassword = "playwright-updated-password";
 
-  await page.goto("/register");
-  await page.getByLabel("显示名称").fill("空间管理员");
-  await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill(firstPassword);
-  await page.getByRole("button", { name: "注册并开始创作" }).click();
-  await expect(page).toHaveURL(/\/projects$/);
+  await registerUser(page, {
+    displayName: "空间管理员",
+    email,
+    password: firstPassword,
+  });
 
   await page.locator('a[href="/workspaces"]').click();
   await expect(page.getByRole("heading", { name: "账户与工作空间" })).toBeVisible();

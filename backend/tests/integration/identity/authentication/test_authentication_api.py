@@ -8,7 +8,10 @@ from uuid6 import uuid7
 
 from app.modules.governance.audit.models import AuditEvent
 from app.modules.identity.models import Membership, UserAccount, Workspace
-from tests.support.identity_builders import register_identity_response
+from tests.support.identity_builders import (
+    register_identity_response,
+    request_registration_ticket,
+)
 
 
 @pytest.mark.asyncio
@@ -16,11 +19,18 @@ async def test_registration_creates_one_atomic_personal_workspace(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
+    ticket = await request_registration_ticket(client, email="Creator@Example.com")
+    registration_payload = {
+        "registration_ticket": ticket,
+        "password": "a-secure-test-password",
+        "display_name": "创作者",
+    }
     first, second = await asyncio.gather(
-        register_identity_response(client), register_identity_response(client)
+        client.post("/api/v1/auth/register", json=registration_payload),
+        client.post("/api/v1/auth/register", json=registration_payload),
     )
 
-    assert sorted((first.status_code, second.status_code)) == [201, 409]
+    assert sorted((first.status_code, second.status_code)) == [201, 410]
     success = first if first.status_code == 201 else second
     payload = success.json()["data"]
     assert payload["user"]["email"] == "creator@example.com"

@@ -8,6 +8,7 @@ import {
   uploadAndWait,
   type AssetFixture,
 } from "./asset-support";
+import { registerUser } from "./auth-support";
 
 test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => {
   test.setTimeout(120_000);
@@ -18,11 +19,10 @@ test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => 
   const locationMediaName = `location-${unique}.png`;
   const voiceMediaName = `voice-${unique}.wav`;
 
-  await page.goto("/register");
-  await page.getByLabel("显示名称").fill("S2 资产验收创作者");
-  await page.getByLabel("邮箱").fill(`s2-assets-${unique}@example.com`);
-  await page.getByLabel("密码").fill("playwright-secure-password");
-  await page.getByRole("button", { name: "注册并开始创作" }).click();
+  await registerUser(page, {
+    displayName: "S2 资产验收创作者",
+    email: `s2-assets-${unique}@example.com`,
+  });
 
   await page.getByRole("button", { name: "创建项目" }).click();
   await page.getByLabel("项目名称").fill(projectName);

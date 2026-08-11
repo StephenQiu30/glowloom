@@ -1,16 +1,14 @@
 import { expect, test } from "@playwright/test";
 
+import { registerUser } from "./auth-support";
+
 test("创作者管理项目和单集完整生命周期", async ({ page }) => {
   test.setTimeout(60_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const email = `project-lifecycle-${unique}@example.com`;
   const projectName = `生命周期项目-${unique}`;
 
-  await page.goto("/register");
-  await page.getByLabel("显示名称").fill("项目管理员");
-  await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill("playwright-secure-password");
-  await page.getByRole("button", { name: "注册并开始创作" }).click();
+  await registerUser(page, { displayName: "项目管理员", email });
 
   await page.getByRole("button", { name: "创建项目" }).click();
   await page.getByLabel("项目名称").fill(projectName);
