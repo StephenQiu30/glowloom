@@ -11,7 +11,7 @@ class CommandModel(BaseModel):
 
 
 class RegisterRequest(CommandModel):
-    email: EmailStr
+    registration_ticket: str = Field(min_length=43, max_length=512)
     password: SecretStr
     display_name: str = Field(min_length=1, max_length=80)
 

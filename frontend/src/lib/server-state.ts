@@ -22,15 +22,17 @@ import {
   revokeConsentApiV1ConsentsConsentIdRevokePost,
 } from "@/api/governance";
 import {
-  archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePost,
-  changePasswordApiV1AuthChangePasswordPost,
-  createWorkspaceApiV1WorkspacesPost,
+    archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePost,
+    changePasswordApiV1AuthChangePasswordPost,
+    confirmRegistrationVerificationApiV1AuthRegistrationVerificationsConfirmPost,
+    createWorkspaceApiV1WorkspacesPost,
   deactivateMeApiV1MeDeactivatePost,
   listWorkspacesApiV1WorkspacesGet,
   loginApiV1AuthLoginPost,
   logoutApiV1AuthLogoutPost,
   meApiV1MeGet,
-  registerApiV1AuthRegisterPost,
+    registerApiV1AuthRegisterPost,
+    requestRegistrationVerificationApiV1AuthRegistrationVerificationsPost,
   restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePost,
   updateMeApiV1MePatch,
   updateWorkspaceApiV1WorkspacesWorkspaceIdPatch,
@@ -137,7 +139,12 @@ export type AppApiError = {
 };
 
 const errorMessages: Record<string, string> = {
+  dependency_unavailable: "注册服务暂时不可用，请稍后重试。",
+  invalid_verification_code: "验证码不正确，请检查后重新输入。",
+  rate_limited: "验证码发送过于频繁，请等待倒计时结束后重试。",
+  resource_conflict: "该邮箱已经注册，请直接登录。",
   unauthenticated: "邮箱或密码不正确，请重新输入。",
+  verification_expired: "验证码或注册凭证已失效，请重新发送验证码。",
 };
 
 export function appApiErrorMessage(error: unknown): string {
@@ -210,6 +217,26 @@ export const appApi = createApi({
     }),
     register: builder.mutation<API.AuthResponse, API.RegisterRequest>({
       queryFn: (body) => runRequest(() => registerApiV1AuthRegisterPost(body)),
+    }),
+    requestRegistrationVerification: builder.mutation<
+      API.RegistrationVerificationAccepted,
+      API.RegistrationVerificationRequest
+    >({
+      queryFn: (body) =>
+        runRequest(() =>
+          requestRegistrationVerificationApiV1AuthRegistrationVerificationsPost(body),
+        ),
+    }),
+    confirmRegistrationVerification: builder.mutation<
+      API.RegistrationVerificationConfirmed,
+      API.RegistrationVerificationConfirmRequest
+    >({
+      queryFn: (body) =>
+        runRequest(() =>
+          confirmRegistrationVerificationApiV1AuthRegistrationVerificationsConfirmPost(
+            body,
+          ),
+        ),
     }),
     me: builder.query<API.MeResponse, void>({
       queryFn: () => runRequest(() => meApiV1MeGet()),
@@ -1680,6 +1707,7 @@ export const {
   useCompleteMediaUploadMutation,
   useConfirmStructureMutation,
   useConfigureScheduleMutation,
+  useConfirmRegistrationVerificationMutation,
   useConfirmedStructureQuery,
   useConsentQuery,
   useConsentsQuery,
@@ -1724,6 +1752,7 @@ export const {
   useRetryMediaProbeMutation,
   useRequestMediaLocationMigrationMutation,
   useRequestMediaLocationRollbackMutation,
+  useRequestRegistrationVerificationMutation,
   useResumeScheduleMutation,
   useReviseConsentMutation,
   useRevokeConsentMutation,

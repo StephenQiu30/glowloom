@@ -1,0 +1,1 @@
+"""Registration email verification boundary."""

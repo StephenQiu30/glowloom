@@ -19,6 +19,15 @@ from app.integrations.redis import RedisCache, redis_ping
 from app.modules.assets.api import router as assets_router
 from app.modules.governance.api import router as governance_router
 from app.modules.identity.api import router as identity_router
+from app.modules.identity.registration_verifications.crypto import (
+    generate_registration_code,
+)
+from app.modules.identity.registration_verifications.redis_store import (
+    RedisRegistrationVerificationStore,
+)
+from app.modules.identity.registration_verifications.smtp import (
+    SMTPRegistrationMailer,
+)
 from app.modules.media.api import router as media_router
 from app.modules.production.api import router as production_router
 from app.modules.projects.api import router as projects_router
@@ -38,6 +47,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        await app.state.registration_verification_store.close()
         await app.state.cache_port.close()
 
 
@@ -56,6 +66,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.cache_port = redis
     app.state.high_cost_guard = redis
+    app.state.registration_verification_store = RedisRegistrationVerificationStore(
+        active.redis_url,
+        environment=active.environment,
+        socket_timeout_seconds=min(active.infrastructure_timeout_seconds, 0.25),
+    )
+    app.state.registration_mailer = SMTPRegistrationMailer(
+        enabled=active.smtp_enabled,
+        host=active.smtp_host,
+        port=active.smtp_port,
+        tls_mode=active.smtp_tls_mode,
+        username=active.smtp_username,
+        password=active.smtp_password,
+        from_email=active.smtp_from_email,
+        from_name=active.smtp_from_name,
+        timeout_seconds=active.smtp_timeout_seconds,
+    )
+    app.state.registration_code_generator = generate_registration_code
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(

@@ -58,6 +58,42 @@ export async function registerApiV1AuthRegisterPost(
   });
 }
 
+/** Request Registration Verification POST /api/v1/auth/registration-verifications */
+export async function requestRegistrationVerificationApiV1AuthRegistrationVerificationsPost(
+  body: API.RegistrationVerificationRequest,
+  options?: RequestOptions
+) {
+  return request<API.ApiResponseRegistrationVerificationAccepted_>(
+    "/api/v1/auth/registration-verifications",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Confirm Registration Verification POST /api/v1/auth/registration-verifications/confirm */
+export async function confirmRegistrationVerificationApiV1AuthRegistrationVerificationsConfirmPost(
+  body: API.RegistrationVerificationConfirmRequest,
+  options?: RequestOptions
+) {
+  return request<API.ApiResponseRegistrationVerificationConfirmed_>(
+    "/api/v1/auth/registration-verifications/confirm",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** Me GET /api/v1/me */
 export async function meApiV1MeGet(options?: RequestOptions) {
   return request<API.ApiResponseMeResponse_>("/api/v1/me", {

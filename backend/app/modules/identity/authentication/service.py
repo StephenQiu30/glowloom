@@ -24,13 +24,16 @@ from app.modules.identity.authentication.schemas import (
 from app.modules.identity.contracts import AuthenticatedUser
 from app.modules.identity.models import Membership, UserAccount, Workspace
 from app.modules.identity.presenters import workspace_response
+from app.modules.identity.registration_verifications.contracts import (
+    RegistrationVerificationStore,
+)
+from app.modules.identity.registration_verifications.crypto import normalize_email
+from app.modules.identity.registration_verifications.service import (
+    consume_registration_ticket,
+)
 
 _password_hash = PasswordHash.recommended()
 _dummy_password_hash = _password_hash.hash("not-a-real-lanverse-password")
-
-
-def _normalize_email(email: str) -> str:
-    return email.strip().casefold()
 
 
 def _plain_password(secret: SecretStr) -> str:
@@ -42,6 +45,17 @@ def _plain_password(secret: SecretStr) -> str:
             status_code=422,
         )
     return value
+
+
+def _display_name(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ApiError(
+            ErrorCode.INVALID_REQUEST,
+            "Display name must not be empty",
+            status_code=422,
+        )
+    return normalized
 
 
 def _user_response(user: UserAccount) -> UserResponse:
@@ -71,11 +85,17 @@ async def register(
     session: AsyncSession,
     request: RegisterRequest,
     settings: Settings,
+    verification_store: RegistrationVerificationStore,
     *,
     trace_id: str,
 ) -> AuthResponse:
-    email = _normalize_email(str(request.email))
     password = _plain_password(request.password)
+    display_name = _display_name(request.display_name)
+    email = await consume_registration_ticket(
+        request.registration_ticket,
+        settings,
+        verification_store,
+    )
     user_id = uuid7()
     workspace_id = uuid7()
     now = datetime.now(UTC)
@@ -83,10 +103,10 @@ async def register(
         id=user_id,
         email_normalized=email,
         password_hash=_password_hash.hash(password),
-        display_name=request.display_name.strip(),
+        display_name=display_name,
         last_login_at=now,
     )
-    workspace = Workspace(id=workspace_id, name=f"{request.display_name.strip()}的工作空间")
+    workspace = Workspace(id=workspace_id, name=f"{display_name}的工作空间")
     membership = Membership(user_id=user_id, workspace_id=workspace_id, role="owner")
     try:
         async with session.begin():
@@ -125,7 +145,7 @@ async def login(
     *,
     trace_id: str,
 ) -> AuthResponse:
-    email = _normalize_email(str(request.email))
+    email = normalize_email(str(request.email))
     password = request.password.get_secret_value()
     async with session.begin():
         user = await repository.find_user_by_email(session, email)

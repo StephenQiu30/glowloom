@@ -15,6 +15,9 @@ class ErrorCode(StrEnum):
     VERSION_CONFLICT = "version_conflict"
     STATE_CONFLICT = "state_conflict"
     QUOTA_INSUFFICIENT = "quota_insufficient"
+    RATE_LIMITED = "rate_limited"
+    INVALID_VERIFICATION_CODE = "invalid_verification_code"
+    VERIFICATION_EXPIRED = "verification_expired"
     DEPENDENCY_UNAVAILABLE = "dependency_unavailable"
     INTERNAL_ERROR = "internal_error"
 

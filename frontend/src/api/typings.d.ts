@@ -226,6 +226,14 @@ declare namespace API {
     data: ProjectResponse;
   };
 
+  type ApiResponseRegistrationVerificationAccepted_ = {
+    data: RegistrationVerificationAccepted;
+  };
+
+  type ApiResponseRegistrationVerificationConfirmed_ = {
+    data: RegistrationVerificationConfirmed;
+  };
+
   type ApiResponseRevocationResponse_ = {
     data: RevocationResponse;
   };
@@ -2447,12 +2455,38 @@ declare namespace API {
   };
 
   type RegisterRequest = {
-    /** Email */
-    email: string;
+    /** Registration Ticket */
+    registration_ticket: string;
     /** Password */
     password: string;
     /** Display Name */
     display_name: string;
+  };
+
+  type RegistrationVerificationAccepted = {
+    /** Accepted */
+    accepted: true | null;
+    /** Retry After Seconds */
+    retry_after_seconds: number;
+  };
+
+  type RegistrationVerificationConfirmed = {
+    /** Registration Ticket */
+    registration_ticket: string;
+    /** Expires In */
+    expires_in: number;
+  };
+
+  type RegistrationVerificationConfirmRequest = {
+    /** Email */
+    email: string;
+    /** Code */
+    code: string;
+  };
+
+  type RegistrationVerificationRequest = {
+    /** Email */
+    email: string;
   };
 
   type reorderEpisodesApiV1ProjectsProjectIdEpisodesReorderPostParams = {

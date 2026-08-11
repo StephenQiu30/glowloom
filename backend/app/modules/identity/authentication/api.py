@@ -18,6 +18,12 @@ from app.modules.identity.authentication.schemas import (
     RegisterRequest,
     RevocationResponse,
 )
+from app.modules.identity.registration_verifications.contracts import (
+    RegistrationVerificationStore,
+)
+from app.modules.identity.registration_verifications.dependencies import (
+    get_registration_verification_store,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["identity"])
 
@@ -32,12 +38,17 @@ async def register(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_async_session)],
     settings: Annotated[Settings, Depends(get_request_settings)],
+    verification_store: Annotated[
+        RegistrationVerificationStore,
+        Depends(get_registration_verification_store),
+    ],
 ) -> ApiResponse[AuthResponse]:
     return ApiResponse(
         data=await service.register(
             session,
             payload,
             settings,
+            verification_store,
             trace_id=str(request.state.request_id),
         )
     )
