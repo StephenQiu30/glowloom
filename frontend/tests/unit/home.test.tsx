@@ -15,14 +15,14 @@ describe("创作首页", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "从剧本到可复用资产，按真实阶段推进每一集",
+        name: /把剧本，变成.*可追踪的成片。/,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "创建账户" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "导入剧本" })).toHaveAttribute(
       "href",
       "/register",
     );
-    expect(screen.getByRole("link", { name: "已有账户，登录" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "继续制作" })).toHaveAttribute(
       "href",
       "/login",
     );
