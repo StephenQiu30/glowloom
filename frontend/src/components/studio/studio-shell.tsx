@@ -131,7 +131,7 @@ function StudioNavigationMenu({
               active={active === item.id}
               asChild
               className={cn(
-                "h-8 px-2.5 py-1.5",
+                "h-8 whitespace-nowrap px-2.5 py-1.5",
                 active === item.id && "bg-muted font-medium",
               )}
             >
@@ -153,7 +153,7 @@ function GlobalSearch({ role }: { role: WorkspaceRole }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button className="hidden w-64 justify-start text-muted-foreground lg:flex" variant="outline">
+        <Button className="hidden w-64 justify-start text-muted-foreground xl:flex" variant="outline">
           <Search aria-hidden="true" />
           <span>搜索或执行命令…</span>
           <kbd className="ml-auto font-mono text-[11px] text-muted-foreground">⌘K</kbd>
@@ -220,7 +220,7 @@ export function StudioShell({
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="mx-auto flex h-[72px] max-w-[1440px] items-center gap-6 px-5 md:px-8">
           <StudioBrand size="l" />
           <div className="hidden md:block">
@@ -273,7 +273,7 @@ export function StudioShell({
           </div>
         </div>
 
-        <div className="flex h-11 items-center overflow-x-auto border-t px-5 md:hidden">
+        <div className="flex h-11 items-center overflow-x-auto bg-muted/35 px-5 md:hidden">
           <StudioNavigationMenu active={active} mobile role={role} />
         </div>
       </header>

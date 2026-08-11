@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowRight, LoaderCircle, MoreHorizontal, Plus, Search } from "lucide-react";
+import { AlertCircle, ArrowRight, FolderPlus, LoaderCircle, MoreHorizontal, Plus, Search, SearchX } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -17,7 +17,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -71,6 +70,12 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
       return statusMatches && queryMatches;
     });
   }, [filter, projects, query]);
+  const hasProjects = projects.length > 0;
+
+  function clearFilters() {
+    setQuery("");
+    setFilter("all");
+  }
 
   async function handleCreate(request: API.ProjectCreateRequest): Promise<boolean> {
     setActionError(null);
@@ -102,7 +107,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
       } : undefined}
     >
       {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 bg-foreground px-4 py-3 text-sm text-background" role="status">{notice}</div> : null}
-      <div className="mx-auto max-w-[1440px] px-5 py-10 md:px-8">
+      <div className="mx-auto max-w-[1280px] px-5 py-12 md:px-8 md:py-14">
         {!authenticated ? (
           <Alert><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription>登录后管理真实项目与单集。</AlertDescription></Alert>
         ) : pageError ? (
@@ -117,7 +122,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
               title="项目管理"
             />
             <MetricGroup
-              className="mt-6"
+              className="mt-8"
               columns={3}
               items={[
                 { label: "全部", value: projects.length },
@@ -129,41 +134,56 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
 
             {actionError ? <Alert className="mt-6" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>创建失败</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
 
-            <div className="flex flex-wrap items-center gap-2 py-5">
-              {filters.map((item) => (
-                <Button key={item.id} onClick={() => setFilter(item.id)} size="sm" variant={filter === item.id ? "secondary" : "ghost"}>{item.label}</Button>
-              ))}
+            <div className="mt-8 flex flex-wrap items-center gap-2 bg-muted/45 p-1.5">
+              <div className="flex items-center gap-1" aria-label="项目状态筛选" role="group">
+                {filters.map((item) => (
+                  <Button
+                    aria-pressed={filter === item.id}
+                    className={filter === item.id ? "bg-background hover:bg-background" : undefined}
+                    key={item.id}
+                    onClick={() => setFilter(item.id)}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
               <div className="relative ml-auto w-full sm:w-80">
                 <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                <Input aria-label="搜索项目" className="pl-9" placeholder="按名称、简介或风格搜索" value={query} onChange={(event) => setQuery(event.target.value)} />
+                <Input aria-label="搜索项目" className="h-9 border-0 bg-background pl-9 shadow-none focus-visible:ring-2" placeholder="按名称、简介或风格搜索" value={query} onChange={(event) => setQuery(event.target.value)} />
               </div>
             </div>
-            <Separator />
 
             {visibleProjects.length ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>项目</TableHead>
-                    <TableHead>规格</TableHead>
-                    <TableHead>视觉风格</TableHead>
-                    <TableHead>事实状态</TableHead>
-                    <TableHead>版本</TableHead>
-                    <TableHead className="text-right">操作</TableHead>
+              <Table className="mt-3 border-separate border-spacing-y-1">
+                <TableHeader className="[&_tr]:border-0">
+                  <TableRow className="border-0 hover:bg-transparent">
+                    <TableHead className="px-4 text-xs text-muted-foreground">项目</TableHead>
+                    <TableHead className="px-4 text-xs text-muted-foreground">规格</TableHead>
+                    <TableHead className="px-4 text-xs text-muted-foreground">视觉风格</TableHead>
+                    <TableHead className="px-4 text-xs text-muted-foreground">事实状态</TableHead>
+                    <TableHead className="px-4 text-xs text-muted-foreground">版本</TableHead>
+                    <TableHead className="px-4 text-right text-xs text-muted-foreground">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {visibleProjects.map((project) => (
-                    <TableRow key={project.id}>
-                      <TableCell className="min-w-72 whitespace-normal py-4">
+                    <TableRow className="border-0 bg-muted/35 hover:bg-muted/70 [&>td:first-child]:rounded-l-lg [&>td:last-child]:rounded-r-lg" key={project.id}>
+                      <TableCell className="min-w-72 whitespace-normal px-4 py-4">
                         <p className="font-medium">{project.name}</p>
                         <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{project.description || "尚未填写项目简介"}</p>
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{project.aspect_ratio} · {Math.round(project.target_duration_ms / 1_000)}s</TableCell>
-                      <TableCell>{project.visual_style || "未设置"}</TableCell>
-                      <TableCell><Badge variant={project.status === "active" ? "secondary" : "outline"}>{project.status === "active" ? "制作中" : "已归档"}</Badge></TableCell>
-                      <TableCell className="font-mono text-xs">r{project.revision}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="px-4 font-mono text-xs">{project.aspect_ratio} · {Math.round(project.target_duration_ms / 1_000)}s</TableCell>
+                      <TableCell className="px-4">{project.visual_style || "未设置"}</TableCell>
+                      <TableCell className="px-4">
+                        <Badge className="border-0 bg-background/80" variant="secondary">
+                          <span className={`size-1.5 rounded-full ${project.status === "active" ? "bg-foreground" : "bg-muted-foreground"}`} aria-hidden="true" />
+                          {project.status === "active" ? "制作中" : "已归档"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-4 font-mono text-xs">r{project.revision}</TableCell>
+                      <TableCell className="px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button asChild size="sm" variant="ghost"><Link aria-label={`打开项目 ${project.name}`} href={`/projects/${project.id}`}>打开<ArrowRight aria-hidden="true" /></Link></Button>
                           <DropdownMenu>
@@ -177,7 +197,24 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
                 </TableBody>
               </Table>
             ) : (
-              <div className="py-24 text-center"><p className="font-medium">没有匹配的项目</p><p className="mt-2 text-sm text-muted-foreground">调整搜索或创建第一个漫剧项目。</p></div>
+              <section className="mt-3 grid min-h-80 place-items-center bg-muted/30 px-6 py-16 text-center" aria-labelledby="project-empty-title">
+                <div className="max-w-sm">
+                  <div className="mx-auto grid size-11 place-items-center rounded-full bg-background text-muted-foreground">
+                    {hasProjects ? <SearchX aria-hidden="true" className="size-5" /> : <FolderPlus aria-hidden="true" className="size-5" />}
+                  </div>
+                  <h2 className="mt-5 text-lg font-semibold tracking-tight" id="project-empty-title">
+                    {hasProjects ? "没有匹配的项目" : "还没有项目"}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {hasProjects ? "调整关键词或状态，或恢复全部项目继续浏览。" : "创建第一个项目，把剧本、单集与制作事实组织在一起。"}
+                  </p>
+                  {hasProjects ? (
+                    <Button className="mt-5" onClick={clearFilters} variant="secondary">清除搜索和筛选</Button>
+                  ) : (
+                    <Button className="mt-5" disabled={!workspaceId} onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" />创建第一个项目</Button>
+                  )}
+                </div>
+              </section>
             )}
           </>
         )}

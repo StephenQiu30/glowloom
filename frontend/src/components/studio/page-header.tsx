@@ -18,7 +18,6 @@ import {
   ItemDescription,
   ItemHeader,
 } from "@/components/ui/item";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/class-names";
 
 type BadgeVariant = VariantProps<typeof badgeVariants>["variant"];
@@ -55,7 +54,7 @@ export function PageHeader({
   title: ReactNode;
 }) {
   return (
-    <header className={cn("grid gap-6", className)}>
+    <header className={cn("grid gap-5", className)}>
       {breadcrumbs.length ? (
         <Breadcrumb>
           <BreadcrumbList>
@@ -113,7 +112,6 @@ export function PageHeader({
         </ItemContent>
         {actions ? <ItemActions className="w-full justify-start sm:w-auto sm:justify-end">{actions}</ItemActions> : null}
       </Item>
-      <Separator />
     </header>
   );
 }

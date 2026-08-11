@@ -32,20 +32,20 @@ export function MetricGroup({
   label: string;
 }) {
   return (
-    <section aria-label={label} className={cn("border-y", className)}>
+    <section aria-label={label} className={cn("bg-muted/45 px-2 py-1", className)}>
       <ItemGroup
         className={cn("grid gap-0 sm:grid-cols-2", columnClasses[columns])}
         role="list"
       >
         {items.map((item, index) => (
           <Item
-            className="rounded-none border-0 px-4 py-5 sm:border-r sm:last:border-r-0"
+            className="rounded-none border-0 px-4 py-4 sm:px-5"
             key={`${String(item.label)}:${index}`}
             role="listitem"
           >
-            <ItemContent>
-              <ItemDescription className="line-clamp-none">{item.label}</ItemDescription>
-              <ItemTitle className="font-mono text-2xl font-medium tracking-tight">
+            <ItemContent className="gap-2">
+              <ItemDescription className="line-clamp-none text-xs font-medium tracking-wide">{item.label}</ItemDescription>
+              <ItemTitle className="font-mono text-3xl font-semibold tracking-[-0.04em]">
                 {item.value}
               </ItemTitle>
             </ItemContent>
