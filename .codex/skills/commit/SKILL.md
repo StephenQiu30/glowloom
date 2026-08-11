@@ -14,18 +14,26 @@ description:
 - Follow all `AGENTS.md` and applicable `AGENTS.local.md` rules (allowed types and test-first ordering).
 - Include both summary and rationale in the body.
 
-## Allowed commit types
+## Subject format and allowed commit types
 
-Only these subject prefixes are allowed:
+Every subject must use `type(scope): 中文说明`. The type and scope stay in
+lowercase English; the summary and body use Chinese except for commands, paths,
+code identifiers, and fixed trailers such as `Co-authored-by`.
 
-- `test:` — failing tests, fixtures, mocks, acceptance scripts, test-only expectations
-- `impl:` — smallest implementation that makes existing red tests pass
-- `feat:` — user-visible capability or behavior changes (after prior `test:` unless documented as not scriptable)
-- `refactor:` — behavior-preserving cleanup after tests are green
-- `docs:` — documentation, examples, and acceptance notes
-- `chore:` — CI, configuration, dependency metadata, generated housekeeping
+- `test(<scope>):` — failing tests, fixtures, mocks, acceptance scripts, test-only expectations
+- `impl(<scope>):` — smallest implementation that makes existing red tests pass
+- `feat(<scope>):` — user-visible capability or behavior changes (after prior `test` unless documented as not scriptable)
+- `refactor(<scope>):` — behavior-preserving cleanup after tests are green
+- `docs(<scope>):` — documentation, examples, and acceptance notes
+- `chore(<scope>):` — CI, configuration, dependency metadata, generated housekeeping
 
-For feature or behavior work, preserve order: `test:` first, then `impl:`/`feat:`, then optional `refactor:`, `docs:`, or `chore:`.
+The scope is required and names a specific business module or engineering area,
+such as `auth`, `frontend`, `storyboard`, `docs`, or `ci`. Do not use vague
+scopes such as `app` or `misc`.
+
+For feature or behavior work, preserve order: `test(<scope>):` first, then
+`impl(<scope>):`/`feat(<scope>):`, then optional `refactor(<scope>):`,
+`docs(<scope>):`, or `chore(<scope>):`.
 
 Do not mix unrelated types in one commit. Split by type when practical.
 
@@ -52,9 +60,9 @@ Do not mix unrelated types in one commit. Split by type when practical.
    artifacts, generated output, and temporary files before committing.
 7. If the staged set differs from the whitelist, staging is incomplete, or a path
    cannot be attributed to the task, fix the index or ask for confirmation.
-8. Choose the allowed type that matches the staged diff. Do not use `fix:` or scoped conventional types unless documented as an exception.
-9. Write a subject line in imperative mood, <= 72 characters. Format: `<type> <short summary>`.
-10. Write a body with summary, rationale, and tests or validation run (or why not run).
+8. Choose the allowed type and the narrowest meaningful scope that match the staged diff. Do not use `fix` or an unscoped subject.
+9. Write a concise Chinese subject, <= 72 characters. Format: `<type>(<scope>): <中文说明>`.
+10. Write the summary, rationale, and tests or validation result in Chinese (or explain in Chinese why validation was not run).
 11. Append `Co-authored-by: Codex <codex@openai.com>` unless the user requests a different identity.
 12. Wrap body lines at 72 characters.
 13. Create the commit message with a here-doc or temp file and use `git commit -F <file>`.
@@ -67,16 +75,16 @@ Do not mix unrelated types in one commit. Split by type when practical.
 ## Template
 
 ```
-<type> <short summary>
+<type>(<scope>): <中文说明>
 
-Summary:
-- <what changed>
+摘要：
+- <修改内容>
 
-Rationale:
-- <why>
+原因：
+- <修改原因>
 
-Tests:
-- <command or "not run (reason)">
+验证：
+- <命令与结果，或“未运行（原因）”>
 
 Co-authored-by: Codex <codex@openai.com>
 ```
