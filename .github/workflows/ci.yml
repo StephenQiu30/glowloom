@@ -65,16 +65,16 @@ jobs:
       - name: Generate and verify OpenAPI client
         run: |
           cd backend
-          .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8686 &
           api_pid=$!
           trap 'kill "$api_pid"' EXIT
           cd ..
           for attempt in 1 2 3 4 5; do
-            curl --fail --silent http://127.0.0.1:8000/healthz && break
+            curl --fail --silent http://127.0.0.1:8686/healthz && break
             sleep 1
           done
           cd frontend
-          OPENAPI_SCHEMA_URL=http://127.0.0.1:8000/openapi.json npm run openapi2ts
+          OPENAPI_SCHEMA_URL=http://127.0.0.1:8686/openapi.json npm run openapi2ts
           cd ..
           git diff --exit-code -- frontend/src/api
       - name: Check backend

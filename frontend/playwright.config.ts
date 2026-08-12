@@ -4,8 +4,8 @@ const runDeepSeekE2E = process.env.LANVERSE_RUN_DEEPSEEK_E2E === "1";
 const deepSeekApiKey = runDeepSeekE2E
   ? (process.env.DEEPSEEK_API_KEY ?? "")
   : "";
-const backendPort = process.env.LANVERSE_E2E_BACKEND_PORT ?? "8001";
-const frontendPort = process.env.LANVERSE_E2E_FRONTEND_PORT ?? "3000";
+const backendPort = process.env.LANVERSE_E2E_BACKEND_PORT ?? "8687";
+const frontendPort = process.env.LANVERSE_E2E_FRONTEND_PORT ?? "8124";
 const backendBaseUrl = `http://127.0.0.1:${backendPort}`;
 const frontendBaseUrl = `http://127.0.0.1:${frontendPort}`;
 

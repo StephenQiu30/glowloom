@@ -7,9 +7,9 @@
     "sharp": "0.35.3"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1 --port 8123",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --hostname 0.0.0.0 --port 8123",
     "lint": "eslint src tests openapi2ts.config.ts vitest.config.ts playwright.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

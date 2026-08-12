@@ -10,5 +10,5 @@ RUN python -m pip install --no-cache-dir --requirement requirements.txt
 
 COPY app ./app
 
-EXPOSE 8000
+EXPOSE 8686
 CMD ["python", "-m", "app.server"]

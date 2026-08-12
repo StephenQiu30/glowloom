@@ -7,10 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPOSITORY_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 DEVELOPMENT_CORS_ORIGINS = (
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3001",
+    "http://localhost:8123",
+    "http://127.0.0.1:8123",
 )
 DEVELOPMENT_EMAIL_VERIFICATION_HMAC_SECRET = (
     "development-only-registration-hmac-change-before-production"
@@ -29,7 +27,7 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
     api_host: str = "0.0.0.0"
-    api_port: int = Field(default=8000, ge=1, le=65535)
+    api_port: int = Field(default=8686, ge=1, le=65535)
     cors_origins: list[str] = list(DEVELOPMENT_CORS_ORIGINS)
 
     database_url: str = "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse"

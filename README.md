@@ -45,14 +45,14 @@ cd backend
 
 ```bash
 cd frontend
-npm run dev -- --port 3001
+npm run dev
 ```
 
 Web、API 文档和依赖就绪状态分别位于：
 
-- `http://127.0.0.1:3001`
-- `http://127.0.0.1:8000/docs`
-- `http://127.0.0.1:8000/readyz`
+- `http://127.0.0.1:8123`
+- `http://127.0.0.1:8686/docs`
+- `http://127.0.0.1:8686/readyz`
 
 ## Docker 一键启动
 
