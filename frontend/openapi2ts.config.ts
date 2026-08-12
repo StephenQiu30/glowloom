@@ -46,10 +46,10 @@ const config = {
   schemaPath,
   serversPath: "./src/api",
   projectName: ".",
-  requestLibPath: "@/lib/api-request",
+  requestLibPath: "@/lib/request",
   requestOptionsType: "RequestOptions",
   requestImportStatement:
-    "import request, { type RequestOptions } from '@/lib/api-request';",
+    "import request, { type RequestOptions } from '@/lib/request';",
   isCamelCase: true,
   nullable: true,
   enumStyle: "string-literal",

@@ -1,6 +1,6 @@
 // @ts-ignore
 /* eslint-disable */
-import request, { type RequestOptions } from "@/lib/api-request";
+import request, { type RequestOptions } from "@/lib/request";
 
 /** Get Asset Version GET /api/v1/asset-versions/${param0} */
 export async function getAssetVersionApiV1AssetVersionsVersionIdGet(

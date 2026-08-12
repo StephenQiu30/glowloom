@@ -1,6 +1,6 @@
 // @ts-ignore
 /* eslint-disable */
-import request, { type RequestOptions } from "@/lib/api-request";
+import request, { type RequestOptions } from "@/lib/request";
 
 /** Get Costs GET /api/v1/costs */
 export async function getCostsApiV1CostsGet(

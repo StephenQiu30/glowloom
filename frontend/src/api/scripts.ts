@@ -1,6 +1,6 @@
 // @ts-ignore
 /* eslint-disable */
-import request, { type RequestOptions } from "@/lib/api-request";
+import request, { type RequestOptions } from "@/lib/request";
 
 /** Set Current Version POST /api/v1/episodes/${param0}/current-script-version */
 export async function setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost(

@@ -1,6 +1,6 @@
 // @ts-ignore
 /* eslint-disable */
-import request, { type RequestOptions } from "@/lib/api-request";
+import request, { type RequestOptions } from "@/lib/request";
 
 /** List Tasks GET /api/v1/tasks */
 export async function listTasksApiV1TasksGet(

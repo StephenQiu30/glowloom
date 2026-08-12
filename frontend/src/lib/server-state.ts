@@ -130,7 +130,7 @@ import {
   cancelGenerationTaskApiV1TasksTaskIdCancelPost,
   listTasksApiV1TasksGet,
 } from "@/api/tasks";
-import { ApiClientError } from "@/lib/api-request";
+import { ApiClientError } from "@/lib/request";
 
 export type AppApiError = {
   message: string;

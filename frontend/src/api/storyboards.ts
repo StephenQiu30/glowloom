@@ -1,6 +1,6 @@
 // @ts-ignore
 /* eslint-disable */
-import request, { type RequestOptions } from "@/lib/api-request";
+import request, { type RequestOptions } from "@/lib/request";
 
 /** List Asset Shot Usages GET /api/v1/asset-versions/${param0}/shot-usages */
 export async function listAssetShotUsagesApiV1AssetVersionsAssetVersionIdShotUsagesGet(
