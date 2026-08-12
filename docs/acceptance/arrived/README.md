@@ -30,5 +30,6 @@
 | 024 | [Outbox 积压与 Worker 执行容量验收](./024-Outbox积压与Worker执行容量验收.md) |
 | 025 | [生成 Attempt 预持久化与无 Provider 失败收敛验收](./025-生成Attempt预持久化与无Provider失败收敛验收.md) |
 | 026 | [generation 协议毒消息终止收敛验收](./026-generation协议毒消息终止收敛验收.md) |
+| 027 | [Provider 数据与凭据安全底座验收](./027-Provider数据与凭据安全底座验收.md) |
 
 返回：[验收索引](../README.md)。

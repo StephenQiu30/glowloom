@@ -132,7 +132,7 @@ def test_provider_control_plane_is_traced_without_premature_ark_acceptance() -> 
 
     assert "状态：accepted" in requirement
     assert "状态：accepted" in design
-    assert "状态：proposed" in prd
+    assert "状态：accepted" in prd
     assert "状态：ready" in plan
     for source in (requirement, design, prd, plan):
         assert "catalog-only" in source

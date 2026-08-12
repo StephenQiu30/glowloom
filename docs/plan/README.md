@@ -15,7 +15,7 @@
 
 | 文档 | 对应输入 | 作用 | 当前可执行状态 |
 | --- | --- | --- | --- |
-| [PLAN-000 MVP 全栈实施总计划](./000-MVP全栈实施总计划.md) | PRD-001～PRD-011 | 统一技术基线、S0～S6/AIP 排序、跨模块 DEV 任务与公共门禁 | ready；S0～S3 accepted；AIP 待 PRD-011 接受；S4 等待 D-004 |
+| [PLAN-000 MVP 全栈实施总计划](./000-MVP全栈实施总计划.md) | PRD-001～PRD-011 | 统一技术基线、S0～S6/AIP 排序、跨模块 DEV 任务与公共门禁 | ready；S0～S3 accepted；DEV-AIP-01 completed；S4 等待 D-004 |
 | [PLAN-001 MVP 产品定义与范围执行计划](./001-MVP产品定义与范围执行计划.md) | PRD-001 | 固化 MVP 范围、决策门禁、成功指标与发布判定 | ready；按切片执行 |
 | [PLAN-002 MVP 纵向切片执行计划](./002-MVP纵向切片执行计划.md) | PRD-002 | 逐切片明确准入、交付物、验证与退出证据 | ready；按 S0→S6 激活 |
 | [PLAN-003 MVP 工作包与交付门禁执行计划](./003-MVP工作包与交付门禁执行计划.md) | PRD-003 | 编排 WP-00～WP-12、DoR/DoD 和在制品限制 | ready；S2/S3 对应工作包已接受；下一门禁为 D-004/S4 |
@@ -26,7 +26,7 @@
 | [PLAN-008 创作生产模块产品任务执行计划](./008-创作生产模块产品任务执行计划.md) | PRD-008 | 定义 25 个创作生产 PT 的接受顺序和证据 | ready；S2/S3 PT accepted；S4 PT 等待 D-004 |
 | [PLAN-009 剪辑交付与平台任务执行计划](./009-剪辑交付与平台任务执行计划.md) | PRD-009 | 定义 24 个剪辑与平台 PT 的接受顺序和证据 | ready；PT-CCH-001、PT-MED-005、PT-SCH-001/002/003 accepted，其余对应 DEV 激活后执行 |
 | [PLAN-010 需求追踪与变更治理执行计划](./010-需求追踪与变更治理执行计划.md) | PRD-010 | 校验 418 个需求叶子与 Requirement→Acceptance 追踪链 | ready；每次变更执行 |
-| [PLAN-011 AI 提供方配置与启用执行计划](./011-AI提供方配置与启用执行计划.md) | PRD-011 | 编排 7 个 Provider 管理 DEV、Red/Green、真实 DeepSeek、OpenAPI/UI 与验收门禁 | ready；PRD-011 接受前 DEV pending |
+| [PLAN-011 AI 提供方配置与启用执行计划](./011-AI提供方配置与启用执行计划.md) | PRD-011 | 编排 7 个 Provider 管理 DEV、Red/Green、真实 DeepSeek、OpenAPI/UI 与验收门禁 | ready；DEV-AIP-01 completed；下一任务 DEV-AIP-02 pending |
 
 ## 阅读与执行顺序
 

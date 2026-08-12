@@ -1,6 +1,6 @@
 # PRD-011 AI 提供方配置与启用
 
-- 状态：proposed（范围与验收标准已确定，接受后按 PLAN-011 执行）
+- 状态：accepted（2026-08-12 用户要求按项目设计规范开始开发；接受的是执行基线，PT-AIP-001～007 仍须分别以真实 Acceptance 证据接受）
 - 日期：2026-08-12
 - 输入：[REQ-014 AI 提供方配置与启用需求](../requirement/014-AI提供方配置与启用需求.md)、[DES-009 AI 提供方配置与启用设计](../design/009-AI提供方配置与启用设计.md)、[生产模块需求](../requirement/009-生产模块需求.md)
 - 输出：7 个可独立接受的 `PT-AIP-*` 产品任务、量化验收标准和完整功能退出门禁
@@ -77,7 +77,7 @@ owner 主路径：
 
 ## 6. 完整功能退出标准
 
-PRD-011 只有在以下证据全部存在时才能 accepted：
+PRD-011 的执行基线已经产品接受；只有以下证据全部存在时，才能声称完整功能完成并把 PT-AIP-001～007 全部 accepted：
 
 1. PT-AIP-001～007 均有对应 Acceptance 回链；局部 PT 可先 accepted，但不能提前声称完整功能完成。
 2. 固定 sentinel Key 的数据库、API、日志、trace、Audit、OpenAPI 产物、DOM 和 browser storage 全面扫描为 0 个明文命中；数据库中对应密文可正确解密，任意 bit flip 和跨记录互换均失败。

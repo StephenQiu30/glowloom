@@ -19,7 +19,7 @@
 | [PRD-008 创作生产模块 PRD 任务](./008-创作生产模块PRD任务.md) | scripts、assets、storyboards、production 的产品任务、依赖和逐项验收 | S2/S3 对应 PT accepted；S4 production PT proposed |
 | [PRD-009 剪辑交付与平台保障 PRD 任务](./009-剪辑交付与平台保障PRD任务.md) | editing 与六类平台保障任务、依赖和逐项验收 | PT-CCH-001、PT-MED-005、PT-SCH-001/002/003 accepted；其余 PT proposed |
 | [PRD-010 需求、设计与产品任务追踪矩阵](./010-需求设计与产品任务追踪矩阵.md) | 418 个 Requirement 叶子编号到 Design、PT/里程碑和验收归属的查漏基线 | S1 映射 accepted；AIP 增量 proposed |
-| [PRD-011 AI 提供方配置与启用](./011-AI提供方配置与启用PRD.md) | 7 个 Provider 管理产品任务、量化安全/性能/真实 Provider 验收和部分接受边界 | proposed；等待接受后执行 |
+| [PRD-011 AI 提供方配置与启用](./011-AI提供方配置与启用PRD.md) | 7 个 Provider 管理产品任务、量化安全/性能/真实 Provider 验收和部分接受边界 | 执行基线 accepted；DEV-AIP-01 completed；各 PT 仍待完整真实证据 |
 
 ## 阅读顺序
 
