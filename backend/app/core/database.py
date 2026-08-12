@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
 
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -44,14 +44,3 @@ def validate_test_database_url(test_url: str | None, application_url: str) -> st
 async def database_ping(target_engine: AsyncEngine = engine) -> None:
     async with target_engine.connect() as connection:
         await connection.execute(text("SELECT 1"))
-
-
-async def initialize_empty_database(target_engine: AsyncEngine = engine) -> None:
-    async with target_engine.begin() as connection:
-        existing = await connection.run_sync(lambda sync: inspect(sync).get_table_names())
-        expected = set(Base.metadata.tables)
-        unexpected = set(existing) - expected
-        if unexpected:
-            names = ", ".join(sorted(unexpected))
-            raise RuntimeError(f"database is not empty; unexpected tables: {names}")
-        await connection.run_sync(Base.metadata.create_all)

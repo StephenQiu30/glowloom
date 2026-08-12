@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings, get_settings
 from app.core.database import session_factory
 from app.core.logging import configure_logging, log_event
+from app.core.migrations import assert_database_at_head
 from app.core.telemetry import (
     configure_telemetry,
     span_identifiers,
@@ -237,6 +238,7 @@ async def run_media_worker(settings: Settings) -> None:
         environment=settings.environment,
     )
     register_implemented_models()
+    await assert_database_at_head()
     initialize_worker_metrics(queue=QUEUE_NAME, capacity=MEDIA_WORKER_MAX_IN_FLIGHT)
     storage = MinioObjectStorage(
         settings.minio_endpoint,

@@ -28,6 +28,21 @@ def test_background_entrypoints_register_models_before_database_work() -> None:
     assert "partial(run_media_worker, settings)" in server
 
 
+def test_every_runtime_entrypoint_fails_closed_on_outdated_database_revision() -> None:
+    for relative_path in (
+        "backend/app/server.py",
+        "backend/app/scheduler.py",
+        "backend/app/io_worker.py",
+        "backend/app/media_worker.py",
+    ):
+        source = (ROOT / relative_path).read_text()
+        assert "await assert_database_at_head()" in source
+
+    initializer = (ROOT / "backend/app/initialize_database.py").read_text()
+    assert "await upgrade_database(engine)" in initializer
+    assert "assert_database_at_head" not in initializer
+
+
 def test_unified_server_configures_process_telemetry_before_child_roles() -> None:
     server = (ROOT / "backend/app/server.py").read_text()
 

@@ -6,9 +6,11 @@ import uvicorn
 
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
+from app.core.migrations import assert_database_at_head
 from app.core.telemetry import configure_telemetry
 from app.io_worker import run_io_worker
 from app.media_worker import run_media_worker
+from app.model_registry import register_implemented_models
 from app.scheduler import run_scheduler
 
 Service = Callable[[], Awaitable[None]]
@@ -31,6 +33,8 @@ async def supervise_services(*services: Service) -> None:
 
 
 async def run_server(settings: Settings) -> None:
+    register_implemented_models()
+    await assert_database_at_head()
     configure_logging(
         settings.log_level,
         service="lanverse-server",

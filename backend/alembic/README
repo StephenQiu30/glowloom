@@ -1,0 +1,4 @@
+Lanverse 使用单一 Alembic revision 链管理 PostgreSQL schema。
+
+全新数据库执行 `alembic upgrade head`。已有、但尚未带 Alembic revision 的数据库
+必须先由 `python -m app.adopt_database_baseline` 做结构零差异校验；禁止直接 stamp。

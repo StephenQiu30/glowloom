@@ -82,6 +82,8 @@ def test_environment_specific_compose_supports_robust_full_stack_startup() -> No
     assert (ROOT / "backend/app/cache_admin.py").is_file()
 
     backend_dockerfile = (ROOT / "backend/Dockerfile").read_text()
+    assert "COPY alembic.ini ./" in backend_dockerfile
+    assert "COPY alembic ./alembic" in backend_dockerfile
     assert 'CMD ["python", "-m", "app.server"]' in backend_dockerfile
 
 

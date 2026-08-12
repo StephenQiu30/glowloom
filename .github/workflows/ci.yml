@@ -48,7 +48,7 @@ jobs:
       - name: Check backend
         working-directory: backend
         run: |
-          .venv/bin/ruff check app tests
+          .venv/bin/ruff check app tests alembic
           .venv/bin/pyright
           .venv/bin/python -m pytest
           .venv/bin/python -m pip check
