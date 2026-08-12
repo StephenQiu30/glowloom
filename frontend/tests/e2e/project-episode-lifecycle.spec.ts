@@ -15,11 +15,11 @@ test("创作者管理项目和单集完整生命周期", async ({ page }) => {
   await page.getByRole("button", { name: "确认创建" }).click();
   await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
 
-  await page.getByRole("button", { name: "创建单集" }).click();
+  await page.getByRole("button", { name: /创建(?:第一集|单集)/ }).click();
   await page.getByLabel("单集名称", { exact: true }).fill("第一集");
   await page.getByRole("button", { name: "确认创建" }).click();
   await expect(page.getByRole("link", { name: "进入第一集", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "创建单集" }).click();
+  await page.getByRole("button", { name: /创建(?:第一集|单集)/ }).click();
   await page.getByLabel("单集名称", { exact: true }).fill("第二集");
   await page.getByRole("button", { name: "确认创建" }).click();
   await expect(page.getByRole("link", { name: "进入第二集", exact: true })).toBeVisible();

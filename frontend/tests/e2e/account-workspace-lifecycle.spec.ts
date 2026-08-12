@@ -2,6 +2,14 @@ import { expect, test } from "@playwright/test";
 
 import { registerUser } from "./auth-support";
 
+async function openAccountWorkspace(
+  page: Parameters<typeof registerUser>[0],
+  displayName: string,
+) {
+  await page.getByRole("button", { name: displayName }).click();
+  await page.getByRole("menuitem", { name: "账户与空间" }).click();
+}
+
 test("用户管理资料、工作空间和账户凭据", async ({ page }) => {
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const email = `workspace-${unique}@example.com`;
@@ -14,7 +22,7 @@ test("用户管理资料、工作空间和账户凭据", async ({ page }) => {
     password: firstPassword,
   });
 
-  await page.locator('a[href="/workspaces"]').click();
+  await openAccountWorkspace(page, "空间管理员");
   await expect(page.getByRole("heading", { name: "账户与工作空间" })).toBeVisible();
 
   await page.getByLabel("显示名称").fill("更新后的管理员");
@@ -37,7 +45,7 @@ test("用户管理资料、工作空间和账户凭据", async ({ page }) => {
   await page.getByRole("link", { name: "查看项目" }).last().click();
   await expect(page.getByText("正式创作空间", { exact: true })).toBeVisible();
 
-  await page.locator('a[href="/workspaces"]').click();
+  await openAccountWorkspace(page, "更新后的管理员");
   await page.getByLabel("当前密码").fill(firstPassword);
   await page.getByLabel("新密码").fill(secondPassword);
   await page.getByRole("button", { name: "修改密码" }).click();
@@ -58,7 +66,7 @@ test("用户管理资料、工作空间和账户凭据", async ({ page }) => {
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
 
-  await page.locator('a[href="/workspaces"]').click();
+  await openAccountWorkspace(page, "更新后的管理员");
   await page.getByLabel("输入 DEACTIVATE 确认").fill("DEACTIVATE");
   await page.getByRole("button", { name: "停用账户" }).click();
   await expect(page).toHaveURL(/\/login$/);

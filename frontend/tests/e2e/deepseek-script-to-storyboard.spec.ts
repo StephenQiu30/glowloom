@@ -47,7 +47,7 @@ test("真实 DeepSeek 提取、人工决议并确认结构", async ({ page }) =>
   await page.getByLabel("项目名称").fill(projectName);
   await page.getByRole("button", { name: "确认创建" }).click();
   await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
-  await page.getByRole("button", { name: "创建单集" }).click();
+  await page.getByRole("button", { name: /创建(?:第一集|单集)/ }).click();
   await page.getByLabel("单集名称", { exact: true }).fill("第一集 雨巷来信");
   await page.getByRole("button", { name: "确认创建" }).click();
   const episodeLink = page.getByRole("link", { name: "进入第一集 雨巷来信" });

@@ -104,7 +104,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await page.getByLabel("项目名称").fill(projectName);
   await page.getByRole("button", { name: "确认创建" }).click();
   await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
-  await page.getByRole("button", { name: "创建单集" }).click();
+  await page.getByRole("button", { name: /创建(?:第一集|单集)/ }).click();
   await page.getByLabel("单集名称", { exact: true }).fill("第一集 分镜");
   await page.getByRole("button", { name: "确认创建" }).click();
 

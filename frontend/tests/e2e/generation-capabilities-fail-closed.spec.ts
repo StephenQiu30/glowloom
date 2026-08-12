@@ -18,7 +18,7 @@ test("无 Ark Key 时任务中心明确阻断生成能力且费用保持零事�
   await page.getByRole("button", { name: "确认创建" }).click();
   await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
 
-  await page.getByRole("button", { name: "创建单集" }).click();
+  await page.getByRole("button", { name: /创建(?:第一集|单集)/ }).click();
   await page.getByLabel("单集名称").fill("第一集");
   await page.getByRole("button", { name: "确认创建" }).click();
   await page.getByRole("link", { name: "进入第一集", exact: true }).click();

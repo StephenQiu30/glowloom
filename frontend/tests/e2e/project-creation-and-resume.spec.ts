@@ -25,7 +25,9 @@ test("首次登录后创建项目和单集并恢复服务端事实", async ({ pa
   await projectLink.click();
 
   await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
-  await page.getByRole("button", { name: "创建单集" }).click();
+  await page
+    .getByRole("button", { name: /创建(?:第一集|单集)/ })
+    .click();
   await page.getByLabel("单集名称").fill("第一集");
   await page.getByRole("button", { name: "确认创建" }).click();
 

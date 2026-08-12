@@ -21,7 +21,7 @@ test("上传到期计划可暂停、立即触发、恢复并从任务事实收�
   await page.getByLabel("项目名称").fill(projectName);
   await page.getByRole("button", { name: "确认创建" }).click();
   await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
-  await page.getByRole("button", { name: "创建单集" }).click();
+  await page.getByRole("button", { name: /创建(?:第一集|单集)/ }).click();
   await page.getByLabel("单集名称", { exact: true }).fill("上传清理验收集");
   await page.getByRole("button", { name: "确认创建" }).click();
   await page.getByRole("link", { name: "进入上传清理验收集" }).click();
