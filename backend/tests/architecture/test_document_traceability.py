@@ -16,7 +16,7 @@ def _expand_requirement_ranges(text: str) -> set[str]:
     return leaves
 
 
-def test_requirement_matrix_matches_exactly_418_requirement_leaves() -> None:
+def test_requirement_matrix_matches_exactly_461_requirement_leaves() -> None:
     matrix = (DOCS / "prd/010-需求设计与产品任务追踪矩阵.md").read_text(encoding="utf-8")
     matrix_leaves = _expand_requirement_ranges(matrix)
     requirement_leaves: set[str] = set()
@@ -27,7 +27,7 @@ def test_requirement_matrix_matches_exactly_418_requirement_leaves() -> None:
             _expand_requirement_ranges(document.read_text(encoding="utf-8"))
         )
 
-    assert len(requirement_leaves) == 418
+    assert len(requirement_leaves) == 461
     assert matrix_leaves == requirement_leaves
 
 
@@ -37,6 +37,7 @@ def test_product_tasks_have_expected_unique_distribution() -> None:
         "008-创作生产模块PRD任务.md": 25,
         "009-剪辑交付与平台保障PRD任务.md": 24,
         "011-AI提供方配置与启用PRD.md": 7,
+        "012-AI短剧MVP核心制作产品任务.md": 11,
     }
     all_tasks: set[str] = set()
     for filename, count in expected.items():
@@ -45,11 +46,11 @@ def test_product_tasks_have_expected_unique_distribution() -> None:
         assert len(tasks) == count
         assert all_tasks.isdisjoint(tasks)
         all_tasks.update(tasks)
-    assert len(all_tasks) == 76
+    assert len(all_tasks) == 87
 
 
 def test_each_prd_links_to_same_numbered_plan() -> None:
-    for number in range(1, 12):
+    for number in range(1, 13):
         prefix = f"{number:03d}-"
         prd = next((DOCS / "prd").glob(f"{prefix}*.md"))
         assert f"../plan/{prefix}" in prd.read_text(encoding="utf-8")
@@ -156,6 +157,39 @@ def test_provider_control_plane_is_traced_without_premature_ark_acceptance() -> 
     assert "PT-AIP-001～007" in prd
     assert "DEV-AIP-01" in plan and "DEV-AIP-07" in plan
     assert "provider_contract_unverified" in prd
+
+
+def test_mvp_core_plan_is_traced_without_premature_generation_acceptance() -> None:
+    requirement = (
+        DOCS / "requirement/015-AI短剧MVP核心制作能力需求.md"
+    ).read_text(encoding="utf-8")
+    design = (
+        DOCS / "design/012-AI短剧MVP核心模块拆分与实施范围.md"
+    ).read_text(encoding="utf-8")
+    prd = (
+        DOCS / "prd/012-AI短剧MVP核心制作产品任务.md"
+    ).read_text(encoding="utf-8")
+    plan = (
+        DOCS / "plan/012-AI短剧MVP核心制作执行计划.md"
+    ).read_text(encoding="utf-8")
+
+    assert "状态：proposed" in requirement
+    assert "状态：proposed" in prd
+    assert "状态：proposed" in plan
+    for source in (requirement, design, prd, plan):
+        assert "MVP-A" in source
+        assert "MVP-B" in source
+        assert "分镜" in source
+    product_tasks = set(
+        re.findall(r"^\| (PT-[A-Z]+-\d{3}) \|", prd, re.MULTILINE)
+    )
+    dev_tasks = set(re.findall(r"^\| (DEV-MVPA-\d{2}) \|", plan, re.MULTILINE))
+    assert len(product_tasks) == 11
+    assert dev_tasks == {f"DEV-MVPA-{number:02d}" for number in range(1, 13)}
+    for gate in ("G-MVPA-001", "G-MVPA-002", "G-MVPA-003"):
+        assert gate in plan
+    assert "D-004" in prd and "D-004" in plan
+    assert "不允许创建假图片成功" in prd
 
 
 def test_ark_public_contract_is_revalidated_without_premature_sdk_install() -> None:
