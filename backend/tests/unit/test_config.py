@@ -30,12 +30,10 @@ def test_repository_environment_example_covers_all_backend_settings() -> None:
     assert {name.upper() for name in Settings.model_fields} <= environment_keys
 
 
-def test_development_cors_supports_documented_and_default_frontend_ports() -> None:
+def test_application_ports_and_development_cors_follow_the_fixed_contract() -> None:
     supported_origins = {
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
+        "http://localhost:8123",
+        "http://127.0.0.1:8123",
     }
     default_origins = set(Settings.model_fields["cors_origins"].default)
     example_origins = set(
@@ -45,14 +43,17 @@ def test_development_cors_supports_documented_and_default_frontend_ports() -> No
         Settings.model_validate(
             {
                 "environment": "development",
-                "cors_origins": ["http://localhost:3001"],
+                "cors_origins": ["http://localhost:8123"],
             }
         ).cors_origins
     )
 
-    assert supported_origins <= default_origins
-    assert supported_origins <= example_origins
-    assert supported_origins <= development_origins
+    assert Settings.model_fields["api_port"].default == 8686
+    assert _read_environment_example(".env.example")["API_PORT"] == "8686"
+    assert _read_environment_example(".env.example")["WEB_PORT"] == "8123"
+    assert default_origins == supported_origins
+    assert example_origins == supported_origins
+    assert development_origins == supported_origins
 
 
 def test_production_cors_does_not_add_development_origins() -> None:
@@ -98,6 +99,8 @@ def test_production_environment_example_is_fail_closed() -> None:
         "EMAIL_VERIFICATION_HMAC_SECRET",
         "DEEPSEEK_API_KEY",
         "ARK_API_KEY",
+        "PROVIDER_CREDENTIAL_MASTER_KEY",
+        "PROVIDER_CREDENTIAL_FINGERPRINT_KEY",
     ):
         assert production_values[secret] == ""
 
@@ -227,6 +230,31 @@ def test_provider_keys_are_optional_and_secret() -> None:
     assert str(configured.deepseek_api_key) == "**********"
     assert isinstance(configured.ark_api_key, SecretStr)
     assert str(configured.ark_api_key) == "**********"
+
+
+def test_provider_credential_encryption_keys_are_optional_independent_secrets() -> None:
+    settings = Settings()
+
+    assert settings.provider_credential_key_id == "local-provider-v1"
+    assert settings.provider_credential_master_key is None
+    assert settings.provider_credential_fingerprint_key is None
+
+    configured = Settings.model_validate(
+        {
+            "provider_credential_master_key": "test-master-key-material",
+            "provider_credential_fingerprint_key": "test-fingerprint-key-material",
+        }
+    )
+    assert str(configured.provider_credential_master_key) == "**********"
+    assert str(configured.provider_credential_fingerprint_key) == "**********"
+
+    with pytest.raises(ValueError, match="must not reuse"):
+        Settings.model_validate(
+            {
+                "provider_credential_master_key": "same-provider-key-material",
+                "provider_credential_fingerprint_key": "same-provider-key-material",
+            }
+        )
 
 
 def test_registration_email_settings_are_bounded_and_secrets_are_independent() -> None:

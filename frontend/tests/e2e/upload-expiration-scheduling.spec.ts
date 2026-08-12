@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 
 import { registerUser } from "./auth-support";
 
-const backendPort = process.env.LANVERSE_E2E_BACKEND_PORT ?? "8001";
+const backendPort = process.env.LANVERSE_E2E_BACKEND_PORT ?? "8687";
 const backendBaseUrl = `http://127.0.0.1:${backendPort}`;
 
 test("上传到期计划可暂停、立即触发、恢复并从任务事实收敛", async ({ page }) => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import api from "@/api";
-import request, { type RequestOptions } from "@/lib/api-request";
+import request, { type RequestOptions } from "@/lib/request";
 
 describe("generated API client", () => {
   it("is generated and uses the typed request adapter", () => {

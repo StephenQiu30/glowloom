@@ -12,12 +12,12 @@ describe("semantic source names", () => {
   });
 
   it("uses purpose-specific names for shared frontend infrastructure", () => {
-    for (const genericName of ["utils.ts", "request.ts", "store.ts", "app-api.ts"]) {
+    for (const genericName of ["utils.ts", "store.ts", "app-api.ts"]) {
       expect(existsSync(resolve(projectRoot, "src/lib", genericName))).toBe(false);
     }
 
     for (const semanticName of [
-      "api-request.ts",
+      "request.ts",
       "auth-session.ts",
       "class-names.ts",
       "redux-store.ts",

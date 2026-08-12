@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("首页展示平台定位和后端状态", async ({ page }) => {
-  const backendPort = process.env.LANVERSE_E2E_BACKEND_PORT ?? "8001";
+  const backendPort = process.env.LANVERSE_E2E_BACKEND_PORT ?? "8687";
   await page.goto("/");
   await expect(
     page.getByRole("heading", {

@@ -24,9 +24,9 @@ describe("create-next-app baseline", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
-      dev: "next dev",
+      dev: "next dev --hostname 127.0.0.1 --port 8123",
       build: "next build",
-      start: "next start",
+      start: "next start --hostname 0.0.0.0 --port 8123",
     });
     expect(packageJson.dependencies).toMatchObject({
       next: "16.2.12",
