@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；当前处于 DEV-MVPA-01 上游研究与 migration spike）
+- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01 已完成上游研究、Red 与 migration Green，等待自有旧库备份/恢复演练）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -40,7 +40,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | --- | --- | --- | --- | --- |
 | G-MVPA-001 范围接受 | closed（2026-08-13 用户明确要求执行） | 产品负责人 | 接受 PRD-012 的 MVP-A、11 个 PT、10 集/100k code points 上限和非目标 | 只评审文档，不改业务代码/表 |
 | G-MVPA-002 黄金样本 | open | 产品负责人 + 短剧制作人 + QA | 一部自有 3–5 集原稿、单集 60–120 秒/12–24 镜、必拍/允许省略标注和预期分集边界入测试 fixture | 可设计匿名格式语料，不可伪造质量接受 |
-| G-MVPA-003 迁移决策 | in_progress（方案对标与 spike） | 技术负责人 | 接受 Alembic 基线/旧库升级/备份恢复方案，并同步修订 DES-002、MOD-011 与 PLAN-000 的“仅 create_all”旧基线 | 只允许在临时库验证 migration spike，不合入业务模型 |
+| G-MVPA-003 迁移决策 | in_progress（实现已 Green；待自有旧库恢复演练） | 技术负责人 | 接受 Alembic 基线/旧库升级/备份恢复方案，并同步修订 DES-002、MOD-011 与 PLAN-000 的“仅 create_all”旧基线 | 不领取新增业务模型；先在团队自有旧库副本保存真实备份/恢复证据 |
 | G-MVPA-004 工作区 | closed（计划编写前已核对） | DEV owner | 每个任务开始前重新运行 `git status --short` 并对白名单；不读/提交本地生成产物 | 保留无关产物；重叠修改时停止 |
 | G-MVPA-005 真实依赖 | 当前 S0–S3 已关闭 | QA/工程 | PostgreSQL/RabbitMQ/MinIO/DeepSeek 现有合同回归可运行；新增 AI 分集/改写/分镜只在真实 DeepSeek 授权开关下接受 | 无 Key 可完成纯领域/UI，但 AI PT 保持 blocked；不要求先完成整个 Provider 管理页面 |
 | G-MVPA-006 上游证据 | active（逐 DEV 关闭） | DEV owner + Reviewer | 每个 DEV 在 Green 前提交固定 commit、许可证、核心源码/测试、可复用点、失败模式和“不采用”理由；至少覆盖一个领域方案和一个成熟横向方案 | 只允许只读调研、Red 与隔离 spike；不得提交拍脑袋的生产抽象或新依赖 |
@@ -61,7 +61,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 
 ## 4. 数据迁移策略
 
-`DEV-MVPA-01` 必须先关闭当前最大的工程卡点：仓库只对空库执行 `metadata.create_all()`，而本计划会增加多组有引用和回填的新表。最小可行方案固定如下：
+`DEV-MVPA-01` 领取时最大的工程卡点是仓库只对空库执行 `metadata.create_all()`，而本计划会增加多组有引用和回填的新表；当前实现按以下最小方案接管，真实恢复证据仍受 G-MVPA-003 约束：
 
 1. 在 `backend/` 引入 Alembic，锁定版本并建立显式 `alembic.ini`、`alembic/env.py` 和 `alembic/versions/`；不自动扫描插件。
 2. 以领取 `DEV-MVPA-01` 时的完整 `main` SHA 和 SQLAlchemy Metadata 生成并人工审阅 baseline。全新环境执行 `alembic upgrade head`；测试快速建库是否继续使用 `create_all` 由 G-MVPA-003 决定，但集成验收必须走 migration。
@@ -79,7 +79,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 
 | DEV | 当前状态 | 对应 PT | 基准人周 | 前置 | 可领取结果 |
 | --- | --- | --- | ---: | --- | --- |
-| DEV-MVPA-01 | in_progress（上游研究/spike；未进入 Green） | PT-DAT-004 | 3 | G-MVPA-001；G-MVPA-003/006 关闭后合入 | Alembic baseline、三路径 migration harness、启动 revision check |
+| DEV-MVPA-01 | in_progress（上游研究/Red/Green 已完成；待恢复证据） | PT-DAT-004 | 3 | G-MVPA-001；G-MVPA-003/006 关闭后 accepted | Alembic baseline、三路径 migration harness、启动 revision check |
 | DEV-MVPA-02 | blocked（G-MVPA-002） | 全部新增 PT 的 fixture/契约门禁 | 2 | MVPA-01 | 黄金样本、格式语料、覆盖 oracle、OpenAPI/模型契约冻结 |
 | DEV-MVPA-03 | proposed | PT-SCR-006 | 8 | MVPA-02 | 整剧 text/txt/md、Document/Revision/Block、格式分析 UI |
 | DEV-MVPA-04 | proposed | PT-SCR-007 | 9 | MVPA-03 | 一个分集建议、边界编辑、confirm、批量物化和项目页回读 |
@@ -114,7 +114,14 @@ DEV-MVPA-01 当前证据记录：
 | Safir `5d6f3c1` | [async Alembic helper](https://github.com/lsst-sqre/safir/blob/5d6f3c119c84acbc9dc3b75b7435bf30a9d9afc1/src/safir/database/_alembic.py)；MIT | 适配 `current heads == script heads` fail-closed gate | 其 stamp helper 不比较 schema；Lanverse 不直接暴露无验证 stamp |
 | Kitsu/Zou `eeefd7b` | [当前 Alembic revisions](https://github.com/cgwire/zou/tree/eeefd7b557802fa073feb93bd90970dcf514e4b5/zou/migrations/versions)；AGPL-3.0 | 只作为成熟影视生产系统长期迁移的存在证据 | 不复制 Flask 模型、通用 Entity/JSONB 或 migration 代码 |
 
-本轮对标后的预审决定是：保留独立 upgrade、async connection sharing、显式 model registry、严格 head gate；旧库 adoption helper 必须在 Alembic compare 之外再验证表、列、类型、默认值、约束和索引，并记录备份确认，不允许把 `command.stamp` 暴露成通用快捷命令。自动生成 baseline 只作为待人工审阅输入，不因命令成功就视为 Green。
+本轮对标后的实现决定是：保留独立 upgrade、async connection sharing、显式 model registry、所有运行入口严格 head gate；旧库 adoption helper 先验证表、列、类型、默认值、约束和索引，并要求安全格式的备份引用，不允许把 `command.stamp` 暴露成通用快捷命令。自动生成 baseline 已人工补齐四条 `use_alter` 循环外键；命令成功仍不替代真实恢复演练。
+
+DEV-MVPA-01 当前实现证据（2026-08-13）：
+
+- baseline 固定当前 42 张业务表；空库 `upgrade head` 后 `current --check-heads` 与 `alembic check` 通过，`downgrade base` 后业务表为 0；
+- 模拟旧 `create_all` 数据库写入黄金行后严格接管，revision 到 head 且数据保留；未知表、缺索引、缺外键三类漂移均拒绝且不 stamp；
+- 统一 server、独立 Scheduler、I/O Worker、Media Worker 均在业务操作前 fail closed；Docker 镜像显式包含 revision 目录，CI Ruff 覆盖 `alembic/`；
+- 以上是专用 `lanverse_test` PostgreSQL 的工程 Green。尚未取得团队自有旧库、数据库系统真实备份和恢复后的逐行/hash 核对，因此不创建 Acceptance、不关闭 G-MVPA-003，也不领取 DEV-MVPA-02。
 
 Red：
 
@@ -433,7 +440,7 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 激活后的第一个可领取任务
 
-当前只领取 `DEV-MVPA-01`，并在 G-MVPA-003/006 关闭前限制为研究、Red 和隔离 spike：
+当前只领取 `DEV-MVPA-01`；研究、Red 与最小 Green 已完成，G-MVPA-003 关闭前只允许补自有旧库备份/恢复证据：
 
 1. 从当前 Metadata 和真实 PostgreSQL 导出 baseline schema；
 2. 先写“当前 `create_all` 无法升级已有 schema”和“错误 stamp 必须拒绝”的 Red；
@@ -442,4 +449,4 @@ MVP-A accepted 后才执行以下动作：
 5. 同步 DES-002、MOD-011、PLAN-000；
 6. 评审通过后才把 `DEV-MVPA-02` 置为 ready。
 
-本计划已由用户激活；不得自动领取 `DEV-MVPA-02` 或预建后续目录、分支、Issue、Acceptance。DEV-MVPA-01 只有完成上游证据评审和真实迁移验证后才能提交为 Green。
+本计划已由用户激活；不得自动领取 `DEV-MVPA-02` 或预建后续目录、分支、Issue、Acceptance。DEV-MVPA-01 可以提交已验证的工程 Green，但只有完成自有旧库备份/恢复演练和评审后才能 accepted。

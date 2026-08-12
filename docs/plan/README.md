@@ -27,7 +27,7 @@ PLAN-001～011 已达到既有“可执行说明”状态；新 PLAN-012 的执�
 | [PLAN-009 剪辑交付与平台任务执行计划](./009-剪辑交付与平台任务执行计划.md) | PRD-009 | 定义 24 个剪辑与平台 PT 的接受顺序和证据 | ready；PT-CCH-001、PT-MED-005、PT-SCH-001/002/003 accepted，其余对应 DEV 激活后执行 |
 | [PLAN-010 需求追踪与变更治理执行计划](./010-需求追踪与变更治理执行计划.md) | PRD-010 | 校验 461 个需求叶子与 Requirement→Acceptance 追踪链 | ready；每次变更执行 |
 | [PLAN-011 AI 提供方配置与启用执行计划](./011-AI提供方配置与启用执行计划.md) | PRD-011 | 编排 7 个 Provider 管理 DEV、Red/Green、真实 DeepSeek、OpenAPI/UI 与验收门禁 | ready；DEV-AIP-01 completed；下一任务 DEV-AIP-02 pending |
-| [PLAN-012 AI 短剧 MVP 核心制作执行计划](./012-AI短剧MVP核心制作执行计划.md) | PRD-012 | 编排 12 个 DEV、71 基准人周、正式迁移、整剧/改写/资产状态/分镜覆盖和分镜包 | proposed；G-MVPA-001～003 关闭后激活 |
+| [PLAN-012 AI 短剧 MVP 核心制作执行计划](./012-AI短剧MVP核心制作执行计划.md) | PRD-012 | 编排 12 个 DEV、71 基准人周、正式迁移、整剧/改写/资产状态/分镜覆盖和分镜包 | active；DEV-MVPA-01 工程 Green，待自有旧库恢复证据；黄金样本阻塞 MVPA-02 |
 
 ## 阅读与执行顺序
 

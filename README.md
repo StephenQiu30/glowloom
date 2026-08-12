@@ -33,12 +33,28 @@ lsof -nP -iTCP:9000 -sTCP:LISTEN
 
 `.env` 中的 `MINIO_ACCESS_KEY` 和 `MINIO_SECRET_KEY` 必须与该实例一致。项目不会重启、停止或修改这项本机服务。
 
-初始化数据库并启动完整后端角色：
+升级数据库并启动完整后端角色：
 
 ```bash
 cd backend
 .venv/bin/python -m app.initialize_database
 .venv/bin/python -m app.server
+```
+
+`app.initialize_database` 只执行受控 Alembic migration，不在 Web/Worker 启动时自动改表。确认数据库 revision 和 ORM Metadata 没有漂移：
+
+```bash
+cd backend
+.venv/bin/alembic current --check-heads
+.venv/bin/alembic check
+```
+
+如果数据库是在 2026-08-13 前由旧版 `metadata.create_all()` 创建且包含需要保留的数据，先在数据库系统外完成可恢复备份，再运行严格结构校验与 baseline 接管；该命令不会创建备份，结构存在任何差异都会拒绝 stamp：
+
+```bash
+cd backend
+.venv/bin/python -m app.adopt_database_baseline \
+  --backup-reference '<已验证的备份或快照编号>'
 ```
 
 另开终端启动前端：
@@ -87,7 +103,7 @@ docker compose \
 
 ```bash
 cd backend
-.venv/bin/ruff check app tests
+.venv/bin/ruff check app tests alembic
 .venv/bin/pyright
 .venv/bin/python -m pytest
 .venv/bin/python -m pip check
