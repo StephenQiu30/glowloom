@@ -4,10 +4,249 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  baseline:
+  backend:
+    name: Backend / Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        env:
+          POSTGRES_DB: lanverse_test
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d lanverse_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11.15"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install locked backend dependencies
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/python -m pip install 'pip==26.1.2'
+          backend/.venv/bin/python -m pip install --requirement backend/requirements-dev.txt
+          backend/.venv/bin/python -m pip check
+      - name: Check backend
+        working-directory: backend
+        run: |
+          .venv/bin/ruff check app tests
+          .venv/bin/pyright
+          .venv/bin/python -m pytest
+          .venv/bin/python -m pip check
+
+  frontend:
+    name: Frontend / Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.23.1"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: |
+          test "$(npm --version)" = "10.9.8"
+          npm ci
+      - name: Check frontend
+        working-directory: frontend
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+
+  openapi:
+    name: API / OpenAPI Drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11.15"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.23.1"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/python -m pip install 'pip==26.1.2'
+          backend/.venv/bin/python -m pip install --requirement backend/requirements-dev.txt
+          test "$(npm --version)" = "10.9.8"
+          cd frontend
+          npm ci
+      - name: Generate and verify OpenAPI client
+        run: |
+          cd backend
+          .venv/bin/python -m uvicorn app.main:app \
+            --host 127.0.0.1 \
+            --port 8686 \
+            --lifespan off &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          cd ..
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8686/healthz >/dev/null; then
+              break
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              wait "$api_pid"
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8686/healthz >/dev/null
+          cd frontend
+          OPENAPI_SCHEMA_URL=http://127.0.0.1:8686/openapi.json npm run openapi2ts
+          cd ..
+          git diff --exit-code -- frontend/src/api
+
+  external_contracts:
+    name: Infrastructure / Contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RABBITMQ_CONTRACT_URL: amqp://guest:guest@127.0.0.1:5672/lanverse_contract
+      MINIO_ENDPOINT: 127.0.0.1:9000
+      MINIO_ACCESS_KEY: lanverse
+      MINIO_SECRET_KEY: lanverse-development-only
+      MINIO_BUCKET: lanverse-contract
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        env:
+          POSTGRES_DB: lanverse_test
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d lanverse_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+      rabbitmq:
+        image: rabbitmq:4.3.4-alpine
+        env:
+          RABBITMQ_DEFAULT_VHOST: lanverse_contract
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11.15"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install locked backend dependencies
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/python -m pip install 'pip==26.1.2'
+          backend/.venv/bin/python -m pip install --requirement backend/requirements-dev.txt
+          backend/.venv/bin/python -m pip check
+      - name: Run the real Redis contracts
+        working-directory: backend
+        run: |
+          LANVERSE_RUN_REDIS_CONTRACT=1 .venv/bin/python -m pytest \
+            tests/contract/test_redis_cache.py \
+            tests/contract/test_generation_high_cost_guard.py \
+            tests/contract/test_registration_verification_store.py
+      - name: Start MinIO contract service
+        run: |
+          docker run --rm --detach --name lanverse-ci-minio \
+            --publish 127.0.0.1:9000:9000 \
+            --env MINIO_ROOT_USER=lanverse \
+            --env MINIO_ROOT_PASSWORD=lanverse-development-only \
+            minio/minio:latest server /data
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs lanverse-ci-minio
+          exit 1
+      - name: Install media contract tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+          ffprobe -version
+      - name: Run the real MinIO and ffprobe contracts
+        working-directory: backend
+        run: |
+          LANVERSE_RUN_MINIO_CONTRACT=1 .venv/bin/python -m pytest \
+            tests/contract/test_minio_port.py \
+            tests/contract/test_media_minio_flow.py
+          LANVERSE_RUN_FFPROBE_CONTRACT=1 .venv/bin/python -m pytest \
+            tests/contract/test_ffprobe_media.py
+      - name: Run the real media stack contract
+        working-directory: backend
+        run: |
+          LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 .venv/bin/python -m pytest \
+            tests/contract/test_media_stack.py
+      - name: Run RabbitMQ publisher and worker contracts
+        working-directory: backend
+        run: |
+          LANVERSE_RUN_RABBITMQ_CONTRACT=1 .venv/bin/python -m pytest \
+            tests/contract/test_rabbitmq_publisher.py \
+            tests/contract/test_rabbitmq_worker.py
+      - name: Run scheduler recovery stack contract
+        working-directory: backend
+        run: |
+          LANVERSE_RUN_SCHEDULER_STACK_CONTRACT=1 .venv/bin/python -m pytest \
+            tests/contract/test_scheduler_recovery_stack.py
+      - name: Stop MinIO contract service
+        if: always()
+        run: docker rm --force lanverse-ci-minio || true
+
+  browser:
+    name: System / Browser E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MINIO_ENDPOINT: 127.0.0.1:9000
+      MINIO_ACCESS_KEY: lanverse
+      MINIO_SECRET_KEY: lanverse-development-only
+      MINIO_BUCKET: lanverse-e2e
     services:
       postgres:
         image: postgres:18.4-alpine
@@ -59,38 +298,40 @@ jobs:
           python -m venv backend/.venv
           backend/.venv/bin/python -m pip install 'pip==26.1.2'
           backend/.venv/bin/python -m pip install --requirement backend/requirements-dev.txt
-          backend/.venv/bin/python -m pip check
+          test "$(npm --version)" = "10.9.8"
           cd frontend
           npm ci
-      - name: Generate and verify OpenAPI client
+      - name: Start MinIO browser service
         run: |
-          cd backend
-          .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8686 &
-          api_pid=$!
-          trap 'kill "$api_pid"' EXIT
-          cd ..
-          for attempt in 1 2 3 4 5; do
-            curl --fail --silent http://127.0.0.1:8686/healthz && break
+          docker run --rm --detach --name lanverse-ci-minio \
+            --publish 127.0.0.1:9000:9000 \
+            --env MINIO_ROOT_USER=lanverse \
+            --env MINIO_ROOT_PASSWORD=lanverse-development-only \
+            minio/minio:latest server /data
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
             sleep 1
           done
-          cd frontend
-          OPENAPI_SCHEMA_URL=http://127.0.0.1:8686/openapi.json npm run openapi2ts
-          cd ..
-          git diff --exit-code -- frontend/src/api
-      - name: Check backend
-        run: |
-          cd backend
-          .venv/bin/ruff check app tests
-          .venv/bin/pyright
-          .venv/bin/python -m pytest
-          .venv/bin/python -m pip check
-      - name: Check frontend
-        run: |
-          cd frontend
-          npm run lint
-          npm run typecheck
-          npm run test
-          npm run build
+          docker logs lanverse-ci-minio
+          exit 1
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run browser E2E
+        working-directory: frontend
+        run: npm run e2e
+      - name: Stop MinIO browser service
+        if: always()
+        run: docker rm --force lanverse-ci-minio || true
+
+  delivery:
+    name: Delivery / Compose and Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
       - name: Check repository hygiene and Compose configuration
         run: |
           if git ls-files | grep -E '(^|/)(\.env($|\.)|.*\.(pem|key|log)$|data/|logs/|playwright-report/|test-results/)' | grep -v -E '\.env(\.production)?\.example$'; then
@@ -109,64 +350,34 @@ jobs:
             -f docker-compose.yml \
             -f docker-compose.prod.yml \
             config >/dev/null
-      - name: Run the real Redis cache contract
-        run: |
-          cd backend
-          LANVERSE_RUN_REDIS_CONTRACT=1 .venv/bin/python -m pytest \
-            tests/contract/test_redis_cache.py \
-            tests/contract/test_generation_high_cost_guard.py \
-            tests/contract/test_registration_verification_store.py
-      - name: Start MinIO contract service
-        run: |
-          docker run --rm --detach --name lanverse-ci-minio \
-            --publish 127.0.0.1:9000:9000 \
-            --env MINIO_ROOT_USER=lanverse \
-            --env MINIO_ROOT_PASSWORD=lanverse-development-only \
-            minio/minio:latest server /data
-          for attempt in {1..60}; do
-            if curl --fail --silent http://127.0.0.1:9000/minio/health/live; then
-              exit 0
-            fi
-            sleep 1
-          done
-          docker logs lanverse-ci-minio
-          exit 1
-      - name: Install media contract tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes ffmpeg
-          ffprobe -version
-      - name: Run the real media stack contract
-        env:
-          RABBITMQ_CONTRACT_URL: amqp://guest:guest@127.0.0.1:5672/lanverse_contract
-          MINIO_ENDPOINT: 127.0.0.1:9000
-          MINIO_ACCESS_KEY: lanverse
-          MINIO_SECRET_KEY: lanverse-development-only
-        run: |
-          cd backend
-          LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 .venv/bin/python -m pytest \
-            tests/contract/test_media_stack.py
-      - name: Stop MinIO contract service
-        if: always()
-        run: docker rm --force lanverse-ci-minio || true
-      - name: Run RabbitMQ publisher and worker contracts
-        run: |
-          cd backend
-          LANVERSE_RUN_RABBITMQ_CONTRACT=1 .venv/bin/python -m pytest \
-            tests/contract/test_rabbitmq_publisher.py \
-            tests/contract/test_rabbitmq_worker.py
-        env:
-          RABBITMQ_CONTRACT_URL: amqp://guest:guest@127.0.0.1:5672/lanverse_contract
-      - name: Run scheduler recovery stack contract
-        run: |
-          cd backend
-          LANVERSE_RUN_SCHEDULER_STACK_CONTRACT=1 .venv/bin/python -m pytest \
-            tests/contract/test_scheduler_recovery_stack.py
-        env:
-          RABBITMQ_CONTRACT_URL: amqp://guest:guest@127.0.0.1:5672/lanverse_contract
-      - name: Install Playwright Chromium
-        run: cd frontend && npx playwright install --with-deps chromium
-      - name: Run browser E2E
-        run: cd frontend && npm run e2e
       - name: Build application images
         run: docker compose build server web
+
+  required:
+    name: Required / CI
+    if: ${{ always() }}
+    needs:
+      - backend
+      - frontend
+      - openapi
+      - external_contracts
+      - browser
+      - delivery
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BACKEND_RESULT: ${{ needs.backend.result }}
+      FRONTEND_RESULT: ${{ needs.frontend.result }}
+      OPENAPI_RESULT: ${{ needs.openapi.result }}
+      EXTERNAL_CONTRACTS_RESULT: ${{ needs.external_contracts.result }}
+      BROWSER_RESULT: ${{ needs.browser.result }}
+      DELIVERY_RESULT: ${{ needs.delivery.result }}
+    steps:
+      - name: Require every project boundary to pass
+        run: |
+          test "$BACKEND_RESULT" = "success"
+          test "$FRONTEND_RESULT" = "success"
+          test "$OPENAPI_RESULT" = "success"
+          test "$EXTERNAL_CONTRACTS_RESULT" = "success"
+          test "$BROWSER_RESULT" = "success"
+          test "$DELIVERY_RESULT" = "success"
