@@ -78,7 +78,7 @@ def test_environment_specific_compose_supports_robust_full_stack_startup() -> No
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
     assert "docker compose up -d --build --wait" in readme
     assert "up -d --no-build --pull always --wait" in readme
-    assert "docker compose build server web" in workflow
+    assert "docker compose --env-file .env.example build server web" in workflow
     assert (ROOT / "backend/app/cache_admin.py").is_file()
 
     backend_dockerfile = (ROOT / "backend/Dockerfile").read_text()
