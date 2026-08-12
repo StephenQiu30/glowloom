@@ -351,7 +351,7 @@ jobs:
             -f docker-compose.prod.yml \
             config >/dev/null
       - name: Build application images
-        run: docker compose build server web
+        run: docker compose --env-file .env.example build server web
 
   required:
     name: Required / CI
