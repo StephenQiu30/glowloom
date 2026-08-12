@@ -316,6 +316,11 @@ jobs:
           done
           docker logs lanverse-ci-minio
           exit 1
+      - name: Install media inspection tool
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+          ffprobe -version
       - name: Install Playwright Chromium
         working-directory: frontend
         run: npx playwright install --with-deps chromium
