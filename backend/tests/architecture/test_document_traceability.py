@@ -16,9 +16,19 @@ def _expand_requirement_ranges(text: str) -> set[str]:
     return leaves
 
 
-def test_requirement_matrix_has_exactly_379_unique_leaves() -> None:
+def test_requirement_matrix_matches_exactly_418_requirement_leaves() -> None:
     matrix = (DOCS / "prd/010-需求设计与产品任务追踪矩阵.md").read_text(encoding="utf-8")
-    assert len(_expand_requirement_ranges(matrix)) == 379
+    matrix_leaves = _expand_requirement_ranges(matrix)
+    requirement_leaves: set[str] = set()
+    for document in (DOCS / "requirement").rglob("*.md"):
+        if document.name == "README.md":
+            continue
+        requirement_leaves.update(
+            _expand_requirement_ranges(document.read_text(encoding="utf-8"))
+        )
+
+    assert len(requirement_leaves) == 418
+    assert matrix_leaves == requirement_leaves
 
 
 def test_product_tasks_have_expected_unique_distribution() -> None:
@@ -26,6 +36,7 @@ def test_product_tasks_have_expected_unique_distribution() -> None:
         "007-基础业务模块PRD任务.md": 20,
         "008-创作生产模块PRD任务.md": 25,
         "009-剪辑交付与平台保障PRD任务.md": 24,
+        "011-AI提供方配置与启用PRD.md": 7,
     }
     all_tasks: set[str] = set()
     for filename, count in expected.items():
@@ -34,11 +45,11 @@ def test_product_tasks_have_expected_unique_distribution() -> None:
         assert len(tasks) == count
         assert all_tasks.isdisjoint(tasks)
         all_tasks.update(tasks)
-    assert len(all_tasks) == 69
+    assert len(all_tasks) == 76
 
 
 def test_each_prd_links_to_same_numbered_plan() -> None:
-    for number in range(1, 11):
+    for number in range(1, 12):
         prefix = f"{number:03d}-"
         prd = next((DOCS / "prd").glob(f"{prefix}*.md"))
         assert f"../plan/{prefix}" in prd.read_text(encoding="utf-8")
@@ -103,6 +114,48 @@ def test_s2_s3_real_provider_acceptance_and_s4_gate_do_not_drift() -> None:
     assert "S2/S3 产品保持 `in_progress`" not in "\n".join(
         (slice_prd, prd, prd_index, plan_index)
     )
+
+
+def test_provider_control_plane_is_traced_without_premature_ark_acceptance() -> None:
+    requirement = (
+        DOCS / "requirement/014-AI提供方配置与启用需求.md"
+    ).read_text(encoding="utf-8")
+    design = (DOCS / "design/009-AI提供方配置与启用设计.md").read_text(
+        encoding="utf-8"
+    )
+    prd = (DOCS / "prd/011-AI提供方配置与启用PRD.md").read_text(
+        encoding="utf-8"
+    )
+    plan = (DOCS / "plan/011-AI提供方配置与启用执行计划.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "状态：accepted" in requirement
+    assert "状态：accepted" in design
+    assert "状态：proposed" in prd
+    assert "状态：ready" in plan
+    for source in (requirement, design, prd, plan):
+        assert "catalog-only" in source
+        assert "D-004" in source
+        assert "DeepSeek" in source
+        assert "明文" in source
+    for preset_id in (
+        "deepseek",
+        "volcengine_ark",
+        "openai",
+        "anthropic",
+        "google_gemini",
+        "alibaba_bailian",
+        "moonshot_kimi",
+        "zhipu_glm",
+        "minimax",
+        "openrouter",
+        "custom_openai_compatible",
+    ):
+        assert preset_id in prd
+    assert "PT-AIP-001～007" in prd
+    assert "DEV-AIP-01" in plan and "DEV-AIP-07" in plan
+    assert "provider_contract_unverified" in prd
 
 
 def test_ark_public_contract_is_revalidated_without_premature_sdk_install() -> None:

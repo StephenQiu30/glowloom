@@ -18,14 +18,15 @@
 | [PRD-007 基础业务模块 PRD 任务](./007-基础业务模块PRD任务.md) | identity、projects、media、governance 的产品任务、依赖和逐项验收 | PT-MED-001～003/005、PT-GOV-001/002 accepted；持续任务仍推进 |
 | [PRD-008 创作生产模块 PRD 任务](./008-创作生产模块PRD任务.md) | scripts、assets、storyboards、production 的产品任务、依赖和逐项验收 | S2/S3 对应 PT accepted；S4 production PT proposed |
 | [PRD-009 剪辑交付与平台保障 PRD 任务](./009-剪辑交付与平台保障PRD任务.md) | editing 与六类平台保障任务、依赖和逐项验收 | PT-CCH-001、PT-MED-005、PT-SCH-001/002/003 accepted；其余 PT proposed |
-| [PRD-010 需求、设计与产品任务追踪矩阵](./010-需求设计与产品任务追踪矩阵.md) | 379 个 Requirement 叶子编号到 Design、PT/里程碑和验收归属的查漏基线 | S1 映射 accepted |
+| [PRD-010 需求、设计与产品任务追踪矩阵](./010-需求设计与产品任务追踪矩阵.md) | 418 个 Requirement 叶子编号到 Design、PT/里程碑和验收归属的查漏基线 | S1 映射 accepted；AIP 增量 proposed |
+| [PRD-011 AI 提供方配置与启用](./011-AI提供方配置与启用PRD.md) | 7 个 Provider 管理产品任务、量化安全/性能/真实 Provider 验收和部分接受边界 | proposed；等待接受后执行 |
 
 ## 阅读顺序
 
 1. PRD-001 决定“为谁、交付什么、做到什么程度以及哪些外部选择会阻塞”。
 2. PRD-004 至 PRD-006 决定“每个模块拥有什么事实、提供哪些用例以及怎样交接”。
-3. PRD-007 至 PRD-009 把模块设计转成“可以映射到 DEV、阻塞和逐项接受的 PT 产品任务”；工程排期和领取只使用 PLAN-000 的 `DEV-*`。
-4. PRD-010 查漏“每个 ENT/FR/IF/NFR 叶子是否都有 Design 和 PT/验收归属”，并显式隔离 P1 与条件性任务。
+3. PRD-007 至 PRD-009 与 PRD-011 把模块设计转成“可以映射到 DEV、阻塞和逐项接受的 PT 产品任务”；工程排期和领取使用对应 Plan 的唯一 `DEV-*`。
+4. PRD-010 查漏“每个 ENT/FR/IF/NFR 叶子是否都有 Design 和 PT/验收归属”，并显式隔离 P1、条件性任务和 Provider catalog-only 状态。
 5. PRD-002 决定“按什么用户价值顺序组合 PT，以及每个切片怎样才算完成”。
 6. PRD-003 决定“先关闭什么决策、哪些 PT 进入工作包、如何验证和执行”。
 
