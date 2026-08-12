@@ -111,4 +111,6 @@ docker compose --env-file .env.example config >/dev/null
 
 需要真实外部依赖的契约通过对应 `LANVERSE_RUN_*` 环境变量显式开启；CI 中保留了 Redis、RabbitMQ、MinIO、ffprobe、Scheduler、媒体栈和浏览器的完整原生命令作为可执行事实源。
 
+CI 在 PR、merge queue 和 main push 上运行完整门禁，并由稳定检查 `Required / CI` 汇总后端、前端、OpenAPI、真实基础设施、浏览器和交付边界。GitHub main 规则应禁止绕过并要求该检查成功；本地 commit 不等于远端 CI 已通过。
+
 产品、架构、PRD 与执行计划分别位于 `docs/requirement`、`docs/design`、`docs/prd` 和 `docs/plan`。真实凭据、媒体、日志和本地数据不得提交。
