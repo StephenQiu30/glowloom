@@ -31,7 +31,9 @@ def _utc_now() -> datetime:
 class ModelCapability(Base):
     __tablename__ = "prod_model_capabilities"
     __table_args__ = (
-        CheckConstraint("kind IN ('image', 'video')", name="ck_prod_capability_kind"),
+        CheckConstraint(
+            "kind IN ('text', 'image', 'video')", name="ck_prod_capability_kind"
+        ),
         CheckConstraint(
             "status IN ('active', 'inactive', 'unavailable')",
             name="ck_prod_capability_status",
@@ -43,6 +45,11 @@ class ModelCapability(Base):
             "kind",
             "config_version",
             name="uq_prod_capability_configuration",
+        ),
+        UniqueConstraint(
+            "id",
+            "config_version",
+            name="uq_prod_capability_id_version",
         ),
         Index("ix_prod_capability_kind_status", "kind", "status"),
     )

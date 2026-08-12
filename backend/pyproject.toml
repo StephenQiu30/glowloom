@@ -7,6 +7,7 @@ dependencies = [
     "aio-pika==10.0.1",
     "anyio==4.14.2",
     "asyncpg==0.31.0",
+    "cryptography==50.0.0",
     "email-validator==2.3.0",
     "fastapi==0.140.12",
     "langchain-deepseek==1.1.0",

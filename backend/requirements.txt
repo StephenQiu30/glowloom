@@ -35,11 +35,15 @@ certifi==2026.7.22
     #   minio
     #   requests
 cffi==2.1.0
-    # via argon2-cffi-bindings
+    # via
+    #   argon2-cffi-bindings
+    #   cryptography
 charset-normalizer==3.4.9
     # via requests
 click==8.4.2
     # via uvicorn
+cryptography==50.0.0
+    # via lanverse-backend (pyproject.toml)
 distro==1.9.0
     # via
     #   langsmith

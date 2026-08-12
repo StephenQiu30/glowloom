@@ -98,10 +98,17 @@ class Settings(BaseSettings):
     email_verification_source_limit: int = Field(default=20, ge=1, le=1000)
     deepseek_api_key: SecretStr | None = None
     ark_api_key: SecretStr | None = None
+    provider_credential_key_id: str = Field(
+        default="local-provider-v1", min_length=1, max_length=100
+    )
+    provider_credential_master_key: SecretStr | None = None
+    provider_credential_fingerprint_key: SecretStr | None = None
 
     @field_validator(
         "deepseek_api_key",
         "ark_api_key",
+        "provider_credential_master_key",
+        "provider_credential_fingerprint_key",
         "smtp_host",
         "smtp_username",
         "smtp_password",
@@ -179,6 +186,16 @@ class Settings(BaseSettings):
         if (self.smtp_username is None) != (self.smtp_password is None):
             raise ValueError(
                 "SMTP_USERNAME and SMTP_PASSWORD must be configured together"
+            )
+        if (
+            self.provider_credential_master_key is not None
+            and self.provider_credential_fingerprint_key is not None
+            and self.provider_credential_master_key.get_secret_value()
+            == self.provider_credential_fingerprint_key.get_secret_value()
+        ):
+            raise ValueError(
+                "PROVIDER_CREDENTIAL_FINGERPRINT_KEY must not reuse "
+                "PROVIDER_CREDENTIAL_MASTER_KEY"
             )
         return self
 

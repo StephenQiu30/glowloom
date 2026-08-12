@@ -7,6 +7,7 @@ def register_implemented_models() -> None:
     from app.modules.media import models as media_models
     from app.modules.messaging import models as messaging_models
     from app.modules.production import models as production_models
+    from app.modules.production.providers import models as provider_models
     from app.modules.projects import models as project_models
     from app.modules.scheduling import models as scheduling_models
     from app.modules.scripts import models as script_models
@@ -20,6 +21,7 @@ def register_implemented_models() -> None:
         media_models,
         messaging_models,
         production_models,
+        provider_models,
         project_models,
         script_models,
         scheduling_models,
