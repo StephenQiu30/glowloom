@@ -129,6 +129,9 @@ def test_backend_uses_pycharm_venv_and_pip_lock_baseline() -> None:
 
 def test_ci_executes_the_real_media_stack_contract() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    browser_job = workflow.split("\n  browser:\n", maxsplit=1)[1].split(
+        "\n  delivery:\n", maxsplit=1
+    )[0]
 
     assert "name: Start MinIO contract service" in workflow
     assert "minio/minio:latest server /data" in workflow
@@ -141,6 +144,8 @@ def test_ci_executes_the_real_media_stack_contract() -> None:
     assert "docker rm --force lanverse-ci-minio" in workflow
     assert "image: redis:latest" in workflow
     assert "LANVERSE_RUN_REDIS_CONTRACT=1" in workflow
+    assert "sudo apt-get install --yes ffmpeg" in browser_job
+    assert "ffprobe -version" in browser_job
 
 
 def test_ci_exposes_project_execution_boundaries_and_a_stable_required_gate() -> None:
