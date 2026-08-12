@@ -143,6 +143,37 @@ def test_ci_executes_the_real_media_stack_contract() -> None:
     assert "LANVERSE_RUN_REDIS_CONTRACT=1" in workflow
 
 
+def test_ci_exposes_project_execution_boundaries_and_a_stable_required_gate() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+
+    expected_jobs = {
+        "backend": "Backend / Quality",
+        "frontend": "Frontend / Quality",
+        "openapi": "API / OpenAPI Drift",
+        "external_contracts": "Infrastructure / Contracts",
+        "browser": "System / Browser E2E",
+        "delivery": "Delivery / Compose and Images",
+        "required": "Required / CI",
+    }
+    for job_id, job_name in expected_jobs.items():
+        assert f"\n  {job_id}:\n" in workflow
+        assert f"name: {job_name}" in workflow
+
+    assert "permissions:\n  contents: read" in workflow
+    assert "merge_group:" in workflow
+    assert "\n    paths:" not in workflow
+    assert workflow.count("timeout-minutes:") == len(expected_jobs)
+
+    required = workflow.split("\n  required:\n", maxsplit=1)[1]
+    assert "if: ${{ always() }}" in required
+    for dependency in expected_jobs.keys() - {"required"}:
+        assert f"      - {dependency}\n" in required
+        assert f"${{{{ needs.{dependency}.result }}}}" in required
+
+    assert "LANVERSE_RUN_FFPROBE_CONTRACT=1" in workflow
+    assert "LANVERSE_RUN_MINIO_CONTRACT=1" in workflow
+
+
 def test_scripts_is_split_by_capability() -> None:
     scripts = ROOT / "backend/app/modules/scripts"
     for capability in ("versions", "extractions", "structure"):
