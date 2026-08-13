@@ -186,6 +186,8 @@ const readiness: API.ShotReadinessBatchResponse = {
         narrative_structure_id: sceneId,
         narrative_structure_revision: 1,
         narrative_dependency_hash: "1".repeat(64),
+        coverage_basis_hash: "2".repeat(64),
+        coverage_evaluation_hash: "3".repeat(64),
         scene_id: sceneId,
         dialogue_ids: [dialogueId],
         asset_version_ids: [locationVersionId],
@@ -218,6 +220,8 @@ const readiness: API.ShotReadinessBatchResponse = {
         narrative_structure_id: sceneId,
         narrative_structure_revision: 1,
         narrative_dependency_hash: "1".repeat(64),
+        coverage_basis_hash: "2".repeat(64),
+        coverage_evaluation_hash: "3".repeat(64),
         scene_id: sceneId,
         dialogue_ids: [],
         asset_version_ids: [],
@@ -228,6 +232,77 @@ const readiness: API.ShotReadinessBatchResponse = {
       evaluation_hash: "f".repeat(64),
     },
   ],
+};
+
+const coverage: API.CoverageReportResponse = {
+  episode_id: episodeId,
+  status: "blocked",
+  ready: false,
+  basis_hash: "2".repeat(64),
+  evaluation_hash: "3".repeat(64),
+  summary: {
+    required_total: 1,
+    covered: 1,
+    approved_omitted: 0,
+    uncovered: 0,
+    shots_total: 2,
+    linked: 1,
+    approved_invented: 0,
+    orphan: 1,
+    stale: 0,
+  },
+  units: [
+    {
+      narrative_unit_id: dialogueId,
+      unit_version_id: dialogueId,
+      position: 1,
+      kind: "dialogue",
+      exact_text: "你终于来了。",
+      required_for_coverage: true,
+      required_channel: "audio",
+      status: "covered",
+      shot_ids: [firstShotId],
+    },
+  ],
+  shots: [
+    {
+      shot_id: firstShotId,
+      spec_version_id: specVersionId,
+      position: 1,
+      title: "建立雨夜车站",
+      status: "linked",
+      unit_version_ids: [dialogueId],
+    },
+    {
+      shot_id: secondShotId,
+      spec_version_id: null,
+      position: 2,
+      title: "角色走入画面",
+      status: "orphan",
+      unit_version_ids: [],
+    },
+  ],
+  references: [
+    {
+      id: "019fb2c0-a000-7000-8000-000000000025",
+      shot_id: firstShotId,
+      shot_spec_version_id: specVersionId,
+      narrative_unit_id: dialogueId,
+      unit_version_id: dialogueId,
+      channel: "audio",
+      role: "primary",
+      coverage_mode: "full",
+      segment_start: null,
+      segment_end: null,
+      contribution: "required",
+      origin: "human",
+      created_by: workspaceId,
+      created_at: now,
+    },
+  ],
+  stale_reference_ids: [],
+  stale_decision_ids: [],
+  next_actions: ["map_or_approve_invented_shots"],
 };
 
 const assets: API.AssetResponse[] = [
@@ -430,6 +505,7 @@ describe("分镜工作台", () => {
         assetBible={assetBible}
         busy={false}
         confirmedShotCandidates={[acceptedShotCandidate]}
+        coverage={coverage}
         order={shots}
         readiness={readiness}
         selectedShotId={firstShotId}
@@ -526,6 +602,17 @@ describe("分镜工作台", () => {
               subject_key: "subject-00000018",
             }),
           ]),
+          narrative_references: [
+            {
+              unit_version_id: dialogueId,
+              channel: "audio",
+              role: "primary",
+              coverage_mode: "full",
+              segment_start: null,
+              segment_end: null,
+              contribution: "required",
+            },
+          ],
         }),
       ),
     );
@@ -605,6 +692,7 @@ describe("分镜工作台", () => {
         assetBible={undefined}
         busy={false}
         confirmedShotCandidates={[]}
+        coverage={coverage}
         order={{ items: [], order_hash: "a".repeat(64) }}
         selectedShotId={null}
         versions={[]}
@@ -648,6 +736,7 @@ describe("分镜工作台", () => {
         assetBible={assetBible}
         busy={false}
         confirmedShotCandidates={[]}
+        coverage={coverage}
         order={{ ...shots, items: [shots.items[0]] }}
         readiness={{ ...readiness, items: [readiness.items[0]] }}
         selectedShotId={firstShotId}

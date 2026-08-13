@@ -151,8 +151,10 @@ import {
   createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPost,
   deleteShotApiV1ShotsShotIdDelete,
   decideDraftApiV1StoryboardDraftsDraftIdDecisionsPost,
+  decideCoverageApiV1EpisodesEpisodeIdCoverageDecisionsPost,
   getBatchApiV1StoryboardDraftBatchesBatchIdGet,
   getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet,
+  getCoverageApiV1EpisodesEpisodeIdCoverageGet,
   getSpecVersionApiV1ShotSpecVersionsVersionIdGet,
   listAssetShotUsagesApiV1AssetVersionsAssetVersionIdShotUsagesGet,
   listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet,
@@ -163,6 +165,7 @@ import {
   preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPost,
   preflightApplyApiV1StoryboardDraftBatchesBatchIdApplyPreflightPost,
   reorderShotsApiV1EpisodesEpisodeIdShotsReorderPost,
+  replaceReferencesApiV1ShotsShotIdNarrativeReferencesPost,
   restoreShotApiV1ShotsShotIdRestorePost,
   setCurrentSpecVersionApiV1ShotsShotIdCurrentSpecVersionPost,
   shotDeletePreflightApiV1ShotsShotIdDeletePreflightGet,
@@ -260,6 +263,7 @@ export const appApi = createApi({
     "ArchivedShots",
     "ShotSpecs",
     "ShotReadiness",
+    "Coverage",
     "StoryboardDraft",
   ],
   endpoints: (builder) => ({
@@ -1062,6 +1066,7 @@ export const appApi = createApi({
       invalidatesTags: (_result, _error, { episodeId, batchId }) => [
         { type: "StoryboardDraft", id: batchId },
         { type: "Shots", id: episodeId },
+        { type: "Coverage", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
@@ -1138,6 +1143,57 @@ export const appApi = createApi({
         { type: "ShotReadiness", id: episodeId },
       ],
     }),
+    coverage: builder.query<API.CoverageReportResponse, string>({
+      queryFn: (episodeId) =>
+        runRequest(() =>
+          getCoverageApiV1EpisodesEpisodeIdCoverageGet({
+            episode_id: episodeId,
+          }),
+        ),
+      providesTags: (_result, _error, episodeId) => [
+        { type: "Coverage", id: episodeId },
+      ],
+    }),
+    replaceNarrativeReferences: builder.mutation<
+      API.NarrativeReferenceReplaceResponse,
+      {
+        episodeId: string;
+        shotId: string;
+        body: API.NarrativeReferenceReplaceRequest;
+      }
+    >({
+      queryFn: ({ shotId, body }) =>
+        runRequest(() =>
+          replaceReferencesApiV1ShotsShotIdNarrativeReferencesPost(
+            { shot_id: shotId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId, shotId }) => [
+        { type: "Coverage", id: episodeId },
+        { type: "Shots", id: episodeId },
+        { type: "ShotSpecs", id: shotId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
+    decideCoverage: builder.mutation<
+      API.CoverageDecisionApplyResponse,
+      { episodeId: string; body: API.CoverageDecisionRequest }
+    >({
+      queryFn: ({ episodeId, body }) =>
+        runRequest(() =>
+          decideCoverageApiV1EpisodesEpisodeIdCoverageDecisionsPost(
+            { episode_id: episodeId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "Coverage", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+      ],
+    }),
     shotSpecVersions: builder.query<API.ShotSpecVersionResponse[], string>({
       queryFn: (shotId) =>
         runRequest(() =>
@@ -1171,6 +1227,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Shots", id: episodeId },
+        { type: "Coverage", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
@@ -1187,6 +1244,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Shots", id: episodeId },
+        { type: "Coverage", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
@@ -1201,6 +1259,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Shots", id: episodeId },
+        { type: "Coverage", id: episodeId },
       ],
     }),
     appendShotSpec: builder.mutation<
@@ -1217,6 +1276,7 @@ export const appApi = createApi({
       invalidatesTags: (_result, _error, { episodeId, shotId }) => [
         { type: "Shots", id: episodeId },
         { type: "ShotSpecs", id: shotId },
+        { type: "Coverage", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
@@ -1239,6 +1299,7 @@ export const appApi = createApi({
       invalidatesTags: (_result, _error, { episodeId, shotId }) => [
         { type: "Shots", id: episodeId },
         { type: "ShotSpecs", id: shotId },
+        { type: "Coverage", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
@@ -1256,6 +1317,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Shots", id: episodeId },
+        { type: "Coverage", id: episodeId },
       ],
     }),
     copyShot: builder.mutation<
@@ -1268,6 +1330,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Shots", id: episodeId },
+        { type: "Coverage", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
@@ -1295,6 +1358,7 @@ export const appApi = createApi({
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Shots", id: episodeId },
         { type: "ArchivedShots", id: episodeId },
+        { type: "Coverage", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
@@ -1315,6 +1379,7 @@ export const appApi = createApi({
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Shots", id: episodeId },
         { type: "ArchivedShots", id: episodeId },
+        { type: "Coverage", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
@@ -1349,6 +1414,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Shots", id: episodeId },
+        { type: "Coverage", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
@@ -1371,6 +1437,7 @@ export const appApi = createApi({
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Shots", id: episodeId },
         { type: "ArchivedShots", id: episodeId },
+        { type: "Coverage", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
@@ -1405,6 +1472,8 @@ export const appApi = createApi({
       invalidatesTags: (result, _error, { episodeId, sourceId }) => [
         { type: "ScriptVersions", id: sourceId },
         { type: "Episodes", id: episodeId },
+        { type: "Coverage", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
         ...(result
           ? [{ type: "ScriptVersion" as const, id: result.version.id }]
@@ -1429,6 +1498,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { episodeId, versionId }) => [
         { type: "NarrativeStructure", id: versionId },
+        { type: "Coverage", id: episodeId },
         { type: "Snapshot", id: episodeId },
         { type: "ShotReadiness", id: episodeId },
         "AuditEvents",
@@ -1488,6 +1558,8 @@ export const appApi = createApi({
         { type: "AdaptationRun", id: runId },
         { type: "ScriptVersions", id: sourceId },
         { type: "Episodes", id: episodeId },
+        { type: "Coverage", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
         "AuditEvents",
         ...(result
@@ -1525,6 +1597,8 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { episodeId }) => [
         { type: "Episodes", id: episodeId },
+        { type: "Coverage", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
       ],
     }),
@@ -1628,6 +1702,8 @@ export const appApi = createApi({
         ),
       invalidatesTags: (result, _error, { batchId, episodeId }) => [
         { type: "ExtractionBatch", id: batchId },
+        { type: "Coverage", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
         { type: "Snapshot", id: episodeId },
         ...(result
           ? [
@@ -2438,7 +2514,10 @@ export const {
   useScriptVersionsQuery,
   useStartExtractionMutation,
   useCopyShotMutation,
+  useCoverageQuery,
+  useDecideCoverageMutation,
   useReorderShotsMutation,
+  useReplaceNarrativeReferencesMutation,
   useShotOrderQuery,
   useShotReadinessQuery,
   useShotDeletePreflightMutation,

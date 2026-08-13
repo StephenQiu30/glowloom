@@ -6,11 +6,14 @@ import {
 } from "@/app/studio/[episodeId]/storyboard-shot-operations";
 
 const scriptVersionId = "019fb6c0-a000-7000-8000-000000000001";
+const workspaceId = "019fb6c0-a000-7000-8000-000000000010";
 const firstSceneId = "019fb6c0-a000-7000-8000-000000000002";
 const secondSceneId = "019fb6c0-a000-7000-8000-000000000003";
 const firstDialogueId = "019fb6c0-a000-7000-8000-000000000004";
 const secondDialogueId = "019fb6c0-a000-7000-8000-000000000005";
 const locationVersionId = "019fb6c0-a000-7000-8000-000000000006";
+const firstUnitId = "019fb6c0-a000-7000-8000-000000000007";
+const secondUnitId = "019fb6c0-a000-7000-8000-000000000008";
 const locationReference: API.AssetReferenceRequest = {
   slot_key: "location-main",
   role: "location",
@@ -33,7 +36,7 @@ function version({
 }): API.ShotSpecVersionResponse {
   return {
     id,
-    workspace_id: "019fb6c0-a000-7000-8000-000000000010",
+    workspace_id: workspaceId,
     shot_id: "019fb6c0-a000-7000-8000-000000000011",
     version_no: 1,
     schema_version: 1,
@@ -94,6 +97,31 @@ function version({
   };
 }
 
+function narrativeReference(
+  id: string,
+  unitVersionId: string,
+  shotId: string,
+  specVersionId: string,
+  channel: API.NarrativeReferenceInput["channel"],
+): API.NarrativeReferenceResponse {
+  return {
+    id,
+    shot_id: shotId,
+    shot_spec_version_id: specVersionId,
+    narrative_unit_id: unitVersionId,
+    unit_version_id: unitVersionId,
+    channel,
+    role: "primary",
+    coverage_mode: "full",
+    segment_start: null,
+    segment_end: null,
+    contribution: "required",
+    origin: "human",
+    created_by: workspaceId,
+    created_at: "2026-07-31T12:00:00Z",
+  };
+}
+
 describe("分镜变换目标构造", () => {
   it("拆分保持总时长、固定资产，并把对白只分配到一个目标", () => {
     const source = version({
@@ -103,14 +131,33 @@ describe("分镜变换目标构造", () => {
       duration: 4_000,
       purpose: "主角进入车站",
     });
+    const firstReference = narrativeReference(
+      "019fb6c0-a000-7000-8000-000000000030",
+      firstUnitId,
+      source.shot_id,
+      source.id,
+      "visual",
+    );
+    const secondReference = narrativeReference(
+      "019fb6c0-a000-7000-8000-000000000031",
+      secondUnitId,
+      source.shot_id,
+      source.id,
+      "audio",
+    );
 
-    const targets = buildSplitTargets(source, {
-      firstTitle: "主角进入",
-      secondTitle: "车站空镜",
-      firstDurationMs: 2_200,
-      firstActionCount: 1,
-      firstDialogueCount: 1,
-    });
+    const targets = buildSplitTargets(
+      source,
+      [firstReference, secondReference],
+      {
+        firstTitle: "主角进入",
+        secondTitle: "车站空镜",
+        firstDurationMs: 2_200,
+        firstActionCount: 1,
+        firstDialogueCount: 1,
+        firstNarrativeReferenceIds: [firstReference.id],
+      },
+    );
 
     expect(targets.map((target) => target.spec.duration_ms)).toEqual([
       2_200,
@@ -123,6 +170,12 @@ describe("分镜变换目标构造", () => {
     expect(targets[1].spec.dialogue_or_narration).toEqual([]);
     expect(targets[0].asset_references).toEqual([locationReference]);
     expect(targets[1].asset_references).toEqual([locationReference]);
+    expect(targets[0].narrative_references).toEqual([
+      expect.objectContaining({ unit_version_id: firstUnitId }),
+    ]);
+    expect(targets[1].narrative_references).toEqual([
+      expect.objectContaining({ unit_version_id: secondUnitId }),
+    ]);
   });
 
   it("同场次合并连续动作与对白，并保持总时长", () => {
@@ -141,10 +194,30 @@ describe("分镜变换目标构造", () => {
       purpose: "灯箱突然闪烁",
     });
 
-    const target = buildMergeTarget(first, second, {
-      baseVersionId: first.id,
-      title: "进入车站并发现灯箱",
-    });
+    const target = buildMergeTarget(
+      first,
+      second,
+      [
+        narrativeReference(
+          "019fb6c0-a000-7000-8000-000000000032",
+          firstUnitId,
+          first.shot_id,
+          first.id,
+          "visual",
+        ),
+        narrativeReference(
+          "019fb6c0-a000-7000-8000-000000000033",
+          secondUnitId,
+          second.shot_id,
+          second.id,
+          "audio",
+        ),
+      ],
+      {
+        baseVersionId: first.id,
+        title: "进入车站并发现灯箱",
+      },
+    );
 
     expect(target.title).toBe("进入车站并发现灯箱");
     expect(target.spec.duration_ms).toBe(7_000);
@@ -156,6 +229,10 @@ describe("分镜变换目标构造", () => {
       secondDialogueId,
     ]);
     expect(target.spec.dialogue_or_narration).toHaveLength(2);
+    expect(target.narrative_references.map((item) => item.unit_version_id)).toEqual([
+      firstUnitId,
+      secondUnitId,
+    ]);
   });
 
   it("跨场次不能通过选择基础规格绕过内容守恒", () => {
@@ -175,7 +252,7 @@ describe("分镜变换目标构造", () => {
     });
 
     expect(() =>
-      buildMergeTarget(first, second, {
+      buildMergeTarget(first, second, [], {
         baseVersionId: second.id,
         title: "穿过隧道",
       }),

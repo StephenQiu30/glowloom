@@ -13,22 +13,30 @@ from uuid import UUID
 
 import httpx
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
+from app.core.auth import create_access_token
+from app.core.config import Settings
 from app.modules.assets.models import AssetVersion
+from app.modules.identity.models import Membership, UserAccount, Workspace
 from app.modules.projects.models import Episode
 from app.modules.scripts.models import Dialogue, Scene, ScriptSource, ScriptVersion
+from app.modules.scripts.narratives.service import ensure_structure_for_version
+from app.modules.storyboards.coverage.models import ShotNarrativeReference
+from app.modules.storyboards.coverage.rules import required_channel
 from app.modules.storyboards.hashing import storyboard_content_hashes
 from app.modules.storyboards.models import AssetReference, Shot, ShotSpecVersion
 from app.modules.storyboards.schemas import AssetReferenceRequest, ShotSpec
-from tests.support.identity_builders import register_identity_response
 from tests.support.media_builders import seed_ready_media_version
 from tests.support.project_builders import project_payload
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PERFORMANCE_ENABLED = os.environ.get("RUN_STORYBOARD_PERFORMANCE") == "1"
+PERFORMANCE_JWT_SECRET = "storyboard-performance-secret-at-least-32-bytes"
+PERFORMANCE_EMAIL_SECRET = "storyboard-performance-email-secret-at-least-32-bytes"
 
 
 def _data(response: httpx.Response, *, expected_status: int) -> dict[str, Any]:
@@ -42,16 +50,45 @@ async def _seed_confirmed_episode(
     *,
     shot_count: int,
 ) -> tuple[dict[str, str], dict[str, UUID]]:
-    identity = _data(
-        await register_identity_response(
-            client,
-            email=f"storyboard-profile-{shot_count}@example.com",
-        ),
-        expected_status=201,
+    actor_id = uuid7()
+    workspace_id = uuid7()
+    async with session_factory() as session, session.begin():
+        session.add(
+            UserAccount(
+                id=actor_id,
+                email_normalized=f"storyboard-profile-{shot_count}@example.com",
+                password_hash="performance-test-account-has-no-login-secret",
+                token_version=1,
+                display_name=f"性能测试用户 {shot_count}",
+                status="active",
+            )
+        )
+        session.add(
+            Workspace(
+                id=workspace_id,
+                name=f"分镜性能空间 {shot_count}",
+                status="active",
+                revision=1,
+            )
+        )
+        await session.flush()
+        session.add(
+            Membership(
+                id=uuid7(),
+                workspace_id=workspace_id,
+                user_id=actor_id,
+                role="owner",
+                status="active",
+            )
+        )
+    token_settings = Settings(
+        environment="test",
+        jwt_secret_key=SecretStr(PERFORMANCE_JWT_SECRET),
+        email_verification_hmac_secret=SecretStr(PERFORMANCE_EMAIL_SECRET),
     )
-    headers = {"authorization": f"Bearer {identity['access_token']}"}
-    workspace_id = UUID(identity["workspace"]["id"])
-    actor_id = UUID(identity["user"]["id"])
+    headers = {
+        "authorization": f"Bearer {create_access_token(actor_id, 1, token_settings)}"
+    }
     project = _data(
         await client.post(
             "/api/v1/projects",
@@ -145,6 +182,13 @@ async def _seed_confirmed_episode(
         assert persisted_episode is not None
         persisted_episode.current_script_version_id = script_version_id
         persisted_episode.revision += 1
+
+    async with session_factory() as session, session.begin():
+        await ensure_structure_for_version(
+            session,
+            script_version_id,
+            actor_id=actor_id,
+        )
 
     return headers, {
         "workspace_id": workspace_id,
@@ -304,8 +348,10 @@ async def _seed_shots(
     *,
     refs: dict[str, UUID],
     asset_version_ids: dict[str, UUID],
+    narrative_units: list[dict[str, Any]],
     shot_count: int,
 ) -> None:
+    assert narrative_units
     spec = ShotSpec.model_validate(
         {
             "schema_version": 1,
@@ -401,6 +447,7 @@ async def _seed_shots(
         shots: list[Shot] = []
         versions: list[ShotSpecVersion] = []
         references: list[AssetReference] = []
+        narrative_references: list[ShotNarrativeReference] = []
         for position in range(1, shot_count + 1):
             shot_id = uuid7()
             spec_version_id = uuid7()
@@ -451,11 +498,34 @@ async def _seed_shots(
                 )
                 for request in reference_requests
             )
+            linked_units = narrative_units if position == 1 else narrative_units[:1]
+            narrative_references.extend(
+                ShotNarrativeReference(
+                    id=uuid7(),
+                    workspace_id=refs["workspace_id"],
+                    episode_id=refs["episode_id"],
+                    shot_id=shot_id,
+                    shot_spec_version_id=spec_version_id,
+                    narrative_unit_id=UUID(unit["unit_id"]),
+                    unit_version_id=UUID(unit["id"]),
+                    channel=required_channel(str(unit["kind"])),
+                    role="primary" if position == 1 else "supporting",
+                    coverage_mode="full",
+                    segment_start=None,
+                    segment_end=None,
+                    segment_key="full",
+                    contribution="required" if position == 1 else "supporting",
+                    origin="human",
+                    created_by=refs["actor_id"],
+                )
+                for unit in linked_units
+            )
         session.add_all(shots)
         await session.flush()
         session.add_all(versions)
         await session.flush()
         session.add_all(references)
+        session.add_all(narrative_references)
 
 
 async def _build_profile_episode(
@@ -468,6 +538,13 @@ async def _build_profile_episode(
         client,
         session_factory,
         shot_count=shot_count,
+    )
+    narrative_structure = _data(
+        await client.get(
+            f"/api/v1/script-versions/{refs['script_version_id']}/narrative-structure",
+            headers=headers,
+        ),
+        expected_status=200,
     )
     asset_version_ids = {
         "location": await _seed_ready_asset_version(
@@ -515,6 +592,7 @@ async def _build_profile_episode(
         session_factory,
         refs=refs,
         asset_version_ids=asset_version_ids,
+        narrative_units=cast(list[dict[str, Any]], narrative_structure["units"]),
         shot_count=shot_count,
     )
     return headers, str(refs["episode_id"])
@@ -650,7 +728,8 @@ async def test_fixed_storyboard_performance_profile(
         "LANG": os.environ.get("LANG", "en_US.UTF-8"),
         "ENVIRONMENT": "production",
         "DATABASE_URL": database_url,
-        "JWT_SECRET_KEY": "storyboard-performance-secret-at-least-32-bytes",
+        "JWT_SECRET_KEY": PERFORMANCE_JWT_SECRET,
+        "EMAIL_VERIFICATION_HMAC_SECRET": PERFORMANCE_EMAIL_SECRET,
         "DEEPSEEK_API_KEY": "",
         "LOG_LEVEL": "INFO",
     }
@@ -717,12 +796,13 @@ async def test_fixed_storyboard_performance_profile(
                     headers=headers_120,
                 )
         finally:
-            process.terminate()
-            try:
-                await asyncio.wait_for(process.wait(), timeout=10)
-            except TimeoutError:
-                process.kill()
-                await asyncio.wait_for(process.wait(), timeout=10)
+            if process.returncode is None:
+                process.terminate()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=10)
+                except TimeoutError:
+                    process.kill()
+                    await asyncio.wait_for(process.wait(), timeout=10)
         server_log.seek(0)
         durations = _server_durations(server_log.read())
 

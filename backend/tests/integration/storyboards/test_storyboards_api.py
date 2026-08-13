@@ -823,6 +823,7 @@ async def test_storyboard_facts_are_itemized_in_episode_and_project_delete_guard
             "expected_current_spec_version_id": None,
             "spec": shot_spec_payload(refs, purpose="固定第一版制作规格"),
             "asset_references": [],
+            "narrative_references": [],
         },
     )
     assert first_spec.status_code == 201
@@ -833,6 +834,7 @@ async def test_storyboard_facts_are_itemized_in_episode_and_project_delete_guard
             "expected_current_spec_version_id": first_spec.json()["data"]["version"]["id"],
             "spec": shot_spec_payload(refs, purpose="保留不可变历史规格"),
             "asset_references": [],
+            "narrative_references": [],
         },
     )
     assert second_spec.status_code == 201
@@ -969,6 +971,7 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
             "expected_current_spec_version_id": None,
             "spec": shot_spec_payload(refs, purpose="交代主角停下观察"),
             "asset_references": [],
+            "narrative_references": [],
         },
     )
     assert first_response.status_code == 201
@@ -984,6 +987,7 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
             "expected_current_spec_version_id": None,
             "spec": shot_spec_payload(refs, purpose="不能覆盖并发版本"),
             "asset_references": [],
+            "narrative_references": [],
         },
     )
     assert conflict.status_code == 409
@@ -997,6 +1001,7 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
             "expected_current_spec_version_id": first["version"]["id"],
             "spec": shot_spec_payload(refs, purpose="强化主角的警觉反应"),
             "asset_references": [],
+            "narrative_references": [],
         },
     )
     assert second_response.status_code == 201
@@ -1044,6 +1049,7 @@ async def test_shot_spec_versions_are_immutable_and_compare_current_pointer(
             "expected_current_spec_version_id": first["version"]["id"],
             "spec": invalid_dialogue,
             "asset_references": [],
+            "narrative_references": [],
         },
     )
     assert rejected.status_code == 422
@@ -1224,6 +1230,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
             "expected_current_spec_version_id": None,
             "spec": source_payload,
             "asset_references": [],
+            "narrative_references": [],
         },
     )
     assert saved.status_code == 201
@@ -1476,8 +1483,9 @@ async def test_merge_preflight_rejects_action_capacity_before_writing(
             headers=headers,
             json={
                 "expected_current_spec_version_id": None,
-                "spec": spec,
-                "asset_references": [],
+                    "spec": spec,
+                    "asset_references": [],
+                    "narrative_references": [],
             },
         )
         assert saved.status_code == 201
@@ -1559,6 +1567,7 @@ async def test_readiness_is_deterministic_and_reacts_to_rights_without_mutating_
                     "subject_key": None,
                 }
             ],
+            "narrative_references": [],
         },
     )
     assert saved_response.status_code == 201
@@ -1779,6 +1788,7 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
                         "subject_key": None,
                     }
                 ],
+                "narrative_references": [],
             },
         )
         assert saved.status_code == 201
@@ -1829,6 +1839,7 @@ async def test_asset_usage_and_upgrade_are_append_only_and_all_or_nothing(
                     "subject_key": None,
                 }
             ],
+            "narrative_references": [],
         },
     )
     assert concurrent_change.status_code == 201
@@ -1984,6 +1995,7 @@ async def test_production_snapshot_is_stable_scoped_and_provider_agnostic(
                     "subject_key": None,
                 }
             ],
+            "narrative_references": [],
         },
     )
     assert saved.status_code == 201

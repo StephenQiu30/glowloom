@@ -82,6 +82,45 @@ export async function listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet(
   );
 }
 
+/** Get Coverage GET /api/v1/episodes/${param0}/coverage */
+export async function getCoverageApiV1EpisodesEpisodeIdCoverageGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getCoverageApiV1EpisodesEpisodeIdCoverageGetParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseCoverageReportResponse_>(
+    `/api/v1/episodes/${param0}/coverage`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Decide Coverage POST /api/v1/episodes/${param0}/coverage-decisions */
+export async function decideCoverageApiV1EpisodesEpisodeIdCoverageDecisionsPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.decideCoverageApiV1EpisodesEpisodeIdCoverageDecisionsPostParams,
+  body: API.CoverageDecisionRequest,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseCoverageDecisionApplyResponse_>(
+    `/api/v1/episodes/${param0}/coverage-decisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** Get Episode Readiness GET /api/v1/episodes/${param0}/shot-readiness */
 export async function getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -346,6 +385,28 @@ export async function shotDeletePreflightApiV1ShotsShotIdDeletePreflightGet(
     {
       method: "GET",
       params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Replace References POST /api/v1/shots/${param0}/narrative-references */
+export async function replaceReferencesApiV1ShotsShotIdNarrativeReferencesPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.replaceReferencesApiV1ShotsShotIdNarrativeReferencesPostParams,
+  body: API.NarrativeReferenceReplaceRequest,
+  options?: RequestOptions
+) {
+  const { shot_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseNarrativeReferenceReplaceResponse_>(
+    `/api/v1/shots/${param0}/narrative-references`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
       ...(options || {}),
     }
   );

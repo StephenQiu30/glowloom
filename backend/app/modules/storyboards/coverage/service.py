@@ -23,6 +23,7 @@ from app.modules.storyboards.coverage.models import (
     CoverageDecision,
     ShotNarrativeReference,
 )
+from app.modules.storyboards.coverage.rules import required_channel
 from app.modules.storyboards.coverage.schemas import (
     CoverageDecisionApplyResponse,
     CoverageDecisionRequest,
@@ -94,10 +95,6 @@ def _decision_response(value: CoverageDecision) -> CoverageDecisionResponse:
         actor_id=value.actor_id,
         created_at=value.created_at,
     )
-
-
-def _required_channel(kind: str) -> Literal["visual", "audio"]:
-    return "audio" if kind in {"dialogue", "narration"} else "visual"
 
 
 def _segment_key(value: NarrativeReferenceInput) -> str:
@@ -292,12 +289,12 @@ def _evaluate_report(
 
     unit_items: list[UnitCoverageResponse] = []
     for unit in narrative.units:
-        required_channel = _required_channel(unit.kind)
+        unit_required_channel = required_channel(unit.kind)
         required_references = [
             reference
             for reference in refs_by_unit[unit.unit_version_id]
             if reference.contribution == "required"
-            and _channel_matches(reference.channel, required_channel)
+            and _channel_matches(reference.channel, unit_required_channel)
         ]
         covered = _intervals_cover(len(unit.exact_text), required_references)
         decision = latest.get(("unit", unit.narrative_unit_id))
@@ -321,7 +318,7 @@ def _evaluate_report(
                 kind=unit.kind,
                 exact_text=unit.exact_text,
                 required_for_coverage=unit.required_for_coverage,
-                required_channel=required_channel,
+                required_channel=unit_required_channel,
                 status=unit_status,
                 shot_ids=sorted(
                     {reference.shot_id for reference in refs_by_unit[unit.unit_version_id]},
@@ -469,12 +466,14 @@ async def resolve_report(
     return await _report_for_context(session, episode)
 
 
-def _validate_references(
-    request: NarrativeReferenceReplaceRequest,
+def validate_reference_inputs(
+    references: list[NarrativeReferenceInput],
     report: CoverageReportResponse,
+    *,
+    shot_id: UUID,
 ) -> dict[UUID, UnitCoverageResponse]:
     units = {unit.unit_version_id: unit for unit in report.units}
-    for reference in request.references:
+    for reference in references:
         unit = units.get(reference.unit_version_id)
         if unit is None:
             raise ApiError(
@@ -494,15 +493,6 @@ def _validate_references(
                 status_code=422,
                 details={"reason": "segment_out_of_range"},
             )
-    return units
-
-
-def _validate_primary_uniqueness(
-    request: NarrativeReferenceReplaceRequest,
-    report: CoverageReportResponse,
-    *,
-    shot_id: UUID,
-) -> None:
     existing = {
         (
             reference.unit_version_id,
@@ -518,7 +508,7 @@ def _validate_primary_uniqueness(
     duplicate = next(
         (
             reference
-            for reference in request.references
+            for reference in references
             if reference.role == "primary"
             and (
                 reference.unit_version_id,
@@ -537,6 +527,7 @@ def _validate_primary_uniqueness(
             status_code=409,
             details={"reason": "duplicate_primary_reference"},
         )
+    return units
 
 
 async def replace_references(
@@ -600,8 +591,11 @@ async def replace_references(
                 status_code=503,
                 next_action="retry_coverage",
             )
-        units = _validate_references(request, report)
-        _validate_primary_uniqueness(request, report, shot_id=shot.id)
+        units = validate_reference_inputs(
+            request.references,
+            report,
+            shot_id=shot.id,
+        )
         previous_result = await storyboard_repository.find_spec_version(
             session,
             request.expected_current_spec_version_id,

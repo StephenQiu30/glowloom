@@ -436,6 +436,99 @@ async def test_drafts_require_complete_review_before_atomic_apply(
     items = shots.json()["data"]["items"]
     assert len(items) == 1
     assert items[0]["source_draft_shot_id"] == first["id"]
+    coverage_response = await client.get(
+        f"/api/v1/episodes/{episode['id']}/coverage",
+        headers=headers,
+    )
+    assert coverage_response.status_code == 200
+    coverage = coverage_response.json()["data"]
+    assert coverage["summary"]["linked"] == 1
+    assert coverage["summary"]["orphan"] == 0
+    assert coverage["summary"]["uncovered"] == 1
+    assert {reference["unit_version_id"] for reference in coverage["references"]} == set(
+        first["narrative_unit_version_ids"]
+    )
+    assert all(reference["origin"] == "ai" for reference in coverage["references"])
+
+    repeated_batch = await create_batch_fixture(
+        client,
+        headers=headers,
+        episode=episode,
+        version_id=script["version"]["id"],
+        key="draft-batch:apply:repeated",
+    )
+    await record_result_fixture(
+        session_factory,
+        batch_id=repeated_batch["id"],
+        structure=script["structure"],
+    )
+    repeated_response = await client.get(
+        f"/api/v1/storyboard-draft-batches/{repeated_batch['id']}",
+        headers=headers,
+    )
+    assert repeated_response.status_code == 200
+    repeated_batch = repeated_response.json()["data"]
+    repeated_first, repeated_second = repeated_batch["drafts"]
+    for draft, action in (
+        (repeated_first, "accepted"),
+        (repeated_second, "ignored"),
+    ):
+        decision_response = await client.post(
+            f"/api/v1/storyboard-drafts/{draft['id']}/decisions",
+            headers=headers,
+            json={
+                "action": action,
+                "expected_batch_revision": repeated_batch["revision"],
+                "idempotency_key": f"draft-repeat:{draft['id']}:{action}",
+            },
+        )
+        assert decision_response.status_code == 201
+        repeated_batch = decision_response.json()["data"]["batch"]
+    repeated_approve = await client.post(
+        f"/api/v1/storyboard-draft-batches/{repeated_batch['id']}/approve",
+        headers=headers,
+        json={
+            "expected_revision": repeated_batch["revision"],
+            "idempotency_key": "draft-repeat:approve",
+        },
+    )
+    assert repeated_approve.status_code == 200
+    repeated_batch = repeated_approve.json()["data"]
+    repeated_preflight = await client.post(
+        f"/api/v1/storyboard-draft-batches/{repeated_batch['id']}/apply-preflight",
+        headers=headers,
+        json={"expected_revision": repeated_batch["revision"]},
+    )
+    assert repeated_preflight.status_code == 200
+    repeated_impact = repeated_preflight.json()["data"]
+    repeated_apply = await client.post(
+        f"/api/v1/storyboard-draft-batches/{repeated_batch['id']}/apply",
+        headers=headers,
+        json={
+            "expected_revision": repeated_batch["revision"],
+            "expected_order_hash": repeated_impact["order_hash"],
+            "impact_hash": repeated_impact["impact_hash"],
+            "idempotency_key": "draft-repeat:apply",
+        },
+    )
+    assert repeated_apply.status_code == 201
+
+    repeated_coverage_response = await client.get(
+        f"/api/v1/episodes/{episode['id']}/coverage",
+        headers=headers,
+    )
+    assert repeated_coverage_response.status_code == 200
+    repeated_coverage = repeated_coverage_response.json()["data"]
+    assert repeated_coverage["summary"]["linked"] == 2
+    roles_by_unit: dict[str, set[str]] = {}
+    for reference in repeated_coverage["references"]:
+        roles_by_unit.setdefault(reference["unit_version_id"], set()).add(
+            reference["role"]
+        )
+    assert roles_by_unit == {
+        unit_version_id: {"primary", "supporting"}
+        for unit_version_id in first["narrative_unit_version_ids"]
+    }
 
 
 @pytest.mark.asyncio

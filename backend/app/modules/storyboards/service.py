@@ -59,6 +59,7 @@ from app.modules.storyboards.coverage.service import (
 from app.modules.storyboards.coverage.service import (
     unavailable_report as unavailable_coverage_report,
 )
+from app.modules.storyboards.coverage.service import validate_reference_inputs
 from app.modules.storyboards.hashing import (
     canonical_payload_hash,
     shot_order_hash,
@@ -865,7 +866,10 @@ async def _store_narrative_references(
     inputs: list[NarrativeReferenceInput],
     actor_id: UUID,
     now: datetime,
+    origin: Literal["ai", "human", "migrated"] = "human",
 ) -> list[ShotNarrativeReference]:
+    if not inputs:
+        return []
     episode = await resolve_episode_content_context(
         session,
         shot.workspace_id,
@@ -921,7 +925,7 @@ async def _store_narrative_references(
                 else f"{value.segment_start}:{value.segment_end}"
             ),
             contribution=value.contribution,
-            origin="human",
+            origin=origin,
             created_by=actor_id,
             created_at=now,
         )
@@ -1112,6 +1116,19 @@ async def append_spec_version(
             project_id=episode.project_id,
             references=request.asset_references,
         )
+        coverage_report = await resolve_coverage_report(session, episode)
+        if request.narrative_references and coverage_report.status == "unavailable":
+            raise ApiError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE,
+                "Coverage dependencies are unavailable",
+                status_code=503,
+                next_action="retry_coverage",
+            )
+        validate_reference_inputs(
+            request.narrative_references,
+            coverage_report,
+            shot_id=shot.id,
+        )
         hashes = storyboard_content_hashes(request.spec, request.asset_references)
         previous_version_id = shot.current_spec_version_id
         now = datetime.now(UTC)
@@ -1145,6 +1162,14 @@ async def append_spec_version(
             for reference in request.asset_references
         ]
         session.add_all(references)
+        await _store_narrative_references(
+            session,
+            shot=shot,
+            version=version,
+            inputs=request.narrative_references,
+            actor_id=claims.sub,
+            now=now,
+        )
         shot.current_spec_version_id = version.id
         shot.revision += 1
         _append_spec_version_audit(
@@ -2932,6 +2957,13 @@ async def apply_asset_upgrade(
             session,
             [shot.id for shot, _version in rows],
         )
+        source_narrative_references = await coverage_repository.list_references(
+            session,
+            [version.id for _shot, version in rows],
+        )
+        narrative_by_version: dict[UUID, list[ShotNarrativeReference]] = defaultdict(list)
+        for reference in source_narrative_references:
+            narrative_by_version[reference.shot_spec_version_id].append(reference)
         now = datetime.now(UTC)
         versions: list[ShotSpecVersion] = []
         stored_references: list[list[AssetReference]] = []
@@ -3013,6 +3045,18 @@ async def apply_asset_upgrade(
                 for reference in replacement_requests
             ]
             session.add_all(references)
+            await _store_narrative_references(
+                session,
+                shot=shot,
+                version=version,
+                inputs=[
+                    _narrative_input(reference)
+                    for reference in narrative_by_version[source_version.id]
+                ],
+                actor_id=claims.sub,
+                now=now,
+                origin="migrated",
+            )
             stored_references.append(references)
             shot.current_spec_version_id = version.id
             shot.revision += 1

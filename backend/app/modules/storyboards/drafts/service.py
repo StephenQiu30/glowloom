@@ -29,6 +29,9 @@ from app.modules.storyboards.contracts import (
     StoryboardDraftInputChanged,
     StoryboardDraftUnit,
 )
+from app.modules.storyboards.coverage import repository as coverage_repository
+from app.modules.storyboards.coverage.models import ShotNarrativeReference
+from app.modules.storyboards.coverage.rules import required_channel
 from app.modules.storyboards.drafts import repository
 from app.modules.storyboards.drafts.models import (
     DraftAssetReference,
@@ -1149,6 +1152,10 @@ async def apply_batch(
             asset.asset_version_id: asset
             for asset in await repository.list_input_assets(session, batch.id)
         }
+        input_units = {
+            unit.unit_version_id: unit
+            for unit in await repository.list_input_units(session, batch.id)
+        }
         units_by_draft: dict[UUID, list[UUID]] = {}
         for relation in relations:
             units_by_draft.setdefault(relation.draft_shot_id, []).append(relation.unit_version_id)
@@ -1160,6 +1167,14 @@ async def apply_batch(
             batch.episode_id,
             for_update=True,
         )
+        current_references = await coverage_repository.list_references(
+            session,
+            [
+                shot.current_spec_version_id
+                for shot in current_shots
+                if shot.current_spec_version_id is not None
+            ],
+        )
         accepted = [draft for draft in drafts if decisions[draft.id].action != "ignored"]
         if len(current_shots) + len(accepted) > MAX_ACTIVE_SHOTS:
             raise ApiError(
@@ -1169,6 +1184,16 @@ async def apply_batch(
             )
 
         created_ids: list[UUID] = []
+        primary_edges = {
+            (
+                reference.unit_version_id,
+                reference.channel,
+                reference.segment_start,
+                reference.segment_end,
+            )
+            for reference in current_references
+            if reference.role == "primary"
+        }
         now = datetime.now(UTC)
         for offset, draft in enumerate(accepted, start=1):
             decision = decisions[draft.id]
@@ -1245,6 +1270,33 @@ async def apply_batch(
                         created_at=now,
                     )
                 )
+            for unit_version_id in target.narrative_unit_version_ids:
+                unit = input_units[unit_version_id]
+                channel = required_channel(unit.kind)
+                edge = (unit_version_id, channel, None, None)
+                primary = edge not in primary_edges
+                session.add(
+                    ShotNarrativeReference(
+                        id=uuid7(),
+                        workspace_id=batch.workspace_id,
+                        episode_id=batch.episode_id,
+                        shot_id=shot.id,
+                        shot_spec_version_id=spec.id,
+                        narrative_unit_id=unit.narrative_unit_id,
+                        unit_version_id=unit.unit_version_id,
+                        channel=channel,
+                        role="primary" if primary else "supporting",
+                        coverage_mode="full",
+                        segment_start=None,
+                        segment_end=None,
+                        segment_key="full",
+                        contribution="required" if primary else "supporting",
+                        origin="human" if decision.action == "modified" else "ai",
+                        created_by=claims.sub,
+                        created_at=now,
+                    )
+                )
+                primary_edges.add(edge)
             created_ids.append(shot.id)
         batch.status = "applied"
         batch.apply_idempotency_key = request.idempotency_key

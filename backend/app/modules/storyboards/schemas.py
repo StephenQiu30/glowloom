@@ -181,6 +181,22 @@ class NarrativeReferenceInput(CommandModel):
         return self
 
 
+def _validate_narrative_reference_keys(
+    references: list[NarrativeReferenceInput],
+) -> None:
+    keys = [
+        (
+            reference.unit_version_id,
+            reference.channel,
+            reference.segment_start,
+            reference.segment_end,
+        )
+        for reference in references
+    ]
+    if len(set(keys)) != len(keys):
+        raise ValueError("narrative references must be unique within a shot")
+
+
 class AssetReferenceResponse(BaseModel):
     slot_key: str
     role: AssetRole
@@ -264,12 +280,14 @@ class ShotSpecCreateRequest(CommandModel):
     expected_current_spec_version_id: UUID | None
     spec: ShotSpec
     asset_references: list[AssetReferenceRequest] = Field(default=[], max_length=100)
+    narrative_references: list[NarrativeReferenceInput] = Field(max_length=100)
 
     @model_validator(mode="after")
     def validate_reference_keys(self) -> "ShotSpecCreateRequest":
         slot_keys = [reference.slot_key for reference in self.asset_references]
         if len(set(slot_keys)) != len(slot_keys):
             raise ValueError("asset reference slot keys must be unique")
+        _validate_narrative_reference_keys(self.narrative_references)
         return self
 
 
@@ -310,17 +328,7 @@ class TargetShotSpecRequest(CommandModel):
         keys = [reference.slot_key for reference in self.asset_references]
         if len(set(keys)) != len(keys):
             raise ValueError("asset reference slot keys must be unique")
-        narrative_keys = [
-            (
-                reference.unit_version_id,
-                reference.channel,
-                reference.segment_start,
-                reference.segment_end,
-            )
-            for reference in self.narrative_references
-        ]
-        if len(set(narrative_keys)) != len(narrative_keys):
-            raise ValueError("narrative references must be unique within a shot")
+        _validate_narrative_reference_keys(self.narrative_references)
         return self
 
 

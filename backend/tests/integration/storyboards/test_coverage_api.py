@@ -38,6 +38,7 @@ async def _shot_with_spec(
             "expected_current_spec_version_id": None,
             "spec": spec,
             "asset_references": [],
+            "narrative_references": [],
         },
     )
     assert appended.status_code == 201
@@ -54,6 +55,87 @@ def _full_reference(unit: dict[str, Any], *, role: str = "primary") -> dict[str,
         "segment_end": None,
         "contribution": "required",
     }
+
+
+@pytest.mark.asyncio
+async def test_manual_spec_append_requires_and_persists_narrative_references(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await create_episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="coverage-spec-append@example.com",
+    )
+    shot, spec = await _shot_with_spec(
+        client,
+        headers=headers,
+        episode=episode,
+        refs=refs,
+        key="coverage-spec-append-001",
+    )
+    report = (
+        await client.get(
+            f"/api/v1/episodes/{episode['id']}/coverage",
+            headers=headers,
+        )
+    ).json()["data"]
+    references = [_full_reference(unit) for unit in report["units"]]
+    mapped = await _replace_references(
+        client,
+        headers=headers,
+        shot=shot,
+        spec=spec,
+        report=report,
+        references=references,
+    )
+    assert mapped.status_code == 201, mapped.text
+    mapped_data = mapped.json()["data"]
+
+    missing_references = await client.post(
+        f"/api/v1/shots/{shot['id']}/spec-versions",
+        headers=headers,
+        json={
+            "expected_current_spec_version_id": mapped_data[
+                "current_spec_version_id"
+            ],
+            "spec": spec["spec"],
+            "asset_references": [],
+        },
+    )
+    assert missing_references.status_code == 422
+
+    appended = await client.post(
+        f"/api/v1/shots/{shot['id']}/spec-versions",
+        headers=headers,
+        json={
+            "expected_current_spec_version_id": mapped_data[
+                "current_spec_version_id"
+            ],
+            "spec": spec["spec"],
+            "asset_references": [],
+            "narrative_references": references,
+        },
+    )
+    assert appended.status_code == 201, appended.text
+    current_spec_id = appended.json()["data"]["version"]["id"]
+    updated_report = (
+        await client.get(
+            f"/api/v1/episodes/{episode['id']}/coverage",
+            headers=headers,
+        )
+    ).json()["data"]
+    current_references = [
+        reference
+        for reference in updated_report["references"]
+        if reference["shot_spec_version_id"] == current_spec_id
+    ]
+    assert len(current_references) == len(references)
+    assert {reference["unit_version_id"] for reference in current_references} == {
+        reference["unit_version_id"] for reference in references
+    }
+    assert updated_report["summary"]["uncovered"] == 0
+    assert updated_report["summary"]["orphan"] == 0
 
 
 def _split_spec(
@@ -362,6 +444,7 @@ async def test_omission_and_invented_approvals_are_append_only_and_become_stale(
             "expected_current_spec_version_id": invented_spec["id"],
             "spec": changed_invented_spec,
             "asset_references": [],
+            "narrative_references": [],
         },
     )
     assert changed_invented.status_code == 201
@@ -494,6 +577,7 @@ async def test_split_rejects_narrative_loss_then_preserves_the_exact_partition(
             "expected_current_spec_version_id": None,
             "spec": source_payload,
             "asset_references": [],
+            "narrative_references": [],
         },
     )
     assert saved.status_code == 201

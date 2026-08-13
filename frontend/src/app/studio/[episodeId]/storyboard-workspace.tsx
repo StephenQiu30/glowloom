@@ -51,6 +51,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/class-names";
 
 import { toAssetReferenceRequest } from "./asset-reference";
+import { toNarrativeReferenceInput } from "./narrative-reference";
 import {
   DeleteShotDialog,
   type MergePreparation,
@@ -64,6 +65,7 @@ type StoryboardWorkspaceProps = {
   assetBible?: API.AssetBibleResponse;
   busy: boolean;
   confirmedShotCandidates: API.ExtractionCandidateResponse[];
+  coverage?: API.CoverageReportResponse;
   order: API.ShotOrderResponse;
   readiness?: API.ShotReadinessBatchResponse;
   selectedShotId: string | null;
@@ -171,6 +173,10 @@ const readinessIssueLabels: Record<API.ShotReadinessIssue["code"], string> = {
   MEDIA_REFERENCE_UNAVAILABLE: "资产所需的媒体版本不可用",
   RIGHTS_BLOCKED: "资产授权尚未满足本次生产用途",
   DEPENDENCY_UNAVAILABLE: "生产依赖暂时不可用",
+  NARRATIVE_REFERENCE_INVALID: "叙事来源关系或审批已过期",
+  COVERAGE_UNACCOUNTED: "仍有必拍剧本单元未覆盖",
+  SHOT_SOURCE_ORPHAN: "镜头没有叙事来源或原创审批",
+  COVERAGE_DEPENDENCY_UNAVAILABLE: "剧本覆盖依赖暂时不可用",
 };
 
 const readinessWarningLabels: Record<API.ShotReadinessWarning["code"], string> = {
@@ -467,6 +473,7 @@ function ShotSpecEditor({
   assetBible,
   busy,
   currentVersion,
+  narrativeReferences,
   readiness,
   shot,
   structure,
@@ -475,6 +482,7 @@ function ShotSpecEditor({
   assetBible?: API.AssetBibleResponse;
   busy: boolean;
   currentVersion?: API.ShotSpecVersionResponse;
+  narrativeReferences: API.NarrativeReferenceResponse[];
   readiness?: API.ShotReadinessResponse;
   shot: API.ShotResponse;
   structure?: API.ConfirmedStructureResponse;
@@ -733,6 +741,7 @@ function ShotSpecEditor({
         },
       },
       asset_references: references,
+      narrative_references: narrativeReferences.map(toNarrativeReferenceInput),
     });
   }
 
@@ -1244,6 +1253,7 @@ export function StoryboardWorkspace({
   assetBible,
   busy,
   confirmedShotCandidates,
+  coverage,
   order,
   readiness,
   selectedShotId,
@@ -1280,8 +1290,17 @@ export function StoryboardWorkspace({
     ? readinessByShot.get(selectedShot.id)
     : undefined;
   const transformSource: ShotTransformSource | undefined =
-    selectedShot && currentVersion
-      ? { shot: selectedShot, version: currentVersion }
+    selectedShot && currentVersion && coverage
+      ? {
+          shot: selectedShot,
+          version: currentVersion,
+          narrativeReferences:
+            coverage?.references.filter(
+              (reference) =>
+                reference.shot_spec_version_id === currentVersion.id,
+            ) ?? [],
+          narrativeUnits: coverage?.units ?? [],
+        }
       : undefined;
   const mergeCandidates = selectedShot
     ? order.items.filter(
@@ -1612,6 +1631,7 @@ export function StoryboardWorkspace({
                 busy={busy}
                 currentVersion={currentVersion}
                 key={`${selectedShot.id}:${currentVersion?.id ?? "draft"}`}
+                narrativeReferences={transformSource?.narrativeReferences ?? []}
                 readiness={selectedReadiness}
                 shot={selectedShot}
                 structure={structure}

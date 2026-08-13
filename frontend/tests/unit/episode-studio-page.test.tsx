@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   deleteDraftVersion: vi.fn(),
   diffVersions: vi.fn(),
   getConfirmedStructure: vi.fn(),
+  getCoverage: vi.fn(),
   getNarrativeStructure: vi.fn(),
   getBatch: vi.fn(),
   getAssetBible: vi.fn(),
@@ -96,6 +97,7 @@ vi.mock("@/api/storyboards", async () => ({
   )),
   createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPost:
     apiMocks.createShotFromCandidate,
+  getCoverageApiV1EpisodesEpisodeIdCoverageGet: apiMocks.getCoverage,
   getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet:
     apiMocks.listShotReadiness,
   listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet:
@@ -936,6 +938,56 @@ describe("单集统一生产工作台", () => {
         summary: { total: 1, ready: 0, blocked: 1, unavailable: 0 },
         items: [],
         evaluation_hash: "b".repeat(64),
+      },
+    });
+    apiMocks.getCoverage.mockResolvedValue({
+      data: {
+        episode_id: episodeId,
+        status: "blocked",
+        ready: false,
+        basis_hash: "c".repeat(64),
+        evaluation_hash: "d".repeat(64),
+        summary: {
+          required_total: 1,
+          covered: 0,
+          approved_omitted: 0,
+          uncovered: 1,
+          shots_total: 1,
+          linked: 0,
+          approved_invented: 0,
+          orphan: 1,
+          stale: 0,
+        },
+        units: [
+          {
+            narrative_unit_id: narrativeStructure.units[0].unit_id,
+            unit_version_id: narrativeStructure.units[0].id,
+            position: 1,
+            kind: "action",
+            exact_text: narrativeStructure.units[0].exact_text,
+            required_for_coverage: true,
+            required_channel: "visual",
+            status: "uncovered",
+            shot_ids: [],
+          },
+        ],
+        shots: [
+          {
+            shot_id: shotId,
+            spec_version_id: storyboardShot.current_spec_version_id,
+            position: 1,
+            title: storyboardShot.title,
+            status: "orphan",
+            unit_version_ids: [],
+          },
+        ],
+        references: [],
+        stale_reference_ids: [],
+        stale_decision_ids: [],
+        next_actions: [
+          "map_or_omit_narrative_units",
+          "map_or_approve_invented_shots",
+        ],
       },
     });
     apiMocks.updateShot.mockResolvedValue({

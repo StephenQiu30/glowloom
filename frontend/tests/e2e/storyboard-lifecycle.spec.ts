@@ -275,7 +275,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
     .fill("深夜旧车站月台，雨水沿顶棚滴落");
   await page.getByLabel("情绪与光线").fill("冷蓝环境光与暖色灯箱形成反差");
   await page.getByLabel("动作节拍").fill("林澈停下脚步\n抬头寻找声音来源");
-  await page.getByRole("button", { name: /林澈.*有人吗/ }).click();
+  await page.getByRole("button", { name: "林澈 有人吗？", exact: true }).click();
   const fixedAssets = page.getByRole("region", { name: "固定资产版本" });
   await fixedAssets
     .getByRole("button", {
@@ -313,6 +313,17 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await page.getByLabel("尾帧意图").fill("角色停在灯箱下方并回头");
   await page.getByRole("button", { name: "保存为新版本" }).click();
   await expect(page.getByRole("status")).toContainText("镜头规格 v1 已保存");
+  await page.getByRole("button", { name: "编辑来源映射" }).click();
+  await page
+    .getByLabel("映射叙事单元 动作：雨夜车站")
+    .click();
+  await page
+    .getByLabel("映射叙事单元 台词：林澈：有人吗？")
+    .click();
+  await page.getByRole("button", { name: "保存来源映射" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "镜头“车站警觉”的叙事来源已保存为新规格版本",
+  );
 
   await page.goto("/studio");
   await page.getByRole("tab", { name: locationFixture.tabName }).click();
@@ -334,7 +345,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await expect(page.getByRole("status")).toContainText(
     "已为 1 个镜头创建新的规格版本",
   );
-  await expect(page.getByText("本页历史引用 1")).toBeVisible();
+  await expect(page.getByText("本页历史引用 2")).toBeVisible();
   await expect(page.getByText("本页当前引用 0")).toBeVisible();
   await page.getByLabel("检查引用的资产版本").selectOption({
     label: "v2（资产当前版本）",
@@ -342,24 +353,35 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await expect(page.getByText("本页当前引用 1")).toBeVisible();
 
   await page.goto(`/studio/${episodeId}/storyboard`);
-  await expect(page.getByRole("button", { name: "v2 · 当前" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "v3 · 当前" })).toBeDisabled();
   await expect(page.getByText("当前规格可进入生产预检")).toBeVisible();
   await page.getByRole("button", { name: "v1 · 设为当前" }).click();
   await expect(page.getByRole("status")).toContainText("已切换到规格 v1");
   await page.getByLabel("镜头目的").fill("强化角色听见异响后的停顿与回望");
   await page.getByRole("button", { name: "保存为新版本" }).click();
-  await expect(page.getByRole("status")).toContainText("镜头规格 v3 已保存");
-  await page.getByRole("button", { name: "v2 · 设为当前" }).click();
-  await expect(page.getByRole("status")).toContainText("已切换到规格 v2");
+  await expect(page.getByRole("status")).toContainText("镜头规格 v4 已保存");
+  await page.getByRole("button", { name: "v3 · 设为当前" }).click();
+  await expect(page.getByRole("status")).toContainText("已切换到规格 v3");
 
   await page.getByRole("button", { name: "复制镜头" }).click();
   await expect(page.getByRole("status")).toContainText(
     "镜头“车站警觉”已复制",
   );
   await expect(page.getByText("2 个镜头", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: /林澈.*有人吗/ }).click();
+  await page.getByRole("button", { name: "林澈 有人吗？", exact: true }).click();
   await page.getByRole("button", { name: "保存为新版本" }).click();
   await expect(page.getByRole("status")).toContainText("镜头规格 v2 已保存");
+  await page.getByRole("button", { name: "编辑来源映射" }).click();
+  await page
+    .getByLabel("映射叙事单元 动作：雨夜车站")
+    .click();
+  await page
+    .getByLabel("映射叙事单元 台词：林澈：有人吗？")
+    .click();
+  await page.getByRole("button", { name: "保存来源映射" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "镜头“车站警觉 · 副本”的叙事来源已保存为新规格版本",
+  );
   await page
     .getByRole("button", { name: "拖动镜头 车站警觉 · 副本" })
     .dragTo(
@@ -416,6 +438,12 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await expect(
     page.getByText("前段包含 2 个动作和 1 条对白；其余内容全部进入后段。"),
   ).toBeVisible();
+  await page
+    .getByLabel("叙事来源 雨夜车站 分配到后段")
+    .click();
+  await page
+    .getByLabel("叙事来源 林澈：有人吗？ 分配到前段")
+    .click();
   await page.getByRole("button", { name: "确认拆分" }).click();
   await expect(page.getByRole("status")).toContainText("镜头已拆分为两个目标");
   await expect(page.getByText("2 个镜头", { exact: true })).toBeVisible();
@@ -458,7 +486,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
     .click();
   await setCurrentAssetVersion(page, 1);
   await expect(page.getByText("本页当前引用 2")).toBeVisible();
-  await expect(page.getByText("本页历史引用 4")).toBeVisible();
+  await expect(page.getByText("本页历史引用 5")).toBeVisible();
   await page.getByRole("button", { name: "全选当前引用" }).click();
   await page.getByRole("button", { name: "生成升级预检" }).click();
   const finalUpgradeDialog = page.getByRole("dialog", {
@@ -534,11 +562,11 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   ).toContainText("2");
   await page.getByRole("button", { name: "检查删除 第一集 分镜" }).click();
   await expect(
-    page.getByText("单集已有 6 个分镜镜头（8 个规格版本）"),
+    page.getByText("单集已有 6 个分镜镜头（10 个规格版本）"),
   ).toBeVisible();
   await page.getByRole("button", { name: "检查项目删除条件" }).click();
   await expect(
-    page.getByText("项目关联 6 个分镜镜头（8 个规格版本）"),
+    page.getByText("项目关联 6 个分镜镜头（10 个规格版本）"),
   ).toBeVisible();
   await expect(
     page.getByText("项目已有 5 个资产（5 个版本）"),

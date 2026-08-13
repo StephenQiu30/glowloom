@@ -246,6 +246,14 @@ declare namespace API {
     data: CostQueryResponse;
   };
 
+  type ApiResponseCoverageDecisionApplyResponse_ = {
+    data: CoverageDecisionApplyResponse;
+  };
+
+  type ApiResponseCoverageReportResponse_ = {
+    data: CoverageReportResponse;
+  };
+
   type ApiResponseCurrentScriptVersionResponse_ = {
     data: CurrentScriptVersionResponse;
   };
@@ -365,6 +373,10 @@ declare namespace API {
 
   type ApiResponseNarrativeImpactResponse_ = {
     data: NarrativeImpactResponse;
+  };
+
+  type ApiResponseNarrativeReferenceReplaceResponse_ = {
+    data: NarrativeReferenceReplaceResponse;
   };
 
   type ApiResponseNarrativeRevisionResponse_ = {
@@ -1737,6 +1749,110 @@ declare namespace API {
     wearer_character_id: string | null | null;
   };
 
+  type CoverageDecisionApplyResponse = {
+    decision: CoverageDecisionResponse;
+    report: CoverageReportResponse;
+  };
+
+  type CoverageDecisionRequest = {
+    /** Action */
+    action:
+      | "approve_omission"
+      | "revoke_omission"
+      | "approve_invented"
+      | "revoke_invented";
+    /** Unit Version Id */
+    unit_version_id: string | null;
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string | null;
+    /** Reason */
+    reason: string;
+    /** Evidence */
+    evidence: string | null | null;
+    /** Expected Evaluation Hash */
+    expected_evaluation_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type CoverageDecisionResponse = {
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Sequence */
+    sequence: number;
+    /** Action */
+    action:
+      | "approve_omission"
+      | "revoke_omission"
+      | "approve_invented"
+      | "revoke_invented";
+    /** Unit Version Id */
+    unit_version_id: string | null;
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string | null;
+    /** Basis Hash */
+    basis_hash: string;
+    /** Reason */
+    reason: string;
+    /** Evidence */
+    evidence: string | null;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Actor Id */
+    actor_id: string;
+    /** Created At */
+    created_at: string;
+  };
+
+  type CoverageReportResponse = {
+    /** Episode Id */
+    episode_id: string;
+    /** Status */
+    status: "ready" | "blocked" | "unavailable";
+    /** Ready */
+    ready: boolean;
+    /** Basis Hash */
+    basis_hash: string;
+    /** Evaluation Hash */
+    evaluation_hash: string;
+    summary: CoverageSummaryResponse;
+    /** Units */
+    units: UnitCoverageResponse[];
+    /** Shots */
+    shots: ShotCoverageResponse[];
+    /** References */
+    references: NarrativeReferenceResponse[];
+    /** Stale Reference Ids */
+    stale_reference_ids: string[];
+    /** Stale Decision Ids */
+    stale_decision_ids: string[];
+    /** Next Actions */
+    next_actions: string[];
+  };
+
+  type CoverageSummaryResponse = {
+    /** Required Total */
+    required_total: number;
+    /** Covered */
+    covered: number;
+    /** Approved Omitted */
+    approved_omitted: number;
+    /** Uncovered */
+    uncovered: number;
+    /** Shots Total */
+    shots_total: number;
+    /** Linked */
+    linked: number;
+    /** Approved Invented */
+    approved_invented: number;
+    /** Orphan */
+    orphan: number;
+    /** Stale */
+    stale: number;
+  };
+
   type createAccessApiV1MediaVersionIdAccessPostParams = {
     version_id: string;
   };
@@ -1815,6 +1931,10 @@ declare namespace API {
     {
       state_id: string;
     };
+
+  type decideCoverageApiV1EpisodesEpisodeIdCoverageDecisionsPostParams = {
+    episode_id: string;
+  };
 
   type decideDraftApiV1StoryboardDraftsDraftIdDecisionsPostParams = {
     draft_id: string;
@@ -2774,6 +2894,10 @@ declare namespace API {
     offset: number | null;
   };
 
+  type getCoverageApiV1EpisodesEpisodeIdCoverageGetParams = {
+    episode_id: string;
+  };
+
   type getEpisodeApiV1EpisodesEpisodeIdGetParams = {
     episode_id: string;
   };
@@ -3496,6 +3620,95 @@ declare namespace API {
     created_at: string;
   };
 
+  type NarrativeReferenceInput = {
+    /** Unit Version Id */
+    unit_version_id: string;
+    /** Channel */
+    channel: "visual" | "audio" | "both";
+    /** Role */
+    role:
+      | "primary"
+      | "dialogue"
+      | "reaction"
+      | "insert"
+      | "setup"
+      | "payoff"
+      | "transition"
+      | "supporting";
+    /** Coverage Mode */
+    coverage_mode: "full" | "partial";
+    /** Segment Start */
+    segment_start: number | null | null;
+    /** Segment End */
+    segment_end: number | null | null;
+    /** Contribution */
+    contribution: "required" | "supporting";
+  };
+
+  type NarrativeReferenceReplaceRequest = {
+    /** Expected Shot Revision */
+    expected_shot_revision: number;
+    /** Expected Current Spec Version Id */
+    expected_current_spec_version_id: string;
+    /** Expected Evaluation Hash */
+    expected_evaluation_hash: string;
+    /** References */
+    references: NarrativeReferenceInput[];
+  };
+
+  type NarrativeReferenceReplaceResponse = {
+    /** Shot Id */
+    shot_id: string;
+    /** Previous Spec Version Id */
+    previous_spec_version_id: string;
+    /** Current Spec Version Id */
+    current_spec_version_id: string;
+    /** Shot Revision */
+    shot_revision: number;
+    /** References */
+    references: NarrativeReferenceResponse[];
+    report: CoverageReportResponse;
+  };
+
+  type NarrativeReferenceResponse = {
+    /** Id */
+    id: string;
+    /** Shot Id */
+    shot_id: string;
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string;
+    /** Narrative Unit Id */
+    narrative_unit_id: string;
+    /** Unit Version Id */
+    unit_version_id: string;
+    /** Channel */
+    channel: "visual" | "audio" | "both";
+    /** Role */
+    role:
+      | "primary"
+      | "dialogue"
+      | "reaction"
+      | "insert"
+      | "setup"
+      | "payoff"
+      | "transition"
+      | "supporting";
+    /** Coverage Mode */
+    coverage_mode: "full" | "partial";
+    /** Segment Start */
+    segment_start: number | null;
+    /** Segment End */
+    segment_end: number | null;
+    /** Contribution */
+    contribution: "required" | "supporting";
+    /** Origin */
+    origin: "ai" | "human" | "migrated";
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+  };
+
   type NarrativeRevisionResponse = {
     structure: NarrativeStructureResponse;
     impact: NarrativeImpactResponse;
@@ -4003,6 +4216,10 @@ declare namespace API {
     episode_id: string;
   };
 
+  type replaceReferencesApiV1ShotsShotIdNarrativeReferencesPostParams = {
+    shot_id: string;
+  };
+
   type requestMediaLocationMigrationApiV1MediaVersionIdLocationMigrationsPostParams =
     {
       version_id: string;
@@ -4495,6 +4712,21 @@ declare namespace API {
     purpose: string;
   };
 
+  type ShotCoverageResponse = {
+    /** Shot Id */
+    shot_id: string;
+    /** Spec Version Id */
+    spec_version_id: string | null;
+    /** Position */
+    position: number;
+    /** Title */
+    title: string;
+    /** Status */
+    status: "linked" | "approved_invented" | "orphan";
+    /** Unit Version Ids */
+    unit_version_ids: string[];
+  };
+
   type ShotCreateRequest = {
     /** Title */
     title: string;
@@ -4569,6 +4801,10 @@ declare namespace API {
     narrative_structure_revision: number | null;
     /** Narrative Dependency Hash */
     narrative_dependency_hash: string | null;
+    /** Coverage Basis Hash */
+    coverage_basis_hash: string | null;
+    /** Coverage Evaluation Hash */
+    coverage_evaluation_hash: string | null;
     /** Scene Id */
     scene_id: string;
     /** Dialogue Ids */
@@ -4602,7 +4838,11 @@ declare namespace API {
       | "ASSET_NOT_READY"
       | "MEDIA_REFERENCE_UNAVAILABLE"
       | "RIGHTS_BLOCKED"
-      | "DEPENDENCY_UNAVAILABLE";
+      | "DEPENDENCY_UNAVAILABLE"
+      | "NARRATIVE_REFERENCE_INVALID"
+      | "COVERAGE_UNACCOUNTED"
+      | "SHOT_SOURCE_ORPHAN"
+      | "COVERAGE_DEPENDENCY_UNAVAILABLE";
     /** Field Path */
     field_path: string | null | null;
     /** Dependency Type */
@@ -4718,6 +4958,8 @@ declare namespace API {
     spec: ShotSpec;
     /** Asset References */
     asset_references: AssetReferenceRequest[] | null;
+    /** Narrative References */
+    narrative_references: NarrativeReferenceInput[];
   };
 
   type ShotSpecCreateResponse = {
@@ -4944,6 +5186,8 @@ declare namespace API {
     spec: ShotSpec;
     /** Asset References */
     asset_references: AssetReferenceRequest[] | null;
+    /** Narrative References */
+    narrative_references: NarrativeReferenceInput[];
   };
 
   type TaskErrorResponse = {
@@ -5037,6 +5281,27 @@ declare namespace API {
 
   type triggerScheduleApiV1SchedulesScheduleIdTriggerPostParams = {
     schedule_id: string;
+  };
+
+  type UnitCoverageResponse = {
+    /** Narrative Unit Id */
+    narrative_unit_id: string;
+    /** Unit Version Id */
+    unit_version_id: string;
+    /** Position */
+    position: number;
+    /** Kind */
+    kind: "scene_heading" | "action" | "dialogue" | "narration";
+    /** Exact Text */
+    exact_text: string;
+    /** Required For Coverage */
+    required_for_coverage: boolean;
+    /** Required Channel */
+    required_channel: "visual" | "audio";
+    /** Status */
+    status: "covered" | "approved_omitted" | "uncovered";
+    /** Shot Ids */
+    shot_ids: string[];
   };
 
   type UnknownScheduleRuleResponse = {

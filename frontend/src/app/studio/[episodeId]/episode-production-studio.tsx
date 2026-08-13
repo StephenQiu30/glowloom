@@ -35,6 +35,7 @@ import {
   useCancelGenerationTaskMutation,
   useConfigureScheduleMutation,
   useCostsQuery,
+  useCoverageQuery,
   useConfirmStructureMutation,
   useConfirmedStructureQuery,
   useCopyShotMutation,
@@ -45,6 +46,7 @@ import {
   useDeleteScriptVersionMutation,
   useDeleteShotMutation,
   useDecideExtractionCandidateMutation,
+  useDecideCoverageMutation,
   useDecideStoryboardDraftMutation,
   useEpisodeQuery,
   useEpisodeSnapshotQuery,
@@ -75,6 +77,7 @@ import {
   useResumeScheduleMutation,
   useReviseNarrativeStructureMutation,
   useReorderShotsMutation,
+  useReplaceNarrativeReferencesMutation,
   useScriptSourcesQuery,
   useScriptVersionQuery,
   useScriptVersionsQuery,
@@ -110,6 +113,7 @@ import { MediaWorkspace } from "./media-workspace";
 import { ScriptWorkspace } from "./script-workspace";
 import { type MergePreparation } from "./storyboard-shot-operations";
 import { StoryboardDrafts } from "./storyboard-drafts";
+import { StoryboardCoverage } from "./storyboard-coverage";
 import { StoryboardWorkspace } from "./storyboard-workspace";
 import { TaskWorkspace } from "./task-workspace";
 
@@ -244,6 +248,10 @@ export function EpisodeProductionStudio({
     pollingInterval: 5_000,
     skip: !authenticated || !storyboardActive,
   });
+  const coverageQuery = useCoverageQuery(episodeId, {
+    pollingInterval: 5_000,
+    skip: !authenticated || !storyboardActive,
+  });
   const confirmedVersionId =
     snapshot?.script_summary.status === "confirmed"
       ? episode?.current_script_version_id
@@ -296,6 +304,7 @@ export function EpisodeProductionStudio({
     (shotOrderQuery.isLoading ||
       archivedShotsQuery.isLoading ||
       shotReadinessQuery.isLoading ||
+      coverageQuery.isLoading ||
       structureQuery.isLoading);
   const scriptLoading =
     scriptActive &&
@@ -374,6 +383,9 @@ export function EpisodeProductionStudio({
   const [shotDeletePreflight, shotDeletePreflightState] =
     useShotDeletePreflightMutation();
   const [deleteShot, deleteShotState] = useDeleteShotMutation();
+  const [replaceNarrativeReferences, narrativeReferenceState] =
+    useReplaceNarrativeReferencesMutation();
+  const [decideCoverage, coverageDecisionState] = useDecideCoverageMutation();
   const [loadShotSpecVersion, shotSpecLookupState] =
     useLazyShotSpecVersionQuery();
   const [notice, setNotice] = useState<string | null>(null);
@@ -431,6 +443,8 @@ export function EpisodeProductionStudio({
     mergeShotsState,
     shotDeletePreflightState,
     deleteShotState,
+    narrativeReferenceState,
+    coverageDecisionState,
     shotSpecLookupState,
   ].some((state) => state.isLoading);
 
@@ -1146,6 +1160,43 @@ export function EpisodeProductionStudio({
     });
   }
 
+  async function handleReplaceNarrativeReferences(
+    shot: API.ShotResponse,
+    references: API.NarrativeReferenceInput[],
+  ): Promise<boolean> {
+    const report = coverageQuery.data;
+    const currentSpecVersionId = shot.current_spec_version_id;
+    if (!report || !currentSpecVersionId) return false;
+    let succeeded = false;
+    await runAction(async () => {
+      await replaceNarrativeReferences({
+        episodeId,
+        shotId: shot.id,
+        body: {
+          expected_shot_revision: shot.revision,
+          expected_current_spec_version_id: currentSpecVersionId,
+          expected_evaluation_hash: report.evaluation_hash,
+          references,
+        },
+      }).unwrap();
+      succeeded = true;
+      return `镜头“${shot.title}”的叙事来源已保存为新规格版本。`;
+    });
+    return succeeded;
+  }
+
+  async function handleCoverageDecision(
+    request: API.CoverageDecisionRequest,
+  ): Promise<boolean> {
+    let succeeded = false;
+    await runAction(async () => {
+      await decideCoverage({ episodeId, body: request }).unwrap();
+      succeeded = true;
+      return "覆盖决议已追加保存，准备度将按固定版本重新计算。";
+    });
+    return succeeded;
+  }
+
   async function handleSplitPreflight(
     shotId: string,
     request: API.SplitPreflightRequest,
@@ -1180,7 +1231,9 @@ export function EpisodeProductionStudio({
     const order = shotOrderQuery.data;
     const sourceSpecId = source.current_spec_version_id;
     const partnerSpecId = partner.current_spec_version_id;
-    if (!order || !sourceSpecId || !partnerSpecId) return undefined;
+    if (!order || !sourceSpecId || !partnerSpecId || !coverageQuery.data) {
+      return undefined;
+    }
     const orderedShots = [source, partner].sort((left, right) =>
       left.position - right.position
     );
@@ -1203,8 +1256,26 @@ export function EpisodeProductionStudio({
       result = {
         preflight,
         sources: [
-          { shot: orderedShots[0], version: firstVersion },
-          { shot: orderedShots[1], version: secondVersion },
+          {
+            shot: orderedShots[0],
+            version: firstVersion,
+            narrativeReferences:
+              coverageQuery.data?.references.filter(
+                (reference) =>
+                  reference.shot_spec_version_id === firstVersion.id,
+              ) ?? [],
+            narrativeUnits: coverageQuery.data?.units ?? [],
+          },
+          {
+            shot: orderedShots[1],
+            version: secondVersion,
+            narrativeReferences:
+              coverageQuery.data?.references.filter(
+                (reference) =>
+                  reference.shot_spec_version_id === secondVersion.id,
+              ) ?? [],
+            narrativeUnits: coverageQuery.data?.units ?? [],
+          },
         ],
       };
       return "合并影响已固定，请确认目标镜头规格。";
@@ -1303,6 +1374,7 @@ export function EpisodeProductionStudio({
     ? shotOrderQuery.error ??
       archivedShotsQuery.error ??
       shotReadinessQuery.error ??
+      coverageQuery.error ??
       structureQuery.error ??
       draftBatchQuery.error ??
       shotSpecVersionsQuery.error
@@ -1477,12 +1549,24 @@ export function EpisodeProductionStudio({
                     onDecide={handleDecideStoryboardDraft}
                     onPreflight={handleStoryboardDraftPreflight}
                   />
+                  {coverageQuery.data ? (
+                    <StoryboardCoverage
+                      busy={busy}
+                      report={coverageQuery.data}
+                      selectedShotId={selectedShot?.id ?? null}
+                      shots={shotOrderQuery.data?.items ?? []}
+                      onDecide={handleCoverageDecision}
+                      onReplace={handleReplaceNarrativeReferences}
+                      onSelectShot={setSelectedShotId}
+                    />
+                  ) : null}
                   <StoryboardWorkspace
                     archivedShots={archivedShotsQuery.data ?? []}
                     assetBible={assetBibleQuery.data}
                     busy={busy}
                     confirmedShotCandidates={confirmedShotCandidates}
                     order={shotOrderQuery.data ?? { items: [], order_hash: "" }}
+                    coverage={coverageQuery.data}
                     readiness={shotReadinessQuery.data}
                     selectedShotId={selectedShot?.id ?? null}
                     structure={structureQuery.data}

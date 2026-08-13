@@ -96,6 +96,7 @@ async def create_ready_generation_shot(
                     "subject_key": None,
                 }
             ],
+            "narrative_references": [],
         },
     )
     assert saved.status_code == 201

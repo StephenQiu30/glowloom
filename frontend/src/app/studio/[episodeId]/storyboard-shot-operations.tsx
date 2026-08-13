@@ -30,6 +30,10 @@ import {
 } from "@/components/ui/select";
 
 import { toAssetReferenceRequest } from "./asset-reference";
+import {
+  narrativeReferenceKey,
+  toNarrativeReferenceInput,
+} from "./narrative-reference";
 
 type SplitTargetOptions = {
   firstTitle: string;
@@ -37,6 +41,7 @@ type SplitTargetOptions = {
   firstDurationMs: number;
   firstActionCount: number;
   firstDialogueCount: number;
+  firstNarrativeReferenceIds: string[];
 };
 
 type MergeTargetOptions = {
@@ -45,6 +50,8 @@ type MergeTargetOptions = {
 };
 
 export type ShotTransformSource = {
+  narrativeReferences: API.NarrativeReferenceResponse[];
+  narrativeUnits: API.UnitCoverageResponse[];
   shot: API.ShotResponse;
   version: API.ShotSpecVersionResponse;
 };
@@ -157,6 +164,7 @@ function suggestedSplitBoundary(source: API.ShotSpecVersionResponse): {
 
 export function buildSplitTargets(
   source: API.ShotSpecVersionResponse,
+  narrativeReferences: API.NarrativeReferenceResponse[],
   options: SplitTargetOptions,
 ): [API.TargetShotSpecRequest, API.TargetShotSpecRequest] {
   const firstSpec = structuredClone(source.spec);
@@ -208,16 +216,34 @@ export function buildSplitTargets(
     throw new Error("来源对白顺序不能由一个安全分界表达");
   }
   secondSpec.duration_ms = sourceDuration - options.firstDurationMs;
+  const knownReferenceIds = new Set(
+    narrativeReferences.map((reference) => reference.id),
+  );
+  const firstReferenceIds = new Set(options.firstNarrativeReferenceIds);
+  if (
+    firstReferenceIds.size !== options.firstNarrativeReferenceIds.length ||
+    [...firstReferenceIds].some((id) => !knownReferenceIds.has(id))
+  ) {
+    throw new Error("拆分叙事来源分配包含未知或重复关系");
+  }
+  const firstNarrativeReferences = narrativeReferences
+    .filter((reference) => firstReferenceIds.has(reference.id))
+    .map(toNarrativeReferenceInput);
+  const secondNarrativeReferences = narrativeReferences
+    .filter((reference) => !firstReferenceIds.has(reference.id))
+    .map(toNarrativeReferenceInput);
   return [
     {
       title: options.firstTitle.trim(),
       spec: firstSpec,
       asset_references: clonedReferences(source.asset_references),
+      narrative_references: firstNarrativeReferences,
     },
     {
       title: options.secondTitle.trim(),
       spec: secondSpec,
       asset_references: clonedReferences(source.asset_references),
+      narrative_references: secondNarrativeReferences,
     },
   ];
 }
@@ -310,6 +336,7 @@ function mergeSourceError(
 export function buildMergeTarget(
   first: API.ShotSpecVersionResponse,
   second: API.ShotSpecVersionResponse,
+  narrativeReferences: API.NarrativeReferenceResponse[],
   options: MergeTargetOptions,
 ): API.TargetShotSpecRequest {
   const sourceError = mergeSourceError(first, second);
@@ -346,10 +373,15 @@ export function buildMergeTarget(
   spec.duration_ms =
     (first.spec.duration_ms ?? 3_000) +
     (second.spec.duration_ms ?? 3_000);
+  const narrativeKeys = narrativeReferences.map(narrativeReferenceKey);
+  if (new Set(narrativeKeys).size !== narrativeKeys.length) {
+    throw new Error("两个来源包含冲突的叙事关系，需先分别修正映射");
+  }
   return {
     title: options.title.trim(),
     spec,
     asset_references: mergedAssetReferences(base, other),
+    narrative_references: narrativeReferences.map(toNarrativeReferenceInput),
   };
 }
 
@@ -401,6 +433,9 @@ export function SplitShotDialog({
   const [firstDialogueCount, setFirstDialogueCount] = useState(
     initialBoundary.firstDialogueCount,
   );
+  const [narrativeAllocation, setNarrativeAllocation] = useState<
+    Record<string, "first" | "second">
+  >({});
   const totalDuration = source.version.spec.duration_ms ?? 3_000;
   const secondDuration = totalDuration - firstDuration;
   const durationValid =
@@ -411,6 +446,9 @@ export function SplitShotDialog({
     source.version,
     firstActionCount,
     firstDialogueCount,
+  );
+  const narrativeAllocationComplete = source.narrativeReferences.every(
+    (reference) => Boolean(narrativeAllocation[reference.id]),
   );
 
   function changeOpen(nextOpen: boolean) {
@@ -427,18 +465,28 @@ export function SplitShotDialog({
   }
 
   async function apply() {
-    if (!preflight || !durationValid || contentError) return;
+    if (
+      !preflight ||
+      !durationValid ||
+      contentError ||
+      !narrativeAllocationComplete
+    ) {
+      return;
+    }
     const succeeded = await onApply(source.shot.id, {
       expected_source_spec_version_id: source.version.id,
       expected_order_hash: preflight.order_hash,
       impact_hash: preflight.impact_hash,
       idempotency_key: `studio-split:${source.shot.id}:${crypto.randomUUID()}`,
-      targets: buildSplitTargets(source.version, {
+      targets: buildSplitTargets(source.version, source.narrativeReferences, {
         firstTitle,
         secondTitle,
         firstDurationMs: firstDuration,
         firstActionCount,
         firstDialogueCount,
+        firstNarrativeReferenceIds: source.narrativeReferences
+          .filter((reference) => narrativeAllocation[reference.id] === "first")
+          .map((reference) => reference.id),
       }),
     });
     if (succeeded) changeOpen(false);
@@ -543,6 +591,77 @@ export function SplitShotDialog({
                 />
               </div>
             </div>
+            {source.narrativeReferences.length ? (
+              <section className="grid gap-2" aria-labelledby="split-narrative-title">
+                <div>
+                  <h3 className="text-sm font-medium" id="split-narrative-title">
+                    分配叙事来源
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    每条现有关系必须明确进入前段或后段，不能遗漏或重复。
+                  </p>
+                </div>
+                {source.narrativeReferences.map((reference) => {
+                  const unit = source.narrativeUnits.find(
+                    (item) => item.unit_version_id === reference.unit_version_id,
+                  );
+                  const label = unit?.exact_text ?? reference.unit_version_id.slice(-8);
+                  return (
+                    <div
+                      className="grid gap-2 rounded-xl border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                      key={reference.id}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{label}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {reference.channel} · {reference.role} · {reference.coverage_mode}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          aria-label={`叙事来源 ${label} 分配到前段`}
+                          aria-pressed={narrativeAllocation[reference.id] === "first"}
+                          onClick={() =>
+                            setNarrativeAllocation((current) => ({
+                              ...current,
+                              [reference.id]: "first",
+                            }))
+                          }
+                          size="sm"
+                          type="button"
+                          variant={
+                            narrativeAllocation[reference.id] === "first"
+                              ? "secondary"
+                              : "outline"
+                          }
+                        >
+                          前段
+                        </Button>
+                        <Button
+                          aria-label={`叙事来源 ${label} 分配到后段`}
+                          aria-pressed={narrativeAllocation[reference.id] === "second"}
+                          onClick={() =>
+                            setNarrativeAllocation((current) => ({
+                              ...current,
+                              [reference.id]: "second",
+                            }))
+                          }
+                          size="sm"
+                          type="button"
+                          variant={
+                            narrativeAllocation[reference.id] === "second"
+                              ? "secondary"
+                              : "outline"
+                          }
+                        >
+                          后段
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </section>
+            ) : null}
             {contentError ? (
               <Alert variant="destructive">
                 <AlertTitle>当前分界不能守恒</AlertTitle>
@@ -570,6 +689,7 @@ export function SplitShotDialog({
                 busy ||
                 !durationValid ||
                 Boolean(contentError) ||
+                !narrativeAllocationComplete ||
                 !firstTitle.trim() ||
                 !secondTitle.trim()
               }
@@ -659,10 +779,15 @@ export function MergeShotsDialog({
       expected_order_hash: preparation.preflight.order_hash,
       impact_hash: preparation.preflight.impact_hash,
       idempotency_key: `studio-merge:${first.shot.id}:${second.shot.id}:${crypto.randomUUID()}`,
-      target: buildMergeTarget(first.version, second.version, {
-        baseVersionId,
-        title,
-      }),
+      target: buildMergeTarget(
+        first.version,
+        second.version,
+        [...first.narrativeReferences, ...second.narrativeReferences],
+        {
+          baseVersionId,
+          title,
+        },
+      ),
     });
     if (succeeded) changeOpen(false);
   }
