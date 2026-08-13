@@ -169,7 +169,13 @@ def test_mvp_core_plan_is_traced_without_premature_generation_acceptance() -> No
     assert "| DEV-MVPA-03 | completed" in plan
     assert "| DEV-MVPA-04 | completed" in plan
     assert "| DEV-MVPA-05 | completed" in plan
-    assert "| DEV-MVPA-06 | in_progress" in plan
+    assert "| DEV-MVPA-06 | completed" in plan
+    narrative_acceptance = DOCS / "acceptance/arrived/032-稳定叙事单元与失效传播验收.md"
+    assert narrative_acceptance.is_file()
+    narrative_evidence = narrative_acceptance.read_text(encoding="utf-8")
+    assert "PT-SCR-009、DEV-MVPA-06" in narrative_evidence
+    assert "c32e1f6" in narrative_evidence
+    assert "404 passed, 26 skipped" in narrative_evidence
     assert (DOCS / "acceptance/arrived/029-整剧导入与格式体检验收.md").is_file()
     episode_plan_acceptance = DOCS / "acceptance/arrived/030-分集计划与批量物化验收.md"
     assert episode_plan_acceptance.is_file()
