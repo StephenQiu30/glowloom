@@ -50,6 +50,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/class-names";
 
+import { toAssetReferenceRequest } from "./asset-reference";
 import {
   DeleteShotDialog,
   type MergePreparation,
@@ -507,7 +508,7 @@ function ShotSpecEditor({
     initial.script_reference.dialogue_ids ?? [],
   );
   const [references, setReferences] = useState<API.AssetReferenceRequest[]>(
-    currentVersion?.asset_references.map((reference) => ({ ...reference })) ?? [],
+    currentVersion?.asset_references.map(toAssetReferenceRequest) ?? [],
   );
   const [subjectPlacements, setSubjectPlacements] = useState<
     API.SubjectPlacement[]

@@ -521,6 +521,29 @@ describe("分镜工作台", () => {
         }),
       ),
     );
+    const savedRequest = onSaveSpec.mock.calls[0]?.[1] as
+      | API.ShotSpecCreateRequest
+      | undefined;
+    expect(savedRequest?.asset_references).toEqual([
+      {
+        slot_key: "location-main",
+        role: "location",
+        asset_version_id: locationVersionId,
+        subject_key: null,
+      },
+      {
+        slot_key: "character-00000017",
+        role: "character",
+        asset_version_id: characterVersionId,
+        subject_key: "subject-00000017",
+      },
+      {
+        slot_key: "voice-00000018",
+        role: "voice",
+        asset_version_id: voiceVersionId,
+        subject_key: "subject-00000018",
+      },
+    ]);
 
     await user.click(screen.getByRole("button", { name: "下移镜头" }));
     expect(onReorder).toHaveBeenCalledWith([secondShotId, firstShotId]);

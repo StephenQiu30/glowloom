@@ -277,13 +277,19 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await page.getByRole("button", { name: /林澈.*有人吗/ }).click();
   const fixedAssets = page.getByRole("region", { name: "固定资产版本" });
   await fixedAssets
-    .getByRole("button", { name: characterFixture.name, exact: true })
+    .getByRole("button", {
+      name: `${characterFixture.name} · 基础状态`,
+      exact: true,
+    })
     .click();
   await page
     .getByLabel(`${characterFixture.name}画面位置`)
     .fill("画面右侧，面向月台深处");
   await fixedAssets
-    .getByRole("button", { name: voiceFixture.name, exact: true })
+    .getByRole("button", {
+      name: `${voiceFixture.name} · 基础状态`,
+      exact: true,
+    })
     .click();
   await page
     .getByRole("button", {
@@ -292,7 +298,10 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
     .click();
   await page.getByLabel("林澈表演提示").fill("压低声音，短暂停顿后试探询问");
   await fixedAssets
-    .getByRole("button", { name: locationFixture.name, exact: true })
+    .getByRole("button", {
+      name: `${locationFixture.name} · 基础状态`,
+      exact: true,
+    })
     .click();
   await page.getByLabel("环境声").fill("雨声与远处列车低鸣");
   await page.getByLabel("音效（逗号分隔）").fill("脚步声，灯箱电流声");

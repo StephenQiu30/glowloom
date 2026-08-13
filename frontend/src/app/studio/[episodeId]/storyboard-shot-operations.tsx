@@ -29,6 +29,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { toAssetReferenceRequest } from "./asset-reference";
+
 type SplitTargetOptions = {
   firstTitle: string;
   secondTitle: string;
@@ -57,7 +59,7 @@ function clip(value: string, maxLength: number): string {
 function clonedReferences(
   references: API.AssetReferenceResponse[],
 ): API.AssetReferenceRequest[] {
-  return references.map((reference) => ({ ...reference }));
+  return references.map(toAssetReferenceRequest);
 }
 
 function uniqueStrings(values: Array<string | null | undefined>): string[] {

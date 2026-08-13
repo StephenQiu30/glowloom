@@ -182,13 +182,19 @@ test("真实 DeepSeek 提取、人工决议并确认结构", async ({ page }) =>
   await page.getByRole("button", { name: /顾清禾.*你终于来了/ }).click();
   const fixedAssets = page.getByRole("region", { name: "固定资产版本" });
   await fixedAssets
-    .getByRole("button", { name: characterFixture.name, exact: true })
+    .getByRole("button", {
+      name: `${characterFixture.name} · 基础状态`,
+      exact: true,
+    })
     .click();
   await page
     .getByLabel(`${characterFixture.name}画面位置`)
     .fill("画面右侧，面向陆沉舟");
   await fixedAssets
-    .getByRole("button", { name: voiceFixture.name, exact: true })
+    .getByRole("button", {
+      name: `${voiceFixture.name} · 基础状态`,
+      exact: true,
+    })
     .click();
   await page
     .getByRole("button", {
@@ -197,7 +203,10 @@ test("真实 DeepSeek 提取、人工决议并确认结构", async ({ page }) =>
     .click();
   await page.getByLabel("顾清禾表演提示").fill("克制地确认来人身份");
   await fixedAssets
-    .getByRole("button", { name: locationFixture.name, exact: true })
+    .getByRole("button", {
+      name: `${locationFixture.name} · 基础状态`,
+      exact: true,
+    })
     .click();
   await page.getByLabel("环境声").fill("持续雨声与远处更鼓");
   await page.getByLabel("音效（逗号分隔）").fill("伞面雨滴，脚步声");

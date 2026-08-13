@@ -11,6 +11,12 @@ const secondSceneId = "019fb6c0-a000-7000-8000-000000000003";
 const firstDialogueId = "019fb6c0-a000-7000-8000-000000000004";
 const secondDialogueId = "019fb6c0-a000-7000-8000-000000000005";
 const locationVersionId = "019fb6c0-a000-7000-8000-000000000006";
+const locationReference: API.AssetReferenceRequest = {
+  slot_key: "location-main",
+  role: "location",
+  asset_version_id: locationVersionId,
+  subject_key: null,
+};
 
 function version({
   id,
@@ -112,8 +118,8 @@ describe("分镜变换目标构造", () => {
     ]);
     expect(targets[1].spec.script_reference.dialogue_ids).toEqual([]);
     expect(targets[1].spec.dialogue_or_narration).toEqual([]);
-    expect(targets[0].asset_references).toEqual(source.asset_references);
-    expect(targets[1].asset_references).toEqual(source.asset_references);
+    expect(targets[0].asset_references).toEqual([locationReference]);
+    expect(targets[1].asset_references).toEqual([locationReference]);
   });
 
   it("同场次合并连续动作与对白，并保持总时长", () => {
@@ -172,6 +178,6 @@ describe("分镜变换目标构造", () => {
     expect(target.spec.script_reference.dialogue_ids).toEqual([
       secondDialogueId,
     ]);
-    expect(target.asset_references).toEqual(second.asset_references);
+    expect(target.asset_references).toEqual([locationReference]);
   });
 });
