@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～06 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写和稳定叙事单元/失效传播；制作人/QA 内容质量复核保留到分镜/分镜包产品验收；下一任务为 DEV-MVPA-07 AssetState/Occurrence）
+- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～07 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播和 AssetState/Occurrence；制作人/QA 内容质量复核保留到分镜/分镜包产品验收；下一任务为 DEV-MVPA-08 资产影响治理）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -79,7 +79,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 
 1. 在 `backend/` 引入 Alembic，锁定版本并建立显式 `alembic.ini`、`alembic/env.py` 和 `alembic/versions/`；不自动扫描插件。
 2. 以真实历史 Metadata 和表结构快照人工校正 revision 边界：`95c0d24572c5` 固定 Provider 引入前的 38 张业务表，`8d9f2a6c4b71` 增加 4 张 Provider 表和 Capability 复合唯一约束，`4c8e2f7a9b31` 增加 4 张整剧文档/格式分析表并扩展 document Media，`7f3a9c1d2e84` 增加 4 张分集计划/批量物化血缘表，`9a4d6e2f1b73` 增加单表 AdaptationRun，`2b7e4c9a1d63` 增加 4 张稳定叙事结构/版本/影响表。全新环境独立执行 `alembic upgrade head`，集成验收必须走 migration。
-3. 已有数据库不得直接 `stamp head`。adoption 只接受六种已知完整签名：当前 55 表结构直接采用 head，剧本改写 era 51 表结构采用 `9a4d6e2f1b73` 后升级，分集计划 era 50 表结构采用 `7f3a9c1d2e84` 后升级，整剧文档 era 46 表结构采用 `4c8e2f7a9b31` 后升级，Provider-era 42 表结构采用 `8d9f2a6c4b71` 后升级，或历史 38 表结构采用 baseline 后原子升级；任一能力的部分表集和任何未知漂移都拒绝且不 stamp。
+3. 已有数据库不得直接 `stamp head`。adoption 只接受七种已知完整签名：当前 57 表结构直接采用 head，NarrativeUnit era 55 表结构采用 `2b7e4c9a1d63` 后升级，剧本改写 era 51 表结构采用 `9a4d6e2f1b73` 后升级，分集计划 era 50 表结构采用 `7f3a9c1d2e84` 后升级，整剧文档 era 46 表结构采用 `4c8e2f7a9b31` 后升级，Provider-era 42 表结构采用 `8d9f2a6c4b71` 后升级，或历史 38 表结构采用 baseline 后原子升级；任一能力的部分表集和任何未知漂移都拒绝且不 stamp。
 4. 新业务表按任务分 revision，不把 13 类核心实体压进一个不可回滚 revision。每个 revision 包含 upgrade、结构校验和可逆的 schema downgrade；涉及已写业务数据时，回滚优先恢复备份或前滚修复，不做破坏性自动 downgrade。
 5. 每次 revision 在三条路径验证：空库到 head、当前 schema 快照到 head、含黄金样本旧库副本到 head；运行前后均核对行数、哈希、复合 FK、唯一约束和 current 指针。
 6. 应用启动只检查数据库 revision 是否为允许版本，不能在 Web 进程自动 upgrade；部署前由独立受控命令执行升级。
@@ -99,7 +99,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-04 | completed（Acceptance 030） | PT-SCR-007 | 9 | MVPA-03 | 一个分集建议、边界编辑、confirm、批量物化和项目页回读 |
 | DEV-MVPA-05 | completed（Acceptance 031） | PT-SCR-008 | 9 | MVPA-02 | 单集改写 Run、一个候选、diff/编辑/发布和失败恢复 |
 | DEV-MVPA-06 | completed（Acceptance 032） | PT-SCR-009 | 14 | MVPA-05 | NarrativeUnit/Version、人工修正、current 影响和下游 stale |
-| DEV-MVPA-07 | proposed | PT-AST-006 | 7 | MVPA-06 | AssetState/Occurrence/state current、状态矩阵和 readiness |
+| DEV-MVPA-07 | completed（Acceptance 033） | PT-AST-006 | 7 | MVPA-06 | AssetState/Occurrence/state current、状态矩阵和 readiness |
 | DEV-MVPA-08 | proposed | PT-AST-007 | 5 | MVPA-07 | 改名/禁用/换版本影响中心、state-aware usage 与 apply |
 | DEV-MVPA-09 | proposed | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
 | DEV-MVPA-10 | proposed | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
@@ -347,10 +347,11 @@ Green：
 | OpenPype `f67bacf` | [Version schema](https://github.com/ynput/OpenPype/blob/f67bacf11713cadb5c46c1580ff7ef97276cf0f9/openpype/pipeline/schema/version-3.0.json#L1-L83)、[Representation/dependency schema](https://github.com/ynput/OpenPype/blob/f67bacf11713cadb5c46c1580ff7ef97276cf0f9/openpype/pipeline/schema/representation-2.0.json#L1-L78)、[真实 publish 集成测试](https://github.com/ynput/OpenPype/blob/f67bacf11713cadb5c46c1580ff7ef97276cf0f9/tests/integration/hosts/maya/test_publish_in_maya.py#L41-L104)；MIT，仓库已归档 | `Asset → Subset → Version → Representation` 的只追加发布链、来源/作者/时间和文件校验成熟；但以 Mongo/宿主 DCC 和名称上下文为中心，仓库已停止维护 | 只适配不可变 Version/媒体 representation/promotion 与集成测试形态；不引入 Mongo、插件框架或 archived runtime |
 | xStudio `d60b3e8` | [Media 多 Source 与 current 测试](https://github.com/AcademySoftwareFoundation/xstudio/blob/d60b3e87fc52fb87b4d4e545e16dcd35471c567c/src/media/test/media_test.cpp#L14-L46)、[Playlist 有序增删移动与序列化测试](https://github.com/AcademySoftwareFoundation/xstudio/blob/d60b3e87fc52fb87b4d4e545e16dcd35471c567c/src/playlist/test/playlist_test.cpp#L16-L55)；Apache-2.0，跨年度 | 稳定 UUID 与显示顺序分离；current source 必须属于候选集合，非法选择拒绝且序列化后保持 | 适配 selected-valid-member、identity≠order 不变量；不引入 C++/Qt 播放审片栈 |
 | Prism `fd440de`（v2.1.3） | [ProductBrowser 的 entity/product/version 层级](https://github.com/PrismPipeline/Prism/blob/fd440de6747b7e62e2ba8cb675028e7adbbce1e3/Prism/Scripts/ProjectScripts/ProductBrowser.py)、[LGPL-3.0-or-later 声明](https://github.com/PrismPipeline/Prism/blob/fd440de6747b7e62e2ba8cb675028e7adbbce1e3/README.md#L37-L40) | 产品/版本历史、master version、依赖查看器和场景文件锁是成熟 UX；仓库未发现与本任务同构的自动化失败测试，且主干是文件路径/DCC UI | 仅作为资产圣经/版本浏览交互参考；不直接复用或为 MVP 引入其桌面管线 |
+| AYON Backend `08e5492`（2026-08-13 复核） | [Product 实体](https://github.com/ynput/ayon-backend/blob/08e549239c5ca2c2f40d579e0a81165e959a6494/ayon_server/entities/product.py)、[Version/HERO 约束](https://github.com/ynput/ayon-backend/blob/08e549239c5ca2c2f40d579e0a81165e959a6494/ayon_server/entities/version.py)、[Representation 实体](https://github.com/ynput/ayon-backend/blob/08e549239c5ca2c2f40d579e0a81165e959a6494/ayon_server/entities/representation.py)、[FSL-1.1-ALv2 许可证](https://github.com/ynput/ayon-backend/blob/08e549239c5ca2c2f40d579e0a81165e959a6494/LICENSE) | 持续维护的 `Product → Version → Representation` 分层和单 HERO 规则证明身份、发布版本、物理表示与主选应分开；但 HERO 唯一性由保存钩子查询保证，仓库缺同构失败测试，当前许可证禁止竞争性商用服务并延迟两年才转 Apache-2.0 | 只作为新鲜行为对照；不复制源码、不引入运行时，并用数据库复合 FK/唯一约束强化 state current 合法成员关系 |
 
 本地 delta 结论：现有 `Asset/AssetVersion/MediaReference/Consent`、Script extraction candidate、Shot 固定 AssetVersion、usage/upgrade preflight 均继续复用。C4 只新增 `AssetState/Occurrence`、state current、state-aware binding、rename/disable/version 影响治理和手工/上传 Version；`PromptRevision/GenerationRun/OutputCandidate/Selection/MediaLineage/Provider` 由共享 C5 独占，C4 只消费展示契约，禁止重复计费或另造候选体系。
 
-综合决定：本轮没有候选可直接替换当前资产模块，也没有必要新增第三方运行时。实现只吸收五条已被成熟项目反复验证的不变量：稳定身份不随名称/顺序变化；状态/出现范围/媒体版本分层；主选必须属于可用候选；变更先用同一输入做 preflight 再 apply；历史引用固定版本且禁用只让派生 readiness 失效、不删除历史。该证据子 Gate、黄金 fixture 和首轮迁移 Gate 已完成；DEV-MVPA-07/08 仍须等待 MVPA-06，并用各自本地 Red/revision 证明复合一致性后才能进入 Green。证据没有减少本地迁移、UI 和回归工作，两个 DEV 仍按 `7+5=12` 基准人周；共享 C5 候选/媒体底座不得在这里重复相加。
+综合决定：本轮没有候选可直接替换当前资产模块，也没有必要新增第三方运行时。实现只吸收五条已被成熟项目反复验证的不变量：稳定身份不随名称/顺序变化；状态/出现范围/媒体版本分层；主选必须属于可用候选；变更先用同一输入做 preflight 再 apply；历史引用固定版本且禁用只让派生 readiness 失效、不删除历史。该证据子 Gate、黄金 fixture 和首轮迁移 Gate 已完成；DEV-MVPA-07 已满足 MVPA-06 前置，必须用本地 Red/revision 证明复合一致性后才能进入 Green。证据没有减少本地迁移、UI 和回归工作，两个 DEV 仍按 `7+5=12` 基准人周；共享 C5 候选/媒体底座不得在这里重复相加。
 
 Red：跨 Asset Version、状态同名、Occurrence 跨项目、current 竞态、禁用后仍 ready、改名破坏 FK、影响查询 N+1、陈旧 hash 和非终态任务竞态先失败。
 
@@ -363,6 +364,16 @@ Green：
 - 资产页按身份→状态矩阵展示出现集、主版本、readiness 和 usage。
 
 退出：角色常服/受伤、场景日/夜、道具完好/破损均能回溯 NarrativeUnit；改名零 FK 变化，disable 零历史删除。
+
+DEV-MVPA-07 实现与验收证据（2026-08-13）：
+
+- 直接在现有 assets 纵向模块完成根模型切换，没有为了目录图预建 `states/` 空包：`Asset` 只保留稳定身份；原子 `base` `AssetState` 承担 current，`AssetVersion` 固定且校验同一 `asset_id + asset_state_id + workspace_id`；旧的 Asset 级 current 字段、路由和 `candidate` source_type 已直接移除，不保留双写、别名或兼容 DTO；
+- `AssetOccurrence` 是只追加的 link/unlink 决议，固定 `NarrativeUnitVersion` 而不是集号、名称或可变正文；读取时结合当前 Script/NarrativeUnit 版本派生 `current/stale`，叙事结构修正后旧出现关系保留且转 stale，依赖无法判定则由状态 readiness 返回 unavailable；
+- 资产圣经按身份→状态输出当前版本、出现关系和服务端 readiness；分镜规格把 `asset_id/state_id/version_id/binding_source` 作为复合事实，跨状态/跨资产版本由数据库和服务双重拒绝；旧规格与已固定版本不随 current 漂移；
+- 资产工作台可创建语义状态键、切换状态并为每个状态独立追加/选择版本；分镜工作台只展示 active 状态并固定显示“资产 · 状态”。浏览器验收发现归档会把资产排出生产圣经并误删恢复入口，Green 以独立归档身份卡修复生命周期，而非让归档资产继续进入生产列表；
+- Alembic `6c1f8d4a7e20` 将 55 表前滚到 57 表；仓库外 0600 备份后，隔离恢复完成 `55 → 57 → 55 → 57`，开发库 19 行业务事实保持、当前新增资产表均为空，随后才升级正式本机开发库；head 与 autogenerate drift 均通过；
+- 后端全量 `411 passed, 26 skipped`，Ruff/Pyright/17 个命名与 Plain Data Contract 架构门禁全过；前端全量 `24 files / 82 tests`、TypeScript、ESLint、生产构建通过，真实 PostgreSQL/MinIO/RabbitMQ 浏览器资产治理闭环通过；
+- 完整证据见 [Acceptance 033](../acceptance/arrived/033-资产剧情状态与出现关系验收.md)。DEV-MVPA-07 在上述范围内 completed；PT-AST-006 仍保持 `in_progress`，因为状态编辑/禁用及其立即阻断契约按已接受设计由 DEV-MVPA-08 收口；改名/禁用影响预检、state-aware usage 批量治理和 Prompt 失效均未因本任务提前宣称完成。
 
 ### 6.7 DEV-MVPA-09：拆镜/合镜守恒修复
 
@@ -610,4 +621,4 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 当前可领取任务
 
-`DEV-MVPA-01～06` 已完成并由 Acceptance 028～032 和黄金 fixture 契约关闭。当前下一任务是 `DEV-MVPA-07`：先重新核对资产领域成熟 GitHub 方案的固定源码/测试/许可证与本地 delta，再以 Red 固定 AssetState/Occurrence、state current、状态矩阵和 readiness，不预建候选生成或 StoryboardDraft 空目录。
+`DEV-MVPA-01～07` 已完成并由 Acceptance 028～033 和黄金 fixture 契约关闭。当前下一任务是 `DEV-MVPA-08`：基于已固定的 `Asset/State/Version/Occurrence` 事实实现改名、禁用和换版本的同输入 preflight/apply、state-aware usage 与失效传播；不引入 OutputCandidate/GenerationRun，不用裸名称或兼容 DTO 回写历史引用。
