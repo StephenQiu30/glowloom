@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～09 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence、资产影响治理和拆镜/合镜内容守恒；制作人/QA 内容质量复核保留到分镜/分镜包产品验收；下一任务为 DEV-MVPA-10 AI 分镜草案）
+- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～09 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence、资产影响治理和拆镜/合镜内容守恒；DEV-MVPA-10 的第二轮 GitHub 证据与最小实现边界已冻结，正在进入 Red；制作人/QA 内容质量复核保留到分镜/分镜包产品验收）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -102,7 +102,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-07 | completed（Acceptance 033） | PT-AST-006 | 7 | MVPA-06 | AssetState/Occurrence/state current、状态矩阵和 readiness |
 | DEV-MVPA-08 | completed（Acceptance 034） | PT-AST-007 | 5 | MVPA-07 | 改名/禁用/换版本影响中心、state-aware usage 与 apply |
 | DEV-MVPA-09 | completed（Acceptance 035） | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
-| DEV-MVPA-10 | proposed | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
+| DEV-MVPA-10 | in_progress | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
 | DEV-MVPA-11 | proposed | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
 | DEV-MVPA-12 | proposed | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
 | **合计** |  | **11 个 PT** | **71 人周** |  | **整剧到可信分镜包** |
@@ -429,13 +429,28 @@ Green：后端成为守恒最终事实源；split 要求两侧 action/dialogue �
 
 ### 6.8 DEV-MVPA-10：AI 分镜草案
 
+DEV-MVPA-10 第二轮 GitHub 证据（固定于 2026-08-13）补充了候选审核、人工中断和影视发布三类横向方案；它们用于验证数据分层与失败边界，不替代 Lanverse 本地事务：
+
+| 候选 | 固定源码/测试与许可证 | 已证明的能力与缺口 | 准入决定 |
+| --- | --- | --- | --- |
+| Label Studio `0205168` | [Prediction、Annotation、parent_prediction 分层](https://github.com/HumanSignal/label-studio/blob/0205168bf881dd99664dd9d7a97f615f8693e82f/label_studio/tasks/models.py#L659-L732)、[Prediction→Annotation 显式转换](https://github.com/HumanSignal/label-studio/blob/0205168bf881dd99664dd9d7a97f615f8693e82f/label_studio/data_manager/actions/predictions_to_annotations.py#L15-L58)、[转换后来源与摘要测试](https://github.com/HumanSignal/label-studio/blob/0205168bf881dd99664dd9d7a97f615f8693e82f/label_studio/tests/data_manager/actions/test_predictions_to_annotations.py#L45-L79)；Apache-2.0 | 模型预测与人工事实是不同实体，正式结果保留 parent prediction；但批量转换没有 Lanverse 的 input hash、order/spec CAS 和全批零写入契约 | 采用 DraftShot→Decision→Shot 的可追溯分层；不引入 Django/标注 DSL，也不把转换 action 当原子 Apply |
+| LangGraph `644815f`（1.2.11） | [`interrupt`/`Command(resume)` 和 checkpoint 要求](https://github.com/langchain-ai/langgraph/blob/644815f9e5bc52ad8f7a5227a456227e9c3e639b/libs/langgraph/langgraph/types.py#L800-L871)、[节点从头重放语义](https://github.com/langchain-ai/langgraph/blob/644815f9e5bc52ad8f7a5227a456227e9c3e639b/libs/langgraph/langgraph/types.py#L851-L871)；MIT | HITL 能暂停、持久化和恢复，但恢复会从节点开头重执行，前置副作用必须自行幂等；当前流程已有 Task/Outbox/Worker 和显式人工 HTTP 命令 | 不引入 LangGraph 或第二套 checkpoint；吸收“中断前零正式副作用、重放必须幂等”的失败测试 |
+| AYON Core `0c876b7` | [验证阶段可停止/错误阻断](https://github.com/ynput/ayon-core/blob/0c876b716a18a16e76a54dc81eecda4aff76b612/client/ayon_core/pipeline/publish/logic.py#L614-L648)、[Integrate 的文件事务](https://github.com/ynput/ayon-core/blob/0c876b716a18a16e76a54dc81eecda4aff76b612/client/ayon_core/plugins/publish/integrate.py#L95-L182)、[数据库先提交且 TODO 承认不能完整回滚](https://github.com/ynput/ayon-core/blob/0c876b716a18a16e76a54dc81eecda4aff76b612/client/ayon_core/plugins/publish/integrate.py#L162-L182)；Apache-2.0 | 成熟影视发布器明确区分 validate/integrate 并呈现可修复错误；但 DB 与文件传输不是一个可回滚事务 | 采用 preflight→apply 和用户可修复错误；拒绝其部分提交边界，MVP 草案 Apply 只写同一 PostgreSQL 事务 |
+| Jellyfish `a967819` | [AI 结构化结果写镜头](https://github.com/Forget-C/Jellyfish/blob/a9678194ddf2d9be3ccbe78d4287d87d5089e123/backend/app/services/studio/script_division.py#L17-L73)、[已有镜头时零写入拒绝](https://github.com/Forget-C/Jellyfish/blob/a9678194ddf2d9be3ccbe78d4287d87d5089e123/backend/tests/test_script_division.py#L47-L109)；Apache-2.0 | 先得到结构化结果、再统一 flush，已有镜头 fail closed；但没有持久 DraftBatch/人工 Decision，写入即正式 Shot | 吸收“已有事实不覆盖”和批量 flush 测试；AI 结果必须先持久为 DraftShot，不能直接调用正式写镜服务 |
+| LocalMiniDrama `05f90fb` | [流式增量写正式分镜及最终覆盖](https://github.com/xuanyustudio/LocalMiniDrama/blob/05f90fb9ec21dea5753e324b673fc8a96bc6b2e0/backend-node/src/services/episodeStoryboardService.js#L619-L746)、[连接中断把部分分镜当 truncated success](https://github.com/xuanyustudio/LocalMiniDrama/blob/05f90fb9ec21dea5753e324b673fc8a96bc6b2e0/backend-node/src/services/episodeStoryboardService.js#L1069-L1096)；MIT | 增量可见和断线恢复有用户价值；但失败时部分正式结果被视为成功、按镜号覆盖且旧分镜软删 | 作为失败反例：Provider 输出未完整校验前正式 Shot 写入必须为 0；unknown 不得转成部分成功 |
+| ai-fusion-video `9dc3879` | [clearContent 删除全部分镜内容](https://github.com/Stonewuu/ai-fusion-video/blob/9dc387934d18b53f5b08b6b0c81d09edc315d5ae/ai-fusion-video/src/main/java/com/stonewu/fusion/service/storyboard/StoryboardService.java#L68-L81)、[分集绑定复用](https://github.com/Stonewuu/ai-fusion-video/blob/9dc387934d18b53f5b08b6b0c81d09edc315d5ae/ai-fusion-video/src/main/java/com/stonewu/fusion/service/storyboard/StoryboardService.java#L161-L208)；MIT | Spring 事务和父级归属检查成熟；但重生成仍提供整集删除内容入口，没有候选/决议/Apply 血缘 | 只吸收同 Episode/Script 归属和事务测试；整集清空、名称/序号匹配和可变正式行不采用 |
+
+本地实现决定：不新增通用 Candidate/GenerationRun，不复用 extraction candidate，也不引入 LangGraph。新建职责明确的 `storyboards/drafts/` 能力包；物理事实是 Batch、固定 Unit 输入、固定 Asset 输入、DraftShot 和只追加 Decision，正式 Shot 只增加唯一 `source_draft_shot_id`。接口与类使用短业务语义名，仍受 64 字符和 Plain Data Contract 门禁约束。
+
+MVP Apply 固定为 append-only：Batch 创建时保存 active Shot 的 order/spec/revision baseline；任何人工变化令 preflight 409。Apply diff 保留全部既有 Shot，只新增 `accepted/modified` 草案，`ignored` 不写入，modified/archived 数量显式为 0。这样真实保护人工镜头且不猜测跨 Batch 对应；自动更新/归档旧 AI 镜头留待稳定映射另行设计。
+
 Red：Run 写正式 Shot、输入版本漂移、重复 Apply、人工锁定覆盖、order/spec 冲突、部分 Apply、无状态资产、Worker 重启和 unknown 先失败。
 
 Green：
 
 - DraftBatch 固定 Script/Narrative/AssetState/Version、目标时长和 Prompt/模型/schema；
 - AI 只产 DraftShot；Decision 只追加；
-- Apply preflight 返回新增/保留/修改/归档 diff，默认不归档人工锁定镜头；
+- Apply preflight 返回新增/保留/修改/归档 diff；当前 append-only Apply 保留全部现有镜头且修改/归档为 0；
 - Apply 在一个事务或可证明的原子命令中创建正式 Shot/Spec/References 并 CAS order；
 - 分镜页区分 AI 草案和正式镜头，允许逐镜修改/忽略与整批确认。
 
@@ -501,8 +516,8 @@ Green：
 | GET/POST | `/api/v1/assets/{id}/states` | assets / MVPA-07 |
 | POST | `/api/v1/asset-states/{id}/{occurrence-decisions|current-version}` | assets / MVPA-07 |
 | POST | `/api/v1/assets/{id}/{rename-preflight|rename|disable-preflight|disable}` | assets / MVPA-08 |
-| POST/GET | `/api/v1/episodes/{id}/storyboard-draft-runs`、`/api/v1/storyboard-draft-runs/{id}` | storyboards / MVPA-10 |
-| POST | `/api/v1/storyboard-drafts/{id}/{decisions|apply-preflight|apply}` | storyboards / MVPA-10 |
+| POST/GET | `/api/v1/episodes/{id}/storyboard-draft-batches`、`/api/v1/storyboard-draft-batches/{id}` | storyboards / MVPA-10 |
+| POST | `/api/v1/storyboard-drafts/{id}/decisions`、`/api/v1/storyboard-draft-batches/{id}/{approve|apply-preflight|apply}` | storyboards / MVPA-10 |
 | GET | `/api/v1/episodes/{id}/coverage` | storyboards / MVPA-11 |
 | POST | `/api/v1/narrative-unit-versions/{id}/coverage-decisions` | storyboards / MVPA-11 |
 | POST/GET | `/api/v1/episodes/{id}/storyboard-exports` | storyboards / MVPA-12 |
@@ -642,4 +657,4 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 当前可领取任务
 
-`DEV-MVPA-01～09` 已完成并由 Acceptance 028～035 和黄金 fixture 契约关闭。当前下一任务是 `DEV-MVPA-10`：基于固定 ScriptVersion、NarrativeUnitVersion、AssetState/Version 和现有不可变 ShotSpec 建立 AI 分镜 DraftBatch、人工决议与原子 Apply；实现前继续复核固定 GitHub commit 的候选先行、失败恢复和 Apply 冲突测试，不提前实现 CoverageReport、分镜包或剪辑时间线。
+`DEV-MVPA-01～09` 已完成并由 Acceptance 028～035 和黄金 fixture 契约关闭。`DEV-MVPA-10` 的 GitHub 证据与最小实现边界已冻结，当前进入 Red：先固定 Provider 对正式 Shot 写入 0、输入漂移、只追加决议、approve 完整性、append-only Apply diff、order/spec 冲突、幂等、部分写入、Worker 重启和 unknown；再实现 DraftBatch，不提前实现 CoverageReport、分镜包或剪辑时间线。
