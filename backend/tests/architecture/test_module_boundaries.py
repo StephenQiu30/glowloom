@@ -9,6 +9,20 @@ FORBIDDEN_CONTRACT_IMPORTS = (
     "sqlalchemy",
     "app.integrations",
 )
+FORBIDDEN_DATA_METHODS = {"commit", "load", "publish", "save", "send"}
+FORBIDDEN_DATA_SUFFIXES = ("Bean", "DTO", "Data", "Info", "Object")
+
+
+def _base_name(base: ast.expr) -> str:
+    if isinstance(base, ast.Name):
+        return base.id
+    if isinstance(base, ast.Attribute):
+        return base.attr
+    return ""
+
+
+def _is_true(node: ast.expr) -> bool:
+    return isinstance(node, ast.Constant) and node.value is True
 
 
 def _cross_module_internal_imports() -> set[str]:
@@ -68,4 +82,39 @@ def test_public_contracts_are_plain_data_objects() -> None:
             for name in names:
                 if name.startswith(FORBIDDEN_CONTRACT_IMPORTS):
                     offenders.add(f"{source.relative_to(MODULES)}:{name}")
+    assert offenders == set()
+
+
+def test_contract_data_objects_are_immutable_and_have_no_io_methods() -> None:
+    offenders: set[str] = set()
+    for source in MODULES.glob("*/contracts.py"):
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        relative = source.relative_to(MODULES)
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            bases = {_base_name(base) for base in node.bases}
+            if node.name.endswith(FORBIDDEN_DATA_SUFFIXES):
+                offenders.add(f"{relative}:{node.name}:non-semantic-name")
+            if bases & {"Exception", "Protocol", "RuntimeError", "StrEnum"}:
+                continue
+            methods = {
+                item.name
+                for item in node.body
+                if isinstance(item, (ast.AsyncFunctionDef, ast.FunctionDef))
+            }
+            for method in methods & FORBIDDEN_DATA_METHODS:
+                offenders.add(f"{relative}:{node.name}.{method}:io-method")
+            dataclass_decorators = [
+                decorator
+                for decorator in node.decorator_list
+                if isinstance(decorator, ast.Call)
+                and _base_name(decorator.func) == "dataclass"
+            ]
+            for decorator in dataclass_decorators:
+                options = {keyword.arg: keyword.value for keyword in decorator.keywords}
+                if not _is_true(options.get("frozen", ast.Constant(False))):
+                    offenders.add(f"{relative}:{node.name}:mutable-dataclass")
+                if not _is_true(options.get("slots", ast.Constant(False))):
+                    offenders.add(f"{relative}:{node.name}:unslotted-dataclass")
     assert offenders == set()
