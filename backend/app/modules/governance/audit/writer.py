@@ -213,6 +213,12 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
     "shot.current_spec_changed": frozenset(
         {"episode_id", "revision", "previous_version_id", "current_version_id"}
     ),
+    "storyboard.draft_batch_created": frozenset(
+        {"episode_id", "input_hash", "task_id", "revision"}
+    ),
+    "storyboard.draft_decided": frozenset({"batch_id", "decision", "revision"}),
+    "storyboard.draft_batch_approved": frozenset({"revision"}),
+    "storyboard.draft_batch_applied": frozenset({"revision", "created_shot_ids"}),
     "consent.registered": frozenset({"revision", "subject_type"}),
     "consent.revised": frozenset({"revision", "subject_type"}),
     "consent.revoked": frozenset({"revision", "subject_type"}),

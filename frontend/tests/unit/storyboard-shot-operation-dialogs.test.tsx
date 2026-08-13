@@ -34,6 +34,7 @@ function transformSource(position: number): ShotTransformSource {
       source_script_version_id: scriptVersionId,
       source_scene_id: sceneId,
       source_candidate_id: null,
+      source_draft_shot_id: null,
       status: "active",
       current_spec_version_id: versionId,
       revision: 2,

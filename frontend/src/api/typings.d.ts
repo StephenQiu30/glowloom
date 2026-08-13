@@ -258,6 +258,22 @@ declare namespace API {
     data: DeleteResponse;
   };
 
+  type ApiResponseDraftApplyPreflightResponse_ = {
+    data: DraftApplyPreflightResponse;
+  };
+
+  type ApiResponseDraftApplyResponse_ = {
+    data: DraftApplyResponse;
+  };
+
+  type ApiResponseDraftBatchResponse_ = {
+    data: DraftBatchResponse;
+  };
+
+  type ApiResponseDraftDecisionResult_ = {
+    data: DraftDecisionResult;
+  };
+
   type ApiResponseEpisodeOrderResponse_ = {
     data: EpisodeOrderResponse;
   };
@@ -572,6 +588,14 @@ declare namespace API {
 
   type applyAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePostParams = {
     asset_version_id: string;
+  };
+
+  type applyBatchApiV1StoryboardDraftBatchesBatchIdApplyPostParams = {
+    batch_id: string;
+  };
+
+  type approveBatchApiV1StoryboardDraftBatchesBatchIdApprovePostParams = {
+    batch_id: string;
   };
 
   type archiveAssetApiV1AssetsAssetIdArchivePostParams = {
@@ -949,7 +973,7 @@ declare namespace API {
     /** Asset Id */
     asset_id: string;
     /** Binding Source */
-    binding_source: "manual";
+    binding_source: "manual" | "ai";
     /** Subject Key */
     subject_key: string | null;
   };
@@ -1725,6 +1749,10 @@ declare namespace API {
     asset_id: string;
   };
 
+  type createBatchApiV1EpisodesEpisodeIdStoryboardDraftBatchesPostParams = {
+    episode_id: string;
+  };
+
   type createEpisodeApiV1ProjectsProjectIdEpisodesPostParams = {
     project_id: string;
   };
@@ -1787,6 +1815,10 @@ declare namespace API {
     {
       state_id: string;
     };
+
+  type decideDraftApiV1StoryboardDraftsDraftIdDecisionsPostParams = {
+    draft_id: string;
+  };
 
   type decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPostParams =
     {
@@ -1968,6 +2000,214 @@ declare namespace API {
     issue_ids: string[] | null;
     /** Timeline Source Ids */
     timeline_source_ids: string[] | null;
+  };
+
+  type DraftApplyDiff = {
+    /** Kept */
+    kept: number;
+    /** Created */
+    created: number;
+    /** Modified */
+    modified: 0 | null;
+    /** Archived */
+    archived: 0 | null;
+  };
+
+  type DraftApplyPreflightRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type DraftApplyPreflightResponse = {
+    /** Batch Id */
+    batch_id: string;
+    /** Batch Revision */
+    batch_revision: number;
+    /** Order Hash */
+    order_hash: string;
+    /** Impact Hash */
+    impact_hash: string;
+    diff: DraftApplyDiff;
+  };
+
+  type DraftApplyRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Expected Order Hash */
+    expected_order_hash: string;
+    /** Impact Hash */
+    impact_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type DraftApplyResponse = {
+    batch: DraftBatchResponse;
+    /** Created Shot Ids */
+    created_shot_ids: string[];
+  };
+
+  type DraftApproveRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type DraftAssetReferenceResponse = {
+    /** Slot Key */
+    slot_key: string;
+    /** Role */
+    role:
+      | "location"
+      | "character"
+      | "prop"
+      | "costume"
+      | "visual_style"
+      | "voice";
+    /** Asset Version Id */
+    asset_version_id: string;
+    /** Subject Key */
+    subject_key: string | null;
+  };
+
+  type DraftBatchCreateRequest = {
+    /** Input Script Version Id */
+    input_script_version_id: string;
+    /** Asset State Ids */
+    asset_state_ids: string[] | null;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type DraftBatchResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Project Id */
+    project_id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Status */
+    status:
+      | "queued"
+      | "running"
+      | "needs_review"
+      | "approved"
+      | "applied"
+      | "failed"
+      | "unknown"
+      | "cancelled";
+    /** Revision */
+    revision: number;
+    /** Task Id */
+    task_id: string | null;
+    input: DraftInputSummary;
+    /** Drafts */
+    drafts: DraftShotResponse[];
+    decision_summary: DraftDecisionSummary;
+    /** Error Code */
+    error_code: string | null;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+  };
+
+  type DraftDecisionRequest = {
+    /** Action */
+    action: "accepted" | "modified" | "ignored";
+    /** Expected Batch Revision */
+    expected_batch_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+    target: DraftTarget | null | null;
+  };
+
+  type DraftDecisionResponse = {
+    /** Id */
+    id: string;
+    /** Sequence */
+    sequence: number;
+    /** Action */
+    action: "accepted" | "modified" | "ignored";
+    target: DraftTarget | null;
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+  };
+
+  type DraftDecisionResult = {
+    batch: DraftBatchResponse;
+    draft: DraftShotResponse;
+  };
+
+  type DraftDecisionSummary = {
+    /** Pending */
+    pending: number;
+    /** Accepted */
+    accepted: number;
+    /** Modified */
+    modified: number;
+    /** Ignored */
+    ignored: number;
+  };
+
+  type DraftInputSummary = {
+    /** Script Version Id */
+    script_version_id: string;
+    /** Narrative Structure Id */
+    narrative_structure_id: string;
+    /** Narrative Revision */
+    narrative_revision: number;
+    /** Narrative Dependency Hash */
+    narrative_dependency_hash: string;
+    /** Narrative Unit Version Ids */
+    narrative_unit_version_ids: string[];
+    /** Asset State Ids */
+    asset_state_ids: string[];
+    /** Asset Version Ids */
+    asset_version_ids: string[];
+    /** Target Duration Ms */
+    target_duration_ms: number;
+    /** Aspect Ratio */
+    aspect_ratio: "9:16" | "16:9" | "1:1";
+    /** Visual Style */
+    visual_style: string | null;
+    /** Input Hash */
+    input_hash: string;
+  };
+
+  type DraftShotResponse = {
+    /** Id */
+    id: string;
+    /** Proposal Key */
+    proposal_key: string;
+    /** Position */
+    position: number;
+    /** Title */
+    title: string;
+    /** Narrative Unit Version Ids */
+    narrative_unit_version_ids: string[];
+    spec: ShotSpec;
+    /** Asset References */
+    asset_references: DraftAssetReferenceResponse[];
+    /** Risk Codes */
+    risk_codes: string[];
+    /** Decision History */
+    decision_history: DraftDecisionResponse[];
+  };
+
+  type DraftTarget = {
+    /** Title */
+    title: string;
+    /** Narrative Unit Version Ids */
+    narrative_unit_version_ids: string[];
+    spec: ShotSpec;
+    /** Asset References */
+    asset_references: AssetReferenceRequest[] | null;
   };
 
   type enableAssetApiV1AssetsAssetIdEnablePostParams = {
@@ -2515,6 +2755,10 @@ declare namespace API {
     version_id: string;
   };
 
+  type getBatchApiV1StoryboardDraftBatchesBatchIdGetParams = {
+    batch_id: string;
+  };
+
   type getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGetParams = {
     version_id: string;
   };
@@ -2865,6 +3109,7 @@ declare namespace API {
       | "script_extraction"
       | "episode_planning"
       | "script_adaptation"
+      | "storyboard_draft"
       | "image_generation"
       | "video_generation"
       | "media_probe"
@@ -3535,6 +3780,11 @@ declare namespace API {
   type pauseScheduleApiV1SchedulesScheduleIdPausePostParams = {
     schedule_id: string;
   };
+
+  type preflightApplyApiV1StoryboardDraftBatchesBatchIdApplyPreflightPostParams =
+    {
+      batch_id: string;
+    };
 
   type preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPostParams =
     {
@@ -4432,6 +4682,8 @@ declare namespace API {
     source_scene_id: string;
     /** Source Candidate Id */
     source_candidate_id: string | null;
+    /** Source Draft Shot Id */
+    source_draft_shot_id: string | null;
     /** Status */
     status: "active" | "archived";
     /** Current Spec Version Id */
@@ -4713,6 +4965,7 @@ declare namespace API {
       | "script_extraction"
       | "episode_planning"
       | "script_adaptation"
+      | "storyboard_draft"
       | "image_generation"
       | "video_generation"
       | "media_probe"
@@ -4725,6 +4978,7 @@ declare namespace API {
       | "extraction_batch"
       | "episode_plan"
       | "adaptation_run"
+      | "storyboard_draft_batch"
       | "generation_request"
       | "media_version"
       | "upload_session"

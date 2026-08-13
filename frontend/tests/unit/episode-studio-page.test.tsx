@@ -391,6 +391,7 @@ const storyboardShot: API.ShotResponse = {
   source_script_version_id: versionId,
   source_scene_id: sceneId,
   source_candidate_id: null,
+  source_draft_shot_id: null,
   status: "active",
   current_spec_version_id: null,
   revision: 1,

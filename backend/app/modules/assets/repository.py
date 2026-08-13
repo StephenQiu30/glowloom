@@ -37,6 +37,25 @@ async def find_state(
     return await session.scalar(query)
 
 
+async def find_state_scopes(
+    session: AsyncSession,
+    state_ids: list[UUID],
+    *,
+    for_update: bool = False,
+) -> list[tuple[AssetState, Asset]]:
+    if not state_ids:
+        return []
+    query = (
+        select(AssetState, Asset)
+        .join(Asset, Asset.id == AssetState.asset_id)
+        .where(AssetState.id.in_(state_ids))
+    )
+    if for_update:
+        query = query.with_for_update(of=AssetState)
+    rows = await session.execute(query)
+    return [(row[0], row[1]) for row in rows]
+
+
 async def find_state_by_creation_key(
     session: AsyncSession,
     asset_id: UUID,

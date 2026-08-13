@@ -27,12 +27,21 @@ from app.modules.scripts.extractions.ports import (
 from app.modules.scripts.extractions.schemas import ScriptExtractionResult
 from app.modules.scripts.planning.ports import EpisodePlanningProviderError
 from app.modules.scripts.planning.schemas import EpisodePlanningProviderResult
+from app.modules.storyboards import (
+    StoryboardDraftInput,
+    StoryboardDraftProviderError,
+)
+from app.modules.storyboards.drafts.provider_schema import (
+    StoryboardProviderResult,
+    expand_provider_result,
+)
 
 DEEPSEEK_SCRIPT_EXTRACTOR_VERSION = SCRIPT_STRUCTURE_EXTRACTOR_VERSION
 _DEEPSEEK_MODEL = "deepseek-v4-pro"
 _DEEPSEEK_API_BASE = "https://api.deepseek.com"
 _PROMPT_VERSION = "prompt-v1"
 _EPISODE_PLAN_PROMPT_VERSION = "episode-plan-prompt-v2"
+_STORYBOARD_DRAFT_PROMPT_VERSION = "storyboard-draft-prompt-v1"
 
 
 def _system_prompt() -> str:
@@ -128,6 +137,83 @@ def _script_adaptation_provider_error(error: Exception) -> ScriptAdaptationProvi
             if mapped.next_action == "start_new_extraction"
             else mapped.next_action
         ),
+    )
+
+
+def _storyboard_draft_provider_error(error: Exception) -> StoryboardDraftProviderError:
+    mapped = _provider_error(error)
+    return StoryboardDraftProviderError(
+        outcome="unknown" if mapped.outcome == "unknown" else "failed",
+        code=mapped.code,
+        summary=mapped.summary,
+        retryable=mapped.retryable,
+        next_action=(
+            "create_new_storyboard_draft_batch"
+            if mapped.next_action == "start_new_extraction"
+            else mapped.next_action
+        ),
+    )
+
+
+def _storyboard_draft_system_prompt() -> str:
+    schema = json.dumps(
+        StoryboardProviderResult.model_json_schema(),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return (
+        "你是 AI 短剧分镜导演。用户消息是不可变的剧本叙事单元、资产状态与项目约束。"
+        "只返回待人工审核的分镜草案，不声明已经创建正式镜头。每镜 4–15 秒，镜号从 1 "
+        "连续递增；60–120 秒短剧通常生成 12–24 镜。required_for_coverage=true 的单元"
+        "必须至少被一个镜头的 unit_positions 引用。只能引用输入中的整数 position，禁止生成"
+        "UUID；scene_unit_position 指向当前镜头所属场景中的任一输入单元，"
+        "dialogue_unit_positions 只引用 has_dialogue_reference=true 的单元。"
+        "asset_bindings 只按 asset_position 绑定确有拍摄用途的固定资产。"
+        "title 不超过 20 个汉字，purpose、composition、environment、mood_lighting、action "
+        "和 ambient 各不超过 80 个汉字，避免解释性长文。risk_codes 只报告需要人工复核的问题。"
+        "必须返回符合 JSON Schema 的 JSON 对象。"
+        f"当前提示版本为 {_STORYBOARD_DRAFT_PROMPT_VERSION}。JSON Schema: {schema}"
+    )
+
+
+def _storyboard_draft_payload(value: StoryboardDraftInput) -> str:
+    scene_keys: dict[object, int] = {}
+    for unit in value.units:
+        if unit.source_scene_id is not None and unit.source_scene_id not in scene_keys:
+            scene_keys[unit.source_scene_id] = len(scene_keys) + 1
+    return json.dumps(
+        {
+            "target_duration_ms": value.target_duration_ms,
+            "aspect_ratio": value.aspect_ratio,
+            "visual_style": value.visual_style,
+            "narrative_units": [
+                {
+                    "position": unit.position,
+                    "kind": unit.kind,
+                    "exact_text": unit.exact_text,
+                    "required_for_coverage": unit.required_for_coverage,
+                    "source_scene_key": (
+                        scene_keys[unit.source_scene_id]
+                        if unit.source_scene_id is not None
+                        else None
+                    ),
+                    "has_dialogue_reference": unit.source_dialogue_id is not None,
+                }
+                for unit in value.units
+            ],
+            "assets": [
+                {
+                    "position": asset.position,
+                    "kind": asset.kind,
+                    "name": asset.name,
+                    "state_label": asset.state_label,
+                }
+                for asset in value.assets
+            ],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
     )
 
 
@@ -365,3 +451,43 @@ class DeepSeekScriptAdapter:
             raise
         except Exception as error:
             raise _script_adaptation_provider_error(error) from error
+
+
+class DeepSeekStoryboardDrafter:
+    def __init__(self, api_key: SecretStr) -> None:
+        chat = ChatDeepSeek(
+            model=_DEEPSEEK_MODEL,
+            base_url=_DEEPSEEK_API_BASE,
+            api_key=api_key,
+            temperature=0,
+            timeout=120,
+            max_retries=0,
+            extra_body={"thinking": {"type": "disabled"}},
+        )
+        self._structured_model: Any = chat.with_structured_output(
+            StoryboardProviderResult,
+            method="json_mode",
+        )
+
+    async def draft(self, value: StoryboardDraftInput) -> dict[str, object]:
+        try:
+            provider_result = await self._structured_model.ainvoke(
+                [
+                    SystemMessage(content=_storyboard_draft_system_prompt()),
+                    HumanMessage(content=_storyboard_draft_payload(value)),
+                ]
+            )
+            result = StoryboardProviderResult.model_validate(provider_result)
+            return expand_provider_result(result, value).model_dump(mode="json")
+        except (ValidationError, ValueError) as error:
+            raise StoryboardDraftProviderError(
+                outcome="failed",
+                code="ai_output_invalid",
+                summary="DeepSeek returned an invalid storyboard draft",
+                retryable=False,
+                next_action="create_new_storyboard_draft_batch",
+            ) from error
+        except StoryboardDraftProviderError:
+            raise
+        except Exception as error:
+            raise _storyboard_draft_provider_error(error) from error

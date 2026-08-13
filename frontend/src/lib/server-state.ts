@@ -140,13 +140,18 @@ import {
   updateDraftApiV1AdaptationRunsRunIdDraftPatch,
 } from "@/api/scriptAdaptations";
 import {
+  applyBatchApiV1StoryboardDraftBatchesBatchIdApplyPost,
   applyAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePost,
   appendSpecVersionApiV1ShotsShotIdSpecVersionsPost,
+  approveBatchApiV1StoryboardDraftBatchesBatchIdApprovePost,
   archiveShotApiV1ShotsShotIdArchivePost,
   copyShotApiV1ShotsShotIdCopyPost,
+  createBatchApiV1EpisodesEpisodeIdStoryboardDraftBatchesPost,
   createManualShotApiV1EpisodesEpisodeIdShotsPost,
   createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPost,
   deleteShotApiV1ShotsShotIdDelete,
+  decideDraftApiV1StoryboardDraftsDraftIdDecisionsPost,
+  getBatchApiV1StoryboardDraftBatchesBatchIdGet,
   getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet,
   getSpecVersionApiV1ShotSpecVersionsVersionIdGet,
   listAssetShotUsagesApiV1AssetVersionsAssetVersionIdShotUsagesGet,
@@ -156,6 +161,7 @@ import {
   mergePreflightApiV1ShotsMergePreflightPost,
   mergeShotsApiV1ShotsMergePost,
   preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPost,
+  preflightApplyApiV1StoryboardDraftBatchesBatchIdApplyPreflightPost,
   reorderShotsApiV1EpisodesEpisodeIdShotsReorderPost,
   restoreShotApiV1ShotsShotIdRestorePost,
   setCurrentSpecVersionApiV1ShotsShotIdCurrentSpecVersionPost,
@@ -254,6 +260,7 @@ export const appApi = createApi({
     "ArchivedShots",
     "ShotSpecs",
     "ShotReadiness",
+    "StoryboardDraft",
   ],
   endpoints: (builder) => ({
     login: builder.mutation<API.AuthResponse, API.LoginRequest>({
@@ -975,6 +982,88 @@ export const appApi = createApi({
         ),
       providesTags: (_result, _error, episodeId) => [
         { type: "Shots", id: episodeId },
+      ],
+    }),
+    storyboardDraft: builder.query<API.DraftBatchResponse, string>({
+      queryFn: (batchId) =>
+        runRequest(() =>
+          getBatchApiV1StoryboardDraftBatchesBatchIdGet({ batch_id: batchId }),
+        ),
+      providesTags: (_result, _error, batchId) => [
+        { type: "StoryboardDraft", id: batchId },
+      ],
+    }),
+    createStoryboardDraft: builder.mutation<
+      API.DraftBatchResponse,
+      { episodeId: string; body: API.DraftBatchCreateRequest }
+    >({
+      queryFn: ({ episodeId, body }) =>
+        runRequest(() =>
+          createBatchApiV1EpisodesEpisodeIdStoryboardDraftBatchesPost(
+            { episode_id: episodeId },
+            body,
+          ),
+        ),
+      invalidatesTags: ["Tasks"],
+    }),
+    decideStoryboardDraft: builder.mutation<
+      API.DraftDecisionResult,
+      { batchId: string; draftId: string; body: API.DraftDecisionRequest }
+    >({
+      queryFn: ({ draftId, body }) =>
+        runRequest(() =>
+          decideDraftApiV1StoryboardDraftsDraftIdDecisionsPost(
+            { draft_id: draftId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { batchId }) => [
+        { type: "StoryboardDraft", id: batchId },
+      ],
+    }),
+    approveStoryboardDraft: builder.mutation<
+      API.DraftBatchResponse,
+      { batchId: string; body: API.DraftApproveRequest }
+    >({
+      queryFn: ({ batchId, body }) =>
+        runRequest(() =>
+          approveBatchApiV1StoryboardDraftBatchesBatchIdApprovePost(
+            { batch_id: batchId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { batchId }) => [
+        { type: "StoryboardDraft", id: batchId },
+      ],
+    }),
+    preflightStoryboardDraft: builder.mutation<
+      API.DraftApplyPreflightResponse,
+      { batchId: string; body: API.DraftApplyPreflightRequest }
+    >({
+      queryFn: ({ batchId, body }) =>
+        runRequest(() =>
+          preflightApplyApiV1StoryboardDraftBatchesBatchIdApplyPreflightPost(
+            { batch_id: batchId },
+            body,
+          ),
+        ),
+    }),
+    applyStoryboardDraft: builder.mutation<
+      API.DraftApplyResponse,
+      { episodeId: string; batchId: string; body: API.DraftApplyRequest }
+    >({
+      queryFn: ({ batchId, body }) =>
+        runRequest(() =>
+          applyBatchApiV1StoryboardDraftBatchesBatchIdApplyPost(
+            { batch_id: batchId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId, batchId }) => [
+        { type: "StoryboardDraft", id: batchId },
+        { type: "Shots", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
+        { type: "Snapshot", id: episodeId },
       ],
     }),
     archivedShots: builder.query<API.ShotResponse[], string>({
@@ -2224,6 +2313,8 @@ export const appApi = createApi({
 export const {
   useAdaptationRunQuery,
   useApplyAssetUpgradeMutation,
+  useApplyStoryboardDraftMutation,
+  useApproveStoryboardDraftMutation,
   useCancelAdaptationRunMutation,
   useCancelGenerationTaskMutation,
   useAppendAssetVersionMutation,
@@ -2254,6 +2345,7 @@ export const {
   useCreateAssetStateMutation,
   useCurrentAssetVersionPreflightMutation,
   useCreateShotMutation,
+  useCreateStoryboardDraftMutation,
   useCreateShotFromCandidateMutation,
   useCreateEpisodeMutation,
   useCreateProjectMutation,
@@ -2267,6 +2359,7 @@ export const {
   useDeleteProjectMutation,
   useDeactivateAccountMutation,
   useDecideExtractionCandidateMutation,
+  useDecideStoryboardDraftMutation,
   useEpisodeQuery,
   useEnableAssetMutation,
   useEnableAssetStateMutation,
@@ -2302,6 +2395,7 @@ export const {
   useProjectQuery,
   useProjectDeletePreflightMutation,
   useProjectSnapshotQuery,
+  usePreflightStoryboardDraftMutation,
   useProjectsQuery,
   usePublishAdaptationRunMutation,
   usePublishScriptVersionMutation,
@@ -2349,6 +2443,7 @@ export const {
   useShotReadinessQuery,
   useShotDeletePreflightMutation,
   useShotSpecVersionsQuery,
+  useStoryboardDraftQuery,
   useSplitShotMutation,
   useSplitShotPreflightMutation,
   useTasksQuery,

@@ -21,6 +21,7 @@ from app.modules.assets.contracts import (
     AssetVersionReference,
     ProjectAssetReferenceSummary,
     ProjectAssetSummary,
+    StoryboardAssetInput,
 )
 from app.modules.assets.models import (
     Asset,
@@ -1789,6 +1790,71 @@ async def resolve_asset_version_readiness(
         region=region,
     )
     return results.get(version_id)
+
+
+async def resolve_storyboard_assets(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_id: UUID,
+    state_ids: list[UUID],
+    *,
+    for_update: bool = False,
+) -> tuple[StoryboardAssetInput, ...]:
+    unique_ids = list(dict.fromkeys(state_ids))
+    rows = await repository.find_state_scopes(
+        session,
+        unique_ids,
+        for_update=for_update,
+    )
+    by_state = {
+        state.id: (state, asset)
+        for state, asset in rows
+        if state.workspace_id == workspace_id
+        and asset.workspace_id == workspace_id
+        and asset.project_id == project_id
+    }
+    if len(by_state) != len(unique_ids):
+        return ()
+    version_ids = [
+        state.current_version_id
+        for state, _asset in by_state.values()
+        if state.current_version_id is not None
+    ]
+    if len(version_ids) != len(unique_ids):
+        return ()
+    readiness = await resolve_asset_versions_readiness(
+        session,
+        workspace_id,
+        project_id,
+        version_ids,
+        purpose="ai_short_drama_generation",
+        channel="lanverse_preview",
+        region="CN",
+    )
+    if len(readiness) != len(unique_ids):
+        return ()
+    inputs: list[StoryboardAssetInput] = []
+    for state_id in unique_ids:
+        state, asset = by_state[state_id]
+        assert state.current_version_id is not None
+        reference = readiness[state.current_version_id]
+        if reference.status != "ready":
+            return ()
+        inputs.append(
+            StoryboardAssetInput(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                asset_id=asset.id,
+                asset_state_id=state.id,
+                asset_version_id=state.current_version_id,
+                kind=asset.kind,
+                name=asset.name,
+                state_label=state.label,
+                state_revision=state.revision,
+                readiness_hash=reference.evaluation_hash,
+            )
+        )
+    return tuple(inputs)
 
 
 _STATE_NEXT_ACTIONS = {

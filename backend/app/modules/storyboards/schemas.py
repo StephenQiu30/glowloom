@@ -153,7 +153,7 @@ class AssetReferenceResponse(BaseModel):
     asset_version_id: UUID
     asset_state_id: UUID
     asset_id: UUID
-    binding_source: Literal["manual"]
+    binding_source: Literal["manual", "ai"]
     subject_key: str | None
 
 
@@ -197,6 +197,7 @@ class ShotResponse(BaseModel):
     source_script_version_id: UUID
     source_scene_id: UUID
     source_candidate_id: UUID | None
+    source_draft_shot_id: UUID | None
     status: Literal["active", "archived"]
     current_spec_version_id: UUID | None
     revision: int

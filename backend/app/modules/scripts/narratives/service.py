@@ -22,6 +22,8 @@ from app.modules.scripts.contracts import (
     NarrativeDependencySnapshot,
     NarrativeImpactSnapshot,
     NarrativeUnitVersionReference,
+    StoryboardNarrativeSnapshot,
+    StoryboardNarrativeUnit,
 )
 from app.modules.scripts.models import Dialogue, Scene, ScriptSource, ScriptVersion
 from app.modules.scripts.narratives import repository
@@ -81,6 +83,50 @@ async def resolve_narrative_unit_versions(
         if version.workspace_id == workspace_id
         and (context := contexts.get(version.episode_id)) is not None
     }
+
+
+async def resolve_storyboard_narrative(
+    session: AsyncSession,
+    workspace_id: UUID,
+    script_version_id: UUID,
+) -> StoryboardNarrativeSnapshot | None:
+    structure = await repository.find_structure_by_script(session, script_version_id)
+    if structure is None or structure.workspace_id != workspace_id:
+        return None
+    versions = await repository.list_versions(
+        session,
+        structure.id,
+        structure.revision,
+    )
+    units = await repository.find_units(session, [version.unit_id for version in versions])
+    kind_by_id = {unit.id: unit.kind for unit in units}
+    if len(kind_by_id) != len(versions):
+        return None
+    return StoryboardNarrativeSnapshot(
+        workspace_id=structure.workspace_id,
+        episode_id=structure.episode_id,
+        script_version_id=structure.script_version_id,
+        structure_id=structure.id,
+        structure_revision=structure.revision,
+        dependency_hash=structure.dependency_hash,
+        units=tuple(
+            StoryboardNarrativeUnit(
+                narrative_unit_id=version.unit_id,
+                unit_version_id=version.id,
+                position=version.position,
+                kind=cast(
+                    Literal["scene_heading", "action", "dialogue", "narration"],
+                    kind_by_id[version.unit_id],
+                ),
+                exact_text=version.exact_text,
+                text_hash=version.text_hash,
+                required_for_coverage=version.required_for_coverage,
+                source_scene_id=version.source_scene_id,
+                source_dialogue_id=version.source_dialogue_id,
+            )
+            for version in versions
+        ),
+    )
 
 
 def _unit_hash_payload(

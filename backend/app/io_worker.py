@@ -22,6 +22,7 @@ from app.integrations.deepseek import (
     DeepSeekEpisodePlanner,
     DeepSeekScriptAdapter,
     DeepSeekScriptStructureExtractor,
+    DeepSeekStoryboardDrafter,
 )
 from app.integrations.rabbitmq import declare_task_topology
 from app.model_registry import register_implemented_models
@@ -39,6 +40,12 @@ from app.modules.messaging.consumer import (
     finalize_extraction_failure,
     finalize_extraction_success,
     prepare_configured_extraction,
+)
+from app.modules.messaging.draft_consumer import (
+    PreparedStoryboardDraft,
+    finalize_storyboard_draft_failure,
+    finalize_storyboard_draft_success,
+    prepare_storyboard_draft,
 )
 from app.modules.messaging.generation_consumer import (
     PreparedGenerationDispatch,
@@ -72,6 +79,10 @@ from app.modules.scripts.planning.ports import (
     EpisodePlanningProviderError,
 )
 from app.modules.scripts.planning.schemas import EpisodePlanningProviderResult
+from app.modules.storyboards import (
+    StoryboardDraftProvider,
+    StoryboardDraftProviderError,
+)
 
 IO_WORKER_MAX_IN_FLIGHT = 4
 MAX_MESSAGE_BYTES = 64 * 1024
@@ -96,6 +107,7 @@ async def process_incoming_message(
     extractor: ScriptStructureExtractor | None = None,
     episode_planner: EpisodePlanner | None = None,
     adaptation_provider: ScriptAdapter | None = None,
+    storyboard_drafter: StoryboardDraftProvider | None = None,
 ) -> WorkerResult:
     started = time.perf_counter()
     if len(message.body) > MAX_MESSAGE_BYTES:
@@ -131,6 +143,7 @@ async def process_incoming_message(
             extractor=extractor,
             episode_planner=episode_planner,
             adaptation_provider=adaptation_provider,
+            storyboard_drafter=storyboard_drafter,
         )
         span.set_attribute("messaging.operation.result", result)
         if result == "requeued":
@@ -207,7 +220,16 @@ async def _process_valid_envelope(
     extractor: ScriptStructureExtractor | None,
     episode_planner: EpisodePlanner | None,
     adaptation_provider: ScriptAdapter | None,
+    storyboard_drafter: StoryboardDraftProvider | None,
 ) -> WorkerResult:
+
+    if envelope.event_type == "storyboard_draft.requested":
+        return await _process_storyboard_draft_envelope(
+            message,
+            envelope,
+            factory,
+            storyboard_drafter=storyboard_drafter,
+        )
 
     if envelope.event_type == "script_adaptation.requested":
         return await _process_script_adaptation_envelope(
@@ -481,6 +503,73 @@ async def _process_script_adaptation_envelope(
     return result
 
 
+async def _process_storyboard_draft_envelope(
+    message: IncomingMessage,
+    envelope: MessageEnvelope,
+    factory: async_sessionmaker[AsyncSession],
+    *,
+    storyboard_drafter: StoryboardDraftProvider | None,
+) -> WorkerResult:
+    try:
+        async with factory() as session:
+            async with session.begin():
+                prepared = await prepare_storyboard_draft(
+                    session,
+                    envelope,
+                    configured=storyboard_drafter is not None,
+                )
+    except Exception:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    if not isinstance(prepared, PreparedStoryboardDraft):
+        await message.ack()
+        return prepared
+    if storyboard_drafter is None:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    draft_result: dict[str, object] | None = None
+    try:
+        draft_result = await storyboard_drafter.draft(prepared.draft_input)
+    except StoryboardDraftProviderError as error:
+        provider_error = error
+    except Exception:
+        provider_error = StoryboardDraftProviderError(
+            outcome="unknown",
+            code="ai_result_unknown",
+            summary="AI storyboard draft response outcome is unknown",
+            retryable=False,
+            next_action="create_new_storyboard_draft_batch",
+        )
+    else:
+        provider_error = None
+
+    try:
+        async with factory() as session:
+            async with session.begin():
+                if provider_error is None:
+                    if draft_result is None:
+                        raise RuntimeError("storyboard draft result is unavailable")
+                    result = await finalize_storyboard_draft_success(
+                        session,
+                        prepared,
+                        draft_result,
+                    )
+                else:
+                    result = await finalize_storyboard_draft_failure(
+                        session,
+                        prepared,
+                        provider_error,
+                    )
+    except Exception:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    await message.ack()
+    return result
+
+
 async def run_io_worker(settings: Settings) -> None:
     configure_logging(
         settings.log_level,
@@ -509,6 +598,11 @@ async def run_io_worker(settings: Settings) -> None:
         if settings.deepseek_api_key is not None
         else None
     )
+    storyboard_drafter = (
+        DeepSeekStoryboardDrafter(settings.deepseek_api_key)
+        if settings.deepseek_api_key is not None
+        else None
+    )
     connection = await aio_pika.connect_robust(settings.rabbitmq_url, timeout=3)
     try:
         channel = await connection.channel()
@@ -522,6 +616,7 @@ async def run_io_worker(settings: Settings) -> None:
                 extractor=extractor,
                 episode_planner=episode_planner,
                 adaptation_provider=adaptation_provider,
+                storyboard_drafter=storyboard_drafter,
             )
 
         await io_queue.consume(on_message, no_ack=False)

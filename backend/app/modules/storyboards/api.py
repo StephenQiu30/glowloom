@@ -8,6 +8,7 @@ from app.core.auth import AccessTokenClaims, get_access_token_claims
 from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
 from app.modules.storyboards import service
+from app.modules.storyboards.drafts.api import router as drafts_router
 from app.modules.storyboards.schemas import (
     AssetUpgradeApplyRequest,
     AssetUpgradeApplyResponse,
@@ -39,6 +40,7 @@ from app.modules.storyboards.schemas import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["storyboards"])
+router.include_router(drafts_router)
 
 
 @router.get(
@@ -134,9 +136,7 @@ async def merge_preflight(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotTransformPreflightResponse]:
-    return ApiResponse(
-        data=await service.merge_preflight(session, claims, payload)
-    )
+    return ApiResponse(data=await service.merge_preflight(session, claims, payload))
 
 
 @router.post(
@@ -171,9 +171,7 @@ async def create_manual_shot(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotResponse]:
-    return ApiResponse(
-        data=await service.create_manual_shot(session, claims, episode_id, payload)
-    )
+    return ApiResponse(data=await service.create_manual_shot(session, claims, episode_id, payload))
 
 
 @router.get(
@@ -234,9 +232,7 @@ async def reorder_shots(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotOrderResponse]:
-    return ApiResponse(
-        data=await service.reorder_shots(session, claims, episode_id, payload)
-    )
+    return ApiResponse(data=await service.reorder_shots(session, claims, episode_id, payload))
 
 
 @router.get(
@@ -289,9 +285,7 @@ async def archive_shot(
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotStateResponse]:
     return ApiResponse(
-        data=await service.set_shot_archived(
-            session, claims, shot_id, payload, archived=True
-        )
+        data=await service.set_shot_archived(session, claims, shot_id, payload, archived=True)
     )
 
 
@@ -306,9 +300,7 @@ async def restore_shot(
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotStateResponse]:
     return ApiResponse(
-        data=await service.set_shot_archived(
-            session, claims, shot_id, payload, archived=False
-        )
+        data=await service.set_shot_archived(session, claims, shot_id, payload, archived=False)
     )
 
 
@@ -345,9 +337,7 @@ async def split_preflight(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotTransformPreflightResponse]:
-    return ApiResponse(
-        data=await service.split_preflight(session, claims, shot_id, payload)
-    )
+    return ApiResponse(data=await service.split_preflight(session, claims, shot_id, payload))
 
 
 @router.post(
@@ -405,9 +395,7 @@ async def list_spec_versions(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[list[ShotSpecVersionResponse]]:
-    return ApiResponse(
-        data=await service.list_spec_versions(session, claims, shot_id)
-    )
+    return ApiResponse(data=await service.list_spec_versions(session, claims, shot_id))
 
 
 @router.get(
@@ -419,9 +407,7 @@ async def get_spec_version(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ShotSpecVersionResponse]:
-    return ApiResponse(
-        data=await service.get_spec_version(session, claims, version_id)
-    )
+    return ApiResponse(data=await service.get_spec_version(session, claims, version_id))
 
 
 @router.post(

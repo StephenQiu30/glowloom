@@ -160,6 +160,28 @@ export async function reorderShotsApiV1EpisodesEpisodeIdShotsReorderPost(
   );
 }
 
+/** Create Batch POST /api/v1/episodes/${param0}/storyboard-draft-batches */
+export async function createBatchApiV1EpisodesEpisodeIdStoryboardDraftBatchesPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.createBatchApiV1EpisodesEpisodeIdStoryboardDraftBatchesPostParams,
+  body: API.DraftBatchCreateRequest,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseDraftBatchResponse_>(
+    `/api/v1/episodes/${param0}/storyboard-draft-batches`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** Create From Confirmed Candidate POST /api/v1/extraction-candidates/${param0}/shot */
 export async function createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -480,6 +502,111 @@ export async function mergePreflightApiV1ShotsMergePreflightPost(
       headers: {
         "Content-Type": "application/json",
       },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Get Batch GET /api/v1/storyboard-draft-batches/${param0} */
+export async function getBatchApiV1StoryboardDraftBatchesBatchIdGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getBatchApiV1StoryboardDraftBatchesBatchIdGetParams,
+  options?: RequestOptions
+) {
+  const { batch_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseDraftBatchResponse_>(
+    `/api/v1/storyboard-draft-batches/${param0}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Apply Batch POST /api/v1/storyboard-draft-batches/${param0}/apply */
+export async function applyBatchApiV1StoryboardDraftBatchesBatchIdApplyPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.applyBatchApiV1StoryboardDraftBatchesBatchIdApplyPostParams,
+  body: API.DraftApplyRequest,
+  options?: RequestOptions
+) {
+  const { batch_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseDraftApplyResponse_>(
+    `/api/v1/storyboard-draft-batches/${param0}/apply`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Preflight Apply POST /api/v1/storyboard-draft-batches/${param0}/apply-preflight */
+export async function preflightApplyApiV1StoryboardDraftBatchesBatchIdApplyPreflightPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.preflightApplyApiV1StoryboardDraftBatchesBatchIdApplyPreflightPostParams,
+  body: API.DraftApplyPreflightRequest,
+  options?: RequestOptions
+) {
+  const { batch_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseDraftApplyPreflightResponse_>(
+    `/api/v1/storyboard-draft-batches/${param0}/apply-preflight`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Approve Batch POST /api/v1/storyboard-draft-batches/${param0}/approve */
+export async function approveBatchApiV1StoryboardDraftBatchesBatchIdApprovePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.approveBatchApiV1StoryboardDraftBatchesBatchIdApprovePostParams,
+  body: API.DraftApproveRequest,
+  options?: RequestOptions
+) {
+  const { batch_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseDraftBatchResponse_>(
+    `/api/v1/storyboard-draft-batches/${param0}/approve`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Decide Draft POST /api/v1/storyboard-drafts/${param0}/decisions */
+export async function decideDraftApiV1StoryboardDraftsDraftIdDecisionsPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.decideDraftApiV1StoryboardDraftsDraftIdDecisionsPostParams,
+  body: API.DraftDecisionRequest,
+  options?: RequestOptions
+) {
+  const { draft_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseDraftDecisionResult_>(
+    `/api/v1/storyboard-drafts/${param0}/decisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
       data: body,
       ...(options || {}),
     }

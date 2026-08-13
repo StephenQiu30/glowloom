@@ -4,16 +4,24 @@ from uuid import UUID
 
 import httpx
 import pytest
-from app.modules.storyboards.drafts import record_draft_result
-from app.modules.storyboards.drafts.schemas import DraftProviderResult
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from uuid6 import uuid7
 
+from app.core.errors import ApiError
+from app.modules.scripts.models import Dialogue, Scene
+from app.modules.scripts.narratives.models import NarrativeUnit, NarrativeUnitVersion
+from app.modules.storyboards.drafts import record_draft_result
+from app.modules.storyboards.drafts.models import DraftShot
+from app.modules.storyboards.drafts.schemas import DraftProviderResult
+from app.modules.storyboards.models import Shot
 from tests.support.identity_builders import register_identity_response
 from tests.support.project_builders import project_payload
 
 
-async def _published_episode(
+async def published_episode(
     client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
     *,
     email: str,
 ) -> tuple[dict[str, str], dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -32,7 +40,7 @@ async def _published_episode(
     created_episode = await client.post(
         f"/api/v1/projects/{project['id']}/episodes",
         headers=headers,
-        json={"name": "第一集", "target_duration_ms": 90_000},
+        json={"name": "第一集", "target_duration_ms": 11_000},
     )
     assert created_episode.status_code == 201
     episode = created_episode.json()["data"]
@@ -64,16 +72,62 @@ async def _published_episode(
     )
     assert published.status_code == 201
     version = published.json()["data"]["version"]
+    async with session_factory() as session, session.begin():
+        scene = Scene(
+            workspace_id=UUID(identity["workspace"]["id"]),
+            script_version_id=UUID(version["id"]),
+            position=1,
+            heading="内景·旧车站·夜",
+            location="旧车站月台",
+            time_of_day="夜",
+            summary="林澈在雨夜进入旧车站",
+            source_start=0,
+            source_end=len(body),
+        )
+        session.add(scene)
+        await session.flush()
+        dialogue_start = body.index("林澈：有人吗？")
+        dialogue = Dialogue(
+            workspace_id=UUID(identity["workspace"]["id"]),
+            scene_id=scene.id,
+            position=1,
+            speaker_candidate="林澈",
+            dialogue_kind="spoken",
+            text="有人吗？",
+            source_start=dialogue_start,
+            source_end=dialogue_start + len("林澈：有人吗？"),
+        )
+        session.add(dialogue)
+        await session.flush()
+        rows = await session.execute(
+            select(NarrativeUnitVersion, NarrativeUnit)
+            .join(NarrativeUnit, NarrativeUnit.id == NarrativeUnitVersion.unit_id)
+            .where(NarrativeUnitVersion.script_version_id == UUID(version["id"]))
+        )
+        for unit_version, unit in rows:
+            unit_version.source_scene_id = scene.id
+            if unit.kind == "dialogue":
+                unit_version.source_dialogue_id = dialogue.id
     structure_response = await client.get(
         f"/api/v1/script-versions/{version['id']}/narrative-structure",
         headers=headers,
     )
     assert structure_response.status_code == 200
     structure = structure_response.json()["data"]
-    return headers, project, episode, {"version": version, "structure": structure}
+    return (
+        headers,
+        project,
+        episode,
+        {
+            "version": version,
+            "structure": structure,
+            "actor_id": identity["user"]["id"],
+            "workspace_id": identity["workspace"]["id"],
+        },
+    )
 
 
-def _draft_spec(
+def draft_spec(
     structure: dict[str, Any],
     *,
     purpose: str,
@@ -128,7 +182,7 @@ def _draft_spec(
     }
 
 
-def _provider_result(structure: dict[str, Any]) -> DraftProviderResult:
+def provider_result(structure: dict[str, Any]) -> DraftProviderResult:
     unit_ids = [unit["id"] for unit in structure["units"]]
     return DraftProviderResult.model_validate(
         {
@@ -138,7 +192,7 @@ def _provider_result(structure: dict[str, Any]) -> DraftProviderResult:
                     "position": 1,
                     "title": "雨夜进入月台",
                     "narrative_unit_version_ids": unit_ids[:-1],
-                    "spec": _draft_spec(
+                    "spec": draft_spec(
                         structure,
                         purpose="建立雨夜车站与人物处境",
                         duration_ms=6_000,
@@ -151,7 +205,7 @@ def _provider_result(structure: dict[str, Any]) -> DraftProviderResult:
                     "position": 2,
                     "title": "广播发出警告",
                     "narrative_unit_version_ids": unit_ids[-1:],
-                    "spec": _draft_spec(
+                    "spec": draft_spec(
                         structure,
                         purpose="用广播制造悬念",
                         duration_ms=5_000,
@@ -164,7 +218,7 @@ def _provider_result(structure: dict[str, Any]) -> DraftProviderResult:
     )
 
 
-async def _create_batch(
+async def create_batch_fixture(
     client: httpx.AsyncClient,
     *,
     headers: dict[str, str],
@@ -185,7 +239,7 @@ async def _create_batch(
     return response.json()["data"]
 
 
-async def _record_result(
+async def record_result_fixture(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     batch_id: str,
@@ -195,8 +249,44 @@ async def _record_result(
         await record_draft_result(
             session,
             batch_id=UUID(batch_id),
-            result=_provider_result(structure),
+            result=provider_result(structure),
         )
+
+
+@pytest.mark.asyncio
+async def test_provider_result_requires_complete_narrative_coverage(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, _project, episode, script = await published_episode(
+        client,
+        session_factory,
+        email="draft-coverage@example.com",
+    )
+    batch = await create_batch_fixture(
+        client,
+        headers=headers,
+        episode=episode,
+        version_id=script["version"]["id"],
+        key="draft-coverage",
+    )
+    payload = provider_result(script["structure"]).model_dump(mode="json")
+    payload["shots"] = payload["shots"][:1]
+    payload["shots"][0]["spec"]["duration_ms"] = 11_000
+
+    with pytest.raises(ApiError, match="cover every required narrative unit"):
+        async with session_factory() as session, session.begin():
+            await record_draft_result(
+                session,
+                batch_id=UUID(batch["id"]),
+                result=payload,
+            )
+
+    async with session_factory() as session:
+        draft_count = await session.scalar(select(func.count()).select_from(DraftShot))
+        shot_count = await session.scalar(select(func.count()).select_from(Shot))
+        assert draft_count == 0
+        assert shot_count == 0
 
 
 @pytest.mark.asyncio
@@ -204,11 +294,12 @@ async def test_drafts_require_complete_review_before_atomic_apply(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, _project, episode, script = await _published_episode(
+    headers, _project, episode, script = await published_episode(
         client,
+        session_factory,
         email="draft-apply@example.com",
     )
-    batch = await _create_batch(
+    batch = await create_batch_fixture(
         client,
         headers=headers,
         episode=episode,
@@ -225,7 +316,7 @@ async def test_drafts_require_complete_review_before_atomic_apply(
     assert before_result.status_code == 200
     assert before_result.json()["data"]["items"] == []
 
-    await _record_result(
+    await record_result_fixture(
         session_factory,
         batch_id=batch["id"],
         structure=script["structure"],
@@ -352,18 +443,19 @@ async def test_apply_rejects_shot_baseline_change_without_partial_writes(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, _project, episode, script = await _published_episode(
+    headers, _project, episode, script = await published_episode(
         client,
+        session_factory,
         email="draft-conflict@example.com",
     )
-    batch = await _create_batch(
+    batch = await create_batch_fixture(
         client,
         headers=headers,
         episode=episode,
         version_id=script["version"]["id"],
         key="draft-batch:conflict:1",
     )
-    await _record_result(
+    await record_result_fixture(
         session_factory,
         batch_id=batch["id"],
         structure=script["structure"],
@@ -409,17 +501,24 @@ async def test_apply_rejects_shot_baseline_change_without_partial_writes(
         for unit in structure["units"]
         if unit["source_scene_id"] is not None
     )
-    manual = await client.post(
-        f"/api/v1/episodes/{episode['id']}/shots",
-        headers=headers,
-        json={
-            "title": "审核期间新增的人工镜头",
-            "source_script_version_id": script["version"]["id"],
-            "source_scene_id": scene_id,
-            "creation_key": "manual-after-draft-preflight",
-        },
-    )
-    assert manual.status_code == 201
+    async with session_factory() as session, session.begin():
+        session.add(
+            Shot(
+                id=uuid7(),
+                workspace_id=UUID(script["workspace_id"]),
+                episode_id=UUID(episode["id"]),
+                position=1,
+                title="审核期间新增的人工镜头",
+                source_script_version_id=UUID(script["version"]["id"]),
+                source_scene_id=UUID(scene_id),
+                source_candidate_id=None,
+                source_draft_shot_id=None,
+                creation_key="manual-after-draft-preflight",
+                status="active",
+                revision=1,
+                created_by=UUID(script["actor_id"]),
+            )
+        )
 
     rejected = await client.post(
         f"/api/v1/storyboard-draft-batches/{batch['id']}/apply",
@@ -447,18 +546,19 @@ async def test_decisions_are_append_only_and_idempotency_is_scoped_to_input(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, _project, episode, script = await _published_episode(
+    headers, _project, episode, script = await published_episode(
         client,
+        session_factory,
         email="draft-decisions@example.com",
     )
-    batch = await _create_batch(
+    batch = await create_batch_fixture(
         client,
         headers=headers,
         episode=episode,
         version_id=script["version"]["id"],
         key="draft-batch:decisions:1",
     )
-    await _record_result(
+    await record_result_fixture(
         session_factory,
         batch_id=batch["id"],
         structure=script["structure"],

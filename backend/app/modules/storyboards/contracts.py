@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 from uuid import UUID
 
 
@@ -28,7 +28,7 @@ class ShotAssetReferenceSnapshot:
     asset_version_id: UUID
     asset_state_id: UUID
     asset_id: UUID
-    binding_source: Literal["manual"]
+    binding_source: Literal["manual", "ai"]
     subject_key: str | None
 
 
@@ -72,3 +72,62 @@ class EpisodeStoryboardSummary:
     ready: int
     blocked: int
     unavailable: int
+
+
+@dataclass(frozen=True, slots=True)
+class StoryboardDraftUnit:
+    unit_version_id: UUID
+    position: int
+    kind: Literal["scene_heading", "action", "dialogue", "narration"]
+    exact_text: str
+    required_for_coverage: bool
+    source_scene_id: UUID | None
+    source_dialogue_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class StoryboardDraftAsset:
+    asset_version_id: UUID
+    position: int
+    kind: str
+    name: str
+    state_label: str
+
+
+@dataclass(frozen=True, slots=True)
+class StoryboardDraftInput:
+    batch_id: UUID
+    task_id: UUID
+    input_hash: str
+    script_version_id: UUID
+    target_duration_ms: int
+    aspect_ratio: Literal["9:16", "16:9", "1:1"]
+    visual_style: str | None
+    units: tuple[StoryboardDraftUnit, ...]
+    assets: tuple[StoryboardDraftAsset, ...]
+
+
+class StoryboardDraftInputChanged(RuntimeError):
+    pass
+
+
+class StoryboardDraftProviderError(RuntimeError):
+    def __init__(
+        self,
+        *,
+        outcome: Literal["failed", "unknown"],
+        code: str,
+        summary: str,
+        retryable: bool,
+        next_action: str,
+    ) -> None:
+        super().__init__(summary)
+        self.outcome = outcome
+        self.code = code
+        self.summary = summary
+        self.retryable = retryable
+        self.next_action = next_action
+
+
+class StoryboardDraftProvider(Protocol):
+    async def draft(self, value: StoryboardDraftInput) -> dict[str, object]: ...

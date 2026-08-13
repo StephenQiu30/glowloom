@@ -28,6 +28,7 @@ async def list_tasks(
         "script_extraction",
         "episode_planning",
         "script_adaptation",
+        "storyboard_draft",
         "image_generation",
         "video_generation",
         "media_probe",

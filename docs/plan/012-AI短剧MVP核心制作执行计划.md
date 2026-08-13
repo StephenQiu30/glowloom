@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～09 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence、资产影响治理和拆镜/合镜内容守恒；DEV-MVPA-10 的第二轮 GitHub 证据与最小实现边界已冻结，正在进入 Red；制作人/QA 内容质量复核保留到分镜/分镜包产品验收）
+- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～10 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence、资产影响治理、拆镜/合镜内容守恒和可审核 AI 分镜草案；下一任务为 DEV-MVPA-11 多对多覆盖与 readiness；制作人/QA 内容质量复核保留到分镜/分镜包产品验收）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -102,8 +102,8 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-07 | completed（Acceptance 033） | PT-AST-006 | 7 | MVPA-06 | AssetState/Occurrence/state current、状态矩阵和 readiness |
 | DEV-MVPA-08 | completed（Acceptance 034） | PT-AST-007 | 5 | MVPA-07 | 改名/禁用/换版本影响中心、state-aware usage 与 apply |
 | DEV-MVPA-09 | completed（Acceptance 035） | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
-| DEV-MVPA-10 | in_progress | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
-| DEV-MVPA-11 | proposed | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
+| DEV-MVPA-10 | completed（Acceptance 036） | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
+| DEV-MVPA-11 | ready | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
 | DEV-MVPA-12 | proposed | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
 | **合计** |  | **11 个 PT** | **71 人周** |  | **整剧到可信分镜包** |
 
@@ -456,6 +456,16 @@ Green：
 
 退出：真实黄金单集生成 12–24 个草案，Apply 前正式写入 0，冲突时正式写入 0，成功重放只回读同一结果。
 
+完成证据（2026-08-13）：
+
+- 新增职责明确的 `storyboards/drafts/`：Batch 固定 current Script/Narrative/Asset 输入和正式镜头基线；DraftShot 与正式 Shot 分表；Decision 只追加；正式 Shot 以唯一 `source_draft_shot_id` 保留来源。
+- 复用现有 Task/Outbox/Inbox/I/O Worker。Provider 成功只落草案；无 Provider、输入漂移、重复投递、处理中重放、failed 和 unknown 都有显式终态，未建立第二套工作流运行时。
+- Provider 输出协议改为短字段和局部整数位置，adapter 确定性展开为固定 UUID；这是对真实 DeepSeek token 超限和身份幻觉根因的协议收敛，不是兼容解析器。服务端继续硬校验 required unit 覆盖、对白归属、固定资产、4–15 秒单镜、目标总时长和 12–24 镜。
+- 前端在正式镜头上方独立呈现草案，支持选择 ready 状态资产、逐镜接受/修改/忽略、整批批准、preflight diff 和原子 Apply。当前 Apply 只追加，保留所有现有镜头，修改/归档数为 0。
+- 实现遵循 DES-000 的语义化短文件名和 Plain Data Contract：跨模块输入为不可变 `dataclass(frozen=True, slots=True)`，Pydantic 只用于边界，未新增空泛 DTO、拼音、中文迁移名或兼容包装。
+- 后端全量 `431 passed, 27 skipped`，Ruff/Pyright/pip check 通过；真实 DeepSeek 合约 `1 passed`；迁移测试 `26 passed` 且真实数据库为新 head、无模型漂移；前端 `25 files / 89 tests`、TypeScript、生产构建通过。
+- 完整证据见 [Acceptance 036](../acceptance/arrived/036-AI分镜草案审核与原子应用验收.md)。DEV-MVPA-10 与 PT-SBD-008 completed；NarrativeReference、CoverageReport、分镜包和视频生成仍不在本验收范围。
+
 ### 6.9 DEV-MVPA-11：多对多覆盖与 readiness
 
 Red：一个 unit 多镜、一个镜多 unit、对白 audio/visual 分道、重复 primary、approved omission、orphan、旧 unit、依赖 unavailable、Spec/State 切换、36/120 镜 N+1 先失败。
@@ -657,4 +667,4 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 当前可领取任务
 
-`DEV-MVPA-01～09` 已完成并由 Acceptance 028～035 和黄金 fixture 契约关闭。`DEV-MVPA-10` 的 GitHub 证据与最小实现边界已冻结，当前进入 Red：先固定 Provider 对正式 Shot 写入 0、输入漂移、只追加决议、approve 完整性、append-only Apply diff、order/spec 冲突、幂等、部分写入、Worker 重启和 unknown；再实现 DraftBatch，不提前实现 CoverageReport、分镜包或剪辑时间线。
+`DEV-MVPA-01～10` 已完成并由 Acceptance 028～036 和黄金 fixture 契约关闭。当前可领取 `DEV-MVPA-11`：先扩展 GitHub 证据并冻结 NarrativeReference/CoverageDecision/CoverageReport 的事实边界，再以 Red 固定多对多覆盖、approved omission、orphan、stale、依赖 unavailable、双向定位和 36/120 镜无 N+1；不得通过兼容字段猜测旧镜头覆盖关系，也不提前实现分镜包或剪辑时间线。

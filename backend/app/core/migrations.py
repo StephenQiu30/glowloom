@@ -21,6 +21,8 @@ EPISODE_PLANNING_REVISION = "7f3a9c1d2e84"
 ADAPTATION_REVISION = "9a4d6e2f1b73"
 NARRATIVE_REVISION = "2b7e4c9a1d63"
 ASSET_STATE_REVISION = "6c1f8d4a7e20"
+ASSET_CHANGE_REVISION = "36bf151da189"
+STORYBOARD_DRAFT_REVISION = "ecdbb9f876f8"
 PROVIDER_TABLE_NAMES = frozenset(
     {
         "prod_provider_bindings",
@@ -68,6 +70,18 @@ ASSET_CHANGE_COLUMNS = frozenset(
         "command_receipts",
     }
 )
+STORYBOARD_DRAFT_TABLE_NAMES = frozenset(
+    {
+        "sbd_draft_batches",
+        "sbd_draft_input_units",
+        "sbd_draft_input_assets",
+        "sbd_draft_shots",
+        "sbd_draft_shot_units",
+        "sbd_draft_asset_refs",
+        "sbd_draft_decisions",
+    }
+)
+STORYBOARD_DRAFT_COLUMNS = frozenset({"source_draft_shot_id"})
 PROVIDER_CAPABILITY_UNIQUE = "uq_prod_capability_id_version"
 
 
@@ -185,6 +199,29 @@ _PRE_ASSET_CHANGE_OBJECTS = {
     "uq_ast_name_revision_scope",
 }
 
+_PRE_STORYBOARD_DRAFT_OBJECTS = {
+    "fk_sbd_shot_draft_workspace",
+    "uq_sbd_shot_workspace_draft",
+}
+
+
+def _include_pre_storyboard_draft_object(
+    object_: object,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: object | None,
+) -> bool:
+    if type_ == "table" and name in STORYBOARD_DRAFT_TABLE_NAMES:
+        return False
+    table = getattr(object_, "table", None)
+    table_name = getattr(table, "name", None)
+    if type_ == "column" and table_name == "sbd_shots" and name in STORYBOARD_DRAFT_COLUMNS:
+        return False
+    if name in _PRE_STORYBOARD_DRAFT_OBJECTS:
+        return False
+    return _include_baseline_object(object_, name, type_, reflected, compare_to)
+
 
 def _include_pre_asset_change_object(
     object_: object,
@@ -201,7 +238,7 @@ def _include_pre_asset_change_object(
         return False
     if name in _PRE_ASSET_CHANGE_OBJECTS:
         return False
-    return _include_baseline_object(object_, name, type_, reflected, compare_to)
+    return _include_pre_storyboard_draft_object(object_, name, type_, reflected, compare_to)
 
 
 def _include_pre_asset_state_object(
@@ -330,6 +367,7 @@ def _baseline_differences(
     adaptation_era: bool = False,
     narrative_era: bool = False,
     asset_state_era: bool = False,
+    asset_change_era: bool = False,
 ) -> list[object]:
     if (
         sum(
@@ -341,6 +379,7 @@ def _baseline_differences(
                 adaptation_era,
                 narrative_era,
                 asset_state_era,
+                asset_change_era,
             )
         )
         > 1
@@ -361,6 +400,8 @@ def _baseline_differences(
         include_object = _include_narrative_era_object
     elif asset_state_era:
         include_object = _include_pre_asset_change_object
+    elif asset_change_era:
+        include_object = _include_pre_storyboard_draft_object
     context = MigrationContext.configure(
         connection,
         opts={
@@ -414,8 +455,11 @@ def _adopt_existing_database(connection: Connection) -> None:
     narrative_tables = table_names & NARRATIVE_TABLE_NAMES
     asset_state_tables = table_names & ASSET_STATE_TABLE_NAMES
     asset_change_tables = table_names & ASSET_CHANGE_TABLE_NAMES
+    storyboard_draft_tables = table_names & STORYBOARD_DRAFT_TABLE_NAMES
     asset_columns = {column["name"] for column in inspector.get_columns("ast_assets")}
     asset_change_columns = asset_columns & ASSET_CHANGE_COLUMNS
+    shot_columns = {column["name"] for column in inspector.get_columns("sbd_shots")}
+    storyboard_draft_columns = shot_columns & STORYBOARD_DRAFT_COLUMNS
     capability_unique_present = "prod_model_capabilities" in table_names and any(
         constraint["name"] == PROVIDER_CAPABILITY_UNIQUE
         for constraint in inspector.get_unique_constraints("prod_model_capabilities")
@@ -428,6 +472,21 @@ def _adopt_existing_database(connection: Connection) -> None:
     expected_asset_state_tables = set(ASSET_STATE_TABLE_NAMES)
     expected_asset_change_tables = set(ASSET_CHANGE_TABLE_NAMES)
     expected_asset_change_columns = set(ASSET_CHANGE_COLUMNS)
+    expected_storyboard_draft_tables = set(STORYBOARD_DRAFT_TABLE_NAMES)
+    expected_storyboard_draft_columns = set(STORYBOARD_DRAFT_COLUMNS)
+    if (
+        (storyboard_draft_tables and storyboard_draft_tables != expected_storyboard_draft_tables)
+        or (
+            storyboard_draft_columns
+            and storyboard_draft_columns != expected_storyboard_draft_columns
+        )
+        or bool(storyboard_draft_tables) != bool(storyboard_draft_columns)
+    ):
+        raise DatabaseSchemaMismatchError(
+            "database schema differs from baseline; partial StoryboardDraft schema; "
+            f"tables={sorted(storyboard_draft_tables)!r}, "
+            f"columns={sorted(storyboard_draft_columns)!r}"
+        )
     if (
         (asset_change_tables and asset_change_tables != expected_asset_change_tables)
         or (asset_change_columns and asset_change_columns != expected_asset_change_columns)
@@ -472,12 +531,28 @@ def _adopt_existing_database(connection: Connection) -> None:
             f"capability_unique={capability_unique_present!r}"
         )
 
-    if asset_change_tables:
+    if storyboard_draft_tables:
         summary = "; ".join(repr(item) for item in current_differences[:3])
         raise DatabaseSchemaMismatchError(
-            "database schema differs from current asset change schema; "
+            "database schema differs from current StoryboardDraft schema; "
             f"first differences: {summary}"
         )
+
+    if asset_change_tables:
+        asset_change_era_differences = _baseline_differences(
+            connection,
+            asset_change_era=True,
+        )
+        if asset_change_era_differences:
+            summary = "; ".join(repr(item) for item in asset_change_era_differences[:3])
+            raise DatabaseSchemaMismatchError(
+                f"database schema differs from AssetChange-era schema; first differences: {summary}"
+            )
+        command.stamp(configuration, ASSET_CHANGE_REVISION)
+        command.upgrade(configuration, "head")
+        _assert_database_matches_metadata(connection)
+        ensure_expected_heads(_database_heads(connection), get_script_heads())
+        return
 
     if asset_state_tables:
         asset_state_era_differences = _baseline_differences(

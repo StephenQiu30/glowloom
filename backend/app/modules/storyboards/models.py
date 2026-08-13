@@ -49,6 +49,11 @@ class Shot(Base):
             name="fk_sbd_shot_candidate_workspace",
         ),
         ForeignKeyConstraint(
+            ("source_draft_shot_id", "workspace_id"),
+            ("sbd_draft_shots.id", "sbd_draft_shots.workspace_id"),
+            name="fk_sbd_shot_draft_workspace",
+        ),
+        ForeignKeyConstraint(
             ("current_spec_version_id", "workspace_id"),
             ("sbd_shot_spec_versions.id", "sbd_shot_spec_versions.workspace_id"),
             name="fk_sbd_shot_current_spec_workspace",
@@ -58,6 +63,10 @@ class Shot(Base):
         ),
         CheckConstraint("position >= 1", name="ck_sbd_shot_position"),
         CheckConstraint("status IN ('active', 'archived')", name="ck_sbd_shot_status"),
+        CheckConstraint(
+            "source_candidate_id IS NULL OR source_draft_shot_id IS NULL",
+            name="ck_sbd_shot_single_origin",
+        ),
         CheckConstraint("revision >= 1", name="ck_sbd_shot_revision"),
         UniqueConstraint("id", "workspace_id", name="uq_sbd_shot_id_workspace"),
         UniqueConstraint(
@@ -71,6 +80,13 @@ class Shot(Base):
             "source_candidate_id",
             unique=True,
             postgresql_where=text("source_candidate_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_sbd_shot_workspace_draft",
+            "workspace_id",
+            "source_draft_shot_id",
+            unique=True,
+            postgresql_where=text("source_draft_shot_id IS NOT NULL"),
         ),
         Index(
             "uq_sbd_shot_active_position",
@@ -96,22 +112,19 @@ class Shot(Base):
     source_script_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     source_scene_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     source_candidate_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    source_draft_shot_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     creation_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active")
     current_spec_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     revision: Mapped[int] = mapped_column(Integer, default=1)
-    archived_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_by: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=True
     )
     created_by: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
     )
@@ -145,9 +158,7 @@ class ShotSpecVersion(Base):
     created_by: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
 class AssetReference(Base):
@@ -175,12 +186,11 @@ class AssetReference(Base):
             name="fk_sbd_asset_ref_version_scope",
         ),
         CheckConstraint(
-            "role IN ('location', 'character', 'prop', 'costume', "
-            "'visual_style', 'voice')",
+            "role IN ('location', 'character', 'prop', 'costume', 'visual_style', 'voice')",
             name="ck_sbd_asset_ref_role",
         ),
         CheckConstraint(
-            "binding_source = 'manual'",
+            "binding_source IN ('manual', 'ai')",
             name="ck_sbd_asset_ref_binding_source",
         ),
         UniqueConstraint(
@@ -202,9 +212,7 @@ class AssetReference(Base):
     asset_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     binding_source: Mapped[str] = mapped_column(String(30), default="manual")
     subject_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
 class ShotTransform(Base):
@@ -235,16 +243,10 @@ class ShotTransform(Base):
     episode_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     operation: Mapped[str] = mapped_column(String(20))
     source_shot_ids: Mapped[list[UUID]] = mapped_column(ARRAY(Uuid()), nullable=False)
-    source_spec_version_ids: Mapped[list[UUID]] = mapped_column(
-        ARRAY(Uuid()), nullable=False
-    )
+    source_spec_version_ids: Mapped[list[UUID]] = mapped_column(ARRAY(Uuid()), nullable=False)
     result_shot_ids: Mapped[list[UUID]] = mapped_column(ARRAY(Uuid()), nullable=False)
     impact_hash: Mapped[str] = mapped_column(String(64))
     input_hash: Mapped[str] = mapped_column(String(64))
     idempotency_key: Mapped[str] = mapped_column(String(200))
-    actor_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now
-    )
+    actor_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("idn_user_accounts.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)

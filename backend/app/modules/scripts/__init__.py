@@ -17,6 +17,7 @@ from app.modules.scripts.contracts import (
     NarrativeDependencySnapshot,
     ScriptExtractionInput,
     ScriptProductionSummary,
+    StoryboardNarrativeSnapshot,
 )
 from app.modules.scripts.extractions.ports import (
     ScriptExtractionProviderError,
@@ -33,6 +34,7 @@ from app.modules.scripts.extractions.service import (
 from app.modules.scripts.narratives.service import (
     resolve_narrative_dependencies,
     resolve_narrative_unit_versions,
+    resolve_storyboard_narrative,
 )
 from app.modules.scripts.planning.ports import (
     EpisodePlanner,
@@ -63,6 +65,7 @@ __all__ = [
     "ConfirmedStructureQuery",
     "EpisodeConfirmedStructureQuery",
     "NarrativeDependencySnapshot",
+    "StoryboardNarrativeSnapshot",
     "ConfirmedShotCandidateReference",
     "count_episode_script_versions",
     "EpisodePlanner",
@@ -88,6 +91,7 @@ __all__ = [
     "resolve_episode_confirmed_structures",
     "resolve_narrative_dependencies",
     "resolve_narrative_unit_versions",
+    "resolve_storyboard_narrative",
     "resolve_confirmed_shot_candidate",
     "script_version_exists",
     "summarize_current_scripts",

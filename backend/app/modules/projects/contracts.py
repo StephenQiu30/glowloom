@@ -71,6 +71,19 @@ class EpisodeContentContext:
 
 
 @dataclass(frozen=True, slots=True)
+class StoryboardEpisodeContext:
+    episode_id: UUID
+    project_id: UUID
+    workspace_id: UUID
+    current_script_version_id: UUID | None
+    episode_revision: int
+    project_revision: int
+    target_duration_ms: int
+    aspect_ratio: Literal["9:16", "16:9", "1:1"]
+    visual_style: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class ProjectContentContext:
     project_id: UUID
     workspace_id: UUID

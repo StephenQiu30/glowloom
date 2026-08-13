@@ -24,6 +24,8 @@ import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
   useAdaptationRunQuery,
+  useApplyStoryboardDraftMutation,
+  useApproveStoryboardDraftMutation,
   useAssetBibleQuery,
   useAssetsQuery,
   useAppendShotSpecMutation,
@@ -37,11 +39,13 @@ import {
   useConfirmedStructureQuery,
   useCopyShotMutation,
   useCreateShotMutation,
+  useCreateStoryboardDraftMutation,
   useCreateAdaptationRunMutation,
   useCreateShotFromCandidateMutation,
   useDeleteScriptVersionMutation,
   useDeleteShotMutation,
   useDecideExtractionCandidateMutation,
+  useDecideStoryboardDraftMutation,
   useEpisodeQuery,
   useEpisodeSnapshotQuery,
   useEpisodesQuery,
@@ -61,6 +65,7 @@ import {
   useMediaLocationsQuery,
   useNarrativeStructureQuery,
   useProjectQuery,
+  usePreflightStoryboardDraftMutation,
   usePublishScriptVersionMutation,
   usePublishAdaptationRunMutation,
   usePauseScheduleMutation,
@@ -86,6 +91,7 @@ import {
   useSplitShotMutation,
   useSplitShotPreflightMutation,
   useStartExtractionMutation,
+  useStoryboardDraftQuery,
   useSchedulesQuery,
   useTasksQuery,
   useTriggerScheduleMutation,
@@ -103,6 +109,7 @@ import {
 import { MediaWorkspace } from "./media-workspace";
 import { ScriptWorkspace } from "./script-workspace";
 import { type MergePreparation } from "./storyboard-shot-operations";
+import { StoryboardDrafts } from "./storyboard-drafts";
 import { StoryboardWorkspace } from "./storyboard-workspace";
 import { TaskWorkspace } from "./task-workspace";
 
@@ -244,6 +251,18 @@ export function EpisodeProductionStudio({
   const structureQuery = useConfirmedStructureQuery(confirmedVersionId ?? "", {
     skip: !confirmedVersionId || !storyboardActive,
   });
+  const taskDraftBatchId = episodeTasks.find(
+    (task) => task.task_type === "storyboard_draft",
+  )?.request_id;
+  const [startedDraftBatchId, setStartedDraftBatchId] = useState<
+    string | null | undefined
+  >(undefined);
+  const draftBatchId =
+    startedDraftBatchId === undefined ? taskDraftBatchId : startedDraftBatchId;
+  const draftBatchQuery = useStoryboardDraftQuery(draftBatchId ?? "", {
+    pollingInterval: draftBatchId ? 3_000 : 0,
+    skip: !draftBatchId || !storyboardActive,
+  });
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const selectedShot =
     shotOrderQuery.data?.items.find((shot) => shot.id === selectedShotId) ??
@@ -327,6 +346,16 @@ export function EpisodeProductionStudio({
     useSetCurrentMediaVersionMutation();
   const [setMediaArchived, mediaArchiveState] = useSetMediaArchivedMutation();
   const [createShot, createShotState] = useCreateShotMutation();
+  const [createStoryboardDraft, storyboardDraftCreateState] =
+    useCreateStoryboardDraftMutation();
+  const [decideStoryboardDraft, storyboardDraftDecisionState] =
+    useDecideStoryboardDraftMutation();
+  const [approveStoryboardDraft, storyboardDraftApproveState] =
+    useApproveStoryboardDraftMutation();
+  const [preflightStoryboardDraft, storyboardDraftPreflightState] =
+    usePreflightStoryboardDraftMutation();
+  const [applyStoryboardDraft, storyboardDraftApplyState] =
+    useApplyStoryboardDraftMutation();
   const [createShotFromCandidate, createShotFromCandidateState] =
     useCreateShotFromCandidateMutation();
   const [updateShot, updateShotState] = useUpdateShotMutation();
@@ -384,6 +413,11 @@ export function EpisodeProductionStudio({
     mediaCurrentState,
     mediaArchiveState,
     createShotState,
+    storyboardDraftCreateState,
+    storyboardDraftDecisionState,
+    storyboardDraftApproveState,
+    storyboardDraftPreflightState,
+    storyboardDraftApplyState,
     createShotFromCandidateState,
     updateShotState,
     appendShotSpecState,
@@ -909,6 +943,99 @@ export function EpisodeProductionStudio({
     return succeeded;
   }
 
+  async function handleCreateStoryboardDraft(assetStateIds: string[]) {
+    if (!confirmedVersionId) return;
+    await runAction(async () => {
+      const created = await createStoryboardDraft({
+        episodeId,
+        body: {
+          input_script_version_id: confirmedVersionId,
+          asset_state_ids: assetStateIds,
+          idempotency_key: `studio-storyboard-draft:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      setStartedDraftBatchId(created.id);
+      return `分镜草案批次已创建，固定了 ${created.input.narrative_unit_version_ids.length} 个叙事单元和 ${created.input.asset_version_ids.length} 个资产版本。`;
+    });
+  }
+
+  async function handleDecideStoryboardDraft(
+    draft: API.DraftShotResponse,
+    action: "accepted" | "modified" | "ignored",
+    target?: API.DraftTarget,
+  ) {
+    const batch = draftBatchQuery.data;
+    if (!batch) return;
+    await runAction(async () => {
+      const result = await decideStoryboardDraft({
+        batchId: batch.id,
+        draftId: draft.id,
+        body: {
+          action,
+          expected_batch_revision: batch.revision,
+          idempotency_key: `studio-storyboard-decision:${crypto.randomUUID()}`,
+          target: target ?? null,
+        },
+      }).unwrap();
+      await draftBatchQuery.refetch();
+      return `镜头 ${String(draft.position).padStart(2, "0")} 已记录为 ${result.draft.decision_history.at(-1)?.action ?? action}。`;
+    });
+  }
+
+  async function handleApproveStoryboardDraft() {
+    const batch = draftBatchQuery.data;
+    if (!batch) return;
+    await runAction(async () => {
+      await approveStoryboardDraft({
+        batchId: batch.id,
+        body: {
+          expected_revision: batch.revision,
+          idempotency_key: `studio-storyboard-approve:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      await draftBatchQuery.refetch();
+      return "分镜草案已整批批准，正式镜头仍未写入。";
+    });
+  }
+
+  async function handleStoryboardDraftPreflight(): Promise<
+    API.DraftApplyPreflightResponse | undefined
+  > {
+    const batch = draftBatchQuery.data;
+    if (!batch) return undefined;
+    let preflight: API.DraftApplyPreflightResponse | undefined;
+    await runAction(async () => {
+      preflight = await preflightStoryboardDraft({
+        batchId: batch.id,
+        body: { expected_revision: batch.revision },
+      }).unwrap();
+      return `写入预检通过：保留 ${preflight.diff.kept} 个现有镜头，新建 ${preflight.diff.created} 个镜头。`;
+    });
+    return preflight;
+  }
+
+  async function handleApplyStoryboardDraft(
+    preflight: API.DraftApplyPreflightResponse,
+  ) {
+    const batch = draftBatchQuery.data;
+    if (!batch) return;
+    await runAction(async () => {
+      const result = await applyStoryboardDraft({
+        episodeId,
+        batchId: batch.id,
+        body: {
+          expected_revision: preflight.batch_revision,
+          expected_order_hash: preflight.order_hash,
+          impact_hash: preflight.impact_hash,
+          idempotency_key: `studio-storyboard-apply:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      setSelectedShotId(result.created_shot_ids[0] ?? selectedShotId);
+      await Promise.all([draftBatchQuery.refetch(), shotOrderQuery.refetch()]);
+      return `已原子写入 ${result.created_shot_ids.length} 个正式镜头。`;
+    });
+  }
+
   async function handleCreateShotFromCandidate(
     candidate: API.ExtractionCandidateResponse,
   ): Promise<boolean> {
@@ -1177,6 +1304,7 @@ export function EpisodeProductionStudio({
       archivedShotsQuery.error ??
       shotReadinessQuery.error ??
       structureQuery.error ??
+      draftBatchQuery.error ??
       shotSpecVersionsQuery.error
     : undefined;
 
@@ -1336,32 +1464,46 @@ export function EpisodeProductionStudio({
                   summary={snapshot.asset_summary}
                 />
               ) : initialPanel === "storyboard" ? (
-                <StoryboardWorkspace
-                  archivedShots={archivedShotsQuery.data ?? []}
-                  assetBible={assetBibleQuery.data}
-                  busy={busy}
-                  confirmedShotCandidates={confirmedShotCandidates}
-                  order={shotOrderQuery.data ?? { items: [], order_hash: "" }}
-                  readiness={shotReadinessQuery.data}
-                  selectedShotId={selectedShot?.id ?? null}
-                  structure={structureQuery.data}
-                  versions={shotSpecVersionsQuery.currentData ?? []}
-                  onCopy={handleCopyShot}
-                  onCreate={handleCreateShot}
-                  onCreateFromCandidate={handleCreateShotFromCandidate}
-                  onDelete={handleDeleteShot}
-                  onDeletePreflight={handleShotDeletePreflight}
-                  onMerge={handleMergeShots}
-                  onMergePrepare={handleMergePrepare}
-                  onReorder={handleReorderShots}
-                  onSaveSpec={handleSaveShotSpec}
-                  onSelectShot={setSelectedShotId}
-                  onSetCurrentSpec={handleSetCurrentShotSpec}
-                  onSplit={handleSplitShot}
-                  onSplitPreflight={handleSplitPreflight}
-                  onToggleArchived={handleToggleShotArchived}
-                  onUpdate={handleUpdateShot}
-                />
+                <div className="grid gap-5">
+                  <StoryboardDrafts
+                    assetBible={assetBibleQuery.data}
+                    batch={draftBatchQuery.data}
+                    busy={busy}
+                    canCreate={Boolean(confirmedVersionId && structureQuery.data?.scenes.length)}
+                    episodeId={episodeId}
+                    onApply={handleApplyStoryboardDraft}
+                    onApprove={handleApproveStoryboardDraft}
+                    onCreate={handleCreateStoryboardDraft}
+                    onDecide={handleDecideStoryboardDraft}
+                    onPreflight={handleStoryboardDraftPreflight}
+                  />
+                  <StoryboardWorkspace
+                    archivedShots={archivedShotsQuery.data ?? []}
+                    assetBible={assetBibleQuery.data}
+                    busy={busy}
+                    confirmedShotCandidates={confirmedShotCandidates}
+                    order={shotOrderQuery.data ?? { items: [], order_hash: "" }}
+                    readiness={shotReadinessQuery.data}
+                    selectedShotId={selectedShot?.id ?? null}
+                    structure={structureQuery.data}
+                    versions={shotSpecVersionsQuery.currentData ?? []}
+                    onCopy={handleCopyShot}
+                    onCreate={handleCreateShot}
+                    onCreateFromCandidate={handleCreateShotFromCandidate}
+                    onDelete={handleDeleteShot}
+                    onDeletePreflight={handleShotDeletePreflight}
+                    onMerge={handleMergeShots}
+                    onMergePrepare={handleMergePrepare}
+                    onReorder={handleReorderShots}
+                    onSaveSpec={handleSaveShotSpec}
+                    onSelectShot={setSelectedShotId}
+                    onSetCurrentSpec={handleSetCurrentShotSpec}
+                    onSplit={handleSplitShot}
+                    onSplitPreflight={handleSplitPreflight}
+                    onToggleArchived={handleToggleShotArchived}
+                    onUpdate={handleUpdateShot}
+                  />
+                </div>
               ) : initialPanel === "media" ? (
                 <MediaWorkspace
                   busy={busy}

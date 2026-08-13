@@ -31,6 +31,7 @@ from app.modules.projects.contracts import (
     MaterializedEpisodeReference,
     ProjectEpisodeOrderSnapshot,
     PublishedEpisodeScriptReference,
+    StoryboardEpisodeContext,
 )
 from app.modules.projects.episodes.schemas import (
     EpisodeCreateRequest,
@@ -212,6 +213,37 @@ async def resolve_episode_content_contexts(
         and episode.status == "active"
         and project.status == "active"
     }
+
+
+async def resolve_storyboard_episode(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_id: UUID,
+    *,
+    for_update: bool = False,
+) -> StoryboardEpisodeContext | None:
+    result = await repository.find_episode(session, episode_id, for_update=for_update)
+    if result is None:
+        return None
+    episode, project = result
+    if (
+        episode.workspace_id != workspace_id
+        or project.workspace_id != workspace_id
+        or episode.status != "active"
+        or project.status != "active"
+    ):
+        return None
+    return StoryboardEpisodeContext(
+        episode_id=episode.id,
+        project_id=project.id,
+        workspace_id=episode.workspace_id,
+        current_script_version_id=episode.current_script_version_id,
+        episode_revision=episode.revision,
+        project_revision=project.revision,
+        target_duration_ms=episode.target_duration_ms,
+        aspect_ratio=cast(Literal["9:16", "16:9", "1:1"], project.aspect_ratio),
+        visual_style=project.visual_style,
+    )
 
 
 async def lock_episode_content_context(

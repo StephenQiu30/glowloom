@@ -42,6 +42,30 @@ class NarrativeDependencySnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class StoryboardNarrativeUnit:
+    narrative_unit_id: UUID
+    unit_version_id: UUID
+    position: int
+    kind: Literal["scene_heading", "action", "dialogue", "narration"]
+    exact_text: str
+    text_hash: str
+    required_for_coverage: bool
+    source_scene_id: UUID | None
+    source_dialogue_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class StoryboardNarrativeSnapshot:
+    workspace_id: UUID
+    episode_id: UUID
+    script_version_id: UUID
+    structure_id: UUID
+    structure_revision: int
+    dependency_hash: str
+    units: tuple[StoryboardNarrativeUnit, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class NarrativeUnitVersionReference:
     workspace_id: UUID
     project_id: UUID

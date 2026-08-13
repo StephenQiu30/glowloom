@@ -165,6 +165,7 @@ def _shot_response(shot: Shot) -> ShotResponse:
         source_script_version_id=shot.source_script_version_id,
         source_scene_id=shot.source_scene_id,
         source_candidate_id=shot.source_candidate_id,
+        source_draft_shot_id=shot.source_draft_shot_id,
         status=cast(Literal["active", "archived"], shot.status),
         current_spec_version_id=shot.current_spec_version_id,
         revision=shot.revision,
@@ -197,7 +198,7 @@ def _reference_response(reference: AssetReference) -> AssetReferenceResponse:
         asset_version_id=reference.asset_version_id,
         asset_state_id=reference.asset_state_id,
         asset_id=reference.asset_id,
-        binding_source=cast(Literal["manual"], reference.binding_source),
+        binding_source=cast(Literal["manual", "ai"], reference.binding_source),
         subject_key=reference.subject_key,
     )
 
@@ -2848,7 +2849,7 @@ async def get_production_snapshot(
                 asset_version_id=reference.asset_version_id,
                 asset_state_id=reference.asset_state_id,
                 asset_id=reference.asset_id,
-                binding_source=cast(Literal["manual"], reference.binding_source),
+                binding_source=cast(Literal["manual", "ai"], reference.binding_source),
                 subject_key=reference.subject_key,
             )
             for reference in references
