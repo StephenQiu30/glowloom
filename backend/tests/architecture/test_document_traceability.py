@@ -190,7 +190,11 @@ def test_mvp_core_plan_is_traced_without_premature_generation_acceptance() -> No
         assert gate in plan
     assert "| DEV-MVPA-01 | completed" in plan
     assert "| DEV-MVPA-02 | completed" in plan
-    assert "| DEV-MVPA-03 | ready" in plan
+    assert "| DEV-MVPA-03 | completed" in plan
+    assert "| DEV-MVPA-04 | ready" in plan
+    assert (
+        DOCS / "acceptance/arrived/029-整剧导入与格式体检验收.md"
+    ).is_file()
     assert "不等于制作人/QA 已接受" in prd
     assert "D-004" in prd and "D-004" in plan
     assert "不允许创建假图片成功" in prd
