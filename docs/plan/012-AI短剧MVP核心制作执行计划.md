@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01 已完成上游研究、Red 与 migration Green，等待自有旧库备份/恢复演练）
+- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01 等待自有旧库备份/恢复演练；DEV-MVPA-02 已有用户授权的原创合成黄金候选，等待制作人/QA 内容复核）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -39,7 +39,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | Gate | 当前状态 | 负责人 | 关闭证据 | 未关闭时允许做什么 |
 | --- | --- | --- | --- | --- |
 | G-MVPA-001 范围接受 | closed（2026-08-13 用户明确要求执行） | 产品负责人 | 接受 PRD-012 的 MVP-A、11 个 PT、10 集/100k code points 上限和非目标 | 只评审文档，不改业务代码/表 |
-| G-MVPA-002 黄金样本 | in_progress（匿名格式语料已 Green；真实黄金剧和人工 oracle 待提供/接受） | 产品负责人 + 短剧制作人 + QA | 一部自有 3–5 集原稿、单集 60–120 秒/12–24 镜、必拍/允许省略标注和预期分集边界入测试 fixture | 可设计匿名格式语料，不可伪造质量接受 |
+| G-MVPA-002 黄金样本 | in_progress（格式语料与原创合成黄金候选已 Green；制作人/QA 内容签字待完成） | 产品负责人 + 短剧制作人 + QA | 一部自有或明确接受的原创合成 3–5 集原稿、单集 60–120 秒/12–24 镜、必拍/允许省略标注和预期分集边界入测试 fixture，并完成三方签字 | 可设计、测试用户授权的原创合成候选，不可复制参考稿或伪造质量接受 |
 | G-MVPA-003 迁移决策 | in_progress（实现已 Green；待自有旧库恢复演练） | 技术负责人 | 接受 Alembic 基线/旧库升级/备份恢复方案，并同步修订 DES-002、MOD-011 与 PLAN-000 的“仅 create_all”旧基线 | 不领取新增业务模型；先在团队自有旧库副本保存真实备份/恢复证据 |
 | G-MVPA-004 工作区 | closed（计划编写前已核对） | DEV owner | 每个任务开始前重新运行 `git status --short` 并对白名单；不读/提交本地生成产物 | 保留无关产物；重叠修改时停止 |
 | G-MVPA-005 真实依赖 | 当前 S0–S3 已关闭 | QA/工程 | PostgreSQL/RabbitMQ/MinIO/DeepSeek 现有合同回归可运行；新增 AI 分集/改写/分镜只在真实 DeepSeek 授权开关下接受 | 无 Key 可完成纯领域/UI，但 AI PT 保持 blocked；不要求先完成整个 Provider 管理页面 |
@@ -144,6 +144,9 @@ DEV-MVPA-02 准入前置证据（2026-08-13）：
 - `backend/tests/fixtures/mvp_a/script_format_cases.json` 已形成十组可公开提交的最小合成语料，固定显式 5 集、全角/中文/英文集标记、缺号、重复、逆序、空集、前言待决、标题同行不误切、CRLF/行首空白和 Unicode 扩展汉字/Emoji；所有 marker 使用 half-open Unicode code-point 区间；
 - `backend/tests/contract/test_mvp_a_script_fixture_contract.py` 以严格 Pydantic 契约拒绝额外字段，验证完整失败矩阵、精确原文切片、行号、code-point/UTF-16/UTF-8 差异、100k code-point 上限和无外部引用；该契约测试 8 项通过；
 - `backend/tests/fixtures/mvp_a/README.md` 已固定真实黄金包的最小交付清单和仓库授权边界；上述合成语料只关闭格式 corpus 子项，不证明分集、改写或分镜质量，不能关闭 G-MVPA-002，也不能据此进入生产 parser Green。
+- 用户随后明确允许使用其本地 DOCX 作为结构参考并把 mock 数据放入 `docs/`。只读检查确认参考稿含连续 60 集、86 页和明确的“集标记/场标题/动作/对白/钩子”结构；原文件、文件名、本地路径和正文均未进入仓库，也未复制或翻译其内容；
+- `docs/fixtures/mvp_a/001-雾港倒计时合成黄金候选.md` 与 `backend/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json` 已形成原创 5 集候选：分集范围、选定第 3 集 20 个 NarrativeUnit、16 镜/92 秒、角色/地点/道具状态、固定 AssetVersion、`@图片N`、一对多/多对一、拆合守恒、批准省略和创作性镜头均有 oracle；
+- `backend/tests/contract/test_mvp_a_golden_candidate_contract.py` 以严格 schema 和 11 项测试固定原文切片、覆盖守恒与未签字不得关闭 Gate。该候选关闭“缺少可执行材料”子项，但制作人/QA 尚未签字，所以 `review_status.closes_g_mvpa_002=false`，DEV-MVPA-02 仍不进入生产契约冻结。
 
 Red：
 
@@ -522,7 +525,7 @@ MVP-A accepted 后才执行以下动作：
 
 ## 13. 停止条件
 
-- 未接受 MVP-A 或未提供可入库的自有黄金样本；
+- 未接受 MVP-A，或未提供可入库的自有/原创合成黄金候选并完成规定的内容复核；
 - 目标数据库有不可丢失数据但没有备份、副本或 baseline 结构一致性证据；
 - 发现新增事实需要跨模块 ORM、复制 Episode/Scene/Task/Candidate 或保存可变 current 快照；
 - AI 结果需要自动发布、分镜 Apply 需要删除重建整集、split/merge 需要截断内容；
