@@ -22,11 +22,19 @@ from app.model_registry import register_implemented_models
 from tests.conftest import TEST_DATABASE_URL
 
 BASELINE_REVISION = "95c0d24572c5"
+PROVIDER_REVISION = "8d9f2a6c4b71"
+SCRIPT_DOCUMENT_REVISION = "4c8e2f7a9b31"
 PROVIDER_TABLE_NAMES = {
     "prod_provider_bindings",
     "prod_provider_connections",
     "prod_provider_credential_versions",
     "prod_provider_health_checks",
+}
+SCRIPT_DOCUMENT_TABLE_NAMES = {
+    "scr_script_documents",
+    "scr_document_revisions",
+    "scr_narrative_blocks",
+    "scr_format_issues",
 }
 PROVIDER_CAPABILITY_UNIQUE = "uq_prod_capability_id_version"
 
@@ -35,7 +43,7 @@ def _create_historical_pre_provider_schema(sync_connection: Connection) -> None:
     legacy_tables = [
         table
         for name, table in Base.metadata.tables.items()
-        if name not in PROVIDER_TABLE_NAMES
+        if name not in PROVIDER_TABLE_NAMES | SCRIPT_DOCUMENT_TABLE_NAMES
     ]
     Base.metadata.create_all(sync_connection, tables=legacy_tables)
     sync_connection.execute(
@@ -44,6 +52,15 @@ def _create_historical_pre_provider_schema(sync_connection: Connection) -> None:
             f"DROP CONSTRAINT {PROVIDER_CAPABILITY_UNIQUE}"
         )
     )
+
+
+def _create_provider_era_schema(sync_connection: Connection) -> None:
+    provider_era_tables = [
+        table
+        for name, table in Base.metadata.tables.items()
+        if name not in SCRIPT_DOCUMENT_TABLE_NAMES
+    ]
+    Base.metadata.create_all(sync_connection, tables=provider_era_tables)
 
 
 async def _drop_migration_test_schema(target_engine: AsyncEngine) -> None:
@@ -212,7 +229,7 @@ async def test_previously_shipped_full_baseline_upgrades_without_duplicate_provi
     migration_engine: AsyncEngine,
 ) -> None:
     async with migration_engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+        await connection.run_sync(_create_provider_era_schema)
         await connection.execute(
             text(
                 """
@@ -253,7 +270,11 @@ async def test_baseline_revision_represents_the_historical_thirty_eight_table_sc
         )
 
     assert table_names == {
-        *(set(Base.metadata.tables) - PROVIDER_TABLE_NAMES),
+        *(
+            set(Base.metadata.tables)
+            - PROVIDER_TABLE_NAMES
+            - SCRIPT_DOCUMENT_TABLE_NAMES
+        ),
         "alembic_version",
     }
     assert PROVIDER_CAPABILITY_UNIQUE not in capability_unique_constraints
@@ -300,6 +321,157 @@ async def test_provider_revision_downgrades_to_historical_baseline_without_losin
     assert PROVIDER_TABLE_NAMES.isdisjoint(table_names)
     assert PROVIDER_CAPABILITY_UNIQUE not in capability_unique_constraints
     assert account == "downgrade@example.test"
+
+
+@pytest.mark.asyncio
+async def test_provider_revision_is_the_pre_document_forty_two_table_schema(
+    migration_engine: AsyncEngine,
+) -> None:
+    await upgrade_database(migration_engine, revision=PROVIDER_REVISION)
+
+    async with migration_engine.connect() as connection:
+        table_names = set(
+            await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+        )
+
+    assert await get_database_heads(migration_engine) == (PROVIDER_REVISION,)
+    assert table_names == {
+        *(set(Base.metadata.tables) - SCRIPT_DOCUMENT_TABLE_NAMES),
+        "alembic_version",
+    }
+
+
+@pytest.mark.asyncio
+async def test_document_revision_upgrades_provider_era_and_preserves_existing_rows(
+    migration_engine: AsyncEngine,
+) -> None:
+    account_id = uuid4()
+    await upgrade_database(migration_engine, revision=PROVIDER_REVISION)
+    async with migration_engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                INSERT INTO idn_user_accounts (
+                    id, email_normalized, password_hash, token_version,
+                    display_name, status, created_at, updated_at
+                ) VALUES (
+                    :id, 'document-upgrade@example.test', 'test-hash', 1,
+                    'Document Upgrade', 'active', now(), now()
+                )
+                """
+            ),
+            {"id": account_id},
+        )
+
+    await upgrade_database(migration_engine)
+
+    async with migration_engine.connect() as connection:
+        table_names = set(
+            await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+        )
+        account = await connection.scalar(
+            text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
+            {"id": account_id},
+        )
+    assert await get_database_heads(migration_engine) == (SCRIPT_DOCUMENT_REVISION,)
+    assert SCRIPT_DOCUMENT_TABLE_NAMES <= table_names
+    assert account == "document-upgrade@example.test"
+    await assert_database_matches_metadata(migration_engine)
+
+
+@pytest.mark.asyncio
+async def test_unversioned_provider_era_schema_is_adopted_then_upgraded(
+    migration_engine: AsyncEngine,
+) -> None:
+    account_id = uuid4()
+    async with migration_engine.begin() as connection:
+        await connection.run_sync(_create_provider_era_schema)
+        await connection.execute(
+            text(
+                """
+                INSERT INTO idn_user_accounts (
+                    id, email_normalized, password_hash, token_version,
+                    display_name, status, created_at, updated_at
+                ) VALUES (
+                    :id, 'provider-era@example.test', 'test-hash', 1,
+                    'Provider Era', 'active', now(), now()
+                )
+                """
+            ),
+            {"id": account_id},
+        )
+
+    await adopt_existing_database(
+        migration_engine,
+        backup_reference="test-backup-before-document-adoption",
+    )
+
+    async with migration_engine.connect() as connection:
+        account = await connection.scalar(
+            text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
+            {"id": account_id},
+        )
+    assert await get_database_heads(migration_engine) == (SCRIPT_DOCUMENT_REVISION,)
+    assert account == "provider-era@example.test"
+    await assert_database_matches_metadata(migration_engine)
+
+
+@pytest.mark.asyncio
+async def test_partial_document_schema_is_rejected_without_stamping(
+    migration_engine: AsyncEngine,
+) -> None:
+    async with migration_engine.begin() as connection:
+        await connection.run_sync(_create_provider_era_schema)
+        await connection.run_sync(
+            lambda sync: Base.metadata.tables["scr_script_documents"].create(sync)
+        )
+
+    with pytest.raises(
+        DatabaseSchemaMismatchError,
+        match="partial ScriptDocument schema",
+    ):
+        await adopt_existing_database(
+            migration_engine,
+            backup_reference="test-backup-before-partial-document-adoption",
+        )
+
+    assert await get_database_heads(migration_engine) == ()
+
+
+@pytest.mark.asyncio
+async def test_document_revision_downgrades_to_provider_revision_without_legacy_loss(
+    migration_engine: AsyncEngine,
+) -> None:
+    account_id = uuid4()
+    await upgrade_database(migration_engine)
+    async with migration_engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                INSERT INTO idn_user_accounts (
+                    id, email_normalized, password_hash, token_version,
+                    display_name, status, created_at, updated_at
+                ) VALUES (
+                    :id, 'document-downgrade@example.test', 'test-hash', 1,
+                    'Document Downgrade', 'active', now(), now()
+                )
+                """
+            ),
+            {"id": account_id},
+        )
+
+    await downgrade_database(migration_engine, PROVIDER_REVISION)
+
+    async with migration_engine.connect() as connection:
+        table_names = set(
+            await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+        )
+        account = await connection.scalar(
+            text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
+            {"id": account_id},
+        )
+    assert SCRIPT_DOCUMENT_TABLE_NAMES.isdisjoint(table_names)
+    assert account == "document-downgrade@example.test"
 
 
 @pytest.mark.asyncio

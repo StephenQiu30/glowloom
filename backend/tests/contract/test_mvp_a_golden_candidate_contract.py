@@ -8,6 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 FIXTURE_DIRECTORY = Path(__file__).parents[1] / "fixtures/mvp_a"
 GOLDEN_CANDIDATE_FILE = FIXTURE_DIRECTORY / "golden_candidate_harbor_countdown.json"
+DOCS_IMPORT_SAMPLE_FILE = (
+    Path(__file__).parents[3]
+    / "docs/fixtures/mvp_a/002-雾港倒计时整剧导入样例.txt"
+)
 
 
 class StrictFixtureModel(BaseModel):
@@ -179,6 +183,17 @@ def test_golden_candidate_is_original_authorized_material_without_source_copy() 
     assert "/Users/" not in serialized
     assert "http://" not in serialized
     assert "https://" not in serialized
+
+
+def test_docs_import_sample_is_utf8_without_bom_and_matches_golden_script() -> None:
+    fixture = load_golden_candidate()
+    raw_bytes = DOCS_IMPORT_SAMPLE_FILE.read_bytes()
+
+    assert not raw_bytes.startswith(b"\xef\xbb\xbf")
+    raw_text = raw_bytes.decode("utf-8")
+    assert raw_text.endswith("\n")
+    assert not raw_text.endswith("\n\n")
+    assert raw_text.removesuffix("\n") == fixture.full_script
 
 
 def test_five_episode_boundaries_are_exact_contiguous_codepoint_slices() -> None:
