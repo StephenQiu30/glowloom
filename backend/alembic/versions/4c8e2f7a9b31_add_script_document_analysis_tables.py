@@ -1,4 +1,4 @@
-"""增加整剧文档与格式分析表
+"""Add whole-script document and format analysis tables.
 
 Revision ID: 4c8e2f7a9b31
 Revises: 8d9f2a6c4b71

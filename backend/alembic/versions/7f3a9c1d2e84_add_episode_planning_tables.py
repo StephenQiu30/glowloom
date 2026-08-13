@@ -1,4 +1,4 @@
-"""增加分集计划与批量物化表
+"""Add episode planning and batch materialization tables.
 
 Revision ID: 7f3a9c1d2e84
 Revises: 4c8e2f7a9b31

@@ -1,13 +1,14 @@
-"""增加 Provider 安全数据表
+"""Add provider security tables.
 
 Revision ID: 8d9f2a6c4b71
 Revises: 95c0d24572c5
 Create Date: 2026-08-13 10:21:00
 
-兼容说明：首版 Alembic baseline 曾错误地包含本 revision 的四张表。
-已应用该首版 baseline 的数据库会检测到完整表集并安全跳过创建；历史
-pre-Alembic 38 表数据库在 adoption 后由本 revision 补齐表集。部分存在
-四张表时 fail closed，避免在未知中间状态上继续。
+Compatibility note: the first Alembic baseline mistakenly included the four tables
+owned by this revision. Databases that applied that baseline detect the complete table
+set and safely skip creation. Historical pre-Alembic 38-table databases add the table
+set here after adoption. A partial table set fails closed instead of continuing from an
+unknown intermediate state.
 """
 
 from collections.abc import Sequence

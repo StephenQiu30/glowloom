@@ -19,6 +19,39 @@ def test_user_facing_documents_and_e2e_specs_use_semantic_filenames() -> None:
     ] == []
 
 
+def test_executable_source_paths_and_alembic_revisions_use_ascii_semantic_names() -> None:
+    executable_roots = [
+        ROOT / "backend/app",
+        ROOT / "backend/alembic/versions",
+        ROOT / "backend/tests",
+        ROOT / "frontend/src",
+        ROOT / "frontend/tests",
+    ]
+    source_paths = [
+        path
+        for root in executable_roots
+        for path in root.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+    ]
+    assert [
+        path.relative_to(ROOT).as_posix()
+        for path in source_paths
+        if not path.relative_to(ROOT).as_posix().isascii()
+    ] == []
+    assert [
+        path.relative_to(ROOT).as_posix()
+        for path in source_paths
+        if len(path.name) > 64
+    ] == []
+
+    revision_name = re.compile(r"^[0-9a-f]{12}_[a-z][a-z0-9_]*\.py$")
+    assert [
+        path.name
+        for path in (ROOT / "backend/alembic/versions").glob("*.py")
+        if not revision_name.fullmatch(path.name)
+    ] == []
+
+
 def test_production_and_test_code_are_separate() -> None:
     assert (ROOT / "backend/app").is_dir()
     assert (ROOT / "backend/tests").is_dir()

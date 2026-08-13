@@ -1,4 +1,4 @@
-"""建立当前模型基线
+"""Create the current model baseline.
 
 Revision ID: 95c0d24572c5
 Revises:
