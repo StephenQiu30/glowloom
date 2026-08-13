@@ -104,7 +104,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-09 | completed（Acceptance 035） | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
 | DEV-MVPA-10 | completed（Acceptance 036） | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
 | DEV-MVPA-11 | completed（Acceptance 037） | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
-| DEV-MVPA-12 | proposed | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
+| DEV-MVPA-12 | in_progress | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
 | **合计** |  | **11 个 PT** | **71 人周** |  | **整剧到可信分镜包** |
 
 `DEV-MVPA-02` 不创建产品 PT，因为黄金 fixture 和契约冻结是全部 PT 的共同准入证据；它不能被单独标记为产品 accepted。
@@ -510,6 +510,27 @@ Green：
 - 后端全量、36/120 镜性能、迁移、前端全量和浏览器验收的真实命令与结果见 [Acceptance 037](../acceptance/arrived/037-剧本分镜多对多覆盖验收.md)。DEV-MVPA-11 与 PT-SBD-009 completed；JSON/CSV/HTML 分镜包、MediaVersion/Lineage 和受控下载仍属于 DEV-MVPA-12。
 
 ### 6.10 DEV-MVPA-12：分镜包与联合 E2E
+
+#### 6.10.1 上游成熟方案证据 Gate（2026-08-14）
+
+本任务在编码前按固定 commit 检查了领域项目、交换格式和资产发布工程。下表中“采纳”只表示吸收已验证的规则；MVP 不直接复制它们的业务模型，也不新增运行时依赖。
+
+| 候选 | 固定证据、许可证与测试 | 采纳 / 拒绝 |
+| --- | --- | --- |
+| LocalMiniDrama | commit [`7b6c1a7`](https://github.com/xuanyustudio/LocalMiniDrama/tree/7b6c1a748e9e3013b88a902cfbfd31ec283da0d1)，MIT。[分镜表实现](https://github.com/xuanyustudio/LocalMiniDrama/blob/7b6c1a748e9e3013b88a902cfbfd31ec283da0d1/frontweb/src/utils/exportStoryboardSheet.js#L1-L209)证明每镜一行、HTML 转义、CSV 引号和 UTF-8 BOM 的最小可用列；[项目 ZIP](https://github.com/xuanyustudio/LocalMiniDrama/blob/7b6c1a748e9e3013b88a902cfbfd31ec283da0d1/backend-node/src/services/dramaExportService.js#L13-L18)在文件丢失时返回 `null`，后续仍能报告导出成功。 | 采纳表格列、转义和 BOM；拒绝浏览器读 current、本地路径、缺件静默跳过和无历史 Manifest。 |
+| wind-comic | commit [`c83e1cf`](https://github.com/ChrisChen667788/wind-comic/tree/c83e1cf5e9b88fa8ac62bb737c79985a95243b8d)，MIT。[纯函数预检](https://github.com/ChrisChen667788/wind-comic/blob/c83e1cf5e9b88fa8ac62bb737c79985a95243b8d/lib/publish-package.ts#L36-L77)会把缺件转为 `warnings/ready=false`，[测试](https://github.com/ChrisChen667788/wind-comic/blob/c83e1cf5e9b88fa8ac62bb737c79985a95243b8d/tests/v12-3-0-publish-package.test.ts#L16-L60)覆盖齐件、缺件和超限。 | 采纳无 I/O 的预检结果和结构化 blocker；拒绝 URL 作长期文件引用以及缺件时仍可产生“部分成功包”。 |
+| dramai | commit [`2ec3810`](https://github.com/hyyyyyyz/dramai/tree/2ec38104380823aff711c96ed852d5f713b8ac5a)，Apache-2.0。[JSON 备份](https://github.com/hyyyyyyz/dramai/blob/2ec38104380823aff711c96ed852d5f713b8ac5a/src/core/export/json.ts#L4-L76)显式写入 format/version，[导入](https://github.com/hyyyyyyz/dramai/blob/2ec38104380823aff711c96ed852d5f713b8ac5a/src/core/export/json.ts#L99-L151)先验证版本再在 IndexedDB 事务中恢复；[剪映 alpha 包](https://github.com/hyyyyyyz/dramai/blob/2ec38104380823aff711c96ed852d5f713b8ac5a/src/core/export/jianying.ts#L7-L107)同时给机器 Manifest 和人类说明。 | 采纳格式标签、schema 版本和机器/人类双表示；拒绝从当前 IndexedDB 临时聚合和无哈希的文件引用。 |
+| BagIt Python | commit [`4bd2713`](https://github.com/LibraryOfCongress/bagit-python/tree/4bd2713cedbe1f8e634567c20ef0dded9622011d)，CC0/Public Domain。[文档](https://github.com/LibraryOfCongress/bagit-python/blob/4bd2713cedbe1f8e634567c20ef0dded9622011d/README.rst#L67-L97)使用 manifest checksum 和完整性验证；[测试](https://github.com/LibraryOfCongress/bagit-python/blob/4bd2713cedbe1f8e634567c20ef0dded9622011d/test.py#L74-L135)明确区分字节翻转、缺失文件、快速完整性和全量 checksum，[缺件测试](https://github.com/LibraryOfCongress/bagit-python/blob/4bd2713cedbe1f8e634567c20ef0dded9622011d/test.py#L210-L311)会 fail closed。 | 采纳每个表示的 SHA-256、size 和缺件失败语义；拒绝完整 BagIt 目录/依赖，因 MVP 只需四个确定性 ZIP 成员。 |
+| OpenTimelineIO | commit [`bc5fe2d`](https://github.com/AcademySoftwareFoundation/OpenTimelineIO/tree/bc5fe2d78dc3f8b2a8feb7e04483d85a12e80072)，Apache-2.0。[序列化测试](https://github.com/AcademySoftwareFoundation/OpenTimelineIO/blob/bc5fe2d78dc3f8b2a8feb7e04483d85a12e80072/tests/test_serialization.cpp#L24-L110)固定 schema label 和精确 JSON；[版本测试](https://github.com/AcademySoftwareFoundation/OpenTimelineIO/blob/bc5fe2d78dc3f8b2a8feb7e04483d85a12e80072/tests/test_version_manifest.py#L65-L129)验证降级和非法目标失败。 | 采纳 schema label、稳定序列化和明确版本拒绝；拒绝引入 Timeline/Track/Clip，因 MVP-A 不建专业时间线。 |
+| AYON Core | commit [`0c876b7`](https://github.com/ynput/ayon-core/tree/0c876b716a18a16e76a54dc81eecda4aff76b612)，Apache-2.0。[发布集成](https://github.com/ynput/ayon-core/blob/0c876b716a18a16e76a54dc81eecda4aff76b612/client/ayon_core/plugins/publish/integrate.py#L95-L182)将注册版本、传输文件和注册 representation 分步；异常时可回滚文件事务，但源码 TODO 明确数据库改动无法同步回滚。 | 采纳“字节先落盘并验证，再公布 representation”；拒绝把文件回滚误当作跨数据库/对象存储原子性。 |
+
+**本地差距与实施决策：**
+
+- Lanverse 已有不可变 `ScriptVersion/NarrativeUnitVersion/ShotSpecVersion/AssetVersion`、派生 `CoverageReport`、私有 `MediaObject/MediaVersion/MediaLocation`、`Task + Outbox/Inbox` 和 `ObjectStoragePort.put/stat/stream/presign_download`；真实缺口是固定导出输入、确定性包、发布时序、`MediaLineage` 和受控历史，不是第二套 Task/存储/时间线。
+- 提交事务只保存不可变 `ExportSnapshot`、`input_hash`、`StoryboardExportJob`、Task 和 Outbox；Worker 之后仅从该 Snapshot 渲染，不重读 current，因此重启/重试不重新决定输入。
+- Worker 使用 Python 标准库生成确定性 ZIP：`manifest.json`、`storyboard.json`、`storyboard.csv`、`storyboard.html`；每个表示的 SHA-256/size 写入 Manifest。对象使用 Job ID 确定性键，`put` 后必须 `stat + stream sha256` 验证。
+- 只有字节验证通过后，才在一个数据库事务中创建不可变 `StoryboardExportManifest`、通过 Media 公开契约登记 rendered delivery `MediaVersion/Location/Lineage`、标记 Job/Task 成功。崩溃在 `put` 与 DB commit 之间时，重放复用同一对象键并重验哈希；未 commit 时 API 不可见 available Manifest/Media。
+- 语义命名与 Plain Data Contract 继续以 DES-000 为唯一事实源：`ExportSnapshot/RenderedMediaCommand/RenderedMediaResult` 只持有字段、类型和无 I/O 校验；`exports/{models,schemas,service,package,consumer}.py` 使用当前目录下最短的业务语义名，所有源码/测试文件名含扩展名不超过 64 个 ASCII 字符，不新增 DTO 别名、旧路径包装或双路径兼容。
 
 Red：导出读取漂移 current、coverage 过期、blocked asset、幂等冲突、文件写失败、Manifest/Media 部分提交、后续改稿篡改历史和跨空间下载先失败。
 
