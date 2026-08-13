@@ -7,13 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.modules.assets.models import Asset
 from tests.integration.storyboards.test_storyboards_api import (
-    _seed_ready_storyboard_shots,
     create_episode_with_confirmed_structure,
     create_ready_location_asset,
+    seed_ready_storyboard_shots,
 )
 
 
-async def _ready_episode(
+async def create_ready_export_episode(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -31,7 +31,7 @@ async def _ready_episode(
         project_id=UUID(episode["project_id"]),
         refs=refs,
     )
-    await _seed_ready_storyboard_shots(
+    await seed_ready_storyboard_shots(
         session_factory,
         refs=refs,
         location_version_id=UUID(asset_version["id"]),
@@ -57,7 +57,7 @@ async def test_export_preflight_fixes_ready_inputs_and_request_is_idempotent(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, refs, asset_version = await _ready_episode(
+    headers, episode, refs, asset_version = await create_ready_export_episode(
         client,
         session_factory,
         email="storyboard-export-ready@example.com",
@@ -140,7 +140,7 @@ async def test_export_preflight_blocks_uncovered_and_disabled_asset(
         blocker["code"] for blocker in uncovered_data["blockers"]
     }
 
-    headers, episode, _refs, asset_version = await _ready_episode(
+    headers, episode, _refs, asset_version = await create_ready_export_episode(
         client,
         session_factory,
         email="storyboard-export-disabled@example.com",
@@ -169,7 +169,7 @@ async def test_export_request_rejects_stale_preflight_without_writing_history(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, episode, _refs, asset_version = await _ready_episode(
+    headers, episode, _refs, asset_version = await create_ready_export_episode(
         client,
         session_factory,
         email="storyboard-export-stale@example.com",

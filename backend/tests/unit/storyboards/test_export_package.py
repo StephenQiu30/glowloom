@@ -14,6 +14,7 @@ from app.modules.storyboards.exports.contracts import (
     ExportUnit,
 )
 from app.modules.storyboards.exports.package import build_storyboard_package
+from app.modules.storyboards.hashing import canonical_payload_hash
 
 
 def _id(value: int) -> UUID:
@@ -103,16 +104,13 @@ def _snapshot() -> ExportSnapshot:
     )
 
 
+def _input_hash(snapshot: ExportSnapshot) -> str:
+    return canonical_payload_hash(snapshot.model_dump(mode="json"))
+
+
 def test_storyboard_package_is_deterministic_and_self_describing() -> None:
     snapshot = _snapshot()
-    input_hash = hashlib.sha256(
-        json.dumps(
-            snapshot.model_dump(mode="json"),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()
+    input_hash = _input_hash(snapshot)
 
     first = build_storyboard_package(snapshot, input_hash)
     second = build_storyboard_package(snapshot, input_hash)
@@ -149,7 +147,8 @@ def test_storyboard_package_is_deterministic_and_self_describing() -> None:
 
 
 def test_storyboard_package_keeps_machine_and_human_formats_safe() -> None:
-    result = build_storyboard_package(_snapshot(), "a" * 64)
+    snapshot = _snapshot()
+    result = build_storyboard_package(snapshot, _input_hash(snapshot))
 
     with zipfile.ZipFile(io.BytesIO(result.content)) as package:
         json_payload = json.loads(package.read("storyboard.json"))
