@@ -17,12 +17,17 @@ import { assetKindLabels } from "./episode-studio-model";
 export function EpisodeAssetOverview({
   summary,
   assets,
+  assetBible,
 }: {
   summary: API.AssetSummary;
   assets: API.AssetResponse[];
+  assetBible?: API.AssetBibleResponse;
 }) {
   const required = new Set(summary.required_kinds);
   const ready = new Set(summary.ready_kinds);
+  const statesByAssetId = new Map(
+    (assetBible?.items ?? []).map(({ asset, states }) => [asset.id, states]),
+  );
 
   return (
     <div className="grid gap-6">
@@ -82,8 +87,20 @@ export function EpisodeAssetOverview({
                   <p className="truncate font-medium">{asset.name}</p>
                   <p className="mt-1 text-xs text-slate-500">{assetKindLabels[asset.kind]} · revision {asset.revision}</p>
                 </div>
-                <Badge variant={asset.current_version_id ? "secondary" : "outline"}>
-                  {asset.current_version_id ? "已固定版本" : "待建版本"}
+                <Badge
+                  variant={
+                    statesByAssetId
+                      .get(asset.id)
+                      ?.some(({ state }) => state.current_version_id)
+                      ? "secondary"
+                      : "outline"
+                  }
+                >
+                  {statesByAssetId
+                    .get(asset.id)
+                    ?.some(({ state }) => state.current_version_id)
+                    ? "已有状态版本"
+                    : "待建版本"}
                 </Badge>
               </div>
             </article>

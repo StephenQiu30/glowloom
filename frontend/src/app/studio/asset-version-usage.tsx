@@ -46,11 +46,13 @@ function versionLabel(
 
 export function AssetVersionUsage({
   asset,
+  currentVersionId,
   onCompleted,
   onError,
   versions,
 }: {
   asset: API.AssetResponse;
+  currentVersionId: string | null;
   onCompleted: (shotCount: number) => void;
   onError: (message: string) => void;
   versions: API.AssetVersionResponse[];
@@ -68,8 +70,8 @@ export function AssetVersionUsage({
 
   const sourceVersion =
     versions.find((version) => version.id === sourceChoice) ??
-    versions.find((version) => version.id !== asset.current_version_id) ??
-    versions.find((version) => version.id === asset.current_version_id) ??
+    versions.find((version) => version.id !== currentVersionId) ??
+    versions.find((version) => version.id === currentVersionId) ??
     versions[0];
   const targetVersion =
     versions.find(
@@ -78,7 +80,7 @@ export function AssetVersionUsage({
     ) ??
     versions.find(
       (version) =>
-        version.id === asset.current_version_id &&
+        version.id === currentVersionId &&
         version.id !== sourceVersion?.id,
     ) ??
     versions.find((version) => version.id !== sourceVersion?.id);
@@ -200,7 +202,7 @@ export function AssetVersionUsage({
                   >
                     {versions.map((version) => (
                       <option key={version.id} value={version.id}>
-                        {versionLabel(version, asset.current_version_id)}
+                        {versionLabel(version, currentVersionId)}
                       </option>
                     ))}
                   </select>
@@ -218,7 +220,7 @@ export function AssetVersionUsage({
                       .filter((version) => version.id !== sourceVersion?.id)
                       .map((version) => (
                         <option key={version.id} value={version.id}>
-                          {versionLabel(version, asset.current_version_id)}
+                          {versionLabel(version, currentVersionId)}
                         </option>
                       ))}
                   </select>
@@ -395,7 +397,7 @@ export function AssetVersionUsage({
             <DialogTitle>确认资产版本升级</DialogTitle>
             <DialogDescription>
               {sourceVersion && targetVersion
-                ? `${versionLabel(sourceVersion, asset.current_version_id)} → ${versionLabel(targetVersion, asset.current_version_id)}`
+                ? `${versionLabel(sourceVersion, currentVersionId)} → ${versionLabel(targetVersion, currentVersionId)}`
                 : "复核即将写入的变更"}
             </DialogDescription>
           </DialogHeader>

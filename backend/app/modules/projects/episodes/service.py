@@ -198,6 +198,22 @@ async def resolve_episode_content_context(
     return _episode_content_context(episode)
 
 
+async def resolve_episode_content_contexts(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_ids: list[UUID],
+) -> dict[UUID, EpisodeContentContext]:
+    rows = await repository.find_episodes(session, list(dict.fromkeys(episode_ids)))
+    return {
+        episode.id: _episode_content_context(episode)
+        for episode, project in rows
+        if episode.workspace_id == workspace_id
+        and project.workspace_id == workspace_id
+        and episode.status == "active"
+        and project.status == "active"
+    }
+
+
 async def lock_episode_content_context(
     session: AsyncSession,
     workspace_id: UUID,

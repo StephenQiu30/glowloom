@@ -24,6 +24,7 @@ import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
   useAdaptationRunQuery,
+  useAssetBibleQuery,
   useAssetsQuery,
   useAppendShotSpecMutation,
   useArchivedShotsQuery,
@@ -216,6 +217,9 @@ export function EpisodeProductionStudio({
   });
   const adaptationRun = adaptationRunId ? adaptationRunQuery.data : undefined;
   const assetsQuery = useAssetsQuery(episode?.project_id ?? "", { skip: !episode });
+  const assetBibleQuery = useAssetBibleQuery(episode?.project_id ?? "", {
+    skip: !episode,
+  });
   const mediaQuery = useMediaVersionsQuery(workspaceId ?? "", { skip: !workspaceId });
   const [locationVersionId, setLocationVersionId] = useState<string | null>(null);
   const mediaLocationsQuery = useMediaLocationsQuery(locationVersionId ?? "", {
@@ -1163,6 +1167,7 @@ export function EpisodeProductionStudio({
     batchQuery.error ??
     candidatesQuery.error ??
     assetsQuery.error ??
+    assetBibleQuery.error ??
     mediaQuery.error;
   const adaptationError = adaptationRunId
     ? adaptationRunQuery.error
@@ -1325,11 +1330,15 @@ export function EpisodeProductionStudio({
                   onStartExtraction={handleStartExtraction}
                 />
               ) : initialPanel === "assets" ? (
-                <EpisodeAssetOverview assets={assetsQuery.data?.items ?? []} summary={snapshot.asset_summary} />
+                <EpisodeAssetOverview
+                  assetBible={assetBibleQuery.data}
+                  assets={assetsQuery.data?.items ?? []}
+                  summary={snapshot.asset_summary}
+                />
               ) : initialPanel === "storyboard" ? (
                 <StoryboardWorkspace
                   archivedShots={archivedShotsQuery.data ?? []}
-                  assets={assetsQuery.data?.items ?? []}
+                  assetBible={assetBibleQuery.data}
                   busy={busy}
                   confirmedShotCandidates={confirmedShotCandidates}
                   order={shotOrderQuery.data ?? { items: [], order_hash: "" }}

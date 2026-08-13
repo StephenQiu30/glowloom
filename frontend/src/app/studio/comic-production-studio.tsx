@@ -39,11 +39,13 @@ import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
   useAppendAssetVersionMutation,
+  useAssetBibleQuery,
   useAssetDeletePreflightMutation,
   useAssetReadinessQuery,
   useAssetsQuery,
   useAssetVersionsQuery,
   useCreateAssetMutation,
+  useCreateAssetStateMutation,
   useDeleteAssetMutation,
   useMeQuery,
   useMediaVersionsQuery,
@@ -55,11 +57,17 @@ import {
 
 import {
   CreateAssetDialog,
+  CreateStateDialog,
   DeleteAssetDialog,
   EditAssetDialog,
   VersionDialog,
 } from "./asset-dialogs";
-import { AssetDetail, AssetList } from "./asset-panels";
+import {
+  ArchivedAssetCard,
+  AssetDetail,
+  AssetList,
+  AssetStateBar,
+} from "./asset-panels";
 import {
   type AssetKind,
   assetTypes,
@@ -81,10 +89,14 @@ export function ComicProductionStudio() {
   const assets = useAssetsQuery(effectiveProject?.id ?? "", {
     skip: !effectiveProject,
   });
+  const assetBible = useAssetBibleQuery(effectiveProject?.id ?? "", {
+    skip: !effectiveProject,
+  });
   const media = useMediaVersionsQuery(workspaceId ?? "", { skip: !workspaceId });
   const [selectedKind, setSelectedKind] = useState<AssetKind>("character");
   const [query, setQuery] = useState("");
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
   const allAssets = assets.data?.items ?? [];
   const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
   const visibleAssets = allAssets.filter(
@@ -98,18 +110,35 @@ export function ComicProductionStudio() {
   );
   const selectedAsset =
     visibleAssets.find((asset) => asset.id === selectedAssetId) ?? visibleAssets[0];
-  const versions = useAssetVersionsQuery(selectedAsset?.id ?? "", {
-    skip: !selectedAsset,
+  const bibleItems = assetBible.data?.items ?? [];
+  const statesByAssetId = new Map(
+    bibleItems.map(({ asset, states }) => [
+      asset.id,
+      states.map(({ state }) => state),
+    ]),
+  );
+  const selectedBible = bibleItems.find(
+    ({ asset }) => asset.id === selectedAsset?.id,
+  );
+  const selectedStates = selectedBible?.states.map(({ state }) => state) ?? [];
+  const selectedState =
+    selectedStates.find((state) => state.id === selectedStateId) ??
+    selectedStates.find((state) => state.state_key === "base") ??
+    selectedStates[0];
+  const versions = useAssetVersionsQuery(selectedState?.id ?? "", {
+    skip: !selectedState,
   });
   const versionItems = versions.data?.items ?? [];
   const currentVersion =
-    versionItems.find((version) => version.id === selectedAsset?.current_version_id) ??
+    versionItems.find((version) => version.id === selectedState?.current_version_id) ??
     versionItems[0];
   const readiness = useAssetReadinessQuery(currentVersion?.id ?? "", {
     refetchOnMountOrArgChange: true,
     skip: !currentVersion,
   });
   const [createAsset, createState] = useCreateAssetMutation();
+  const [createAssetState, createAssetStateStatus] =
+    useCreateAssetStateMutation();
   const [appendVersion, appendState] = useAppendAssetVersionMutation();
   const [setAssetArchived, archiveState] = useSetAssetArchivedMutation();
   const [updateAsset, updateState] = useUpdateAssetMutation();
@@ -121,6 +150,7 @@ export function ComicProductionStudio() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
+  const [stateOpen, setStateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePreflight, setDeletePreflight] =
     useState<API.AssetDeletePreflightResponse>();
@@ -142,8 +172,30 @@ export function ComicProductionStudio() {
       }).unwrap();
       setSelectedKind(created.kind);
       setSelectedAssetId(created.id);
+      setSelectedStateId(null);
       setCreateOpen(false);
       setNotice(`资产身份已创建：${created.name}`);
+      return true;
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+      return false;
+    }
+  }
+
+  async function submitState(
+    request: API.AssetStateCreateRequest,
+  ): Promise<boolean> {
+    if (!selectedAsset || !effectiveProject) return false;
+    setActionError(null);
+    try {
+      const created = await createAssetState({
+        projectId: effectiveProject.id,
+        assetId: selectedAsset.id,
+        body: request,
+      }).unwrap();
+      setSelectedStateId(created.state.id);
+      setStateOpen(false);
+      setNotice(`剧情状态已创建：${created.state.label}`);
       return true;
     } catch (error: unknown) {
       setActionError(appApiErrorMessage(error));
@@ -154,11 +206,13 @@ export function ComicProductionStudio() {
   async function submitVersion(
     request: API.AssetVersionCreateRequest,
   ): Promise<boolean> {
-    if (!selectedAsset) return false;
+    if (!selectedAsset || !selectedState || !effectiveProject) return false;
     setActionError(null);
     try {
       const created = await appendVersion({
+        projectId: effectiveProject.id,
         assetId: selectedAsset.id,
+        stateId: selectedState.id,
         body: request,
       }).unwrap();
       setVersionOpen(false);
@@ -212,20 +266,21 @@ export function ComicProductionStudio() {
   }
 
   async function selectCurrentVersion(version: API.AssetVersionResponse) {
-    if (!selectedAsset || !effectiveProject) return;
+    if (!selectedAsset || !selectedState || !effectiveProject) return;
     setActionError(null);
     setNotice(null);
     try {
       await setCurrentAssetVersion({
         projectId: effectiveProject.id,
-        assetId: selectedAsset.id,
+        stateId: selectedState.id,
         body: {
           version_id: version.id,
-          expected_current_version_id: selectedAsset.current_version_id,
-          expected_revision: selectedAsset.revision,
+          expected_current_version_id: selectedState.current_version_id,
+          expected_revision: selectedState.revision,
+          idempotency_key: `select-asset-version:${crypto.randomUUID()}`,
         },
       }).unwrap();
-      await assets.refetch().unwrap();
+      await assetBible.refetch().unwrap();
       setNotice(`资产已切换到版本 v${version.version_no}；既有镜头引用保持不变。`);
     } catch (error: unknown) {
       setActionError(appApiErrorMessage(error));
@@ -263,8 +318,13 @@ export function ComicProductionStudio() {
   }
 
   const activeCount = allAssets.filter((asset) => asset.status === "active").length;
-  const versionedCount = allAssets.filter((asset) => asset.current_version_id).length;
-  const pageError = me.error ?? projects.error ?? assets.error ?? media.error;
+  const versionedCount = bibleItems.reduce(
+    (total, { states }) =>
+      total + states.filter(({ state }) => state.current_version_id).length,
+    0,
+  );
+  const pageError =
+    me.error ?? projects.error ?? assets.error ?? assetBible.error ?? media.error;
 
   return (
     <StudioShell
@@ -293,6 +353,7 @@ export function ComicProductionStudio() {
                     onValueChange={(value) => {
                       setSelectedProjectId(value);
                       setSelectedAssetId(null);
+                      setSelectedStateId(null);
                     }}
                   >
                     <SelectTrigger id="assetProject"><SelectValue /></SelectTrigger>
@@ -411,6 +472,7 @@ export function ComicProductionStudio() {
               onValueChange={(value) => {
                 setSelectedKind(value as AssetKind);
                 setSelectedAssetId(null);
+                setSelectedStateId(null);
               }}
               value={selectedKind}
             >
@@ -455,32 +517,54 @@ export function ComicProductionStudio() {
                 </div>
                 <AssetList
                   assets={visibleAssets}
+                  statesByAssetId={statesByAssetId}
                   isLoading={assets.isLoading}
-                  onSelect={setSelectedAssetId}
+                  onSelect={(assetId) => {
+                    setSelectedAssetId(assetId);
+                    setSelectedStateId(null);
+                  }}
                   selectedId={selectedAsset?.id}
                 />
               </div>
-              {selectedAsset ? (
-                <AssetDetail
+              {selectedAsset && selectedState ? (
+                <div className="grid gap-5">
+                  <AssetStateBar
+                    assetStatus={selectedAsset.status}
+                    onCreate={() => setStateOpen(true)}
+                    onSelect={setSelectedStateId}
+                    selectedId={selectedState.id}
+                    states={selectedStates}
+                  />
+                  <AssetDetail
+                    asset={selectedAsset}
+                    currentState={selectedState}
+                    isArchiving={archiveState.isLoading || assets.isFetching}
+                    isChangingCurrent={currentVersionState.isLoading}
+                    mediaById={mediaById}
+                    onAddVersion={() => setVersionOpen(true)}
+                    onDelete={() => void prepareDelete()}
+                    onEdit={() => setEditOpen(true)}
+                    onSetCurrent={(version) => void selectCurrentVersion(version)}
+                    onToggleArchive={toggleArchive}
+                    onUpgradeCompleted={(shotCount) => {
+                      setActionError(null);
+                      setNotice(`已为 ${shotCount} 个镜头创建新的规格版本。`);
+                    }}
+                    onUpgradeError={(message) => setActionError(message || null)}
+                    readiness={currentVersion ? readiness.data : undefined}
+                    readinessError={currentVersion ? readiness.error : undefined}
+                    readinessLoading={currentVersion ? readiness.isLoading : false}
+                    versions={versionItems}
+                    versionsLoading={versions.isLoading}
+                  />
+                </div>
+              ) : selectedAsset?.status === "archived" ? (
+                <ArchivedAssetCard
                   asset={selectedAsset}
-                  isArchiving={archiveState.isLoading || assets.isFetching}
-                  isChangingCurrent={currentVersionState.isLoading}
-                  mediaById={mediaById}
-                  onAddVersion={() => setVersionOpen(true)}
+                  isRestoring={archiveState.isLoading || assets.isFetching}
                   onDelete={() => void prepareDelete()}
                   onEdit={() => setEditOpen(true)}
-                  onSetCurrent={(version) => void selectCurrentVersion(version)}
-                  onToggleArchive={toggleArchive}
-                  onUpgradeCompleted={(shotCount) => {
-                    setActionError(null);
-                    setNotice(`已为 ${shotCount} 个镜头创建新的规格版本。`);
-                  }}
-                  onUpgradeError={(message) => setActionError(message || null)}
-                  readiness={currentVersion ? readiness.data : undefined}
-                  readinessError={currentVersion ? readiness.error : undefined}
-                  readinessLoading={currentVersion ? readiness.isLoading : false}
-                  versions={versionItems}
-                  versionsLoading={versions.isLoading}
+                  onRestore={() => void toggleArchive()}
                 />
               ) : (
                 <Card>
@@ -522,15 +606,6 @@ export function ComicProductionStudio() {
             onSubmit={submitEdit}
             open={editOpen}
           />
-          <VersionDialog
-            asset={selectedAsset}
-            characters={characterAssets}
-            isSubmitting={appendState.isLoading}
-            mediaVersions={mediaVersions}
-            onOpenChange={setVersionOpen}
-            onSubmit={submitVersion}
-            open={versionOpen}
-          />
           <DeleteAssetDialog
             asset={selectedAsset}
             isDeleting={deleteState.isLoading}
@@ -543,6 +618,27 @@ export function ComicProductionStudio() {
             open={deleteOpen}
             preflight={deletePreflight}
           />
+          {selectedState ? (
+            <>
+              <CreateStateDialog
+                asset={selectedAsset}
+                isSubmitting={createAssetStateStatus.isLoading}
+                onOpenChange={setStateOpen}
+                onSubmit={submitState}
+                open={stateOpen}
+              />
+              <VersionDialog
+                asset={selectedAsset}
+                state={selectedState}
+                characters={characterAssets}
+                isSubmitting={appendState.isLoading}
+                mediaVersions={mediaVersions}
+                onOpenChange={setVersionOpen}
+                onSubmit={submitVersion}
+                open={versionOpen}
+              />
+            </>
+          ) : null}
         </>
       ) : null}
     </StudioShell>

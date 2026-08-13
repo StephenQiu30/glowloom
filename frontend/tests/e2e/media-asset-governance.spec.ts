@@ -177,6 +177,21 @@ test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => 
   await page.getByRole("tab", { name: character.tabName }).click();
   await page.getByRole("button", { name: `选择资产 ${character.name}` }).click();
 
+  await page.getByRole("button", { name: "新建状态" }).click();
+  const stateDialog = page.getByRole("dialog", { name: "新建剧情状态" });
+  await stateDialog.getByLabel("状态键").fill("rain_injured");
+  await stateDialog.getByLabel("显示名称").fill("雨夜受伤");
+  await stateDialog.getByLabel("状态说明").fill("雨夜追逐后左臂带伤");
+  await stateDialog.getByRole("button", { name: "创建状态" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "剧情状态已创建：雨夜受伤",
+  );
+  await expect(page.getByRole("button", { name: /雨夜受伤/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByRole("button", { name: /基础状态/ }).click();
+
   await page.getByRole("button", { name: "编辑资产身份" }).click();
   const editDialog = page.getByRole("dialog", { name: "编辑资产身份" });
   await editDialog.getByLabel("资产名称").fill(renamedCharacter);
@@ -226,12 +241,13 @@ test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => 
   const auditTrail = page.getByRole("region", { name: "操作审计" });
   await expect(auditTrail.getByText("授权撤销")).toBeVisible();
   await expect(auditTrail.getByText("资产更新")).toBeVisible();
-  await expect(auditTrail.getByText("资产当前版本切换")).toBeVisible();
+  await expect(auditTrail.getByText("资产剧情状态创建")).toBeVisible();
+  await expect(auditTrail.getByText("资产状态当前版本切换")).toBeVisible();
   await expect(auditTrail.getByText("资产归档")).toBeVisible();
   await expect(auditTrail.getByText("资产恢复")).toBeVisible();
   await expect(auditTrail.getByText("资产版本创建").first()).toBeVisible();
   await auditTrail.getByRole("button", { name: "筛选" }).click();
-  await auditTrail.getByLabel("动作").selectOption("asset.current_changed");
+  await auditTrail.getByLabel("动作").selectOption("asset.state_current_changed");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
   await auditTrail.getByLabel("动作").selectOption("consent.revoked");

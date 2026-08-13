@@ -162,10 +162,21 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
     "asset.archived": frozenset({"revision", "previous_status", "status"}),
     "asset.restored": frozenset({"revision", "previous_status", "status"}),
     "asset.deleted": frozenset({"revision", "kind", "project_id"}),
+    "asset.state_created": frozenset({"asset_id", "asset_revision", "state_key"}),
+    "asset.occurrence_decided": frozenset(
+        {
+            "asset_id",
+            "state_revision",
+            "decision_id",
+            "decision",
+            "narrative_unit_id",
+        }
+    ),
     "asset.version_created": frozenset(
         {
             "asset_id",
-            "asset_revision",
+            "asset_state_id",
+            "state_revision",
             "version_no",
             "kind",
             "set_as_current",
@@ -173,7 +184,9 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
             "current_version_id",
         }
     ),
-    "asset.current_changed": frozenset({"revision", "previous_version_id", "current_version_id"}),
+    "asset.state_current_changed": frozenset(
+        {"asset_id", "revision", "previous_version_id", "current_version_id"}
+    ),
     "shot.spec_version_created": frozenset(
         {
             "shot_id",

@@ -1,16 +1,18 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 
 import {
-  appendAssetVersionApiV1AssetsAssetIdVersionsPost,
+  appendAssetVersionApiV1AssetStatesStateIdVersionsPost,
   archiveAssetApiV1AssetsAssetIdArchivePost,
   assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGet,
+  createAssetStateApiV1AssetsAssetIdStatesPost,
   createAssetApiV1ProjectsProjectIdAssetsPost,
   deleteAssetApiV1AssetsAssetIdDelete,
+  getAssetBibleApiV1ProjectsProjectIdAssetBibleGet,
   getAssetReadinessApiV1AssetVersionsVersionIdReadinessGet,
   listAssetsApiV1ProjectsProjectIdAssetsGet,
-  listAssetVersionsApiV1AssetsAssetIdVersionsGet,
+  listAssetVersionsApiV1AssetStatesStateIdVersionsGet,
   restoreAssetApiV1AssetsAssetIdRestorePost,
-  setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPost,
+  setCurrentAssetVersionApiV1AssetStatesStateIdCurrentVersionPost,
   updateAssetApiV1AssetsAssetIdPatch,
 } from "@/api/assets";
 import {
@@ -218,7 +220,9 @@ export const appApi = createApi({
     "Media",
     "MediaLocations",
     "Assets",
+    "AssetBible",
     "Asset",
+    "AssetStates",
     "AssetVersions",
     "AssetReadiness",
     "AssetShotUsages",
@@ -1725,17 +1729,38 @@ export const appApi = createApi({
         })) ?? []),
       ],
     }),
-    assetVersions: builder.query<API.PaginatedAssetVersions, string>({
-      queryFn: (assetId) =>
+    assetBible: builder.query<API.AssetBibleResponse, string>({
+      queryFn: (projectId) =>
         runRequest(() =>
-          listAssetVersionsApiV1AssetsAssetIdVersionsGet({
-            asset_id: assetId,
+          getAssetBibleApiV1ProjectsProjectIdAssetBibleGet({
+            project_id: projectId,
+            purpose: "ai_short_drama_generation",
+            channel: "lanverse_preview",
+            region: "CN",
+          }),
+        ),
+      providesTags: (result, _error, projectId) => [
+        { type: "AssetBible", id: projectId },
+        ...(result?.items.flatMap(({ asset, states }) => [
+          { type: "Asset" as const, id: asset.id },
+          ...states.map(({ state }) => ({
+            type: "AssetStates" as const,
+            id: state.id,
+          })),
+        ]) ?? []),
+      ],
+    }),
+    assetVersions: builder.query<API.PaginatedAssetVersions, string>({
+      queryFn: (stateId) =>
+        runRequest(() =>
+          listAssetVersionsApiV1AssetStatesStateIdVersionsGet({
+            state_id: stateId,
             limit: 100,
             offset: 0,
           }),
         ),
-      providesTags: (result, _error, assetId) => [
-        { type: "AssetVersions", id: assetId },
+      providesTags: (result, _error, stateId) => [
+        { type: "AssetVersions", id: stateId },
         ...(result?.items.map((version) => ({
           type: "AssetReadiness" as const,
           id: version.id,
@@ -1769,25 +1794,48 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { projectId }) => [
         { type: "Assets", id: projectId },
+        { type: "AssetBible", id: projectId },
       ],
     }),
-    appendAssetVersion: builder.mutation<
-      API.AssetVersionCreateResponse,
-      { assetId: string; body: API.AssetVersionCreateRequest }
+    createAssetState: builder.mutation<
+      API.AssetStateCreateResponse,
+      { projectId: string; assetId: string; body: API.AssetStateCreateRequest }
     >({
       queryFn: ({ assetId, body }) =>
         runRequest(() =>
-          appendAssetVersionApiV1AssetsAssetIdVersionsPost(
+          createAssetStateApiV1AssetsAssetIdStatesPost(
             { asset_id: assetId },
             body,
           ),
         ),
-      invalidatesTags: (result, _error, { assetId }) => [
+      invalidatesTags: (_result, _error, { projectId, assetId }) => [
+        { type: "AssetBible", id: projectId },
         { type: "Asset", id: assetId },
-        { type: "AssetVersions", id: assetId },
+      ],
+    }),
+    appendAssetVersion: builder.mutation<
+      API.AssetVersionCreateResponse,
+      {
+        projectId: string;
+        assetId: string;
+        stateId: string;
+        body: API.AssetVersionCreateRequest;
+      }
+    >({
+      queryFn: ({ stateId, body }) =>
+        runRequest(() =>
+          appendAssetVersionApiV1AssetStatesStateIdVersionsPost(
+            { state_id: stateId },
+            body,
+          ),
+        ),
+      invalidatesTags: (result, _error, { projectId, assetId, stateId }) => [
+        { type: "Asset", id: assetId },
+        { type: "AssetBible", id: projectId },
+        { type: "AssetStates", id: stateId },
+        { type: "AssetVersions", id: stateId },
         ...(result
           ? [
-              { type: "Assets" as const, id: result.asset.project_id },
               { type: "AssetReadiness" as const, id: result.version.id },
             ]
           : []),
@@ -1803,24 +1851,30 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { projectId, assetId }) => [
         { type: "Assets", id: projectId },
+        { type: "AssetBible", id: projectId },
         { type: "Asset", id: assetId },
       ],
     }),
     setCurrentAssetVersion: builder.mutation<
-      API.AssetResponse,
-      { projectId: string; assetId: string; body: API.AssetCurrentVersionRequest }
+      API.AssetStateResponse,
+      {
+        projectId: string;
+        stateId: string;
+        body: API.AssetStateCurrentRequest;
+      }
     >({
-      queryFn: ({ assetId, body }) =>
+      queryFn: ({ stateId, body }) =>
         runRequest(() =>
-          setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPost(
-            { asset_id: assetId },
+          setCurrentAssetVersionApiV1AssetStatesStateIdCurrentVersionPost(
+            { state_id: stateId },
             body,
           ),
         ),
-      invalidatesTags: (_result, _error, { projectId, assetId, body }) => [
+      invalidatesTags: (_result, _error, { projectId, stateId, body }) => [
         { type: "Assets", id: projectId },
-        { type: "Asset", id: assetId },
-        { type: "AssetVersions", id: assetId },
+        { type: "AssetBible", id: projectId },
+        { type: "AssetStates", id: stateId },
+        { type: "AssetVersions", id: stateId },
         { type: "AssetReadiness", id: body.version_id },
         ...(body.expected_current_version_id &&
         body.expected_current_version_id !== body.version_id
@@ -1857,6 +1911,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { projectId, assetId }) => [
         { type: "Assets", id: projectId },
+        { type: "AssetBible", id: projectId },
         { type: "Asset", id: assetId },
       ],
     }),
@@ -1877,14 +1932,7 @@ export const appApi = createApi({
         ...(result
           ? [
               { type: "Assets" as const, id: result.project_id },
-              ...(result.current_version_id
-                ? [
-                    {
-                      type: "AssetReadiness" as const,
-                      id: result.current_version_id,
-                    },
-                  ]
-                : []),
+              { type: "AssetBible" as const, id: result.project_id },
             ]
           : []),
       ],
@@ -2025,6 +2073,7 @@ export const {
   useAssetShotUsagesQuery,
   useAssetUpgradePreflightMutation,
   useAssetDeletePreflightMutation,
+  useAssetBibleQuery,
   useAssetsQuery,
   useAssetVersionsQuery,
   useChangePasswordMutation,
@@ -2038,6 +2087,7 @@ export const {
   useCreateAdaptationRunMutation,
   useCreateConsentMutation,
   useCreateAssetMutation,
+  useCreateAssetStateMutation,
   useCreateShotMutation,
   useCreateShotFromCandidateMutation,
   useCreateEpisodeMutation,

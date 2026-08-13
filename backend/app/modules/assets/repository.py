@@ -3,7 +3,13 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.assets.models import Asset, AssetMediaReference, AssetVersion
+from app.modules.assets.models import (
+    Asset,
+    AssetMediaReference,
+    AssetOccurrenceDecision,
+    AssetState,
+    AssetVersion,
+)
 
 
 async def find_asset(
@@ -16,6 +22,81 @@ async def find_asset(
     if for_update:
         query = query.with_for_update().execution_options(populate_existing=True)
     return await session.scalar(query)
+
+
+async def find_state(
+    session: AsyncSession,
+    state_id: UUID,
+    *,
+    for_update: bool = False,
+) -> AssetState | None:
+    query = select(AssetState).where(AssetState.id == state_id)
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    return await session.scalar(query)
+
+
+async def find_state_by_creation_key(
+    session: AsyncSession,
+    asset_id: UUID,
+    creation_key: str,
+) -> AssetState | None:
+    return await session.scalar(
+        select(AssetState).where(
+            AssetState.asset_id == asset_id,
+            AssetState.creation_key == creation_key,
+        )
+    )
+
+
+async def find_state_by_key(
+    session: AsyncSession,
+    asset_id: UUID,
+    state_key: str,
+) -> AssetState | None:
+    return await session.scalar(
+        select(AssetState).where(
+            AssetState.asset_id == asset_id,
+            AssetState.state_key == state_key,
+        )
+    )
+
+
+async def list_states(
+    session: AsyncSession,
+    asset_id: UUID,
+) -> list[AssetState]:
+    return list(
+        await session.scalars(
+            select(AssetState)
+            .where(AssetState.asset_id == asset_id)
+            .order_by(
+                (AssetState.state_key != "base"),
+                AssetState.created_at,
+                AssetState.id,
+            )
+        )
+    )
+
+
+async def list_states_for_assets(
+    session: AsyncSession,
+    asset_ids: list[UUID],
+) -> list[AssetState]:
+    if not asset_ids:
+        return []
+    return list(
+        await session.scalars(
+            select(AssetState)
+            .where(AssetState.asset_id.in_(asset_ids))
+            .order_by(
+                AssetState.asset_id,
+                (AssetState.state_key != "base"),
+                AssetState.created_at,
+                AssetState.id,
+            )
+        )
+    )
 
 
 async def find_duplicate_name(
@@ -67,22 +148,36 @@ async def list_assets(
     return list(rows), total or 0
 
 
-async def list_active_assets_with_current_version(
+async def list_project_assets(
     session: AsyncSession,
     project_id: UUID,
-) -> tuple[list[tuple[Asset, AssetVersion]], int]:
+) -> list[Asset]:
+    return list(
+        await session.scalars(
+            select(Asset)
+            .where(Asset.project_id == project_id, Asset.status == "active")
+            .order_by(Asset.kind, Asset.created_at, Asset.id)
+        )
+    )
+
+
+async def list_active_states_with_current_version(
+    session: AsyncSession,
+    project_id: UUID,
+) -> tuple[list[tuple[Asset, AssetState, AssetVersion]], int]:
     total = await session.scalar(
         select(func.count())
         .select_from(Asset)
         .where(Asset.project_id == project_id, Asset.status == "active")
     )
     rows = await session.execute(
-        select(Asset, AssetVersion)
-        .join(AssetVersion, AssetVersion.id == Asset.current_version_id)
+        select(Asset, AssetState, AssetVersion)
+        .join(AssetState, AssetState.asset_id == Asset.id)
+        .join(AssetVersion, AssetVersion.id == AssetState.current_version_id)
         .where(Asset.project_id == project_id, Asset.status == "active")
-        .order_by(Asset.kind, Asset.id)
+        .order_by(Asset.kind, Asset.id, AssetState.state_key)
     )
-    return [(asset, version) for asset, version in rows], total or 0
+    return [(asset, state, version) for asset, state, version in rows], total or 0
 
 
 async def count_asset_references_by_project(
@@ -143,35 +238,37 @@ async def count_related_asset_versions(
 async def find_version(
     session: AsyncSession,
     version_id: UUID,
-) -> tuple[AssetVersion, Asset] | None:
+) -> tuple[AssetVersion, AssetState, Asset] | None:
     row = (
         await session.execute(
-            select(AssetVersion, Asset)
+            select(AssetVersion, AssetState, Asset)
+            .join(AssetState, AssetState.id == AssetVersion.asset_state_id)
             .join(Asset, Asset.id == AssetVersion.asset_id)
             .where(AssetVersion.id == version_id)
         )
     ).one_or_none()
-    return None if row is None else (row[0], row[1])
+    return None if row is None else (row[0], row[1], row[2])
 
 
 async def find_versions(
     session: AsyncSession,
     version_ids: list[UUID],
-) -> list[tuple[AssetVersion, Asset]]:
+) -> list[tuple[AssetVersion, AssetState, Asset]]:
     if not version_ids:
         return []
     rows = await session.execute(
-        select(AssetVersion, Asset)
+        select(AssetVersion, AssetState, Asset)
+        .join(AssetState, AssetState.id == AssetVersion.asset_state_id)
         .join(Asset, Asset.id == AssetVersion.asset_id)
         .where(AssetVersion.id.in_(version_ids))
     )
-    by_id = {row[0].id: (row[0], row[1]) for row in rows}
+    by_id = {row[0].id: (row[0], row[1], row[2]) for row in rows}
     return [by_id[version_id] for version_id in version_ids if version_id in by_id]
 
 
 async def list_versions(
     session: AsyncSession,
-    asset_id: UUID,
+    state_id: UUID,
     *,
     limit: int,
     offset: int,
@@ -179,11 +276,11 @@ async def list_versions(
     total = await session.scalar(
         select(func.count())
         .select_from(AssetVersion)
-        .where(AssetVersion.asset_id == asset_id)
+        .where(AssetVersion.asset_state_id == state_id)
     )
     rows = await session.scalars(
         select(AssetVersion)
-        .where(AssetVersion.asset_id == asset_id)
+        .where(AssetVersion.asset_state_id == state_id)
         .order_by(AssetVersion.version_no.desc())
         .limit(limit)
         .offset(offset)
@@ -232,13 +329,63 @@ async def count_versions(session: AsyncSession, asset_id: UUID) -> int:
     )
 
 
+async def delete_states(session: AsyncSession, asset_id: UUID) -> None:
+    for state in await list_states(session, asset_id):
+        await session.delete(state)
+
+
+async def find_occurrence_by_key(
+    session: AsyncSession,
+    state_id: UUID,
+    idempotency_key: str,
+) -> AssetOccurrenceDecision | None:
+    return await session.scalar(
+        select(AssetOccurrenceDecision).where(
+            AssetOccurrenceDecision.asset_state_id == state_id,
+            AssetOccurrenceDecision.idempotency_key == idempotency_key,
+        )
+    )
+
+
+async def latest_occurrence_sequence(
+    session: AsyncSession,
+    state_id: UUID,
+) -> int:
+    return (
+        await session.scalar(
+            select(func.coalesce(func.max(AssetOccurrenceDecision.sequence), 0)).where(
+                AssetOccurrenceDecision.asset_state_id == state_id
+            )
+        )
+        or 0
+    )
+
+
+async def list_occurrence_decisions(
+    session: AsyncSession,
+    state_ids: list[UUID],
+) -> list[AssetOccurrenceDecision]:
+    if not state_ids:
+        return []
+    return list(
+        await session.scalars(
+            select(AssetOccurrenceDecision)
+            .where(AssetOccurrenceDecision.asset_state_id.in_(state_ids))
+            .order_by(
+                AssetOccurrenceDecision.asset_state_id,
+                AssetOccurrenceDecision.sequence,
+            )
+        )
+    )
+
+
 async def find_candidate_version(
     session: AsyncSession,
     candidate_id: UUID,
 ) -> AssetVersion | None:
     return await session.scalar(
         select(AssetVersion).where(
-            AssetVersion.source_type == "candidate",
+            AssetVersion.source_type == "script_extraction_candidate",
             AssetVersion.source_id == candidate_id,
         )
     )

@@ -147,6 +147,9 @@ const versions: API.ShotSpecVersionResponse[] = [
         slot_key: "location-main",
         role: "location",
         asset_version_id: locationVersionId,
+        asset_state_id: "019fb2c0-a000-7000-8000-000000000021",
+        asset_id: "019fb2c0-a000-7000-8000-000000000011",
+        binding_source: "manual",
         subject_key: null,
       },
     ],
@@ -235,7 +238,6 @@ const assets: API.AssetResponse[] = [
     aliases: [],
     tags: [],
     status: "active",
-    current_version_id: locationVersionId,
     revision: 1,
     created_at: now,
     updated_at: now,
@@ -250,7 +252,6 @@ const assets: API.AssetResponse[] = [
     aliases: [],
     tags: [],
     status: "active",
-    current_version_id: characterVersionId,
     revision: 1,
     created_at: now,
     updated_at: now,
@@ -265,13 +266,114 @@ const assets: API.AssetResponse[] = [
     aliases: [],
     tags: [],
     status: "active",
-    current_version_id: voiceVersionId,
     revision: 1,
     created_at: now,
     updated_at: now,
     warnings: [],
   },
 ];
+
+function assetBibleState(
+  asset: API.AssetResponse,
+  versionId: string,
+  ordinal: number,
+): API.AssetBibleState {
+  const stateId = `019fb2c0-a000-7000-8000-00000000002${ordinal}`;
+  const spec: API.AssetVersionResponse["spec"] =
+    asset.kind === "location"
+      ? {
+          kind: "location",
+          spatial_description: "雨夜旧车站",
+          time_weather: "夜间暴雨",
+          visual_elements: ["旧灯箱"],
+          lighting: "冷蓝侧逆光",
+        }
+      : asset.kind === "voice"
+        ? {
+            kind: "voice",
+            source_kind: "synthetic_recording",
+            language: "zh-CN",
+            performance_traits: ["克制"],
+            allowed_usage: ["preview"],
+          }
+        : {
+            kind: "character",
+            identity: asset.name,
+            appearance: "固定外观",
+            age_impression: "青年",
+            temperament: ["克制"],
+          };
+  const state: API.AssetStateResponse = {
+    id: stateId,
+    workspace_id: workspaceId,
+    asset_id: asset.id,
+    state_key: "base",
+    label: "基础状态",
+    description: "",
+    status: "active",
+    current_version_id: versionId,
+    revision: 1,
+    created_by: workspaceId,
+    created_at: now,
+    updated_at: now,
+  };
+  return {
+    state,
+    current_version: {
+      id: versionId,
+      workspace_id: workspaceId,
+      asset_id: asset.id,
+      asset_state_id: stateId,
+      version_no: 1,
+      schema_version: 1,
+      spec,
+      prompt_description: "固定生产版本",
+      source_type: "manual",
+      source_id: null,
+      content_hash: `${ordinal}`.repeat(64),
+      media_references: [],
+      created_by: workspaceId,
+      created_at: now,
+    },
+    occurrences: [],
+    readiness: {
+      status: "draft",
+      blockers: [],
+      warnings: [],
+      next_actions: [],
+      dependency_snapshot: {
+        asset_state_id: stateId,
+        asset_state_revision: 1,
+        current_version_id: versionId,
+        occurrence_decision_ids: [],
+        media_version_ids: [],
+        consent_ids: [],
+        evaluated_at: now,
+      },
+    },
+  };
+}
+
+const assetBible: API.AssetBibleResponse = {
+  items: assets.map((asset, index) => ({
+    asset,
+    states: [
+      assetBibleState(
+        asset,
+        [locationVersionId, characterVersionId, voiceVersionId][index],
+        index + 1,
+      ),
+    ],
+  })),
+  summary: {
+    asset_count: 3,
+    state_count: 3,
+    ready: 0,
+    draft: 3,
+    blocked: 0,
+    unavailable: 0,
+  },
+};
 
 const acceptedShotCandidate: API.ExtractionCandidateResponse = {
   id: "019fb2c0-a000-7000-8000-000000000013",
@@ -317,7 +419,7 @@ describe("分镜工作台", () => {
     render(
       <StoryboardWorkspace
         archivedShots={archivedShots}
-        assets={assets}
+        assetBible={assetBible}
         busy={false}
         confirmedShotCandidates={[acceptedShotCandidate]}
         order={shots}
@@ -363,10 +465,14 @@ describe("分镜工作台", () => {
 
     await user.clear(screen.getByLabelText("镜头目的"));
     await user.type(screen.getByLabelText("镜头目的"), "强调人物进入未知空间");
-    await user.click(screen.getByRole("button", { name: "顾清禾" }));
+    await user.click(
+      screen.getByRole("button", { name: "顾清禾 · 基础状态" }),
+    );
     await user.clear(screen.getByLabelText("顾清禾画面位置"));
     await user.type(screen.getByLabelText("顾清禾画面位置"), "画面左侧，面向站台深处");
-    await user.click(screen.getByRole("button", { name: "顾清禾声线" }));
+    await user.click(
+      screen.getByRole("button", { name: "顾清禾声线 · 基础状态" }),
+    );
     await user.click(
       screen.getByRole("button", { name: "为对白 顾清禾 选择声音 顾清禾声线" }),
     );
@@ -465,7 +571,7 @@ describe("分镜工作台", () => {
     render(
       <StoryboardWorkspace
         archivedShots={[]}
-        assets={[]}
+        assetBible={undefined}
         busy={false}
         confirmedShotCandidates={[]}
         order={{ items: [], order_hash: "a".repeat(64) }}
@@ -508,7 +614,7 @@ describe("分镜工作台", () => {
     render(
       <StoryboardWorkspace
         archivedShots={[]}
-        assets={assets}
+        assetBible={assetBible}
         busy={false}
         confirmedShotCandidates={[]}
         order={{ ...shots, items: [shots.items[0]] }}

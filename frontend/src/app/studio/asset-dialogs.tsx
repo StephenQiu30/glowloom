@@ -151,6 +151,88 @@ export function CreateAssetDialog({
   );
 }
 
+export function CreateStateDialog({
+  asset,
+  isSubmitting,
+  onOpenChange,
+  onSubmit,
+  open,
+}: {
+  asset: API.AssetResponse;
+  isSubmitting: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (request: API.AssetStateCreateRequest) => Promise<boolean>;
+  open: boolean;
+}) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const completed = await onSubmit({
+      state_key: textValue(form, "stateKey"),
+      label: textValue(form, "label"),
+      description: textValue(form, "description"),
+      expected_asset_revision: asset.revision,
+      idempotency_key: `create-asset-state:${crypto.randomUUID()}`,
+    });
+    if (completed) formElement.reset();
+  }
+
+  return (
+    <Dialog.Root onOpenChange={onOpenChange} open={open}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
+        <Dialog.Content className={dialogClassName}>
+          <DialogHeading
+            description={`为“${asset.name}”建立可独立版本化的剧情状态；状态键创建后保持稳定。`}
+            title="新建剧情状态"
+          />
+          <form className="mt-6 grid gap-5" onSubmit={submit}>
+            <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="stateKey">状态键</Label>
+                <Input
+                  id="stateKey"
+                  name="stateKey"
+                  pattern="[a-z0-9][a-z0-9_]{0,79}"
+                  placeholder="例如：injured"
+                  required
+                />
+                <p className="text-xs text-slate-500">使用小写英文、数字或下划线。</p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="stateLabel">显示名称</Label>
+                <Input
+                  id="stateLabel"
+                  name="label"
+                  placeholder="例如：受伤状态"
+                  required
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="stateDescription">状态说明</Label>
+              <Input
+                id="stateDescription"
+                name="description"
+                placeholder="例如：第 3 集雨夜追逐后，左臂带伤"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline">取消</Button>
+              </Dialog.Close>
+              <Button disabled={isSubmitting} type="submit">
+                {isSubmitting ? "创建中…" : "创建状态"}
+              </Button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 export function EditAssetDialog({
   asset,
   isSubmitting,
@@ -461,6 +543,7 @@ function VersionSpecFields({
 
 export function VersionDialog({
   asset,
+  state,
   characters,
   isSubmitting,
   mediaVersions,
@@ -469,6 +552,7 @@ export function VersionDialog({
   open,
 }: {
   asset: API.AssetResponse;
+  state: API.AssetStateResponse;
   characters: API.AssetResponse[];
   isSubmitting: boolean;
   mediaVersions: API.MediaVersionResponse[];
@@ -500,7 +584,8 @@ export function VersionDialog({
         : [],
       source_type: "manual",
       source_id: null,
-      expected_current_version_id: asset.current_version_id,
+      expected_revision: state.revision,
+      expected_current_version_id: state.current_version_id,
       set_as_current: true,
     });
     if (completed) formElement.reset();

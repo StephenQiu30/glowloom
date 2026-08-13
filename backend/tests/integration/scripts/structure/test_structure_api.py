@@ -585,7 +585,12 @@ async def test_confirmed_asset_candidates_create_or_link_idempotently(
     detail = await client.get(f"/api/v1/assets/{asset_id}", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["data"]["project_id"] == episode["project_id"]
-    assert detail.json()["data"]["current_version_id"]
+    states = await client.get(
+        f"/api/v1/assets/{asset_id}/states",
+        headers=headers,
+    )
+    assert states.status_code == 200
+    assert states.json()["data"]["items"][0]["current_version_id"]
 
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Asset)) == 1
@@ -613,7 +618,12 @@ async def test_candidate_link_blocks_deleting_an_asset_without_versions(
     )
     assert created.status_code == 201
     asset = created.json()["data"]
-    assert asset["current_version_id"] is None
+    states = await client.get(
+        f"/api/v1/assets/{asset['id']}/states",
+        headers=headers,
+    )
+    assert states.status_code == 200
+    assert states.json()["data"]["items"][0]["current_version_id"] is None
 
     linked = await client.post(
         f"/api/v1/extraction-candidates/{by_key['asset-pending']['id']}/decisions",

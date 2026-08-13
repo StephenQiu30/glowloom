@@ -8,8 +8,10 @@ const apiMocks = vi.hoisted(() => ({
   archiveAsset: vi.fn(),
   assetDeletePreflight: vi.fn(),
   createAsset: vi.fn(),
+  createAssetState: vi.fn(),
   deleteAsset: vi.fn(),
   getAssetReadiness: vi.fn(),
+  getAssetBible: vi.fn(),
   listAssets: vi.fn(),
   listAssetShotUsages: vi.fn(),
   listAssetVersions: vi.fn(),
@@ -45,19 +47,21 @@ vi.mock("@/api/assets", async () => {
   const actual = await vi.importActual<typeof import("@/api/assets")>("@/api/assets");
   return {
     ...actual,
-    appendAssetVersionApiV1AssetsAssetIdVersionsPost:
+    appendAssetVersionApiV1AssetStatesStateIdVersionsPost:
       apiMocks.appendAssetVersion,
     archiveAssetApiV1AssetsAssetIdArchivePost: apiMocks.archiveAsset,
     assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGet:
       apiMocks.assetDeletePreflight,
     createAssetApiV1ProjectsProjectIdAssetsPost: apiMocks.createAsset,
+    createAssetStateApiV1AssetsAssetIdStatesPost: apiMocks.createAssetState,
     deleteAssetApiV1AssetsAssetIdDelete: apiMocks.deleteAsset,
     getAssetReadinessApiV1AssetVersionsVersionIdReadinessGet:
       apiMocks.getAssetReadiness,
+    getAssetBibleApiV1ProjectsProjectIdAssetBibleGet: apiMocks.getAssetBible,
     listAssetsApiV1ProjectsProjectIdAssetsGet: apiMocks.listAssets,
-    listAssetVersionsApiV1AssetsAssetIdVersionsGet: apiMocks.listAssetVersions,
+    listAssetVersionsApiV1AssetStatesStateIdVersionsGet: apiMocks.listAssetVersions,
     restoreAssetApiV1AssetsAssetIdRestorePost: apiMocks.restoreAsset,
-    setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPost:
+    setCurrentAssetVersionApiV1AssetStatesStateIdCurrentVersionPost:
       apiMocks.setCurrentAssetVersion,
     updateAssetApiV1AssetsAssetIdPatch: apiMocks.updateAsset,
   };
@@ -86,6 +90,7 @@ import { setAccessToken } from "@/lib/auth-session";
 const workspaceId = "019fb1e0-a00a-70f6-99dc-0b4e9e085565";
 const projectId = "019fb1e0-a010-70f6-99dc-0b4e9e085566";
 const assetId = "019fb1e0-a020-70f6-99dc-0b4e9e085567";
+const stateId = "019fb1e0-a025-70f6-99dc-0b4e9e085567";
 const versionId = "019fb1e0-a030-70f6-99dc-0b4e9e085568";
 const oldVersionId = "019fb1e0-a030-70f6-99dc-0b4e9e085560";
 const mediaVersionId = "019fb1e0-a040-70f6-99dc-0b4e9e085569";
@@ -103,17 +108,32 @@ const asset: API.AssetResponse = {
   aliases: ["清禾"],
   tags: ["主角"],
   status: "active",
-  current_version_id: versionId,
   revision: 3,
   created_at: now,
   updated_at: now,
   warnings: [],
 };
 
+const assetState: API.AssetStateResponse = {
+  id: stateId,
+  workspace_id: workspaceId,
+  asset_id: assetId,
+  state_key: "base",
+  label: "基础状态",
+  description: "",
+  status: "active",
+  current_version_id: versionId,
+  revision: 3,
+  created_by: "019fb1e0-a000-7000-8000-000000000001",
+  created_at: now,
+  updated_at: now,
+};
+
 const version: API.AssetVersionResponse = {
   id: versionId,
   workspace_id: workspaceId,
   asset_id: assetId,
+  asset_state_id: stateId,
   version_no: 3,
   schema_version: 1,
   spec: {
@@ -157,6 +177,8 @@ const readiness: API.AssetReadinessResponse = {
   next_actions: ["review_asset_consent"],
   dependency_snapshot: {
     asset_version_id: versionId,
+    asset_state_id: stateId,
+    asset_state_revision: 3,
     media_version_ids: [mediaVersionId],
     consent_ids: [],
     evaluated_at: now,
@@ -210,6 +232,45 @@ describe("AI 漫剧资产工作台", () => {
     });
     apiMocks.listAssets.mockResolvedValue({
       data: { items: [asset], total: 1, limit: 100, offset: 0 },
+    });
+    apiMocks.getAssetBible.mockResolvedValue({
+      data: {
+        items: [
+          {
+            asset,
+            states: [
+              {
+                state: assetState,
+                current_version: version,
+                occurrences: [],
+                readiness: {
+                  status: "blocked",
+                  blockers: readiness.blockers,
+                  warnings: [],
+                  next_actions: readiness.next_actions,
+                  dependency_snapshot: {
+                    asset_state_id: stateId,
+                    asset_state_revision: 3,
+                    current_version_id: versionId,
+                    occurrence_decision_ids: [],
+                    media_version_ids: [mediaVersionId],
+                    consent_ids: [],
+                    evaluated_at: now,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+        summary: {
+          asset_count: 1,
+          state_count: 1,
+          ready: 0,
+          draft: 0,
+          blocked: 1,
+          unavailable: 0,
+        },
+      },
     });
     apiMocks.listAssetVersions.mockResolvedValue({
       data: { items: [version, oldVersion], total: 2, limit: 100, offset: 0 },
@@ -312,11 +373,25 @@ describe("AI 漫剧资产工作台", () => {
       },
     });
     apiMocks.createAsset.mockResolvedValue({
-      data: { ...asset, id: "019fb1e0-a050-7000-8000-000000000001", name: "陆沉舟", current_version_id: null, revision: 1 },
+      data: { ...asset, id: "019fb1e0-a050-7000-8000-000000000001", name: "陆沉舟", revision: 1 },
+    });
+    apiMocks.createAssetState.mockResolvedValue({
+      data: {
+        asset: { ...asset, revision: 4 },
+        state: {
+          ...assetState,
+          id: "019fb1e0-a025-70f6-99dc-0b4e9e085590",
+          state_key: "injured",
+          label: "受伤状态",
+          description: "第 3 集雨夜追逐后，左臂带伤",
+          current_version_id: null,
+          revision: 1,
+        },
+      },
     });
     apiMocks.appendAssetVersion.mockResolvedValue({
       data: {
-        asset: { ...asset, revision: 4 },
+        state: { ...assetState, revision: 4 },
         version: { ...version, version_no: 4 },
         readiness: { ...readiness, status: "ready", blockers: [], next_actions: [] },
       },
@@ -335,7 +410,7 @@ describe("AI 漫剧资产工作台", () => {
       },
     });
     apiMocks.setCurrentAssetVersion.mockResolvedValue({
-      data: { ...asset, current_version_id: oldVersionId, revision: 4 },
+      data: { ...assetState, current_version_id: oldVersionId, revision: 4 },
     });
     apiMocks.assetDeletePreflight.mockResolvedValue({
       data: {
@@ -416,7 +491,7 @@ describe("AI 漫剧资产工作台", () => {
       expect(apiMocks.appendAssetVersion).toHaveBeenCalledTimes(1),
     );
     expect(apiMocks.appendAssetVersion).toHaveBeenCalledWith(
-      { asset_id: assetId },
+      { state_id: stateId },
       expect.objectContaining({
         spec: {
           kind: "character",
@@ -431,11 +506,47 @@ describe("AI 漫剧资产工作台", () => {
         ],
         source_type: "manual",
         source_id: null,
+        expected_revision: 3,
         expected_current_version_id: versionId,
         set_as_current: true,
       }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent("版本 v4 已保存");
+  });
+
+  it("为资产身份建立语义化剧情状态", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <ComicProductionStudio />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole("button", { name: /基础状态/ })).toBePressed();
+    await user.click(screen.getByRole("button", { name: "新建状态" }));
+    await user.type(screen.getByLabelText("状态键"), "injured");
+    await user.type(screen.getByLabelText("显示名称"), "受伤状态");
+    await user.type(
+      screen.getByLabelText("状态说明"),
+      "第 3 集雨夜追逐后，左臂带伤",
+    );
+    await user.click(screen.getByRole("button", { name: "创建状态" }));
+
+    await waitFor(() =>
+      expect(apiMocks.createAssetState).toHaveBeenCalledWith(
+        { asset_id: assetId },
+        {
+          state_key: "injured",
+          label: "受伤状态",
+          description: "第 3 集雨夜追逐后，左臂带伤",
+          expected_asset_revision: 3,
+          idempotency_key: expect.any(String),
+        },
+      ),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "剧情状态已创建：受伤状态",
+    );
   });
 
   it("编辑资产身份并显式切换历史当前版本", async () => {
@@ -470,12 +581,13 @@ describe("AI 漫剧资产工作台", () => {
 
     await user.click(screen.getByRole("button", { name: "设为当前资产版本 v2" }));
     await waitFor(() => expect(apiMocks.setCurrentAssetVersion).toHaveBeenCalledWith(
-      { asset_id: assetId },
-      {
+      { state_id: stateId },
+      expect.objectContaining({
         version_id: oldVersionId,
         expected_current_version_id: versionId,
         expected_revision: 3,
-      },
+        idempotency_key: expect.any(String),
+      }),
     ));
   });
 
@@ -487,7 +599,6 @@ describe("AI 漫剧资产工作台", () => {
       name: "临时空角色",
       aliases: [],
       tags: [],
-      current_version_id: null,
       revision: 1,
     };
     apiMocks.listAssets.mockResolvedValue({
@@ -495,6 +606,51 @@ describe("AI 漫剧资产工作台", () => {
     });
     apiMocks.listAssetVersions.mockResolvedValue({
       data: { items: [], total: 0, limit: 100, offset: 0 },
+    });
+    apiMocks.getAssetBible.mockResolvedValue({
+      data: {
+        items: [
+          {
+            asset: emptyAsset,
+            states: [
+              {
+                state: {
+                  ...assetState,
+                  id: `${stateId.slice(0, -1)}9`,
+                  asset_id: emptyAsset.id,
+                  current_version_id: null,
+                  revision: 1,
+                },
+                current_version: null,
+                occurrences: [],
+                readiness: {
+                  status: "draft",
+                  blockers: [],
+                  warnings: [],
+                  next_actions: [],
+                  dependency_snapshot: {
+                    asset_state_id: `${stateId.slice(0, -1)}9`,
+                    asset_state_revision: 1,
+                    current_version_id: null,
+                    occurrence_decision_ids: [],
+                    media_version_ids: [],
+                    consent_ids: [],
+                    evaluated_at: now,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+        summary: {
+          asset_count: 1,
+          state_count: 1,
+          ready: 0,
+          draft: 1,
+          blocked: 0,
+          unavailable: 0,
+        },
+      },
     });
     apiMocks.assetDeletePreflight.mockResolvedValue({
       data: { allowed: true, blockers: [] },
@@ -671,6 +827,7 @@ describe("AI 漫剧资产工作台", () => {
       <AppProviders>
         <AssetVersionUsage
           asset={asset}
+          currentVersionId={versionId}
           onCompleted={onCompleted}
           onError={onError}
           versions={[version, oldVersion]}
@@ -691,7 +848,8 @@ describe("AI 漫剧资产工作台", () => {
     view.rerender(
       <AppProviders>
         <AssetVersionUsage
-          asset={{ ...asset, current_version_id: oldVersionId, revision: 4 }}
+          asset={{ ...asset, revision: 4 }}
+          currentVersionId={oldVersionId}
           onCompleted={onCompleted}
           onError={onError}
           versions={[version, oldVersion]}

@@ -105,3 +105,21 @@ async def find_episode(
         query = query.with_for_update(of=(Episode, Project))
     row = (await session.execute(query)).one_or_none()
     return None if row is None else (row[0], row[1])
+
+
+async def find_episodes(
+    session: AsyncSession,
+    episode_ids: list[UUID],
+) -> list[tuple[Episode, Project]]:
+    if not episode_ids:
+        return []
+    rows = await session.execute(
+        select(Episode, Project)
+        .join(
+            Project,
+            (Project.id == Episode.project_id)
+            & (Project.workspace_id == Episode.workspace_id),
+        )
+        .where(Episode.id.in_(episode_ids))
+    )
+    return [(row[0], row[1]) for row in rows]

@@ -2,6 +2,129 @@
 /* eslint-disable */
 import request, { type RequestOptions } from "@/lib/request";
 
+/** Set Current Asset Version POST /api/v1/asset-states/${param0}/current-version */
+export async function setCurrentAssetVersionApiV1AssetStatesStateIdCurrentVersionPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.setCurrentAssetVersionApiV1AssetStatesStateIdCurrentVersionPostParams,
+  body: API.AssetStateCurrentRequest,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetStateResponse_>(
+    `/api/v1/asset-states/${param0}/current-version`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Decide Asset Occurrence POST /api/v1/asset-states/${param0}/occurrence-decisions */
+export async function decideAssetOccurrenceApiV1AssetStatesStateIdOccurrenceDecisionsPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.decideAssetOccurrenceApiV1AssetStatesStateIdOccurrenceDecisionsPostParams,
+  body: API.AssetOccurrenceRequest,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetOccurrenceDecisionResponse_>(
+    `/api/v1/asset-states/${param0}/occurrence-decisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** List Asset Occurrences GET /api/v1/asset-states/${param0}/occurrences */
+export async function listAssetOccurrencesApiV1AssetStatesStateIdOccurrencesGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listAssetOccurrencesApiV1AssetStatesStateIdOccurrencesGetParams,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponsePaginatedAssetOccurrences_>(
+    `/api/v1/asset-states/${param0}/occurrences`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Get Asset State Readiness GET /api/v1/asset-states/${param0}/readiness */
+export async function getAssetStateReadinessApiV1AssetStatesStateIdReadinessGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getAssetStateReadinessApiV1AssetStatesStateIdReadinessGetParams,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetStateReadinessResponse_>(
+    `/api/v1/asset-states/${param0}/readiness`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
+      ...(options || {}),
+    }
+  );
+}
+
+/** List Asset Versions GET /api/v1/asset-states/${param0}/versions */
+export async function listAssetVersionsApiV1AssetStatesStateIdVersionsGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listAssetVersionsApiV1AssetStatesStateIdVersionsGetParams,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponsePaginatedAssetVersions_>(
+    `/api/v1/asset-states/${param0}/versions`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Append Asset Version POST /api/v1/asset-states/${param0}/versions */
+export async function appendAssetVersionApiV1AssetStatesStateIdVersionsPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.appendAssetVersionApiV1AssetStatesStateIdVersionsPostParams,
+  body: API.AssetVersionCreateRequest,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetVersionCreateResponse_>(
+    `/api/v1/asset-states/${param0}/versions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** Get Asset Version GET /api/v1/asset-versions/${param0} */
 export async function getAssetVersionApiV1AssetVersionsVersionIdGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -94,34 +217,12 @@ export async function updateAssetApiV1AssetsAssetIdPatch(
 export async function archiveAssetApiV1AssetsAssetIdArchivePost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.archiveAssetApiV1AssetsAssetIdArchivePostParams,
-  body: API.AssetStateRequest,
+  body: API.AssetStatusRequest,
   options?: RequestOptions
 ) {
   const { asset_id: param0, ...queryParams } = params;
   return request<API.ApiResponseAssetResponse_>(
     `/api/v1/assets/${param0}/archive`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
-}
-
-/** Set Current Asset Version POST /api/v1/assets/${param0}/current-version */
-export async function setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPostParams,
-  body: API.AssetCurrentVersionRequest,
-  options?: RequestOptions
-) {
-  const { asset_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseAssetResponse_>(
-    `/api/v1/assets/${param0}/current-version`,
     {
       method: "POST",
       headers: {
@@ -155,7 +256,7 @@ export async function assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGet(
 export async function restoreAssetApiV1AssetsAssetIdRestorePost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.restoreAssetApiV1AssetsAssetIdRestorePostParams,
-  body: API.AssetStateRequest,
+  body: API.AssetStatusRequest,
   options?: RequestOptions
 ) {
   const { asset_id: param0, ...queryParams } = params;
@@ -173,35 +274,33 @@ export async function restoreAssetApiV1AssetsAssetIdRestorePost(
   );
 }
 
-/** List Asset Versions GET /api/v1/assets/${param0}/versions */
-export async function listAssetVersionsApiV1AssetsAssetIdVersionsGet(
+/** List Asset States GET /api/v1/assets/${param0}/states */
+export async function listAssetStatesApiV1AssetsAssetIdStatesGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.listAssetVersionsApiV1AssetsAssetIdVersionsGetParams,
+  params: API.listAssetStatesApiV1AssetsAssetIdStatesGetParams,
   options?: RequestOptions
 ) {
   const { asset_id: param0, ...queryParams } = params;
-  return request<API.ApiResponsePaginatedAssetVersions_>(
-    `/api/v1/assets/${param0}/versions`,
+  return request<API.ApiResponsePaginatedAssetStates_>(
+    `/api/v1/assets/${param0}/states`,
     {
       method: "GET",
-      params: {
-        ...queryParams,
-      },
+      params: { ...queryParams },
       ...(options || {}),
     }
   );
 }
 
-/** Append Asset Version POST /api/v1/assets/${param0}/versions */
-export async function appendAssetVersionApiV1AssetsAssetIdVersionsPost(
+/** Create Asset State POST /api/v1/assets/${param0}/states */
+export async function createAssetStateApiV1AssetsAssetIdStatesPost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.appendAssetVersionApiV1AssetsAssetIdVersionsPostParams,
-  body: API.AssetVersionCreateRequest,
+  params: API.createAssetStateApiV1AssetsAssetIdStatesPostParams,
+  body: API.AssetStateCreateRequest,
   options?: RequestOptions
 ) {
   const { asset_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseAssetVersionCreateResponse_>(
-    `/api/v1/assets/${param0}/versions`,
+  return request<API.ApiResponseAssetStateCreateResponse_>(
+    `/api/v1/assets/${param0}/states`,
     {
       method: "POST",
       headers: {
@@ -209,6 +308,25 @@ export async function appendAssetVersionApiV1AssetsAssetIdVersionsPost(
       },
       params: { ...queryParams },
       data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Get Asset Bible GET /api/v1/projects/${param0}/asset-bible */
+export async function getAssetBibleApiV1ProjectsProjectIdAssetBibleGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getAssetBibleApiV1ProjectsProjectIdAssetBibleGetParams,
+  options?: RequestOptions
+) {
+  const { project_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetBibleResponse_>(
+    `/api/v1/projects/${param0}/asset-bible`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
       ...(options || {}),
     }
   );

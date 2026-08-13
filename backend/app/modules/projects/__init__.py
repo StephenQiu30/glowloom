@@ -21,6 +21,7 @@ from app.modules.projects.episodes.service import (
     project_episode_order_snapshot,
     publish_episode_script_version_batch,
     resolve_episode_content_context,
+    resolve_episode_content_contexts,
     resolve_episode_generation_context,
 )
 from app.modules.projects.projects.service import (
@@ -48,6 +49,7 @@ __all__ = [
     "project_episode_order_snapshot",
     "publish_episode_script_version_batch",
     "resolve_episode_content_context",
+    "resolve_episode_content_contexts",
     "resolve_episode_generation_context",
     "lock_active_project_for_content_write",
     "project_for_content_read",

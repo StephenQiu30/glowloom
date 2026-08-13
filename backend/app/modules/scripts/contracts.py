@@ -41,6 +41,26 @@ class NarrativeDependencySnapshot:
     dependency_hash: str
 
 
+@dataclass(frozen=True, slots=True)
+class NarrativeUnitVersionReference:
+    workspace_id: UUID
+    project_id: UUID
+    episode_id: UUID
+    script_version_id: UUID
+    narrative_unit_id: UUID
+    narrative_unit_version_id: UUID
+    current_script_version_id: UUID | None
+    current_unit_version_id: UUID | None
+    text_hash: str
+
+    @property
+    def is_current(self) -> bool:
+        return (
+            self.script_version_id == self.current_script_version_id
+            and self.narrative_unit_version_id == self.current_unit_version_id
+        )
+
+
 class NarrativeImpactRecorder(Protocol):
     async def __call__(
         self,

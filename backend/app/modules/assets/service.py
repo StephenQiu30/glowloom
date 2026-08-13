@@ -15,30 +15,52 @@ from app.modules.assets.contracts import (
     AssetCandidateCommand,
     AssetCandidateDecisionCountReader,
     AssetCandidateResult,
+    AssetOccurrenceNarrativeReader,
+    AssetOccurrenceNarrativeSnapshot,
     AssetVersionReadinessReference,
     AssetVersionReference,
     ProjectAssetReferenceSummary,
     ProjectAssetSummary,
 )
-from app.modules.assets.models import Asset, AssetMediaReference, AssetVersion
+from app.modules.assets.models import (
+    Asset,
+    AssetMediaReference,
+    AssetOccurrenceDecision,
+    AssetState,
+    AssetVersion,
+)
 from app.modules.assets.schemas import (
+    AssetBibleAsset,
+    AssetBibleResponse,
+    AssetBibleState,
+    AssetBibleSummary,
     AssetCreateRequest,
-    AssetCurrentVersionRequest,
     AssetDeleteBlocker,
     AssetDeletePreflightResponse,
     AssetKind,
     AssetMediaReferenceResponse,
+    AssetOccurrenceDecisionResponse,
+    AssetOccurrenceRequest,
+    AssetOccurrenceResponse,
     AssetReadinessBlocker,
     AssetReadinessDependencySnapshot,
     AssetReadinessResponse,
     AssetResponse,
     AssetSpec,
-    AssetStateRequest,
+    AssetStateCreateRequest,
+    AssetStateCreateResponse,
+    AssetStateCurrentRequest,
+    AssetStateReadinessResponse,
+    AssetStateReadinessSnapshot,
+    AssetStateResponse,
+    AssetStatusRequest,
     AssetUpdateRequest,
     AssetVersionCreateRequest,
     AssetVersionCreateResponse,
     AssetVersionResponse,
+    PaginatedAssetOccurrences,
     PaginatedAssets,
+    PaginatedAssetStates,
     PaginatedAssetVersions,
     ReadinessStatus,
     parse_asset_spec,
@@ -135,11 +157,27 @@ def _asset_response(
         aliases=asset.aliases,
         tags=asset.tags,
         status=cast(Literal["active", "archived"], asset.status),
-        current_version_id=asset.current_version_id,
         revision=asset.revision,
         created_at=asset.created_at,
         updated_at=asset.updated_at,
         warnings=["duplicate_name"] if duplicate else [],
+    )
+
+
+def _state_response(state: AssetState) -> AssetStateResponse:
+    return AssetStateResponse(
+        id=state.id,
+        workspace_id=state.workspace_id,
+        asset_id=state.asset_id,
+        state_key=state.state_key,
+        label=state.label,
+        description=state.description,
+        status=cast(Literal["active", "disabled"], state.status),
+        current_version_id=state.current_version_id,
+        revision=state.revision,
+        created_by=state.created_by,
+        created_at=state.created_at,
+        updated_at=state.updated_at,
     )
 
 
@@ -151,11 +189,15 @@ def _version_response(
         id=version.id,
         workspace_id=version.workspace_id,
         asset_id=version.asset_id,
+        asset_state_id=version.asset_state_id,
         version_no=version.version_no,
         schema_version=version.schema_version,
         spec=parse_asset_spec(str(version.spec["kind"]), version.spec),
         prompt_description=version.prompt_description,
-        source_type=cast(Literal["manual", "candidate"], version.source_type),
+        source_type=cast(
+            Literal["manual", "script_extraction_candidate"],
+            version.source_type,
+        ),
         source_id=version.source_id,
         content_hash=version.content_hash,
         media_references=[
@@ -217,18 +259,28 @@ def _require_revision(asset: Asset, expected_revision: int) -> None:
         )
 
 
-def _require_expected_current(
-    asset: Asset, expected_current_version_id: UUID | None
-) -> None:
-    if asset.current_version_id != expected_current_version_id:
+def _require_state_revision(state: AssetState, expected_revision: int) -> None:
+    if state.revision != expected_revision:
         raise ApiError(
             ErrorCode.VERSION_CONFLICT,
-            "Current asset version has changed",
+            "Asset state has changed",
+            status_code=409,
+            details={"current_revision": state.revision},
+        )
+
+
+def _require_expected_current(
+    state: AssetState, expected_current_version_id: UUID | None
+) -> None:
+    if state.current_version_id != expected_current_version_id:
+        raise ApiError(
+            ErrorCode.VERSION_CONFLICT,
+            "Current asset state version has changed",
             status_code=409,
             details={
                 "current_version_id": (
-                    str(asset.current_version_id)
-                    if asset.current_version_id is not None
+                    str(state.current_version_id)
+                    if state.current_version_id is not None
                     else None
                 )
             },
@@ -280,6 +332,39 @@ async def _locked_asset_for_write(
     return asset
 
 
+async def _state_for_read(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    state_id: UUID,
+) -> tuple[AssetState, Asset]:
+    state = await repository.find_state(session, state_id)
+    if state is None:
+        raise _not_found("Asset state")
+    asset = await _asset_for_read(session, claims, state.asset_id)
+    if state.workspace_id != asset.workspace_id:
+        raise _not_found("Asset state")
+    return state, asset
+
+
+async def _locked_state_for_write(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    state_id: UUID,
+) -> tuple[AssetState, Asset]:
+    state_reference = await repository.find_state(session, state_id)
+    if state_reference is None:
+        raise _not_found("Asset state")
+    asset = await _locked_asset_for_write(session, claims, state_reference.asset_id)
+    state = await repository.find_state(session, state_id, for_update=True)
+    if (
+        state is None
+        or state.asset_id != asset.id
+        or state.workspace_id != asset.workspace_id
+    ):
+        raise _not_found("Asset state")
+    return state, asset
+
+
 async def create_asset(
     session: AsyncSession,
     claims: AccessTokenClaims,
@@ -316,6 +401,23 @@ async def create_asset(
             created_by=claims.sub,
         )
         session.add(asset)
+        await session.flush([asset])
+        session.add(
+            AssetState(
+                id=uuid7(),
+                workspace_id=asset.workspace_id,
+                asset_id=asset.id,
+                state_key="base",
+                label="基础状态",
+                description="",
+                status="active",
+                current_version_id=None,
+                revision=1,
+                creation_key="base",
+                command_receipts={},
+                created_by=claims.sub,
+            )
+        )
         append_audit_event(
             session,
             workspace_id=asset.workspace_id,
@@ -369,6 +471,293 @@ async def get_asset(
     asset_id: UUID,
 ) -> AssetResponse:
     return _asset_response(await _asset_for_read(session, claims, asset_id))
+
+
+async def create_state(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    asset_id: UUID,
+    request: AssetStateCreateRequest,
+    *,
+    trace_id: str,
+) -> AssetStateCreateResponse:
+    state_key = request.state_key.strip()
+    label = request.label.strip()
+    description = request.description.strip()
+    idempotency_key = request.idempotency_key.strip()
+    async with session.begin():
+        asset = await _locked_asset_for_write(session, claims, asset_id)
+        replay = await repository.find_state_by_creation_key(
+            session,
+            asset.id,
+            idempotency_key,
+        )
+        if replay is not None:
+            if (
+                replay.state_key != state_key
+                or replay.label != label
+                or replay.description != description
+            ):
+                raise ApiError(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "Asset state idempotency key was reused with different input",
+                    status_code=409,
+                )
+            return AssetStateCreateResponse(
+                asset=_asset_response(asset),
+                state=_state_response(replay),
+            )
+        if await repository.find_state_by_key(session, asset.id, state_key) is not None:
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Asset state key already exists",
+                status_code=409,
+            )
+        _require_revision(asset, request.expected_asset_revision)
+        now = datetime.now(UTC)
+        state = AssetState(
+            id=uuid7(),
+            workspace_id=asset.workspace_id,
+            asset_id=asset.id,
+            state_key=state_key,
+            label=label,
+            description=description,
+            status="active",
+            current_version_id=None,
+            revision=1,
+            creation_key=idempotency_key,
+            command_receipts={},
+            created_by=claims.sub,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(state)
+        asset.revision += 1
+        asset.updated_at = now
+        append_audit_event(
+            session,
+            workspace_id=asset.workspace_id,
+            actor_id=claims.sub,
+            action="asset.state_created",
+            target_type="asset_state",
+            target_id=state.id,
+            trace_id=trace_id,
+            metadata={
+                "asset_id": str(asset.id),
+                "asset_revision": asset.revision,
+                "state_key": state.state_key,
+            },
+            occurred_at=now,
+        )
+        await session.flush()
+    return AssetStateCreateResponse(
+        asset=_asset_response(asset),
+        state=_state_response(state),
+    )
+
+
+async def list_states(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    asset_id: UUID,
+) -> PaginatedAssetStates:
+    asset = await _asset_for_read(session, claims, asset_id)
+    states = await repository.list_states(session, asset.id)
+    return PaginatedAssetStates(
+        items=[_state_response(state) for state in states],
+        total=len(states),
+    )
+
+
+def _current_occurrence_rows(
+    rows: list[AssetOccurrenceDecision],
+) -> list[AssetOccurrenceDecision]:
+    latest: dict[tuple[UUID, UUID], AssetOccurrenceDecision] = {}
+    for row in rows:
+        latest[(row.asset_state_id, row.narrative_unit_id)] = row
+    return [
+        row
+        for row in latest.values()
+        if row.decision == "link"
+    ]
+
+
+def _occurrence_response(
+    row: AssetOccurrenceDecision,
+    narratives: dict[UUID, AssetOccurrenceNarrativeSnapshot],
+) -> AssetOccurrenceResponse:
+    narrative = narratives.get(row.narrative_unit_version_id)
+    freshness: Literal["current", "stale"] = (
+        "current"
+        if narrative is not None
+        and narrative.narrative_unit_id == row.narrative_unit_id
+        and narrative.is_current
+        else "stale"
+    )
+    return AssetOccurrenceResponse(
+        id=row.id,
+        workspace_id=row.workspace_id,
+        asset_state_id=row.asset_state_id,
+        episode_id=row.episode_id,
+        narrative_unit_id=row.narrative_unit_id,
+        narrative_unit_version_id=row.narrative_unit_version_id,
+        sequence=row.sequence,
+        decision=cast(Literal["link", "unlink"], row.decision),
+        origin=cast(Literal["manual", "script_candidate"], row.origin),
+        evidence_hash=row.evidence_hash,
+        idempotency_key=row.idempotency_key,
+        freshness=freshness,
+        created_by=row.created_by,
+        created_at=row.created_at,
+    )
+
+
+async def decide_occurrence(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    state_id: UUID,
+    request: AssetOccurrenceRequest,
+    read_narratives: AssetOccurrenceNarrativeReader,
+    *,
+    trace_id: str,
+) -> AssetOccurrenceDecisionResponse:
+    async with session.begin():
+        state, asset = await _locked_state_for_write(session, claims, state_id)
+        replay = await repository.find_occurrence_by_key(
+            session,
+            state.id,
+            request.idempotency_key,
+        )
+        if replay is not None:
+            if (
+                replay.decision != request.decision
+                or replay.narrative_unit_id != request.narrative_unit_id
+                or replay.narrative_unit_version_id
+                != request.narrative_unit_version_id
+            ):
+                raise ApiError(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "Occurrence idempotency key was reused with different input",
+                    status_code=409,
+                )
+            replay_narratives = await read_narratives(
+                workspace_id=state.workspace_id,
+                unit_version_ids=[replay.narrative_unit_version_id],
+            )
+            return AssetOccurrenceDecisionResponse(
+                state=_state_response(state),
+                decision=_occurrence_response(replay, replay_narratives),
+            )
+        _require_state_revision(state, request.expected_revision)
+        if state.status != "active":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Disabled asset state cannot change occurrences",
+                status_code=409,
+                next_action="enable_asset_state",
+            )
+        narratives = await read_narratives(
+            workspace_id=state.workspace_id,
+            unit_version_ids=[request.narrative_unit_version_id],
+        )
+        narrative = narratives.get(request.narrative_unit_version_id)
+        if (
+            narrative is None
+            or narrative.narrative_unit_id != request.narrative_unit_id
+        ):
+            raise _not_found("Narrative unit version")
+        if narrative.project_id != asset.project_id:
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Narrative unit belongs to another project",
+                status_code=409,
+            )
+        if not narrative.is_current:
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT,
+                "Narrative unit version is not current",
+                status_code=409,
+                next_action="refresh_narrative_structure",
+            )
+        sequence = await repository.latest_occurrence_sequence(session, state.id) + 1
+        evidence_hash = sha256(
+            json.dumps(
+                {
+                    "asset_state_id": str(state.id),
+                    "decision": request.decision,
+                    "episode_id": str(narrative.episode_id),
+                    "narrative_unit_id": str(narrative.narrative_unit_id),
+                    "narrative_unit_version_id": str(
+                        narrative.narrative_unit_version_id
+                    ),
+                    "text_hash": narrative.text_hash,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        now = datetime.now(UTC)
+        decision = AssetOccurrenceDecision(
+            id=uuid7(),
+            workspace_id=state.workspace_id,
+            asset_state_id=state.id,
+            episode_id=narrative.episode_id,
+            narrative_unit_id=narrative.narrative_unit_id,
+            narrative_unit_version_id=narrative.narrative_unit_version_id,
+            sequence=sequence,
+            decision=request.decision,
+            origin="manual",
+            evidence_hash=evidence_hash,
+            idempotency_key=request.idempotency_key,
+            created_by=claims.sub,
+            created_at=now,
+        )
+        session.add(decision)
+        state.revision += 1
+        state.updated_at = now
+        append_audit_event(
+            session,
+            workspace_id=state.workspace_id,
+            actor_id=claims.sub,
+            action="asset.occurrence_decided",
+            target_type="asset_state",
+            target_id=state.id,
+            trace_id=trace_id,
+            metadata={
+                "asset_id": str(asset.id),
+                "state_revision": state.revision,
+                "decision_id": str(decision.id),
+                "decision": decision.decision,
+                "narrative_unit_id": str(decision.narrative_unit_id),
+            },
+            occurred_at=now,
+        )
+        await session.flush()
+    return AssetOccurrenceDecisionResponse(
+        state=_state_response(state),
+        decision=_occurrence_response(decision, narratives),
+    )
+
+
+async def list_occurrences(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    state_id: UUID,
+    read_narratives: AssetOccurrenceNarrativeReader,
+    *,
+    include_history: bool,
+) -> PaginatedAssetOccurrences:
+    state, _asset = await _state_for_read(session, claims, state_id)
+    history = await repository.list_occurrence_decisions(session, [state.id])
+    rows = history if include_history else _current_occurrence_rows(history)
+    narratives = await read_narratives(
+        workspace_id=state.workspace_id,
+        unit_version_ids=[row.narrative_unit_version_id for row in rows],
+    )
+    return PaginatedAssetOccurrences(
+        items=[_occurrence_response(row, narratives) for row in rows],
+        total=len(rows),
+    )
 
 
 async def update_asset(
@@ -434,7 +823,7 @@ async def set_asset_archived(
     session: AsyncSession,
     claims: AccessTokenClaims,
     asset_id: UUID,
-    request: AssetStateRequest,
+    request: AssetStatusRequest,
     *,
     archived: bool,
     trace_id: str,
@@ -594,6 +983,8 @@ async def delete_asset(
                 "project_id": str(asset.project_id),
             },
         )
+        await repository.delete_states(session, asset.id)
+        await session.flush()
         await session.delete(asset)
 
 
@@ -744,6 +1135,7 @@ def _readiness_prerequisites(
 
 def _compose_readiness(
     asset: Asset,
+    state: AssetState,
     version: AssetVersion,
     references: list[AssetMediaReference],
     *,
@@ -755,7 +1147,17 @@ def _compose_readiness(
 ) -> AssetReadinessResponse:
     blockers = list(blockers)
     consent_ids: list[UUID] = []
-    if not draft and asset.status == "active":
+    if state.status != "active":
+        blockers.append(
+            AssetReadinessBlocker(
+                code="asset_state_disabled",
+                dependency_type="ASSET_STATE",
+                dependency_id=state.id,
+                summary="Disabled asset state cannot be used by new work",
+                next_action="enable_asset_state",
+            )
+        )
+    if not draft and asset.status == "active" and state.status == "active":
         if rights_unavailable:
             blockers.append(
                 AssetReadinessBlocker(
@@ -797,6 +1199,8 @@ def _compose_readiness(
         next_actions=next_actions,
         dependency_snapshot=AssetReadinessDependencySnapshot(
             asset_version_id=version.id,
+            asset_state_id=state.id,
+            asset_state_revision=state.revision,
             media_version_ids=[item.media_version_id for item in references],
             consent_ids=consent_ids,
             evaluated_at=at_time,
@@ -807,6 +1211,7 @@ def _compose_readiness(
 async def _evaluate_readiness(
     session: AsyncSession,
     asset: Asset,
+    state: AssetState,
     version: AssetVersion,
     references: list[AssetMediaReference],
     *,
@@ -832,7 +1237,7 @@ async def _evaluate_readiness(
     )
     rights: RightsGateResult | None = None
     rights_unavailable = False
-    if not draft and asset.status == "active":
+    if not draft and asset.status == "active" and state.status == "active":
         try:
             rights = await check_rights(
                 session,
@@ -854,6 +1259,7 @@ async def _evaluate_readiness(
             rights_unavailable = True
     return _compose_readiness(
         asset,
+        state,
         version,
         references,
         blockers=blockers,
@@ -867,13 +1273,13 @@ async def _evaluate_readiness(
 async def append_version(
     session: AsyncSession,
     claims: AccessTokenClaims,
-    asset_id: UUID,
+    state_id: UUID,
     request: AssetVersionCreateRequest,
     *,
     trace_id: str,
 ) -> AssetVersionCreateResponse:
     async with session.begin():
-        asset = await _locked_asset_for_write(session, claims, asset_id)
+        state, asset = await _locked_state_for_write(session, claims, state_id)
         if asset.status != "active":
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
@@ -881,8 +1287,16 @@ async def append_version(
                 status_code=409,
                 next_action="restore_asset",
             )
-        previous_version_id = asset.current_version_id
-        _require_expected_current(asset, request.expected_current_version_id)
+        if state.status != "active":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Disabled asset state cannot accept a version",
+                status_code=409,
+                next_action="enable_asset_state",
+            )
+        previous_version_id = state.current_version_id
+        _require_state_revision(state, request.expected_revision)
+        _require_expected_current(state, request.expected_current_version_id)
         if request.spec.kind != asset.kind:
             raise ApiError(
                 ErrorCode.INVALID_REQUEST,
@@ -900,6 +1314,7 @@ async def append_version(
             id=uuid7(),
             workspace_id=asset.workspace_id,
             asset_id=asset.id,
+            asset_state_id=state.id,
             version_no=await repository.latest_version_number(session, asset.id) + 1,
             schema_version=1,
             spec=spec_to_json(request.spec),
@@ -932,13 +1347,14 @@ async def append_version(
         ]
         session.add_all(stored_references)
         if request.set_as_current:
-            asset.current_version_id = version.id
-            asset.revision += 1
-            asset.updated_at = now
+            state.current_version_id = version.id
+            state.revision += 1
+            state.updated_at = now
         await session.flush()
         readiness = await _evaluate_readiness(
             session,
             asset,
+            state,
             version,
             stored_references,
             purpose="ai_short_drama_generation",
@@ -957,7 +1373,8 @@ async def append_version(
             trace_id=trace_id,
             metadata={
                 "asset_id": str(asset.id),
-                "asset_revision": asset.revision,
+                "asset_state_id": str(state.id),
+                "state_revision": state.revision,
                 "version_no": version.version_no,
                 "kind": asset.kind,
                 "set_as_current": request.set_as_current,
@@ -967,8 +1384,8 @@ async def append_version(
                     else None
                 ),
                 "current_version_id": (
-                    str(asset.current_version_id)
-                    if asset.current_version_id is not None
+                    str(state.current_version_id)
+                    if state.current_version_id is not None
                     else None
                 ),
             },
@@ -976,7 +1393,7 @@ async def append_version(
         )
         await session.flush()
     return AssetVersionCreateResponse(
-        asset=_asset_response(asset),
+        state=_state_response(state),
         version=_version_response(version, stored_references),
         readiness=readiness,
     )
@@ -985,14 +1402,14 @@ async def append_version(
 async def list_versions(
     session: AsyncSession,
     claims: AccessTokenClaims,
-    asset_id: UUID,
+    state_id: UUID,
     *,
     limit: int,
     offset: int,
 ) -> PaginatedAssetVersions:
-    asset = await _asset_for_read(session, claims, asset_id)
+    state, _asset = await _state_for_read(session, claims, state_id)
     rows, total = await repository.list_versions(
-        session, asset.id, limit=limit, offset=offset
+        session, state.id, limit=limit, offset=offset
     )
     references = await repository.list_media_references(
         session, [item.id for item in rows]
@@ -1016,7 +1433,7 @@ async def get_version(
     result = await repository.find_version(session, version_id)
     if result is None:
         raise _not_found("Asset version")
-    version, asset = result
+    version, _state, asset = result
     await _asset_for_read(session, claims, asset.id)
     references = await repository.list_media_references(session, [version.id])
     return _version_response(version, references)
@@ -1025,44 +1442,78 @@ async def get_version(
 async def set_current_version(
     session: AsyncSession,
     claims: AccessTokenClaims,
-    asset_id: UUID,
-    request: AssetCurrentVersionRequest,
+    state_id: UUID,
+    request: AssetStateCurrentRequest,
     *,
     trace_id: str,
-) -> AssetResponse:
+) -> AssetStateResponse:
     async with session.begin():
-        asset = await _locked_asset_for_write(session, claims, asset_id)
-        _require_revision(asset, request.expected_revision)
-        _require_expected_current(asset, request.expected_current_version_id)
+        state, asset = await _locked_state_for_write(session, claims, state_id)
+        receipt = state.command_receipts.get(request.idempotency_key)
+        command_hash = sha256(
+            json.dumps(
+                request.model_dump(mode="json") | {"idempotency_key": None},
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        if receipt is not None:
+            if receipt.get("command_hash") != command_hash:
+                raise ApiError(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "Asset state command key was reused with different input",
+                    status_code=409,
+                )
+            return _state_response(state)
+        _require_state_revision(state, request.expected_revision)
+        _require_expected_current(state, request.expected_current_version_id)
         result = await repository.find_version(session, request.version_id)
-        if result is None or result[0].asset_id != asset.id:
+        if result is None:
             raise _not_found("Asset version")
-        previous_version_id = asset.current_version_id
+        version, version_state, version_asset = result
+        if version_asset.id != asset.id:
+            raise _not_found("Asset version")
+        if version_state.id != state.id:
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Asset version does not belong to this state",
+                status_code=409,
+            )
+        previous_version_id = state.current_version_id
         now = datetime.now(UTC)
-        asset.current_version_id = request.version_id
-        asset.revision += 1
-        asset.updated_at = now
+        state.current_version_id = version.id
+        state.revision += 1
+        state.updated_at = now
+        state.command_receipts = {
+            **state.command_receipts,
+            request.idempotency_key: {
+                "command_hash": command_hash,
+                "revision": state.revision,
+                "current_version_id": str(version.id),
+            },
+        }
         append_audit_event(
             session,
             workspace_id=asset.workspace_id,
             actor_id=claims.sub,
-            action="asset.current_changed",
-            target_type="asset",
-            target_id=asset.id,
+            action="asset.state_current_changed",
+            target_type="asset_state",
+            target_id=state.id,
             trace_id=trace_id,
             metadata={
-                "revision": asset.revision,
+                "asset_id": str(asset.id),
+                "revision": state.revision,
                 "previous_version_id": (
                     str(previous_version_id)
                     if previous_version_id is not None
                     else None
                 ),
-                "current_version_id": str(asset.current_version_id),
+                "current_version_id": str(state.current_version_id),
             },
             occurred_at=now,
         )
         await session.flush()
-    return _asset_response(asset)
+    return _state_response(state)
 
 
 async def get_readiness(
@@ -1077,12 +1528,13 @@ async def get_readiness(
     result = await repository.find_version(session, version_id)
     if result is None:
         raise _not_found("Asset version")
-    version, asset = result
+    version, state, asset = result
     await _asset_for_read(session, claims, asset.id)
     references = await repository.list_media_references(session, [version.id])
     return await _evaluate_readiness(
         session,
         asset,
+        state,
         version,
         references,
         purpose=purpose,
@@ -1101,17 +1553,17 @@ async def summarize_project_assets(
     channel: str,
     region: str,
 ) -> ProjectAssetSummary:
-    rows, total = await repository.list_active_assets_with_current_version(
+    rows, total = await repository.list_active_states_with_current_version(
         session, project_id
     )
-    if any(asset.workspace_id != workspace_id for asset, _version in rows):
+    if any(asset.workspace_id != workspace_id for asset, _state, _version in rows):
         raise ApiError(
             ErrorCode.DEPENDENCY_UNAVAILABLE,
             "Asset summary scope is inconsistent",
             status_code=503,
         )
     references = await repository.list_media_references(
-        session, [version.id for _asset, version in rows]
+        session, [version.id for _asset, _state, version in rows]
     )
     references_by_version: dict[UUID, list[AssetMediaReference]] = {}
     for reference in references:
@@ -1119,10 +1571,12 @@ async def summarize_project_assets(
     evaluated_at = datetime.now(UTC)
     evaluated = [
         (
+            asset.id,
             asset.kind,
             await _evaluate_readiness(
                 session,
                 asset,
+                state,
                 version,
                 references_by_version.get(version.id, []),
                 purpose=purpose,
@@ -1131,14 +1585,29 @@ async def summarize_project_assets(
                 at_time=evaluated_at,
             ),
         )
-        for asset, version in rows
+        for asset, state, version in rows
     ]
+    status_by_asset: dict[UUID, str] = {}
+    kind_by_asset: dict[UUID, str] = {}
+    for asset_id, kind, readiness in evaluated:
+        kind_by_asset[asset_id] = kind
+        previous = status_by_asset.get(asset_id)
+        if readiness.status == "ready" or previous is None:
+            status_by_asset[asset_id] = readiness.status
+        elif previous != "ready" and readiness.status == "blocked":
+            status_by_asset[asset_id] = "blocked"
     ready_kinds = tuple(
-        sorted({kind for kind, readiness in evaluated if readiness.status == "ready"})
+        sorted(
+            {
+                kind_by_asset[asset_id]
+                for asset_id, state_status in status_by_asset.items()
+                if state_status == "ready"
+            }
+        )
     )
-    ready = sum(readiness.status == "ready" for _kind, readiness in evaluated)
-    draft = sum(readiness.status == "draft" for _kind, readiness in evaluated)
-    blocked = sum(readiness.status == "blocked" for _kind, readiness in evaluated)
+    ready = sum(state_status == "ready" for state_status in status_by_asset.values())
+    blocked = sum(state_status == "blocked" for state_status in status_by_asset.values())
+    draft = total - ready - blocked
     required_kinds = ("character", "location", "voice")
     if set(required_kinds).issubset(ready_kinds):
         status = "ready"
@@ -1154,7 +1623,7 @@ async def summarize_project_assets(
             status,
         ),
         total=total,
-        versioned=len(rows),
+        versioned=len(status_by_asset),
         ready=ready,
         draft=draft,
         blocked=blocked,
@@ -1204,7 +1673,7 @@ async def resolve_asset_version(
     result = await repository.find_version(session, version_id)
     if result is None:
         return None
-    version, asset = result
+    version, state, asset = result
     if version.workspace_id != workspace_id:
         return None
     return AssetVersionReference(
@@ -1212,8 +1681,10 @@ async def resolve_asset_version(
         workspace_id=version.workspace_id,
         project_id=asset.project_id,
         asset_id=asset.id,
+        asset_state_id=state.id,
         kind=asset.kind,
         asset_status=asset.status,
+        asset_state_status=state.status,
     )
 
 
@@ -1225,20 +1696,23 @@ async def asset_version_for_content_read(
     result = await repository.find_version(session, version_id)
     if result is None:
         raise _not_found("Asset version")
-    version, asset = result
+    version, state, asset = result
     await _asset_for_read(session, claims, asset.id)
     return AssetVersionReference(
         id=version.id,
         workspace_id=version.workspace_id,
         project_id=asset.project_id,
         asset_id=asset.id,
+        asset_state_id=state.id,
         kind=asset.kind,
         asset_status=asset.status,
+        asset_state_status=state.status,
     )
 
 
 def _readiness_reference(
     asset: Asset,
+    state: AssetState,
     version: AssetVersion,
     readiness: AssetReadinessResponse,
 ) -> AssetVersionReadinessReference:
@@ -1249,7 +1723,9 @@ def _readiness_reference(
     stable_snapshot = {
         "asset_version_id": str(version.id),
         "asset_id": str(asset.id),
+        "asset_state_id": str(state.id),
         "asset_status": asset.status,
+        "asset_state_status": state.status,
         "content_hash": version.content_hash,
         "status": status,
         "blockers": [
@@ -1275,8 +1751,10 @@ def _readiness_reference(
     return AssetVersionReadinessReference(
         id=version.id,
         asset_id=asset.id,
+        asset_state_id=state.id,
         kind=asset.kind,
         asset_status=asset.status,
+        asset_state_status=state.status,
         status=status,
         blocker_codes=blocker_codes,
         media_version_ids=tuple(readiness.dependency_snapshot.media_version_ids),
@@ -1298,13 +1776,13 @@ async def resolve_asset_versions_readiness(
     unique_ids = list(dict.fromkeys(version_ids))
     rows = await repository.find_versions(session, unique_ids)
     scoped = [
-        (version, asset)
-        for version, asset in rows
+        (version, state, asset)
+        for version, state, asset in rows
         if version.workspace_id == workspace_id and asset.project_id == project_id
     ]
     references = await repository.list_media_references(
         session,
-        [version.id for version, _asset in scoped],
+        [version.id for version, _state, _asset in scoped],
     )
     by_version: dict[UUID, list[AssetMediaReference]] = {}
     for reference in references:
@@ -1319,7 +1797,7 @@ async def resolve_asset_versions_readiness(
         tuple[list[AssetReadinessBlocker], bool],
     ] = {}
     rights_subjects: list[SubjectReference] = []
-    for version, asset in scoped:
+    for version, state, asset in scoped:
         version_references = by_version.get(version.id, [])
         blockers, draft = _readiness_prerequisites(
             asset,
@@ -1328,7 +1806,7 @@ async def resolve_asset_versions_readiness(
             media=media,
         )
         prerequisites[version.id] = (blockers, draft)
-        if not draft and asset.status == "active":
+        if not draft and asset.status == "active" and state.status == "active":
             rights_subjects.append(
                 SubjectReference(
                     subject_type=SubjectType.ASSET_VERSION,
@@ -1356,7 +1834,7 @@ async def resolve_asset_versions_readiness(
                 raise
             rights_unavailable = True
     results: dict[UUID, AssetVersionReadinessReference] = {}
-    for version, asset in scoped:
+    for version, state, asset in scoped:
         blockers, draft = prerequisites[version.id]
         subject = SubjectReference(
             subject_type=SubjectType.ASSET_VERSION,
@@ -1364,6 +1842,7 @@ async def resolve_asset_versions_readiness(
         )
         readiness = _compose_readiness(
             asset,
+            state,
             version,
             by_version.get(version.id, []),
             blockers=blockers,
@@ -1372,7 +1851,7 @@ async def resolve_asset_versions_readiness(
             rights_unavailable=rights_unavailable and subject in rights_subjects,
             at_time=at_time,
         )
-        results[version.id] = _readiness_reference(asset, version, readiness)
+        results[version.id] = _readiness_reference(asset, state, version, readiness)
     return results
 
 
@@ -1396,6 +1875,260 @@ async def resolve_asset_version_readiness(
         region=region,
     )
     return results.get(version_id)
+
+
+_STATE_NEXT_ACTIONS = {
+    "required_field_missing": "complete_asset_spec",
+    "required_media_missing": "attach_media_reference",
+    "media_unavailable": "replace_media_reference",
+    "consent_missing": "review_asset_consent",
+    "consent_revoked": "review_asset_consent",
+    "rights_dependency_unavailable": "retry_readiness",
+    "asset_archived": "restore_asset",
+    "asset_state_disabled": "enable_asset_state",
+}
+
+
+def _state_readiness(
+    state: AssetState,
+    current_occurrences: list[AssetOccurrenceDecision],
+    readiness: AssetVersionReadinessReference | None,
+    *,
+    evaluated_at: datetime,
+) -> AssetStateReadinessResponse:
+    if state.current_version_id is None:
+        blockers = [
+            AssetReadinessBlocker(
+                code="state_current_version_missing",
+                dependency_type="ASSET_STATE",
+                dependency_id=state.id,
+                summary="Asset state has no current immutable version",
+                next_action="create_asset_state_version",
+            )
+        ]
+        status: Literal["draft", "ready", "blocked", "unavailable"] = (
+            "blocked" if state.status != "active" else "draft"
+        )
+        if state.status != "active":
+            blockers.append(
+                AssetReadinessBlocker(
+                    code="asset_state_disabled",
+                    dependency_type="ASSET_STATE",
+                    dependency_id=state.id,
+                    summary="Asset state is disabled",
+                    next_action="enable_asset_state",
+                )
+            )
+        return AssetStateReadinessResponse(
+            status=status,
+            blockers=blockers,
+            warnings=[],
+            next_actions=list(dict.fromkeys(item.next_action for item in blockers)),
+            dependency_snapshot=AssetStateReadinessSnapshot(
+                asset_state_id=state.id,
+                asset_state_revision=state.revision,
+                current_version_id=None,
+                occurrence_decision_ids=[item.id for item in current_occurrences],
+                media_version_ids=[],
+                consent_ids=[],
+                evaluated_at=evaluated_at,
+            ),
+        )
+    if readiness is None:
+        blockers = [
+            AssetReadinessBlocker(
+                code="state_current_version_unavailable",
+                dependency_type="ASSET_VERSION",
+                dependency_id=state.current_version_id,
+                summary="Current asset state version is unavailable",
+                next_action="repair_asset_state_current",
+            )
+        ]
+        return AssetStateReadinessResponse(
+            status="unavailable",
+            blockers=blockers,
+            warnings=[],
+            next_actions=["repair_asset_state_current"],
+            dependency_snapshot=AssetStateReadinessSnapshot(
+                asset_state_id=state.id,
+                asset_state_revision=state.revision,
+                current_version_id=state.current_version_id,
+                occurrence_decision_ids=[item.id for item in current_occurrences],
+                media_version_ids=[],
+                consent_ids=[],
+                evaluated_at=evaluated_at,
+            ),
+        )
+    blockers = [
+        AssetReadinessBlocker(
+            code=code,
+            dependency_type="ASSET_VERSION",
+            dependency_id=readiness.id,
+            summary=f"Asset state dependency is blocked: {code}",
+            next_action=_STATE_NEXT_ACTIONS.get(code, "review_asset_state"),
+        )
+        for code in readiness.blocker_codes
+    ]
+    return AssetStateReadinessResponse(
+        status=readiness.status,
+        blockers=blockers,
+        warnings=[],
+        next_actions=list(dict.fromkeys(item.next_action for item in blockers)),
+        dependency_snapshot=AssetStateReadinessSnapshot(
+            asset_state_id=state.id,
+            asset_state_revision=state.revision,
+            current_version_id=state.current_version_id,
+            occurrence_decision_ids=[item.id for item in current_occurrences],
+            media_version_ids=list(readiness.media_version_ids),
+            consent_ids=list(readiness.consent_ids),
+            evaluated_at=evaluated_at,
+        ),
+    )
+
+
+async def get_state_readiness(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    state_id: UUID,
+    *,
+    purpose: str,
+    channel: str,
+    region: str,
+) -> AssetStateReadinessResponse:
+    state, asset = await _state_for_read(session, claims, state_id)
+    occurrences = _current_occurrence_rows(
+        await repository.list_occurrence_decisions(session, [state.id])
+    )
+    readiness_by_version = await resolve_asset_versions_readiness(
+        session,
+        asset.workspace_id,
+        asset.project_id,
+        [state.current_version_id] if state.current_version_id is not None else [],
+        purpose=purpose,
+        channel=channel,
+        region=region,
+    )
+    return _state_readiness(
+        state,
+        occurrences,
+        (
+            readiness_by_version.get(state.current_version_id)
+            if state.current_version_id is not None
+            else None
+        ),
+        evaluated_at=datetime.now(UTC),
+    )
+
+
+async def get_asset_bible(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    project_id: UUID,
+    read_narratives: AssetOccurrenceNarrativeReader,
+    *,
+    purpose: str,
+    channel: str,
+    region: str,
+) -> AssetBibleResponse:
+    project = await project_for_content_read(session, claims, project_id)
+    assets = await repository.list_project_assets(session, project_id)
+    states = await repository.list_states_for_assets(
+        session,
+        [asset.id for asset in assets],
+    )
+    occurrence_history = await repository.list_occurrence_decisions(
+        session,
+        [state.id for state in states],
+    )
+    current_occurrences = _current_occurrence_rows(occurrence_history)
+    narratives = await read_narratives(
+        workspace_id=project.workspace_id,
+        unit_version_ids=[
+            row.narrative_unit_version_id for row in current_occurrences
+        ],
+    )
+    current_version_ids = [
+        state.current_version_id
+        for state in states
+        if state.current_version_id is not None
+    ]
+    version_rows = await repository.find_versions(session, current_version_ids)
+    version_by_id = {version.id: version for version, _state, _asset in version_rows}
+    media_references = await repository.list_media_references(
+        session,
+        current_version_ids,
+    )
+    media_by_version: dict[UUID, list[AssetMediaReference]] = {}
+    for reference in media_references:
+        media_by_version.setdefault(reference.asset_version_id, []).append(reference)
+    readiness_by_version = await resolve_asset_versions_readiness(
+        session,
+        project.workspace_id,
+        project_id,
+        current_version_ids,
+        purpose=purpose,
+        channel=channel,
+        region=region,
+    )
+    occurrences_by_state: dict[UUID, list[AssetOccurrenceDecision]] = {}
+    for occurrence in current_occurrences:
+        occurrences_by_state.setdefault(occurrence.asset_state_id, []).append(occurrence)
+    states_by_asset: dict[UUID, list[AssetState]] = {}
+    for state in states:
+        states_by_asset.setdefault(state.asset_id, []).append(state)
+    evaluated_at = datetime.now(UTC)
+    items: list[AssetBibleAsset] = []
+    state_statuses: list[str] = []
+    for asset in assets:
+        state_items: list[AssetBibleState] = []
+        for state in states_by_asset.get(asset.id, []):
+            state_occurrences = occurrences_by_state.get(state.id, [])
+            version = (
+                version_by_id.get(state.current_version_id)
+                if state.current_version_id is not None
+                else None
+            )
+            state_readiness = _state_readiness(
+                state,
+                state_occurrences,
+                (
+                    readiness_by_version.get(state.current_version_id)
+                    if state.current_version_id is not None
+                    else None
+                ),
+                evaluated_at=evaluated_at,
+            )
+            state_statuses.append(state_readiness.status)
+            state_items.append(
+                AssetBibleState(
+                    state=_state_response(state),
+                    current_version=(
+                        _version_response(
+                            version,
+                            media_by_version.get(version.id, []),
+                        )
+                        if version is not None
+                        else None
+                    ),
+                    occurrences=[
+                        _occurrence_response(row, narratives)
+                        for row in state_occurrences
+                    ],
+                    readiness=state_readiness,
+                )
+            )
+        items.append(AssetBibleAsset(asset=_asset_response(asset), states=state_items))
+    return AssetBibleResponse(
+        items=items,
+        summary=AssetBibleSummary(
+            asset_count=len(assets),
+            state_count=len(states),
+            ready=state_statuses.count("ready"),
+            draft=state_statuses.count("draft"),
+            blocked=state_statuses.count("blocked"),
+            unavailable=state_statuses.count("unavailable"),
+        ),
+    )
 
 
 def _candidate_spec(command: AssetCandidateCommand) -> AssetSpec:
@@ -1474,9 +2207,16 @@ async def create_or_link_candidate(
             or asset.kind != command.kind
         ):
             raise _not_found()
+        base_state = await repository.find_state_by_key(session, asset.id, "base")
+        if base_state is None:
+            raise ApiError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE,
+                "Asset base state is unavailable",
+                status_code=503,
+            )
         return AssetCandidateResult(
             asset_id=asset.id,
-            asset_version_id=asset.current_version_id,
+            asset_version_id=base_state.current_version_id,
         )
 
     normalized_name = _normalize_name(command.name)
@@ -1493,27 +2233,48 @@ async def create_or_link_candidate(
         revision=1,
         created_by=actor.user_id,
     )
+    state = AssetState(
+        id=uuid7(),
+        workspace_id=command.workspace_id,
+        asset_id=asset.id,
+        state_key="base",
+        label="基础状态",
+        description="",
+        status="active",
+        current_version_id=None,
+        revision=1,
+        creation_key="base",
+        command_receipts={},
+        created_by=actor.user_id,
+    )
     spec = _candidate_spec(command)
     version = AssetVersion(
         id=uuid7(),
         workspace_id=command.workspace_id,
         asset_id=asset.id,
+        asset_state_id=state.id,
         version_no=1,
         schema_version=1,
         spec=spec_to_json(spec),
         prompt_description=command.description,
-        source_type="candidate",
+        source_type="script_extraction_candidate",
         source_id=command.candidate_id,
         content_hash=_version_hash(
-            spec, command.description, [], "candidate", command.candidate_id
+            spec,
+            command.description,
+            [],
+            "script_extraction_candidate",
+            command.candidate_id,
         ),
         created_by=actor.user_id,
     )
     session.add(asset)
     await session.flush([asset])
+    session.add(state)
+    await session.flush([state])
     session.add(version)
     await session.flush([version])
-    asset.current_version_id = version.id
-    asset.revision = 2
-    await session.flush([asset])
+    state.current_version_id = version.id
+    state.revision = 2
+    await session.flush([state])
     return AssetCandidateResult(asset_id=asset.id, asset_version_id=version.id)

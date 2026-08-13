@@ -32,9 +32,26 @@ async def _identity_project(
     return headers, identity, created.json()["data"]
 
 
+async def _base_state(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    asset_id: str,
+) -> dict[str, Any]:
+    response = await client.get(
+        f"/api/v1/assets/{asset_id}/states",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    states = response.json()["data"]["items"]
+    assert len(states) == 1
+    assert states[0]["state_key"] == "base"
+    return cast(dict[str, Any], states[0])
+
+
 def _character_version_payload(
     media_version_id: UUID,
     *,
+    expected_revision: int,
     expected_current_version_id: str | None,
     appearance: str = "黑发、冷峻轮廓",
 ) -> dict[str, object]:
@@ -56,6 +73,7 @@ def _character_version_payload(
         ],
         "source_type": "manual",
         "source_id": None,
+        "expected_revision": expected_revision,
         "expected_current_version_id": expected_current_version_id,
         "set_as_current": True,
     }
@@ -226,9 +244,10 @@ async def test_related_asset_version_blocks_deleting_an_empty_character(
     assert character_response.status_code == prop_response.status_code == 201
     character = character_response.json()["data"]
     prop = prop_response.json()["data"]
+    prop_state = await _base_state(client, headers, prop["id"])
 
     version_response = await client.post(
-        f"/api/v1/assets/{prop['id']}/versions",
+        f"/api/v1/asset-states/{prop_state['id']}/versions",
         headers=headers,
         json={
             "spec": {
@@ -238,6 +257,7 @@ async def test_related_asset_version_blocks_deleting_an_empty_character(
                 "usage_context": "角色随身佩戴",
                 "holder_character_id": character["id"],
             },
+            "expected_revision": prop_state["revision"],
             "expected_current_version_id": None,
         },
     )
@@ -305,10 +325,11 @@ async def test_related_asset_version_append_and_character_delete_are_serialized(
         assert character_response.status_code == prop_response.status_code == 201
         character = character_response.json()["data"]
         prop = prop_response.json()["data"]
+        prop_state = await _base_state(client, headers, prop["id"])
 
         appended, deleted = await asyncio.gather(
             client.post(
-                f"/api/v1/assets/{prop['id']}/versions",
+                f"/api/v1/asset-states/{prop_state['id']}/versions",
                 headers=headers,
                 json={
                     "spec": {
@@ -318,6 +339,7 @@ async def test_related_asset_version_append_and_character_delete_are_serialized(
                         "usage_context": "角色持有",
                         "holder_character_id": character["id"],
                     },
+                    "expected_revision": prop_state["revision"],
                     "expected_current_version_id": None,
                 },
             ),
@@ -383,12 +405,14 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
     )
     assert created_asset.status_code == 201
     asset = created_asset.json()["data"]
+    state = await _base_state(client, headers, asset["id"])
 
     version_response = await client.post(
-        f"/api/v1/assets/{asset['id']}/versions",
+        f"/api/v1/asset-states/{state['id']}/versions",
         headers=headers,
         json=_character_version_payload(
             portrait_id,
+            expected_revision=state["revision"],
             expected_current_version_id=None,
         ),
     )
@@ -397,7 +421,8 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
     version = result["version"]
     assert version["version_no"] == 1
     assert version["spec"]["kind"] == "character"
-    assert result["asset"]["current_version_id"] == version["id"]
+    assert result["state"]["current_version_id"] == version["id"]
+    assert version["asset_state_id"] == state["id"]
     assert result["readiness"]["status"] == "blocked"
     assert [item["code"] for item in result["readiness"]["blockers"]] == [
         "consent_missing"
@@ -405,13 +430,14 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
 
     invalid_payload = _character_version_payload(
         portrait_id,
+        expected_revision=result["state"]["revision"],
         expected_current_version_id=version["id"],
     )
     invalid_spec = dict(cast(dict[str, object], invalid_payload["spec"]))
     invalid_spec["provider_model"] = "forbidden"
     invalid_payload["spec"] = invalid_spec
     unknown_field = await client.post(
-        f"/api/v1/assets/{asset['id']}/versions",
+        f"/api/v1/asset-states/{state['id']}/versions",
         headers=headers,
         json=invalid_payload,
     )
@@ -439,13 +465,14 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
         consent_data["id"]
     ]
 
-    endpoint = f"/api/v1/assets/{asset['id']}/versions"
+    endpoint = f"/api/v1/asset-states/{state['id']}/versions"
     first, second = await asyncio.gather(
         client.post(
             endpoint,
             headers=headers,
             json=_character_version_payload(
                 portrait_id,
+                expected_revision=result["state"]["revision"],
                 expected_current_version_id=version["id"],
                 appearance="黑发、雨夜造型",
             ),
@@ -455,6 +482,7 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
             headers=headers,
             json=_character_version_payload(
                 portrait_id,
+                expected_revision=result["state"]["revision"],
                 expected_current_version_id=version["id"],
                 appearance="黑发、室内造型",
             ),
@@ -480,7 +508,8 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
         set(item["metadata"])
         <= {
             "asset_id",
-            "asset_revision",
+            "asset_state_id",
+            "state_revision",
             "version_no",
             "kind",
             "set_as_current",
@@ -491,12 +520,13 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
     )
 
     switched = await client.post(
-        f"/api/v1/assets/{asset['id']}/current-version",
+        f"/api/v1/asset-states/{state['id']}/current-version",
         headers=headers,
         json={
             "version_id": version["id"],
             "expected_current_version_id": current["id"],
-            "expected_revision": winner.json()["data"]["asset"]["revision"],
+            "expected_revision": winner.json()["data"]["state"]["revision"],
+            "idempotency_key": "select-initial-character-version",
         },
     )
     assert switched.status_code == 200
@@ -506,13 +536,14 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
         headers=headers,
         params={
             "workspace_id": str(workspace_id),
-            "action": "asset.current_changed",
-            "target_id": asset["id"],
+            "action": "asset.state_current_changed",
+            "target_id": state["id"],
         },
     )
     assert current_audit.status_code == 200
     assert current_audit.json()["data"]["total"] == 1
     assert current_audit.json()["data"]["items"][0]["metadata"] == {
+        "asset_id": asset["id"],
         "revision": switched.json()["data"]["revision"],
         "previous_version_id": current["id"],
         "current_version_id": version["id"],
@@ -593,12 +624,14 @@ async def test_asset_commands_hide_cross_workspace_media_and_assets(
     )
     assert created.status_code == 201
     asset = created.json()["data"]
+    state = await _base_state(client, first_headers, asset["id"])
 
     foreign_reference = await client.post(
-        f"/api/v1/assets/{asset['id']}/versions",
+        f"/api/v1/asset-states/{state['id']}/versions",
         headers=first_headers,
         json=_character_version_payload(
             foreign_media_id,
+            expected_revision=state["revision"],
             expected_current_version_id=None,
         ),
     )

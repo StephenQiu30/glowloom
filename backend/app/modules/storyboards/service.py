@@ -12,6 +12,7 @@ from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.assets import (
     AssetVersionReadinessReference,
+    AssetVersionReference,
     asset_version_for_content_read,
     resolve_asset_version,
     resolve_asset_versions_readiness,
@@ -188,6 +189,9 @@ def _reference_response(reference: AssetReference) -> AssetReferenceResponse:
             reference.role,
         ),
         asset_version_id=reference.asset_version_id,
+        asset_state_id=reference.asset_state_id,
+        asset_id=reference.asset_id,
+        binding_source=cast(Literal["manual"], reference.binding_source),
         subject_key=reference.subject_key,
     )
 
@@ -716,7 +720,8 @@ async def _validate_asset_references(
     workspace_id: UUID,
     project_id: UUID,
     references: list[AssetReferenceRequest],
-) -> None:
+) -> dict[UUID, AssetVersionReference]:
+    resolved_by_version: dict[UUID, AssetVersionReference] = {}
     for reference in references:
         resolved = await resolve_asset_version(
             session,
@@ -728,6 +733,7 @@ async def _validate_asset_references(
             or resolved.project_id != project_id
             or resolved.kind != reference.role
             or resolved.asset_status != "active"
+            or resolved.asset_state_status != "active"
         ):
             raise ApiError(
                 ErrorCode.VALIDATION_FAILED,
@@ -740,6 +746,8 @@ async def _validate_asset_references(
                     "role": reference.role,
                 },
             )
+        resolved_by_version[reference.asset_version_id] = resolved
+    return resolved_by_version
 
 
 async def _validate_target(
@@ -813,6 +821,23 @@ async def _create_target(
     )
     session.add(version)
     await session.flush()
+    episode_context = await resolve_episode_content_context(
+        session,
+        workspace_id,
+        episode_id,
+    )
+    if episode_context is None:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Episode context is unavailable",
+            status_code=503,
+        )
+    resolved_by_version = await _validate_asset_references(
+        session,
+        workspace_id=workspace_id,
+        project_id=episode_context.project_id,
+        references=target.asset_references,
+    )
     references = [
         AssetReference(
             id=uuid7(),
@@ -821,6 +846,9 @@ async def _create_target(
             slot_key=reference.slot_key,
             role=reference.role,
             asset_version_id=reference.asset_version_id,
+            asset_state_id=resolved_by_version[reference.asset_version_id].asset_state_id,
+            asset_id=resolved_by_version[reference.asset_version_id].asset_id,
+            binding_source="manual",
             subject_key=reference.subject_key,
             created_at=now,
         )
@@ -914,7 +942,7 @@ async def append_spec_version(
             scene_id=script.scene_id,
             dialogue_ids=script.dialogue_ids,
         )
-        await _validate_asset_references(
+        resolved_by_version = await _validate_asset_references(
             session,
             workspace_id=shot.workspace_id,
             project_id=episode.project_id,
@@ -945,6 +973,11 @@ async def append_spec_version(
                 slot_key=reference.slot_key,
                 role=reference.role,
                 asset_version_id=reference.asset_version_id,
+                asset_state_id=resolved_by_version[
+                    reference.asset_version_id
+                ].asset_state_id,
+                asset_id=resolved_by_version[reference.asset_version_id].asset_id,
+                binding_source="manual",
                 subject_key=reference.subject_key,
             )
             for reference in request.asset_references
@@ -2654,6 +2687,26 @@ async def apply_asset_upgrade(
             replacement_requests_by_version.append(replacement_requests)
             session.add(version)
         await session.flush()
+        resolved_by_version: dict[UUID, AssetVersionReference] = {}
+        for reference in (
+            item
+            for requests in replacement_requests_by_version
+            for item in requests
+        ):
+            if reference.asset_version_id in resolved_by_version:
+                continue
+            resolved = await resolve_asset_version(
+                session,
+                rows[0][0].workspace_id,
+                reference.asset_version_id,
+            )
+            if resolved is None:
+                raise ApiError(
+                    ErrorCode.DEPENDENCY_UNAVAILABLE,
+                    "Asset version became unavailable during upgrade",
+                    status_code=503,
+                )
+            resolved_by_version[reference.asset_version_id] = resolved
         for (shot, source_version), version, replacement_requests in zip(
             rows,
             versions,
@@ -2668,6 +2721,11 @@ async def apply_asset_upgrade(
                     slot_key=reference.slot_key,
                     role=reference.role,
                     asset_version_id=reference.asset_version_id,
+                    asset_state_id=resolved_by_version[
+                        reference.asset_version_id
+                    ].asset_state_id,
+                    asset_id=resolved_by_version[reference.asset_version_id].asset_id,
+                    binding_source="manual",
                     subject_key=reference.subject_key,
                     created_at=now,
                 )
@@ -2772,6 +2830,9 @@ async def get_production_snapshot(
                     reference.role,
                 ),
                 asset_version_id=reference.asset_version_id,
+                asset_state_id=reference.asset_state_id,
+                asset_id=reference.asset_id,
+                binding_source=cast(Literal["manual"], reference.binding_source),
                 subject_key=reference.subject_key,
             )
             for reference in references

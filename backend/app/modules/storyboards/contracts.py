@@ -26,6 +26,9 @@ class ShotAssetReferenceSnapshot:
         "voice",
     ]
     asset_version_id: UUID
+    asset_state_id: UUID
+    asset_id: UUID
+    binding_source: Literal["manual"]
     subject_key: str | None
 
 

@@ -13,7 +13,7 @@ from uuid6 import uuid7
 
 from app.core.database import create_engine
 from app.model_registry import register_implemented_models
-from app.modules.assets.models import Asset
+from app.modules.assets.models import Asset, AssetState
 from app.modules.identity.models import Membership
 from app.modules.production.models import Task
 from app.modules.projects.models import Episode
@@ -282,11 +282,18 @@ async def seed_asset_candidate_reference(episode_id: UUID, asset_id: UUID) -> No
             )
             if episode is None or asset is None:
                 raise RuntimeError("episode or asset does not exist")
+            base_state = await session.scalar(
+                select(AssetState).where(
+                    AssetState.asset_id == asset.id,
+                    AssetState.state_key == "base",
+                )
+            )
             if (
                 asset.workspace_id != episode.workspace_id
                 or asset.project_id != episode.project_id
                 or asset.kind != "character"
-                or asset.current_version_id is not None
+                or base_state is None
+                or base_state.current_version_id is not None
             ):
                 raise RuntimeError("asset is not an empty character in the episode project")
             existing = await session.scalar(

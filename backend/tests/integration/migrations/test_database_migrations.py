@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import Connection, inspect, text
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.database import Base, create_engine
@@ -61,68 +61,24 @@ ASSET_STATE_TABLE_NAMES = {
 PROVIDER_CAPABILITY_UNIQUE = "uq_prod_capability_id_version"
 
 
-def _create_historical_pre_provider_schema(sync_connection: Connection) -> None:
-    legacy_tables = [
-        table
-        for name, table in Base.metadata.tables.items()
-        if name
-        not in (
-            PROVIDER_TABLE_NAMES
-            | SCRIPT_DOCUMENT_TABLE_NAMES
-            | EPISODE_PLANNING_TABLE_NAMES
-            | ADAPTATION_TABLE_NAMES
-            | NARRATIVE_TABLE_NAMES
-        )
-    ]
-    Base.metadata.create_all(sync_connection, tables=legacy_tables)
-    sync_connection.execute(
-        text(f"ALTER TABLE prod_model_capabilities DROP CONSTRAINT {PROVIDER_CAPABILITY_UNIQUE}")
-    )
-
-
-def _create_provider_era_schema(sync_connection: Connection) -> None:
-    provider_era_tables = [
-        table
-        for name, table in Base.metadata.tables.items()
-        if name
-        not in SCRIPT_DOCUMENT_TABLE_NAMES
-        | EPISODE_PLANNING_TABLE_NAMES
-        | ADAPTATION_TABLE_NAMES
-        | NARRATIVE_TABLE_NAMES
-    ]
-    Base.metadata.create_all(sync_connection, tables=provider_era_tables)
-
-
 async def _drop_migration_test_schema(target_engine: AsyncEngine) -> None:
     async with target_engine.begin() as connection:
-        await connection.execute(text("DROP TABLE IF EXISTS migration_unknown_table CASCADE"))
-        await connection.run_sync(Base.metadata.drop_all)
-        await connection.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE"))
+        table_names = await connection.run_sync(
+            lambda sync: inspect(sync).get_table_names()
+        )
+        for table_name in table_names:
+            quoted = connection.dialect.identifier_preparer.quote(table_name)
+            await connection.execute(text(f"DROP TABLE {quoted} CASCADE"))
 
 
-def _create_document_era_schema(sync_connection: Connection) -> None:
-    document_era_tables = [
-        table
-        for name, table in Base.metadata.tables.items()
-        if name not in EPISODE_PLANNING_TABLE_NAMES | ADAPTATION_TABLE_NAMES | NARRATIVE_TABLE_NAMES
-    ]
-    Base.metadata.create_all(sync_connection, tables=document_era_tables)
-
-
-def _create_episode_planning_era_schema(sync_connection: Connection) -> None:
-    episode_planning_era_tables = [
-        table
-        for name, table in Base.metadata.tables.items()
-        if name not in ADAPTATION_TABLE_NAMES | NARRATIVE_TABLE_NAMES
-    ]
-    Base.metadata.create_all(sync_connection, tables=episode_planning_era_tables)
-
-
-def _create_adaptation_era_schema(sync_connection: Connection) -> None:
-    adaptation_era_tables = [
-        table for name, table in Base.metadata.tables.items() if name not in NARRATIVE_TABLE_NAMES
-    ]
-    Base.metadata.create_all(sync_connection, tables=adaptation_era_tables)
+async def _create_unversioned_revision(
+    target_engine: AsyncEngine,
+    revision: str,
+) -> None:
+    """Build a historical schema from its migration, then remove only its stamp."""
+    await upgrade_database(target_engine, revision=revision)
+    async with target_engine.begin() as connection:
+        await connection.execute(text("DROP TABLE alembic_version"))
 
 
 @pytest.fixture
@@ -363,8 +319,8 @@ async def test_historical_pre_provider_database_is_adopted_and_upgraded_without_
     migration_engine: AsyncEngine,
 ) -> None:
     account_id = uuid4()
+    await _create_unversioned_revision(migration_engine, BASELINE_REVISION)
     async with migration_engine.begin() as connection:
-        await connection.run_sync(_create_historical_pre_provider_schema)
         await connection.execute(
             text(
                 """
@@ -413,8 +369,8 @@ async def test_historical_pre_provider_database_is_adopted_and_upgraded_without_
 async def test_partial_historical_provider_schema_is_rejected_without_stamping(
     migration_engine: AsyncEngine,
 ) -> None:
+    await _create_unversioned_revision(migration_engine, BASELINE_REVISION)
     async with migration_engine.begin() as connection:
-        await connection.run_sync(_create_historical_pre_provider_schema)
         await connection.execute(
             text(
                 "ALTER TABLE prod_model_capabilities "
@@ -439,20 +395,10 @@ async def test_partial_historical_provider_schema_is_rejected_without_stamping(
 async def test_previously_shipped_full_baseline_upgrades_without_duplicate_provider_tables(
     migration_engine: AsyncEngine,
 ) -> None:
+    await upgrade_database(migration_engine, revision=PROVIDER_REVISION)
     async with migration_engine.begin() as connection:
-        await connection.run_sync(_create_provider_era_schema)
         await connection.execute(
-            text(
-                """
-                CREATE TABLE alembic_version (
-                    version_num VARCHAR(32) NOT NULL,
-                    CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
-                )
-                """
-            )
-        )
-        await connection.execute(
-            text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
+            text("UPDATE alembic_version SET version_num = :revision"),
             {"revision": BASELINE_REVISION},
         )
 
@@ -486,6 +432,7 @@ async def test_baseline_revision_represents_the_historical_thirty_eight_table_sc
             - EPISODE_PLANNING_TABLE_NAMES
             - ADAPTATION_TABLE_NAMES
             - NARRATIVE_TABLE_NAMES
+            - ASSET_STATE_TABLE_NAMES
         ),
         "alembic_version",
     }
@@ -550,6 +497,7 @@ async def test_provider_revision_is_the_pre_document_forty_two_table_schema(
             - EPISODE_PLANNING_TABLE_NAMES
             - ADAPTATION_TABLE_NAMES
             - NARRATIVE_TABLE_NAMES
+            - ASSET_STATE_TABLE_NAMES
         ),
         "alembic_version",
     }
@@ -597,8 +545,8 @@ async def test_unversioned_provider_era_schema_is_adopted_then_upgraded(
     migration_engine: AsyncEngine,
 ) -> None:
     account_id = uuid4()
+    await _create_unversioned_revision(migration_engine, PROVIDER_REVISION)
     async with migration_engine.begin() as connection:
-        await connection.run_sync(_create_provider_era_schema)
         await connection.execute(
             text(
                 """
@@ -624,7 +572,7 @@ async def test_unversioned_provider_era_schema_is_adopted_then_upgraded(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
         )
-    assert await get_database_heads(migration_engine) == (NARRATIVE_REVISION,)
+    assert await get_database_heads(migration_engine) == (ASSET_STATE_REVISION,)
     assert account == "provider-era@example.test"
     await assert_database_matches_metadata(migration_engine)
 
@@ -633,10 +581,10 @@ async def test_unversioned_provider_era_schema_is_adopted_then_upgraded(
 async def test_partial_document_schema_is_rejected_without_stamping(
     migration_engine: AsyncEngine,
 ) -> None:
+    await _create_unversioned_revision(migration_engine, PROVIDER_REVISION)
     async with migration_engine.begin() as connection:
-        await connection.run_sync(_create_provider_era_schema)
-        await connection.run_sync(
-            lambda sync: Base.metadata.tables["scr_script_documents"].create(sync)
+        await connection.execute(
+            text("CREATE TABLE scr_script_documents (id UUID PRIMARY KEY)")
         )
 
     with pytest.raises(
@@ -753,7 +701,7 @@ async def test_head_upgrades_episode_planning_era_and_preserves_rows(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
         )
-    assert await get_database_heads(migration_engine) == (NARRATIVE_REVISION,)
+    assert await get_database_heads(migration_engine) == (ASSET_STATE_REVISION,)
     assert ADAPTATION_TABLE_NAMES <= table_names
     assert NARRATIVE_TABLE_NAMES <= table_names
     assert account == "adaptation-upgrade@example.test"
@@ -764,15 +712,14 @@ async def test_head_upgrades_episode_planning_era_and_preserves_rows(
 async def test_unversioned_episode_planning_era_is_adopted_then_upgraded(
     migration_engine: AsyncEngine,
 ) -> None:
-    async with migration_engine.begin() as connection:
-        await connection.run_sync(_create_episode_planning_era_schema)
+    await _create_unversioned_revision(migration_engine, EPISODE_PLANNING_REVISION)
 
     await adopt_existing_database(
         migration_engine,
         backup_reference="test-backup-before-adaptation-adoption",
     )
 
-    assert await get_database_heads(migration_engine) == (NARRATIVE_REVISION,)
+    assert await get_database_heads(migration_engine) == (ASSET_STATE_REVISION,)
     await assert_database_matches_metadata(migration_engine)
 
 
@@ -780,15 +727,14 @@ async def test_unversioned_episode_planning_era_is_adopted_then_upgraded(
 async def test_unversioned_adaptation_era_is_adopted_then_upgraded(
     migration_engine: AsyncEngine,
 ) -> None:
-    async with migration_engine.begin() as connection:
-        await connection.run_sync(_create_adaptation_era_schema)
+    await _create_unversioned_revision(migration_engine, ADAPTATION_REVISION)
 
     await adopt_existing_database(
         migration_engine,
         backup_reference="test-backup-before-narrative-adoption",
     )
 
-    assert await get_database_heads(migration_engine) == (NARRATIVE_REVISION,)
+    assert await get_database_heads(migration_engine) == (ASSET_STATE_REVISION,)
     await assert_database_matches_metadata(migration_engine)
 
 
@@ -796,10 +742,10 @@ async def test_unversioned_adaptation_era_is_adopted_then_upgraded(
 async def test_partial_narrative_schema_is_rejected_without_stamping(
     migration_engine: AsyncEngine,
 ) -> None:
+    await _create_unversioned_revision(migration_engine, ADAPTATION_REVISION)
     async with migration_engine.begin() as connection:
-        await connection.run_sync(_create_adaptation_era_schema)
-        await connection.run_sync(
-            lambda sync: Base.metadata.tables["scr_narrative_structures"].create(sync)
+        await connection.execute(
+            text("CREATE TABLE scr_narrative_structures (id UUID PRIMARY KEY)")
         )
 
     with pytest.raises(
@@ -818,10 +764,10 @@ async def test_partial_narrative_schema_is_rejected_without_stamping(
 async def test_partial_episode_planning_schema_is_rejected_without_stamping(
     migration_engine: AsyncEngine,
 ) -> None:
+    await _create_unversioned_revision(migration_engine, SCRIPT_DOCUMENT_REVISION)
     async with migration_engine.begin() as connection:
-        await connection.run_sync(_create_document_era_schema)
-        await connection.run_sync(
-            lambda sync: Base.metadata.tables["scr_episode_plans"].create(sync)
+        await connection.execute(
+            text("CREATE TABLE scr_episode_plans (id UUID PRIMARY KEY)")
         )
 
     with pytest.raises(
@@ -889,7 +835,7 @@ async def test_existing_schema_drift_is_rejected_without_stamping(
         await connection.run_sync(Base.metadata.create_all)
         await connection.execute(text(schema_drift))
 
-    with pytest.raises(DatabaseSchemaMismatchError, match="schema differs from baseline"):
+    with pytest.raises(DatabaseSchemaMismatchError, match="schema differs from"):
         await adopt_existing_database(
             migration_engine,
             backup_reference="test-backup-before-baseline",

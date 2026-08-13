@@ -14,12 +14,14 @@ from app.modules.projects import (
     EpisodeContentContext,
     episode_for_content_read,
     resolve_episode_content_context,
+    resolve_episode_content_contexts,
 )
 from app.modules.scripts import repository as scripts_repository
 from app.modules.scripts.authorization import require_resource_access, resource_not_found
 from app.modules.scripts.contracts import (
     NarrativeDependencySnapshot,
     NarrativeImpactSnapshot,
+    NarrativeUnitVersionReference,
 )
 from app.modules.scripts.models import Dialogue, Scene, ScriptSource, ScriptVersion
 from app.modules.scripts.narratives import repository
@@ -47,6 +49,38 @@ from app.modules.scripts.narratives.schemas import (
 
 PARSER_VERSION = "deterministic-lines-v1"
 INVALIDATED_SCOPES = ["shot_readiness", "coverage", "export"]
+
+
+async def resolve_narrative_unit_versions(
+    session: AsyncSession,
+    workspace_id: UUID,
+    unit_version_ids: list[UUID],
+) -> dict[UUID, NarrativeUnitVersionReference]:
+    rows = await repository.list_unit_version_scopes(
+        session,
+        list(dict.fromkeys(unit_version_ids)),
+    )
+    contexts = await resolve_episode_content_contexts(
+        session,
+        workspace_id,
+        [version.episode_id for version, _unit in rows],
+    )
+    return {
+        version.id: NarrativeUnitVersionReference(
+            workspace_id=version.workspace_id,
+            project_id=context.project_id,
+            episode_id=version.episode_id,
+            script_version_id=version.script_version_id,
+            narrative_unit_id=version.unit_id,
+            narrative_unit_version_id=version.id,
+            current_script_version_id=context.current_script_version_id,
+            current_unit_version_id=unit.current_version_id,
+            text_hash=version.text_hash,
+        )
+        for version, unit in rows
+        if version.workspace_id == workspace_id
+        and (context := contexts.get(version.episode_id)) is not None
+    }
 
 
 def _unit_hash_payload(

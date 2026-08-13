@@ -154,6 +154,10 @@ declare namespace API {
     data: AdaptationRunResponse;
   };
 
+  type ApiResponseAssetBibleResponse_ = {
+    data: AssetBibleResponse;
+  };
+
   type ApiResponseAssetDeletePreflightResponse_ = {
     data: AssetDeletePreflightResponse;
   };
@@ -162,12 +166,28 @@ declare namespace API {
     data: AssetDeleteResponse;
   };
 
+  type ApiResponseAssetOccurrenceDecisionResponse_ = {
+    data: AssetOccurrenceDecisionResponse;
+  };
+
   type ApiResponseAssetReadinessResponse_ = {
     data: AssetReadinessResponse;
   };
 
   type ApiResponseAssetResponse_ = {
     data: AssetResponse;
+  };
+
+  type ApiResponseAssetStateCreateResponse_ = {
+    data: AssetStateCreateResponse;
+  };
+
+  type ApiResponseAssetStateReadinessResponse_ = {
+    data: AssetStateReadinessResponse;
+  };
+
+  type ApiResponseAssetStateResponse_ = {
+    data: AssetStateResponse;
   };
 
   type ApiResponseAssetUpgradeApplyResponse_ = {
@@ -319,12 +339,20 @@ declare namespace API {
     data: NarrativeStructureResponse;
   };
 
+  type ApiResponsePaginatedAssetOccurrences_ = {
+    data: PaginatedAssetOccurrences;
+  };
+
   type ApiResponsePaginatedAssets_ = {
     data: PaginatedAssets;
   };
 
   type ApiResponsePaginatedAssetShotUsages_ = {
     data: PaginatedAssetShotUsages;
+  };
+
+  type ApiResponsePaginatedAssetStates_ = {
+    data: PaginatedAssetStates;
   };
 
   type ApiResponsePaginatedAssetVersions_ = {
@@ -495,8 +523,8 @@ declare namespace API {
     data: WorkspaceResponse;
   };
 
-  type appendAssetVersionApiV1AssetsAssetIdVersionsPostParams = {
-    asset_id: string;
+  type appendAssetVersionApiV1AssetStatesStateIdVersionsPostParams = {
+    state_id: string;
   };
 
   type appendSpecVersionApiV1ShotsShotIdSpecVersionsPostParams = {
@@ -559,6 +587,41 @@ declare namespace API {
     workspace_id: string;
   };
 
+  type AssetBibleAsset = {
+    asset: AssetResponse;
+    /** States */
+    states: AssetBibleState[];
+  };
+
+  type AssetBibleResponse = {
+    /** Items */
+    items: AssetBibleAsset[];
+    summary: AssetBibleSummary;
+  };
+
+  type AssetBibleState = {
+    state: AssetStateResponse;
+    current_version: AssetVersionResponse | null;
+    /** Occurrences */
+    occurrences: AssetOccurrenceResponse[];
+    readiness: AssetStateReadinessResponse;
+  };
+
+  type AssetBibleSummary = {
+    /** Asset Count */
+    asset_count: number;
+    /** State Count */
+    state_count: number;
+    /** Ready */
+    ready: number;
+    /** Draft */
+    draft: number;
+    /** Blocked */
+    blocked: number;
+    /** Unavailable */
+    unavailable: number;
+  };
+
   type AssetCandidateProposal = {
     /** Kind */
     kind: "asset";
@@ -591,15 +654,6 @@ declare namespace API {
     aliases: string[] | null;
     /** Tags */
     tags: string[] | null;
-  };
-
-  type AssetCurrentVersionRequest = {
-    /** Version Id */
-    version_id: string;
-    /** Expected Current Version Id */
-    expected_current_version_id: string | null;
-    /** Expected Revision */
-    expected_revision: number;
   };
 
   type AssetDeleteBlocker = {
@@ -658,6 +712,55 @@ declare namespace API {
     position: number;
   };
 
+  type AssetOccurrenceDecisionResponse = {
+    state: AssetStateResponse;
+    decision: AssetOccurrenceResponse;
+  };
+
+  type AssetOccurrenceRequest = {
+    /** Decision */
+    decision: "link" | "unlink";
+    /** Narrative Unit Id */
+    narrative_unit_id: string;
+    /** Narrative Unit Version Id */
+    narrative_unit_version_id: string;
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type AssetOccurrenceResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Asset State Id */
+    asset_state_id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Narrative Unit Id */
+    narrative_unit_id: string;
+    /** Narrative Unit Version Id */
+    narrative_unit_version_id: string;
+    /** Sequence */
+    sequence: number;
+    /** Decision */
+    decision: "link" | "unlink";
+    /** Origin */
+    origin: "manual" | "script_candidate";
+    /** Evidence Hash */
+    evidence_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Freshness */
+    freshness: "current" | "stale";
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+  };
+
   type AssetReadinessBlocker = {
     /** Code */
     code: string;
@@ -676,6 +779,10 @@ declare namespace API {
   type AssetReadinessDependencySnapshot = {
     /** Asset Version Id */
     asset_version_id: string;
+    /** Asset State Id */
+    asset_state_id: string;
+    /** Asset State Revision */
+    asset_state_revision: number;
     /** Media Version Ids */
     media_version_ids: string[];
     /** Consent Ids */
@@ -726,6 +833,12 @@ declare namespace API {
       | "voice";
     /** Asset Version Id */
     asset_version_id: string;
+    /** Asset State Id */
+    asset_state_id: string;
+    /** Asset Id */
+    asset_id: string;
+    /** Binding Source */
+    binding_source: "manual";
     /** Subject Key */
     subject_key: string | null;
   };
@@ -753,8 +866,6 @@ declare namespace API {
     tags: string[];
     /** Status */
     status: "active" | "archived";
-    /** Current Version Id */
-    current_version_id: string | null;
     /** Revision */
     revision: number;
     /** Created At */
@@ -782,7 +893,92 @@ declare namespace API {
     is_current: boolean;
   };
 
-  type AssetStateRequest = {
+  type AssetStateCreateRequest = {
+    /** State Key */
+    state_key: string;
+    /** Label */
+    label: string;
+    /** Description */
+    description: string | null;
+    /** Expected Asset Revision */
+    expected_asset_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type AssetStateCreateResponse = {
+    asset: AssetResponse;
+    state: AssetStateResponse;
+  };
+
+  type AssetStateCurrentRequest = {
+    /** Version Id */
+    version_id: string;
+    /** Expected Current Version Id */
+    expected_current_version_id: string | null;
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type AssetStateReadinessResponse = {
+    /** Status */
+    status: "draft" | "ready" | "blocked" | "unavailable";
+    /** Blockers */
+    blockers: AssetReadinessBlocker[];
+    /** Warnings */
+    warnings: string[];
+    /** Next Actions */
+    next_actions: string[];
+    dependency_snapshot: AssetStateReadinessSnapshot;
+  };
+
+  type AssetStateReadinessSnapshot = {
+    /** Asset State Id */
+    asset_state_id: string;
+    /** Asset State Revision */
+    asset_state_revision: number;
+    /** Current Version Id */
+    current_version_id: string | null;
+    /** Occurrence Decision Ids */
+    occurrence_decision_ids: string[];
+    /** Media Version Ids */
+    media_version_ids: string[];
+    /** Consent Ids */
+    consent_ids: string[];
+    /** Evaluated At */
+    evaluated_at: string;
+  };
+
+  type AssetStateResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Asset Id */
+    asset_id: string;
+    /** State Key */
+    state_key: string;
+    /** Label */
+    label: string;
+    /** Description */
+    description: string;
+    /** Status */
+    status: "active" | "disabled";
+    /** Current Version Id */
+    current_version_id: string | null;
+    /** Revision */
+    revision: number;
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+  };
+
+  type AssetStatusRequest = {
     /** Expected Revision */
     expected_revision: number;
   };
@@ -878,9 +1074,11 @@ declare namespace API {
     /** Media References */
     media_references: AssetMediaReferenceRequest[] | null;
     /** Source Type */
-    source_type: "manual" | "candidate" | null;
+    source_type: "manual" | "script_extraction_candidate" | null;
     /** Source Id */
     source_id: string | null | null;
+    /** Expected Revision */
+    expected_revision: number;
     /** Expected Current Version Id */
     expected_current_version_id: string | null;
     /** Set As Current */
@@ -888,7 +1086,7 @@ declare namespace API {
   };
 
   type AssetVersionCreateResponse = {
-    asset: AssetResponse;
+    state: AssetStateResponse;
     version: AssetVersionResponse;
     readiness: AssetReadinessResponse;
   };
@@ -900,6 +1098,8 @@ declare namespace API {
     workspace_id: string;
     /** Asset Id */
     asset_id: string;
+    /** Asset State Id */
+    asset_state_id: string;
     /** Version No */
     version_no: number;
     /** Schema Version */
@@ -915,7 +1115,7 @@ declare namespace API {
     /** Prompt Description */
     prompt_description: string;
     /** Source Type */
-    source_type: "manual" | "candidate";
+    source_type: "manual" | "script_extraction_candidate";
     /** Source Id */
     source_id: string | null;
     /** Content Hash */
@@ -1311,6 +1511,10 @@ declare namespace API {
     project_id: string;
   };
 
+  type createAssetStateApiV1AssetsAssetIdStatesPostParams = {
+    asset_id: string;
+  };
+
   type createEpisodeApiV1ProjectsProjectIdEpisodesPostParams = {
     project_id: string;
   };
@@ -1363,6 +1567,11 @@ declare namespace API {
     /** Confirmation */
     confirmation: "DEACTIVATE";
   };
+
+  type decideAssetOccurrenceApiV1AssetStatesStateIdOccurrenceDecisionsPostParams =
+    {
+      state_id: string;
+    };
 
   type decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPostParams =
     {
@@ -2050,8 +2259,22 @@ declare namespace API {
     asset_id: string;
   };
 
+  type getAssetBibleApiV1ProjectsProjectIdAssetBibleGetParams = {
+    project_id: string;
+    purpose: string;
+    channel: string;
+    region: string;
+  };
+
   type getAssetReadinessApiV1AssetVersionsVersionIdReadinessGetParams = {
     version_id: string;
+    purpose: string;
+    channel: string;
+    region: string;
+  };
+
+  type getAssetStateReadinessApiV1AssetStatesStateIdReadinessGetParams = {
+    state_id: string;
     purpose: string;
     channel: string;
     region: string;
@@ -2241,6 +2464,11 @@ declare namespace API {
     episode_id: string;
   };
 
+  type listAssetOccurrencesApiV1AssetStatesStateIdOccurrencesGetParams = {
+    state_id: string;
+    include_history: boolean | null;
+  };
+
   type listAssetsApiV1ProjectsProjectIdAssetsGetParams = {
     project_id: string;
     kind:
@@ -2265,8 +2493,12 @@ declare namespace API {
       offset: number | null;
     };
 
-  type listAssetVersionsApiV1AssetsAssetIdVersionsGetParams = {
+  type listAssetStatesApiV1AssetsAssetIdStatesGetParams = {
     asset_id: string;
+  };
+
+  type listAssetVersionsApiV1AssetStatesStateIdVersionsGetParams = {
+    state_id: string;
     limit: number | null | null;
     offset: number | null;
   };
@@ -2892,6 +3124,13 @@ declare namespace API {
     href: string;
   };
 
+  type PaginatedAssetOccurrences = {
+    /** Items */
+    items: AssetOccurrenceResponse[];
+    /** Total */
+    total: number;
+  };
+
   type PaginatedAssets = {
     /** Items */
     items: AssetResponse[];
@@ -2912,6 +3151,13 @@ declare namespace API {
     limit: number;
     /** Offset */
     offset: number;
+  };
+
+  type PaginatedAssetStates = {
+    /** Items */
+    items: AssetStateResponse[];
+    /** Total */
+    total: number;
   };
 
   type PaginatedAssetVersions = {
@@ -3736,8 +3982,8 @@ declare namespace API {
     created_at: string;
   };
 
-  type setCurrentAssetVersionApiV1AssetsAssetIdCurrentVersionPostParams = {
-    asset_id: string;
+  type setCurrentAssetVersionApiV1AssetStatesStateIdCurrentVersionPostParams = {
+    state_id: string;
   };
 
   type setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPostParams =

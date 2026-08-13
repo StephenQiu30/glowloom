@@ -14,6 +14,7 @@ const apiMocks = vi.hoisted(() => ({
   getConfirmedStructure: vi.fn(),
   getNarrativeStructure: vi.fn(),
   getBatch: vi.fn(),
+  getAssetBible: vi.fn(),
   getEpisode: vi.fn(),
   getProject: vi.fn(),
   getSnapshot: vi.fn(),
@@ -127,6 +128,7 @@ vi.mock("@/api/media", async () => ({
 
 vi.mock("@/api/assets", async () => ({
   ...(await vi.importActual<typeof import("@/api/assets")>("@/api/assets")),
+  getAssetBibleApiV1ProjectsProjectIdAssetBibleGet: apiMocks.getAssetBible,
   listAssetsApiV1ProjectsProjectIdAssetsGet: apiMocks.listAssets,
 }));
 
@@ -502,6 +504,19 @@ describe("单集统一生产工作台", () => {
     });
     apiMocks.listAssets.mockResolvedValue({
       data: { items: [], total: 0, limit: 100, offset: 0 },
+    });
+    apiMocks.getAssetBible.mockResolvedValue({
+      data: {
+        items: [],
+        summary: {
+          asset_count: 0,
+          state_count: 0,
+          ready: 0,
+          draft: 0,
+          blocked: 0,
+          unavailable: 0,
+        },
+      },
     });
     apiMocks.listMedia.mockResolvedValue({
       data: { items: [], total: 0, limit: 100, offset: 0 },

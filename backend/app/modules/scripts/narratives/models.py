@@ -196,6 +196,13 @@ class NarrativeUnitVersion(Base):
             name="uq_scr_narrative_version_id_workspace",
         ),
         UniqueConstraint(
+            "id",
+            "unit_id",
+            "episode_id",
+            "workspace_id",
+            name="uq_scr_narrative_version_unit_scope",
+        ),
+        UniqueConstraint(
             "unit_id",
             "version_no",
             name="uq_scr_narrative_version_number",

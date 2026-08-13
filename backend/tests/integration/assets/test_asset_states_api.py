@@ -330,22 +330,23 @@ async def test_occurrence_decisions_are_append_only_scoped_and_staleness_visible
     assert current.json()["data"]["total"] == 1
     assert current.json()["data"]["items"][0]["freshness"] == "current"
 
+    corrected_units: list[dict[str, object]] = [
+        {
+            "unit_id": item["unit_id"],
+            "kind": item["kind"],
+            "source_start": item["source_range"]["start"],
+            "source_end": item["source_range"]["end"],
+            "required_for_coverage": item["required_for_coverage"],
+        }
+        for item in structure["units"]
+    ]
     corrected_payload = {
         "expected_revision": structure["revision"],
         "expected_current_script_version_id": structure["script_version_id"],
         "idempotency_key": "occurrence:narrative-correction",
-        "units": [
-            {
-                "unit_id": item["unit_id"],
-                "kind": item["kind"],
-                "source_start": item["source_range"]["start"],
-                "source_end": item["source_range"]["end"],
-                "required_for_coverage": item["required_for_coverage"],
-            }
-            for item in structure["units"]
-        ],
+        "units": corrected_units,
     }
-    corrected_payload["units"][1]["required_for_coverage"] = False
+    corrected_units[1]["required_for_coverage"] = False
     corrected = await client.post(
         f"/api/v1/narrative-structures/{structure['id']}/revisions",
         headers=headers,

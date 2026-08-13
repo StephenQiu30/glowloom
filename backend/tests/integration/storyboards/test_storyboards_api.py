@@ -11,6 +11,7 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
+from app.modules.assets.models import AssetVersion
 from app.modules.projects.models import Episode
 from app.modules.scripts.models import (
     CandidateDecision,
@@ -37,6 +38,21 @@ class _SnapshotReader(Protocol):
         workspace_id: UUID,
         version_id: UUID,
     ) -> Awaitable[Any]: ...
+
+
+async def _base_asset_state(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    asset_id: str,
+) -> dict[str, Any]:
+    response = await client.get(
+        f"/api/v1/assets/{asset_id}/states",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    states = response.json()["data"]["items"]
+    assert len(states) == 1
+    return cast(dict[str, Any], states[0])
 
 
 async def create_episode_with_confirmed_structure(
@@ -282,8 +298,9 @@ async def create_ready_location_asset(
     )
     assert asset_response.status_code == 201
     asset = asset_response.json()["data"]
+    state = await _base_asset_state(client, headers, asset["id"])
     version_response = await client.post(
-        f"/api/v1/assets/{asset['id']}/versions",
+        f"/api/v1/asset-states/{state['id']}/versions",
         headers=headers,
         json={
             "spec": {
@@ -303,6 +320,7 @@ async def create_ready_location_asset(
             ],
             "source_type": "manual",
             "source_id": None,
+            "expected_revision": state["revision"],
             "expected_current_version_id": None,
             "set_as_current": True,
         },
@@ -328,8 +346,14 @@ async def _append_ready_location_version(
     current_version: dict[str, Any],
 ) -> dict[str, Any]:
     media_version_id = UUID(current_version["media_references"][0]["media_version_id"])
+    state_response = await client.get(
+        f"/api/v1/assets/{current_version['asset_id']}/states",
+        headers=headers,
+    )
+    assert state_response.status_code == 200
+    state = state_response.json()["data"]["items"][0]
     response = await client.post(
-        f"/api/v1/assets/{current_version['asset_id']}/versions",
+        f"/api/v1/asset-states/{state['id']}/versions",
         headers=headers,
         json={
             "spec": {
@@ -349,6 +373,7 @@ async def _append_ready_location_version(
             ],
             "source_type": "manual",
             "source_id": None,
+            "expected_revision": state["revision"],
             "expected_current_version_id": current_version["id"],
             "set_as_current": True,
         },
@@ -387,6 +412,8 @@ async def _seed_ready_storyboard_shots(
     )
     hashes = storyboard_content_hashes(spec, [reference_request])
     async with session_factory() as session, session.begin():
+        asset_version = await session.get(AssetVersion, location_version_id)
+        assert asset_version is not None
         shots: list[Shot] = []
         versions: list[ShotSpecVersion] = []
         references: list[AssetReference] = []
@@ -431,6 +458,9 @@ async def _seed_ready_storyboard_shots(
                     slot_key="location-main",
                     role="location",
                     asset_version_id=location_version_id,
+                    asset_state_id=asset_version.asset_state_id,
+                    asset_id=asset_version.asset_id,
+                    binding_source="manual",
                     subject_key=None,
                 )
             )

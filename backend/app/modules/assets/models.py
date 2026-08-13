@@ -33,14 +33,6 @@ class Asset(Base):
             ("prj_projects.id", "prj_projects.workspace_id"),
             name="fk_ast_asset_project_workspace",
         ),
-        ForeignKeyConstraint(
-            ("current_version_id", "workspace_id"),
-            ("ast_asset_versions.id", "ast_asset_versions.workspace_id"),
-            name="fk_ast_asset_current_version_workspace",
-            deferrable=True,
-            initially="DEFERRED",
-            use_alter=True,
-        ),
         CheckConstraint(
             "kind IN ('character', 'location', 'prop', 'costume', "
             "'visual_style', 'voice')",
@@ -74,7 +66,6 @@ class Asset(Base):
     aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     status: Mapped[str] = mapped_column(String(20), default="active")
-    current_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     revision: Mapped[int] = mapped_column(Integer, default=1)
     archived_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -93,33 +84,114 @@ class Asset(Base):
     )
 
 
-class AssetVersion(Base):
-    __tablename__ = "ast_asset_versions"
+class AssetState(Base):
+    __tablename__ = "ast_asset_states"
     __table_args__ = (
         ForeignKeyConstraint(
             ("asset_id", "workspace_id"),
             ("ast_assets.id", "ast_assets.workspace_id"),
-            name="fk_ast_version_asset_workspace",
+            name="fk_ast_state_asset_workspace",
+        ),
+        ForeignKeyConstraint(
+            ("current_version_id", "id", "asset_id", "workspace_id"),
+            (
+                "ast_asset_versions.id",
+                "ast_asset_versions.asset_state_id",
+                "ast_asset_versions.asset_id",
+                "ast_asset_versions.workspace_id",
+            ),
+            name="fk_ast_state_current_version_scope",
+            deferrable=True,
+            initially="DEFERRED",
+            use_alter=True,
+        ),
+        CheckConstraint(
+            "status IN ('active', 'disabled')",
+            name="ck_ast_state_status",
+        ),
+        CheckConstraint("revision >= 1", name="ck_ast_state_revision"),
+        UniqueConstraint("id", "workspace_id", name="uq_ast_state_id_workspace"),
+        UniqueConstraint(
+            "id",
+            "asset_id",
+            "workspace_id",
+            name="uq_ast_state_scope",
+        ),
+        UniqueConstraint(
+            "asset_id",
+            "state_key",
+            name="uq_ast_state_asset_key",
+        ),
+        UniqueConstraint(
+            "asset_id",
+            "creation_key",
+            name="uq_ast_state_asset_creation",
+        ),
+        Index("ix_ast_state_asset_status", "asset_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    asset_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    state_key: Mapped[str] = mapped_column(String(80))
+    label: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    current_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    creation_key: Mapped[str] = mapped_column(String(200))
+    command_receipts: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
+    )
+
+
+class AssetVersion(Base):
+    __tablename__ = "ast_asset_versions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ("asset_state_id", "asset_id", "workspace_id"),
+            (
+                "ast_asset_states.id",
+                "ast_asset_states.asset_id",
+                "ast_asset_states.workspace_id",
+            ),
+            name="fk_ast_version_state_scope",
             deferrable=True,
             initially="DEFERRED",
         ),
         CheckConstraint("version_no >= 1", name="ck_ast_version_number"),
         CheckConstraint("schema_version >= 1", name="ck_ast_schema_version"),
         CheckConstraint(
-            "source_type IN ('manual', 'candidate')",
+            "source_type IN ('manual', 'script_extraction_candidate')",
             name="ck_ast_version_source_type",
         ),
         UniqueConstraint("id", "workspace_id", name="uq_ast_version_id_workspace"),
+        UniqueConstraint(
+            "id",
+            "asset_state_id",
+            "asset_id",
+            "workspace_id",
+            name="uq_ast_version_scope",
+        ),
         UniqueConstraint("asset_id", "version_no", name="uq_ast_version_number"),
         UniqueConstraint(
             "source_type", "source_id", name="uq_ast_version_source"
         ),
         Index("ix_ast_version_content_hash", "content_hash"),
+        Index("ix_ast_version_state_number", "asset_state_id", "version_no"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
     workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     asset_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    asset_state_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     version_no: Mapped[int] = mapped_column(Integer)
     schema_version: Mapped[int] = mapped_column(Integer, default=1)
     spec: Mapped[dict[str, Any]] = mapped_column(JSONB)
@@ -127,6 +199,88 @@ class AssetVersion(Base):
     source_type: Mapped[str] = mapped_column(String(30), default="manual")
     source_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     content_hash: Mapped[str] = mapped_column(String(64))
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now
+    )
+
+
+class AssetOccurrenceDecision(Base):
+    __tablename__ = "ast_asset_occurrences"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ("asset_state_id", "workspace_id"),
+            ("ast_asset_states.id", "ast_asset_states.workspace_id"),
+            name="fk_ast_occurrence_state_workspace",
+        ),
+        ForeignKeyConstraint(
+            ("narrative_unit_id", "episode_id", "workspace_id"),
+            (
+                "scr_narrative_units.id",
+                "scr_narrative_units.episode_id",
+                "scr_narrative_units.workspace_id",
+            ),
+            name="fk_ast_occurrence_unit_scope",
+        ),
+        ForeignKeyConstraint(
+            (
+                "narrative_unit_version_id",
+                "narrative_unit_id",
+                "episode_id",
+                "workspace_id",
+            ),
+            (
+                "scr_narrative_unit_versions.id",
+                "scr_narrative_unit_versions.unit_id",
+                "scr_narrative_unit_versions.episode_id",
+                "scr_narrative_unit_versions.workspace_id",
+            ),
+            name="fk_ast_occurrence_unit_version_scope",
+        ),
+        CheckConstraint("sequence >= 1", name="ck_ast_occurrence_sequence"),
+        CheckConstraint(
+            "decision IN ('link', 'unlink')",
+            name="ck_ast_occurrence_decision",
+        ),
+        CheckConstraint(
+            "origin IN ('manual', 'script_candidate')",
+            name="ck_ast_occurrence_origin",
+        ),
+        UniqueConstraint(
+            "asset_state_id",
+            "sequence",
+            name="uq_ast_occurrence_state_sequence",
+        ),
+        UniqueConstraint(
+            "asset_state_id",
+            "idempotency_key",
+            name="uq_ast_occurrence_state_idempotency",
+        ),
+        Index(
+            "ix_ast_occurrence_episode_state",
+            "episode_id",
+            "asset_state_id",
+        ),
+        Index(
+            "ix_ast_occurrence_unit_created",
+            "narrative_unit_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    asset_state_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    episode_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    narrative_unit_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    narrative_unit_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer)
+    decision: Mapped[str] = mapped_column(String(20))
+    origin: Mapped[str] = mapped_column(String(30))
+    evidence_hash: Mapped[str] = mapped_column(String(64))
+    idempotency_key: Mapped[str] = mapped_column(String(200))
     created_by: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
     )

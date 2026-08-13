@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
+from app.modules.assets.models import AssetVersion
 from app.modules.projects.models import Episode
 from app.modules.scripts.models import Dialogue, Scene, ScriptSource, ScriptVersion
 from app.modules.storyboards.hashing import storyboard_content_hashes
@@ -233,9 +234,17 @@ async def _seed_ready_asset_version(
         ),
         expected_status=201,
     )
+    state_page = _data(
+        await client.get(
+            f"/api/v1/assets/{asset['id']}/states",
+            headers=headers,
+        ),
+        expected_status=200,
+    )
+    state = state_page["items"][0]
     created = _data(
         await client.post(
-            f"/api/v1/assets/{asset['id']}/versions",
+            f"/api/v1/asset-states/{state['id']}/versions",
             headers=headers,
             json={
                 "spec": _asset_spec(kind, ordinal=ordinal),
@@ -249,6 +258,7 @@ async def _seed_ready_asset_version(
                 ],
                 "source_type": "manual",
                 "source_id": None,
+                "expected_revision": state["revision"],
                 "expected_current_version_id": None,
                 "set_as_current": True,
             },
@@ -377,6 +387,17 @@ async def _seed_shots(
     ]
     hashes = storyboard_content_hashes(spec, reference_requests)
     async with session_factory() as session, session.begin():
+        asset_versions = {
+            version.id: version
+            for version in await session.scalars(
+                select(AssetVersion).where(
+                    AssetVersion.id.in_(
+                        [request.asset_version_id for request in reference_requests]
+                    )
+                )
+            )
+        }
+        assert len(asset_versions) == len(reference_requests)
         shots: list[Shot] = []
         versions: list[ShotSpecVersion] = []
         references: list[AssetReference] = []
@@ -421,6 +442,11 @@ async def _seed_shots(
                     slot_key=request.slot_key,
                     role=request.role,
                     asset_version_id=request.asset_version_id,
+                    asset_state_id=asset_versions[
+                        request.asset_version_id
+                    ].asset_state_id,
+                    asset_id=asset_versions[request.asset_version_id].asset_id,
+                    binding_source="manual",
                     subject_key=request.subject_key,
                 )
                 for request in reference_requests

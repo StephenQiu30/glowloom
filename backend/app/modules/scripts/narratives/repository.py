@@ -85,6 +85,38 @@ async def find_units(
     return list(await session.scalars(query))
 
 
+async def find_unit_version_scope(
+    session: AsyncSession,
+    unit_id: UUID,
+    unit_version_id: UUID,
+) -> tuple[NarrativeUnitVersion, NarrativeUnit] | None:
+    row = (
+        await session.execute(
+            select(NarrativeUnitVersion, NarrativeUnit)
+            .join(NarrativeUnit, NarrativeUnit.id == NarrativeUnitVersion.unit_id)
+            .where(
+                NarrativeUnitVersion.id == unit_version_id,
+                NarrativeUnitVersion.unit_id == unit_id,
+            )
+        )
+    ).one_or_none()
+    return None if row is None else (row[0], row[1])
+
+
+async def list_unit_version_scopes(
+    session: AsyncSession,
+    unit_version_ids: list[UUID],
+) -> list[tuple[NarrativeUnitVersion, NarrativeUnit]]:
+    if not unit_version_ids:
+        return []
+    rows = await session.execute(
+        select(NarrativeUnitVersion, NarrativeUnit)
+        .join(NarrativeUnit, NarrativeUnit.id == NarrativeUnitVersion.unit_id)
+        .where(NarrativeUnitVersion.id.in_(unit_version_ids))
+    )
+    return [(row[0], row[1]) for row in rows]
+
+
 async def next_impact_sequence(session: AsyncSession, episode_id: UUID) -> int:
     return (
         await session.scalar(

@@ -333,9 +333,20 @@ async def test_project_asset_facts_are_itemized_and_block_project_delete(
     assert archived_response.status_code == 201
     active_asset = active_response.json()["data"]
     archived_asset = archived_response.json()["data"]
+    active_states = await client.get(
+        f"/api/v1/assets/{active_asset['id']}/states",
+        headers=headers,
+    )
+    archived_states = await client.get(
+        f"/api/v1/assets/{archived_asset['id']}/states",
+        headers=headers,
+    )
+    assert active_states.status_code == archived_states.status_code == 200
+    active_state = active_states.json()["data"]["items"][0]
+    archived_state = archived_states.json()["data"]["items"][0]
 
     active_version = await client.post(
-        f"/api/v1/assets/{active_asset['id']}/versions",
+        f"/api/v1/asset-states/{active_state['id']}/versions",
         headers=headers,
         json={
             "spec": {
@@ -349,12 +360,13 @@ async def test_project_asset_facts_are_itemized_and_block_project_delete(
             "media_references": [],
             "source_type": "manual",
             "source_id": None,
+            "expected_revision": active_state["revision"],
             "expected_current_version_id": None,
             "set_as_current": True,
         },
     )
     archived_version = await client.post(
-        f"/api/v1/assets/{archived_asset['id']}/versions",
+        f"/api/v1/asset-states/{archived_state['id']}/versions",
         headers=headers,
         json={
             "spec": {
@@ -368,6 +380,7 @@ async def test_project_asset_facts_are_itemized_and_block_project_delete(
             "media_references": [],
             "source_type": "manual",
             "source_id": None,
+            "expected_revision": archived_state["revision"],
             "expected_current_version_id": None,
             "set_as_current": True,
         },
@@ -378,7 +391,7 @@ async def test_project_asset_facts_are_itemized_and_block_project_delete(
     archived = await client.post(
         f"/api/v1/assets/{archived_asset['id']}/archive",
         headers=headers,
-        json={"expected_revision": 2},
+        json={"expected_revision": archived_asset["revision"]},
     )
     assert archived.status_code == 200
     assert archived.json()["data"]["status"] == "archived"

@@ -14,6 +14,9 @@ AssetKind = Literal[
 ]
 AssetStatus = Literal["active", "archived"]
 ReadinessStatus = Literal["draft", "ready", "blocked"]
+AssetStateStatus = Literal["active", "disabled"]
+OccurrenceDecision = Literal["link", "unlink"]
+OccurrenceFreshness = Literal["current", "stale"]
 
 
 class CommandModel(BaseModel):
@@ -112,7 +115,7 @@ class AssetUpdateRequest(CommandModel):
     tags: list[str] | None = Field(default=None, max_length=30)
 
 
-class AssetStateRequest(CommandModel):
+class AssetStatusRequest(CommandModel):
     expected_revision: int = Field(ge=1)
 
 
@@ -125,7 +128,6 @@ class AssetResponse(BaseModel):
     aliases: list[str]
     tags: list[str]
     status: AssetStatus
-    current_version_id: UUID | None
     revision: int
     created_at: datetime
     updated_at: datetime
@@ -137,6 +139,39 @@ class PaginatedAssets(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class AssetStateCreateRequest(CommandModel):
+    state_key: str = Field(pattern=r"^[a-z0-9][a-z0-9_]{0,79}$")
+    label: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=4000)
+    expected_asset_revision: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class AssetStateResponse(BaseModel):
+    id: UUID
+    workspace_id: UUID
+    asset_id: UUID
+    state_key: str
+    label: str
+    description: str
+    status: AssetStateStatus
+    current_version_id: UUID | None
+    revision: int
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class AssetStateCreateResponse(BaseModel):
+    asset: AssetResponse
+    state: AssetStateResponse
+
+
+class PaginatedAssetStates(BaseModel):
+    items: list[AssetStateResponse]
+    total: int
 
 
 class AssetMediaReferenceRequest(CommandModel):
@@ -165,15 +200,16 @@ class AssetVersionCreateRequest(CommandModel):
     spec: AssetSpec
     prompt_description: str = Field(default="", max_length=8000)
     media_references: list[AssetMediaReferenceRequest] = Field(default=[], max_length=100)
-    source_type: Literal["manual", "candidate"] = "manual"
+    source_type: Literal["manual", "script_extraction_candidate"] = "manual"
     source_id: UUID | None = None
+    expected_revision: int = Field(ge=1)
     expected_current_version_id: UUID | None
     set_as_current: bool = True
 
     @model_validator(mode="after")
     def validate_source(self) -> "AssetVersionCreateRequest":
-        if self.source_type == "candidate" and self.source_id is None:
-            raise ValueError("candidate source requires source_id")
+        if self.source_type == "script_extraction_candidate" and self.source_id is None:
+            raise ValueError("script extraction candidate source requires source_id")
         if self.source_type == "manual" and self.source_id is not None:
             raise ValueError("manual source does not accept source_id")
         keys = [(item.purpose, item.position) for item in self.media_references]
@@ -186,11 +222,12 @@ class AssetVersionResponse(BaseModel):
     id: UUID
     workspace_id: UUID
     asset_id: UUID
+    asset_state_id: UUID
     version_no: int
     schema_version: int
     spec: AssetSpec
     prompt_description: str
-    source_type: Literal["manual", "candidate"]
+    source_type: Literal["manual", "script_extraction_candidate"]
     source_id: UUID | None
     content_hash: str
     media_references: list[AssetMediaReferenceResponse]
@@ -205,10 +242,11 @@ class PaginatedAssetVersions(BaseModel):
     offset: int
 
 
-class AssetCurrentVersionRequest(CommandModel):
+class AssetStateCurrentRequest(CommandModel):
     version_id: UUID
     expected_current_version_id: UUID | None
     expected_revision: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=1, max_length=200)
 
 
 class AssetReadinessBlocker(BaseModel):
@@ -222,6 +260,8 @@ class AssetReadinessBlocker(BaseModel):
 
 class AssetReadinessDependencySnapshot(BaseModel):
     asset_version_id: UUID
+    asset_state_id: UUID
+    asset_state_revision: int
     media_version_ids: list[UUID]
     consent_ids: list[UUID]
     evaluated_at: datetime
@@ -236,9 +276,88 @@ class AssetReadinessResponse(BaseModel):
 
 
 class AssetVersionCreateResponse(BaseModel):
-    asset: AssetResponse
+    state: AssetStateResponse
     version: AssetVersionResponse
     readiness: AssetReadinessResponse
+
+
+class AssetOccurrenceRequest(CommandModel):
+    decision: OccurrenceDecision
+    narrative_unit_id: UUID
+    narrative_unit_version_id: UUID
+    expected_revision: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class AssetOccurrenceResponse(BaseModel):
+    id: UUID
+    workspace_id: UUID
+    asset_state_id: UUID
+    episode_id: UUID
+    narrative_unit_id: UUID
+    narrative_unit_version_id: UUID
+    sequence: int
+    decision: OccurrenceDecision
+    origin: Literal["manual", "script_candidate"]
+    evidence_hash: str
+    idempotency_key: str
+    freshness: OccurrenceFreshness
+    created_by: UUID
+    created_at: datetime
+
+
+class AssetOccurrenceDecisionResponse(BaseModel):
+    state: AssetStateResponse
+    decision: AssetOccurrenceResponse
+
+
+class PaginatedAssetOccurrences(BaseModel):
+    items: list[AssetOccurrenceResponse]
+    total: int
+
+
+class AssetStateReadinessSnapshot(BaseModel):
+    asset_state_id: UUID
+    asset_state_revision: int
+    current_version_id: UUID | None
+    occurrence_decision_ids: list[UUID]
+    media_version_ids: list[UUID]
+    consent_ids: list[UUID]
+    evaluated_at: datetime
+
+
+class AssetStateReadinessResponse(BaseModel):
+    status: Literal["draft", "ready", "blocked", "unavailable"]
+    blockers: list[AssetReadinessBlocker]
+    warnings: list[str]
+    next_actions: list[str]
+    dependency_snapshot: AssetStateReadinessSnapshot
+
+
+class AssetBibleState(BaseModel):
+    state: AssetStateResponse
+    current_version: AssetVersionResponse | None
+    occurrences: list[AssetOccurrenceResponse]
+    readiness: AssetStateReadinessResponse
+
+
+class AssetBibleAsset(BaseModel):
+    asset: AssetResponse
+    states: list[AssetBibleState]
+
+
+class AssetBibleSummary(BaseModel):
+    asset_count: int
+    state_count: int
+    ready: int
+    draft: int
+    blocked: int
+    unavailable: int
+
+
+class AssetBibleResponse(BaseModel):
+    items: list[AssetBibleAsset]
+    summary: AssetBibleSummary
 
 
 class AssetDeleteBlocker(BaseModel):

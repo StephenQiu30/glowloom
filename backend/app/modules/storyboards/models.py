@@ -160,14 +160,28 @@ class AssetReference(Base):
             ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
-            ("asset_version_id", "workspace_id"),
-            ("ast_asset_versions.id", "ast_asset_versions.workspace_id"),
-            name="fk_sbd_asset_ref_version_workspace",
+            (
+                "asset_version_id",
+                "asset_state_id",
+                "asset_id",
+                "workspace_id",
+            ),
+            (
+                "ast_asset_versions.id",
+                "ast_asset_versions.asset_state_id",
+                "ast_asset_versions.asset_id",
+                "ast_asset_versions.workspace_id",
+            ),
+            name="fk_sbd_asset_ref_version_scope",
         ),
         CheckConstraint(
             "role IN ('location', 'character', 'prop', 'costume', "
             "'visual_style', 'voice')",
             name="ck_sbd_asset_ref_role",
+        ),
+        CheckConstraint(
+            "binding_source = 'manual'",
+            name="ck_sbd_asset_ref_binding_source",
         ),
         UniqueConstraint(
             "shot_spec_version_id",
@@ -175,6 +189,7 @@ class AssetReference(Base):
             name="uq_sbd_asset_ref_spec_slot",
         ),
         Index("ix_sbd_asset_ref_asset_version", "asset_version_id"),
+        Index("ix_sbd_asset_ref_state", "asset_state_id"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
@@ -183,6 +198,9 @@ class AssetReference(Base):
     slot_key: Mapped[str] = mapped_column(String(100))
     role: Mapped[str] = mapped_column(String(30))
     asset_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    asset_state_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    asset_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    binding_source: Mapped[str] = mapped_column(String(30), default="manual")
     subject_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now

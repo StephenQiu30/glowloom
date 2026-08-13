@@ -37,11 +37,13 @@ import { AssetVersionUsage } from "./asset-version-usage";
 
 export function AssetList({
   assets,
+  statesByAssetId,
   isLoading,
   onSelect,
   selectedId,
 }: {
   assets: API.AssetResponse[];
+  statesByAssetId: Map<string, API.AssetStateResponse[]>;
   isLoading: boolean;
   onSelect: (id: string) => void;
   selectedId?: string;
@@ -79,6 +81,10 @@ export function AssetList({
         {assets.map((asset) => {
           const config = typeConfig(asset.kind);
           const Icon = config.icon;
+          const states = statesByAssetId.get(asset.id) ?? [];
+          const versionedStates = states.filter(
+            (state) => state.current_version_id,
+          ).length;
           return (
             <button
               aria-label={`选择资产 ${asset.name}`}
@@ -116,14 +122,121 @@ export function AssetList({
                   {asset.status === "active" ? "使用中" : "已归档"}
                 </Badge>
                 <span className="mt-1 block font-mono text-[10px] text-slate-400">
-                  {asset.current_version_id
-                    ? `v · ${shortId(asset.current_version_id)}`
-                    : "无版本"}
+                  {asset.status === "archived"
+                    ? "状态不参与生产"
+                    : versionedStates > 0
+                    ? `${versionedStates}/${states.length} 状态有版本`
+                    : `${states.length} 状态 · 无版本`}
                 </span>
               </span>
             </button>
           );
         })}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ArchivedAssetCard({
+  asset,
+  isRestoring,
+  onDelete,
+  onEdit,
+  onRestore,
+}: {
+  asset: API.AssetResponse;
+  isRestoring: boolean;
+  onDelete: () => void;
+  onEdit: () => void;
+  onRestore: () => void;
+}) {
+  const config = typeConfig(asset.kind);
+  const Icon = config.icon;
+  return (
+    <Card className="gap-0 py-0">
+      <CardHeader className="border-b py-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="grid size-11 place-items-center rounded-xl bg-slate-100 text-slate-500">
+              <Icon className="size-5" aria-hidden="true" />
+            </span>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-xl">{asset.name}</CardTitle>
+                <Badge variant="outline">{config.singular}</Badge>
+                <Badge variant="secondary">已归档</Badge>
+              </div>
+              <CardDescription className="mt-1">
+                Asset {shortId(asset.id)} · revision {asset.revision}
+              </CardDescription>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button aria-label="编辑资产身份" onClick={onEdit} variant="outline">
+              <Pencil aria-hidden="true" />编辑身份
+            </Button>
+            <Button disabled={isRestoring} onClick={onRestore} variant="outline">
+              <Archive aria-hidden="true" />恢复
+            </Button>
+            <Button aria-label="删除资产身份" onClick={onDelete} variant="ghost">
+              <Trash2 aria-hidden="true" />删除
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-5 text-sm leading-6 text-slate-500">
+        归档资产不进入资产圣经、准备度与新镜头绑定；恢复后可继续维护原有剧情状态和不可变版本。
+      </CardContent>
+    </Card>
+  );
+}
+
+export function AssetStateBar({
+  assetStatus,
+  onCreate,
+  onSelect,
+  selectedId,
+  states,
+}: {
+  assetStatus: API.AssetResponse["status"];
+  onCreate: () => void;
+  onSelect: (id: string) => void;
+  selectedId: string;
+  states: API.AssetStateResponse[];
+}) {
+  return (
+    <Card className="gap-0 py-0">
+      <CardHeader className="border-b py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle>剧情状态</CardTitle>
+            <CardDescription>每个状态独立维护当前生产版本。</CardDescription>
+          </div>
+          <Button
+            disabled={assetStatus === "archived"}
+            onClick={onCreate}
+            size="sm"
+            variant="outline"
+          >
+            <Plus aria-hidden="true" />新建状态
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-wrap gap-2 p-4">
+        {states.map((state) => (
+          <Button
+            aria-pressed={state.id === selectedId}
+            key={state.id}
+            onClick={() => onSelect(state.id)}
+            size="sm"
+            variant={state.id === selectedId ? "default" : "outline"}
+          >
+            {state.label}
+            <span className="text-xs opacity-70">
+              {state.current_version_id ? "有版本" : "待补版本"}
+            </span>
+          </Button>
+        ))}
       </CardContent>
     </Card>
   );
@@ -359,7 +472,9 @@ function VersionHistory({
               ) : null}
             </p>
             <p className="mt-1 truncate text-xs text-slate-500">
-              {version.source_type === "candidate" ? "脚本候选交接" : "手动创建"} · {shortId(version.content_hash)}
+              {version.source_type === "script_extraction_candidate"
+                ? "脚本候选交接"
+                : "手动创建"} · {shortId(version.content_hash)}
             </p>
           </div>
           <div className="grid justify-items-end gap-2">
@@ -386,6 +501,7 @@ function VersionHistory({
 
 export function AssetDetail({
   asset,
+  currentState,
   isArchiving,
   isChangingCurrent,
   mediaById,
@@ -403,6 +519,7 @@ export function AssetDetail({
   versionsLoading,
 }: {
   asset: API.AssetResponse;
+  currentState: API.AssetStateResponse;
   isArchiving: boolean;
   isChangingCurrent: boolean;
   mediaById: Map<string, API.MediaVersionResponse>;
@@ -422,7 +539,8 @@ export function AssetDetail({
   const config = typeConfig(asset.kind);
   const Icon = config.icon;
   const currentVersion =
-    versions.find((version) => version.id === asset.current_version_id) ?? versions[0];
+    versions.find((version) => version.id === currentState.current_version_id) ??
+    versions[0];
 
   return (
     <div className="grid gap-5">
@@ -447,7 +565,8 @@ export function AssetDetail({
                   ) : null}
                 </div>
                 <CardDescription className="mt-1">
-                  Asset {shortId(asset.id)} · revision {asset.revision}
+                  Asset {shortId(asset.id)} · {currentState.label} · state revision{" "}
+                  {currentState.revision}
                 </CardDescription>
                 {asset.tags.length > 0 ? (
                   <div className="mt-3 flex flex-wrap gap-1.5">
@@ -521,7 +640,7 @@ export function AssetDetail({
           {versions.length > 0 ? (
             <VersionHistory
               assetStatus={asset.status}
-              currentVersionId={asset.current_version_id}
+              currentVersionId={currentState.current_version_id}
               isChangingCurrent={isChangingCurrent}
               versions={versions}
               onSetCurrent={onSetCurrent}
@@ -534,6 +653,7 @@ export function AssetDetail({
 
       <AssetVersionUsage
         asset={asset}
+        currentVersionId={currentState.current_version_id}
         onCompleted={onUpgradeCompleted}
         onError={onUpgradeError}
         versions={versions}

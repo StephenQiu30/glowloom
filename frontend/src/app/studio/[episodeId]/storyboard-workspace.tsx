@@ -60,7 +60,7 @@ import {
 
 type StoryboardWorkspaceProps = {
   archivedShots: API.ShotResponse[];
-  assets: API.AssetResponse[];
+  assetBible?: API.AssetBibleResponse;
   busy: boolean;
   confirmedShotCandidates: API.ExtractionCandidateResponse[];
   order: API.ShotOrderResponse;
@@ -462,7 +462,7 @@ function ShotTitleDialog({
 }
 
 function ShotSpecEditor({
-  assets,
+  assetBible,
   busy,
   currentVersion,
   readiness,
@@ -470,7 +470,7 @@ function ShotSpecEditor({
   structure,
   onSaveSpec,
 }: {
-  assets: API.AssetResponse[];
+  assetBible?: API.AssetBibleResponse;
   busy: boolean;
   currentVersion?: API.ShotSpecVersionResponse;
   readiness?: API.ShotReadinessResponse;
@@ -541,14 +541,19 @@ function ShotSpecEditor({
   const scene = structure?.scenes.find(
     (item) => item.id === initial.script_reference.scene_id,
   );
-  const activeAssets = assets.filter(
-    (asset) => asset.status === "active" && asset.current_version_id,
+  const assetChoices = (assetBible?.items ?? []).flatMap(({ asset, states }) =>
+    asset.status === "active"
+      ? states.flatMap(({ state, current_version: version }) =>
+          state.status === "active" && version ? [{ asset, state, version }] : [],
+        )
+      : [],
   );
-  const assetsByKind = Object.groupBy(activeAssets, (asset) => asset.kind);
+  const assetsByKind = Object.groupBy(
+    assetChoices,
+    ({ asset }) => asset.kind,
+  );
   const assetsByVersion = new Map(
-    activeAssets.flatMap((asset) =>
-      asset.current_version_id ? [[asset.current_version_id, asset] as const] : [],
-    ),
+    assetChoices.map((choice) => [choice.version.id, choice] as const),
   );
   const characterReferences = references.filter(
     (reference) => reference.role === "character" && reference.subject_key,
@@ -565,7 +570,7 @@ function ShotSpecEditor({
 
   function referenceName(reference: API.AssetReferenceRequest): string {
     return (
-      assetsByVersion.get(reference.asset_version_id)?.name ??
+      assetsByVersion.get(reference.asset_version_id)?.asset.name ??
       `${assetKindLabels[reference.role]} ${reference.asset_version_id.slice(-8)}`
     );
   }
@@ -578,9 +583,9 @@ function ShotSpecEditor({
     );
   }
 
-  function toggleAsset(asset: API.AssetResponse) {
-    const versionId = asset.current_version_id;
-    if (!versionId) return;
+  function toggleAsset(choice: (typeof assetChoices)[number]) {
+    const { asset, version } = choice;
+    const versionId = version.id;
     const existing = references.find(
       (reference) => reference.asset_version_id === versionId,
     );
@@ -1073,21 +1078,21 @@ function ShotSpecEditor({
               <div className="grid content-start gap-2" key={kind}>
                 <Label>{assetKindLabels[kind]}</Label>
                 <div className="flex flex-wrap gap-2">
-                  {(assetsByKind[kind] ?? []).map((asset) => {
+                  {(assetsByKind[kind] ?? []).map((choice) => {
                     const selected = references.some(
                       (reference) =>
-                        reference.asset_version_id === asset.current_version_id,
+                        reference.asset_version_id === choice.version.id,
                     );
                     return (
                       <Button
                         aria-pressed={selected}
-                        key={asset.id}
-                        onClick={() => toggleAsset(asset)}
+                        key={choice.state.id}
+                        onClick={() => toggleAsset(choice)}
                         size="sm"
                         type="button"
                         variant={selected ? "secondary" : "outline"}
                       >
-                        {asset.name}
+                        {choice.asset.name} · {choice.state.label}
                       </Button>
                     );
                   })}
@@ -1234,7 +1239,7 @@ function ShotSpecEditor({
 
 export function StoryboardWorkspace({
   archivedShots,
-  assets,
+  assetBible,
   busy,
   confirmedShotCandidates,
   order,
@@ -1601,7 +1606,7 @@ export function StoryboardWorkspace({
                 </section>
               ) : null}
               <ShotSpecEditor
-                assets={assets}
+                assetBible={assetBible}
                 busy={busy}
                 currentVersion={currentVersion}
                 key={`${selectedShot.id}:${currentVersion?.id ?? "draft"}`}
