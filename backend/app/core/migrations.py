@@ -128,6 +128,8 @@ def _upgrade(connection: Connection, revision: str) -> None:
 async def upgrade_database(target_engine: AsyncEngine = engine, revision: str = "head") -> None:
     async with target_engine.begin() as connection:
         await connection.run_sync(_upgrade, revision)
+    if revision == "head":
+        await assert_database_matches_metadata(target_engine)
 
 
 def _downgrade(connection: Connection, revision: str) -> None:

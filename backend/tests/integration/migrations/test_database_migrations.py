@@ -113,6 +113,18 @@ async def test_empty_database_upgrades_to_registered_metadata_head(
 
 
 @pytest.mark.asyncio
+async def test_head_upgrade_rejects_stale_revision_marker(
+    migration_engine: AsyncEngine,
+) -> None:
+    await upgrade_database(migration_engine)
+    async with migration_engine.begin() as connection:
+        await connection.execute(text("DROP TABLE sys_schedules CASCADE"))
+
+    with pytest.raises(DatabaseSchemaMismatchError, match="schema differs from baseline"):
+        await upgrade_database(migration_engine)
+
+
+@pytest.mark.asyncio
 async def test_asset_state_revision_moves_asset_current_without_dual_write(
     migration_engine: AsyncEngine,
 ) -> None:

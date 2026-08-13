@@ -4,7 +4,8 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from pydantic import SecretStr
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import inspect, text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.database import (
@@ -35,6 +36,14 @@ TEST_DATABASE_URL = validate_test_database_url(
 )
 
 register_implemented_models()
+
+
+async def _drop_test_tables(target_engine: AsyncEngine) -> None:
+    async with target_engine.begin() as connection:
+        table_names = await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+        for table_name in sorted(table_names):
+            quoted_name = connection.dialect.identifier_preparer.quote(table_name)
+            await connection.execute(text(f"DROP TABLE {quoted_name} CASCADE"))
 
 
 class UnavailableTestCache:
@@ -118,16 +127,15 @@ def registration_mailer() -> RecordingRegistrationMailer:
 @pytest.fixture
 async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_engine(TEST_DATABASE_URL)
+    await _drop_test_tables(engine)
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         yield factory
     finally:
-        async with engine.begin() as connection:
-            await connection.run_sync(Base.metadata.drop_all)
+        await _drop_test_tables(engine)
         await engine.dispose()
 
 
