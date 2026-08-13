@@ -51,18 +51,11 @@ def _create_historical_pre_provider_schema(sync_connection: Connection) -> None:
         table
         for name, table in Base.metadata.tables.items()
         if name
-        not in (
-            PROVIDER_TABLE_NAMES
-            | SCRIPT_DOCUMENT_TABLE_NAMES
-            | EPISODE_PLANNING_TABLE_NAMES
-        )
+        not in (PROVIDER_TABLE_NAMES | SCRIPT_DOCUMENT_TABLE_NAMES | EPISODE_PLANNING_TABLE_NAMES)
     ]
     Base.metadata.create_all(sync_connection, tables=legacy_tables)
     sync_connection.execute(
-        text(
-            "ALTER TABLE prod_model_capabilities "
-            f"DROP CONSTRAINT {PROVIDER_CAPABILITY_UNIQUE}"
-        )
+        text(f"ALTER TABLE prod_model_capabilities DROP CONSTRAINT {PROVIDER_CAPABILITY_UNIQUE}")
     )
 
 
@@ -200,17 +193,12 @@ async def test_historical_pre_provider_database_is_adopted_and_upgraded_without_
         capability_unique_constraints = await connection.run_sync(
             lambda sync: {
                 constraint["name"]
-                for constraint in inspect(sync).get_unique_constraints(
-                    "prod_model_capabilities"
-                )
+                for constraint in inspect(sync).get_unique_constraints("prod_model_capabilities")
             }
         )
         account = (
             await connection.execute(
-                text(
-                    "SELECT email_normalized, display_name "
-                    "FROM idn_user_accounts WHERE id = :id"
-                ),
+                text("SELECT email_normalized, display_name FROM idn_user_accounts WHERE id = :id"),
                 {"id": account_id},
             )
         ).one()
@@ -284,9 +272,7 @@ async def test_baseline_revision_represents_the_historical_thirty_eight_table_sc
         capability_unique_constraints = await connection.run_sync(
             lambda sync: {
                 constraint["name"]
-                for constraint in inspect(sync).get_unique_constraints(
-                    "prod_model_capabilities"
-                )
+                for constraint in inspect(sync).get_unique_constraints("prod_model_capabilities")
             }
         )
 
@@ -331,9 +317,7 @@ async def test_provider_revision_downgrades_to_historical_baseline_without_losin
         capability_unique_constraints = await connection.run_sync(
             lambda sync: {
                 constraint["name"]
-                for constraint in inspect(sync).get_unique_constraints(
-                    "prod_model_capabilities"
-                )
+                for constraint in inspect(sync).get_unique_constraints("prod_model_capabilities")
             }
         )
         account = await connection.scalar(
@@ -352,17 +336,11 @@ async def test_provider_revision_is_the_pre_document_forty_two_table_schema(
     await upgrade_database(migration_engine, revision=PROVIDER_REVISION)
 
     async with migration_engine.connect() as connection:
-        table_names = set(
-            await connection.run_sync(lambda sync: inspect(sync).get_table_names())
-        )
+        table_names = set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
 
     assert await get_database_heads(migration_engine) == (PROVIDER_REVISION,)
     assert table_names == {
-        *(
-            set(Base.metadata.tables)
-            - SCRIPT_DOCUMENT_TABLE_NAMES
-            - EPISODE_PLANNING_TABLE_NAMES
-        ),
+        *(set(Base.metadata.tables) - SCRIPT_DOCUMENT_TABLE_NAMES - EPISODE_PLANNING_TABLE_NAMES),
         "alembic_version",
     }
 
@@ -392,9 +370,7 @@ async def test_document_revision_upgrades_provider_era_and_preserves_existing_ro
     await upgrade_database(migration_engine, revision=SCRIPT_DOCUMENT_REVISION)
 
     async with migration_engine.connect() as connection:
-        table_names = set(
-            await connection.run_sync(lambda sync: inspect(sync).get_table_names())
-        )
+        table_names = set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
         account = await connection.scalar(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
@@ -489,9 +465,7 @@ async def test_document_revision_downgrades_to_provider_revision_without_legacy_
     await downgrade_database(migration_engine, PROVIDER_REVISION)
 
     async with migration_engine.connect() as connection:
-        table_names = set(
-            await connection.run_sync(lambda sync: inspect(sync).get_table_names())
-        )
+        table_names = set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
         account = await connection.scalar(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
@@ -526,9 +500,7 @@ async def test_episode_planning_revision_upgrades_document_era_and_preserves_row
     await upgrade_database(migration_engine)
 
     async with migration_engine.connect() as connection:
-        table_names = set(
-            await connection.run_sync(lambda sync: inspect(sync).get_table_names())
-        )
+        table_names = set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
         account = await connection.scalar(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
@@ -586,9 +558,7 @@ async def test_episode_planning_revision_downgrades_to_document_revision_without
     await downgrade_database(migration_engine, SCRIPT_DOCUMENT_REVISION)
 
     async with migration_engine.connect() as connection:
-        table_names = set(
-            await connection.run_sync(lambda sync: inspect(sync).get_table_names())
-        )
+        table_names = set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
         account = await connection.scalar(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},

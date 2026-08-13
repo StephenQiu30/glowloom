@@ -14,6 +14,17 @@ import {
   updateAssetApiV1AssetsAssetIdPatch,
 } from "@/api/assets";
 import {
+  confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPost,
+  createEpisodePlanApiV1DocumentRevisionsRevisionIdEpisodePlansPost,
+  getEpisodePlanApiV1EpisodePlansPlanIdGet,
+  materializeEpisodePlanApiV1EpisodePlansPlanIdMaterializationsPost,
+  mergeEpisodeProposalsApiV1EpisodePlansPlanIdMergePost,
+  moveEpisodeBoundaryApiV1EpisodePlansPlanIdMoveBoundaryPost,
+  publishImportCommitApiV1ImportCommitsCommitIdPublishPost,
+  renameEpisodeProposalApiV1EpisodePlansPlanIdRenamePost,
+  splitEpisodeProposalApiV1EpisodePlansPlanIdSplitPost,
+} from "@/api/episodePlanning";
+import {
   createConsentApiV1ConsentsPost,
   getConsentApiV1ConsentsConsentIdGet,
   listAuditEventsApiV1AuditEventsGet,
@@ -203,6 +214,7 @@ export const appApi = createApi({
     "AssetShotUsages",
     "ScriptSources",
     "ScriptDocuments",
+    "EpisodePlans",
     "ScriptVersions",
     "ScriptVersion",
     "Tasks",
@@ -561,6 +573,138 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { projectId }) => [
         { type: "ScriptDocuments", id: projectId },
+        "AuditEvents",
+      ],
+    }),
+    episodePlan: builder.query<API.EpisodePlanDetailResponse, string>({
+      queryFn: (planId) =>
+        runRequest(() =>
+          getEpisodePlanApiV1EpisodePlansPlanIdGet({ plan_id: planId }),
+        ),
+      providesTags: (_result, _error, planId) => [
+        { type: "EpisodePlans", id: planId },
+      ],
+    }),
+    createEpisodePlan: builder.mutation<
+      API.EpisodePlanDetailResponse,
+      { revisionId: string; body: API.EpisodePlanCreateRequest }
+    >({
+      queryFn: ({ revisionId, body }) =>
+        runRequest(() =>
+          createEpisodePlanApiV1DocumentRevisionsRevisionIdEpisodePlansPost(
+            { revision_id: revisionId },
+            body,
+          ),
+        ),
+      invalidatesTags: ["EpisodePlans", "Tasks", "AuditEvents"],
+    }),
+    renameEpisodeProposal: builder.mutation<
+      API.EpisodePlanDetailResponse,
+      { planId: string; body: API.RenameEpisodeProposalRequest }
+    >({
+      queryFn: ({ planId, body }) =>
+        runRequest(() =>
+          renameEpisodeProposalApiV1EpisodePlansPlanIdRenamePost(
+            { plan_id: planId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { planId }) => [
+        { type: "EpisodePlans", id: planId },
+      ],
+    }),
+    moveEpisodeBoundary: builder.mutation<
+      API.EpisodePlanDetailResponse,
+      { planId: string; body: API.MoveEpisodeBoundaryRequest }
+    >({
+      queryFn: ({ planId, body }) =>
+        runRequest(() =>
+          moveEpisodeBoundaryApiV1EpisodePlansPlanIdMoveBoundaryPost(
+            { plan_id: planId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { planId }) => [
+        { type: "EpisodePlans", id: planId },
+      ],
+    }),
+    splitEpisodeProposal: builder.mutation<
+      API.EpisodePlanDetailResponse,
+      { planId: string; body: API.SplitEpisodeProposalRequest }
+    >({
+      queryFn: ({ planId, body }) =>
+        runRequest(() =>
+          splitEpisodeProposalApiV1EpisodePlansPlanIdSplitPost(
+            { plan_id: planId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { planId }) => [
+        { type: "EpisodePlans", id: planId },
+      ],
+    }),
+    mergeEpisodeProposals: builder.mutation<
+      API.EpisodePlanDetailResponse,
+      { planId: string; body: API.MergeEpisodeProposalRequest }
+    >({
+      queryFn: ({ planId, body }) =>
+        runRequest(() =>
+          mergeEpisodeProposalsApiV1EpisodePlansPlanIdMergePost(
+            { plan_id: planId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { planId }) => [
+        { type: "EpisodePlans", id: planId },
+      ],
+    }),
+    confirmEpisodePlan: builder.mutation<
+      API.EpisodePlanDetailResponse,
+      { planId: string; body: API.ConfirmEpisodePlanRequest }
+    >({
+      queryFn: ({ planId, body }) =>
+        runRequest(() =>
+          confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPost(
+            { plan_id: planId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { planId }) => [
+        { type: "EpisodePlans", id: planId },
+        "AuditEvents",
+      ],
+    }),
+    materializeEpisodePlan: builder.mutation<
+      API.ImportCommitDetailResponse,
+      { planId: string; body: API.MaterializeEpisodePlanRequest }
+    >({
+      queryFn: ({ planId, body }) =>
+        runRequest(() =>
+          materializeEpisodePlanApiV1EpisodePlansPlanIdMaterializationsPost(
+            { plan_id: planId },
+            body,
+          ),
+        ),
+      invalidatesTags: ["EpisodePlans", "Episodes", "Project", "Snapshot", "AuditEvents"],
+    }),
+    publishImportCommit: builder.mutation<
+      API.ImportCommitDetailResponse,
+      { commitId: string; body: API.PublishImportCommitRequest }
+    >({
+      queryFn: ({ commitId, body }) =>
+        runRequest(() =>
+          publishImportCommitApiV1ImportCommitsCommitIdPublishPost(
+            { commit_id: commitId },
+            body,
+          ),
+        ),
+      invalidatesTags: [
+        "EpisodePlans",
+        "Episodes",
+        "Project",
+        "Snapshot",
+        "ScriptSources",
+        "ScriptVersions",
         "AuditEvents",
       ],
     }),
@@ -1776,6 +1920,15 @@ export const {
   useExtractionCandidatesQuery,
   useImportScriptMutation,
   useImportScriptDocumentMutation,
+  useLazyEpisodePlanQuery,
+  useCreateEpisodePlanMutation,
+  useRenameEpisodeProposalMutation,
+  useMoveEpisodeBoundaryMutation,
+  useSplitEpisodeProposalMutation,
+  useMergeEpisodeProposalsMutation,
+  useConfirmEpisodePlanMutation,
+  useMaterializeEpisodePlanMutation,
+  usePublishImportCommitMutation,
   useInitializeMediaUploadMutation,
   useInitializeMediaVersionUploadMutation,
   useLoginMutation,

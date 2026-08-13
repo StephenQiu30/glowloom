@@ -14,6 +14,7 @@ from app.core.database import (
     validate_test_database_url,
 )
 from app.main import create_app
+from app.model_registry import register_implemented_models
 from app.modules.caching.contracts import (
     CacheKey,
     CacheNamespace,
@@ -32,6 +33,8 @@ TEST_DATABASE_URL = validate_test_database_url(
     "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
     "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse",
 )
+
+register_implemented_models()
 
 
 class UnavailableTestCache:

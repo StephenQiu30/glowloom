@@ -17,6 +17,7 @@ R = TypeVar("R")
 REGISTERED_MESSAGE_EVENT_TYPES = frozenset(
     {
         "script_extraction.requested",
+        "episode_planning.requested",
         "generation.requested",
         "media_probe.requested",
         "upload_expiration.requested",
@@ -167,9 +168,7 @@ def observe_outbox_backlog(
             except Exception:
                 pass
             try:
-                OUTBOX_OLDEST_AGE.labels(queue=queue, state=state).set(
-                    ages.get(key, 0)
-                )
+                OUTBOX_OLDEST_AGE.labels(queue=queue, state=state).set(ages.get(key, 0))
             except Exception:
                 pass
 

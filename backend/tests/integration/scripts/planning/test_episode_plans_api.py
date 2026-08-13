@@ -11,7 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import io_worker
 from app.modules.messaging import envelope_from_event
-from app.modules.messaging.models import OutboxEvent
+from app.modules.messaging.contracts import MessageEnvelope
+from app.modules.messaging.models import InboxDelivery, OutboxEvent
+from app.modules.messaging.planning_consumer import (
+    PreparedEpisodePlanning,
+    prepare_episode_planning,
+)
+from app.modules.production.models import Task
 from app.modules.projects.models import Episode
 from app.modules.scripts.models import (
     EpisodePlan,
@@ -27,11 +33,7 @@ from app.modules.scripts.planning.schemas import (
 )
 from tests.support.project_builders import project_payload, register_project_owner
 
-
-FIXTURE = (
-    Path(__file__).parents[4]
-    / "fixtures/mvp_a/002-雾港倒计时整剧导入样例.txt"
-)
+FIXTURE = Path(__file__).parents[5] / "docs/fixtures/mvp_a/002-雾港倒计时整剧导入样例.txt"
 
 
 async def _project_and_document(
@@ -136,10 +138,10 @@ async def test_explicit_plan_is_reviewable_idempotent_and_writes_no_episode(
         "projected_episode_count": 5,
     }
     source = document["revision"]["normalized_text"]
-    assert "".join(
-        source[proposal["source_start"] : proposal["source_end"]]
-        for proposal in proposals
-    ) == source
+    assert (
+        "".join(source[proposal["source_start"] : proposal["source_end"]] for proposal in proposals)
+        == source
+    )
     assert all(
         proposals[index - 1]["source_end"] == proposals[index]["source_start"]
         for index in range(1, len(proposals))
@@ -283,10 +285,12 @@ async def test_boundaries_split_merge_and_titles_change_only_the_plan(
     merged_result = merged.json()["data"]
     assert merged_result["plan"]["revision"] == 5
     assert len(merged_result["proposals"]) == 2
-    assert "".join(
-        text[item["source_start"] : item["source_end"]]
-        for item in merged_result["proposals"]
-    ) == text
+    assert (
+        "".join(
+            text[item["source_start"] : item["source_end"]] for item in merged_result["proposals"]
+        )
+        == text
+    )
 
     stale = await client.post(
         f"/api/v1/episode-plans/{result['plan']['id']}/confirm",
@@ -386,10 +390,7 @@ async def test_confirm_materialize_and_publish_are_concurrent_idempotent_batches
     published_batch = published.json()["data"]
     assert published_batch["commit"]["status"] == "published"
     assert published_batch["commit"]["revision"] == 3
-    assert all(
-        item["published_version_id"] is not None
-        for item in published_batch["segments"]
-    )
+    assert all(item["published_version_id"] is not None for item in published_batch["segments"])
     repeated_publish = await client.post(
         f"/api/v1/import-commits/{batch['commit']['id']}/publish",
         headers=headers,
@@ -407,8 +408,7 @@ async def test_confirm_materialize_and_publish_are_concurrent_idempotent_batches
     }
     assert all(current_ids.values())
     assert {
-        item["episode_id"]: item["published_version_id"]
-        for item in published_batch["segments"]
+        item["episode_id"]: item["published_version_id"] for item in published_batch["segments"]
     } == current_ids
 
     source = document["revision"]["normalized_text"]
@@ -426,9 +426,7 @@ async def test_confirm_materialize_and_publish_are_concurrent_idempotent_batches
         assert "".join(source[item.source_start : item.source_end] for item in origins) == source
         for origin in origins:
             draft = await session.get(ScriptVersion, origin.draft_version_id)
-            published_version = await session.get(
-                ScriptVersion, origin.published_version_id
-            )
+            published_version = await session.get(ScriptVersion, origin.published_version_id)
             assert draft is not None and draft.status == "draft"
             assert published_version is not None and published_version.status == "published"
             assert draft.body == source[origin.source_start : origin.source_end]
@@ -461,10 +459,10 @@ async def test_materialization_failure_on_third_segment_rolls_back_every_formal_
         json={"expected_revision": 1, "idempotency_key": "rollback-confirm"},
     )
     confirmed = confirmed_response.json()["data"]
-    real_write = planning_service._write_materialized_segment
+    real_write = planning_service.__dict__["_write_materialized_segment"]
     calls = 0
 
-    async def fail_third(*args: object, **kwargs: object) -> object:
+    async def fail_third(*args: Any, **kwargs: Any) -> Any:
         nonlocal calls
         calls += 1
         if calls == 3:
@@ -522,13 +520,12 @@ class _RecordingEpisodePlanner:
     ) -> EpisodePlanningProviderResult:
         self.inputs.append(normalized_text)
         lines = normalized_text.splitlines(keepends=True)
-        first_end = len("".join(lines[:3]))
         return EpisodePlanningProviderResult(
             proposals=[
                 EpisodePlanningProviderProposal(
                     title="警报出现",
                     end_block_position=3,
-                    exact_end_anchor=normalized_text[max(0, first_end - 24) : first_end],
+                    exact_end_anchor=lines[2].rstrip("\r\n")[-24:],
                     estimated_duration_ms=min(target_duration_ms, 60_000),
                     reason="冲突建立并以新线索收束",
                     confidence=0.86,
@@ -536,13 +533,70 @@ class _RecordingEpisodePlanner:
                 EpisodePlanningProviderProposal(
                     title="追踪真相",
                     end_block_position=len(lines),
-                    exact_end_anchor=normalized_text[-24:],
+                    exact_end_anchor=lines[-1][-24:],
                     estimated_duration_ms=min(target_duration_ms, 60_000),
                     reason="完成追踪并留下下一集钩子",
                     confidence=0.82,
                 ),
             ]
         )
+
+
+class _InvalidAnchorEpisodePlanner:
+    async def plan(
+        self,
+        normalized_text: str,
+        *,
+        target_duration_ms: int,
+        maximum_episode_count: int,
+    ) -> EpisodePlanningProviderResult:
+        return EpisodePlanningProviderResult(
+            proposals=[
+                EpisodePlanningProviderProposal(
+                    title="非法候选",
+                    end_block_position=len(normalized_text.splitlines()),
+                    exact_end_anchor="原文中不存在的锚点",
+                    estimated_duration_ms=target_duration_ms,
+                    reason="故意构造非法锚点",
+                    confidence=0.5,
+                )
+            ]
+        )
+
+
+async def _queued_ai_plan(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    email: str,
+    idempotency_key: str,
+) -> tuple[dict[str, str], dict[str, Any], bytes]:
+    text = (
+        "场景1：控制室，夜\n警报突然响起。\n甲：先封锁三号门。\n"
+        "场景2：港口，雨\n乙发现被删掉的日志。\n远处灯塔熄灭。"
+    )
+    headers, _, document = await _project_and_document(client, email=email, text=text)
+    created = await client.post(
+        f"/api/v1/document-revisions/{document['revision']['id']}/episode-plans",
+        headers=headers,
+        json={
+            "strategy": "target_duration_ai",
+            "target_duration_ms": 60_000,
+            "requested_episode_count": None,
+            "idempotency_key": idempotency_key,
+        },
+    )
+    assert created.status_code == 202
+    queued = created.json()["data"]
+    async with session_factory() as session:
+        event = await session.scalar(
+            select(OutboxEvent).where(
+                OutboxEvent.aggregate_id == UUID(queued["plan"]["planning_task_id"])
+            )
+        )
+        assert event is not None
+        body = envelope_from_event(event).model_dump_json().encode()
+    return headers, queued, body
 
 
 @pytest.mark.asyncio
@@ -598,21 +652,161 @@ async def test_unmarked_document_ai_candidate_is_async_validated_and_never_write
     assert message.nack_requeues == []
     assert planner.inputs == [text]
 
-    fetched = await client.get(
-        f"/api/v1/episode-plans/{queued['plan']['id']}", headers=headers
-    )
+    fetched = await client.get(f"/api/v1/episode-plans/{queued['plan']['id']}", headers=headers)
     assert fetched.status_code == 200
     candidate = fetched.json()["data"]
     assert candidate["plan"]["status"] == "review_ready"
     assert candidate["plan"]["revision"] == 2
     assert len(candidate["proposals"]) == 2
-    assert all(
-        item["boundary_evidence"]["kind"] == "ai_anchor"
-        for item in candidate["proposals"]
+    assert all(item["boundary_evidence"]["kind"] == "ai_anchor" for item in candidate["proposals"])
+    assert (
+        "".join(text[item["source_start"] : item["source_end"]] for item in candidate["proposals"])
+        == text
     )
-    assert "".join(
-        text[item["source_start"] : item["source_end"]]
-        for item in candidate["proposals"]
-    ) == text
     async with session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(Episode)) == 0
+
+
+@pytest.mark.asyncio
+async def test_ai_plan_without_configured_provider_fails_once_without_formal_writes(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, queued, body = await _queued_ai_plan(
+        client,
+        session_factory,
+        email="episode-plan-no-provider@example.com",
+        idempotency_key="ai-plan-no-provider",
+    )
+    message = _RecordingMessage(body)
+
+    outcome = await io_worker.process_incoming_message(
+        message,
+        session_factory,
+        episode_planner=None,
+    )
+
+    assert outcome == "completed"
+    assert message.ack_count == 1
+    assert message.nack_requeues == []
+    fetched = await client.get(
+        f"/api/v1/episode-plans/{queued['plan']['id']}",
+        headers=headers,
+    )
+    assert fetched.status_code == 200
+    failed_plan = fetched.json()["data"]
+    assert failed_plan["plan"]["status"] == "draft"
+    assert failed_plan["plan"]["planning_error_code"] == "ai_service_unavailable"
+    assert failed_plan["proposals"] == []
+
+    async with session_factory() as session:
+        task = await session.get(Task, UUID(queued["plan"]["planning_task_id"]))
+        assert task is not None
+        assert task.status == "failed"
+        assert task.error_code == "ai_service_unavailable"
+        delivery = await session.scalar(select(InboxDelivery))
+        assert delivery is not None
+        assert delivery.status == "completed"
+        assert delivery.attempt_count == 1
+        assert await session.scalar(select(func.count()).select_from(Episode)) == 0
+
+
+@pytest.mark.asyncio
+async def test_ai_plan_with_invalid_anchor_is_acked_as_non_retryable_failure(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, queued, body = await _queued_ai_plan(
+        client,
+        session_factory,
+        email="episode-plan-invalid-anchor@example.com",
+        idempotency_key="ai-plan-invalid-anchor",
+    )
+    message = _RecordingMessage(body)
+
+    outcome = await io_worker.process_incoming_message(
+        message,
+        session_factory,
+        episode_planner=_InvalidAnchorEpisodePlanner(),
+    )
+
+    assert outcome == "completed"
+    assert message.ack_count == 1
+    assert message.nack_requeues == []
+    fetched = await client.get(
+        f"/api/v1/episode-plans/{queued['plan']['id']}",
+        headers=headers,
+    )
+    assert fetched.status_code == 200
+    failed_plan = fetched.json()["data"]
+    assert failed_plan["plan"]["status"] == "draft"
+    assert failed_plan["plan"]["planning_error_code"] == "ai_output_invalid"
+    assert failed_plan["proposals"] == []
+
+    async with session_factory() as session:
+        task = await session.get(Task, UUID(queued["plan"]["planning_task_id"]))
+        assert task is not None
+        assert task.status == "failed"
+        assert task.error_code == "ai_output_invalid"
+        delivery = await session.scalar(select(InboxDelivery))
+        assert delivery is not None
+        assert delivery.status == "completed"
+        assert delivery.last_error == "ai_output_invalid"
+        assert delivery.attempt_count == 1
+        assert await session.scalar(select(func.count()).select_from(Episode)) == 0
+
+
+@pytest.mark.asyncio
+async def test_ai_plan_redelivery_after_preparation_is_marked_unknown_not_resubmitted(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, queued, body = await _queued_ai_plan(
+        client,
+        session_factory,
+        email="episode-plan-interrupted@example.com",
+        idempotency_key="ai-plan-interrupted",
+    )
+    envelope = MessageEnvelope.model_validate_json(body)
+    async with session_factory() as session:
+        async with session.begin():
+            prepared = await prepare_episode_planning(
+                session,
+                envelope,
+                configured=True,
+            )
+            assert isinstance(prepared, PreparedEpisodePlanning)
+
+    planner = _RecordingEpisodePlanner()
+    message = _RecordingMessage(body)
+    outcome = await io_worker.process_incoming_message(
+        message,
+        session_factory,
+        episode_planner=planner,
+    )
+
+    assert outcome == "completed"
+    assert message.ack_count == 1
+    assert message.nack_requeues == []
+    assert planner.inputs == []
+    fetched = await client.get(
+        f"/api/v1/episode-plans/{queued['plan']['id']}",
+        headers=headers,
+    )
+    assert fetched.status_code == 200
+    interrupted_plan = fetched.json()["data"]
+    assert interrupted_plan["plan"]["status"] == "draft"
+    assert interrupted_plan["plan"]["planning_error_code"] == "ai_result_unknown"
+    assert interrupted_plan["proposals"] == []
+
+    async with session_factory() as session:
+        task = await session.get(Task, UUID(queued["plan"]["planning_task_id"]))
+        assert task is not None
+        assert task.status == "unknown"
+        assert task.error_code == "ai_result_unknown"
+        delivery = await session.scalar(select(InboxDelivery))
+        assert delivery is not None
+        assert delivery.status == "completed"
+        assert delivery.last_error == "ai_result_unknown"
+        assert delivery.attempt_count == 2
         assert await session.scalar(select(func.count()).select_from(Episode)) == 0

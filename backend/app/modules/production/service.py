@@ -22,6 +22,7 @@ from app.modules.messaging import (
 )
 from app.modules.production import repository
 from app.modules.production.contracts import (
+    EpisodePlanningTaskCommand,
     EpisodeTaskSummary,
     MediaLocationMigrationTaskCommand,
     MediaLocationRetirementTaskCommand,
@@ -93,8 +94,7 @@ async def summarize_episode_tasks(
     return {
         episode_id: EpisodeTaskSummary(
             running=sum(
-                statuses.get(status, 0)
-                for status in ("queued", "running", "waiting_provider")
+                statuses.get(status, 0) for status in ("queued", "running", "waiting_provider")
             ),
             failed=statuses.get("failed", 0) + statuses.get("cancelled", 0),
             succeeded=statuses.get("succeeded", 0),
@@ -139,6 +139,19 @@ def _same_command(task: Task, command: ScriptExtractionTaskCommand) -> bool:
         and task.episode_id == command.episode_id
         and task.input_version_id == command.input_version_id
         and task.input_hash == command.input_hash
+    )
+
+
+def _same_episode_planning_command(
+    task: Task,
+    command: EpisodePlanningTaskCommand,
+) -> bool:
+    return (
+        task.request_id == command.plan_id
+        and task.input_version_id == command.document_revision_id
+        and task.input_hash == command.input_hash
+        and task.usage_type == "document_revision"
+        and task.usage_id == command.document_revision_id
     )
 
 
@@ -400,6 +413,156 @@ async def complete_script_extraction_task(
         )
         await session.flush()
     return changed
+
+
+async def start_episode_planning_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+    trace_id: str,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "episode_planning":
+        raise ValueError("task is not an episode planning task")
+    if task.status != "queued":
+        return False
+    previous_status = task.status
+    task.status = "running"
+    task.progress_stage = "calling_provider"
+    task.error_code = None
+    task.error_retryable = None
+    task.error_summary = None
+    task.next_action = "poll_task"
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.started",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def fail_episode_planning_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    error_code: str,
+    error_summary: str,
+    next_action: str,
+    now: datetime,
+    trace_id: str,
+    retryable: bool = False,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "episode_planning":
+        raise ValueError("task is not an episode planning task")
+    if task.status in {"succeeded", "failed", "cancelled"}:
+        return False
+    previous_status = task.status
+    task.status = "failed"
+    task.progress_stage = "blocked"
+    task.error_code = error_code
+    task.error_retryable = retryable
+    task.error_summary = error_summary
+    task.next_action = next_action
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.failed",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def mark_episode_planning_task_unknown(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+    trace_id: str,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "episode_planning":
+        raise ValueError("task is not an episode planning task")
+    if task.status in {"succeeded", "failed", "cancelled", "unknown"}:
+        return False
+    previous_status = task.status
+    task.status = "unknown"
+    task.progress_stage = "reconciliation_required"
+    task.error_code = "ai_result_unknown"
+    task.error_retryable = False
+    task.error_summary = "DeepSeek response outcome is unknown"
+    task.next_action = "start_new_episode_plan"
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.unknown",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def complete_episode_planning_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+    trace_id: str,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "episode_planning":
+        raise ValueError("task is not an episode planning task")
+    if task.status == "succeeded":
+        return False
+    if task.status in {"failed", "cancelled"}:
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Task cannot be completed from its current state",
+            status_code=409,
+        )
+    previous_status = task.status
+    task.status = "succeeded"
+    task.progress_stage = "completed"
+    task.error_code = None
+    task.error_retryable = None
+    task.error_summary = None
+    task.next_action = "review_episode_plan"
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.succeeded",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
 
 
 async def fail_media_probe_task(
@@ -737,13 +900,9 @@ async def create_script_extraction_task(
     if actor.workspace_id != command.workspace_id:
         raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403)
     try:
-        require_workspace_capability(
-            actor.role, actor.workspace_status, Capability.CONTENT_WRITE
-        )
+        require_workspace_capability(actor.role, actor.workspace_status, Capability.CONTENT_WRITE)
     except PermissionError as error:
-        raise ApiError(
-            ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403
-        ) from error
+        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403) from error
     if not trace_id or len(trace_id) > 64:
         raise ApiError(ErrorCode.INVALID_REQUEST, "Invalid trace identifier", status_code=422)
 
@@ -838,13 +997,9 @@ async def create_media_probe_task(
     if actor.workspace_id != command.workspace_id:
         raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403)
     try:
-        require_workspace_capability(
-            actor.role, actor.workspace_status, Capability.CONTENT_WRITE
-        )
+        require_workspace_capability(actor.role, actor.workspace_status, Capability.CONTENT_WRITE)
     except PermissionError as error:
-        raise ApiError(
-            ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403
-        ) from error
+        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403) from error
     if not trace_id or len(trace_id) > 64:
         raise ApiError(ErrorCode.INVALID_REQUEST, "Invalid trace identifier", status_code=422)
 
@@ -882,9 +1037,7 @@ async def create_media_probe_task(
             command.idempotency_key,
         )
         if existing is None:
-            raise ApiError(
-                ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500
-            )
+            raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
         if not _same_media_probe_command(existing, command):
             raise ApiError(
                 ErrorCode.RESOURCE_CONFLICT,
@@ -928,6 +1081,112 @@ async def create_media_probe_task(
     task = await repository.find_task(session, inserted_id)
     if task is None:
         raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    return task_response(task)
+
+
+async def create_episode_planning_task(
+    session: AsyncSession,
+    actor: ActorContext,
+    command: EpisodePlanningTaskCommand,
+    *,
+    trace_id: str,
+) -> TaskResponse:
+    if actor.workspace_id != command.workspace_id:
+        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403)
+    try:
+        require_workspace_capability(actor.role, actor.workspace_status, Capability.CONTENT_WRITE)
+    except PermissionError as error:
+        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403) from error
+    if not trace_id or len(trace_id) > 64:
+        raise ApiError(ErrorCode.INVALID_REQUEST, "Invalid trace identifier", status_code=422)
+
+    task_id = uuid7()
+    now = datetime.now(UTC)
+    inserted_id = await session.scalar(
+        insert(Task)
+        .values(
+            id=task_id,
+            workspace_id=command.workspace_id,
+            task_type="episode_planning",
+            request_type="episode_plan",
+            request_id=command.plan_id,
+            usage_type="document_revision",
+            usage_id=command.document_revision_id,
+            input_version_id=command.document_revision_id,
+            input_hash=command.input_hash,
+            status="queued",
+            progress_stage="queued",
+            next_action="poll_task",
+            cancel_status="none",
+            idempotency_key=command.idempotency_key,
+            requested_by=actor.user_id,
+            revision=1,
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(constraint="uq_prod_task_idempotency")
+        .returning(Task.id)
+    )
+    if inserted_id is None:
+        existing = await repository.find_idempotent_task(
+            session,
+            command.workspace_id,
+            "episode_planning",
+            command.idempotency_key,
+        )
+        if existing is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Task state is unavailable",
+                status_code=500,
+            )
+        if not _same_episode_planning_command(existing, command):
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Idempotency key was used with different input",
+                status_code=409,
+            )
+        return task_response(existing)
+
+    await enqueue_outbox_event(
+        session,
+        OutboxEventCommand(
+            workspace_id=command.workspace_id,
+            event_type="episode_planning.requested",
+            schema_version=1,
+            aggregate_type="task",
+            aggregate_id=inserted_id,
+            routing_key="io.script.plan",
+            payload={"task_id": str(inserted_id)},
+            trace_id=trace_id,
+            available_at=now,
+            occurred_at=now,
+        ),
+    )
+    append_audit_event(
+        session,
+        workspace_id=command.workspace_id,
+        actor_id=actor.user_id,
+        action="task.created",
+        target_type="task",
+        target_id=inserted_id,
+        trace_id=trace_id,
+        metadata={
+            "revision": 1,
+            "task_type": "episode_planning",
+            "request_type": "episode_plan",
+            "request_id": str(command.plan_id),
+        },
+        occurred_at=now,
+    )
+    await session.flush()
+    task = await repository.find_task(session, inserted_id)
+    if task is None:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Task state is unavailable",
+            status_code=500,
+        )
     return task_response(task)
 
 
@@ -1014,9 +1273,7 @@ async def create_upload_expiration_task(
         occurred_at=now,
     )
     await session.flush()
-    return UploadExpirationTaskDispatch(
-        task=task_response(task), outbox_event_id=outbox_event_id
-    )
+    return UploadExpirationTaskDispatch(task=task_response(task), outbox_event_id=outbox_event_id)
 
 
 async def create_upload_cleanup_task(
@@ -1102,9 +1359,7 @@ async def create_upload_cleanup_task(
         occurred_at=now,
     )
     await session.flush()
-    return UploadCleanupTaskDispatch(
-        task=task_response(task), outbox_event_id=outbox_event_id
-    )
+    return UploadCleanupTaskDispatch(task=task_response(task), outbox_event_id=outbox_event_id)
 
 
 async def create_media_location_migration_task(
@@ -1116,9 +1371,7 @@ async def create_media_location_migration_task(
     if not trace_id or len(trace_id) > 64:
         raise ApiError(ErrorCode.INVALID_REQUEST, "Invalid trace identifier", status_code=422)
     usage_type = (
-        "media_location_migration"
-        if command.operation == "migrate"
-        else "media_location_rollback"
+        "media_location_migration" if command.operation == "migrate" else "media_location_rollback"
     )
     existing = await repository.find_idempotent_task(
         session,
@@ -1131,10 +1384,7 @@ async def create_media_location_migration_task(
             existing.request_id != command.media_version_id
             or existing.requested_by != command.requested_by
             or existing.usage_type != usage_type
-            or (
-                command.operation == "rollback"
-                and existing.usage_id != command.location_id
-            )
+            or (command.operation == "rollback" and existing.usage_id != command.location_id)
         ):
             raise ApiError(
                 ErrorCode.RESOURCE_CONFLICT,
@@ -1152,9 +1402,7 @@ async def create_media_location_migration_task(
                 "Location migration event is unavailable",
                 status_code=500,
             )
-        return MediaLocationTaskDispatch(
-            task=task_response(existing), outbox_event_id=event_id
-        )
+        return MediaLocationTaskDispatch(task=task_response(existing), outbox_event_id=event_id)
 
     now = datetime.now(UTC)
     task = Task(
@@ -1248,9 +1496,7 @@ async def create_media_location_retirement_task(
                 "Location retirement event is unavailable",
                 status_code=500,
             )
-        return MediaLocationTaskDispatch(
-            task=task_response(existing), outbox_event_id=event_id
-        )
+        return MediaLocationTaskDispatch(task=task_response(existing), outbox_event_id=event_id)
 
     now = datetime.now(UTC)
     task = Task(
@@ -1324,9 +1570,7 @@ async def get_task(
     if task is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Task not found", status_code=404)
     try:
-        await actor_context(
-            session, claims, task.workspace_id, Capability.CONTENT_READ
-        )
+        await actor_context(session, claims, task.workspace_id, Capability.CONTENT_READ)
     except ApiError as error:
         if error.code in {ErrorCode.NOT_FOUND, ErrorCode.FORBIDDEN}:
             raise ApiError(ErrorCode.NOT_FOUND, "Task not found", status_code=404) from error
@@ -1341,6 +1585,7 @@ async def list_tasks(
     *,
     task_type: Literal[
         "script_extraction",
+        "episode_planning",
         "image_generation",
         "video_generation",
         "media_probe",
@@ -1354,9 +1599,7 @@ async def list_tasks(
     limit: int,
     offset: int,
 ) -> PaginatedTasks:
-    await actor_context(
-        session, claims, workspace_id, Capability.CONTENT_READ
-    )
+    await actor_context(session, claims, workspace_id, Capability.CONTENT_READ)
     tasks, total = await repository.list_tasks(
         session,
         workspace_id,

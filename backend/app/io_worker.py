@@ -18,7 +18,7 @@ from app.core.telemetry import (
     start_span,
     traceparent_from_headers,
 )
-from app.integrations.deepseek import DeepSeekScriptStructureExtractor
+from app.integrations.deepseek import DeepSeekEpisodePlanner, DeepSeekScriptStructureExtractor
 from app.integrations.rabbitmq import declare_task_topology
 from app.model_registry import register_implemented_models
 from app.modules.messaging import MessageEnvelope
@@ -41,11 +41,22 @@ from app.modules.messaging.metrics import (
     observe_message_result,
     track_worker_inflight,
 )
+from app.modules.messaging.planning_consumer import (
+    PreparedEpisodePlanning,
+    finalize_episode_planning_failure,
+    finalize_episode_planning_success,
+    prepare_episode_planning,
+)
 from app.modules.scripts import (
     ScriptExtractionProviderError,
     ScriptExtractionResult,
     ScriptStructureExtractor,
 )
+from app.modules.scripts.planning.ports import (
+    EpisodePlanner,
+    EpisodePlanningProviderError,
+)
+from app.modules.scripts.planning.schemas import EpisodePlanningProviderResult
 
 IO_WORKER_MAX_IN_FLIGHT = 4
 MAX_MESSAGE_BYTES = 64 * 1024
@@ -68,6 +79,7 @@ async def process_incoming_message(
     factory: async_sessionmaker[AsyncSession],
     *,
     extractor: ScriptStructureExtractor | None = None,
+    episode_planner: EpisodePlanner | None = None,
 ) -> WorkerResult:
     started = time.perf_counter()
     if len(message.body) > MAX_MESSAGE_BYTES:
@@ -101,6 +113,7 @@ async def process_incoming_message(
             envelope,
             factory,
             extractor=extractor,
+            episode_planner=episode_planner,
         )
         span.set_attribute("messaging.operation.result", result)
         if result == "requeued":
@@ -175,6 +188,7 @@ async def _process_valid_envelope(
     factory: async_sessionmaker[AsyncSession],
     *,
     extractor: ScriptStructureExtractor | None,
+    episode_planner: EpisodePlanner | None,
 ) -> WorkerResult:
 
     if envelope.event_type == "generation.requested":
@@ -182,6 +196,14 @@ async def _process_valid_envelope(
             message,
             envelope,
             factory,
+        )
+
+    if envelope.event_type == "episode_planning.requested":
+        return await _process_episode_planning_envelope(
+            message,
+            envelope,
+            factory,
+            episode_planner=episode_planner,
         )
 
     if extractor is None:
@@ -289,6 +311,77 @@ async def _process_generation_envelope(
     return result
 
 
+async def _process_episode_planning_envelope(
+    message: IncomingMessage,
+    envelope: MessageEnvelope,
+    factory: async_sessionmaker[AsyncSession],
+    *,
+    episode_planner: EpisodePlanner | None,
+) -> WorkerResult:
+    try:
+        async with factory() as session:
+            async with session.begin():
+                prepared = await prepare_episode_planning(
+                    session,
+                    envelope,
+                    configured=episode_planner is not None,
+                )
+    except Exception:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    if not isinstance(prepared, PreparedEpisodePlanning):
+        await message.ack()
+        return prepared
+    if episode_planner is None:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    planning_result: EpisodePlanningProviderResult | None = None
+    try:
+        planning_result = await episode_planner.plan(
+            prepared.planning_input.normalized_text,
+            target_duration_ms=prepared.planning_input.target_duration_ms,
+            maximum_episode_count=prepared.planning_input.maximum_episode_count,
+        )
+    except EpisodePlanningProviderError as error:
+        provider_error = error
+    except Exception:
+        provider_error = EpisodePlanningProviderError(
+            outcome="unknown",
+            code="ai_result_unknown",
+            summary="DeepSeek response outcome is unknown",
+            retryable=False,
+            next_action="start_new_episode_plan",
+        )
+    else:
+        provider_error = None
+
+    try:
+        async with factory() as session:
+            async with session.begin():
+                if provider_error is None:
+                    if planning_result is None:
+                        raise RuntimeError("episode planning result is unavailable")
+                    result = await finalize_episode_planning_success(
+                        session,
+                        prepared,
+                        planning_result,
+                    )
+                else:
+                    result = await finalize_episode_planning_failure(
+                        session,
+                        prepared,
+                        provider_error,
+                    )
+    except Exception:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    await message.ack()
+    return result
+
+
 async def run_io_worker(settings: Settings) -> None:
     configure_logging(
         settings.log_level,
@@ -307,6 +400,11 @@ async def run_io_worker(settings: Settings) -> None:
         if settings.deepseek_api_key is not None
         else None
     )
+    episode_planner = (
+        DeepSeekEpisodePlanner(settings.deepseek_api_key)
+        if settings.deepseek_api_key is not None
+        else None
+    )
     connection = await aio_pika.connect_robust(settings.rabbitmq_url, timeout=3)
     try:
         channel = await connection.channel()
@@ -318,6 +416,7 @@ async def run_io_worker(settings: Settings) -> None:
                 message,
                 session_factory,
                 extractor=extractor,
+                episode_planner=episode_planner,
             )
 
         await io_queue.consume(on_message, no_ack=False)

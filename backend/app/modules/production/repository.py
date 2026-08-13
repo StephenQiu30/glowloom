@@ -41,6 +41,7 @@ async def list_tasks(
     *,
     task_type: Literal[
         "script_extraction",
+        "episode_planning",
         "image_generation",
         "video_generation",
         "media_probe",
@@ -86,7 +87,5 @@ async def count_task_statuses_by_episode(
         .group_by(Task.episode_id, Task.status)
     )
     return [
-        (episode_id, status, count)
-        for episode_id, status, count in rows
-        if episode_id is not None
+        (episode_id, status, count) for episode_id, status, count in rows if episode_id is not None
     ]

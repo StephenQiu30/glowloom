@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import UTC, datetime
 from typing import Literal, cast
 from uuid import UUID
@@ -18,10 +20,17 @@ from app.modules.projects.authorization import (
 from app.modules.projects.contracts import (
     DeleteBlocker,
     DeletePreflightResponse,
+    EpisodeBatchMaterializeCommand,
+    EpisodeBatchMaterializeResult,
     EpisodeContentContext,
+    EpisodeScriptPublishBatchCommand,
+    EpisodeScriptPublishBatchResult,
     EpisodeScriptVersionCountReader,
     EpisodeStoryboardReferenceReader,
     GenerationProjectContext,
+    MaterializedEpisodeReference,
+    ProjectEpisodeOrderSnapshot,
+    PublishedEpisodeScriptReference,
 )
 from app.modules.projects.episodes.schemas import (
     EpisodeCreateRequest,
@@ -61,6 +70,25 @@ def _episode_revision(episode: Episode, expected: int) -> None:
             status_code=409,
             details={"current_revision": episode.revision},
         )
+
+
+def _active_order_hash(episodes: list[Episode]) -> str:
+    payload = [
+        {
+            "id": str(episode.id),
+            "position": episode.position,
+            "revision": episode.revision,
+            "current_script_version_id": (
+                str(episode.current_script_version_id)
+                if episode.current_script_version_id is not None
+                else None
+            ),
+        }
+        for episode in episodes
+        if episode.status == "active"
+    ]
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 async def _owned_episode(
@@ -235,6 +263,250 @@ async def compare_and_set_current_script_version(
     episode.revision += 1
     await session.flush()
     return _episode_content_context(episode)
+
+
+async def project_episode_order_snapshot(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    project_id: UUID,
+) -> ProjectEpisodeOrderSnapshot:
+    project, _ = await owned_project(
+        session,
+        claims,
+        project_id,
+        Capability.CONTENT_READ,
+    )
+    episodes = await repository.list_episodes(
+        session,
+        project.id,
+        include_archived=False,
+    )
+    return ProjectEpisodeOrderSnapshot(
+        project_id=project.id,
+        workspace_id=project.workspace_id,
+        project_revision=project.revision,
+        active_episode_count=len(episodes),
+        active_order_hash=_active_order_hash(episodes),
+    )
+
+
+async def materialize_episode_batch(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    command: EpisodeBatchMaterializeCommand,
+    *,
+    trace_id: str,
+) -> EpisodeBatchMaterializeResult:
+    if len({item.client_reference_id for item in command.items}) != len(command.items):
+        raise ApiError(
+            ErrorCode.INVALID_REQUEST,
+            "Episode batch references must be unique",
+            status_code=422,
+        )
+    project, _ = await owned_project(
+        session,
+        claims,
+        command.project_id,
+        Capability.CONTENT_WRITE,
+        for_update=True,
+    )
+    require_project_revision(project, command.expected_project_revision)
+    active = await repository.list_episodes(
+        session,
+        project.id,
+        include_archived=False,
+        for_update=True,
+    )
+    current_order_hash = _active_order_hash(active)
+    if current_order_hash != command.expected_active_order_hash:
+        raise ApiError(
+            ErrorCode.VERSION_CONFLICT,
+            "Episode order has changed",
+            status_code=409,
+            next_action="refresh_episode_plan_impact",
+            details={"active_order_hash": current_order_hash},
+        )
+    if len(active) + len(command.items) > 10:
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Episode limit would be exceeded",
+            status_code=409,
+            next_action="reduce_episode_count",
+            details={
+                "active_episode_count": len(active),
+                "requested_episode_count": len(command.items),
+                "maximum_episode_count": 10,
+            },
+        )
+    next_position = max((episode.position for episode in active), default=0) + 1
+    created: list[tuple[Episode, UUID]] = []
+    now = datetime.now(UTC)
+    for offset, item in enumerate(command.items):
+        episode = Episode(
+            id=uuid7(),
+            workspace_id=project.workspace_id,
+            project_id=project.id,
+            name=item.name.strip(),
+            position=next_position + offset,
+            target_duration_ms=item.target_duration_ms,
+            status="active",
+            revision=1,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(episode)
+        created.append((episode, item.client_reference_id))
+    project.revision += 1
+    project.updated_at = now
+    await session.flush()
+    for episode, _ in created:
+        append_audit_event(
+            session,
+            workspace_id=episode.workspace_id,
+            actor_id=claims.sub,
+            action="episode.created",
+            target_type="episode",
+            target_id=episode.id,
+            trace_id=trace_id,
+            metadata={
+                "project_id": str(project.id),
+                "project_revision": project.revision,
+                "revision": episode.revision,
+                "position": episode.position,
+                "status": episode.status,
+                "source": "episode_plan_batch",
+            },
+            occurred_at=now,
+        )
+    all_active = [*active, *(episode for episode, _ in created)]
+    append_audit_event(
+        session,
+        workspace_id=project.workspace_id,
+        actor_id=claims.sub,
+        action="episode.batch_materialized",
+        target_type="project",
+        target_id=project.id,
+        trace_id=trace_id,
+        metadata={
+            "project_revision": project.revision,
+            "created_episode_count": len(created),
+            "active_episode_count": len(all_active),
+        },
+        occurred_at=now,
+    )
+    await session.flush()
+    return EpisodeBatchMaterializeResult(
+        project_revision=project.revision,
+        active_order_hash=_active_order_hash(all_active),
+        items=tuple(
+            MaterializedEpisodeReference(
+                client_reference_id=reference_id,
+                episode_id=episode.id,
+                revision=episode.revision,
+                position=episode.position,
+                current_script_version_id=episode.current_script_version_id,
+            )
+            for episode, reference_id in created
+        ),
+    )
+
+
+async def publish_episode_script_version_batch(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    command: EpisodeScriptPublishBatchCommand,
+    *,
+    trace_id: str,
+) -> EpisodeScriptPublishBatchResult:
+    if len({item.episode_id for item in command.items}) != len(command.items):
+        raise ApiError(
+            ErrorCode.INVALID_REQUEST,
+            "Episode publish items must be unique",
+            status_code=422,
+        )
+    project, _ = await owned_project(
+        session,
+        claims,
+        command.project_id,
+        Capability.CONTENT_WRITE,
+        for_update=True,
+    )
+    require_project_revision(project, command.expected_project_revision)
+    active = await repository.list_episodes(
+        session,
+        project.id,
+        include_archived=False,
+        for_update=True,
+    )
+    episode_by_id = {episode.id: episode for episode in active}
+    for item in command.items:
+        episode = episode_by_id.get(item.episode_id)
+        if episode is None:
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT,
+                "Episode batch has changed",
+                status_code=409,
+                next_action="refresh_import_commit",
+            )
+        _episode_revision(episode, item.expected_revision)
+        if episode.current_script_version_id != item.expected_current_script_version_id:
+            raise ApiError(
+                ErrorCode.VERSION_CONFLICT,
+                "Current script version has changed",
+                status_code=409,
+                next_action="refresh_import_commit",
+                details={
+                    "episode_id": str(episode.id),
+                    "current_script_version_id": (
+                        str(episode.current_script_version_id)
+                        if episode.current_script_version_id is not None
+                        else None
+                    ),
+                },
+            )
+    now = datetime.now(UTC)
+    published: list[PublishedEpisodeScriptReference] = []
+    for item in command.items:
+        episode = episode_by_id[item.episode_id]
+        previous = episode.current_script_version_id
+        episode.current_script_version_id = item.script_version_id
+        episode.revision += 1
+        episode.updated_at = now
+        published.append(
+            PublishedEpisodeScriptReference(
+                episode_id=episode.id,
+                revision=episode.revision,
+                previous_script_version_id=previous,
+                current_script_version_id=item.script_version_id,
+            )
+        )
+    for item in published:
+        append_audit_event(
+            session,
+            workspace_id=project.workspace_id,
+            actor_id=claims.sub,
+            action="episode.current_script_changed",
+            target_type="episode",
+            target_id=item.episode_id,
+            trace_id=trace_id,
+            metadata={
+                "project_id": str(project.id),
+                "revision": item.revision,
+                "previous_version_id": (
+                    str(item.previous_script_version_id)
+                    if item.previous_script_version_id is not None
+                    else None
+                ),
+                "current_version_id": str(item.current_script_version_id),
+                "source": "episode_plan_batch",
+            },
+            occurred_at=now,
+        )
+    await session.flush()
+    return EpisodeScriptPublishBatchResult(
+        project_revision=project.revision,
+        items=tuple(published),
+    )
 
 
 async def create_episode(

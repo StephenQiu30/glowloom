@@ -44,6 +44,7 @@ import {
 import { taskStatusLabels, taskTone } from "./episode-studio-model";
 
 const taskTypeLabels: Record<API.TaskResponse["task_type"], string> = {
+  episode_planning: "分集规划",
   script_extraction: "剧本结构提取",
   image_generation: "镜头图片生成",
   video_generation: "镜头视频生成",
@@ -55,6 +56,7 @@ const taskTypeLabels: Record<API.TaskResponse["task_type"], string> = {
 };
 
 const requestTypeLabels: Record<API.TaskResponse["request_type"], string> = {
+  episode_plan: "分集计划",
   extraction_batch: "提取批次",
   generation_request: "镜头生成请求",
   media_version: "媒体版本",

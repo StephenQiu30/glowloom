@@ -15,6 +15,7 @@ TaskStatus = Literal[
 ]
 TaskType = Literal[
     "script_extraction",
+    "episode_planning",
     "image_generation",
     "video_generation",
     "media_probe",
@@ -25,6 +26,7 @@ TaskType = Literal[
 ]
 TaskRequestType = Literal[
     "extraction_batch",
+    "episode_plan",
     "generation_request",
     "media_version",
     "upload_session",
@@ -74,6 +76,16 @@ class ScriptExtractionTaskCommand(BaseModel):
     episode_id: UUID
     request_id: UUID
     input_version_id: UUID
+    input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class EpisodePlanningTaskCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace_id: UUID
+    plan_id: UUID
+    document_revision_id: UUID
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     idempotency_key: str = Field(min_length=1, max_length=200)
 

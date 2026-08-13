@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Literal, Protocol
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DeleteBlocker(BaseModel):
@@ -76,6 +76,79 @@ class ProjectContentContext:
     workspace_id: UUID
     status: Literal["active", "archived"]
     revision: int
+
+
+class EpisodeBatchItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    client_reference_id: UUID
+    name: str = Field(min_length=1, max_length=120)
+    target_duration_ms: int = Field(ge=1000, le=7_200_000)
+
+
+class EpisodeBatchMaterializeCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    project_id: UUID
+    expected_project_revision: int = Field(ge=1)
+    expected_active_order_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    items: list[EpisodeBatchItem] = Field(min_length=1, max_length=10)
+
+
+@dataclass(frozen=True, slots=True)
+class MaterializedEpisodeReference:
+    client_reference_id: UUID
+    episode_id: UUID
+    revision: int
+    position: int
+    current_script_version_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeBatchMaterializeResult:
+    project_revision: int
+    active_order_hash: str
+    items: tuple[MaterializedEpisodeReference, ...]
+
+
+class EpisodeScriptPublishItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    episode_id: UUID
+    expected_revision: int = Field(ge=1)
+    expected_current_script_version_id: UUID | None
+    script_version_id: UUID
+
+
+class EpisodeScriptPublishBatchCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    project_id: UUID
+    expected_project_revision: int = Field(ge=1)
+    items: list[EpisodeScriptPublishItem] = Field(min_length=1, max_length=10)
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedEpisodeScriptReference:
+    episode_id: UUID
+    revision: int
+    previous_script_version_id: UUID | None
+    current_script_version_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeScriptPublishBatchResult:
+    project_revision: int
+    items: tuple[PublishedEpisodeScriptReference, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectEpisodeOrderSnapshot:
+    project_id: UUID
+    workspace_id: UUID
+    project_revision: int
+    active_episode_count: int
+    active_order_hash: str
 
 
 @dataclass(frozen=True, slots=True)

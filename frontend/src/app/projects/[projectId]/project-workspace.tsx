@@ -257,6 +257,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
               language={project.language}
               projectId={project.id}
               projectName={project.name}
+              targetDurationMs={project.target_duration_ms}
               workspaceId={project.workspace_id}
             />
 

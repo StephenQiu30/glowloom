@@ -19,11 +19,14 @@ from app.modules.scripts.extractions.ports import (
     ScriptExtractionProviderError,
 )
 from app.modules.scripts.extractions.schemas import ScriptExtractionResult
+from app.modules.scripts.planning.ports import EpisodePlanningProviderError
+from app.modules.scripts.planning.schemas import EpisodePlanningProviderResult
 
 DEEPSEEK_SCRIPT_EXTRACTOR_VERSION = SCRIPT_STRUCTURE_EXTRACTOR_VERSION
 _DEEPSEEK_MODEL = "deepseek-v4-pro"
 _DEEPSEEK_API_BASE = "https://api.deepseek.com"
 _PROMPT_VERSION = "prompt-v1"
+_EPISODE_PLAN_PROMPT_VERSION = "episode-plan-prompt-v2"
 
 
 def _system_prompt() -> str:
@@ -92,6 +95,61 @@ def _provider_error(error: Exception) -> ScriptExtractionProviderError:
     )
 
 
+def _episode_planning_provider_error(error: Exception) -> EpisodePlanningProviderError:
+    mapped = _provider_error(error)
+    return EpisodePlanningProviderError(
+        outcome="unknown" if mapped.outcome == "unknown" else "failed",
+        code=mapped.code,
+        summary=mapped.summary,
+        retryable=mapped.retryable,
+        next_action=(
+            "start_new_episode_plan"
+            if mapped.next_action == "start_new_extraction"
+            else mapped.next_action
+        ),
+    )
+
+
+def _episode_planning_system_prompt(
+    *,
+    target_duration_ms: int,
+    maximum_episode_count: int,
+    source_block_count: int,
+) -> str:
+    schema = json.dumps(
+        EpisodePlanningProviderResult.model_json_schema(),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return (
+        "你是 AI 短剧分集规划器。用户消息是只读 JSON，source_blocks 中每项包含 "
+        "position 和原文 text。只基于这些原文提出一个分集候选，不改写、补写或删除正文。"
+        "按叙事冲突、钩子和场景边界规划，每集目标时长为 "
+        f"{target_duration_ms} 毫秒，最多 {maximum_episode_count} 集。"
+        "全文明显不足一集目标时长时只输出一集，不要把每行当成一集。"
+        "end_block_position 必须逐字复制所选 source_block 的 position，不是候选集序号；"
+        "各项必须严格递增，最后一项必须等于 "
+        f"{source_block_count}。exact_end_anchor 必须逐字复制对应 source_block.text 的末尾"
+        "不超过 240 个字符，不得包含 JSON 引号或包装字段，并在全部原文 text 中只出现一次。"
+        "reason 解释冲突或钩子，confidence 为 0 到 1。"
+        f"当前提示版本为 {_EPISODE_PLAN_PROMPT_VERSION}。JSON Schema: {schema}"
+    )
+
+
+def _episode_planning_source_payload(normalized_text: str) -> str:
+    return json.dumps(
+        {
+            "source_blocks": [
+                {"position": position, "text": line}
+                for position, line in enumerate(normalized_text.splitlines(), start=1)
+            ]
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
 class DeepSeekScriptStructureExtractor:
     def __init__(self, api_key: SecretStr) -> None:
         chat = ChatDeepSeek(
@@ -115,8 +173,7 @@ class DeepSeekScriptStructureExtractor:
             )
             result = ScriptExtractionResult.model_validate(value)
             if any(
-                candidate.source_range.end > len(script_body)
-                for candidate in result.candidates
+                candidate.source_range.end > len(script_body) for candidate in result.candidates
             ):
                 raise ScriptExtractionProviderError(
                     outcome="failed",
@@ -138,3 +195,55 @@ class DeepSeekScriptStructureExtractor:
             raise
         except Exception as error:
             raise _provider_error(error) from error
+
+
+class DeepSeekEpisodePlanner:
+    def __init__(self, api_key: SecretStr) -> None:
+        chat = ChatDeepSeek(
+            model=_DEEPSEEK_MODEL,
+            base_url=_DEEPSEEK_API_BASE,
+            api_key=api_key,
+            temperature=0,
+            timeout=120,
+            max_retries=0,
+            extra_body={"thinking": {"type": "disabled"}},
+        )
+        self._structured_model: Any = chat.with_structured_output(
+            EpisodePlanningProviderResult,
+            method="json_mode",
+        )
+
+    async def plan(
+        self,
+        normalized_text: str,
+        *,
+        target_duration_ms: int,
+        maximum_episode_count: int,
+    ) -> EpisodePlanningProviderResult:
+        try:
+            source_block_count = len(normalized_text.splitlines())
+            value = await self._structured_model.ainvoke(
+                [
+                    SystemMessage(
+                        content=_episode_planning_system_prompt(
+                            target_duration_ms=target_duration_ms,
+                            maximum_episode_count=maximum_episode_count,
+                            source_block_count=source_block_count,
+                        )
+                    ),
+                    HumanMessage(content=_episode_planning_source_payload(normalized_text)),
+                ]
+            )
+            return EpisodePlanningProviderResult.model_validate(value)
+        except ValidationError as error:
+            raise EpisodePlanningProviderError(
+                outcome="failed",
+                code="ai_output_invalid",
+                summary="DeepSeek returned an invalid episode plan",
+                retryable=False,
+                next_action="start_new_episode_plan",
+            ) from error
+        except EpisodePlanningProviderError:
+            raise
+        except Exception as error:
+            raise _episode_planning_provider_error(error) from error

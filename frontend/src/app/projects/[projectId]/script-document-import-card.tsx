@@ -33,6 +33,8 @@ import {
   useScriptDocumentsQuery,
 } from "@/lib/server-state";
 
+import { EpisodePlanWorkspace } from "./episode-plan-workspace";
+
 type ImportMode = "text" | "media";
 
 const RIGHTS_DECLARATION = "我确认拥有该剧本用于本项目制作与分析的权利";
@@ -93,12 +95,14 @@ export function ScriptDocumentImportCard({
   language,
   projectId,
   projectName,
+  targetDurationMs,
   workspaceId,
 }: {
   canWrite: boolean;
   language: string;
   projectId: string;
   projectName: string;
+  targetDurationMs: number;
   workspaceId: string;
 }) {
   const documents = useScriptDocumentsQuery(projectId);
@@ -251,6 +255,7 @@ export function ScriptDocumentImportCard({
   }
 
   return (
+    <>
     <Card
       className="mt-8"
       aria-label="整剧导入与格式体检"
@@ -439,5 +444,13 @@ export function ScriptDocumentImportCard({
         </aside>
       </CardContent>
     </Card>
+    {analysis ? (
+      <EpisodePlanWorkspace
+        analysis={analysis}
+        canWrite={canWrite}
+        targetDurationMs={targetDurationMs}
+      />
+    ) : null}
+    </>
   );
 }

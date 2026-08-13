@@ -93,6 +93,10 @@ declare namespace API {
     data: EpisodeOrderResponse;
   };
 
+  type ApiResponseEpisodePlanDetailResponse_ = {
+    data: EpisodePlanDetailResponse;
+  };
+
   type ApiResponseEpisodeProductionSnapshot_ = {
     data: EpisodeProductionSnapshot;
   };
@@ -119,6 +123,10 @@ declare namespace API {
 
   type ApiResponseGenerationTaskCancellationResponse_ = {
     data: GenerationTaskCancellationResponse;
+  };
+
+  type ApiResponseImportCommitDetailResponse_ = {
+    data: ImportCommitDetailResponse;
   };
 
   type ApiResponseListEpisodeResponse_ = {
@@ -938,6 +946,17 @@ declare namespace API {
     scenes: SceneResponse[];
   };
 
+  type confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPostParams = {
+    plan_id: string;
+  };
+
+  type ConfirmEpisodePlanRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
   type confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePostParams =
     {
       batch_id: string;
@@ -1146,6 +1165,11 @@ declare namespace API {
   type createEpisodeApiV1ProjectsProjectIdEpisodesPostParams = {
     project_id: string;
   };
+
+  type createEpisodePlanApiV1DocumentRevisionsRevisionIdEpisodePlansPostParams =
+    {
+      revision_id: string;
+    };
 
   type createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPostParams =
     {
@@ -1375,6 +1399,114 @@ declare namespace API {
     project_revision: number;
   };
 
+  type EpisodePlanCreateRequest = {
+    /** Strategy */
+    strategy: "explicit_markers" | "target_duration_ai";
+    /** Target Duration Ms */
+    target_duration_ms: number;
+    /** Requested Episode Count */
+    requested_episode_count: number | null | null;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type EpisodePlanDetailResponse = {
+    plan: EpisodePlanResponse;
+    /** Proposals */
+    proposals: EpisodeProposalResponse[];
+    impact: EpisodePlanImpactResponse;
+    source: EpisodePlanSourceResponse;
+  };
+
+  type EpisodePlanImpactBlocker = {
+    /** Code */
+    code: string;
+    /** Summary */
+    summary: string;
+    /** Next Action */
+    next_action: string;
+  };
+
+  type EpisodePlanImpactResponse = {
+    /** Project Revision */
+    project_revision: number;
+    /** Active Episode Count */
+    active_episode_count: number;
+    /** Active Order Hash */
+    active_order_hash: string;
+    /** Projected Episode Count */
+    projected_episode_count: number;
+    /** Allowed */
+    allowed: boolean;
+    /** Blockers */
+    blockers: EpisodePlanImpactBlocker[];
+  };
+
+  type EpisodePlanResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Project Id */
+    project_id: string;
+    /** Document Revision Id */
+    document_revision_id: string;
+    /** Strategy */
+    strategy: "explicit_markers" | "target_duration_ai";
+    /** Status */
+    status:
+      | "draft"
+      | "review_ready"
+      | "confirmed"
+      | "materialized"
+      | "superseded";
+    /** Target Duration Ms */
+    target_duration_ms: number;
+    /** Requested Episode Count */
+    requested_episode_count: number | null;
+    /** Total Estimated Duration Ms */
+    total_estimated_duration_ms: number;
+    /** Input Hash */
+    input_hash: string;
+    /** Planning Engine Version */
+    planning_engine_version: string;
+    /** Model Name */
+    model_name: string | null;
+    /** Prompt Version */
+    prompt_version: string | null;
+    /** Schema Version */
+    schema_version: string;
+    /** Planning Task Id */
+    planning_task_id: string | null;
+    /** Planning Error Code */
+    planning_error_code: string | null;
+    /** Revision */
+    revision: number;
+    /** Confirmed By */
+    confirmed_by: string | null;
+    /** Confirmed At */
+    confirmed_at: string | null;
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+  };
+
+  type EpisodePlanSourceResponse = {
+    /** Document Revision Id */
+    document_revision_id: string;
+    /** Normalized Text */
+    normalized_text: string;
+    /** Normalized Hash */
+    normalized_hash: string;
+    /** Codepoint Count */
+    codepoint_count: number;
+    /** Blocks */
+    blocks: NarrativeBlockResponse[];
+  };
+
   type EpisodeProductionSnapshot = {
     /** Episode Id */
     episode_id: string;
@@ -1407,6 +1539,41 @@ declare namespace API {
       episode_id: string;
     };
 
+  type EpisodeProposalResponse = {
+    /** Id */
+    id: string;
+    /** Plan Id */
+    plan_id: string;
+    /** Position */
+    position: number;
+    /** Title */
+    title: string;
+    /** Start Block Id */
+    start_block_id: string;
+    /** End Block Id */
+    end_block_id: string;
+    /** Start Block Position */
+    start_block_position: number;
+    /** End Block Position */
+    end_block_position: number;
+    /** Source Start */
+    source_start: number;
+    /** Source End */
+    source_end: number;
+    /** Content Hash */
+    content_hash: string;
+    /** Estimated Duration Ms */
+    estimated_duration_ms: number;
+    /** Reason */
+    reason: string;
+    /** Confidence */
+    confidence: number;
+    /** Boundary Evidence */
+    boundary_evidence: Record<string, any>;
+    /** Is Locked */
+    is_locked: boolean;
+  };
+
   type EpisodeReorderRequest = {
     /** Episode Ids */
     episode_ids: string[];
@@ -1435,6 +1602,33 @@ declare namespace API {
     current_script_version_id: string | null;
     /** Current Timeline Version Id */
     current_timeline_version_id: string | null;
+  };
+
+  type EpisodeSegmentOriginResponse = {
+    /** Id */
+    id: string;
+    /** Import Commit Id */
+    import_commit_id: string;
+    /** Proposal Id */
+    proposal_id: string;
+    /** Document Revision Id */
+    document_revision_id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Source Id */
+    source_id: string;
+    /** Draft Version Id */
+    draft_version_id: string;
+    /** Published Version Id */
+    published_version_id: string | null;
+    /** Position */
+    position: number;
+    /** Source Start */
+    source_start: number;
+    /** Source End */
+    source_end: number;
+    /** Source Hash */
+    source_hash: string;
   };
 
   type EpisodeStateRequest = {
@@ -1729,6 +1923,10 @@ declare namespace API {
     episode_id: string;
   };
 
+  type getEpisodePlanApiV1EpisodePlansPlanIdGetParams = {
+    plan_id: string;
+  };
+
   type getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGetParams = {
     episode_id: string;
   };
@@ -1795,6 +1993,50 @@ declare namespace API {
   type IgnoreDecision = {
     /** Action */
     action: "ignore";
+  };
+
+  type ImportCommitDetailResponse = {
+    commit: ImportCommitResponse;
+    /** Segments */
+    segments: EpisodeSegmentOriginResponse[];
+  };
+
+  type ImportCommitResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Project Id */
+    project_id: string;
+    /** Plan Id */
+    plan_id: string;
+    /** Mode */
+    mode: "append_new";
+    /** Status */
+    status:
+      | "pending"
+      | "materializing"
+      | "materialized"
+      | "publishing"
+      | "published"
+      | "conflict"
+      | "failed";
+    /** Input Hash */
+    input_hash: string;
+    /** Expected Project Revision */
+    expected_project_revision: number;
+    /** Expected Active Order Hash */
+    expected_active_order_hash: string;
+    /** Error Code */
+    error_code: string | null;
+    /** Revision */
+    revision: number;
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
   };
 
   type importDocumentApiV1ProjectsProjectIdScriptImportsPostParams = {
@@ -1980,6 +2222,7 @@ declare namespace API {
     workspace_id: string;
     task_type:
       | "script_extraction"
+      | "episode_planning"
       | "image_generation"
       | "video_generation"
       | "media_probe"
@@ -2031,6 +2274,24 @@ declare namespace API {
     email: string;
     /** Password */
     password: string;
+  };
+
+  type materializeEpisodePlanApiV1EpisodePlansPlanIdMaterializationsPostParams =
+    {
+      plan_id: string;
+    };
+
+  type MaterializeEpisodePlanRequest = {
+    /** Mode */
+    mode: "append_new";
+    /** Expected Plan Revision */
+    expected_plan_revision: number;
+    /** Expected Project Revision */
+    expected_project_revision: number;
+    /** Expected Active Order Hash */
+    expected_active_order_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
   };
 
   type MediaAccessRequest = {
@@ -2186,6 +2447,19 @@ declare namespace API {
     workspace: WorkspaceResponse;
   };
 
+  type MergeEpisodeProposalRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Left Proposal Id */
+    left_proposal_id: string;
+  };
+
+  type mergeEpisodeProposalsApiV1EpisodePlansPlanIdMergePostParams = {
+    plan_id: string;
+  };
+
   type MergeIntoDecision = {
     /** Action */
     action: "merge_into";
@@ -2238,6 +2512,21 @@ declare namespace API {
     status: "active" | "inactive" | "unavailable";
     /** Unavailable Reason */
     unavailable_reason: string | null;
+  };
+
+  type moveEpisodeBoundaryApiV1EpisodePlansPlanIdMoveBoundaryPostParams = {
+    plan_id: string;
+  };
+
+  type MoveEpisodeBoundaryRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Left Proposal Id */
+    left_proposal_id: string;
+    /** Source Offset */
+    source_offset: number;
   };
 
   type NarrativeBlockResponse = {
@@ -2578,6 +2867,17 @@ declare namespace API {
     holder_character_id: string | null | null;
   };
 
+  type publishImportCommitApiV1ImportCommitsCommitIdPublishPostParams = {
+    commit_id: string;
+  };
+
+  type PublishImportCommitRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
   type publishVersionApiV1ScriptSourcesSourceIdVersionsPostParams = {
     source_id: string;
   };
@@ -2622,6 +2922,21 @@ declare namespace API {
   type RegistrationVerificationRequest = {
     /** Email */
     email: string;
+  };
+
+  type renameEpisodeProposalApiV1EpisodePlansPlanIdRenamePostParams = {
+    plan_id: string;
+  };
+
+  type RenameEpisodeProposalRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Proposal Id */
+    proposal_id: string;
+    /** Title */
+    title: string;
   };
 
   type reorderEpisodesApiV1ProjectsProjectIdEpisodesReorderPostParams = {
@@ -3418,6 +3733,23 @@ declare namespace API {
     title: string;
   };
 
+  type splitEpisodeProposalApiV1EpisodePlansPlanIdSplitPostParams = {
+    plan_id: string;
+  };
+
+  type SplitEpisodeProposalRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Proposal Id */
+    proposal_id: string;
+    /** Source Offset */
+    source_offset: number;
+    /** New Title */
+    new_title: string;
+  };
+
   type splitPreflightApiV1ShotsShotIdSplitPreflightPostParams = {
     shot_id: string;
   };
@@ -3543,6 +3875,7 @@ declare namespace API {
     /** Task Type */
     task_type:
       | "script_extraction"
+      | "episode_planning"
       | "image_generation"
       | "video_generation"
       | "media_probe"
@@ -3553,6 +3886,7 @@ declare namespace API {
     /** Request Type */
     request_type:
       | "extraction_batch"
+      | "episode_plan"
       | "generation_request"
       | "media_version"
       | "upload_session"

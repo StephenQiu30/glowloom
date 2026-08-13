@@ -11,6 +11,7 @@ import * as tasks from "./tasks";
 import * as production from "./production";
 import * as scriptDocuments from "./scriptDocuments";
 import * as scripts from "./scripts";
+import * as episodePlanning from "./episodePlanning";
 import * as schedules from "./schedules";
 import * as storyboards from "./storyboards";
 import * as system from "./system";
@@ -24,6 +25,7 @@ export default {
   production,
   scriptDocuments,
   scripts,
+  episodePlanning,
   schedules,
   storyboards,
   system,

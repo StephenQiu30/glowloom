@@ -26,6 +26,7 @@ async def list_tasks(
     session: Annotated[AsyncSession, Depends(get_async_session)],
     task_type: Literal[
         "script_extraction",
+        "episode_planning",
         "image_generation",
         "video_generation",
         "media_probe",
