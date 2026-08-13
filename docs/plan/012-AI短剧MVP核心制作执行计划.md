@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～07 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播和 AssetState/Occurrence；制作人/QA 内容质量复核保留到分镜/分镜包产品验收；下一任务为 DEV-MVPA-08 资产影响治理）
+- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～08 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence 和资产影响治理；制作人/QA 内容质量复核保留到分镜/分镜包产品验收；下一任务为 DEV-MVPA-09 拆镜/合镜守恒修复）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -100,7 +100,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-05 | completed（Acceptance 031） | PT-SCR-008 | 9 | MVPA-02 | 单集改写 Run、一个候选、diff/编辑/发布和失败恢复 |
 | DEV-MVPA-06 | completed（Acceptance 032） | PT-SCR-009 | 14 | MVPA-05 | NarrativeUnit/Version、人工修正、current 影响和下游 stale |
 | DEV-MVPA-07 | completed（Acceptance 033） | PT-AST-006 | 7 | MVPA-06 | AssetState/Occurrence/state current、状态矩阵和 readiness |
-| DEV-MVPA-08 | proposed | PT-AST-007 | 5 | MVPA-07 | 改名/禁用/换版本影响中心、state-aware usage 与 apply |
+| DEV-MVPA-08 | completed（Acceptance 034） | PT-AST-007 | 5 | MVPA-07 | 改名/禁用/换版本影响中心、state-aware usage 与 apply |
 | DEV-MVPA-09 | proposed | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
 | DEV-MVPA-10 | proposed | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
 | DEV-MVPA-11 | proposed | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
@@ -375,6 +375,15 @@ DEV-MVPA-07 实现与验收证据（2026-08-13）：
 - 后端全量 `411 passed, 26 skipped`，Ruff/Pyright/17 个命名与 Plain Data Contract 架构门禁全过；前端全量 `24 files / 82 tests`、TypeScript、ESLint、生产构建通过，真实 PostgreSQL/MinIO/RabbitMQ 浏览器资产治理闭环通过；
 - 完整证据见 [Acceptance 033](../acceptance/arrived/033-资产剧情状态与出现关系验收.md)。DEV-MVPA-07 在上述范围内 completed；PT-AST-006 仍保持 `in_progress`，因为状态编辑/禁用及其立即阻断契约按已接受设计由 DEV-MVPA-08 收口；改名/禁用影响预检、state-aware usage 批量治理和 Prompt 失效均未因本任务提前宣称完成。
 
+DEV-MVPA-08 实现与验收证据（2026-08-13）：
+
+- `Asset.status` 继续只表示 active/archived 身份生命周期，新增 `availability=enabled|disabled` 表示生产可用性；`AssetState.status` 的禁用语义独立。禁用立即让资产 readiness 和引用它的 Shot readiness 阻断，但 AssetVersion、ShotSpec、GenerationRequest、Task 与审计记录零删除；
+- `AssetNameRevision` 只追加保存名称修订。名称不能再通过通用 PATCH 更新，必须走 rename preflight/apply；成功后稳定 ID/FK 不变、旧名称加入 alias，重复名称只返回告警；
+- rename、Asset/State disable 和 State current 都先批量读取 Episode/Shot/Spec、GenerationRequest 输入快照与非终态 Task，再固定 `impact_hash`。Apply 在锁内重扫；任务状态、revision、引用或命令输入变化均以 409 零写入；
+- 状态 label/description 使用独立 CAS/幂等命令，state_key 不可变。前端把元数据编辑、改名、停用、归档和当前版本切换拆成独立操作，高影响操作展示影响摘要后才允许确认；
+- Alembic `36bf151da189` 将 57 张业务表前滚到 58 张。仓库外 0600 备份后，隔离库完成 `57 → 58 → 57 → 58`，随后才升级开发库；head 与 autogenerate drift 均通过；
+- 完整证据见 [Acceptance 034](../acceptance/arrived/034-资产变更影响治理验收.md)。DEV-MVPA-08 与 PT-AST-007 completed；DEV-MVPA-07 留下的 PT-AST-006 状态编辑/禁用缺口同步关闭。C5 的 PromptRevision、OutputCandidate/Selection/Lineage 和真实 Provider 不在本任务内。
+
 ### 6.7 DEV-MVPA-09：拆镜/合镜守恒修复
 
 分镜与覆盖共享 GitHub 证据池（固定于 2026-08-13）同时约束 DEV-MVPA-09/10/11：
@@ -621,4 +630,4 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 当前可领取任务
 
-`DEV-MVPA-01～07` 已完成并由 Acceptance 028～033 和黄金 fixture 契约关闭。当前下一任务是 `DEV-MVPA-08`：基于已固定的 `Asset/State/Version/Occurrence` 事实实现改名、禁用和换版本的同输入 preflight/apply、state-aware usage 与失效传播；不引入 OutputCandidate/GenerationRun，不用裸名称或兼容 DTO 回写历史引用。
+`DEV-MVPA-01～08` 已完成并由 Acceptance 028～034 和黄金 fixture 契约关闭。当前下一任务是 `DEV-MVPA-09`：直接修复现有 split/merge 的对白与叙事内容守恒，并以 preflight/apply、完整目标规格和只追加 ShotTransform 拒绝静默丢内容；不提前引入 AI 分镜批次、CoverageReport 或剪辑时间线。
