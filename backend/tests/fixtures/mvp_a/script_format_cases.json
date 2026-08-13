@@ -142,5 +142,82 @@
       }
     ],
     "expected_problem_kinds": []
+  },
+  {
+    "fixture_id": "mvp-a-format-number-out-of-order-001",
+    "description": "synthetic：唯一但逆序的集号必须区别于缺号",
+    "input_text": "第二集\n合成片段乙。\n\n第一集\n合成片段甲。",
+    "expected_analysis": "rejected",
+    "expected_markers": [
+      {
+        "episode_number": 2,
+        "marker_text": "第二集",
+        "line_number": 1,
+        "start_codepoint": 0,
+        "end_codepoint": 3
+      },
+      {
+        "episode_number": 1,
+        "marker_text": "第一集",
+        "line_number": 4,
+        "start_codepoint": 12,
+        "end_codepoint": 15
+      }
+    ],
+    "expected_problem_kinds": ["number_out_of_order"]
+  },
+  {
+    "fixture_id": "mvp-a-format-preamble-001",
+    "description": "synthetic：前言不归入第一集，保留确定性边界并要求用户决定归属",
+    "input_text": "合成人物表：甲、乙。\n\n第一集\n合成正文甲。\n\n第二集\n合成正文乙。",
+    "expected_analysis": "deterministic",
+    "expected_markers": [
+      {
+        "episode_number": 1,
+        "marker_text": "第一集",
+        "line_number": 3,
+        "start_codepoint": 12,
+        "end_codepoint": 15
+      },
+      {
+        "episode_number": 2,
+        "marker_text": "第二集",
+        "line_number": 6,
+        "start_codepoint": 24,
+        "end_codepoint": 27
+      }
+    ],
+    "expected_problem_kinds": ["preamble_requires_decision"]
+  },
+  {
+    "fixture_id": "mvp-a-format-inline-title-001",
+    "description": "synthetic：集号和标题同行不是独占行标记，不能成为硬边界",
+    "input_text": "第一集 开场\n合成正文。",
+    "expected_analysis": "ai_candidate_required",
+    "expected_markers": [],
+    "expected_problem_kinds": ["no_marker"]
+  },
+  {
+    "fixture_id": "mvp-a-format-crlf-whitespace-001",
+    "description": "synthetic：CRLF 和集标记两侧空白不改变原文 code-point 坐标",
+    "input_text": "  第一集  \r\n合成正文。\r\n\r\n第二集\r\n继续。",
+    "expected_analysis": "deterministic",
+    "expected_markers": [
+      {
+        "episode_number": 1,
+        "marker_text": "第一集",
+        "line_number": 1,
+        "start_codepoint": 2,
+        "end_codepoint": 5
+      },
+      {
+        "episode_number": 2,
+        "marker_text": "第二集",
+        "line_number": 4,
+        "start_codepoint": 18,
+        "end_codepoint": 21
+      }
+    ],
+    "expected_problem_kinds": []
   }
 ]

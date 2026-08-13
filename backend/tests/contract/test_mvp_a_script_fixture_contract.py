@@ -2,6 +2,7 @@ import json
 from enum import StrEnum
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 FIXTURE_DIRECTORY = Path(__file__).parents[1] / "fixtures/mvp_a"
@@ -17,8 +18,10 @@ class ExpectedAnalysis(StrEnum):
 class FormatProblemKind(StrEnum):
     NUMBER_GAP = "number_gap"
     DUPLICATE_NUMBER = "duplicate_number"
+    NUMBER_OUT_OF_ORDER = "number_out_of_order"
     EMPTY_EPISODE = "empty_episode"
     NO_MARKER = "no_marker"
+    PREAMBLE_REQUIRES_DECISION = "preamble_requires_decision"
 
 
 class EpisodeMarkerFixture(BaseModel):
@@ -67,6 +70,10 @@ def test_format_fixture_matrix_covers_the_mvp_a_pre_gate() -> None:
         "mvp-a-format-empty-episode-001",
         "mvp-a-format-no-marker-001",
         "mvp-a-format-unicode-codepoint-001",
+        "mvp-a-format-number-out-of-order-001",
+        "mvp-a-format-preamble-001",
+        "mvp-a-format-inline-title-001",
+        "mvp-a-format-crlf-whitespace-001",
     }
     assert {
         problem
@@ -83,14 +90,12 @@ def test_marker_expectations_use_exact_unicode_codepoint_ranges() -> None:
             assert fixture.input_text[marker.start_codepoint : marker.end_codepoint] == (
                 marker.marker_text
             )
-            starts_on_line_boundary = (
-                marker.start_codepoint == 0
-                or fixture.input_text[marker.start_codepoint - 1] == "\n"
-            )
-            assert starts_on_line_boundary
-            assert marker.end_codepoint == len(fixture.input_text) or fixture.input_text[
-                marker.end_codepoint
-            ] == "\n"
+            line_start = fixture.input_text.rfind("\n", 0, marker.start_codepoint) + 1
+            line_end = fixture.input_text.find("\n", marker.end_codepoint)
+            if line_end < 0:
+                line_end = len(fixture.input_text)
+            assert fixture.input_text[line_start : marker.start_codepoint].strip() == ""
+            assert fixture.input_text[marker.end_codepoint : line_end].strip() == ""
             assert marker.line_number == _line_number_at(fixture.input_text, marker.start_codepoint)
             previous_end = marker.end_codepoint
 
@@ -117,6 +122,16 @@ def test_unmarked_fixture_requires_an_ai_candidate_but_does_not_invent_a_boundar
     assert fixture.expected_problem_kinds == [FormatProblemKind.NO_MARKER]
 
 
+def test_preamble_fixture_keeps_deterministic_markers_but_requires_a_user_decision() -> None:
+    fixture = next(
+        case for case in load_format_cases() if case.fixture_id == "mvp-a-format-preamble-001"
+    )
+
+    assert fixture.expected_analysis is ExpectedAnalysis.DETERMINISTIC
+    assert [marker.episode_number for marker in fixture.expected_markers] == [1, 2]
+    assert fixture.expected_problem_kinds == [FormatProblemKind.PREAMBLE_REQUIRES_DECISION]
+
+
 def test_unicode_fixture_proves_offsets_are_not_utf16_code_units_or_utf8_bytes() -> None:
     fixture = next(
         case
@@ -127,6 +142,20 @@ def test_unicode_fixture_proves_offsets_are_not_utf16_code_units_or_utf8_bytes()
     assert any(ord(character) > 0xFFFF for character in fixture.input_text)
     assert len(fixture.input_text) != len(fixture.input_text.encode("utf-16-le")) // 2
     assert len(fixture.input_text) != len(fixture.input_text.encode("utf-8"))
+
+
+def test_fixture_contract_rejects_more_than_100k_codepoints() -> None:
+    with pytest.raises(ValueError, match="at most 100000 characters"):
+        ScriptFormatCase.model_validate(
+            {
+                "fixture_id": "mvp-a-format-over-limit-001",
+                "description": "synthetic：超限输入",
+                "input_text": "甲" * 100_001,
+                "expected_analysis": "rejected",
+                "expected_markers": [],
+                "expected_problem_kinds": [],
+            }
+        )
 
 
 def test_committed_format_fixtures_are_synthetic_and_contain_no_external_reference() -> None:
