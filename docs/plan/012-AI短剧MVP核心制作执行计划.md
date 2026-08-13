@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～10 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence、资产影响治理、拆镜/合镜内容守恒和可审核 AI 分镜草案；DEV-MVPA-11 已完成第二轮成熟方案调研并进入多对多覆盖与 readiness 实施；制作人/QA 内容质量复核保留到分镜/分镜包产品验收）
+- 状态：active（2026-08-14；DEV-MVPA-01～11 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence、资产影响治理、拆镜/合镜内容守恒、可审核 AI 分镜草案以及多对多覆盖/readiness；下一任务为 DEV-MVPA-12 可信分镜包与联合 E2E；制作人/QA 内容质量复核仍保留到分镜包产品验收）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -103,7 +103,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-08 | completed（Acceptance 034） | PT-AST-007 | 5 | MVPA-07 | 改名/禁用/换版本影响中心、state-aware usage 与 apply |
 | DEV-MVPA-09 | completed（Acceptance 035） | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
 | DEV-MVPA-10 | completed（Acceptance 036） | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
-| DEV-MVPA-11 | in_progress（第二轮 GitHub 证据与本地边界已冻结） | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
+| DEV-MVPA-11 | completed（Acceptance 037） | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
 | DEV-MVPA-12 | proposed | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
 | **合计** |  | **11 个 PT** | **71 人周** |  | **整剧到可信分镜包** |
 
@@ -484,7 +484,7 @@ DEV-MVPA-11 第二轮 GitHub 证据（固定于 2026-08-13）同时覆盖成熟�
 - `CoverageDecision` 只追加。批准省略固定 UnitVersion，批准创作性镜头固定 ShotSpecVersion；命令以当前 report evaluation hash 做 CAS，决议保存不含其他决议的 `basis_hash`，因此无关决议不会互相失效，底层 unit/spec/reference 变化仍会令旧决议 stale。
 - `CoverageReport` 首期按需派生，不建可变 current 表：一次批量读取 current units、active shots/current specs、references 和 decisions，分类 `covered/approved_omitted/uncovered/orphan/stale`。required unit 必须 covered 或 approved omitted，orphan/stale 必须为 0；依赖读取失败返回 unavailable，不能降级成 ready。
 - required channel 由叙事种类确定：动作与场景标题要求 visual，对白与旁白要求 audio，`both` 同时满足两路；partial 以 UnitVersion 内 Unicode code-point 半开区间表达，多段并集必须完整覆盖相应 required channel。重复 primary、越界/空 segment、跨 Episode/Workspace 和非 current 固定版本均 fail closed。
-- AI 草案中的 unit IDs 只作为审核建议。DEV-MVPA-10 既有 Apply 不具备 channel/role/segment 证据，因此不得猜成正式关系；旧镜头和新 Apply 镜头都通过同一人工映射入口建立第一组正式边，在此之前 readiness 明确 blocked。
+- AI 草案中的固定 unit IDs 是待人工接受或修改的来源建议，不按文本、镜号或顺序猜测。用户接受完整 DraftTarget 后，Apply 才把固定 UnitVersion 确定性投影为正式边：unit kind 决定 required channel，同一 `(unit, channel, full)` 的首个 current 镜头为 `primary/required`，重复镜头为 `supporting/supporting`；既有 current primary 也参与判定。未经过 DraftDecision 的建议、历史无来源镜头和空映射镜头仍保持 blocked，并可通过同一人工映射入口修正。
 - split 在已有引用时必须由请求显式分配并证明引用并集守恒；merge 取两来源引用的有序并集并拒绝冲突 primary；copy 只复制为 supporting，不得重复满足 required coverage。任何路径都不静默丢失或重复必拍内容。
 - 后端文件继续使用 `models.py/schemas.py/repository.py/service.py/api.py` 等目录已提供语义的短名，跨模块对象使用不可变 `Command/Query/Snapshot/Result` Plain Data Contract；受 DES-000 的 64 字符文件名、禁止含糊 DTO/兼容包装和架构测试硬门禁约束。
 
@@ -499,6 +499,15 @@ Green：
 - 分镜页实现文本↔镜头双向定位和 uncovered/orphan/stale 总览。
 
 退出：required 全 covered/approved omitted、orphan=0、stale=0 才 ready；36/120 镜保持既有 P95 门禁且无按镜 N+1。
+
+完成证据（2026-08-14）：
+
+- 新增不可变 `ShotNarrativeReference` 和只追加 `CoverageDecision`；关系固定 current `ShotSpecVersion + NarrativeUnitVersion`，数据库复合外键、边唯一约束、segment 约束和作用域校验共同阻止跨集、跨空间、越界与重复关系。
+- `CoverageReport` 由 current Unit、active Shot/current Spec、引用和最新决议批量派生，区分 `covered/approved_omitted/uncovered` 与 `linked/approved_invented/orphan`，单独报告 stale；依赖异常返回 unavailable，readiness 与 ProductionSnapshot 均 fail closed。
+- 手工保存规格必须提交完整 `narrative_references`，缺字段直接 422；修正映射、资产升级、AI Draft Apply、copy、split 和 merge 都在创建新不可变 Spec 时原子保存或守恒迁移关系，不保留旧请求别名、空默认或运行时兼容推断。
+- 分镜页提供 coverage 总览、剧本单元↔镜头双向定位、关系编辑、省略/原创批准与撤销、stale 提示；拆分要求逐边明确分配，合并遇到重复边先由用户修正，浏览器闭环已覆盖该失败路径。
+- 工程规范继续以 DES-000 为唯一事实源；新增架构门禁自动拒绝非 ASCII、超过 64 字符和空泛命名的源码/测试文件，Plain Data Contract 的 I/O/ORM/可变跨模块对象限制保持生效。
+- 后端全量、36/120 镜性能、迁移、前端全量和浏览器验收的真实命令与结果见 [Acceptance 037](../acceptance/arrived/037-剧本分镜多对多覆盖验收.md)。DEV-MVPA-11 与 PT-SBD-009 completed；JSON/CSV/HTML 分镜包、MediaVersion/Lineage 和受控下载仍属于 DEV-MVPA-12。
 
 ### 6.10 DEV-MVPA-12：分镜包与联合 E2E
 
@@ -687,4 +696,4 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 当前可领取任务
 
-`DEV-MVPA-01～10` 已完成并由 Acceptance 028～036 和黄金 fixture 契约关闭。`DEV-MVPA-11` 已领取并完成第二轮 GitHub 证据与事实边界冻结，当前进入 Red：固定多对多覆盖、approved omission、orphan、stale、依赖 unavailable、双向定位和 36/120 镜无 N+1；不得通过兼容字段猜测旧镜头覆盖关系，也不提前实现分镜包或剪辑时间线。
+`DEV-MVPA-01～11` 已完成并由 Acceptance 028～037 和黄金 fixture 契约关闭。当前唯一可领取任务是 `DEV-MVPA-12`：先以 Red 固定导出读取漂移 current、coverage 过期、blocked asset、幂等冲突、对象写失败、Manifest/Media 部分提交、历史被后续改稿篡改和跨空间下载；再实现固定输入的 JSON/CSV/HTML 分镜包、MediaVersion/Lineage、历史与受控下载。不得提前实现图片/视频生成、剪辑时间线或商业平台能力。
