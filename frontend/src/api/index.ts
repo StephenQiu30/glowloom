@@ -9,6 +9,7 @@ import * as media from "./media";
 import * as projects from "./projects";
 import * as tasks from "./tasks";
 import * as production from "./production";
+import * as scriptDocuments from "./scriptDocuments";
 import * as scripts from "./scripts";
 import * as schedules from "./schedules";
 import * as storyboards from "./storyboards";
@@ -21,6 +22,7 @@ export default {
   projects,
   tasks,
   production,
+  scriptDocuments,
   scripts,
   schedules,
   storyboards,

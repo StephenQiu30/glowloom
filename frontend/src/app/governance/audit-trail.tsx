@@ -46,6 +46,7 @@ const auditActionLabels: Record<string, string> = {
   "episode.restored": "单集恢复",
   "episode.deleted": "单集删除",
   "script.version_created": "剧本初始版本创建",
+  "script.document_imported": "整剧文档导入",
   "script.version_published": "剧本版本发布",
   "script.current_changed": "剧本当前版本切换",
   "script.source_archived": "剧本来源归档",

@@ -97,6 +97,7 @@ export function mediaKindFromFile(file: File): API.UploadDeclaration["kind"] {
   if (file.type.startsWith("image/")) return "image";
   if (file.type.startsWith("video/")) return "video";
   if (file.type.startsWith("audio/")) return "audio";
+  if (/\.(?:txt|md)$/i.test(file.name)) return "document";
   return "subtitle";
 }
 

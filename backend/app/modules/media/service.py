@@ -12,7 +12,8 @@ from app.core.errors import ApiError, ErrorCode
 from app.modules.governance.audit import append_audit_event
 from app.modules.identity import ActorContext, Capability, actor_context
 from app.modules.media import repository
-from app.modules.media.contracts import MediaVersionReference
+from app.modules.media.contracts import MediaProbeError, MediaVersionReference
+from app.modules.media.document_content import read_strict_utf8_document
 from app.modules.media.models import MediaLocation, MediaObject, MediaVersion, UploadSession
 from app.modules.media.schemas import (
     AppendVersionRequest,
@@ -69,6 +70,7 @@ ALLOWED_MIME_TYPES: dict[str, frozenset[str]] = {
     "delivery": frozenset(
         {"application/zip", "application/json", "video/mp4", "application/x-subrip"}
     ),
+    "document": frozenset({"text/plain", "text/markdown"}),
 }
 
 
@@ -157,12 +159,17 @@ def _media_location_response(location: MediaLocation) -> MediaLocationResponse:
 
 
 def _validate_declaration(request: UploadDeclaration, settings: Settings) -> None:
-    if request.size_bytes > settings.media_max_upload_bytes:
+    max_size_bytes = (
+        settings.script_document_max_bytes
+        if request.kind == "document"
+        else settings.media_max_upload_bytes
+    )
+    if request.size_bytes > max_size_bytes:
         raise ApiError(
             ErrorCode.VALIDATION_FAILED,
             "Media exceeds the upload size limit",
             status_code=422,
-            details={"max_size_bytes": settings.media_max_upload_bytes},
+            details={"max_size_bytes": max_size_bytes},
         )
     if request.mime_type.lower() not in ALLOWED_MIME_TYPES[request.kind]:
         raise ApiError(
@@ -170,6 +177,15 @@ def _validate_declaration(request: UploadDeclaration, settings: Settings) -> Non
             "Media MIME type is not allowed for this kind",
             status_code=422,
         )
+    if request.kind == "document":
+        suffix = request.filename.strip().lower().rsplit(".", 1)
+        extension = f".{suffix[-1]}" if len(suffix) == 2 else ""
+        if extension not in {".txt", ".md"}:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Document filename must end with .txt or .md",
+                status_code=422,
+            )
 
 
 def _same_upload(upload: UploadSession, request: UploadDeclaration) -> bool:
@@ -798,6 +814,74 @@ async def media_version_accessible(
     if version.workspace_id != workspace_id or version.probe_status == "quarantined":
         return False
     return await repository.find_active_location(session, version.id) is not None
+
+
+async def read_utf8_document_version(
+    session: AsyncSession,
+    workspace_id: UUID,
+    version_id: UUID,
+    storage: MediaStorage,
+    *,
+    max_bytes: int,
+    max_codepoints: int,
+) -> str:
+    """Read one immutable, ready document version without granting a public URL."""
+
+    result = await repository.find_media_version(session, version_id)
+    if result is None or result[0].workspace_id != workspace_id:
+        raise ApiError(ErrorCode.NOT_FOUND, "Document media not found", status_code=404)
+    version, media_object = result
+    if media_object.kind != "document":
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Media version is not a document",
+            status_code=422,
+        )
+    if media_object.status != "active" or version.probe_status != "ready":
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Document media is not ready",
+            status_code=409,
+            next_action="wait_for_media_probe",
+            details={"probe_status": version.probe_status},
+        )
+    location = await repository.find_active_location(session, version.id)
+    if location is None:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Document media location is unavailable",
+            status_code=503,
+            next_action="retry",
+            details={"retryable": True},
+        )
+    try:
+        text, _ = await read_strict_utf8_document(
+            storage.port.stream(location.object_key),
+            mime_type=version.mime_type,
+            max_bytes=max_bytes,
+            max_codepoints=max_codepoints,
+        )
+    except MediaProbeError as error:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            error.summary,
+            status_code=422,
+            next_action="upload_utf8_document",
+            details={"document_error_code": error.code},
+        ) from error
+    except StorageObjectNotFound as error:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Document media location is unavailable",
+            status_code=503,
+            next_action="retry",
+            details={"retryable": True},
+        ) from error
+    except (StorageAccessDenied, StorageUnavailable) as error:
+        raise _dependency_error() from error
+    except Exception as error:
+        raise _dependency_error() from error
+    return text
 
 
 async def resolve_media_version_reference(

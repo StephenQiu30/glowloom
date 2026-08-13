@@ -40,6 +40,7 @@ import {
 import {
   archiveMediaApiV1MediaObjectsMediaObjectIdArchivePost,
   completeUploadApiV1MediaUploadsUploadSessionIdCompletePost,
+  getMediaApiV1MediaVersionIdGet,
   initializeUploadApiV1MediaUploadsPost,
   initializeVersionUploadApiV1MediaObjectsMediaObjectIdVersionsPost,
   listMediaLocationsApiV1MediaVersionIdLocationsGet,
@@ -50,6 +51,10 @@ import {
   retryProbeApiV1MediaVersionIdProbeRetryPost,
   setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPost,
 } from "@/api/media";
+import {
+  importDocumentApiV1ProjectsProjectIdScriptImportsPost,
+  listDocumentsApiV1ProjectsProjectIdScriptDocumentsGet,
+} from "@/api/scriptDocuments";
 import {
   archiveEpisodeApiV1EpisodesEpisodeIdArchivePost,
   archiveProjectApiV1ProjectsProjectIdArchivePost,
@@ -197,6 +202,7 @@ export const appApi = createApi({
     "AssetReadiness",
     "AssetShotUsages",
     "ScriptSources",
+    "ScriptDocuments",
     "ScriptVersions",
     "ScriptVersion",
     "Tasks",
@@ -527,6 +533,44 @@ export const appApi = createApi({
         ),
       providesTags: (_result, _error, episodeId) => [
         { type: "ScriptSources", id: episodeId },
+      ],
+    }),
+    scriptDocuments: builder.query<API.PaginatedScriptDocuments, string>({
+      queryFn: (projectId) =>
+        runRequest(() =>
+          listDocumentsApiV1ProjectsProjectIdScriptDocumentsGet({
+            project_id: projectId,
+            limit: 100,
+            offset: 0,
+          }),
+        ),
+      providesTags: (_result, _error, projectId) => [
+        { type: "ScriptDocuments", id: projectId },
+      ],
+    }),
+    importScriptDocument: builder.mutation<
+      API.ScriptDocumentAnalysisResponse,
+      { projectId: string; body: API.ScriptDocumentImportRequest }
+    >({
+      queryFn: ({ projectId, body }) =>
+        runRequest(() =>
+          importDocumentApiV1ProjectsProjectIdScriptImportsPost(
+            { project_id: projectId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: "ScriptDocuments", id: projectId },
+        "AuditEvents",
+      ],
+    }),
+    mediaVersion: builder.query<API.MediaVersionResponse, string>({
+      queryFn: (versionId) =>
+        runRequest(() =>
+          getMediaApiV1MediaVersionIdGet({ version_id: versionId }),
+        ),
+      providesTags: (_result, _error, versionId) => [
+        { type: "Media", id: versionId },
       ],
     }),
     scriptVersion: builder.query<API.ScriptVersionResponse, string>({
@@ -1731,6 +1775,7 @@ export const {
   useExtractionBatchQuery,
   useExtractionCandidatesQuery,
   useImportScriptMutation,
+  useImportScriptDocumentMutation,
   useInitializeMediaUploadMutation,
   useInitializeMediaVersionUploadMutation,
   useLoginMutation,
@@ -1741,6 +1786,7 @@ export const {
   useMergeShotsMutation,
   useMergeShotsPreflightMutation,
   useMediaVersionsQuery,
+  useLazyMediaVersionQuery,
   useMediaLocationsQuery,
   useProjectQuery,
   useProjectDeletePreflightMutation,
@@ -1778,6 +1824,7 @@ export const {
   useUpdateWorkspaceMutation,
   useWorkspacesQuery,
   useScriptSourcesQuery,
+  useScriptDocumentsQuery,
   useScriptVersionQuery,
   useScriptVersionsQuery,
   useStartExtractionMutation,

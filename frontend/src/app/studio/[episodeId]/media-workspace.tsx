@@ -41,6 +41,7 @@ const mediaKindLabels: Record<API.UploadDeclaration["kind"], string> = {
   audio: "音频",
   subtitle: "字幕",
   delivery: "交付文件",
+  document: "剧本文档",
 };
 
 const probeLabels: Record<API.MediaVersionResponse["probe_status"], string> = {
@@ -83,6 +84,7 @@ function groupMediaObjects(media: API.MediaVersionResponse[]): MediaObjectView[]
 function inputAccept(kind: API.UploadDeclaration["kind"]): string | undefined {
   if (kind === "image" || kind === "video" || kind === "audio") return `${kind}/*`;
   if (kind === "subtitle") return ".srt,.vtt,text/vtt,application/x-subrip";
+  if (kind === "document") return ".txt,.md,text/plain,text/markdown";
   return undefined;
 }
 

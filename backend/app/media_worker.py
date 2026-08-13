@@ -18,6 +18,7 @@ from app.core.telemetry import (
     start_span,
     traceparent_from_headers,
 )
+from app.integrations.document_probe import RoutingMediaProbe, Utf8DocumentProbe
 from app.integrations.ffprobe import FfprobeMediaProbe
 from app.integrations.minio import MinioObjectStorage
 from app.integrations.rabbitmq import declare_task_topology
@@ -249,7 +250,15 @@ async def run_media_worker(settings: Settings) -> None:
         thread_limit=settings.storage_thread_limit,
         operation_timeout_seconds=settings.storage_operation_timeout_seconds,
     )
-    probe = FfprobeMediaProbe(timeout_seconds=settings.media_probe_timeout_seconds)
+    probe = RoutingMediaProbe(
+        media_probe=FfprobeMediaProbe(
+            timeout_seconds=settings.media_probe_timeout_seconds
+        ),
+        document_probe=Utf8DocumentProbe(
+            max_bytes=settings.script_document_max_bytes,
+            max_codepoints=settings.script_document_max_codepoints,
+        ),
+    )
     connection = await aio_pika.connect_robust(settings.rabbitmq_url, timeout=3)
     try:
         channel = await connection.channel()

@@ -50,6 +50,7 @@ import {
 
 import { EpisodeLifecycleCard } from "./episode-lifecycle-card";
 import { ProjectLifecyclePanel } from "./project-lifecycle-panel";
+import { ScriptDocumentImportCard } from "./script-document-import-card";
 
 const stageLabels: Record<API.ProjectProductionSnapshot["current_stage"], string> = {
   project_setup: "项目设置",
@@ -159,6 +160,8 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
     (total, episode) => total + (episode.task_summary.running ?? 0),
     0,
   ) ?? 0;
+  const canWrite =
+    project?.status === "active" && me.data?.workspace.role !== "viewer";
 
   async function handleCreate(request: API.EpisodeCreateRequest): Promise<boolean> {
     setActionError(null);
@@ -247,6 +250,14 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                 { label: "进行中任务", value: runningTasks },
               ]}
               label="项目生产摘要"
+            />
+
+            <ScriptDocumentImportCard
+              canWrite={canWrite}
+              language={project.language}
+              projectId={project.id}
+              projectName={project.name}
+              workspaceId={project.workspace_id}
             />
 
             {actionError ? (

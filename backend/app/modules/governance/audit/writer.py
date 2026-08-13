@@ -80,6 +80,16 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
     "script.version_created": frozenset(
         {"source_id", "episode_id", "version_no", "status"}
     ),
+    "script.document_imported": frozenset(
+        {
+            "document_id",
+            "project_id",
+            "source_type",
+            "analysis_status",
+            "block_count",
+            "issue_count",
+        }
+    ),
     "script.version_published": frozenset(
         {
             "source_id",

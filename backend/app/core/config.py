@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     media_upload_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     media_access_ttl_seconds: int = Field(default=300, ge=30, le=900)
     media_probe_timeout_seconds: int = Field(default=120, ge=5, le=600)
+    script_document_max_bytes: int = Field(default=400_000, ge=1, le=4_000_000)
+    script_document_max_codepoints: int = Field(default=100_000, ge=1, le=1_000_000)
     media_cleanup_interval_seconds: int = Field(default=3600, ge=60, le=86400)
     media_cleanup_batch_size: int = Field(default=100, ge=1, le=500)
     media_location_rollback_seconds: int = Field(

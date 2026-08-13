@@ -24,7 +24,9 @@ StorageResultLabel = Literal[
     "failed",
     "unregistered",
 ]
-MediaKindLabel = Literal["image", "video", "audio", "subtitle", "unregistered"]
+MediaKindLabel = Literal[
+    "image", "video", "audio", "subtitle", "document", "unregistered"
+]
 MediaProbeResultLabel = Literal[
     "succeeded",
     "probe_timeout",
@@ -32,6 +34,11 @@ MediaProbeResultLabel = Literal[
     "unsupported_media",
     "invalid_probe_output",
     "invalid_image_metadata",
+    "unsupported_document_mime",
+    "document_too_large",
+    "document_not_utf8",
+    "utf8_bom_not_allowed",
+    "empty_document",
     "cancelled",
     "failed",
     "unregistered",
@@ -60,7 +67,9 @@ REGISTERED_STORAGE_RESULTS = frozenset(
         "failed",
     }
 )
-REGISTERED_MEDIA_KINDS = frozenset({"image", "video", "audio", "subtitle"})
+REGISTERED_MEDIA_KINDS = frozenset(
+    {"image", "video", "audio", "subtitle", "document"}
+)
 REGISTERED_MEDIA_PROBE_RESULTS = frozenset(
     {
         "succeeded",
@@ -68,6 +77,11 @@ REGISTERED_MEDIA_PROBE_RESULTS = frozenset(
         "probe_tool_unavailable",
         "unsupported_media",
         "invalid_probe_output",
+        "unsupported_document_mime",
+        "document_too_large",
+        "document_not_utf8",
+        "utf8_bom_not_allowed",
+        "empty_document",
         "invalid_image_metadata",
         "cancelled",
         "failed",

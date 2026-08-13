@@ -206,6 +206,10 @@ declare namespace API {
     data: PaginatedSchedules;
   };
 
+  type ApiResponsePaginatedScriptDocuments_ = {
+    data: PaginatedScriptDocuments;
+  };
+
   type ApiResponsePaginatedScriptSources_ = {
     data: PaginatedScriptSources;
   };
@@ -244,6 +248,10 @@ declare namespace API {
 
   type ApiResponseScheduleResponse_ = {
     data: ScheduleResponse;
+  };
+
+  type ApiResponseScriptDocumentAnalysisResponse_ = {
+    data: ScriptDocumentAnalysisResponse;
   };
 
   type ApiResponseScriptImportResponse_ = {
@@ -346,7 +354,7 @@ declare namespace API {
     /** Workspace Id */
     workspace_id: string;
     /** Kind */
-    kind: "image" | "video" | "audio" | "subtitle" | "delivery";
+    kind: "image" | "video" | "audio" | "subtitle" | "delivery" | "document";
     /** Filename */
     filename: string;
     /** Size Bytes */
@@ -1299,6 +1307,43 @@ declare namespace API {
     other_version_id: string;
   };
 
+  type DocumentRevisionResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Document Id */
+    document_id: string;
+    /** Version No */
+    version_no: number;
+    /** Source Type */
+    source_type: "text" | "media";
+    /** Source Media Version Id */
+    source_media_version_id: string | null;
+    /** Raw Text */
+    raw_text: string;
+    /** Raw Hash */
+    raw_hash: string;
+    /** Normalized Text */
+    normalized_text: string;
+    /** Normalized Hash */
+    normalized_hash: string;
+    /** Normalizer Version */
+    normalizer_version: string;
+    /** Normalization Map */
+    normalization_map: Record<string, any>;
+    /** Codepoint Count */
+    codepoint_count: number;
+    /** Analysis Status */
+    analysis_status: "deterministic" | "ai_candidate_required" | "rejected";
+    /** Analyzer Version */
+    analyzer_version: string;
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
+  };
+
   type DownstreamEvidenceResponse = {
     /** Generation Request Ids */
     generation_request_ids: string[] | null;
@@ -1475,6 +1520,31 @@ declare namespace API {
     revision: number;
     /** Created At */
     created_at: string;
+  };
+
+  type FormatIssueResponse = {
+    /** Id */
+    id: string;
+    /** Document Revision Id */
+    document_revision_id: string;
+    /** Position */
+    position: number;
+    /** Code */
+    code: string;
+    /** Severity */
+    severity: "warning" | "blocking";
+    /** Source Start */
+    source_start: number;
+    /** Source End */
+    source_end: number;
+    /** Line Number */
+    line_number: number;
+    /** Column Number */
+    column_number: number;
+    /** Next Action */
+    next_action: string;
+    /** Details */
+    details: Record<string, any>;
   };
 
   type GenerationBlocker = {
@@ -1684,6 +1754,10 @@ declare namespace API {
     version_id: string | null | null;
   };
 
+  type getRevisionApiV1DocumentRevisionsRevisionIdGetParams = {
+    revision_id: string;
+  };
+
   type getShotApiV1ShotsShotIdGetParams = {
     shot_id: string;
   };
@@ -1721,6 +1795,10 @@ declare namespace API {
   type IgnoreDecision = {
     /** Action */
     action: "ignore";
+  };
+
+  type importDocumentApiV1ProjectsProjectIdScriptImportsPostParams = {
+    project_id: string;
   };
 
   type importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPostParams = {
@@ -1798,6 +1876,12 @@ declare namespace API {
     offset: number | null;
   };
 
+  type listDocumentsApiV1ProjectsProjectIdScriptDocumentsGetParams = {
+    project_id: string;
+    limit: number | null | null;
+    offset: number | null;
+  };
+
   type listEpisodesApiV1ProjectsProjectIdEpisodesGetParams = {
     project_id: string;
     include_archived: boolean | null;
@@ -1828,7 +1912,15 @@ declare namespace API {
 
   type listMediaApiV1MediaGetParams = {
     workspace_id: string;
-    kind: "image" | "video" | "audio" | "subtitle" | "delivery" | null | null;
+    kind:
+      | "image"
+      | "video"
+      | "audio"
+      | "subtitle"
+      | "delivery"
+      | "document"
+      | null
+      | null;
     source_type: "upload" | "generated" | "rendered" | null | null;
     include_archived: boolean | null;
     created_from: string | null | null;
@@ -1999,7 +2091,7 @@ declare namespace API {
     /** Workspace Id */
     workspace_id: string;
     /** Kind */
-    kind: "image" | "video" | "audio" | "subtitle" | "delivery";
+    kind: "image" | "video" | "audio" | "subtitle" | "delivery" | "document";
     /** Source Type */
     source_type: "upload" | "generated" | "rendered";
     /** Status */
@@ -2040,7 +2132,13 @@ declare namespace API {
     /** Media Object Id */
     media_object_id: string;
     /** Media Object Kind */
-    media_object_kind: "image" | "video" | "audio" | "subtitle" | "delivery";
+    media_object_kind:
+      | "image"
+      | "video"
+      | "audio"
+      | "subtitle"
+      | "delivery"
+      | "document";
     /** Media Object Source Type */
     media_object_source_type: "upload" | "generated" | "rendered";
     /** Media Object Status */
@@ -2140,6 +2238,32 @@ declare namespace API {
     status: "active" | "inactive" | "unavailable";
     /** Unavailable Reason */
     unavailable_reason: string | null;
+  };
+
+  type NarrativeBlockResponse = {
+    /** Id */
+    id: string;
+    /** Document Revision Id */
+    document_revision_id: string;
+    /** Position */
+    position: number;
+    /** Kind */
+    kind:
+      | "preamble"
+      | "episode_marker"
+      | "scene_heading"
+      | "dialogue"
+      | "narration"
+      | "action"
+      | "separator";
+    /** Source Start */
+    source_start: number;
+    /** Source End */
+    source_end: number;
+    /** Text Hash */
+    text_hash: string;
+    /** Metadata */
+    metadata: Record<string, any>;
   };
 
   type NarrativeSpec = {
@@ -2260,6 +2384,17 @@ declare namespace API {
   type PaginatedSchedules = {
     /** Items */
     items: ScheduleResponse[];
+    /** Total */
+    total: number;
+    /** Limit */
+    limit: number;
+    /** Offset */
+    offset: number;
+  };
+
+  type PaginatedScriptDocuments = {
+    /** Items */
+    items: ScriptDocumentResponse[];
     /** Total */
     total: number;
     /** Limit */
@@ -2749,6 +2884,59 @@ declare namespace API {
     expected_revision: number;
     /** Idempotency Key */
     idempotency_key: string;
+  };
+
+  type ScriptDocumentAnalysisResponse = {
+    document: ScriptDocumentResponse;
+    revision: DocumentRevisionResponse;
+    /** Blocks */
+    blocks: NarrativeBlockResponse[];
+    /** Issues */
+    issues: FormatIssueResponse[];
+  };
+
+  type ScriptDocumentImportRequest = {
+    /** Input Type */
+    input_type: "text" | "media";
+    /** Title */
+    title: string;
+    /** Text */
+    text: string | null | null;
+    /** Media Version Id */
+    media_version_id: string | null | null;
+    /** Language */
+    language: string;
+    /** Rights Declaration */
+    rights_declaration: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type ScriptDocumentResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Project Id */
+    project_id: string;
+    /** Title */
+    title: string;
+    /** Source Type */
+    source_type: "text" | "media";
+    /** Source Media Version Id */
+    source_media_version_id: string | null;
+    /** Language */
+    language: string;
+    /** Rights Declaration */
+    rights_declaration: string;
+    /** Status */
+    status: "active" | "archived";
+    /** Revision */
+    revision: number;
+    /** Created By */
+    created_by: string;
+    /** Created At */
+    created_at: string;
   };
 
   type ScriptExtractionRequest = {
@@ -3475,7 +3663,7 @@ declare namespace API {
     /** Workspace Id */
     workspace_id: string;
     /** Kind */
-    kind: "image" | "video" | "audio" | "subtitle" | "delivery";
+    kind: "image" | "video" | "audio" | "subtitle" | "delivery" | "document";
     /** Filename */
     filename: string;
     /** Size Bytes */
@@ -3503,7 +3691,7 @@ declare namespace API {
     /** Status */
     status: "pending" | "completed" | "expired" | "failed";
     /** Kind */
-    kind: "image" | "video" | "audio" | "subtitle" | "delivery";
+    kind: "image" | "video" | "audio" | "subtitle" | "delivery" | "document";
     /** Filename */
     filename: string;
     /** Size Bytes */

@@ -26,6 +26,230 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+class ScriptDocument(Base):
+    __tablename__ = "scr_script_documents"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_id", "workspace_id"],
+            ["prj_projects.id", "prj_projects.workspace_id"],
+            name="fk_scr_document_project_workspace",
+        ),
+        ForeignKeyConstraint(
+            ["source_media_version_id", "workspace_id"],
+            ["med_media_versions.id", "med_media_versions.workspace_id"],
+            name="fk_scr_document_media_workspace",
+        ),
+        CheckConstraint(
+            "source_type IN ('text', 'media')",
+            name="ck_scr_document_source_type",
+        ),
+        CheckConstraint(
+            "(source_type = 'text' AND source_media_version_id IS NULL) OR "
+            "(source_type = 'media' AND source_media_version_id IS NOT NULL)",
+            name="ck_scr_document_source_reference",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'archived')", name="ck_scr_document_status"
+        ),
+        CheckConstraint("revision >= 1", name="ck_scr_document_revision"),
+        UniqueConstraint("id", "workspace_id", name="uq_scr_document_id_workspace"),
+        UniqueConstraint(
+            "project_id",
+            "idempotency_key",
+            name="uq_scr_document_project_idempotency",
+        ),
+        Index(
+            "ix_scr_document_project_status_created",
+            "project_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    project_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    title: Mapped[str] = mapped_column(String(120))
+    source_type: Mapped[str] = mapped_column(String(20))
+    source_media_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    language: Mapped[str] = mapped_column(String(35))
+    rights_declaration: Mapped[str] = mapped_column(Text)
+    input_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    idempotency_key: Mapped[str] = mapped_column(String(200))
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
+class DocumentRevision(Base):
+    __tablename__ = "scr_document_revisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["document_id", "workspace_id"],
+            ["scr_script_documents.id", "scr_script_documents.workspace_id"],
+            name="fk_scr_document_revision_document_workspace",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["source_media_version_id", "workspace_id"],
+            ["med_media_versions.id", "med_media_versions.workspace_id"],
+            name="fk_scr_document_revision_media_workspace",
+        ),
+        CheckConstraint("version_no >= 1", name="ck_scr_document_revision_number"),
+        CheckConstraint(
+            "source_type IN ('text', 'media')",
+            name="ck_scr_document_revision_source_type",
+        ),
+        CheckConstraint(
+            "(source_type = 'text' AND source_media_version_id IS NULL) OR "
+            "(source_type = 'media' AND source_media_version_id IS NOT NULL)",
+            name="ck_scr_document_revision_source_reference",
+        ),
+        CheckConstraint(
+            "analysis_status IN ('deterministic', 'ai_candidate_required', 'rejected')",
+            name="ck_scr_document_revision_analysis_status",
+        ),
+        CheckConstraint(
+            "codepoint_count >= 1", name="ck_scr_document_revision_codepoints"
+        ),
+        UniqueConstraint(
+            "id", "workspace_id", name="uq_scr_document_revision_id_workspace"
+        ),
+        UniqueConstraint(
+            "document_id",
+            "version_no",
+            name="uq_scr_document_revision_number",
+        ),
+        Index("ix_scr_document_revision_raw_hash", "raw_hash"),
+        Index(
+            "ix_scr_document_revision_document_created",
+            "document_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    document_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    version_no: Mapped[int] = mapped_column(Integer)
+    source_type: Mapped[str] = mapped_column(String(20))
+    source_media_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    raw_text: Mapped[str] = mapped_column(Text)
+    raw_hash: Mapped[str] = mapped_column(String(64))
+    normalized_text: Mapped[str] = mapped_column(Text)
+    normalized_hash: Mapped[str] = mapped_column(String(64))
+    normalizer_version: Mapped[str] = mapped_column(String(80))
+    normalization_map: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    codepoint_count: Mapped[int] = mapped_column(Integer)
+    analysis_status: Mapped[str] = mapped_column(String(30))
+    analyzer_version: Mapped[str] = mapped_column(String(80))
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
+class NarrativeBlock(Base):
+    __tablename__ = "scr_narrative_blocks"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["document_revision_id", "workspace_id"],
+            ["scr_document_revisions.id", "scr_document_revisions.workspace_id"],
+            name="fk_scr_narrative_block_revision_workspace",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("position >= 1", name="ck_scr_narrative_block_position"),
+        CheckConstraint(
+            "kind IN ('preamble', 'episode_marker', 'scene_heading', 'dialogue', "
+            "'narration', 'action', 'separator')",
+            name="ck_scr_narrative_block_kind",
+        ),
+        CheckConstraint(
+            "source_start >= 0", name="ck_scr_narrative_block_source_start"
+        ),
+        CheckConstraint(
+            "source_end > source_start", name="ck_scr_narrative_block_source_range"
+        ),
+        UniqueConstraint(
+            "id", "workspace_id", name="uq_scr_narrative_block_id_workspace"
+        ),
+        UniqueConstraint(
+            "document_revision_id",
+            "position",
+            name="uq_scr_narrative_block_revision_position",
+        ),
+        Index(
+            "ix_scr_narrative_block_revision_range",
+            "document_revision_id",
+            "source_start",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    document_revision_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    position: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(30))
+    source_start: Mapped[int] = mapped_column(Integer)
+    source_end: Mapped[int] = mapped_column(Integer)
+    text_hash: Mapped[str] = mapped_column(String(64))
+    block_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
+class FormatIssue(Base):
+    __tablename__ = "scr_format_issues"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["document_revision_id", "workspace_id"],
+            ["scr_document_revisions.id", "scr_document_revisions.workspace_id"],
+            name="fk_scr_format_issue_revision_workspace",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("position >= 1", name="ck_scr_format_issue_position"),
+        CheckConstraint(
+            "severity IN ('warning', 'blocking')",
+            name="ck_scr_format_issue_severity",
+        ),
+        CheckConstraint("source_start >= 0", name="ck_scr_format_issue_source_start"),
+        CheckConstraint(
+            "source_end > source_start", name="ck_scr_format_issue_source_range"
+        ),
+        CheckConstraint("line_number >= 1", name="ck_scr_format_issue_line"),
+        CheckConstraint("column_number >= 1", name="ck_scr_format_issue_column"),
+        UniqueConstraint(
+            "id", "workspace_id", name="uq_scr_format_issue_id_workspace"
+        ),
+        UniqueConstraint(
+            "document_revision_id",
+            "position",
+            name="uq_scr_format_issue_revision_position",
+        ),
+        Index(
+            "ix_scr_format_issue_revision_severity",
+            "document_revision_id",
+            "severity",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    document_revision_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    position: Mapped[int] = mapped_column(Integer)
+    code: Mapped[str] = mapped_column(String(80))
+    severity: Mapped[str] = mapped_column(String(20))
+    source_start: Mapped[int] = mapped_column(Integer)
+    source_end: Mapped[int] = mapped_column(Integer)
+    line_number: Mapped[int] = mapped_column(Integer)
+    column_number: Mapped[int] = mapped_column(Integer)
+    next_action: Mapped[str] = mapped_column(String(100))
+    issue_details: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
 class ScriptSource(Base):
     __tablename__ = "scr_script_sources"
     __table_args__ = (

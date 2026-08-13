@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.production.contracts import TaskResponse
 
-MediaKind = Literal["image", "video", "audio", "subtitle", "delivery"]
+MediaKind = Literal["image", "video", "audio", "subtitle", "delivery", "document"]
 MediaSource = Literal["upload", "generated", "rendered"]
 ProbeStatus = Literal["pending", "ready", "failed", "quarantined"]
 

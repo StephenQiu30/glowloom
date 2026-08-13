@@ -29,7 +29,7 @@ class MediaObject(Base):
     __tablename__ = "med_media_objects"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('image', 'video', 'audio', 'subtitle', 'delivery')",
+            "kind IN ('image', 'video', 'audio', 'subtitle', 'delivery', 'document')",
             name="ck_med_media_object_kind",
         ),
         CheckConstraint(
@@ -183,7 +183,8 @@ class UploadSession(Base):
     __tablename__ = "med_upload_sessions"
     __table_args__ = (
         CheckConstraint(
-            "declared_kind IN ('image', 'video', 'audio', 'subtitle', 'delivery')",
+            "declared_kind IN "
+            "('image', 'video', 'audio', 'subtitle', 'delivery', 'document')",
             name="ck_med_upload_kind",
         ),
         CheckConstraint(
