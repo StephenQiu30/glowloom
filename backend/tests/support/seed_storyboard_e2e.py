@@ -16,6 +16,7 @@ from app.model_registry import register_implemented_models
 from app.modules.assets.models import Asset, AssetState
 from app.modules.identity.models import Membership
 from app.modules.production.models import Task
+from app.modules.projects import resolve_episode_content_context
 from app.modules.projects.models import Episode
 from app.modules.scripts.models import (
     CandidateDecision,
@@ -26,6 +27,7 @@ from app.modules.scripts.models import (
     ScriptSource,
     ScriptVersion,
 )
+from app.modules.scripts.narratives.service import ensure_structure
 
 
 def _validated_database_url() -> str:
@@ -266,6 +268,23 @@ async def seed_confirmed_structure(episode_id: UUID) -> None:
             )
             episode.current_script_version_id = confirmed_version_id
             episode.revision += 1
+            await session.flush()
+            source = await session.get(ScriptSource, source_id)
+            confirmed_version = await session.get(ScriptVersion, confirmed_version_id)
+            episode_context = await resolve_episode_content_context(
+                session,
+                episode.workspace_id,
+                episode.id,
+            )
+            if source is None or confirmed_version is None or episode_context is None:
+                raise RuntimeError("confirmed script narrative context is unavailable")
+            await ensure_structure(
+                session,
+                version=confirmed_version,
+                source=source,
+                episode=episode_context,
+                actor_id=actor_id,
+            )
     finally:
         await engine.dispose()
 
