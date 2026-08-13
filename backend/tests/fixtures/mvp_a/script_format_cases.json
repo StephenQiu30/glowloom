@@ -1,0 +1,146 @@
+[
+  {
+    "fixture_id": "mvp-a-format-explicit-five-001",
+    "description": "synthetic：五种受支持的独占行集标记应确定性识别",
+    "input_text": "第一集\n场景1：合成大厅，日\n甲：测试开始。\n\n第２集\n场景2：合成走廊，夜\n乙：继续。\n\n第三话\n场景3：合成庭院，日\n甲：确认。\n\nEP4\n场景4：合成仓库，夜\n乙：记录。\n\nEPISODE 5\n场景5：合成天台，日\n甲：结束。",
+    "expected_analysis": "deterministic",
+    "expected_markers": [
+      {
+        "episode_number": 1,
+        "marker_text": "第一集",
+        "line_number": 1,
+        "start_codepoint": 0,
+        "end_codepoint": 3
+      },
+      {
+        "episode_number": 2,
+        "marker_text": "第２集",
+        "line_number": 5,
+        "start_codepoint": 24,
+        "end_codepoint": 27
+      },
+      {
+        "episode_number": 3,
+        "marker_text": "第三话",
+        "line_number": 9,
+        "start_codepoint": 46,
+        "end_codepoint": 49
+      },
+      {
+        "episode_number": 4,
+        "marker_text": "EP4",
+        "line_number": 13,
+        "start_codepoint": 68,
+        "end_codepoint": 71
+      },
+      {
+        "episode_number": 5,
+        "marker_text": "EPISODE 5",
+        "line_number": 17,
+        "start_codepoint": 90,
+        "end_codepoint": 99
+      }
+    ],
+    "expected_problem_kinds": []
+  },
+  {
+    "fixture_id": "mvp-a-format-number-gap-001",
+    "description": "synthetic：第一集后直接出现第三集必须拒绝",
+    "input_text": "第一集\n合成片段甲。\n\n第三集\n合成片段乙。",
+    "expected_analysis": "rejected",
+    "expected_markers": [
+      {
+        "episode_number": 1,
+        "marker_text": "第一集",
+        "line_number": 1,
+        "start_codepoint": 0,
+        "end_codepoint": 3
+      },
+      {
+        "episode_number": 3,
+        "marker_text": "第三集",
+        "line_number": 4,
+        "start_codepoint": 12,
+        "end_codepoint": 15
+      }
+    ],
+    "expected_problem_kinds": ["number_gap"]
+  },
+  {
+    "fixture_id": "mvp-a-format-duplicate-number-001",
+    "description": "synthetic：重复第一集必须拒绝",
+    "input_text": "第一集\n合成片段甲。\n\n第一集\n合成片段乙。",
+    "expected_analysis": "rejected",
+    "expected_markers": [
+      {
+        "episode_number": 1,
+        "marker_text": "第一集",
+        "line_number": 1,
+        "start_codepoint": 0,
+        "end_codepoint": 3
+      },
+      {
+        "episode_number": 1,
+        "marker_text": "第一集",
+        "line_number": 4,
+        "start_codepoint": 12,
+        "end_codepoint": 15
+      }
+    ],
+    "expected_problem_kinds": ["duplicate_number"]
+  },
+  {
+    "fixture_id": "mvp-a-format-empty-episode-001",
+    "description": "synthetic：相邻标记造成空集必须拒绝",
+    "input_text": "第一集\n\n第二集\n合成片段乙。",
+    "expected_analysis": "rejected",
+    "expected_markers": [
+      {
+        "episode_number": 1,
+        "marker_text": "第一集",
+        "line_number": 1,
+        "start_codepoint": 0,
+        "end_codepoint": 3
+      },
+      {
+        "episode_number": 2,
+        "marker_text": "第二集",
+        "line_number": 3,
+        "start_codepoint": 5,
+        "end_codepoint": 8
+      }
+    ],
+    "expected_problem_kinds": ["empty_episode"]
+  },
+  {
+    "fixture_id": "mvp-a-format-no-marker-001",
+    "description": "synthetic：正文内出现集号字样不能误切，无独占行标记时只允许进入 AI 候选",
+    "input_text": "合成资料中写着“第一集结束后再复盘”，这不是独占一行的集标记。\n场景：合成控制室，日。\n甲：继续分析。",
+    "expected_analysis": "ai_candidate_required",
+    "expected_markers": [],
+    "expected_problem_kinds": ["no_marker"]
+  },
+  {
+    "fixture_id": "mvp-a-format-unicode-codepoint-001",
+    "description": "synthetic：扩展汉字和 Emoji 之前的范围必须按 Unicode code point 计算",
+    "input_text": "第一集\n𠮷号演员拿起道具🧭。\n\n第二集\n合成人物乙回应：“收到。”",
+    "expected_analysis": "deterministic",
+    "expected_markers": [
+      {
+        "episode_number": 1,
+        "marker_text": "第一集",
+        "line_number": 1,
+        "start_codepoint": 0,
+        "end_codepoint": 3
+      },
+      {
+        "episode_number": 2,
+        "marker_text": "第二集",
+        "line_number": 4,
+        "start_codepoint": 16,
+        "end_codepoint": 19
+      }
+    ],
+    "expected_problem_kinds": []
+  }
+]
