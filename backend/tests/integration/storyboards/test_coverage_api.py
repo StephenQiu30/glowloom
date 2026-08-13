@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Any, cast
 from uuid import UUID
 
@@ -53,6 +54,33 @@ def _full_reference(unit: dict[str, Any], *, role: str = "primary") -> dict[str,
         "segment_end": None,
         "contribution": "required",
     }
+
+
+def _split_spec(
+    refs: dict[str, UUID],
+    *,
+    purpose: str,
+    duration_ms: int,
+    include_dialogue: bool,
+    beat_key: str,
+) -> dict[str, object]:
+    spec = deepcopy(shot_spec_payload(refs, purpose=purpose))
+    spec["duration_ms"] = duration_ms
+    spec["action_beats"] = [
+        {
+            "beat_key": beat_key,
+            "order": 1,
+            "description": (
+                "林澈停下脚步" if beat_key == "pause" else "林澈观察异常灯箱"
+            ),
+        }
+    ]
+    if not include_dialogue:
+        script_reference = dict(cast(dict[str, object], spec["script_reference"]))
+        script_reference["dialogue_ids"] = []
+        spec["script_reference"] = script_reference
+        spec["dialogue_or_narration"] = []
+    return spec
 
 
 async def _replace_references(
@@ -319,6 +347,33 @@ async def test_omission_and_invented_approvals_are_append_only_and_become_stale(
     assert report["summary"]["approved_invented"] == 1
     assert report["summary"]["orphan"] == 0
 
+    changed_invented_spec = shot_spec_payload(
+        refs,
+        purpose="修改创作性过渡镜头的规格",
+    )
+    cast(dict[str, object], changed_invented_spec["visual"])[
+        "subject_placements"
+    ] = []
+    changed_invented_spec["dialogue_or_narration"] = []
+    changed_invented = await client.post(
+        f"/api/v1/shots/{invented_shot['id']}/spec-versions",
+        headers=headers,
+        json={
+            "expected_current_spec_version_id": invented_spec["id"],
+            "spec": changed_invented_spec,
+            "asset_references": [],
+        },
+    )
+    assert changed_invented.status_code == 201
+    report = (
+        await client.get(
+            f"/api/v1/episodes/{episode['id']}/coverage",
+            headers=headers,
+        )
+    ).json()["data"]
+    assert report["summary"]["stale"] == 2
+    assert report["summary"]["approved_invented"] == 0
+
     changed_references = references.copy()
     changed_references[0] = changed_references[0] | {"role": "supporting"}
     changed = await _replace_references(
@@ -404,3 +459,139 @@ async def test_mapping_rejects_stale_cas_and_cross_episode_unit(
     )
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "version_conflict"
+
+
+@pytest.mark.asyncio
+async def test_split_rejects_narrative_loss_then_preserves_the_exact_partition(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await create_episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="coverage-split@example.com",
+    )
+    endpoint = f"/api/v1/episodes/{episode['id']}/shots"
+    created = await client.post(
+        endpoint,
+        headers=headers,
+        json=shot_creation_payload(
+            refs,
+            title="覆盖守恒来源镜头",
+            creation_key="coverage-split-source",
+        ),
+    )
+    assert created.status_code == 201
+    shot = created.json()["data"]
+    source_payload = shot_spec_payload(refs, purpose="验证拆镜覆盖守恒")
+    cast(list[dict[str, object]], source_payload["action_beats"]).append(
+        {"beat_key": "observe", "order": 2, "description": "林澈观察异常灯箱"}
+    )
+    saved = await client.post(
+        f"/api/v1/shots/{shot['id']}/spec-versions",
+        headers=headers,
+        json={
+            "expected_current_spec_version_id": None,
+            "spec": source_payload,
+            "asset_references": [],
+        },
+    )
+    assert saved.status_code == 201
+    source_spec = saved.json()["data"]["version"]
+    report = (
+        await client.get(
+            f"/api/v1/episodes/{episode['id']}/coverage",
+            headers=headers,
+        )
+    ).json()["data"]
+    references = [_full_reference(unit) for unit in report["units"]]
+    mapped = await _replace_references(
+        client,
+        headers=headers,
+        shot=saved.json()["data"]["shot"],
+        spec=source_spec,
+        report=report,
+        references=references,
+    )
+    assert mapped.status_code == 201, mapped.text
+    current_spec_id = mapped.json()["data"]["current_spec_version_id"]
+    order = (await client.get(endpoint, headers=headers)).json()["data"]
+    preflight_payload = {
+        "expected_source_spec_version_id": current_spec_id,
+        "expected_order_hash": order["order_hash"],
+    }
+    preflight = await client.post(
+        f"/api/v1/shots/{shot['id']}/split-preflight",
+        headers=headers,
+        json=preflight_payload,
+    )
+    assert preflight.status_code == 200
+    first_spec = _split_spec(
+        refs,
+        purpose="前半镜头",
+        duration_ms=1500,
+        include_dialogue=True,
+        beat_key="pause",
+    )
+    second_spec = _split_spec(
+        refs,
+        purpose="后半镜头",
+        duration_ms=1500,
+        include_dialogue=False,
+        beat_key="observe",
+    )
+    split_payload: dict[str, object] = {
+        **preflight_payload,
+        "impact_hash": preflight.json()["data"]["impact_hash"],
+        "idempotency_key": "coverage-split-valid",
+        "targets": [
+            {
+                "title": "前半镜头",
+                "spec": first_spec,
+                "asset_references": [],
+                "narrative_references": references[:1],
+            },
+            {
+                "title": "后半镜头",
+                "spec": second_spec,
+                "asset_references": [],
+                "narrative_references": references[1:],
+            },
+        ],
+    }
+    losing_payload = deepcopy(split_payload)
+    losing_payload["idempotency_key"] = "coverage-split-losing"
+    losing_targets = cast(list[dict[str, object]], losing_payload["targets"])
+    losing_targets[1]["narrative_references"] = references[2:]
+    rejected = await client.post(
+        f"/api/v1/shots/{shot['id']}/split",
+        headers=headers,
+        json=losing_payload,
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["error"]["details"] == {
+        "reason": "split_narrative_mismatch"
+    }
+    unchanged = await client.get(f"/api/v1/shots/{shot['id']}", headers=headers)
+    assert unchanged.json()["data"]["status"] == "active"
+
+    applied = await client.post(
+        f"/api/v1/shots/{shot['id']}/split",
+        headers=headers,
+        json=split_payload,
+    )
+    assert applied.status_code == 201, applied.text
+    result = applied.json()["data"]
+    result_report = (
+        await client.get(
+            f"/api/v1/episodes/{episode['id']}/coverage",
+            headers=headers,
+        )
+    ).json()["data"]
+    assert result_report["status"] == "ready"
+    assert {item["shot_id"] for item in result_report["references"]} == {
+        item["id"] for item in result["shots"]
+    }
+    assert sorted(
+        item["unit_version_id"] for item in result_report["references"]
+    ) == sorted(item["unit_version_id"] for item in references)

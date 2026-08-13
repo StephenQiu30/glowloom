@@ -3,6 +3,7 @@ from typing import Literal
 
 from app.modules.storyboards.schemas import (
     DialogueOrNarration,
+    NarrativeReferenceInput,
     ShotSpec,
     TargetShotSpecRequest,
 )
@@ -24,6 +25,9 @@ ConservationCode = Literal[
     "merge_action_mismatch",
     "merge_dialogue_id_mismatch",
     "merge_dialogue_mismatch",
+    "split_narrative_mismatch",
+    "merge_narrative_conflict",
+    "merge_narrative_mismatch",
 ]
 
 
@@ -223,4 +227,69 @@ def validate_merge_content(
         _raise(
             "merge_dialogue_mismatch",
             "merge dialogue content and action links must preserve every source item",
+        )
+
+
+def _narrative_signature(value: NarrativeReferenceInput) -> tuple[object, ...]:
+    return (
+        value.unit_version_id,
+        value.channel,
+        value.role,
+        value.coverage_mode,
+        value.segment_start,
+        value.segment_end,
+        value.contribution,
+    )
+
+
+def _narrative_edge_key(value: NarrativeReferenceInput) -> tuple[object, ...]:
+    return (
+        value.unit_version_id,
+        value.channel,
+        value.segment_start,
+        value.segment_end,
+    )
+
+
+def validate_split_narrative(
+    source: Sequence[NarrativeReferenceInput],
+    targets: Sequence[TargetShotSpecRequest],
+) -> None:
+    source_signatures = {_narrative_signature(value) for value in source}
+    target_signatures = [
+        _narrative_signature(value)
+        for target in targets
+        for value in target.narrative_references
+    ]
+    if len(set(target_signatures)) != len(target_signatures) or set(
+        target_signatures
+    ) != source_signatures:
+        _raise(
+            "split_narrative_mismatch",
+            "split narrative references must form one exact source partition",
+        )
+
+
+def validate_merge_narrative(
+    sources: Sequence[Sequence[NarrativeReferenceInput]],
+    target: TargetShotSpecRequest,
+) -> None:
+    source_signatures = [
+        _narrative_signature(value) for source in sources for value in source
+    ]
+    source_edges = [
+        _narrative_edge_key(value) for source in sources for value in source
+    ]
+    if len(set(source_edges)) != len(source_edges):
+        _raise(
+            "merge_narrative_conflict",
+            "merge sources contain conflicting narrative references",
+        )
+    target_signatures = {
+        _narrative_signature(value) for value in target.narrative_references
+    }
+    if target_signatures != set(source_signatures):
+        _raise(
+            "merge_narrative_mismatch",
+            "merge target must preserve every source narrative reference",
         )

@@ -213,6 +213,25 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
     "shot.current_spec_changed": frozenset(
         {"episode_id", "revision", "previous_version_id", "current_version_id"}
     ),
+    "shot.narrative_references_replaced": frozenset(
+        {
+            "shot_id",
+            "episode_id",
+            "previous_spec_version_id",
+            "reference_count",
+            "shot_revision",
+        }
+    ),
+    "storyboard.coverage_decided": frozenset(
+        {
+            "episode_id",
+            "sequence",
+            "decision_action",
+            "unit_version_id",
+            "shot_spec_version_id",
+            "basis_hash",
+        }
+    ),
     "storyboard.draft_batch_created": frozenset(
         {"episode_id", "input_hash", "task_id", "revision"}
     ),

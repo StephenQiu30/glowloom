@@ -13,6 +13,7 @@ from uuid6 import uuid7
 
 from app.modules.assets.models import AssetVersion
 from app.modules.projects.models import Episode
+from app.modules.scripts import resolve_storyboard_narrative
 from app.modules.scripts.models import (
     CandidateDecision,
     Dialogue,
@@ -23,6 +24,7 @@ from app.modules.scripts.models import (
     ScriptVersion,
 )
 from app.modules.scripts.narratives.service import record_current_impact
+from app.modules.storyboards.coverage.models import ShotNarrativeReference
 from app.modules.storyboards.hashing import storyboard_content_hashes
 from app.modules.storyboards.models import AssetReference, Shot, ShotSpecVersion
 from app.modules.storyboards.schemas import AssetReferenceRequest, ShotSpec
@@ -414,9 +416,16 @@ async def _seed_ready_storyboard_shots(
     async with session_factory() as session, session.begin():
         asset_version = await session.get(AssetVersion, location_version_id)
         assert asset_version is not None
+        narrative = await resolve_storyboard_narrative(
+            session,
+            refs["workspace_id"],
+            refs["script_version_id"],
+        )
+        assert narrative is not None
         shots: list[Shot] = []
         versions: list[ShotSpecVersion] = []
         references: list[AssetReference] = []
+        narrative_references: list[ShotNarrativeReference] = []
         for position in range(1, count + 1):
             shot_id = uuid7()
             spec_version_id = uuid7()
@@ -464,11 +473,83 @@ async def _seed_ready_storyboard_shots(
                     subject_key=None,
                 )
             )
+            selected_units = narrative.units if position == 1 else narrative.units[:1]
+            for unit in selected_units:
+                narrative_references.append(
+                    ShotNarrativeReference(
+                        id=uuid7(),
+                        workspace_id=refs["workspace_id"],
+                        episode_id=refs["episode_id"],
+                        shot_id=shot_id,
+                        shot_spec_version_id=spec_version_id,
+                        narrative_unit_id=unit.narrative_unit_id,
+                        unit_version_id=unit.unit_version_id,
+                        channel=(
+                            "audio"
+                            if unit.kind in {"dialogue", "narration"}
+                            else "visual"
+                        ),
+                        role="primary" if position == 1 else "supporting",
+                        coverage_mode="full",
+                        segment_start=None,
+                        segment_end=None,
+                        segment_key="full",
+                        contribution=("required" if position == 1 else "supporting"),
+                        origin="human",
+                        created_by=refs["actor_id"],
+                    )
+                )
         session.add_all(shots)
         await session.flush()
         session.add_all(versions)
         await session.flush()
         session.add_all(references)
+        session.add_all(narrative_references)
+
+
+async def _map_all_units(
+    client: httpx.AsyncClient,
+    *,
+    headers: dict[str, str],
+    episode_id: str,
+    shot: dict[str, Any],
+    spec_version: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    report_response = await client.get(
+        f"/api/v1/episodes/{episode_id}/coverage",
+        headers=headers,
+    )
+    assert report_response.status_code == 200
+    report = report_response.json()["data"]
+    mapped = await client.post(
+        f"/api/v1/shots/{shot['id']}/narrative-references",
+        headers=headers,
+        json={
+            "expected_shot_revision": shot["revision"],
+            "expected_current_spec_version_id": spec_version["id"],
+            "expected_evaluation_hash": report["evaluation_hash"],
+            "references": [
+                {
+                    "unit_version_id": unit["unit_version_id"],
+                    "channel": unit["required_channel"],
+                    "role": "primary",
+                    "coverage_mode": "full",
+                    "segment_start": None,
+                    "segment_end": None,
+                    "contribution": "required",
+                }
+                for unit in report["units"]
+            ],
+        },
+    )
+    assert mapped.status_code == 201, mapped.text
+    mapped_data = mapped.json()["data"]
+    current = await client.get(
+        f"/api/v1/shot-spec-versions/{mapped_data['current_spec_version_id']}",
+        headers=headers,
+    )
+    assert current.status_code == 200
+    return mapped_data, current.json()["data"]
 
 
 async def _seed_confirmed_shot_candidate(
@@ -1223,6 +1304,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
                     beat_key="pause",
                 ),
                 "asset_references": [],
+                "narrative_references": [],
             },
             {
                 "title": "观察灯箱",
@@ -1234,6 +1316,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
                     beat_key="observe",
                 ),
                 "asset_references": [],
+                "narrative_references": [],
             },
         ],
     }
@@ -1299,6 +1382,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
                 "title": "进入并观察月台",
                 "spec": merge_target_spec,
                 "asset_references": [],
+                "narrative_references": [],
             },
         },
     )
@@ -1478,7 +1562,14 @@ async def test_readiness_is_deterministic_and_reacts_to_rights_without_mutating_
         },
     )
     assert saved_response.status_code == 201
-    spec_version = saved_response.json()["data"]["version"]
+    saved_data = saved_response.json()["data"]
+    _mapped, spec_version = await _map_all_units(
+        client,
+        headers=headers,
+        episode_id=episode["id"],
+        shot=saved_data["shot"],
+        spec_version=saved_data["version"],
+    )
 
     first_response = await client.get(
         f"/api/v1/shots/{shot['id']}/readiness",
@@ -1585,9 +1676,9 @@ async def test_batch_readiness_has_constant_query_bound(
     }
     assert all(item["status"] == "ready" for item in result["items"])
     assert len(result["evaluation_hash"]) == 64
-    # Current narrative identity and dependency hash add two batch queries;
-    # the bound must remain independent of shot count.
-    assert len(statements) <= 14, [statement.splitlines()[0] for statement in statements]
+    # Script, asset and narrative coverage dependencies are batch-loaded. The
+    # bound is intentionally fixed and must remain independent of shot count.
+    assert len(statements) <= 20, [statement.splitlines()[0] for statement in statements]
 
     snapshot_statements: list[str] = []
 
@@ -1626,7 +1717,7 @@ async def test_batch_readiness_has_constant_query_bound(
         "blocked": 0,
         "unavailable": 0,
     }
-    assert len(snapshot_statements) <= 26, [
+    assert len(snapshot_statements) <= 34, [
         statement.splitlines()[0] for statement in snapshot_statements
     ]
 
@@ -1896,7 +1987,14 @@ async def test_production_snapshot_is_stable_scoped_and_provider_agnostic(
         },
     )
     assert saved.status_code == 201
-    version = saved.json()["data"]["version"]
+    saved_data = saved.json()["data"]
+    _mapped, version = await _map_all_units(
+        client,
+        headers=headers,
+        episode_id=episode["id"],
+        shot=saved_data["shot"],
+        spec_version=saved_data["version"],
+    )
 
     from app.modules import storyboards
 

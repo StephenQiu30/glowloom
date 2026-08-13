@@ -32,12 +32,15 @@ from app.modules.scripts import (
     resolve_confirmed_structure,
     resolve_episode_confirmed_structures,
     resolve_narrative_dependencies,
+    resolve_storyboard_narrative,
 )
 from app.modules.storyboards import repository
 from app.modules.storyboards.conservation import (
     TransformConservationError,
     validate_merge_content,
+    validate_merge_narrative,
     validate_split_content,
+    validate_split_narrative,
 )
 from app.modules.storyboards.contracts import (
     AssetShotUsageSnapshot,
@@ -46,6 +49,15 @@ from app.modules.storyboards.contracts import (
     ShotProductionSnapshot,
     ShotSpecRef,
     StoryboardReferenceSummary,
+)
+from app.modules.storyboards.coverage import repository as coverage_repository
+from app.modules.storyboards.coverage.models import ShotNarrativeReference
+from app.modules.storyboards.coverage.schemas import CoverageReportResponse
+from app.modules.storyboards.coverage.service import (
+    resolve_report as resolve_coverage_report,
+)
+from app.modules.storyboards.coverage.service import (
+    unavailable_report as unavailable_coverage_report,
 )
 from app.modules.storyboards.hashing import (
     canonical_payload_hash,
@@ -71,6 +83,7 @@ from app.modules.storyboards.schemas import (
     DownstreamEvidenceResponse,
     MergePreflightRequest,
     MergeShotRequest,
+    NarrativeReferenceInput,
     PaginatedAssetShotUsages,
     ShotCreateRequest,
     ShotCurrentSpecRequest,
@@ -781,6 +794,141 @@ async def _validate_target(
         project_id=project_id,
         references=target.asset_references,
     )
+    episode = await resolve_episode_content_context(session, workspace_id, episode_id)
+    narrative = (
+        await resolve_storyboard_narrative(
+            session,
+            workspace_id,
+            episode.current_script_version_id,
+        )
+        if episode is not None and episode.current_script_version_id is not None
+        else None
+    )
+    if narrative is None:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Current narrative structure is unavailable",
+            status_code=503,
+            next_action="retry_coverage",
+        )
+    units = {unit.unit_version_id: unit for unit in narrative.units}
+    for reference in target.narrative_references:
+        unit = units.get(reference.unit_version_id)
+        if unit is None:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Narrative reference is not current for the target episode",
+                status_code=422,
+                details={"reason": "unit_version_outside_episode"},
+            )
+        if (
+            reference.segment_end is not None
+            and reference.segment_end > len(unit.exact_text)
+        ):
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Narrative segment exceeds the fixed unit text",
+                status_code=422,
+                details={"reason": "segment_out_of_range"},
+            )
+
+
+def _narrative_input(value: ShotNarrativeReference) -> NarrativeReferenceInput:
+    return NarrativeReferenceInput(
+        unit_version_id=value.unit_version_id,
+        channel=cast(Literal["visual", "audio", "both"], value.channel),
+        role=cast(
+            Literal[
+                "primary",
+                "dialogue",
+                "reaction",
+                "insert",
+                "setup",
+                "payoff",
+                "transition",
+                "supporting",
+            ],
+            value.role,
+        ),
+        coverage_mode=cast(Literal["full", "partial"], value.coverage_mode),
+        segment_start=value.segment_start,
+        segment_end=value.segment_end,
+        contribution=cast(Literal["required", "supporting"], value.contribution),
+    )
+
+
+async def _store_narrative_references(
+    session: AsyncSession,
+    *,
+    shot: Shot,
+    version: ShotSpecVersion,
+    inputs: list[NarrativeReferenceInput],
+    actor_id: UUID,
+    now: datetime,
+) -> list[ShotNarrativeReference]:
+    episode = await resolve_episode_content_context(
+        session,
+        shot.workspace_id,
+        shot.episode_id,
+    )
+    narrative = (
+        await resolve_storyboard_narrative(
+            session,
+            shot.workspace_id,
+            episode.current_script_version_id,
+        )
+        if episode is not None and episode.current_script_version_id is not None
+        else None
+    )
+    if narrative is None:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Current narrative structure is unavailable",
+            status_code=503,
+            next_action="retry_coverage",
+        )
+    units = {unit.unit_version_id: unit for unit in narrative.units}
+    missing = [
+        value.unit_version_id for value in inputs if value.unit_version_id not in units
+    ]
+    if missing:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Narrative reference is not current for the target episode",
+            status_code=422,
+            details={
+                "reason": "unit_version_outside_episode",
+                "unit_version_ids": [str(value) for value in missing],
+            },
+        )
+    stored = [
+        ShotNarrativeReference(
+            id=uuid7(),
+            workspace_id=shot.workspace_id,
+            episode_id=shot.episode_id,
+            shot_id=shot.id,
+            shot_spec_version_id=version.id,
+            narrative_unit_id=units[value.unit_version_id].narrative_unit_id,
+            unit_version_id=value.unit_version_id,
+            channel=value.channel,
+            role=value.role,
+            coverage_mode=value.coverage_mode,
+            segment_start=value.segment_start,
+            segment_end=value.segment_end,
+            segment_key=(
+                "full"
+                if value.coverage_mode == "full"
+                else f"{value.segment_start}:{value.segment_end}"
+            ),
+            contribution=value.contribution,
+            origin="human",
+            created_by=actor_id,
+            created_at=now,
+        )
+        for value in inputs
+    ]
+    session.add_all(stored)
+    return stored
 
 
 async def _create_target(
@@ -863,6 +1011,14 @@ async def _create_target(
         for reference in target.asset_references
     ]
     session.add_all(references)
+    await _store_narrative_references(
+        session,
+        shot=shot,
+        version=version,
+        inputs=target.narrative_references,
+        actor_id=actor_id,
+        now=now,
+    )
     shot.current_spec_version_id = version.id
     _append_spec_version_audit(
         session,
@@ -1196,6 +1352,10 @@ async def copy_shot(
             request.expected_source_spec_version_id,
         )
         source_references = await _references_for_spec(session, source_spec.id)
+        source_narrative_references = await coverage_repository.list_references(
+            session,
+            [source_spec.id],
+        )
         reference_requests = [
             AssetReferenceRequest(
                 slot_key=reference.slot_key,
@@ -1219,6 +1379,12 @@ async def copy_shot(
             title=request.title,
             spec=ShotSpec.model_validate(source_spec.spec),
             asset_references=reference_requests,
+            narrative_references=[
+                _narrative_input(reference).model_copy(
+                    update={"role": "supporting", "contribution": "supporting"}
+                )
+                for reference in source_narrative_references
+            ],
         )
         source_index = next(
             index for index, active_shot in enumerate(active) if active_shot.id == source.id
@@ -1360,8 +1526,16 @@ async def split_shot(
                 details={"current_impact_hash": expected_impact_hash},
             )
         source_model = ShotSpec.model_validate(source_spec.spec)
+        source_narrative_references = await coverage_repository.list_references(
+            session,
+            [source_spec.id],
+        )
         try:
             validate_split_content(source_model, request.targets)
+            validate_split_narrative(
+                [_narrative_input(value) for value in source_narrative_references],
+                request.targets,
+            )
         except TransformConservationError as error:
             raise ApiError(
                 ErrorCode.VALIDATION_FAILED,
@@ -1584,8 +1758,21 @@ async def merge_shots(
                 details={"current_impact_hash": expected_impact_hash},
             )
         source_models = [ShotSpec.model_validate(spec.spec) for spec in specs]
+        source_narrative_references = await coverage_repository.list_references(
+            session,
+            [spec.id for spec in specs],
+        )
+        narrative_by_spec: dict[UUID, list[NarrativeReferenceInput]] = defaultdict(list)
+        for reference in source_narrative_references:
+            narrative_by_spec[reference.shot_spec_version_id].append(
+                _narrative_input(reference)
+            )
         try:
             validate_merge_content(source_models, request.target)
+            validate_merge_narrative(
+                [narrative_by_spec[spec.id] for spec in specs],
+                request.target,
+            )
         except TransformConservationError as error:
             raise ApiError(
                 ErrorCode.VALIDATION_FAILED,
@@ -1764,7 +1951,10 @@ def _finalize_readiness(
 ) -> ShotReadinessResponse:
     blocking_reasons = _unique_readiness_issues(issues)
     status: Literal["ready", "blocked", "unavailable"]
-    if any(issue.code == "DEPENDENCY_UNAVAILABLE" for issue in blocking_reasons):
+    if any(
+        issue.code in {"DEPENDENCY_UNAVAILABLE", "COVERAGE_DEPENDENCY_UNAVAILABLE"}
+        for issue in blocking_reasons
+    ):
         status = "unavailable"
     elif blocking_reasons:
         status = "blocked"
@@ -1809,6 +1999,7 @@ def _evaluate_loaded_readiness(
     script_state: ScriptReadinessState,
     asset_snapshots: dict[UUID, AssetVersionReadinessReference],
     assets_unavailable: bool,
+    coverage: CoverageReportResponse,
 ) -> ShotReadinessResponse:
     if version is None:
         return _finalize_readiness(
@@ -1841,6 +2032,8 @@ def _evaluate_loaded_readiness(
                     if script_state.narrative is not None
                     else None
                 ),
+                coverage_basis_hash=coverage.basis_hash,
+                coverage_evaluation_hash=coverage.evaluation_hash,
                 scene_id=shot.source_scene_id,
                 dialogue_ids=[],
                 asset_version_ids=[],
@@ -1898,6 +2091,58 @@ def _evaluate_loaded_readiness(
                 next_action="retry_readiness",
             )
         )
+
+    if coverage.status == "unavailable":
+        issues.append(
+            ShotReadinessIssue(
+                code="COVERAGE_DEPENDENCY_UNAVAILABLE",
+                field_path="evaluated_dependencies.coverage_evaluation_hash",
+                dependency_type="COVERAGE",
+                summary="Narrative coverage dependencies are unavailable",
+                next_action="retry_coverage",
+            )
+        )
+    else:
+        shot_coverage = next(
+            (item for item in coverage.shots if item.shot_id == shot.id),
+            None,
+        )
+        stale_reference_ids = set(coverage.stale_reference_ids)
+        if any(
+            reference.id in stale_reference_ids
+            and reference.shot_id == shot.id
+            for reference in coverage.references
+        ) or coverage.stale_decision_ids:
+            issues.append(
+                ShotReadinessIssue(
+                    code="NARRATIVE_REFERENCE_INVALID",
+                    field_path="narrative_references",
+                    dependency_type="COVERAGE",
+                    summary="Narrative coverage references or decisions are stale",
+                    next_action="review_stale_coverage",
+                )
+            )
+        if coverage.summary.uncovered:
+            issues.append(
+                ShotReadinessIssue(
+                    code="COVERAGE_UNACCOUNTED",
+                    field_path="narrative_references",
+                    dependency_type="COVERAGE",
+                    summary="Required narrative units remain unaccounted",
+                    next_action="map_or_omit_narrative_units",
+                )
+            )
+        if shot_coverage is None or shot_coverage.status == "orphan":
+            issues.append(
+                ShotReadinessIssue(
+                    code="SHOT_SOURCE_ORPHAN",
+                    field_path="narrative_references",
+                    dependency_type="COVERAGE",
+                    dependency_id=version.id,
+                    summary="Shot has no current narrative source or creative approval",
+                    next_action="map_or_approve_invented_shot",
+                )
+            )
 
     if sum(reference.role == "location" for reference in references) != 1:
         issues.append(
@@ -2013,6 +2258,8 @@ def _evaluate_loaded_readiness(
         narrative_dependency_hash=(
             script_state.narrative.dependency_hash if script_state.narrative is not None else None
         ),
+        coverage_basis_hash=coverage.basis_hash,
+        coverage_evaluation_hash=coverage.evaluation_hash,
         scene_id=spec.script_reference.scene_id,
         dialogue_ids=spec.script_reference.dialogue_ids,
         asset_version_ids=[reference.asset_version_id for reference in references],
@@ -2196,6 +2443,7 @@ async def get_readiness(
         [version] if version is not None else [],
         references,
     )
+    coverage = await resolve_coverage_report(session, episode)
     return _evaluate_loaded_readiness(
         shot,
         version,
@@ -2212,6 +2460,7 @@ async def get_readiness(
         ),
         asset_snapshots=asset_snapshots,
         assets_unavailable=assets_unavailable,
+        coverage=coverage,
     )
 
 
@@ -2236,6 +2485,7 @@ async def get_episode_readiness(
         versions,
         references,
     )
+    coverage = await resolve_coverage_report(session, episode)
     items = [
         _evaluate_loaded_readiness(
             shot,
@@ -2253,6 +2503,7 @@ async def get_episode_readiness(
             ),
             asset_snapshots=asset_snapshots,
             assets_unavailable=assets_unavailable,
+            coverage=coverage,
         )
         for shot, version in rows
     ]
@@ -2327,6 +2578,18 @@ async def summarize_episode_storyboards(
         versions=versions,
         references=references,
     )
+    coverage_by_episode: dict[UUID, CoverageReportResponse] = {}
+    for episode_id in unique_episode_ids:
+        context = await resolve_episode_content_context(
+            session,
+            workspace_id,
+            episode_id,
+        )
+        coverage_by_episode[episode_id] = (
+            await resolve_coverage_report(session, context)
+            if context is not None
+            else unavailable_coverage_report(episode_id)
+        )
     items_by_episode: dict[UUID, list[ShotReadinessResponse]] = defaultdict(list)
     for shot, version in rows:
         items_by_episode[shot.episode_id].append(
@@ -2346,6 +2609,7 @@ async def summarize_episode_storyboards(
                 ),
                 asset_snapshots=asset_snapshots,
                 assets_unavailable=assets_unavailable,
+                coverage=coverage_by_episode[shot.episode_id],
             )
         )
 
@@ -2809,6 +3073,7 @@ async def get_production_snapshot(
         [version],
         references,
     )
+    coverage = await resolve_coverage_report(session, episode)
     readiness = _evaluate_loaded_readiness(
         shot,
         version,
@@ -2816,6 +3081,7 @@ async def get_production_snapshot(
         script_state=script_states[version.id],
         asset_snapshots=asset_snapshots,
         assets_unavailable=assets_unavailable,
+        coverage=coverage,
     )
     spec = ShotSpec.model_validate(version.spec)
     return ShotProductionSnapshot(

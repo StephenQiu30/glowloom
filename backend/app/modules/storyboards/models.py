@@ -70,6 +70,12 @@ class Shot(Base):
         CheckConstraint("revision >= 1", name="ck_sbd_shot_revision"),
         UniqueConstraint("id", "workspace_id", name="uq_sbd_shot_id_workspace"),
         UniqueConstraint(
+            "id",
+            "episode_id",
+            "workspace_id",
+            name="uq_sbd_shot_episode_scope",
+        ),
+        UniqueConstraint(
             "workspace_id",
             "creation_key",
             name="uq_sbd_shot_workspace_creation_key",
@@ -143,6 +149,12 @@ class ShotSpecVersion(Base):
         CheckConstraint("version_no >= 1", name="ck_sbd_spec_version_number"),
         CheckConstraint("schema_version = 1", name="ck_sbd_spec_schema_version"),
         UniqueConstraint("id", "workspace_id", name="uq_sbd_spec_id_workspace"),
+        UniqueConstraint(
+            "id",
+            "shot_id",
+            "workspace_id",
+            name="uq_sbd_spec_shot_scope",
+        ),
         UniqueConstraint("shot_id", "version_no", name="uq_sbd_spec_version_number"),
         Index("ix_sbd_spec_input_hash", "input_hash"),
     )

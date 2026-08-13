@@ -38,6 +38,17 @@ AssetRole = Literal[
     "visual_style",
     "voice",
 ]
+NarrativeChannel = Literal["visual", "audio", "both"]
+NarrativeRole = Literal[
+    "primary",
+    "dialogue",
+    "reaction",
+    "insert",
+    "setup",
+    "payoff",
+    "transition",
+    "supporting",
+]
 
 
 class CommandModel(BaseModel):
@@ -145,6 +156,29 @@ class AssetReferenceRequest(CommandModel):
     role: AssetRole
     asset_version_id: UUID
     subject_key: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class NarrativeReferenceInput(CommandModel):
+    unit_version_id: UUID
+    channel: NarrativeChannel
+    role: NarrativeRole
+    coverage_mode: Literal["full", "partial"]
+    segment_start: int | None = Field(default=None, ge=0)
+    segment_end: int | None = Field(default=None, ge=1)
+    contribution: Literal["required", "supporting"]
+
+    @model_validator(mode="after")
+    def validate_segment(self) -> "NarrativeReferenceInput":
+        if self.coverage_mode == "full":
+            if self.segment_start is not None or self.segment_end is not None:
+                raise ValueError("full coverage cannot include a segment range")
+        elif (
+            self.segment_start is None
+            or self.segment_end is None
+            or self.segment_end <= self.segment_start
+        ):
+            raise ValueError("partial coverage requires a non-empty segment range")
+        return self
 
 
 class AssetReferenceResponse(BaseModel):
@@ -269,12 +303,24 @@ class TargetShotSpecRequest(CommandModel):
     title: str = Field(min_length=1, max_length=200)
     spec: ShotSpec
     asset_references: list[AssetReferenceRequest] = Field(default=[], max_length=100)
+    narrative_references: list[NarrativeReferenceInput] = Field(max_length=100)
 
     @model_validator(mode="after")
     def validate_reference_keys(self) -> "TargetShotSpecRequest":
         keys = [reference.slot_key for reference in self.asset_references]
         if len(set(keys)) != len(keys):
             raise ValueError("asset reference slot keys must be unique")
+        narrative_keys = [
+            (
+                reference.unit_version_id,
+                reference.channel,
+                reference.segment_start,
+                reference.segment_end,
+            )
+            for reference in self.narrative_references
+        ]
+        if len(set(narrative_keys)) != len(narrative_keys):
+            raise ValueError("narrative references must be unique within a shot")
         return self
 
 
@@ -372,6 +418,10 @@ class ShotReadinessIssue(BaseModel):
         "MEDIA_REFERENCE_UNAVAILABLE",
         "RIGHTS_BLOCKED",
         "DEPENDENCY_UNAVAILABLE",
+        "NARRATIVE_REFERENCE_INVALID",
+        "COVERAGE_UNACCOUNTED",
+        "SHOT_SOURCE_ORPHAN",
+        "COVERAGE_DEPENDENCY_UNAVAILABLE",
     ]
     field_path: str | None = None
     dependency_type: str | None = None
@@ -398,6 +448,8 @@ class ShotReadinessDependencies(BaseModel):
     narrative_structure_id: UUID | None
     narrative_structure_revision: int | None
     narrative_dependency_hash: str | None
+    coverage_basis_hash: str | None
+    coverage_evaluation_hash: str | None
     scene_id: UUID
     dialogue_ids: list[UUID]
     asset_version_ids: list[UUID]

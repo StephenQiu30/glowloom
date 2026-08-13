@@ -6,9 +6,12 @@ import pytest
 from app.modules.storyboards.conservation import (
     TransformConservationError,
     validate_merge_content,
+    validate_merge_narrative,
     validate_split_content,
+    validate_split_narrative,
 )
 from app.modules.storyboards.schemas import (
+    NarrativeReferenceInput,
     ShotSpec,
     TargetShotSpecRequest,
 )
@@ -18,6 +21,8 @@ SCENE_ID = UUID("019fbe40-a000-7000-8000-000000000002")
 OTHER_SCENE_ID = UUID("019fbe40-a000-7000-8000-000000000003")
 DIALOGUE_A = UUID("019fbe40-a000-7000-8000-000000000004")
 DIALOGUE_B = UUID("019fbe40-a000-7000-8000-000000000005")
+UNIT_A = UUID("019fbe40-a000-7000-8000-000000000006")
+UNIT_B = UUID("019fbe40-a000-7000-8000-000000000007")
 
 
 def _spec(
@@ -78,7 +83,12 @@ def _spec(
 
 
 def _target(spec: ShotSpec, title: str = "目标镜头") -> TargetShotSpecRequest:
-    return TargetShotSpecRequest(title=title, spec=spec, asset_references=[])
+    return TargetShotSpecRequest(
+        title=title,
+        spec=spec,
+        asset_references=[],
+        narrative_references=[],
+    )
 
 
 def _split_targets(source: ShotSpec) -> list[TargetShotSpecRequest]:
@@ -97,6 +107,25 @@ def _split_targets(source: ShotSpec) -> list[TargetShotSpecRequest]:
     second.dialogue_or_narration = [second.dialogue_or_narration[1]]
     second.duration_ms = 1_500
     return [_target(first, "前段"), _target(second, "后段")]
+
+
+def _narrative(
+    unit_version_id: UUID,
+    *,
+    channel: str = "visual",
+    role: str = "primary",
+) -> NarrativeReferenceInput:
+    return NarrativeReferenceInput.model_validate(
+        {
+            "unit_version_id": str(unit_version_id),
+            "channel": channel,
+            "role": role,
+            "coverage_mode": "full",
+            "segment_start": None,
+            "segment_end": None,
+            "contribution": "required",
+        }
+    )
 
 
 def test_split_requires_an_ordered_exact_action_and_dialogue_partition() -> None:
@@ -126,6 +155,29 @@ def test_split_requires_an_ordered_exact_action_and_dialogue_partition() -> None
         validate_split_content(source, repeated_action)
 
 
+def test_split_requires_an_exact_narrative_reference_partition() -> None:
+    source_spec = _spec(
+        beat_prefix="source",
+        descriptions=["进入月台", "观察灯箱"],
+        dialogue_ids=[DIALOGUE_A, DIALOGUE_B],
+    )
+    source = [_narrative(UNIT_A), _narrative(UNIT_B, channel="audio")]
+    targets = _split_targets(source_spec)
+    targets[0].narrative_references = [source[0]]
+    targets[1].narrative_references = [source[1]]
+    validate_split_narrative(source, targets)
+
+    missing = deepcopy(targets)
+    missing[1].narrative_references = []
+    with pytest.raises(TransformConservationError, match="exact source partition"):
+        validate_split_narrative(source, missing)
+
+    repeated = deepcopy(targets)
+    repeated[1].narrative_references = [source[0], source[1]]
+    with pytest.raises(TransformConservationError, match="exact source partition"):
+        validate_split_narrative(source, repeated)
+
+
 def test_merge_preserves_content_and_rekeys_dialogue_beat_links() -> None:
     first = _spec(
         beat_prefix="beat",
@@ -153,6 +205,28 @@ def test_merge_preserves_content_and_rekeys_dialogue_beat_links() -> None:
     wrong_link.dialogue_or_narration[1].beat_key = "merged-1"
     with pytest.raises(TransformConservationError, match="merge dialogue content"):
         validate_merge_content([first, second], _target(wrong_link))
+
+
+def test_merge_requires_the_exact_narrative_union_and_rejects_edge_conflicts() -> None:
+    target = _target(
+        _spec(
+            beat_prefix="merged",
+            descriptions=["进入月台"],
+            dialogue_ids=[],
+        )
+    )
+    first = _narrative(UNIT_A)
+    second = _narrative(UNIT_B, channel="audio", role="dialogue")
+    target.narrative_references = [first, second]
+    validate_merge_narrative([[first], [second]], target)
+
+    target.narrative_references = [first]
+    with pytest.raises(TransformConservationError, match="preserve every source"):
+        validate_merge_narrative([[first], [second]], target)
+
+    same_edge = _narrative(UNIT_A, role="supporting")
+    with pytest.raises(TransformConservationError, match="conflicting narrative"):
+        validate_merge_narrative([[first], [same_edge]], target)
 
 
 @pytest.mark.parametrize(

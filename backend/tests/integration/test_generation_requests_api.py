@@ -99,13 +99,53 @@ async def create_ready_generation_shot(
         },
     )
     assert saved.status_code == 201
+    saved_data = saved.json()["data"]
+    report_response = await client.get(
+        f"/api/v1/episodes/{episode['id']}/coverage",
+        headers=headers,
+    )
+    assert report_response.status_code == 200
+    report = report_response.json()["data"]
+    mapped = await client.post(
+        f"/api/v1/shots/{shot['id']}/narrative-references",
+        headers=headers,
+        json={
+            "expected_shot_revision": saved_data["shot"]["revision"],
+            "expected_current_spec_version_id": saved_data["version"]["id"],
+            "expected_evaluation_hash": report["evaluation_hash"],
+            "references": [
+                {
+                    "unit_version_id": unit["unit_version_id"],
+                    "channel": unit["required_channel"],
+                    "role": "primary",
+                    "coverage_mode": "full",
+                    "segment_start": None,
+                    "segment_end": None,
+                    "contribution": "required",
+                }
+                for unit in report["units"]
+            ],
+        },
+    )
+    assert mapped.status_code == 201
+    mapped_data = mapped.json()["data"]
+    current_spec_response = await client.get(
+        f"/api/v1/shot-spec-versions/{mapped_data['current_spec_version_id']}",
+        headers=headers,
+    )
+    assert current_spec_response.status_code == 200
+    current_shot_response = await client.get(
+        f"/api/v1/shots/{shot['id']}",
+        headers=headers,
+    )
+    assert current_shot_response.status_code == 200
     return (
         headers,
         episode,
         refs,
         {
-            "shot": shot,
-            "spec_version": saved.json()["data"]["version"],
+            "shot": current_shot_response.json()["data"],
+            "spec_version": current_spec_response.json()["data"],
         },
     )
 

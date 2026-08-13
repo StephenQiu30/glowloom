@@ -31,6 +31,7 @@ NARRATIVE_REVISION = "2b7e4c9a1d63"
 ASSET_STATE_REVISION = "6c1f8d4a7e20"
 ASSET_CHANGE_REVISION = "36bf151da189"
 STORYBOARD_DRAFT_REVISION = "ecdbb9f876f8"
+STORYBOARD_COVERAGE_REVISION = "7a2d9c4e6f10"
 PROVIDER_TABLE_NAMES = {
     "prod_provider_bindings",
     "prod_provider_connections",
@@ -69,6 +70,10 @@ STORYBOARD_DRAFT_TABLE_NAMES = {
     "sbd_draft_shot_units",
     "sbd_draft_asset_refs",
     "sbd_draft_decisions",
+}
+STORYBOARD_COVERAGE_TABLE_NAMES = {
+    "sbd_narrative_references",
+    "sbd_coverage_decisions",
 }
 PROVIDER_CAPABILITY_UNIQUE = "uq_prod_capability_id_version"
 
@@ -118,7 +123,8 @@ async def test_empty_database_upgrades_to_registered_metadata_head(
     async with migration_engine.connect() as connection:
         table_names = set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
     assert table_names == {*Base.metadata.tables, "alembic_version"}
-    assert await get_database_heads(migration_engine) == (STORYBOARD_DRAFT_REVISION,)
+    assert await get_database_heads(migration_engine) == (STORYBOARD_COVERAGE_REVISION,)
+    assert STORYBOARD_COVERAGE_TABLE_NAMES <= table_names
     assert ASSET_STATE_TABLE_NAMES <= table_names
 
 
@@ -132,6 +138,82 @@ async def test_head_upgrade_rejects_stale_revision_marker(
 
     with pytest.raises(DatabaseSchemaMismatchError, match="schema differs from baseline"):
         await upgrade_database(migration_engine)
+
+
+@pytest.mark.asyncio
+async def test_storyboard_coverage_revision_upgrades_and_downgrades_cleanly(
+    migration_engine: AsyncEngine,
+) -> None:
+    await upgrade_database(migration_engine, revision=STORYBOARD_DRAFT_REVISION)
+
+    await upgrade_database(migration_engine)
+
+    async with migration_engine.connect() as connection:
+        table_names = set(
+            await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+        )
+        shot_constraints = await connection.run_sync(
+            lambda sync: {
+                item["name"]
+                for item in inspect(sync).get_unique_constraints("sbd_shots")
+            }
+        )
+        spec_constraints = await connection.run_sync(
+            lambda sync: {
+                item["name"]
+                for item in inspect(sync).get_unique_constraints(
+                    "sbd_shot_spec_versions"
+                )
+            }
+        )
+    assert STORYBOARD_COVERAGE_TABLE_NAMES <= table_names
+    assert "uq_sbd_shot_episode_scope" in shot_constraints
+    assert "uq_sbd_spec_shot_scope" in spec_constraints
+    await assert_database_matches_metadata(migration_engine)
+
+    await downgrade_database(migration_engine, STORYBOARD_DRAFT_REVISION)
+    async with migration_engine.connect() as connection:
+        downgraded_tables = set(
+            await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+        )
+    assert STORYBOARD_COVERAGE_TABLE_NAMES.isdisjoint(downgraded_tables)
+
+
+@pytest.mark.asyncio
+async def test_unversioned_storyboard_draft_schema_is_adopted_then_upgraded(
+    migration_engine: AsyncEngine,
+) -> None:
+    await _create_unversioned_revision(migration_engine, STORYBOARD_DRAFT_REVISION)
+
+    await adopt_existing_database(
+        migration_engine,
+        backup_reference="test-backup-before-coverage-adoption",
+    )
+
+    assert await get_database_heads(migration_engine) == (STORYBOARD_COVERAGE_REVISION,)
+    await assert_database_matches_metadata(migration_engine)
+
+
+@pytest.mark.asyncio
+async def test_partial_storyboard_coverage_schema_is_rejected_without_stamping(
+    migration_engine: AsyncEngine,
+) -> None:
+    await _create_unversioned_revision(migration_engine, STORYBOARD_DRAFT_REVISION)
+    async with migration_engine.begin() as connection:
+        await connection.execute(
+            text("CREATE TABLE sbd_coverage_decisions (id UUID PRIMARY KEY)")
+        )
+
+    with pytest.raises(
+        DatabaseSchemaMismatchError,
+        match="partial StoryboardCoverage schema",
+    ):
+        await adopt_existing_database(
+            migration_engine,
+            backup_reference="test-backup-before-partial-coverage-adoption",
+        )
+
+    assert await get_database_heads(migration_engine) == ()
 
 
 @pytest.mark.asyncio
@@ -569,6 +651,7 @@ async def test_baseline_revision_represents_the_historical_thirty_eight_table_sc
             - ASSET_STATE_TABLE_NAMES
             - ASSET_CHANGE_TABLE_NAMES
             - STORYBOARD_DRAFT_TABLE_NAMES
+            - STORYBOARD_COVERAGE_TABLE_NAMES
         ),
         "alembic_version",
     }
@@ -636,6 +719,7 @@ async def test_provider_revision_is_the_pre_document_forty_two_table_schema(
             - ASSET_STATE_TABLE_NAMES
             - ASSET_CHANGE_TABLE_NAMES
             - STORYBOARD_DRAFT_TABLE_NAMES
+            - STORYBOARD_COVERAGE_TABLE_NAMES
         ),
         "alembic_version",
     }
@@ -710,7 +794,7 @@ async def test_unversioned_provider_era_schema_is_adopted_then_upgraded(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
         )
-    assert await get_database_heads(migration_engine) == (STORYBOARD_DRAFT_REVISION,)
+    assert await get_database_heads(migration_engine) == (STORYBOARD_COVERAGE_REVISION,)
     assert account == "provider-era@example.test"
     await assert_database_matches_metadata(migration_engine)
 
@@ -837,7 +921,7 @@ async def test_head_upgrades_episode_planning_era_and_preserves_rows(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
         )
-    assert await get_database_heads(migration_engine) == (STORYBOARD_DRAFT_REVISION,)
+    assert await get_database_heads(migration_engine) == (STORYBOARD_COVERAGE_REVISION,)
     assert ADAPTATION_TABLE_NAMES <= table_names
     assert NARRATIVE_TABLE_NAMES <= table_names
     assert account == "adaptation-upgrade@example.test"
@@ -855,7 +939,7 @@ async def test_unversioned_episode_planning_era_is_adopted_then_upgraded(
         backup_reference="test-backup-before-adaptation-adoption",
     )
 
-    assert await get_database_heads(migration_engine) == (STORYBOARD_DRAFT_REVISION,)
+    assert await get_database_heads(migration_engine) == (STORYBOARD_COVERAGE_REVISION,)
     await assert_database_matches_metadata(migration_engine)
 
 
@@ -870,7 +954,7 @@ async def test_unversioned_adaptation_era_is_adopted_then_upgraded(
         backup_reference="test-backup-before-narrative-adoption",
     )
 
-    assert await get_database_heads(migration_engine) == (STORYBOARD_DRAFT_REVISION,)
+    assert await get_database_heads(migration_engine) == (STORYBOARD_COVERAGE_REVISION,)
     await assert_database_matches_metadata(migration_engine)
 
 

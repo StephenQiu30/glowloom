@@ -1,0 +1,1 @@
+"""Narrative coverage application capability."""
