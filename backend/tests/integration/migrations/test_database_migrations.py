@@ -29,6 +29,7 @@ EPISODE_PLANNING_REVISION = "7f3a9c1d2e84"
 ADAPTATION_REVISION = "9a4d6e2f1b73"
 NARRATIVE_REVISION = "2b7e4c9a1d63"
 ASSET_STATE_REVISION = "6c1f8d4a7e20"
+ASSET_CHANGE_REVISION = "36bf151da189"
 PROVIDER_TABLE_NAMES = {
     "prod_provider_bindings",
     "prod_provider_connections",
@@ -58,14 +59,13 @@ ASSET_STATE_TABLE_NAMES = {
     "ast_asset_states",
     "ast_asset_occurrences",
 }
+ASSET_CHANGE_TABLE_NAMES = {"ast_asset_name_revisions"}
 PROVIDER_CAPABILITY_UNIQUE = "uq_prod_capability_id_version"
 
 
 async def _drop_migration_test_schema(target_engine: AsyncEngine) -> None:
     async with target_engine.begin() as connection:
-        table_names = await connection.run_sync(
-            lambda sync: inspect(sync).get_table_names()
-        )
+        table_names = await connection.run_sync(lambda sync: inspect(sync).get_table_names())
         for table_name in table_names:
             quoted = connection.dialect.identifier_preparer.quote(table_name)
             await connection.execute(text(f"DROP TABLE {quoted} CASCADE"))
@@ -108,7 +108,7 @@ async def test_empty_database_upgrades_to_registered_metadata_head(
     async with migration_engine.connect() as connection:
         table_names = set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
     assert table_names == {*Base.metadata.tables, "alembic_version"}
-    assert await get_database_heads(migration_engine) == (ASSET_STATE_REVISION,)
+    assert await get_database_heads(migration_engine) == (ASSET_CHANGE_REVISION,)
     assert ASSET_STATE_TABLE_NAMES <= table_names
 
 
@@ -269,6 +269,118 @@ async def test_asset_state_revision_moves_asset_current_without_dual_write(
         ).one()
     assert restored.current_version_id == version_id
     assert restored.source_type == "candidate"
+
+
+@pytest.mark.asyncio
+async def test_asset_change_revision_backfills_name_and_availability(
+    migration_engine: AsyncEngine,
+) -> None:
+    actor_id = uuid4()
+    workspace_id = uuid4()
+    project_id = uuid4()
+    asset_id = uuid4()
+    await upgrade_database(migration_engine, revision=ASSET_STATE_REVISION)
+    values = {
+        "actor_id": actor_id,
+        "workspace_id": workspace_id,
+        "project_id": project_id,
+        "asset_id": asset_id,
+    }
+    async with migration_engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                INSERT INTO idn_user_accounts (
+                    id, email_normalized, password_hash, token_version,
+                    display_name, status, created_at, updated_at
+                ) VALUES (
+                    :actor_id, 'asset-change-migration@example.test', 'hash', 1,
+                    'Asset Change Migration', 'active', now(), now()
+                )
+                """
+            ),
+            values,
+        )
+        await connection.execute(
+            text(
+                """
+                INSERT INTO idn_workspaces (
+                    id, name, status, revision, created_at, updated_at
+                ) VALUES (
+                    :workspace_id, 'Asset Change Workspace', 'active', 1,
+                    now(), now()
+                )
+                """
+            ),
+            values,
+        )
+        await connection.execute(
+            text(
+                """
+                INSERT INTO prj_projects (
+                    id, workspace_id, name, aspect_ratio, language,
+                    target_duration_ms, budget_limit, currency, status,
+                    revision, created_at, updated_at
+                ) VALUES (
+                    :project_id, :workspace_id, 'Asset Change Project',
+                    '9:16', 'zh-CN', 90000, 0, 'CNY', 'active', 1,
+                    now(), now()
+                )
+                """
+            ),
+            values,
+        )
+        await connection.execute(
+            text(
+                """
+                INSERT INTO ast_assets (
+                    id, workspace_id, project_id, kind, name,
+                    normalized_name, aliases, tags, status, revision,
+                    created_by, created_at, updated_at
+                ) VALUES (
+                    :asset_id, :workspace_id, :project_id, 'location',
+                    '旧泵站', '旧泵站', ARRAY['泵站']::text[],
+                    ARRAY[]::text[], 'active', 3, :actor_id, now(), now()
+                )
+                """
+            ),
+            values,
+        )
+
+    await upgrade_database(migration_engine)
+
+    async with migration_engine.connect() as connection:
+        asset = (
+            await connection.execute(
+                text(
+                    "SELECT availability, name_revision, command_receipts "
+                    "FROM ast_assets WHERE id = :asset_id"
+                ),
+                values,
+            )
+        ).one()
+        name_revision = (
+            await connection.execute(
+                text(
+                    "SELECT revision_no, name_snapshot, normalized_name "
+                    "FROM ast_asset_name_revisions WHERE asset_id = :asset_id"
+                ),
+                values,
+            )
+        ).one()
+    assert asset == ("enabled", 1, {})
+    assert name_revision == (1, "旧泵站", "旧泵站")
+    await assert_database_matches_metadata(migration_engine)
+
+    await downgrade_database(migration_engine, ASSET_STATE_REVISION)
+    async with migration_engine.connect() as connection:
+        preserved = (
+            await connection.execute(
+                text("SELECT name, aliases, revision FROM ast_assets WHERE id = :asset_id"),
+                values,
+            )
+        ).one()
+    assert preserved == ("旧泵站", ["泵站"], 3)
 
 
 @pytest.mark.asyncio
@@ -433,6 +545,7 @@ async def test_baseline_revision_represents_the_historical_thirty_eight_table_sc
             - ADAPTATION_TABLE_NAMES
             - NARRATIVE_TABLE_NAMES
             - ASSET_STATE_TABLE_NAMES
+            - ASSET_CHANGE_TABLE_NAMES
         ),
         "alembic_version",
     }
@@ -498,6 +611,7 @@ async def test_provider_revision_is_the_pre_document_forty_two_table_schema(
             - ADAPTATION_TABLE_NAMES
             - NARRATIVE_TABLE_NAMES
             - ASSET_STATE_TABLE_NAMES
+            - ASSET_CHANGE_TABLE_NAMES
         ),
         "alembic_version",
     }
@@ -572,7 +686,7 @@ async def test_unversioned_provider_era_schema_is_adopted_then_upgraded(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
         )
-    assert await get_database_heads(migration_engine) == (ASSET_STATE_REVISION,)
+    assert await get_database_heads(migration_engine) == (ASSET_CHANGE_REVISION,)
     assert account == "provider-era@example.test"
     await assert_database_matches_metadata(migration_engine)
 
@@ -583,9 +697,7 @@ async def test_partial_document_schema_is_rejected_without_stamping(
 ) -> None:
     await _create_unversioned_revision(migration_engine, PROVIDER_REVISION)
     async with migration_engine.begin() as connection:
-        await connection.execute(
-            text("CREATE TABLE scr_script_documents (id UUID PRIMARY KEY)")
-        )
+        await connection.execute(text("CREATE TABLE scr_script_documents (id UUID PRIMARY KEY)"))
 
     with pytest.raises(
         DatabaseSchemaMismatchError,
@@ -701,7 +813,7 @@ async def test_head_upgrades_episode_planning_era_and_preserves_rows(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
         )
-    assert await get_database_heads(migration_engine) == (ASSET_STATE_REVISION,)
+    assert await get_database_heads(migration_engine) == (ASSET_CHANGE_REVISION,)
     assert ADAPTATION_TABLE_NAMES <= table_names
     assert NARRATIVE_TABLE_NAMES <= table_names
     assert account == "adaptation-upgrade@example.test"
@@ -719,7 +831,7 @@ async def test_unversioned_episode_planning_era_is_adopted_then_upgraded(
         backup_reference="test-backup-before-adaptation-adoption",
     )
 
-    assert await get_database_heads(migration_engine) == (ASSET_STATE_REVISION,)
+    assert await get_database_heads(migration_engine) == (ASSET_CHANGE_REVISION,)
     await assert_database_matches_metadata(migration_engine)
 
 
@@ -734,7 +846,7 @@ async def test_unversioned_adaptation_era_is_adopted_then_upgraded(
         backup_reference="test-backup-before-narrative-adoption",
     )
 
-    assert await get_database_heads(migration_engine) == (ASSET_STATE_REVISION,)
+    assert await get_database_heads(migration_engine) == (ASSET_CHANGE_REVISION,)
     await assert_database_matches_metadata(migration_engine)
 
 
@@ -766,9 +878,7 @@ async def test_partial_episode_planning_schema_is_rejected_without_stamping(
 ) -> None:
     await _create_unversioned_revision(migration_engine, SCRIPT_DOCUMENT_REVISION)
     async with migration_engine.begin() as connection:
-        await connection.execute(
-            text("CREATE TABLE scr_episode_plans (id UUID PRIMARY KEY)")
-        )
+        await connection.execute(text("CREATE TABLE scr_episode_plans (id UUID PRIMARY KEY)"))
 
     with pytest.raises(
         DatabaseSchemaMismatchError,

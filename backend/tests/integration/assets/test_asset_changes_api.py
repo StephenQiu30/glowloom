@@ -202,7 +202,13 @@ async def _asset_change_facts(
                     "subject_placements": [],
                     "mood_lighting": "冷蓝应急灯",
                 },
-                "action_beats": [],
+                "action_beats": [
+                    {
+                        "beat_key": "rush",
+                        "order": 1,
+                        "description": "沈岚冲向控制台",
+                    }
+                ],
                 "dialogue_or_narration": [],
                 "duration_ms": 4000,
                 "audio_intent": {"ambient": "水声", "sound_effects": []},
@@ -310,19 +316,23 @@ async def _asset_change_facts(
         await session.flush()
         session.add_all([asset_reference, request_asset, task])
 
-    return headers, asset, {
-        "workspace_id": workspace_id,
-        "project_id": project_id,
-        "episode_id": episode_id,
-        "asset_id": asset_id,
-        "state_id": state_id,
-        "first_version_id": first_version_id,
-        "second_version_id": UUID(second_data["version"]["id"]),
-        "shot_id": shot_id,
-        "spec_version_id": spec_version_id,
-        "request_id": request_id,
-        "task_id": task_id,
-    }
+    return (
+        headers,
+        asset,
+        {
+            "workspace_id": workspace_id,
+            "project_id": project_id,
+            "episode_id": episode_id,
+            "asset_id": asset_id,
+            "state_id": state_id,
+            "first_version_id": first_version_id,
+            "second_version_id": UUID(second_data["version"]["id"]),
+            "shot_id": shot_id,
+            "spec_version_id": spec_version_id,
+            "request_id": request_id,
+            "task_id": task_id,
+        },
+    )
 
 
 @pytest.mark.asyncio
@@ -356,9 +366,7 @@ async def test_rename_uses_stable_impact_and_keeps_all_references(
         "active_task_count": 1,
     }
     assert preflight["shots"][0]["slot_keys"] == ["location-main"]
-    assert preflight["prompt_snapshots"][0]["generation_request_id"] == str(
-        facts["request_id"]
-    )
+    assert preflight["prompt_snapshots"][0]["generation_request_id"] == str(facts["request_id"])
     assert preflight["active_tasks"][0]["task_id"] == str(facts["task_id"])
 
     async with session_factory() as session, session.begin():
@@ -465,29 +473,39 @@ async def test_disable_blocks_new_work_without_deleting_history(
     assert readiness_response.status_code == 200
     readiness = readiness_response.json()["data"]
     assert readiness["ready"] is False
-    assert "asset_disabled" in {
-        blocker["code"] for blocker in readiness["blocking_reasons"]
-    }
+    assert "ASSET_DISABLED" in {blocker["code"] for blocker in readiness["blocking_reasons"]}
 
     async with session_factory() as session:
-        assert await session.scalar(
-            select(func.count()).select_from(AssetVersion).where(
-                AssetVersion.asset_id == facts["asset_id"]
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(AssetVersion)
+                .where(AssetVersion.asset_id == facts["asset_id"])
             )
-        ) == 2
-        assert await session.scalar(
-            select(func.count()).select_from(AssetReference).where(
-                AssetReference.asset_id == facts["asset_id"]
+            == 2
+        )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(AssetReference)
+                .where(AssetReference.asset_id == facts["asset_id"])
             )
-        ) == 1
-        assert await session.scalar(
-            select(func.count()).select_from(GenerationRequestAsset).where(
-                GenerationRequestAsset.asset_version_id == facts["first_version_id"]
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(GenerationRequestAsset)
+                .where(GenerationRequestAsset.asset_version_id == facts["first_version_id"])
             )
-        ) == 1
-        assert await session.scalar(
-            select(func.count()).select_from(Task).where(Task.id == facts["task_id"])
-        ) == 1
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(Task).where(Task.id == facts["task_id"])
+            )
+            == 1
+        )
 
     enabled_response = await client.post(
         f"/api/v1/assets/{asset['id']}/enable",
@@ -521,6 +539,7 @@ async def test_state_edit_disable_and_current_switch_require_explicit_impacts(
         headers=headers,
         json={
             "expected_revision": state["revision"],
+            "idempotency_key": "state-edit:storm-night:v1",
             "label": "暴雨夜",
             "description": "泵站仍可运行但水位持续上涨",
         },

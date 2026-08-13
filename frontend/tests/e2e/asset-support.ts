@@ -119,3 +119,12 @@ export async function createReadyAsset(page: Page, fixture: AssetFixture) {
   ).toBeVisible();
   await expect(page.getByText("媒体、字段与授权范围均满足当前用途")).toBeVisible();
 }
+
+export async function setCurrentAssetVersion(page: Page, versionNo: number) {
+  await page
+    .getByRole("button", { name: `设为当前资产版本 v${versionNo}` })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "确认切换当前版本" });
+  await expect(dialog.getByText(/影响 \d+ 个分镜/)).toBeVisible();
+  await dialog.getByRole("button", { name: "确认切换" }).click();
+}

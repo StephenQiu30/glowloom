@@ -4,6 +4,7 @@ import {
   ONE_PIXEL_PNG,
   createReadyAsset,
   fillAssetSpec,
+  setCurrentAssetVersion,
   testToneWav,
   uploadAndWait,
   type AssetFixture,
@@ -194,12 +195,20 @@ test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => 
 
   await page.getByRole("button", { name: "编辑资产身份" }).click();
   const editDialog = page.getByRole("dialog", { name: "编辑资产身份" });
-  await editDialog.getByLabel("资产名称").fill(renamedCharacter);
   await editDialog.getByLabel("别名（逗号分隔）").fill("清禾，顾小姐");
   await editDialog.getByLabel("标签（逗号分隔）").fill("S2验收，雨巷主角");
   await editDialog.getByRole("button", { name: "保存身份信息" }).click();
   await expect(page.getByRole("status")).toContainText(
-    `资产身份已更新：${renamedCharacter}`,
+    `资产身份已更新：${character.name}`,
+  );
+  await page.getByRole("button", { name: "重命名资产" }).click();
+  const renameDialog = page.getByRole("dialog", { name: "重命名资产" });
+  await renameDialog.getByLabel("新资产名称").fill(renamedCharacter);
+  await renameDialog.getByRole("button", { name: "检查影响" }).click();
+  await expect(renameDialog.getByText(/影响 \d+ 个分镜/)).toBeVisible();
+  await renameDialog.getByRole("button", { name: "确认重命名" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    `资产已重命名为“${renamedCharacter}”`,
   );
 
   await page.getByRole("button", { name: "添加新版本" }).click();
@@ -211,7 +220,7 @@ test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => 
   await page.getByRole("button", { name: "保存版本" }).click();
   await expect(page.getByRole("status")).toContainText("版本 v2 已保存");
 
-  await page.getByRole("button", { name: "设为当前资产版本 v1" }).click();
+  await setCurrentAssetVersion(page, 1);
   await expect(page.getByRole("status")).toContainText(
     "资产已切换到版本 v1；既有镜头引用保持不变。",
   );

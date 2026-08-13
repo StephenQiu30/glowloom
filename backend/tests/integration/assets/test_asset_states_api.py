@@ -238,13 +238,12 @@ async def test_state_current_is_cas_scoped_and_asset_current_api_is_removed(
     assert injured_version["asset_state_id"] == injured["id"]
 
     cross_state = await client.post(
-        f"/api/v1/asset-states/{injured['id']}/current-version",
+        f"/api/v1/asset-states/{injured['id']}/current-version-preflight",
         headers=headers,
         json={
             "version_id": base_version["id"],
             "expected_current_version_id": injured_version["id"],
             "expected_revision": injured_state["revision"],
-            "idempotency_key": "state-current:cross-state",
         },
     )
     assert cross_state.status_code == 409
@@ -457,9 +456,7 @@ async def test_asset_bible_groups_state_occurrences_and_readiness(
     assert data["items"][0]["asset"]["id"] == asset["id"]
     states = {item["state"]["state_key"]: item for item in data["items"][0]["states"]}
     assert set(states) == {"base", "injured"}
-    assert states["base"]["readiness"]["blockers"][0]["code"] == (
-        "state_current_version_missing"
-    )
+    assert states["base"]["readiness"]["blockers"][0]["code"] == ("state_current_version_missing")
     assert states["injured"]["occurrences"][0]["episode_id"] == episode["id"]
     assert states["injured"]["readiness"]["warnings"] == []
 

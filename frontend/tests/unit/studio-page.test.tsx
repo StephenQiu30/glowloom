@@ -6,7 +6,10 @@ const apiMocks = vi.hoisted(() => ({
   applyAssetUpgrade: vi.fn(),
   appendAssetVersion: vi.fn(),
   archiveAsset: vi.fn(),
+  assetDisablePreflight: vi.fn(),
   assetDeletePreflight: vi.fn(),
+  assetRenamePreflight: vi.fn(),
+  assetStateDisablePreflight: vi.fn(),
   createAsset: vi.fn(),
   createAssetState: vi.fn(),
   deleteAsset: vi.fn(),
@@ -20,8 +23,13 @@ const apiMocks = vi.hoisted(() => ({
   me: vi.fn(),
   preflightAssetUpgrade: vi.fn(),
   restoreAsset: vi.fn(),
+  renameAsset: vi.fn(),
+  currentAssetVersionPreflight: vi.fn(),
+  disableAsset: vi.fn(),
+  disableAssetState: vi.fn(),
   setCurrentAssetVersion: vi.fn(),
   updateAsset: vi.fn(),
+  updateAssetState: vi.fn(),
 }));
 
 vi.mock("@/api/identity", async () => {
@@ -50,8 +58,14 @@ vi.mock("@/api/assets", async () => {
     appendAssetVersionApiV1AssetStatesStateIdVersionsPost:
       apiMocks.appendAssetVersion,
     archiveAssetApiV1AssetsAssetIdArchivePost: apiMocks.archiveAsset,
+    assetDisablePreflightApiV1AssetsAssetIdDisablePreflightPost:
+      apiMocks.assetDisablePreflight,
     assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGet:
       apiMocks.assetDeletePreflight,
+    assetRenamePreflightApiV1AssetsAssetIdRenamePreflightPost:
+      apiMocks.assetRenamePreflight,
+    assetStateDisablePreflightApiV1AssetStatesStateIdDisablePreflightPost:
+      apiMocks.assetStateDisablePreflight,
     createAssetApiV1ProjectsProjectIdAssetsPost: apiMocks.createAsset,
     createAssetStateApiV1AssetsAssetIdStatesPost: apiMocks.createAssetState,
     deleteAssetApiV1AssetsAssetIdDelete: apiMocks.deleteAsset,
@@ -61,9 +75,16 @@ vi.mock("@/api/assets", async () => {
     listAssetsApiV1ProjectsProjectIdAssetsGet: apiMocks.listAssets,
     listAssetVersionsApiV1AssetStatesStateIdVersionsGet: apiMocks.listAssetVersions,
     restoreAssetApiV1AssetsAssetIdRestorePost: apiMocks.restoreAsset,
+    renameAssetApiV1AssetsAssetIdRenamePost: apiMocks.renameAsset,
+    currentAssetVersionPreflightApiV1AssetStatesStateIdCurrentVersionPreflightPost:
+      apiMocks.currentAssetVersionPreflight,
+    disableAssetApiV1AssetsAssetIdDisablePost: apiMocks.disableAsset,
+    disableAssetStateApiV1AssetStatesStateIdDisablePost:
+      apiMocks.disableAssetState,
     setCurrentAssetVersionApiV1AssetStatesStateIdCurrentVersionPost:
       apiMocks.setCurrentAssetVersion,
     updateAssetApiV1AssetsAssetIdPatch: apiMocks.updateAsset,
+    updateAssetStateApiV1AssetStatesStateIdPatch: apiMocks.updateAssetState,
   };
 });
 
@@ -108,6 +129,8 @@ const asset: API.AssetResponse = {
   aliases: ["清禾"],
   tags: ["主角"],
   status: "active",
+  availability: "enabled",
+  name_revision: 1,
   revision: 3,
   created_at: now,
   updated_at: now,
@@ -183,6 +206,57 @@ const readiness: API.AssetReadinessResponse = {
     consent_ids: [],
     evaluated_at: now,
   },
+};
+
+const changeImpact: API.AssetImpactResponse = {
+  operation: "set_current",
+  asset_id: assetId,
+  state_id: stateId,
+  old_version_id: versionId,
+  new_version_id: oldVersionId,
+  summary: {
+    episode_count: 1,
+    shot_count: 1,
+    spec_version_count: 1,
+    prompt_snapshot_count: 1,
+    active_task_count: 1,
+  },
+  episodes: [
+    {
+      episode_id: episodeId,
+      shot_count: 1,
+      prompt_snapshot_count: 1,
+      active_task_count: 1,
+    },
+  ],
+  shots: [
+    {
+      shot_id: shotId,
+      shot_title: "雨夜相逢",
+      episode_id: episodeId,
+      spec_version_ids: [shotSpecVersionId],
+      current_spec_version_id: shotSpecVersionId,
+      slot_keys: ["character-main"],
+    },
+  ],
+  prompt_snapshots: [
+    {
+      generation_request_id: "019fb1e0-a090-70f6-99dc-0b4e9e085573",
+      episode_id: episodeId,
+      shot_id: shotId,
+      shot_spec_version_id: shotSpecVersionId,
+      input_hash: "d".repeat(64),
+    },
+  ],
+  active_tasks: [
+    {
+      task_id: "019fb1e0-a091-70f6-99dc-0b4e9e085573",
+      generation_request_id: "019fb1e0-a090-70f6-99dc-0b4e9e085573",
+      status: "running",
+      revision: 1,
+    },
+  ],
+  impact_hash: "f".repeat(64),
 };
 
 describe("AI 漫剧资产工作台", () => {
@@ -403,14 +477,53 @@ describe("AI 漫剧资产工作台", () => {
     apiMocks.updateAsset.mockResolvedValue({
       data: {
         ...asset,
-        name: "顾清禾（雨巷）",
         aliases: ["清禾", "顾小姐"],
         tags: ["主角", "雨巷"],
         revision: 4,
       },
     });
+    apiMocks.assetRenamePreflight.mockResolvedValue({
+      data: { ...changeImpact, operation: "rename", new_version_id: null },
+    });
+    apiMocks.renameAsset.mockResolvedValue({
+      data: {
+        asset: {
+          ...asset,
+          name: "顾清禾（雨巷）",
+          aliases: ["清禾", "顾清禾"],
+          name_revision: 2,
+          revision: 4,
+        },
+        impact: { ...changeImpact, operation: "rename", new_version_id: null },
+      },
+    });
+    apiMocks.currentAssetVersionPreflight.mockResolvedValue({ data: changeImpact });
+    apiMocks.assetStateDisablePreflight.mockResolvedValue({
+      data: { ...changeImpact, operation: "disable_state", new_version_id: null },
+    });
+    apiMocks.assetDisablePreflight.mockResolvedValue({
+      data: { ...changeImpact, operation: "disable_asset", new_version_id: null },
+    });
+    apiMocks.disableAsset.mockResolvedValue({
+      data: {
+        asset: { ...asset, availability: "disabled", revision: 4 },
+        impact: { ...changeImpact, operation: "disable_asset", new_version_id: null },
+      },
+    });
+    apiMocks.disableAssetState.mockResolvedValue({
+      data: {
+        state: { ...assetState, status: "disabled", revision: 4 },
+        impact: { ...changeImpact, operation: "disable_state", new_version_id: null },
+      },
+    });
+    apiMocks.updateAssetState.mockResolvedValue({
+      data: { ...assetState, label: "雨夜状态", description: "衣物湿透", revision: 4 },
+    });
     apiMocks.setCurrentAssetVersion.mockResolvedValue({
-      data: { ...assetState, current_version_id: oldVersionId, revision: 4 },
+      data: {
+        state: { ...assetState, current_version_id: oldVersionId, revision: 4 },
+        impact: changeImpact,
+      },
     });
     apiMocks.assetDeletePreflight.mockResolvedValue({
       data: {
@@ -549,7 +662,7 @@ describe("AI 漫剧资产工作台", () => {
     );
   });
 
-  it("编辑资产身份并显式切换历史当前版本", async () => {
+  it("分离元数据编辑与重命名，并在影响确认后切换当前版本", async () => {
     const user = userEvent.setup();
     render(
       <AppProviders>
@@ -558,9 +671,7 @@ describe("AI 漫剧资产工作台", () => {
     );
 
     await user.click(await screen.findByRole("button", { name: "编辑资产身份" }));
-    const name = screen.getByLabelText("资产名称");
-    await user.clear(name);
-    await user.type(name, "顾清禾（雨巷）");
+    expect(screen.queryByLabelText("资产名称")).not.toBeInTheDocument();
     const aliases = screen.getByLabelText("别名（逗号分隔）");
     await user.clear(aliases);
     await user.type(aliases, "清禾, 顾小姐");
@@ -573,22 +684,125 @@ describe("AI 漫剧资产工作台", () => {
       { asset_id: assetId },
       {
         expected_revision: 3,
-        name: "顾清禾（雨巷）",
         aliases: ["清禾", "顾小姐"],
         tags: ["主角", "雨巷"],
       },
     ));
 
+    await user.click(screen.getByRole("button", { name: "重命名资产" }));
+    await user.clear(screen.getByLabelText("新资产名称"));
+    await user.type(screen.getByLabelText("新资产名称"), "顾清禾（雨巷）");
+    await user.click(screen.getByRole("button", { name: "检查影响" }));
+    await waitFor(() => expect(apiMocks.assetRenamePreflight).toHaveBeenCalledWith(
+      { asset_id: assetId },
+      { new_name: "顾清禾（雨巷）", expected_revision: 3 },
+    ));
+    expect(await screen.findByText("影响 1 个分镜")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "确认重命名" }));
+    await waitFor(() => expect(apiMocks.renameAsset).toHaveBeenCalledWith(
+      { asset_id: assetId },
+      expect.objectContaining({
+        new_name: "顾清禾（雨巷）",
+        expected_revision: 3,
+        impact_hash: "f".repeat(64),
+        idempotency_key: expect.any(String),
+      }),
+    ));
+
     await user.click(screen.getByRole("button", { name: "设为当前资产版本 v2" }));
+    await waitFor(() =>
+      expect(apiMocks.currentAssetVersionPreflight).toHaveBeenCalledWith(
+        { state_id: stateId },
+        {
+          version_id: oldVersionId,
+          expected_current_version_id: versionId,
+          expected_revision: 3,
+        },
+      ),
+    );
+    expect(await screen.findByRole("dialog", { name: "确认切换当前版本" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "确认切换" }));
     await waitFor(() => expect(apiMocks.setCurrentAssetVersion).toHaveBeenCalledWith(
       { state_id: stateId },
       expect.objectContaining({
         version_id: oldVersionId,
         expected_current_version_id: versionId,
         expected_revision: 3,
+        impact_hash: "f".repeat(64),
         idempotency_key: expect.any(String),
       }),
     ));
+  });
+
+  it("编辑剧情状态并在影响确认后停用", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <ComicProductionStudio />
+      </AppProviders>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "编辑状态" }));
+    const label = screen.getByLabelText("状态名称");
+    await user.clear(label);
+    await user.type(label, "雨夜状态");
+    await user.type(screen.getByLabelText("状态说明"), "衣物湿透");
+    await user.click(screen.getByRole("button", { name: "保存状态" }));
+    await waitFor(() => expect(apiMocks.updateAssetState).toHaveBeenCalledWith(
+      { state_id: stateId },
+      expect.objectContaining({
+        expected_revision: 3,
+        idempotency_key: expect.any(String),
+        label: "雨夜状态",
+        description: "衣物湿透",
+      }),
+    ));
+
+    await user.click(screen.getByRole("button", { name: "停用状态" }));
+    await waitFor(() => expect(apiMocks.assetStateDisablePreflight).toHaveBeenCalledWith(
+      { state_id: stateId },
+      { expected_revision: 3 },
+    ));
+    expect(
+      await screen.findByRole("dialog", { name: "确认停用剧情状态" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "确认停用" }));
+    await waitFor(() => expect(apiMocks.disableAssetState).toHaveBeenCalledWith(
+      { state_id: stateId },
+      expect.objectContaining({
+        expected_revision: 3,
+        impact_hash: "f".repeat(64),
+        idempotency_key: expect.any(String),
+      }),
+    ));
+  });
+
+  it("预览影响后停用资产且不伪装成归档", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <ComicProductionStudio />
+      </AppProviders>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "停用资产" }));
+    await waitFor(() => expect(apiMocks.assetDisablePreflight).toHaveBeenCalledWith(
+      { asset_id: assetId },
+      { expected_revision: 3 },
+    ));
+    expect(
+      await screen.findByRole("dialog", { name: "确认停用资产" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "确认停用" }));
+    await waitFor(() => expect(apiMocks.disableAsset).toHaveBeenCalledWith(
+      { asset_id: assetId },
+      expect.objectContaining({
+        expected_revision: 3,
+        impact_hash: "f".repeat(64),
+        idempotency_key: expect.any(String),
+      }),
+    ));
+    expect(apiMocks.archiveAsset).not.toHaveBeenCalled();
   });
 
   it("仅在删除预检允许时删除空资产身份", async () => {

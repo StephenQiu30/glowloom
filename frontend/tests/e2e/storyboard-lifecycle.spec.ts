@@ -7,6 +7,7 @@ import {
   ONE_PIXEL_PNG,
   createReadyAsset,
   fillAssetSpec,
+  setCurrentAssetVersion,
   testToneWav,
   uploadAndWait,
   type AssetFixture,
@@ -220,7 +221,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
     .getByRole("button", { name: `选择资产 ${locationFixture.name}` })
     .click();
   await expect(page.getByText("媒体、字段与授权范围均满足当前用途")).toBeVisible();
-  await page.getByRole("button", { name: "设为当前资产版本 v1" }).click();
+  await setCurrentAssetVersion(page, 1);
   await expect(page.getByRole("status")).toContainText(
     "资产已切换到版本 v1；既有镜头引用保持不变。",
   );
@@ -318,7 +319,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await page
     .getByRole("button", { name: `选择资产 ${locationFixture.name}` })
     .click();
-  await page.getByRole("button", { name: "设为当前资产版本 v2" }).click();
+  await setCurrentAssetVersion(page, 2);
   await expect(page.getByRole("status")).toContainText(
     "资产已切换到版本 v2；既有镜头引用保持不变。",
   );
@@ -441,7 +442,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await page
     .getByRole("button", { name: `选择资产 ${locationFixture.name}` })
     .click();
-  await page.getByRole("button", { name: "设为当前资产版本 v1" }).click();
+  await setCurrentAssetVersion(page, 1);
   await expect(page.getByText("本页当前引用 2")).toBeVisible();
   await expect(page.getByText("本页历史引用 3")).toBeVisible();
   await page.getByRole("button", { name: "全选当前引用" }).click();
@@ -453,7 +454,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await finalUpgradeDialog
     .getByRole("button", { name: "返回检查" })
     .click();
-  await page.getByRole("button", { name: "设为当前资产版本 v2" }).click();
+  await setCurrentAssetVersion(page, 2);
   await expect(page.getByText("本页当前引用 0")).toBeVisible();
   await expect(page.getByText("已选择 0 个当前镜头")).toBeVisible();
   await expect(

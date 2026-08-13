@@ -158,7 +158,6 @@ async def test_asset_identity_lifecycle_duplicate_hint_and_safe_delete(
         headers=headers,
         json={
             "expected_revision": 1,
-            "name": "林澈（定稿）",
             "aliases": ["阿澈", "主角"],
         },
     )
@@ -214,7 +213,7 @@ async def test_asset_identity_lifecycle_duplicate_hint_and_safe_delete(
     assert "林澈" not in str(audit.json()["data"])
     assert audit.json()["data"]["items"][3]["metadata"] == {
         "revision": 2,
-        "changed_fields": ["aliases", "name"],
+        "changed_fields": ["aliases"],
     }
 
     async with session_factory() as session:
@@ -424,9 +423,7 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
     assert result["state"]["current_version_id"] == version["id"]
     assert version["asset_state_id"] == state["id"]
     assert result["readiness"]["status"] == "blocked"
-    assert [item["code"] for item in result["readiness"]["blockers"]] == [
-        "consent_missing"
-    ]
+    assert [item["code"] for item in result["readiness"]["blockers"]] == ["consent_missing"]
 
     invalid_payload = _character_version_payload(
         portrait_id,
@@ -461,9 +458,7 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
     )
     assert readiness.status_code == 200
     assert readiness.json()["data"]["status"] == "ready"
-    assert readiness.json()["data"]["dependency_snapshot"]["consent_ids"] == [
-        consent_data["id"]
-    ]
+    assert readiness.json()["data"]["dependency_snapshot"]["consent_ids"] == [consent_data["id"]]
 
     endpoint = f"/api/v1/asset-states/{state['id']}/versions"
     first, second = await asyncio.gather(
@@ -519,18 +514,30 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
         for item in version_audit.json()["data"]["items"]
     )
 
+    switch_payload = {
+        "version_id": version["id"],
+        "expected_current_version_id": current["id"],
+        "expected_revision": winner.json()["data"]["state"]["revision"],
+    }
+    switch_preflight = await client.post(
+        f"/api/v1/asset-states/{state['id']}/current-version-preflight",
+        headers=headers,
+        json=switch_payload,
+    )
+    assert switch_preflight.status_code == 200
+    impact = switch_preflight.json()["data"]
     switched = await client.post(
         f"/api/v1/asset-states/{state['id']}/current-version",
         headers=headers,
         json={
-            "version_id": version["id"],
-            "expected_current_version_id": current["id"],
-            "expected_revision": winner.json()["data"]["state"]["revision"],
+            **switch_payload,
+            "impact_hash": impact["impact_hash"],
             "idempotency_key": "select-initial-character-version",
         },
     )
     assert switched.status_code == 200
-    assert switched.json()["data"]["current_version_id"] == version["id"]
+    switched_state = switched.json()["data"]["state"]
+    assert switched_state["current_version_id"] == version["id"]
     current_audit = await client.get(
         "/api/v1/audit-events",
         headers=headers,
@@ -544,9 +551,10 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
     assert current_audit.json()["data"]["total"] == 1
     assert current_audit.json()["data"]["items"][0]["metadata"] == {
         "asset_id": asset["id"],
-        "revision": switched.json()["data"]["revision"],
+        "revision": switched_state["revision"],
         "previous_version_id": current["id"],
         "current_version_id": version["id"],
+        "impact_hash": impact["impact_hash"],
     }
 
     revoked = await client.post(
@@ -583,12 +591,7 @@ async def test_asset_version_is_typed_immutable_concurrent_and_rights_gated(
         )
         assert original is not None
         assert original.spec["appearance"] == "黑发、冷峻轮廓"
-        assert (
-            await session.scalar(
-                select(func.count()).select_from(AssetMediaReference)
-            )
-            == 2
-        )
+        assert await session.scalar(select(func.count()).select_from(AssetMediaReference)) == 2
 
 
 @pytest.mark.asyncio
@@ -647,6 +650,4 @@ async def test_asset_commands_hide_cross_workspace_media_and_assets(
 
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(AssetVersion)) == 0
-        assert UUID(first_identity["workspace"]["id"]) != UUID(
-            second_identity["workspace"]["id"]
-        )
+        assert UUID(first_identity["workspace"]["id"]) != UUID(second_identity["workspace"]["id"])
