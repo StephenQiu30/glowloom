@@ -141,8 +141,8 @@ DEV-MVPA-01 当前实现证据（2026-08-13）：
 
 DEV-MVPA-02 准入前置证据（2026-08-13）：
 
-- `backend/tests/fixtures/mvp_a/script_format_cases.json` 已形成六组可公开提交的最小合成语料，固定显式 5 集、全角/中文/英文集标记、缺号、重复、空集、正文内嵌集号不误切、Unicode 扩展汉字和 Emoji；所有 marker 使用 half-open Unicode code-point 区间；
-- `backend/tests/contract/test_mvp_a_script_fixture_contract.py` 以严格 Pydantic 契约拒绝额外字段，验证完整失败矩阵、精确原文切片、行号、code-point/UTF-16/UTF-8 差异和无外部引用；该契约测试 6 项通过；
+- `backend/tests/fixtures/mvp_a/script_format_cases.json` 已形成十组可公开提交的最小合成语料，固定显式 5 集、全角/中文/英文集标记、缺号、重复、逆序、空集、前言待决、标题同行不误切、CRLF/行首空白和 Unicode 扩展汉字/Emoji；所有 marker 使用 half-open Unicode code-point 区间；
+- `backend/tests/contract/test_mvp_a_script_fixture_contract.py` 以严格 Pydantic 契约拒绝额外字段，验证完整失败矩阵、精确原文切片、行号、code-point/UTF-16/UTF-8 差异、100k code-point 上限和无外部引用；该契约测试 8 项通过；
 - `backend/tests/fixtures/mvp_a/README.md` 已固定真实黄金包的最小交付清单和仓库授权边界；上述合成语料只关闭格式 corpus 子项，不证明分集、改写或分镜质量，不能关闭 G-MVPA-002，也不能据此进入生产 parser Green。
 
 Red：
@@ -179,7 +179,14 @@ GitHub 证据池（固定于 2026-08-13）先于实现：
 
 本地 delta 已核对：现有 `ScriptSource/ScriptVersion` 是 Episode 级不可变正文，`Scene/Dialogue` 只锚定一个 ScriptVersion；`Project/Episode` 与 current script CAS 已存在；Task/Outbox 已存在；Media 上传链存在，但 `MediaObject.kind` 和 UploadSession 目前没有 `document`。因此本任务只新增项目级 Document vertical slice 和 `document` 媒体用途，不能再建 Episode、Task、Blob 或第二套剧本版本。
 
-综合决定：没有候选同时满足“中国短剧集标记 + 严格 UTF-8 + 全文 code-point 区间守恒 + 当前 Python/SQLAlchemy 模块边界”。首期应实现一个很小的内部 span-preserving scanner，但它不是自由发挥：规则/误判 corpus 取自上述项目，输入/编码契约取自 Unstructured 的失败测试，所有输出都必须由原文切片重建并做 hash/gap/overlap 校验。2026-08-13 已完成源码与许可证子 Gate；G-MVPA-002 关闭并形成本地 Red/隔离 spike 前，G-MVPA-006 仍不关闭，也不写生产 parser。
+综合决定：没有候选同时满足“中国短剧集标记 + 严格 UTF-8 + 全文 code-point 区间守恒 + 当前 Python/SQLAlchemy 模块边界”。首期应实现一个很小的内部 span-preserving scanner，但它不是自由发挥：规则/误判 corpus 取自上述项目，输入/编码契约取自 Unstructured 的失败测试，所有输出都必须由原文切片重建并做 hash/gap/overlap 校验。2026-08-13 已完成源码、许可证与隔离算法 spike 子 Gate；G-MVPA-002/003 和其余本地 Red 未关闭前，G-MVPA-006 仍保持 active，也不写生产 parser。
+
+隔离 spike 记录（2026-08-13）：
+
+- spike 只存在于 `/tmp` 且验证后删除，没有进入生产或测试源码；算法按 `splitlines(keepends=True)` 累加 Python Unicode code-point 坐标，不 trim/重组正文；
+- 十组已提交格式语料与五个上游失败分类全部通过：正文中的“第一集结束/原著第九章”不误切；在当前严格语法假设下，括号包装和标题同行不成为硬边界；CRLF/行首空白仍定位原文，缺号/重复/逆序/空集使用不同问题分类；
+- 全文逐行 block 连续、拼接结果和 SHA-256 与输入一致，证明最小 scanner 方案可行；前言保持确定性 marker 结果但产生 `preamble_requires_decision`，不再沿用 LocalMiniDrama 静默塞入第一集的行为；
+- 尚未冻结 UTF-8 BOM 的诊断/归一策略、允许的括号包装语法和公开 `FormatIssue.code` 命名；这些必须在真实黄金样本评审和 API 契约 Red 中解决，spike 通过不能替代 PT-SCR-006 Acceptance。
 
 Red：编码、MIME、100k 上限、显式标记、缺号/重复/空集、gap/overlap、跨空间、幂等、Worker 重启和正文泄漏先失败。
 
