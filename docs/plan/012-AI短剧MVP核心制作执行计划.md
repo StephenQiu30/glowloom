@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～08 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence 和资产影响治理；制作人/QA 内容质量复核保留到分镜/分镜包产品验收；下一任务为 DEV-MVPA-09 拆镜/合镜守恒修复）
+- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～09 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence、资产影响治理和拆镜/合镜内容守恒；制作人/QA 内容质量复核保留到分镜/分镜包产品验收；下一任务为 DEV-MVPA-10 AI 分镜草案）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -82,7 +82,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 3. 已有数据库不得直接 `stamp head`。adoption 只接受七种已知完整签名：当前 57 表结构直接采用 head，NarrativeUnit era 55 表结构采用 `2b7e4c9a1d63` 后升级，剧本改写 era 51 表结构采用 `9a4d6e2f1b73` 后升级，分集计划 era 50 表结构采用 `7f3a9c1d2e84` 后升级，整剧文档 era 46 表结构采用 `4c8e2f7a9b31` 后升级，Provider-era 42 表结构采用 `8d9f2a6c4b71` 后升级，或历史 38 表结构采用 baseline 后原子升级；任一能力的部分表集和任何未知漂移都拒绝且不 stamp。
 4. 新业务表按任务分 revision，不把 13 类核心实体压进一个不可回滚 revision。每个 revision 包含 upgrade、结构校验和可逆的 schema downgrade；涉及已写业务数据时，回滚优先恢复备份或前滚修复，不做破坏性自动 downgrade。
 5. 每次 revision 在三条路径验证：空库到 head、当前 schema 快照到 head、含黄金样本旧库副本到 head；运行前后均核对行数、哈希、复合 FK、唯一约束和 current 指针。
-6. 应用启动只检查数据库 revision 是否为允许版本，不能在 Web 进程自动 upgrade；部署前由独立受控命令执行升级。
+6. 应用运行入口只检查数据库 revision 是否为允许版本，不能在 Web 进程自动 upgrade；部署前由独立受控命令执行升级，升级到 `head` 后必须比较实际 schema 与已注册 Metadata，拒绝“版本号在 head 但业务表缺失”的伪成功。
 7. Acceptance 必须记录数据库版本、备份位置的脱敏标识、执行时长、锁影响、失败注入、恢复结果和不可外推事项。
 
 首个 baseline 不承担生产零停机承诺。本机 38 表/19 行数据已完成备份恢复和前滚守恒；任何其他含不可丢失数据的目标环境，仍必须先提供副本/备份演练，不得套用本次小库结论。
@@ -101,7 +101,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-06 | completed（Acceptance 032） | PT-SCR-009 | 14 | MVPA-05 | NarrativeUnit/Version、人工修正、current 影响和下游 stale |
 | DEV-MVPA-07 | completed（Acceptance 033） | PT-AST-006 | 7 | MVPA-06 | AssetState/Occurrence/state current、状态矩阵和 readiness |
 | DEV-MVPA-08 | completed（Acceptance 034） | PT-AST-007 | 5 | MVPA-07 | 改名/禁用/换版本影响中心、state-aware usage 与 apply |
-| DEV-MVPA-09 | proposed | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
+| DEV-MVPA-09 | completed（Acceptance 035） | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
 | DEV-MVPA-10 | proposed | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
 | DEV-MVPA-11 | proposed | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
 | DEV-MVPA-12 | proposed | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
@@ -417,6 +417,16 @@ Green：后端成为守恒最终事实源；split 要求两侧 action/dialogue �
 
 退出：现有 PT-SBD-004 回归、并发/幂等/impact hash、浏览器 split/merge 全过，未引入 NarrativeUnit 时也不会静默丢内容。
 
+完成证据（2026-08-13）：
+
+- 后端新增单一 `conservation.py` 领域校验器。split 的两个目标必须对来源动作、对白 ID、对白属性和动作关联形成有序精确分区；merge 必须同剧本、同场次且在现有 15 秒、8 动作、8 对白表示上限内，目标动作、对白及重编号后的关联必须与两个来源完整同构。
+- merge preflight 在产生影响摘要前拒绝跨场、重复对白、超时长或超容量；apply 在任何目标 Shot/Spec 写入前再次校验完整目标。现有幂等键、order/impact hash、不可变 Spec 和只追加 ShotTransform 均保留。
+- 前端拆分要求显式动作/对白分界并把关联对白留在对应动作段；合并不再 `.slice(0, 8)` 或隐式丢弃另一侧，动作/对白按镜头顺序重建，资产引用合并去重，视觉/声音/生成意图由用户明确选择基础规格。
+- 实施前固定并审阅 Olive `7e0e94a`、Pitivi `a4b19eb`、OpenTimelineIO `bc5fe2d`、xStudio `d60b3e8` 及三个 AI 短剧项目的源码、测试和许可证；本轮只采用事务、区间与失败分类，不复制 GPL/LGPL/AGPL 代码，也未新增运行依赖。
+- 红灯先稳定复现后端缺少守恒模块、前端动作复制/跨场合并/对白映射错误；Green 后后端全量 `423 passed, 26 skipped`，Ruff/Pyright/pip check 通过，前端 `24 files / 87 tests`、TypeScript、生产构建通过，真实 PostgreSQL 浏览器分镜闭环 1/1 通过。
+- 浏览器复核期间暴露测试夹具只删除 ORM 表、残留 `alembic_version` 的根缺陷；测试库现在清除全部表，`upgrade head` 后强制比较真实 schema。缺表且 revision 仍为 head 的新 Red 已转 Green，不增加兼容探测或自动修补业务库。
+- 完整证据见 [Acceptance 035](../acceptance/arrived/035-分镜拆合内容守恒验收.md)。DEV-MVPA-09 与 PT-SBD-007 completed；NarrativeUnit 引用、AI DraftBatch、CoverageReport 和分镜包仍由 DEV-MVPA-10～12 承担。
+
 ### 6.8 DEV-MVPA-10：AI 分镜草案
 
 Red：Run 写正式 Shot、输入版本漂移、重复 Apply、人工锁定覆盖、order/spec 冲突、部分 Apply、无状态资产、Worker 重启和 unknown 先失败。
@@ -632,4 +642,4 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 当前可领取任务
 
-`DEV-MVPA-01～08` 已完成并由 Acceptance 028～034 和黄金 fixture 契约关闭。当前下一任务是 `DEV-MVPA-09`：直接修复现有 split/merge 的对白与叙事内容守恒，并以 preflight/apply、完整目标规格和只追加 ShotTransform 拒绝静默丢内容；不提前引入 AI 分镜批次、CoverageReport 或剪辑时间线。
+`DEV-MVPA-01～09` 已完成并由 Acceptance 028～035 和黄金 fixture 契约关闭。当前下一任务是 `DEV-MVPA-10`：基于固定 ScriptVersion、NarrativeUnitVersion、AssetState/Version 和现有不可变 ShotSpec 建立 AI 分镜 DraftBatch、人工决议与原子 Apply；实现前继续复核固定 GitHub commit 的候选先行、失败恢复和 Apply 冲突测试，不提前实现 CoverageReport、分镜包或剪辑时间线。
