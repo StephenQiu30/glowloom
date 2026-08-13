@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID
 
 
@@ -12,6 +12,46 @@ class MediaVersionReference:
     object_status: str
     probe_status: str
     has_active_location: bool
+
+
+RenderedMediaSourceType = Literal[
+    "asset_version",
+    "narrative_unit_version",
+    "script_version",
+    "shot_spec_version",
+    "storyboard_coverage",
+    "storyboard_export_snapshot",
+    "storyboard_readiness",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedMediaSource:
+    source_type: RenderedMediaSourceType
+    source_id: UUID
+    source_hash: str
+    position: int
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedMediaCommand:
+    workspace_id: UUID
+    filename: str
+    sha256: str
+    size_bytes: int
+    mime_type: str
+    storage_profile: str
+    bucket: str
+    object_key: str
+    created_by: UUID
+    sources: tuple[RenderedMediaSource, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedMediaResult:
+    media_object_id: UUID
+    media_version_id: UUID
+    media_location_id: UUID
 
 
 @dataclass(frozen=True, slots=True)

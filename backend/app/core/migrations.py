@@ -89,6 +89,13 @@ STORYBOARD_COVERAGE_TABLE_NAMES = frozenset(
         "sbd_coverage_decisions",
     }
 )
+STORYBOARD_EXPORT_TABLE_NAMES = frozenset(
+    {
+        "med_media_lineages",
+        "sbd_export_jobs",
+        "sbd_export_manifests",
+    }
+)
 PROVIDER_CAPABILITY_UNIQUE = "uq_prod_capability_id_version"
 
 
@@ -217,6 +224,18 @@ _PRE_STORYBOARD_COVERAGE_OBJECTS = {
 }
 
 
+def _include_pre_storyboard_export_object(
+    object_: object,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: object | None,
+) -> bool:
+    if type_ == "table" and name in STORYBOARD_EXPORT_TABLE_NAMES:
+        return False
+    return _include_baseline_object(object_, name, type_, reflected, compare_to)
+
+
 def _include_pre_storyboard_coverage_object(
     object_: object,
     name: str | None,
@@ -228,7 +247,9 @@ def _include_pre_storyboard_coverage_object(
         return False
     if name in _PRE_STORYBOARD_COVERAGE_OBJECTS:
         return False
-    return _include_baseline_object(object_, name, type_, reflected, compare_to)
+    return _include_pre_storyboard_export_object(
+        object_, name, type_, reflected, compare_to
+    )
 
 
 def _include_pre_storyboard_draft_object(
@@ -397,6 +418,7 @@ def _baseline_differences(
     asset_state_era: bool = False,
     asset_change_era: bool = False,
     storyboard_draft_era: bool = False,
+    storyboard_coverage_era: bool = False,
 ) -> list[object]:
     if (
         sum(
@@ -410,6 +432,7 @@ def _baseline_differences(
                 asset_state_era,
                 asset_change_era,
                 storyboard_draft_era,
+                storyboard_coverage_era,
             )
         )
         > 1
@@ -434,6 +457,8 @@ def _baseline_differences(
         include_object = _include_pre_storyboard_draft_object
     elif storyboard_draft_era:
         include_object = _include_pre_storyboard_coverage_object
+    elif storyboard_coverage_era:
+        include_object = _include_pre_storyboard_export_object
     context = MigrationContext.configure(
         connection,
         opts={
@@ -489,6 +514,7 @@ def _adopt_existing_database(connection: Connection) -> None:
     asset_change_tables = table_names & ASSET_CHANGE_TABLE_NAMES
     storyboard_draft_tables = table_names & STORYBOARD_DRAFT_TABLE_NAMES
     storyboard_coverage_tables = table_names & STORYBOARD_COVERAGE_TABLE_NAMES
+    storyboard_export_tables = table_names & STORYBOARD_EXPORT_TABLE_NAMES
     asset_columns = {column["name"] for column in inspector.get_columns("ast_assets")}
     asset_change_columns = asset_columns & ASSET_CHANGE_COLUMNS
     shot_columns = {column["name"] for column in inspector.get_columns("sbd_shots")}
@@ -508,6 +534,12 @@ def _adopt_existing_database(connection: Connection) -> None:
     expected_storyboard_draft_tables = set(STORYBOARD_DRAFT_TABLE_NAMES)
     expected_storyboard_draft_columns = set(STORYBOARD_DRAFT_COLUMNS)
     expected_storyboard_coverage_tables = set(STORYBOARD_COVERAGE_TABLE_NAMES)
+    expected_storyboard_export_tables = set(STORYBOARD_EXPORT_TABLE_NAMES)
+    if storyboard_export_tables and storyboard_export_tables != expected_storyboard_export_tables:
+        raise DatabaseSchemaMismatchError(
+            "database schema differs from baseline; partial StoryboardExport schema; "
+            f"tables={sorted(storyboard_export_tables)!r}"
+        )
     if (
         storyboard_coverage_tables
         and storyboard_coverage_tables != expected_storyboard_coverage_tables
@@ -573,12 +605,31 @@ def _adopt_existing_database(connection: Connection) -> None:
             f"capability_unique={capability_unique_present!r}"
         )
 
-    if storyboard_coverage_tables:
+    if storyboard_export_tables:
         summary = "; ".join(repr(item) for item in current_differences[:3])
         raise DatabaseSchemaMismatchError(
-            "database schema differs from current StoryboardCoverage schema; "
+            "database schema differs from current StoryboardExport schema; "
             f"first differences: {summary}"
         )
+
+    if storyboard_coverage_tables:
+        storyboard_coverage_era_differences = _baseline_differences(
+            connection,
+            storyboard_coverage_era=True,
+        )
+        if storyboard_coverage_era_differences:
+            summary = "; ".join(
+                repr(item) for item in storyboard_coverage_era_differences[:3]
+            )
+            raise DatabaseSchemaMismatchError(
+                "database schema differs from StoryboardCoverage-era schema; "
+                f"first differences: {summary}"
+            )
+        command.stamp(configuration, STORYBOARD_COVERAGE_REVISION)
+        command.upgrade(configuration, "head")
+        _assert_database_matches_metadata(connection)
+        ensure_expected_heads(_database_heads(connection), get_script_heads())
+        return
 
     if storyboard_draft_tables:
         storyboard_draft_era_differences = _baseline_differences(

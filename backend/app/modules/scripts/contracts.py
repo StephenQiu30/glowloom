@@ -42,6 +42,16 @@ class NarrativeDependencySnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class ScriptVersionSnapshot:
+    workspace_id: UUID
+    episode_id: UUID
+    version_id: UUID
+    version_no: int
+    status: Literal["draft", "published"]
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
 class StoryboardNarrativeUnit:
     narrative_unit_id: UUID
     unit_version_id: UUID

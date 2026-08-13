@@ -18,6 +18,7 @@ TaskType = Literal[
     "episode_planning",
     "script_adaptation",
     "storyboard_draft",
+    "storyboard_export",
     "image_generation",
     "video_generation",
     "media_probe",
@@ -31,6 +32,7 @@ TaskRequestType = Literal[
     "episode_plan",
     "adaptation_run",
     "storyboard_draft_batch",
+    "storyboard_export_job",
     "generation_request",
     "media_version",
     "upload_session",
@@ -134,6 +136,17 @@ class StoryboardDraftTaskCommand(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=200)
 
 
+class StoryboardExportTaskCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace_id: UUID
+    episode_id: UUID
+    job_id: UUID
+    input_version_id: UUID
+    input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
 class MediaProbeTaskCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -206,6 +219,7 @@ class TaskContext:
     request_type: str
     usage_type: str | None
     usage_id: UUID | None
+    input_hash: str | None
     requested_by: UUID
     status: TaskStatus
 

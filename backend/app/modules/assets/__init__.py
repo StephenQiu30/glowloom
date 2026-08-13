@@ -3,6 +3,7 @@
 from app.modules.assets.contracts import (
     AssetCandidateCommand,
     AssetCandidateResult,
+    AssetExportSnapshot,
     AssetVersionReadinessReference,
     AssetVersionReference,
     ProjectAssetReferenceSummary,
@@ -16,6 +17,7 @@ from app.modules.assets.service import (
     resolve_asset_version,
     resolve_asset_version_readiness,
     resolve_asset_versions_readiness,
+    resolve_export_assets,
     resolve_storyboard_assets,
     summarize_project_asset_references,
     summarize_project_assets,
@@ -24,6 +26,7 @@ from app.modules.assets.service import (
 __all__ = [
     "AssetCandidateCommand",
     "AssetCandidateResult",
+    "AssetExportSnapshot",
     "AssetVersionReadinessReference",
     "AssetVersionReference",
     "ProjectAssetReferenceSummary",
@@ -35,6 +38,7 @@ __all__ = [
     "resolve_asset_version",
     "resolve_asset_version_readiness",
     "resolve_asset_versions_readiness",
+    "resolve_export_assets",
     "resolve_storyboard_assets",
     "summarize_project_asset_references",
     "summarize_project_assets",

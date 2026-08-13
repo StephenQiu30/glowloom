@@ -10,6 +10,7 @@ from app.core.schemas import ApiResponse
 from app.modules.storyboards import service
 from app.modules.storyboards.coverage.api import router as coverage_router
 from app.modules.storyboards.drafts.api import router as drafts_router
+from app.modules.storyboards.exports.api import router as exports_router
 from app.modules.storyboards.schemas import (
     AssetUpgradeApplyRequest,
     AssetUpgradeApplyResponse,
@@ -43,6 +44,7 @@ from app.modules.storyboards.schemas import (
 router = APIRouter(prefix="/api/v1", tags=["storyboards"])
 router.include_router(coverage_router)
 router.include_router(drafts_router)
+router.include_router(exports_router)
 
 
 @router.get(

@@ -35,6 +35,23 @@ class AssetVersionReadinessReference:
 
 
 @dataclass(frozen=True, slots=True)
+class AssetExportSnapshot:
+    workspace_id: UUID
+    project_id: UUID
+    asset_id: UUID
+    asset_state_id: UUID
+    asset_version_id: UUID
+    kind: str
+    name: str
+    state_label: str
+    state_revision: int
+    content_hash: str
+    readiness_status: Literal["draft", "ready", "blocked", "unavailable"]
+    blocker_codes: tuple[str, ...]
+    readiness_hash: str
+
+
+@dataclass(frozen=True, slots=True)
 class StoryboardAssetInput:
     workspace_id: UUID
     project_id: UUID

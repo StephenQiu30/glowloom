@@ -31,6 +31,7 @@ import {
   useAppendShotSpecMutation,
   useArchivedShotsQuery,
   useCompleteMediaUploadMutation,
+  useCreateMediaAccessMutation,
   useCancelAdaptationRunMutation,
   useCancelGenerationTaskMutation,
   useConfigureScheduleMutation,
@@ -68,12 +69,14 @@ import {
   useNarrativeStructureQuery,
   useProjectQuery,
   usePreflightStoryboardDraftMutation,
+  usePreflightStoryboardExportMutation,
   usePublishScriptVersionMutation,
   usePublishAdaptationRunMutation,
   usePauseScheduleMutation,
   useRetryMediaProbeMutation,
   useRequestMediaLocationMigrationMutation,
   useRequestMediaLocationRollbackMutation,
+  useRequestStoryboardExportMutation,
   useResumeScheduleMutation,
   useReviseNarrativeStructureMutation,
   useReorderShotsMutation,
@@ -95,6 +98,7 @@ import {
   useSplitShotPreflightMutation,
   useStartExtractionMutation,
   useStoryboardDraftQuery,
+  useStoryboardExportsQuery,
   useSchedulesQuery,
   useTasksQuery,
   useTriggerScheduleMutation,
@@ -113,6 +117,7 @@ import { MediaWorkspace } from "./media-workspace";
 import { ScriptWorkspace } from "./script-workspace";
 import { type MergePreparation } from "./storyboard-shot-operations";
 import { StoryboardDrafts } from "./storyboard-drafts";
+import { StoryboardExports } from "./StoryboardExports";
 import { StoryboardCoverage } from "./storyboard-coverage";
 import { StoryboardWorkspace } from "./storyboard-workspace";
 import { TaskWorkspace } from "./task-workspace";
@@ -252,6 +257,10 @@ export function EpisodeProductionStudio({
     pollingInterval: 5_000,
     skip: !authenticated || !storyboardActive,
   });
+  const storyboardExportsQuery = useStoryboardExportsQuery(episodeId, {
+    pollingInterval: 3_000,
+    skip: !authenticated || !storyboardActive,
+  });
   const confirmedVersionId =
     snapshot?.script_summary.status === "confirmed"
       ? episode?.current_script_version_id
@@ -305,6 +314,7 @@ export function EpisodeProductionStudio({
       archivedShotsQuery.isLoading ||
       shotReadinessQuery.isLoading ||
       coverageQuery.isLoading ||
+      storyboardExportsQuery.isLoading ||
       structureQuery.isLoading);
   const scriptLoading =
     scriptActive &&
@@ -386,6 +396,11 @@ export function EpisodeProductionStudio({
   const [replaceNarrativeReferences, narrativeReferenceState] =
     useReplaceNarrativeReferencesMutation();
   const [decideCoverage, coverageDecisionState] = useDecideCoverageMutation();
+  const [preflightStoryboardExport, storyboardExportPreflightState] =
+    usePreflightStoryboardExportMutation();
+  const [requestStoryboardExport, storyboardExportRequestState] =
+    useRequestStoryboardExportMutation();
+  const [createMediaAccess, mediaAccessState] = useCreateMediaAccessMutation();
   const [loadShotSpecVersion, shotSpecLookupState] =
     useLazyShotSpecVersionQuery();
   const [notice, setNotice] = useState<string | null>(null);
@@ -445,6 +460,9 @@ export function EpisodeProductionStudio({
     deleteShotState,
     narrativeReferenceState,
     coverageDecisionState,
+    storyboardExportPreflightState,
+    storyboardExportRequestState,
+    mediaAccessState,
     shotSpecLookupState,
   ].some((state) => state.isLoading);
 
@@ -1197,6 +1215,40 @@ export function EpisodeProductionStudio({
     return succeeded;
   }
 
+  async function handleStoryboardExportPreflight() {
+    await runAction(async () => {
+      const result = await preflightStoryboardExport(episodeId).unwrap();
+      if (result.status === "ready") {
+        return `导出预检通过，已固定 ${result.shot_spec_version_ids.length} 个镜头规格和 ${result.asset_version_ids.length} 个资产版本。`;
+      }
+      return `导出预检发现 ${result.blockers.length} 个阻断，请按清单修正后重试。`;
+    });
+  }
+
+  async function handleStoryboardExport(inputHash: string) {
+    await runAction(async () => {
+      const result = await requestStoryboardExport({
+        episodeId,
+        body: {
+          expected_input_hash: inputHash,
+          idempotency_key: `studio-storyboard-export:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      return `可信分镜包任务已创建：${result.id.slice(0, 8)}。`;
+    });
+  }
+
+  async function handleStoryboardExportDownload(mediaVersionId: string) {
+    await runAction(async () => {
+      const access = await createMediaAccess({
+        mediaVersionId,
+        purpose: "download",
+      }).unwrap();
+      window.open(access.url, "_blank", "noopener,noreferrer");
+      return "分镜包临时下载地址已打开。";
+    });
+  }
+
   async function handleSplitPreflight(
     shotId: string,
     request: API.SplitPreflightRequest,
@@ -1375,6 +1427,7 @@ export function EpisodeProductionStudio({
       archivedShotsQuery.error ??
       shotReadinessQuery.error ??
       coverageQuery.error ??
+      storyboardExportsQuery.error ??
       structureQuery.error ??
       draftBatchQuery.error ??
       shotSpecVersionsQuery.error
@@ -1537,6 +1590,14 @@ export function EpisodeProductionStudio({
                 />
               ) : initialPanel === "storyboard" ? (
                 <div className="grid gap-5">
+                  <StoryboardExports
+                    busy={busy}
+                    history={storyboardExportsQuery.data}
+                    preflight={storyboardExportPreflightState.data}
+                    onDownload={handleStoryboardExportDownload}
+                    onExport={handleStoryboardExport}
+                    onPreflight={handleStoryboardExportPreflight}
+                  />
                   <StoryboardDrafts
                     assetBible={assetBibleQuery.data}
                     batch={draftBatchQuery.data}

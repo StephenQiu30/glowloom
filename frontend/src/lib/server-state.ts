@@ -63,6 +63,7 @@ import {
 import {
   archiveMediaApiV1MediaObjectsMediaObjectIdArchivePost,
   completeUploadApiV1MediaUploadsUploadSessionIdCompletePost,
+  createAccessApiV1MediaVersionIdAccessPost,
   getMediaApiV1MediaVersionIdGet,
   initializeUploadApiV1MediaUploadsPost,
   initializeVersionUploadApiV1MediaObjectsMediaObjectIdVersionsPost,
@@ -158,13 +159,16 @@ import {
   getSpecVersionApiV1ShotSpecVersionsVersionIdGet,
   listAssetShotUsagesApiV1AssetVersionsAssetVersionIdShotUsagesGet,
   listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet,
+  listExportsApiV1EpisodesEpisodeIdStoryboardExportsGet,
   listShotsApiV1EpisodesEpisodeIdShotsGet,
   listSpecVersionsApiV1ShotsShotIdSpecVersionsGet,
   mergePreflightApiV1ShotsMergePreflightPost,
   mergeShotsApiV1ShotsMergePost,
   preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPost,
   preflightApplyApiV1StoryboardDraftBatchesBatchIdApplyPreflightPost,
+  preflightExportApiV1EpisodesEpisodeIdStoryboardExportsPreflightPost,
   reorderShotsApiV1EpisodesEpisodeIdShotsReorderPost,
+  requestExportApiV1EpisodesEpisodeIdStoryboardExportsPost,
   replaceReferencesApiV1ShotsShotIdNarrativeReferencesPost,
   restoreShotApiV1ShotsShotIdRestorePost,
   setCurrentSpecVersionApiV1ShotsShotIdCurrentSpecVersionPost,
@@ -265,6 +269,7 @@ export const appApi = createApi({
     "ShotReadiness",
     "Coverage",
     "StoryboardDraft",
+    "StoryboardExports",
   ],
   endpoints: (builder) => ({
     login: builder.mutation<API.AuthResponse, API.LoginRequest>({
@@ -1153,6 +1158,55 @@ export const appApi = createApi({
       providesTags: (_result, _error, episodeId) => [
         { type: "Coverage", id: episodeId },
       ],
+    }),
+    storyboardExports: builder.query<API.ExportHistoryResponse, string>({
+      queryFn: (episodeId) =>
+        runRequest(() =>
+          listExportsApiV1EpisodesEpisodeIdStoryboardExportsGet({
+            episode_id: episodeId,
+          }),
+        ),
+      providesTags: (_result, _error, episodeId) => [
+        { type: "StoryboardExports", id: episodeId },
+      ],
+    }),
+    preflightStoryboardExport: builder.mutation<
+      API.ExportPreflightResponse,
+      string
+    >({
+      queryFn: (episodeId) =>
+        runRequest(() =>
+          preflightExportApiV1EpisodesEpisodeIdStoryboardExportsPreflightPost({
+            episode_id: episodeId,
+          }),
+        ),
+    }),
+    requestStoryboardExport: builder.mutation<
+      API.ExportResponse,
+      { episodeId: string; body: API.ExportRequest }
+    >({
+      queryFn: ({ episodeId, body }) =>
+        runRequest(() =>
+          requestExportApiV1EpisodesEpisodeIdStoryboardExportsPost(
+            { episode_id: episodeId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId }) => [
+        { type: "StoryboardExports", id: episodeId },
+      ],
+    }),
+    createMediaAccess: builder.mutation<
+      API.MediaAccessResponse,
+      { mediaVersionId: string; purpose: API.MediaAccessRequest["purpose"] }
+    >({
+      queryFn: ({ mediaVersionId, purpose }) =>
+        runRequest(() =>
+          createAccessApiV1MediaVersionIdAccessPost(
+            { version_id: mediaVersionId },
+            { purpose },
+          ),
+        ),
     }),
     replaceNarrativeReferences: builder.mutation<
       API.NarrativeReferenceReplaceResponse,
@@ -2409,6 +2463,7 @@ export const {
   useAssetVersionsQuery,
   useChangePasswordMutation,
   useCompleteMediaUploadMutation,
+  useCreateMediaAccessMutation,
   useConfirmStructureMutation,
   useConfigureScheduleMutation,
   useConfirmRegistrationVerificationMutation,
@@ -2472,6 +2527,7 @@ export const {
   useProjectDeletePreflightMutation,
   useProjectSnapshotQuery,
   usePreflightStoryboardDraftMutation,
+  usePreflightStoryboardExportMutation,
   useProjectsQuery,
   usePublishAdaptationRunMutation,
   usePublishScriptVersionMutation,
@@ -2480,6 +2536,7 @@ export const {
   useRetryMediaProbeMutation,
   useRequestMediaLocationMigrationMutation,
   useRequestMediaLocationRollbackMutation,
+  useRequestStoryboardExportMutation,
   useRequestRegistrationVerificationMutation,
   useResumeScheduleMutation,
   useReviseNarrativeStructureMutation,
@@ -2523,6 +2580,7 @@ export const {
   useShotDeletePreflightMutation,
   useShotSpecVersionsQuery,
   useStoryboardDraftQuery,
+  useStoryboardExportsQuery,
   useSplitShotMutation,
   useSplitShotPreflightMutation,
   useTasksQuery,

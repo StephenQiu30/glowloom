@@ -17,6 +17,7 @@ from app.modules.scripts.contracts import (
     NarrativeDependencySnapshot,
     ScriptExtractionInput,
     ScriptProductionSummary,
+    ScriptVersionSnapshot,
     StoryboardNarrativeSnapshot,
 )
 from app.modules.scripts.extractions.ports import (
@@ -53,6 +54,7 @@ from app.modules.scripts.versions.service import (
     resolve_confirmed_structure,
     resolve_confirmed_structures,
     resolve_episode_confirmed_structures,
+    resolve_script_version_snapshot,
     script_version_exists,
 )
 
@@ -80,6 +82,7 @@ __all__ = [
     "ScriptAdaptationProviderError",
     "ScriptAdaptationProviderResult",
     "ScriptProductionSummary",
+    "ScriptVersionSnapshot",
     "ScriptStructureExtractor",
     "record_episode_planning_error",
     "record_episode_planning_result",
@@ -89,6 +92,7 @@ __all__ = [
     "resolve_confirmed_structure",
     "resolve_confirmed_structures",
     "resolve_episode_confirmed_structures",
+    "resolve_script_version_snapshot",
     "resolve_narrative_dependencies",
     "resolve_narrative_unit_versions",
     "resolve_storyboard_narrative",

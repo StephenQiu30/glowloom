@@ -30,6 +30,7 @@ ALLOWED_ROUTING_KEYS = frozenset(
         "media.upload.cleanup",
         "media.location.migrate",
         "media.location.retire",
+        "media.storyboard.export",
     }
 )
 

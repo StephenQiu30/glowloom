@@ -28,6 +28,7 @@ from app.modules.scripts.contracts import (
     NarrativeImpactRecorder,
     NarrativeImpactSnapshot,
     ScriptVersionImpactReader,
+    ScriptVersionSnapshot,
 )
 from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
 from app.modules.scripts.versions.schemas import (
@@ -304,6 +305,32 @@ async def script_version_exists(
 ) -> bool:
     version = await repository.find_version(session, version_id)
     return version is not None and version.workspace_id == workspace_id
+
+
+async def resolve_script_version_snapshot(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_id: UUID,
+    version_id: UUID,
+) -> ScriptVersionSnapshot | None:
+    version = await repository.find_version(session, version_id)
+    if version is None or version.workspace_id != workspace_id:
+        return None
+    source = await repository.find_source(session, version.source_id)
+    if (
+        source is None
+        or source.workspace_id != workspace_id
+        or source.episode_id != episode_id
+    ):
+        return None
+    return ScriptVersionSnapshot(
+        workspace_id=workspace_id,
+        episode_id=episode_id,
+        version_id=version.id,
+        version_no=version.version_no,
+        status=cast(Literal["draft", "published"], version.status),
+        content_hash=version.content_hash,
+    )
 
 
 async def resolve_confirmed_structure(

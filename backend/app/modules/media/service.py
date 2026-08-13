@@ -12,9 +12,20 @@ from app.core.errors import ApiError, ErrorCode
 from app.modules.governance.audit import append_audit_event
 from app.modules.identity import ActorContext, Capability, actor_context
 from app.modules.media import repository
-from app.modules.media.contracts import MediaProbeError, MediaVersionReference
+from app.modules.media.contracts import (
+    MediaProbeError,
+    MediaVersionReference,
+    RenderedMediaCommand,
+    RenderedMediaResult,
+)
 from app.modules.media.document_content import read_strict_utf8_document
-from app.modules.media.models import MediaLocation, MediaObject, MediaVersion, UploadSession
+from app.modules.media.models import (
+    MediaLineage,
+    MediaLocation,
+    MediaObject,
+    MediaVersion,
+    UploadSession,
+)
 from app.modules.media.schemas import (
     AppendVersionRequest,
     ArchiveMediaRequest,
@@ -72,6 +83,120 @@ ALLOWED_MIME_TYPES: dict[str, frozenset[str]] = {
     ),
     "document": frozenset({"text/plain", "text/markdown"}),
 }
+
+
+def _valid_sha256(value: str) -> bool:
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+async def register_rendered_media(
+    session: AsyncSession,
+    command: RenderedMediaCommand,
+    *,
+    trace_id: str,
+) -> RenderedMediaResult:
+    if (
+        not command.filename
+        or len(command.filename) > 255
+        or command.size_bytes < 1
+        or command.mime_type not in ALLOWED_MIME_TYPES["delivery"]
+        or not _valid_sha256(command.sha256)
+        or not command.storage_profile
+        or not command.bucket
+        or not command.object_key
+        or not command.sources
+    ):
+        raise ValueError("rendered media declaration is invalid")
+    positions = [value.position for value in command.sources]
+    source_keys = [
+        (value.source_type, value.source_id) for value in command.sources
+    ]
+    if (
+        positions != list(range(1, len(positions) + 1))
+        or len(set(source_keys)) != len(source_keys)
+        or any(not _valid_sha256(value.source_hash) for value in command.sources)
+    ):
+        raise ValueError("rendered media lineage is invalid")
+
+    now = datetime.now(UTC)
+    media_object = MediaObject(
+        id=uuid7(),
+        workspace_id=command.workspace_id,
+        kind="delivery",
+        source_type="rendered",
+        status="active",
+        current_version_id=None,
+        revision=1,
+        created_at=now,
+        updated_at=now,
+    )
+    version = MediaVersion(
+        id=uuid7(),
+        workspace_id=command.workspace_id,
+        media_object_id=media_object.id,
+        version_no=1,
+        filename=command.filename,
+        sha256=command.sha256,
+        size_bytes=command.size_bytes,
+        mime_type=command.mime_type,
+        probe_status="ready",
+        probe_attempt=1,
+        created_by=command.created_by,
+        created_at=now,
+    )
+    location = MediaLocation(
+        id=uuid7(),
+        workspace_id=command.workspace_id,
+        media_version_id=version.id,
+        storage_profile=command.storage_profile,
+        bucket=command.bucket,
+        object_key=command.object_key,
+        status="active",
+        verified_at=now,
+        created_at=now,
+    )
+    session.add(media_object)
+    await session.flush()
+    session.add(version)
+    await session.flush()
+    media_object.current_version_id = version.id
+    session.add(location)
+    session.add_all(
+        MediaLineage(
+            id=uuid7(),
+            workspace_id=command.workspace_id,
+            media_version_id=version.id,
+            source_type=value.source_type,
+            source_id=value.source_id,
+            source_hash=value.source_hash,
+            position=value.position,
+            created_at=now,
+        )
+        for value in command.sources
+    )
+    append_audit_event(
+        session,
+        workspace_id=command.workspace_id,
+        actor_id=command.created_by,
+        action="media.version_created",
+        target_type="media_version",
+        target_id=version.id,
+        trace_id=trace_id,
+        metadata={
+            "revision": media_object.revision,
+            "version_id": str(version.id),
+            "version_no": version.version_no,
+            "kind": media_object.kind,
+            "source_type": media_object.source_type,
+        },
+        occurred_at=now,
+    )
+    await session.flush()
+    return RenderedMediaResult(
+        media_object_id=media_object.id,
+        media_version_id=version.id,
+        media_location_id=location.id,
+    )
 
 
 def _media_object_response(media_object: MediaObject) -> MediaObjectResponse:

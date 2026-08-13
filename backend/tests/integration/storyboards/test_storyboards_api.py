@@ -393,7 +393,7 @@ async def _append_ready_location_version(
     return version
 
 
-async def _seed_ready_storyboard_shots(
+async def seed_ready_storyboard_shots(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     refs: dict[str, UUID],
@@ -1644,7 +1644,7 @@ async def test_batch_readiness_has_constant_query_bound(
         project_id=UUID(episode["project_id"]),
         refs=refs,
     )
-    await _seed_ready_storyboard_shots(
+    await seed_ready_storyboard_shots(
         session_factory,
         refs=refs,
         location_version_id=UUID(location_version["id"]),

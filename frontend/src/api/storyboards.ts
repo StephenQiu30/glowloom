@@ -221,6 +221,62 @@ export async function createBatchApiV1EpisodesEpisodeIdStoryboardDraftBatchesPos
   );
 }
 
+/** List Exports GET /api/v1/episodes/${param0}/storyboard-exports */
+export async function listExportsApiV1EpisodesEpisodeIdStoryboardExportsGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listExportsApiV1EpisodesEpisodeIdStoryboardExportsGetParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseExportHistoryResponse_>(
+    `/api/v1/episodes/${param0}/storyboard-exports`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Request Export POST /api/v1/episodes/${param0}/storyboard-exports */
+export async function requestExportApiV1EpisodesEpisodeIdStoryboardExportsPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.requestExportApiV1EpisodesEpisodeIdStoryboardExportsPostParams,
+  body: API.ExportRequest,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseExportResponse_>(
+    `/api/v1/episodes/${param0}/storyboard-exports`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Preflight Export POST /api/v1/episodes/${param0}/storyboard-exports/preflight */
+export async function preflightExportApiV1EpisodesEpisodeIdStoryboardExportsPreflightPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.preflightExportApiV1EpisodesEpisodeIdStoryboardExportsPreflightPostParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseExportPreflightResponse_>(
+    `/api/v1/episodes/${param0}/storyboard-exports/preflight`,
+    {
+      method: "POST",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
 /** Create From Confirmed Candidate POST /api/v1/extraction-candidates/${param0}/shot */
 export async function createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

@@ -15,6 +15,7 @@ def register_implemented_models() -> None:
     from app.modules.storyboards import models as storyboard_models
     from app.modules.storyboards.coverage import models as storyboard_coverage_models
     from app.modules.storyboards.drafts import models as storyboard_draft_models
+    from app.modules.storyboards.exports import models as storyboard_export_models
 
     _ = (
         assets_models,
@@ -32,4 +33,5 @@ def register_implemented_models() -> None:
         storyboard_models,
         storyboard_coverage_models,
         storyboard_draft_models,
+        storyboard_export_models,
     )

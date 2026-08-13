@@ -15,6 +15,7 @@ from app.modules.assets.contracts import (
     AssetCandidateCommand,
     AssetCandidateDecisionCountReader,
     AssetCandidateResult,
+    AssetExportSnapshot,
     AssetOccurrenceNarrativeReader,
     AssetOccurrenceNarrativeSnapshot,
     AssetVersionReadinessReference,
@@ -1855,6 +1856,55 @@ async def resolve_storyboard_assets(
             )
         )
     return tuple(inputs)
+
+
+async def resolve_export_assets(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_id: UUID,
+    version_ids: list[UUID],
+) -> tuple[AssetExportSnapshot, ...]:
+    unique_ids = list(dict.fromkeys(version_ids))
+    rows = await repository.find_versions(session, unique_ids)
+    by_version = {
+        version.id: (version, state, asset)
+        for version, state, asset in rows
+        if version.workspace_id == workspace_id
+        and state.workspace_id == workspace_id
+        and asset.workspace_id == workspace_id
+        and asset.project_id == project_id
+    }
+    if len(by_version) != len(unique_ids):
+        return ()
+    readiness = await resolve_asset_versions_readiness(
+        session,
+        workspace_id,
+        project_id,
+        unique_ids,
+        purpose="ai_short_drama_generation",
+        channel="lanverse_preview",
+        region="CN",
+    )
+    if len(readiness) != len(unique_ids):
+        return ()
+    return tuple(
+        AssetExportSnapshot(
+            workspace_id=workspace_id,
+            project_id=project_id,
+            asset_id=by_version[version_id][2].id,
+            asset_state_id=by_version[version_id][1].id,
+            asset_version_id=version_id,
+            kind=by_version[version_id][2].kind,
+            name=by_version[version_id][2].name,
+            state_label=by_version[version_id][1].label,
+            state_revision=by_version[version_id][1].revision,
+            content_hash=by_version[version_id][0].content_hash,
+            readiness_status=readiness[version_id].status,
+            blocker_codes=readiness[version_id].blocker_codes,
+            readiness_hash=readiness[version_id].evaluation_hash,
+        )
+        for version_id in unique_ids
+    )
 
 
 _STATE_NEXT_ACTIONS = {

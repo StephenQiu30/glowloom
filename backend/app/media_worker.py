@@ -37,6 +37,7 @@ from app.modules.messaging.metrics import (
     observe_message_result,
     track_worker_inflight,
 )
+from app.modules.storyboards.exports.consumer import consume_storyboard_export
 
 MEDIA_WORKER_MAX_IN_FLIGHT = 2
 MAX_MESSAGE_BYTES = 64 * 1024
@@ -208,6 +209,14 @@ async def _process_valid_envelope(
                     )
                 elif envelope.event_type == "media_location_retirement.requested":
                     result = await consume_media_location_retirement(
+                        session,
+                        envelope,
+                        storage=storage,
+                        storage_profile=storage_profile,
+                        storage_bucket=storage_bucket,
+                    )
+                elif envelope.event_type == "storyboard_export.requested":
+                    result = await consume_storyboard_export(
                         session,
                         envelope,
                         storage=storage,

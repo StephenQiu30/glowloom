@@ -15,6 +15,7 @@ from app.modules.storyboards.exports.contracts import (
 )
 from app.modules.storyboards.exports.package import build_storyboard_package
 from app.modules.storyboards.hashing import canonical_payload_hash
+from app.modules.storyboards.schemas import ShotSpec
 
 
 def _id(value: int) -> UUID:
@@ -56,6 +57,7 @@ def _snapshot() -> ExportSnapshot:
                 name='沈岚, "女帝"',
                 state_label="常服",
                 state_revision=1,
+                content_hash=digest,
                 readiness_hash=digest,
             ),
         ),
@@ -68,10 +70,35 @@ def _snapshot() -> ExportSnapshot:
                 spec_version_no=3,
                 spec_content_hash=digest,
                 spec_input_hash=digest,
-                spec={
-                    "visual": {"environment": "河岸"},
-                    "action_beats": [{"description": "沈岚回头"}],
-                },
+                spec=ShotSpec.model_validate(
+                    {
+                        "script_reference": {
+                            "confirmed_script_version_id": str(_id(4)),
+                            "scene_id": str(_id(14)),
+                            "dialogue_ids": [],
+                        },
+                        "narrative": {"purpose": "女帝确认孩子遇险"},
+                        "visual": {
+                            "shot_size": "close_up",
+                            "camera_angle": "eye_level",
+                            "camera_movement": "static",
+                            "composition": "沈岚占据画面中心",
+                            "environment": "河岸",
+                            "subject_placements": [],
+                            "mood_lighting": "冷色逆光",
+                        },
+                        "action_beats": [
+                            {
+                                "beat_key": "turn",
+                                "order": 1,
+                                "description": "沈岚回头",
+                            }
+                        ],
+                        "dialogue_or_narration": [],
+                        "duration_ms": 3000,
+                        "generation_intent": {"mode": "text_to_video"},
+                    }
+                ),
                 prompt="河岸，沈岚回头",
                 readiness_hash=digest,
                 asset_references=(

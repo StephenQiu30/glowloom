@@ -29,6 +29,7 @@ const apiMocks = vi.hoisted(() => ({
   listMedia: vi.fn(),
   listSources: vi.fn(),
   listArchivedShots: vi.fn(),
+  listExports: vi.fn(),
   listShotReadiness: vi.fn(),
   listShots: vi.fn(),
   listShotSpecVersions: vi.fn(),
@@ -102,6 +103,7 @@ vi.mock("@/api/storyboards", async () => ({
     apiMocks.listShotReadiness,
   listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet:
     apiMocks.listArchivedShots,
+  listExportsApiV1EpisodesEpisodeIdStoryboardExportsGet: apiMocks.listExports,
   listShotsApiV1EpisodesEpisodeIdShotsGet: apiMocks.listShots,
   listSpecVersionsApiV1ShotsShotIdSpecVersionsGet:
     apiMocks.listShotSpecVersions,
@@ -523,6 +525,9 @@ describe("单集统一生产工作台", () => {
     });
     apiMocks.listMedia.mockResolvedValue({
       data: { items: [], total: 0, limit: 100, offset: 0 },
+    });
+    apiMocks.listExports.mockResolvedValue({
+      data: { items: [], total: 0 },
     });
     apiMocks.startExtraction.mockResolvedValue({
       data: {

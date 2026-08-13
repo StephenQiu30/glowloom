@@ -298,6 +298,18 @@ declare namespace API {
     data: EpisodeResponse;
   };
 
+  type ApiResponseExportHistoryResponse_ = {
+    data: ExportHistoryResponse;
+  };
+
+  type ApiResponseExportPreflightResponse_ = {
+    data: ExportPreflightResponse;
+  };
+
+  type ApiResponseExportResponse_ = {
+    data: ExportResponse;
+  };
+
   type ApiResponseExtractionBatchResponse_ = {
     data: ExtractionBatchResponse;
   };
@@ -2613,6 +2625,124 @@ declare namespace API {
     unit: "per_request" | null;
   };
 
+  type ExportBlockerResponse = {
+    /** Code */
+    code: string;
+    /** Summary */
+    summary: string;
+    /** Next Action */
+    next_action: string;
+    /** Shot Id */
+    shot_id: string | null | null;
+    /** Dependency Id */
+    dependency_id: string | null | null;
+  };
+
+  type ExportFileResponse = {
+    /** Path */
+    path: string;
+    /** Media Type */
+    media_type: string;
+    /** Sha256 */
+    sha256: string;
+    /** Size Bytes */
+    size_bytes: number;
+  };
+
+  type ExportHistoryResponse = {
+    /** Items */
+    items: ExportResponse[];
+    /** Total */
+    total: number;
+  };
+
+  type ExportManifestResponse = {
+    /** Id */
+    id: string;
+    /** Schema Version */
+    schema_version: number;
+    /** Input Hash */
+    input_hash: string;
+    /** Script Version Id */
+    script_version_id: string;
+    /** Narrative Structure Id */
+    narrative_structure_id: string;
+    /** Narrative Unit Version Ids */
+    narrative_unit_version_ids: string[];
+    /** Shot Spec Version Ids */
+    shot_spec_version_ids: string[];
+    /** Asset Version Ids */
+    asset_version_ids: string[];
+    /** Coverage Basis Hash */
+    coverage_basis_hash: string;
+    /** Coverage Evaluation Hash */
+    coverage_evaluation_hash: string;
+    /** Files */
+    files: ExportFileResponse[];
+    /** Media Version Id */
+    media_version_id: string;
+    /** Package Sha256 */
+    package_sha256: string;
+    /** Package Size Bytes */
+    package_size_bytes: number;
+    /** Created At */
+    created_at: string;
+  };
+
+  type ExportPreflightResponse = {
+    /** Episode Id */
+    episode_id: string;
+    /** Status */
+    status: "ready" | "blocked" | "unavailable";
+    /** Input Hash */
+    input_hash: string | null;
+    /** Script Version Id */
+    script_version_id: string | null;
+    /** Narrative Structure Id */
+    narrative_structure_id: string | null;
+    /** Narrative Unit Version Ids */
+    narrative_unit_version_ids: string[];
+    /** Shot Spec Version Ids */
+    shot_spec_version_ids: string[];
+    /** Asset Version Ids */
+    asset_version_ids: string[];
+    /** Coverage Basis Hash */
+    coverage_basis_hash: string | null;
+    /** Coverage Evaluation Hash */
+    coverage_evaluation_hash: string | null;
+    /** Readiness Evaluation Hash */
+    readiness_evaluation_hash: string | null;
+    /** Blockers */
+    blockers: ExportBlockerResponse[];
+  };
+
+  type ExportRequest = {
+    /** Expected Input Hash */
+    expected_input_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type ExportResponse = {
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Status */
+    status: "queued" | "running" | "succeeded" | "failed";
+    /** Input Hash */
+    input_hash: string;
+    /** Task Id */
+    task_id: string | null;
+    /** Error Code */
+    error_code: string | null;
+    manifest: ExportManifestResponse | null;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+  };
+
   type ExtractionBatchResponse = {
     /** Id */
     id: string;
@@ -3136,6 +3266,10 @@ declare namespace API {
   type listEpisodesApiV1ProjectsProjectIdEpisodesGetParams = {
     project_id: string;
     include_archived: boolean | null;
+  };
+
+  type listExportsApiV1EpisodesEpisodeIdStoryboardExportsGetParams = {
+    episode_id: string;
   };
 
   type listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGetParams =
@@ -4004,6 +4138,11 @@ declare namespace API {
       asset_version_id: string;
     };
 
+  type preflightExportApiV1EpisodesEpisodeIdStoryboardExportsPreflightPostParams =
+    {
+      episode_id: string;
+    };
+
   type preflightGenerationApiV1ShotsShotIdGenerationPreflightPostParams = {
     shot_id: string;
   };
@@ -4218,6 +4357,10 @@ declare namespace API {
 
   type replaceReferencesApiV1ShotsShotIdNarrativeReferencesPostParams = {
     shot_id: string;
+  };
+
+  type requestExportApiV1EpisodesEpisodeIdStoryboardExportsPostParams = {
+    episode_id: string;
   };
 
   type requestMediaLocationMigrationApiV1MediaVersionIdLocationMigrationsPostParams =
@@ -5210,6 +5353,7 @@ declare namespace API {
       | "episode_planning"
       | "script_adaptation"
       | "storyboard_draft"
+      | "storyboard_export"
       | "image_generation"
       | "video_generation"
       | "media_probe"
@@ -5223,6 +5367,7 @@ declare namespace API {
       | "episode_plan"
       | "adaptation_run"
       | "storyboard_draft_batch"
+      | "storyboard_export_job"
       | "generation_request"
       | "media_version"
       | "upload_session"

@@ -179,6 +179,45 @@ class MediaLocation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
+class MediaLineage(Base):
+    __tablename__ = "med_media_lineages"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ("media_version_id", "workspace_id"),
+            ("med_media_versions.id", "med_media_versions.workspace_id"),
+            name="fk_med_lineage_version_workspace",
+        ),
+        CheckConstraint("position >= 1", name="ck_med_lineage_position"),
+        CheckConstraint(
+            "source_type IN ('asset_version', 'narrative_unit_version', "
+            "'script_version', 'shot_spec_version', 'storyboard_coverage', "
+            "'storyboard_export_snapshot', 'storyboard_readiness')",
+            name="ck_med_lineage_source_type",
+        ),
+        UniqueConstraint(
+            "media_version_id",
+            "position",
+            name="uq_med_lineage_version_position",
+        ),
+        UniqueConstraint(
+            "media_version_id",
+            "source_type",
+            "source_id",
+            name="uq_med_lineage_source",
+        ),
+        Index("ix_med_lineage_source", "source_type", "source_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    media_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(40))
+    source_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    source_hash: Mapped[str] = mapped_column(String(64))
+    position: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
 class UploadSession(Base):
     __tablename__ = "med_upload_sessions"
     __table_args__ = (

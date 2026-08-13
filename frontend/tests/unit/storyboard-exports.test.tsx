@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { StoryboardExports } from "@/app/studio/[episodeId]/storyboard-exports";
+import { StoryboardExports } from "@/app/studio/[episodeId]/StoryboardExports";
 
 const inputHash = "a".repeat(64);
 
