@@ -39,7 +39,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | Gate | 当前状态 | 负责人 | 关闭证据 | 未关闭时允许做什么 |
 | --- | --- | --- | --- | --- |
 | G-MVPA-001 范围接受 | closed（2026-08-13 用户明确要求执行） | 产品负责人 | 接受 PRD-012 的 MVP-A、11 个 PT、10 集/100k code points 上限和非目标 | 只评审文档，不改业务代码/表 |
-| G-MVPA-002 黄金样本 | open | 产品负责人 + 短剧制作人 + QA | 一部自有 3–5 集原稿、单集 60–120 秒/12–24 镜、必拍/允许省略标注和预期分集边界入测试 fixture | 可设计匿名格式语料，不可伪造质量接受 |
+| G-MVPA-002 黄金样本 | in_progress（匿名格式语料已 Green；真实黄金剧和人工 oracle 待提供/接受） | 产品负责人 + 短剧制作人 + QA | 一部自有 3–5 集原稿、单集 60–120 秒/12–24 镜、必拍/允许省略标注和预期分集边界入测试 fixture | 可设计匿名格式语料，不可伪造质量接受 |
 | G-MVPA-003 迁移决策 | in_progress（实现已 Green；待自有旧库恢复演练） | 技术负责人 | 接受 Alembic 基线/旧库升级/备份恢复方案，并同步修订 DES-002、MOD-011 与 PLAN-000 的“仅 create_all”旧基线 | 不领取新增业务模型；先在团队自有旧库副本保存真实备份/恢复证据 |
 | G-MVPA-004 工作区 | closed（计划编写前已核对） | DEV owner | 每个任务开始前重新运行 `git status --short` 并对白名单；不读/提交本地生成产物 | 保留无关产物；重叠修改时停止 |
 | G-MVPA-005 真实依赖 | 当前 S0–S3 已关闭 | QA/工程 | PostgreSQL/RabbitMQ/MinIO/DeepSeek 现有合同回归可运行；新增 AI 分集/改写/分镜只在真实 DeepSeek 授权开关下接受 | 无 Key 可完成纯领域/UI，但 AI PT 保持 blocked；不要求先完成整个 Provider 管理页面 |
@@ -138,6 +138,12 @@ DEV-MVPA-01 当前实现证据（2026-08-13）：
 - 统一 server、独立 Scheduler、I/O Worker、Media Worker 均在业务操作前 fail closed；Docker 镜像显式包含 revision 目录，CI Ruff 覆盖 `alembic/`；
 - 合成备份恢复演练使用两个名称固定且以 `_test` 结尾的临时 PostgreSQL 库：源库由 `template0 → alembic upgrade head` 创建并写入一条测试账号，`pg_dump -Fc --no-owner --no-privileges` 后在空目标库以 `pg_restore --single-transaction --exit-on-error` 恢复；43 张表的逐表行数和排序行内容 hash 完全一致，目标 revision 为 `95c0d24572c5`，`current --check-heads` 与 `alembic check` 通过，演练结束后两个临时库均已删除；
 - 以上证明 migration-managed 数据库的工具链和 fail-closed 校验可以工作，不证明团队旧库结构、真实数据规模、锁影响、恢复时长或 RPO/RTO。尚未取得团队自有旧库及其运维侧备份引用，因此不创建 Acceptance、不关闭 G-MVPA-003，也不领取 DEV-MVPA-02。
+
+DEV-MVPA-02 准入前置证据（2026-08-13）：
+
+- `backend/tests/fixtures/mvp_a/script_format_cases.json` 已形成六组可公开提交的最小合成语料，固定显式 5 集、全角/中文/英文集标记、缺号、重复、空集、正文内嵌集号不误切、Unicode 扩展汉字和 Emoji；所有 marker 使用 half-open Unicode code-point 区间；
+- `backend/tests/contract/test_mvp_a_script_fixture_contract.py` 以严格 Pydantic 契约拒绝额外字段，验证完整失败矩阵、精确原文切片、行号、code-point/UTF-16/UTF-8 差异和无外部引用；该契约测试 6 项通过；
+- `backend/tests/fixtures/mvp_a/README.md` 已固定真实黄金包的最小交付清单和仓库授权边界；上述合成语料只关闭格式 corpus 子项，不证明分集、改写或分镜质量，不能关闭 G-MVPA-002，也不能据此进入生产 parser Green。
 
 Red：
 
