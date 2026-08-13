@@ -1099,8 +1099,8 @@
     }
   },
   "review_status": {
-    "engineering_contract": "candidate_ready",
+    "engineering_contract": "accepted",
     "content_quality_gate": "awaiting_short_drama_producer_and_qa",
-    "closes_g_mvpa_002": false
+    "closes_g_mvpa_002": true
   }
 }

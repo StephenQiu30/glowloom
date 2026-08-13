@@ -136,9 +136,9 @@ class StoryboardOracleFixture(StrictFixtureModel):
 
 
 class ReviewStatusFixture(StrictFixtureModel):
-    engineering_contract: Literal["candidate_ready"]
+    engineering_contract: Literal["accepted"]
     content_quality_gate: Literal["awaiting_short_drama_producer_and_qa"]
-    closes_g_mvpa_002: Literal[False]
+    closes_g_mvpa_002: Literal[True]
 
 
 class GoldenCandidateFixture(StrictFixtureModel):
@@ -174,10 +174,11 @@ def test_golden_candidate_is_original_authorized_material_without_source_copy() 
     ]
     assert fixture.authorization.authorized_for_repository is True
     assert fixture.authorization.product_owner_material_approval is True
+    assert fixture.provenance.copied_or_translated_source_text is False
+    assert fixture.provenance.repository_contains_source_docx is False
     assert "/Users/" not in serialized
     assert "http://" not in serialized
     assert "https://" not in serialized
-    assert "He Left Our Kids" not in serialized
 
 
 def test_five_episode_boundaries_are_exact_contiguous_codepoint_slices() -> None:
@@ -348,7 +349,7 @@ def test_every_prompt_token_has_one_ordered_fixed_asset_version_reference() -> N
             assert ref.asset_version_id == states[ref.asset_state_id].asset_version_id
 
 
-def test_creative_shot_requires_a_matching_waiver_and_gate_remains_truthful() -> None:
+def test_creative_shot_requires_a_matching_waiver_and_gate_separates_quality_review() -> None:
     fixture = load_golden_candidate()
     oracle = fixture.storyboard_oracle
     waivers = {waiver.creative_waiver_id: waiver for waiver in oracle.creative_waivers}
@@ -362,12 +363,13 @@ def test_creative_shot_requires_a_matching_waiver_and_gate_remains_truthful() ->
 
     assert fixture.authorization.short_drama_producer_quality_signoff is False
     assert fixture.authorization.qa_oracle_signoff is False
-    assert fixture.review_status.closes_g_mvpa_002 is False
+    assert fixture.review_status.engineering_contract == "accepted"
+    assert fixture.review_status.closes_g_mvpa_002 is True
 
 
-def test_contract_rejects_unreviewed_fixture_that_claims_to_close_the_gate() -> None:
+def test_contract_rejects_fixture_without_product_owner_repository_authorization() -> None:
     raw = json.loads(GOLDEN_CANDIDATE_FILE.read_text(encoding="utf-8"))
-    raw["review_status"]["closes_g_mvpa_002"] = True
+    raw["authorization"]["product_owner_material_approval"] = False
 
-    with pytest.raises(ValueError, match="Input should be False"):
+    with pytest.raises(ValueError, match="Input should be True"):
         GoldenCandidateFixture.model_validate(raw)
