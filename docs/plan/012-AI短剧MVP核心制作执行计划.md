@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～04 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划与原子批量物化；制作人/QA 内容质量复核保留到分镜/分镜包产品验收；下一任务为 DEV-MVPA-05）
+- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～04 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划与原子批量物化；制作人/QA 内容质量复核保留到分镜/分镜包产品验收；DEV-MVPA-05 已进入 GitHub 证据与 Red 阶段）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -97,7 +97,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-02 | completed（原创 mock、格式语料、覆盖 oracle 与严格 fixture 契约） | 全部新增 PT 的 fixture/契约门禁 | 2 | MVPA-01 | 5 集黄金工程材料、20 单元/16 镜覆盖 oracle、状态资产和模型契约 |
 | DEV-MVPA-03 | completed（Acceptance 029） | PT-SCR-006 | 8 | MVPA-02 | 整剧 text/txt/md、Document/Revision/Block、格式分析 UI |
 | DEV-MVPA-04 | completed（Acceptance 030） | PT-SCR-007 | 9 | MVPA-03 | 一个分集建议、边界编辑、confirm、批量物化和项目页回读 |
-| DEV-MVPA-05 | ready | PT-SCR-008 | 9 | MVPA-02 | 单集改写 Run、一个候选、diff/编辑/发布和失败恢复 |
+| DEV-MVPA-05 | in_progress（GitHub 证据 Gate 已关闭，待 Red） | PT-SCR-008 | 9 | MVPA-02 | 单集改写 Run、一个候选、diff/编辑/发布和失败恢复 |
 | DEV-MVPA-06 | proposed | PT-SCR-009 | 14 | MVPA-05 | NarrativeUnit/Version、人工修正、current 影响和下游 stale |
 | DEV-MVPA-07 | proposed | PT-AST-006 | 7 | MVPA-06 | AssetState/Occurrence/state current、状态矩阵和 readiness |
 | DEV-MVPA-08 | proposed | PT-AST-007 | 5 | MVPA-07 | 改名/禁用/换版本影响中心、state-aware usage 与 apply |
@@ -249,6 +249,28 @@ Green：
 - 后端 `388 passed, 25 skipped`，前端 `22 files / 76 tests` 与生产构建通过，完整 Playwright `11 passed`；详见 [Acceptance 030](../acceptance/arrived/030-分集计划与批量物化验收.md)。
 
 ### 6.4 DEV-MVPA-05：改写候选与发布
+
+改写共享 GitHub 证据池（固定于 2026-08-13）先于实现。领域项目用来验证短剧约束和审核流，跨年度项目用来校验结构化输出与 diff；README、stars 和短期 release 数不承担正确性证明：
+
+| 候选 | 固定源码/测试与许可证 | 已证明的能力与缺口 | 准入决定 |
+| --- | --- | --- | --- |
+| Jellyfish `a967819` | [最小改写 Prompt](https://github.com/Forget-C/Jellyfish/blob/a9678194ddf2d9be3ccbe78d4287d87d5089e123/backend/app/chains/agents/script_optimizer_agent.py#L12-L53)、[类型化完整正文与摘要](https://github.com/Forget-C/Jellyfish/blob/a9678194ddf2d9be3ccbe78d4287d87d5089e123/backend/app/schemas/skills/script_processing.py#L220-L226)、[异步任务 API 测试](https://github.com/Forget-C/Jellyfish/blob/a9678194ddf2d9be3ccbe78d4287d87d5089e123/backend/tests/test_script_processing_async_api.py#L418-L454)；Apache-2.0 | “仅围绕问题最小改写”、完整候选正文和 change summary 是合适的模型输出；异步 API 会返回 task/reused。但未发现输入 ScriptVersion 快照、候选人工编辑修订和 current CAS | 适配输出 schema 与测试分类；不引入其 TaskManager，不把请求正文复制进另一套任务事实 |
+| DramaClaw `09b04c5` | [短剧逐节拍结构化改写](https://github.com/dramaclaw/dramaclaw/blob/09b04c5a056afa2b7baaf3b4d46995bedede6bc0/src/novelvideo/agents/content_rewriter.py#L14-L31)、[目标节拍/字数/口语与核心剧情约束](https://github.com/dramaclaw/dramaclaw/blob/09b04c5a056afa2b7baaf3b4d46995bedede6bc0/src/novelvideo/agents/content_rewriter.py#L116-L199)、[ELv2 说明](https://github.com/dramaclaw/dramaclaw/blob/09b04c5a056afa2b7baaf3b4d46995bedede6bc0/docs/zh/license.md) | 证明目标节拍、对白可说性、核心冲突/反转/钩子和结构化非空输出需要同时约束；函数只返回拼接字符串，没有候选持久化、人工编辑、diff 或发布并发保护 | 只吸收短剧约束维度和非法空行测试；ELv2 限制托管服务，代码与 Prompt 不复制 |
+| ArcReel `ed71819` | [内容指纹与审核状态机](https://github.com/ArcReel/ArcReel/blob/ed71819aadf81015c0af4b3f5db0815607e04fae/lib/script_review.py#L125-L158)、[确认后编辑重新 pending](https://github.com/ArcReel/ArcReel/blob/ed71819aadf81015c0af4b3f5db0815607e04fae/tests/test_script_review.py#L207-L245)、[陈旧 revision 零写入](https://github.com/ArcReel/ArcReel/blob/ed71819aadf81015c0af4b3f5db0815607e04fae/tests/test_script_batch_edit.py#L100-L177)；AGPL-3.0 | 已确认内容变化后自动重开审核、写入前比较基线、批命令失败零写入，与候选编辑/发布冲突同构；其真值是 JSON 文件指纹而非数据库不可变版本 | 只复用行为与失败测试分类；AGPL 代码、文件 SSOT 和 step1/step2 平行模型不进入当前平台 |
+| ai-fusion-video `9dc3879` | [Script 乐观锁与原地更新](https://github.com/Stonewuu/ai-fusion-video/blob/9dc387934d18b53f5b08b6b0c81d09edc315d5ae/ai-fusion-video/src/main/java/com/stonewu/fusion/service/script/ScriptService.java#L52-L68)、[替换原稿并删除派生集/场次](https://github.com/Stonewuu/ai-fusion-video/blob/9dc387934d18b53f5b08b6b0c81d09edc315d5ae/ai-fusion-video/src/main/java/com/stonewu/fusion/service/script/ScriptService.java#L80-L104)；MIT | 行级 version 冲突可借鉴；但正文原地覆盖，替换来源时删除派生事实，无法回答“AI 原稿/候选/最终稿分别是什么” | 明确不采用正文更新模型；只把它作为“乐观锁仍不足以替代不可变版本”的反例 |
+| LocalMiniDrama `05f90fb` | [前端轮询状态](https://github.com/xuanyustudio/LocalMiniDrama/blob/05f90fb9ec21dea5753e324b673fc8a96bc6b2e0/frontweb/src/composables/useCanvasScript.js#L10-L26)、[整集列表覆盖保存](https://github.com/xuanyustudio/LocalMiniDrama/blob/05f90fb9ec21dea5753e324b673fc8a96bc6b2e0/frontweb/src/composables/useCanvasScript.js#L32-L91)；MIT | pending/completed/failed/timeout 对用户可见；但保存会重发整个 Episode 列表并覆盖 `script_content`，没有 expected revision、候选身份和发布门 | 只参考紧凑任务状态 UI；不复用整表 payload、轮询器和可变 script_content 模型 |
+| LangChain DeepSeek `06ab861`（`langchain-deepseek==1.1.0`） | [`with_structured_output` 的 json mode/schema 契约](https://github.com/langchain-ai/langchain/blob/06ab861ace88325966fda14ec9a4f1600f441cbb/libs/partners/deepseek/langchain_deepseek/chat_models.py#L457-L557)、[严格模式/兼容性测试](https://github.com/langchain-ai/langchain/blob/06ab861ace88325966fda14ec9a4f1600f441cbb/libs/partners/deepseek/tests/unit_tests/test_chat_models.py#L304-L426)；MIT，项目始于 2022 年 | 当前仓库已锁定相同版本并通过真实 DeepSeek 分集合同；可直接沿用 Pydantic 结构化输出，不需要第二套 Agent SDK | 直接复用当前依赖和 integration port；业务侧仍须独立验证长度、输入 hash、状态和 unknown，不把“解析成功”等同于可发布 |
+| CPython `6cb20a2`（v3.13.5） | [`unified_diff`](https://github.com/python/cpython/blob/6cb20a219a860eaf687b2d968b41c480c7461909/Lib/difflib.py#L1095-L1151)、[空输入/换行/类型测试](https://github.com/python/cpython/blob/6cb20a219a860eaf687b2d968b41c480c7461909/Lib/test/test_difflib.py#L67-L81)；PSF-2.0，跨年度标准库 | 当前 `ScriptVersion` diff 已直接使用同一标准库，足以展示行级新增/删除；diff 不是保存格式、补丁或合并真值 | 直接复用现有服务，不增加表、不把 diff 结果持久化、不用 diff 反推发布正文 |
+| jsdiff `13576bf`（v8.0.3） | [行 diff 的 CRLF/空行/最大编辑长度测试](https://github.com/kpdecker/jsdiff/blob/13576bfbcc444ce48f71cfd1e08529bd13962411/test/diff/line.js#L6-L121)；BSD-3-Clause，始于 2011 年 | 浏览器端词/行 diff 完整，但会新增一套 diff 口径；当前服务端已经返回权威 unified diff | 明确不新增依赖；若以后需要富文本词级高亮，再单独以同一 base/target version 做无状态呈现 spike |
+
+本地 delta 与最小落地决定：
+
+- 现有 `ScriptSource/ScriptVersion` 已保存不可变正文和 SHA-256，`publish_version` 已在一笔事务里锁 Source/Episode、追加 published Version、CAS current 并给出旧镜头影响；现有 diff API、Task/Outbox、取消字段、DeepSeek 类型化 port 和统一错误体系全部复用，不新建 ScriptRevision、Candidate、Task 或 diff 表。
+- 真缺口只是一张 `AdaptationRun`：固定 `input_script_version_id + input_hash`、四类约束、engine/model/prompt/schema、Task、幂等键与状态；AI 完成后保存不可变 `candidate_body/hash/summary/estimated_duration`，另以 `draft_body/hash/revision` 保存人工工作稿，发布后固定 `published_script_version_id`。
+- Worker 消息只携带 `task_id`，在事务中回读 Run 与输入 ScriptVersion；Prompt、原稿、候选正文和幂等键不得进入 Outbox、Task payload、Audit metadata 或错误详情。AI 只返回候选，不调用版本发布服务。
+- 候选编辑必须提交 `expected_revision`；发布必须同时提交 `expected_run_revision + expected_current_version_id + idempotency_key`。发布只读取已锁定 Run 的 draft，追加一个 ScriptVersion 并 CAS current；同键重放返回同一 published version，不同正文/陈旧 current/并发第二发布 fail closed。
+- `difflib` 仅动态比较 input version 与当前 draft；用户取消、无 Key、鉴权失败、非法 schema/长度、超时 unknown、worker 重投都不得改变原稿或 Episode current。unknown 不自动重发供应商请求，只允许新建 Run。
+- 隔离 spike 结论：不引入 jsdiff、Agent SDK、第二套队列或短剧上游 ORM；DEV-MVPA-05 的最小 schema 为单表 Run，API 为 create/get/edit/diff/cancel/publish，前端嵌入现有 Episode script 工作台。
 
 Red：AI 覆盖原稿、输入版本漂移、schema/长度失败、unknown 盲重发、并发发布、重复候选、Prompt/正文泄漏和取消先失败。
 
@@ -554,6 +576,6 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 当前可领取任务
 
-`DEV-MVPA-01～04` 已完成，下一任务为 `DEV-MVPA-05`。开始改写实现前，必须先按 G-MVPA-006 为“受约束剧本改写、diff/人工编辑、追加 Version 与 current CAS”重新建立固定 commit/许可证/失败测试证据池，再提交覆盖原稿、输入漂移、无 Key、非法结构化输出、unknown 重投和并发发布 Red。
+`DEV-MVPA-01～04` 已完成，`DEV-MVPA-05` 已完成固定 commit/许可证/源码/测试、本地 delta 与隔离 spike Gate，当前可领取 Red：覆盖原稿、输入漂移、无 Key、非法结构化输出、unknown 重投、候选编辑 CAS、取消和并发发布。
 
 本计划已由用户激活；`DEV-MVPA-05` 只实现 AdaptationRun 的最小纵向闭环，不预建 NarrativeUnit、AssetState 或 StoryboardDraft 空目录，不让 AI 候选直接覆盖 current，也不因 PT-SCR-007 已接受而冒充剧本改写已经完成。
