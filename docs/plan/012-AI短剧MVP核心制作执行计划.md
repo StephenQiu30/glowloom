@@ -42,10 +42,10 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | G-MVPA-002 工程黄金样本 | closed（用户明确接受原创 mock 入库；5 集/20 单元/16 镜 oracle 与 19 项契约 Green） | 产品负责人 + 工程 QA | 自有或明确接受的原创合成 3–5 集原稿、单集 60–120 秒/12–24 镜、必拍/允许省略、状态资产和预期分集边界入 fixture；工程准入与内容质量接受分离 | 制作人/QA 主观内容质量仍是 DEV-MVPA-10～12 产品验收条件；不可复制参考稿或伪造内容质量接受 |
 | G-MVPA-003 迁移决策 | closed（本机真实 38 表/19 行旧库已备份、恢复、接管到 `8d9f2a6c4b71`，旧数据哈希守恒） | 技术负责人 | [Acceptance 028](../acceptance/arrived/028-Alembic历史旧库迁移与恢复验收.md)；DES-002、MOD-011、PLAN-000 同步 | 后续 revision 继续三路径验证；本次小库结果不外推零停机/RPO/RTO |
 | G-MVPA-004 工作区 | closed（计划编写前已核对） | DEV owner | 每个任务开始前重新运行 `git status --short` 并对白名单；不读/提交本地生成产物 | 保留无关产物；重叠修改时停止 |
-| G-MVPA-005 真实依赖 | 当前 S0–S3 已关闭 | QA/工程 | PostgreSQL/RabbitMQ/MinIO/DeepSeek 现有合同回归可运行；新增 AI 分集/改写/分镜只在真实 DeepSeek 授权开关下接受 | 无 Key 可完成纯领域/UI，但 AI PT 保持 blocked；不要求先完成整个 Provider 管理页面 |
-| G-MVPA-006 上游证据 | active（逐 DEV 关闭） | DEV owner + Reviewer | 每个 DEV 在 Green 前提交固定 commit、许可证、核心源码/测试、可复用点、失败模式和“不采用”理由；至少覆盖一个领域方案和一个成熟横向方案 | 只允许只读调研、Red 与隔离 spike；不得提交拍脑袋的生产抽象或新依赖 |
+| G-MVPA-005 真实依赖 | closed（MVP-A） | QA/工程 | PostgreSQL/RabbitMQ/MinIO 已进入联合 E2E；DeepSeek 分集、改写、分镜各有显式授权真实合同；Acceptance 030、031、036、038 记录实际运行与默认跳过边界 | 只关闭 MVP-A 文本与分镜能力；图片/视频 Provider 仍受 D-004 和 MVP-B Gate 约束 |
+| G-MVPA-006 上游证据 | closed（DEV-MVPA-01～12） | DEV owner + Reviewer | 各 DEV 在 Green 前均记录固定 commit/release、许可证、核心源码/测试、可复用点、失败模式和不采用理由；Acceptance 028～038 汇总本地决定 | 后续新 DEV 必须重新建立自己的上游证据，不继承本次结论冒充新能力准入 |
 
-2026-08-13 用户明确要求按本计划执行，因此 G-MVPA-001 已关闭；同日又明确要求增加 GitHub 成熟方案研究，故 DEV-MVPA-01 先以只读研究/隔离 spike 启动。用户随后明确允许参考其 DOCX 结构并把原创 mock 放入 `docs/`，因此 G-MVPA-002 只关闭工程 fixture/oracle 准入，制作人/QA 主观质量复核移到实际分镜与分镜包产品验收。真实本机 pre-Alembic 库的备份、恢复副本、原子升级和数据哈希守恒关闭 G-MVPA-003。任何 DEV 的 G-MVPA-006 未关闭时仍不得进入 Green。
+2026-08-13 用户明确要求按本计划执行，因此 G-MVPA-001 已关闭；同日又明确要求增加 GitHub 成熟方案研究，故 DEV-MVPA-01 先以只读研究/隔离 spike 启动。用户随后明确允许参考其 DOCX 结构并把原创 mock 放入 `docs/`，因此 G-MVPA-002 只关闭工程 fixture/oracle 准入，制作人/QA 主观质量复核移到实际分镜与分镜包产品验收。真实本机 pre-Alembic 库的备份、恢复副本、原子升级和数据哈希守恒关闭 G-MVPA-003。DEV-MVPA-01～12 的逐项 GitHub 证据和真实依赖合同已经分别随 Acceptance 028～038 关闭 G-MVPA-005/006；该关闭不授权 MVP-B 图片/视频能力，也不替代制作人内容签字。
 
 ### 3.1 上游证据 Gate 的执行格式
 

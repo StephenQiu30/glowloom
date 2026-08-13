@@ -166,6 +166,8 @@ def test_mvp_core_plan_is_traced_without_premature_generation_acceptance() -> No
     assert dev_tasks == {f"DEV-MVPA-{number:02d}" for number in range(1, 13)}
     for gate in ("G-MVPA-001", "G-MVPA-002", "G-MVPA-003", "G-MVPA-006"):
         assert gate in plan
+    assert "| G-MVPA-005 真实依赖 | closed（MVP-A）" in plan
+    assert "| G-MVPA-006 上游证据 | closed（DEV-MVPA-01～12）" in plan
     assert "| DEV-MVPA-01 | completed" in plan
     assert "| DEV-MVPA-02 | completed" in plan
     assert "| DEV-MVPA-03 | completed" in plan
