@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～10 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence、资产影响治理、拆镜/合镜内容守恒和可审核 AI 分镜草案；下一任务为 DEV-MVPA-11 多对多覆盖与 readiness；制作人/QA 内容质量复核保留到分镜/分镜包产品验收）
+- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01～10 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence、资产影响治理、拆镜/合镜内容守恒和可审核 AI 分镜草案；DEV-MVPA-11 已完成第二轮成熟方案调研并进入多对多覆盖与 readiness 实施；制作人/QA 内容质量复核保留到分镜/分镜包产品验收）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -103,7 +103,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-08 | completed（Acceptance 034） | PT-AST-007 | 5 | MVPA-07 | 改名/禁用/换版本影响中心、state-aware usage 与 apply |
 | DEV-MVPA-09 | completed（Acceptance 035） | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
 | DEV-MVPA-10 | completed（Acceptance 036） | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
-| DEV-MVPA-11 | ready | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
+| DEV-MVPA-11 | in_progress（第二轮 GitHub 证据与本地边界已冻结） | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
 | DEV-MVPA-12 | proposed | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
 | **合计** |  | **11 个 PT** | **71 人周** |  | **整剧到可信分镜包** |
 
@@ -468,6 +468,26 @@ Green：
 
 ### 6.9 DEV-MVPA-11：多对多覆盖与 readiness
 
+DEV-MVPA-11 第二轮 GitHub 证据（固定于 2026-08-13）同时覆盖成熟需求追踪、成熟人工标注关系和短剧领域校验。成熟度与领域贴合度分开评价；新项目只能补充领域反例，不能单独承担平台架构正确性证明：
+
+| 候选 | 固定源码/测试与许可证 | 已证明的能力与缺口 | 准入决定 |
+| --- | --- | --- | --- |
+| StrictDoc `a03c4ec` | [有类型的双向 many-to-many set](https://github.com/strictdoc-project/strictdoc/blob/a03c4ecb9a288558a01905d44782d9fcc6ffebd9/strictdoc/core/graph/many_to_many_set.py#L8-L108)、[一对多/反向查询/删除无残留/按边类型计数测试](https://github.com/strictdoc-project/strictdoc/blob/a03c4ecb9a288558a01905d44782d9fcc6ffebd9/tests/unit/strictdoc/core/test_many2many_set.py#L8-L96)；Apache-2.0，跨年度维护 | 独立关系边同时维护正反向索引、拒绝重复并区分边类型，适合验证“unit 找 shots / shot 找 units”；它是文档内存图，不提供数据库不可变版本、CAS、覆盖决议或生产 readiness | 采用独立关系身份、双向查询和类型化角色的不变量；不引入其文档模型或运行依赖 |
+| Label Studio `f62571b` | [Relation 的独立 ID、双端引用、方向/标签和去重序列化](https://github.com/HumanSignal/label-studio/blob/f62571b6f0290f97afdc64f7bca0e6a10112cdf8/web/libs/editor/src/stores/RelationStore.js#L15-L227)、[新增、重复拒绝和双端查询测试](https://github.com/HumanSignal/label-studio/blob/f62571b6f0290f97afdc64f7bca0e6a10112cdf8/web/libs/editor/src/stores/__tests__/RelationStore.test.js#L169-L223)；Apache-2.0 | 成熟人工标注 UI 证明关系必须可按任一端选择、高亮、删除和显示标签；其 annotation 是可变前端状态，不固定 NarrativeUnitVersion/ShotSpecVersion，也没有 stale/coverage gate | 采用双向定位、高亮、关系标签和重复关系即时反馈；不复制 MobX store，不把客户端关系当事实源 |
+| drama-skills `ca53b57` | [短剧 coverage ledger 模板](https://github.com/worldwonderer/drama-skills/blob/ca53b57452bd975cb3067f6343908a2f27ab4758/skills/short-drama-storyboard/assets/coverage-template.json#L1-L38)、[镜头稳定身份与拆合后 retired/successor 规则](https://github.com/worldwonderer/drama-skills/blob/ca53b57452bd975cb3067f6343908a2f27ab4758/skills/short-drama-storyboard/references/shot-revision-identity.md#L1-L29)、[覆盖守恒校验器](https://github.com/worldwonderer/drama-skills/blob/ca53b57452bd975cb3067f6343908a2f27ab4758/skills/short-drama-storyboard/scripts/storyboard_check.py#L84-L190)、[静默遗漏/错误总数/矛盾状态测试](https://github.com/worldwonderer/drama-skills/blob/ca53b57452bd975cb3067f6343908a2f27ab4758/skills/short-drama-storyboard/tests/test_structural_validators.py#L85-L177)；MIT | 领域上直接证明 covered/unresolved 必须形成全集、拆合不能按数组位置猜身份、被绑定记录变化才应 stale；但项目较新，事实源是文件/JSONL，没有事务、权限、数据库 FK 或并发证据 | 采用覆盖账本、显式省略、稳定镜头身份和窄失效测试分类；不把其文件工具或 JSON schema 作为平台运行时 |
+| Doorstop `af3b671` | [链接 stamp/suspect/clear 与确认语义](https://github.com/doorstop-dev/doorstop/blob/af3b671a1b93f605a61b9a17a8c2e025d7522a3b/doorstop/core/item.py#L834-L932)、[UID/body/reference 哈希](https://github.com/doorstop-dev/doorstop/blob/af3b671a1b93f605a61b9a17a8c2e025d7522a3b/doorstop/core/item.py#L1087-L1112)；LGPL-3.0 | 成熟需求追踪证明 stale 关系必须显式确认而不是悄悄恢复 current；其 hash/link 绑定文件项，且 LGPL 运行依赖没有必要 | 延续现有 narrative dependency hash/显式确认行为；不引入依赖，不复制代码 |
+
+本地 delta 与实现边界已经冻结：
+
+- `NarrativeUnit/NarrativeUnitVersion` 已提供稳定逻辑身份和不可变表达，`Shot/ShotSpecVersion` 已提供稳定镜头身份、不可变规格、顺序 CAS、拆合与固定 AssetVersion；缺口只允许落在 `storyboards/coverage/`，不得复制上述事实或创建第二套 Scene/Shot/Task。
+- `ShotNarrativeReference` 是独立不可变边，固定 `ShotSpecVersion + NarrativeUnitVersion`，携带 `channel/role/coverage_mode/segment/contribution/origin`。修正映射必须克隆一个新 Spec 并 CAS current；禁止 UPDATE/DELETE 旧边、按镜号/名称/文本相似度回填或给旧镜头增加“兼容默认映射”。
+- `CoverageDecision` 只追加。批准省略固定 UnitVersion，批准创作性镜头固定 ShotSpecVersion；命令以当前 report evaluation hash 做 CAS，决议保存不含其他决议的 `basis_hash`，因此无关决议不会互相失效，底层 unit/spec/reference 变化仍会令旧决议 stale。
+- `CoverageReport` 首期按需派生，不建可变 current 表：一次批量读取 current units、active shots/current specs、references 和 decisions，分类 `covered/approved_omitted/uncovered/orphan/stale`。required unit 必须 covered 或 approved omitted，orphan/stale 必须为 0；依赖读取失败返回 unavailable，不能降级成 ready。
+- required channel 由叙事种类确定：动作与场景标题要求 visual，对白与旁白要求 audio，`both` 同时满足两路；partial 以 UnitVersion 内 Unicode code-point 半开区间表达，多段并集必须完整覆盖相应 required channel。重复 primary、越界/空 segment、跨 Episode/Workspace 和非 current 固定版本均 fail closed。
+- AI 草案中的 unit IDs 只作为审核建议。DEV-MVPA-10 既有 Apply 不具备 channel/role/segment 证据，因此不得猜成正式关系；旧镜头和新 Apply 镜头都通过同一人工映射入口建立第一组正式边，在此之前 readiness 明确 blocked。
+- split 在已有引用时必须由请求显式分配并证明引用并集守恒；merge 取两来源引用的有序并集并拒绝冲突 primary；copy 只复制为 supporting，不得重复满足 required coverage。任何路径都不静默丢失或重复必拍内容。
+- 后端文件继续使用 `models.py/schemas.py/repository.py/service.py/api.py` 等目录已提供语义的短名，跨模块对象使用不可变 `Command/Query/Snapshot/Result` Plain Data Contract；受 DES-000 的 64 字符文件名、禁止含糊 DTO/兼容包装和架构测试硬门禁约束。
+
 Red：一个 unit 多镜、一个镜多 unit、对白 audio/visual 分道、重复 primary、approved omission、orphan、旧 unit、依赖 unavailable、Spec/State 切换、36/120 镜 N+1 先失败。
 
 Green：
@@ -667,4 +687,4 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 当前可领取任务
 
-`DEV-MVPA-01～10` 已完成并由 Acceptance 028～036 和黄金 fixture 契约关闭。当前可领取 `DEV-MVPA-11`：先扩展 GitHub 证据并冻结 NarrativeReference/CoverageDecision/CoverageReport 的事实边界，再以 Red 固定多对多覆盖、approved omission、orphan、stale、依赖 unavailable、双向定位和 36/120 镜无 N+1；不得通过兼容字段猜测旧镜头覆盖关系，也不提前实现分镜包或剪辑时间线。
+`DEV-MVPA-01～10` 已完成并由 Acceptance 028～036 和黄金 fixture 契约关闭。`DEV-MVPA-11` 已领取并完成第二轮 GitHub 证据与事实边界冻结，当前进入 Red：固定多对多覆盖、approved omission、orphan、stale、依赖 unavailable、双向定位和 36/120 镜无 N+1；不得通过兼容字段猜测旧镜头覆盖关系，也不提前实现分镜包或剪辑时间线。
