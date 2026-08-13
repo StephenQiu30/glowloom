@@ -9,6 +9,7 @@ import * as media from "./media";
 import * as projects from "./projects";
 import * as tasks from "./tasks";
 import * as production from "./production";
+import * as scriptAdaptations from "./scriptAdaptations";
 import * as scriptDocuments from "./scriptDocuments";
 import * as scripts from "./scripts";
 import * as episodePlanning from "./episodePlanning";
@@ -23,6 +24,7 @@ export default {
   projects,
   tasks,
   production,
+  scriptAdaptations,
   scriptDocuments,
   scripts,
   episodePlanning,

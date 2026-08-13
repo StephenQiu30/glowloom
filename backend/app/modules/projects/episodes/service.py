@@ -198,6 +198,26 @@ async def resolve_episode_content_context(
     return _episode_content_context(episode)
 
 
+async def lock_episode_content_context(
+    session: AsyncSession,
+    workspace_id: UUID,
+    episode_id: UUID,
+) -> EpisodeContentContext | None:
+    """Resolve an active internal worker context while serializing current changes."""
+    result = await repository.find_episode(session, episode_id, for_update=True)
+    if result is None:
+        return None
+    episode, project = result
+    if (
+        episode.workspace_id != workspace_id
+        or project.workspace_id != workspace_id
+        or episode.status != "active"
+        or project.status != "active"
+    ):
+        return None
+    return _episode_content_context(episode)
+
+
 async def resolve_episode_generation_context(
     session: AsyncSession,
     workspace_id: UUID,

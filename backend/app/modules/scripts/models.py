@@ -521,6 +521,130 @@ class ScriptVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
+class AdaptationRun(Base):
+    __tablename__ = "scr_adaptation_runs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["episode_id", "workspace_id"],
+            ["prj_episodes.id", "prj_episodes.workspace_id"],
+            name="fk_scr_adaptation_episode_workspace",
+        ),
+        ForeignKeyConstraint(
+            ["source_id", "workspace_id"],
+            ["scr_script_sources.id", "scr_script_sources.workspace_id"],
+            name="fk_scr_adaptation_source_workspace",
+        ),
+        ForeignKeyConstraint(
+            ["input_script_version_id", "workspace_id"],
+            ["scr_script_versions.id", "scr_script_versions.workspace_id"],
+            name="fk_scr_adaptation_input_workspace",
+        ),
+        ForeignKeyConstraint(
+            ["published_script_version_id", "workspace_id"],
+            ["scr_script_versions.id", "scr_script_versions.workspace_id"],
+            name="fk_scr_adaptation_published_workspace",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "workspace_id"],
+            ["prod_tasks.id", "prod_tasks.workspace_id"],
+            name="fk_scr_adaptation_task_workspace",
+        ),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'published', "
+            "'failed', 'cancelled', 'unknown')",
+            name="ck_scr_adaptation_status",
+        ),
+        CheckConstraint(
+            "target_duration_ms >= 15000 AND target_duration_ms <= 600000",
+            name="ck_scr_adaptation_target_duration",
+        ),
+        CheckConstraint(
+            "pacing IN ('slow', 'balanced', 'fast')",
+            name="ck_scr_adaptation_pacing",
+        ),
+        CheckConstraint("revision >= 1", name="ck_scr_adaptation_revision"),
+        CheckConstraint(
+            "estimated_duration_ms IS NULL OR "
+            "(estimated_duration_ms >= 1000 AND estimated_duration_ms <= 600000)",
+            name="ck_scr_adaptation_estimated_duration",
+        ),
+        CheckConstraint(
+            "(candidate_body IS NULL) = (candidate_hash IS NULL)",
+            name="ck_scr_adaptation_candidate_pair",
+        ),
+        CheckConstraint(
+            "(draft_body IS NULL) = (draft_hash IS NULL)",
+            name="ck_scr_adaptation_draft_pair",
+        ),
+        CheckConstraint(
+            "status != 'published' OR published_script_version_id IS NOT NULL",
+            name="ck_scr_adaptation_published_version",
+        ),
+        UniqueConstraint("id", "workspace_id", name="uq_scr_adaptation_id_workspace"),
+        UniqueConstraint("task_id", name="uq_scr_adaptation_task"),
+        UniqueConstraint(
+            "episode_id",
+            "idempotency_key",
+            name="uq_scr_adaptation_episode_idempotency",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "publish_idempotency_key",
+            name="uq_scr_adaptation_publish_idempotency",
+        ),
+        Index(
+            "ix_scr_adaptation_episode_created",
+            "episode_id",
+            "created_at",
+        ),
+        Index(
+            "ix_scr_adaptation_workspace_status_created",
+            "workspace_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    episode_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    source_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    input_script_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64))
+    target_duration_ms: Mapped[int] = mapped_column(Integer)
+    core_plot_points: Mapped[list[str]] = mapped_column(JSONB)
+    pacing: Mapped[str] = mapped_column(String(20))
+    colloquial_dialogue: Mapped[bool] = mapped_column(Boolean)
+    adaptation_engine_version: Mapped[str] = mapped_column(String(80))
+    model_name: Mapped[str] = mapped_column(String(160))
+    prompt_version: Mapped[str] = mapped_column(String(80))
+    schema_version: Mapped[str] = mapped_column(String(80))
+    task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="queued")
+    candidate_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    candidate_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    draft_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    change_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    estimated_duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    published_script_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    publish_idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    publish_command_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    publish_result_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    cancel_idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    cancel_command_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    idempotency_key: Mapped[str] = mapped_column(String(200))
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
+    )
+
+
 class EpisodeSegmentOrigin(Base):
     __tablename__ = "scr_episode_segment_origins"
     __table_args__ = (

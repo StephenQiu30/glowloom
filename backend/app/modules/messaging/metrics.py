@@ -18,6 +18,7 @@ REGISTERED_MESSAGE_EVENT_TYPES = frozenset(
     {
         "script_extraction.requested",
         "episode_planning.requested",
+        "script_adaptation.requested",
         "generation.requested",
         "media_probe.requested",
         "upload_expiration.requested",

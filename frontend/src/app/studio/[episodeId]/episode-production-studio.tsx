@@ -23,10 +23,12 @@ import {
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
+  useAdaptationRunQuery,
   useAssetsQuery,
   useAppendShotSpecMutation,
   useArchivedShotsQuery,
   useCompleteMediaUploadMutation,
+  useCancelAdaptationRunMutation,
   useCancelGenerationTaskMutation,
   useConfigureScheduleMutation,
   useCostsQuery,
@@ -34,6 +36,7 @@ import {
   useConfirmedStructureQuery,
   useCopyShotMutation,
   useCreateShotMutation,
+  useCreateAdaptationRunMutation,
   useCreateShotFromCandidateMutation,
   useDeleteScriptVersionMutation,
   useDeleteShotMutation,
@@ -47,6 +50,7 @@ import {
   useInitializeMediaUploadMutation,
   useInitializeMediaVersionUploadMutation,
   useLazyShotSpecVersionQuery,
+  useLazyAdaptationDiffQuery,
   useLazyScriptVersionDiffQuery,
   useMeQuery,
   useMergeShotsMutation,
@@ -56,6 +60,7 @@ import {
   useMediaLocationsQuery,
   useProjectQuery,
   usePublishScriptVersionMutation,
+  usePublishAdaptationRunMutation,
   usePauseScheduleMutation,
   useRetryMediaProbeMutation,
   useRequestMediaLocationMigrationMutation,
@@ -82,6 +87,7 @@ import {
   useTasksQuery,
   useTriggerScheduleMutation,
   useUpdateShotMutation,
+  useUpdateAdaptationDraftMutation,
 } from "@/lib/server-state";
 
 import { EpisodeAssetOverview } from "./episode-asset-overview";
@@ -185,6 +191,21 @@ export function EpisodeProductionStudio({
     pollingInterval: batchQuery.data?.status === "running" ? 4_000 : 0,
     skip: !batchId,
   });
+  const [startedAdaptationRunId, setStartedAdaptationRunId] = useState<
+    string | null | undefined
+  >(undefined);
+  const taskAdaptationRunId = episodeTasks.find(
+    (task) => task.task_type === "script_adaptation",
+  )?.request_id;
+  const adaptationRunId =
+    startedAdaptationRunId === undefined
+      ? taskAdaptationRunId
+      : startedAdaptationRunId;
+  const adaptationRunQuery = useAdaptationRunQuery(adaptationRunId ?? "", {
+    pollingInterval: adaptationRunId ? 3_000 : 0,
+    skip: !adaptationRunId,
+  });
+  const adaptationRun = adaptationRunId ? adaptationRunQuery.data : undefined;
   const assetsQuery = useAssetsQuery(episode?.project_id ?? "", { skip: !episode });
   const mediaQuery = useMediaVersionsQuery(workspaceId ?? "", { skip: !workspaceId });
   const [locationVersionId, setLocationVersionId] = useState<string | null>(null);
@@ -257,6 +278,16 @@ export function EpisodeProductionStudio({
     useSetScriptSourceArchivedMutation();
   const [deleteScriptVersion, scriptDeleteState] =
     useDeleteScriptVersionMutation();
+  const [createAdaptationRun, adaptationCreateState] =
+    useCreateAdaptationRunMutation();
+  const [updateAdaptationDraft, adaptationDraftState] =
+    useUpdateAdaptationDraftMutation();
+  const [loadAdaptationDiff, adaptationDiffState] =
+    useLazyAdaptationDiffQuery();
+  const [publishAdaptationRun, adaptationPublishState] =
+    usePublishAdaptationRunMutation();
+  const [cancelAdaptationRun, adaptationCancelState] =
+    useCancelAdaptationRunMutation();
   const [initializeUpload, initializationState] = useInitializeMediaUploadMutation();
   const [initializeVersionUpload, versionInitializationState] =
     useInitializeMediaVersionUploadMutation();
@@ -301,6 +332,8 @@ export function EpisodeProductionStudio({
   const [actionError, setActionError] = useState<string | null>(null);
   const [scriptVersionImpact, setScriptVersionImpact] =
     useState<API.ScriptVersionImpactResponse | null>(null);
+  const [adaptationDifference, setAdaptationDifference] =
+    useState<API.AdaptationDiffResponse | null>(null);
 
   const busy = [
     importState,
@@ -312,6 +345,11 @@ export function EpisodeProductionStudio({
     scriptDiffState,
     scriptSourceState,
     scriptDeleteState,
+    adaptationCreateState,
+    adaptationDraftState,
+    adaptationDiffState,
+    adaptationPublishState,
+    adaptationCancelState,
     initializationState,
     versionInitializationState,
     completionState,
@@ -586,6 +624,80 @@ export function EpisodeProductionStudio({
       return `剧本草稿 v${version.version_no} 已删除。`;
     });
     return succeeded;
+  }
+
+  async function handleCreateAdaptation(
+    request: API.AdaptationRunCreateRequest,
+  ) {
+    await runAction(async () => {
+      const result = await createAdaptationRun({
+        episodeId,
+        body: request,
+      }).unwrap();
+      setStartedAdaptationRunId(result.id);
+      setAdaptationDifference(null);
+      return "剧本改写任务已创建；AI 只会生成候选，不会覆盖原稿。";
+    });
+  }
+
+  async function handleSaveAdaptationDraft(body: string) {
+    const run = adaptationRun;
+    if (!run) return;
+    await runAction(async () => {
+      await updateAdaptationDraft({
+        runId: run.id,
+        body: { body, expected_revision: run.revision },
+      }).unwrap();
+      setAdaptationDifference(null);
+      return "改写工作稿已保存。";
+    });
+  }
+
+  async function handleCompareAdaptation() {
+    const run = adaptationRun;
+    if (!run) return;
+    await runAction(async () => {
+      setAdaptationDifference(
+        await loadAdaptationDiff(run.id, true).unwrap(),
+      );
+      return "已加载原稿与改写工作稿的服务端差异。";
+    });
+  }
+
+  async function handlePublishAdaptation() {
+    const run = adaptationRun;
+    const currentVersionId = episode?.current_script_version_id;
+    if (!run || !currentVersionId) return;
+    await runAction(async () => {
+      const result = await publishAdaptationRun({
+        episodeId,
+        sourceId: run.source_id,
+        runId: run.id,
+        body: {
+          expected_run_revision: run.revision,
+          expected_current_version_id: currentVersionId,
+          idempotency_key: `studio-adaptation-publish:${run.id}:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      setScriptVersionImpact(result.current.impact);
+      setStartedBatchId(null);
+      return `改写稿已发布为 v${result.version.version_no} 并设为当前版本。`;
+    });
+  }
+
+  async function handleCancelAdaptation() {
+    const run = adaptationRun;
+    if (!run) return;
+    await runAction(async () => {
+      await cancelAdaptationRun({
+        runId: run.id,
+        body: {
+          expected_revision: run.revision,
+          idempotency_key: `studio-adaptation-cancel:${run.id}:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      return "剧本改写任务已取消；原稿与当前版本未改变。";
+    });
   }
 
   async function handleUpload(
@@ -1019,6 +1131,9 @@ export function EpisodeProductionStudio({
     candidatesQuery.error ??
     assetsQuery.error ??
     mediaQuery.error;
+  const adaptationError = adaptationRunId
+    ? adaptationRunQuery.error
+    : undefined;
   const storyboardError = storyboardActive
     ? shotOrderQuery.error ??
       archivedShotsQuery.error ??
@@ -1058,11 +1173,11 @@ export function EpisodeProductionStudio({
             <AlertTitle>需要登录</AlertTitle>
             <AlertDescription><Link className="underline" href="/login">登录后进入单集生产工作台</Link></AlertDescription>
           </Alert>
-        ) : pageError || storyboardError ? (
+        ) : pageError || storyboardError || adaptationError ? (
           <Alert variant="destructive">
             <AlertCircle aria-hidden="true" />
             <AlertTitle>生产事实暂时无法读取</AlertTitle>
-            <AlertDescription>{appApiErrorMessage(pageError ?? storyboardError)}</AlertDescription>
+            <AlertDescription>{appApiErrorMessage(pageError ?? storyboardError ?? adaptationError)}</AlertDescription>
           </Alert>
         ) : !episode || !project || !snapshot || storyboardLoading ? (
           <div className="grid min-h-96 place-items-center"><LoaderCircle className="animate-spin text-foreground" aria-label="正在加载生产工作台" /></div>
@@ -1142,6 +1257,8 @@ export function EpisodeProductionStudio({
               {initialPanel === "script" ? (
                 <ScriptWorkspace
                   assets={assetsQuery.data?.items ?? []}
+                  adaptationDifference={adaptationDifference}
+                  adaptationRun={adaptationRun}
                   batch={batchQuery.data}
                   busy={busy}
                   candidates={candidatesQuery.data?.items ?? []}
@@ -1153,11 +1270,20 @@ export function EpisodeProductionStudio({
                   versionImpact={scriptVersionImpact}
                   versions={versions}
                   onConfirm={handleConfirm}
+                  onCancelAdaptation={handleCancelAdaptation}
+                  onCompareAdaptation={handleCompareAdaptation}
                   onCompareVersions={handleCompareVersions}
                   onDecide={handleDecision}
                   onDeleteDraft={handleDeleteScriptDraft}
+                  onCreateAdaptation={handleCreateAdaptation}
                   onImport={handleImport}
                   onPublish={handlePublish}
+                  onPublishAdaptation={handlePublishAdaptation}
+                  onResetAdaptation={() => {
+                    setStartedAdaptationRunId(null);
+                    setAdaptationDifference(null);
+                  }}
+                  onSaveAdaptationDraft={handleSaveAdaptationDraft}
                   onDismissVersionImpact={() => setScriptVersionImpact(null)}
                   onSetCurrent={handleSetCurrent}
                   onSetSourceArchived={handleSetScriptSourceArchived}

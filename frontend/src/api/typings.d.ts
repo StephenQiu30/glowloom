@@ -25,6 +25,135 @@ declare namespace API {
     description: string;
   };
 
+  type AdaptationCancelRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type AdaptationConstraintsResponse = {
+    /** Target Duration Ms */
+    target_duration_ms: number;
+    /** Core Plot Points */
+    core_plot_points: string[];
+    /** Pacing */
+    pacing: "slow" | "balanced" | "fast";
+    /** Colloquial Dialogue */
+    colloquial_dialogue: boolean;
+  };
+
+  type AdaptationDiffResponse = {
+    /** Base Version Id */
+    base_version_id: string;
+    /** Adaptation Run Id */
+    adaptation_run_id: string;
+    /** Added Lines */
+    added_lines: number;
+    /** Removed Lines */
+    removed_lines: number;
+    /** Diff Lines */
+    diff_lines: string[];
+  };
+
+  type AdaptationDraftUpdateRequest = {
+    /** Body */
+    body: string;
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type AdaptationPublishRequest = {
+    /** Expected Run Revision */
+    expected_run_revision: number;
+    /** Expected Current Version Id */
+    expected_current_version_id: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type AdaptationPublishResponse = {
+    run: AdaptationRunResponse;
+    version: ScriptVersionResponse;
+    current: CurrentScriptVersionResponse;
+  };
+
+  type AdaptationRunCreateRequest = {
+    /** Input Script Version Id */
+    input_script_version_id: string;
+    /** Target Duration Ms */
+    target_duration_ms: number;
+    /** Core Plot Points */
+    core_plot_points: string[];
+    /** Pacing */
+    pacing: "slow" | "balanced" | "fast";
+    /** Colloquial Dialogue */
+    colloquial_dialogue: boolean;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type AdaptationRunResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Source Id */
+    source_id: string;
+    /** Input Script Version Id */
+    input_script_version_id: string;
+    /** Input Hash */
+    input_hash: string;
+    constraints: AdaptationConstraintsResponse;
+    /** Status */
+    status:
+      | "queued"
+      | "running"
+      | "succeeded"
+      | "published"
+      | "failed"
+      | "cancelled"
+      | "unknown";
+    /** Revision */
+    revision: number;
+    /** Task Id */
+    task_id: string | null;
+    /** Candidate Body */
+    candidate_body: string | null;
+    /** Candidate Hash */
+    candidate_hash: string | null;
+    /** Draft Body */
+    draft_body: string | null;
+    /** Draft Hash */
+    draft_hash: string | null;
+    /** Change Summary */
+    change_summary: string | null;
+    /** Estimated Duration Ms */
+    estimated_duration_ms: number | null;
+    /** Error Code */
+    error_code: string | null;
+    /** Published Script Version Id */
+    published_script_version_id: string | null;
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+  };
+
+  type ApiResponseAdaptationDiffResponse_ = {
+    data: AdaptationDiffResponse;
+  };
+
+  type ApiResponseAdaptationPublishResponse_ = {
+    data: AdaptationPublishResponse;
+  };
+
+  type ApiResponseAdaptationRunResponse_ = {
+    data: AdaptationRunResponse;
+  };
+
   type ApiResponseAssetDeletePreflightResponse_ = {
     data: AssetDeletePreflightResponse;
   };
@@ -848,6 +977,10 @@ declare namespace API {
     task_id: string;
   };
 
+  type cancelRunApiV1AdaptationRunsRunIdCancelPostParams = {
+    run_id: string;
+  };
+
   type CandidateDecisionEvidenceResponse = {
     /** Id */
     id: string;
@@ -1180,6 +1313,10 @@ declare namespace API {
     episode_id: string;
   };
 
+  type createRunApiV1EpisodesEpisodeIdAdaptationRunsPostParams = {
+    episode_id: string;
+  };
+
   type CurrentMediaVersionRequest = {
     /** Version Id */
     version_id: string;
@@ -1324,6 +1461,10 @@ declare namespace API {
     source_range: CandidateSourceRange;
     /** Created At */
     created_at: string;
+  };
+
+  type diffRunApiV1AdaptationRunsRunIdDiffGetParams = {
+    run_id: string;
   };
 
   type diffVersionsApiV1ScriptVersionsVersionIdDiffGetParams = {
@@ -1956,6 +2097,10 @@ declare namespace API {
     revision_id: string;
   };
 
+  type getRunApiV1AdaptationRunsRunIdGetParams = {
+    run_id: string;
+  };
+
   type getShotApiV1ShotsShotIdGetParams = {
     shot_id: string;
   };
@@ -2223,6 +2368,7 @@ declare namespace API {
     task_type:
       | "script_extraction"
       | "episode_planning"
+      | "script_adaptation"
       | "image_generation"
       | "video_generation"
       | "media_probe"
@@ -2876,6 +3022,10 @@ declare namespace API {
     expected_revision: number;
     /** Idempotency Key */
     idempotency_key: string;
+  };
+
+  type publishRunApiV1AdaptationRunsRunIdPublishPostParams = {
+    run_id: string;
   };
 
   type publishVersionApiV1ScriptSourcesSourceIdVersionsPostParams = {
@@ -3876,6 +4026,7 @@ declare namespace API {
     task_type:
       | "script_extraction"
       | "episode_planning"
+      | "script_adaptation"
       | "image_generation"
       | "video_generation"
       | "media_probe"
@@ -3887,6 +4038,7 @@ declare namespace API {
     request_type:
       | "extraction_batch"
       | "episode_plan"
+      | "adaptation_run"
       | "generation_request"
       | "media_version"
       | "upload_session"
@@ -3958,6 +4110,10 @@ declare namespace API {
 
   type updateBudgetLimitApiV1ProjectsProjectIdBudgetLimitPostParams = {
     project_id: string;
+  };
+
+  type updateDraftApiV1AdaptationRunsRunIdDraftPatchParams = {
+    run_id: string;
   };
 
   type updateEpisodeApiV1EpisodesEpisodeIdPatchParams = {

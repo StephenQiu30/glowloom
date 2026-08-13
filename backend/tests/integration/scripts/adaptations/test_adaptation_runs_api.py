@@ -452,6 +452,37 @@ async def test_missing_provider_input_drift_and_invalid_output_fail_closed(
     assert invalid["candidate_body"] is None
     assert invalid["draft_body"] is None
 
+    duration_headers, _, duration_run, duration_body = await _queued_run(
+        client,
+        session_factory,
+        email="adaptation-invalid-duration@example.com",
+        idempotency_key="adaptation-invalid-duration",
+    )
+    duration_adapter = _RecordingAdapter(
+        {
+            "adapted_script_text": ADAPTED_BODY,
+            "change_summary": "未达到目标时长的候选",
+            "estimated_duration_ms": 15_000,
+        }
+    )
+    assert (
+        await io_worker.process_incoming_message(
+            _RecordingMessage(duration_body),
+            session_factory,
+            adaptation_provider=duration_adapter,
+        )
+        == "completed"
+    )
+    invalid_duration = (
+        await client.get(
+            f"/api/v1/adaptation-runs/{duration_run['id']}",
+            headers=duration_headers,
+        )
+    ).json()["data"]
+    assert invalid_duration["status"] == "failed"
+    assert invalid_duration["error_code"] == "ai_output_invalid"
+    assert invalid_duration["candidate_body"] is None
+
 
 @pytest.mark.asyncio
 async def test_interrupted_delivery_becomes_unknown_without_blind_resubmit(

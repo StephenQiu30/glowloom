@@ -1,5 +1,14 @@
 """Public script extraction application use cases."""
 
+from app.modules.scripts.adaptations.ports import ScriptAdaptationProviderError
+from app.modules.scripts.adaptations.schemas import ScriptAdaptationProviderResult
+from app.modules.scripts.adaptations.service import (
+    AdaptationInput,
+    AdaptationInputChanged,
+    prepare_adaptation_input,
+    record_adaptation_error,
+    record_adaptation_result,
+)
 from app.modules.scripts.contracts import (
     ConfirmedShotCandidateReference,
     ConfirmedStructureQuery,
@@ -41,6 +50,8 @@ from app.modules.scripts.versions.service import (
 )
 
 __all__ = [
+    "AdaptationInput",
+    "AdaptationInputChanged",
     "count_asset_candidate_decisions",
     "record_extraction_result",
     "ConfirmedStructureReference",
@@ -57,10 +68,15 @@ __all__ = [
     "ScriptExtractionInput",
     "ScriptExtractionProviderError",
     "ScriptExtractionResult",
+    "ScriptAdaptationProviderError",
+    "ScriptAdaptationProviderResult",
     "ScriptProductionSummary",
     "ScriptStructureExtractor",
     "record_episode_planning_error",
     "record_episode_planning_result",
+    "prepare_adaptation_input",
+    "record_adaptation_error",
+    "record_adaptation_result",
     "resolve_confirmed_structure",
     "resolve_confirmed_structures",
     "resolve_episode_confirmed_structures",

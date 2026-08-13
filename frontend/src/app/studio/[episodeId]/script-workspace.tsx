@@ -60,6 +60,7 @@ import {
   scriptStatusLabels,
   taskStatusLabels,
 } from "./episode-studio-model";
+import { ScriptAdaptationPanel } from "./script-adaptation-panel";
 
 type CandidateDecision = API.CandidateDecisionRequest["decision"];
 
@@ -72,9 +73,17 @@ export function ScriptWorkspace({
   batch,
   candidates,
   assets,
+  adaptationRun,
+  adaptationDifference,
   busy,
   versionImpact,
   onImport,
+  onCreateAdaptation,
+  onSaveAdaptationDraft,
+  onCompareAdaptation,
+  onPublishAdaptation,
+  onCancelAdaptation,
+  onResetAdaptation,
   onPublish,
   onStartExtraction,
   onCompareVersions,
@@ -93,9 +102,17 @@ export function ScriptWorkspace({
   batch?: API.ExtractionBatchResponse;
   candidates: API.ExtractionCandidateResponse[];
   assets: API.AssetResponse[];
+  adaptationRun?: API.AdaptationRunResponse;
+  adaptationDifference: API.AdaptationDiffResponse | null;
   busy: boolean;
   versionImpact: API.ScriptVersionImpactResponse | null;
   onImport: (request: API.ScriptImportRequest) => Promise<void>;
+  onCreateAdaptation: (request: API.AdaptationRunCreateRequest) => Promise<void>;
+  onSaveAdaptationDraft: (body: string) => Promise<void>;
+  onCompareAdaptation: () => Promise<void>;
+  onPublishAdaptation: () => Promise<void>;
+  onCancelAdaptation: () => Promise<void>;
+  onResetAdaptation: () => void;
   onPublish: (body: string) => Promise<void>;
   onStartExtraction: () => Promise<void>;
   onCompareVersions: (
@@ -292,6 +309,28 @@ export function ScriptWorkspace({
             />
           </CardContent>
         </Card>
+
+        <ScriptAdaptationPanel
+          busy={busy}
+          currentVersion={
+            versions.find(
+              (version) => version.id === episode.current_script_version_id,
+            ) ??
+            (editableVersion?.id === episode.current_script_version_id
+              ? editableVersion
+              : undefined)
+          }
+          difference={adaptationDifference}
+          episode={episode}
+          key={adaptationRun?.draft_hash ?? adaptationRun?.status ?? "new-adaptation"}
+          run={adaptationRun}
+          onCancel={onCancelAdaptation}
+          onCompare={onCompareAdaptation}
+          onCreate={onCreateAdaptation}
+          onPublish={onPublishAdaptation}
+          onReset={onResetAdaptation}
+          onSaveDraft={onSaveAdaptationDraft}
+        />
 
         {batch ? (
           <Card>

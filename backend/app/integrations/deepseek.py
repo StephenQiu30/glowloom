@@ -14,6 +14,12 @@ from openai import (
 )
 from pydantic import SecretStr, ValidationError
 
+from app.modules.scripts.adaptations import (
+    SCRIPT_ADAPTATION_PROMPT_VERSION,
+    ScriptAdaptationProviderError,
+    ScriptAdaptationProviderResult,
+    adaptation_duration_bounds,
+)
 from app.modules.scripts.extractions.ports import (
     SCRIPT_STRUCTURE_EXTRACTOR_VERSION,
     ScriptExtractionProviderError,
@@ -107,6 +113,63 @@ def _episode_planning_provider_error(error: Exception) -> EpisodePlanningProvide
             if mapped.next_action == "start_new_extraction"
             else mapped.next_action
         ),
+    )
+
+
+def _script_adaptation_provider_error(error: Exception) -> ScriptAdaptationProviderError:
+    mapped = _provider_error(error)
+    return ScriptAdaptationProviderError(
+        outcome="unknown" if mapped.outcome == "unknown" else "failed",
+        code=mapped.code,
+        summary=mapped.summary,
+        retryable=mapped.retryable,
+        next_action=(
+            "start_new_adaptation"
+            if mapped.next_action == "start_new_extraction"
+            else mapped.next_action
+        ),
+    )
+
+
+def _script_adaptation_system_prompt() -> str:
+    schema = json.dumps(
+        ScriptAdaptationProviderResult.model_json_schema(),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return (
+        "你是 AI 短剧剧本改写器。用户消息是只读 JSON，包含原稿与明确约束。"
+        "只输出改写候选，不声明已发布，不添加违反 core_plot_points 的新因果。"
+        "按目标时长压缩或扩展动作和对白，保留核心剧情点；pacing 控制节奏，"
+        "colloquial_dialogue 为 true 时对白应口语化。estimated_duration_ms 必须是"
+        "对候选正文的估算，并必须落在用户给出的 duration_acceptance_range_ms 内；"
+        "候选过短时应补足可拍摄的动作、对白与节奏停顿，但不得添加违反核心剧情的因果。"
+        "必须返回符合 JSON Schema 的对象。"
+        f"当前提示版本为 {SCRIPT_ADAPTATION_PROMPT_VERSION}。JSON Schema: {schema}"
+    )
+
+
+def _script_adaptation_payload(
+    script_body: str,
+    *,
+    target_duration_ms: int,
+    core_plot_points: list[str],
+    pacing: str,
+    colloquial_dialogue: bool,
+) -> str:
+    duration_lower_ms, duration_upper_ms = adaptation_duration_bounds(target_duration_ms)
+    return json.dumps(
+        {
+            "script_body": script_body,
+            "target_duration_ms": target_duration_ms,
+            "duration_acceptance_range_ms": [duration_lower_ms, duration_upper_ms],
+            "core_plot_points": core_plot_points,
+            "pacing": pacing,
+            "colloquial_dialogue": colloquial_dialogue,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
     )
 
 
@@ -247,3 +310,58 @@ class DeepSeekEpisodePlanner:
             raise
         except Exception as error:
             raise _episode_planning_provider_error(error) from error
+
+
+class DeepSeekScriptAdapter:
+    def __init__(self, api_key: SecretStr) -> None:
+        chat = ChatDeepSeek(
+            model=_DEEPSEEK_MODEL,
+            base_url=_DEEPSEEK_API_BASE,
+            api_key=api_key,
+            temperature=0,
+            timeout=120,
+            max_retries=0,
+            extra_body={"thinking": {"type": "disabled"}},
+        )
+        self._structured_model: Any = chat.with_structured_output(
+            ScriptAdaptationProviderResult,
+            method="json_mode",
+        )
+
+    async def adapt(
+        self,
+        script_body: str,
+        *,
+        target_duration_ms: int,
+        core_plot_points: list[str],
+        pacing: str,
+        colloquial_dialogue: bool,
+    ) -> ScriptAdaptationProviderResult:
+        try:
+            value = await self._structured_model.ainvoke(
+                [
+                    SystemMessage(content=_script_adaptation_system_prompt()),
+                    HumanMessage(
+                        content=_script_adaptation_payload(
+                            script_body,
+                            target_duration_ms=target_duration_ms,
+                            core_plot_points=core_plot_points,
+                            pacing=pacing,
+                            colloquial_dialogue=colloquial_dialogue,
+                        )
+                    ),
+                ]
+            )
+            return ScriptAdaptationProviderResult.model_validate(value)
+        except ValidationError as error:
+            raise ScriptAdaptationProviderError(
+                outcome="failed",
+                code="ai_output_invalid",
+                summary="DeepSeek returned an invalid script adaptation",
+                retryable=False,
+                next_action="start_new_adaptation",
+            ) from error
+        except ScriptAdaptationProviderError:
+            raise
+        except Exception as error:
+            raise _script_adaptation_provider_error(error) from error

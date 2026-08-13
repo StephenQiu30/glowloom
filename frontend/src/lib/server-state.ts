@@ -118,6 +118,14 @@ import {
   triggerScheduleApiV1SchedulesScheduleIdTriggerPost,
 } from "@/api/schedules";
 import {
+  cancelRunApiV1AdaptationRunsRunIdCancelPost,
+  createRunApiV1EpisodesEpisodeIdAdaptationRunsPost,
+  diffRunApiV1AdaptationRunsRunIdDiffGet,
+  getRunApiV1AdaptationRunsRunIdGet,
+  publishRunApiV1AdaptationRunsRunIdPublishPost,
+  updateDraftApiV1AdaptationRunsRunIdDraftPatch,
+} from "@/api/scriptAdaptations";
+import {
   applyAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePost,
   appendSpecVersionApiV1ShotsShotIdSpecVersionsPost,
   archiveShotApiV1ShotsShotIdArchivePost,
@@ -217,6 +225,7 @@ export const appApi = createApi({
     "EpisodePlans",
     "ScriptVersions",
     "ScriptVersion",
+    "AdaptationRun",
     "Tasks",
     "ModelCapabilities",
     "Costs",
@@ -724,6 +733,15 @@ export const appApi = createApi({
         ),
       providesTags: (_result, _error, versionId) => [
         { type: "ScriptVersion", id: versionId },
+      ],
+    }),
+    adaptationRun: builder.query<API.AdaptationRunResponse, string>({
+      queryFn: (runId) =>
+        runRequest(() =>
+          getRunApiV1AdaptationRunsRunIdGet({ run_id: runId }),
+        ),
+      providesTags: (_result, _error, runId) => [
+        { type: "AdaptationRun", id: runId },
       ],
     }),
     confirmedStructure: builder.query<API.ConfirmedStructureResponse, string>({
@@ -1273,6 +1291,84 @@ export const appApi = createApi({
         ...(result
           ? [{ type: "ScriptVersion" as const, id: result.version.id }]
           : []),
+      ],
+    }),
+    createAdaptationRun: builder.mutation<
+      API.AdaptationRunResponse,
+      { episodeId: string; body: API.AdaptationRunCreateRequest }
+    >({
+      queryFn: ({ episodeId, body }) =>
+        runRequest(() =>
+          createRunApiV1EpisodesEpisodeIdAdaptationRunsPost(
+            { episode_id: episodeId },
+            body,
+          ),
+        ),
+      invalidatesTags: ["Tasks", "AuditEvents"],
+    }),
+    updateAdaptationDraft: builder.mutation<
+      API.AdaptationRunResponse,
+      { runId: string; body: API.AdaptationDraftUpdateRequest }
+    >({
+      queryFn: ({ runId, body }) =>
+        runRequest(() =>
+          updateDraftApiV1AdaptationRunsRunIdDraftPatch(
+            { run_id: runId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { runId }) => [
+        { type: "AdaptationRun", id: runId },
+      ],
+    }),
+    adaptationDiff: builder.query<API.AdaptationDiffResponse, string>({
+      queryFn: (runId) =>
+        runRequest(() =>
+          diffRunApiV1AdaptationRunsRunIdDiffGet({ run_id: runId }),
+        ),
+    }),
+    publishAdaptationRun: builder.mutation<
+      API.AdaptationPublishResponse,
+      {
+        episodeId: string;
+        sourceId: string;
+        runId: string;
+        body: API.AdaptationPublishRequest;
+      }
+    >({
+      queryFn: ({ runId, body }) =>
+        runRequest(() =>
+          publishRunApiV1AdaptationRunsRunIdPublishPost(
+            { run_id: runId },
+            body,
+          ),
+        ),
+      invalidatesTags: (result, _error, { episodeId, sourceId, runId }) => [
+        { type: "AdaptationRun", id: runId },
+        { type: "ScriptVersions", id: sourceId },
+        { type: "Episodes", id: episodeId },
+        { type: "Snapshot", id: episodeId },
+        "AuditEvents",
+        ...(result
+          ? [{ type: "ScriptVersion" as const, id: result.version.id }]
+          : []),
+      ],
+    }),
+    cancelAdaptationRun: builder.mutation<
+      API.AdaptationRunResponse,
+      { runId: string; body: API.AdaptationCancelRequest }
+    >({
+      queryFn: ({ runId, body }) =>
+        runRequest(() =>
+          cancelRunApiV1AdaptationRunsRunIdCancelPost(
+            { run_id: runId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { runId }) => [
+        { type: "AdaptationRun", id: runId },
+        "Tasks",
+        "AuditEvents",
       ],
     }),
     setCurrentScriptVersion: builder.mutation<
@@ -1879,7 +1975,9 @@ export const appApi = createApi({
 });
 
 export const {
+  useAdaptationRunQuery,
   useApplyAssetUpgradeMutation,
+  useCancelAdaptationRunMutation,
   useCancelGenerationTaskMutation,
   useAppendAssetVersionMutation,
   useAppendShotSpecMutation,
@@ -1899,6 +1997,7 @@ export const {
   useConfirmedStructureQuery,
   useConsentQuery,
   useConsentsQuery,
+  useCreateAdaptationRunMutation,
   useCreateConsentMutation,
   useCreateAssetMutation,
   useCreateShotMutation,
@@ -1934,6 +2033,7 @@ export const {
   useLoginMutation,
   useLogoutMutation,
   useLazyShotSpecVersionQuery,
+  useLazyAdaptationDiffQuery,
   useLazyScriptVersionDiffQuery,
   useMeQuery,
   useMergeShotsMutation,
@@ -1945,6 +2045,7 @@ export const {
   useProjectDeletePreflightMutation,
   useProjectSnapshotQuery,
   useProjectsQuery,
+  usePublishAdaptationRunMutation,
   usePublishScriptVersionMutation,
   usePauseScheduleMutation,
   useRegisterMutation,
@@ -1994,4 +2095,5 @@ export const {
   useCostsQuery,
   useSchedulesQuery,
   useTriggerScheduleMutation,
+  useUpdateAdaptationDraftMutation,
 } = appApi;

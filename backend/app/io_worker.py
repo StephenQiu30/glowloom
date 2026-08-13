@@ -18,10 +18,20 @@ from app.core.telemetry import (
     start_span,
     traceparent_from_headers,
 )
-from app.integrations.deepseek import DeepSeekEpisodePlanner, DeepSeekScriptStructureExtractor
+from app.integrations.deepseek import (
+    DeepSeekEpisodePlanner,
+    DeepSeekScriptAdapter,
+    DeepSeekScriptStructureExtractor,
+)
 from app.integrations.rabbitmq import declare_task_topology
 from app.model_registry import register_implemented_models
 from app.modules.messaging import MessageEnvelope
+from app.modules.messaging.adaptation_consumer import (
+    PreparedScriptAdaptation,
+    finalize_script_adaptation_failure,
+    finalize_script_adaptation_success,
+    prepare_script_adaptation,
+)
 from app.modules.messaging.consumer import (
     IO_SCRIPT_EXTRACTION_CONSUMER,
     PreparedScriptExtraction,
@@ -52,6 +62,11 @@ from app.modules.scripts import (
     ScriptExtractionResult,
     ScriptStructureExtractor,
 )
+from app.modules.scripts.adaptations import (
+    ScriptAdaptationProviderError,
+    ScriptAdaptationProviderResult,
+    ScriptAdapter,
+)
 from app.modules.scripts.planning.ports import (
     EpisodePlanner,
     EpisodePlanningProviderError,
@@ -80,6 +95,7 @@ async def process_incoming_message(
     *,
     extractor: ScriptStructureExtractor | None = None,
     episode_planner: EpisodePlanner | None = None,
+    adaptation_provider: ScriptAdapter | None = None,
 ) -> WorkerResult:
     started = time.perf_counter()
     if len(message.body) > MAX_MESSAGE_BYTES:
@@ -114,6 +130,7 @@ async def process_incoming_message(
             factory,
             extractor=extractor,
             episode_planner=episode_planner,
+            adaptation_provider=adaptation_provider,
         )
         span.set_attribute("messaging.operation.result", result)
         if result == "requeued":
@@ -189,7 +206,16 @@ async def _process_valid_envelope(
     *,
     extractor: ScriptStructureExtractor | None,
     episode_planner: EpisodePlanner | None,
+    adaptation_provider: ScriptAdapter | None,
 ) -> WorkerResult:
+
+    if envelope.event_type == "script_adaptation.requested":
+        return await _process_script_adaptation_envelope(
+            message,
+            envelope,
+            factory,
+            adaptation_provider=adaptation_provider,
+        )
 
     if envelope.event_type == "generation.requested":
         return await _process_generation_envelope(
@@ -382,6 +408,79 @@ async def _process_episode_planning_envelope(
     return result
 
 
+async def _process_script_adaptation_envelope(
+    message: IncomingMessage,
+    envelope: MessageEnvelope,
+    factory: async_sessionmaker[AsyncSession],
+    *,
+    adaptation_provider: ScriptAdapter | None,
+) -> WorkerResult:
+    try:
+        async with factory() as session:
+            async with session.begin():
+                prepared = await prepare_script_adaptation(
+                    session,
+                    envelope,
+                    configured=adaptation_provider is not None,
+                )
+    except Exception:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    if not isinstance(prepared, PreparedScriptAdaptation):
+        await message.ack()
+        return prepared
+    if adaptation_provider is None:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    adaptation_result: ScriptAdaptationProviderResult | dict[str, object] | None = None
+    try:
+        adaptation_result = await adaptation_provider.adapt(
+            prepared.adaptation_input.script_body,
+            target_duration_ms=prepared.adaptation_input.target_duration_ms,
+            core_plot_points=prepared.adaptation_input.core_plot_points,
+            pacing=prepared.adaptation_input.pacing,
+            colloquial_dialogue=prepared.adaptation_input.colloquial_dialogue,
+        )
+    except ScriptAdaptationProviderError as error:
+        provider_error = error
+    except Exception:
+        provider_error = ScriptAdaptationProviderError(
+            outcome="unknown",
+            code="ai_result_unknown",
+            summary="AI adaptation response outcome is unknown",
+            retryable=False,
+            next_action="start_new_adaptation",
+        )
+    else:
+        provider_error = None
+
+    try:
+        async with factory() as session:
+            async with session.begin():
+                if provider_error is None:
+                    if adaptation_result is None:
+                        raise RuntimeError("adaptation result is unavailable")
+                    result = await finalize_script_adaptation_success(
+                        session,
+                        prepared,
+                        adaptation_result,
+                    )
+                else:
+                    result = await finalize_script_adaptation_failure(
+                        session,
+                        prepared,
+                        provider_error,
+                    )
+    except Exception:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    await message.ack()
+    return result
+
+
 async def run_io_worker(settings: Settings) -> None:
     configure_logging(
         settings.log_level,
@@ -405,6 +504,11 @@ async def run_io_worker(settings: Settings) -> None:
         if settings.deepseek_api_key is not None
         else None
     )
+    adaptation_provider = (
+        DeepSeekScriptAdapter(settings.deepseek_api_key)
+        if settings.deepseek_api_key is not None
+        else None
+    )
     connection = await aio_pika.connect_robust(settings.rabbitmq_url, timeout=3)
     try:
         channel = await connection.channel()
@@ -417,6 +521,7 @@ async def run_io_worker(settings: Settings) -> None:
                 session_factory,
                 extractor=extractor,
                 episode_planner=episode_planner,
+                adaptation_provider=adaptation_provider,
             )
 
         await io_queue.consume(on_message, no_ack=False)

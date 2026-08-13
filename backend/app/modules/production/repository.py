@@ -42,6 +42,7 @@ async def list_tasks(
     task_type: Literal[
         "script_extraction",
         "episode_planning",
+        "script_adaptation",
         "image_generation",
         "video_generation",
         "media_probe",
