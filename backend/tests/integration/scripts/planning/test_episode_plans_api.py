@@ -27,6 +27,10 @@ from app.modules.scripts.models import (
     ScriptSource,
     ScriptVersion,
 )
+from app.modules.scripts.narratives.models import (
+    NarrativeImpactAssessment,
+    NarrativeStructure,
+)
 from app.modules.scripts.planning.schemas import (
     EpisodePlanningProviderProposal,
     EpisodePlanningProviderResult,
@@ -416,6 +420,10 @@ async def test_confirm_materialize_and_publish_are_concurrent_idempotent_batches
         assert await session.scalar(select(func.count()).select_from(Episode)) == 5
         assert await session.scalar(select(func.count()).select_from(ScriptSource)) == 5
         assert await session.scalar(select(func.count()).select_from(ScriptVersion)) == 10
+        assert await session.scalar(select(func.count()).select_from(NarrativeStructure)) == 5
+        assert (
+            await session.scalar(select(func.count()).select_from(NarrativeImpactAssessment)) == 5
+        )
         assert await session.scalar(select(func.count()).select_from(ImportCommit)) == 1
         origins = list(
             await session.scalars(

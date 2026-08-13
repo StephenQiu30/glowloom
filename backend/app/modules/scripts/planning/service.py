@@ -43,6 +43,7 @@ from app.modules.scripts.models import (
     ScriptSource,
     ScriptVersion,
 )
+from app.modules.scripts.narratives.service import record_current_impact
 from app.modules.scripts.planning import repository
 from app.modules.scripts.planning.ports import (
     EPISODE_PLANNER_PROMPT_VERSION,
@@ -1566,6 +1567,17 @@ async def publish_import_commit(
                         ),
                         trace_id=trace_id,
                     )
+                    for item in batch.items:
+                        await record_current_impact(
+                            session,
+                            workspace_id=commit.workspace_id,
+                            episode_id=item.episode_id,
+                            episode_revision=item.revision,
+                            previous_script_version_id=item.previous_script_version_id,
+                            current_script_version_id=item.current_script_version_id,
+                            affected_shot_ids=[],
+                            actor_id=claims.sub,
+                        )
                     published_by_episode = {item.episode_id: item for item in batch.items}
                     for origin in origins:
                         origin.published_version_id = versions_by_origin[origin.id].id

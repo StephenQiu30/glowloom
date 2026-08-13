@@ -17,6 +17,8 @@ from app.modules.scripts.adaptations.schemas import (
     AdaptationRunCreateRequest,
     AdaptationRunResponse,
 )
+from app.modules.scripts.contracts import NarrativeImpactSnapshot
+from app.modules.scripts.narratives.service import record_current_impact_snapshot
 from app.modules.storyboards import list_script_version_affected_shot_ids
 
 router = APIRouter(prefix="/api/v1", tags=["script-adaptations"])
@@ -109,6 +111,27 @@ async def publish_run(
             current_script_version_id=current_script_version_id,
         )
 
+    async def record_narrative_impact(
+        *,
+        workspace_id: UUID,
+        episode_id: UUID,
+        episode_revision: int,
+        previous_script_version_id: UUID | None,
+        current_script_version_id: UUID,
+        affected_shot_ids: list[UUID],
+        actor_id: UUID,
+    ) -> NarrativeImpactSnapshot:
+        return await record_current_impact_snapshot(
+            session,
+            workspace_id=workspace_id,
+            episode_id=episode_id,
+            episode_revision=episode_revision,
+            previous_script_version_id=previous_script_version_id,
+            current_script_version_id=current_script_version_id,
+            affected_shot_ids=affected_shot_ids,
+            actor_id=actor_id,
+        )
+
     return ApiResponse(
         data=await service.publish_run(
             session,
@@ -116,6 +139,7 @@ async def publish_run(
             run_id,
             payload,
             read_impact,
+            record_narrative_impact,
             trace_id=str(request.state.request_id),
         )
     )

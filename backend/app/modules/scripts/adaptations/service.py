@@ -45,7 +45,10 @@ from app.modules.scripts.adaptations.schemas import (
     ScriptAdaptationProviderResult,
 )
 from app.modules.scripts.authorization import require_resource_access, resource_not_found
-from app.modules.scripts.contracts import ScriptVersionImpactReader
+from app.modules.scripts.contracts import (
+    NarrativeImpactRecorder,
+    ScriptVersionImpactReader,
+)
 from app.modules.scripts.models import AdaptationRun, ScriptVersion
 from app.modules.scripts.versions.schemas import (
     CurrentScriptVersionResponse,
@@ -387,6 +390,7 @@ async def publish_run(
     run_id: UUID,
     request: AdaptationPublishRequest,
     impact_reader: ScriptVersionImpactReader,
+    narrative_impact_recorder: NarrativeImpactRecorder,
     *,
     trace_id: str,
 ) -> AdaptationPublishResponse:
@@ -447,6 +451,15 @@ async def publish_run(
             episode_id=run.episode_id,
             current_script_version_id=version.id,
         )
+        narrative_impact = await narrative_impact_recorder(
+            workspace_id=run.workspace_id,
+            episode_id=run.episode_id,
+            episode_revision=current.revision,
+            previous_script_version_id=request.expected_current_version_id,
+            current_script_version_id=version.id,
+            affected_shot_ids=affected_shot_ids,
+            actor_id=claims.sub,
+        )
         run.status = "published"
         run.published_script_version_id = version.id
         run.publish_idempotency_key = request.idempotency_key
@@ -456,6 +469,10 @@ async def publish_run(
             "current_script_version_id": str(version.id),
             "episode_revision": current.revision,
             "affected_shot_ids": [str(item) for item in affected_shot_ids],
+            "narrative_impact_id": str(narrative_impact.impact_id),
+            "previous_narrative_dependency_hash": (narrative_impact.previous_dependency_hash),
+            "current_narrative_dependency_hash": (narrative_impact.current_dependency_hash),
+            "invalidated_scopes": list(narrative_impact.invalidated_scopes),
         }
         run.revision += 1
         run.updated_at = now
@@ -486,6 +503,13 @@ async def publish_run(
                 previous_script_version_id=request.expected_current_version_id,
                 current_script_version_id=version.id,
                 affected_shot_ids=affected_shot_ids,
+                narrative_impact_id=narrative_impact.impact_id,
+                previous_narrative_dependency_hash=(narrative_impact.previous_dependency_hash),
+                current_narrative_dependency_hash=(narrative_impact.current_dependency_hash),
+                invalidated_scopes=cast(
+                    list[Literal["shot_readiness", "coverage", "export"]],
+                    list(narrative_impact.invalidated_scopes),
+                ),
             ),
         ),
     )
@@ -513,6 +537,19 @@ async def _published_response(
     current_version_id = UUID(cast(str, snapshot["current_script_version_id"]))
     episode_revision = cast(int, snapshot["episode_revision"])
     affected_snapshot = cast(list[str], snapshot["affected_shot_ids"])
+    narrative_impact_id = UUID(cast(str, snapshot["narrative_impact_id"]))
+    previous_narrative_hash = cast(
+        str | None,
+        snapshot["previous_narrative_dependency_hash"],
+    )
+    current_narrative_hash = cast(
+        str,
+        snapshot["current_narrative_dependency_hash"],
+    )
+    invalidated_scopes = cast(
+        list[Literal["shot_readiness", "coverage", "export"]],
+        snapshot["invalidated_scopes"],
+    )
     return AdaptationPublishResponse(
         run=_run_response(run),
         version=_version_response(version),
@@ -524,6 +561,10 @@ async def _published_response(
                 previous_script_version_id=UUID(str(previous)) if previous else None,
                 current_script_version_id=current_version_id,
                 affected_shot_ids=[UUID(item) for item in affected_snapshot],
+                narrative_impact_id=narrative_impact_id,
+                previous_narrative_dependency_hash=previous_narrative_hash,
+                current_narrative_dependency_hash=current_narrative_hash,
+                invalidated_scopes=invalidated_scopes,
             ),
         ),
     )

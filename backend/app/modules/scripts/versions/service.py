@@ -25,6 +25,8 @@ from app.modules.scripts.contracts import (
     ConfirmedStructureQuery,
     ConfirmedStructureReference,
     EpisodeConfirmedStructureQuery,
+    NarrativeImpactRecorder,
+    NarrativeImpactSnapshot,
     ScriptVersionImpactReader,
 )
 from app.modules.scripts.models import ExtractionBatch, ScriptSource, ScriptVersion
@@ -82,6 +84,7 @@ def _current_response(
     current_script_version_id: UUID,
     episode_revision: int,
     affected_shot_ids: list[UUID],
+    narrative_impact: NarrativeImpactSnapshot,
 ) -> CurrentScriptVersionResponse:
     return CurrentScriptVersionResponse(
         episode_id=episode_id,
@@ -91,6 +94,13 @@ def _current_response(
             previous_script_version_id=previous_script_version_id,
             current_script_version_id=current_script_version_id,
             affected_shot_ids=affected_shot_ids,
+            narrative_impact_id=narrative_impact.impact_id,
+            previous_narrative_dependency_hash=narrative_impact.previous_dependency_hash,
+            current_narrative_dependency_hash=narrative_impact.current_dependency_hash,
+            invalidated_scopes=cast(
+                list[Literal["shot_readiness", "coverage", "export"]],
+                list(narrative_impact.invalidated_scopes),
+            ),
         ),
     )
 
@@ -150,9 +160,7 @@ async def import_text_source(
     content_hash = sha256(request.body.encode("utf-8")).hexdigest()
     now = datetime.now(UTC)
     async with session.begin():
-        episode = await lock_active_episode_for_content_write(
-            session, claims, episode_id
-        )
+        episode = await lock_active_episode_for_content_write(session, claims, episode_id)
         source_id = uuid7()
         inserted_id = await session.scalar(
             insert(ScriptSource)
@@ -257,9 +265,7 @@ async def get_source(
     source = await repository.find_source(session, source_id)
     if source is None:
         raise resource_not_found("Script source")
-    await require_resource_access(
-        session, claims, source.workspace_id, "Script source"
-    )
+    await require_resource_access(session, claims, source.workspace_id, "Script source")
     return _source_response(source)
 
 
@@ -272,9 +278,7 @@ async def list_sources(
     offset: int,
 ) -> PaginatedScriptSources:
     await episode_for_content_read(session, claims, episode_id)
-    sources, total = await repository.list_sources(
-        session, episode_id, limit=limit, offset=offset
-    )
+    sources, total = await repository.list_sources(session, episode_id, limit=limit, offset=offset)
     return PaginatedScriptSources(
         items=[_source_response(source) for source in sources],
         total=total,
@@ -291,9 +295,7 @@ async def get_version(
     version = await repository.find_version(session, version_id)
     if version is None:
         raise resource_not_found("Script version")
-    await require_resource_access(
-        session, claims, version.workspace_id, "Script version"
-    )
+    await require_resource_access(session, claims, version.workspace_id, "Script version")
     return _version_response(version)
 
 
@@ -338,9 +340,7 @@ async def resolve_confirmed_structure(
         return None
     dialogues = await repository.list_dialogues(session, [scene_id])
     available_ids = {dialogue.id for dialogue in dialogues}
-    if len(set(dialogue_ids)) != len(dialogue_ids) or not set(dialogue_ids).issubset(
-        available_ids
-    ):
+    if len(set(dialogue_ids)) != len(dialogue_ids) or not set(dialogue_ids).issubset(available_ids):
         return None
     return ConfirmedStructureReference(
         workspace_id=workspace_id,
@@ -385,10 +385,7 @@ async def resolve_episode_confirmed_structures(
         [query.structure.script_version_id for query in unique_queries],
         [query.structure.scene_id for query in unique_queries],
     )
-    by_pair = {
-        (version.id, scene.id): (version, source, scene)
-        for version, source, scene in rows
-    }
+    by_pair = {(version.id, scene.id): (version, source, scene) for version, source, scene in rows}
     dialogues = await repository.list_dialogues(
         session,
         [scene.id for _version, _source, scene in rows],
@@ -416,9 +413,7 @@ async def resolve_episode_confirmed_structures(
             and source.status == "active"
             and scene.workspace_id == workspace_id
             and len(set(query.dialogue_ids)) == len(query.dialogue_ids)
-            and set(query.dialogue_ids).issubset(
-                dialogue_ids_by_scene.get(scene.id, set())
-            )
+            and set(query.dialogue_ids).issubset(dialogue_ids_by_scene.get(scene.id, set()))
         )
         results[scoped_query] = (
             ConfirmedStructureReference(
@@ -445,12 +440,8 @@ async def list_versions(
     source = await repository.find_source(session, source_id)
     if source is None:
         raise resource_not_found("Script source")
-    await require_resource_access(
-        session, claims, source.workspace_id, "Script source"
-    )
-    versions, total = await repository.list_versions(
-        session, source_id, limit=limit, offset=offset
-    )
+    await require_resource_access(session, claims, source.workspace_id, "Script source")
+    versions, total = await repository.list_versions(session, source_id, limit=limit, offset=offset)
     return PaginatedScriptVersions(
         items=[_version_response(version) for version in versions],
         total=total,
@@ -465,6 +456,7 @@ async def publish_version(
     source_id: UUID,
     request: ScriptVersionPublishRequest,
     impact_reader: ScriptVersionImpactReader,
+    narrative_impact_recorder: NarrativeImpactRecorder,
     *,
     trace_id: str,
 ) -> ScriptVersionPublishResponse:
@@ -474,18 +466,14 @@ async def publish_version(
         source = await repository.find_source(session, source_id, for_update=True)
         if source is None:
             raise resource_not_found("Script source")
-        await require_resource_access(
-            session, claims, source.workspace_id, "Script source"
-        )
+        await require_resource_access(session, claims, source.workspace_id, "Script source")
         if source.status != "active":
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
                 "Script source is archived",
                 status_code=409,
             )
-        episode = await lock_active_episode_for_content_write(
-            session, claims, source.episode_id
-        )
+        episode = await lock_active_episode_for_content_write(session, claims, source.episode_id)
         version = ScriptVersion(
             id=uuid7(),
             workspace_id=source.workspace_id,
@@ -533,6 +521,15 @@ async def publish_version(
             episode_id=current.episode_id,
             current_script_version_id=version.id,
         )
+        narrative_impact = await narrative_impact_recorder(
+            workspace_id=source.workspace_id,
+            episode_id=current.episode_id,
+            episode_revision=current.revision,
+            previous_script_version_id=request.expected_current_version_id,
+            current_script_version_id=version.id,
+            affected_shot_ids=affected_shot_ids,
+            actor_id=claims.sub,
+        )
     return ScriptVersionPublishResponse(
         version=_version_response(version),
         current=_current_response(
@@ -541,6 +538,7 @@ async def publish_version(
             version.id,
             current.revision,
             affected_shot_ids,
+            narrative_impact,
         ),
     )
 
@@ -551,25 +549,20 @@ async def set_current_version(
     episode_id: UUID,
     request: CurrentScriptVersionRequest,
     impact_reader: ScriptVersionImpactReader,
+    narrative_impact_recorder: NarrativeImpactRecorder,
     *,
     trace_id: str,
 ) -> CurrentScriptVersionResponse:
     async with session.begin():
-        episode = await lock_active_episode_for_content_write(
-            session, claims, episode_id
-        )
+        episode = await lock_active_episode_for_content_write(session, claims, episode_id)
         version = await repository.find_version(session, request.version_id)
         if version is None:
             raise resource_not_found("Script version")
-        await require_resource_access(
-            session, claims, version.workspace_id, "Script version"
-        )
+        await require_resource_access(session, claims, version.workspace_id, "Script version")
         source = await repository.find_source(session, version.source_id)
         if source is None:
             raise resource_not_found("Script source")
-        await require_resource_access(
-            session, claims, source.workspace_id, "Script source"
-        )
+        await require_resource_access(session, claims, source.workspace_id, "Script source")
         if source.episode_id != episode.episode_id:
             raise ApiError(
                 ErrorCode.RESOURCE_CONFLICT,
@@ -612,12 +605,22 @@ async def set_current_version(
             episode_id=current.episode_id,
             current_script_version_id=version.id,
         )
+        narrative_impact = await narrative_impact_recorder(
+            workspace_id=source.workspace_id,
+            episode_id=current.episode_id,
+            episode_revision=current.revision,
+            previous_script_version_id=request.expected_current_version_id,
+            current_script_version_id=version.id,
+            affected_shot_ids=affected_shot_ids,
+            actor_id=claims.sub,
+        )
     return _current_response(
         current.episode_id,
         request.expected_current_version_id,
         version.id,
         current.revision,
         affected_shot_ids,
+        narrative_impact,
     )
 
 
@@ -635,12 +638,8 @@ async def set_source_archived(
         source = await repository.find_source(session, source_id, for_update=True)
         if source is None:
             raise resource_not_found("Script source")
-        await require_resource_access(
-            session, claims, source.workspace_id, "Script source"
-        )
-        await lock_active_episode_for_content_write(
-            session, claims, source.episode_id
-        )
+        await require_resource_access(session, claims, source.workspace_id, "Script source")
+        await lock_active_episode_for_content_write(session, claims, source.episode_id)
         _source_revision(source, request.expected_revision)
         if source.status != expected_status:
             raise ApiError(
@@ -658,11 +657,7 @@ async def set_source_archived(
             session,
             workspace_id=source.workspace_id,
             actor_id=claims.sub,
-            action=(
-                "script.source_archived"
-                if archived
-                else "script.source_restored"
-            ),
+            action=("script.source_archived" if archived else "script.source_restored"),
             target_type="script_source",
             target_id=source.id,
             trace_id=trace_id,
@@ -799,9 +794,7 @@ async def delete_draft_version(
                 next_action="review_script_version_delete_blockers",
                 details={
                     "script_version_id": str(locked_version.id),
-                    "blockers": [
-                        blocker.model_dump(mode="json") for blocker in blockers
-                    ],
+                    "blockers": [blocker.model_dump(mode="json") for blocker in blockers],
                 },
             )
         append_audit_event(
@@ -833,15 +826,11 @@ async def diff_versions(
     base = await repository.find_version(session, version_id)
     if base is None:
         raise resource_not_found("Script version")
-    await require_resource_access(
-        session, claims, base.workspace_id, "Script version"
-    )
+    await require_resource_access(session, claims, base.workspace_id, "Script version")
     target = await repository.find_version(session, other_version_id)
     if target is None:
         raise resource_not_found("Script version")
-    await require_resource_access(
-        session, claims, target.workspace_id, "Script version"
-    )
+    await require_resource_access(session, claims, target.workspace_id, "Script version")
     if base.source_id != target.source_id:
         raise ApiError(
             ErrorCode.RESOURCE_CONFLICT,
@@ -860,13 +849,9 @@ async def diff_versions(
     return ScriptVersionDiffResponse(
         base_version_id=base.id,
         target_version_id=target.id,
-        added_lines=sum(
-            line.startswith("+") and not line.startswith("+++")
-            for line in diff_lines
-        ),
+        added_lines=sum(line.startswith("+") and not line.startswith("+++") for line in diff_lines),
         removed_lines=sum(
-            line.startswith("-") and not line.startswith("---")
-            for line in diff_lines
+            line.startswith("-") and not line.startswith("---") for line in diff_lines
         ),
         diff_lines=diff_lines,
     )

@@ -154,6 +154,9 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
         {"revision", "published_script_version_id", "episode_revision"}
     ),
     "script.adaptation_cancelled": frozenset({"revision", "task_id"}),
+    "script.narrative_structure_corrected": frozenset(
+        {"script_version_id", "revision", "unit_count", "impact_id"}
+    ),
     "asset.created": frozenset({"revision", "kind", "project_id"}),
     "asset.updated": frozenset({"revision", "changed_fields"}),
     "asset.archived": frozenset({"revision", "previous_status", "status"}),

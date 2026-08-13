@@ -1,4 +1,5 @@
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
 from uuid import UUID
@@ -25,9 +26,11 @@ from app.modules.projects import (
 from app.modules.scripts import (
     ConfirmedStructureQuery,
     EpisodeConfirmedStructureQuery,
+    NarrativeDependencySnapshot,
     resolve_confirmed_shot_candidate,
     resolve_confirmed_structure,
     resolve_episode_confirmed_structures,
+    resolve_narrative_dependencies,
 )
 from app.modules.storyboards import repository
 from app.modules.storyboards.contracts import (
@@ -92,6 +95,14 @@ from app.modules.storyboards.schemas import (
 )
 
 MAX_ACTIVE_SHOTS = 120
+
+
+@dataclass(frozen=True, slots=True)
+class ScriptReadinessState:
+    confirmed_structure_available: bool | None
+    current_script_version_id: UUID | None
+    narrative: NarrativeDependencySnapshot | None
+    narrative_unavailable: bool
 
 
 async def summarize_episode_storyboard_references(
@@ -1769,7 +1780,7 @@ def _evaluate_loaded_readiness(
     version: ShotSpecVersion | None,
     references: list[AssetReference],
     *,
-    structure_available: bool | None,
+    script_state: ScriptReadinessState,
     asset_snapshots: dict[UUID, AssetVersionReadinessReference],
     assets_unavailable: bool,
 ) -> ShotReadinessResponse:
@@ -1788,6 +1799,22 @@ def _evaluate_loaded_readiness(
             dependencies=ShotReadinessDependencies(
                 shot_spec_version_id=None,
                 confirmed_script_version_id=shot.source_script_version_id,
+                current_script_version_id=script_state.current_script_version_id,
+                narrative_structure_id=(
+                    script_state.narrative.structure_id
+                    if script_state.narrative is not None
+                    else None
+                ),
+                narrative_structure_revision=(
+                    script_state.narrative.structure_revision
+                    if script_state.narrative is not None
+                    else None
+                ),
+                narrative_dependency_hash=(
+                    script_state.narrative.dependency_hash
+                    if script_state.narrative is not None
+                    else None
+                ),
                 scene_id=shot.source_scene_id,
                 dialogue_ids=[],
                 asset_version_ids=[],
@@ -1800,7 +1827,7 @@ def _evaluate_loaded_readiness(
     spec = ShotSpec.model_validate(version.spec)
     issues: list[ShotReadinessIssue] = []
     warnings: list[ShotReadinessWarning] = []
-    if structure_available is None:
+    if script_state.confirmed_structure_available is None:
         issues.append(
             ShotReadinessIssue(
                 code="DEPENDENCY_UNAVAILABLE",
@@ -1809,7 +1836,7 @@ def _evaluate_loaded_readiness(
                 next_action="retry_readiness",
             )
         )
-    elif not structure_available:
+    elif not script_state.confirmed_structure_available:
         issues.append(
             ShotReadinessIssue(
                 code="SCRIPT_VERSION_UNAVAILABLE",
@@ -1818,6 +1845,31 @@ def _evaluate_loaded_readiness(
                 dependency_id=spec.script_reference.confirmed_script_version_id,
                 summary="The fixed confirmed script structure is unavailable",
                 next_action="select_confirmed_script_structure",
+            )
+        )
+
+    if script_state.current_script_version_id != spec.script_reference.confirmed_script_version_id:
+        issues.append(
+            ShotReadinessIssue(
+                code="SCRIPT_REVISION_NOT_CURRENT",
+                field_path="spec.script_reference.confirmed_script_version_id",
+                dependency_type="SCRIPT_VERSION",
+                dependency_id=script_state.current_script_version_id,
+                summary="The shot references a script revision that is no longer current",
+                next_action="revise_storyboard_from_current_script",
+            )
+        )
+    if script_state.narrative_unavailable or (
+        script_state.current_script_version_id is not None and script_state.narrative is None
+    ):
+        issues.append(
+            ShotReadinessIssue(
+                code="DEPENDENCY_UNAVAILABLE",
+                field_path="evaluated_dependencies.narrative_dependency_hash",
+                dependency_type="NARRATIVE_STRUCTURE",
+                dependency_id=script_state.current_script_version_id,
+                summary="Current narrative structure dependency is unavailable",
+                next_action="retry_readiness",
             )
         )
 
@@ -1923,6 +1975,18 @@ def _evaluate_loaded_readiness(
     dependencies = ShotReadinessDependencies(
         shot_spec_version_id=version.id,
         confirmed_script_version_id=spec.script_reference.confirmed_script_version_id,
+        current_script_version_id=script_state.current_script_version_id,
+        narrative_structure_id=(
+            script_state.narrative.structure_id if script_state.narrative is not None else None
+        ),
+        narrative_structure_revision=(
+            script_state.narrative.structure_revision
+            if script_state.narrative is not None
+            else None
+        ),
+        narrative_dependency_hash=(
+            script_state.narrative.dependency_hash if script_state.narrative is not None else None
+        ),
         scene_id=spec.script_reference.scene_id,
         dialogue_ids=spec.script_reference.dialogue_ids,
         asset_version_ids=[reference.asset_version_id for reference in references],
@@ -1964,7 +2028,7 @@ async def _resolve_project_readiness_dependencies(
     versions: list[ShotSpecVersion],
     references: list[AssetReference],
 ) -> tuple[
-    dict[UUID, bool | None],
+    dict[UUID, ScriptReadinessState],
     dict[UUID, AssetVersionReadinessReference],
     bool,
 ]:
@@ -1996,6 +2060,50 @@ async def _resolve_project_readiness_dependencies(
             for version_id, query in queries_by_version.items()
         }
 
+    episode_ids = list(dict.fromkeys(episode_id_by_version.values()))
+    contexts: dict[UUID, EpisodeContentContext | None] = {}
+    narrative_resolution_unavailable = False
+    try:
+        for episode_id in episode_ids:
+            contexts[episode_id] = await resolve_episode_content_context(
+                session,
+                workspace_id,
+                episode_id,
+            )
+        current_script_ids = [
+            context.current_script_version_id
+            for context in contexts.values()
+            if context is not None and context.current_script_version_id is not None
+        ]
+        narrative_snapshots = await resolve_narrative_dependencies(
+            session,
+            workspace_id,
+            current_script_ids,
+        )
+    except (SQLAlchemyError, ApiError) as error:
+        if isinstance(error, ApiError) and error.code != ErrorCode.DEPENDENCY_UNAVAILABLE:
+            raise
+        narrative_snapshots = {}
+        narrative_resolution_unavailable = True
+
+    script_states: dict[UUID, ScriptReadinessState] = {}
+    for version in versions:
+        episode_id = episode_id_by_version[version.id]
+        context = contexts.get(episode_id)
+        current_script_version_id = (
+            context.current_script_version_id if context is not None else None
+        )
+        script_states[version.id] = ScriptReadinessState(
+            confirmed_structure_available=structure_states.get(version.id),
+            current_script_version_id=current_script_version_id,
+            narrative=(
+                narrative_snapshots.get(current_script_version_id)
+                if current_script_version_id is not None
+                else None
+            ),
+            narrative_unavailable=(narrative_resolution_unavailable or context is None),
+        )
+
     asset_ids = list(dict.fromkeys(reference.asset_version_id for reference in references))
     assets_unavailable = False
     try:
@@ -2013,7 +2121,7 @@ async def _resolve_project_readiness_dependencies(
             raise
         asset_snapshots = {}
         assets_unavailable = True
-    return structure_states, asset_snapshots, assets_unavailable
+    return script_states, asset_snapshots, assets_unavailable
 
 
 async def _resolve_readiness_dependencies(
@@ -2022,7 +2130,7 @@ async def _resolve_readiness_dependencies(
     versions: list[ShotSpecVersion],
     references: list[AssetReference],
 ) -> tuple[
-    dict[UUID, bool | None],
+    dict[UUID, ScriptReadinessState],
     dict[UUID, AssetVersionReadinessReference],
     bool,
 ]:
@@ -2056,7 +2164,7 @@ async def get_readiness(
             raise _not_found("Shot spec version")
         version = version_result[0]
         references = await repository.list_asset_references(session, [version.id])
-    structure_states, asset_snapshots, assets_unavailable = await _resolve_readiness_dependencies(
+    script_states, asset_snapshots, assets_unavailable = await _resolve_readiness_dependencies(
         session,
         episode,
         [version] if version is not None else [],
@@ -2066,7 +2174,16 @@ async def get_readiness(
         shot,
         version,
         references,
-        structure_available=(structure_states.get(version.id) if version is not None else False),
+        script_state=(
+            script_states[version.id]
+            if version is not None
+            else ScriptReadinessState(
+                confirmed_structure_available=False,
+                current_script_version_id=episode.current_script_version_id,
+                narrative=None,
+                narrative_unavailable=False,
+            )
+        ),
         asset_snapshots=asset_snapshots,
         assets_unavailable=assets_unavailable,
     )
@@ -2087,7 +2204,7 @@ async def get_episode_readiness(
     references_by_version: dict[UUID, list[AssetReference]] = defaultdict(list)
     for reference in references:
         references_by_version[reference.shot_spec_version_id].append(reference)
-    structure_states, asset_snapshots, assets_unavailable = await _resolve_readiness_dependencies(
+    script_states, asset_snapshots, assets_unavailable = await _resolve_readiness_dependencies(
         session,
         episode,
         versions,
@@ -2098,8 +2215,15 @@ async def get_episode_readiness(
             shot,
             version,
             references_by_version.get(version.id, []) if version is not None else [],
-            structure_available=(
-                structure_states.get(version.id) if version is not None else False
+            script_state=(
+                script_states[version.id]
+                if version is not None
+                else ScriptReadinessState(
+                    confirmed_structure_available=False,
+                    current_script_version_id=episode.current_script_version_id,
+                    narrative=None,
+                    narrative_unavailable=False,
+                )
             ),
             asset_snapshots=asset_snapshots,
             assets_unavailable=assets_unavailable,
@@ -2164,7 +2288,7 @@ async def summarize_episode_storyboards(
     for reference in references:
         references_by_version[reference.shot_spec_version_id].append(reference)
     (
-        structure_states,
+        script_states,
         asset_snapshots,
         assets_unavailable,
     ) = await _resolve_project_readiness_dependencies(
@@ -2184,8 +2308,15 @@ async def summarize_episode_storyboards(
                 shot,
                 version,
                 (references_by_version.get(version.id, []) if version is not None else []),
-                structure_available=(
-                    structure_states.get(version.id) if version is not None else False
+                script_state=(
+                    script_states[version.id]
+                    if version is not None
+                    else ScriptReadinessState(
+                        confirmed_structure_available=False,
+                        current_script_version_id=None,
+                        narrative=None,
+                        narrative_unavailable=True,
+                    )
                 ),
                 asset_snapshots=asset_snapshots,
                 assets_unavailable=assets_unavailable,
@@ -2597,7 +2728,7 @@ async def get_production_snapshot(
     if episode is None:
         return None
     references = await repository.list_asset_references(session, [version.id])
-    structure_states, asset_snapshots, assets_unavailable = await _resolve_readiness_dependencies(
+    script_states, asset_snapshots, assets_unavailable = await _resolve_readiness_dependencies(
         session,
         episode,
         [version],
@@ -2607,7 +2738,7 @@ async def get_production_snapshot(
         shot,
         version,
         references,
-        structure_available=structure_states.get(version.id),
+        script_state=script_states[version.id],
         asset_snapshots=asset_snapshots,
         assets_unavailable=assets_unavailable,
     )

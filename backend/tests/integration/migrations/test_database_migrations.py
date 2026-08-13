@@ -26,6 +26,7 @@ PROVIDER_REVISION = "8d9f2a6c4b71"
 SCRIPT_DOCUMENT_REVISION = "4c8e2f7a9b31"
 EPISODE_PLANNING_REVISION = "7f3a9c1d2e84"
 ADAPTATION_REVISION = "9a4d6e2f1b73"
+NARRATIVE_REVISION = "2b7e4c9a1d63"
 PROVIDER_TABLE_NAMES = {
     "prod_provider_bindings",
     "prod_provider_connections",
@@ -45,6 +46,12 @@ EPISODE_PLANNING_TABLE_NAMES = {
     "scr_episode_segment_origins",
 }
 ADAPTATION_TABLE_NAMES = {"scr_adaptation_runs"}
+NARRATIVE_TABLE_NAMES = {
+    "scr_narrative_structures",
+    "scr_narrative_units",
+    "scr_narrative_unit_versions",
+    "scr_narrative_impacts",
+}
 PROVIDER_CAPABILITY_UNIQUE = "uq_prod_capability_id_version"
 
 
@@ -58,6 +65,7 @@ def _create_historical_pre_provider_schema(sync_connection: Connection) -> None:
             | SCRIPT_DOCUMENT_TABLE_NAMES
             | EPISODE_PLANNING_TABLE_NAMES
             | ADAPTATION_TABLE_NAMES
+            | NARRATIVE_TABLE_NAMES
         )
     ]
     Base.metadata.create_all(sync_connection, tables=legacy_tables)
@@ -71,7 +79,10 @@ def _create_provider_era_schema(sync_connection: Connection) -> None:
         table
         for name, table in Base.metadata.tables.items()
         if name
-        not in SCRIPT_DOCUMENT_TABLE_NAMES | EPISODE_PLANNING_TABLE_NAMES | ADAPTATION_TABLE_NAMES
+        not in SCRIPT_DOCUMENT_TABLE_NAMES
+        | EPISODE_PLANNING_TABLE_NAMES
+        | ADAPTATION_TABLE_NAMES
+        | NARRATIVE_TABLE_NAMES
     ]
     Base.metadata.create_all(sync_connection, tables=provider_era_tables)
 
@@ -87,16 +98,25 @@ def _create_document_era_schema(sync_connection: Connection) -> None:
     document_era_tables = [
         table
         for name, table in Base.metadata.tables.items()
-        if name not in EPISODE_PLANNING_TABLE_NAMES | ADAPTATION_TABLE_NAMES
+        if name not in EPISODE_PLANNING_TABLE_NAMES | ADAPTATION_TABLE_NAMES | NARRATIVE_TABLE_NAMES
     ]
     Base.metadata.create_all(sync_connection, tables=document_era_tables)
 
 
 def _create_episode_planning_era_schema(sync_connection: Connection) -> None:
     episode_planning_era_tables = [
-        table for name, table in Base.metadata.tables.items() if name not in ADAPTATION_TABLE_NAMES
+        table
+        for name, table in Base.metadata.tables.items()
+        if name not in ADAPTATION_TABLE_NAMES | NARRATIVE_TABLE_NAMES
     ]
     Base.metadata.create_all(sync_connection, tables=episode_planning_era_tables)
+
+
+def _create_adaptation_era_schema(sync_connection: Connection) -> None:
+    adaptation_era_tables = [
+        table for name, table in Base.metadata.tables.items() if name not in NARRATIVE_TABLE_NAMES
+    ]
+    Base.metadata.create_all(sync_connection, tables=adaptation_era_tables)
 
 
 @pytest.fixture
@@ -298,6 +318,7 @@ async def test_baseline_revision_represents_the_historical_thirty_eight_table_sc
             - SCRIPT_DOCUMENT_TABLE_NAMES
             - EPISODE_PLANNING_TABLE_NAMES
             - ADAPTATION_TABLE_NAMES
+            - NARRATIVE_TABLE_NAMES
         ),
         "alembic_version",
     }
@@ -361,6 +382,7 @@ async def test_provider_revision_is_the_pre_document_forty_two_table_schema(
             - SCRIPT_DOCUMENT_TABLE_NAMES
             - EPISODE_PLANNING_TABLE_NAMES
             - ADAPTATION_TABLE_NAMES
+            - NARRATIVE_TABLE_NAMES
         ),
         "alembic_version",
     }
@@ -435,7 +457,7 @@ async def test_unversioned_provider_era_schema_is_adopted_then_upgraded(
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
         )
-    assert await get_database_heads(migration_engine) == (ADAPTATION_REVISION,)
+    assert await get_database_heads(migration_engine) == (NARRATIVE_REVISION,)
     assert account == "provider-era@example.test"
     await assert_database_matches_metadata(migration_engine)
 
@@ -535,7 +557,7 @@ async def test_episode_planning_revision_upgrades_document_era_and_preserves_row
 
 
 @pytest.mark.asyncio
-async def test_adaptation_revision_upgrades_episode_planning_era_and_preserves_rows(
+async def test_head_upgrades_episode_planning_era_and_preserves_rows(
     migration_engine: AsyncEngine,
 ) -> None:
     account_id = uuid4()
@@ -564,8 +586,9 @@ async def test_adaptation_revision_upgrades_episode_planning_era_and_preserves_r
             text("SELECT email_normalized FROM idn_user_accounts WHERE id = :id"),
             {"id": account_id},
         )
-    assert await get_database_heads(migration_engine) == (ADAPTATION_REVISION,)
+    assert await get_database_heads(migration_engine) == (NARRATIVE_REVISION,)
     assert ADAPTATION_TABLE_NAMES <= table_names
+    assert NARRATIVE_TABLE_NAMES <= table_names
     assert account == "adaptation-upgrade@example.test"
     await assert_database_matches_metadata(migration_engine)
 
@@ -582,8 +605,46 @@ async def test_unversioned_episode_planning_era_is_adopted_then_upgraded(
         backup_reference="test-backup-before-adaptation-adoption",
     )
 
-    assert await get_database_heads(migration_engine) == (ADAPTATION_REVISION,)
+    assert await get_database_heads(migration_engine) == (NARRATIVE_REVISION,)
     await assert_database_matches_metadata(migration_engine)
+
+
+@pytest.mark.asyncio
+async def test_unversioned_adaptation_era_is_adopted_then_upgraded(
+    migration_engine: AsyncEngine,
+) -> None:
+    async with migration_engine.begin() as connection:
+        await connection.run_sync(_create_adaptation_era_schema)
+
+    await adopt_existing_database(
+        migration_engine,
+        backup_reference="test-backup-before-narrative-adoption",
+    )
+
+    assert await get_database_heads(migration_engine) == (NARRATIVE_REVISION,)
+    await assert_database_matches_metadata(migration_engine)
+
+
+@pytest.mark.asyncio
+async def test_partial_narrative_schema_is_rejected_without_stamping(
+    migration_engine: AsyncEngine,
+) -> None:
+    async with migration_engine.begin() as connection:
+        await connection.run_sync(_create_adaptation_era_schema)
+        await connection.run_sync(
+            lambda sync: Base.metadata.tables["scr_narrative_structures"].create(sync)
+        )
+
+    with pytest.raises(
+        DatabaseSchemaMismatchError,
+        match="partial NarrativeUnit schema",
+    ):
+        await adopt_existing_database(
+            migration_engine,
+            backup_reference="test-backup-before-partial-narrative-adoption",
+        )
+
+    assert await get_database_heads(migration_engine) == ()
 
 
 @pytest.mark.asyncio

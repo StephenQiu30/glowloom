@@ -128,17 +128,13 @@ class ShotSpec(CommandModel):
         beat_keys = [beat.beat_key for beat in self.action_beats]
         if len(set(beat_keys)) != len(beat_keys):
             raise ValueError("action beat keys must be unique")
-        if [beat.order for beat in self.action_beats] != list(
-            range(1, len(self.action_beats) + 1)
-        ):
+        if [beat.order for beat in self.action_beats] != list(range(1, len(self.action_beats) + 1)):
             raise ValueError("action beat order must be continuous from 1")
 
         dialogue_ids = set(self.script_reference.dialogue_ids)
         for item in self.dialogue_or_narration:
             if item.source_dialogue_id not in dialogue_ids:
-                raise ValueError(
-                    "dialogue must belong to script_reference.dialogue_ids"
-                )
+                raise ValueError("dialogue must belong to script_reference.dialogue_ids")
             if item.beat_key is not None and item.beat_key not in beat_keys:
                 raise ValueError("dialogue beat_key must reference an action beat")
         return self
@@ -359,6 +355,7 @@ class ShotReadinessIssue(BaseModel):
         "SPEC_FIELD_MISSING",
         "DURATION_OUT_OF_RANGE",
         "SCRIPT_VERSION_UNAVAILABLE",
+        "SCRIPT_REVISION_NOT_CURRENT",
         "SOURCE_SCENE_INVALID",
         "SOURCE_DIALOGUE_INVALID",
         "LOCATION_REFERENCE_MISSING",
@@ -392,6 +389,10 @@ class ShotReadinessWarning(BaseModel):
 class ShotReadinessDependencies(BaseModel):
     shot_spec_version_id: UUID | None
     confirmed_script_version_id: UUID
+    current_script_version_id: UUID | None
+    narrative_structure_id: UUID | None
+    narrative_structure_revision: int | None
+    narrative_dependency_hash: str | None
     scene_id: UUID
     dialogue_ids: list[UUID]
     asset_version_ids: list[UUID]

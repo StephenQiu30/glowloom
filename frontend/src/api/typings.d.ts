@@ -303,6 +303,22 @@ declare namespace API {
     data: MeResponse;
   };
 
+  type ApiResponseNarrativeDependencyResponse_ = {
+    data: NarrativeDependencyResponse;
+  };
+
+  type ApiResponseNarrativeImpactResponse_ = {
+    data: NarrativeImpactResponse;
+  };
+
+  type ApiResponseNarrativeRevisionResponse_ = {
+    data: NarrativeRevisionResponse;
+  };
+
+  type ApiResponseNarrativeStructureResponse_ = {
+    data: NarrativeStructureResponse;
+  };
+
   type ApiResponsePaginatedAssets_ = {
     data: PaginatedAssets;
   };
@@ -2080,9 +2096,26 @@ declare namespace API {
     candidate_id: string;
   };
 
+  type getLatestNarrativeImpactApiV1EpisodesEpisodeIdNarrativeImpactsLatestGetParams =
+    {
+      episode_id: string;
+    };
+
   type getMediaApiV1MediaVersionIdGetParams = {
     version_id: string;
   };
+
+  type getNarrativeDependencyApiV1EpisodesEpisodeIdNarrativeDependencyGetParams =
+    {
+      episode_id: string;
+      evaluation_hash: string | null | null;
+    };
+
+  type getNarrativeStructureApiV1ScriptVersionsVersionIdNarrativeStructureGetParams =
+    {
+      version_id: string;
+      revision: number | null | null;
+    };
 
   type getProjectApiV1ProjectsProjectIdGetParams = {
     project_id: string;
@@ -2701,11 +2734,153 @@ declare namespace API {
     metadata: Record<string, any>;
   };
 
+  type NarrativeDependencyResponse = {
+    /** Episode Id */
+    episode_id: string;
+    /** Current Script Version Id */
+    current_script_version_id: string;
+    /** Current Structure Id */
+    current_structure_id: string;
+    /** Current Structure Revision */
+    current_structure_revision: number;
+    /** Current Dependency Hash */
+    current_dependency_hash: string;
+    /** Evaluated Hash */
+    evaluated_hash: string | null;
+    /** Status */
+    status: "fresh" | "stale";
+  };
+
+  type NarrativeImpactResponse = {
+    /** Id */
+    id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Sequence */
+    sequence: number;
+    /** Trigger */
+    trigger: "current_changed" | "structure_corrected";
+    /** Episode Revision */
+    episode_revision: number;
+    /** Previous Script Version Id */
+    previous_script_version_id: string | null;
+    /** Current Script Version Id */
+    current_script_version_id: string;
+    /** Previous Structure Hash */
+    previous_structure_hash: string | null;
+    /** Current Structure Hash */
+    current_structure_hash: string;
+    /** Previous Dependency Hash */
+    previous_dependency_hash: string | null;
+    /** Current Dependency Hash */
+    current_dependency_hash: string;
+    /** Previous Unit Count */
+    previous_unit_count: number;
+    /** Current Unit Count */
+    current_unit_count: number;
+    /** Affected Shot Ids */
+    affected_shot_ids: string[];
+    /** Invalidated Scopes */
+    invalidated_scopes: ("shot_readiness" | "coverage" | "export")[];
+    /** Impact Hash */
+    impact_hash: string;
+    /** Created At */
+    created_at: string;
+  };
+
+  type NarrativeRevisionResponse = {
+    structure: NarrativeStructureResponse;
+    impact: NarrativeImpactResponse;
+  };
+
   type NarrativeSpec = {
     /** Purpose */
     purpose: string;
     /** Continuity Note */
     continuity_note: string | null | null;
+  };
+
+  type NarrativeStructureResponse = {
+    /** Id */
+    id: string;
+    /** Workspace Id */
+    workspace_id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Script Version Id */
+    script_version_id: string;
+    /** Input Hash */
+    input_hash: string;
+    /** Parser Version */
+    parser_version: string;
+    /** Structure Hash */
+    structure_hash: string;
+    /** Dependency Hash */
+    dependency_hash: string;
+    /** Revision */
+    revision: number;
+    /** Units */
+    units: NarrativeUnitResponse[];
+    /** Created At */
+    created_at: string;
+    /** Updated At */
+    updated_at: string;
+  };
+
+  type NarrativeStructureRevisionRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Expected Current Script Version Id */
+    expected_current_script_version_id: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Units */
+    units: NarrativeUnitRevisionItem[];
+  };
+
+  type NarrativeUnitResponse = {
+    /** Id */
+    id: string;
+    /** Unit Id */
+    unit_id: string;
+    /** Kind */
+    kind: "scene_heading" | "action" | "dialogue" | "narration";
+    /** Position */
+    position: number;
+    /** Version No */
+    version_no: number;
+    source_range: SourceRange;
+    /** Exact Text */
+    exact_text: string;
+    /** Text Hash */
+    text_hash: string;
+    /** Prefix Text */
+    prefix_text: string;
+    /** Suffix Text */
+    suffix_text: string;
+    /** Required For Coverage */
+    required_for_coverage: boolean;
+    /** Source Scene Id */
+    source_scene_id: string | null;
+    /** Source Dialogue Id */
+    source_dialogue_id: string | null;
+    /** Origin */
+    origin: "deterministic" | "manual";
+    /** Created At */
+    created_at: string;
+  };
+
+  type NarrativeUnitRevisionItem = {
+    /** Unit Id */
+    unit_id: string;
+    /** Kind */
+    kind: "scene_heading" | "action" | "dialogue" | "narration";
+    /** Source Start */
+    source_start: number;
+    /** Source End */
+    source_end: number;
+    /** Required For Coverage */
+    required_for_coverage: boolean;
   };
 
   type NextAction = {
@@ -3175,6 +3350,11 @@ declare namespace API {
     consent_id: string;
   };
 
+  type reviseNarrativeStructureApiV1NarrativeStructuresStructureIdRevisionsPostParams =
+    {
+      structure_id: string;
+    };
+
   type RevocationResponse = {
     /** Revoked */
     revoked: true | null;
@@ -3513,6 +3693,14 @@ declare namespace API {
     current_script_version_id: string;
     /** Affected Shot Ids */
     affected_shot_ids: string[];
+    /** Narrative Impact Id */
+    narrative_impact_id: string;
+    /** Previous Narrative Dependency Hash */
+    previous_narrative_dependency_hash: string | null;
+    /** Current Narrative Dependency Hash */
+    current_narrative_dependency_hash: string;
+    /** Invalidated Scopes */
+    invalidated_scopes: ("shot_readiness" | "coverage" | "export")[];
   };
 
   type ScriptVersionPublishRequest = {
@@ -3642,6 +3830,14 @@ declare namespace API {
     shot_spec_version_id: string | null;
     /** Confirmed Script Version Id */
     confirmed_script_version_id: string;
+    /** Current Script Version Id */
+    current_script_version_id: string | null;
+    /** Narrative Structure Id */
+    narrative_structure_id: string | null;
+    /** Narrative Structure Revision */
+    narrative_structure_revision: number | null;
+    /** Narrative Dependency Hash */
+    narrative_dependency_hash: string | null;
     /** Scene Id */
     scene_id: string;
     /** Dialogue Ids */
@@ -3663,6 +3859,7 @@ declare namespace API {
       | "SPEC_FIELD_MISSING"
       | "DURATION_OUT_OF_RANGE"
       | "SCRIPT_VERSION_UNAVAILABLE"
+      | "SCRIPT_REVISION_NOT_CURRENT"
       | "SOURCE_SCENE_INVALID"
       | "SOURCE_DIALOGUE_INVALID"
       | "LOCATION_REFERENCE_MISSING"
@@ -3881,6 +4078,13 @@ declare namespace API {
     expected_revision: number;
     /** Title */
     title: string;
+  };
+
+  type SourceRange = {
+    /** Start */
+    start: number;
+    /** End */
+    end: number;
   };
 
   type splitEpisodeProposalApiV1EpisodePlansPlanIdSplitPostParams = {

@@ -168,7 +168,8 @@ def test_mvp_core_plan_is_traced_without_premature_generation_acceptance() -> No
     assert "| DEV-MVPA-02 | completed" in plan
     assert "| DEV-MVPA-03 | completed" in plan
     assert "| DEV-MVPA-04 | completed" in plan
-    assert "| DEV-MVPA-05 | in_progress" in plan
+    assert "| DEV-MVPA-05 | completed" in plan
+    assert "| DEV-MVPA-06 | in_progress" in plan
     assert (DOCS / "acceptance/arrived/029-整剧导入与格式体检验收.md").is_file()
     episode_plan_acceptance = DOCS / "acceptance/arrived/030-分集计划与批量物化验收.md"
     assert episode_plan_acceptance.is_file()

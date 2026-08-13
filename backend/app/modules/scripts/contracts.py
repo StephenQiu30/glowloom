@@ -25,6 +25,37 @@ class ScriptVersionImpactReader(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class NarrativeImpactSnapshot:
+    impact_id: UUID
+    previous_dependency_hash: str | None
+    current_dependency_hash: str
+    invalidated_scopes: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class NarrativeDependencySnapshot:
+    episode_id: UUID
+    script_version_id: UUID
+    structure_id: UUID
+    structure_revision: int
+    dependency_hash: str
+
+
+class NarrativeImpactRecorder(Protocol):
+    async def __call__(
+        self,
+        *,
+        workspace_id: UUID,
+        episode_id: UUID,
+        episode_revision: int,
+        previous_script_version_id: UUID | None,
+        current_script_version_id: UUID,
+        affected_shot_ids: list[UUID],
+        actor_id: UUID,
+    ) -> NarrativeImpactSnapshot: ...
+
+
+@dataclass(frozen=True, slots=True)
 class ScriptProductionSummary:
     status: ScriptProductionStatus
     current_version_id: UUID | None

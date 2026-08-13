@@ -61,6 +61,7 @@ import {
   taskStatusLabels,
 } from "./episode-studio-model";
 import { ScriptAdaptationPanel } from "./script-adaptation-panel";
+import { NarrativeStructurePanel } from "./narrative-structure-panel";
 
 type CandidateDecision = API.CandidateDecisionRequest["decision"];
 
@@ -69,6 +70,7 @@ export function ScriptWorkspace({
   snapshot,
   source,
   editableVersion,
+  narrativeStructure,
   versions,
   batch,
   candidates,
@@ -85,6 +87,7 @@ export function ScriptWorkspace({
   onCancelAdaptation,
   onResetAdaptation,
   onPublish,
+  onReviseNarrative,
   onStartExtraction,
   onCompareVersions,
   onDecide,
@@ -98,6 +101,7 @@ export function ScriptWorkspace({
   snapshot: API.EpisodeProductionSnapshot;
   source?: API.ScriptSourceResponse;
   editableVersion?: API.ScriptVersionResponse;
+  narrativeStructure?: API.NarrativeStructureResponse;
   versions: API.ScriptVersionResponse[];
   batch?: API.ExtractionBatchResponse;
   candidates: API.ExtractionCandidateResponse[];
@@ -114,6 +118,9 @@ export function ScriptWorkspace({
   onCancelAdaptation: () => Promise<void>;
   onResetAdaptation: () => void;
   onPublish: (body: string) => Promise<void>;
+  onReviseNarrative: (
+    request: API.NarrativeStructureRevisionRequest,
+  ) => Promise<void>;
   onStartExtraction: () => Promise<void>;
   onCompareVersions: (
     versionId: string,
@@ -309,6 +316,20 @@ export function ScriptWorkspace({
             />
           </CardContent>
         </Card>
+
+        {narrativeStructure ? (
+          <NarrativeStructurePanel
+            busy={busy}
+            key={`${narrativeStructure.id}:${narrativeStructure.revision}`}
+            scriptBody={
+              versions.find(
+                (version) => version.id === narrativeStructure.script_version_id,
+              )?.body ?? editableVersion?.body ?? ""
+            }
+            structure={narrativeStructure}
+            onRevise={onReviseNarrative}
+          />
+        ) : null}
 
         <ScriptAdaptationPanel
           busy={busy}

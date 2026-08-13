@@ -58,6 +58,7 @@ import {
   useModelCapabilitiesQuery,
   useMediaVersionsQuery,
   useMediaLocationsQuery,
+  useNarrativeStructureQuery,
   useProjectQuery,
   usePublishScriptVersionMutation,
   usePublishAdaptationRunMutation,
@@ -66,6 +67,7 @@ import {
   useRequestMediaLocationMigrationMutation,
   useRequestMediaLocationRollbackMutation,
   useResumeScheduleMutation,
+  useReviseNarrativeStructureMutation,
   useReorderShotsMutation,
   useScriptSourcesQuery,
   useScriptVersionQuery,
@@ -137,6 +139,13 @@ export function EpisodeProductionStudio({
   const currentVersionQuery = useScriptVersionQuery(
     episode?.current_script_version_id ?? "",
     { skip: !episode?.current_script_version_id },
+  );
+  const scriptActive = initialPanel === "script";
+  const narrativeStructureQuery = useNarrativeStructureQuery(
+    episode?.current_script_version_id ?? "",
+    {
+      skip: !episode?.current_script_version_id || !scriptActive,
+    },
   );
   const sources = sourcesQuery.data?.items ?? [];
   const activeSource =
@@ -265,6 +274,10 @@ export function EpisodeProductionStudio({
       archivedShotsQuery.isLoading ||
       shotReadinessQuery.isLoading ||
       structureQuery.isLoading);
+  const scriptLoading =
+    scriptActive &&
+    Boolean(episode?.current_script_version_id) &&
+    narrativeStructureQuery.isLoading;
 
   const [importScript, importState] = useImportScriptMutation();
   const [publishVersion, publishState] = usePublishScriptVersionMutation();
@@ -272,6 +285,8 @@ export function EpisodeProductionStudio({
   const [decideCandidate, decisionState] = useDecideExtractionCandidateMutation();
   const [confirmStructure, confirmationState] = useConfirmStructureMutation();
   const [setCurrentVersion, currentState] = useSetCurrentScriptVersionMutation();
+  const [reviseNarrativeStructure, narrativeRevisionState] =
+    useReviseNarrativeStructureMutation();
   const [loadScriptVersionDiff, scriptDiffState] =
     useLazyScriptVersionDiffQuery();
   const [setScriptSourceArchived, scriptSourceState] =
@@ -342,6 +357,7 @@ export function EpisodeProductionStudio({
     decisionState,
     confirmationState,
     currentState,
+    narrativeRevisionState,
     scriptDiffState,
     scriptSourceState,
     scriptDeleteState,
@@ -575,6 +591,22 @@ export function EpisodeProductionStudio({
         : "剧本版本已切换；现有镜头均引用该版本。";
     });
     return result;
+  }
+
+  async function handleReviseNarrative(
+    request: API.NarrativeStructureRevisionRequest,
+  ) {
+    const structure = narrativeStructureQuery.data;
+    if (!structure) return;
+    await runAction(async () => {
+      const result = await reviseNarrativeStructure({
+        episodeId,
+        versionId: structure.script_version_id,
+        structureId: structure.id,
+        body: request,
+      }).unwrap();
+      return `叙事结构已追加 revision ${result.structure.revision}；分镜准备度、覆盖和导出依赖已失效重算。`;
+    });
   }
 
   async function handleCompareVersions(
@@ -1124,6 +1156,7 @@ export function EpisodeProductionStudio({
     snapshotQuery.error ??
     sourcesQuery.error ??
     currentVersionQuery.error ??
+    (scriptActive ? narrativeStructureQuery.error : undefined) ??
     versionsQuery.error ??
     tasksQuery.error ??
     schedulesQuery.error ??
@@ -1179,7 +1212,7 @@ export function EpisodeProductionStudio({
             <AlertTitle>生产事实暂时无法读取</AlertTitle>
             <AlertDescription>{appApiErrorMessage(pageError ?? storyboardError ?? adaptationError)}</AlertDescription>
           </Alert>
-        ) : !episode || !project || !snapshot || storyboardLoading ? (
+        ) : !episode || !project || !snapshot || storyboardLoading || scriptLoading ? (
           <div className="grid min-h-96 place-items-center"><LoaderCircle className="animate-spin text-foreground" aria-label="正在加载生产工作台" /></div>
         ) : (
           <>
@@ -1265,6 +1298,7 @@ export function EpisodeProductionStudio({
                   editableVersion={editableVersion}
                   episode={episode}
                   key={editableVersion?.id ?? activeSource?.id ?? "script-import"}
+                  narrativeStructure={narrativeStructureQuery.data}
                   snapshot={snapshot}
                   source={activeSource}
                   versionImpact={scriptVersionImpact}
@@ -1284,6 +1318,7 @@ export function EpisodeProductionStudio({
                     setAdaptationDifference(null);
                   }}
                   onSaveAdaptationDraft={handleSaveAdaptationDraft}
+                  onReviseNarrative={handleReviseNarrative}
                   onDismissVersionImpact={() => setScriptVersionImpact(null)}
                   onSetCurrent={handleSetCurrent}
                   onSetSourceArchived={handleSetScriptSourceArchived}

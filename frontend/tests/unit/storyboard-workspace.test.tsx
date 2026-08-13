@@ -177,6 +177,10 @@ const readiness: API.ShotReadinessBatchResponse = {
       evaluated_dependencies: {
         shot_spec_version_id: specVersionId,
         confirmed_script_version_id: scriptVersionId,
+        current_script_version_id: scriptVersionId,
+        narrative_structure_id: sceneId,
+        narrative_structure_revision: 1,
+        narrative_dependency_hash: "1".repeat(64),
         scene_id: sceneId,
         dialogue_ids: [dialogueId],
         asset_version_ids: [locationVersionId],
@@ -205,6 +209,10 @@ const readiness: API.ShotReadinessBatchResponse = {
       evaluated_dependencies: {
         shot_spec_version_id: null,
         confirmed_script_version_id: scriptVersionId,
+        current_script_version_id: scriptVersionId,
+        narrative_structure_id: sceneId,
+        narrative_structure_revision: 1,
+        narrative_dependency_hash: "1".repeat(64),
         scene_id: sceneId,
         dialogue_ids: [],
         asset_version_ids: [],

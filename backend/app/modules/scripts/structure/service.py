@@ -10,6 +10,7 @@ from uuid6 import uuid7
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
 from app.modules.identity import Capability, actor_context
+from app.modules.projects import resolve_episode_content_context
 from app.modules.scripts import repository
 from app.modules.scripts.authorization import (
     require_resource_access,
@@ -31,6 +32,7 @@ from app.modules.scripts.models import (
     Scene,
     ScriptVersion,
 )
+from app.modules.scripts.narratives.service import ensure_structure
 from app.modules.scripts.structure.schemas import (
     ConfirmedStructureResponse,
     DialogueResponse,
@@ -310,8 +312,7 @@ async def confirm_structure(
                         _candidate_detail(candidate) for candidate in unresolved
                     ],
                     "blocking_continuity_candidates": [
-                        _candidate_detail(candidate)
-                        for candidate in blocking_continuity
+                        _candidate_detail(candidate) for candidate in blocking_continuity
                     ],
                 },
             )
@@ -322,16 +323,12 @@ async def confirm_structure(
                 [candidate.id for candidate in candidates],
             )
         )
-        scene_candidates = [
-            candidate for candidate in candidates if candidate.kind == "scene"
-        ]
+        scene_candidates = [candidate for candidate in candidates if candidate.kind == "scene"]
         accepted_scene_candidates = [
             candidate for candidate in scene_candidates if candidate.status == "accepted"
         ]
         scene_by_id = {candidate.id: candidate for candidate in scene_candidates}
-        scene_by_key = {
-            candidate.candidate_key: candidate for candidate in scene_candidates
-        }
+        scene_by_key = {candidate.candidate_key: candidate for candidate in scene_candidates}
 
         input_version = await repository.find_version(
             session,
@@ -404,9 +401,7 @@ async def confirm_structure(
             scenes.append(scene)
             scene_by_candidate_id[candidate.id] = scene
 
-        dialogue_candidates_by_scene: dict[UUID, list[ExtractionCandidate]] = defaultdict(
-            list
-        )
+        dialogue_candidates_by_scene: dict[UUID, list[ExtractionCandidate]] = defaultdict(list)
         dialogue_proposals: dict[UUID, DialogueCandidateProposal] = {}
         for candidate in candidates:
             if candidate.kind != "dialogue" or candidate.status != "accepted":
@@ -465,6 +460,25 @@ async def confirm_structure(
         session.add_all(scenes)
         await session.flush()
         session.add_all(dialogues)
+        await session.flush()
+        episode = await resolve_episode_content_context(
+            session,
+            batch.workspace_id,
+            source.episode_id,
+        )
+        if episode is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Confirmed script episode is unavailable",
+                status_code=500,
+            )
+        await ensure_structure(
+            session,
+            version=confirmed_version,
+            source=source,
+            episode=episode,
+            actor_id=actor.user_id,
+        )
         batch.confirmed_script_version_id = confirmed_version.id
         batch.updated_at = now
         await session.flush()
@@ -508,16 +522,10 @@ async def resolve_confirmed_shot_candidate(
     if candidate is None or candidate.kind != "shot" or candidate.status != "accepted":
         return None
     batch = await repository.find_extraction_batch(session, candidate.batch_id)
-    if (
-        batch is None
-        or batch.status != "succeeded"
-        or batch.confirmed_script_version_id is None
-    ):
+    if batch is None or batch.status != "succeeded" or batch.confirmed_script_version_id is None:
         return None
     structure_candidates = await repository.list_structure_candidates(session, batch.id)
-    scene_candidates = [
-        item for item in structure_candidates if item.kind == "scene"
-    ]
+    scene_candidates = [item for item in structure_candidates if item.kind == "scene"]
     decisions = _latest_decisions(
         await repository.list_candidate_decisions_for_candidates(
             session,

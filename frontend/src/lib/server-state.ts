@@ -100,12 +100,14 @@ import {
   diffVersionsApiV1ScriptVersionsVersionIdDiffGet,
   getExtractionBatchApiV1ExtractionBatchesBatchIdGet,
   getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGet,
+  getNarrativeStructureApiV1ScriptVersionsVersionIdNarrativeStructureGet,
   getVersionApiV1ScriptVersionsVersionIdGet,
   importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPost,
   listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGet,
   listSourcesApiV1EpisodesEpisodeIdScriptSourcesGet,
   listVersionsApiV1ScriptSourcesSourceIdVersionsGet,
   publishVersionApiV1ScriptSourcesSourceIdVersionsPost,
+  reviseNarrativeStructureApiV1NarrativeStructuresStructureIdRevisionsPost,
   restoreSourceApiV1ScriptSourcesSourceIdRestorePost,
   setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost,
   startExtractionApiV1ScriptVersionsVersionIdExtractionsPost,
@@ -233,6 +235,7 @@ export const appApi = createApi({
     "ExtractionBatch",
     "ExtractionCandidates",
     "ConfirmedStructure",
+    "NarrativeStructure",
     "Shots",
     "ArchivedShots",
     "ShotSpecs",
@@ -753,6 +756,18 @@ export const appApi = createApi({
         ),
       providesTags: (_result, _error, versionId) => [
         { type: "ConfirmedStructure", id: versionId },
+      ],
+    }),
+    narrativeStructure: builder.query<API.NarrativeStructureResponse, string>({
+      queryFn: (versionId) =>
+        runRequest(() =>
+          getNarrativeStructureApiV1ScriptVersionsVersionIdNarrativeStructureGet({
+            version_id: versionId,
+            revision: null,
+          }),
+        ),
+      providesTags: (_result, _error, versionId) => [
+        { type: "NarrativeStructure", id: versionId },
       ],
     }),
     scriptVersions: builder.query<API.PaginatedScriptVersions, string>({
@@ -1291,6 +1306,29 @@ export const appApi = createApi({
         ...(result
           ? [{ type: "ScriptVersion" as const, id: result.version.id }]
           : []),
+      ],
+    }),
+    reviseNarrativeStructure: builder.mutation<
+      API.NarrativeRevisionResponse,
+      {
+        episodeId: string;
+        versionId: string;
+        structureId: string;
+        body: API.NarrativeStructureRevisionRequest;
+      }
+    >({
+      queryFn: ({ structureId, body }) =>
+        runRequest(() =>
+          reviseNarrativeStructureApiV1NarrativeStructuresStructureIdRevisionsPost(
+            { structure_id: structureId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { episodeId, versionId }) => [
+        { type: "NarrativeStructure", id: versionId },
+        { type: "Snapshot", id: episodeId },
+        { type: "ShotReadiness", id: episodeId },
+        "AuditEvents",
       ],
     }),
     createAdaptationRun: builder.mutation<
@@ -2041,6 +2079,7 @@ export const {
   useMediaVersionsQuery,
   useLazyMediaVersionQuery,
   useMediaLocationsQuery,
+  useNarrativeStructureQuery,
   useProjectQuery,
   useProjectDeletePreflightMutation,
   useProjectSnapshotQuery,
@@ -2054,6 +2093,7 @@ export const {
   useRequestMediaLocationRollbackMutation,
   useRequestRegistrationVerificationMutation,
   useResumeScheduleMutation,
+  useReviseNarrativeStructureMutation,
   useReviseConsentMutation,
   useRevokeConsentMutation,
   useReorderEpisodesMutation,

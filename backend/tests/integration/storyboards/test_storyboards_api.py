@@ -21,6 +21,7 @@ from app.modules.scripts.models import (
     ScriptSource,
     ScriptVersion,
 )
+from app.modules.scripts.narratives.service import record_current_impact
 from app.modules.storyboards.hashing import storyboard_content_hashes
 from app.modules.storyboards.models import AssetReference, Shot, ShotSpecVersion
 from app.modules.storyboards.schemas import AssetReferenceRequest, ShotSpec
@@ -134,6 +135,17 @@ async def create_episode_with_confirmed_structure(
         session.add(dialogue)
         persisted_episode.current_script_version_id = script_version_id
         persisted_episode.revision += 1
+        await session.flush()
+        await record_current_impact(
+            session,
+            workspace_id=workspace_id,
+            episode_id=episode_id,
+            episode_revision=persisted_episode.revision,
+            previous_script_version_id=None,
+            current_script_version_id=script_version_id,
+            affected_shot_ids=[],
+            actor_id=actor_id,
+        )
 
     return (
         headers,
@@ -1427,7 +1439,9 @@ async def test_batch_readiness_has_constant_query_bound(
     }
     assert all(item["status"] == "ready" for item in result["items"])
     assert len(result["evaluation_hash"]) == 64
-    assert len(statements) <= 12, [statement.splitlines()[0] for statement in statements]
+    # Current narrative identity and dependency hash add two batch queries;
+    # the bound must remain independent of shot count.
+    assert len(statements) <= 14, [statement.splitlines()[0] for statement in statements]
 
     snapshot_statements: list[str] = []
 
@@ -1466,7 +1480,7 @@ async def test_batch_readiness_has_constant_query_bound(
         "blocked": 0,
         "unavailable": 0,
     }
-    assert len(snapshot_statements) <= 24, [
+    assert len(snapshot_statements) <= 26, [
         statement.splitlines()[0] for statement in snapshot_statements
     ]
 

@@ -96,6 +96,10 @@ class ScriptVersionImpactResponse(BaseModel):
     previous_script_version_id: UUID | None
     current_script_version_id: UUID
     affected_shot_ids: list[UUID]
+    narrative_impact_id: UUID
+    previous_narrative_dependency_hash: str | None
+    current_narrative_dependency_hash: str
+    invalidated_scopes: list[Literal["shot_readiness", "coverage", "export"]]
 
 
 class CurrentScriptVersionResponse(BaseModel):

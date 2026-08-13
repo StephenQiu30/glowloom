@@ -11,6 +11,7 @@ def register_implemented_models() -> None:
     from app.modules.projects import models as project_models
     from app.modules.scheduling import models as scheduling_models
     from app.modules.scripts import models as script_models
+    from app.modules.scripts.narratives import models as narrative_models
     from app.modules.storyboards import models as storyboard_models
 
     _ = (
@@ -23,6 +24,7 @@ def register_implemented_models() -> None:
         production_models,
         provider_models,
         project_models,
+        narrative_models,
         script_models,
         scheduling_models,
         storyboard_models,

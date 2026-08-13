@@ -157,6 +157,7 @@ const readinessIssueLabels: Record<API.ShotReadinessIssue["code"], string> = {
   SPEC_FIELD_MISSING: "镜头规格字段不完整",
   DURATION_OUT_OF_RANGE: "镜头时长超出支持范围",
   SCRIPT_VERSION_UNAVAILABLE: "已确认剧本版本不可用",
+  SCRIPT_REVISION_NOT_CURRENT: "镜头引用的剧本已不是当前版本",
   SOURCE_SCENE_INVALID: "来源场次与已确认剧本不一致",
   SOURCE_DIALOGUE_INVALID: "对白引用与已确认场次不一致",
   LOCATION_REFERENCE_MISSING: "需要且只能固定一个场景资产版本",

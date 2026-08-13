@@ -1,5 +1,6 @@
 import asyncio
 from typing import Any
+from uuid import UUID
 
 import httpx
 import pytest
@@ -99,9 +100,7 @@ async def test_text_import_is_idempotent_private_and_creates_immutable_version(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-owner@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-owner@example.com")
     episode = await _episode(client, headers, workspace_id)
     endpoint = f"/api/v1/episodes/{episode['id']}/script-sources"
 
@@ -148,9 +147,7 @@ async def test_text_import_is_idempotent_private_and_creates_immutable_version(
     )
     assert imported_audit.status_code == 200
     assert imported_audit.json()["data"]["total"] == 1
-    assert imported_audit.json()["data"]["items"][0]["action"] == (
-        "script.version_created"
-    )
+    assert imported_audit.json()["data"]["items"][0]["action"] == ("script.version_created")
     assert imported_audit.json()["data"]["items"][0]["metadata"] == {
         "source_id": source["id"],
         "episode_id": episode["id"],
@@ -160,15 +157,11 @@ async def test_text_import_is_idempotent_private_and_creates_immutable_version(
     assert "body" not in str(imported_audit.json()["data"])
     assert "content_hash" not in str(imported_audit.json()["data"])
 
-    fetched_source = await client.get(
-        f"/api/v1/script-sources/{source['id']}", headers=headers
-    )
+    fetched_source = await client.get(f"/api/v1/script-sources/{source['id']}", headers=headers)
     assert fetched_source.status_code == 200
     assert fetched_source.json()["data"] == source
 
-    sources = await client.get(
-        f"/api/v1/episodes/{episode['id']}/script-sources", headers=headers
-    )
+    sources = await client.get(f"/api/v1/episodes/{episode['id']}/script-sources", headers=headers)
     assert sources.status_code == 200
     assert sources.json()["data"] == {
         "items": [source],
@@ -185,9 +178,7 @@ async def test_text_import_is_idempotent_private_and_creates_immutable_version(
     assert history.json()["data"]["total"] == 1
     assert history.json()["data"]["items"] == [version]
 
-    fetched = await client.get(
-        f"/api/v1/script-versions/{version['id']}", headers=headers
-    )
+    fetched = await client.get(f"/api/v1/script-versions/{version['id']}", headers=headers)
     assert fetched.status_code == 200
     assert fetched.json()["data"] == version
     immutable = await client.patch(
@@ -200,8 +191,7 @@ async def test_text_import_is_idempotent_private_and_creates_immutable_version(
     too_long = await client.post(
         endpoint,
         headers=headers,
-        json=_import_payload(body="字" * 20_001)
-        | {"idempotency_key": "too-long"},
+        json=_import_payload(body="字" * 20_001) | {"idempotency_key": "too-long"},
     )
     assert too_long.status_code == 422
     blank = await client.post(
@@ -237,9 +227,7 @@ async def test_import_is_concurrency_safe_and_cross_workspace_hidden(
     assert first.json()["data"] == second.json()["data"]
     imported = first.json()["data"]
 
-    stranger_headers, _ = await _identity(
-        client, email="script-stranger@example.com"
-    )
+    stranger_headers, _ = await _identity(client, email="script-stranger@example.com")
     hidden_source = await client.get(
         f"/api/v1/script-sources/{imported['source']['id']}",
         headers=stranger_headers,
@@ -260,9 +248,7 @@ async def test_import_is_concurrency_safe_and_cross_workspace_hidden(
 async def test_archived_episode_rejects_new_script_source(
     client: httpx.AsyncClient,
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-archived-owner@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-archived-owner@example.com")
     episode = await _episode(client, headers, workspace_id)
     archived = await client.post(
         f"/api/v1/episodes/{episode['id']}/archive",
@@ -285,9 +271,7 @@ async def test_publish_appends_immutable_version_and_switches_episode_current(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-publish-owner@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-publish-owner@example.com")
     episode = await _episode(client, headers, workspace_id)
     imported = await _import_script(client, headers, episode["id"])
     source = imported["source"]
@@ -305,27 +289,27 @@ async def test_publish_appends_immutable_version_and_switches_episode_current(
     assert published["version_no"] == 2
     assert published["status"] == "published"
     assert published["body"] == "第二场\n角色乙：继续。"
-    assert result["current"] == {
+    assert result["current"] | {"impact": None} == {
         "episode_id": episode["id"],
         "current_script_version_id": published["id"],
         "episode_revision": 2,
-        "impact": {
-            "previous_script_version_id": None,
-            "current_script_version_id": published["id"],
-            "affected_shot_ids": [],
-        },
+        "impact": None,
     }
+    impact = result["current"]["impact"]
+    assert impact["previous_script_version_id"] is None
+    assert impact["current_script_version_id"] == published["id"]
+    assert impact["affected_shot_ids"] == []
+    assert UUID(impact["narrative_impact_id"])
+    assert impact["previous_narrative_dependency_hash"] is None
+    assert len(impact["current_narrative_dependency_hash"]) == 64
+    assert impact["invalidated_scopes"] == ["shot_readiness", "coverage", "export"]
 
-    fetched_episode = await client.get(
-        f"/api/v1/episodes/{episode['id']}", headers=headers
-    )
+    fetched_episode = await client.get(f"/api/v1/episodes/{episode['id']}", headers=headers)
     assert fetched_episode.status_code == 200
     assert fetched_episode.json()["data"]["current_script_version_id"] == published["id"]
     assert fetched_episode.json()["data"]["revision"] == 2
 
-    history = await client.get(
-        f"/api/v1/script-sources/{source['id']}/versions", headers=headers
-    )
+    history = await client.get(f"/api/v1/script-sources/{source['id']}/versions", headers=headers)
     assert history.status_code == 200
     assert history.json()["data"]["items"] == [draft, published]
     immutable = await client.patch(
@@ -359,9 +343,7 @@ async def test_publish_appends_immutable_version_and_switches_episode_current(
 
     async with session_factory() as session:
         versions = list(
-            await session.scalars(
-                select(ScriptVersion).order_by(ScriptVersion.version_no)
-            )
+            await session.scalars(select(ScriptVersion).order_by(ScriptVersion.version_no))
         )
         assert [(item.version_no, item.status, item.body) for item in versions] == [
             (1, "draft", "第一场\n角色甲：开始吧。"),
@@ -375,9 +357,7 @@ async def test_concurrent_publish_creates_exactly_one_new_version(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-publish-concurrent@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-publish-concurrent@example.com")
     episode = await _episode(client, headers, workspace_id)
     imported = await _import_script(client, headers, episode["id"])
     source_id = imported["source"]["id"]
@@ -401,10 +381,7 @@ async def test_concurrent_publish_creates_exactly_one_new_version(
     conflict = next(response for response in responses if response.status_code == 409)
     current_version_id = winner.json()["data"]["version"]["id"]
     assert conflict.json()["error"]["code"] == "version_conflict"
-    assert (
-        conflict.json()["error"]["details"]["current_script_version_id"]
-        == current_version_id
-    )
+    assert conflict.json()["error"]["details"]["current_script_version_id"] == current_version_id
     published_audit = await client.get(
         "/api/v1/audit-events",
         headers=headers,
@@ -435,9 +412,7 @@ async def test_concurrent_publish_creates_exactly_one_new_version(
 async def test_current_switch_accepts_only_published_version_from_same_episode(
     client: httpx.AsyncClient,
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-current-owner@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-current-owner@example.com")
     episode = await _episode(client, headers, workspace_id)
     imported = await _import_script(client, headers, episode["id"])
     source_id = imported["source"]["id"]
@@ -467,16 +442,21 @@ async def test_current_switch_accepts_only_published_version_from_same_episode(
         },
     )
     assert switched.status_code == 200
-    assert switched.json()["data"] == {
+    switched_data = switched.json()["data"]
+    assert switched_data | {"impact": None} == {
         "episode_id": episode["id"],
         "current_script_version_id": second["id"],
         "episode_revision": 4,
-        "impact": {
-            "previous_script_version_id": third["id"],
-            "current_script_version_id": second["id"],
-            "affected_shot_ids": [],
-        },
+        "impact": None,
     }
+    impact = switched_data["impact"]
+    assert impact["previous_script_version_id"] == third["id"]
+    assert impact["current_script_version_id"] == second["id"]
+    assert impact["affected_shot_ids"] == []
+    assert UUID(impact["narrative_impact_id"])
+    assert len(impact["previous_narrative_dependency_hash"]) == 64
+    assert len(impact["current_narrative_dependency_hash"]) == 64
+    assert impact["invalidated_scopes"] == ["shot_readiness", "coverage", "export"]
     current_audit = await client.get(
         "/api/v1/audit-events",
         headers=headers,
@@ -543,9 +523,7 @@ async def test_current_switch_accepts_only_published_version_from_same_episode(
     assert wrong_episode.status_code == 409
     assert wrong_episode.json()["error"]["code"] == "resource_conflict"
 
-    stranger_headers, _ = await _identity(
-        client, email="script-current-stranger@example.com"
-    )
+    stranger_headers, _ = await _identity(client, email="script-current-stranger@example.com")
     hidden = await client.post(
         f"/api/v1/episodes/{episode['id']}/current-script-version",
         headers=stranger_headers,
@@ -562,9 +540,7 @@ async def test_publishing_new_current_version_reports_active_shots_with_older_sc
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-impact-owner@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-impact-owner@example.com")
     episode = await _episode(client, headers, workspace_id)
     imported = await _import_script(client, headers, episode["id"])
     published_response = await client.post(
@@ -621,11 +597,14 @@ async def test_publishing_new_current_version_reports_active_shots_with_older_sc
 
     assert next_response.status_code == 201
     result = next_response.json()["data"]
-    assert result["current"]["impact"] == {
-        "previous_script_version_id": published["id"],
-        "current_script_version_id": result["version"]["id"],
-        "affected_shot_ids": [str(shot_id)],
-    }
+    impact = result["current"]["impact"]
+    assert impact["previous_script_version_id"] == published["id"]
+    assert impact["current_script_version_id"] == result["version"]["id"]
+    assert impact["affected_shot_ids"] == [str(shot_id)]
+    assert UUID(impact["narrative_impact_id"])
+    assert len(impact["previous_narrative_dependency_hash"]) == 64
+    assert len(impact["current_narrative_dependency_hash"]) == 64
+    assert impact["invalidated_scopes"] == ["shot_readiness", "coverage", "export"]
 
     async with session_factory() as session:
         stored_shot = await session.get(Shot, shot_id)
@@ -639,9 +618,7 @@ async def test_concurrent_current_switch_reports_winner_without_mutating_version
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-current-concurrent@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-current-concurrent@example.com")
     episode = await _episode(client, headers, workspace_id)
     imported = await _import_script(client, headers, episode["id"])
     source_id = imported["source"]["id"]
@@ -685,11 +662,14 @@ async def test_concurrent_current_switch_reports_winner_without_mutating_version
     result = winner.json()["data"]
     assert result["current_script_version_id"] in {second["id"], third["id"]}
     assert result["episode_revision"] == 5
-    assert result["impact"] == {
-        "previous_script_version_id": fourth["id"],
-        "current_script_version_id": result["current_script_version_id"],
-        "affected_shot_ids": [],
-    }
+    impact = result["impact"]
+    assert impact["previous_script_version_id"] == fourth["id"]
+    assert impact["current_script_version_id"] == result["current_script_version_id"]
+    assert impact["affected_shot_ids"] == []
+    assert UUID(impact["narrative_impact_id"])
+    assert len(impact["previous_narrative_dependency_hash"]) == 64
+    assert len(impact["current_narrative_dependency_hash"]) == 64
+    assert impact["invalidated_scopes"] == ["shot_readiness", "coverage", "export"]
     assert conflict.json()["error"]["code"] == "version_conflict"
     assert (
         conflict.json()["error"]["details"]["current_script_version_id"]
@@ -702,10 +682,7 @@ async def test_concurrent_current_switch_reports_winner_without_mutating_version
         assert await session.scalar(select(func.count()).select_from(Dialogue)) == 0
         stored_episode = await session.get(Episode, episode["id"])
         assert stored_episode is not None
-        assert (
-            str(stored_episode.current_script_version_id)
-            == result["current_script_version_id"]
-        )
+        assert str(stored_episode.current_script_version_id) == result["current_script_version_id"]
 
 
 @pytest.mark.asyncio
@@ -713,9 +690,7 @@ async def test_delete_draft_version_requires_confirmation_and_is_private(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-delete-draft@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-delete-draft@example.com")
     episode = await _episode(client, headers, workspace_id)
     imported = await _import_script(client, headers, episode["id"])
     draft = imported["version"]
@@ -732,9 +707,7 @@ async def test_delete_draft_version_requires_confirmation_and_is_private(
     assert declined.json()["error"]["code"] == "invalid_request"
     assert (await client.get(endpoint, headers=headers)).status_code == 200
 
-    stranger_headers, _ = await _identity(
-        client, email="script-delete-draft-stranger@example.com"
-    )
+    stranger_headers, _ = await _identity(client, email="script-delete-draft-stranger@example.com")
     hidden = await client.delete(
         endpoint,
         headers=stranger_headers,
@@ -773,9 +746,7 @@ async def test_delete_version_returns_current_and_extraction_blockers(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-delete-blockers@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-delete-blockers@example.com")
     episode = await _episode(client, headers, workspace_id)
     imported = await _import_script(client, headers, episode["id"])
     source_id = imported["source"]["id"]
@@ -810,9 +781,10 @@ async def test_delete_version_returns_current_and_extraction_blockers(
     extracted_error = extracted_delete.json()["error"]
     assert extracted_error["code"] == "state_conflict"
     assert extracted_error["next_action"] == "review_script_version_delete_blockers"
-    assert [
-        blocker["code"] for blocker in extracted_error["details"]["blockers"]
-    ] == ["VERSION_NOT_DRAFT", "HAS_EXTRACTION_BATCH"]
+    assert [blocker["code"] for blocker in extracted_error["details"]["blockers"]] == [
+        "VERSION_NOT_DRAFT",
+        "HAS_EXTRACTION_BATCH",
+    ]
     assert extracted_error["details"]["blockers"][1]["resource_id"] == batch["id"]
 
     current_delete = await client.delete(
@@ -822,8 +794,7 @@ async def test_delete_version_returns_current_and_extraction_blockers(
     )
     assert current_delete.status_code == 409
     assert [
-        blocker["code"]
-        for blocker in current_delete.json()["error"]["details"]["blockers"]
+        blocker["code"] for blocker in current_delete.json()["error"]["details"]["blockers"]
     ] == ["VERSION_NOT_DRAFT", "CURRENT_VERSION"]
 
     async with session_factory() as session:
@@ -835,9 +806,7 @@ async def test_source_archive_restore_keeps_versions_and_current_reference(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-source-lifecycle@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-source-lifecycle@example.com")
     episode = await _episode(client, headers, workspace_id)
     imported = await _import_script(client, headers, episode["id"])
     source = imported["source"]
@@ -860,19 +829,13 @@ async def test_source_archive_restore_keeps_versions_and_current_reference(
     assert archived["status"] == "archived"
     assert archived["revision"] == 2
 
-    fetched = await client.get(
-        f"/api/v1/script-sources/{source['id']}", headers=headers
-    )
+    fetched = await client.get(f"/api/v1/script-sources/{source['id']}", headers=headers)
     assert fetched.status_code == 200
     assert fetched.json()["data"] == archived
-    history = await client.get(
-        f"/api/v1/script-sources/{source['id']}/versions", headers=headers
-    )
+    history = await client.get(f"/api/v1/script-sources/{source['id']}/versions", headers=headers)
     assert history.status_code == 200
     assert history.json()["data"]["items"] == [draft, published]
-    fetched_episode = await client.get(
-        f"/api/v1/episodes/{episode['id']}", headers=headers
-    )
+    fetched_episode = await client.get(f"/api/v1/episodes/{episode['id']}", headers=headers)
     assert fetched_episode.json()["data"]["current_script_version_id"] == published["id"]
 
     blocked_publish = await client.post(
@@ -910,13 +873,14 @@ async def test_source_archive_restore_keeps_versions_and_current_reference(
         },
     )
     assert lifecycle_audit.status_code == 200
-    assert [
-        item["action"] for item in lifecycle_audit.json()["data"]["items"]
-    ] == ["script.source_restored", "script.source_archived"]
-    assert [
-        item["metadata"]["revision"]
-        for item in lifecycle_audit.json()["data"]["items"]
-    ] == [3, 2]
+    assert [item["action"] for item in lifecycle_audit.json()["data"]["items"]] == [
+        "script.source_restored",
+        "script.source_archived",
+    ]
+    assert [item["metadata"]["revision"] for item in lifecycle_audit.json()["data"]["items"]] == [
+        3,
+        2,
+    ]
     next_publish = await client.post(
         f"/api/v1/script-sources/{source['id']}/versions",
         headers=headers,
@@ -933,9 +897,7 @@ async def test_source_archive_restore_keeps_versions_and_current_reference(
 async def test_version_diff_is_derived_private_and_limited_to_one_source(
     client: httpx.AsyncClient,
 ) -> None:
-    headers, workspace_id = await _identity(
-        client, email="script-diff-owner@example.com"
-    )
+    headers, workspace_id = await _identity(client, email="script-diff-owner@example.com")
     episode = await _episode(client, headers, workspace_id)
     imported = await _import_script(
         client,
@@ -991,9 +953,7 @@ async def test_version_diff_is_derived_private_and_limited_to_one_source(
     assert cross_source.status_code == 409
     assert cross_source.json()["error"]["code"] == "resource_conflict"
 
-    stranger_headers, _ = await _identity(
-        client, email="script-diff-stranger@example.com"
-    )
+    stranger_headers, _ = await _identity(client, email="script-diff-stranger@example.com")
     hidden = await client.get(
         f"/api/v1/script-versions/{draft['id']}/diff",
         headers=stranger_headers,

@@ -14,6 +14,7 @@ from app.modules.scripts.contracts import (
     ConfirmedStructureQuery,
     ConfirmedStructureReference,
     EpisodeConfirmedStructureQuery,
+    NarrativeDependencySnapshot,
     ScriptExtractionInput,
     ScriptProductionSummary,
 )
@@ -29,6 +30,7 @@ from app.modules.scripts.extractions.service import (
     summarize_current_scripts,
     synchronize_extraction_batch_status,
 )
+from app.modules.scripts.narratives.service import resolve_narrative_dependencies
 from app.modules.scripts.planning.ports import (
     EpisodePlanner,
     EpisodePlanningInput,
@@ -57,6 +59,7 @@ __all__ = [
     "ConfirmedStructureReference",
     "ConfirmedStructureQuery",
     "EpisodeConfirmedStructureQuery",
+    "NarrativeDependencySnapshot",
     "ConfirmedShotCandidateReference",
     "count_episode_script_versions",
     "EpisodePlanner",
@@ -80,6 +83,7 @@ __all__ = [
     "resolve_confirmed_structure",
     "resolve_confirmed_structures",
     "resolve_episode_confirmed_structures",
+    "resolve_narrative_dependencies",
     "resolve_confirmed_shot_candidate",
     "script_version_exists",
     "summarize_current_scripts",

@@ -13,9 +13,7 @@ def test_user_facing_documents_and_e2e_specs_use_semantic_filenames() -> None:
     ]
 
     assert [
-        path.relative_to(ROOT).as_posix()
-        for path in candidates
-        if slice_token.search(path.name)
+        path.relative_to(ROOT).as_posix() for path in candidates if slice_token.search(path.name)
     ] == []
 
 
@@ -38,10 +36,20 @@ def test_executable_source_paths_and_alembic_revisions_use_ascii_semantic_names(
         for path in source_paths
         if not path.relative_to(ROOT).as_posix().isascii()
     ] == []
+    assert [path.relative_to(ROOT).as_posix() for path in source_paths if len(path.name) > 64] == []
+    generic_stems = {
+        "common",
+        "data",
+        "helper",
+        "helpers",
+        "manager",
+        "misc",
+        "processor",
+    }
     assert [
         path.relative_to(ROOT).as_posix()
         for path in source_paths
-        if len(path.name) > 64
+        if path.stem.lower() in generic_stems
     ] == []
 
     revision_name = re.compile(r"^[0-9a-f]{12}_[a-z][a-z0-9_]*\.py$")

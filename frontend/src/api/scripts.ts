@@ -24,6 +24,42 @@ export async function setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersio
   );
 }
 
+/** Get Narrative Dependency GET /api/v1/episodes/${param0}/narrative-dependency */
+export async function getNarrativeDependencyApiV1EpisodesEpisodeIdNarrativeDependencyGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getNarrativeDependencyApiV1EpisodesEpisodeIdNarrativeDependencyGetParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseNarrativeDependencyResponse_>(
+    `/api/v1/episodes/${param0}/narrative-dependency`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Get Latest Narrative Impact GET /api/v1/episodes/${param0}/narrative-impacts/latest */
+export async function getLatestNarrativeImpactApiV1EpisodesEpisodeIdNarrativeImpactsLatestGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getLatestNarrativeImpactApiV1EpisodesEpisodeIdNarrativeImpactsLatestGetParams,
+  options?: RequestOptions
+) {
+  const { episode_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseNarrativeImpactResponse_>(
+    `/api/v1/episodes/${param0}/narrative-impacts/latest`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
 /** List Sources GET /api/v1/episodes/${param0}/script-sources */
 export async function listSourcesApiV1EpisodesEpisodeIdScriptSourcesGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -164,6 +200,28 @@ export async function decideExtractionCandidateApiV1ExtractionCandidatesCandidat
   const { candidate_id: param0, ...queryParams } = params;
   return request<API.ApiResponseCandidateDecisionResultResponse_>(
     `/api/v1/extraction-candidates/${param0}/decisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Revise Narrative Structure POST /api/v1/narrative-structures/${param0}/revisions */
+export async function reviseNarrativeStructureApiV1NarrativeStructuresStructureIdRevisionsPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.reviseNarrativeStructureApiV1NarrativeStructuresStructureIdRevisionsPostParams,
+  body: API.NarrativeStructureRevisionRequest,
+  options?: RequestOptions
+) {
+  const { structure_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseNarrativeRevisionResponse_>(
+    `/api/v1/narrative-structures/${param0}/revisions`,
     {
       method: "POST",
       headers: {
@@ -350,6 +408,25 @@ export async function startExtractionApiV1ScriptVersionsVersionIdExtractionsPost
       },
       params: { ...queryParams },
       data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Get Narrative Structure GET /api/v1/script-versions/${param0}/narrative-structure */
+export async function getNarrativeStructureApiV1ScriptVersionsVersionIdNarrativeStructureGet(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getNarrativeStructureApiV1ScriptVersionsVersionIdNarrativeStructureGetParams,
+  options?: RequestOptions
+) {
+  const { version_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseNarrativeStructureResponse_>(
+    `/api/v1/script-versions/${param0}/narrative-structure`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
       ...(options || {}),
     }
   );

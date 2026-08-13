@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   deleteDraftVersion: vi.fn(),
   diffVersions: vi.fn(),
   getConfirmedStructure: vi.fn(),
+  getNarrativeStructure: vi.fn(),
   getBatch: vi.fn(),
   getEpisode: vi.fn(),
   getProject: vi.fn(),
@@ -33,6 +34,7 @@ const apiMocks = vi.hoisted(() => ({
   listVersions: vi.fn(),
   me: vi.fn(),
   publishVersion: vi.fn(),
+  reviseNarrativeStructure: vi.fn(),
   retryProbe: vi.fn(),
   restoreMedia: vi.fn(),
   restoreSource: vi.fn(),
@@ -69,6 +71,8 @@ vi.mock("@/api/scripts", async () => ({
   getExtractionBatchApiV1ExtractionBatchesBatchIdGet: apiMocks.getBatch,
   getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGet:
     apiMocks.getConfirmedStructure,
+  getNarrativeStructureApiV1ScriptVersionsVersionIdNarrativeStructureGet:
+    apiMocks.getNarrativeStructure,
   getVersionApiV1ScriptVersionsVersionIdGet: apiMocks.getVersion,
   importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPost: apiMocks.importScript,
   listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGet:
@@ -76,6 +80,8 @@ vi.mock("@/api/scripts", async () => ({
   listSourcesApiV1EpisodesEpisodeIdScriptSourcesGet: apiMocks.listSources,
   listVersionsApiV1ScriptSourcesSourceIdVersionsGet: apiMocks.listVersions,
   publishVersionApiV1ScriptSourcesSourceIdVersionsPost: apiMocks.publishVersion,
+  reviseNarrativeStructureApiV1NarrativeStructuresStructureIdRevisionsPost:
+    apiMocks.reviseNarrativeStructure,
   restoreSourceApiV1ScriptSourcesSourceIdRestorePost: apiMocks.restoreSource,
   setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost:
     apiMocks.setCurrentVersion,
@@ -233,6 +239,39 @@ const version: API.ScriptVersionResponse = {
   content_hash: "a".repeat(64),
   created_by: "019fb2c0-a000-7000-8000-000000000006",
   created_at: now,
+};
+
+const narrativeStructure: API.NarrativeStructureResponse = {
+  id: "019fb2c0-a000-7000-8000-000000000017",
+  workspace_id: workspaceId,
+  episode_id: episodeId,
+  script_version_id: versionId,
+  input_hash: version.content_hash,
+  parser_version: "deterministic-lines-v1",
+  structure_hash: "d".repeat(64),
+  dependency_hash: "e".repeat(64),
+  revision: 1,
+  units: [
+    {
+      id: "019fb2c0-a000-7000-8000-000000000018",
+      unit_id: "019fb2c0-a000-7000-8000-000000000019",
+      kind: "action",
+      position: 1,
+      version_no: 1,
+      source_range: { start: 0, end: 6 },
+      exact_text: "第一场 雨巷",
+      text_hash: "f".repeat(64),
+      prefix_text: "",
+      suffix_text: version.body.slice(6),
+      required_for_coverage: true,
+      source_scene_id: null,
+      source_dialogue_id: null,
+      origin: "deterministic",
+      created_at: now,
+    },
+  ],
+  created_at: now,
+  updated_at: now,
 };
 
 function extractionBatch(
@@ -454,6 +493,7 @@ describe("单集统一生产工作台", () => {
       data: { items: [source], total: 1, limit: 100, offset: 0 },
     });
     apiMocks.getVersion.mockResolvedValue({ data: version });
+    apiMocks.getNarrativeStructure.mockResolvedValue({ data: narrativeStructure });
     apiMocks.listVersions.mockResolvedValue({
       data: { items: [version], total: 1, limit: 100, offset: 0 },
     });
@@ -579,6 +619,10 @@ describe("单集统一生产工作台", () => {
           previous_script_version_id: currentVersion.id,
           current_script_version_id: previousVersion.id,
           affected_shot_ids: [shotId],
+          narrative_impact_id: "019fb2c0-a000-7000-8000-000000000020",
+          previous_narrative_dependency_hash: "1".repeat(64),
+          current_narrative_dependency_hash: "2".repeat(64),
+          invalidated_scopes: ["shot_readiness", "coverage", "export"],
         },
       },
     });

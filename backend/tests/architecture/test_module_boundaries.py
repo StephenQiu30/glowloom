@@ -4,6 +4,12 @@ from pathlib import Path
 MODULES = Path(__file__).resolve().parents[2] / "app/modules"
 KNOWN_INTERNAL_IMPORTS: set[str] = set()
 
+FORBIDDEN_CONTRACT_IMPORTS = (
+    "fastapi",
+    "sqlalchemy",
+    "app.integrations",
+)
+
 
 def _cross_module_internal_imports() -> set[str]:
     offenders: set[str] = set()
@@ -37,8 +43,7 @@ def _cross_module_internal_imports() -> set[str]:
             if target == "app.modules.governance.audit":
                 continue
             if target == f"app.modules.{target_module}" and not any(
-                alias.name in {"api", "models", "repository", "service"}
-                for alias in node.names
+                alias.name in {"api", "models", "repository", "service"} for alias in node.names
             ):
                 continue
             offenders.add(f"{relative}:{target}:{imported}")
@@ -47,3 +52,20 @@ def _cross_module_internal_imports() -> set[str]:
 
 def test_cross_module_imports_use_public_contracts() -> None:
     assert _cross_module_internal_imports() == KNOWN_INTERNAL_IMPORTS
+
+
+def test_public_contracts_are_plain_data_objects() -> None:
+    offenders: set[str] = set()
+    for source in MODULES.glob("*/contracts.py"):
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                names = [node.module or ""]
+            else:
+                continue
+            for name in names:
+                if name.startswith(FORBIDDEN_CONTRACT_IMPORTS):
+                    offenders.add(f"{source.relative_to(MODULES)}:{name}")
+    assert offenders == set()

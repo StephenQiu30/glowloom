@@ -24,9 +24,7 @@ GOLDEN_PATH = (
     / "golden_candidate_harbor_countdown.json"
 )
 GOLDEN = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
-EPISODE_THREE = next(
-    episode for episode in GOLDEN["episodes"] if episode["episode_id"] == "ep-03"
-)
+EPISODE_THREE = next(episode for episode in GOLDEN["episodes"] if episode["episode_id"] == "ep-03")
 GOLDEN_UNITS = GOLDEN["narrative_units"]
 
 
@@ -215,7 +213,9 @@ async def test_correction_rejects_overlap_cross_version_and_concurrent_revision(
         f"/api/v1/script-sources/{source['id']}/versions",
         headers=headers,
         json={
-            "body": "第一集\n《门禁》\n内景·控制室·深夜\n林澈：立刻封锁全部闸门。\n红色警报灯连续闪烁。",
+            "body": (
+                "第一集\n《门禁》\n内景·控制室·深夜\n林澈：立刻封锁全部闸门。\n红色警报灯连续闪烁。"
+            ),
             "expected_current_version_id": first_version["id"],
         },
     )
@@ -234,9 +234,10 @@ async def test_correction_rejects_overlap_cross_version_and_concurrent_revision(
     )
     assert dependency.status_code == 200
     assert dependency.json()["data"]["status"] == "stale"
-    assert dependency.json()["data"]["current_dependency_hash"] == impact[
-        "current_narrative_dependency_hash"
-    ]
+    assert (
+        dependency.json()["data"]["current_dependency_hash"]
+        == impact["current_narrative_dependency_hash"]
+    )
 
     second_structure_response = await client.get(
         f"/api/v1/script-versions/{second_version['id']}/narrative-structure",
@@ -270,6 +271,22 @@ async def test_correction_rejects_overlap_cross_version_and_concurrent_revision(
     )
     assert rejected_overlap.status_code == 422
     assert rejected_overlap.json()["error"]["code"] == "invalid_request"
+
+    incomplete = _revision_payload(
+        second_structure,
+        idempotency_key="narrative-incomplete",
+    )
+    incomplete["units"][-1]["source_end"] -= 1
+    rejected_incomplete = await client.post(
+        f"/api/v1/narrative-structures/{second_structure['id']}/revisions",
+        headers=headers,
+        json=incomplete,
+    )
+    assert rejected_incomplete.status_code == 422
+    assert rejected_incomplete.json()["error"]["details"] == {
+        "missing_codepoints": 1,
+        "unexpected_codepoints": 0,
+    }
 
     first_command = _revision_payload(
         second_structure,
@@ -322,9 +339,7 @@ def _minimal_spec(version_id: UUID, scene_id: UUID) -> ShotSpec:
                 "subject_placements": [],
                 "mood_lighting": "红色警报灯",
             },
-            "action_beats": [
-                {"beat_key": "beat-1", "order": 1, "description": "警报灯闪烁"}
-            ],
+            "action_beats": [{"beat_key": "beat-1", "order": 1, "description": "警报灯闪烁"}],
             "dialogue_or_narration": [],
             "duration_ms": 4_000,
             "generation_intent": {"mode": "text_to_video"},
@@ -423,14 +438,12 @@ async def test_current_switch_adds_explicit_narrative_blocker_to_old_shot(
     assert after.status_code == 200
     result = after.json()["data"]
     assert result["ready"] is False
-    assert "SCRIPT_REVISION_NOT_CURRENT" in {
-        item["code"] for item in result["blocking_reasons"]
-    }
-    assert result["evaluated_dependencies"]["current_script_version_id"] == (
-        second_publish.json()["data"]["version"]["id"]
+    assert "SCRIPT_REVISION_NOT_CURRENT" in {item["code"] for item in result["blocking_reasons"]}
+    assert (
+        result["evaluated_dependencies"]["current_script_version_id"]
+        == (second_publish.json()["data"]["version"]["id"])
     )
-    assert result["evaluated_dependencies"]["narrative_dependency_hash"] == (
-        second_publish.json()["data"]["current"]["impact"][
-            "current_narrative_dependency_hash"
-        ]
+    assert (
+        result["evaluated_dependencies"]["narrative_dependency_hash"]
+        == (second_publish.json()["data"]["current"]["impact"]["current_narrative_dependency_hash"])
     )

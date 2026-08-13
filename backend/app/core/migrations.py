@@ -18,6 +18,7 @@ BASELINE_REVISION = "95c0d24572c5"
 PROVIDER_REVISION = "8d9f2a6c4b71"
 SCRIPT_DOCUMENT_REVISION = "4c8e2f7a9b31"
 EPISODE_PLANNING_REVISION = "7f3a9c1d2e84"
+ADAPTATION_REVISION = "9a4d6e2f1b73"
 PROVIDER_TABLE_NAMES = frozenset(
     {
         "prod_provider_bindings",
@@ -43,6 +44,14 @@ EPISODE_PLANNING_TABLE_NAMES = frozenset(
     }
 )
 ADAPTATION_TABLE_NAMES = frozenset({"scr_adaptation_runs"})
+NARRATIVE_TABLE_NAMES = frozenset(
+    {
+        "scr_narrative_structures",
+        "scr_narrative_units",
+        "scr_narrative_unit_versions",
+        "scr_narrative_impacts",
+    }
+)
 PROVIDER_CAPABILITY_UNIQUE = "uq_prod_capability_id_version"
 
 
@@ -138,6 +147,7 @@ def _include_historical_pre_provider_object(
         | SCRIPT_DOCUMENT_TABLE_NAMES
         | EPISODE_PLANNING_TABLE_NAMES
         | ADAPTATION_TABLE_NAMES
+        | NARRATIVE_TABLE_NAMES
     ):
         return False
     if type_ == "unique_constraint" and name == PROVIDER_CAPABILITY_UNIQUE:
@@ -153,7 +163,10 @@ def _include_provider_era_object(
     compare_to: object | None,
 ) -> bool:
     if type_ == "table" and name in (
-        SCRIPT_DOCUMENT_TABLE_NAMES | EPISODE_PLANNING_TABLE_NAMES | ADAPTATION_TABLE_NAMES
+        SCRIPT_DOCUMENT_TABLE_NAMES
+        | EPISODE_PLANNING_TABLE_NAMES
+        | ADAPTATION_TABLE_NAMES
+        | NARRATIVE_TABLE_NAMES
     ):
         return False
     return _include_baseline_object(object_, name, type_, reflected, compare_to)
@@ -166,7 +179,9 @@ def _include_document_era_object(
     reflected: bool,
     compare_to: object | None,
 ) -> bool:
-    if type_ == "table" and name in (EPISODE_PLANNING_TABLE_NAMES | ADAPTATION_TABLE_NAMES):
+    if type_ == "table" and name in (
+        EPISODE_PLANNING_TABLE_NAMES | ADAPTATION_TABLE_NAMES | NARRATIVE_TABLE_NAMES
+    ):
         return False
     return _include_baseline_object(object_, name, type_, reflected, compare_to)
 
@@ -178,7 +193,19 @@ def _include_episode_planning_era_object(
     reflected: bool,
     compare_to: object | None,
 ) -> bool:
-    if type_ == "table" and name in ADAPTATION_TABLE_NAMES:
+    if type_ == "table" and name in (ADAPTATION_TABLE_NAMES | NARRATIVE_TABLE_NAMES):
+        return False
+    return _include_baseline_object(object_, name, type_, reflected, compare_to)
+
+
+def _include_adaptation_era_object(
+    object_: object,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: object | None,
+) -> bool:
+    if type_ == "table" and name in NARRATIVE_TABLE_NAMES:
         return False
     return _include_baseline_object(object_, name, type_, reflected, compare_to)
 
@@ -190,8 +217,20 @@ def _baseline_differences(
     provider_era: bool = False,
     document_era: bool = False,
     episode_planning_era: bool = False,
+    adaptation_era: bool = False,
 ) -> list[object]:
-    if sum((historical_pre_provider, provider_era, document_era, episode_planning_era)) > 1:
+    if (
+        sum(
+            (
+                historical_pre_provider,
+                provider_era,
+                document_era,
+                episode_planning_era,
+                adaptation_era,
+            )
+        )
+        > 1
+    ):
         raise ValueError("schema comparison mode must be singular")
     include_object = _include_baseline_object
     if historical_pre_provider:
@@ -202,6 +241,8 @@ def _baseline_differences(
         include_object = _include_document_era_object
     elif episode_planning_era:
         include_object = _include_episode_planning_era_object
+    elif adaptation_era:
+        include_object = _include_adaptation_era_object
     context = MigrationContext.configure(
         connection,
         opts={
@@ -252,6 +293,7 @@ def _adopt_existing_database(connection: Connection) -> None:
     script_document_tables = table_names & SCRIPT_DOCUMENT_TABLE_NAMES
     episode_planning_tables = table_names & EPISODE_PLANNING_TABLE_NAMES
     adaptation_tables = table_names & ADAPTATION_TABLE_NAMES
+    narrative_tables = table_names & NARRATIVE_TABLE_NAMES
     capability_unique_present = "prod_model_capabilities" in table_names and any(
         constraint["name"] == PROVIDER_CAPABILITY_UNIQUE
         for constraint in inspector.get_unique_constraints("prod_model_capabilities")
@@ -260,6 +302,12 @@ def _adopt_existing_database(connection: Connection) -> None:
     expected_provider_tables = set(PROVIDER_TABLE_NAMES)
     expected_episode_planning_tables = set(EPISODE_PLANNING_TABLE_NAMES)
     expected_adaptation_tables = set(ADAPTATION_TABLE_NAMES)
+    expected_narrative_tables = set(NARRATIVE_TABLE_NAMES)
+    if narrative_tables and narrative_tables != expected_narrative_tables:
+        raise DatabaseSchemaMismatchError(
+            "database schema differs from baseline; partial NarrativeUnit schema; "
+            f"tables={sorted(narrative_tables)!r}"
+        )
     if adaptation_tables and adaptation_tables != expected_adaptation_tables:
         raise DatabaseSchemaMismatchError(
             "database schema differs from baseline; partial AdaptationRun schema; "
@@ -284,12 +332,29 @@ def _adopt_existing_database(connection: Connection) -> None:
             f"capability_unique={capability_unique_present!r}"
         )
 
-    if adaptation_tables:
+    if narrative_tables:
         summary = "; ".join(repr(item) for item in current_differences[:3])
         raise DatabaseSchemaMismatchError(
-            "database schema differs from baseline/current AdaptationRun schema; "
+            "database schema differs from baseline/current NarrativeUnit schema; "
             f"first differences: {summary}"
         )
+
+    if adaptation_tables:
+        adaptation_era_differences = _baseline_differences(
+            connection,
+            adaptation_era=True,
+        )
+        if adaptation_era_differences:
+            summary = "; ".join(repr(item) for item in adaptation_era_differences[:3])
+            raise DatabaseSchemaMismatchError(
+                "database schema differs from AdaptationRun-era schema; "
+                f"first differences: {summary}"
+            )
+        command.stamp(configuration, ADAPTATION_REVISION)
+        command.upgrade(configuration, "head")
+        _assert_database_matches_metadata(connection)
+        ensure_expected_heads(_database_heads(connection), get_script_heads())
+        return
 
     if episode_planning_tables:
         episode_planning_era_differences = _baseline_differences(

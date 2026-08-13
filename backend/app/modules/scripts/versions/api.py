@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import AccessTokenClaims, get_access_token_claims
 from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
+from app.modules.scripts.contracts import NarrativeImpactSnapshot
+from app.modules.scripts.narratives.service import record_current_impact_snapshot
 from app.modules.scripts.versions import service
 from app.modules.scripts.versions.schemas import (
     CurrentScriptVersionRequest,
@@ -112,13 +114,32 @@ async def publish_version(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ScriptVersionPublishResponse]:
-    async def read_impact(
-        *, episode_id: UUID, current_script_version_id: UUID
-    ) -> list[UUID]:
+    async def read_impact(*, episode_id: UUID, current_script_version_id: UUID) -> list[UUID]:
         return await list_script_version_affected_shot_ids(
             session,
             episode_id=episode_id,
             current_script_version_id=current_script_version_id,
+        )
+
+    async def record_narrative_impact(
+        *,
+        workspace_id: UUID,
+        episode_id: UUID,
+        episode_revision: int,
+        previous_script_version_id: UUID | None,
+        current_script_version_id: UUID,
+        affected_shot_ids: list[UUID],
+        actor_id: UUID,
+    ) -> NarrativeImpactSnapshot:
+        return await record_current_impact_snapshot(
+            session,
+            workspace_id=workspace_id,
+            episode_id=episode_id,
+            episode_revision=episode_revision,
+            previous_script_version_id=previous_script_version_id,
+            current_script_version_id=current_script_version_id,
+            affected_shot_ids=affected_shot_ids,
+            actor_id=actor_id,
         )
 
     return ApiResponse(
@@ -128,6 +149,7 @@ async def publish_version(
             source_id,
             payload,
             read_impact,
+            record_narrative_impact,
             trace_id=str(request.state.request_id),
         )
     )
@@ -144,13 +166,32 @@ async def set_current_version(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[CurrentScriptVersionResponse]:
-    async def read_impact(
-        *, episode_id: UUID, current_script_version_id: UUID
-    ) -> list[UUID]:
+    async def read_impact(*, episode_id: UUID, current_script_version_id: UUID) -> list[UUID]:
         return await list_script_version_affected_shot_ids(
             session,
             episode_id=episode_id,
             current_script_version_id=current_script_version_id,
+        )
+
+    async def record_narrative_impact(
+        *,
+        workspace_id: UUID,
+        episode_id: UUID,
+        episode_revision: int,
+        previous_script_version_id: UUID | None,
+        current_script_version_id: UUID,
+        affected_shot_ids: list[UUID],
+        actor_id: UUID,
+    ) -> NarrativeImpactSnapshot:
+        return await record_current_impact_snapshot(
+            session,
+            workspace_id=workspace_id,
+            episode_id=episode_id,
+            episode_revision=episode_revision,
+            previous_script_version_id=previous_script_version_id,
+            current_script_version_id=current_script_version_id,
+            affected_shot_ids=affected_shot_ids,
+            actor_id=actor_id,
         )
 
     return ApiResponse(
@@ -160,6 +201,7 @@ async def set_current_version(
             episode_id,
             payload,
             read_impact,
+            record_narrative_impact,
             trace_id=str(request.state.request_id),
         )
     )
@@ -244,9 +286,7 @@ async def diff_versions(
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[ScriptVersionDiffResponse]:
     return ApiResponse(
-        data=await service.diff_versions(
-            session, claims, version_id, other_version_id
-        )
+        data=await service.diff_versions(session, claims, version_id, other_version_id)
     )
 
 
