@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-14；DEV-MVPA-01～11 已完成真实旧库迁移、工程黄金 fixture Gate、整剧导入、分集计划/原子物化、受约束剧本改写、稳定叙事单元/失效传播、AssetState/Occurrence、资产影响治理、拆镜/合镜内容守恒、可审核 AI 分镜草案以及多对多覆盖/readiness；下一任务为 DEV-MVPA-12 可信分镜包与联合 E2E；制作人/QA 内容质量复核仍保留到分镜包产品验收）
+- 状态：review_ready（2026-08-14；DEV-MVPA-01～12 与 11 个 PT 工程验收均完成；MVP-A 只等待产品负责人/短剧制作人对黄金样本主观内容质量作 accepted/blocked 决定，MVP-B/C 仍未激活）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -104,7 +104,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-09 | completed（Acceptance 035） | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
 | DEV-MVPA-10 | completed（Acceptance 036） | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
 | DEV-MVPA-11 | completed（Acceptance 037） | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
-| DEV-MVPA-12 | in_progress | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
+| DEV-MVPA-12 | completed（Acceptance 038；产品内容复核待签字） | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
 | **合计** |  | **11 个 PT** | **71 人周** |  | **整剧到可信分镜包** |
 
 `DEV-MVPA-02` 不创建产品 PT，因为黄金 fixture 和契约冻结是全部 PT 的共同准入证据；它不能被单独标记为产品 accepted。
@@ -543,6 +543,14 @@ Green：
 
 退出：黄金剧至少一集从 Document 到 Export 完整 E2E 两次；第二次注入 current 变化、Worker 重启或对象存储短暂失败，结果无重复/漂移。
 
+完成证据（2026-08-14）：
+
+- `ExportSnapshot` 固定 Script、NarrativeUnitVersion、AssetState/AssetVersion、ShotSpecVersion、Coverage/readiness ID 与 hash；提交时重算 input hash，Worker 重启后不重读 current。
+- 确定性 ZIP 固定生成 `manifest.json`、`storyboard.json`、UTF-8 BOM CSV 和转义 HTML；对象逐字节验证成功后才在单事务登记 Manifest、delivery MediaVersion、Location、Lineage 和任务成功。
+- 5 集黄金 Document 已完成计划/物化，第一集从审核后 AI 草案到 Export 连续执行两次；第二次注入 AssetState current 变化、存储短暂失败和 Worker 重启，两包字节相同，无重复 Manifest/Media。
+- 真实私有 MinIO 写入与临时下载、RabbitMQ 浏览器任务、跨空间拒绝、36/120 镜性能、空库迁移、OpenAPI 再生成和全量回归结果见 [Acceptance 038](../acceptance/arrived/038-可信分镜包与MVP联合验收.md)。
+- DEV-MVPA-12 与 PT-SBD-010 工程状态 completed；产品负责人仍需对黄金样本主观内容质量作最终签字，本计划不由工程测试伪造该决定。
+
 ## 7. 代码与文件边界
 
 以下是任务开始后的允许落点，不代表现在预建目录：
@@ -717,4 +725,4 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 当前可领取任务
 
-`DEV-MVPA-01～11` 已完成并由 Acceptance 028～037 和黄金 fixture 契约关闭。当前唯一可领取任务是 `DEV-MVPA-12`：先以 Red 固定导出读取漂移 current、coverage 过期、blocked asset、幂等冲突、对象写失败、Manifest/Media 部分提交、历史被后续改稿篡改和跨空间下载；再实现固定输入的 JSON/CSV/HTML 分镜包、MediaVersion/Lineage、历史与受控下载。不得提前实现图片/视频生成、剪辑时间线或商业平台能力。
+`DEV-MVPA-01～12` 已完成工程交付，并由 Acceptance 028～038 和黄金 fixture 契约关闭。当前没有可继续领取的 MVP-A 工程任务；下一动作是产品负责人/短剧制作人审阅 Acceptance 038 的黄金样本与分镜包，并明确选择 `accepted` 或给出可定位的 `blocked` 内容项。在该决定前不激活 MVP-B，不提前实现图片/视频生成、剪辑时间线或商业平台能力。
