@@ -35,6 +35,8 @@ type SplitTargetOptions = {
   firstTitle: string;
   secondTitle: string;
   firstDurationMs: number;
+  firstActionCount: number;
+  firstDialogueCount: number;
 };
 
 type MergeTargetOptions = {
@@ -62,16 +64,95 @@ function clonedReferences(
   return references.map(toAssetReferenceRequest);
 }
 
-function uniqueStrings(values: Array<string | null | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+function splitBoundaryError(
+  source: API.ShotSpecVersionResponse,
+  firstActionCount: number,
+  firstDialogueCount: number,
+): string | null {
+  const actionCount = source.spec.action_beats.length;
+  const dialogueIds = source.spec.script_reference.dialogue_ids ?? [];
+  if (
+    !Number.isInteger(firstActionCount) ||
+    firstActionCount < 1 ||
+    firstActionCount >= actionCount
+  ) {
+    return "来源至少需要两个动作，并明确前段包含几个动作";
+  }
+  if (
+    !Number.isInteger(firstDialogueCount) ||
+    firstDialogueCount < 0 ||
+    firstDialogueCount > dialogueIds.length
+  ) {
+    return "前段对白数超出来源对白范围";
+  }
+  const firstBeatKeys = new Set(
+    source.spec.action_beats
+      .slice(0, firstActionCount)
+      .map((beat) => beat.beat_key),
+  );
+  const firstDialogueIds = new Set(dialogueIds.slice(0, firstDialogueCount));
+  for (const item of source.spec.dialogue_or_narration ?? []) {
+    if (!item.beat_key) continue;
+    if (
+      firstDialogueIds.has(item.source_dialogue_id) !==
+      firstBeatKeys.has(item.beat_key)
+    ) {
+      return "对白必须与它引用的动作分配到同一段";
+    }
+  }
+  return null;
 }
 
-function joinedText(
-  values: Array<string | null | undefined>,
-  maxLength: number,
-): string | null {
-  const joined = uniqueStrings(values).join("；");
-  return joined ? clip(joined, maxLength) : null;
+function suggestedDialogueBoundary(
+  source: API.ShotSpecVersionResponse,
+  firstActionCount: number,
+): number {
+  const dialogueCount =
+    source.spec.script_reference.dialogue_ids?.length ?? 0;
+  const actionCount = source.spec.action_beats.length;
+  const preferred = Math.round(
+    dialogueCount * (firstActionCount / Math.max(actionCount, 1)),
+  );
+  return Array.from({ length: dialogueCount + 1 }, (_, value) => value)
+    .sort(
+      (left, right) =>
+        Math.abs(left - preferred) - Math.abs(right - preferred),
+    )
+    .find(
+      (candidate) =>
+        splitBoundaryError(source, firstActionCount, candidate) === null,
+    ) ?? preferred;
+}
+
+function suggestedSplitBoundary(source: API.ShotSpecVersionResponse): {
+  firstActionCount: number;
+  firstDialogueCount: number;
+} {
+  const actionCount = source.spec.action_beats.length;
+  const preferredAction = Math.max(1, Math.floor(actionCount / 2));
+  const candidates = Array.from(
+    { length: Math.max(0, actionCount - 1) },
+    (_, index) => index + 1,
+  ).sort(
+    (left, right) =>
+      Math.abs(left - preferredAction) - Math.abs(right - preferredAction),
+  );
+  for (const firstActionCount of candidates) {
+    const firstDialogueCount = suggestedDialogueBoundary(
+      source,
+      firstActionCount,
+    );
+    if (
+      splitBoundaryError(
+        source,
+        firstActionCount,
+        firstDialogueCount,
+      ) === null
+    ) {
+      return { firstActionCount, firstDialogueCount };
+    }
+  }
+  return { firstActionCount: preferredAction, firstDialogueCount: 0 };
 }
 
 export function buildSplitTargets(
@@ -81,18 +162,52 @@ export function buildSplitTargets(
   const firstSpec = structuredClone(source.spec);
   const secondSpec = structuredClone(source.spec);
   const sourceDuration = source.spec.duration_ms ?? 3_000;
+  const boundaryError = splitBoundaryError(
+    source,
+    options.firstActionCount,
+    options.firstDialogueCount,
+  );
+  if (boundaryError) throw new Error(boundaryError);
+  const sourceDialogueIds = source.spec.script_reference.dialogue_ids ?? [];
+  const firstDialogueIds = sourceDialogueIds.slice(
+    0,
+    options.firstDialogueCount,
+  );
+  const secondDialogueIds = sourceDialogueIds.slice(
+    options.firstDialogueCount,
+  );
+  const firstDialogueSet = new Set(firstDialogueIds);
+  const secondDialogueSet = new Set(secondDialogueIds);
   firstSpec.duration_ms = options.firstDurationMs;
-  firstSpec.narrative.purpose = clip(
-    `${source.spec.narrative.purpose}（前段）`,
-    500,
-  );
+  firstSpec.action_beats = source.spec.action_beats
+    .slice(0, options.firstActionCount)
+    .map((beat, index) => ({ ...beat, order: index + 1 }));
+  secondSpec.action_beats = source.spec.action_beats
+    .slice(options.firstActionCount)
+    .map((beat, index) => ({ ...beat, order: index + 1 }));
+  firstSpec.script_reference.dialogue_ids = firstDialogueIds;
+  secondSpec.script_reference.dialogue_ids = secondDialogueIds;
+  firstSpec.dialogue_or_narration = (
+    source.spec.dialogue_or_narration ?? []
+  ).filter((item) => firstDialogueSet.has(item.source_dialogue_id));
+  secondSpec.dialogue_or_narration = (
+    source.spec.dialogue_or_narration ?? []
+  ).filter((item) => secondDialogueSet.has(item.source_dialogue_id));
+  const recombinedDialogueIds = [
+    ...firstSpec.dialogue_or_narration,
+    ...secondSpec.dialogue_or_narration,
+  ].map((item) => item.source_dialogue_id);
+  if (
+    JSON.stringify(recombinedDialogueIds) !==
+    JSON.stringify(
+      (source.spec.dialogue_or_narration ?? []).map(
+        (item) => item.source_dialogue_id,
+      ),
+    )
+  ) {
+    throw new Error("来源对白顺序不能由一个安全分界表达");
+  }
   secondSpec.duration_ms = sourceDuration - options.firstDurationMs;
-  secondSpec.narrative.purpose = clip(
-    `${source.spec.narrative.purpose}（后段）`,
-    500,
-  );
-  secondSpec.script_reference.dialogue_ids = [];
-  secondSpec.dialogue_or_narration = [];
   return [
     {
       title: options.firstTitle.trim(),
@@ -107,34 +222,89 @@ export function buildSplitTargets(
   ];
 }
 
+function uniqueSlotKey(
+  preferred: string,
+  occupied: Set<string>,
+): string {
+  if (!occupied.has(preferred)) return preferred;
+  for (let suffix = 2; suffix <= 100; suffix += 1) {
+    const ending = `-${suffix}`;
+    const candidate = `${preferred.slice(0, 100 - ending.length)}${ending}`;
+    if (!occupied.has(candidate)) return candidate;
+  }
+  throw new Error("合并资产槽位无法生成唯一名称");
+}
+
+function referenceIdentity(
+  reference: API.AssetReferenceRequest,
+): string {
+  return JSON.stringify([
+    reference.role,
+    reference.asset_version_id,
+    reference.subject_key ?? null,
+  ]);
+}
+
 function mergedAssetReferences(
   base: API.ShotSpecVersionResponse,
   other: API.ShotSpecVersionResponse,
-  sameScene: boolean,
 ): API.AssetReferenceRequest[] {
-  const result = clonedReferences(base.asset_references);
-  if (!sameScene) return result;
-  const slotKeys = new Set(result.map((reference) => reference.slot_key));
-  const uniqueRoles = new Set(
-    result
-      .filter((reference) =>
-        ["location", "visual_style"].includes(reference.role),
-      )
-      .map((reference) => reference.role),
-  );
-  for (const reference of other.asset_references) {
-    if (slotKeys.has(reference.slot_key)) continue;
-    if (
-      ["location", "visual_style"].includes(reference.role) &&
-      uniqueRoles.has(reference.role)
-    ) {
-      continue;
+  const result: API.AssetReferenceRequest[] = [];
+  const occupied = new Set<string>();
+  const identities = new Set<string>();
+  for (const reference of [base, other].flatMap((version) =>
+    clonedReferences(version.asset_references),
+  )) {
+    const identity = referenceIdentity(reference);
+    if (identities.has(identity)) continue;
+    if (result.length >= 100) {
+      throw new Error("合并后不能表示超过 100 个资产引用");
     }
-    result.push({ ...reference });
-    slotKeys.add(reference.slot_key);
-    uniqueRoles.add(reference.role);
+    const slotKey = uniqueSlotKey(reference.slot_key, occupied);
+    result.push({ ...reference, slot_key: slotKey });
+    occupied.add(slotKey);
+    identities.add(identity);
   }
   return result;
+}
+
+function mergeSourceError(
+  first: API.ShotSpecVersionResponse,
+  second: API.ShotSpecVersionResponse,
+): string | null {
+  if (
+    first.spec.script_reference.confirmed_script_version_id !==
+    second.spec.script_reference.confirmed_script_version_id
+  ) {
+    return "只能合并同一确认剧本版本的镜头";
+  }
+  if (
+    first.spec.script_reference.scene_id !==
+    second.spec.script_reference.scene_id
+  ) {
+    return "只能合并同一场次的镜头";
+  }
+  const duration =
+    (first.spec.duration_ms ?? 3_000) +
+    (second.spec.duration_ms ?? 3_000);
+  if (duration > 15_000) return "合并后的镜头不能超过 15,000 毫秒";
+  const actionCount =
+    first.spec.action_beats.length + second.spec.action_beats.length;
+  if (actionCount > 8) return "合并后不能超过 8 个动作";
+  const dialogueIds = [
+    ...(first.spec.script_reference.dialogue_ids ?? []),
+    ...(second.spec.script_reference.dialogue_ids ?? []),
+  ];
+  const dialogueCount =
+    (first.spec.dialogue_or_narration?.length ?? 0) +
+    (second.spec.dialogue_or_narration?.length ?? 0);
+  if (dialogueIds.length > 8 || dialogueCount > 8) {
+    return "合并后不能超过 8 条对白或旁白";
+  }
+  if (new Set(dialogueIds).size !== dialogueIds.length) {
+    return "两个来源包含重复对白，无法无损合并";
+  }
+  return null;
 }
 
 export function buildMergeTarget(
@@ -142,98 +312,44 @@ export function buildMergeTarget(
   second: API.ShotSpecVersionResponse,
   options: MergeTargetOptions,
 ): API.TargetShotSpecRequest {
+  const sourceError = mergeSourceError(first, second);
+  if (sourceError) throw new Error(sourceError);
   const base = options.baseVersionId === second.id ? second : first;
   const other = base.id === first.id ? second : first;
-  const sameScene =
-    first.spec.script_reference.scene_id ===
-    second.spec.script_reference.scene_id;
   const spec = structuredClone(base.spec);
-  const actionDescriptions = [first, second]
-    .flatMap((version) =>
-      version.spec.action_beats.map((beat) => beat.description),
-    )
-    .slice(0, 8);
-  spec.action_beats = actionDescriptions.map((description, index) => ({
-    beat_key: `beat-${index + 1}`,
-    order: index + 1,
-    description,
-  }));
-
-  const dialogueIds = sameScene
-    ? uniqueStrings([
-        ...(first.spec.script_reference.dialogue_ids ?? []),
-        ...(second.spec.script_reference.dialogue_ids ?? []),
-      ])
-    : [...(base.spec.script_reference.dialogue_ids ?? [])];
-  const dialogueById = new Map(
-    [first, second].flatMap((version) =>
-      (version.spec.dialogue_or_narration ?? []).map((dialogue) => [
-        dialogue.source_dialogue_id,
-        dialogue,
-      ] as const),
-    ),
+  const sources = [first, second];
+  const beatKeyMaps = sources.map(() => new Map<string, string>());
+  const actionEntries = sources.flatMap((version, sourceIndex) =>
+    version.spec.action_beats.map((beat) => ({ beat, sourceIndex })),
   );
-  spec.script_reference.dialogue_ids = dialogueIds;
-  spec.dialogue_or_narration = dialogueIds.map((dialogueId, index) => {
-    const dialogue = dialogueById.get(dialogueId);
+  spec.action_beats = actionEntries.map(({ beat, sourceIndex }, index) => {
+    const beatKey = `beat-${index + 1}`;
+    beatKeyMaps[sourceIndex].set(beat.beat_key, beatKey);
     return {
-      source_dialogue_id: dialogueId,
-      beat_key: spec.action_beats[Math.min(index, spec.action_beats.length - 1)]
-        .beat_key,
-      speaker_subject_key: dialogue?.speaker_subject_key ?? null,
-      render_as_audio: dialogue?.render_as_audio ?? false,
-      performance_note: dialogue?.performance_note ?? null,
+      beat_key: beatKey,
+      order: index + 1,
+      description: beat.description,
     };
   });
+
+  spec.script_reference.dialogue_ids = sources.flatMap(
+    (version) => version.spec.script_reference.dialogue_ids ?? [],
+  );
+  spec.dialogue_or_narration = sources.flatMap((version, sourceIndex) =>
+    (version.spec.dialogue_or_narration ?? []).map((dialogue) => ({
+      ...dialogue,
+      beat_key: dialogue.beat_key
+        ? (beatKeyMaps[sourceIndex].get(dialogue.beat_key) ?? null)
+        : null,
+    })),
+  );
   spec.duration_ms =
-    (first.spec.duration_ms ?? 3_000) + (second.spec.duration_ms ?? 3_000);
-  spec.narrative.purpose = clip(
-    `${first.spec.narrative.purpose}；${second.spec.narrative.purpose}`,
-    500,
-  );
-  spec.narrative.continuity_note = joinedText(
-    [
-      first.spec.narrative.continuity_note,
-      second.spec.narrative.continuity_note,
-    ],
-    500,
-  );
-  spec.visual.composition = clip(
-    `${first.spec.visual.composition}；${second.spec.visual.composition}`,
-    1_000,
-  );
-  spec.visual.mood_lighting = clip(
-    `${first.spec.visual.mood_lighting}；${second.spec.visual.mood_lighting}`,
-    1_000,
-  );
-  const placementBySubject = new Map(
-    [
-      ...(base.spec.visual.subject_placements ?? []),
-      ...(sameScene ? (other.spec.visual.subject_placements ?? []) : []),
-    ].map((placement) => [placement.subject_key, placement]),
-  );
-  spec.visual.subject_placements = [...placementBySubject.values()].slice(0, 16);
-  spec.audio_intent = {
-    ambient: joinedText(
-      [first.spec.audio_intent?.ambient, second.spec.audio_intent?.ambient],
-      1_000,
-    ),
-    sound_effects: uniqueStrings([
-      ...(first.spec.audio_intent?.sound_effects ?? []),
-      ...(second.spec.audio_intent?.sound_effects ?? []),
-    ]).slice(0, 8),
-  };
-  spec.generation_intent.keyframe_notes = joinedText(
-    [
-      first.spec.generation_intent.keyframe_notes,
-      second.spec.generation_intent.keyframe_notes,
-    ],
-    2_000,
-  );
+    (first.spec.duration_ms ?? 3_000) +
+    (second.spec.duration_ms ?? 3_000);
   return {
     title: options.title.trim(),
     spec,
-    asset_references: mergedAssetReferences(base, other, sameScene),
+    asset_references: mergedAssetReferences(base, other),
   };
 }
 
@@ -278,12 +394,24 @@ export function SplitShotDialog({
       Math.floor((source.version.spec.duration_ms ?? 3_000) / 2 / 100) * 100,
     ),
   );
+  const initialBoundary = suggestedSplitBoundary(source.version);
+  const [firstActionCount, setFirstActionCount] = useState(
+    initialBoundary.firstActionCount,
+  );
+  const [firstDialogueCount, setFirstDialogueCount] = useState(
+    initialBoundary.firstDialogueCount,
+  );
   const totalDuration = source.version.spec.duration_ms ?? 3_000;
   const secondDuration = totalDuration - firstDuration;
   const durationValid =
     Number.isInteger(firstDuration) &&
     firstDuration >= 500 &&
     secondDuration >= 500;
+  const contentError = splitBoundaryError(
+    source.version,
+    firstActionCount,
+    firstDialogueCount,
+  );
 
   function changeOpen(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -299,7 +427,7 @@ export function SplitShotDialog({
   }
 
   async function apply() {
-    if (!preflight || !durationValid) return;
+    if (!preflight || !durationValid || contentError) return;
     const succeeded = await onApply(source.shot.id, {
       expected_source_spec_version_id: source.version.id,
       expected_order_hash: preflight.order_hash,
@@ -309,6 +437,8 @@ export function SplitShotDialog({
         firstTitle,
         secondTitle,
         firstDurationMs: firstDuration,
+        firstActionCount,
+        firstDialogueCount,
       }),
     });
     if (succeeded) changeOpen(false);
@@ -379,7 +509,50 @@ export function SplitShotDialog({
                   {secondDuration} 毫秒
                 </div>
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="splitFirstActionCount">前段动作数</Label>
+                <Input
+                  id="splitFirstActionCount"
+                  max={source.version.spec.action_beats.length - 1}
+                  min={1}
+                  onChange={(event) => {
+                    const nextValue = Number(event.target.value);
+                    setFirstActionCount(nextValue);
+                    setFirstDialogueCount(
+                      suggestedDialogueBoundary(source.version, nextValue),
+                    );
+                  }}
+                  type="number"
+                  value={firstActionCount}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="splitFirstDialogueCount">前段对白数</Label>
+                <Input
+                  id="splitFirstDialogueCount"
+                  max={
+                    source.version.spec.script_reference.dialogue_ids?.length ??
+                    0
+                  }
+                  min={0}
+                  onChange={(event) =>
+                    setFirstDialogueCount(Number(event.target.value))
+                  }
+                  type="number"
+                  value={firstDialogueCount}
+                />
+              </div>
             </div>
+            {contentError ? (
+              <Alert variant="destructive">
+                <AlertTitle>当前分界不能守恒</AlertTitle>
+                <AlertDescription>{contentError}</AlertDescription>
+              </Alert>
+            ) : (
+              <p className="text-xs leading-5 text-muted-foreground">
+                前段包含 {firstActionCount} 个动作和 {firstDialogueCount} 条对白；其余内容全部进入后段。
+              </p>
+            )}
           </div>
         ) : (
           <Alert>
@@ -393,7 +566,13 @@ export function SplitShotDialog({
         <DialogFooter>
           {preflight ? (
             <Button
-              disabled={busy || !durationValid || !firstTitle.trim() || !secondTitle.trim()}
+              disabled={
+                busy ||
+                !durationValid ||
+                Boolean(contentError) ||
+                !firstTitle.trim() ||
+                !secondTitle.trim()
+              }
               onClick={() => void apply()}
               type="button"
             >
@@ -401,7 +580,9 @@ export function SplitShotDialog({
             </Button>
           ) : (
             <Button
-              disabled={busy || totalDuration < 1_000}
+              disabled={
+                busy || totalDuration < 1_000 || Boolean(contentError)
+              }
               onClick={() => void prepare()}
               type="button"
             >
@@ -442,6 +623,12 @@ export function MergeShotsDialog({
         0,
       )
     : 0;
+  const mergeError = preparation
+    ? mergeSourceError(
+        preparation.sources[0].version,
+        preparation.sources[1].version,
+      )
+    : null;
 
   function changeOpen(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -463,7 +650,7 @@ export function MergeShotsDialog({
   }
 
   async function apply() {
-    if (!preparation) return;
+    if (!preparation || mergeError) return;
     const [first, second] = preparation.sources;
     const succeeded = await onApply({
       shot_ids: preparation.preflight.source_shot_ids,
@@ -508,10 +695,10 @@ export function MergeShotsDialog({
                 合并时长 {totalDuration} 毫秒，检出 {evidenceCount(preparation.preflight.downstream_evidence)} 条下游证据。
               </AlertDescription>
             </Alert>
-            {totalDuration > 15_000 ? (
+            {mergeError ? (
               <Alert variant="destructive">
-                <AlertTitle>合并后时长超限</AlertTitle>
-                <AlertDescription>目标镜头不能超过 15,000 毫秒。</AlertDescription>
+                <AlertTitle>当前来源不能无损合并</AlertTitle>
+                <AlertDescription>{mergeError}</AlertDescription>
               </Alert>
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
@@ -525,7 +712,7 @@ export function MergeShotsDialog({
                 />
               </div>
               <div className="grid gap-2 sm:col-span-2">
-                <Label>场次与资产基础</Label>
+                <Label>视觉与生成基础</Label>
                 <Select value={baseVersionId} onValueChange={setBaseVersionId}>
                   <SelectTrigger aria-label="合并规格基础" className="h-10 w-full">
                     <SelectValue />
@@ -539,7 +726,7 @@ export function MergeShotsDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  跨场次时只保留所选规格的场次、对白和资产；同场次会合并动作与对白。
+                  仅从所选规格继承视觉、声音与生成意图；同场次动作、对白和资产引用会完整合并。
                 </p>
               </div>
             </div>
@@ -573,7 +760,7 @@ export function MergeShotsDialog({
         <DialogFooter>
           {preparation ? (
             <Button
-              disabled={busy || totalDuration > 15_000 || !title.trim()}
+              disabled={busy || Boolean(mergeError) || !title.trim()}
               onClick={() => void apply()}
               type="button"
             >

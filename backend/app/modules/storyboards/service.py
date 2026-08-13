@@ -34,6 +34,11 @@ from app.modules.scripts import (
     resolve_narrative_dependencies,
 )
 from app.modules.storyboards import repository
+from app.modules.storyboards.conservation import (
+    TransformConservationError,
+    validate_merge_content,
+    validate_split_content,
+)
 from app.modules.storyboards.contracts import (
     AssetShotUsageSnapshot,
     EpisodeStoryboardSummary,
@@ -1354,39 +1359,23 @@ async def split_shot(
                 details={"current_impact_hash": expected_impact_hash},
             )
         source_model = ShotSpec.model_validate(source_spec.spec)
-        source_dialogues = set(source_model.script_reference.dialogue_ids)
-        target_dialogue_sets: list[set[UUID]] = []
+        try:
+            validate_split_content(source_model, request.targets)
+        except TransformConservationError as error:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                error.summary,
+                status_code=422,
+                next_action="review_split_content",
+                details={"reason": error.code},
+            ) from error
         for target in request.targets:
-            script = target.spec.script_reference
-            if (
-                script.confirmed_script_version_id != source.source_script_version_id
-                or script.scene_id != source.source_scene_id
-                or not set(script.dialogue_ids).issubset(source_dialogues)
-            ):
-                raise ApiError(
-                    ErrorCode.VALIDATION_FAILED,
-                    "Split target must preserve the source script and dialogue subset",
-                    status_code=422,
-                )
             await _validate_target(
                 session,
                 workspace_id=source.workspace_id,
                 episode_id=source.episode_id,
                 project_id=episode.project_id,
                 target=target,
-            )
-            target_dialogue_sets.append(set(script.dialogue_ids))
-        if target_dialogue_sets[0] & target_dialogue_sets[1]:
-            raise ApiError(
-                ErrorCode.VALIDATION_FAILED,
-                "A source dialogue cannot be assigned to both split targets",
-                status_code=422,
-            )
-        if sum(target.spec.duration_ms for target in request.targets) != source_model.duration_ms:
-            raise ApiError(
-                ErrorCode.VALIDATION_FAILED,
-                "Split target durations must equal the source duration",
-                status_code=422,
             )
         source_index = next(
             index for index, active_shot in enumerate(active) if active_shot.id == source.id
@@ -1505,6 +1494,19 @@ async def _merge_sources(
             strict=True,
         )
     ]
+    try:
+        validate_merge_content(
+            [ShotSpec.model_validate(spec.spec) for spec in specs],
+            None,
+        )
+    except TransformConservationError as error:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            error.summary,
+            status_code=422,
+            next_action="review_merge_sources",
+            details={"reason": error.code},
+        ) from error
     return shots, specs, active
 
 
@@ -1581,30 +1583,16 @@ async def merge_shots(
                 details={"current_impact_hash": expected_impact_hash},
             )
         source_models = [ShotSpec.model_validate(spec.spec) for spec in specs]
-        source_script_ids = {
-            model.script_reference.confirmed_script_version_id for model in source_models
-        }
-        if len(source_script_ids) != 1:
+        try:
+            validate_merge_content(source_models, request.target)
+        except TransformConservationError as error:
             raise ApiError(
                 ErrorCode.VALIDATION_FAILED,
-                "Merge sources must use the same confirmed script version",
+                error.summary,
                 status_code=422,
-            )
-        if (
-            request.target.spec.script_reference.confirmed_script_version_id
-            not in source_script_ids
-        ):
-            raise ApiError(
-                ErrorCode.VALIDATION_FAILED,
-                "Merge target must preserve the source script version",
-                status_code=422,
-            )
-        if request.target.spec.duration_ms != sum(model.duration_ms for model in source_models):
-            raise ApiError(
-                ErrorCode.VALIDATION_FAILED,
-                "Merge target duration must equal the source durations",
-                status_code=422,
-            )
+                next_action="review_merge_content",
+                details={"reason": error.code},
+            ) from error
         await _validate_target(
             session,
             workspace_id=episode.workspace_id,

@@ -1313,6 +1313,23 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
         persisted = await client.get(f"/api/v1/shots/{split_shot['id']}", headers=headers)
         assert persisted.json()["data"]["status"] == "archived"
 
+    duplicate_dialogue_preflight = await client.post(
+        "/api/v1/shots/merge-preflight",
+        headers=headers,
+        json={
+            "shot_ids": [merged["shots"][0]["id"], copied["shots"][0]["id"]],
+            "expected_spec_version_ids": [
+                merged["spec_versions"][0]["id"],
+                copied["spec_versions"][0]["id"],
+            ],
+            "expected_order_hash": merged["order"]["order_hash"],
+        },
+    )
+    assert duplicate_dialogue_preflight.status_code == 422
+    assert duplicate_dialogue_preflight.json()["error"]["details"] == {
+        "reason": "merge_dialogue_duplicate"
+    }
+
     transform_audit = await client.get(
         "/api/v1/audit-events",
         headers=headers,
@@ -1328,6 +1345,74 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
     assert sources.count("copy") == 1
     assert sources.count("split") == 2
     assert sources.count("merge") == 1
+
+
+@pytest.mark.asyncio
+async def test_merge_preflight_rejects_action_capacity_before_writing(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, refs = await create_episode_with_confirmed_structure(
+        client,
+        session_factory,
+        email="storyboard-conservation@example.com",
+    )
+    endpoint = f"/api/v1/episodes/{episode['id']}/shots"
+    shots: list[dict[str, object]] = []
+    versions: list[dict[str, object]] = []
+    for source_index in range(2):
+        created = await client.post(
+            endpoint,
+            headers=headers,
+            json=shot_creation_payload(
+                refs,
+                title=f"容量来源 {source_index + 1}",
+                creation_key=f"conservation-capacity-{source_index + 1}",
+            ),
+        )
+        assert created.status_code == 201
+        shot = cast(dict[str, object], created.json()["data"])
+        spec = shot_spec_payload(refs, purpose=f"容量来源 {source_index + 1}")
+        spec["script_reference"] = {
+            "confirmed_script_version_id": str(refs["script_version_id"]),
+            "scene_id": str(refs["scene_id"]),
+            "dialogue_ids": [],
+        }
+        spec["dialogue_or_narration"] = []
+        spec["action_beats"] = [
+            {
+                "beat_key": f"source-{source_index + 1}-{beat_index + 1}",
+                "order": beat_index + 1,
+                "description": f"来源 {source_index + 1} 动作 {beat_index + 1}",
+            }
+            for beat_index in range(5 if source_index == 0 else 4)
+        ]
+        saved = await client.post(
+            f"/api/v1/shots/{shot['id']}/spec-versions",
+            headers=headers,
+            json={
+                "expected_current_spec_version_id": None,
+                "spec": spec,
+                "asset_references": [],
+            },
+        )
+        assert saved.status_code == 201
+        shots.append(shot)
+        versions.append(cast(dict[str, object], saved.json()["data"]["version"]))
+
+    order = (await client.get(endpoint, headers=headers)).json()["data"]
+    rejected = await client.post(
+        "/api/v1/shots/merge-preflight",
+        headers=headers,
+        json={
+            "shot_ids": [shot["id"] for shot in shots],
+            "expected_spec_version_ids": [version["id"] for version in versions],
+            "expected_order_hash": order["order_hash"],
+        },
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["error"]["details"] == {"reason": "merge_action_overflow"}
+    assert len((await client.get(endpoint, headers=headers)).json()["data"]["items"]) == 2
 
 
 @pytest.mark.asyncio

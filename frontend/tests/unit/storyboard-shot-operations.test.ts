@@ -56,6 +56,7 @@ function version({
       },
       action_beats: [
         { beat_key: "beat-1", order: 1, description: `${purpose}动作` },
+        { beat_key: "beat-2", order: 2, description: `${purpose}反应` },
       ],
       dialogue_or_narration: [
         {
@@ -107,6 +108,8 @@ describe("分镜变换目标构造", () => {
       firstTitle: "主角进入",
       secondTitle: "车站空镜",
       firstDurationMs: 2_200,
+      firstActionCount: 1,
+      firstDialogueCount: 1,
     });
 
     expect(targets.map((target) => target.spec.duration_ms)).toEqual([
@@ -145,7 +148,9 @@ describe("分镜变换目标构造", () => {
 
     expect(target.title).toBe("进入车站并发现灯箱");
     expect(target.spec.duration_ms).toBe(7_000);
-    expect(target.spec.action_beats.map((beat) => beat.order)).toEqual([1, 2]);
+    expect(target.spec.action_beats.map((beat) => beat.order)).toEqual([
+      1, 2, 3, 4,
+    ]);
     expect(target.spec.script_reference.dialogue_ids).toEqual([
       firstDialogueId,
       secondDialogueId,
@@ -153,7 +158,7 @@ describe("分镜变换目标构造", () => {
     expect(target.spec.dialogue_or_narration).toHaveLength(2);
   });
 
-  it("跨场次合并时以用户选择的规格为场次与资产基础", () => {
+  it("跨场次不能通过选择基础规格绕过内容守恒", () => {
     const first = version({
       id: "019fb6c0-a000-7000-8000-000000000023",
       sceneId: firstSceneId,
@@ -169,15 +174,11 @@ describe("分镜变换目标构造", () => {
       purpose: "隧道出口",
     });
 
-    const target = buildMergeTarget(first, second, {
-      baseVersionId: second.id,
-      title: "穿过隧道",
-    });
-
-    expect(target.spec.script_reference.scene_id).toBe(secondSceneId);
-    expect(target.spec.script_reference.dialogue_ids).toEqual([
-      secondDialogueId,
-    ]);
-    expect(target.asset_references).toEqual([locationReference]);
+    expect(() =>
+      buildMergeTarget(first, second, {
+        baseVersionId: second.id,
+        title: "穿过隧道",
+      }),
+    ).toThrow(/同一场次/);
   });
 });

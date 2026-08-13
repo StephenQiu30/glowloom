@@ -2,12 +2,12 @@ from copy import deepcopy
 from uuid import UUID
 
 import pytest
+
 from app.modules.storyboards.conservation import (
     TransformConservationError,
     validate_merge_content,
     validate_split_content,
 )
-
 from app.modules.storyboards.schemas import (
     ShotSpec,
     TargetShotSpecRequest,
@@ -144,6 +144,9 @@ def test_merge_preserves_content_and_rekeys_dialogue_beat_links() -> None:
         descriptions=["进入月台", "观察灯箱"],
         dialogue_ids=[DIALOGUE_A, DIALOGUE_B],
     )
+    merged.dialogue_or_narration[1].performance_note = second.dialogue_or_narration[
+        0
+    ].performance_note
     validate_merge_content([first, second], _target(merged))
 
     wrong_link = merged.model_copy(deep=True)

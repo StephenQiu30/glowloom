@@ -190,7 +190,7 @@ describe("分镜结构操作对话框", () => {
       secondDialogueId,
     ]);
     expect(
-      target.spec.dialogue_or_narration.map((item) => item.beat_key),
+      (target.spec.dialogue_or_narration ?? []).map((item) => item.beat_key),
     ).toEqual(["beat-1", "beat-3"]);
   });
 
@@ -233,7 +233,8 @@ describe("分镜结构操作对话框", () => {
     ).toEqual([1, 1]);
     expect(
       request.targets.map(
-        (target) => target.spec.script_reference.dialogue_ids.length,
+        (target) =>
+          target.spec.script_reference.dialogue_ids?.length ?? 0,
       ),
     ).toEqual([1, 0]);
   });

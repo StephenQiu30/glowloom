@@ -357,6 +357,9 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
     "镜头“车站警觉”已复制",
   );
   await expect(page.getByText("2 个镜头", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /林澈.*有人吗/ }).click();
+  await page.getByRole("button", { name: "保存为新版本" }).click();
+  await expect(page.getByRole("status")).toContainText("镜头规格 v2 已保存");
   await page
     .getByRole("button", { name: "拖动镜头 车站警觉 · 副本" })
     .dragTo(
@@ -377,6 +380,11 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await expect(shotOrder.getByRole("listitem").first()).toContainText(
     "车站警觉 · 副本",
   );
+  await page.getByRole("button", { name: "下移镜头" }).click();
+  await expect(page.getByRole("status")).toContainText("镜头顺序已更新");
+  await expect(shotOrder.getByRole("listitem").first()).toContainText(
+    "车站警觉",
+  );
 
   await page.getByRole("button", { name: "合并" }).click();
   await page.getByRole("button", { name: "检查合并影响" }).click();
@@ -385,7 +393,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await expect(page.getByRole("status")).toContainText("相邻镜头已合并");
   await expect(page.getByText("1 个镜头", { exact: true })).toBeVisible();
 
-  const mergedTitle = "车站警觉 · 副本 + 车站警觉";
+  const mergedTitle = "车站警觉 + 车站警觉 · 副本";
   await page.getByRole("button", { name: "归档镜头" }).click();
   await expect(page.getByRole("status")).toContainText(`镜头“${mergedTitle}”已归档`);
   await page.getByRole("button", { name: `恢复${mergedTitle}` }).click();
@@ -405,6 +413,9 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await page.getByRole("button", { name: "拆分" }).click();
   await page.getByRole("button", { name: "检查拆分影响" }).click();
   await expect(page.getByText("影响已固定", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("前段包含 2 个动作和 1 条对白；其余内容全部进入后段。"),
+  ).toBeVisible();
   await page.getByRole("button", { name: "确认拆分" }).click();
   await expect(page.getByRole("status")).toContainText("镜头已拆分为两个目标");
   await expect(page.getByText("2 个镜头", { exact: true })).toBeVisible();
@@ -426,6 +437,9 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await expect(page.getByLabel("构图")).toHaveValue(
     /人物位于右侧三分线，灯箱形成纵深引导/,
   );
+  await expect(page.getByLabel("动作节拍")).toHaveValue(
+    "林澈停下脚步\n抬头寻找声音来源",
+  );
   await expect(
     page.getByLabel(`${characterFixture.name}画面位置`),
   ).toHaveValue("画面右侧，面向月台深处");
@@ -444,7 +458,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
     .click();
   await setCurrentAssetVersion(page, 1);
   await expect(page.getByText("本页当前引用 2")).toBeVisible();
-  await expect(page.getByText("本页历史引用 3")).toBeVisible();
+  await expect(page.getByText("本页历史引用 4")).toBeVisible();
   await page.getByRole("button", { name: "全选当前引用" }).click();
   await page.getByRole("button", { name: "生成升级预检" }).click();
   const finalUpgradeDialog = page.getByRole("dialog", {
@@ -491,7 +505,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
     .getByLabel("动作")
     .selectOption("shot.spec_version_created");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
-  await expect(auditTrail.getByText(/7 条只追加事件/)).toBeVisible();
+  await expect(auditTrail.getByText(/8 条只追加事件/)).toBeVisible();
   await expect(
     auditTrail.locator("article").first().getByText("分镜规格版本创建"),
   ).toBeVisible();
@@ -520,11 +534,11 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   ).toContainText("2");
   await page.getByRole("button", { name: "检查删除 第一集 分镜" }).click();
   await expect(
-    page.getByText("单集已有 6 个分镜镜头（7 个规格版本）"),
+    page.getByText("单集已有 6 个分镜镜头（8 个规格版本）"),
   ).toBeVisible();
   await page.getByRole("button", { name: "检查项目删除条件" }).click();
   await expect(
-    page.getByText("项目关联 6 个分镜镜头（7 个规格版本）"),
+    page.getByText("项目关联 6 个分镜镜头（8 个规格版本）"),
   ).toBeVisible();
   await expect(
     page.getByText("项目已有 5 个资产（5 个版本）"),
