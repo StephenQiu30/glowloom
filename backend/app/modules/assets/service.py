@@ -25,6 +25,7 @@ from app.modules.assets.contracts import (
 from app.modules.assets.models import (
     Asset,
     AssetMediaReference,
+    AssetNameRevision,
     AssetOccurrenceDecision,
     AssetState,
     AssetVersion,
@@ -49,7 +50,6 @@ from app.modules.assets.schemas import (
     AssetSpec,
     AssetStateCreateRequest,
     AssetStateCreateResponse,
-    AssetStateCurrentRequest,
     AssetStateReadinessResponse,
     AssetStateReadinessSnapshot,
     AssetStateResponse,
@@ -128,11 +128,11 @@ _REQUIRED_SPEC_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
-def _normalize_name(value: str) -> str:
+def normalize_name(value: str) -> str:
     return " ".join(value.strip().casefold().split())
 
 
-def _clean_values(values: list[str]) -> list[str]:
+def clean_values(values: list[str]) -> list[str]:
     cleaned: list[str] = []
     seen: set[str] = set()
     for value in values:
@@ -143,7 +143,7 @@ def _clean_values(values: list[str]) -> list[str]:
     return cleaned
 
 
-def _asset_response(
+def asset_response(
     asset: Asset,
     *,
     duplicate: bool = False,
@@ -157,6 +157,8 @@ def _asset_response(
         aliases=asset.aliases,
         tags=asset.tags,
         status=cast(Literal["active", "archived"], asset.status),
+        availability=cast(Literal["enabled", "disabled"], asset.availability),
+        name_revision=asset.name_revision,
         revision=asset.revision,
         created_at=asset.created_at,
         updated_at=asset.updated_at,
@@ -164,7 +166,7 @@ def _asset_response(
     )
 
 
-def _state_response(state: AssetState) -> AssetStateResponse:
+def state_response(state: AssetState) -> AssetStateResponse:
     return AssetStateResponse(
         id=state.id,
         workspace_id=state.workspace_id,
@@ -245,11 +247,11 @@ def _version_hash(
     return sha256(canonical.encode()).hexdigest()
 
 
-def _not_found(resource: str = "Asset") -> ApiError:
+def asset_not_found(resource: str = "Asset") -> ApiError:
     return ApiError(ErrorCode.NOT_FOUND, f"{resource} not found", status_code=404)
 
 
-def _require_revision(asset: Asset, expected_revision: int) -> None:
+def require_asset_revision(asset: Asset, expected_revision: int) -> None:
     if asset.revision != expected_revision:
         raise ApiError(
             ErrorCode.VERSION_CONFLICT,
@@ -259,7 +261,7 @@ def _require_revision(asset: Asset, expected_revision: int) -> None:
         )
 
 
-def _require_state_revision(state: AssetState, expected_revision: int) -> None:
+def require_state_revision(state: AssetState, expected_revision: int) -> None:
     if state.revision != expected_revision:
         raise ApiError(
             ErrorCode.VERSION_CONFLICT,
@@ -269,9 +271,7 @@ def _require_state_revision(state: AssetState, expected_revision: int) -> None:
         )
 
 
-def _require_expected_current(
-    state: AssetState, expected_current_version_id: UUID | None
-) -> None:
+def require_expected_current(state: AssetState, expected_current_version_id: UUID | None) -> None:
     if state.current_version_id != expected_current_version_id:
         raise ApiError(
             ErrorCode.VERSION_CONFLICT,
@@ -279,48 +279,46 @@ def _require_expected_current(
             status_code=409,
             details={
                 "current_version_id": (
-                    str(state.current_version_id)
-                    if state.current_version_id is not None
-                    else None
+                    str(state.current_version_id) if state.current_version_id is not None else None
                 )
             },
         )
 
 
-async def _asset_for_read(
+async def asset_for_read(
     session: AsyncSession,
     claims: AccessTokenClaims,
     asset_id: UUID,
 ) -> Asset:
     asset = await repository.find_asset(session, asset_id)
     if asset is None:
-        raise _not_found()
+        raise asset_not_found()
     try:
         context = await project_for_content_read(session, claims, asset.project_id)
     except ApiError as error:
         if error.code == ErrorCode.NOT_FOUND:
-            raise _not_found() from error
+            raise asset_not_found() from error
         raise
     if context.workspace_id != asset.workspace_id:
-        raise _not_found()
+        raise asset_not_found()
     return asset
 
 
-async def _locked_asset_for_write(
+async def lock_asset_for_write(
     session: AsyncSession,
     claims: AccessTokenClaims,
     asset_id: UUID,
 ) -> Asset:
     asset_reference = await repository.find_asset(session, asset_id)
     if asset_reference is None:
-        raise _not_found()
+        raise asset_not_found()
     try:
         context = await lock_active_project_for_content_write(
             session, claims, asset_reference.project_id
         )
     except ApiError as error:
         if error.code == ErrorCode.NOT_FOUND:
-            raise _not_found() from error
+            raise asset_not_found() from error
         raise
     asset = await repository.find_asset(session, asset_id, for_update=True)
     if (
@@ -328,40 +326,36 @@ async def _locked_asset_for_write(
         or asset.project_id != context.project_id
         or context.workspace_id != asset.workspace_id
     ):
-        raise _not_found()
+        raise asset_not_found()
     return asset
 
 
-async def _state_for_read(
+async def state_for_read(
     session: AsyncSession,
     claims: AccessTokenClaims,
     state_id: UUID,
 ) -> tuple[AssetState, Asset]:
     state = await repository.find_state(session, state_id)
     if state is None:
-        raise _not_found("Asset state")
-    asset = await _asset_for_read(session, claims, state.asset_id)
+        raise asset_not_found("Asset state")
+    asset = await asset_for_read(session, claims, state.asset_id)
     if state.workspace_id != asset.workspace_id:
-        raise _not_found("Asset state")
+        raise asset_not_found("Asset state")
     return state, asset
 
 
-async def _locked_state_for_write(
+async def lock_state_for_write(
     session: AsyncSession,
     claims: AccessTokenClaims,
     state_id: UUID,
 ) -> tuple[AssetState, Asset]:
     state_reference = await repository.find_state(session, state_id)
     if state_reference is None:
-        raise _not_found("Asset state")
-    asset = await _locked_asset_for_write(session, claims, state_reference.asset_id)
+        raise asset_not_found("Asset state")
+    asset = await lock_asset_for_write(session, claims, state_reference.asset_id)
     state = await repository.find_state(session, state_id, for_update=True)
-    if (
-        state is None
-        or state.asset_id != asset.id
-        or state.workspace_id != asset.workspace_id
-    ):
-        raise _not_found("Asset state")
+    if state is None or state.asset_id != asset.id or state.workspace_id != asset.workspace_id:
+        raise asset_not_found("Asset state")
     return state, asset
 
 
@@ -377,14 +371,10 @@ async def create_asset(
     if not name:
         raise ApiError(ErrorCode.INVALID_REQUEST, "Asset name is required", status_code=422)
     async with session.begin():
-        project = await lock_active_project_for_content_write(
-            session, claims, project_id
-        )
-        normalized_name = _normalize_name(name)
+        project = await lock_active_project_for_content_write(session, claims, project_id)
+        normalized_name = normalize_name(name)
         duplicate = (
-            await repository.find_duplicate_name(
-                session, project_id, request.kind, normalized_name
-            )
+            await repository.find_duplicate_name(session, project_id, request.kind, normalized_name)
             is not None
         )
         asset = Asset(
@@ -394,14 +384,25 @@ async def create_asset(
             kind=request.kind,
             name=name,
             normalized_name=normalized_name,
-            aliases=_clean_values(request.aliases),
-            tags=_clean_values(request.tags),
+            aliases=clean_values(request.aliases),
+            tags=clean_values(request.tags),
             status="active",
+            availability="enabled",
+            name_revision=1,
             revision=1,
             created_by=claims.sub,
         )
         session.add(asset)
-        await session.flush([asset])
+        session.add(
+            AssetNameRevision(
+                asset_id=asset.id,
+                revision_no=1,
+                workspace_id=asset.workspace_id,
+                name_snapshot=asset.name,
+                normalized_name=asset.normalized_name,
+                created_by=claims.sub,
+            )
+        )
         session.add(
             AssetState(
                 id=uuid7(),
@@ -433,7 +434,7 @@ async def create_asset(
             },
         )
         await session.flush()
-    return _asset_response(asset, duplicate=duplicate)
+    return asset_response(asset, duplicate=duplicate)
 
 
 async def list_assets(
@@ -458,7 +459,7 @@ async def list_assets(
         offset=offset,
     )
     return PaginatedAssets(
-        items=[_asset_response(item) for item in rows],
+        items=[asset_response(item) for item in rows],
         total=total,
         limit=limit,
         offset=offset,
@@ -470,7 +471,7 @@ async def get_asset(
     claims: AccessTokenClaims,
     asset_id: UUID,
 ) -> AssetResponse:
-    return _asset_response(await _asset_for_read(session, claims, asset_id))
+    return asset_response(await asset_for_read(session, claims, asset_id))
 
 
 async def create_state(
@@ -486,7 +487,7 @@ async def create_state(
     description = request.description.strip()
     idempotency_key = request.idempotency_key.strip()
     async with session.begin():
-        asset = await _locked_asset_for_write(session, claims, asset_id)
+        asset = await lock_asset_for_write(session, claims, asset_id)
         replay = await repository.find_state_by_creation_key(
             session,
             asset.id,
@@ -504,8 +505,8 @@ async def create_state(
                     status_code=409,
                 )
             return AssetStateCreateResponse(
-                asset=_asset_response(asset),
-                state=_state_response(replay),
+                asset=asset_response(asset),
+                state=state_response(replay),
             )
         if await repository.find_state_by_key(session, asset.id, state_key) is not None:
             raise ApiError(
@@ -513,7 +514,7 @@ async def create_state(
                 "Asset state key already exists",
                 status_code=409,
             )
-        _require_revision(asset, request.expected_asset_revision)
+        require_asset_revision(asset, request.expected_asset_revision)
         now = datetime.now(UTC)
         state = AssetState(
             id=uuid7(),
@@ -551,8 +552,8 @@ async def create_state(
         )
         await session.flush()
     return AssetStateCreateResponse(
-        asset=_asset_response(asset),
-        state=_state_response(state),
+        asset=asset_response(asset),
+        state=state_response(state),
     )
 
 
@@ -561,10 +562,10 @@ async def list_states(
     claims: AccessTokenClaims,
     asset_id: UUID,
 ) -> PaginatedAssetStates:
-    asset = await _asset_for_read(session, claims, asset_id)
+    asset = await asset_for_read(session, claims, asset_id)
     states = await repository.list_states(session, asset.id)
     return PaginatedAssetStates(
-        items=[_state_response(state) for state in states],
+        items=[state_response(state) for state in states],
         total=len(states),
     )
 
@@ -575,11 +576,7 @@ def _current_occurrence_rows(
     latest: dict[tuple[UUID, UUID], AssetOccurrenceDecision] = {}
     for row in rows:
         latest[(row.asset_state_id, row.narrative_unit_id)] = row
-    return [
-        row
-        for row in latest.values()
-        if row.decision == "link"
-    ]
+    return [row for row in latest.values() if row.decision == "link"]
 
 
 def _occurrence_response(
@@ -622,7 +619,7 @@ async def decide_occurrence(
     trace_id: str,
 ) -> AssetOccurrenceDecisionResponse:
     async with session.begin():
-        state, asset = await _locked_state_for_write(session, claims, state_id)
+        state, asset = await lock_state_for_write(session, claims, state_id)
         replay = await repository.find_occurrence_by_key(
             session,
             state.id,
@@ -632,8 +629,7 @@ async def decide_occurrence(
             if (
                 replay.decision != request.decision
                 or replay.narrative_unit_id != request.narrative_unit_id
-                or replay.narrative_unit_version_id
-                != request.narrative_unit_version_id
+                or replay.narrative_unit_version_id != request.narrative_unit_version_id
             ):
                 raise ApiError(
                     ErrorCode.RESOURCE_CONFLICT,
@@ -645,10 +641,10 @@ async def decide_occurrence(
                 unit_version_ids=[replay.narrative_unit_version_id],
             )
             return AssetOccurrenceDecisionResponse(
-                state=_state_response(state),
+                state=state_response(state),
                 decision=_occurrence_response(replay, replay_narratives),
             )
-        _require_state_revision(state, request.expected_revision)
+        require_state_revision(state, request.expected_revision)
         if state.status != "active":
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
@@ -661,11 +657,8 @@ async def decide_occurrence(
             unit_version_ids=[request.narrative_unit_version_id],
         )
         narrative = narratives.get(request.narrative_unit_version_id)
-        if (
-            narrative is None
-            or narrative.narrative_unit_id != request.narrative_unit_id
-        ):
-            raise _not_found("Narrative unit version")
+        if narrative is None or narrative.narrative_unit_id != request.narrative_unit_id:
+            raise asset_not_found("Narrative unit version")
         if narrative.project_id != asset.project_id:
             raise ApiError(
                 ErrorCode.RESOURCE_CONFLICT,
@@ -687,9 +680,7 @@ async def decide_occurrence(
                     "decision": request.decision,
                     "episode_id": str(narrative.episode_id),
                     "narrative_unit_id": str(narrative.narrative_unit_id),
-                    "narrative_unit_version_id": str(
-                        narrative.narrative_unit_version_id
-                    ),
+                    "narrative_unit_version_id": str(narrative.narrative_unit_version_id),
                     "text_hash": narrative.text_hash,
                 },
                 sort_keys=True,
@@ -734,7 +725,7 @@ async def decide_occurrence(
         )
         await session.flush()
     return AssetOccurrenceDecisionResponse(
-        state=_state_response(state),
+        state=state_response(state),
         decision=_occurrence_response(decision, narratives),
     )
 
@@ -747,7 +738,7 @@ async def list_occurrences(
     *,
     include_history: bool,
 ) -> PaginatedAssetOccurrences:
-    state, _asset = await _state_for_read(session, claims, state_id)
+    state, _asset = await state_for_read(session, claims, state_id)
     history = await repository.list_occurrence_decisions(session, [state.id])
     rows = history if include_history else _current_occurrence_rows(history)
     narratives = await read_narratives(
@@ -772,32 +763,12 @@ async def update_asset(
     if not changes:
         raise ApiError(ErrorCode.INVALID_REQUEST, "No asset changes supplied", status_code=422)
     async with session.begin():
-        asset = await _locked_asset_for_write(session, claims, asset_id)
-        _require_revision(asset, request.expected_revision)
-        duplicate = False
-        if request.name is not None:
-            name = request.name.strip()
-            if not name:
-                raise ApiError(
-                    ErrorCode.INVALID_REQUEST, "Asset name is required", status_code=422
-                )
-            normalized_name = _normalize_name(name)
-            duplicate = (
-                await repository.find_duplicate_name(
-                    session,
-                    asset.project_id,
-                    asset.kind,
-                    normalized_name,
-                    excluding_id=asset.id,
-                )
-                is not None
-            )
-            asset.name = name
-            asset.normalized_name = normalized_name
+        asset = await lock_asset_for_write(session, claims, asset_id)
+        require_asset_revision(asset, request.expected_revision)
         if request.aliases is not None:
-            asset.aliases = _clean_values(request.aliases)
+            asset.aliases = clean_values(request.aliases)
         if request.tags is not None:
-            asset.tags = _clean_values(request.tags)
+            asset.tags = clean_values(request.tags)
         now = datetime.now(UTC)
         asset.revision += 1
         asset.updated_at = now
@@ -816,7 +787,7 @@ async def update_asset(
             occurred_at=now,
         )
         await session.flush()
-    return _asset_response(asset, duplicate=duplicate)
+    return asset_response(asset)
 
 
 async def set_asset_archived(
@@ -830,12 +801,10 @@ async def set_asset_archived(
 ) -> AssetResponse:
     expected_status = "active" if archived else "archived"
     async with session.begin():
-        asset = await _locked_asset_for_write(session, claims, asset_id)
-        _require_revision(asset, request.expected_revision)
+        asset = await lock_asset_for_write(session, claims, asset_id)
+        require_asset_revision(asset, request.expected_revision)
         if asset.status != expected_status:
-            raise ApiError(
-                ErrorCode.STATE_CONFLICT, "Asset state conflict", status_code=409
-            )
+            raise ApiError(ErrorCode.STATE_CONFLICT, "Asset state conflict", status_code=409)
         previous_status = asset.status
         now = datetime.now(UTC)
         asset.status = "archived" if archived else "active"
@@ -859,7 +828,7 @@ async def set_asset_archived(
             occurred_at=now,
         )
         await session.flush()
-    return _asset_response(asset)
+    return asset_response(asset)
 
 
 async def delete_preflight(
@@ -868,7 +837,7 @@ async def delete_preflight(
     asset_id: UUID,
     read_candidate_decision_counts: AssetCandidateDecisionCountReader,
 ) -> AssetDeletePreflightResponse:
-    asset = await _asset_for_read(session, claims, asset_id)
+    asset = await asset_for_read(session, claims, asset_id)
     version_count = await repository.count_versions(session, asset.id)
     decision_count = (
         await read_candidate_decision_counts(
@@ -899,8 +868,7 @@ async def delete_preflight(
             AssetDeleteBlocker(
                 code="asset_has_related_versions",
                 summary=(
-                    f"Asset is referenced by {related_version_count} related "
-                    "asset version(s)"
+                    f"Asset is referenced by {related_version_count} related asset version(s)"
                 ),
                 version_count=0,
                 decision_count=0,
@@ -911,10 +879,7 @@ async def delete_preflight(
         blockers.append(
             AssetDeleteBlocker(
                 code="asset_has_candidate_decisions",
-                summary=(
-                    f"Asset is linked from {decision_count} script candidate "
-                    "decision(s)"
-                ),
+                summary=(f"Asset is linked from {decision_count} script candidate decision(s)"),
                 version_count=0,
                 decision_count=decision_count,
                 related_version_count=0,
@@ -933,8 +898,8 @@ async def delete_asset(
     trace_id: str,
 ) -> None:
     async with session.begin():
-        asset = await _locked_asset_for_write(session, claims, asset_id)
-        _require_revision(asset, expected_revision)
+        asset = await lock_asset_for_write(session, claims, asset_id)
+        require_asset_revision(asset, expected_revision)
         if await repository.count_versions(session, asset.id):
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
@@ -1033,7 +998,7 @@ async def _resolve_media_references(
             session, asset.workspace_id, reference.media_version_id
         )
         if media is None:
-            raise _not_found("Media version")
+            raise asset_not_found("Media version")
         expected_kind = _MEDIA_KIND_BY_PURPOSE[reference.purpose]
         if media.kind != expected_kind:
             raise ApiError(
@@ -1125,9 +1090,7 @@ def _readiness_prerequisites(
     spec = parse_asset_spec(asset.kind, version.spec)
     blockers = _missing_spec_blockers(spec)
     draft = bool(blockers)
-    media_blockers, required_media_missing = _media_blockers(
-        asset.kind, references, media
-    )
+    media_blockers, required_media_missing = _media_blockers(asset.kind, references, media)
     blockers.extend(media_blockers)
     draft = draft or required_media_missing
     return blockers, draft
@@ -1157,7 +1120,12 @@ def _compose_readiness(
                 next_action="enable_asset_state",
             )
         )
-    if not draft and asset.status == "active" and state.status == "active":
+    if (
+        not draft
+        and asset.status == "active"
+        and asset.availability == "enabled"
+        and state.status == "active"
+    ):
         if rights_unavailable:
             blockers.append(
                 AssetReadinessBlocker(
@@ -1190,7 +1158,21 @@ def _compose_readiness(
             )
         )
 
-    status: ReadinessStatus = "draft" if draft else "blocked" if blockers else "ready"
+    if asset.availability != "enabled":
+        blockers.append(
+            AssetReadinessBlocker(
+                code="asset_disabled",
+                dependency_type="ASSET",
+                dependency_id=asset.id,
+                summary="Disabled asset cannot be used by new work",
+                next_action="enable_asset",
+            )
+        )
+
+    hard_blocked = asset.availability != "enabled" or state.status != "active"
+    status: ReadinessStatus = (
+        "blocked" if hard_blocked else "draft" if draft else "blocked" if blockers else "ready"
+    )
     next_actions = list(dict.fromkeys(item.next_action for item in blockers))
     return AssetReadinessResponse(
         status=status,
@@ -1237,7 +1219,12 @@ async def _evaluate_readiness(
     )
     rights: RightsGateResult | None = None
     rights_unavailable = False
-    if not draft and asset.status == "active" and state.status == "active":
+    if (
+        not draft
+        and asset.status == "active"
+        and asset.availability == "enabled"
+        and state.status == "active"
+    ):
         try:
             rights = await check_rights(
                 session,
@@ -1279,13 +1266,20 @@ async def append_version(
     trace_id: str,
 ) -> AssetVersionCreateResponse:
     async with session.begin():
-        state, asset = await _locked_state_for_write(session, claims, state_id)
+        state, asset = await lock_state_for_write(session, claims, state_id)
         if asset.status != "active":
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
                 "Archived asset cannot accept a version",
                 status_code=409,
                 next_action="restore_asset",
+            )
+        if asset.availability != "enabled":
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "Disabled asset cannot accept a version",
+                status_code=409,
+                next_action="enable_asset",
             )
         if state.status != "active":
             raise ApiError(
@@ -1295,8 +1289,8 @@ async def append_version(
                 next_action="enable_asset_state",
             )
         previous_version_id = state.current_version_id
-        _require_state_revision(state, request.expected_revision)
-        _require_expected_current(state, request.expected_current_version_id)
+        require_state_revision(state, request.expected_revision)
+        require_expected_current(state, request.expected_current_version_id)
         if request.spec.kind != asset.kind:
             raise ApiError(
                 ErrorCode.INVALID_REQUEST,
@@ -1379,21 +1373,17 @@ async def append_version(
                 "kind": asset.kind,
                 "set_as_current": request.set_as_current,
                 "previous_version_id": (
-                    str(previous_version_id)
-                    if previous_version_id is not None
-                    else None
+                    str(previous_version_id) if previous_version_id is not None else None
                 ),
                 "current_version_id": (
-                    str(state.current_version_id)
-                    if state.current_version_id is not None
-                    else None
+                    str(state.current_version_id) if state.current_version_id is not None else None
                 ),
             },
             occurred_at=now,
         )
         await session.flush()
     return AssetVersionCreateResponse(
-        state=_state_response(state),
+        state=state_response(state),
         version=_version_response(version, stored_references),
         readiness=readiness,
     )
@@ -1407,13 +1397,9 @@ async def list_versions(
     limit: int,
     offset: int,
 ) -> PaginatedAssetVersions:
-    state, _asset = await _state_for_read(session, claims, state_id)
-    rows, total = await repository.list_versions(
-        session, state.id, limit=limit, offset=offset
-    )
-    references = await repository.list_media_references(
-        session, [item.id for item in rows]
-    )
+    state, _asset = await state_for_read(session, claims, state_id)
+    rows, total = await repository.list_versions(session, state.id, limit=limit, offset=offset)
+    references = await repository.list_media_references(session, [item.id for item in rows])
     by_version: dict[UUID, list[AssetMediaReference]] = {}
     for item in references:
         by_version.setdefault(item.asset_version_id, []).append(item)
@@ -1432,88 +1418,11 @@ async def get_version(
 ) -> AssetVersionResponse:
     result = await repository.find_version(session, version_id)
     if result is None:
-        raise _not_found("Asset version")
+        raise asset_not_found("Asset version")
     version, _state, asset = result
-    await _asset_for_read(session, claims, asset.id)
+    await asset_for_read(session, claims, asset.id)
     references = await repository.list_media_references(session, [version.id])
     return _version_response(version, references)
-
-
-async def set_current_version(
-    session: AsyncSession,
-    claims: AccessTokenClaims,
-    state_id: UUID,
-    request: AssetStateCurrentRequest,
-    *,
-    trace_id: str,
-) -> AssetStateResponse:
-    async with session.begin():
-        state, asset = await _locked_state_for_write(session, claims, state_id)
-        receipt = state.command_receipts.get(request.idempotency_key)
-        command_hash = sha256(
-            json.dumps(
-                request.model_dump(mode="json") | {"idempotency_key": None},
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode()
-        ).hexdigest()
-        if receipt is not None:
-            if receipt.get("command_hash") != command_hash:
-                raise ApiError(
-                    ErrorCode.RESOURCE_CONFLICT,
-                    "Asset state command key was reused with different input",
-                    status_code=409,
-                )
-            return _state_response(state)
-        _require_state_revision(state, request.expected_revision)
-        _require_expected_current(state, request.expected_current_version_id)
-        result = await repository.find_version(session, request.version_id)
-        if result is None:
-            raise _not_found("Asset version")
-        version, version_state, version_asset = result
-        if version_asset.id != asset.id:
-            raise _not_found("Asset version")
-        if version_state.id != state.id:
-            raise ApiError(
-                ErrorCode.RESOURCE_CONFLICT,
-                "Asset version does not belong to this state",
-                status_code=409,
-            )
-        previous_version_id = state.current_version_id
-        now = datetime.now(UTC)
-        state.current_version_id = version.id
-        state.revision += 1
-        state.updated_at = now
-        state.command_receipts = {
-            **state.command_receipts,
-            request.idempotency_key: {
-                "command_hash": command_hash,
-                "revision": state.revision,
-                "current_version_id": str(version.id),
-            },
-        }
-        append_audit_event(
-            session,
-            workspace_id=asset.workspace_id,
-            actor_id=claims.sub,
-            action="asset.state_current_changed",
-            target_type="asset_state",
-            target_id=state.id,
-            trace_id=trace_id,
-            metadata={
-                "asset_id": str(asset.id),
-                "revision": state.revision,
-                "previous_version_id": (
-                    str(previous_version_id)
-                    if previous_version_id is not None
-                    else None
-                ),
-                "current_version_id": str(state.current_version_id),
-            },
-            occurred_at=now,
-        )
-        await session.flush()
-    return _state_response(state)
 
 
 async def get_readiness(
@@ -1527,9 +1436,9 @@ async def get_readiness(
 ) -> AssetReadinessResponse:
     result = await repository.find_version(session, version_id)
     if result is None:
-        raise _not_found("Asset version")
+        raise asset_not_found("Asset version")
     version, state, asset = result
-    await _asset_for_read(session, claims, asset.id)
+    await asset_for_read(session, claims, asset.id)
     references = await repository.list_media_references(session, [version.id])
     return await _evaluate_readiness(
         session,
@@ -1553,9 +1462,7 @@ async def summarize_project_assets(
     channel: str,
     region: str,
 ) -> ProjectAssetSummary:
-    rows, total = await repository.list_active_states_with_current_version(
-        session, project_id
-    )
+    rows, total = await repository.list_active_states_with_current_version(session, project_id)
     if any(asset.workspace_id != workspace_id for asset, _state, _version in rows):
         raise ApiError(
             ErrorCode.DEPENDENCY_UNAVAILABLE,
@@ -1684,6 +1591,7 @@ async def resolve_asset_version(
         asset_state_id=state.id,
         kind=asset.kind,
         asset_status=asset.status,
+        asset_availability=asset.availability,
         asset_state_status=state.status,
     )
 
@@ -1695,9 +1603,9 @@ async def asset_version_for_content_read(
 ) -> AssetVersionReference:
     result = await repository.find_version(session, version_id)
     if result is None:
-        raise _not_found("Asset version")
+        raise asset_not_found("Asset version")
     version, state, asset = result
-    await _asset_for_read(session, claims, asset.id)
+    await asset_for_read(session, claims, asset.id)
     return AssetVersionReference(
         id=version.id,
         workspace_id=version.workspace_id,
@@ -1706,6 +1614,7 @@ async def asset_version_for_content_read(
         asset_state_id=state.id,
         kind=asset.kind,
         asset_status=asset.status,
+        asset_availability=asset.availability,
         asset_state_status=state.status,
     )
 
@@ -1725,16 +1634,15 @@ def _readiness_reference(
         "asset_id": str(asset.id),
         "asset_state_id": str(state.id),
         "asset_status": asset.status,
+        "asset_availability": asset.availability,
         "asset_state_status": state.status,
         "content_hash": version.content_hash,
         "status": status,
         "blockers": [
-            blocker.model_dump(mode="json", exclude_none=True)
-            for blocker in readiness.blockers
+            blocker.model_dump(mode="json", exclude_none=True) for blocker in readiness.blockers
         ],
         "media_version_ids": [
-            str(media_id)
-            for media_id in readiness.dependency_snapshot.media_version_ids
+            str(media_id) for media_id in readiness.dependency_snapshot.media_version_ids
         ],
         "consent_ids": [
             str(consent_id) for consent_id in readiness.dependency_snapshot.consent_ids
@@ -1754,6 +1662,7 @@ def _readiness_reference(
         asset_state_id=state.id,
         kind=asset.kind,
         asset_status=asset.status,
+        asset_availability=asset.availability,
         asset_state_status=state.status,
         status=status,
         blocker_codes=blocker_codes,
@@ -1806,7 +1715,12 @@ async def resolve_asset_versions_readiness(
             media=media,
         )
         prerequisites[version.id] = (blockers, draft)
-        if not draft and asset.status == "active" and state.status == "active":
+        if (
+            not draft
+            and asset.status == "active"
+            and asset.availability == "enabled"
+            and state.status == "active"
+        ):
             rights_subjects.append(
                 SubjectReference(
                     subject_type=SubjectType.ASSET_VERSION,
@@ -1885,6 +1799,7 @@ _STATE_NEXT_ACTIONS = {
     "consent_revoked": "review_asset_consent",
     "rights_dependency_unavailable": "retry_readiness",
     "asset_archived": "restore_asset",
+    "asset_disabled": "enable_asset",
     "asset_state_disabled": "enable_asset_state",
 }
 
@@ -1995,7 +1910,7 @@ async def get_state_readiness(
     channel: str,
     region: str,
 ) -> AssetStateReadinessResponse:
-    state, asset = await _state_for_read(session, claims, state_id)
+    state, asset = await state_for_read(session, claims, state_id)
     occurrences = _current_occurrence_rows(
         await repository.list_occurrence_decisions(session, [state.id])
     )
@@ -2043,14 +1958,10 @@ async def get_asset_bible(
     current_occurrences = _current_occurrence_rows(occurrence_history)
     narratives = await read_narratives(
         workspace_id=project.workspace_id,
-        unit_version_ids=[
-            row.narrative_unit_version_id for row in current_occurrences
-        ],
+        unit_version_ids=[row.narrative_unit_version_id for row in current_occurrences],
     )
     current_version_ids = [
-        state.current_version_id
-        for state in states
-        if state.current_version_id is not None
+        state.current_version_id for state in states if state.current_version_id is not None
     ]
     version_rows = await repository.find_versions(session, current_version_ids)
     version_by_id = {version.id: version for version, _state, _asset in version_rows}
@@ -2101,7 +2012,7 @@ async def get_asset_bible(
             state_statuses.append(state_readiness.status)
             state_items.append(
                 AssetBibleState(
-                    state=_state_response(state),
+                    state=state_response(state),
                     current_version=(
                         _version_response(
                             version,
@@ -2111,13 +2022,12 @@ async def get_asset_bible(
                         else None
                     ),
                     occurrences=[
-                        _occurrence_response(row, narratives)
-                        for row in state_occurrences
+                        _occurrence_response(row, narratives) for row in state_occurrences
                     ],
                     readiness=state_readiness,
                 )
             )
-        items.append(AssetBibleAsset(asset=_asset_response(asset), states=state_items))
+        items.append(AssetBibleAsset(asset=asset_response(asset), states=state_items))
     return AssetBibleResponse(
         items=items,
         summary=AssetBibleSummary(
@@ -2184,9 +2094,7 @@ async def create_or_link_candidate(
     actor: ActorContext,
     command: AssetCandidateCommand,
 ) -> AssetCandidateResult:
-    existing_version = await repository.find_candidate_version(
-        session, command.candidate_id
-    )
+    existing_version = await repository.find_candidate_version(session, command.candidate_id)
     if existing_version is not None:
         return AssetCandidateResult(
             asset_id=existing_version.asset_id,
@@ -2194,19 +2102,15 @@ async def create_or_link_candidate(
         )
     if command.action == "link_existing":
         if command.target_asset_id is None:
-            raise ApiError(
-                ErrorCode.INVALID_REQUEST, "Target asset is required", status_code=422
-            )
-        asset = await repository.find_asset(
-            session, command.target_asset_id, for_update=True
-        )
+            raise ApiError(ErrorCode.INVALID_REQUEST, "Target asset is required", status_code=422)
+        asset = await repository.find_asset(session, command.target_asset_id, for_update=True)
         if (
             asset is None
             or asset.workspace_id != command.workspace_id
             or asset.project_id != command.project_id
             or asset.kind != command.kind
         ):
-            raise _not_found()
+            raise asset_not_found()
         base_state = await repository.find_state_by_key(session, asset.id, "base")
         if base_state is None:
             raise ApiError(
@@ -2219,7 +2123,7 @@ async def create_or_link_candidate(
             asset_version_id=base_state.current_version_id,
         )
 
-    normalized_name = _normalize_name(command.name)
+    normalized_name = normalize_name(command.name)
     asset = Asset(
         id=uuid7(),
         workspace_id=command.workspace_id,
@@ -2230,6 +2134,8 @@ async def create_or_link_candidate(
         aliases=[],
         tags=["script_candidate"],
         status="active",
+        availability="enabled",
+        name_revision=1,
         revision=1,
         created_by=actor.user_id,
     )
@@ -2269,9 +2175,18 @@ async def create_or_link_candidate(
         created_by=actor.user_id,
     )
     session.add(asset)
-    await session.flush([asset])
+    session.add(
+        AssetNameRevision(
+            asset_id=asset.id,
+            revision_no=1,
+            workspace_id=asset.workspace_id,
+            name_snapshot=asset.name,
+            normalized_name=asset.normalized_name,
+            created_by=actor.user_id,
+        )
+    )
     session.add(state)
-    await session.flush([state])
+    await session.flush([asset, state])
     session.add(version)
     await session.flush([version])
     state.current_version_id = version.id

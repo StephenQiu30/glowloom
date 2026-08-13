@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.assets.models import (
     Asset,
     AssetMediaReference,
+    AssetNameRevision,
     AssetOccurrenceDecision,
     AssetState,
     AssetVersion,
@@ -135,9 +136,7 @@ async def list_assets(
     if query:
         pattern = f"%{query.strip()}%"
         filters.append(or_(Asset.name.ilike(pattern), Asset.normalized_name.ilike(pattern)))
-    total = await session.scalar(
-        select(func.count()).select_from(Asset).where(*filters)
-    )
+    total = await session.scalar(select(func.count()).select_from(Asset).where(*filters))
     rows = await session.scalars(
         select(Asset)
         .where(*filters)
@@ -201,8 +200,7 @@ async def count_asset_references_by_project(
         .group_by(Asset.project_id)
     )
     return [
-        (project_id, asset_count, version_count)
-        for project_id, asset_count, version_count in rows
+        (project_id, asset_count, version_count) for project_id, asset_count, version_count in rows
     ]
 
 
@@ -288,6 +286,35 @@ async def list_versions(
     return list(rows), total or 0
 
 
+async def list_change_versions(
+    session: AsyncSession,
+    *,
+    asset_id: UUID,
+    state_id: UUID | None = None,
+) -> list[AssetVersion]:
+    filters = [AssetVersion.asset_id == asset_id]
+    if state_id is not None:
+        filters.append(AssetVersion.asset_state_id == state_id)
+    return list(
+        await session.scalars(
+            select(AssetVersion).where(*filters).order_by(AssetVersion.version_no, AssetVersion.id)
+        )
+    )
+
+
+async def list_name_revisions(
+    session: AsyncSession,
+    asset_id: UUID,
+) -> list[AssetNameRevision]:
+    return list(
+        await session.scalars(
+            select(AssetNameRevision)
+            .where(AssetNameRevision.asset_id == asset_id)
+            .order_by(AssetNameRevision.revision_no)
+        )
+    )
+
+
 async def latest_version_number(session: AsyncSession, asset_id: UUID) -> int:
     return (
         await session.scalar(
@@ -321,9 +348,7 @@ async def list_media_references(
 async def count_versions(session: AsyncSession, asset_id: UUID) -> int:
     return (
         await session.scalar(
-            select(func.count())
-            .select_from(AssetVersion)
-            .where(AssetVersion.asset_id == asset_id)
+            select(func.count()).select_from(AssetVersion).where(AssetVersion.asset_id == asset_id)
         )
         or 0
     )

@@ -341,3 +341,36 @@ async def list_asset_version_usages(
         )
         for version_id in version_ids
     ], total or 0
+
+
+async def list_asset_usages(
+    session: AsyncSession,
+    workspace_id: UUID,
+    asset_version_ids: list[UUID],
+    *,
+    for_update: bool,
+) -> list[tuple[ShotSpecVersion, Shot, list[str]]]:
+    if not asset_version_ids:
+        return []
+    query = (
+        select(ShotSpecVersion, Shot, AssetReference.slot_key)
+        .join(Shot, Shot.id == ShotSpecVersion.shot_id)
+        .join(
+            AssetReference,
+            AssetReference.shot_spec_version_id == ShotSpecVersion.id,
+        )
+        .where(
+            Shot.workspace_id == workspace_id,
+            AssetReference.asset_version_id.in_(asset_version_ids),
+        )
+        .order_by(Shot.episode_id, Shot.id, ShotSpecVersion.version_no, AssetReference.slot_key)
+    )
+    if for_update:
+        query = query.with_for_update(of=(Shot, ShotSpecVersion, AssetReference))
+    rows = await session.execute(query)
+    grouped: dict[UUID, tuple[ShotSpecVersion, Shot, list[str]]] = {}
+    for version, shot, slot_key in rows:
+        if version.id not in grouped:
+            grouped[version.id] = (version, shot, [])
+        grouped[version.id][2].append(slot_key)
+    return list(grouped.values())

@@ -13,6 +13,7 @@ AssetKind = Literal[
     "voice",
 ]
 AssetStatus = Literal["active", "archived"]
+AssetAvailability = Literal["enabled", "disabled"]
 ReadinessStatus = Literal["draft", "ready", "blocked"]
 AssetStateStatus = Literal["active", "disabled"]
 OccurrenceDecision = Literal["link", "unlink"]
@@ -65,21 +66,14 @@ class StyleSpec(CommandModel):
 
 class VoiceSpec(CommandModel):
     kind: Literal["voice"]
-    source_kind: Literal[
-        "synthetic_recording", "human_recording", "voice_clone"
-    ] | None = None
+    source_kind: Literal["synthetic_recording", "human_recording", "voice_clone"] | None = None
     language: str = Field(default="", max_length=35)
     performance_traits: list[str] = Field(default_factory=list, max_length=30)
     allowed_usage: list[str] = Field(default_factory=list, max_length=30)
 
 
 AssetSpec = Annotated[
-    CharacterSpec
-    | LocationSpec
-    | PropSpec
-    | CostumeSpec
-    | StyleSpec
-    | VoiceSpec,
+    CharacterSpec | LocationSpec | PropSpec | CostumeSpec | StyleSpec | VoiceSpec,
     Field(discriminator="kind"),
 ]
 
@@ -110,13 +104,16 @@ class AssetCreateRequest(CommandModel):
 
 class AssetUpdateRequest(CommandModel):
     expected_revision: int = Field(ge=1)
-    name: str | None = Field(default=None, min_length=1, max_length=200)
     aliases: list[str] | None = Field(default=None, max_length=30)
     tags: list[str] | None = Field(default=None, max_length=30)
 
 
 class AssetStatusRequest(CommandModel):
     expected_revision: int = Field(ge=1)
+
+
+class AssetEnableRequest(AssetStatusRequest):
+    idempotency_key: str = Field(min_length=1, max_length=200)
 
 
 class AssetResponse(BaseModel):
@@ -128,6 +125,8 @@ class AssetResponse(BaseModel):
     aliases: list[str]
     tags: list[str]
     status: AssetStatus
+    availability: AssetAvailability
+    name_revision: int
     revision: int
     created_at: datetime
     updated_at: datetime
@@ -167,6 +166,17 @@ class AssetStateResponse(BaseModel):
 class AssetStateCreateResponse(BaseModel):
     asset: AssetResponse
     state: AssetStateResponse
+
+
+class AssetStateUpdateRequest(CommandModel):
+    expected_revision: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=1, max_length=200)
+    label: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=4000)
+
+
+class AssetStateEnableRequest(AssetStatusRequest):
+    idempotency_key: str = Field(min_length=1, max_length=200)
 
 
 class PaginatedAssetStates(BaseModel):
@@ -242,11 +252,107 @@ class PaginatedAssetVersions(BaseModel):
     offset: int
 
 
-class AssetStateCurrentRequest(CommandModel):
+class AssetStateCurrentPreflightRequest(CommandModel):
     version_id: UUID
     expected_current_version_id: UUID | None
     expected_revision: int = Field(ge=1)
+
+
+class AssetStateCurrentRequest(AssetStateCurrentPreflightRequest):
+    impact_hash: str = Field(min_length=64, max_length=64)
     idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class AssetRenamePreflightRequest(CommandModel):
+    new_name: str = Field(min_length=1, max_length=200)
+    expected_revision: int = Field(ge=1)
+
+
+class AssetRenameRequest(AssetRenamePreflightRequest):
+    impact_hash: str = Field(min_length=64, max_length=64)
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class AssetDisablePreflightRequest(CommandModel):
+    expected_revision: int = Field(ge=1)
+
+
+class AssetDisableRequest(AssetDisablePreflightRequest):
+    impact_hash: str = Field(min_length=64, max_length=64)
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class AssetImpactSummary(BaseModel):
+    episode_count: int = Field(ge=0)
+    shot_count: int = Field(ge=0)
+    spec_version_count: int = Field(ge=0)
+    prompt_snapshot_count: int = Field(ge=0)
+    active_task_count: int = Field(ge=0)
+
+
+class AssetEpisodeImpact(BaseModel):
+    episode_id: UUID
+    shot_count: int = Field(ge=0)
+    prompt_snapshot_count: int = Field(ge=0)
+    active_task_count: int = Field(ge=0)
+
+
+class AssetShotImpact(BaseModel):
+    shot_id: UUID
+    shot_title: str
+    episode_id: UUID
+    spec_version_ids: list[UUID]
+    current_spec_version_id: UUID | None
+    slot_keys: list[str]
+
+
+class AssetPromptImpact(BaseModel):
+    generation_request_id: UUID
+    episode_id: UUID
+    shot_id: UUID
+    shot_spec_version_id: UUID
+    input_hash: str
+
+
+class AssetTaskImpact(BaseModel):
+    task_id: UUID
+    generation_request_id: UUID
+    status: Literal["queued", "running", "waiting_provider", "unknown"]
+    revision: int = Field(ge=1)
+
+
+class AssetImpactResponse(BaseModel):
+    operation: Literal["rename", "disable_asset", "disable_state", "set_current"]
+    asset_id: UUID
+    state_id: UUID | None
+    old_version_id: UUID | None
+    new_version_id: UUID | None
+    summary: AssetImpactSummary
+    episodes: list[AssetEpisodeImpact]
+    shots: list[AssetShotImpact]
+    prompt_snapshots: list[AssetPromptImpact]
+    active_tasks: list[AssetTaskImpact]
+    impact_hash: str
+
+
+class AssetRenameResponse(BaseModel):
+    asset: AssetResponse
+    impact: AssetImpactResponse
+
+
+class AssetAvailabilityResponse(BaseModel):
+    asset: AssetResponse
+    impact: AssetImpactResponse
+
+
+class AssetStateAvailabilityResponse(BaseModel):
+    state: AssetStateResponse
+    impact: AssetImpactResponse
+
+
+class AssetStateCurrentResponse(BaseModel):
+    state: AssetStateResponse
+    impact: AssetImpactResponse
 
 
 class AssetReadinessBlocker(BaseModel):

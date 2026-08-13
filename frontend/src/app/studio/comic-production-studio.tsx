@@ -40,26 +40,38 @@ import {
   appApiErrorMessage,
   useAppendAssetVersionMutation,
   useAssetBibleQuery,
+  useAssetDisablePreflightMutation,
   useAssetDeletePreflightMutation,
+  useAssetRenamePreflightMutation,
+  useAssetStateDisablePreflightMutation,
   useAssetReadinessQuery,
   useAssetsQuery,
   useAssetVersionsQuery,
   useCreateAssetMutation,
   useCreateAssetStateMutation,
   useDeleteAssetMutation,
+  useDisableAssetMutation,
+  useDisableAssetStateMutation,
+  useEnableAssetMutation,
+  useEnableAssetStateMutation,
   useMeQuery,
   useMediaVersionsQuery,
   useProjectsQuery,
   useSetAssetArchivedMutation,
+  useCurrentAssetVersionPreflightMutation,
+  useRenameAssetMutation,
   useSetCurrentAssetVersionMutation,
   useUpdateAssetMutation,
+  useUpdateAssetStateMutation,
 } from "@/lib/server-state";
 
+import { AssetImpactDialog, RenameAssetDialog } from "./asset-impact";
 import {
   CreateAssetDialog,
   CreateStateDialog,
   DeleteAssetDialog,
   EditAssetDialog,
+  EditStateDialog,
   VersionDialog,
 } from "./asset-dialogs";
 import {
@@ -142,6 +154,20 @@ export function ComicProductionStudio() {
   const [appendVersion, appendState] = useAppendAssetVersionMutation();
   const [setAssetArchived, archiveState] = useSetAssetArchivedMutation();
   const [updateAsset, updateState] = useUpdateAssetMutation();
+  const [loadRenameImpact, renameImpactState] = useAssetRenamePreflightMutation();
+  const [renameAsset, renameState] = useRenameAssetMutation();
+  const [loadDisableImpact, disableImpactState] = useAssetDisablePreflightMutation();
+  const [disableAsset, disableAssetStatus] = useDisableAssetMutation();
+  const [enableAsset, enableState] = useEnableAssetMutation();
+  const [updateAssetState, updateAssetStateStatus] = useUpdateAssetStateMutation();
+  const [loadStateImpact, stateImpactStatus] =
+    useAssetStateDisablePreflightMutation();
+  const [disableAssetState, disableAssetStateStatus] =
+    useDisableAssetStateMutation();
+  const [enableAssetState, enableAssetStateStatus] =
+    useEnableAssetStateMutation();
+  const [loadCurrentImpact, currentImpactState] =
+    useCurrentAssetVersionPreflightMutation();
   const [setCurrentAssetVersion, currentVersionState] =
     useSetCurrentAssetVersionMutation();
   const [loadDeletePreflight, deletePreflightState] =
@@ -151,7 +177,16 @@ export function ComicProductionStudio() {
   const [editOpen, setEditOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
+  const [stateEditOpen, setStateEditOpen] = useState(false);
+  const [stateDisableOpen, setStateDisableOpen] = useState(false);
+  const [stateImpact, setStateImpact] = useState<API.AssetImpactResponse>();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [disableOpen, setDisableOpen] = useState(false);
+  const [disableImpact, setDisableImpact] = useState<API.AssetImpactResponse>();
+  const [currentOpen, setCurrentOpen] = useState(false);
+  const [currentImpact, setCurrentImpact] = useState<API.AssetImpactResponse>();
+  const [pendingVersion, setPendingVersion] = useState<API.AssetVersionResponse>();
   const [deletePreflight, setDeletePreflight] =
     useState<API.AssetDeletePreflightResponse>();
   const [notice, setNotice] = useState<string | null>(null);
@@ -159,7 +194,10 @@ export function ComicProductionStudio() {
   const mediaVersions = media.data?.items ?? [];
   const mediaById = new Map(mediaVersions.map((item) => [item.id, item]));
   const characterAssets = allAssets.filter(
-    (asset) => asset.kind === "character" && asset.status === "active",
+    (asset) =>
+      asset.kind === "character" &&
+      asset.status === "active" &&
+      asset.availability === "enabled",
   );
 
   async function submitCreate(request: API.AssetCreateRequest): Promise<boolean> {
@@ -200,6 +238,86 @@ export function ComicProductionStudio() {
     } catch (error: unknown) {
       setActionError(appApiErrorMessage(error));
       return false;
+    }
+  }
+
+  async function submitStateEdit(
+    request: API.AssetStateUpdateRequest,
+  ): Promise<boolean> {
+    if (!selectedAsset || !selectedState || !effectiveProject) return false;
+    setActionError(null);
+    try {
+      await updateAssetState({
+        projectId: effectiveProject.id,
+        assetId: selectedAsset.id,
+        stateId: selectedState.id,
+        body: request,
+      }).unwrap();
+      setStateEditOpen(false);
+      setNotice("剧情状态信息已更新。");
+      return true;
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+      return false;
+    }
+  }
+
+  async function toggleStateAvailability() {
+    if (!selectedAsset || !selectedState || !effectiveProject) return;
+    setActionError(null);
+    setNotice(null);
+    if (selectedState.status === "disabled") {
+      try {
+        await enableAssetState({
+          projectId: effectiveProject.id,
+          assetId: selectedAsset.id,
+          stateId: selectedState.id,
+          body: {
+            expected_revision: selectedState.revision,
+            idempotency_key: `enable-asset-state:${crypto.randomUUID()}`,
+          },
+        }).unwrap();
+        setNotice("剧情状态已启用。");
+      } catch (error: unknown) {
+        setActionError(appApiErrorMessage(error));
+      }
+      return;
+    }
+    setStateImpact(undefined);
+    setStateDisableOpen(true);
+    try {
+      setStateImpact(
+        await loadStateImpact({
+          stateId: selectedState.id,
+          body: { expected_revision: selectedState.revision },
+        }).unwrap(),
+      );
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+    }
+  }
+
+  async function confirmStateDisable() {
+    if (!selectedAsset || !selectedState || !effectiveProject || !stateImpact) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await disableAssetState({
+        projectId: effectiveProject.id,
+        assetId: selectedAsset.id,
+        stateId: selectedState.id,
+        body: {
+          expected_revision: selectedState.revision,
+          impact_hash: stateImpact.impact_hash,
+          idempotency_key: `disable-asset-state:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      setStateDisableOpen(false);
+      setStateImpact(undefined);
+      setNotice("剧情状态已停用；历史引用保持可追溯。");
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
     }
   }
 
@@ -265,23 +383,151 @@ export function ComicProductionStudio() {
     }
   }
 
+  async function preflightRename(
+    newName: string,
+  ): Promise<API.AssetImpactResponse | undefined> {
+    if (!selectedAsset) return undefined;
+    setActionError(null);
+    try {
+      return await loadRenameImpact({
+        assetId: selectedAsset.id,
+        body: {
+          new_name: newName,
+          expected_revision: selectedAsset.revision,
+        },
+      }).unwrap();
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+      return undefined;
+    }
+  }
+
+  async function applyRename(
+    newName: string,
+    impact: API.AssetImpactResponse,
+  ): Promise<boolean> {
+    if (!selectedAsset || !effectiveProject) return false;
+    setActionError(null);
+    try {
+      const result = await renameAsset({
+        projectId: effectiveProject.id,
+        assetId: selectedAsset.id,
+        body: {
+          new_name: newName,
+          expected_revision: selectedAsset.revision,
+          impact_hash: impact.impact_hash,
+          idempotency_key: `rename-asset:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      setNotice(`资产已重命名为“${result.asset.name}”，旧名称已保留为别名。`);
+      return true;
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+      return false;
+    }
+  }
+
+  async function toggleAvailability() {
+    if (!selectedAsset || !effectiveProject) return;
+    setActionError(null);
+    setNotice(null);
+    if (selectedAsset.availability === "disabled") {
+      try {
+        await enableAsset({
+          projectId: effectiveProject.id,
+          assetId: selectedAsset.id,
+          body: {
+            expected_revision: selectedAsset.revision,
+            idempotency_key: `enable-asset:${crypto.randomUUID()}`,
+          },
+        }).unwrap();
+        setNotice("资产已启用，可重新用于新生产任务。");
+      } catch (error: unknown) {
+        setActionError(appApiErrorMessage(error));
+      }
+      return;
+    }
+    setDisableImpact(undefined);
+    setDisableOpen(true);
+    try {
+      setDisableImpact(
+        await loadDisableImpact({
+          assetId: selectedAsset.id,
+          body: { expected_revision: selectedAsset.revision },
+        }).unwrap(),
+      );
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+    }
+  }
+
+  async function confirmDisable() {
+    if (!selectedAsset || !effectiveProject || !disableImpact) return;
+    setActionError(null);
+    try {
+      await disableAsset({
+        projectId: effectiveProject.id,
+        assetId: selectedAsset.id,
+        body: {
+          expected_revision: selectedAsset.revision,
+          impact_hash: disableImpact.impact_hash,
+          idempotency_key: `disable-asset:${crypto.randomUUID()}`,
+        },
+      }).unwrap();
+      setDisableOpen(false);
+      setDisableImpact(undefined);
+      setNotice("资产已停用；历史版本和引用保持可追溯。");
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+    }
+  }
+
   async function selectCurrentVersion(version: API.AssetVersionResponse) {
     if (!selectedAsset || !selectedState || !effectiveProject) return;
     setActionError(null);
     setNotice(null);
+    setPendingVersion(version);
+    setCurrentImpact(undefined);
+    setCurrentOpen(true);
     try {
-      await setCurrentAssetVersion({
-        projectId: effectiveProject.id,
+      setCurrentImpact(await loadCurrentImpact({
         stateId: selectedState.id,
         body: {
           version_id: version.id,
           expected_current_version_id: selectedState.current_version_id,
           expected_revision: selectedState.revision,
+        },
+      }).unwrap());
+    } catch (error: unknown) {
+      setActionError(appApiErrorMessage(error));
+    }
+  }
+
+  async function confirmCurrentVersion() {
+    if (
+      !selectedAsset ||
+      !selectedState ||
+      !effectiveProject ||
+      !pendingVersion ||
+      !currentImpact
+    ) return;
+    setActionError(null);
+    try {
+      await setCurrentAssetVersion({
+        projectId: effectiveProject.id,
+        stateId: selectedState.id,
+        body: {
+          version_id: pendingVersion.id,
+          expected_current_version_id: selectedState.current_version_id,
+          expected_revision: selectedState.revision,
+          impact_hash: currentImpact.impact_hash,
           idempotency_key: `select-asset-version:${crypto.randomUUID()}`,
         },
       }).unwrap();
+      setCurrentOpen(false);
+      setCurrentImpact(undefined);
       await assetBible.refetch().unwrap();
-      setNotice(`资产已切换到版本 v${version.version_no}；既有镜头引用保持不变。`);
+      setNotice(`资产已切换到版本 v${pendingVersion.version_no}；既有镜头引用保持不变。`);
     } catch (error: unknown) {
       setActionError(appApiErrorMessage(error));
     }
@@ -529,10 +775,18 @@ export function ComicProductionStudio() {
               {selectedAsset && selectedState ? (
                 <div className="grid gap-5">
                   <AssetStateBar
+                    assetAvailability={selectedAsset.availability}
                     assetStatus={selectedAsset.status}
+                    isChangingState={
+                      disableAssetStateStatus.isLoading ||
+                      enableAssetStateStatus.isLoading
+                    }
                     onCreate={() => setStateOpen(true)}
+                    onEdit={() => setStateEditOpen(true)}
                     onSelect={setSelectedStateId}
+                    onToggleState={() => void toggleStateAvailability()}
                     selectedId={selectedState.id}
+                    selectedState={selectedState}
                     states={selectedStates}
                   />
                   <AssetDetail
@@ -540,12 +794,17 @@ export function ComicProductionStudio() {
                     currentState={selectedState}
                     isArchiving={archiveState.isLoading || assets.isFetching}
                     isChangingCurrent={currentVersionState.isLoading}
+                    isChangingAvailability={
+                      disableAssetStatus.isLoading || enableState.isLoading
+                    }
                     mediaById={mediaById}
                     onAddVersion={() => setVersionOpen(true)}
                     onDelete={() => void prepareDelete()}
                     onEdit={() => setEditOpen(true)}
+                    onRename={() => setRenameOpen(true)}
                     onSetCurrent={(version) => void selectCurrentVersion(version)}
                     onToggleArchive={toggleArchive}
+                    onToggleAvailability={() => void toggleAvailability()}
                     onUpgradeCompleted={(shotCount) => {
                       setActionError(null);
                       setNotice(`已为 ${shotCount} 个镜头创建新的规格版本。`);
@@ -606,6 +865,15 @@ export function ComicProductionStudio() {
             onSubmit={submitEdit}
             open={editOpen}
           />
+          <RenameAssetDialog
+            asset={selectedAsset}
+            isApplying={renameState.isLoading}
+            isLoading={renameImpactState.isLoading}
+            onApply={applyRename}
+            onOpenChange={setRenameOpen}
+            onPreflight={preflightRename}
+            open={renameOpen}
+          />
           <DeleteAssetDialog
             asset={selectedAsset}
             isDeleting={deleteState.isLoading}
@@ -627,6 +895,13 @@ export function ComicProductionStudio() {
                 onSubmit={submitState}
                 open={stateOpen}
               />
+              <EditStateDialog
+                isSubmitting={updateAssetStateStatus.isLoading}
+                onOpenChange={setStateEditOpen}
+                onSubmit={submitStateEdit}
+                open={stateEditOpen}
+                state={selectedState}
+              />
               <VersionDialog
                 asset={selectedAsset}
                 state={selectedState}
@@ -641,6 +916,51 @@ export function ComicProductionStudio() {
           ) : null}
         </>
       ) : null}
+      <AssetImpactDialog
+        confirmLabel="确认停用"
+        description="停用会阻止新的引用和生产任务，但不会删除历史版本、分镜或生成请求。"
+        impact={disableImpact}
+        isApplying={disableAssetStatus.isLoading}
+        isLoading={disableImpactState.isLoading}
+        onConfirm={confirmDisable}
+        onOpenChange={(open) => {
+          setDisableOpen(open);
+          if (!open) setDisableImpact(undefined);
+        }}
+        open={disableOpen}
+        title="确认停用资产"
+      />
+      <AssetImpactDialog
+        confirmLabel="确认切换"
+        description="只更新该剧情状态的当前版本；既有分镜继续固定到原资产版本。"
+        impact={currentImpact}
+        isApplying={currentVersionState.isLoading}
+        isLoading={currentImpactState.isLoading}
+        onConfirm={confirmCurrentVersion}
+        onOpenChange={(open) => {
+          setCurrentOpen(open);
+          if (!open) {
+            setCurrentImpact(undefined);
+            setPendingVersion(undefined);
+          }
+        }}
+        open={currentOpen}
+        title="确认切换当前版本"
+      />
+      <AssetImpactDialog
+        confirmLabel="确认停用"
+        description="停用该剧情状态会阻止它参与新的资产绑定和生产任务，既有版本与引用不删除。"
+        impact={stateImpact}
+        isApplying={disableAssetStateStatus.isLoading}
+        isLoading={stateImpactStatus.isLoading}
+        onConfirm={confirmStateDisable}
+        onOpenChange={(open) => {
+          setStateDisableOpen(open);
+          if (!open) setStateImpact(undefined);
+        }}
+        open={stateDisableOpen}
+        title="确认停用剧情状态"
+      />
     </StudioShell>
   );
 }

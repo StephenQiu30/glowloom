@@ -154,6 +154,10 @@ declare namespace API {
     data: AdaptationRunResponse;
   };
 
+  type ApiResponseAssetAvailabilityResponse_ = {
+    data: AssetAvailabilityResponse;
+  };
+
   type ApiResponseAssetBibleResponse_ = {
     data: AssetBibleResponse;
   };
@@ -166,6 +170,10 @@ declare namespace API {
     data: AssetDeleteResponse;
   };
 
+  type ApiResponseAssetImpactResponse_ = {
+    data: AssetImpactResponse;
+  };
+
   type ApiResponseAssetOccurrenceDecisionResponse_ = {
     data: AssetOccurrenceDecisionResponse;
   };
@@ -174,12 +182,24 @@ declare namespace API {
     data: AssetReadinessResponse;
   };
 
+  type ApiResponseAssetRenameResponse_ = {
+    data: AssetRenameResponse;
+  };
+
   type ApiResponseAssetResponse_ = {
     data: AssetResponse;
   };
 
+  type ApiResponseAssetStateAvailabilityResponse_ = {
+    data: AssetStateAvailabilityResponse;
+  };
+
   type ApiResponseAssetStateCreateResponse_ = {
     data: AssetStateCreateResponse;
+  };
+
+  type ApiResponseAssetStateCurrentResponse_ = {
+    data: AssetStateCurrentResponse;
   };
 
   type ApiResponseAssetStateReadinessResponse_ = {
@@ -587,6 +607,11 @@ declare namespace API {
     workspace_id: string;
   };
 
+  type AssetAvailabilityResponse = {
+    asset: AssetResponse;
+    impact: AssetImpactResponse;
+  };
+
   type AssetBibleAsset = {
     asset: AssetResponse;
     /** States */
@@ -685,6 +710,79 @@ declare namespace API {
     deleted: true | null;
   };
 
+  type assetDisablePreflightApiV1AssetsAssetIdDisablePreflightPostParams = {
+    asset_id: string;
+  };
+
+  type AssetDisablePreflightRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type AssetDisableRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Impact Hash */
+    impact_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type AssetEnableRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type AssetEpisodeImpact = {
+    /** Episode Id */
+    episode_id: string;
+    /** Shot Count */
+    shot_count: number;
+    /** Prompt Snapshot Count */
+    prompt_snapshot_count: number;
+    /** Active Task Count */
+    active_task_count: number;
+  };
+
+  type AssetImpactResponse = {
+    /** Operation */
+    operation: "rename" | "disable_asset" | "disable_state" | "set_current";
+    /** Asset Id */
+    asset_id: string;
+    /** State Id */
+    state_id: string | null;
+    /** Old Version Id */
+    old_version_id: string | null;
+    /** New Version Id */
+    new_version_id: string | null;
+    summary: AssetImpactSummary;
+    /** Episodes */
+    episodes: AssetEpisodeImpact[];
+    /** Shots */
+    shots: AssetShotImpact[];
+    /** Prompt Snapshots */
+    prompt_snapshots: AssetPromptImpact[];
+    /** Active Tasks */
+    active_tasks: AssetTaskImpact[];
+    /** Impact Hash */
+    impact_hash: string;
+  };
+
+  type AssetImpactSummary = {
+    /** Episode Count */
+    episode_count: number;
+    /** Shot Count */
+    shot_count: number;
+    /** Spec Version Count */
+    spec_version_count: number;
+    /** Prompt Snapshot Count */
+    prompt_snapshot_count: number;
+    /** Active Task Count */
+    active_task_count: number;
+  };
+
   type AssetMediaReferenceRequest = {
     /** Media Version Id */
     media_version_id: string;
@@ -759,6 +857,19 @@ declare namespace API {
     created_by: string;
     /** Created At */
     created_at: string;
+  };
+
+  type AssetPromptImpact = {
+    /** Generation Request Id */
+    generation_request_id: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Shot Id */
+    shot_id: string;
+    /** Shot Spec Version Id */
+    shot_spec_version_id: string;
+    /** Input Hash */
+    input_hash: string;
   };
 
   type AssetReadinessBlocker = {
@@ -843,6 +954,33 @@ declare namespace API {
     subject_key: string | null;
   };
 
+  type assetRenamePreflightApiV1AssetsAssetIdRenamePreflightPostParams = {
+    asset_id: string;
+  };
+
+  type AssetRenamePreflightRequest = {
+    /** New Name */
+    new_name: string;
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
+  type AssetRenameRequest = {
+    /** New Name */
+    new_name: string;
+    /** Expected Revision */
+    expected_revision: number;
+    /** Impact Hash */
+    impact_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type AssetRenameResponse = {
+    asset: AssetResponse;
+    impact: AssetImpactResponse;
+  };
+
   type AssetResponse = {
     /** Id */
     id: string;
@@ -866,6 +1004,10 @@ declare namespace API {
     tags: string[];
     /** Status */
     status: "active" | "archived";
+    /** Availability */
+    availability: "enabled" | "disabled";
+    /** Name Revision */
+    name_revision: number;
     /** Revision */
     revision: number;
     /** Created At */
@@ -874,6 +1016,21 @@ declare namespace API {
     updated_at: string;
     /** Warnings */
     warnings: "duplicate_name"[] | null;
+  };
+
+  type AssetShotImpact = {
+    /** Shot Id */
+    shot_id: string;
+    /** Shot Title */
+    shot_title: string;
+    /** Episode Id */
+    episode_id: string;
+    /** Spec Version Ids */
+    spec_version_ids: string[];
+    /** Current Spec Version Id */
+    current_spec_version_id: string | null;
+    /** Slot Keys */
+    slot_keys: string[];
   };
 
   type AssetShotUsageResponse = {
@@ -891,6 +1048,11 @@ declare namespace API {
     slot_keys: string[];
     /** Is Current */
     is_current: boolean;
+  };
+
+  type AssetStateAvailabilityResponse = {
+    state: AssetStateResponse;
+    impact: AssetImpactResponse;
   };
 
   type AssetStateCreateRequest = {
@@ -911,11 +1073,39 @@ declare namespace API {
     state: AssetStateResponse;
   };
 
+  type AssetStateCurrentPreflightRequest = {
+    /** Version Id */
+    version_id: string;
+    /** Expected Current Version Id */
+    expected_current_version_id: string | null;
+    /** Expected Revision */
+    expected_revision: number;
+  };
+
   type AssetStateCurrentRequest = {
     /** Version Id */
     version_id: string;
     /** Expected Current Version Id */
     expected_current_version_id: string | null;
+    /** Expected Revision */
+    expected_revision: number;
+    /** Impact Hash */
+    impact_hash: string;
+    /** Idempotency Key */
+    idempotency_key: string;
+  };
+
+  type AssetStateCurrentResponse = {
+    state: AssetStateResponse;
+    impact: AssetImpactResponse;
+  };
+
+  type assetStateDisablePreflightApiV1AssetStatesStateIdDisablePreflightPostParams =
+    {
+      state_id: string;
+    };
+
+  type AssetStateEnableRequest = {
     /** Expected Revision */
     expected_revision: number;
     /** Idempotency Key */
@@ -978,6 +1168,17 @@ declare namespace API {
     updated_at: string;
   };
 
+  type AssetStateUpdateRequest = {
+    /** Expected Revision */
+    expected_revision: number;
+    /** Idempotency Key */
+    idempotency_key: string;
+    /** Label */
+    label: string | null | null;
+    /** Description */
+    description: string | null | null;
+  };
+
   type AssetStatusRequest = {
     /** Expected Revision */
     expected_revision: number;
@@ -1002,11 +1203,20 @@ declare namespace API {
     required_kinds: string[];
   };
 
+  type AssetTaskImpact = {
+    /** Task Id */
+    task_id: string;
+    /** Generation Request Id */
+    generation_request_id: string;
+    /** Status */
+    status: "queued" | "running" | "waiting_provider" | "unknown";
+    /** Revision */
+    revision: number;
+  };
+
   type AssetUpdateRequest = {
     /** Expected Revision */
     expected_revision: number;
-    /** Name */
-    name: string | null | null;
     /** Aliases */
     aliases: string[] | null | null;
     /** Tags */
@@ -1537,6 +1747,11 @@ declare namespace API {
     episode_id: string;
   };
 
+  type currentAssetVersionPreflightApiV1AssetStatesStateIdCurrentVersionPreflightPostParams =
+    {
+      state_id: string;
+    };
+
   type CurrentMediaVersionRequest = {
     /** Version Id */
     version_id: string;
@@ -1697,6 +1912,14 @@ declare namespace API {
     other_version_id: string;
   };
 
+  type disableAssetApiV1AssetsAssetIdDisablePostParams = {
+    asset_id: string;
+  };
+
+  type disableAssetStateApiV1AssetStatesStateIdDisablePostParams = {
+    state_id: string;
+  };
+
   type DocumentRevisionResponse = {
     /** Id */
     id: string;
@@ -1745,6 +1968,14 @@ declare namespace API {
     issue_ids: string[] | null;
     /** Timeline Source Ids */
     timeline_source_ids: string[] | null;
+  };
+
+  type enableAssetApiV1AssetsAssetIdEnablePostParams = {
+    asset_id: string;
+  };
+
+  type enableAssetStateApiV1AssetStatesStateIdEnablePostParams = {
+    state_id: string;
   };
 
   type EpisodeCreateRequest = {
@@ -3495,6 +3726,10 @@ declare namespace API {
     email: string;
   };
 
+  type renameAssetApiV1AssetsAssetIdRenamePostParams = {
+    asset_id: string;
+  };
+
   type renameEpisodeProposalApiV1EpisodePlansPlanIdRenamePostParams = {
     plan_id: string;
   };
@@ -4113,6 +4348,7 @@ declare namespace API {
       | "VOICE_REFERENCE_MISSING"
       | "ASSET_KIND_MISMATCH"
       | "ASSET_VERSION_UNAVAILABLE"
+      | "ASSET_DISABLED"
       | "ASSET_NOT_READY"
       | "MEDIA_REFERENCE_UNAVAILABLE"
       | "RIGHTS_BLOCKED"
@@ -4556,6 +4792,10 @@ declare namespace API {
 
   type updateAssetApiV1AssetsAssetIdPatchParams = {
     asset_id: string;
+  };
+
+  type updateAssetStateApiV1AssetStatesStateIdPatchParams = {
+    state_id: string;
   };
 
   type updateBudgetLimitApiV1ProjectsProjectIdBudgetLimitPostParams = {

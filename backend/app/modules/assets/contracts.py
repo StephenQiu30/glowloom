@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 from uuid import UUID
 
+AssetTaskStatus = Literal["queued", "running", "waiting_provider", "unknown"]
+
 
 @dataclass(frozen=True, slots=True)
 class AssetVersionReference:
@@ -12,6 +14,7 @@ class AssetVersionReference:
     asset_state_id: UUID
     kind: str
     asset_status: str
+    asset_availability: str
     asset_state_status: str
 
 
@@ -22,6 +25,7 @@ class AssetVersionReadinessReference:
     asset_state_id: UUID
     kind: str
     asset_status: str
+    asset_availability: str
     asset_state_status: str
     status: Literal["draft", "ready", "blocked", "unavailable"]
     blocker_codes: tuple[str, ...]
@@ -77,6 +81,56 @@ class AssetOccurrenceNarrativeReader(Protocol):
         workspace_id: UUID,
         unit_version_ids: list[UUID],
     ) -> dict[UUID, AssetOccurrenceNarrativeSnapshot]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class AssetShotUsageSnapshot:
+    shot_id: UUID
+    shot_title: str
+    episode_id: UUID
+    spec_version_id: UUID
+    spec_version_no: int
+    current_spec_version_id: UUID | None
+    shot_status: str
+    slot_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AssetPromptSnapshot:
+    generation_request_id: UUID
+    episode_id: UUID
+    shot_id: UUID
+    shot_spec_version_id: UUID
+    input_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class AssetTaskSnapshot:
+    task_id: UUID
+    generation_request_id: UUID
+    status: AssetTaskStatus
+    revision: int
+
+
+class AssetShotUsageReader(Protocol):
+    async def __call__(
+        self,
+        *,
+        workspace_id: UUID,
+        asset_version_ids: list[UUID],
+        for_update: bool,
+    ) -> list[AssetShotUsageSnapshot]: ...
+
+
+class AssetProductionImpactReader(Protocol):
+    async def __call__(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        asset_version_ids: list[UUID],
+        for_update: bool,
+    ) -> tuple[list[AssetPromptSnapshot], list[AssetTaskSnapshot]]: ...
 
 
 @dataclass(frozen=True, slots=True)

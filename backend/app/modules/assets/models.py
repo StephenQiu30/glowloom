@@ -34,20 +34,39 @@ class Asset(Base):
             name="fk_ast_asset_project_workspace",
         ),
         CheckConstraint(
-            "kind IN ('character', 'location', 'prop', 'costume', "
-            "'visual_style', 'voice')",
+            "kind IN ('character', 'location', 'prop', 'costume', 'visual_style', 'voice')",
             name="ck_ast_asset_kind",
         ),
+        CheckConstraint("status IN ('active', 'archived')", name="ck_ast_asset_status"),
         CheckConstraint(
-            "status IN ('active', 'archived')", name="ck_ast_asset_status"
+            "availability IN ('enabled', 'disabled')",
+            name="ck_ast_asset_availability",
         ),
         CheckConstraint("revision >= 1", name="ck_ast_asset_revision"),
+        CheckConstraint("name_revision >= 1", name="ck_ast_asset_name_revision"),
+        ForeignKeyConstraint(
+            ("id", "workspace_id", "name_revision"),
+            (
+                "ast_asset_name_revisions.asset_id",
+                "ast_asset_name_revisions.workspace_id",
+                "ast_asset_name_revisions.revision_no",
+            ),
+            name="fk_ast_asset_current_name",
+            deferrable=True,
+            initially="DEFERRED",
+            use_alter=True,
+        ),
         UniqueConstraint("id", "workspace_id", name="uq_ast_asset_id_workspace"),
         Index(
             "ix_ast_asset_project_kind_status",
             "project_id",
             "kind",
             "status",
+        ),
+        Index(
+            "ix_ast_asset_project_availability",
+            "project_id",
+            "availability",
         ),
         Index(
             "ix_ast_asset_project_kind_normalized_name",
@@ -66,22 +85,51 @@ class Asset(Base):
     aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     status: Mapped[str] = mapped_column(String(20), default="active")
+    availability: Mapped[str] = mapped_column(String(20), default="enabled")
+    name_revision: Mapped[int] = mapped_column(Integer, default=1)
     revision: Mapped[int] = mapped_column(Integer, default=1)
-    archived_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    command_receipts: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_by: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=True
     )
     created_by: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
     )
+
+
+class AssetNameRevision(Base):
+    __tablename__ = "ast_asset_name_revisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ("asset_id", "workspace_id"),
+            ("ast_assets.id", "ast_assets.workspace_id"),
+            name="fk_ast_name_revision_asset_workspace",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("revision_no >= 1", name="ck_ast_name_revision_number"),
+        UniqueConstraint(
+            "asset_id",
+            "workspace_id",
+            "revision_no",
+            name="uq_ast_name_revision_scope",
+        ),
+        Index("ix_ast_name_revision_asset_created", "asset_id", "created_at"),
+    )
+
+    asset_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    revision_no: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    name_snapshot: Mapped[str] = mapped_column(String(200))
+    normalized_name: Mapped[str] = mapped_column(String(200))
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
 class AssetState(Base):
@@ -144,9 +192,7 @@ class AssetState(Base):
     created_by: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
     )
@@ -181,9 +227,7 @@ class AssetVersion(Base):
             name="uq_ast_version_scope",
         ),
         UniqueConstraint("asset_id", "version_no", name="uq_ast_version_number"),
-        UniqueConstraint(
-            "source_type", "source_id", name="uq_ast_version_source"
-        ),
+        UniqueConstraint("source_type", "source_id", name="uq_ast_version_source"),
         Index("ix_ast_version_content_hash", "content_hash"),
         Index("ix_ast_version_state_number", "asset_state_id", "version_no"),
     )
@@ -202,9 +246,7 @@ class AssetVersion(Base):
     created_by: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
 class AssetOccurrenceDecision(Base):
@@ -284,9 +326,7 @@ class AssetOccurrenceDecision(Base):
     created_by: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("idn_user_accounts.id"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
 class AssetMediaReference(Base):
@@ -318,6 +358,4 @@ class AssetMediaReference(Base):
     media_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     purpose: Mapped[str] = mapped_column(String(40))
     position: Mapped[int] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)

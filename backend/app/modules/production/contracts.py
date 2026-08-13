@@ -39,6 +39,24 @@ GenerationProtocolErrorCode = Literal[
     "unsupported_message_schema",
     "invalid_message_payload",
 ]
+AssetImpactTaskStatus = Literal["queued", "running", "waiting_provider", "unknown"]
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationPromptSnapshot:
+    generation_request_id: UUID
+    episode_id: UUID
+    shot_id: UUID
+    shot_spec_version_id: UUID
+    input_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationTaskSnapshot:
+    task_id: UUID
+    generation_request_id: UUID
+    status: AssetImpactTaskStatus
+    revision: int
 
 
 class TaskScopeResponse(BaseModel):

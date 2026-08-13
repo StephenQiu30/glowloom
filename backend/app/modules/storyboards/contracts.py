@@ -54,6 +54,18 @@ class StoryboardReferenceSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class AssetShotUsageSnapshot:
+    shot_id: UUID
+    shot_title: str
+    episode_id: UUID
+    spec_version_id: UUID
+    spec_version_no: int
+    current_spec_version_id: UUID | None
+    shot_status: str
+    slot_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class EpisodeStoryboardSummary:
     status: Literal["not_started", "blocked", "ready", "unavailable"]
     total: int

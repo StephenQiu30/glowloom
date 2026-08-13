@@ -3,17 +3,27 @@ import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import {
   appendAssetVersionApiV1AssetStatesStateIdVersionsPost,
   archiveAssetApiV1AssetsAssetIdArchivePost,
+  assetDisablePreflightApiV1AssetsAssetIdDisablePreflightPost,
   assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGet,
+  assetRenamePreflightApiV1AssetsAssetIdRenamePreflightPost,
+  assetStateDisablePreflightApiV1AssetStatesStateIdDisablePreflightPost,
   createAssetStateApiV1AssetsAssetIdStatesPost,
   createAssetApiV1ProjectsProjectIdAssetsPost,
+  currentAssetVersionPreflightApiV1AssetStatesStateIdCurrentVersionPreflightPost,
   deleteAssetApiV1AssetsAssetIdDelete,
+  disableAssetApiV1AssetsAssetIdDisablePost,
+  disableAssetStateApiV1AssetStatesStateIdDisablePost,
+  enableAssetApiV1AssetsAssetIdEnablePost,
+  enableAssetStateApiV1AssetStatesStateIdEnablePost,
   getAssetBibleApiV1ProjectsProjectIdAssetBibleGet,
   getAssetReadinessApiV1AssetVersionsVersionIdReadinessGet,
   listAssetsApiV1ProjectsProjectIdAssetsGet,
   listAssetVersionsApiV1AssetStatesStateIdVersionsGet,
+  renameAssetApiV1AssetsAssetIdRenamePost,
   restoreAssetApiV1AssetsAssetIdRestorePost,
   setCurrentAssetVersionApiV1AssetStatesStateIdCurrentVersionPost,
   updateAssetApiV1AssetsAssetIdPatch,
+  updateAssetStateApiV1AssetStatesStateIdPatch,
 } from "@/api/assets";
 import {
   confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPost,
@@ -1855,8 +1865,159 @@ export const appApi = createApi({
         { type: "Asset", id: assetId },
       ],
     }),
-    setCurrentAssetVersion: builder.mutation<
+    assetRenamePreflight: builder.mutation<
+      API.AssetImpactResponse,
+      { assetId: string; body: API.AssetRenamePreflightRequest }
+    >({
+      queryFn: ({ assetId, body }) =>
+        runRequest(() =>
+          assetRenamePreflightApiV1AssetsAssetIdRenamePreflightPost(
+            { asset_id: assetId },
+            body,
+          ),
+        ),
+    }),
+    renameAsset: builder.mutation<
+      API.AssetRenameResponse,
+      { projectId: string; assetId: string; body: API.AssetRenameRequest }
+    >({
+      queryFn: ({ assetId, body }) =>
+        runRequest(() =>
+          renameAssetApiV1AssetsAssetIdRenamePost({ asset_id: assetId }, body),
+        ),
+      invalidatesTags: (_result, _error, { projectId, assetId }) => [
+        { type: "Assets", id: projectId },
+        { type: "AssetBible", id: projectId },
+        { type: "Asset", id: assetId },
+      ],
+    }),
+    assetDisablePreflight: builder.mutation<
+      API.AssetImpactResponse,
+      { assetId: string; body: API.AssetDisablePreflightRequest }
+    >({
+      queryFn: ({ assetId, body }) =>
+        runRequest(() =>
+          assetDisablePreflightApiV1AssetsAssetIdDisablePreflightPost(
+            { asset_id: assetId },
+            body,
+          ),
+        ),
+    }),
+    disableAsset: builder.mutation<
+      API.AssetAvailabilityResponse,
+      { projectId: string; assetId: string; body: API.AssetDisableRequest }
+    >({
+      queryFn: ({ assetId, body }) =>
+        runRequest(() =>
+          disableAssetApiV1AssetsAssetIdDisablePost({ asset_id: assetId }, body),
+        ),
+      invalidatesTags: (_result, _error, { projectId, assetId }) => [
+        { type: "Assets", id: projectId },
+        { type: "AssetBible", id: projectId },
+        { type: "Asset", id: assetId },
+      ],
+    }),
+    enableAsset: builder.mutation<
+      API.AssetResponse,
+      { projectId: string; assetId: string; body: API.AssetEnableRequest }
+    >({
+      queryFn: ({ assetId, body }) =>
+        runRequest(() =>
+          enableAssetApiV1AssetsAssetIdEnablePost({ asset_id: assetId }, body),
+        ),
+      invalidatesTags: (_result, _error, { projectId, assetId }) => [
+        { type: "Assets", id: projectId },
+        { type: "AssetBible", id: projectId },
+        { type: "Asset", id: assetId },
+      ],
+    }),
+    updateAssetState: builder.mutation<
       API.AssetStateResponse,
+      { projectId: string; assetId: string; stateId: string; body: API.AssetStateUpdateRequest }
+    >({
+      queryFn: ({ stateId, body }) =>
+        runRequest(() =>
+          updateAssetStateApiV1AssetStatesStateIdPatch({ state_id: stateId }, body),
+        ),
+      invalidatesTags: (_result, _error, { projectId, assetId, stateId }) => [
+        { type: "Assets", id: projectId },
+        { type: "AssetBible", id: projectId },
+        { type: "Asset", id: assetId },
+        { type: "AssetStates", id: stateId },
+      ],
+    }),
+    assetStateDisablePreflight: builder.mutation<
+      API.AssetImpactResponse,
+      { stateId: string; body: API.AssetDisablePreflightRequest }
+    >({
+      queryFn: ({ stateId, body }) =>
+        runRequest(() =>
+          assetStateDisablePreflightApiV1AssetStatesStateIdDisablePreflightPost(
+            { state_id: stateId },
+            body,
+          ),
+        ),
+    }),
+    disableAssetState: builder.mutation<
+      API.AssetStateAvailabilityResponse,
+      {
+        projectId: string;
+        assetId: string;
+        stateId: string;
+        body: API.AssetDisableRequest;
+      }
+    >({
+      queryFn: ({ stateId, body }) =>
+        runRequest(() =>
+          disableAssetStateApiV1AssetStatesStateIdDisablePost(
+            { state_id: stateId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId, assetId, stateId }) => [
+        { type: "Assets", id: projectId },
+        { type: "AssetBible", id: projectId },
+        { type: "Asset", id: assetId },
+        { type: "AssetStates", id: stateId },
+      ],
+    }),
+    enableAssetState: builder.mutation<
+      API.AssetStateResponse,
+      {
+        projectId: string;
+        assetId: string;
+        stateId: string;
+        body: API.AssetStateEnableRequest;
+      }
+    >({
+      queryFn: ({ stateId, body }) =>
+        runRequest(() =>
+          enableAssetStateApiV1AssetStatesStateIdEnablePost(
+            { state_id: stateId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId, assetId, stateId }) => [
+        { type: "Assets", id: projectId },
+        { type: "AssetBible", id: projectId },
+        { type: "Asset", id: assetId },
+        { type: "AssetStates", id: stateId },
+      ],
+    }),
+    currentAssetVersionPreflight: builder.mutation<
+      API.AssetImpactResponse,
+      { stateId: string; body: API.AssetStateCurrentPreflightRequest }
+    >({
+      queryFn: ({ stateId, body }) =>
+        runRequest(() =>
+          currentAssetVersionPreflightApiV1AssetStatesStateIdCurrentVersionPreflightPost(
+            { state_id: stateId },
+            body,
+          ),
+        ),
+    }),
+    setCurrentAssetVersion: builder.mutation<
+      API.AssetStateCurrentResponse,
       {
         projectId: string;
         stateId: string;
@@ -2070,6 +2231,9 @@ export const {
   useAuditEventsQuery,
   useArchivedShotsQuery,
   useAssetReadinessQuery,
+  useAssetDisablePreflightMutation,
+  useAssetRenamePreflightMutation,
+  useAssetStateDisablePreflightMutation,
   useAssetShotUsagesQuery,
   useAssetUpgradePreflightMutation,
   useAssetDeletePreflightMutation,
@@ -2088,6 +2252,7 @@ export const {
   useCreateConsentMutation,
   useCreateAssetMutation,
   useCreateAssetStateMutation,
+  useCurrentAssetVersionPreflightMutation,
   useCreateShotMutation,
   useCreateShotFromCandidateMutation,
   useCreateEpisodeMutation,
@@ -2095,12 +2260,16 @@ export const {
   useCreateWorkspaceMutation,
   useDeleteScriptVersionMutation,
   useDeleteAssetMutation,
+  useDisableAssetMutation,
+  useDisableAssetStateMutation,
   useDeleteShotMutation,
   useDeleteEpisodeMutation,
   useDeleteProjectMutation,
   useDeactivateAccountMutation,
   useDecideExtractionCandidateMutation,
   useEpisodeQuery,
+  useEnableAssetMutation,
+  useEnableAssetStateMutation,
   useEpisodeSnapshotQuery,
   useEpisodesQuery,
   useExtractionBatchQuery,
@@ -2147,6 +2316,7 @@ export const {
   useReviseConsentMutation,
   useRevokeConsentMutation,
   useReorderEpisodesMutation,
+  useRenameAssetMutation,
   useEpisodeDeletePreflightMutation,
   useSetEpisodeArchivedMutation,
   useSetAssetArchivedMutation,
@@ -2161,6 +2331,7 @@ export const {
   useSetWorkspaceArchivedMutation,
   useUpdateProfileMutation,
   useUpdateAssetMutation,
+  useUpdateAssetStateMutation,
   useUpdateShotMutation,
   useUpdateEpisodeMutation,
   useUpdateProjectBudgetMutation,

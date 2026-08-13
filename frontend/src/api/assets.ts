@@ -2,6 +2,28 @@
 /* eslint-disable */
 import request, { type RequestOptions } from "@/lib/request";
 
+/** Update Asset State PATCH /api/v1/asset-states/${param0} */
+export async function updateAssetStateApiV1AssetStatesStateIdPatch(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.updateAssetStateApiV1AssetStatesStateIdPatchParams,
+  body: API.AssetStateUpdateRequest,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetStateResponse_>(
+    `/api/v1/asset-states/${param0}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** Set Current Asset Version POST /api/v1/asset-states/${param0}/current-version */
 export async function setCurrentAssetVersionApiV1AssetStatesStateIdCurrentVersionPost(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -10,8 +32,96 @@ export async function setCurrentAssetVersionApiV1AssetStatesStateIdCurrentVersio
   options?: RequestOptions
 ) {
   const { state_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseAssetStateResponse_>(
+  return request<API.ApiResponseAssetStateCurrentResponse_>(
     `/api/v1/asset-states/${param0}/current-version`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Current Asset Version Preflight POST /api/v1/asset-states/${param0}/current-version-preflight */
+export async function currentAssetVersionPreflightApiV1AssetStatesStateIdCurrentVersionPreflightPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.currentAssetVersionPreflightApiV1AssetStatesStateIdCurrentVersionPreflightPostParams,
+  body: API.AssetStateCurrentPreflightRequest,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetImpactResponse_>(
+    `/api/v1/asset-states/${param0}/current-version-preflight`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Disable Asset State POST /api/v1/asset-states/${param0}/disable */
+export async function disableAssetStateApiV1AssetStatesStateIdDisablePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.disableAssetStateApiV1AssetStatesStateIdDisablePostParams,
+  body: API.AssetDisableRequest,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetStateAvailabilityResponse_>(
+    `/api/v1/asset-states/${param0}/disable`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Asset State Disable Preflight POST /api/v1/asset-states/${param0}/disable-preflight */
+export async function assetStateDisablePreflightApiV1AssetStatesStateIdDisablePreflightPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.assetStateDisablePreflightApiV1AssetStatesStateIdDisablePreflightPostParams,
+  body: API.AssetDisablePreflightRequest,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetImpactResponse_>(
+    `/api/v1/asset-states/${param0}/disable-preflight`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Enable Asset State POST /api/v1/asset-states/${param0}/enable */
+export async function enableAssetStateApiV1AssetStatesStateIdEnablePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.enableAssetStateApiV1AssetStatesStateIdEnablePostParams,
+  body: API.AssetStateEnableRequest,
+  options?: RequestOptions
+) {
+  const { state_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetStateResponse_>(
+    `/api/v1/asset-states/${param0}/enable`,
     {
       method: "POST",
       headers: {
@@ -247,6 +357,116 @@ export async function assetDeletePreflightApiV1AssetsAssetIdDeletePreflightGet(
     {
       method: "GET",
       params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
+/** Disable Asset POST /api/v1/assets/${param0}/disable */
+export async function disableAssetApiV1AssetsAssetIdDisablePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.disableAssetApiV1AssetsAssetIdDisablePostParams,
+  body: API.AssetDisableRequest,
+  options?: RequestOptions
+) {
+  const { asset_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetAvailabilityResponse_>(
+    `/api/v1/assets/${param0}/disable`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Asset Disable Preflight POST /api/v1/assets/${param0}/disable-preflight */
+export async function assetDisablePreflightApiV1AssetsAssetIdDisablePreflightPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.assetDisablePreflightApiV1AssetsAssetIdDisablePreflightPostParams,
+  body: API.AssetDisablePreflightRequest,
+  options?: RequestOptions
+) {
+  const { asset_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetImpactResponse_>(
+    `/api/v1/assets/${param0}/disable-preflight`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Enable Asset POST /api/v1/assets/${param0}/enable */
+export async function enableAssetApiV1AssetsAssetIdEnablePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.enableAssetApiV1AssetsAssetIdEnablePostParams,
+  body: API.AssetEnableRequest,
+  options?: RequestOptions
+) {
+  const { asset_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetResponse_>(
+    `/api/v1/assets/${param0}/enable`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Rename Asset POST /api/v1/assets/${param0}/rename */
+export async function renameAssetApiV1AssetsAssetIdRenamePost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.renameAssetApiV1AssetsAssetIdRenamePostParams,
+  body: API.AssetRenameRequest,
+  options?: RequestOptions
+) {
+  const { asset_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetRenameResponse_>(
+    `/api/v1/assets/${param0}/rename`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** Asset Rename Preflight POST /api/v1/assets/${param0}/rename-preflight */
+export async function assetRenamePreflightApiV1AssetsAssetIdRenamePreflightPost(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.assetRenamePreflightApiV1AssetsAssetIdRenamePreflightPostParams,
+  body: API.AssetRenamePreflightRequest,
+  options?: RequestOptions
+) {
+  const { asset_id: param0, ...queryParams } = params;
+  return request<API.ApiResponseAssetImpactResponse_>(
+    `/api/v1/assets/${param0}/rename-preflight`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
       ...(options || {}),
     }
   );

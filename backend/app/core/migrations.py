@@ -20,6 +20,7 @@ SCRIPT_DOCUMENT_REVISION = "4c8e2f7a9b31"
 EPISODE_PLANNING_REVISION = "7f3a9c1d2e84"
 ADAPTATION_REVISION = "9a4d6e2f1b73"
 NARRATIVE_REVISION = "2b7e4c9a1d63"
+ASSET_STATE_REVISION = "6c1f8d4a7e20"
 PROVIDER_TABLE_NAMES = frozenset(
     {
         "prod_provider_bindings",
@@ -57,6 +58,14 @@ ASSET_STATE_TABLE_NAMES = frozenset(
     {
         "ast_asset_states",
         "ast_asset_occurrences",
+    }
+)
+ASSET_CHANGE_TABLE_NAMES = frozenset({"ast_asset_name_revisions"})
+ASSET_CHANGE_COLUMNS = frozenset(
+    {
+        "availability",
+        "name_revision",
+        "command_receipts",
     }
 )
 PROVIDER_CAPABILITY_UNIQUE = "uq_prod_capability_id_version"
@@ -163,6 +172,35 @@ _PRE_ASSET_STATE_OBJECTS = {
     "uq_scr_narrative_version_unit_scope",
 }
 
+_PRE_ASSET_CHANGE_OBJECTS = {
+    "ck_ast_asset_availability",
+    "ck_ast_asset_name_revision",
+    "ck_ast_name_revision_number",
+    "fk_ast_asset_current_name",
+    "fk_ast_name_revision_asset_workspace",
+    "ix_ast_asset_project_availability",
+    "ix_ast_name_revision_asset_created",
+    "uq_ast_name_revision_scope",
+}
+
+
+def _include_pre_asset_change_object(
+    object_: object,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: object | None,
+) -> bool:
+    if type_ == "table" and name in ASSET_CHANGE_TABLE_NAMES:
+        return False
+    table = getattr(object_, "table", None)
+    table_name = getattr(table, "name", None)
+    if type_ == "column" and table_name == "ast_assets" and name in ASSET_CHANGE_COLUMNS:
+        return False
+    if name in _PRE_ASSET_CHANGE_OBJECTS:
+        return False
+    return _include_baseline_object(object_, name, type_, reflected, compare_to)
+
 
 def _include_pre_asset_state_object(
     object_: object,
@@ -179,7 +217,7 @@ def _include_pre_asset_state_object(
         return False
     if name in _PRE_ASSET_STATE_OBJECTS:
         return False
-    return _include_baseline_object(object_, name, type_, reflected, compare_to)
+    return _include_pre_asset_change_object(object_, name, type_, reflected, compare_to)
 
 
 def _include_historical_pre_provider_object(
@@ -289,6 +327,7 @@ def _baseline_differences(
     episode_planning_era: bool = False,
     adaptation_era: bool = False,
     narrative_era: bool = False,
+    asset_state_era: bool = False,
 ) -> list[object]:
     if (
         sum(
@@ -299,6 +338,7 @@ def _baseline_differences(
                 episode_planning_era,
                 adaptation_era,
                 narrative_era,
+                asset_state_era,
             )
         )
         > 1
@@ -317,6 +357,8 @@ def _baseline_differences(
         include_object = _include_adaptation_era_object
     elif narrative_era:
         include_object = _include_narrative_era_object
+    elif asset_state_era:
+        include_object = _include_pre_asset_change_object
     context = MigrationContext.configure(
         connection,
         opts={
@@ -369,6 +411,9 @@ def _adopt_existing_database(connection: Connection) -> None:
     adaptation_tables = table_names & ADAPTATION_TABLE_NAMES
     narrative_tables = table_names & NARRATIVE_TABLE_NAMES
     asset_state_tables = table_names & ASSET_STATE_TABLE_NAMES
+    asset_change_tables = table_names & ASSET_CHANGE_TABLE_NAMES
+    asset_columns = {column["name"] for column in inspector.get_columns("ast_assets")}
+    asset_change_columns = asset_columns & ASSET_CHANGE_COLUMNS
     capability_unique_present = "prod_model_capabilities" in table_names and any(
         constraint["name"] == PROVIDER_CAPABILITY_UNIQUE
         for constraint in inspector.get_unique_constraints("prod_model_capabilities")
@@ -379,6 +424,18 @@ def _adopt_existing_database(connection: Connection) -> None:
     expected_adaptation_tables = set(ADAPTATION_TABLE_NAMES)
     expected_narrative_tables = set(NARRATIVE_TABLE_NAMES)
     expected_asset_state_tables = set(ASSET_STATE_TABLE_NAMES)
+    expected_asset_change_tables = set(ASSET_CHANGE_TABLE_NAMES)
+    expected_asset_change_columns = set(ASSET_CHANGE_COLUMNS)
+    if (
+        (asset_change_tables and asset_change_tables != expected_asset_change_tables)
+        or (asset_change_columns and asset_change_columns != expected_asset_change_columns)
+        or bool(asset_change_tables) != bool(asset_change_columns)
+    ):
+        raise DatabaseSchemaMismatchError(
+            "database schema differs from baseline; partial asset change schema; "
+            f"tables={sorted(asset_change_tables)!r}, "
+            f"columns={sorted(asset_change_columns)!r}"
+        )
     if asset_state_tables and asset_state_tables != expected_asset_state_tables:
         raise DatabaseSchemaMismatchError(
             "database schema differs from baseline; partial AssetState schema; "
@@ -413,12 +470,28 @@ def _adopt_existing_database(connection: Connection) -> None:
             f"capability_unique={capability_unique_present!r}"
         )
 
-    if asset_state_tables:
+    if asset_change_tables:
         summary = "; ".join(repr(item) for item in current_differences[:3])
         raise DatabaseSchemaMismatchError(
-            "database schema differs from current AssetState schema; "
+            "database schema differs from current asset change schema; "
             f"first differences: {summary}"
         )
+
+    if asset_state_tables:
+        asset_state_era_differences = _baseline_differences(
+            connection,
+            asset_state_era=True,
+        )
+        if asset_state_era_differences:
+            summary = "; ".join(repr(item) for item in asset_state_era_differences[:3])
+            raise DatabaseSchemaMismatchError(
+                f"database schema differs from AssetState-era schema; first differences: {summary}"
+            )
+        command.stamp(configuration, ASSET_STATE_REVISION)
+        command.upgrade(configuration, "head")
+        _assert_database_matches_metadata(connection)
+        ensure_expected_heads(_database_heads(connection), get_script_heads())
+        return
 
     if narrative_tables:
         narrative_era_differences = _baseline_differences(

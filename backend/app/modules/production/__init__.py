@@ -1,5 +1,6 @@
 """Public production task contracts and application use cases."""
 
+from app.modules.production.asset_impact import read_asset_production_impacts
 from app.modules.production.contracts import (
     EpisodePlanningTaskCommand,
     EpisodeTaskSummary,
@@ -112,6 +113,7 @@ __all__ = [
     "mark_script_adaptation_task_unknown",
     "mark_episode_planning_task_unknown",
     "prepare_generation_attempt",
+    "read_asset_production_impacts",
     "start_script_extraction_task",
     "start_script_adaptation_task",
     "start_episode_planning_task",

@@ -166,6 +166,7 @@ const readinessIssueLabels: Record<API.ShotReadinessIssue["code"], string> = {
   VOICE_REFERENCE_MISSING: "启用语音的对白尚未固定声音资产版本",
   ASSET_KIND_MISMATCH: "资产类型与镜头引用槽位不一致",
   ASSET_VERSION_UNAVAILABLE: "固定的资产版本不可用",
+  ASSET_DISABLED: "固定资产已停用",
   ASSET_NOT_READY: "固定资产尚未达到生产就绪状态",
   MEDIA_REFERENCE_UNAVAILABLE: "资产所需的媒体版本不可用",
   RIGHTS_BLOCKED: "资产授权尚未满足本次生产用途",

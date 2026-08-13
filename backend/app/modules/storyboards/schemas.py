@@ -366,6 +366,7 @@ class ShotReadinessIssue(BaseModel):
         "VOICE_REFERENCE_MISSING",
         "ASSET_KIND_MISMATCH",
         "ASSET_VERSION_UNAVAILABLE",
+        "ASSET_DISABLED",
         "ASSET_NOT_READY",
         "MEDIA_REFERENCE_UNAVAILABLE",
         "RIGHTS_BLOCKED",

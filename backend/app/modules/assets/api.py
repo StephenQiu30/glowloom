@@ -7,26 +7,44 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import AccessTokenClaims, get_access_token_claims
 from app.core.database import get_async_session
 from app.core.schemas import ApiResponse
-from app.modules.assets import service
+from app.modules.assets import impact, service
 from app.modules.assets.contracts import (
     AssetOccurrenceNarrativeReader,
     AssetOccurrenceNarrativeSnapshot,
+    AssetProductionImpactReader,
+    AssetPromptSnapshot,
+    AssetShotUsageReader,
+    AssetShotUsageSnapshot,
+    AssetTaskSnapshot,
 )
 from app.modules.assets.schemas import (
+    AssetAvailabilityResponse,
     AssetBibleResponse,
     AssetCreateRequest,
     AssetDeletePreflightResponse,
     AssetDeleteResponse,
+    AssetDisablePreflightRequest,
+    AssetDisableRequest,
+    AssetEnableRequest,
+    AssetImpactResponse,
     AssetKind,
     AssetOccurrenceDecisionResponse,
     AssetOccurrenceRequest,
     AssetReadinessResponse,
+    AssetRenamePreflightRequest,
+    AssetRenameRequest,
+    AssetRenameResponse,
     AssetResponse,
+    AssetStateAvailabilityResponse,
     AssetStateCreateRequest,
     AssetStateCreateResponse,
+    AssetStateCurrentPreflightRequest,
     AssetStateCurrentRequest,
+    AssetStateCurrentResponse,
+    AssetStateEnableRequest,
     AssetStateReadinessResponse,
     AssetStateResponse,
+    AssetStateUpdateRequest,
     AssetStatusRequest,
     AssetUpdateRequest,
     AssetVersionCreateRequest,
@@ -70,6 +88,80 @@ def _narrative_reader(session: AsyncSession) -> AssetOccurrenceNarrativeReader:
         }
 
     return read_narratives
+
+
+def _shot_usage_reader(session: AsyncSession) -> AssetShotUsageReader:
+    async def read_usages(
+        *,
+        workspace_id: UUID,
+        asset_version_ids: list[UUID],
+        for_update: bool,
+    ) -> list[AssetShotUsageSnapshot]:
+        from app.modules.storyboards import read_asset_usages
+
+        rows = await read_asset_usages(
+            session,
+            workspace_id=workspace_id,
+            asset_version_ids=asset_version_ids,
+            for_update=for_update,
+        )
+        return [
+            AssetShotUsageSnapshot(
+                shot_id=item.shot_id,
+                shot_title=item.shot_title,
+                episode_id=item.episode_id,
+                spec_version_id=item.spec_version_id,
+                spec_version_no=item.spec_version_no,
+                current_spec_version_id=item.current_spec_version_id,
+                shot_status=item.shot_status,
+                slot_keys=item.slot_keys,
+            )
+            for item in rows
+        ]
+
+    return read_usages
+
+
+def _production_impact_reader(session: AsyncSession) -> AssetProductionImpactReader:
+    async def read_impacts(
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        asset_version_ids: list[UUID],
+        for_update: bool,
+    ) -> tuple[list[AssetPromptSnapshot], list[AssetTaskSnapshot]]:
+        from app.modules.production import read_asset_production_impacts
+
+        prompt_rows, task_rows = await read_asset_production_impacts(
+            session,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            asset_version_ids=asset_version_ids,
+            for_update=for_update,
+        )
+        return (
+            [
+                AssetPromptSnapshot(
+                    generation_request_id=item.generation_request_id,
+                    episode_id=item.episode_id,
+                    shot_id=item.shot_id,
+                    shot_spec_version_id=item.shot_spec_version_id,
+                    input_hash=item.input_hash,
+                )
+                for item in prompt_rows
+            ],
+            [
+                AssetTaskSnapshot(
+                    task_id=item.task_id,
+                    generation_request_id=item.generation_request_id,
+                    status=item.status,
+                    revision=item.revision,
+                )
+                for item in task_rows
+            ],
+        )
+
+    return read_impacts
 
 
 @router.post(
@@ -192,6 +284,28 @@ async def list_asset_states(
     return ApiResponse(data=await service.list_states(session, claims, asset_id))
 
 
+@router.patch(
+    "/asset-states/{state_id}",
+    response_model=ApiResponse[AssetStateResponse],
+)
+async def update_asset_state(
+    state_id: UUID,
+    payload: AssetStateUpdateRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetStateResponse]:
+    return ApiResponse(
+        data=await impact.update_state(
+            session,
+            claims,
+            state_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
+
+
 @router.post(
     "/asset-states/{state_id}/occurrence-decisions",
     response_model=ApiResponse[AssetOccurrenceDecisionResponse],
@@ -257,8 +371,120 @@ async def update_asset(
 
 
 @router.post(
-    "/assets/{asset_id}/archive", response_model=ApiResponse[AssetResponse]
+    "/assets/{asset_id}/rename-preflight",
+    response_model=ApiResponse[AssetImpactResponse],
 )
+async def asset_rename_preflight(
+    asset_id: UUID,
+    payload: AssetRenamePreflightRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetImpactResponse]:
+    return ApiResponse(
+        data=await impact.rename_preflight(
+            session,
+            claims,
+            asset_id,
+            payload,
+            _shot_usage_reader(session),
+            _production_impact_reader(session),
+        )
+    )
+
+
+@router.post(
+    "/assets/{asset_id}/rename",
+    response_model=ApiResponse[AssetRenameResponse],
+)
+async def rename_asset(
+    asset_id: UUID,
+    payload: AssetRenameRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetRenameResponse]:
+    return ApiResponse(
+        data=await impact.rename_asset(
+            session,
+            claims,
+            asset_id,
+            payload,
+            _shot_usage_reader(session),
+            _production_impact_reader(session),
+            trace_id=str(request.state.request_id),
+        )
+    )
+
+
+@router.post(
+    "/assets/{asset_id}/disable-preflight",
+    response_model=ApiResponse[AssetImpactResponse],
+)
+async def asset_disable_preflight(
+    asset_id: UUID,
+    payload: AssetDisablePreflightRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetImpactResponse]:
+    return ApiResponse(
+        data=await impact.asset_disable_preflight(
+            session,
+            claims,
+            asset_id,
+            payload,
+            _shot_usage_reader(session),
+            _production_impact_reader(session),
+        )
+    )
+
+
+@router.post(
+    "/assets/{asset_id}/disable",
+    response_model=ApiResponse[AssetAvailabilityResponse],
+)
+async def disable_asset(
+    asset_id: UUID,
+    payload: AssetDisableRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetAvailabilityResponse]:
+    return ApiResponse(
+        data=await impact.disable_asset(
+            session,
+            claims,
+            asset_id,
+            payload,
+            _shot_usage_reader(session),
+            _production_impact_reader(session),
+            trace_id=str(request.state.request_id),
+        )
+    )
+
+
+@router.post(
+    "/assets/{asset_id}/enable",
+    response_model=ApiResponse[AssetResponse],
+)
+async def enable_asset(
+    asset_id: UUID,
+    payload: AssetEnableRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetResponse]:
+    return ApiResponse(
+        data=await impact.enable_asset(
+            session,
+            claims,
+            asset_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
+
+
+@router.post("/assets/{asset_id}/archive", response_model=ApiResponse[AssetResponse])
 async def archive_asset(
     asset_id: UUID,
     payload: AssetStatusRequest,
@@ -278,9 +504,7 @@ async def archive_asset(
     )
 
 
-@router.post(
-    "/assets/{asset_id}/restore", response_model=ApiResponse[AssetResponse]
-)
+@router.post("/assets/{asset_id}/restore", response_model=ApiResponse[AssetResponse])
 async def restore_asset(
     asset_id: UUID,
     payload: AssetStatusRequest,
@@ -326,9 +550,7 @@ async def asset_delete_preflight(
     )
 
 
-@router.delete(
-    "/assets/{asset_id}", response_model=ApiResponse[AssetDeleteResponse]
-)
+@router.delete("/assets/{asset_id}", response_model=ApiResponse[AssetDeleteResponse])
 async def delete_asset(
     asset_id: UUID,
     expected_revision: Annotated[int, Query(ge=1)],
@@ -377,6 +599,74 @@ async def append_asset_version(
     )
 
 
+@router.post(
+    "/asset-states/{state_id}/disable-preflight",
+    response_model=ApiResponse[AssetImpactResponse],
+)
+async def asset_state_disable_preflight(
+    state_id: UUID,
+    payload: AssetDisablePreflightRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetImpactResponse]:
+    return ApiResponse(
+        data=await impact.state_disable_preflight(
+            session,
+            claims,
+            state_id,
+            payload,
+            _shot_usage_reader(session),
+            _production_impact_reader(session),
+        )
+    )
+
+
+@router.post(
+    "/asset-states/{state_id}/disable",
+    response_model=ApiResponse[AssetStateAvailabilityResponse],
+)
+async def disable_asset_state(
+    state_id: UUID,
+    payload: AssetDisableRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetStateAvailabilityResponse]:
+    return ApiResponse(
+        data=await impact.disable_state(
+            session,
+            claims,
+            state_id,
+            payload,
+            _shot_usage_reader(session),
+            _production_impact_reader(session),
+            trace_id=str(request.state.request_id),
+        )
+    )
+
+
+@router.post(
+    "/asset-states/{state_id}/enable",
+    response_model=ApiResponse[AssetStateResponse],
+)
+async def enable_asset_state(
+    state_id: UUID,
+    payload: AssetStateEnableRequest,
+    request: Request,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetStateResponse]:
+    return ApiResponse(
+        data=await impact.enable_state(
+            session,
+            claims,
+            state_id,
+            payload,
+            trace_id=str(request.state.request_id),
+        )
+    )
+
+
 @router.get(
     "/asset-states/{state_id}/versions",
     response_model=ApiResponse[PaginatedAssetVersions],
@@ -404,14 +694,34 @@ async def get_asset_version(
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> ApiResponse[AssetVersionResponse]:
+    return ApiResponse(data=await service.get_version(session, claims, version_id))
+
+
+@router.post(
+    "/asset-states/{state_id}/current-version-preflight",
+    response_model=ApiResponse[AssetImpactResponse],
+)
+async def current_asset_version_preflight(
+    state_id: UUID,
+    payload: AssetStateCurrentPreflightRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> ApiResponse[AssetImpactResponse]:
     return ApiResponse(
-        data=await service.get_version(session, claims, version_id)
+        data=await impact.current_version_preflight(
+            session,
+            claims,
+            state_id,
+            payload,
+            _shot_usage_reader(session),
+            _production_impact_reader(session),
+        )
     )
 
 
 @router.post(
     "/asset-states/{state_id}/current-version",
-    response_model=ApiResponse[AssetStateResponse],
+    response_model=ApiResponse[AssetStateCurrentResponse],
 )
 async def set_current_asset_version(
     state_id: UUID,
@@ -419,13 +729,15 @@ async def set_current_asset_version(
     request: Request,
     claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
-) -> ApiResponse[AssetStateResponse]:
+) -> ApiResponse[AssetStateCurrentResponse]:
     return ApiResponse(
-        data=await service.set_current_version(
+        data=await impact.set_current_version(
             session,
             claims,
             state_id,
             payload,
+            _shot_usage_reader(session),
+            _production_impact_reader(session),
             trace_id=str(request.state.request_id),
         )
     )

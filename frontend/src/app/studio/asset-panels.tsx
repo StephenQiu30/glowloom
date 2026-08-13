@@ -3,6 +3,7 @@
 import {
   AlertCircle,
   Archive,
+  CircleOff,
   CheckCircle2,
   Clock3,
   FileImage,
@@ -113,13 +114,17 @@ export function AssetList({
               <span className="text-right">
                 <Badge
                   className={
-                    asset.status === "active"
+                    asset.status === "active" && asset.availability === "enabled"
                       ? "border-emerald-100 bg-emerald-50 text-emerald-700"
                       : "border-slate-200 bg-slate-100 text-slate-500"
                   }
                   variant="outline"
                 >
-                  {asset.status === "active" ? "使用中" : "已归档"}
+                  {asset.status === "archived"
+                    ? "已归档"
+                    : asset.availability === "disabled"
+                      ? "已停用"
+                      : "使用中"}
                 </Badge>
                 <span className="mt-1 block font-mono text-[10px] text-slate-400">
                   {asset.status === "archived"
@@ -192,16 +197,26 @@ export function ArchivedAssetCard({
 }
 
 export function AssetStateBar({
+  assetAvailability,
   assetStatus,
+  isChangingState,
   onCreate,
+  onEdit,
   onSelect,
+  onToggleState,
   selectedId,
+  selectedState,
   states,
 }: {
+  assetAvailability: API.AssetResponse["availability"];
   assetStatus: API.AssetResponse["status"];
+  isChangingState: boolean;
   onCreate: () => void;
+  onEdit: () => void;
   onSelect: (id: string) => void;
+  onToggleState: () => void;
   selectedId: string;
+  selectedState: API.AssetStateResponse;
   states: API.AssetStateResponse[];
 }) {
   return (
@@ -212,14 +227,32 @@ export function AssetStateBar({
             <CardTitle>剧情状态</CardTitle>
             <CardDescription>每个状态独立维护当前生产版本。</CardDescription>
           </div>
-          <Button
-            disabled={assetStatus === "archived"}
-            onClick={onCreate}
-            size="sm"
-            variant="outline"
-          >
-            <Plus aria-hidden="true" />新建状态
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={assetStatus === "archived"}
+              onClick={onEdit}
+              size="sm"
+              variant="outline"
+            >
+              编辑状态
+            </Button>
+            <Button
+              disabled={isChangingState || assetStatus === "archived"}
+              onClick={onToggleState}
+              size="sm"
+              variant="outline"
+            >
+              {selectedState.status === "active" ? "停用状态" : "启用状态"}
+            </Button>
+            <Button
+              disabled={assetStatus === "archived" || assetAvailability === "disabled"}
+              onClick={onCreate}
+              size="sm"
+              variant="outline"
+            >
+              <Plus aria-hidden="true" />新建状态
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2 p-4">
@@ -233,7 +266,11 @@ export function AssetStateBar({
           >
             {state.label}
             <span className="text-xs opacity-70">
-              {state.current_version_id ? "有版本" : "待补版本"}
+              {state.status === "disabled"
+                ? "已停用"
+                : state.current_version_id
+                  ? "有版本"
+                  : "待补版本"}
             </span>
           </Button>
         ))}
@@ -250,6 +287,7 @@ function readinessStyle(status: API.AssetReadinessResponse["status"]): string {
 
 const readinessBlockerLabels: Record<string, string> = {
   asset_archived: "资产已归档，不能用于新的生产任务",
+  asset_disabled: "资产已停用，不能用于新的生产任务",
   consent_expired: "授权已过期，当前用途不再被覆盖",
   consent_missing: "缺少覆盖当前用途的有效授权",
   consent_revoked: "授权已撤回，新的生成与交付已被阻止",
@@ -440,15 +478,19 @@ function VersionDetail({
 }
 
 function VersionHistory({
+  assetAvailability,
   assetStatus,
   currentVersionId,
   isChangingCurrent,
+  stateStatus,
   onSetCurrent,
   versions,
 }: {
+  assetAvailability: API.AssetResponse["availability"];
   assetStatus: API.AssetResponse["status"];
   currentVersionId: string | null;
   isChangingCurrent: boolean;
+  stateStatus: API.AssetStateResponse["status"];
   onSetCurrent: (version: API.AssetVersionResponse) => void;
   versions: API.AssetVersionResponse[];
 }) {
@@ -484,7 +526,12 @@ function VersionHistory({
             {currentVersionId !== version.id ? (
               <Button
                 aria-label={`设为当前资产版本 v${version.version_no}`}
-                disabled={assetStatus === "archived" || isChangingCurrent}
+                disabled={
+                  assetStatus === "archived" ||
+                  assetAvailability === "disabled" ||
+                  stateStatus === "disabled" ||
+                  isChangingCurrent
+                }
                 size="sm"
                 variant="outline"
                 onClick={() => onSetCurrent(version)}
@@ -503,13 +550,16 @@ export function AssetDetail({
   asset,
   currentState,
   isArchiving,
+  isChangingAvailability,
   isChangingCurrent,
   mediaById,
   onAddVersion,
   onDelete,
   onEdit,
+  onRename,
   onSetCurrent,
   onToggleArchive,
+  onToggleAvailability,
   onUpgradeCompleted,
   onUpgradeError,
   readiness,
@@ -521,13 +571,16 @@ export function AssetDetail({
   asset: API.AssetResponse;
   currentState: API.AssetStateResponse;
   isArchiving: boolean;
+  isChangingAvailability: boolean;
   isChangingCurrent: boolean;
   mediaById: Map<string, API.MediaVersionResponse>;
   onAddVersion: () => void;
   onDelete: () => void;
   onEdit: () => void;
+  onRename: () => void;
   onSetCurrent: (version: API.AssetVersionResponse) => void;
   onToggleArchive: () => void;
+  onToggleAvailability: () => void;
   onUpgradeCompleted: (shotCount: number) => void;
   onUpgradeError: (message: string) => void;
   readiness?: API.AssetReadinessResponse;
@@ -563,6 +616,9 @@ export function AssetDetail({
                       同名提醒
                     </Badge>
                   ) : null}
+                  {asset.availability === "disabled" ? (
+                    <Badge variant="secondary">已停用</Badge>
+                  ) : null}
                 </div>
                 <CardDescription className="mt-1">
                   Asset {shortId(asset.id)} · {currentState.label} · state revision{" "}
@@ -583,8 +639,14 @@ export function AssetDetail({
               <Button aria-label="编辑资产身份" onClick={onEdit} variant="outline">
                 <Pencil aria-hidden="true" />编辑身份
               </Button>
+              <Button aria-label="重命名资产" onClick={onRename} variant="outline">
+                <Pencil aria-hidden="true" />重命名
+              </Button>
               <Button
-                disabled={asset.status === "archived"}
+                disabled={
+                  asset.status === "archived" || asset.availability === "disabled"
+                  || currentState.status === "disabled"
+                }
                 onClick={onAddVersion}
                 variant="outline"
               >
@@ -593,6 +655,14 @@ export function AssetDetail({
               <Button disabled={isArchiving} onClick={onToggleArchive} variant="ghost">
                 <Archive aria-hidden="true" />
                 {asset.status === "active" ? "归档" : "恢复"}
+              </Button>
+              <Button
+                disabled={isChangingAvailability || asset.status === "archived"}
+                onClick={onToggleAvailability}
+                variant="ghost"
+              >
+                <CircleOff aria-hidden="true" />
+                {asset.availability === "enabled" ? "停用资产" : "启用资产"}
               </Button>
               <Button aria-label="删除资产身份" onClick={onDelete} variant="ghost">
                 <Trash2 aria-hidden="true" />删除
@@ -639,9 +709,11 @@ export function AssetDetail({
         <CardContent className="px-5 py-1">
           {versions.length > 0 ? (
             <VersionHistory
+              assetAvailability={asset.availability}
               assetStatus={asset.status}
               currentVersionId={currentState.current_version_id}
               isChangingCurrent={isChangingCurrent}
+              stateStatus={currentState.status}
               versions={versions}
               onSetCurrent={onSetCurrent}
             />

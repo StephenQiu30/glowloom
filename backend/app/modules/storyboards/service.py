@@ -35,6 +35,7 @@ from app.modules.scripts import (
 )
 from app.modules.storyboards import repository
 from app.modules.storyboards.contracts import (
+    AssetShotUsageSnapshot,
     EpisodeStoryboardSummary,
     ShotAssetReferenceSnapshot,
     ShotProductionSnapshot,
@@ -733,6 +734,7 @@ async def _validate_asset_references(
             or resolved.project_id != project_id
             or resolved.kind != reference.role
             or resolved.asset_status != "active"
+            or resolved.asset_availability != "enabled"
             or resolved.asset_state_status != "active"
         ):
             raise ApiError(
@@ -973,9 +975,7 @@ async def append_spec_version(
                 slot_key=reference.slot_key,
                 role=reference.role,
                 asset_version_id=reference.asset_version_id,
-                asset_state_id=resolved_by_version[
-                    reference.asset_version_id
-                ].asset_state_id,
+                asset_state_id=resolved_by_version[reference.asset_version_id].asset_state_id,
                 asset_id=resolved_by_version[reference.asset_version_id].asset_id,
                 binding_source="manual",
                 subject_key=reference.subject_key,
@@ -1716,6 +1716,10 @@ def _asset_readiness_issues(
             code = "ASSET_VERSION_UNAVAILABLE"
             summary = "The fixed asset version belongs to an archived asset"
             next_action = "replace_or_restore_asset"
+        elif blocker_code == "asset_disabled":
+            code = "ASSET_DISABLED"
+            summary = "The fixed asset version belongs to a disabled asset"
+            next_action = "enable_asset"
         elif blocker_code.startswith("media_") or blocker_code == "required_media_missing":
             code = "MEDIA_REFERENCE_UNAVAILABLE"
             summary = "The fixed asset version has unavailable required media"
@@ -2411,6 +2415,34 @@ async def list_asset_shot_usages(
     )
 
 
+async def read_asset_usages(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    asset_version_ids: list[UUID],
+    for_update: bool,
+) -> list[AssetShotUsageSnapshot]:
+    rows = await repository.list_asset_usages(
+        session,
+        workspace_id,
+        asset_version_ids,
+        for_update=for_update,
+    )
+    return [
+        AssetShotUsageSnapshot(
+            shot_id=shot.id,
+            shot_title=shot.title,
+            episode_id=shot.episode_id,
+            spec_version_id=version.id,
+            spec_version_no=version.version_no,
+            current_spec_version_id=shot.current_spec_version_id,
+            shot_status=shot.status,
+            slot_keys=tuple(slot_keys),
+        )
+        for version, shot, slot_keys in rows
+    ]
+
+
 def _replacement_reference_requests(
     references: list[AssetReference],
     *,
@@ -2689,9 +2721,7 @@ async def apply_asset_upgrade(
         await session.flush()
         resolved_by_version: dict[UUID, AssetVersionReference] = {}
         for reference in (
-            item
-            for requests in replacement_requests_by_version
-            for item in requests
+            item for requests in replacement_requests_by_version for item in requests
         ):
             if reference.asset_version_id in resolved_by_version:
                 continue
@@ -2721,9 +2751,7 @@ async def apply_asset_upgrade(
                     slot_key=reference.slot_key,
                     role=reference.role,
                     asset_version_id=reference.asset_version_id,
-                    asset_state_id=resolved_by_version[
-                        reference.asset_version_id
-                    ].asset_state_id,
+                    asset_state_id=resolved_by_version[reference.asset_version_id].asset_state_id,
                     asset_id=resolved_by_version[reference.asset_version_id].asset_id,
                     binding_source="manual",
                     subject_key=reference.subject_key,

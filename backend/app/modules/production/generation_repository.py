@@ -10,6 +10,7 @@ from app.modules.production.models import (
     CostEntry,
     GenerationAttempt,
     GenerationRequest,
+    GenerationRequestAsset,
     ModelCapability,
     Reservation,
     Task,
@@ -121,9 +122,7 @@ async def find_generation_task_for_cancellation(
     task_id: UUID,
 ) -> Task | None:
     return await session.scalar(
-        select(Task)
-        .where(Task.id == task_id, Task.workspace_id == workspace_id)
-        .with_for_update()
+        select(Task).where(Task.id == task_id, Task.workspace_id == workspace_id).with_for_update()
     )
 
 
@@ -131,9 +130,7 @@ async def find_generation_task_for_execution(
     session: AsyncSession,
     task_id: UUID,
 ) -> Task | None:
-    return await session.scalar(
-        select(Task).where(Task.id == task_id).with_for_update()
-    )
+    return await session.scalar(select(Task).where(Task.id == task_id).with_for_update())
 
 
 async def find_latest_generation_attempt(
@@ -183,6 +180,49 @@ async def find_generation_request(
             GenerationRequest.workspace_id == workspace_id,
         )
     )
+
+
+async def list_asset_impact_rows(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_id: UUID,
+    asset_version_ids: list[UUID],
+    *,
+    for_update: bool,
+) -> list[tuple[GenerationRequest, Task]]:
+    if not asset_version_ids:
+        return []
+    request_ids = (
+        select(GenerationRequestAsset.request_id)
+        .join(
+            GenerationRequest,
+            GenerationRequest.id == GenerationRequestAsset.request_id,
+        )
+        .where(
+            GenerationRequestAsset.workspace_id == workspace_id,
+            GenerationRequest.project_id == project_id,
+            GenerationRequestAsset.asset_version_id.in_(asset_version_ids),
+        )
+        .distinct()
+    )
+    query = (
+        select(GenerationRequest, Task)
+        .join(
+            Task,
+            (Task.request_type == "generation_request")
+            & (Task.request_id == GenerationRequest.id)
+            & (Task.workspace_id == GenerationRequest.workspace_id),
+        )
+        .where(
+            GenerationRequest.workspace_id == workspace_id,
+            GenerationRequest.id.in_(request_ids),
+        )
+        .order_by(GenerationRequest.created_at, GenerationRequest.id)
+    )
+    if for_update:
+        query = query.with_for_update(of=(GenerationRequest, Task))
+    rows = await session.execute(query)
+    return [(row[0], row[1]) for row in rows]
 
 
 async def find_generation_reservation_for_update(

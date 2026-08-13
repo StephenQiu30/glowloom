@@ -233,6 +233,72 @@ export function CreateStateDialog({
   );
 }
 
+export function EditStateDialog({
+  isSubmitting,
+  onOpenChange,
+  onSubmit,
+  open,
+  state,
+}: {
+  isSubmitting: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (request: API.AssetStateUpdateRequest) => Promise<boolean>;
+  open: boolean;
+  state: API.AssetStateResponse;
+}) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    await onSubmit({
+      expected_revision: state.revision,
+      idempotency_key: `update-asset-state:${crypto.randomUUID()}`,
+      label: textValue(form, "label"),
+      description: textValue(form, "description"),
+    });
+  }
+
+  return (
+    <Dialog.Root onOpenChange={onOpenChange} open={open}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
+        <Dialog.Content className={dialogClassName}>
+          <DialogHeading
+            description={`状态键“${state.state_key}”保持不变，只更新可读名称和说明。`}
+            title="编辑剧情状态"
+          />
+          <form className="mt-6 grid gap-5" onSubmit={submit}>
+            <div className="grid gap-2">
+              <Label htmlFor="editStateLabel">状态名称</Label>
+              <Input
+                defaultValue={state.label}
+                id="editStateLabel"
+                name="label"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="editStateDescription">状态说明</Label>
+              <Input
+                defaultValue={state.description}
+                id="editStateDescription"
+                name="description"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline">取消</Button>
+              </Dialog.Close>
+              <Button disabled={isSubmitting} type="submit">
+                {isSubmitting ? "保存中…" : "保存状态"}
+              </Button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 export function EditAssetDialog({
   asset,
   isSubmitting,
@@ -251,7 +317,6 @@ export function EditAssetDialog({
     const form = new FormData(event.currentTarget);
     await onSubmit({
       expected_revision: asset.revision,
-      name: textValue(form, "name"),
       aliases: splitValues(form.get("aliases")),
       tags: splitValues(form.get("tags")),
     });
@@ -263,14 +328,10 @@ export function EditAssetDialog({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
         <Dialog.Content className={dialogClassName}>
           <DialogHeading
-            description="只修改资产身份信息；资产类型、不可变版本和既有镜头引用不会改变。"
+            description="只修改别名和标签；重命名需要单独完成影响预检。"
             title="编辑资产身份"
           />
           <form className="mt-6 grid gap-5" onSubmit={submit}>
-            <div className="grid gap-2">
-              <Label htmlFor="assetName">资产名称</Label>
-              <Input defaultValue={asset.name} id="assetName" name="name" required />
-            </div>
             <div className="grid gap-2">
               <Label htmlFor="assetAliases">别名（逗号分隔）</Label>
               <Input
