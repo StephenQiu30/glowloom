@@ -23,7 +23,7 @@ htmlcov/
 node_modules/
 dist/
 .next/
-coverage/
+/coverage/
 artifacts/
 reports/
 playwright-report/
