@@ -1091,9 +1091,17 @@ def _split_target_spec(
     purpose: str,
     duration_ms: int,
     include_dialogue: bool,
+    beat_key: str,
 ) -> dict[str, object]:
     spec = deepcopy(shot_spec_payload(refs, purpose=purpose))
     spec["duration_ms"] = duration_ms
+    spec["action_beats"] = [
+        {
+            "beat_key": beat_key,
+            "order": 1,
+            "description": ("林澈停下脚步" if beat_key == "pause" else "林澈观察异常灯箱"),
+        }
+    ]
     if not include_dialogue:
         script_reference = dict(cast(dict[str, object], spec["script_reference"]))
         script_reference["dialogue_ids"] = []
@@ -1124,12 +1132,16 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
     )
     assert created.status_code == 201
     source = created.json()["data"]
+    source_payload = shot_spec_payload(refs, purpose="建立车站悬疑氛围")
+    cast(list[dict[str, object]], source_payload["action_beats"]).append(
+        {"beat_key": "observe", "order": 2, "description": "林澈观察异常灯箱"}
+    )
     saved = await client.post(
         f"/api/v1/shots/{source['id']}/spec-versions",
         headers=headers,
         json={
             "expected_current_spec_version_id": None,
-            "spec": shot_spec_payload(refs, purpose="建立车站悬疑氛围"),
+            "spec": source_payload,
             "asset_references": [],
         },
     )
@@ -1208,6 +1220,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
                     purpose="主角进入月台并说话",
                     duration_ms=1500,
                     include_dialogue=True,
+                    beat_key="pause",
                 ),
                 "asset_references": [],
             },
@@ -1218,11 +1231,25 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
                     purpose="主角观察异常灯箱",
                     duration_ms=1500,
                     include_dialogue=False,
+                    beat_key="observe",
                 ),
                 "asset_references": [],
             },
         ],
     }
+    repeated_action_payload = deepcopy(split_payload)
+    repeated_targets = cast(list[dict[str, object]], repeated_action_payload["targets"])
+    first_target = cast(dict[str, object], repeated_targets[0]["spec"])
+    second_target = cast(dict[str, object], repeated_targets[1]["spec"])
+    second_target["action_beats"] = deepcopy(first_target["action_beats"])
+    repeated_action_response = await client.post(
+        f"/api/v1/shots/{source['id']}/split",
+        headers=headers,
+        json=repeated_action_payload,
+    )
+    assert repeated_action_response.status_code == 422
+    assert repeated_action_response.json()["error"]["code"] == "validation_failed"
+
     split_response = await client.post(
         f"/api/v1/shots/{source['id']}/split",
         headers=headers,
@@ -1257,6 +1284,10 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
     assert merge_preflight_response.status_code == 200
     merge_preflight = merge_preflight_response.json()["data"]
     assert merge_preflight["operation"] == "merge"
+    merge_target_spec = shot_spec_payload(refs, purpose="合并后的完整叙事目标")
+    cast(list[dict[str, object]], merge_target_spec["action_beats"]).append(
+        {"beat_key": "observe", "order": 2, "description": "林澈观察异常灯箱"}
+    )
     merged_response = await client.post(
         "/api/v1/shots/merge",
         headers=headers,
@@ -1266,7 +1297,7 @@ async def test_copy_split_merge_are_atomic_idempotent_and_preserve_sources(
             "idempotency_key": "merge-transform-001",
             "target": {
                 "title": "进入并观察月台",
-                "spec": shot_spec_payload(refs, purpose="合并后的完整叙事目标"),
+                "spec": merge_target_spec,
                 "asset_references": [],
             },
         },

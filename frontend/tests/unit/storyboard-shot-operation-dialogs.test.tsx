@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildMergeTarget,
+  buildSplitTargets,
   DeleteShotDialog,
   MergeShotsDialog,
   type ShotTransformSource,
@@ -14,11 +16,14 @@ const episodeId = "019fb6d0-a000-7000-8000-000000000002";
 const scriptVersionId = "019fb6d0-a000-7000-8000-000000000003";
 const sceneId = "019fb6d0-a000-7000-8000-000000000004";
 const dialogueId = "019fb6d0-a000-7000-8000-000000000005";
+const secondDialogueId = "019fb6d0-a000-7000-8000-000000000006";
+const otherSceneId = "019fb6d0-a000-7000-8000-000000000007";
 const now = "2026-07-31T12:00:00Z";
 
 function transformSource(position: number): ShotTransformSource {
   const shotId = `019fb6d0-a000-7000-8000-00000000001${position}`;
   const versionId = `019fb6d0-a000-7000-8000-00000000002${position}`;
+  const sourceDialogueId = position === 1 ? dialogueId : secondDialogueId;
   return {
     shot: {
       id: shotId,
@@ -46,7 +51,7 @@ function transformSource(position: number): ShotTransformSource {
         script_reference: {
           confirmed_script_version_id: scriptVersionId,
           scene_id: sceneId,
-          dialogue_ids: [dialogueId],
+          dialogue_ids: [sourceDialogueId],
         },
         narrative: { purpose: `完成镜头 ${position}`, continuity_note: null },
         visual: {
@@ -60,10 +65,11 @@ function transformSource(position: number): ShotTransformSource {
         },
         action_beats: [
           { beat_key: "beat-1", order: 1, description: `动作 ${position}` },
+          { beat_key: "beat-2", order: 2, description: `反应 ${position}` },
         ],
         dialogue_or_narration: [
           {
-            source_dialogue_id: dialogueId,
+            source_dialogue_id: sourceDialogueId,
             beat_key: "beat-1",
             speaker_subject_key: null,
             render_as_audio: false,
@@ -109,6 +115,85 @@ function preflight(
 }
 
 describe("分镜结构操作对话框", () => {
+  it("拆分构造器按明确边界完整分配动作与对白", () => {
+    const source = transformSource(1);
+    const targets = buildSplitTargets(source.version, {
+      firstTitle: "前段",
+      secondTitle: "后段",
+      firstDurationMs: 2_000,
+      firstActionCount: 1,
+      firstDialogueCount: 1,
+    });
+
+    expect(
+      targets.flatMap((target) =>
+        target.spec.action_beats.map((beat) => beat.description),
+      ),
+    ).toEqual(["动作 1", "反应 1"]);
+    expect(
+      targets.flatMap(
+        (target) => target.spec.script_reference.dialogue_ids,
+      ),
+    ).toEqual([dialogueId]);
+    expect(targets.map((target) => target.spec.action_beats.length)).toEqual([
+      1, 1,
+    ]);
+  });
+
+  it("合并构造器拒绝跨场与不可表示的动作数量", () => {
+    const first = transformSource(1);
+    const crossScene = structuredClone(transformSource(2));
+    crossScene.shot.source_scene_id = otherSceneId;
+    crossScene.version.spec.script_reference.scene_id = otherSceneId;
+    expect(() =>
+      buildMergeTarget(first.version, crossScene.version, {
+        baseVersionId: first.version.id,
+        title: "跨场合并",
+      }),
+    ).toThrow(/同一场次/);
+
+    const second = transformSource(2);
+    first.version.spec.action_beats = Array.from({ length: 5 }, (_, index) => ({
+      beat_key: `first-${index + 1}`,
+      order: index + 1,
+      description: `前镜动作 ${index + 1}`,
+    }));
+    second.version.spec.action_beats = Array.from({ length: 4 }, (_, index) => ({
+      beat_key: `second-${index + 1}`,
+      order: index + 1,
+      description: `后镜动作 ${index + 1}`,
+    }));
+    expect(() =>
+      buildMergeTarget(first.version, second.version, {
+        baseVersionId: first.version.id,
+        title: "动作超限",
+      }),
+    ).toThrow(/8 个动作/);
+  });
+
+  it("同场合并完整保留动作、对白和重编号后的关联", () => {
+    const first = transformSource(1);
+    const second = transformSource(2);
+    const target = buildMergeTarget(first.version, second.version, {
+      baseVersionId: first.version.id,
+      title: "完整合并",
+    });
+
+    expect(target.spec.action_beats.map((beat) => beat.description)).toEqual([
+      "动作 1",
+      "反应 1",
+      "动作 2",
+      "反应 2",
+    ]);
+    expect(target.spec.script_reference.dialogue_ids).toEqual([
+      dialogueId,
+      secondDialogueId,
+    ]);
+    expect(
+      target.spec.dialogue_or_narration.map((item) => item.beat_key),
+    ).toEqual(["beat-1", "beat-3"]);
+  });
+
   it("先预检再提交完整拆分目标", async () => {
     const user = userEvent.setup();
     const source = transformSource(1);
@@ -143,6 +228,14 @@ describe("分镜结构操作对话框", () => {
       2_300,
       1_700,
     ]);
+    expect(
+      request.targets.map((target) => target.spec.action_beats.length),
+    ).toEqual([1, 1]);
+    expect(
+      request.targets.map(
+        (target) => target.spec.script_reference.dialogue_ids.length,
+      ),
+    ).toEqual([1, 0]);
   });
 
   it("合并相邻镜头时固定预检结果并提交目标规格", async () => {
