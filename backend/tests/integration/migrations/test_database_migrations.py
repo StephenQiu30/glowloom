@@ -1,3 +1,4 @@
+import json
 import logging
 from collections.abc import AsyncIterator
 from uuid import uuid4
@@ -27,6 +28,7 @@ SCRIPT_DOCUMENT_REVISION = "4c8e2f7a9b31"
 EPISODE_PLANNING_REVISION = "7f3a9c1d2e84"
 ADAPTATION_REVISION = "9a4d6e2f1b73"
 NARRATIVE_REVISION = "2b7e4c9a1d63"
+ASSET_STATE_REVISION = "6c1f8d4a7e20"
 PROVIDER_TABLE_NAMES = {
     "prod_provider_bindings",
     "prod_provider_connections",
@@ -51,6 +53,10 @@ NARRATIVE_TABLE_NAMES = {
     "scr_narrative_units",
     "scr_narrative_unit_versions",
     "scr_narrative_impacts",
+}
+ASSET_STATE_TABLE_NAMES = {
+    "ast_asset_states",
+    "ast_asset_occurrences",
 }
 PROVIDER_CAPABILITY_UNIQUE = "uq_prod_capability_id_version"
 
@@ -146,6 +152,167 @@ async def test_empty_database_upgrades_to_registered_metadata_head(
     async with migration_engine.connect() as connection:
         table_names = set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
     assert table_names == {*Base.metadata.tables, "alembic_version"}
+    assert await get_database_heads(migration_engine) == (ASSET_STATE_REVISION,)
+    assert ASSET_STATE_TABLE_NAMES <= table_names
+
+
+@pytest.mark.asyncio
+async def test_asset_state_revision_moves_asset_current_without_dual_write(
+    migration_engine: AsyncEngine,
+) -> None:
+    actor_id = uuid4()
+    workspace_id = uuid4()
+    project_id = uuid4()
+    asset_id = uuid4()
+    version_id = uuid4()
+    source_id = uuid4()
+    await upgrade_database(migration_engine, revision=NARRATIVE_REVISION)
+    async with migration_engine.begin() as connection:
+        values = {
+            "actor_id": actor_id,
+            "workspace_id": workspace_id,
+            "project_id": project_id,
+            "asset_id": asset_id,
+            "version_id": version_id,
+            "source_id": source_id,
+            "spec": json.dumps(
+                {
+                    "kind": "character",
+                    "identity": "沈岚",
+                    "appearance": "常服",
+                    "age_impression": "31 岁",
+                    "temperament": ["坚定"],
+                },
+                ensure_ascii=False,
+            ),
+            "content_hash": "a" * 64,
+        }
+        await connection.execute(
+            text(
+                """
+                INSERT INTO idn_user_accounts (
+                    id, email_normalized, password_hash, token_version,
+                    display_name, status, created_at, updated_at
+                ) VALUES (
+                    :actor_id, 'asset-state-migration@example.test', 'hash', 1,
+                    'Asset State Migration', 'active', now(), now()
+                )
+                """
+            ),
+            values,
+        )
+        await connection.execute(
+            text(
+                """
+                INSERT INTO idn_workspaces (
+                    id, name, status, revision, created_at, updated_at
+                ) VALUES (
+                    :workspace_id, 'Migration Workspace', 'active', 1, now(), now()
+                )
+                """
+            ),
+            values,
+        )
+        await connection.execute(
+            text(
+                """
+                INSERT INTO prj_projects (
+                    id, workspace_id, name, aspect_ratio, language,
+                    target_duration_ms, budget_limit, currency, status, revision,
+                    created_at, updated_at
+                ) VALUES (
+                    :project_id, :workspace_id, 'Migration Project', '9:16', 'zh-CN',
+                    90000, 0, 'CNY', 'active', 1, now(), now()
+                )
+                """
+            ),
+            values,
+        )
+        await connection.execute(
+            text(
+                """
+                INSERT INTO ast_assets (
+                    id, workspace_id, project_id, kind, name, normalized_name,
+                    aliases, tags, status, current_version_id, revision, created_by,
+                    created_at, updated_at
+                ) VALUES (
+                    :asset_id, :workspace_id, :project_id, 'character', '沈岚', '沈岚',
+                    ARRAY[]::text[], ARRAY[]::text[], 'active', NULL, 1, :actor_id,
+                    now(), now()
+                )
+                """
+            ),
+            values,
+        )
+        await connection.execute(
+            text(
+                """
+                INSERT INTO ast_asset_versions (
+                    id, workspace_id, asset_id, version_no, schema_version, spec,
+                    prompt_description, source_type, source_id, content_hash,
+                    created_by, created_at
+                ) VALUES (
+                    :version_id, :workspace_id, :asset_id, 1, 1, CAST(:spec AS jsonb),
+                    '迁移前版本', 'candidate', :source_id, :content_hash,
+                    :actor_id, now()
+                )
+                """
+            ),
+            values,
+        )
+        await connection.execute(
+            text("UPDATE ast_assets SET current_version_id = :version_id WHERE id = :asset_id"),
+            values,
+        )
+
+    await upgrade_database(migration_engine)
+
+    async with migration_engine.connect() as connection:
+        asset_columns = {
+            column["name"]
+            for column in await connection.run_sync(
+                lambda sync: inspect(sync).get_columns("ast_assets")
+            )
+        }
+        state = (
+            await connection.execute(
+                text(
+                    "SELECT id, state_key, current_version_id FROM ast_asset_states "
+                    "WHERE asset_id = :asset_id"
+                ),
+                {"asset_id": asset_id},
+            )
+        ).one()
+        migrated_version = (
+            await connection.execute(
+                text(
+                    "SELECT asset_state_id, source_type FROM ast_asset_versions "
+                    "WHERE id = :version_id"
+                ),
+                {"version_id": version_id},
+            )
+        ).one()
+    assert "current_version_id" not in asset_columns
+    assert state.state_key == "base"
+    assert state.current_version_id == version_id
+    assert migrated_version.asset_state_id == state.id
+    assert migrated_version.source_type == "script_extraction_candidate"
+
+    await downgrade_database(migration_engine, NARRATIVE_REVISION)
+    async with migration_engine.connect() as connection:
+        restored = (
+            await connection.execute(
+                text(
+                    "SELECT a.current_version_id, v.source_type "
+                    "FROM ast_assets AS a "
+                    "JOIN ast_asset_versions AS v ON v.asset_id = a.id "
+                    "WHERE a.id = :asset_id"
+                ),
+                {"asset_id": asset_id},
+            )
+        ).one()
+    assert restored.current_version_id == version_id
+    assert restored.source_type == "candidate"
 
 
 @pytest.mark.asyncio
