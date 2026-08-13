@@ -51,13 +51,27 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 
 每个 `DEV-MVPA-*` 的实现记录必须先回答以下问题，不以 README 功能表、stars 或搜索摘要代替源码审查：
 
-1. 至少检索 3 个候选：AI 短剧/影视领域实现、成熟横向工程、官方标准或维护方示例各优先一个；无合适候选时记录查询式和排除理由。
+1. 每个业务模块先建立不少于 5 个候选的证据池：至少 3 个 AI 短剧/影视领域实现，以及 2 个有跨年度维护、正式发布或系统测试的横向工程/官方标准；无合适候选时记录查询式和排除理由。多个 DEV 可复用同一模块证据池，但必须重新核对固定 commit 之后的本地 delta。
 2. 固定仓库 commit/release，阅读 LICENSE 全文、关键模型/服务、迁移或状态机、核心测试和未完成 TODO；记录最后活跃时间只作为风险信号。
 3. 对每个候选给出 `直接复用 / 适配概念 / 明确不采用`，说明本地依赖、数据迁移、失败恢复、许可证和维护成本。
 4. 先写本地 delta：哪些能力当前仓库已有、哪些是真缺口；禁止为追随上游建立第二套 Episode、Task、Asset、Candidate、Media 或异常体系。
 5. 只有证据表、Red 和最小 spike 同时支持方案时才进入 Green；spike 代码在评审前保持未提交，结论不成立就删除而不建立兼容层。
 
-每个 DEV 预留 0.5–1 个工程日完成本 Gate，已包含在 71 人周基准中；若候选许可证、维护状态或 PoC 失败导致方案变化，先更新估算和 Design，再继续编码。
+星标、README 能力表和短期 release 数不能单独证明成熟。候选只有同时具备清晰许可证、可定位的核心源码、相关失败测试、可解释的数据身份/状态，以及与 Lanverse 不变量相容的依赖边界，才可进入“直接复用”；缺一项则降为“适配概念”或“明确不采用”。
+
+剧本、资产、分镜三个模块的共享证据池在进入首个对应 DEV 前集中建立；后续每个 DEV 仍预留 0.5–1 个工程日核对增量，已包含在 71 人周基准中。若候选许可证、维护状态或 PoC 失败导致方案变化，先更新估算和 Design，再继续编码。
+
+### 3.2 成熟度与代码准入判定
+
+| 检查面 | 可直接复用必须满足 | 只作概念参考的典型情形 | 直接拒绝的典型情形 |
+| --- | --- | --- | --- |
+| 许可证 | 仓库根 LICENSE 与逐文件声明一致，允许当前分发/托管方式 | AGPL/ELv2 只研究公开行为与模型，不复制代码 | 无 LICENSE、非商业、托管限制或附加商业条款与目标冲突 |
+| 维护 | 有跨年度历史或稳定 release，关键路径非单人一次性原型 | 2026 年新短剧项目虽活跃，只用于验证领域流程 | README 宣称完成但源码/TODO/测试无法支撑 |
+| 正确性 | 有与本任务同构的边界、并发、失败恢复测试 | 只有 happy path 或模型 mock，需要本地 Red 重建契约 | 静默截断、删除重建、名称/序号作长期身份 |
+| 数据模型 | 稳定身份、不可变修订/版本、显式引用和可恢复状态 | 可借鉴 UI/步骤，但本地必须重新建血缘 | 与现有 Episode/Task/Asset/Media 平行造第二套事实 |
+| 集成成本 | 依赖体量、运行时和迁移成本小于自行实现的已证实最小内核 | 仅提取算法/测试语料，不引入整套框架 | 为 P0 txt/md 引入 PDF/OCR/ETL 或另一套队列/数据库 |
+
+截至 2026-08-13，Jellyfish、LocalMiniDrama、ai-fusion-video、DramaClaw、ArcReel、wind-comic 均创建于 2026 年；它们可作为高相关领域证据，但不能单独承担“成熟工程事实源”。跨年度的 Fountain.js、Unstructured、OpenTimelineIO、OpenAssetIO、Kitsu/Zou 等用于校验解析、身份、版本和制作追踪不变量。结论不是整仓拼装，而是“能直接复用的局部复用，无法证明守恒的部分用本地最小实现并由上游测试语料约束”。
 
 ## 4. 数据迁移策略
 
@@ -79,7 +93,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 
 | DEV | 当前状态 | 对应 PT | 基准人周 | 前置 | 可领取结果 |
 | --- | --- | --- | ---: | --- | --- |
-| DEV-MVPA-01 | in_progress（上游研究/Red/Green 已完成；待恢复证据） | PT-DAT-004 | 3 | G-MVPA-001；G-MVPA-003/006 关闭后 accepted | Alembic baseline、三路径 migration harness、启动 revision check |
+| DEV-MVPA-01 | in_progress（上游研究/Red/Green/合成恢复演练已完成；待自有旧库恢复证据） | PT-DAT-004 | 3 | G-MVPA-001；G-MVPA-003/006 关闭后 accepted | Alembic baseline、三路径 migration harness、启动 revision check |
 | DEV-MVPA-02 | blocked（G-MVPA-002） | 全部新增 PT 的 fixture/契约门禁 | 2 | MVPA-01 | 黄金样本、格式语料、覆盖 oracle、OpenAPI/模型契约冻结 |
 | DEV-MVPA-03 | proposed | PT-SCR-006 | 8 | MVPA-02 | 整剧 text/txt/md、Document/Revision/Block、格式分析 UI |
 | DEV-MVPA-04 | proposed | PT-SCR-007 | 9 | MVPA-03 | 一个分集建议、边界编辑、confirm、批量物化和项目页回读 |
@@ -113,6 +127,7 @@ DEV-MVPA-01 当前证据记录：
 | FastAPI full-stack template `c350936` | [prestart 独立 upgrade](https://github.com/fastapi/full-stack-fastapi-template/blob/c350936d2888ef16ff4f5549684fd8db54935a89/backend/scripts/prestart.sh)、[Metadata env](https://github.com/fastapi/full-stack-fastapi-template/blob/c350936d2888ef16ff4f5549684fd8db54935a89/backend/app/alembic/env.py)；MIT | 适配部署次序和单 Metadata autogenerate | 不复制同步 SQLModel engine、初始化数据和 5 分钟固定重试；Web/Worker 不执行 upgrade |
 | Safir `5d6f3c1` | [async Alembic helper](https://github.com/lsst-sqre/safir/blob/5d6f3c119c84acbc9dc3b75b7435bf30a9d9afc1/src/safir/database/_alembic.py)；MIT | 适配 `current heads == script heads` fail-closed gate | 其 stamp helper 不比较 schema；Lanverse 不直接暴露无验证 stamp |
 | Kitsu/Zou `eeefd7b` | [当前 Alembic revisions](https://github.com/cgwire/zou/tree/eeefd7b557802fa073feb93bd90970dcf514e4b5/zou/migrations/versions)；AGPL-3.0 | 只作为成熟影视生产系统长期迁移的存在证据 | 不复制 Flask 模型、通用 Entity/JSONB 或 migration 代码 |
+| PostgreSQL 18 官方 | [`pg_dump` custom archive](https://www.postgresql.org/docs/18/app-pgdump.html)、[`pg_restore --single-transaction --exit-on-error`](https://www.postgresql.org/docs/18/app-pgrestore.html) | 直接采用可选择、可校验且单事务失败回滚的恢复链路 | 备份成功不代表可恢复；必须在由 `template0` 创建的隔离目标库验证数据与 revision |
 
 本轮对标后的实现决定是：保留独立 upgrade、async connection sharing、显式 model registry、所有运行入口严格 head gate；旧库 adoption helper 先验证表、列、类型、默认值、约束和索引，并要求安全格式的备份引用，不允许把 `command.stamp` 暴露成通用快捷命令。自动生成 baseline 已人工补齐四条 `use_alter` 循环外键；命令成功仍不替代真实恢复演练。
 
@@ -121,7 +136,8 @@ DEV-MVPA-01 当前实现证据（2026-08-13）：
 - baseline 固定当前 42 张业务表；空库 `upgrade head` 后 `current --check-heads` 与 `alembic check` 通过，`downgrade base` 后业务表为 0；
 - 模拟旧 `create_all` 数据库写入黄金行后严格接管，revision 到 head 且数据保留；未知表、缺索引、缺外键三类漂移均拒绝且不 stamp；
 - 统一 server、独立 Scheduler、I/O Worker、Media Worker 均在业务操作前 fail closed；Docker 镜像显式包含 revision 目录，CI Ruff 覆盖 `alembic/`；
-- 以上是专用 `lanverse_test` PostgreSQL 的工程 Green。尚未取得团队自有旧库、数据库系统真实备份和恢复后的逐行/hash 核对，因此不创建 Acceptance、不关闭 G-MVPA-003，也不领取 DEV-MVPA-02。
+- 合成备份恢复演练使用两个名称固定且以 `_test` 结尾的临时 PostgreSQL 库：源库由 `template0 → alembic upgrade head` 创建并写入一条测试账号，`pg_dump -Fc --no-owner --no-privileges` 后在空目标库以 `pg_restore --single-transaction --exit-on-error` 恢复；43 张表的逐表行数和排序行内容 hash 完全一致，目标 revision 为 `95c0d24572c5`，`current --check-heads` 与 `alembic check` 通过，演练结束后两个临时库均已删除；
+- 以上证明 migration-managed 数据库的工具链和 fail-closed 校验可以工作，不证明团队旧库结构、真实数据规模、锁影响、恢复时长或 RPO/RTO。尚未取得团队自有旧库及其运维侧备份引用，因此不创建 Acceptance、不关闭 G-MVPA-003，也不领取 DEV-MVPA-02。
 
 Red：
 
@@ -144,6 +160,21 @@ Refactor/退出：
 
 ### 6.2 DEV-MVPA-03：整剧导入与格式体检
 
+GitHub 证据池（固定于 2026-08-13）先于实现：
+
+| 候选 | 固定源码/测试与许可证 | 证据结论 | 准入决定 |
+| --- | --- | --- | --- |
+| LocalMiniDrama `05f90fb` | [集标记解析器](https://github.com/xuanyustudio/LocalMiniDrama/blob/05f90fb9ec21dea5753e324b673fc8a96bc6b2e0/frontweb/src/utils/scriptEpisodes.js#L6-L77)、[Episode 表](https://github.com/xuanyustudio/LocalMiniDrama/blob/05f90fb9ec21dea5753e324b673fc8a96bc6b2e0/backend-node/migrations/01_init.sql#L20-L38)；MIT | 中文/全角数字/括号标记覆盖面有价值；解析前后 `trim` 且只返回正文副本，未发现该解析器的边界测试，也不保留 code-point span | 只吸收格式语料与误判样例；不复制为 Lanverse parser，不复用其单字段 Episode 模型 |
+| DramaClaw `09b04c5` | [ChapterDetector](https://github.com/dramaclaw/dramaclaw/blob/09b04c5a056afa2b7baaf3b4d46995bedede6bc0/src/novelvideo/cognee/chapter_detector.py#L42-L114)、[嵌入章节引用/结尾句/场景块测试](https://github.com/dramaclaw/dramaclaw/blob/09b04c5a056afa2b7baaf3b4d46995bedede6bc0/tests/test_api_ingest_chapter_preview.py#L103-L250)、[ELv2 说明](https://github.com/dramaclaw/dramaclaw/blob/09b04c5a056afa2b7baaf3b4d46995bedede6bc0/docs/zh/license.md) | 证明“第一集结束”与正文中的“原著第九章”不能误切；实现只保存行号/重组 content，未给不可变修订与精确字符区间 | 只复用测试分类；ELv2 禁止把其功能作为第三方托管服务，当前平台不得复制代码 |
+| Fountain.js `fcfa86a` | [lexer/tokenizer](https://github.com/mattdaly/Fountain.js/blob/fcfa86abca2a3d57337f901c7727a2fd9b1946b1/fountain.js#L2-L154)；MIT，始于 2012 年 | 成熟地分类 scene heading/dialogue/action；但标准化换行、清除缩进、按空行切块并 trim，token 无原文坐标 | 适配元素分类和 fixture 思路；不引入 JS 依赖，不用其 token 作 NarrativeBlock 身份 |
+| screenplay-tools `d0fc871` | [Python 增量 parser](https://github.com/wildwinter/screenplay-tools/blob/d0fc871f02a8bdaa66a107bf6005081a0974ef2f/python/src/screenplay_tools/fountain/parser.py#L29-L182)、[UTF-8/格式回归](https://github.com/wildwinter/screenplay-tools/blob/d0fc871f02a8bdaa66a107bf6005081a0974ef2f/python/tests/fountain/test_parser.py)；MIT | Python/JS/C#/C++ 多实现和真实 `.fountain` corpus 有利于元素 taxonomy；默认 `splitlines/strip` 并合并连续 action/dialogue，不保留原区间 | 只复用 taxonomy 和测试设计；P0 不支持 `.fountain/.fdx`，不引入依赖 |
+| Unstructured `8c4592a` | [txt partition](https://github.com/Unstructured-IO/unstructured/blob/8c4592a136b8abfa2e0ead78a45c3bfcf29479f8/unstructured/partition/text.py#L45-L108)、[编码/输入互斥测试](https://github.com/Unstructured-IO/unstructured/blob/8c4592a136b8abfa2e0ead78a45c3bfcf29479f8/test_unstructured/partition/test_text.py#L43-L180)；Apache-2.0，跨年度 236 个 GitHub release | 成熟格式分派、编码错误和 filename/file/text 互斥契约可借鉴；默认会自动合段、strip、分类，且接受 UTF-16/32，依赖远超 P0 | 明确不引入；Lanverse 只接受严格 UTF-8 txt/md，并保留原文坐标 |
+| wind-comic `c83e1cf` | [中文剧本 parser](https://github.com/ChrisChen667788/wind-comic/blob/c83e1cf5e9b88fa8ac62bb737c79985a95243b8d/lib/script-parser.ts#L18-L190)；MIT | 覆盖中文场景/对白/动作，但先对每行 trim 并删除空行；结果只有章节号、场景 ID 与聚合文本 | 明确不采用 parser；空行和字符范围丢失会直接破坏 gap=0/overlap=0 验收 |
+
+本地 delta 已核对：现有 `ScriptSource/ScriptVersion` 是 Episode 级不可变正文，`Scene/Dialogue` 只锚定一个 ScriptVersion；`Project/Episode` 与 current script CAS 已存在；Task/Outbox 已存在；Media 上传链存在，但 `MediaObject.kind` 和 UploadSession 目前没有 `document`。因此本任务只新增项目级 Document vertical slice 和 `document` 媒体用途，不能再建 Episode、Task、Blob 或第二套剧本版本。
+
+综合决定：没有候选同时满足“中国短剧集标记 + 严格 UTF-8 + 全文 code-point 区间守恒 + 当前 Python/SQLAlchemy 模块边界”。首期应实现一个很小的内部 span-preserving scanner，但它不是自由发挥：规则/误判 corpus 取自上述项目，输入/编码契约取自 Unstructured 的失败测试，所有输出都必须由原文切片重建并做 hash/gap/overlap 校验。2026-08-13 已完成源码与许可证子 Gate；G-MVPA-002 关闭并形成本地 Red/隔离 spike 前，G-MVPA-006 仍不关闭，也不写生产 parser。
+
 Red：编码、MIME、100k 上限、显式标记、缺号/重复/空集、gap/overlap、跨空间、幂等、Worker 重启和正文泄漏先失败。
 
 Green：
@@ -156,6 +187,20 @@ Green：
 退出：PT-SCR-006 的确定性 10 份格式语料全过，Document/Revision/Block 可刷新回读，零 Episode 写入。
 
 ### 6.3 DEV-MVPA-04：EpisodePlan 与批量物化
+
+GitHub 证据池（固定于 2026-08-13）先于实现：
+
+| 候选 | 固定源码/测试与许可证 | 可吸收的不变量 | 不采用项 |
+| --- | --- | --- | --- |
+| ArcReel `ed71819` | [分集账本 ADR](https://github.com/ArcReel/ArcReel/blob/ed71819aadf81015c0af4b3f5db0815607e04fae/docs/adr/0031-episode-ledger-single-source-of-truth.md)、[服务端分批规划 ADR](https://github.com/ArcReel/ArcReel/blob/ed71819aadf81015c0af4b3f5db0815607e04fae/docs/adr/0032-episode-planning-server-side-batched.md)、[source range/fingerprint](https://github.com/ArcReel/ArcReel/blob/ed71819aadf81015c0af4b3f5db0815607e04fae/lib/episode_ledger.py#L44-L177)、[锚点/Unicode/冲突测试](https://github.com/ArcReel/ArcReel/blob/ed71819aadf81015c0af4b3f5db0815607e04fae/tests/test_episode_planner.py#L281-L711)；AGPL-3.0 | 原稿指纹、连续 source range、唯一 end anchor、机械校验后重试、并发变化拒绝、重规划只 stale 不删历史 | AGPL 代码不进入当前平台；不采用 `project.json` SSOT、物理 episode 文件和滚动 cursor 作为正式 DB 模型 |
+| DramaClaw `09b04c5` | [EpisodePlanner 结构化输出/多轮工具](https://github.com/dramaclaw/dramaclaw/blob/09b04c5a056afa2b7baaf3b4d46995bedede6bc0/src/novelvideo/agents/episode_planner.py#L30-L231)、[ELv2](https://github.com/dramaclaw/dramaclaw/blob/09b04c5a056afa2b7baaf3b4d46995bedede6bc0/LICENSES/Elastic-2.0.txt) | 分集建议应显式给标题、冲突、钩子、关键事件、人物和章节范围；角色列表可约束模型输出 | 只给估计 chapter_start/end，未发现 plan revision/CAS/物化原子性同构测试；ELv2 不复制代码，不引入其图谱/Agent 框架 |
+| LocalMiniDrama `05f90fb` | [确定性拆集](https://github.com/xuanyustudio/LocalMiniDrama/blob/05f90fb9ec21dea5753e324b673fc8a96bc6b2e0/frontweb/src/utils/scriptEpisodes.js#L6-L77)、[Episode/Storyboard schema](https://github.com/xuanyustudio/LocalMiniDrama/blob/05f90fb9ec21dea5753e324b673fc8a96bc6b2e0/backend-node/migrations/01_init.sql#L20-L60)；MIT | 有显式标记时应跳过 LLM，得到可解释确定性集数 | 解析结果直接成为 Episode script_content；没有 reviewable Plan、expected revision、幂等批量提交或历史来源 |
+| Jellyfish `a967819` | [结构化 ShotDivision](https://github.com/Forget-C/Jellyfish/blob/a9678194ddf2d9be3ccbe78d4287d87d5089e123/backend/app/schemas/skills/script_processing.py#L17-L44)、[已有镜头时 fail 的写库服务与测试](https://github.com/Forget-C/Jellyfish/blob/a9678194ddf2d9be3ccbe78d4287d87d5089e123/backend/tests/test_script_division.py#L47-L109)；Apache-2.0 | AI 只产结构化候选，正式对象写入前检查既有状态；冲突应拒绝而非覆盖 | start/end 只做 `ge=1`，未证明全集覆盖；Shot 仅存 excerpt，不能替代 EpisodePlan/ImportCommit |
+| OpenTimelineIO `bc5fe2d` | [Timeline/Track/Clip/MediaReference 层级](https://github.com/AcademySoftwareFoundation/OpenTimelineIO/blob/bc5fe2d78dc3f8b2a8feb7e04483d85a12e80072/docs/tutorials/otio-timeline-structure.md)、[镜头增删用例](https://github.com/AcademySoftwareFoundation/OpenTimelineIO/blob/bc5fe2d78dc3f8b2a8feb7e04483d85a12e80072/docs/use-cases/shots-added-removed-from-cut.md)；Apache-2.0，始于 2016 年 | 顺序与稳定 Clip 身份应分离；变更后用 manifest/diff 通知下游 | 它是编辑互换模型，不决定叙事分集；MVP 不引入 OTIO 依赖或把 Episode 当 Clip |
+
+本地 delta 已核对：现有 `Project.revision`、Episode active position 唯一约束、Episode current script version CAS、ScriptSource/Version idempotency 均应复用；缺口仅是 `EpisodePlan/Proposal/ImportCommit/EpisodeSegmentOrigin` 和一个 projects 批量命令。批量物化必须由 projects 持锁并一次事务写完整顺序；scripts 只能通过 Protocol 请求，不能越界直接写 `prj_episodes`。
+
+综合决定：显式集标记走确定性 scanner；无标记时 DeepSeek 只返回一个带 block/anchor、预计时长、理由与置信度的候选。服务端独立验证锚点唯一、边界单调、全文并集守恒和计划输入 hash；人工 confirm 后才执行 ImportCommit。该方案吸收 ArcReel 的“指纹 + 锚点 + validator + stale”和 Jellyfish 的“候选与写入分离”，但以 Lanverse 不可变 DocumentRevision、Plan revision、数据库 CAS 与事务实现，避免复制 AGPL/ELv2 代码或引入平行账本。2026-08-13 已完成源码与许可证子 Gate；黄金 fixture、本地 Red 和事务 spike 未完成前不得进入 Green。
 
 Red：非法边界、跨 block 切分、陈旧 revision、同键异输入、并发 confirm、部分 Episode/current、重复物化和已有项目影响先失败。
 
