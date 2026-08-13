@@ -554,6 +554,23 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   ).toContainText("2 / 2");
   await expect(page.getByText(/服务端计算 90%/)).toBeVisible();
 
+  const exportCard = page
+    .locator('[data-slot="card"]')
+    .filter({ hasText: "可信分镜包" });
+  await exportCard.getByRole("button", { name: "检查导出条件" }).click();
+  await expect(page.getByRole("status")).toContainText("导出预检通过");
+  await expect(exportCard.getByLabel("分镜包预检结果")).toContainText(
+    "预检结果：可导出",
+  );
+  await exportCard.getByRole("button", { name: "生成分镜包" }).click();
+  await expect(page.getByRole("status")).toContainText("可信分镜包任务已创建");
+  await expect(exportCard.getByText("可下载", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(
+    exportCard.getByRole("button", { name: "下载分镜包" }),
+  ).toBeEnabled();
+
   await page.goto("/projects");
   await page.getByRole("link", { name: `打开项目 ${projectName}` }).click();
   const projectSummary = page.getByRole("region", { name: "项目生产摘要" });

@@ -1,5 +1,8 @@
 import hashlib
+import io
 import os
+import zipfile
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import cast
 from urllib.parse import unquote, urlparse
@@ -10,8 +13,10 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app import media_worker
 from app.core.config import Settings
 from app.integrations.minio import MinioObjectStorage
+from app.modules.media import MediaProbePort, MediaProbeResult
 from app.modules.media.expiration_consumer import consume_upload_expiration
 from app.modules.media.models import MediaVersion, UploadSession
 from app.modules.media.storage import StorageObjectNotFound
@@ -20,7 +25,35 @@ from app.modules.messaging.models import OutboxEvent
 from app.modules.production.models import Task
 from app.modules.scheduling.dispatcher import dispatch_due_schedules
 from app.modules.scheduling.models import Schedule
+from app.modules.storyboards.exports.models import StoryboardExportManifest
+from tests.integration.storyboards.test_storyboard_exports import (
+    create_ready_export_episode,
+)
 from tests.support.identity_builders import register_identity_response
+
+
+class ContractMessage:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+        self.ack_count = 0
+        self.nack_requeues: list[bool] = []
+
+    async def ack(self) -> None:
+        self.ack_count += 1
+
+    async def nack(self, *, requeue: bool) -> None:
+        self.nack_requeues.append(requeue)
+
+
+class NoDeliveryProbe(MediaProbePort):
+    async def probe(
+        self,
+        content: AsyncIterator[bytes],
+        *,
+        kind: str,
+        mime_type: str,
+    ) -> MediaProbeResult:
+        raise AssertionError("storyboard delivery packages do not require probing")
 
 
 @pytest.mark.skipif(
@@ -100,6 +133,106 @@ async def test_media_api_completes_a_real_private_minio_upload(
             downloaded = await external.get(access.json()["data"]["url"])
         assert downloaded.status_code == 200
         assert downloaded.content == content
+    finally:
+        await storage.delete(object_key)
+
+
+@pytest.mark.skipif(
+    os.getenv("LANVERSE_RUN_MINIO_CONTRACT") != "1",
+    reason="set LANVERSE_RUN_MINIO_CONTRACT=1 with the explicit MinIO profile running",
+)
+@pytest.mark.asyncio
+async def test_storyboard_export_uses_private_minio_and_controlled_download(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    test_settings: Settings,
+) -> None:
+    storage = MinioObjectStorage(
+        test_settings.minio_endpoint,
+        test_settings.minio_access_key,
+        test_settings.minio_secret_key,
+        test_settings.minio_bucket,
+        secure=test_settings.minio_secure,
+        thread_limit=test_settings.storage_thread_limit,
+    )
+    await storage.ensure_bucket()
+    headers, episode, refs, _asset_version = await create_ready_export_episode(
+        client,
+        session_factory,
+        email="storyboard-export-minio@example.com",
+    )
+    preflight = await client.post(
+        f"/api/v1/episodes/{episode['id']}/storyboard-exports/preflight",
+        headers=headers,
+    )
+    assert preflight.status_code == 200
+    created = await client.post(
+        f"/api/v1/episodes/{episode['id']}/storyboard-exports",
+        headers=headers,
+        json={
+            "expected_input_hash": preflight.json()["data"]["input_hash"],
+            "idempotency_key": "storyboard-export-real-minio",
+        },
+    )
+    assert created.status_code == 202
+    export = created.json()["data"]
+    async with session_factory() as session:
+        event = await session.scalar(
+            select(OutboxEvent).where(
+                OutboxEvent.aggregate_id == UUID(export["task_id"])
+            )
+        )
+        assert event is not None
+        body = envelope_from_event(event).model_dump_json().encode()
+
+    object_key = f"exports/{refs['workspace_id']}/{export['id']}.zip"
+    message = ContractMessage(body)
+    try:
+        assert (
+            await media_worker.process_incoming_message(
+                message,
+                session_factory,
+                storage=storage,
+                probe=NoDeliveryProbe(),
+            )
+            == "completed"
+        )
+        assert message.ack_count == 1
+        package_bytes = b"".join(
+            [chunk async for chunk in storage.stream(object_key)]
+        )
+        with zipfile.ZipFile(io.BytesIO(package_bytes)) as package:
+            assert package.namelist() == [
+                "manifest.json",
+                "storyboard.csv",
+                "storyboard.html",
+                "storyboard.json",
+            ]
+        async with session_factory() as session:
+            manifest = await session.scalar(
+                select(StoryboardExportManifest).where(
+                    StoryboardExportManifest.job_id == UUID(export["id"])
+                )
+            )
+            assert manifest is not None
+            media_version_id = manifest.media_version_id
+        access = await client.post(
+            f"/api/v1/media/{media_version_id}/access",
+            headers=headers,
+            json={"purpose": "download"},
+        )
+        assert access.status_code == 200
+        scheme = "https" if test_settings.minio_secure else "http"
+        anonymous_url = (
+            f"{scheme}://{test_settings.minio_endpoint}/"
+            f"{test_settings.minio_bucket}/{object_key}"
+        )
+        async with httpx.AsyncClient(timeout=5) as external:
+            downloaded = await external.get(access.json()["data"]["url"])
+            anonymous = await external.get(anonymous_url)
+        assert downloaded.status_code == 200
+        assert downloaded.content == package_bytes
+        assert anonymous.status_code in {401, 403}
     finally:
         await storage.delete(object_key)
 

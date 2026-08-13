@@ -622,21 +622,29 @@ async def _wait_for_server(
     raise RuntimeError("performance API process did not become healthy")
 
 
-async def _request_profile_pair(
+async def _request_profile(
     client: httpx.AsyncClient,
     *,
     episode_id: str,
     headers: dict[str, str],
     expected_count: int,
-) -> tuple[str, str]:
+) -> tuple[str, str, str, str]:
     list_request_id = str(uuid7())
+    coverage_request_id = str(uuid7())
     readiness_request_id = str(uuid7())
+    export_request_id = str(uuid7())
     listed = await client.get(
         f"/api/v1/episodes/{episode_id}/shots",
         headers={**headers, "x-request-id": list_request_id},
     )
     assert listed.status_code == 200, listed.text
     assert len(listed.json()["data"]["items"]) == expected_count
+    coverage = await client.get(
+        f"/api/v1/episodes/{episode_id}/coverage",
+        headers={**headers, "x-request-id": coverage_request_id},
+    )
+    assert coverage.status_code == 200, coverage.text
+    assert coverage.json()["data"]["status"] == "ready"
     readiness = await client.get(
         f"/api/v1/episodes/{episode_id}/shot-readiness",
         headers={**headers, "x-request-id": readiness_request_id},
@@ -649,7 +657,20 @@ async def _request_profile_pair(
         "blocked": 0,
         "unavailable": 0,
     }
-    return list_request_id, readiness_request_id
+    export = await client.post(
+        f"/api/v1/episodes/{episode_id}/storyboard-exports/preflight",
+        headers={**headers, "x-request-id": export_request_id},
+    )
+    assert export.status_code == 200, export.text
+    export_data = export.json()["data"]
+    assert export_data["status"] == "ready"
+    assert len(export_data["shot_spec_version_ids"]) == expected_count
+    return (
+        list_request_id,
+        coverage_request_id,
+        readiness_request_id,
+        export_request_id,
+    )
 
 
 async def _exercise_reorder(
@@ -733,7 +754,10 @@ async def test_fixed_storyboard_performance_profile(
         "DEEPSEEK_API_KEY": "",
         "LOG_LEVEL": "INFO",
     }
-    sample_request_ids: dict[int, list[tuple[str, str]]] = {36: [], 120: []}
+    sample_request_ids: dict[int, list[tuple[str, str, str, str]]] = {
+        36: [],
+        120: [],
+    }
 
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as server_log:
         process = await asyncio.create_subprocess_exec(
@@ -765,7 +789,7 @@ async def test_fixed_storyboard_performance_profile(
                     for shot_count in (12, 36, 120)
                 }
                 headers_12, episode_12 = episodes[12]
-                await _request_profile_pair(
+                await _request_profile(
                     client,
                     episode_id=episode_12,
                     headers=headers_12,
@@ -774,7 +798,7 @@ async def test_fixed_storyboard_performance_profile(
                 for shot_count in (36, 120):
                     headers, episode_id = episodes[shot_count]
                     for _ in range(10):
-                        await _request_profile_pair(
+                        await _request_profile(
                             client,
                             episode_id=episode_id,
                             headers=headers,
@@ -782,7 +806,7 @@ async def test_fixed_storyboard_performance_profile(
                         )
                     for _ in range(50):
                         sample_request_ids[shot_count].append(
-                            await _request_profile_pair(
+                            await _request_profile(
                                 client,
                                 episode_id=episode_id,
                                 headers=headers,
@@ -809,8 +833,8 @@ async def test_fixed_storyboard_performance_profile(
     p95_results: dict[int, float] = {}
     for shot_count, request_ids in sample_request_ids.items():
         combined_samples = [
-            durations[list_request_id] + durations[readiness_request_id]
-            for list_request_id, readiness_request_id in request_ids
+            sum(durations[request_id] for request_id in profile_ids)
+            for profile_ids in request_ids
         ]
         p95_results[shot_count] = _percentile_95(combined_samples)
 
@@ -824,6 +848,12 @@ async def test_fixed_storyboard_performance_profile(
             "fixture_sizes": [12, 36, 120],
             "warmups": 10,
             "samples": 50,
+            "requests_per_sample": [
+                "shot_list",
+                "coverage",
+                "readiness",
+                "export_preflight",
+            ],
             "reorders_120": 30,
             "processes": 1,
         },
