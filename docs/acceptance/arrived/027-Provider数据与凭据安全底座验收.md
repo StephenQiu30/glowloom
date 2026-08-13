@@ -43,3 +43,7 @@ DEV-AIP-01 没有 Repository、Service、Router 或 UI，因此尚未证明 owne
 生产 KMS/Secret Manager 产品、密钥轮换命令和恢复演练尚未选择或实现。当前单 key_id cipher 对未知/旧 key_id 明确 fail closed；DEV-AIP-05 实现逐条重加密前不能宣称主密钥轮换可用。
 
 没有读取或迁移现有 `DEEPSEEK_API_KEY`/`ARK_API_KEY`，也没有真实 Provider 网络调用、模型准入、费用或页面结果。DeepSeek 数据库单向切换仍由 DEV-AIP-06 和真实账号/额度门禁负责，Ark/Seedream/Seedance 继续受 D-004 阻断。
+
+## 5. 后续迁移闭环（2026-08-13）
+
+本记录验收时“只有空库 `create_all()`、未证明存量迁移”的风险已由 [Acceptance 028](./028-Alembic历史旧库迁移与恢复验收.md) 关闭：真实 Provider 引入前 38 表/19 行本机旧库经仓库外备份、恢复副本、历史 baseline 接管和独立 Provider revision 升级到 42 表 head，旧表内容 hash 守恒。该后续证据只关闭数据迁移风险，不扩展本记录尚未接受的 Provider API、RBAC、运行时解析或真实调用范围。

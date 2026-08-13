@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01 等待自有旧库备份/恢复演练；DEV-MVPA-02 已有用户授权的原创合成黄金候选，等待制作人/QA 内容复核）
+- 状态：active（2026-08-13 用户明确要求开始；DEV-MVPA-01/02 已关闭真实旧库迁移与工程黄金 fixture Gate；制作人/QA 内容质量复核保留到分镜/分镜包产品验收；下一任务为 DEV-MVPA-03）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -39,13 +39,13 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | Gate | 当前状态 | 负责人 | 关闭证据 | 未关闭时允许做什么 |
 | --- | --- | --- | --- | --- |
 | G-MVPA-001 范围接受 | closed（2026-08-13 用户明确要求执行） | 产品负责人 | 接受 PRD-012 的 MVP-A、11 个 PT、10 集/100k code points 上限和非目标 | 只评审文档，不改业务代码/表 |
-| G-MVPA-002 黄金样本 | in_progress（格式语料与原创合成黄金候选已 Green；制作人/QA 内容签字待完成） | 产品负责人 + 短剧制作人 + QA | 一部自有或明确接受的原创合成 3–5 集原稿、单集 60–120 秒/12–24 镜、必拍/允许省略标注和预期分集边界入测试 fixture，并完成三方签字 | 可设计、测试用户授权的原创合成候选，不可复制参考稿或伪造质量接受 |
-| G-MVPA-003 迁移决策 | in_progress（实现已 Green；待自有旧库恢复演练） | 技术负责人 | 接受 Alembic 基线/旧库升级/备份恢复方案，并同步修订 DES-002、MOD-011 与 PLAN-000 的“仅 create_all”旧基线 | 不领取新增业务模型；先在团队自有旧库副本保存真实备份/恢复证据 |
+| G-MVPA-002 工程黄金样本 | closed（用户明确接受原创 mock 入库；5 集/20 单元/16 镜 oracle 与 19 项契约 Green） | 产品负责人 + 工程 QA | 自有或明确接受的原创合成 3–5 集原稿、单集 60–120 秒/12–24 镜、必拍/允许省略、状态资产和预期分集边界入 fixture；工程准入与内容质量接受分离 | 制作人/QA 主观内容质量仍是 DEV-MVPA-10～12 产品验收条件；不可复制参考稿或伪造内容质量接受 |
+| G-MVPA-003 迁移决策 | closed（本机真实 38 表/19 行旧库已备份、恢复、接管到 `8d9f2a6c4b71`，旧数据哈希守恒） | 技术负责人 | [Acceptance 028](../acceptance/arrived/028-Alembic历史旧库迁移与恢复验收.md)；DES-002、MOD-011、PLAN-000 同步 | 后续 revision 继续三路径验证；本次小库结果不外推零停机/RPO/RTO |
 | G-MVPA-004 工作区 | closed（计划编写前已核对） | DEV owner | 每个任务开始前重新运行 `git status --short` 并对白名单；不读/提交本地生成产物 | 保留无关产物；重叠修改时停止 |
 | G-MVPA-005 真实依赖 | 当前 S0–S3 已关闭 | QA/工程 | PostgreSQL/RabbitMQ/MinIO/DeepSeek 现有合同回归可运行；新增 AI 分集/改写/分镜只在真实 DeepSeek 授权开关下接受 | 无 Key 可完成纯领域/UI，但 AI PT 保持 blocked；不要求先完成整个 Provider 管理页面 |
 | G-MVPA-006 上游证据 | active（逐 DEV 关闭） | DEV owner + Reviewer | 每个 DEV 在 Green 前提交固定 commit、许可证、核心源码/测试、可复用点、失败模式和“不采用”理由；至少覆盖一个领域方案和一个成熟横向方案 | 只允许只读调研、Red 与隔离 spike；不得提交拍脑袋的生产抽象或新依赖 |
 
-2026-08-13 用户明确要求按本计划执行，因此 G-MVPA-001 已关闭；同日又明确要求增加 GitHub 成熟方案研究，故 DEV-MVPA-01 先以只读研究/隔离 spike 启动。G-MVPA-002 在进入 DEV-MVPA-02 前关闭；G-MVPA-003 只有在迁移对标记录、三路径验证方案和恢复方案评审后才能关闭。任何 DEV 的 G-MVPA-006 未关闭时不得进入 Green。
+2026-08-13 用户明确要求按本计划执行，因此 G-MVPA-001 已关闭；同日又明确要求增加 GitHub 成熟方案研究，故 DEV-MVPA-01 先以只读研究/隔离 spike 启动。用户随后明确允许参考其 DOCX 结构并把原创 mock 放入 `docs/`，因此 G-MVPA-002 只关闭工程 fixture/oracle 准入，制作人/QA 主观质量复核移到实际分镜与分镜包产品验收。真实本机 pre-Alembic 库的备份、恢复副本、原子升级和数据哈希守恒关闭 G-MVPA-003。任何 DEV 的 G-MVPA-006 未关闭时仍不得进入 Green。
 
 ### 3.1 上游证据 Gate 的执行格式
 
@@ -75,17 +75,17 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 
 ## 4. 数据迁移策略
 
-`DEV-MVPA-01` 领取时最大的工程卡点是仓库只对空库执行 `metadata.create_all()`，而本计划会增加多组有引用和回填的新表；当前实现按以下最小方案接管，真实恢复证据仍受 G-MVPA-003 约束：
+`DEV-MVPA-01` 领取时最大的工程卡点是仓库只对空库执行 `metadata.create_all()`，而本计划会增加多组有引用和回填的新表；现已按以下最小方案接管，真实恢复证据见 Acceptance 028：
 
 1. 在 `backend/` 引入 Alembic，锁定版本并建立显式 `alembic.ini`、`alembic/env.py` 和 `alembic/versions/`；不自动扫描插件。
-2. 以领取 `DEV-MVPA-01` 时的完整 `main` SHA 和 SQLAlchemy Metadata 生成并人工审阅 baseline。全新环境执行 `alembic upgrade head`；测试快速建库是否继续使用 `create_all` 由 G-MVPA-003 决定，但集成验收必须走 migration。
-3. 已有数据库不得直接 `stamp head`。先导出 schema/约束/索引快照，与 baseline 做零差异验证；只有完全匹配的库才允许备份后 stamp baseline。
+2. 以真实历史 Metadata 和表结构快照人工校正 revision 边界：`95c0d24572c5` 只固定 Provider 引入前的 38 张业务表，`8d9f2a6c4b71` 再增加 4 张 Provider 表和 Capability 复合唯一约束。全新环境独立执行 `alembic upgrade head`，集成验收必须走 migration。
+3. 已有数据库不得直接 `stamp head`。adoption 只接受两种已知完整签名：当前 42 表结构直接采用 head，或历史 38 表结构采用 baseline 后原子升级；部分 Provider 和任何未知漂移都拒绝且不 stamp。
 4. 新业务表按任务分 revision，不把 13 类核心实体压进一个不可回滚 revision。每个 revision 包含 upgrade、结构校验和可逆的 schema downgrade；涉及已写业务数据时，回滚优先恢复备份或前滚修复，不做破坏性自动 downgrade。
 5. 每次 revision 在三条路径验证：空库到 head、当前 schema 快照到 head、含黄金样本旧库副本到 head；运行前后均核对行数、哈希、复合 FK、唯一约束和 current 指针。
 6. 应用启动只检查数据库 revision 是否为允许版本，不能在 Web 进程自动 upgrade；部署前由独立受控命令执行升级。
 7. Acceptance 必须记录数据库版本、备份位置的脱敏标识、执行时长、锁影响、失败注入、恢复结果和不可外推事项。
 
-首个 baseline 不承担生产零停机承诺。若目标环境包含不可丢失数据且无法提供副本/备份演练，PT-DAT-004 和所有新增模型任务保持 blocked。
+首个 baseline 不承担生产零停机承诺。本机 38 表/19 行数据已完成备份恢复和前滚守恒；任何其他含不可丢失数据的目标环境，仍必须先提供副本/备份演练，不得套用本次小库结论。
 
 ## 5. DEV 执行台账
 
@@ -93,9 +93,9 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 
 | DEV | 当前状态 | 对应 PT | 基准人周 | 前置 | 可领取结果 |
 | --- | --- | --- | ---: | --- | --- |
-| DEV-MVPA-01 | in_progress（上游研究/Red/Green/合成恢复演练已完成；待自有旧库恢复证据） | PT-DAT-004 | 3 | G-MVPA-001；G-MVPA-003/006 关闭后 accepted | Alembic baseline、三路径 migration harness、启动 revision check |
-| DEV-MVPA-02 | blocked（G-MVPA-002） | 全部新增 PT 的 fixture/契约门禁 | 2 | MVPA-01 | 黄金样本、格式语料、覆盖 oracle、OpenAPI/模型契约冻结 |
-| DEV-MVPA-03 | proposed | PT-SCR-006 | 8 | MVPA-02 | 整剧 text/txt/md、Document/Revision/Block、格式分析 UI |
+| DEV-MVPA-01 | completed（真实旧库迁移与 Acceptance 028） | PT-DAT-004 | 3 | G-MVPA-001/003/006 closed | Alembic 历史 baseline、Provider 增量 revision、三路径/恢复、运行 head check |
+| DEV-MVPA-02 | completed（原创 mock、格式语料、覆盖 oracle 与严格 fixture 契约） | 全部新增 PT 的 fixture/契约门禁 | 2 | MVPA-01 | 5 集黄金工程材料、20 单元/16 镜覆盖 oracle、状态资产和模型契约 |
+| DEV-MVPA-03 | ready | PT-SCR-006 | 8 | MVPA-02 | 整剧 text/txt/md、Document/Revision/Block、格式分析 UI |
 | DEV-MVPA-04 | proposed | PT-SCR-007 | 9 | MVPA-03 | 一个分集建议、边界编辑、confirm、批量物化和项目页回读 |
 | DEV-MVPA-05 | proposed | PT-SCR-008 | 9 | MVPA-02 | 单集改写 Run、一个候选、diff/编辑/发布和失败恢复 |
 | DEV-MVPA-06 | proposed | PT-SCR-009 | 14 | MVPA-05 | NarrativeUnit/Version、人工修正、current 影响和下游 stale |
@@ -133,20 +133,23 @@ DEV-MVPA-01 当前证据记录：
 
 DEV-MVPA-01 当前实现证据（2026-08-13）：
 
-- baseline 固定当前 42 张业务表；空库 `upgrade head` 后 `current --check-heads` 与 `alembic check` 通过，`downgrade base` 后业务表为 0；
-- 模拟旧 `create_all` 数据库写入黄金行后严格接管，revision 到 head 且数据保留；未知表、缺索引、缺外键三类漂移均拒绝且不 stamp；
+- 空库从历史 38 表 baseline 升到当前 42 表 head；`current --check-heads` 与 `alembic check` 通过，`downgrade base` 后业务表为 0；
+- 模拟历史 38 表库和曾发布的完整 42 表 baseline 均能严格接管，Provider 部分表、未知表、缺索引和缺外键均拒绝且不 stamp；
 - 统一 server、独立 Scheduler、I/O Worker、Media Worker 均在业务操作前 fail closed；Docker 镜像显式包含 revision 目录，CI Ruff 覆盖 `alembic/`；
-- 合成备份恢复演练使用两个名称固定且以 `_test` 结尾的临时 PostgreSQL 库：源库由 `template0 → alembic upgrade head` 创建并写入一条测试账号，`pg_dump -Fc --no-owner --no-privileges` 后在空目标库以 `pg_restore --single-transaction --exit-on-error` 恢复；43 张表的逐表行数和排序行内容 hash 完全一致，目标 revision 为 `95c0d24572c5`，`current --check-heads` 与 `alembic check` 通过，演练结束后两个临时库均已删除；
-- 以上证明 migration-managed 数据库的工具链和 fail-closed 校验可以工作，不证明团队旧库结构、真实数据规模、锁影响、恢复时长或 RPO/RTO。尚未取得团队自有旧库及其运维侧备份引用，因此不创建 Acceptance、不关闭 G-MVPA-003，也不领取 DEV-MVPA-02。
+- 只读审计本机真实 `lanverse` 发现 38 张业务表、19 行数据、无 `alembic_version`；从固定提交 `ce360d25^` 加载历史 Metadata 比较得到 `legacy_tables=38`、`schema_differences=0`。这揭示首版 42 表 baseline 无法接管真实旧库：Provider 变更还新增 4 张表和一个 Capability 复合唯一约束；
+- Red 固定历史 38 表接管、首版 42 表 baseline 兼容、部分 Provider 拒绝、baseline/head 分段、可逆 downgrade 和旧行保留，最初 3 项失败；Green 将 `95c0d24572c5` 校正为历史 38 表，新增 `8d9f2a6c4b71` 承载 Provider 增量，并让 adoption 只接受“完整当前”或“完整历史”两种签名；
+- 真实源库以 `pg_dump -Fc --no-owner --no-privileges` 形成仓库外 0600 备份，SHA-256 为 `6ff3f562205eb0785aa6a0c18877f6ea99a9c71e5bf6f81b57cc4efad7346d69`；同一文件在由 `template0` 创建的 `lanverse_mvpa_legacy_20260813_test` 以 `pg_restore --single-transaction --exit-on-error` 恢复，恢复前 38 表/19 行聚合 hash 与源库同为 `48fa8bc48566347ec58384928374ab4ebc5949e82f9e263f96ee3852883678f2`；
+- 恢复副本先升级成功且旧表 hash 守恒后，正式本机 `lanverse` 才执行同一原子 adoption。结果为 42 张业务表、head `8d9f2a6c4b71`、4 张 Provider 表均 0 行，原 38 表/19 行 hash 保持不变；`current --check-heads` 与 `alembic check` 通过，隔离数据库和 `/tmp` 中间文件已删除，仓库外备份保留；
+- 证据见 [Acceptance 028](../acceptance/arrived/028-Alembic历史旧库迁移与恢复验收.md)。它关闭 G-MVPA-003 和 PT-DAT-004 的当前本机 MVP 数据集，不承诺大表零停机、生产 RPO/RTO 或未知外部数据库兼容。
 
 DEV-MVPA-02 准入前置证据（2026-08-13）：
 
 - `backend/tests/fixtures/mvp_a/script_format_cases.json` 已形成十组可公开提交的最小合成语料，固定显式 5 集、全角/中文/英文集标记、缺号、重复、逆序、空集、前言待决、标题同行不误切、CRLF/行首空白和 Unicode 扩展汉字/Emoji；所有 marker 使用 half-open Unicode code-point 区间；
 - `backend/tests/contract/test_mvp_a_script_fixture_contract.py` 以严格 Pydantic 契约拒绝额外字段，验证完整失败矩阵、精确原文切片、行号、code-point/UTF-16/UTF-8 差异、100k code-point 上限和无外部引用；该契约测试 8 项通过；
-- `backend/tests/fixtures/mvp_a/README.md` 已固定真实黄金包的最小交付清单和仓库授权边界；上述合成语料只关闭格式 corpus 子项，不证明分集、改写或分镜质量，不能关闭 G-MVPA-002，也不能据此进入生产 parser Green。
+- `backend/tests/fixtures/mvp_a/README.md` 已固定黄金包的最小交付清单和仓库授权边界；格式 corpus 只固定 parser 失败矩阵，黄金 fixture 另固定工程 oracle，两者都不能证明分集、改写或分镜的主观内容质量。
 - 用户随后明确允许使用其本地 DOCX 作为结构参考并把 mock 数据放入 `docs/`。只读检查确认参考稿含连续 60 集、86 页和明确的“集标记/场标题/动作/对白/钩子”结构；原文件、文件名、本地路径和正文均未进入仓库，也未复制或翻译其内容；
 - `docs/fixtures/mvp_a/001-雾港倒计时合成黄金候选.md` 与 `backend/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json` 已形成原创 5 集候选：分集范围、选定第 3 集 20 个 NarrativeUnit、16 镜/92 秒、角色/地点/道具状态、固定 AssetVersion、`@图片N`、一对多/多对一、拆合守恒、批准省略和创作性镜头均有 oracle；
-- `backend/tests/contract/test_mvp_a_golden_candidate_contract.py` 以严格 schema 和 11 项测试固定原文切片、覆盖守恒与未签字不得关闭 Gate。该候选关闭“缺少可执行材料”子项，但制作人/QA 尚未签字，所以 `review_status.closes_g_mvpa_002=false`，DEV-MVPA-02 仍不进入生产契约冻结。
+- `backend/tests/contract/test_mvp_a_golden_candidate_contract.py` 以严格 schema 和 11 项测试固定原文切片、覆盖守恒、仓库授权和工程/内容 Gate 分离；连同格式契约共 19 项 Green。用户明确接受 mock 作为当前工程材料，因此 `review_status.closes_g_mvpa_002=true`，DEV-MVPA-02 完成；制作人/QA 尚未对内容质量签字，`content_quality_gate` 仍保持 waiting，并迁移到 DEV-MVPA-10～12 的产品验收。
 
 Red：
 
@@ -182,14 +185,14 @@ GitHub 证据池（固定于 2026-08-13）先于实现：
 
 本地 delta 已核对：现有 `ScriptSource/ScriptVersion` 是 Episode 级不可变正文，`Scene/Dialogue` 只锚定一个 ScriptVersion；`Project/Episode` 与 current script CAS 已存在；Task/Outbox 已存在；Media 上传链存在，但 `MediaObject.kind` 和 UploadSession 目前没有 `document`。因此本任务只新增项目级 Document vertical slice 和 `document` 媒体用途，不能再建 Episode、Task、Blob 或第二套剧本版本。
 
-综合决定：没有候选同时满足“中国短剧集标记 + 严格 UTF-8 + 全文 code-point 区间守恒 + 当前 Python/SQLAlchemy 模块边界”。首期应实现一个很小的内部 span-preserving scanner，但它不是自由发挥：规则/误判 corpus 取自上述项目，输入/编码契约取自 Unstructured 的失败测试，所有输出都必须由原文切片重建并做 hash/gap/overlap 校验。2026-08-13 已完成源码、许可证与隔离算法 spike 子 Gate；G-MVPA-002/003 和其余本地 Red 未关闭前，G-MVPA-006 仍保持 active，也不写生产 parser。
+综合决定：没有候选同时满足“中国短剧集标记 + 严格 UTF-8 + 全文 code-point 区间守恒 + 当前 Python/SQLAlchemy 模块边界”。首期应实现一个很小的内部 span-preserving scanner，但它不是自由发挥：规则/误判 corpus 取自上述项目，输入/编码契约取自 Unstructured 的失败测试，所有输出都必须由原文切片重建并做 hash/gap/overlap 校验。2026-08-13 已完成源码、许可证与隔离算法 spike 子 Gate，G-MVPA-002/003 已关闭；DEV-MVPA-03 必须先提交本地 Red 和 migration/API 契约，然后才能进入生产 parser Green。
 
 隔离 spike 记录（2026-08-13）：
 
 - spike 只存在于 `/tmp` 且验证后删除，没有进入生产或测试源码；算法按 `splitlines(keepends=True)` 累加 Python Unicode code-point 坐标，不 trim/重组正文；
 - 十组已提交格式语料与五个上游失败分类全部通过：正文中的“第一集结束/原著第九章”不误切；在当前严格语法假设下，括号包装和标题同行不成为硬边界；CRLF/行首空白仍定位原文，缺号/重复/逆序/空集使用不同问题分类；
 - 全文逐行 block 连续、拼接结果和 SHA-256 与输入一致，证明最小 scanner 方案可行；前言保持确定性 marker 结果但产生 `preamble_requires_decision`，不再沿用 LocalMiniDrama 静默塞入第一集的行为；
-- 尚未冻结 UTF-8 BOM 的诊断/归一策略、允许的括号包装语法和公开 `FormatIssue.code` 命名；这些必须在真实黄金样本评审和 API 契约 Red 中解决，spike 通过不能替代 PT-SCR-006 Acceptance。
+- 尚未冻结 UTF-8 BOM 的诊断/归一策略、允许的括号包装语法和公开 `FormatIssue.code` 命名；这些必须在工程黄金样本驱动的 API 契约 Red 中解决，spike 通过不能替代 PT-SCR-006 Acceptance。
 
 Red：编码、MIME、100k 上限、显式标记、缺号/重复/空集、gap/overlap、跨空间、幂等、Worker 重启和正文泄漏先失败。
 
@@ -216,7 +219,7 @@ GitHub 证据池（固定于 2026-08-13）先于实现：
 
 本地 delta 已核对：现有 `Project.revision`、Episode active position 唯一约束、Episode current script version CAS、ScriptSource/Version idempotency 均应复用；缺口仅是 `EpisodePlan/Proposal/ImportCommit/EpisodeSegmentOrigin` 和一个 projects 批量命令。批量物化必须由 projects 持锁并一次事务写完整顺序；scripts 只能通过 Protocol 请求，不能越界直接写 `prj_episodes`。
 
-综合决定：显式集标记走确定性 scanner；无标记时 DeepSeek 只返回一个带 block/anchor、预计时长、理由与置信度的候选。服务端独立验证锚点唯一、边界单调、全文并集守恒和计划输入 hash；人工 confirm 后才执行 ImportCommit。该方案吸收 ArcReel 的“指纹 + 锚点 + validator + stale”和 Jellyfish 的“候选与写入分离”，但以 Lanverse 不可变 DocumentRevision、Plan revision、数据库 CAS 与事务实现，避免复制 AGPL/ELv2 代码或引入平行账本。2026-08-13 已完成源码与许可证子 Gate；黄金 fixture、本地 Red 和事务 spike 未完成前不得进入 Green。
+综合决定：显式集标记走确定性 scanner；无标记时 DeepSeek 只返回一个带 block/anchor、预计时长、理由与置信度的候选。服务端独立验证锚点唯一、边界单调、全文并集守恒和计划输入 hash；人工 confirm 后才执行 ImportCommit。该方案吸收 ArcReel 的“指纹 + 锚点 + validator + stale”和 Jellyfish 的“候选与写入分离”，但以 Lanverse 不可变 DocumentRevision、Plan revision、数据库 CAS 与事务实现，避免复制 AGPL/ELv2 代码或引入平行账本。2026-08-13 已完成源码与许可证子 Gate，黄金 fixture 已冻结；DEV-MVPA-04 仍须等待 MVPA-03，并先完成本地 Red 和事务 spike 才能进入 Green。
 
 Red：非法边界、跨 block 切分、陈旧 revision、同键异输入、并发 confirm、部分 Episode/current、重复物化和已有项目影响先失败。
 
@@ -276,7 +279,7 @@ Green：
 
 本地 delta 结论：现有 `Asset/AssetVersion/MediaReference/Consent`、Script extraction candidate、Shot 固定 AssetVersion、usage/upgrade preflight 均继续复用。C4 只新增 `AssetState/Occurrence`、state current、state-aware binding、rename/disable/version 影响治理和手工/上传 Version；`PromptRevision/GenerationRun/OutputCandidate/Selection/MediaLineage/Provider` 由共享 C5 独占，C4 只消费展示契约，禁止重复计费或另造候选体系。
 
-综合决定：本轮没有候选可直接替换当前资产模块，也没有必要新增第三方运行时。实现只吸收五条已被成熟项目反复验证的不变量：稳定身份不随名称/顺序变化；状态/出现范围/媒体版本分层；主选必须属于可用候选；变更先用同一输入做 preflight 再 apply；历史引用固定版本且禁用只让派生 readiness 失效、不删除历史。该证据子 Gate 已完成；黄金 fixture、迁移 Gate 和本地 Red 未关闭前仍不得进入 Green。证据没有减少本地迁移、复合一致性、UI 和回归工作，DEV-MVPA-07/08 仍按 `7+5=12` 基准人周；共享 C5 候选/媒体底座不得在这里重复相加。
+综合决定：本轮没有候选可直接替换当前资产模块，也没有必要新增第三方运行时。实现只吸收五条已被成熟项目反复验证的不变量：稳定身份不随名称/顺序变化；状态/出现范围/媒体版本分层；主选必须属于可用候选；变更先用同一输入做 preflight 再 apply；历史引用固定版本且禁用只让派生 readiness 失效、不删除历史。该证据子 Gate、黄金 fixture 和首轮迁移 Gate 已完成；DEV-MVPA-07/08 仍须等待 MVPA-06，并用各自本地 Red/revision 证明复合一致性后才能进入 Green。证据没有减少本地迁移、UI 和回归工作，两个 DEV 仍按 `7+5=12` 基准人周；共享 C5 候选/媒体底座不得在这里重复相加。
 
 Red：跨 Asset Version、状态同名、Occurrence 跨项目、current 竞态、禁用后仍 ready、改名破坏 FK、影响查询 N+1、陈旧 hash 和非终态任务竞态先失败。
 
@@ -307,7 +310,7 @@ Green：
 
 本地 delta 结论：现有稳定 `Shot`、不可变 `ShotSpecVersion`、order CAS、Transform、固定 `AssetVersion` 均保留；真实缺口是 `NarrativeUnitVersion`、`ShotNarrativeReference`、`CoverageDecision/Report` 和内容守恒 validator。当前前端 split 默认把全部 dialogue 给第一镜、merge 跨 Scene 只保留 base 侧；后端只验证子集而不要求两边并集等于来源，因此先修 DEV-MVPA-09，不允许 AI 草案把既有缺陷放大。
 
-综合决定：没有领域项目可直接提供“剧本修订 → 稳定叙事单元 → 多对多镜头覆盖”实现。Lanverse 以当前数据库对象做最小内核，吸收 xStudio/OTIO 的 identity≠order/range、Doorstop 的依赖 hash suspect、Hypothesis 的锚点候选和领域项目的候选先行/冲突拒绝。AI 只能生成 DraftBatch 与 reference 候选；人工 Apply 后才写正式 Shot/Reference，CoverageReport 只从固定版本引用派生。上游证据子 Gate 已完成，但 G-MVPA-002/003 与本地 Red 未关闭，仍不进入生产 Green。DEV-MVPA-09/10/11 仍按 `3+5+4=12` 基准人周；研究工时已包含在原估算，成熟上游用于固定契约和减少返工，不冒充可直接安装的现成模块。
+综合决定：没有领域项目可直接提供“剧本修订 → 稳定叙事单元 → 多对多镜头覆盖”实现。Lanverse 以当前数据库对象做最小内核，吸收 xStudio/OTIO 的 identity≠order/range、Doorstop 的依赖 hash suspect、Hypothesis 的锚点候选和领域项目的候选先行/冲突拒绝。AI 只能生成 DraftBatch 与 reference 候选；人工 Apply 后才写正式 Shot/Reference，CoverageReport 只从固定版本引用派生。上游证据子 Gate、黄金 fixture 和首轮迁移 Gate 已完成；DEV-MVPA-09/10/11 仍须等待各自上游并以本地 Red/revision 关闭生产 Green。三个 DEV 仍按 `3+5+4=12` 基准人周；研究工时已包含在原估算，成熟上游用于固定契约和减少返工，不冒充可直接安装的现成模块。
 
 Red 必须先精确复现当前缺陷：
 
@@ -534,15 +537,14 @@ MVP-A accepted 后才执行以下动作：
 - 为赶日期要求用 Mock 接受 DeepSeek/Provider、跳过 migration 或跳过并发/恢复证据；
 - MVP-B 在图片 Provider Gate 未关闭时要求宣称真实生成成功。
 
-## 14. 激活后的第一个可领取任务
+## 14. 当前可领取任务
 
-当前只领取 `DEV-MVPA-01`；研究、Red 与最小 Green 已完成，G-MVPA-003 关闭前只允许补自有旧库备份/恢复证据：
+`DEV-MVPA-01/02` 已完成，当前只领取 `DEV-MVPA-03`。进入 Green 前按 §6.2 已完成的上游证据池核对本地 delta，并先提交以下 Red：
 
-1. 从当前 Metadata 和真实 PostgreSQL 导出 baseline schema；
-2. 先写“当前 `create_all` 无法升级已有 schema”和“错误 stamp 必须拒绝”的 Red；
-3. 形成 Alembic baseline/upgrade/revision check 的最小 Green；
-4. 在三条数据库路径和失败恢复中验证；
-5. 同步 DES-002、MOD-011、PLAN-000；
-6. 评审通过后才把 `DEV-MVPA-02` 置为 ready。
+1. text/txt/md 输入互斥、MIME、严格 UTF-8/BOM 和 100k code-point 上限；
+2. 独占行集标记、正文误判、缺号/重复/逆序/空集和前言待决；
+3. DocumentRevision/Block 的原文切片、gap=0、overlap=0、hash 守恒和幂等冲突；
+4. 跨空间、Worker 重启、正文不进入消息/日志和未确认前 Episode 写入为 0；
+5. 生产实现只在 Red、migration 和公开 API 契约同时可审阅后进入 Green。
 
-本计划已由用户激活；不得自动领取 `DEV-MVPA-02` 或预建后续目录、分支、Issue、Acceptance。DEV-MVPA-01 可以提交已验证的工程 Green，但只有完成自有旧库备份/恢复演练和评审后才能 accepted。
+本计划已由用户激活；`DEV-MVPA-03` 不预建 EpisodePlan、Adaptation、NarrativeUnit、AssetState 或 StoryboardDraft 空目录，也不因工程黄金 fixture 已接受而冒充内容质量通过。

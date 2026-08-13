@@ -49,7 +49,7 @@ cd backend
 .venv/bin/alembic check
 ```
 
-如果数据库是在 2026-08-13 前由旧版 `metadata.create_all()` 创建且包含需要保留的数据，先在数据库系统外完成可恢复备份，再运行严格结构校验与 baseline 接管；该命令不会创建备份，结构存在任何差异都会拒绝 stamp：
+如果数据库是在 2026-08-13 前由旧版 `metadata.create_all()` 创建且包含需要保留的数据，先在数据库系统外完成可恢复备份，再运行严格结构校验与 baseline 接管。命令只接受两种已知完整签名：当前 42 表结构直接采用 head，或 Provider 引入前的 38 表结构先采用历史 baseline、再原子升级 4 张 Provider 表；未知、部分 Provider 或其他漂移均拒绝且不 stamp。该命令不会创建备份：
 
 ```bash
 cd backend
