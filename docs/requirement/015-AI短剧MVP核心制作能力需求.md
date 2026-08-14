@@ -1,6 +1,6 @@
 # REQ-015 AI 短剧 MVP 核心制作能力需求
 
-- 状态：proposed（2026-08-13 用户要求把 DES-012 转化为可真实实施的计划）
+- 状态：proposed（整份文档继续保留演进边界；截至 2026-08-14，MVP-A 11/11 PT 已由 Acceptance 028～038 接受）
 - 输入：[平台总体需求](./001-平台总体需求概述.md)、[项目模块需求](./003-项目模块需求.md)、[剧本模块需求](./arrived/006-剧本模块需求.md)、[资产模块需求](./arrived/007-资产模块需求.md)、[分镜模块需求](./arrived/008-分镜模块需求.md)
 - 设计：[DES-011 核心生产模块缺口与目标设计](../design/011-AI短剧核心生产模块缺口与目标设计.md)、[DES-012 MVP 核心模块拆分与实施范围](../design/012-AI短剧MVP核心模块拆分与实施范围.md)
 - 下游：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -80,7 +80,7 @@ MVP-A 是本需求的当前范围。MVP-B 的真实图片生成继续复用生�
 | MVP-NFR-004 | 不可变与可追溯 | 任一正式 Shot、资产状态版本和导出必须能回溯精确 Document/Script/Narrative/Asset/Shot 版本、actor、时间和来源决定。 |
 | MVP-NFR-005 | Fail closed | 格式、依赖、权利、版本、覆盖或导出依赖 unavailable/stale/blocked 时不得默认为 ready，也不得用前端本地推导绕过。 |
 | MVP-NFR-006 | 异步恢复 | AI 分集、改写和分镜草案必须复用 Task/Outbox/Worker；刷新、重复消息和 Worker 重启不得重复外部调用或正式 Apply。 |
-| MVP-NFR-007 | 性能与容量 | MVP 上限为每项目 10 集、整剧 100,000 code points、每集 20,000 字和 120 active Shot；36 镜批量查询 P95 ≤800 ms、120 镜 P95 ≤2 s。 |
+| MVP-NFR-007 | 性能与容量 | MVP 上限为每项目 10 集、整剧 100,000 code points、每集 20,000 字和单 Episode 120 active Shot；36 镜批量查询 P95 ≤800 ms、120 镜 P95 ≤2 s。 |
 | MVP-NFR-008 | 正文与媒体安全 | 剧本文本、Prompt、文档 object key、预签名 URL 和权利材料不得进入普通日志、metric label、消息正文或未授权响应。 |
 | MVP-NFR-009 | 数据变更 | 新表和约束必须使用正式 schema migration，在空库、当前 schema 快照和含黄金样本的旧库副本上验证前滚、校验与恢复；不得用 `create_all` 冒充升级。 |
 | MVP-NFR-010 | 可访问与契约 | 主要导入、边界编辑、diff、资产状态、分镜覆盖和导出路径必须键盘可完成；前端只消费 OpenAPI 生成 client 和服务端状态。 |
@@ -105,4 +105,4 @@ MVP-A 是本需求的当前范围。MVP-B 的真实图片生成继续复用生�
 
 ## 9. 接受边界
 
-本 Requirement 当前仅形成可审阅的需求事实，只有 [PRD-012](../prd/012-AI短剧MVP核心制作产品任务.md) 中对应 PT 取得真实 Acceptance 后才能逐项 accepted。既有 S0～S3 事实保持 accepted；新增能力失败不撤销其历史证据，也不能借既有证据提前接受本 Requirement。
+本 Requirement 继续以 `proposed` 标记整份文档的演进边界；其中 MVP-A 的 11 个 PT 已由 Acceptance 028～038 逐项 accepted，产品负责人兼短剧制作人/QA 已接受黄金样本和固定版本分镜包。既有 S0～S3 事实保持 accepted；MVP-A accepted 不得外推为真实图片、视频、时间线或成片能力。

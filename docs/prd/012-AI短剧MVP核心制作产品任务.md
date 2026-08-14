@@ -1,6 +1,6 @@
 # PRD-012 AI 短剧 MVP 核心制作产品任务
 
-- 状态：active（MVP-A 范围与工程黄金样本已接受；PT-DAT-004 已验收，其余 10 个 PT 待逐项实现）
+- 状态：active（MVP-A 11/11 PT 已由 Acceptance 028～038 验收并完成产品签字；MVP-B 条件切片尚未激活）
 - 日期：2026-08-13
 - 输入：[REQ-015 AI 短剧 MVP 核心制作能力](../requirement/015-AI短剧MVP核心制作能力需求.md)、[DES-011 核心生产模块缺口与目标设计](../design/011-AI短剧核心生产模块缺口与目标设计.md)、[DES-012 MVP 核心模块拆分与实施范围](../design/012-AI短剧MVP核心模块拆分与实施范围.md)
 - 既有事实：[PRD-008 创作生产模块任务](./008-创作生产模块PRD任务.md)中已接受的 S2/S3 PT
@@ -113,4 +113,4 @@ MVP-B 不在本 PRD 创建第二套 Provider/Candidate 任务。进入真实图�
 
 ## 9. 状态与接受规则
 
-产品负责人已明确启动 MVP-A，并接受原创 mock 作为当前工程黄金材料。PT-DAT-004 已通过真实旧库备份、恢复、前滚和数据守恒验收；其余 10 个 PT 仍须在真实实现后单独 accepted。工程黄金样本只是可执行 oracle，不等于制作人/QA 已接受分集、改写或分镜的主观内容质量。当前状态以 [PLAN-012](../plan/012-AI短剧MVP核心制作执行计划.md) 的 DEV 台账和独立 Acceptance 为准；文档完成不等于产品完成。
+产品负责人已明确启动并接受 MVP-A。PT-DAT-004、PT-SCR-006～009、PT-AST-006/007、PT-SBD-007～010 已由 Acceptance 028～038 分别 accepted；2026-08-14，产品负责人兼短剧制作人/QA 同步接受原创黄金样本的主观内容质量。MVP-A accepted 不等于发布型 MVP 已完成，真实图片、视频、时间线与成片仍以各自 PRD、Plan 和独立 Acceptance 为准。

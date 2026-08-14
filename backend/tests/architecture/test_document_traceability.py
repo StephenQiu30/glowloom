@@ -105,7 +105,7 @@ def test_s2_s3_real_provider_acceptance_and_s4_gate_do_not_drift() -> None:
     assert "Ready 分镜 1/1" in slice_prd
     assert "PT-SCR-001～005" in prd and "已 accepted" in prd
     assert "S2/S3 对应 PT accepted" in prd_index
-    assert "S0～S3 accepted" in plan_index
+    assert "S0～S3 与 MVP-A accepted" in plan_index
     assert "S2/S3 产品保持 `in_progress`" not in "\n".join((slice_prd, prd, prd_index, plan_index))
 
 
@@ -152,7 +152,10 @@ def test_mvp_core_plan_is_traced_without_premature_generation_acceptance() -> No
     plan = (DOCS / "plan/012-AI短剧MVP核心制作执行计划.md").read_text(encoding="utf-8")
 
     assert "状态：proposed" in requirement
+    assert "MVP-A 11/11 PT 已由 Acceptance 028～038 接受" in requirement
     assert "状态：active" in prd
+    assert "状态：active（MVP-A 11/11 PT accepted；MVP-B/C proposed）" in design
+    assert "MVP-A 11/11 PT 已由 Acceptance 028～038 验收并完成产品签字" in prd
     assert "状态：accepted" in plan
     assert "DEV-MVPA-01～12 与 11 个 PT 工程验收均完成" in plan
     assert "产品负责人兼短剧制作人/QA 已接受黄金样本" in plan
@@ -197,7 +200,7 @@ def test_mvp_core_plan_is_traced_without_premature_generation_acceptance() -> No
     assert "真实 DeepSeek" in acceptance
     assert "388 passed, 25 skipped" in acceptance
     assert "11 passed" in acceptance
-    assert "不等于制作人/QA 已接受" in prd
+    assert "产品负责人兼短剧制作人/QA 同步接受原创黄金样本" in prd
     assert "D-004" in prd and "D-004" in plan
     assert "不允许创建假图片成功" in prd
 

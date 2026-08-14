@@ -39,7 +39,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | Gate | 当前状态 | 负责人 | 关闭证据 | 未关闭时允许做什么 |
 | --- | --- | --- | --- | --- |
 | G-MVPA-001 范围接受 | closed（2026-08-13 用户明确要求执行） | 产品负责人 | 接受 PRD-012 的 MVP-A、11 个 PT、10 集/100k code points 上限和非目标 | 只评审文档，不改业务代码/表 |
-| G-MVPA-002 工程黄金样本 | closed（用户明确接受原创 mock 入库；5 集/20 单元/16 镜 oracle 与 19 项契约 Green） | 产品负责人 + 工程 QA | 自有或明确接受的原创合成 3–5 集原稿、单集 60–120 秒/12–24 镜、必拍/允许省略、状态资产和预期分集边界入 fixture；工程准入与内容质量接受分离 | 制作人/QA 主观内容质量仍是 DEV-MVPA-10～12 产品验收条件；不可复制参考稿或伪造内容质量接受 |
+| G-MVPA-002 工程黄金样本 | closed（用户明确接受原创 mock 入库；5 集/20 单元/16 镜 oracle 与 20 项契约 Green） | 产品负责人 + 工程 QA | 自有或明确接受的原创合成 3–5 集原稿、单集 60–120 秒/12–24 镜、必拍/允许省略、状态资产和预期分集边界入 fixture；工程准入与内容质量接受分离 | 制作人/QA 主观内容质量仍是 DEV-MVPA-10～12 产品验收条件；不可复制参考稿或伪造内容质量接受 |
 | G-MVPA-003 迁移决策 | closed（本机真实 38 表/19 行旧库已备份、恢复、接管到 `8d9f2a6c4b71`，旧数据哈希守恒） | 技术负责人 | [Acceptance 028](../acceptance/arrived/028-Alembic历史旧库迁移与恢复验收.md)；DES-002、MOD-011、PLAN-000 同步 | 后续 revision 继续三路径验证；本次小库结果不外推零停机/RPO/RTO |
 | G-MVPA-004 工作区 | closed（计划编写前已核对） | DEV owner | 每个任务开始前重新运行 `git status --short` 并对白名单；不读/提交本地生成产物 | 保留无关产物；重叠修改时停止 |
 | G-MVPA-005 真实依赖 | closed（MVP-A） | QA/工程 | PostgreSQL/RabbitMQ/MinIO 已进入联合 E2E；DeepSeek 分集、改写、分镜各有显式授权真实合同；Acceptance 030、031、036、038 记录实际运行与默认跳过边界 | 只关闭 MVP-A 文本与分镜能力；图片/视频 Provider 仍受 D-004 和 MVP-B Gate 约束 |
@@ -149,7 +149,7 @@ DEV-MVPA-02 准入前置证据（2026-08-13）：
 - `backend/tests/fixtures/mvp_a/README.md` 已固定黄金包的最小交付清单和仓库授权边界；格式 corpus 只固定 parser 失败矩阵，黄金 fixture 另固定工程 oracle，两者都不能证明分集、改写或分镜的主观内容质量。
 - 用户随后明确允许使用其本地 DOCX 作为结构参考并把 mock 数据放入 `docs/`。只读检查确认参考稿含连续 60 集、86 页和明确的“集标记/场标题/动作/对白/钩子”结构；原文件、文件名、本地路径和正文均未进入仓库，也未复制或翻译其内容；
 - `docs/fixtures/mvp_a/001-雾港倒计时合成黄金候选.md` 与 `backend/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json` 已形成原创 5 集候选：分集范围、选定第 3 集 20 个 NarrativeUnit、16 镜/92 秒、角色/地点/道具状态、固定 AssetVersion、`@图片N`、一对多/多对一、拆合守恒、批准省略和创作性镜头均有 oracle；
-- `backend/tests/contract/test_mvp_a_golden_candidate_contract.py` 以严格 schema 和 11 项测试固定原文切片、覆盖守恒、仓库授权和工程/内容 Gate 分离；连同格式契约共 19 项 Green。用户先接受 mock 作为工程材料并以 `review_status.closes_g_mvpa_002=true` 关闭 DEV-MVPA-02，随后在 DEV-MVPA-10～12 完成后以产品负责人兼短剧制作人/QA 身份接受内容质量；两个签字与 `content_quality_gate=accepted` 已独立记录。
+- `backend/tests/contract/test_mvp_a_golden_candidate_contract.py` 以严格 schema 和 12 项测试固定原文切片、覆盖守恒、仓库授权和工程/内容 Gate 分离；连同格式契约共 20 项 Green。用户先接受 mock 作为工程材料并以 `review_status.closes_g_mvpa_002=true` 关闭 DEV-MVPA-02，随后在 DEV-MVPA-10～12 完成后以产品负责人兼短剧制作人/QA 身份接受内容质量；两个签字与 `content_quality_gate=accepted` 已独立记录。
 
 Red：
 
