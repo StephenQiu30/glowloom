@@ -8,7 +8,7 @@
 
 `script_format_cases.json` 属于第一类，只证明输入格式契约，不证明分集、改写或分镜质量，不能用于关闭 `G-MVPA-002`。
 
-`golden_candidate_harbor_countdown.json` 属于第二类。它固定 5 集原稿、选定集 20 个 NarrativeUnit、16 镜、资产状态、拆合守恒、批准省略、创作性镜头和 `@图片N` 引用。用户明确接受原创 mock 作为当前工程材料，因此 `review_status.closes_g_mvpa_002=true` 只关闭 fixture/oracle 工程准入；制作人和 QA 的主观内容质量布尔值仍为 false，并在实际分镜/分镜包产品验收前不得改写。
+`golden_candidate_harbor_countdown.json` 最初按第二类建立，并在 2026-08-14 由产品负责人兼短剧制作人/QA 明确接受后进入第三类。它固定 5 集原稿、选定集 20 个 NarrativeUnit、16 镜、资产状态、拆合守恒、批准省略、创作性镜头和 `@图片N` 引用；`review_status.closes_g_mvpa_002=true` 记录工程准入，两个质量签字和 `content_quality_gate=accepted` 独立记录产品验收，二者不得互相代替。
 
 ## 黄金样本交付包
 

@@ -1,6 +1,6 @@
 # PLAN-012 AI 短剧 MVP 核心制作执行计划
 
-- 状态：review_ready（2026-08-14；DEV-MVPA-01～12 与 11 个 PT 工程验收均完成；MVP-A 只等待产品负责人/短剧制作人对黄金样本主观内容质量作 accepted/blocked 决定，MVP-B/C 仍未激活）
+- 状态：accepted（2026-08-14；DEV-MVPA-01～12 与 11 个 PT 工程验收均完成；产品负责人兼短剧制作人/QA 已接受黄金样本；MVP-A 全部 Gate 已关闭，MVP-B/C 仍未激活）
 - 日期：2026-08-13
 - 代码基线：`main@b6dbce2`（本计划首次提交；每个 DEV 另记录领取时完整 SHA）
 - 输入：[PRD-012 AI 短剧 MVP 核心制作产品任务](../prd/012-AI短剧MVP核心制作产品任务.md)
@@ -9,7 +9,7 @@
 
 ## 1. 执行结论
 
-当前正式计划只激活 **MVP-A：整剧到可信分镜包**。MVP-B 真实图片生成不与本计划并行：它必须等待 MVP-A、目标图片 Provider 真实账号和 Provider 控制面门禁，并先把现有 S4 的图片/视频耦合范围重新拆开。
+本计划的正式范围仅为 **MVP-A：整剧到可信分镜包**，现已 accepted。MVP-B 真实图片生成没有随本次验收自动激活：它仍须取得目标图片 Provider 真实账号、关闭 Provider 控制面门禁，并先把现有 S4 的图片/视频耦合范围重新拆开。
 
 MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失链路：
 
@@ -45,7 +45,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | G-MVPA-005 真实依赖 | closed（MVP-A） | QA/工程 | PostgreSQL/RabbitMQ/MinIO 已进入联合 E2E；DeepSeek 分集、改写、分镜各有显式授权真实合同；Acceptance 030、031、036、038 记录实际运行与默认跳过边界 | 只关闭 MVP-A 文本与分镜能力；图片/视频 Provider 仍受 D-004 和 MVP-B Gate 约束 |
 | G-MVPA-006 上游证据 | closed（DEV-MVPA-01～12） | DEV owner + Reviewer | 各 DEV 在 Green 前均记录固定 commit/release、许可证、核心源码/测试、可复用点、失败模式和不采用理由；Acceptance 028～038 汇总本地决定 | 后续新 DEV 必须重新建立自己的上游证据，不继承本次结论冒充新能力准入 |
 
-2026-08-13 用户明确要求按本计划执行，因此 G-MVPA-001 已关闭；同日又明确要求增加 GitHub 成熟方案研究，故 DEV-MVPA-01 先以只读研究/隔离 spike 启动。用户随后明确允许参考其 DOCX 结构并把原创 mock 放入 `docs/`，因此 G-MVPA-002 只关闭工程 fixture/oracle 准入，制作人/QA 主观质量复核移到实际分镜与分镜包产品验收。真实本机 pre-Alembic 库的备份、恢复副本、原子升级和数据哈希守恒关闭 G-MVPA-003。DEV-MVPA-01～12 的逐项 GitHub 证据和真实依赖合同已经分别随 Acceptance 028～038 关闭 G-MVPA-005/006；该关闭不授权 MVP-B 图片/视频能力，也不替代制作人内容签字。
+2026-08-13 用户明确要求按本计划执行，因此 G-MVPA-001 已关闭；同日又明确要求增加 GitHub 成熟方案研究，故 DEV-MVPA-01 先以只读研究/隔离 spike 启动。用户随后明确允许参考其 DOCX 结构并把原创 mock 放入 `docs/`，因此 G-MVPA-002 只关闭工程 fixture/oracle 准入，制作人/QA 主观质量复核移到实际分镜与分镜包产品验收。真实本机 pre-Alembic 库的备份、恢复副本、原子升级和数据哈希守恒关闭 G-MVPA-003。DEV-MVPA-01～12 的逐项 GitHub 证据和真实依赖合同已经分别随 Acceptance 028～038 关闭 G-MVPA-005/006；这些工程 Gate 本身不授权 MVP-B 图片/视频能力，也不替代制作人内容签字，后者已于 2026-08-14 在 Acceptance 038 独立记录为 accepted。
 
 ### 3.1 上游证据 Gate 的执行格式
 
@@ -104,7 +104,7 @@ MVP-A 不是推倒重做 S2/S3，而是在已接受事实上增加四条缺失�
 | DEV-MVPA-09 | completed（Acceptance 035） | PT-SBD-007 | 3 | MVPA-02 | 现有 split/merge 前后端守恒修复和回归 |
 | DEV-MVPA-10 | completed（Acceptance 036） | PT-SBD-008 | 5 | MVPA-06、MVPA-07、MVPA-09 | StoryboardDraftBatch、决议、Apply diff/CAS 和 UI |
 | DEV-MVPA-11 | completed（Acceptance 037） | PT-SBD-009 | 4 | MVPA-08、MVPA-10 | NarrativeReference、Coverage/Decision、双向定位和 readiness |
-| DEV-MVPA-12 | completed（Acceptance 038；产品内容复核待签字） | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
+| DEV-MVPA-12 | completed（Acceptance 038；产品内容已接受） | PT-SBD-010 | 2 | MVPA-04、MVPA-11 | 固定版本 JSON/CSV/HTML/Manifest、下载和 MVP-A E2E |
 | **合计** |  | **11 个 PT** | **71 人周** |  | **整剧到可信分镜包** |
 
 `DEV-MVPA-02` 不创建产品 PT，因为黄金 fixture 和契约冻结是全部 PT 的共同准入证据；它不能被单独标记为产品 accepted。
@@ -149,7 +149,7 @@ DEV-MVPA-02 准入前置证据（2026-08-13）：
 - `backend/tests/fixtures/mvp_a/README.md` 已固定黄金包的最小交付清单和仓库授权边界；格式 corpus 只固定 parser 失败矩阵，黄金 fixture 另固定工程 oracle，两者都不能证明分集、改写或分镜的主观内容质量。
 - 用户随后明确允许使用其本地 DOCX 作为结构参考并把 mock 数据放入 `docs/`。只读检查确认参考稿含连续 60 集、86 页和明确的“集标记/场标题/动作/对白/钩子”结构；原文件、文件名、本地路径和正文均未进入仓库，也未复制或翻译其内容；
 - `docs/fixtures/mvp_a/001-雾港倒计时合成黄金候选.md` 与 `backend/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json` 已形成原创 5 集候选：分集范围、选定第 3 集 20 个 NarrativeUnit、16 镜/92 秒、角色/地点/道具状态、固定 AssetVersion、`@图片N`、一对多/多对一、拆合守恒、批准省略和创作性镜头均有 oracle；
-- `backend/tests/contract/test_mvp_a_golden_candidate_contract.py` 以严格 schema 和 11 项测试固定原文切片、覆盖守恒、仓库授权和工程/内容 Gate 分离；连同格式契约共 19 项 Green。用户明确接受 mock 作为当前工程材料，因此 `review_status.closes_g_mvpa_002=true`，DEV-MVPA-02 完成；制作人/QA 尚未对内容质量签字，`content_quality_gate` 仍保持 waiting，并迁移到 DEV-MVPA-10～12 的产品验收。
+- `backend/tests/contract/test_mvp_a_golden_candidate_contract.py` 以严格 schema 和 11 项测试固定原文切片、覆盖守恒、仓库授权和工程/内容 Gate 分离；连同格式契约共 19 项 Green。用户先接受 mock 作为工程材料并以 `review_status.closes_g_mvpa_002=true` 关闭 DEV-MVPA-02，随后在 DEV-MVPA-10～12 完成后以产品负责人兼短剧制作人/QA 身份接受内容质量；两个签字与 `content_quality_gate=accepted` 已独立记录。
 
 Red：
 
@@ -549,7 +549,7 @@ Green：
 - 确定性 ZIP 固定生成 `manifest.json`、`storyboard.json`、UTF-8 BOM CSV 和转义 HTML；对象逐字节验证成功后才在单事务登记 Manifest、delivery MediaVersion、Location、Lineage 和任务成功。
 - 5 集黄金 Document 已完成计划/物化，第一集从审核后 AI 草案到 Export 连续执行两次；第二次注入 AssetState current 变化、存储短暂失败和 Worker 重启，两包字节相同，无重复 Manifest/Media。
 - 真实私有 MinIO 写入与临时下载、RabbitMQ 浏览器任务、跨空间拒绝、36/120 镜性能、空库迁移、OpenAPI 再生成和全量回归结果见 [Acceptance 038](../acceptance/arrived/038-可信分镜包与MVP联合验收.md)。
-- DEV-MVPA-12 与 PT-SBD-010 工程状态 completed；产品负责人仍需对黄金样本主观内容质量作最终签字，本计划不由工程测试伪造该决定。
+- DEV-MVPA-12 与 PT-SBD-010 工程状态 completed；2026-08-14 产品负责人兼短剧制作人/QA 已对黄金样本主观内容质量作出 `accepted` 决定，MVP-A 产品 Gate 同步关闭。
 
 ## 7. 代码与文件边界
 
@@ -725,4 +725,4 @@ MVP-A accepted 后才执行以下动作：
 
 ## 14. 当前可领取任务
 
-`DEV-MVPA-01～12` 已完成工程交付，并由 Acceptance 028～038 和黄金 fixture 契约关闭。当前没有可继续领取的 MVP-A 工程任务；下一动作是产品负责人/短剧制作人审阅 Acceptance 038 的黄金样本与分镜包，并明确选择 `accepted` 或给出可定位的 `blocked` 内容项。在该决定前不激活 MVP-B，不提前实现图片/视频生成、剪辑时间线或商业平台能力。
+`DEV-MVPA-01～12` 已完成工程交付，并由 Acceptance 028～038、黄金 fixture 契约和产品负责人兼短剧制作人/QA 的明确签字关闭。MVP-A 已 accepted，当前没有可继续领取的 MVP-A 任务。MVP-B/C 不因本次验收自动激活；只有用户另行明确要求并关闭目标 Provider Gate 后，才按第 12 节创建新的执行任务。
