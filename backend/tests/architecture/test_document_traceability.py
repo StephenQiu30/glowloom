@@ -153,9 +153,9 @@ def test_mvp_core_plan_is_traced_without_premature_generation_acceptance() -> No
 
     assert "状态：proposed" in requirement
     assert "状态：active" in prd
-    assert "状态：review_ready" in plan
+    assert "状态：accepted" in plan
     assert "DEV-MVPA-01～12 与 11 个 PT 工程验收均完成" in plan
-    assert "只等待产品负责人/短剧制作人" in plan
+    assert "产品负责人兼短剧制作人/QA 已接受黄金样本" in plan
     for source in (requirement, design, prd, plan):
         assert "MVP-A" in source
         assert "MVP-B" in source
@@ -174,13 +174,14 @@ def test_mvp_core_plan_is_traced_without_premature_generation_acceptance() -> No
     assert "| DEV-MVPA-04 | completed" in plan
     assert "| DEV-MVPA-05 | completed" in plan
     assert "| DEV-MVPA-06 | completed" in plan
-    assert "| DEV-MVPA-12 | completed（Acceptance 038；产品内容复核待签字）" in plan
+    assert "| DEV-MVPA-12 | completed（Acceptance 038；产品内容已接受）" in plan
     export_acceptance = DOCS / "acceptance/arrived/038-可信分镜包与MVP联合验收.md"
     assert export_acceptance.is_file()
     export_evidence = export_acceptance.read_text(encoding="utf-8")
     assert "工程结果：accepted" in export_evidence
-    assert "MVP-A 产品状态：review_ready" in export_evidence
-    assert "不能伪报最终产品 accepted" in export_evidence
+    assert "MVP-A 产品状态：accepted" in export_evidence
+    assert "产品决定：accepted" in export_evidence
+    assert "复核角色：产品负责人兼短剧制作人/QA" in export_evidence
     narrative_acceptance = DOCS / "acceptance/arrived/032-稳定叙事单元与失效传播验收.md"
     assert narrative_acceptance.is_file()
     narrative_evidence = narrative_acceptance.read_text(encoding="utf-8")

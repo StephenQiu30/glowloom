@@ -37,8 +37,10 @@ class AuthorizationFixture(StrictFixtureModel):
     authorized_on: Literal["2026-08-13"]
     authorized_scope: Literal["MVP-A工程材料与自动化契约"]
     product_owner_material_approval: Literal[True]
-    short_drama_producer_quality_signoff: bool
-    qa_oracle_signoff: bool
+    short_drama_producer_quality_signoff: Literal[True]
+    qa_oracle_signoff: Literal[True]
+    content_quality_accepted_on: Literal["2026-08-14"]
+    content_quality_reviewer_role: Literal["产品负责人兼短剧制作人/QA"]
 
 
 class EpisodeFixture(StrictFixtureModel):
@@ -141,7 +143,7 @@ class StoryboardOracleFixture(StrictFixtureModel):
 
 class ReviewStatusFixture(StrictFixtureModel):
     engineering_contract: Literal["accepted"]
-    content_quality_gate: Literal["awaiting_short_drama_producer_and_qa"]
+    content_quality_gate: Literal["accepted"]
     closes_g_mvpa_002: Literal[True]
 
 
@@ -364,7 +366,7 @@ def test_every_prompt_token_has_one_ordered_fixed_asset_version_reference() -> N
             assert ref.asset_version_id == states[ref.asset_state_id].asset_version_id
 
 
-def test_creative_shot_requires_a_matching_waiver_and_gate_separates_quality_review() -> None:
+def test_creative_shot_requires_a_matching_waiver_and_quality_review_is_accepted() -> None:
     fixture = load_golden_candidate()
     oracle = fixture.storyboard_oracle
     waivers = {waiver.creative_waiver_id: waiver for waiver in oracle.creative_waivers}
@@ -376,9 +378,12 @@ def test_creative_shot_requires_a_matching_waiver_and_gate_separates_quality_rev
         waiver = waivers[shot.creative_waiver_id]
         assert waiver.shot_id == shot.shot_id
 
-    assert fixture.authorization.short_drama_producer_quality_signoff is False
-    assert fixture.authorization.qa_oracle_signoff is False
+    assert fixture.authorization.short_drama_producer_quality_signoff is True
+    assert fixture.authorization.qa_oracle_signoff is True
+    assert fixture.authorization.content_quality_accepted_on == "2026-08-14"
+    assert fixture.authorization.content_quality_reviewer_role == "产品负责人兼短剧制作人/QA"
     assert fixture.review_status.engineering_contract == "accepted"
+    assert fixture.review_status.content_quality_gate == "accepted"
     assert fixture.review_status.closes_g_mvpa_002 is True
 
 
