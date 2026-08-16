@@ -400,7 +400,7 @@ export function StoryboardCoverage({
 
   return (
     <Card>
-      <CardHeader className="border-b">
+      <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2">

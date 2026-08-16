@@ -1498,7 +1498,7 @@ export function StoryboardWorkspace({
 
         {selectedShot ? (
           <Card className="min-w-0">
-            <CardHeader className="border-b">
+        <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <CardDescription>镜头 {String(selectedShot.position).padStart(2, "0")}</CardDescription>

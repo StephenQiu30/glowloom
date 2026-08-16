@@ -23,6 +23,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   appApiErrorMessage,
   useConfirmEpisodePlanMutation,
   useCreateEpisodePlanMutation,
@@ -317,7 +324,7 @@ export function EpisodePlanWorkspace({
 
   return (
     <Card className="mt-8" aria-label="分集计划与批量创建" role="region">
-      <CardHeader className="border-b border-slate-100">
+      <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="size-5" aria-hidden="true" />分集计划与批量创建
         </CardTitle>
@@ -334,7 +341,7 @@ export function EpisodePlanWorkspace({
           </Alert>
         ) : null}
         {notice ? (
-          <Alert className="border-emerald-200 bg-emerald-50 text-emerald-800" role="status">
+          <Alert className="border-0 bg-muted/50" role="status">
             <CheckCircle2 aria-hidden="true" />
             <AlertTitle>批量发布完成</AlertTitle>
             <AlertDescription>{notice}</AlertDescription>
@@ -342,10 +349,10 @@ export function EpisodePlanWorkspace({
         ) : null}
 
         {!plan ? (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-muted/45 p-5">
             <div>
               <p className="font-medium">{planButtonLabel}</p>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {strategy === "explicit_markers"
                   ? "沿用已验证的连续集标记，不调用模型。"
                   : "DeepSeek 只生成候选边界，服务端仍会校验唯一锚点和全文守恒。"}
@@ -358,24 +365,24 @@ export function EpisodePlanWorkspace({
           </div>
         ) : (
           <>
-            <div className="grid gap-3 rounded-xl border border-slate-200 p-5 sm:grid-cols-4">
-              <div><p className="text-xs text-slate-500">状态</p><Badge className="mt-2" variant="outline">{planStatusLabels[plan.plan.status]}</Badge></div>
-              <div><p className="text-xs text-slate-500">候选集数</p><p className="mt-1 text-xl font-semibold">{plan.proposals.length}</p></div>
-              <div><p className="text-xs text-slate-500">预计总时长</p><p className="mt-1 text-xl font-semibold">{Math.round(plan.plan.total_estimated_duration_ms / 1_000)} 秒</p></div>
-              <div><p className="text-xs text-slate-500">物化后活跃集</p><p className="mt-1 text-xl font-semibold">{plan.impact.projected_episode_count}</p></div>
+            <div className="grid gap-3 bg-muted/45 p-5 sm:grid-cols-4">
+              <div><p className="text-xs text-muted-foreground">状态</p><Badge className="mt-2" variant="outline">{planStatusLabels[plan.plan.status]}</Badge></div>
+              <div><p className="text-xs text-muted-foreground">候选集数</p><p className="mt-1 text-xl font-semibold">{plan.proposals.length}</p></div>
+              <div><p className="text-xs text-muted-foreground">预计总时长</p><p className="mt-1 text-xl font-semibold">{Math.round(plan.plan.total_estimated_duration_ms / 1_000)} 秒</p></div>
+              <div><p className="text-xs text-muted-foreground">物化后活跃集</p><p className="mt-1 text-xl font-semibold">{plan.impact.projected_episode_count}</p></div>
             </div>
 
             {plan.plan.status === "draft" ? (
-              <p className="flex items-center gap-2 text-sm text-slate-600">
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
                 AI 候选生成后还会经过服务端锚点、边界和全文守恒校验。
               </p>
             ) : null}
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-              <div className="min-w-0 rounded-xl border border-slate-200 p-5">
+              <div className="min-w-0 bg-muted/45 p-5">
                 <p className="font-medium">不可变原文</p>
-                <p className="mt-1 text-xs text-slate-500">revision {plan.plan.document_revision_id} · {plan.source.codepoint_count} 字符</p>
+                <p className="mt-1 text-xs text-muted-foreground">revision {plan.plan.document_revision_id} · {plan.source.codepoint_count} 字符</p>
                 <pre className="mt-4 max-h-[680px] overflow-auto whitespace-pre-wrap rounded-lg bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100">{plan.source.normalized_text}</pre>
               </div>
 
@@ -397,7 +404,7 @@ export function EpisodePlanWorkspace({
                     : [];
                   return (
                     <div className="grid gap-3" key={proposal.id}>
-                      <article className="rounded-xl border border-slate-200 p-5">
+                      <article className="bg-muted/30 p-5">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <Label htmlFor={`episode-title-${proposal.id}`}>第 {proposal.position} 集标题</Label>
@@ -427,36 +434,33 @@ export function EpisodePlanWorkspace({
                           </div>
                           <Badge variant="secondary">{Math.round(proposal.estimated_duration_ms / 1_000)} 秒</Badge>
                         </div>
-                        <p className="mt-4 text-sm leading-6 text-slate-700">{proposal.reason}</p>
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                        <p className="mt-4 text-sm leading-6 text-foreground">{proposal.reason}</p>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                           <span>置信度 {Math.round(proposal.confidence * 100)}%</span>
                           <span>块 {proposal.start_block_position}–{proposal.end_block_position}</span>
                           <span>字符 {proposal.source_start}–{proposal.source_end}</span>
                         </div>
-                        <pre className="mt-4 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-xs leading-6 text-slate-700">{plan.source.normalized_text.slice(proposal.source_start, proposal.source_end)}</pre>
+                        <pre className="mt-4 max-h-56 overflow-auto whitespace-pre-wrap bg-background p-4 text-xs leading-6 text-muted-foreground">{plan.source.normalized_text.slice(proposal.source_start, proposal.source_end)}</pre>
 
                         {editable && innerBlocks.length ? (
-                          <div className="mt-4 grid gap-3 rounded-lg border border-dashed border-slate-300 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+                          <div className="mt-4 grid gap-3 bg-muted/45 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
                             <div className="grid gap-1.5">
                               <Label htmlFor={`split-offset-${proposal.id}`}>从结构块拆分</Label>
-                              <select
-                                className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                                id={`split-offset-${proposal.id}`}
-                                value={splitOffsets[proposal.id] ?? ""}
-                                onChange={(event) =>
-                                  setSplitOffsets((current) => ({
-                                    ...current,
-                                    [proposal.id]: Number(event.target.value),
-                                  }))
+                              <Select
+                                value={splitOffsets[proposal.id]?.toString() ?? ""}
+                                onValueChange={(value) =>
+                                  setSplitOffsets((current) => ({ ...current, [proposal.id]: Number(value) }))
                                 }
                               >
-                                <option value="">选择新一集首块</option>
-                                {innerBlocks.map((block) => (
-                                  <option key={block.id} value={block.source_start}>
-                                    {block.position}. {blockKindLabels[block.kind]}
-                                  </option>
-                                ))}
-                              </select>
+                                <SelectTrigger className="w-full" id={`split-offset-${proposal.id}`}><SelectValue placeholder="选择新一集首块" /></SelectTrigger>
+                                <SelectContent>
+                                  {innerBlocks.map((block) => (
+                                    <SelectItem key={block.id} value={String(block.source_start)}>
+                                      {block.position}. {blockKindLabels[block.kind]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                             <div className="grid gap-1.5">
                               <Label htmlFor={`split-title-${proposal.id}`}>新一集标题</Label>
@@ -477,22 +481,23 @@ export function EpisodePlanWorkspace({
                       </article>
 
                       {next && editable ? (
-                        <div className="grid gap-2 rounded-xl border border-blue-200 bg-blue-50 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                        <div className="grid gap-2 bg-muted/45 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                           <div className="grid gap-1.5">
                             <Label htmlFor={`boundary-${proposal.id}`}>第 {proposal.position}/{next.position} 集边界</Label>
-                            <select
-                              className="h-9 rounded-lg border border-blue-200 bg-white px-3 text-sm"
-                              id={`boundary-${proposal.id}`}
-                              value={next.source_start}
-                              onChange={(event) => move(proposal, Number(event.target.value))}
+                            <Select
+                              value={String(next.source_start)}
+                              onValueChange={(value) => move(proposal, Number(value))}
                             >
-                              {boundaryBlocks.map((block) => (
-                                <option key={block.id} value={block.source_start}>
-                                  块 {block.position} · {blockKindLabels[block.kind]}
-                                  {blockByPosition.get(block.position)?.source_start === next.source_start ? "（当前）" : ""}
-                                </option>
-                              ))}
-                            </select>
+                              <SelectTrigger className="w-full" id={`boundary-${proposal.id}`}><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {boundaryBlocks.map((block) => (
+                                  <SelectItem key={block.id} value={String(block.source_start)}>
+                                    块 {block.position} · {blockKindLabels[block.kind]}
+                                    {blockByPosition.get(block.position)?.source_start === next.source_start ? "（当前）" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <Button onClick={() => merge(proposal)} size="sm" variant="outline"><GitMerge aria-hidden="true" />合并相邻两集</Button>
                         </div>
@@ -511,7 +516,7 @@ export function EpisodePlanWorkspace({
               </Alert>
             ) : null}
 
-            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
+            <div className="flex flex-wrap justify-end gap-3 pt-2">
               {plan.plan.status === "review_ready" ? (
                 <Button disabled={!canWrite || busy || !plan.impact.allowed} onClick={confirm}>
                   确认分集计划

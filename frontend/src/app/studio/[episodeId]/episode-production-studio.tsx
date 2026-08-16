@@ -8,6 +8,7 @@ import {
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { LayoutContainer } from "@/components/layout/layout-container";
 import { MetricGroup } from "@/components/studio/metric-group";
 import { PageHeader } from "@/components/studio/page-header";
 import { StudioShell } from "@/components/studio/studio-shell";
@@ -1434,7 +1435,13 @@ export function EpisodeProductionStudio({
     : undefined;
 
   if (sessionState === "checking") {
-    return <div className="grid min-h-screen place-items-center"><LoaderCircle className="animate-spin text-foreground" aria-label="正在读取登录状态" /></div>;
+    return (
+      <StudioShell active="assets">
+        <div className="grid min-h-[70dvh] place-items-center">
+          <LoaderCircle className="animate-spin text-foreground" aria-label="正在读取登录状态" />
+        </div>
+      </StudioShell>
+    );
   }
 
   return (
@@ -1457,7 +1464,7 @@ export function EpisodeProductionStudio({
           {notice}
         </div>
       ) : null}
-      <div className="mx-auto max-w-[1420px] px-5 py-8 md:px-8">
+      <LayoutContainer className="py-8">
         {!authenticated ? (
           <Alert className="border-amber-200 bg-amber-50 text-amber-800">
             <AlertCircle aria-hidden="true" />
@@ -1693,7 +1700,7 @@ export function EpisodeProductionStudio({
             </section>
           </>
         )}
-      </div>
+      </LayoutContainer>
     </StudioShell>
   );
 }

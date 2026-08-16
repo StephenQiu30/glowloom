@@ -32,14 +32,14 @@ export function MetricGroup({
   label: string;
 }) {
   return (
-    <section aria-label={label} className={cn("bg-muted/45 px-2 py-1", className)}>
+    <section aria-label={label} className={cn("grid gap-6", className)}>
       <ItemGroup
-        className={cn("grid gap-0 sm:grid-cols-2", columnClasses[columns])}
+        className={cn("grid gap-6 sm:grid-cols-2", columnClasses[columns])}
         role="list"
       >
         {items.map((item, index) => (
           <Item
-            className="rounded-none border-0 px-4 py-4 sm:px-5"
+            className="rounded-none border-0 px-0 py-0"
             key={`${String(item.label)}:${index}`}
             role="listitem"
           >

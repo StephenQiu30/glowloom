@@ -9,8 +9,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { Tabs } from "radix-ui";
 
+import { LayoutContainer } from "@/components/layout/layout-container";
 import { PageHeader } from "@/components/studio/page-header";
 import { StudioShell } from "@/components/studio/studio-shell";
 import {
@@ -579,15 +579,15 @@ export function ComicProductionStudio() {
     >
       {notice ? (
         <div
-          className="pointer-events-none fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10"
+          className="pointer-events-none fixed top-24 right-6 z-50 flex items-center gap-2 bg-foreground px-4 py-3 text-sm text-background shadow-lg"
           role="status"
         >
-          <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />
+          <CheckCircle2 className="size-4" aria-hidden="true" />
           {notice}
         </div>
       ) : null}
 
-      <div className="mx-auto max-w-[1420px] px-5 py-8 md:px-8">
+      <LayoutContainer className="py-8">
         <PageHeader
           actions={(
             <div className="flex flex-wrap items-end gap-2">
@@ -713,38 +713,39 @@ export function ComicProductionStudio() {
               </Card>
             </section>
 
-            <Tabs.Root
-              className="mt-6"
-              onValueChange={(value) => {
-                setSelectedKind(value as AssetKind);
-                setSelectedAssetId(null);
-                setSelectedStateId(null);
-              }}
-              value={selectedKind}
+            <div
+              aria-label="资产类型"
+              className="mt-6 flex gap-1 overflow-x-auto bg-muted/45 p-1"
+              role="tablist"
             >
-              <Tabs.List
-                aria-label="资产类型"
-                className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1"
-              >
-                {assetTypes.map((item) => {
-                  const Icon = item.icon;
-                  const count = allAssets.filter(
-                    (asset) => asset.kind === item.id,
-                  ).length;
-                  return (
-                    <Tabs.Trigger
-                      className="flex min-w-24 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-500 outline-none transition hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-medium data-[state=active]:text-foreground"
-                      key={item.id}
-                      value={item.id}
-                    >
-                      <Icon className="size-4" aria-hidden="true" />
-                      {item.label}
-                      <span className="text-xs text-slate-400">{count}</span>
-                    </Tabs.Trigger>
-                  );
-                })}
-              </Tabs.List>
-            </Tabs.Root>
+              {assetTypes.map((item) => {
+                const Icon = item.icon;
+                const count = allAssets.filter(
+                  (asset) => asset.kind === item.id,
+                ).length;
+                const active = selectedKind === item.id;
+                return (
+                  <Button
+                    aria-selected={active}
+                    className="min-w-24 flex-1 justify-center"
+                    key={item.id}
+                    role="tab"
+                    size="sm"
+                    type="button"
+                    variant={active ? "secondary" : "ghost"}
+                    onClick={() => {
+                      setSelectedKind(item.id);
+                      setSelectedAssetId(null);
+                      setSelectedStateId(null);
+                    }}
+                  >
+                    <Icon className="size-4" aria-hidden="true" />
+                    {item.label}
+                    <span className="text-xs text-muted-foreground">{count}</span>
+                  </Button>
+                );
+              })}
+            </div>
 
             <div className="mt-5 grid items-start gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
               <div className="grid gap-3">
@@ -755,7 +756,7 @@ export function ComicProductionStudio() {
                   />
                   <Input
                     aria-label="搜索资产"
-                    className="bg-white pl-9"
+                    className="bg-transparent pl-9"
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="搜索名称或别名"
                     value={query}
@@ -846,7 +847,7 @@ export function ComicProductionStudio() {
             </div>
           </>
         ) : null}
-      </div>
+      </LayoutContainer>
 
       <CreateAssetDialog
         currentKind={selectedKind}

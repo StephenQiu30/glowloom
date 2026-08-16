@@ -2,14 +2,18 @@
 
 import { AlertTriangle, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { Dialog } from "radix-ui";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog as DialogRoot,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-import { dialogClassName } from "./asset-workspace-model";
 
 function ImpactSummary({ impact }: { impact: API.AssetImpactResponse }) {
   const { summary } = impact;
@@ -77,24 +81,22 @@ export function AssetImpactDialog({
   title: string;
 }) {
   return (
-    <Dialog.Root onOpenChange={onOpenChange} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className={dialogClassName}>
+    <DialogRoot onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="max-w-2xl" showCloseButton={false}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <Dialog.Title className="text-xl font-semibold tracking-tight">
+              <DialogTitle className="text-xl font-semibold tracking-tight">
                 {title}
-              </Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm leading-6 text-slate-500">
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-sm leading-6 text-muted-foreground">
                 {description}
-              </Dialog.Description>
+              </DialogDescription>
             </div>
-            <Dialog.Close asChild>
+            <DialogClose asChild>
               <Button aria-label="关闭" size="icon" variant="ghost">
                 <X aria-hidden="true" />
               </Button>
-            </Dialog.Close>
+            </DialogClose>
           </div>
           <div className="mt-6">
             {isLoading ? (
@@ -104,9 +106,9 @@ export function AssetImpactDialog({
             ) : null}
           </div>
           <div className="mt-6 flex justify-end gap-2">
-            <Dialog.Close asChild>
+            <DialogClose asChild>
               <Button type="button" variant="outline">取消</Button>
-            </Dialog.Close>
+            </DialogClose>
             <Button
               disabled={!impact || isLoading || isApplying}
               onClick={() => void onConfirm()}
@@ -116,9 +118,8 @@ export function AssetImpactDialog({
               {isApplying ? "提交中…" : confirmLabel}
             </Button>
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </DialogContent>
+    </DialogRoot>
   );
 }
 
@@ -164,22 +165,20 @@ export function RenameAssetDialog({
   }
 
   return (
-    <Dialog.Root onOpenChange={changeOpen} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className={dialogClassName}>
+    <DialogRoot onOpenChange={changeOpen} open={open}>
+      <DialogContent className="max-w-2xl" showCloseButton={false}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <Dialog.Title className="text-xl font-semibold tracking-tight">
+              <DialogTitle className="text-xl font-semibold tracking-tight">
                 重命名资产
-              </Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm leading-6 text-slate-500">
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-sm leading-6 text-muted-foreground">
                 名称会建立新修订，旧名称保留为别名；稳定资产 ID 和历史引用不变。
-              </Dialog.Description>
+              </DialogDescription>
             </div>
-            <Dialog.Close asChild>
+            <DialogClose asChild>
               <Button aria-label="关闭" size="icon" variant="ghost"><X /></Button>
-            </Dialog.Close>
+            </DialogClose>
           </div>
           <form className="mt-6 grid gap-5" onSubmit={submit}>
             <div className="grid gap-2">
@@ -197,9 +196,9 @@ export function RenameAssetDialog({
             </div>
             {impact ? <ImpactSummary impact={impact} /> : null}
             <div className="flex justify-end gap-2">
-              <Dialog.Close asChild>
+              <DialogClose asChild>
                 <Button type="button" variant="outline">取消</Button>
-              </Dialog.Close>
+              </DialogClose>
               <Button
                 disabled={isLoading || isApplying || newName.trim() === asset.name}
                 type="submit"
@@ -214,8 +213,7 @@ export function RenameAssetDialog({
               </Button>
             </div>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </DialogContent>
+    </DialogRoot>
   );
 }

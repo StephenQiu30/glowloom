@@ -13,11 +13,9 @@ import {
   Plus,
   ShieldCheck,
   ShieldX,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useRef, useState } from "react";
-import { Dialog } from "radix-ui";
 
 import {
   ConsentFormDialog,
@@ -27,7 +25,8 @@ import {
   AuditTrail,
   type AuditFilters,
 } from "@/app/governance/audit-trail";
-import { StudioShell, studioContainerClassName } from "@/components/studio/studio-shell";
+import { LayoutContainer } from "@/components/layout/layout-container";
+import { StudioShell } from "@/components/studio/studio-shell";
 import { MetricGroup } from "@/components/studio/metric-group";
 import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -40,7 +39,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
@@ -91,12 +101,12 @@ const termLabels: Record<string, string> = {
 
 function statusBadge(status: API.ConsentStatus) {
   if (status === "active") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-border bg-muted text-foreground";
   }
   if (status === "revoked") {
-    return "border-rose-200 bg-rose-50 text-rose-700";
+    return "border-destructive/30 bg-destructive/10 text-destructive";
   }
-  return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-border bg-muted text-muted-foreground";
 }
 
 function formatDate(value: string): string {
@@ -127,7 +137,7 @@ function ScopeTerms({ values }: { values: string[] }) {
 function LoadingWorkspace() {
   return (
     <div className="grid min-h-[520px] place-items-center">
-      <div className="text-center text-sm text-slate-500">
+      <div className="text-center text-sm text-muted-foreground">
         <LoaderCircle className="mx-auto mb-3 size-6 animate-spin text-foreground" aria-hidden="true" />
         正在读取授权事实…
       </div>
@@ -167,7 +177,7 @@ function ConsentList({
   selectedId?: string;
 }) {
   return (
-    <Card className="min-w-0 gap-0 border-0 bg-muted/30 py-0">
+    <Card className="min-w-0 gap-0 bg-muted/30 py-0">
       <CardHeader className="py-4">
         <CardTitle>授权记录</CardTitle>
         <CardDescription>{consents.length} 项 Workspace 事实</CardDescription>
@@ -193,7 +203,7 @@ function ConsentList({
                 {statusLabels[consent.status]}
               </Badge>
             </span>
-            <span className="flex items-center justify-between gap-3 text-xs text-slate-500">
+            <span className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
               <span>{subjectTypeLabels[consent.current_revision.scope.subject_type]}</span>
               <span className="flex items-center gap-1">
                 r{consent.revision}<ChevronRight className="size-3" aria-hidden="true" />
@@ -229,53 +239,40 @@ function RevokeDialog({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger asChild>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
         <Button disabled={consent.status === "revoked"} variant="destructive">
           <ShieldX aria-hidden="true" />撤销授权
         </Button>
-      </Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/10">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Dialog.Title className="text-xl font-semibold">撤销当前授权</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm leading-6 text-slate-500">
-                撤销会追加 revision r{consent.revision + 1}，并立即阻止新的生成与交付。
-              </Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <Button aria-label="关闭" size="icon" variant="ghost"><X aria-hidden="true" /></Button>
-            </Dialog.Close>
-          </div>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>撤销当前授权</DialogTitle>
+          <DialogDescription>
+            撤销会追加 revision r{consent.revision + 1}，并立即阻止新的生成与交付。
+          </DialogDescription>
+        </DialogHeader>
           <form className="mt-6 grid gap-5" onSubmit={submit}>
             <div className="grid gap-2">
               <Label htmlFor="revokeReason">撤销原因</Label>
-              <textarea
-                className="min-h-24 resize-none rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-rose-400 focus:ring-3 focus:ring-rose-500/10"
-                id="revokeReason"
-                name="reason"
-                required
-              />
+              <Textarea className="min-h-24 resize-none" id="revokeReason" name="reason" required />
             </div>
-            <Alert className="border-rose-100 bg-rose-50 px-4 py-3 text-rose-700">
+            <Alert variant="destructive">
               <AlertCircle aria-hidden="true" />
               <AlertTitle>历史不会被删除</AlertTitle>
-              <AlertDescription className="text-rose-700/80">
+              <AlertDescription>
                 已有任务、费用和历史交付继续保留，供后续风险处置追溯。
               </AlertDescription>
             </Alert>
-            <div className="flex justify-end gap-2">
-              <Dialog.Close asChild><Button type="button" variant="outline">取消</Button></Dialog.Close>
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="outline">取消</Button></DialogClose>
               <Button disabled={isSubmitting} type="submit" variant="destructive">
                 {isSubmitting ? "撤销中…" : "确认撤销"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -293,7 +290,7 @@ function ConsentDetail({
   const scope = consent.current_revision.scope;
   return (
     <div className="grid gap-5">
-      <Card className="gap-0 border-0 bg-muted/30 py-0">
+      <Card className="gap-0 bg-muted/30 py-0">
         <CardHeader className="py-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -323,27 +320,27 @@ function ConsentDetail({
         <CardContent className="grid gap-6 p-5 sm:grid-cols-2">
           <div className="grid content-start gap-4">
             <div>
-              <p className="text-xs font-medium tracking-wide text-slate-400 uppercase">固定对象</p>
+            <p className="text-xs font-medium tracking-wide text-muted-foreground">固定对象</p>
               <p className="mt-2 text-sm font-medium">{subjectTypeLabels[scope.subject_type]}</p>
-              <p className="mt-1 font-mono text-xs text-slate-500">{scope.subject_id}</p>
+              <p className="mt-1 font-mono text-xs text-muted-foreground">{scope.subject_id}</p>
             </div>
             <div>
-              <p className="text-xs font-medium tracking-wide text-slate-400 uppercase">权利类型</p>
+            <p className="text-xs font-medium tracking-wide text-muted-foreground">权利类型</p>
               <div className="mt-2"><ScopeTerms values={scope.rights_types} /></div>
             </div>
             <div>
-              <p className="text-xs font-medium tracking-wide text-slate-400 uppercase">用途与渠道</p>
+            <p className="text-xs font-medium tracking-wide text-muted-foreground">用途与渠道</p>
               <div className="mt-2"><ScopeTerms values={[...scope.authorized_purposes, ...scope.channels]} /></div>
             </div>
           </div>
-          <div className="grid content-start gap-4 rounded-lg bg-background p-4">
+          <div className="grid content-start gap-4 bg-background p-4">
             <div className="flex items-start gap-3">
               <CalendarRange className="mt-0.5 size-4 text-foreground" aria-hidden="true" />
-              <div><p className="text-sm font-medium">有效期</p><p className="mt-1 text-xs text-slate-500">{formatDate(scope.valid_from)} — {formatDate(scope.valid_to)}</p></div>
+              <div><p className="text-sm font-medium">有效期</p><p className="mt-1 text-xs text-muted-foreground">{formatDate(scope.valid_from)} — {formatDate(scope.valid_to)}</p></div>
             </div>
             <div className="flex items-start gap-3">
               <FileCheck2 className="mt-0.5 size-4 text-foreground" aria-hidden="true" />
-              <div><p className="text-sm font-medium">证明媒体</p><p className="mt-1 font-mono text-xs text-slate-500">{consent.current_revision.proof_media_version_ids.map(shortId).join("、")}</p></div>
+              <div><p className="text-sm font-medium">证明媒体</p><p className="mt-1 font-mono text-xs text-muted-foreground">{consent.current_revision.proof_media_version_ids.map(shortId).join("、")}</p></div>
             </div>
             <div className="flex items-start gap-3">
               <Clock3 className="mt-0.5 size-4 text-foreground" aria-hidden="true" />
@@ -353,21 +350,21 @@ function ConsentDetail({
         </CardContent>
       </Card>
 
-      <Card className="gap-0 border-0 bg-muted/30 py-0">
+      <Card className="gap-0 bg-muted/30 py-0">
         <CardHeader className="py-4">
           <div className="flex items-center gap-2"><History className="size-4 text-foreground" aria-hidden="true" /><CardTitle>修订历史</CardTitle></div>
           <CardDescription>所有事实只追加，旧范围与撤销原因始终可追溯。</CardDescription>
         </CardHeader>
-        <CardContent className="divide-y divide-slate-100 p-0">
+        <CardContent className="divide-y divide-border p-0">
           {[...consent.revisions].reverse().map((revision) => (
             <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-4 px-5 py-4" key={revision.id}>
-              <span className={`mt-0.5 grid size-8 place-items-center rounded-full ${revision.action === "revoke" ? "bg-rose-50 text-rose-600" : "bg-muted text-foreground"}`}>
+              <span className={`mt-0.5 grid size-8 place-items-center ${revision.action === "revoke" ? "bg-destructive/10 text-destructive" : "bg-muted text-foreground"}`}>
                 {revision.action === "revoke" ? <ShieldX className="size-4" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
               </span>
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">r{revision.revision_no} · {actionLabels[revision.action]}</p><time className="text-xs text-slate-400" dateTime={revision.created_at}>{formatDate(revision.created_at)}</time></div>
-                <p className="mt-1 text-sm text-slate-600">{revision.reason}</p>
-                <p className="mt-2 text-xs text-slate-400">{revision.scope.authorized_purposes.length} 项用途 · {revision.proof_media_version_ids.length} 份证明</p>
+                <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">r{revision.revision_no} · {actionLabels[revision.action]}</p><time className="text-xs text-muted-foreground" dateTime={revision.created_at}>{formatDate(revision.created_at)}</time></div>
+                <p className="mt-1 text-sm text-muted-foreground">{revision.reason}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{revision.scope.authorized_purposes.length} 项用途 · {revision.proof_media_version_ids.length} 份证明</p>
               </div>
             </div>
           ))}
@@ -500,15 +497,15 @@ export function GovernanceWorkspace({
     <StudioShell
       active="governance"
     >
-      {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm shadow-lg shadow-slate-950/10" role="status"><Check className="size-4 text-emerald-600" aria-hidden="true" />{notice}</div> : null}
-      <div className={`${studioContainerClassName} py-12 md:py-14`}>
+      {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 flex items-center gap-2 bg-foreground px-4 py-3 text-sm text-background" role="status"><Check className="size-4" aria-hidden="true" />{notice}</div> : null}
+      <LayoutContainer className="py-12 md:py-14">
         <PageHeader
           actions={authenticated ? (
-            <Button className="h-10 bg-primary px-4 text-white hover:bg-primary/85" onClick={() => setCreateOpen(true)}>
+            <Button onClick={() => setCreateOpen(true)}>
               <Plus aria-hidden="true" />新建授权
             </Button>
           ) : (
-            <Button asChild className="h-10 bg-primary px-4 text-white hover:bg-primary/85"><Link href="/login">登录后管理</Link></Button>
+            <Button asChild><Link href="/login">登录后管理</Link></Button>
           )}
           description="登记固定版本的用途、地域、期限与证明，让生成和交付门禁基于可追溯事实。"
           eyebrow={me.data?.workspace.name ?? "授权与审计"}
@@ -517,10 +514,10 @@ export function GovernanceWorkspace({
 
         {sessionState === "checking" || (authenticated && me.isLoading) ? <LoadingWorkspace /> : null}
         {sessionState === "anonymous" ? (
-          <Alert className="mt-8 border-0 bg-amber-50/70 p-4 text-amber-800"><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription className="text-amber-700">授权记录受 Workspace 隔离保护。<Link className="ml-1 font-medium underline" href="/login">前往登录</Link></AlertDescription></Alert>
+          <Alert className="mt-8 border-0 bg-muted/50"><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription>授权记录受 Workspace 隔离保护。<Link className="ml-1 font-medium underline" href="/login">前往登录</Link></AlertDescription></Alert>
         ) : null}
         {authenticated && (me.error || consents.error || media.error) ? (
-          <Alert className="mt-8 border-0 bg-rose-50 p-4 text-rose-800" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>授权事实暂时无法读取</AlertTitle><AlertDescription>{appApiErrorMessage(me.error ?? consents.error ?? media.error)}</AlertDescription></Alert>
+          <Alert className="mt-8 border-0 bg-destructive/10" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>授权事实暂时无法读取</AlertTitle><AlertDescription>{appApiErrorMessage(me.error ?? consents.error ?? media.error)}</AlertDescription></Alert>
         ) : null}
 
         {workspaceId && !me.isLoading ? (
@@ -536,8 +533,8 @@ export function GovernanceWorkspace({
               label="授权状态摘要"
             />
 
-            {actionError ? <Alert className="mt-6 border-0 bg-rose-50 p-4 text-rose-800" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
-            {mediaVersions.length === 0 ? <Alert className="mt-6 border-0 bg-amber-50/70 p-4 text-amber-800"><FileCheck2 aria-hidden="true" /><AlertTitle>缺少可用证明媒体</AlertTitle><AlertDescription className="text-amber-700">先在资产或媒体流程完成一次私有上传，才能登记授权证明。</AlertDescription></Alert> : null}
+            {actionError ? <Alert className="mt-6 border-0 bg-destructive/10" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
+            {mediaVersions.length === 0 ? <Alert className="mt-6 border-0 bg-muted/50"><FileCheck2 aria-hidden="true" /><AlertTitle>缺少可用证明媒体</AlertTitle><AlertDescription>先在资产或媒体流程完成一次私有上传，才能登记授权证明。</AlertDescription></Alert> : null}
 
             {consents.isLoading ? (
               <div className="mt-8 grid min-h-64 place-items-center bg-muted/30 text-sm text-muted-foreground">
@@ -553,7 +550,7 @@ export function GovernanceWorkspace({
             )}
             {auditVisible ? (
               audit.error ? (
-                <Alert className="mt-8 border-rose-200 bg-rose-50 p-4 text-rose-800" variant="destructive">
+                <Alert className="mt-8 border-0 bg-destructive/10" variant="destructive">
                   <AlertCircle aria-hidden="true" />
                   <AlertTitle>审计事实暂时无法读取</AlertTitle>
                   <AlertDescription>{appApiErrorMessage(audit.error)}</AlertDescription>
@@ -569,7 +566,7 @@ export function GovernanceWorkspace({
             ) : null}
           </>
         ) : null}
-      </div>
+      </LayoutContainer>
 
       {workspaceId ? (
         <ConsentFormDialog

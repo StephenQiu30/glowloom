@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 
+import { LayoutContainer } from "@/components/layout/layout-container";
 import { StudioShell } from "@/components/studio/studio-shell";
 import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -166,7 +167,13 @@ export default function WorkspacesPage() {
   const currentWorkspaceId = me.data?.workspace.id;
 
   if (sessionState === "checking") {
-    return <div className="grid min-h-screen place-items-center"><LoaderCircle aria-label="正在读取登录状态" className="animate-spin text-foreground" /></div>;
+    return (
+      <StudioShell active="settings">
+        <div className="grid min-h-[70dvh] place-items-center">
+          <LoaderCircle aria-label="正在读取登录状态" className="animate-spin text-foreground" />
+        </div>
+      </StudioShell>
+    );
   }
 
   return (
@@ -177,7 +184,7 @@ export default function WorkspacesPage() {
         workspaceName: me.data.workspace.name,
       } : undefined}
     >
-      <div className="mx-auto max-w-[1120px] px-5 py-9 md:px-8">
+      <LayoutContainer className="py-9">
         {!authenticated ? (
           <Alert className="border-amber-200 bg-amber-50 text-amber-800"><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription><Link className="underline" href="/login">登录后管理账户与工作空间</Link></AlertDescription></Alert>
         ) : pageError ? (
@@ -306,7 +313,7 @@ export default function WorkspacesPage() {
             </section>
           </>
         )}
-      </div>
+      </LayoutContainer>
     </StudioShell>
   );
 }

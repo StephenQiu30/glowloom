@@ -1,21 +1,33 @@
 "use client";
 
 import { X } from "lucide-react";
-import { type FormEvent } from "react";
-import { Dialog } from "radix-ui";
+import { type FormEvent, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog as DialogRoot,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 import {
   type AssetKind,
   assetTypes,
   buildSpec,
   dialogClassName,
-  selectClassName,
   splitValues,
-  textareaClassName,
   textValue,
   typeConfig,
 } from "./asset-workspace-model";
@@ -30,18 +42,70 @@ function DialogHeading({
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <Dialog.Title className="text-xl font-semibold tracking-tight">
+        <DialogTitle className="text-xl font-semibold tracking-tight">
           {title}
-        </Dialog.Title>
-        <Dialog.Description className="mt-1 text-sm leading-6 text-slate-500">
+        </DialogTitle>
+        <DialogDescription className="mt-1 text-sm leading-6 text-muted-foreground">
           {description}
-        </Dialog.Description>
+        </DialogDescription>
       </div>
-      <Dialog.Close asChild>
+      <DialogClose asChild>
         <Button aria-label="关闭" size="icon" variant="ghost">
           <X aria-hidden="true" />
         </Button>
-      </Dialog.Close>
+      </DialogClose>
+    </div>
+  );
+}
+
+function DialogFrame({
+  children,
+  onOpenChange,
+  open,
+}: {
+  children: ReactNode;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  return (
+    <DialogRoot onOpenChange={onOpenChange} open={open}>
+      <DialogContent className={dialogClassName} showCloseButton={false}>
+        {children}
+      </DialogContent>
+    </DialogRoot>
+  );
+}
+
+function SelectField({
+  defaultValue,
+  id,
+  label,
+  name,
+  options,
+  placeholder,
+}: {
+  defaultValue?: string;
+  id: string;
+  label: string;
+  name: string;
+  options: Array<{ label: string; value: string }>;
+  placeholder?: string;
+}) {
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Select defaultValue={defaultValue} name={name}>
+        <SelectTrigger className="w-full" id={id}>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -92,31 +156,23 @@ export function CreateAssetDialog({
   }
 
   return (
-    <Dialog.Root onOpenChange={onOpenChange} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className={dialogClassName}>
+    <DialogFrame onOpenChange={onOpenChange} open={open}>
           <DialogHeading
             description="资产身份用于稳定引用，后续描述、参考媒体和授权都通过不可变版本追踪。"
             title="新建资产身份"
           />
           <form className="mt-6 grid gap-5" onSubmit={submit}>
             <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="assetKind">资产类型</Label>
-                <select
-                  className={selectClassName}
-                  defaultValue={currentKind}
-                  id="assetKind"
-                  name="kind"
-                >
-                  {assetTypes.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.singular}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SelectField
+                defaultValue={currentKind}
+                id="assetKind"
+                label="资产类型"
+                name="kind"
+                options={assetTypes.map((item) => ({
+                  label: item.singular,
+                  value: item.id,
+                }))}
+              />
               <div className="grid gap-2">
                 <Label htmlFor="assetName">资产名称</Label>
                 <Input id="assetName" name="name" placeholder="例如：顾清禾" required />
@@ -131,11 +187,11 @@ export function CreateAssetDialog({
               <Input id="assetTags" name="tags" placeholder="主角，第一季" />
             </div>
             <div className="flex justify-end gap-2">
-              <Dialog.Close asChild>
+              <DialogClose asChild>
                 <Button type="button" variant="outline">
                   取消
                 </Button>
-              </Dialog.Close>
+              </DialogClose>
               <Button
                 className="bg-primary text-white hover:bg-primary/85"
                 disabled={isSubmitting}
@@ -145,9 +201,7 @@ export function CreateAssetDialog({
               </Button>
             </div>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </DialogFrame>
   );
 }
 
@@ -179,10 +233,7 @@ export function CreateStateDialog({
   }
 
   return (
-    <Dialog.Root onOpenChange={onOpenChange} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className={dialogClassName}>
+    <DialogFrame onOpenChange={onOpenChange} open={open}>
           <DialogHeading
             description={`为“${asset.name}”建立可独立版本化的剧情状态；状态键创建后保持稳定。`}
             title="新建剧情状态"
@@ -219,17 +270,15 @@ export function CreateStateDialog({
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Dialog.Close asChild>
+              <DialogClose asChild>
                 <Button type="button" variant="outline">取消</Button>
-              </Dialog.Close>
+              </DialogClose>
               <Button disabled={isSubmitting} type="submit">
                 {isSubmitting ? "创建中…" : "创建状态"}
               </Button>
             </div>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </DialogFrame>
   );
 }
 
@@ -258,10 +307,7 @@ export function EditStateDialog({
   }
 
   return (
-    <Dialog.Root onOpenChange={onOpenChange} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className={dialogClassName}>
+    <DialogFrame onOpenChange={onOpenChange} open={open}>
           <DialogHeading
             description={`状态键“${state.state_key}”保持不变，只更新可读名称和说明。`}
             title="编辑剧情状态"
@@ -285,17 +331,15 @@ export function EditStateDialog({
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Dialog.Close asChild>
+              <DialogClose asChild>
                 <Button type="button" variant="outline">取消</Button>
-              </Dialog.Close>
+              </DialogClose>
               <Button disabled={isSubmitting} type="submit">
                 {isSubmitting ? "保存中…" : "保存状态"}
               </Button>
             </div>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </DialogFrame>
   );
 }
 
@@ -323,10 +367,7 @@ export function EditAssetDialog({
   }
 
   return (
-    <Dialog.Root onOpenChange={onOpenChange} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className={dialogClassName}>
+    <DialogFrame onOpenChange={onOpenChange} open={open}>
           <DialogHeading
             description="只修改别名和标签；重命名需要单独完成影响预检。"
             title="编辑资产身份"
@@ -349,17 +390,15 @@ export function EditAssetDialog({
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Dialog.Close asChild>
+              <DialogClose asChild>
                 <Button type="button" variant="outline">取消</Button>
-              </Dialog.Close>
+              </DialogClose>
               <Button disabled={isSubmitting} type="submit">
                 {isSubmitting ? "保存中…" : "保存身份信息"}
               </Button>
             </div>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </DialogFrame>
   );
 }
 
@@ -381,10 +420,7 @@ export function DeleteAssetDialog({
   preflight?: API.AssetDeletePreflightResponse;
 }) {
   return (
-    <Dialog.Root onOpenChange={onOpenChange} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className={dialogClassName}>
+    <DialogFrame onOpenChange={onOpenChange} open={open}>
           <DialogHeading
             description={`删除“${asset.name}”的资产身份；本操作只允许无版本、无引用的空资产。`}
             title="删除资产身份"
@@ -407,9 +443,9 @@ export function DeleteAssetDialog({
               </div>
             ) : null}
             <div className="flex justify-end gap-2">
-              <Dialog.Close asChild>
+              <DialogClose asChild>
                 <Button type="button" variant="outline">取消</Button>
-              </Dialog.Close>
+              </DialogClose>
               {preflight?.allowed ? (
                 <Button
                   disabled={isDeleting}
@@ -422,9 +458,7 @@ export function DeleteAssetDialog({
               ) : null}
             </div>
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </DialogFrame>
   );
 }
 
@@ -461,8 +495,7 @@ function TextAreaField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <textarea
-        className={textareaClassName}
+      <Textarea
         id={id}
         name={name}
         placeholder={placeholder}
@@ -479,24 +512,16 @@ function RelatedCharacterField({
   kind: "prop" | "costume";
 }) {
   return (
-    <div className="grid gap-2">
-      <Label htmlFor="relatedCharacter">
-        {kind === "prop" ? "持有角色" : "穿着角色"}
-      </Label>
-      <select
-        className={selectClassName}
-        defaultValue=""
-        id="relatedCharacter"
-        name="relatedCharacter"
-      >
-        <option value="">暂不关联</option>
-        {characters.map((character) => (
-          <option key={character.id} value={character.id}>
-            {character.name}
-          </option>
-        ))}
-      </select>
-    </div>
+    <SelectField
+      id="relatedCharacter"
+      label={kind === "prop" ? "持有角色" : "穿着角色"}
+      name="relatedCharacter"
+      options={characters.map((character) => ({
+        label: character.name,
+        value: character.id,
+      }))}
+      placeholder="暂不关联"
+    />
   );
 }
 
@@ -572,20 +597,17 @@ function VersionSpecFields({
     case "voice":
       return (
         <>
-          <div className="grid gap-2">
-            <Label htmlFor="sourceKind">声音来源</Label>
-            <select
-              className={selectClassName}
-              defaultValue=""
-              id="sourceKind"
-              name="sourceKind"
-            >
-              <option value="">请选择</option>
-              <option value="synthetic_recording">合成录音</option>
-              <option value="human_recording">真人录音</option>
-              <option value="voice_clone">声音克隆</option>
-            </select>
-          </div>
+          <SelectField
+            id="sourceKind"
+            label="声音来源"
+            name="sourceKind"
+            options={[
+              { label: "合成录音", value: "synthetic_recording" },
+              { label: "真人录音", value: "human_recording" },
+              { label: "声音克隆", value: "voice_clone" },
+            ]}
+            placeholder="请选择"
+          />
           <TextField id="language" label="语言" name="language" placeholder="zh-CN" />
           <TextField
             id="performanceTraits"
@@ -653,10 +675,7 @@ export function VersionDialog({
   }
 
   return (
-    <Dialog.Root onOpenChange={onOpenChange} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className={dialogClassName}>
+    <DialogFrame onOpenChange={onOpenChange} open={open}>
           <DialogHeading
             description={`为“${asset.name}”追加不可变版本；旧版本、来源和授权判断继续保留。`}
             title={`添加${config.singular}版本`}
@@ -664,20 +683,16 @@ export function VersionDialog({
           <form className="mt-6 grid gap-5" onSubmit={submit}>
             <VersionSpecFields characters={characters} kind={asset.kind} />
             <div className="grid gap-2">
-              <Label htmlFor="mediaVersionId">参考媒体</Label>
-              <select
-                className={selectClassName}
-                defaultValue=""
+              <SelectField
                 id="mediaVersionId"
+                label="参考媒体"
                 name="mediaVersionId"
-              >
-                <option value="">暂不绑定，保存为草稿</option>
-                {compatibleMedia.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.filename} · v{item.version_no} · {item.probe_status}
-                  </option>
-                ))}
-              </select>
+                options={compatibleMedia.map((item) => ({
+                  label: `${item.filename} · v${item.version_no} · ${item.probe_status}`,
+                  value: item.id,
+                }))}
+                placeholder="暂不绑定，保存为草稿"
+              />
               <p className="text-xs text-slate-500">
                 {compatibleMedia.length === 0
                   ? "当前工作区没有兼容的媒体版本，仍可先保存草稿。"
@@ -693,11 +708,11 @@ export function VersionDialog({
               placeholder="记录生成时必须保持的一致性要求"
             />
             <div className="flex justify-end gap-2">
-              <Dialog.Close asChild>
+              <DialogClose asChild>
                 <Button type="button" variant="outline">
                   取消
                 </Button>
-              </Dialog.Close>
+              </DialogClose>
               <Button
                 className="bg-primary text-white hover:bg-primary/85"
                 disabled={isSubmitting}
@@ -707,8 +722,6 @@ export function VersionDialog({
               </Button>
             </div>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </DialogFrame>
   );
 }

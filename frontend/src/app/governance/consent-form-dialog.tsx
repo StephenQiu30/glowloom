@@ -1,13 +1,30 @@
 "use client";
 
-import { CalendarRange, FileCheck2, ShieldCheck, X } from "lucide-react";
+import { CalendarRange, FileCheck2, ShieldCheck } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { Dialog } from "radix-ui";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 export type ConsentFormValue = {
   subjectIdentity: API.SubjectIdentity;
@@ -85,14 +102,12 @@ function CheckboxGroup({
       <div className="flex flex-wrap gap-2">
         {items.map((item) => (
           <label
-            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 has-checked:border-foreground/25 has-checked:bg-muted has-checked:text-foreground"
+            className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/70 has-checked:bg-muted has-checked:text-foreground"
             key={item.value}
           >
-            <input
-              className="size-4 accent-black"
+            <Checkbox
               defaultChecked={initialValues.includes(item.value)}
               name={name}
-              type="checkbox"
               value={item.value}
             />
             {item.label}
@@ -163,28 +178,19 @@ export function ConsentFormDialog({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-slate-200 bg-[#fbfcfd] shadow-2xl shadow-slate-950/15">
-          <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5">
-            <div>
-              <Dialog.Title className="text-xl font-semibold tracking-tight">
-                {mode === "create" ? "登记新授权" : "追加授权修订"}
-              </Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm leading-6 text-slate-500">
-                固定版本、范围与证明会作为不可变 revision 保存。
-              </Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <Button aria-label="关闭" size="icon" variant="ghost">
-                <X aria-hidden="true" />
-              </Button>
-            </Dialog.Close>
-          </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-3xl overflow-y-auto p-0">
+        <DialogHeader className="sticky top-0 z-10 border-b bg-background px-6 py-5">
+          <DialogTitle>
+            {mode === "create" ? "登记新授权" : "追加授权修订"}
+          </DialogTitle>
+          <DialogDescription>
+            固定版本、范围与证明会作为不可变 revision 保存。
+          </DialogDescription>
+        </DialogHeader>
 
           <form className="grid gap-6 p-6" onChange={onDirty} onSubmit={submit}>
-            <section className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+            <section className="grid gap-4 bg-muted/45 p-5">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="size-4 text-foreground" aria-hidden="true" />
                 <h2 className="font-semibold">权利主体与固定版本</h2>
@@ -206,53 +212,62 @@ export function ConsentFormDialog({
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor={`${mode}-subjectKind`}>主体类型</Label>
-                  <select
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/20 disabled:bg-slate-50"
+                  <Select
                     defaultValue={
                       initialConsent?.subject_identity.kind ?? "fictional_adult"
                     }
                     disabled={mode === "revise"}
-                    id={`${mode}-subjectKind`}
                     name="subjectKind"
                   >
-                    <option value="fictional_adult">虚构成年角色</option>
-                    <option value="adult">成年自然人</option>
-                    <option value="organization">组织</option>
-                    <option value="minor">未成年人（默认阻断）</option>
-                  </select>
+                    <SelectTrigger className="w-full" id={`${mode}-subjectKind`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fictional_adult">虚构成年角色</SelectItem>
+                      <SelectItem value="adult">成年自然人</SelectItem>
+                      <SelectItem value="organization">组织</SelectItem>
+                      <SelectItem value="minor">未成年人（默认阻断）</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor={`${mode}-subjectType`}>版本类型</Label>
-                  <select
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/20"
-                    id={`${mode}-subjectType`}
+                  <Select
                     name="subjectType"
-                    onChange={(event) => setSubjectType(event.target.value as API.SubjectType)}
+                    onValueChange={(value) => setSubjectType(value as API.SubjectType)}
                     value={subjectType}
                   >
-                    <option value="MEDIA_VERSION">媒体版本</option>
-                    <option value="SCRIPT_VERSION">剧本版本</option>
-                    <option value="ASSET_VERSION">资产版本</option>
-                  </select>
+                    <SelectTrigger className="w-full" id={`${mode}-subjectType`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MEDIA_VERSION">媒体版本</SelectItem>
+                      <SelectItem value="SCRIPT_VERSION">剧本版本</SelectItem>
+                      <SelectItem value="ASSET_VERSION">资产版本</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   {subjectType === "MEDIA_VERSION" ? (
                     <>
                       <Label htmlFor={`${mode}-mediaSubjectId`}>固定版本</Label>
-                      <select
-                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/20"
+                      <Select
                         defaultValue={effectiveInitialSubjectId}
-                        id={`${mode}-mediaSubjectId`}
                         key={`media-subject-${effectiveInitialSubjectId}-${mediaVersions.length}`}
                         name="mediaSubjectId"
                         required
                       >
-                        {mediaVersions.map((media) => (
-                          <option key={media.id} value={media.id}>
-                            {mediaLabel(media)}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="w-full" id={`${mode}-mediaSubjectId`}>
+                          <SelectValue placeholder="选择固定版本" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {mediaVersions.map((media) => (
+                            <SelectItem key={media.id} value={media.id}>
+                              {mediaLabel(media)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </>
                   ) : subjectType === "ASSET_VERSION" ? (
                     <>
@@ -289,7 +304,7 @@ export function ConsentFormDialog({
               </div>
             </section>
 
-            <section className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5">
+            <section className="grid gap-5 bg-muted/45 p-5">
               <div className="flex items-center gap-2">
                 <CalendarRange className="size-4 text-foreground" aria-hidden="true" />
                 <h2 className="font-semibold">使用范围与有效期</h2>
@@ -306,14 +321,14 @@ export function ConsentFormDialog({
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor={`${mode}-region`}>适用地域</Label>
-                  <select
-                    className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm"
-                    disabled
-                    id={`${mode}-region`}
-                    value="CN"
-                  >
-                    <option value="CN">中国大陆（CN）</option>
-                  </select>
+                  <Select defaultValue="CN" disabled>
+                    <SelectTrigger className="w-full" id={`${mode}-region`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CN">中国大陆（CN）</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <CheckboxGroup
@@ -368,34 +383,37 @@ export function ConsentFormDialog({
               </div>
             </section>
 
-            <section className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+            <section className="grid gap-4 bg-muted/45 p-5">
               <div className="flex items-center gap-2">
                 <FileCheck2 className="size-4 text-foreground" aria-hidden="true" />
                 <h2 className="font-semibold">证明与说明</h2>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor={`${mode}-proofMediaVersionId`}>证明媒体</Label>
-                <select
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/20"
+                <Select
                   defaultValue={effectiveInitialProofId}
-                  id={`${mode}-proofMediaVersionId`}
                   key={`proof-${effectiveInitialProofId}-${mediaVersions.length}`}
                   name="proofMediaVersionId"
                   required
                 >
-                  {mediaVersions.map((media) => (
-                    <option key={media.id} value={media.id}>
-                      {mediaLabel(media)}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full" id={`${mode}-proofMediaVersionId`}>
+                    <SelectValue placeholder="选择证明媒体" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mediaVersions.map((media) => (
+                      <SelectItem key={media.id} value={media.id}>
+                        {mediaLabel(media)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor={`${mode}-reason`}>
                   {mode === "create" ? "登记说明" : "修订说明"}
                 </Label>
-                <textarea
-                  className="min-h-24 resize-none rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-ring focus:ring-3 focus:ring-ring/20"
+                <Textarea
+                  className="min-h-24 resize-none leading-6"
                   defaultValue={mode === "revise" ? "调整授权使用范围" : "角色形象与声音授权"}
                   id={`${mode}-reason`}
                   maxLength={1000}
@@ -412,12 +430,11 @@ export function ConsentFormDialog({
               </Alert>
             </section>
 
-            <div className="sticky bottom-0 -mx-6 -mb-6 flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">
-              <Dialog.Close asChild>
+            <DialogFooter className="sticky bottom-0 -mx-6 -mb-6 border-t bg-background px-6 py-4">
+              <DialogClose asChild>
                 <Button type="button" variant="outline">取消</Button>
-              </Dialog.Close>
+              </DialogClose>
               <Button
-                className="bg-primary px-5 text-white hover:bg-primary/85"
                 disabled={isSubmitting || mediaVersions.length === 0}
                 type="submit"
               >
@@ -428,10 +445,9 @@ export function ConsentFormDialog({
                     ? "登记授权"
                     : "保存新修订"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   );
 }

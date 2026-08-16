@@ -484,10 +484,8 @@ describe("真实项目生产入口", () => {
     );
 
     await screen.findByRole("heading", { name: project.name });
-    await user.selectOptions(
-      screen.getByLabelText("导入方式"),
-      "media",
-    );
+    await user.click(screen.getByRole("combobox", { name: "导入方式" }));
+    await user.click(screen.getByRole("option", { name: "上传 UTF-8 .txt / .md" }));
     const file = new File(
       ["第一集\n场景1：控制室，夜\n甲：开始。"],
       "whole-script.md",

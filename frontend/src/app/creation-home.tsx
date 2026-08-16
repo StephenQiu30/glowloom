@@ -15,7 +15,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { StudioShell, studioContainerClassName } from "@/components/studio/studio-shell";
+import { LayoutContainer } from "@/components/layout/layout-container";
+import { BasicLayout } from "@/components/layout/basic-layout";
+import { StudioShell } from "@/components/studio/studio-shell";
 import { Button } from "@/components/ui/button";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 
@@ -39,18 +41,20 @@ export function CreationHome() {
 
   if (sessionState !== "anonymous") {
     return (
-      <div className="grid min-h-screen place-items-center">
-        <LoaderCircle
-          aria-label={sessionState === "authenticated" ? "正在进入项目工作区" : "正在读取登录状态"}
-          className="animate-spin text-primary"
-        />
-      </div>
+      <BasicLayout active="create" authState="loading">
+        <div className="grid min-h-[70dvh] place-items-center">
+          <LoaderCircle
+            aria-label={sessionState === "authenticated" ? "正在进入项目工作区" : "正在读取登录状态"}
+            className="animate-spin text-primary"
+          />
+        </div>
+      </BasicLayout>
     );
   }
 
   return (
     <StudioShell active="create">
-      <div className={studioContainerClassName}>
+      <LayoutContainer>
         <div className="py-12 lg:py-14">
           <section
             aria-label="产品欢迎"
@@ -115,7 +119,7 @@ export function CreationHome() {
             </ol>
           </section>
         </div>
-      </div>
+      </LayoutContainer>
     </StudioShell>
   );
 }

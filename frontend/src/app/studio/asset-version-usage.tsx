@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -29,13 +30,20 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   appApiErrorMessage,
   useApplyAssetUpgradeMutation,
   useAssetShotUsagesQuery,
   useAssetUpgradePreflightMutation,
 } from "@/lib/server-state";
 
-import { selectClassName, shortId } from "./asset-workspace-model";
+import { shortId } from "./asset-workspace-model";
 
 function versionLabel(
   version: API.AssetVersionResponse,
@@ -178,7 +186,7 @@ export function AssetVersionUsage({
   return (
     <>
       <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-4">
+        <CardHeader className="py-4">
           <CardTitle>
             <h2>分镜引用与版本升级</h2>
           </CardTitle>
@@ -194,36 +202,42 @@ export function AssetVersionUsage({
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor={`usage-source-${asset.id}`}>检查引用的资产版本</Label>
-                  <select
-                    className={selectClassName}
-                    id={`usage-source-${asset.id}`}
-                    onChange={(event) => changeSource(event.target.value)}
+                  <Select
                     value={sourceVersion?.id ?? ""}
+                    onValueChange={changeSource}
                   >
-                    {versions.map((version) => (
-                      <option key={version.id} value={version.id}>
-                        {versionLabel(version, currentVersionId)}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full" id={`usage-source-${asset.id}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {versions.map((version) => (
+                        <SelectItem key={version.id} value={version.id}>
+                          {versionLabel(version, currentVersionId)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor={`usage-target-${asset.id}`}>升级到资产版本</Label>
-                  <select
-                    className={selectClassName}
+                  <Select
                     disabled={!targetVersion}
-                    id={`usage-target-${asset.id}`}
-                    onChange={(event) => changeTarget(event.target.value)}
                     value={targetVersion?.id ?? ""}
+                    onValueChange={changeTarget}
                   >
-                    {versions
-                      .filter((version) => version.id !== sourceVersion?.id)
-                      .map((version) => (
-                        <option key={version.id} value={version.id}>
-                          {versionLabel(version, currentVersionId)}
-                        </option>
-                      ))}
-                  </select>
+                    <SelectTrigger className="w-full" id={`usage-target-${asset.id}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {versions
+                        .filter((version) => version.id !== sourceVersion?.id)
+                        .map((version) => (
+                          <SelectItem key={version.id} value={version.id}>
+                            {versionLabel(version, currentVersionId)}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                   {!targetVersion ? (
                     <p className="text-xs text-slate-500">添加另一个版本后才能升级。</p>
                   ) : null}
@@ -297,13 +311,12 @@ export function AssetVersionUsage({
                       className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 p-3 hover:bg-slate-50"
                       key={usage.spec_version_id}
                     >
-                      <input
+                      <Checkbox
                         aria-label={`选择镜头 ${usage.shot_title}`}
                         checked={selectedShotIds.includes(usage.shot_id)}
-                        className="mt-1 size-4 accent-black"
                         disabled={busy || !targetVersion}
-                        onChange={() => toggleShot(usage.shot_id)}
-                        type="checkbox"
+                        onCheckedChange={() => toggleShot(usage.shot_id)}
+                        className="mt-1"
                       />
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-medium">

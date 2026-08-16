@@ -4,7 +4,8 @@ import { AlertCircle, ArrowRight, FolderPlus, LoaderCircle, MoreHorizontal, Plus
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { StudioShell, studioContainerClassName } from "@/components/studio/studio-shell";
+import { LayoutContainer } from "@/components/layout/layout-container";
+import { StudioShell } from "@/components/studio/studio-shell";
 import { MetricGroup } from "@/components/studio/metric-group";
 import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -94,7 +95,13 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
   const pageError = me.error ?? workspacesQuery.error ?? projectsQuery.error;
 
   if (sessionState === "checking") {
-    return <div className="grid min-h-screen place-items-center"><LoaderCircle aria-label="正在读取登录状态" className="animate-spin" /></div>;
+    return (
+      <StudioShell active="projects">
+        <div className="grid min-h-[70dvh] place-items-center">
+          <LoaderCircle aria-label="正在读取登录状态" className="animate-spin" />
+        </div>
+      </StudioShell>
+    );
   }
 
   return (
@@ -106,7 +113,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
       } : undefined}
     >
       {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 bg-foreground px-4 py-3 text-sm text-background" role="status">{notice}</div> : null}
-      <div className={`${studioContainerClassName} py-12 md:py-14`}>
+      <LayoutContainer className="py-12 md:py-14">
         {!authenticated ? (
           <Alert><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription>登录后管理真实项目与单集。</AlertDescription></Alert>
         ) : pageError ? (
@@ -156,7 +163,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
             </div>
 
             {visibleProjects.length ? (
-              <Table className="mt-3 border-separate border-spacing-y-1">
+              <Table className="mt-3">
                 <TableHeader className="[&_tr]:border-0">
                   <TableRow className="border-0 hover:bg-transparent">
                     <TableHead className="px-4 text-xs text-muted-foreground">项目</TableHead>
@@ -169,7 +176,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
                 </TableHeader>
                 <TableBody>
                   {visibleProjects.map((project) => (
-                    <TableRow className="border-0 bg-muted/35 hover:bg-muted/70 [&>td:first-child]:rounded-l-lg [&>td:last-child]:rounded-r-lg" key={project.id}>
+                    <TableRow className="bg-muted/35 hover:bg-muted/70" key={project.id}>
                       <TableCell className="min-w-72 whitespace-normal px-4 py-4">
                         <p className="font-medium">{project.name}</p>
                         <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{project.description || "尚未填写项目简介"}</p>
@@ -199,7 +206,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
             ) : (
               <section className="mt-3 grid min-h-80 place-items-center bg-muted/30 px-6 py-16 text-center" aria-labelledby="project-empty-title">
                 <div className="max-w-sm">
-                  <div className="mx-auto grid size-11 place-items-center rounded-full bg-background text-muted-foreground">
+                  <div className="mx-auto grid size-11 place-items-center text-muted-foreground">
                     {hasProjects ? <SearchX aria-hidden="true" className="size-5" /> : <FolderPlus aria-hidden="true" className="size-5" />}
                   </div>
                   <h2 className="mt-5 text-lg font-semibold tracking-tight" id="project-empty-title">
@@ -218,7 +225,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
             )}
           </>
         )}
-      </div>
+      </LayoutContainer>
       {workspaceId ? (
         <ProjectCreateDialog
           isSubmitting={createState.isLoading}

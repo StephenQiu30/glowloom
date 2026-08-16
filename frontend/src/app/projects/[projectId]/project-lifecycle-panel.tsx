@@ -9,6 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   appApiErrorMessage,
   useDeleteProjectMutation,
   useProjectDeletePreflightMutation,
@@ -143,11 +150,14 @@ export function ProjectLifecyclePanel({ project }: { project: API.ProjectRespons
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="grid gap-2">
                   <Label htmlFor="aspectRatio">画幅</Label>
-                  <select className="h-8 rounded-lg border bg-background px-2.5 text-sm" defaultValue={project.aspect_ratio} disabled={project.status === "archived"} id="aspectRatio" name="aspectRatio">
-                    <option value="9:16">9:16</option>
-                    <option value="16:9">16:9</option>
-                    <option value="1:1">1:1</option>
-                  </select>
+                  <Select defaultValue={project.aspect_ratio} disabled={project.status === "archived"} name="aspectRatio">
+                    <SelectTrigger className="w-full" id="aspectRatio"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="9:16">9:16</SelectItem>
+                      <SelectItem value="16:9">16:9</SelectItem>
+                      <SelectItem value="1:1">1:1</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="language">语言</Label>
@@ -188,7 +198,7 @@ export function ProjectLifecyclePanel({ project }: { project: API.ProjectRespons
                 更新预算
               </Button>
             </form>
-            <div className="flex flex-wrap gap-2 border-t pt-5">
+            <div className="flex flex-wrap gap-2 pt-2">
               <Button disabled={archiveState.isLoading} onClick={handleProjectState} variant="outline">
                 {project.status === "active" ? <Archive aria-hidden="true" /> : <RotateCcw aria-hidden="true" />}
                 {project.status === "active" ? "归档项目" : "恢复项目"}

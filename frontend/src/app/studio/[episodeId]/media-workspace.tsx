@@ -16,6 +16,7 @@ import { type FormEvent, useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -32,6 +33,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { mediaKindFromFile } from "./episode-studio-model";
 
@@ -168,8 +176,7 @@ export function MediaWorkspace({
             <form className="grid gap-5" onSubmit={submit}>
               <div className="grid gap-2">
                 <Label htmlFor="mediaFile">选择媒体文件</Label>
-                <input
-                  className="block w-full rounded-lg border border-slate-200 bg-white p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium"
+                <Input
                   id="mediaFile"
                   type="file"
                   required
@@ -182,20 +189,23 @@ export function MediaWorkspace({
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="mediaKind">媒体类型</Label>
-                <select
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  id="mediaKind"
+                <Select
                   value={kind}
-                  onChange={(event) =>
-                    setKind(event.target.value as API.UploadDeclaration["kind"])
+                  onValueChange={(value) =>
+                    setKind(value as API.UploadDeclaration["kind"])
                   }
                 >
-                  {Object.entries(mediaKindLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full" id="mediaKind">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(mediaKindLabels).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               {selectedFile ? (
                 <Alert className="border-border bg-muted text-foreground">
@@ -387,9 +397,8 @@ export function MediaWorkspace({
           <form className="grid gap-5" onSubmit={submitVersion}>
             <div className="grid gap-2">
               <Label htmlFor="appendMediaFile">选择新的媒体文件</Label>
-              <input
+              <Input
                 accept={appendTarget ? inputAccept(appendTarget.media_object_kind) : undefined}
-                className="block w-full rounded-lg border border-slate-200 bg-white p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium"
                 id="appendMediaFile"
                 required
                 type="file"

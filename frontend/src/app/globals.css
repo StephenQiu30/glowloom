@@ -133,5 +133,116 @@
   ::selection {
     background: color-mix(in oklab, #000 16%, transparent);
     color: #000;
-    }
+  }
+}
+
+@layer components {
+  .basic-layout {
+    --basic-header-stack-height: 72px;
+    --basic-footer-height: 48px;
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  .basic-layout[data-has-project-context="true"] {
+    --basic-header-stack-height: calc(var(--basic-header-stack-height) + 44px);
+  }
+
+  .basic-layout[data-has-progress="true"] {
+    --basic-header-stack-height: calc(var(--basic-header-stack-height) + 48px);
+  }
+
+  .basic-layout[data-auth-state="anonymous"] {
+    --basic-header-stack-height: 72px;
+  }
+
+  .basic-layout__header {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 40;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .basic-layout__primary-header {
+    height: 72px;
+  }
+
+  .basic-layout__mobile-nav {
+    height: 44px;
+  }
+
+  .basic-layout__main {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding-block-start: var(--basic-header-stack-height);
+    padding-block-end: var(--basic-footer-height);
+    scrollbar-gutter: stable;
+  }
+
+  .basic-layout__footer {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 40;
+    height: var(--basic-footer-height);
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .basic-layout__skip-link {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 60;
+    transform: translateY(-150%);
+    background: var(--foreground);
+    color: var(--background);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    transition: transform 120ms ease-out;
+  }
+
+  .basic-layout__skip-link:focus {
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 767px) {
+  .basic-layout {
+    --basic-header-stack-height: 116px;
+    --basic-footer-height: 44px;
+  }
+
+  .basic-layout[data-auth-state="anonymous"] {
+    --basic-header-stack-height: 72px;
+  }
+}
+
+@media print {
+  .basic-layout {
+    position: static;
+    overflow: visible;
+  }
+
+  .basic-layout__header,
+  .basic-layout__footer {
+    position: static;
+  }
+
+  .basic-layout__main {
+    height: auto;
+    overflow: visible;
+    padding-block: 0;
+  }
+
+  .basic-layout__skip-link {
+    display: none;
+  }
 }

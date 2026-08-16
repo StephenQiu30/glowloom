@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function ProjectServerCard({ project }: { project: API.ProjectResponse }) {
   return (
-    <Card className="group relative transition hover:border-border hover:shadow-md hover:">
+    <Card className="group relative py-5 transition hover:bg-muted/30">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -23,7 +23,7 @@ export function ProjectServerCard({ project }: { project: API.ProjectResponse })
       </CardHeader>
       <CardContent>
         <p className="line-clamp-2 min-h-12 text-sm leading-6 text-slate-500">{project.description || "尚未填写项目简介"}</p>
-        <div className="mt-5 flex flex-wrap gap-4 border-t border-slate-100 pt-4 text-xs text-slate-500">
+        <div className="mt-5 flex flex-wrap gap-4 pt-4 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5"><Layers3 className="size-3.5" aria-hidden="true" />{project.visual_style ?? "未设视觉风格"}</span>
           <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{Math.round(project.target_duration_ms / 1_000)} 秒/集</span>
         </div>

@@ -13,6 +13,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export type AuditFilters = {
   action?: string;
@@ -143,7 +151,8 @@ export function AuditTrail({
   function submitFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const action = String(form.get("action") ?? "").trim();
+    const actionValue = String(form.get("action") ?? "").trim();
+    const action = actionValue === "all" ? "" : actionValue;
     const actorId = String(form.get("actorId") ?? "").trim();
     const targetId = String(form.get("targetId") ?? "").trim();
     onFilter({
@@ -158,7 +167,7 @@ export function AuditTrail({
   return (
     <section aria-label="操作审计" className="mt-8">
       <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-5">
+        <CardHeader className="py-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -172,64 +181,45 @@ export function AuditTrail({
             <Button
               aria-expanded={filtering}
               onClick={() => setFiltering((visible) => !visible)}
-              variant="outline"
+              variant="ghost"
             >
               <Filter aria-hidden="true" />筛选
             </Button>
           </div>
           {filtering ? (
             <form
-              className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 xl:grid-cols-5"
+              className="mt-4 grid gap-3 bg-muted/45 p-4 md:grid-cols-2 xl:grid-cols-5"
               onSubmit={submitFilters}
             >
               <div className="grid gap-2">
                 <Label htmlFor="auditAction">动作</Label>
-                <select
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  id="auditAction"
-                  name="action"
-                >
-                  <option value="">全部动作</option>
-                  {Object.entries(auditActionLabels).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
+                <Select defaultValue="all" name="action">
+                  <SelectTrigger className="w-full" id="auditAction">
+                    <SelectValue placeholder="全部动作" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部动作</SelectItem>
+                    {Object.entries(auditActionLabels).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="auditActor">Actor UUID</Label>
-                <input
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  id="auditActor"
-                  name="actorId"
-                  placeholder="可选"
-                />
+                <Input id="auditActor" name="actorId" placeholder="可选" />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="auditTarget">目标 UUID</Label>
-                <input
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  id="auditTarget"
-                  name="targetId"
-                  placeholder="可选"
-                />
+                <Input id="auditTarget" name="targetId" placeholder="可选" />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="auditFrom">开始日期</Label>
-                <input
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  id="auditFrom"
-                  name="occurredFrom"
-                  type="date"
-                />
+                <Input id="auditFrom" name="occurredFrom" type="date" />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="auditTo">结束日期</Label>
-                <input
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  id="auditTo"
-                  name="occurredTo"
-                  type="date"
-                />
+                <Input id="auditTo" name="occurredTo" type="date" />
               </div>
               <div className="flex justify-end md:col-span-2 xl:col-span-5">
                 <Button type="submit">应用审计筛选</Button>
@@ -237,14 +227,14 @@ export function AuditTrail({
             </form>
           ) : null}
         </CardHeader>
-        <CardContent className="divide-y divide-slate-100 p-0">
+        <CardContent className="divide-y divide-border p-0">
           {loading ? (
-            <div className="flex items-center gap-2 px-5 py-8 text-sm text-slate-500">
+            <div className="flex items-center gap-2 px-5 py-8 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
               正在读取审计事实…
             </div>
           ) : events.length === 0 ? (
-            <p className="px-5 py-8 text-sm text-slate-500">当前筛选下没有审计事件。</p>
+            <p className="px-5 py-8 text-sm text-muted-foreground">当前筛选下没有审计事件。</p>
           ) : (
             events.map((event) => (
               <article className="grid gap-3 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto]" key={event.id}>
@@ -256,18 +246,18 @@ export function AuditTrail({
                     <Badge variant="secondary">
                       revision {String(event.metadata.revision ?? event.metadata.project_revision ?? "—")}
                     </Badge>
-                    <time className="text-xs text-slate-400" dateTime={event.occurred_at}>
+                    <time className="text-xs text-muted-foreground" dateTime={event.occurred_at}>
                       {new Date(event.occurred_at).toLocaleString("zh-CN", { timeZone: "UTC" })}
                     </time>
                   </div>
-                  <p className="mt-2 text-sm text-slate-600">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     Actor {shortId(event.actor_id)} · {event.target_type} {shortId(event.target_id)}
                   </p>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {eventSummary(event)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 font-mono text-xs text-slate-400">
+                <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
                   <Fingerprint className="size-3.5" aria-hidden="true" />
                   trace {shortId(event.trace_id)}
                 </div>

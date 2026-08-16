@@ -118,6 +118,15 @@ const mediaVersionId = "019fb1e0-a040-70f6-99dc-0b4e9e085569";
 const episodeId = "019fb1e0-a060-70f6-99dc-0b4e9e085570";
 const shotId = "019fb1e0-a070-70f6-99dc-0b4e9e085571";
 const shotSpecVersionId = "019fb1e0-a080-70f6-99dc-0b4e9e085572";
+
+async function selectRadixOption(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+  optionName: string | RegExp,
+) {
+  await user.click(screen.getByRole("combobox", { name: label }));
+  await user.click(screen.getByRole("option", { name: optionName }));
+}
 const now = "2026-07-30T08:00:00Z";
 
 const asset: API.AssetResponse = {
@@ -596,7 +605,7 @@ describe("AI 漫剧资产工作台", () => {
     await user.type(screen.getByLabelText("外观描述"), "乌发高髻，青灰色长衫");
     await user.type(screen.getByLabelText("年龄观感"), "二十五岁");
     await user.type(screen.getByLabelText("性格特征（逗号分隔）"), "清冷, 克制");
-    await user.selectOptions(screen.getByLabelText("参考媒体"), mediaVersionId);
+    await selectRadixOption(user, "参考媒体", /gu-qinghe-portrait\.png/);
     await user.type(screen.getByLabelText("提示词描述"), "保持右眼泪痣。");
     await user.click(screen.getByRole("button", { name: "保存版本" }));
 

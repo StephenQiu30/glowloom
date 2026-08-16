@@ -74,7 +74,7 @@ export function AssetList({
 
   return (
     <Card className="gap-0 py-0">
-      <CardHeader className="border-b py-4">
+      <CardHeader className="py-4">
         <CardTitle>资产身份</CardTitle>
         <CardDescription>{assets.length} 项符合当前筛选</CardDescription>
       </CardHeader>
@@ -91,21 +91,21 @@ export function AssetList({
               aria-label={`选择资产 ${asset.name}`}
               aria-pressed={selectedId === asset.id}
               className={cn(
-                "grid w-full grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border p-3 text-left transition",
+                "grid w-full grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg p-3 text-left transition",
                 selectedId === asset.id
-                  ? "border-foreground/25 bg-muted/70 shadow-sm "
-                  : "border-transparent hover:border-slate-200 hover:bg-slate-50",
+                  ? "bg-muted/70 shadow-sm "
+                  : "hover:bg-muted/45",
               )}
               key={asset.id}
               onClick={() => onSelect(asset.id)}
               type="button"
             >
-              <span className="grid size-10 place-items-center rounded-xl bg-slate-100 text-slate-500">
+              <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground">
                 <Icon className="size-4" aria-hidden="true" />
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">{asset.name}</span>
-                <span className="mt-0.5 block truncate text-xs text-slate-500">
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                   {asset.aliases.length > 0
                     ? asset.aliases.join(" · ")
                     : `${config.singular}身份`}
@@ -115,8 +115,8 @@ export function AssetList({
                 <Badge
                   className={
                     asset.status === "active" && asset.availability === "enabled"
-                      ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-slate-100 text-slate-500"
+                      ? "border-border bg-muted text-foreground"
+                      : "border-border bg-muted text-muted-foreground"
                   }
                   variant="outline"
                 >
@@ -126,7 +126,7 @@ export function AssetList({
                       ? "已停用"
                       : "使用中"}
                 </Badge>
-                <span className="mt-1 block font-mono text-[10px] text-slate-400">
+                <span className="mt-1 block font-mono text-[10px] text-muted-foreground">
                   {asset.status === "archived"
                     ? "状态不参与生产"
                     : versionedStates > 0
@@ -159,10 +159,10 @@ export function ArchivedAssetCard({
   const Icon = config.icon;
   return (
     <Card className="gap-0 py-0">
-      <CardHeader className="border-b py-5">
+      <CardHeader className="py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <span className="grid size-11 place-items-center rounded-xl bg-slate-100 text-slate-500">
+            <span className="grid size-11 place-items-center rounded-lg bg-muted text-muted-foreground">
               <Icon className="size-5" aria-hidden="true" />
             </span>
             <div>
@@ -189,7 +189,7 @@ export function ArchivedAssetCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-5 text-sm leading-6 text-slate-500">
+      <CardContent className="p-5 text-sm leading-6 text-muted-foreground">
         归档资产不进入资产圣经、准备度与新镜头绑定；恢复后可继续维护原有剧情状态和不可变版本。
       </CardContent>
     </Card>
@@ -221,7 +221,7 @@ export function AssetStateBar({
 }) {
   return (
     <Card className="gap-0 py-0">
-      <CardHeader className="border-b py-4">
+      <CardHeader className="py-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <CardTitle>剧情状态</CardTitle>
@@ -314,7 +314,7 @@ function ReadinessPanel({
   }
   if (error) {
     return (
-      <Alert className="border-rose-200 bg-rose-50 text-rose-800" variant="destructive">
+        <Alert className="border-0 bg-destructive/10 text-destructive" variant="destructive">
         <AlertCircle aria-hidden="true" />
         <AlertTitle>准备度暂时无法计算</AlertTitle>
         <AlertDescription>{appApiErrorMessage(error)}</AlertDescription>
@@ -598,7 +598,7 @@ export function AssetDetail({
   return (
     <div className="grid gap-5">
       <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-5">
+      <CardHeader className="py-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               <span className="grid size-11 place-items-center rounded-xl bg-muted text-foreground">
@@ -688,7 +688,7 @@ export function AssetDetail({
       </Card>
 
       <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-4">
+        <CardHeader className="py-4">
           <CardTitle>生产准备度</CardTitle>
           <CardDescription>基于当前版本的字段、媒体探测和实时授权事实计算。</CardDescription>
         </CardHeader>
@@ -702,7 +702,7 @@ export function AssetDetail({
       </Card>
 
       <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-4">
+        <CardHeader className="py-4">
           <CardTitle>版本历史</CardTitle>
           <CardDescription>版本内容不可覆盖，旧事实始终可追溯。</CardDescription>
         </CardHeader>

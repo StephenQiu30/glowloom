@@ -51,6 +51,15 @@ const assetVersionId = "019fb1e0-a045-73cd-8f84-781bef25b92c";
 const consentId = "019fb1e0-a052-7d45-9b43-6821b3b33440";
 const now = "2026-07-30T08:00:00Z";
 
+async function selectRadixOption(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+  optionName: string | RegExp,
+) {
+  await user.click(screen.getByRole("combobox", { name: label }));
+  await user.click(await screen.findByRole("option", { name: optionName }));
+}
+
 const auditEvents: API.AuditEventResponse[] = [
   {
     id: "019fb1e0-a060-7000-8000-000000000000",
@@ -360,8 +369,8 @@ describe("governance consent workspace", () => {
     await user.click(screen.getByRole("button", { name: "新建授权" }));
     await user.clear(screen.getByLabelText("权利主体引用"));
     await user.type(screen.getByLabelText("权利主体引用"), "creator-character-a");
-    await user.selectOptions(screen.getByLabelText("固定版本"), subjectId);
-    await user.selectOptions(screen.getByLabelText("证明媒体"), proofId);
+    await selectRadixOption(user, "固定版本", /character-reference\.png/);
+    await selectRadixOption(user, "证明媒体", /consent-proof\.png/);
     await user.clear(screen.getByLabelText("登记说明"));
     await user.type(screen.getByLabelText("登记说明"), "角色形象授权确认");
     await user.click(screen.getByRole("button", { name: "登记授权" }));
@@ -435,7 +444,7 @@ describe("governance consent workspace", () => {
     expect(within(audit).getAllByText(/MEDIA_VERSION/)).toHaveLength(2);
 
     await user.click(within(audit).getByRole("button", { name: "筛选" }));
-    await user.selectOptions(within(audit).getByLabelText("动作"), "consent.revoked");
+    await selectRadixOption(user, "动作", "授权撤销");
     await user.type(within(audit).getByLabelText("目标 UUID"), consentId);
     await user.click(
       within(audit).getByRole("button", { name: "应用审计筛选" }),
@@ -466,10 +475,10 @@ describe("governance consent workspace", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "登记新授权" })).toBeInTheDocument();
-    expect(screen.getByLabelText("版本类型")).toHaveValue("ASSET_VERSION");
+    expect(screen.getByRole("combobox", { name: "版本类型" })).toHaveTextContent("资产版本");
     expect(screen.getByLabelText("资产版本 UUID")).toHaveValue(assetVersionId);
     await waitFor(() =>
-      expect(screen.getByLabelText("证明媒体")).toHaveValue(proofId),
+      expect(screen.getByRole("combobox", { name: "证明媒体" })).toHaveTextContent(/consent-proof\.png/),
     );
 
     await user.clear(screen.getByLabelText("权利主体引用"));

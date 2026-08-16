@@ -12,5 +12,8 @@ class ResizeObserverMock implements ResizeObserver {
 
 globalThis.ResizeObserver = ResizeObserverMock;
 HTMLElement.prototype.scrollIntoView = () => undefined;
+HTMLElement.prototype.hasPointerCapture = () => false;
+HTMLElement.prototype.setPointerCapture = () => undefined;
+HTMLElement.prototype.releasePointerCapture = () => undefined;
 
 afterEach(cleanup);

@@ -14,6 +14,7 @@ import { type FormEvent, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -70,6 +71,7 @@ export function ScriptAdaptationPanel({
   const [pacing, setPacing] = useState<API.AdaptationRunCreateRequest["pacing"]>(
     "fast",
   );
+  const [colloquialDialogue, setColloquialDialogue] = useState(true);
   const [draftBody, setDraftBody] = useState(run?.draft_body ?? "");
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
@@ -85,7 +87,7 @@ export function ScriptAdaptationPanel({
       target_duration_ms: Number(form.get("targetDurationMs")),
       core_plot_points: corePlotPoints,
       pacing,
-      colloquial_dialogue: form.get("colloquialDialogue") === "on",
+      colloquial_dialogue: colloquialDialogue,
       idempotency_key: `studio-adaptation:${crypto.randomUUID()}`,
     });
   }
@@ -164,7 +166,10 @@ export function ScriptAdaptationPanel({
               />
             </div>
             <label className="flex items-center gap-2 text-sm">
-              <input defaultChecked name="colloquialDialogue" type="checkbox" />
+              <Checkbox
+                checked={colloquialDialogue}
+                onCheckedChange={(checked) => setColloquialDialogue(checked === true)}
+              />
               对白口语化
             </label>
             <div className="flex justify-end">

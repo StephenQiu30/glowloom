@@ -23,6 +23,13 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   appApiErrorMessage,
@@ -261,7 +268,7 @@ export function ScriptDocumentImportCard({
       aria-label="整剧导入与格式体检"
       role="region"
     >
-      <CardHeader className="border-b border-slate-100">
+      <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <FileText className="size-5" aria-hidden="true" />整剧导入与格式体检
         </CardTitle>
@@ -284,16 +291,19 @@ export function ScriptDocumentImportCard({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="scriptDocumentMode">导入方式</Label>
-            <select
-              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm disabled:opacity-60"
+            <Select
               disabled={!canWrite || busy}
-              id="scriptDocumentMode"
+              onValueChange={(value) => setMode(value as ImportMode)}
               value={mode}
-              onChange={(event) => setMode(event.target.value as ImportMode)}
             >
-              <option value="text">粘贴整剧文本</option>
-              <option value="media">上传 UTF-8 .txt / .md</option>
-            </select>
+              <SelectTrigger className="w-full" id="scriptDocumentMode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="text">粘贴整剧文本</SelectItem>
+                <SelectItem value="media">上传 UTF-8 .txt / .md</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {mode === "text" ? (
             <div className="grid gap-2">
@@ -308,27 +318,27 @@ export function ScriptDocumentImportCard({
                 value={text}
                 onChange={(event) => setText(event.target.value)}
               />
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 保留原始换行；最多 100,000 个 Unicode 字符。
               </p>
             </div>
           ) : (
             <div className="grid gap-2">
               <Label htmlFor="scriptDocumentFile">剧本文档</Label>
-              <input
+              <Input
                 accept=".txt,.md,text/plain,text/markdown"
-                className="block w-full rounded-lg border border-slate-200 bg-white p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium disabled:opacity-60"
+                className="h-auto py-2 file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium"
                 disabled={!canWrite || busy}
                 id="scriptDocumentFile"
                 type="file"
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
               />
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 严格 UTF-8、无 BOM，最多 400 KB；上传后固定到不可变媒体版本。
               </p>
             </div>
           )}
-          <div className="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
+          <div className="flex items-start gap-3 bg-muted/45 p-4">
             <Checkbox
               checked={rightsConfirmed}
               disabled={!canWrite || busy}
@@ -347,7 +357,7 @@ export function ScriptDocumentImportCard({
             </Alert>
           ) : null}
           {notice ? (
-            <Alert className="border-emerald-200 bg-emerald-50 text-emerald-800" role="status">
+            <Alert className="border-0 bg-muted/50" role="status">
               <CheckCircle2 aria-hidden="true" />
               <AlertTitle>格式体检已完成</AlertTitle>
               <AlertDescription>{notice}</AlertDescription>
@@ -366,37 +376,37 @@ export function ScriptDocumentImportCard({
         </form>
 
         <aside className="grid content-start gap-5">
-          <div className="rounded-xl border border-slate-200 p-5">
+          <div className="bg-muted/45 p-5">
             <p className="text-sm font-medium">已导入整剧文档</p>
             {documents.isLoading ? (
-              <p className="mt-2 text-sm text-slate-500">正在读取……</p>
+              <p className="mt-2 text-sm text-muted-foreground">正在读取……</p>
             ) : documents.error ? (
-              <p className="mt-2 text-sm text-rose-700">
+              <p className="mt-2 text-sm text-destructive">
                 {appApiErrorMessage(documents.error)}
               </p>
             ) : documents.data?.items.length ? (
               <div className="mt-3 grid gap-3">
                 {documents.data.items.map((document) => (
-                  <div className="rounded-lg bg-slate-50 p-3" key={document.id}>
+                  <div className="bg-background p-3" key={document.id}>
                     <div className="flex items-center justify-between gap-3">
                       <p className="truncate text-sm font-medium">{document.title}</p>
                       <Badge variant="outline">
                         {document.source_type === "media" ? "文件" : "粘贴"}
                       </Badge>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {document.language} · revision {document.revision}
                     </p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="mt-2 text-sm text-slate-500">尚未导入整剧原稿。</p>
+              <p className="mt-2 text-sm text-muted-foreground">尚未导入整剧原稿。</p>
             )}
           </div>
 
           {analysis ? (
-            <div className="rounded-xl border border-slate-200 p-5">
+            <div className="bg-muted/45 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="font-medium">最近一次格式体检</p>
                 <Badge
@@ -410,12 +420,12 @@ export function ScriptDocumentImportCard({
                 </Badge>
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-lg bg-slate-50 p-3">
-                  <dt className="text-slate-500">集标记</dt>
+                <div className="bg-background p-3">
+                  <dt className="text-muted-foreground">集标记</dt>
                   <dd className="mt-1 text-lg font-semibold">{episodeMarkerCount}</dd>
                 </div>
-                <div className="rounded-lg bg-slate-50 p-3">
-                  <dt className="text-slate-500">结构块</dt>
+                <div className="bg-background p-3">
+                  <dt className="text-muted-foreground">结构块</dt>
                   <dd className="mt-1 text-lg font-semibold">
                     {analysis.blocks.length}
                   </dd>
@@ -424,18 +434,18 @@ export function ScriptDocumentImportCard({
               {analysis.issues.length ? (
                 <div className="mt-4 grid gap-3">
                   {analysis.issues.map((issue) => (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3" key={issue.id}>
-                      <p className="text-sm font-medium text-amber-900">
+                    <div className="bg-muted p-3" key={issue.id}>
+                      <p className="text-sm font-medium">
                         {issueLabels[issue.code] ?? issue.code} · 第 {issue.line_number} 行，第 {issue.column_number} 列
                       </p>
-                      <p className="mt-1 text-xs leading-5 text-amber-800">
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
                         {nextActionLabels[issue.next_action] ?? issue.next_action}
                       </p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-emerald-700">
+                <p className="mt-4 text-sm text-muted-foreground">
                   集号连续且没有阻断问题；下一阶段可生成分集计划。
                 </p>
               )}

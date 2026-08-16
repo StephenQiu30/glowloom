@@ -3,6 +3,7 @@
 import { LoaderCircle } from "lucide-react";
 import { type ReactNode } from "react";
 
+import { BasicLayout } from "@/components/layout/basic-layout";
 import { SystemStatusPage } from "@/components/system/system-status-page";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
@@ -24,12 +25,14 @@ export function ProtectedRoute({
 
   if (sessionState === "checking" || (authenticated && me.isLoading)) {
     return (
-      <div className="grid min-h-screen place-items-center">
-        <LoaderCircle
-          aria-label="正在核对页面权限"
-          className="size-5 animate-spin text-muted-foreground"
-        />
-      </div>
+      <BasicLayout active={page} authState="loading">
+        <div className="grid min-h-[70dvh] place-items-center">
+          <LoaderCircle
+            aria-label="正在核对页面权限"
+            className="size-5 animate-spin text-muted-foreground"
+          />
+        </div>
+      </BasicLayout>
     );
   }
 
