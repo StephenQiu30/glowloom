@@ -27,6 +27,8 @@
 | 014 | [NFR、SLO、容量、观测、备份与灾备](./014-非功能服务目标容量观测备份与灾备设计.md) | 统一 SLI/SLO、容量口径、部署、OTel、降级、RPO/RTO 和恢复演练 |
 | 015 | [Requirement → Design 追踪矩阵](./015-Requirement到Design追踪矩阵.md) | FR/NFR/AC、不变式和开放 Gate 的双向追踪 |
 
+已归档的已实施设计：[DES-016 跨页面 BasicLayout 与壳层布局](../archive/design/016-跨页面BasicLayout与壳层布局设计.md)。
+
 ## 3. 关键依赖
 
 ```mermaid

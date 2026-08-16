@@ -26,6 +26,7 @@ Research → Requirement（含 AC）→ Design → PRD → Plan → 实现与测
 | prd | 评审通过后的产品任务与优先级 | [PRD 状态](./prd/README.md) |
 | plan | 评审通过后的实施工作包与验证门禁 | [Plan 状态](./plan/README.md) |
 | acceptance | 实现完成后的真实验收证据 | [Acceptance 状态](./acceptance/README.md) |
+| archive | 已归档但仍需追溯的历史设计与交付文档 | [归档索引](./archive/README.md) |
 
 ## 4. 推荐阅读顺序
 
