@@ -64,7 +64,7 @@ describe("authentication pages", () => {
     apiMocks.login.mockResolvedValue({ data: authResponse });
     apiMocks.register.mockResolvedValue({ data: authResponse });
     apiMocks.requestRegistrationVerification.mockResolvedValue({
-      data: { accepted: true, retry_after_seconds: 60 },
+      data: { accepted: true, email_sent: true, retry_after_seconds: 60 },
     });
     apiMocks.confirmRegistrationVerification.mockResolvedValue({
       data: {
@@ -172,5 +172,26 @@ describe("authentication pages", () => {
       "real-api-access-token",
     );
     expect(routerReplace).toHaveBeenCalledWith("/projects");
+  });
+
+  it("does not claim that an email was sent when the API reports no delivery", async () => {
+    apiMocks.requestRegistrationVerification.mockResolvedValue({
+      data: { accepted: true, email_sent: false, retry_after_seconds: 60 },
+    });
+    const user = userEvent.setup();
+    render(
+      <AppProviders>
+        <RegisterPage />
+      </AppProviders>,
+    );
+
+    await user.type(screen.getByLabelText("邮箱"), "existing@example.com");
+    await user.click(screen.getByRole("button", { name: "发送验证码" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("本次未发送验证码，请检查邮箱是否可用于注册，或直接登录。"))
+        .toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/验证码已经发送至/)).not.toBeInTheDocument();
   });
 });

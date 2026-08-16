@@ -16,6 +16,7 @@ class RegistrationVerificationConfirmRequest(CommandModel):
 
 class RegistrationVerificationAccepted(BaseModel):
     accepted: Literal[True] = True
+    email_sent: bool
     retry_after_seconds: int
 
 

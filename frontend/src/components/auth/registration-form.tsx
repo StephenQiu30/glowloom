@@ -48,6 +48,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
   const [code, setCode] = useState("");
   const [registrationTicket, setRegistrationTicket] = useState<string | null>(null);
   const [retryAfter, setRetryAfter] = useState(0);
+  const [emailSent, setEmailSent] = useState<boolean | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -70,6 +71,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
       const response = await requestVerification({ email: normalizedEmail }).unwrap();
       setEmail(normalizedEmail);
       setCode("");
+      setEmailSent(response.email_sent);
       setRetryAfter(response.retry_after_seconds);
       setStep("verification");
     } catch (error: unknown) {
@@ -117,6 +119,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
     setCode("");
     setRegistrationTicket(null);
     setRetryAfter(0);
+    setEmailSent(null);
     setErrorMessage(null);
   }
 
@@ -167,10 +170,12 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
           </Button>
         </div>
         <Alert>
-          <Mail aria-hidden="true" />
-          <AlertTitle>检查你的邮箱</AlertTitle>
+          {emailSent ? <Mail aria-hidden="true" /> : <AlertCircle aria-hidden="true" />}
+          <AlertTitle>{emailSent ? "检查你的邮箱" : "未发送验证码"}</AlertTitle>
           <AlertDescription>
-            如果该邮箱可用于注册，验证码已经发送至 {email}。
+            {emailSent
+              ? `验证码已经发送至 ${email}。`
+              : "本次未发送验证码，请检查邮箱是否可用于注册，或直接登录。"}
           </AlertDescription>
         </Alert>
         <div className="grid gap-2">

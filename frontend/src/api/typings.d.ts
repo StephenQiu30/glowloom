@@ -4305,6 +4305,8 @@ declare namespace API {
   type RegistrationVerificationAccepted = {
     /** Accepted */
     accepted: true | null;
+    /** Email Sent */
+    email_sent: boolean;
     /** Retry After Seconds */
     retry_after_seconds: number;
   };

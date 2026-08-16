@@ -85,6 +85,7 @@ async def request_verification(
         except RegistrationVerificationUnavailableError as error:
             raise _dependency_unavailable() from error
         return RegistrationVerificationAccepted(
+            email_sent=False,
             retry_after_seconds=reservation.retry_after_seconds
         )
 
@@ -104,6 +105,7 @@ async def request_verification(
             pass
         raise _dependency_unavailable() from error
     return RegistrationVerificationAccepted(
+        email_sent=True,
         retry_after_seconds=reservation.retry_after_seconds
     )
 

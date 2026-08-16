@@ -36,6 +36,7 @@ async def test_registration_requires_confirmed_email_and_consumes_ticket_once(
     assert requested.status_code == 202
     assert requested.json()["data"] == {
         "accepted": True,
+        "email_sent": True,
         "retry_after_seconds": 60,
     }
 
@@ -75,7 +76,7 @@ async def test_registration_requires_confirmed_email_and_consumes_ticket_once(
 
 
 @pytest.mark.asyncio
-async def test_registered_email_has_same_send_response_without_another_code(
+async def test_registered_email_reports_no_send_without_another_code(
     client: httpx.AsyncClient,
     registration_mailer: RecordingRegistrationMailer,
 ) -> None:
@@ -91,6 +92,7 @@ async def test_registered_email_has_same_send_response_without_another_code(
     assert response.status_code == 202
     assert response.json()["data"] == {
         "accepted": True,
+        "email_sent": False,
         "retry_after_seconds": 60,
     }
     assert len(registration_mailer.messages) == sent_before
