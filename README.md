@@ -33,7 +33,7 @@ lsof -nP -iTCP:9000 -sTCP:LISTEN
 
 `.env` 中的 `MINIO_ACCESS_KEY` 和 `MINIO_SECRET_KEY` 必须与该实例一致。项目不会重启、停止或修改这项本机服务。
 
-升级数据库并启动完整后端角色：
+初始化最终数据库结构并启动完整后端角色：
 
 ```bash
 cd backend
@@ -41,21 +41,14 @@ cd backend
 .venv/bin/python -m app.server
 ```
 
-`app.initialize_database` 只执行受控 Alembic migration，不在 Web/Worker 启动时自动改表。确认数据库 revision 和 ORM Metadata 没有漂移：
+`app.initialize_database` 只在空库创建最终 ORM schema；已有数据库只做严格结构校验，并清理遗留的 Alembic revision marker，不在 Web/Worker 启动时自动改表。结构不匹配时命令失败，不执行猜测式修复。
 
 ```bash
 cd backend
-.venv/bin/alembic current --check-heads
-.venv/bin/alembic check
+.venv/bin/python -m app.initialize_database
 ```
 
-如果数据库是在 2026-08-13 前由旧版 `metadata.create_all()` 创建且包含需要保留的数据，先在数据库系统外完成可恢复备份，再运行严格结构校验与 baseline 接管。命令只接受迁移链中已登记且结构完整的历史时代；它会识别对应 revision 后继续前滚。未知结构、任一时代的部分表/列或其他 Metadata 漂移均拒绝且不 stamp。该命令不会创建备份：
-
-```bash
-cd backend
-.venv/bin/python -m app.adopt_database_baseline \
-  --backup-reference '<已验证的备份或快照编号>'
-```
+已有重要数据的数据库在重新初始化前必须先完成可恢复备份和一次性数据转换；项目不保留旧 schema 的增量迁移兼容链。
 
 另开终端启动前端：
 
@@ -103,7 +96,7 @@ docker compose \
 
 ```bash
 cd backend
-.venv/bin/ruff check app tests alembic
+.venv/bin/ruff check app tests
 .venv/bin/pyright
 .venv/bin/python -m pytest
 .venv/bin/python -m pip check

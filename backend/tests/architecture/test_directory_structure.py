@@ -17,10 +17,9 @@ def test_user_facing_documents_and_e2e_specs_use_semantic_filenames() -> None:
     ] == []
 
 
-def test_executable_source_paths_and_alembic_revisions_use_ascii_semantic_names() -> None:
+def test_executable_source_paths_use_ascii_semantic_names() -> None:
     executable_roots = [
         ROOT / "backend/app",
-        ROOT / "backend/alembic/versions",
         ROOT / "backend/tests",
         ROOT / "frontend/src",
         ROOT / "frontend/tests",
@@ -52,13 +51,6 @@ def test_executable_source_paths_and_alembic_revisions_use_ascii_semantic_names(
         if path.stem.lower() in generic_stems
     ] == []
 
-    revision_name = re.compile(r"^[0-9a-f]{12}_[a-z][a-z0-9_]*\.py$")
-    assert [
-        path.name
-        for path in (ROOT / "backend/alembic/versions").glob("*.py")
-        if not revision_name.fullmatch(path.name)
-    ] == []
-
 
 def test_production_and_test_code_are_separate() -> None:
     assert (ROOT / "backend/app").is_dir()
@@ -82,6 +74,8 @@ def test_forbidden_overdesigned_directories_do_not_exist() -> None:
 
 def test_environment_specific_compose_supports_robust_full_stack_startup() -> None:
     assert (ROOT / "backend/Dockerfile").is_file()
+    assert not (ROOT / "backend/alembic").exists()
+    assert not (ROOT / "backend/alembic.ini").exists()
     assert (ROOT / "frontend/Dockerfile").is_file()
     assert (ROOT / "docker-compose.yml").is_file()
     assert (ROOT / "docker-compose.prod.yml").is_file()
@@ -123,8 +117,8 @@ def test_environment_specific_compose_supports_robust_full_stack_startup() -> No
     assert (ROOT / "backend/app/cache_admin.py").is_file()
 
     backend_dockerfile = (ROOT / "backend/Dockerfile").read_text()
-    assert "COPY alembic.ini ./" in backend_dockerfile
-    assert "COPY alembic ./alembic" in backend_dockerfile
+    assert "COPY alembic.ini ./" not in backend_dockerfile
+    assert "COPY alembic ./alembic" not in backend_dockerfile
     assert 'CMD ["python", "-m", "app.server"]' in backend_dockerfile
 
 

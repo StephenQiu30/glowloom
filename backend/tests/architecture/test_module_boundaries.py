@@ -7,7 +7,6 @@ KNOWN_INTERNAL_IMPORTS: set[str] = set()
 
 SOURCE_ROOTS = (
     REPOSITORY / "backend/app",
-    REPOSITORY / "backend/alembic",
     REPOSITORY / "backend/tests",
     REPOSITORY / "frontend/src",
     REPOSITORY / "frontend/tests",

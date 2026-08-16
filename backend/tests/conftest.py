@@ -9,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.database import (
-    Base,
     create_engine,
     get_async_session,
     validate_test_database_url,
 )
+from app.core.schema import initialize_database
 from app.main import create_app
 from app.model_registry import register_implemented_models
 from app.modules.caching.contracts import (
@@ -128,8 +128,7 @@ def registration_mailer() -> RecordingRegistrationMailer:
 async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_engine(TEST_DATABASE_URL)
     await _drop_test_tables(engine)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+    await initialize_database(engine)
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
