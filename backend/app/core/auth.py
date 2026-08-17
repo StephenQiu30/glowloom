@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import jwt
 from fastapi import Depends, Request
@@ -18,6 +18,7 @@ class AccessTokenClaims(BaseModel):
     sub: UUID
     ver: int
     type: Literal["access"]
+    jti: str
     iss: str
     aud: str | list[str]
     iat: datetime
@@ -30,6 +31,7 @@ def create_access_token(user_id: UUID, token_version: int, settings: Settings) -
         "sub": str(user_id),
         "ver": token_version,
         "type": "access",
+        "jti": uuid4().hex,
         "iss": settings.jwt_issuer,
         "aud": settings.jwt_audience,
         "iat": now,
@@ -50,7 +52,18 @@ def decode_access_token(token: str, settings: Settings) -> AccessTokenClaims | N
             algorithms=[ALGORITHM],
             audience=settings.jwt_audience,
             issuer=settings.jwt_issuer,
-            options={"require": ["sub", "ver", "type", "iss", "aud", "iat", "exp"]},
+            options={
+                "require": [
+                    "sub",
+                    "ver",
+                    "type",
+                    "jti",
+                    "iss",
+                    "aud",
+                    "iat",
+                    "exp",
+                ]
+            },
         )
         return AccessTokenClaims.model_validate(claims)
     except (jwt.PyJWTError, ValidationError, ValueError):

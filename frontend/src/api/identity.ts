@@ -43,6 +43,14 @@ export async function logoutApiV1AuthLogoutPost(options?: RequestOptions) {
   });
 }
 
+/** Refresh POST /api/v1/auth/refresh */
+export async function refreshApiV1AuthRefreshPost(options?: RequestOptions) {
+  return request<API.ApiResponseAuthResponse_>("/api/v1/auth/refresh", {
+    method: "POST",
+    ...(options || {}),
+  });
+}
+
 /** Register POST /api/v1/auth/register */
 export async function registerApiV1AuthRegisterPost(
   body: API.RegisterRequest,

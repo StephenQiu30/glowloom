@@ -1,8 +1,14 @@
 import axios, { type AxiosRequestConfig } from "axios";
 
-import { clearAccessToken, getAccessToken } from "@/lib/auth-session";
+import {
+  clearAccessToken,
+  getAccessToken,
+  setAccessToken,
+} from "@/lib/auth-session";
 
-export type RequestOptions = AxiosRequestConfig;
+export type RequestOptions = AxiosRequestConfig & {
+  skipAuthRefresh?: boolean;
+};
 
 type ApiErrorEnvelope = {
   error?: { code?: string; message?: string; next_action?: string };
@@ -23,24 +29,67 @@ export class ApiClientError extends Error {
 const client = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8686",
   timeout: 10_000,
+  withCredentials: true,
 });
+
+let refreshPromise: Promise<string | null> | null = null;
+
+export async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = client
+    .post<API.ApiResponseAuthResponse_>(
+      "/api/v1/auth/refresh",
+      undefined,
+      { withCredentials: true },
+    )
+    .then((response) => {
+      const token = response.data.data.access_token;
+      setAccessToken(token);
+      return token;
+    })
+    .catch(() => {
+      clearAccessToken();
+      return null;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+  return refreshPromise;
+}
+
+const AUTH_REFRESH_EXCLUDED_PATHS = new Set([
+  "/api/v1/auth/login",
+  "/api/v1/auth/register",
+  "/api/v1/auth/refresh",
+]);
 
 export default async function request<T>(
   url: string,
   options: RequestOptions = {},
 ): Promise<T> {
+  const { skipAuthRefresh = false, ...axiosOptions } = options;
   try {
     const accessToken = getAccessToken();
     const response = await client.request<T>({
-      ...options,
+      ...axiosOptions,
       url,
       headers: accessToken
-        ? { ...options.headers, Authorization: `Bearer ${accessToken}` }
-        : options.headers,
+        ? { ...axiosOptions.headers, Authorization: `Bearer ${accessToken}` }
+        : axiosOptions.headers,
     });
     return response.data;
   } catch (cause: unknown) {
     if (axios.isAxiosError<ApiErrorEnvelope>(cause)) {
+      if (
+        cause.response?.status === 401 &&
+        !skipAuthRefresh &&
+        !AUTH_REFRESH_EXCLUDED_PATHS.has(url)
+      ) {
+        const refreshed = await refreshAccessToken();
+        if (refreshed) {
+          return request(url, { ...options, skipAuthRefresh: true });
+        }
+      }
       if (cause.response?.status === 401) clearAccessToken();
       const error = cause.response?.data.error;
       throw new ApiClientError(

@@ -33,6 +33,7 @@ vi.mock("@/api/identity", async () => {
 import LoginPage from "@/app/login/page";
 import RegisterPage from "@/app/register/page";
 import { AppProviders } from "@/app/providers";
+import { getAccessToken } from "@/lib/auth-session";
 
 const authResponse: API.AuthResponse = {
   user: {
@@ -104,7 +105,7 @@ describe("authentication pages", () => {
     expect(screen.getByRole("button", { name: "发送验证码" })).toBeInTheDocument();
   });
 
-  it("logs in through the generated API and persists the returned access token", async () => {
+  it("logs in through the generated API and stores the returned access token", async () => {
     const user = userEvent.setup();
     render(
       <AppProviders>
@@ -123,9 +124,7 @@ describe("authentication pages", () => {
       email: "creator@example.com",
       password: "secure-password-123",
     });
-    expect(sessionStorage.getItem("lanverse.access-token")).toBe(
-      "real-api-access-token",
-    );
+    expect(getAccessToken()).toBe("real-api-access-token");
     expect(routerReplace).toHaveBeenCalledWith("/projects");
   });
 
@@ -168,9 +167,7 @@ describe("authentication pages", () => {
       registration_ticket:
         "registration-ticket-with-more-than-forty-three-characters",
     });
-    expect(sessionStorage.getItem("lanverse.access-token")).toBe(
-      "real-api-access-token",
-    );
+    expect(getAccessToken()).toBe("real-api-access-token");
     expect(routerReplace).toHaveBeenCalledWith("/projects");
   });
 

@@ -8,15 +8,16 @@ import {
 
 describe("JWT browser session", () => {
   afterEach(() => {
-    sessionStorage.clear();
+    clearAccessToken();
   });
 
-  it("keeps the access token only in the current browser tab", () => {
+  it("keeps the short-lived access token out of Web Storage", () => {
     expect(getAccessToken()).toBeNull();
 
     setAccessToken("signed.jwt.token");
 
     expect(getAccessToken()).toBe("signed.jwt.token");
+    expect(sessionStorage.length).toBe(0);
     expect(localStorage.length).toBe(0);
   });
 

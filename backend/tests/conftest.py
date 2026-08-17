@@ -25,6 +25,7 @@ from app.modules.caching.contracts import (
     HighCostGuardResult,
 )
 from app.modules.caching.dependencies import get_cache_port, get_high_cost_guard
+from tests.support.auth_sessions import MemoryAuthSessionStore
 from tests.support.registration_verification import (
     MemoryRegistrationVerificationStore,
     RecordingRegistrationMailer,
@@ -125,6 +126,11 @@ def registration_mailer() -> RecordingRegistrationMailer:
 
 
 @pytest.fixture
+def auth_session_store() -> MemoryAuthSessionStore:
+    return MemoryAuthSessionStore()
+
+
+@pytest.fixture
 async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_engine(TEST_DATABASE_URL)
     await _drop_test_tables(engine)
@@ -144,6 +150,7 @@ def app(
     test_settings: Settings,
     cache_port: CachePort,
     high_cost_guard: AllowingTestHighCostGuard,
+    auth_session_store: MemoryAuthSessionStore,
     registration_store: MemoryRegistrationVerificationStore,
     registration_mailer: RecordingRegistrationMailer,
 ) -> FastAPI:
@@ -156,6 +163,7 @@ def app(
     app.dependency_overrides[get_cache_port] = lambda: cache_port
     app.dependency_overrides[get_high_cost_guard] = lambda: high_cost_guard
     app.state.registration_verification_store = registration_store
+    app.state.auth_session_store = auth_session_store
     app.state.registration_mailer = registration_mailer
     app.state.registration_code_generator = lambda: "123456"
     return app

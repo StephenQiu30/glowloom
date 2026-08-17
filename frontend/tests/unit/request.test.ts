@@ -26,6 +26,7 @@ describe("request", () => {
     const adapter: AxiosAdapter = async (config) => {
       expect(config.baseURL).toBe("http://127.0.0.1:8686");
       expect(config.headers.get("Authorization")).toBe("Bearer session-token");
+      expect(config.withCredentials).toBe(true);
       expect(config.signal).toBe(controller.signal);
       expect(config.timeout).toBe(12_345);
       return response(config, { ok: true });

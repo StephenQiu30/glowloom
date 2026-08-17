@@ -108,6 +108,51 @@ async def test_login_does_not_reveal_whether_an_account_exists(
 
 
 @pytest.mark.asyncio
+async def test_refresh_rotates_persistent_session_and_rejects_replay(
+    client: httpx.AsyncClient,
+) -> None:
+    registered = await register_identity_response(client)
+    assert registered.status_code == 201
+    first_token = registered.json()["data"]["access_token"]
+    first_refresh = registered.cookies.get("lanverse_refresh_token")
+    assert first_refresh
+
+    refreshed = await client.post("/api/v1/auth/refresh")
+    assert refreshed.status_code == 200
+    second_token = refreshed.json()["data"]["access_token"]
+    second_refresh = refreshed.cookies.get("lanverse_refresh_token")
+    assert second_token
+    assert second_token != first_token
+    assert second_refresh and second_refresh != first_refresh
+
+    replay = await client.post(
+        "/api/v1/auth/refresh",
+        headers={"cookie": f"lanverse_refresh_token={first_refresh}"},
+    )
+    assert replay.status_code == 401
+    assert (await client.get(
+        "/api/v1/me",
+        headers={"authorization": f"Bearer {second_token}"},
+    )).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_logout_revokes_persistent_session(
+    client: httpx.AsyncClient,
+) -> None:
+    registered = await register_identity_response(client)
+    token = registered.json()["data"]["access_token"]
+    assert registered.cookies.get("lanverse_refresh_token")
+
+    logged_out = await client.post(
+        "/api/v1/auth/logout",
+        headers={"authorization": f"Bearer {token}"},
+    )
+    assert logged_out.status_code == 200
+    assert (await client.post("/api/v1/auth/refresh")).status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_logout_and_password_change_revoke_previous_tokens(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],

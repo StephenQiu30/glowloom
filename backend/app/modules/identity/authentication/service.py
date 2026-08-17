@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from pwdlib import PasswordHash
@@ -11,6 +12,10 @@ from app.core.config import Settings
 from app.core.errors import ApiError, ErrorCode
 from app.modules.governance.audit import append_audit_event
 from app.modules.identity import repository
+from app.modules.identity.authentication.contracts import (
+    AuthSessionStore,
+    AuthSessionUnavailableError,
+)
 from app.modules.identity.authentication.schemas import (
     AuthResponse,
     ChangePasswordRequest,
@@ -34,6 +39,12 @@ from app.modules.identity.registration_verifications.service import (
 
 _password_hash = PasswordHash.recommended()
 _dummy_password_hash = _password_hash.hash("not-a-real-lanverse-password")
+
+
+@dataclass(frozen=True, slots=True)
+class IssuedAuthSession:
+    response: AuthResponse
+    refresh_token: str
 
 
 def _plain_password(secret: SecretStr) -> str:
@@ -81,14 +92,56 @@ def _auth_response(
     )
 
 
+async def _issue_auth_session(
+    user: UserAccount,
+    workspace: Workspace,
+    membership: Membership,
+    settings: Settings,
+    auth_sessions: AuthSessionStore,
+) -> IssuedAuthSession:
+    try:
+        refresh_token = await auth_sessions.create_session(
+            user.id,
+            user.token_version,
+            ttl_seconds=settings.auth_session_ttl_seconds,
+        )
+    except AuthSessionUnavailableError as error:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Authentication session service is unavailable",
+            status_code=503,
+            next_action="retry",
+        ) from error
+    return IssuedAuthSession(
+        response=_auth_response(user, workspace, membership, settings),
+        refresh_token=refresh_token,
+    )
+
+
+async def _revoke_auth_session(
+    auth_sessions: AuthSessionStore,
+    refresh_token: str,
+) -> None:
+    try:
+        await auth_sessions.revoke_session(refresh_token)
+    except AuthSessionUnavailableError as error:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Authentication session service is unavailable",
+            status_code=503,
+            next_action="retry",
+        ) from error
+
+
 async def register(
     session: AsyncSession,
     request: RegisterRequest,
     settings: Settings,
     verification_store: RegistrationVerificationStore,
+    auth_sessions: AuthSessionStore,
     *,
     trace_id: str,
-) -> AuthResponse:
+) -> IssuedAuthSession:
     password = _plain_password(request.password)
     display_name = _display_name(request.display_name)
     email = await consume_registration_ticket(
@@ -135,16 +188,23 @@ async def register(
             "Account already exists",
             status_code=409,
         ) from error
-    return _auth_response(user, workspace, membership, settings)
+    return await _issue_auth_session(
+        user,
+        workspace,
+        membership,
+        settings,
+        auth_sessions,
+    )
 
 
 async def login(
     session: AsyncSession,
     request: LoginRequest,
     settings: Settings,
+    auth_sessions: AuthSessionStore,
     *,
     trace_id: str,
-) -> AuthResponse:
+) -> IssuedAuthSession:
     email = normalize_email(str(request.email))
     password = request.password.get_secret_value()
     async with session.begin():
@@ -174,7 +234,54 @@ async def login(
             occurred_at=now,
         )
         await session.flush()
-    return _auth_response(user, primary[0], primary[1], settings)
+    return await _issue_auth_session(
+        user,
+        primary[0],
+        primary[1],
+        settings,
+        auth_sessions,
+    )
+
+
+async def refresh(
+    session: AsyncSession,
+    refresh_token: str,
+    settings: Settings,
+    auth_sessions: AuthSessionStore,
+) -> IssuedAuthSession:
+    if len(refresh_token) < 32:
+        raise _unauthenticated()
+    try:
+        rotated = await auth_sessions.rotate_session(
+            refresh_token,
+            ttl_seconds=settings.auth_session_ttl_seconds,
+        )
+    except AuthSessionUnavailableError as error:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Authentication session service is unavailable",
+            status_code=503,
+            next_action="retry",
+        ) from error
+    if rotated is None:
+        raise _unauthenticated()
+
+    user = await repository.find_user_by_id(session, rotated.user_id)
+    if user is None or user.status != "active" or user.token_version != rotated.token_version:
+        await _revoke_auth_session(auth_sessions, rotated.refresh_token)
+        raise _unauthenticated()
+    primary = await repository.find_primary_workspace(session, user.id)
+    if primary is None:
+        await _revoke_auth_session(auth_sessions, rotated.refresh_token)
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Account workspace is unavailable",
+            status_code=500,
+        )
+    return IssuedAuthSession(
+        response=_auth_response(user, primary[0], primary[1], settings),
+        refresh_token=rotated.refresh_token,
+    )
 
 
 async def authenticated_user(session: AsyncSession, claims: AccessTokenClaims) -> UserAccount:
@@ -211,6 +318,8 @@ async def logout(
     claims: AccessTokenClaims,
     *,
     trace_id: str,
+    auth_sessions: AuthSessionStore,
+    refresh_token: str | None,
 ) -> None:
     async with session.begin():
         user = await authenticated_user(session, claims)
@@ -237,6 +346,8 @@ async def logout(
             },
         )
         await session.flush()
+    if refresh_token is not None:
+        await _revoke_auth_session(auth_sessions, refresh_token)
 
 
 async def change_password(

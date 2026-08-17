@@ -1,23 +1,20 @@
-const ACCESS_TOKEN_KEY = "lanverse.access-token";
 const AUTH_SESSION_EVENT = "lanverse:auth-session-changed";
 
-function getSessionStorage(): Storage | null {
-  return typeof window === "undefined" ? null : window.sessionStorage;
-}
+let accessToken: string | null = null;
 
 export function getAccessToken(): string | null {
-  return getSessionStorage()?.getItem(ACCESS_TOKEN_KEY) ?? null;
+  return accessToken;
 }
 
 export function setAccessToken(token: string): void {
-  getSessionStorage()?.setItem(ACCESS_TOKEN_KEY, token);
+  accessToken = token;
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(AUTH_SESSION_EVENT));
   }
 }
 
 export function clearAccessToken(): void {
-  getSessionStorage()?.removeItem(ACCESS_TOKEN_KEY);
+  accessToken = null;
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(AUTH_SESSION_EVENT));
   }

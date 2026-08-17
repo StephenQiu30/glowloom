@@ -16,6 +16,7 @@ from app.core.telemetry import configure_telemetry
 from app.integrations.minio import MinioObjectStorage
 from app.integrations.rabbitmq import rabbitmq_ping
 from app.integrations.redis import RedisCache, redis_ping
+from app.integrations.redis_auth_sessions import RedisAuthSessionStore
 from app.modules.assets.api import router as assets_router
 from app.modules.governance.api import router as governance_router
 from app.modules.identity.api import router as identity_router
@@ -48,6 +49,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await app.state.registration_verification_store.close()
+        await app.state.auth_session_store.close()
         await app.state.cache_port.close()
 
 
@@ -66,6 +68,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.cache_port = redis
     app.state.high_cost_guard = redis
+    app.state.auth_session_store = RedisAuthSessionStore(
+        active.redis_url,
+        environment=active.environment,
+        socket_timeout_seconds=min(active.infrastructure_timeout_seconds, 0.25),
+    )
     app.state.registration_verification_store = RedisRegistrationVerificationStore(
         active.redis_url,
         environment=active.environment,

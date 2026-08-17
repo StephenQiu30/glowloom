@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     jwt_issuer: str = "lanverse-api"
     jwt_audience: str = "lanverse-web"
     jwt_access_token_minutes: int = Field(default=30, ge=5, le=1440)
+    auth_session_ttl_seconds: int = Field(default=30 * 24 * 60 * 60, ge=300, le=90 * 24 * 60 * 60)
     smtp_enabled: bool = False
     smtp_host: str | None = None
     smtp_port: int = Field(default=465, ge=1, le=65535)
