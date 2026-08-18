@@ -163,6 +163,7 @@
     position: fixed;
     inset: 0 0 auto;
     z-index: 40;
+    height: var(--basic-header-stack-height);
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-gutter: stable;

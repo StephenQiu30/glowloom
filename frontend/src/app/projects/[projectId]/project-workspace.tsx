@@ -5,7 +5,6 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronRight,
-  CircleDashed,
   FileText,
   Layers3,
   LoaderCircle,
@@ -18,6 +17,7 @@ import { LayoutContainer } from "@/components/layout/layout-container";
 import { StudioShell } from "@/components/studio/studio-shell";
 import { MetricGroup } from "@/components/studio/metric-group";
 import { PageHeader } from "@/components/studio/page-header";
+import { ProductionNextAction } from "@/components/studio/production-next-action";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,14 +59,6 @@ const stageLabels: Record<API.ProjectProductionSnapshot["current_stage"], string
   structure_review: "结构确认",
   asset_preparation: "资产准备",
   storyboard_preparation: "分镜准备",
-};
-
-const stageSteps: Record<API.ProjectProductionSnapshot["current_stage"], number> = {
-  project_setup: 0,
-  script_import: 0,
-  structure_review: 0,
-  asset_preparation: 1,
-  storyboard_preparation: 2,
 };
 
 function CreateEpisodeDialog({
@@ -193,8 +185,6 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   return (
     <StudioShell
       active="projects"
-      currentStep={snapshot ? stageSteps[snapshot.current_stage] : 0}
-      projectName={project?.name}
       viewer={me.data ? {
         displayName: me.data.user.display_name?.trim() || me.data.user.email,
         workspaceName: me.data.workspace.name,
@@ -210,7 +200,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
           <Alert className="border-0 bg-muted/50">
             <AlertCircle aria-hidden="true" />
             <AlertTitle>需要登录</AlertTitle>
-            <AlertDescription><Link className="underline" href="/login">登录后查看项目生产事实</Link></AlertDescription>
+            <AlertDescription><Link className="underline" href="/login">登录后查看项目</Link></AlertDescription>
           </Alert>
         ) : pageError ? (
           <Alert variant="destructive">
@@ -221,8 +211,8 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
         ) : !project || !snapshot ? (
           <div className="grid min-h-96 place-items-center"><LoaderCircle aria-label="正在加载项目" className="animate-spin text-foreground" /></div>
         ) : (
-          <>
-            <PageHeader
+          <div className="min-w-0">
+              <PageHeader
               actions={firstEpisode ? (
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={() => setCreateOpen(true)} variant="outline"><Plus aria-hidden="true" />创建单集</Button>
@@ -243,39 +233,64 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
               title={project.name}
             />
 
-            <MetricGroup
-              className="mt-8"
-              items={[
-                { label: "项目进度", value: `${snapshot.completion}%` },
-                { label: "活跃单集", value: activeEpisodes.length },
-                { label: "Ready 资产", value: readyAssets },
-                { label: "Ready 分镜", value: readyStoryboards },
-                { label: "进行中任务", value: runningTasks },
-              ]}
-              label="项目生产摘要"
-            />
+              <ProductionNextAction
+                action={snapshot.next_actions[0]}
+                blockingReasons={snapshot.blocking_reasons}
+              />
 
-            <ScriptDocumentImportCard
-              canWrite={canWrite}
-              language={project.language}
-              projectId={project.id}
-              projectName={project.name}
-              targetDurationMs={project.target_duration_ms}
-              workspaceId={project.workspace_id}
-            />
+              <MetricGroup
+                className="mt-8"
+                items={[
+                  { label: "项目进度", value: `${snapshot.completion}%` },
+                  { label: "活跃单集", value: activeEpisodes.length },
+                  { label: "Ready 资产", value: readyAssets },
+                  { label: "Ready 分镜", value: readyStoryboards },
+                  { label: "进行中任务", value: runningTasks },
+                ]}
+                label="项目生产摘要"
+              />
 
-            {actionError ? (
-              <Alert className="mt-5" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert>
-            ) : null}
-            {snapshot.partial_failures.length ? (
-              <Alert className="mt-5 border-0 bg-destructive/10" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>部分摘要不可用</AlertTitle><AlertDescription>{snapshot.partial_failures.map((item) => item.summary).join("；")}</AlertDescription></Alert>
-            ) : null}
+              <section aria-label="项目内容" className="mt-8 grid gap-4 sm:grid-cols-2">
+                <Card className="transition hover:border-foreground/25 hover:shadow-sm">
+                  <CardHeader>
+                    <CardTitle>项目资产</CardTitle>
+                    <CardDescription>角色、场景、道具、服装、声音和风格参考。</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button asChild variant="outline">
+                      <Link href={`/projects/${project.id}/assets`}>查看项目资产<ArrowRight aria-hidden="true" /></Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>单集生产</CardTitle>
+                    <CardDescription>从剧本、资产、分镜到媒体和任务，按单集继续制作。</CardDescription>
+                  </CardHeader>
+                </Card>
+              </section>
 
-            <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <Card>
+              <ScriptDocumentImportCard
+                canWrite={canWrite}
+                language={project.language}
+                projectId={project.id}
+                projectName={project.name}
+                targetDurationMs={project.target_duration_ms}
+                workspaceId={project.workspace_id}
+              />
+
+              {actionError ? (
+                <Alert className="mt-5" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert>
+              ) : null}
+              {snapshot.partial_failures.length ? (
+                <Alert className="mt-5 border-0 bg-destructive/10" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>部分摘要不可用</AlertTitle><AlertDescription>{snapshot.partial_failures.map((item) => item.summary).join("；")}</AlertDescription></Alert>
+              ) : null}
+
+              <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <Card>
                 <CardHeader>
-                  <CardTitle>单集生产</CardTitle>
-                  <CardDescription>阶段、阻塞和入口均来自服务端 ProductionSnapshot。</CardDescription>
+                  <CardTitle>单集列表</CardTitle>
+                  <CardDescription>查看每集当前阶段、阻塞和继续制作入口。</CardDescription>
                 </CardHeader>
                 <CardContent className="divide-y divide-border p-0">
                   {episodes.length === 0 ? (
@@ -308,46 +323,33 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                 </CardContent>
               </Card>
 
-              <aside className="grid content-start gap-5">
-                <Card className="bg-muted/50">
-                  <CardHeader><CardTitle className="flex items-center gap-2"><CircleDashed className="size-5" aria-hidden="true" />下一步</CardTitle></CardHeader>
-                  <CardContent>
-                    <p className="font-medium">{snapshot.next_actions[0]?.label ?? "等待新的生产动作"}</p>
-                    {snapshot.blocking_reasons.map((reason) => (
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground" key={`${reason.code}:${reason.resource_id}`}>{reason.summary}</p>
-                    ))}
-                    {snapshot.next_actions[0] ? (
-                      <Button asChild className="mt-5 w-full"><Link href={snapshot.next_actions[0].href}>开始处理<ArrowRight aria-hidden="true" /></Link></Button>
-                    ) : null}
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader><CardTitle>项目规格</CardTitle></CardHeader>
-                  <CardContent className="grid gap-4 text-sm">
-                    <div className="flex items-center justify-between gap-4"><span className="flex items-center gap-2 text-muted-foreground"><FileText className="size-4" aria-hidden="true" />语言</span><span>{project.language}</span></div>
-                    <div className="flex items-center justify-between gap-4"><span className="flex items-center gap-2 text-muted-foreground"><Layers3 className="size-4" aria-hidden="true" />默认时长</span><span>{Math.round(project.target_duration_ms / 1_000)} 秒</span></div>
-                    <div className="flex items-center justify-between gap-4"><span className="text-muted-foreground">预算上限</span><span>{project.currency} {project.budget_limit}</span></div>
-                  </CardContent>
-                </Card>
-              </aside>
-            </div>
-            <ProjectLifecyclePanel project={project} />
-            <section className="mt-7 grid gap-5" aria-label="单集设置">
-              <div>
-                <h2 className="text-xl font-semibold">单集设置</h2>
-                <p className="mt-1 text-sm text-muted-foreground">编辑、排序、归档与安全删除均使用服务端 revision。</p>
+                <aside className="grid content-start gap-5">
+                  <Card>
+                    <CardHeader><CardTitle>项目规格</CardTitle></CardHeader>
+                    <CardContent className="grid gap-4 text-sm">
+                      <div className="flex items-center justify-between gap-4"><span className="flex items-center gap-2 text-muted-foreground"><FileText className="size-4" aria-hidden="true" />语言</span><span>{project.language}</span></div>
+                      <div className="flex items-center justify-between gap-4"><span className="flex items-center gap-2 text-muted-foreground"><Layers3 className="size-4" aria-hidden="true" />默认时长</span><span>{Math.round(project.target_duration_ms / 1_000)} 秒</span></div>
+                    </CardContent>
+                  </Card>
+                </aside>
               </div>
-              {episodes.map((episode) => (
-                <EpisodeLifecycleCard
-                  activeEpisodes={activeEpisodes}
-                  episode={episode}
-                  episodeSnapshot={episodeSnapshots.get(episode.id)}
-                  key={episode.id}
-                  project={project}
-                />
-              ))}
-            </section>
-          </>
+              <ProjectLifecyclePanel project={project} />
+              <section className="mt-7 grid gap-5" aria-label="单集设置">
+                <div>
+                  <h2 className="text-xl font-semibold">单集设置</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">编辑、排序和归档单集。</p>
+                </div>
+                {episodes.map((episode) => (
+                  <EpisodeLifecycleCard
+                    activeEpisodes={activeEpisodes}
+                    episode={episode}
+                    episodeSnapshot={episodeSnapshots.get(episode.id)}
+                    key={episode.id}
+                    project={project}
+                  />
+                ))}
+              </section>
+            </div>
         )}
       </LayoutContainer>
       {project ? (

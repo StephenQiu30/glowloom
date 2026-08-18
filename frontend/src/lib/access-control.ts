@@ -21,7 +21,6 @@ const pageRoles: Record<
 const primaryNavigation: readonly StudioNavigation[] = [
   "create",
   "projects",
-  "assets",
 ];
 
 export function canAccessPage(

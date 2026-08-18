@@ -1,7 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowRight, FolderPlus, LoaderCircle, MoreHorizontal, Plus, Search, SearchX } from "lucide-react";
-import Link from "next/link";
+import { AlertCircle, FolderPlus, LoaderCircle, Plus, Search, SearchX } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
@@ -9,23 +8,8 @@ import { StudioShell } from "@/components/studio/studio-shell";
 import { MetricGroup } from "@/components/studio/metric-group";
 import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
@@ -36,6 +20,7 @@ import {
 } from "@/lib/server-state";
 
 import { ProjectCreateDialog } from "./project-create-dialog";
+import { ProjectServerCard } from "./project-server-card";
 
 type ProjectFilter = "all" | "active" | "archived";
 
@@ -163,46 +148,9 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
             </div>
 
             {visibleProjects.length ? (
-              <Table className="mt-3">
-                <TableHeader className="[&_tr]:border-0">
-                  <TableRow className="border-0 hover:bg-transparent">
-                    <TableHead className="px-4 text-xs text-muted-foreground">项目</TableHead>
-                    <TableHead className="px-4 text-xs text-muted-foreground">规格</TableHead>
-                    <TableHead className="px-4 text-xs text-muted-foreground">视觉风格</TableHead>
-                    <TableHead className="px-4 text-xs text-muted-foreground">事实状态</TableHead>
-                    <TableHead className="px-4 text-xs text-muted-foreground">版本</TableHead>
-                    <TableHead className="px-4 text-right text-xs text-muted-foreground">操作</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleProjects.map((project) => (
-                    <TableRow className="bg-muted/35 hover:bg-muted/70" key={project.id}>
-                      <TableCell className="min-w-72 whitespace-normal px-4 py-4">
-                        <p className="font-medium">{project.name}</p>
-                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{project.description || "尚未填写项目简介"}</p>
-                      </TableCell>
-                      <TableCell className="px-4 font-mono text-xs">{project.aspect_ratio} · {Math.round(project.target_duration_ms / 1_000)}s</TableCell>
-                      <TableCell className="px-4">{project.visual_style || "未设置"}</TableCell>
-                      <TableCell className="px-4">
-                        <Badge className="border-0 bg-background/80" variant="secondary">
-                          <span className={`size-1.5 rounded-full ${project.status === "active" ? "bg-foreground" : "bg-muted-foreground"}`} aria-hidden="true" />
-                          {project.status === "active" ? "制作中" : "已归档"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="px-4 font-mono text-xs">r{project.revision}</TableCell>
-                      <TableCell className="px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button asChild size="sm" variant="ghost"><Link aria-label={`打开项目 ${project.name}`} href={`/projects/${project.id}`}>打开<ArrowRight aria-hidden="true" /></Link></Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button aria-label={`${project.name} 更多操作`} size="icon-sm" variant="ghost"><MoreHorizontal aria-hidden="true" /></Button></DropdownMenuTrigger>
-                            <DropdownMenuContent align="end"><DropdownMenuItem asChild><Link href={`/projects/${project.id}`}>查看项目事实</Link></DropdownMenuItem></DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {visibleProjects.map((project) => <ProjectServerCard key={project.id} project={project} />)}
+              </div>
             ) : (
               <section className="mt-3 grid min-h-80 place-items-center bg-muted/30 px-6 py-16 text-center" aria-labelledby="project-empty-title">
                 <div className="max-w-sm">

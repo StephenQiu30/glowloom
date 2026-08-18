@@ -59,7 +59,7 @@ describe("role-aware global navigation", () => {
     await waitFor(() => {
       expect(within(navigation).queryByRole("link", { name: "首页" })).not.toBeInTheDocument();
       expect(within(navigation).getByRole("link", { name: "项目" })).toBeInTheDocument();
-      expect(within(navigation).getByRole("link", { name: "资产" })).toBeInTheDocument();
+      expect(within(navigation).queryByRole("link", { name: "资产" })).not.toBeInTheDocument();
     });
     expect(within(navigation).queryByRole("link", { name: "治理" })).not.toBeInTheDocument();
     shell.unmount();

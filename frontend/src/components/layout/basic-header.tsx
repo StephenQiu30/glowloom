@@ -11,7 +11,6 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  SquareStack,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -68,8 +67,7 @@ const navigationItems: Array<{
   icon: typeof Home;
 }> = [
   { id: "create", label: "首页", description: "欢迎与工作概览", href: "/", icon: Home },
-  { id: "projects", label: "项目", description: "项目与单集", href: "/projects", icon: Folder },
-  { id: "assets", label: "资产", description: "角色、场景与版本", href: "/studio", icon: SquareStack },
+  { id: "projects", label: "项目", description: "项目与短剧生产", href: "/projects", icon: Folder },
   { id: "governance", label: "治理", description: "授权与审计", href: "/governance", icon: ShieldCheck },
   { id: "settings", label: "空间", description: "账户与工作空间", href: "/workspaces", icon: Settings },
 ];

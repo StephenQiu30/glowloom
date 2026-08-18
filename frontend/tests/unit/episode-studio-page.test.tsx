@@ -577,6 +577,15 @@ describe("单集统一生产工作台", () => {
     expect(
       await screen.findByRole("heading", { name: "第一集 · 雨巷相逢" }),
     ).toBeInTheDocument();
+    const workflow = screen.getByRole("complementary", { name: "项目制作流程导航" });
+    expect(within(workflow).getByRole("link", { name: /剧本结构/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(workflow).getByRole("link", { name: /分镜设计/ })).toHaveAttribute(
+      "href",
+      `/studio/${episodeId}/storyboard`,
+    );
     await waitFor(() => expect(apiMocks.getVersion).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMocks.listVersions).toHaveBeenCalledTimes(1));
     const editor = await screen.findByLabelText("当前剧本文本");

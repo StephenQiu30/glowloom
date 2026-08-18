@@ -400,7 +400,14 @@ describe("真实项目生产入口", () => {
     );
 
     expect(await screen.findByRole("heading", { name: project.name })).toBeInTheDocument();
+    expect(screen.queryByText("预算与生命周期")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "更新预算" })).not.toBeInTheDocument();
     expect(screen.getAllByText("单集尚未导入剧本").length).toBeGreaterThan(0);
+    const projectContent = screen.getByRole("region", { name: "项目内容" });
+    expect(within(projectContent).getByRole("link", { name: /查看项目资产/ })).toHaveAttribute(
+      "href",
+      `/projects/${projectId}/assets`,
+    );
     expect(screen.getByRole("link", { name: "进入第一集 · 雨巷相逢" })).toHaveAttribute(
       "href",
       `/studio/${episodeId}/script`,

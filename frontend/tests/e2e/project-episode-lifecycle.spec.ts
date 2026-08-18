@@ -29,10 +29,6 @@ test("创作者管理项目和单集完整生命周期", async ({ page }) => {
   await page.getByRole("button", { name: "保存项目信息" }).click();
   await expect(page.getByRole("heading", { name: `${projectName}-更新` })).toBeVisible();
 
-  await page.getByLabel("预算上限").fill("99.99");
-  await page.getByRole("button", { name: "更新预算" }).click();
-  await expect(page.getByText("项目预算已更新。")).toBeVisible();
-
   await page.getByLabel("单集名称 第一集").fill("开端");
   await page.getByLabel("目标秒数").nth(1).fill("105");
   await page.getByRole("button", { name: "保存 第一集" }).click();
@@ -69,7 +65,6 @@ test("创作者管理项目和单集完整生命周期", async ({ page }) => {
 
   await page.goto("/governance");
   const auditTrail = page.getByRole("region", { name: "操作审计" });
-  await expect(auditTrail.getByText("项目预算更新")).toBeVisible();
   await expect(auditTrail.getByText("单集排序")).toBeVisible();
   await expect(auditTrail.getByText("项目删除")).toBeVisible();
   await expect(auditTrail.getByText("单集删除").first()).toBeVisible();

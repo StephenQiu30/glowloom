@@ -15,10 +15,12 @@ import {
 import { assetKindLabels } from "./episode-studio-model";
 
 export function EpisodeAssetOverview({
+  projectId,
   summary,
   assets,
   assetBible,
 }: {
+  projectId: string;
   summary: API.AssetSummary;
   assets: API.AssetResponse[];
   assetBible?: API.AssetBibleResponse;
@@ -41,10 +43,10 @@ export function EpisodeAssetOverview({
       <Card>
         <CardHeader className="gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <CardTitle>S2 必需资产</CardTitle>
-            <CardDescription>角色、场景、声音各至少一项通过字段、媒体和授权准备度。</CardDescription>
+            <CardTitle>本集所需资产</CardTitle>
+            <CardDescription>角色、场景和声音各至少准备一项可用版本。</CardDescription>
           </div>
-          <Button asChild><Link href="/studio">打开完整资产库<ArrowRight aria-hidden="true" /></Link></Button>
+          <Button asChild><Link href={`/projects/${projectId}/assets`}>打开完整资产库<ArrowRight aria-hidden="true" /></Link></Button>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
           {["character", "location", "voice"].map((kind) => {
@@ -77,7 +79,7 @@ export function EpisodeAssetOverview({
       <Card>
         <CardHeader>
           <CardTitle>项目资产目录</CardTitle>
-          <CardDescription>{assets.length} 项真实服务端资产身份</CardDescription>
+          <CardDescription>{assets.length} 项项目资产</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {assets.map((asset) => (
@@ -85,7 +87,7 @@ export function EpisodeAssetOverview({
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-medium">{asset.name}</p>
-                  <p className="mt-1 text-xs text-slate-500">{assetKindLabels[asset.kind]} · revision {asset.revision}</p>
+                  <p className="mt-1 text-xs text-slate-500">{assetKindLabels[asset.kind]}</p>
                 </div>
                 <Badge
                   variant={

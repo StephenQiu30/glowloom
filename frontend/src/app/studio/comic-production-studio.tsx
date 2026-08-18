@@ -86,14 +86,14 @@ import {
   typeConfig,
 } from "./asset-workspace-model";
 
-export function ComicProductionStudio() {
+export function ComicProductionStudio({ initialProjectId }: { initialProjectId?: string }) {
   const sessionState = useAuthSessionState();
   const authenticated = sessionState === "authenticated";
   const me = useMeQuery(undefined, { skip: !authenticated });
   const workspaceId = me.data?.workspace.id;
   const projects = useProjectsQuery(workspaceId ?? "", { skip: !workspaceId });
   const projectItems = projects.data?.items ?? [];
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId ?? null);
   const effectiveProject =
     projectItems.find((project) => project.id === selectedProjectId) ??
     projectItems.find((project) => project.status === "active") ??
@@ -154,7 +154,7 @@ export function ComicProductionStudio() {
   const [appendVersion, appendState] = useAppendAssetVersionMutation();
   const [setAssetArchived, archiveState] = useSetAssetArchivedMutation();
   const [updateAsset, updateState] = useUpdateAssetMutation();
-  const [loadRenameImpact, renameImpactState] = useAssetRenamePreflightMutation();
+  const [loadRenameImpact] = useAssetRenamePreflightMutation();
   const [renameAsset, renameState] = useRenameAssetMutation();
   const [loadDisableImpact, disableImpactState] = useAssetDisablePreflightMutation();
   const [disableAsset, disableAssetStatus] = useDisableAssetMutation();
@@ -573,10 +573,7 @@ export function ComicProductionStudio() {
     me.error ?? projects.error ?? assets.error ?? assetBible.error ?? media.error;
 
   return (
-    <StudioShell
-      active="assets"
-      projectName={effectiveProject?.name}
-    >
+    <StudioShell active="projects">
       {notice ? (
         <div
           className="pointer-events-none fixed top-24 right-6 z-50 flex items-center gap-2 bg-foreground px-4 py-3 text-sm text-background shadow-lg"
@@ -626,8 +623,7 @@ export function ComicProductionStudio() {
               )}
             </div>
           )}
-          badges={[{ label: "生产事实层" }]}
-          description="管理角色、场景、道具、服装、声音与视觉风格的稳定身份、不可变版本和生产准备度。"
+          description="在当前项目中管理角色、场景、道具、服装、声音和风格参考。"
           title="资产库"
         />
 
@@ -869,7 +865,6 @@ export function ComicProductionStudio() {
           <RenameAssetDialog
             asset={selectedAsset}
             isApplying={renameState.isLoading}
-            isLoading={renameImpactState.isLoading}
             onApply={applyRename}
             onOpenChange={setRenameOpen}
             onPreflight={preflightRename}

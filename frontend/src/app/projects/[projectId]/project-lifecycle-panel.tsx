@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, RotateCcw, Save, Trash2, WalletCards } from "lucide-react";
+import { Archive, RotateCcw, Save, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -20,7 +20,6 @@ import {
   useDeleteProjectMutation,
   useProjectDeletePreflightMutation,
   useSetProjectArchivedMutation,
-  useUpdateProjectBudgetMutation,
   useUpdateProjectMutation,
 } from "@/lib/server-state";
 
@@ -29,7 +28,6 @@ export function ProjectLifecyclePanel({ project }: { project: API.ProjectRespons
   const [commandError, setCommandError] = useState<string | null>(null);
   const [deleteCheck, setDeleteCheck] = useState<API.DeletePreflightResponse | null>(null);
   const [updateProject, updateState] = useUpdateProjectMutation();
-  const [updateBudget, budgetState] = useUpdateProjectBudgetMutation();
   const [setArchived, archiveState] = useSetProjectArchivedMutation();
   const [deletePreflight] = useProjectDeletePreflightMutation();
   const [deleteProject, deleteState] = useDeleteProjectMutation();
@@ -65,23 +63,6 @@ export function ProjectLifecyclePanel({ project }: { project: API.ProjectRespons
           },
         }).unwrap(),
       "项目信息已更新。",
-    );
-  }
-
-  async function handleBudgetUpdate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    await runCommand(
-      () =>
-        updateBudget({
-          projectId: project.id,
-          body: {
-            amount: Number(form.get("budgetLimit")),
-            currency: String(form.get("currency")),
-            expected_revision: project.revision,
-          },
-        }).unwrap(),
-      "项目预算已更新。",
     );
   }
 
@@ -178,26 +159,10 @@ export function ProjectLifecyclePanel({ project }: { project: API.ProjectRespons
 
         <Card>
           <CardHeader>
-            <CardTitle>预算与生命周期</CardTitle>
-            <CardDescription>预算使用独立 owner 命令；硬删除必须先通过预检。</CardDescription>
+            <CardTitle>项目生命周期</CardTitle>
+            <CardDescription>归档、恢复或删除项目；删除前必须先通过预检。</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
-            <form className="grid gap-3" onSubmit={handleBudgetUpdate}>
-              <div className="grid grid-cols-[1fr_6rem] gap-3">
-                <div className="grid gap-2">
-                  <Label htmlFor="budgetLimit">预算上限</Label>
-                  <Input defaultValue={project.budget_limit} disabled={project.status === "archived"} id="budgetLimit" min={0} name="budgetLimit" step="0.000001" type="number" />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="currency">币种</Label>
-                  <Input defaultValue={project.currency} disabled={project.status === "archived"} id="currency" maxLength={3} minLength={3} name="currency" />
-                </div>
-              </div>
-              <Button disabled={project.status === "archived" || budgetState.isLoading} type="submit" variant="outline">
-                <WalletCards aria-hidden="true" />
-                更新预算
-              </Button>
-            </form>
             <div className="flex flex-wrap gap-2 pt-2">
               <Button disabled={archiveState.isLoading} onClick={handleProjectState} variant="outline">
                 {project.status === "active" ? <Archive aria-hidden="true" /> : <RotateCcw aria-hidden="true" />}

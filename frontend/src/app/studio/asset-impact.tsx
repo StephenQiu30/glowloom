@@ -126,7 +126,6 @@ export function AssetImpactDialog({
 export function RenameAssetDialog({
   asset,
   isApplying,
-  isLoading,
   onApply,
   onOpenChange,
   onPreflight,
@@ -134,7 +133,6 @@ export function RenameAssetDialog({
 }: {
   asset: API.AssetResponse;
   isApplying: boolean;
-  isLoading: boolean;
   onApply: (newName: string, impact: API.AssetImpactResponse) => Promise<boolean>;
   onOpenChange: (open: boolean) => void;
   onPreflight: (newName: string) => Promise<API.AssetImpactResponse | undefined>;
@@ -142,12 +140,18 @@ export function RenameAssetDialog({
 }) {
   const [newName, setNewName] = useState(asset.name);
   const [impact, setImpact] = useState<API.AssetImpactResponse>();
+  const [preflightLoading, setPreflightLoading] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalized = newName.trim();
     if (!impact) {
-      setImpact(await onPreflight(normalized));
+      setPreflightLoading(true);
+      try {
+        setImpact(await onPreflight(normalized));
+      } finally {
+        setPreflightLoading(false);
+      }
       return;
     }
     if (await onApply(normalized, impact)) {
@@ -200,10 +204,10 @@ export function RenameAssetDialog({
                 <Button type="button" variant="outline">取消</Button>
               </DialogClose>
               <Button
-                disabled={isLoading || isApplying || newName.trim() === asset.name}
+                disabled={preflightLoading || isApplying || newName.trim() === asset.name}
                 type="submit"
               >
-                {isLoading
+                {preflightLoading
                   ? "检查中…"
                   : isApplying
                     ? "提交中…"

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function ProjectServerCard({ project }: { project: API.ProjectResponse }) {
   return (
-    <Card className="group relative py-5 transition hover:bg-muted/30">
+    <Card className="group relative rounded-2xl border bg-card py-5 shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">

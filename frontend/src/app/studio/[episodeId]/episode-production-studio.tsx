@@ -11,16 +11,11 @@ import { useMemo, useState } from "react";
 import { LayoutContainer } from "@/components/layout/layout-container";
 import { MetricGroup } from "@/components/studio/metric-group";
 import { PageHeader } from "@/components/studio/page-header";
+import { ProductionNextAction } from "@/components/studio/production-next-action";
+import { ProductionWorkflowSidebar } from "@/components/studio/production-workflow-sidebar";
 import { StudioShell } from "@/components/studio/studio-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
@@ -110,7 +105,6 @@ import {
 import { EpisodeAssetOverview } from "./episode-asset-overview";
 import {
   type EpisodePanel,
-  episodePanels,
   sha256File,
   stageLabels,
 } from "./episode-studio-model";
@@ -122,13 +116,6 @@ import { StoryboardExports } from "./StoryboardExports";
 import { StoryboardCoverage } from "./storyboard-coverage";
 import { StoryboardWorkspace } from "./storyboard-workspace";
 import { TaskWorkspace } from "./task-workspace";
-
-const stageSteps: Record<API.EpisodeProductionSnapshot["current_stage"], number> = {
-  script_import: 0,
-  structure_review: 0,
-  asset_preparation: 1,
-  storyboard_preparation: 2,
-};
 
 export function EpisodeProductionStudio({
   episodeId,
@@ -1436,7 +1423,7 @@ export function EpisodeProductionStudio({
 
   if (sessionState === "checking") {
     return (
-      <StudioShell active="assets">
+      <StudioShell active="projects">
         <div className="grid min-h-[70dvh] place-items-center">
           <LoaderCircle className="animate-spin text-foreground" aria-label="正在读取登录状态" />
         </div>
@@ -1446,9 +1433,7 @@ export function EpisodeProductionStudio({
 
   return (
     <StudioShell
-      active="assets"
-      currentStep={snapshot ? stageSteps[snapshot.current_stage] : 0}
-      projectName={project?.name}
+      active="projects"
       viewer={
         me.data
           ? {
@@ -1480,78 +1465,69 @@ export function EpisodeProductionStudio({
         ) : !episode || !project || !snapshot || storyboardLoading || scriptLoading ? (
           <div className="grid min-h-96 place-items-center"><LoaderCircle className="animate-spin text-foreground" aria-label="正在加载生产工作台" /></div>
         ) : (
-          <>
-            <PageHeader
-              accessibleTitle={episode.name}
-              actions={(
-                <div className="flex flex-wrap items-center gap-2">
+          <div className="grid gap-8 xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start xl:gap-10">
+            <ProductionWorkflowSidebar
+              activeEpisodeId={episode.id}
+              activePanel={initialPanel}
+              episodeSnapshot={snapshot}
+              episodes={episodesQuery.data ?? []}
+              projectId={project.id}
+              projectName={project.name}
+            />
+
+            <div className="min-w-0">
+              <PageHeader
+                accessibleTitle={episode.name}
+                actions={(
                   <Button asChild variant="outline"><Link href={`/projects/${episode.project_id}`}>项目概览</Link></Button>
-                  <Select value={episode.id} onValueChange={(value) => { window.location.href = `/studio/${value}/${initialPanel}`; }}>
-                    <SelectTrigger aria-label="切换单集" className="h-10 min-w-56"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {(episodesQuery.data ?? []).map((item) => (
-                        <SelectItem key={item.id} value={item.id}>第 {item.position} 集 · {item.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              badges={[
-                { label: stageLabels[snapshot.current_stage] },
-                { label: project.aspect_ratio },
-                { label: project.visual_style ?? "未设视觉风格" },
-              ]}
-              breadcrumbs={[
-                { label: project.name, href: `/projects/${project.id}` },
-                { label: `第 ${episode.position} 集 · ${episode.name}` },
-              ]}
-              description={`${episode.name} · 服务端计算 ${snapshot.completion}% · revision ${episode.revision}`}
-              note="AI 候选经人工确认后才进入下游事实。"
-              title="今天，把这一集往前推进。"
-            />
+                )}
+                badges={[
+                  { label: stageLabels[snapshot.current_stage] },
+                  { label: project.aspect_ratio },
+                  { label: project.visual_style ?? "未设视觉风格" },
+                ]}
+                breadcrumbs={[
+                  { label: project.name, href: `/projects/${project.id}` },
+                  { label: `第 ${episode.position} 集 · ${episode.name}` },
+                ]}
+                description={`${episode.name} · 当前进度 ${snapshot.completion}%`}
+                note="AI 候选经人工确认后才进入下游事实。"
+                title="今天，把这一集往前推进。"
+              />
 
-            <MetricGroup
-              className="mt-8"
-              items={[
-                { label: "当前阶段", value: stageLabels[snapshot.current_stage] },
-                { label: "剧本状态", value: `v${editableVersion?.version_no ?? "-"}` },
-                { label: "Ready 资产", value: `${snapshot.asset_summary.ready} / ${snapshot.asset_summary.total}` },
-                { label: "Ready 分镜", value: `${snapshot.storyboard_summary.ready ?? 0} / ${snapshot.storyboard_summary.total ?? 0}` },
-                { label: "进行中任务", value: snapshot.task_summary.running },
-              ]}
-              label="生产摘要"
-            />
+              <ProductionNextAction
+                action={snapshot.next_actions[0]}
+                blockingReasons={snapshot.blocking_reasons}
+              />
 
-            {snapshot.partial_failures.length ? (
-              <Alert className="mt-5 border-rose-200 bg-rose-50 text-rose-800">
-                <AlertCircle aria-hidden="true" />
-                <AlertTitle>部分摘要不可用</AlertTitle>
-                <AlertDescription>{snapshot.partial_failures.map((failure) => failure.summary).join("；")}</AlertDescription>
-              </Alert>
-            ) : null}
-            {actionError ? (
-              <Alert className="mt-5" variant="destructive">
-                <AlertCircle aria-hidden="true" />
-                <AlertTitle>操作未完成</AlertTitle>
-                <AlertDescription>{actionError}</AlertDescription>
-              </Alert>
-            ) : null}
+              <MetricGroup
+                className="mt-8"
+                items={[
+                  { label: "当前阶段", value: stageLabels[snapshot.current_stage] },
+                  { label: "剧本状态", value: `v${editableVersion?.version_no ?? "-"}` },
+                  { label: "Ready 资产", value: `${snapshot.asset_summary.ready} / ${snapshot.asset_summary.total}` },
+                  { label: "Ready 分镜", value: `${snapshot.storyboard_summary.ready ?? 0} / ${snapshot.storyboard_summary.total ?? 0}` },
+                  { label: "进行中任务", value: snapshot.task_summary.running },
+                ]}
+                label="生产摘要"
+              />
 
-            <nav className="mt-7 grid border-y sm:grid-cols-2 xl:grid-cols-5 xl:divide-x" aria-label="单集制作模块">
-              {episodePanels.map((panel) => (
-                <Link
-                  aria-current={panel.id === initialPanel ? "page" : undefined}
-                  className={`flex items-center gap-3 px-4 py-4 transition ${panel.id === initialPanel ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
-                  href={`/studio/${episode.id}/${panel.id}`}
-                  key={panel.id}
-                >
-                  <panel.icon className="size-5 shrink-0" aria-hidden="true" />
-                  <span><span className="block text-sm font-medium">{panel.label}</span><span className="mt-0.5 block text-xs text-slate-400">{panel.description}</span></span>
-                </Link>
-              ))}
-            </nav>
+              {snapshot.partial_failures.length ? (
+                <Alert className="mt-5 border-rose-200 bg-rose-50 text-rose-800">
+                  <AlertCircle aria-hidden="true" />
+                  <AlertTitle>部分摘要不可用</AlertTitle>
+                  <AlertDescription>{snapshot.partial_failures.map((failure) => failure.summary).join("；")}</AlertDescription>
+                </Alert>
+              ) : null}
+              {actionError ? (
+                <Alert className="mt-5" variant="destructive">
+                  <AlertCircle aria-hidden="true" />
+                  <AlertTitle>操作未完成</AlertTitle>
+                  <AlertDescription>{actionError}</AlertDescription>
+                </Alert>
+              ) : null}
 
-            <section className="mt-6">
+              <section className="mt-6">
               {initialPanel === "script" ? (
                 <ScriptWorkspace
                   assets={assetsQuery.data?.items ?? []}
@@ -1593,6 +1569,7 @@ export function EpisodeProductionStudio({
                 <EpisodeAssetOverview
                   assetBible={assetBibleQuery.data}
                   assets={assetsQuery.data?.items ?? []}
+                  projectId={project.id}
                   summary={snapshot.asset_summary}
                 />
               ) : initialPanel === "storyboard" ? (
@@ -1697,8 +1674,9 @@ export function EpisodeProductionStudio({
                   onTriggerSchedule={handleTriggerSchedule}
                 />
               )}
-            </section>
-          </>
+              </section>
+            </div>
+          </div>
         )}
       </LayoutContainer>
     </StudioShell>

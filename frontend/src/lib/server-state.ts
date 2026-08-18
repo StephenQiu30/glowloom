@@ -97,7 +97,6 @@ import {
   reorderEpisodesApiV1ProjectsProjectIdEpisodesReorderPost,
   restoreEpisodeApiV1EpisodesEpisodeIdRestorePost,
   restoreProjectApiV1ProjectsProjectIdRestorePost,
-  updateBudgetLimitApiV1ProjectsProjectIdBudgetLimitPost,
   updateEpisodeApiV1EpisodesEpisodeIdPatch,
   updateProjectApiV1ProjectsProjectIdPatch,
 } from "@/api/projects";
@@ -380,22 +379,6 @@ export const appApi = createApi({
       queryFn: ({ projectId, body }) =>
         runRequest(() =>
           updateProjectApiV1ProjectsProjectIdPatch({ project_id: projectId }, body),
-        ),
-      invalidatesTags: (_result, _error, { projectId }) => [
-        "Projects",
-        { type: "Project", id: projectId },
-      ],
-    }),
-    updateProjectBudget: builder.mutation<
-      API.ProjectResponse,
-      { projectId: string; body: API.BudgetLimitRequest }
-    >({
-      queryFn: ({ projectId, body }) =>
-        runRequest(() =>
-          updateBudgetLimitApiV1ProjectsProjectIdBudgetLimitPost(
-            { project_id: projectId },
-            body,
-          ),
         ),
       invalidatesTags: (_result, _error, { projectId }) => [
         "Projects",
@@ -2561,7 +2544,6 @@ export const {
   useUpdateAssetStateMutation,
   useUpdateShotMutation,
   useUpdateEpisodeMutation,
-  useUpdateProjectBudgetMutation,
   useUpdateProjectMutation,
   useUpdateWorkspaceMutation,
   useWorkspacesQuery,

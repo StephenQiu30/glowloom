@@ -13,7 +13,7 @@ describe("workspace page access", () => {
   });
 
   it("keeps viewer navigation read-only and excludes governance", () => {
-    expect(visiblePrimaryNavigation("viewer")).toEqual(["projects", "assets"]);
+    expect(visiblePrimaryNavigation("viewer")).toEqual(["projects"]);
     expect(canAccessPage("viewer", "projects")).toBe(true);
     expect(canAccessPage("viewer", "assets")).toBe(true);
     expect(canAccessPage("viewer", "governance")).toBe(false);
@@ -23,7 +23,7 @@ describe("workspace page access", () => {
   it.each(["editor", "owner"] as const)(
     "allows %s to enter governance without promoting it to primary navigation",
     (role) => {
-      expect(visiblePrimaryNavigation(role)).toEqual(["projects", "assets"]);
+      expect(visiblePrimaryNavigation(role)).toEqual(["projects"]);
       expect(canAccessPage(role, "governance")).toBe(true);
     },
   );
