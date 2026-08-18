@@ -61,6 +61,17 @@ const stageLabels: Record<API.ProjectProductionSnapshot["current_stage"], string
   storyboard_preparation: "分镜准备",
 };
 
+const productionStepByStage: Record<
+  API.ProjectProductionSnapshot["current_stage"],
+  number
+> = {
+  project_setup: 0,
+  script_import: 0,
+  structure_review: 0,
+  asset_preparation: 1,
+  storyboard_preparation: 2,
+};
+
 function CreateEpisodeDialog({
   defaultDurationMs,
   isSubmitting,
@@ -185,6 +196,8 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   return (
     <StudioShell
       active="projects"
+      currentStep={snapshot ? productionStepByStage[snapshot.current_stage] : undefined}
+      projectName={project?.name}
       viewer={me.data ? {
         displayName: me.data.user.display_name?.trim() || me.data.user.email,
         workspaceName: me.data.workspace.name,

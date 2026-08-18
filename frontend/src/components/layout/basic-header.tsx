@@ -57,7 +57,7 @@ export type LayoutViewer = {
   workspaceName: string;
 };
 
-const productionStages = ["剧本", "资产", "分镜", "生成", "审核", "交付"];
+const productionStages = ["剧本解析", "资产", "分镜", "生成", "审核", "交付"];
 
 const navigationItems: Array<{
   id: StudioNavigation;
