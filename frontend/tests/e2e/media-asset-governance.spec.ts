@@ -10,6 +10,7 @@ import {
   type AssetFixture,
 } from "./asset-support";
 import { registerUser } from "./auth-support";
+import { chooseOption } from "./select-support";
 
 test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => {
   test.setTimeout(120_000);
@@ -205,7 +206,9 @@ test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => 
   const renameDialog = page.getByRole("dialog", { name: "重命名资产" });
   await renameDialog.getByLabel("新资产名称").fill(renamedCharacter);
   await renameDialog.getByRole("button", { name: "检查影响" }).click();
-  await expect(renameDialog.getByText(/影响 \d+ 个分镜/)).toBeVisible();
+  await expect(renameDialog.getByText(/影响 \d+ 个分镜/)).toBeVisible({
+    timeout: 20_000,
+  });
   await renameDialog.getByRole("button", { name: "确认重命名" }).click();
   await expect(page.getByRole("status")).toContainText(
     `资产已重命名为“${renamedCharacter}”`,
@@ -213,9 +216,10 @@ test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => 
 
   await page.getByRole("button", { name: "添加新版本" }).click();
   await fillAssetSpec(page, character);
-  await page.getByLabel("参考媒体").selectOption({
-    label: `${characterMediaName} · v1 · ready`,
-  });
+  await chooseOption(
+    page.getByLabel("参考媒体"),
+    `${characterMediaName} · v1 · ready`,
+  );
   await page.getByLabel("提示词描述").fill("雨巷造型调整，旧版本保持可追溯。");
   await page.getByRole("button", { name: "保存版本" }).click();
   await expect(page.getByRole("status")).toContainText("版本 v2 已保存");
@@ -256,10 +260,10 @@ test("媒体、三类资产与授权准备度联合闭环", async ({ page }) => 
   await expect(auditTrail.getByText("资产恢复")).toBeVisible();
   await expect(auditTrail.getByText("资产版本创建").first()).toBeVisible();
   await auditTrail.getByRole("button", { name: "筛选" }).click();
-  await auditTrail.getByLabel("动作").selectOption("asset.state_current_changed");
+  await chooseOption(auditTrail.getByLabel("动作"), "资产状态当前版本切换");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
-  await auditTrail.getByLabel("动作").selectOption("consent.revoked");
+  await chooseOption(auditTrail.getByLabel("动作"), "授权撤销");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
 

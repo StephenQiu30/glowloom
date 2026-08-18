@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import media_worker
+from app.integrations.minio import MinioObjectStorage
 from app.modules.assets.models import Asset
 from app.modules.media import MediaProbePort, MediaProbeResult
 from app.modules.media.models import MediaLineage, MediaLocation, MediaObject, MediaVersion
@@ -127,7 +128,15 @@ async def _requested_export(
 async def test_export_worker_publishes_fixed_package_and_lineage_once(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    async def presign_download(
+        _: MinioObjectStorage, object_key: str, expires_seconds: int
+    ) -> str:
+        assert 0 < expires_seconds <= 900
+        return f"https://private-storage.test/download/{object_key}?X-Amz-Signature=test"
+
+    monkeypatch.setattr(MinioObjectStorage, "presign_download", presign_download)
     headers, values, refs, body = await _requested_export(
         client,
         session_factory,

@@ -710,6 +710,28 @@ declare namespace API {
     name: string;
     /** Description */
     description: string;
+    /** Aliases */
+    aliases: string[] | null;
+    /** Role */
+    role: string | null | null;
+    /** Visual Identity */
+    visual_identity: string | null | null;
+    /** Appearance */
+    appearance: string | null | null;
+    /** Voice Profile */
+    voice_profile: string | null | null;
+    /** Goals */
+    goals: string[] | null;
+    /** Relationships */
+    relationships: string[] | null;
+    /** Arc Summary */
+    arc_summary: string | null | null;
+    /** Continuity Notes */
+    continuity_notes: string[] | null;
+    /** First Seen Episode */
+    first_seen_episode: number | null | null;
+    /** Episode Numbers */
+    episode_numbers: number[] | null;
   };
 
   type AssetCreateRequest = {
@@ -1536,6 +1558,14 @@ declare namespace API {
     age_impression: string | null;
     /** Temperament */
     temperament: string[] | null;
+    /** Goals */
+    goals: string[] | null;
+    /** Relationships */
+    relationships: string[] | null;
+    /** Arc Summary */
+    arc_summary: string | null;
+    /** Voice Profile */
+    voice_profile: string | null;
   };
 
   type completeUploadApiV1MediaUploadsUploadSessionIdCompletePostParams = {
@@ -1664,12 +1694,36 @@ declare namespace API {
   type ContinuityCandidateProposal = {
     /** Kind */
     kind: "continuity";
+    /** Scope */
+    scope: "scene" | "episode" | "character" | "world" | null;
     /** Severity */
     severity: "info" | "warning" | "blocking";
     /** Issue */
     issue: string;
     /** Suggestion */
     suggestion: string;
+    /** Episode Number */
+    episode_number: number | null | null;
+    /** Entities */
+    entities: string[] | null;
+    /** Evidence */
+    evidence: string | null | null;
+    /** Topic */
+    topic: string | null | null;
+    /** Title */
+    title: string | null | null;
+    /** Logline */
+    logline: string | null | null;
+    /** Summary */
+    summary: string | null | null;
+    /** Facts */
+    facts: string[] | null;
+    /** Rules */
+    rules: string[] | null;
+    /** Scene Candidate Key */
+    scene_candidate_key: string | null | null;
+    /** Scene Candidate Keys */
+    scene_candidate_keys: string[] | null;
   };
 
   type copyShotApiV1ShotsShotIdCopyPostParams = {
@@ -2032,6 +2086,12 @@ declare namespace API {
     text: string;
     /** Performance Note */
     performance_note: string | null | null;
+    /** Emotion */
+    emotion: string | null | null;
+    /** Action Before */
+    action_before: string | null | null;
+    /** Subtext */
+    subtext: string | null | null;
   };
 
   type DialogueOrNarration = {
@@ -4468,6 +4528,37 @@ declare namespace API {
     time_of_day: string;
     /** Summary */
     summary: string;
+    /** Episode Number */
+    episode_number: number | null | null;
+    /** Scene Number */
+    scene_number: number | null | null;
+    /** Story Beat */
+    story_beat: string | null | null;
+    /** Characters */
+    characters: string[] | null;
+    /** Props */
+    props: string[] | null;
+    /** Environment Details */
+    environment_details: string | null | null;
+    /** Continuity Notes */
+    continuity_notes: string[] | null;
+    /** Production Tasks */
+    production_tasks: SceneProductionTask[] | null;
+  };
+
+  type SceneProductionTask = {
+    /** Task Type */
+    task_type:
+      | "asset_prepare"
+      | "shot_breakdown"
+      | "continuity_review"
+      | "voice_prepare";
+    /** Title */
+    title: string;
+    /** Objective */
+    objective: string;
+    /** Priority */
+    priority: "low" | "normal" | "high" | "blocking" | null;
   };
 
   type SceneResponse = {
@@ -4485,6 +4576,8 @@ declare namespace API {
     time_of_day: string;
     /** Summary */
     summary: string;
+    /** Semantic Context */
+    semantic_context: Record<string, any>;
     source_range: CandidateSourceRange;
     /** Dialogues */
     dialogues: DialogueResponse[];
@@ -4855,6 +4948,26 @@ declare namespace API {
     title: string;
     /** Purpose */
     purpose: string;
+    /** Shot Number */
+    shot_number: number | null | null;
+    /** Shot Type */
+    shot_type: string | null | null;
+    /** Framing */
+    framing: string | null | null;
+    /** Camera Movement */
+    camera_movement: string | null | null;
+    /** Action */
+    action: string | null | null;
+    /** Visual Prompt */
+    visual_prompt: string | null | null;
+    /** Dialogue Excerpt */
+    dialogue_excerpt: string | null | null;
+    /** Asset Names */
+    asset_names: string[] | null;
+    /** Duration Ms */
+    duration_ms: number | null | null;
+    /** Continuity Notes */
+    continuity_notes: string[] | null;
   };
 
   type ShotCoverageResponse = {

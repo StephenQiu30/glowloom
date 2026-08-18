@@ -116,6 +116,10 @@ export function buildSpec(
         appearance: textValue(form, "appearance"),
         age_impression: textValue(form, "ageImpression"),
         temperament: splitValues(form.get("temperament")),
+        goals: [],
+        relationships: [],
+        arc_summary: "",
+        voice_profile: "",
       };
     case "location":
       return {

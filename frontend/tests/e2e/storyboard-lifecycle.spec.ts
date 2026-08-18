@@ -13,6 +13,7 @@ import {
   type AssetFixture,
 } from "./asset-support";
 import { registerUser } from "./auth-support";
+import { chooseOption } from "./select-support";
 
 const e2eDatabaseUrl =
   "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test";
@@ -138,7 +139,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   const referencedEmptyAssetName = `候选引用空角色-${unique}`;
   await page.getByRole("button", { name: "新建资产" }).click();
   const emptyAssetDialog = page.getByRole("dialog", { name: "新建资产身份" });
-  await emptyAssetDialog.getByLabel("资产类型").selectOption("character");
+  await chooseOption(emptyAssetDialog.getByLabel("资产类型"), "角色");
   await emptyAssetDialog.getByLabel("资产名称").fill(referencedEmptyAssetName);
   const emptyAssetResponse = page.waitForResponse(
     (response) =>
@@ -163,7 +164,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await page.getByRole("tab", { name: "道具" }).click();
   await page.getByRole("button", { name: "新建资产" }).click();
   const propDialog = page.getByRole("dialog", { name: "新建资产身份" });
-  await propDialog.getByLabel("资产类型").selectOption("prop");
+  await chooseOption(propDialog.getByLabel("资产类型"), "道具");
   await propDialog.getByLabel("资产名称").fill(relatedPropName);
   await propDialog.getByRole("button", { name: "创建资产" }).click();
   await expect(page.getByRole("status")).toContainText("资产身份已创建");
@@ -172,9 +173,10 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await propVersionDialog.getByLabel("外观描述").fill("青铜剑身，深色皮革剑柄");
   await propVersionDialog.getByLabel("材质").fill("青铜与皮革");
   await propVersionDialog.getByLabel("使用场景").fill("角色随身佩戴");
-  await propVersionDialog
-    .getByLabel("持有角色")
-    .selectOption({ label: referencedEmptyAssetName });
+  await chooseOption(
+    propVersionDialog.getByLabel("持有角色"),
+    referencedEmptyAssetName,
+  );
   await propVersionDialog.getByRole("button", { name: "保存版本" }).click();
   await expect(page.getByRole("status")).toContainText("版本 v1 已保存");
 
@@ -199,9 +201,10 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
 
   await page.getByRole("button", { name: "添加新版本" }).click();
   await fillAssetSpec(page, locationFixture);
-  await page.getByLabel("参考媒体").selectOption({
-    label: `${locationMediaName} · v1 · ready`,
-  });
+  await chooseOption(
+    page.getByLabel("参考媒体"),
+    `${locationMediaName} · v1 · ready`,
+  );
   await page.getByLabel("提示词描述").fill("月台灯箱亮起，保留旧版本历史。");
   await page.getByRole("button", { name: "保存版本" }).click();
   await expect(page.getByRole("status")).toContainText("版本 v2 已保存");
@@ -347,9 +350,7 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   );
   await expect(page.getByText("本页历史引用 2")).toBeVisible();
   await expect(page.getByText("本页当前引用 0")).toBeVisible();
-  await page.getByLabel("检查引用的资产版本").selectOption({
-    label: "v2（资产当前版本）",
-  });
+  await chooseOption(page.getByLabel("检查引用的资产版本"), "v2（资产当前版本）");
   await expect(page.getByText("本页当前引用 1")).toBeVisible();
 
   await page.goto(`/studio/${episodeId}/storyboard`);
@@ -529,18 +530,14 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await page.goto("/governance");
   const auditTrail = page.getByRole("region", { name: "操作审计" });
   await auditTrail.getByRole("button", { name: "筛选" }).click();
-  await auditTrail
-    .getByLabel("动作")
-    .selectOption("shot.spec_version_created");
+  await chooseOption(auditTrail.getByLabel("动作"), "分镜规格版本创建");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/8 条只追加事件/)).toBeVisible();
   await expect(
     auditTrail.locator("article").first().getByText("分镜规格版本创建"),
   ).toBeVisible();
 
-  await auditTrail
-    .getByLabel("动作")
-    .selectOption("shot.current_spec_changed");
+  await chooseOption(auditTrail.getByLabel("动作"), "分镜当前规格切换");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/2 条只追加事件/)).toBeVisible();
   await expect(
@@ -552,7 +549,9 @@ test("从本地确认结构完成镜头规格与生命周期闭环", async ({ pa
   await expect(
     episodeSummary.getByText("Ready 分镜").locator(".."),
   ).toContainText("2 / 2");
-  await expect(page.getByText(/服务端计算 90%/)).toBeVisible();
+  await expect(
+    page.getByRole("progressbar", { name: "项目完成度 90%" }),
+  ).toBeVisible();
 
   const exportCard = page
     .locator('[data-slot="card"]')

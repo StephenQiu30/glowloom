@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { registerUser } from "./auth-support";
+import { chooseOption } from "./select-support";
 
 test("导入发布剧本并在 DeepSeek 未配置时可恢复地失败", async ({ page }) => {
   test.setTimeout(60_000);
@@ -37,17 +38,17 @@ test("导入发布剧本并在 DeepSeek 未配置时可恢复地失败", async (
 
   await page.getByRole("button", { name: "开始结构提取" }).click();
   await expect(page.getByRole("status")).toContainText("提取任务已创建");
-  await expect(
-    page.getByText("提取未完成", { exact: true }),
-  ).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("提取未完成", { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(
     page.getByText("AI extraction service is not configured"),
   ).toBeVisible();
 
   await page.reload();
-  await expect(
-    page.getByText("提取未完成", { exact: true }),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("提取未完成", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.getByRole("button", { name: "重新提取结构" })).toBeVisible();
 
   await page.goto("/projects");
@@ -67,7 +68,7 @@ test("导入发布剧本并在 DeepSeek 未配置时可恢复地失败", async (
   await expect(auditTrail.getByText("任务创建")).toBeVisible();
   await expect(auditTrail.getByText("任务失败")).toBeVisible();
   await auditTrail.getByRole("button", { name: "筛选" }).click();
-  await auditTrail.getByLabel("动作").selectOption("task.failed");
+  await chooseOption(auditTrail.getByLabel("动作"), "任务失败");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
   await expect(auditTrail.getByText("queued → failed")).toBeVisible();

@@ -1,5 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
+import { chooseOption } from "./select-support";
+
 export const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
@@ -77,7 +79,7 @@ export async function fillAssetSpec(page: Page, fixture: AssetFixture) {
     await page.getByLabel("光线描述").fill("暖色灯笼与冷色月光形成对比");
     return;
   }
-  await page.getByLabel("声音来源").selectOption("synthetic_recording");
+  await chooseOption(page.getByLabel("声音来源"), "合成录音");
   await page.getByLabel("语言").fill("zh-CN");
   await page.getByLabel("表演特征（逗号分隔）").fill("克制，清晰");
   await page.getByLabel("允许用途（逗号分隔）").fill("角色对白，内部预览");
@@ -88,7 +90,14 @@ export async function createReadyAsset(page: Page, fixture: AssetFixture) {
   await expect(page.getByRole("heading", { name: "资产库" })).toBeVisible();
   await page.getByRole("button", { name: "新建资产" }).click();
   const createDialog = page.getByRole("dialog", { name: "新建资产身份" });
-  await createDialog.getByLabel("资产类型").selectOption(fixture.kind);
+  await chooseOption(
+    createDialog.getByLabel("资产类型"),
+    fixture.kind === "character"
+      ? "角色"
+      : fixture.kind === "location"
+        ? "场景"
+        : "声音",
+  );
   await createDialog.getByLabel("资产名称").fill(fixture.name);
   await createDialog.getByLabel("别名（逗号分隔）").fill(`${fixture.name}别名`);
   await createDialog.getByLabel("标签（逗号分隔）").fill("端到端验收，第一季");
@@ -97,9 +106,10 @@ export async function createReadyAsset(page: Page, fixture: AssetFixture) {
 
   await page.getByRole("button", { name: "添加新版本" }).click();
   await fillAssetSpec(page, fixture);
-  await page.getByLabel("参考媒体").selectOption({
-    label: `${fixture.mediaName} · v1 · ready`,
-  });
+  await chooseOption(
+    page.getByLabel("参考媒体"),
+    `${fixture.mediaName} · v1 · ready`,
+  );
   await page.getByLabel("提示词描述").fill("保持当前已确认的视觉或表演特征。");
   await page.getByRole("button", { name: "保存版本" }).click();
   await expect(page.getByRole("status")).toContainText("准备度为已阻断");

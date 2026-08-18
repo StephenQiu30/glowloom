@@ -28,10 +28,14 @@ test("上传到期计划可暂停、立即触发、恢复并从任务事实收�
   await expect(page).toHaveURL(/\/studio\/[^/]+\/script$/);
   const episodeId = new URL(page.url()).pathname.split("/")[2];
 
-  const accessToken = await page.evaluate(() =>
-    window.sessionStorage.getItem("lanverse.access-token"),
-  );
-  expect(accessToken).toBeTruthy();
+  const login = await page.request.post(`${backendBaseUrl}/api/v1/auth/login`, {
+    data: {
+      email: `schedule-${unique}@example.com`,
+      password: "playwright-secure-password",
+    },
+  });
+  expect(login.status()).toBe(200);
+  const accessToken = (await login.json()).data.access_token as string;
   const headers = { authorization: `Bearer ${accessToken}` };
   const me = await page.request.get(`${backendBaseUrl}/api/v1/me`, { headers });
   expect(me.status()).toBe(200);

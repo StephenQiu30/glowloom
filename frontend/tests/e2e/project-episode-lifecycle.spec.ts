@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { registerUser } from "./auth-support";
+import { chooseOption } from "./select-support";
 
 test("创作者管理项目和单集完整生命周期", async ({ page }) => {
   test.setTimeout(60_000);
@@ -69,13 +70,13 @@ test("创作者管理项目和单集完整生命周期", async ({ page }) => {
   await expect(auditTrail.getByText("项目删除")).toBeVisible();
   await expect(auditTrail.getByText("单集删除").first()).toBeVisible();
   await auditTrail.getByRole("button", { name: "筛选" }).click();
-  await auditTrail.getByLabel("动作").selectOption("episode.deleted");
+  await chooseOption(auditTrail.getByLabel("动作"), "单集删除");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/2 条只追加事件/)).toBeVisible();
   await expect(
     auditTrail.locator("article").first().getByText("单集删除"),
   ).toBeVisible();
-  await auditTrail.getByLabel("动作").selectOption("project.deleted");
+  await chooseOption(auditTrail.getByLabel("动作"), "项目删除");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
   await expect(

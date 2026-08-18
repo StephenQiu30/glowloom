@@ -9,13 +9,13 @@ test("审阅五集计划后原子创建并批量发布单集剧本", async ({ pa
   test.setTimeout(120_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `MVP-A-分集计划-${unique}`;
-  const sample = readFileSync(
+  const fixture = JSON.parse(readFileSync(
     path.resolve(
       process.cwd(),
-      "../docs/fixtures/mvp_a/002-雾港倒计时整剧导入样例.txt",
+      "../backend/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json",
     ),
     "utf8",
-  );
+  )) as { full_script: string };
 
   await registerUser(page, {
     displayName: "分集计划验收创作者",
@@ -29,7 +29,7 @@ test("审阅五集计划后原子创建并批量发布单集剧本", async ({ pa
   const importCard = page.getByRole("region", {
     name: "整剧导入与格式体检",
   });
-  await importCard.getByLabel("整剧文本").fill(sample);
+  await importCard.getByLabel("整剧文本").fill(fixture.full_script);
   await importCard
     .getByLabel("我确认拥有该剧本用于本项目制作与分析的权利")
     .check();

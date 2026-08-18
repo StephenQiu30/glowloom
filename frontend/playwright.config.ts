@@ -44,6 +44,8 @@ export default defineConfig({
         MINIO_BUCKET: "lanverse-e2e",
         RABBITMQ_URL:
           "amqp://guest:guest@127.0.0.1:5672/lanverse_contract",
+        EMAIL_VERIFICATION_SOURCE_LIMIT: "1000",
+        SCRIPT_EXTRACTION_PROVIDER: "disabled",
       },
       url: `${backendBaseUrl}/readyz`,
       reuseExistingServer: false,

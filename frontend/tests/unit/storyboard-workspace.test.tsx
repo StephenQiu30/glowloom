@@ -78,6 +78,7 @@ const structure: API.ConfirmedStructureResponse = {
       location: "旧车站月台",
       time_of_day: "夜",
       summary: "顾清禾走入空无一人的月台",
+      semantic_context: {},
       source_range: { start: 0, end: 20 },
       dialogues: [
         {
@@ -385,6 +386,10 @@ function assetBibleState(
             appearance: "固定外观",
             age_impression: "青年",
             temperament: ["克制"],
+            goals: [],
+            relationships: [],
+            arc_summary: null,
+            voice_profile: null,
           };
   const state: API.AssetStateResponse = {
     id: stateId,
@@ -469,6 +474,16 @@ const acceptedShotCandidate: API.ExtractionCandidateResponse = {
     scene_candidate_key: "scene-001",
     title: "雨中回望",
     purpose: "交代角色发现远处来客",
+    shot_number: null,
+    shot_type: null,
+    framing: null,
+    camera_movement: null,
+    action: null,
+    visual_prompt: null,
+    dialogue_excerpt: null,
+    asset_names: null,
+    duration_ms: null,
+    continuity_notes: null,
   },
   confidence_note: "镜头意图明确",
   required: false,

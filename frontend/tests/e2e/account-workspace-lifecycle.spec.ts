@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { registerUser } from "./auth-support";
+import { chooseOption } from "./select-support";
 
 async function openAccountWorkspace(
   page: Parameters<typeof registerUser>[0],
@@ -62,7 +63,7 @@ test("用户管理资料、工作空间和账户凭据", async ({ page }) => {
   await expect(auditTrail.getByText("密码修改")).toBeVisible();
   await expect(auditTrail.getByText("资料更新")).toBeVisible();
   await auditTrail.getByRole("button", { name: "筛选" }).click();
-  await auditTrail.getByLabel("动作").selectOption("identity.password_changed");
+  await chooseOption(auditTrail.getByLabel("动作"), "密码修改");
   await auditTrail.getByRole("button", { name: "应用审计筛选" }).click();
   await expect(auditTrail.getByText(/1 条只追加事件/)).toBeVisible();
 

@@ -1,17 +1,22 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
 import { registerUser } from "./auth-support";
+import { chooseOption } from "./select-support";
 
 test("上传整剧样本并恢复确定性格式体检结果", async ({ page }) => {
   test.setTimeout(120_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `MVP-A-整剧导入-${unique}`;
-  const samplePath = path.resolve(
+  const sampleFixturePath = path.resolve(
     process.cwd(),
-    "../docs/fixtures/mvp_a/002-雾港倒计时整剧导入样例.txt",
+    "../backend/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json",
   );
+  const sample = JSON.parse(readFileSync(sampleFixturePath, "utf8")) as {
+    full_script: string;
+  };
 
   await registerUser(page, {
     displayName: "整剧导入验收创作者",
@@ -26,8 +31,12 @@ test("上传整剧样本并恢复确定性格式体检结果", async ({ page }) 
   const importCard = page.getByRole("region", {
     name: "整剧导入与格式体检",
   });
-  await importCard.getByLabel("导入方式").selectOption("media");
-  await importCard.getByLabel("剧本文档").setInputFiles(samplePath);
+  await chooseOption(importCard.getByLabel("导入方式"), "上传 UTF-8 .txt / .md");
+  await importCard.getByLabel("剧本文档").setInputFiles({
+    name: "golden-candidate.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(sample.full_script, "utf8"),
+  });
   await importCard
     .getByLabel("我确认拥有该剧本用于本项目制作与分析的权利")
     .check();
