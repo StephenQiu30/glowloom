@@ -612,14 +612,14 @@ export function ComicProductionStudio({ initialProjectId }: { initialProjectId?:
               ) : null}
               {authenticated ? (
                 effectiveProject?.status === "active" ? (
-                  <Button className="h-10 bg-primary px-4 text-white hover:bg-primary/85" onClick={() => setCreateOpen(true)}>
+                  <Button className="h-10 px-4" onClick={() => setCreateOpen(true)}>
                     <Plus aria-hidden="true" />新建资产
                   </Button>
                 ) : (
                   <Button disabled className="h-10" variant="outline">项目已归档</Button>
                 )
               ) : (
-                <Button asChild className="h-10 bg-primary px-4 text-white hover:bg-primary/85"><Link href="/login">登录后管理</Link></Button>
+                <Button asChild className="h-10 px-4"><Link href="/login">登录后管理</Link></Button>
               )}
             </div>
           )}

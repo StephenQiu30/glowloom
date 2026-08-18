@@ -13,6 +13,7 @@ const apiMocks = vi.hoisted(() => ({
   listEpisodes: vi.fn(),
   listScriptDocuments: vi.fn(),
   me: vi.fn(),
+  previewScriptDocument: vi.fn(),
 }));
 
 vi.mock("@/api/identity", async () => ({
@@ -45,6 +46,8 @@ vi.mock("@/api/scriptDocuments", async () => ({
     apiMocks.importScriptDocument,
   listDocumentsApiV1ProjectsProjectIdScriptDocumentsGet:
     apiMocks.listScriptDocuments,
+  previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost:
+    apiMocks.previewScriptDocument,
 }));
 
 import { AppProviders } from "@/app/providers";
@@ -153,8 +156,8 @@ const documentAnalysis: API.ScriptDocumentAnalysisResponse = {
     workspace_id: workspaceId,
     project_id: projectId,
     title: `${project.name} · 整剧原稿`,
-    source_type: "text",
-    source_media_version_id: null,
+    source_type: "media",
+    source_media_version_id: mediaVersionId,
     language: "zh-CN",
     rights_declaration: "我确认拥有该剧本用于本项目制作与分析的权利",
     status: "active",
@@ -167,8 +170,8 @@ const documentAnalysis: API.ScriptDocumentAnalysisResponse = {
     workspace_id: workspaceId,
     document_id: "019fb2d0-a000-7000-8000-000000000010",
     version_no: 1,
-    source_type: "text",
-    source_media_version_id: null,
+    source_type: "media",
+    source_media_version_id: mediaVersionId,
     raw_text: "场景：控制室。\n甲：开始。",
     raw_hash: "a".repeat(64),
     normalized_text: "场景：控制室。\n甲：开始。",
@@ -248,6 +251,14 @@ describe("真实项目生产入口", () => {
       data: { items: [], total: 0, limit: 100, offset: 0 },
     });
     apiMocks.importScriptDocument.mockResolvedValue({ data: documentAnalysis });
+    apiMocks.previewScriptDocument.mockResolvedValue({
+      data: {
+        media_version_id: mediaVersionId,
+        raw_text: "# 第一集\n\n场景1：控制室，夜\n\n甲：开始。",
+        raw_hash: "d".repeat(64),
+        codepoint_count: 25,
+      },
+    });
     apiMocks.initializeUpload.mockResolvedValue({
       data: {
         upload_session: {
@@ -412,6 +423,14 @@ describe("真实项目生产入口", () => {
     }
     expect(screen.queryByText("预算与生命周期")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "更新预算" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /创建.*集/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保存项目信息" })).not.toBeInTheDocument();
+    expect(screen.queryByText("项目生命周期")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "单集设置" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "整剧导入与格式体检" })).toHaveAttribute(
+      "id",
+      "script-import",
+    );
     expect(screen.getAllByText("单集尚未导入剧本").length).toBeGreaterThan(0);
     const projectContent = screen.getByRole("region", { name: "项目内容" });
     expect(within(projectContent).getByRole("link", { name: /查看项目资产/ })).toHaveAttribute(
@@ -431,65 +450,13 @@ describe("真实项目生产入口", () => {
     );
   });
 
-  it("通过真实接口创建下一集", async () => {
+  it("只接受 Markdown 或 DOCX，并在用户确认预览后才执行整剧解析", async () => {
     const user = userEvent.setup();
-    render(
-      <AppProviders>
-        <ProjectWorkspace projectId={projectId} />
-      </AppProviders>,
-    );
-
-    await user.click(await screen.findByRole("button", { name: "创建单集" }));
-    await user.type(screen.getByLabelText("单集名称"), "第二集 · 城门旧事");
-    await user.click(screen.getByRole("button", { name: "确认创建" }));
-
-    await waitFor(() => expect(apiMocks.createEpisode).toHaveBeenCalledTimes(1));
-    expect(apiMocks.createEpisode).toHaveBeenCalledWith(
-      { project_id: projectId },
-      { name: "第二集 · 城门旧事", target_duration_ms: 90_000 },
-    );
-    expect(await screen.findByRole("status")).toHaveTextContent("第 3 集已创建");
-  });
-
-  it("粘贴整剧原稿并展示可执行的格式体检下一步", async () => {
-    const user = userEvent.setup();
-    render(
-      <AppProviders>
-        <ProjectWorkspace projectId={projectId} />
-      </AppProviders>,
-    );
-
-    await screen.findByRole("heading", { name: project.name });
-    await user.type(screen.getByLabelText("整剧文本"), "场景：控制室。\n甲：开始。");
-    await user.click(
-      screen.getByRole("checkbox", {
-        name: "我确认拥有该剧本用于本项目制作与分析的权利",
-      }),
-    );
-    await user.click(screen.getByRole("button", { name: "导入并分析" }));
-
-    await waitFor(() =>
-      expect(apiMocks.importScriptDocument).toHaveBeenCalledTimes(1),
-    );
-    expect(apiMocks.importScriptDocument).toHaveBeenCalledWith(
-      { project_id: projectId },
-      expect.objectContaining({
-        input_type: "text",
-        title: `${project.name} · 整剧原稿`,
-        text: "场景：控制室。\n甲：开始。",
-        media_version_id: null,
-        language: "zh-CN",
-        idempotency_key: expect.stringMatching(/^script-document:[a-f0-9]{64}$/),
-      }),
-    );
-    expect(await screen.findByRole("status")).toHaveTextContent("格式体检已完成");
-    expect(screen.getByText("需要 AI 分集候选")).toBeInTheDocument();
-    expect(screen.getByText(/未找到独占一行的集标记/)).toBeInTheDocument();
-    expect(screen.getByText("下一步：生成并人工确认分集建议")).toBeInTheDocument();
-  });
-
-  it("把 UTF-8 Markdown 固定为 document 媒体版本后再执行整剧分析", async () => {
-    const user = userEvent.setup();
+    vi.stubGlobal("crypto", {
+      subtle: {
+        digest: vi.fn().mockResolvedValue(new Uint8Array(32).buffer),
+      },
+    });
     const uploadFetch = vi
       .fn()
       .mockResolvedValue({ ok: true, status: 200 });
@@ -501,8 +468,14 @@ describe("真实项目生产入口", () => {
     );
 
     await screen.findByRole("heading", { name: project.name });
-    await user.click(screen.getByRole("combobox", { name: "导入方式" }));
-    await user.click(screen.getByRole("option", { name: "上传 UTF-8 .txt / .md" }));
+    expect(screen.queryByRole("combobox", { name: "导入方式" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("整剧文本")).not.toBeInTheDocument();
+    expect(screen.queryByText(/400 KB/)).not.toBeInTheDocument();
+    const fileInput = screen.getByLabelText("剧本文档");
+    expect(fileInput).toHaveAttribute(
+      "accept",
+      ".docx,.md,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown",
+    );
     const file = new File(
       ["第一集\n场景1：控制室，夜\n甲：开始。"],
       "whole-script.md",
@@ -512,18 +485,23 @@ describe("真实项目生产入口", () => {
       value: async () =>
         new TextEncoder().encode("第一集\n场景1：控制室，夜\n甲：开始。").buffer,
     });
-    await user.upload(screen.getByLabelText("剧本文档"), file);
+    await user.upload(fileInput, file);
+    expect(screen.getByText("whole-script.md")).toBeInTheDocument();
+    expect(screen.getByText(/Markdown 剧本/)).toBeInTheDocument();
     await user.click(
       screen.getByRole("checkbox", {
         name: "我确认拥有该剧本用于本项目制作与分析的权利",
       }),
     );
-    await user.click(screen.getByRole("button", { name: "上传并分析" }));
+    const uploadButton = screen.getByRole("button", { name: "上传并预览" });
+    expect(uploadButton).toBeEnabled();
+    await user.click(uploadButton);
 
     await waitFor(() => expect(apiMocks.initializeUpload).toHaveBeenCalled());
     await waitFor(() => expect(apiMocks.completeUpload).toHaveBeenCalled());
     await waitFor(() => expect(apiMocks.getMedia).toHaveBeenCalled());
-    await waitFor(() => expect(apiMocks.importScriptDocument).toHaveBeenCalled());
+    await waitFor(() => expect(apiMocks.previewScriptDocument).toHaveBeenCalled());
+    expect(apiMocks.importScriptDocument).not.toHaveBeenCalled();
     expect(apiMocks.initializeUpload).toHaveBeenCalledWith(
       expect.objectContaining({
         workspace_id: workspaceId,
@@ -542,13 +520,66 @@ describe("真实项目生产入口", () => {
     expect(apiMocks.getMedia).toHaveBeenCalledWith({
       version_id: mediaVersionId,
     });
+    expect(apiMocks.previewScriptDocument).toHaveBeenCalledWith(
+      { project_id: projectId },
+      { media_version_id: mediaVersionId },
+    );
+    const preview = screen.getByRole("region", { name: "剧本内容预览" });
+    expect(within(preview).getByRole("heading", { name: "第一集" })).toBeInTheDocument();
+    expect(preview).toHaveTextContent("场景1：控制室，夜");
+
+    await user.click(
+      screen.getByRole("button", { name: "确认剧本并开始解析" }),
+    );
+    await waitFor(() => expect(apiMocks.importScriptDocument).toHaveBeenCalled());
     expect(apiMocks.importScriptDocument).toHaveBeenCalledWith(
       { project_id: projectId },
       expect.objectContaining({
         input_type: "media",
+        title: "whole-script.md",
         text: null,
         media_version_id: mediaVersionId,
         idempotency_key: expect.stringMatching(/^script-document:[a-f0-9]{64}$/),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("按 DOCX 官方 MIME 上传 Word 剧本", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("crypto", {
+      subtle: {
+        digest: vi.fn().mockResolvedValue(new Uint8Array(32).buffer),
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+    render(
+      <AppProviders>
+        <ProjectWorkspace projectId={projectId} />
+      </AppProviders>,
+    );
+
+    await screen.findByRole("heading", { name: project.name });
+    const file = new File(["docx-bytes"], "empress.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    Object.defineProperty(file, "arrayBuffer", {
+      value: async () => new TextEncoder().encode("docx-bytes").buffer,
+    });
+    await user.upload(screen.getByLabelText("剧本文档"), file);
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "我确认拥有该剧本用于本项目制作与分析的权利",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "上传并预览" }));
+
+    await waitFor(() => expect(apiMocks.initializeUpload).toHaveBeenCalled());
+    expect(apiMocks.initializeUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: "empress.docx",
+        mime_type:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       }),
     );
     vi.unstubAllGlobals();

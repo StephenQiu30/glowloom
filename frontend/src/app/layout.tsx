@@ -19,7 +19,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={cn("font-sans", GeistSans.variable, GeistMono.variable)}>
+    <html
+      lang="zh-CN"
+      className={cn("font-sans", GeistSans.variable, GeistMono.variable)}
+      suppressHydrationWarning
+    >
       <body>
         <AppProviders>{children}</AppProviders>
       </body>

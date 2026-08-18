@@ -495,6 +495,10 @@ declare namespace API {
     data: ScriptDocumentAnalysisResponse;
   };
 
+  type ApiResponseScriptDocumentPreviewResponse_ = {
+    data: ScriptDocumentPreviewResponse;
+  };
+
   type ApiResponseScriptImportResponse_ = {
     data: ScriptImportResponse;
   };
@@ -4207,6 +4211,10 @@ declare namespace API {
     shot_id: string;
   };
 
+  type previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPostParams = {
+    project_id: string;
+  };
+
   type ProbeRetryRequest = {
     /** Idempotency Key */
     idempotency_key: string;
@@ -4741,6 +4749,22 @@ declare namespace API {
     rights_declaration: string;
     /** Idempotency Key */
     idempotency_key: string;
+  };
+
+  type ScriptDocumentPreviewRequest = {
+    /** Media Version Id */
+    media_version_id: string;
+  };
+
+  type ScriptDocumentPreviewResponse = {
+    /** Media Version Id */
+    media_version_id: string;
+    /** Raw Text */
+    raw_text: string;
+    /** Raw Hash */
+    raw_hash: string;
+    /** Codepoint Count */
+    codepoint_count: number;
   };
 
   type ScriptDocumentResponse = {

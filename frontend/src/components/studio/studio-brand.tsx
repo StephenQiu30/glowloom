@@ -33,7 +33,7 @@ export function StudioBrand({
       <Image
         alt="Lanverse"
         className={cn(
-          "w-auto",
+          "w-auto dark:invert",
           studioBrandSizes[size],
           mdSize ? studioBrandMediumSizes[mdSize] : null,
         )}

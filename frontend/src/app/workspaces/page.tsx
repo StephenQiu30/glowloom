@@ -241,7 +241,7 @@ export default function WorkspacesPage() {
                 {workspacesQuery.data.map((workspace) => {
                   const current = workspace.id === currentWorkspaceId;
                   return (
-                    <article className={`flex flex-wrap items-center gap-5 rounded-2xl border bg-white p-5 ${current ? "border-border shadow-sm " : "border-slate-200"}`} key={workspace.id}>
+                    <article className={`flex flex-wrap items-center gap-5 rounded-2xl border bg-card p-5 ${current ? "shadow-sm" : ""}`} key={workspace.id}>
                       <span className="grid size-12 place-items-center rounded-xl bg-slate-100 text-foreground"><Settings2 className="size-5" aria-hidden="true" /></span>
                       <div className="min-w-48 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{workspace.name}</h3>{current ? <Badge className="border-border bg-muted text-foreground" variant="outline">当前空间</Badge> : null}{workspace.status === "archived" ? <Badge variant="secondary">已归档</Badge> : null}</div><p className="mt-1 text-xs text-slate-500">{roleLabels[workspace.role]} · revision {workspace.revision}</p></div>
                       <div className="flex flex-1 flex-wrap items-end justify-end gap-2">

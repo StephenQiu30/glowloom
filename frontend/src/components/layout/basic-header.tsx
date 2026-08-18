@@ -49,6 +49,7 @@ import { cn } from "@/lib/class-names";
 import { useLogoutMutation } from "@/lib/server-state";
 
 import { LayoutContainer } from "./layout-container";
+import { ThemeToggle } from "./theme-toggle";
 
 export type LayoutAuthState = "loading" | "anonymous" | "authenticated";
 
@@ -335,6 +336,7 @@ export function BasicHeader({
             ) : role ? (
               <GlobalSearch role={role} />
             ) : null}
+            <ThemeToggle />
             {authState === "anonymous" ? <Button asChild><Link href="/login">登录</Link></Button> : null}
             {authState === "authenticated" && role ? (
               <AccountMenu role={role} viewer={viewer} />

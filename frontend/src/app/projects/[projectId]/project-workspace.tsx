@@ -3,15 +3,13 @@
 import {
   AlertCircle,
   ArrowRight,
-  CheckCircle2,
   ChevronRight,
   FileText,
   Layers3,
   LoaderCircle,
-  Plus,
 } from "lucide-react";
 import Link from "next/link";
-import { type FormEvent, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
 import { StudioShell } from "@/components/studio/studio-shell";
@@ -22,39 +20,25 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
-  useCreateEpisodeMutation,
   useEpisodesQuery,
   useMeQuery,
   useProjectQuery,
   useProjectSnapshotQuery,
 } from "@/lib/server-state";
 
-import { EpisodeLifecycleCard } from "./episode-lifecycle-card";
-import { ProjectLifecyclePanel } from "./project-lifecycle-panel";
 import { ScriptDocumentImportCard } from "./script-document-import-card";
 
 const stageLabels: Record<API.ProjectProductionSnapshot["current_stage"], string> = {
-  project_setup: "项目设置",
+  project_setup: "剧本导入",
   script_import: "剧本导入",
   structure_review: "结构确认",
   asset_preparation: "资产准备",
@@ -72,66 +56,6 @@ const productionStepByStage: Record<
   storyboard_preparation: 2,
 };
 
-function CreateEpisodeDialog({
-  defaultDurationMs,
-  isSubmitting,
-  onOpenChange,
-  onSubmit,
-  open,
-}: {
-  defaultDurationMs: number;
-  isSubmitting: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSubmit: (request: API.EpisodeCreateRequest) => Promise<boolean>;
-  open: boolean;
-}) {
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const completed = await onSubmit({
-      name: String(form.get("name") ?? "").trim(),
-      target_duration_ms: Number(form.get("targetDurationSeconds")) * 1_000,
-    });
-    if (completed) formElement.reset();
-  }
-
-  return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent>
-          <DialogHeader>
-            <DialogTitle>创建下一集</DialogTitle>
-            <DialogDescription>单集按项目顺序创建，进入工作台后再导入固定剧本版本。</DialogDescription>
-          </DialogHeader>
-          <form className="mt-6 grid gap-5" onSubmit={submit}>
-            <div className="grid gap-2">
-              <Label htmlFor="episodeName">单集名称</Label>
-              <Input id="episodeName" name="name" placeholder="例如：第二集 · 城门旧事" required maxLength={120} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="episodeDuration">目标时长（秒）</Label>
-              <Input
-                defaultValue={Math.round(defaultDurationMs / 1_000)}
-                id="episodeDuration"
-                min={1}
-                name="targetDurationSeconds"
-                required
-                type="number"
-              />
-            </div>
-            <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="outline">取消</Button></DialogClose>
-              <Button disabled={isSubmitting} type="submit">
-                {isSubmitting ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                确认创建
-              </Button>
-            </DialogFooter>
-          </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const sessionState = useAuthSessionState();
   const authenticated = sessionState === "authenticated";
@@ -142,10 +66,6 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
     pollingInterval: 5_000,
     skip: !authenticated,
   });
-  const [createEpisode, createState] = useCreateEpisodeMutation();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const project = projectQuery.data;
   const episodes = episodesQuery.data ?? [];
   const snapshot = snapshotQuery.data;
@@ -166,20 +86,6 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   ) ?? 0;
   const canWrite =
     project?.status === "active" && me.data?.workspace.role !== "viewer";
-
-  async function handleCreate(request: API.EpisodeCreateRequest): Promise<boolean> {
-    setActionError(null);
-    setNotice(null);
-    try {
-      const created = await createEpisode({ projectId, body: request }).unwrap();
-      setCreateOpen(false);
-      setNotice(`第 ${created.position} 集已创建，可以进入剧本工作台。`);
-      return true;
-    } catch (error: unknown) {
-      setActionError(appApiErrorMessage(error));
-      return false;
-    }
-  }
 
   const pageError = me.error ?? projectQuery.error ?? episodesQuery.error ?? snapshotQuery.error;
 
@@ -203,11 +109,6 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
         workspaceName: me.data.workspace.name,
       } : undefined}
     >
-      {notice ? (
-        <div className="pointer-events-none fixed top-24 right-6 z-50 flex max-w-md items-center gap-2 bg-foreground px-4 py-3 text-sm text-background" role="status">
-          <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />{notice}
-        </div>
-      ) : null}
       <LayoutContainer className="py-10">
         {!authenticated ? (
           <Alert className="border-0 bg-muted/50">
@@ -227,13 +128,12 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
           <div className="min-w-0">
               <PageHeader
               actions={firstEpisode ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => setCreateOpen(true)} variant="outline"><Plus aria-hidden="true" />创建单集</Button>
-                  <Button asChild><Link href={`/studio/${firstEpisode.id}/script`}>继续制作<ArrowRight aria-hidden="true" /></Link></Button>
-                </div>
-              ) : (
-                <Button onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" />创建第一集</Button>
-              )}
+                <Button asChild>
+                  <Link href={`/studio/${firstEpisode.id}/script`}>
+                    继续制作<ArrowRight aria-hidden="true" />
+                  </Link>
+                </Button>
+              ) : undefined}
               badges={[
                 { label: stageLabels[snapshot.current_stage] },
                 { label: project.aspect_ratio },
@@ -287,14 +187,10 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                 canWrite={canWrite}
                 language={project.language}
                 projectId={project.id}
-                projectName={project.name}
                 targetDurationMs={project.target_duration_ms}
                 workspaceId={project.workspace_id}
               />
 
-              {actionError ? (
-                <Alert className="mt-5" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert>
-              ) : null}
               {snapshot.partial_failures.length ? (
                 <Alert className="mt-5 border-0 bg-destructive/10" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>部分摘要不可用</AlertTitle><AlertDescription>{snapshot.partial_failures.map((item) => item.summary).join("；")}</AlertDescription></Alert>
               ) : null}
@@ -307,7 +203,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                 </CardHeader>
                 <CardContent className="divide-y divide-border p-0">
                   {episodes.length === 0 ? (
-                    <div className="px-6 py-16 text-center"><p className="font-medium">还没有单集</p><p className="mt-1 text-sm text-muted-foreground">创建第一集后开始导入剧本。</p></div>
+                    <div className="px-6 py-16 text-center"><p className="font-medium">尚未生成剧集</p><p className="mt-1 text-sm text-muted-foreground">确认剧本解析与分集方案后，系统将在这里生成项目剧集。</p></div>
                   ) : episodes.map((episode) => {
                     const episodeSnapshot = episodeSnapshots.get(episode.id);
                     return (
@@ -346,34 +242,9 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                   </Card>
                 </aside>
               </div>
-              <ProjectLifecyclePanel project={project} />
-              <section className="mt-7 grid gap-5" aria-label="单集设置">
-                <div>
-                  <h2 className="text-xl font-semibold">单集设置</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">编辑、排序和归档单集。</p>
-                </div>
-                {episodes.map((episode) => (
-                  <EpisodeLifecycleCard
-                    activeEpisodes={activeEpisodes}
-                    episode={episode}
-                    episodeSnapshot={episodeSnapshots.get(episode.id)}
-                    key={episode.id}
-                    project={project}
-                  />
-                ))}
-              </section>
             </div>
         )}
       </LayoutContainer>
-      {project ? (
-        <CreateEpisodeDialog
-          defaultDurationMs={project.target_duration_ms}
-          isSubmitting={createState.isLoading}
-          onOpenChange={setCreateOpen}
-          onSubmit={handleCreate}
-          open={createOpen}
-        />
-      ) : null}
     </StudioShell>
   );
 }

@@ -950,6 +950,7 @@ async def read_utf8_document_version(
     storage: MediaStorage,
     *,
     max_bytes: int,
+    allowed_mime_types: frozenset[str] | None = None,
 ) -> str:
     """Read one immutable, ready document version without granting a public URL."""
 
@@ -971,6 +972,18 @@ async def read_utf8_document_version(
             next_action="wait_for_media_probe",
             details={"probe_status": version.probe_status},
         )
+    normalized_mime_type = version.mime_type.split(";", 1)[0].strip().lower()
+    if (
+        allowed_mime_types is not None
+        and normalized_mime_type not in allowed_mime_types
+    ):
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Document MIME type is not allowed for this workflow",
+            status_code=422,
+            next_action="upload_supported_document",
+            details={"allowed_mime_types": sorted(allowed_mime_types)},
+        )
     location = await repository.find_active_location(session, version.id)
     if location is None:
         raise ApiError(
@@ -983,7 +996,7 @@ async def read_utf8_document_version(
     try:
         text, _ = await read_strict_utf8_document(
             storage.port.stream(location.object_key),
-            mime_type=version.mime_type,
+            mime_type=normalized_mime_type,
             max_bytes=max_bytes,
         )
     except MediaProbeError as error:

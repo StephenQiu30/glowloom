@@ -40,6 +40,7 @@ function mockMe(role: API.WorkspaceResponse["role"]) {
 
 describe("role-aware global navigation", () => {
   beforeEach(() => {
+    localStorage.clear();
     sessionStorage.clear();
     setAccessToken("test-access-token");
     vi.clearAllMocks();
@@ -123,5 +124,28 @@ describe("role-aware global navigation", () => {
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "前往 Lanverse" })).not.toBeInTheDocument());
     expect(trigger).toHaveFocus();
+  });
+
+  it("switches and persists the global theme with one click", async () => {
+    const user = userEvent.setup();
+    mockMe("owner");
+    render(
+      <AppProviders>
+        <StudioShell active="projects">
+          <p>项目内容</p>
+        </StudioShell>
+      </AppProviders>,
+    );
+
+    const trigger = await screen.findByRole("button", { name: "切换主题" });
+    await user.click(trigger);
+
+    await waitFor(() => expect(document.documentElement).toHaveClass("dark"));
+    expect(localStorage.getItem("lanverse-theme")).toBe("dark");
+
+    await user.click(trigger);
+    await waitFor(() => expect(document.documentElement).not.toHaveClass("dark"));
+    expect(localStorage.getItem("lanverse-theme")).toBe("light");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 });

@@ -402,21 +402,21 @@ async def project_production_snapshot(
     if not episodes:
         return ProjectProductionSnapshot(
             project_id=project.id,
-            current_stage="project_setup",
+            current_stage="script_import",
             completion=0,
             blocking_reasons=[
                 BlockingReason(
-                    code="EPISODE_MISSING",
-                    summary="项目尚未创建有效单集",
+                    code="SCRIPT_DOCUMENT_MISSING",
+                    summary="项目尚未导入剧本文档",
                     resource_type="project",
                     resource_id=project.id,
                 )
             ],
             next_actions=[
                 NextAction(
-                    code="create_episode",
-                    label="创建单集",
-                    href=f"/projects/{project.id}",
+                    code="import_script_document",
+                    label="导入并预览剧本",
+                    href=f"/projects/{project.id}#script-import",
                 )
             ],
             episodes=[],

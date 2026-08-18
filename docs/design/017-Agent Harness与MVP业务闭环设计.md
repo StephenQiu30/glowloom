@@ -14,7 +14,7 @@ MVP 采用“领域业务流 + LangGraph Agent Harness”的模式，不采用�
 
 ```text
 项目
-  → 导入 DOCX/MD/纯文本
+  → 导入 DOCX/MD
   → 文档格式校验与预览
   → 发布 ScriptRevision
   → 确定性分集规划与剧集预览
@@ -30,7 +30,7 @@ MVP 采用“领域业务流 + LangGraph Agent Harness”的模式，不采用�
 
 ### 2.1 MVP 必须完成
 
-- DOCX、Markdown 和纯文本进入同一文档导入入口；
+- DOCX 和 Markdown 进入同一文档导入入口；
 - 导入后先完成确定性格式分析并可预览，不自动创建正式业务对象；
 - ScriptRevision 作为 AI Skill 的固定输入版本；
 - `script-structure-extraction` 作为第一个受控 Skill；
@@ -130,7 +130,7 @@ START
 
 ```mermaid
 stateDiagram-v2
-    [*] --> imported: DOCX/MD/文本导入
+    [*] --> imported: DOCX/MD 导入
     imported --> preview_ready: 确定性格式分析
     preview_ready --> published: 用户确认 ScriptRevision
     published --> extracting: 启动 Skill
@@ -163,7 +163,7 @@ stateDiagram-v2
 4. 解析结果中越界的 source range、无效候选引用和重复 candidate key 必须失败。
 5. 候选审核可以接受新对象、带修改接受、关联已有对象或忽略，且并发 revision 冲突不会覆盖他人决定。
 6. Worker 重启、重复消息和重复回调不产生第二批候选、第二个 Task 或第二次审计事实。
-7. DOCX、Markdown 和纯文本经过预览后使用同一个 ScriptRevision/Extraction 流程。
+7. DOCX 和 Markdown 经过预览后使用同一个 ScriptRevision/Extraction 流程。
 8. 本机 Codex 可用时，默认使用 `codex_local` 完成结构解析；关闭本机 Codex 后可显式选择 DeepSeek 或 disabled，服务仍能完成导入预览，只有启动 AI Skill 时明确提示能力不可用。
 9. 用户确认结构后，正式场景仍保留故事节拍、人物、道具、环境、连续性和场景级生产任务建议；这些建议不会被误报为已经创建的生产任务。
 

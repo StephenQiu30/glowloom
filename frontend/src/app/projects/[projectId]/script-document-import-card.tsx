@@ -3,12 +3,14 @@
 import {
   AlertCircle,
   CheckCircle2,
-  FileCheck2,
   FileText,
   FileUp,
   LoaderCircle,
+  RotateCcw,
 } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -22,30 +24,30 @@ import {
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Label } from "@/components/ui/label";
 import {
   appApiErrorMessage,
   useCompleteMediaUploadMutation,
   useImportScriptDocumentMutation,
   useInitializeMediaUploadMutation,
   useLazyMediaVersionQuery,
+  usePreviewScriptDocumentMutation,
   useScriptDocumentsQuery,
 } from "@/lib/server-state";
 
 import { EpisodePlanWorkspace } from "./episode-plan-workspace";
 
-type ImportMode = "text" | "media";
-
 const RIGHTS_DECLARATION = "我确认拥有该剧本用于本项目制作与分析的权利";
-const DOCUMENT_MAX_BYTES = 400_000;
+const DOCX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const ACCEPTED_SCRIPT_FILES = `.docx,.md,${DOCX_MIME_TYPE},text/markdown`;
 
 const analysisLabels: Record<
   API.DocumentRevisionResponse["analysis_status"],
@@ -87,10 +89,22 @@ async function sha256Text(value: string): Promise<string> {
   return sha256(new TextEncoder().encode(value).buffer);
 }
 
-function documentMimeType(file: File): "text/plain" | "text/markdown" {
-  return file.name.toLowerCase().endsWith(".md")
-    ? "text/markdown"
-    : "text/plain";
+function documentMimeType(file: File): "text/markdown" | typeof DOCX_MIME_TYPE {
+  return file.name.toLowerCase().endsWith(".docx")
+    ? DOCX_MIME_TYPE
+    : "text/markdown";
+}
+
+function documentKind(file: File): string {
+  return file.name.toLowerCase().endsWith(".docx")
+    ? "DOCX 剧本"
+    : "Markdown 剧本";
+}
+
+function fileSize(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function sleep(milliseconds: number): Promise<void> {
@@ -101,14 +115,12 @@ export function ScriptDocumentImportCard({
   canWrite,
   language,
   projectId,
-  projectName,
   targetDurationMs,
   workspaceId,
 }: {
   canWrite: boolean;
   language: string;
   projectId: string;
-  projectName: string;
   targetDurationMs: number;
   workspaceId: string;
 }) {
@@ -116,17 +128,23 @@ export function ScriptDocumentImportCard({
   const [initializeUpload, initializeState] = useInitializeMediaUploadMutation();
   const [completeUpload, completeState] = useCompleteMediaUploadMutation();
   const [loadMediaVersion] = useLazyMediaVersionQuery();
+  const [previewDocument, previewState] = usePreviewScriptDocumentMutation();
   const [importDocument, importState] = useImportScriptDocumentMutation();
-  const [mode, setMode] = useState<ImportMode>("text");
-  const [text, setText] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [mediaVersionId, setMediaVersionId] = useState<string | null>(null);
+  const [preview, setPreview] =
+    useState<API.ScriptDocumentPreviewResponse | null>(null);
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [analysis, setAnalysis] =
     useState<API.ScriptDocumentAnalysisResponse | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const busy =
-    initializeState.isLoading || completeState.isLoading || importState.isLoading;
+  const uploadBusy =
+    initializeState.isLoading ||
+    completeState.isLoading ||
+    previewState.isLoading;
+  const busy = uploadBusy || importState.isLoading;
   const episodeMarkerCount = useMemo(
     () =>
       analysis?.blocks.filter((block) => block.kind === "episode_marker").length ??
@@ -143,20 +161,17 @@ export function ScriptDocumentImportCard({
         version.probe_status === "quarantined"
       ) {
         throw new Error(
-          version.probe_error_summary ?? "剧本文档探测失败，请检查 UTF-8 编码。",
+          version.probe_error_summary ?? "剧本文档读取失败，请检查文件格式。",
         );
       }
       await sleep(400);
     }
-    throw new Error("文件已上传，格式探测仍在进行；请稍后再次提交同一文件。");
+    throw new Error("文件已上传，格式读取仍在进行；请稍后重新预览。");
   }
 
   async function uploadDocument(selected: File): Promise<string> {
-    if (!/\.(?:txt|md)$/i.test(selected.name)) {
-      throw new Error("只接受 UTF-8 编码的 .txt 或 .md 文件。");
-    }
-    if (selected.size > DOCUMENT_MAX_BYTES) {
-      throw new Error("文件不能超过 400 KB。");
+    if (!/\.(?:docx|md)$/i.test(selected.name)) {
+      throw new Error("只接受 .docx 或 .md 剧本文件。");
     }
     const fileHash = await sha256(await selected.arrayBuffer());
     const mimeType = documentMimeType(selected);
@@ -189,66 +204,84 @@ export function ScriptDocumentImportCard({
     return completed.version.id;
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
+  function selectFile(selected: File | null): void {
+    setFile(selected);
+    setMediaVersionId(null);
+    setPreview(null);
+    setAnalysis(null);
     setActionError(null);
     setNotice(null);
-    setAnalysis(null);
+  }
+
+  function resetFile(): void {
+    selectFile(null);
+    setRightsConfirmed(false);
+    if (fileInput.current) fileInput.current.value = "";
+  }
+
+  async function createPreview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setActionError(null);
+    setNotice(null);
     if (!canWrite) {
-      setActionError("当前身份只能查看整剧文档，不能导入新原稿。");
+      setActionError("当前身份只能查看剧本文档，不能导入新原稿。");
+      return;
+    }
+    if (!file) {
+      setActionError("请选择 .docx 或 .md 剧本文件。");
       return;
     }
     if (!rightsConfirmed) {
       setActionError("请先确认剧本使用权声明。");
       return;
     }
-    const title = String(new FormData(form).get("title") ?? "").trim();
-    if (!title) {
-      setActionError("请填写剧本文档标题。");
+    try {
+      const versionId = await uploadDocument(file);
+      const result = await previewDocument({
+        projectId,
+        body: { media_version_id: versionId },
+      }).unwrap();
+      setMediaVersionId(versionId);
+      setPreview(result);
+      setNotice("文档读取完成，请确认预览内容后开始解析。");
+    } catch (error: unknown) {
+      setActionError(
+        error instanceof Error ? error.message : appApiErrorMessage(error),
+      );
+    }
+  }
+
+  async function confirmAndAnalyze(): Promise<void> {
+    setActionError(null);
+    setNotice(null);
+    if (!file || !mediaVersionId || !preview) {
+      setActionError("请先上传文件并完成内容预览。");
       return;
     }
     try {
-      let body: API.ScriptDocumentImportRequest;
-      if (mode === "text") {
-        if (!text.trim()) throw new Error("请粘贴整剧文本。");
-        const idempotencyHash = await sha256Text(
-          JSON.stringify({ mode, title, language, text, rights: RIGHTS_DECLARATION }),
-        );
-        body = {
-          input_type: "text",
-          title,
-          text,
-          media_version_id: null,
+      const idempotencyHash = await sha256Text(
+        JSON.stringify({
+          title: file.name,
           language,
-          rights_declaration: RIGHTS_DECLARATION,
-          idempotency_key: `script-document:${idempotencyHash}`,
-        };
-      } else {
-        if (!file) throw new Error("请选择 .txt 或 .md 文件。");
-        const mediaVersionId = await uploadDocument(file);
-        const idempotencyHash = await sha256Text(
-          JSON.stringify({
-            mode,
-            title,
-            language,
-            mediaVersionId,
-            rights: RIGHTS_DECLARATION,
-          }),
-        );
-        body = {
+          mediaVersionId,
+          rawHash: preview.raw_hash,
+          rights: RIGHTS_DECLARATION,
+        }),
+      );
+      const result = await importDocument({
+        projectId,
+        body: {
           input_type: "media",
-          title,
+          title: file.name,
           text: null,
           media_version_id: mediaVersionId,
           language,
           rights_declaration: RIGHTS_DECLARATION,
           idempotency_key: `script-document:${idempotencyHash}`,
-        };
-      }
-      const result = await importDocument({ projectId, body }).unwrap();
+        },
+      }).unwrap();
       setAnalysis(result);
-      setNotice("整剧原稿已保存为不可变修订，格式体检结果已生成。");
+      setNotice("剧本已固定为不可变修订，格式解析结果已生成。");
     } catch (error: unknown) {
       const apiError = error as { code?: string };
       setActionError(
@@ -263,204 +296,221 @@ export function ScriptDocumentImportCard({
 
   return (
     <>
-    <Card
-      className="mt-8"
-      aria-label="整剧导入与格式体检"
-      role="region"
-    >
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="size-5" aria-hidden="true" />整剧导入与格式体检
-        </CardTitle>
-        <CardDescription>
-          先保存整部原稿和精确字符范围，不会在这一阶段自动创建单集或分镜。
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-7 pt-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <form className="grid gap-5" onSubmit={submit}>
-          <div className="grid gap-2">
-            <Label htmlFor="scriptDocumentTitle">文档标题</Label>
-            <Input
-              defaultValue={`${projectName} · 整剧原稿`}
-              disabled={!canWrite || busy}
-              id="scriptDocumentTitle"
-              maxLength={120}
-              name="title"
-              required
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="scriptDocumentMode">导入方式</Label>
-            <Select
-              disabled={!canWrite || busy}
-              onValueChange={(value) => setMode(value as ImportMode)}
-              value={mode}
-            >
-              <SelectTrigger className="w-full" id="scriptDocumentMode">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="text">粘贴整剧文本</SelectItem>
-                <SelectItem value="media">上传 UTF-8 .txt / .md</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {mode === "text" ? (
-            <div className="grid gap-2">
-              <Label htmlFor="scriptDocumentText">整剧文本</Label>
-              <Textarea
-                className="min-h-64 resize-y font-mono text-sm leading-6"
-                disabled={!canWrite || busy}
-                id="scriptDocumentText"
-                maxLength={100_000}
-                placeholder={"第一集\n场景1：控制室，夜\n角色：对白……"}
-                required
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                保留原始换行；最多 100,000 个 Unicode 字符。
-              </p>
-            </div>
-          ) : (
+      <Card
+        aria-label="整剧导入与格式体检"
+        className="mt-8 scroll-mt-32"
+        id="script-import"
+        role="region"
+      >
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="size-5" aria-hidden="true" />
+            整剧导入与格式体检
+          </CardTitle>
+          <CardDescription>
+            上传 DOCX 或 Markdown 原稿，先确认内容预览，再固定版本并进入剧本解析。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-7 pt-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <form className="grid gap-5" onSubmit={createPreview}>
             <div className="grid gap-2">
               <Label htmlFor="scriptDocumentFile">剧本文档</Label>
               <Input
-                accept=".txt,.md,text/plain,text/markdown"
-                className="h-auto py-2 file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium"
+                accept={ACCEPTED_SCRIPT_FILES}
                 disabled={!canWrite || busy}
                 id="scriptDocumentFile"
+                ref={fileInput}
                 type="file"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
               />
               <p className="text-xs text-muted-foreground">
-                严格 UTF-8、无 BOM，最多 400 KB；上传后固定到不可变媒体版本。
+                支持 .docx 和 .md；文件容量由对象存储安全策略校验，不设置剧本业务上限。
               </p>
             </div>
-          )}
-          <div className="flex items-start gap-3 bg-muted/45 p-4">
-            <Checkbox
-              checked={rightsConfirmed}
-              disabled={!canWrite || busy}
-              id="scriptDocumentRights"
-              onCheckedChange={(checked) => setRightsConfirmed(checked === true)}
-            />
-            <Label className="font-normal leading-6" htmlFor="scriptDocumentRights">
-              {RIGHTS_DECLARATION}
-            </Label>
-          </div>
-          {actionError ? (
-            <Alert variant="destructive">
-              <AlertCircle aria-hidden="true" />
-              <AlertTitle>导入未完成</AlertTitle>
-              <AlertDescription>{actionError}</AlertDescription>
-            </Alert>
-          ) : null}
-          {notice ? (
-            <Alert className="border-0 bg-muted/50" role="status">
-              <CheckCircle2 aria-hidden="true" />
-              <AlertTitle>格式体检已完成</AlertTitle>
-              <AlertDescription>{notice}</AlertDescription>
-            </Alert>
-          ) : null}
-          <Button disabled={!canWrite || busy} type="submit">
-            {busy ? (
-              <LoaderCircle className="animate-spin" aria-hidden="true" />
-            ) : mode === "media" ? (
-              <FileUp aria-hidden="true" />
-            ) : (
-              <FileCheck2 aria-hidden="true" />
-            )}
-            {mode === "media" ? "上传并分析" : "导入并分析"}
-          </Button>
-        </form>
 
-        <aside className="grid content-start gap-5">
-          <div className="bg-muted/45 p-5">
-            <p className="text-sm font-medium">已导入整剧文档</p>
-            {documents.isLoading ? (
-              <p className="mt-2 text-sm text-muted-foreground">正在读取……</p>
-            ) : documents.error ? (
-              <p className="mt-2 text-sm text-destructive">
-                {appApiErrorMessage(documents.error)}
-              </p>
-            ) : documents.data?.items.length ? (
-              <div className="mt-3 grid gap-3">
-                {documents.data.items.map((document) => (
-                  <div className="bg-background p-3" key={document.id}>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="truncate text-sm font-medium">{document.title}</p>
-                      <Badge variant="outline">
-                        {document.source_type === "media" ? "文件" : "粘贴"}
-                      </Badge>
-                    </div>
+            {file ? (
+              <Item variant="outline">
+                <ItemMedia variant="icon">
+                  <FileText className="size-5" aria-hidden="true" />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle>{file.name}</ItemTitle>
+                  <ItemDescription>
+                    {documentKind(file)} · {fileSize(file.size)}
+                  </ItemDescription>
+                </ItemContent>
+                <Badge variant="outline">{preview ? "已读取" : "等待预览"}</Badge>
+              </Item>
+            ) : null}
+
+            <div className="flex items-start gap-3 bg-muted/45 p-4">
+              <Checkbox
+                checked={rightsConfirmed}
+                disabled={!canWrite || busy}
+                id="scriptDocumentRights"
+                onCheckedChange={(checked) => setRightsConfirmed(checked === true)}
+              />
+              <Label className="font-normal leading-6" htmlFor="scriptDocumentRights">
+                {RIGHTS_DECLARATION}
+              </Label>
+            </div>
+
+            {actionError ? (
+              <Alert variant="destructive">
+                <AlertCircle aria-hidden="true" />
+                <AlertTitle>操作未完成</AlertTitle>
+                <AlertDescription>{actionError}</AlertDescription>
+              </Alert>
+            ) : null}
+            {notice ? (
+              <Alert className="border-0 bg-muted/50" role="status">
+                <CheckCircle2 aria-hidden="true" />
+                <AlertTitle>{analysis ? "格式解析已完成" : "预览已就绪"}</AlertTitle>
+                <AlertDescription>{notice}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            {!preview ? (
+              <Button
+                disabled={!canWrite || uploadBusy || !file || !rightsConfirmed}
+                type="submit"
+              >
+                {uploadBusy ? (
+                  <LoaderCircle className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <FileUp aria-hidden="true" />
+                )}
+                上传并预览
+              </Button>
+            ) : (
+              <section
+                aria-label="剧本内容预览"
+                className="grid gap-4 bg-muted/35 p-5"
+                role="region"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-medium">剧本内容预览</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {document.language} · revision {document.revision}
+                      {preview.codepoint_count.toLocaleString()} 个字符 · 尚未创建剧集
                     </p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">尚未导入整剧原稿。</p>
+                  <Badge variant="outline">等待确认</Badge>
+                </div>
+                <div className="max-h-[520px] overflow-auto rounded-lg border bg-background p-5 text-sm leading-7 whitespace-pre-wrap [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:mb-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:my-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:my-3 [&_h3]:text-lg [&_h3]:font-medium [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:my-3 [&_pre]:overflow-auto [&_pre]:bg-muted [&_pre]:p-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:bg-muted [&_th]:p-2">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {preview.raw_text}
+                  </ReactMarkdown>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button disabled={busy} onClick={resetFile} type="button" variant="outline">
+                    <RotateCcw aria-hidden="true" />
+                    重新选择
+                  </Button>
+                  <Button
+                    disabled={!canWrite || busy || Boolean(analysis)}
+                    onClick={confirmAndAnalyze}
+                    type="button"
+                  >
+                    {importState.isLoading ? (
+                      <LoaderCircle className="animate-spin" aria-hidden="true" />
+                    ) : (
+                      <CheckCircle2 aria-hidden="true" />
+                    )}
+                    {analysis ? "剧本解析已完成" : "确认剧本并开始解析"}
+                  </Button>
+                </div>
+              </section>
             )}
-          </div>
+          </form>
 
-          {analysis ? (
+          <aside className="grid content-start gap-5">
             <div className="bg-muted/45 p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="font-medium">最近一次格式体检</p>
-                <Badge
-                  variant={
-                    analysis.revision.analysis_status === "rejected"
-                      ? "destructive"
-                      : "outline"
-                  }
-                >
-                  {analysisLabels[analysis.revision.analysis_status]}
-                </Badge>
-              </div>
-              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-background p-3">
-                  <dt className="text-muted-foreground">集标记</dt>
-                  <dd className="mt-1 text-lg font-semibold">{episodeMarkerCount}</dd>
-                </div>
-                <div className="bg-background p-3">
-                  <dt className="text-muted-foreground">结构块</dt>
-                  <dd className="mt-1 text-lg font-semibold">
-                    {analysis.blocks.length}
-                  </dd>
-                </div>
-              </dl>
-              {analysis.issues.length ? (
-                <div className="mt-4 grid gap-3">
-                  {analysis.issues.map((issue) => (
-                    <div className="bg-muted p-3" key={issue.id}>
-                      <p className="text-sm font-medium">
-                        {issueLabels[issue.code] ?? issue.code} · 第 {issue.line_number} 行，第 {issue.column_number} 列
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        {nextActionLabels[issue.next_action] ?? issue.next_action}
-                      </p>
-                    </div>
+              <p className="text-sm font-medium">已导入剧本文档</p>
+              {documents.isLoading ? (
+                <p className="mt-2 text-sm text-muted-foreground">正在读取……</p>
+              ) : documents.error ? (
+                <p className="mt-2 text-sm text-destructive">
+                  {appApiErrorMessage(documents.error)}
+                </p>
+              ) : documents.data?.items.length ? (
+                <div className="mt-3 grid gap-3">
+                  {documents.data.items.map((document) => (
+                    <Item key={document.id} size="sm" variant="outline">
+                      <ItemContent>
+                        <ItemTitle>{document.title}</ItemTitle>
+                        <ItemDescription>
+                          {document.language} · revision {document.revision}
+                        </ItemDescription>
+                      </ItemContent>
+                      <Badge variant="outline">文件</Badge>
+                    </Item>
                   ))}
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  集号连续且没有阻断问题；下一阶段可生成分集计划。
+                <p className="mt-2 text-sm text-muted-foreground">
+                  尚未导入剧本原稿。
                 </p>
               )}
             </div>
-          ) : null}
-        </aside>
-      </CardContent>
-    </Card>
-    {analysis ? (
-      <EpisodePlanWorkspace
-        analysis={analysis}
-        canWrite={canWrite}
-        targetDurationMs={targetDurationMs}
-      />
-    ) : null}
+
+            {analysis ? (
+              <div className="bg-muted/45 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="font-medium">最近一次格式解析</p>
+                  <Badge
+                    variant={
+                      analysis.revision.analysis_status === "rejected"
+                        ? "destructive"
+                        : "outline"
+                    }
+                  >
+                    {analysisLabels[analysis.revision.analysis_status]}
+                  </Badge>
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="bg-background p-3">
+                    <dt className="text-muted-foreground">集标记</dt>
+                    <dd className="mt-1 text-lg font-semibold">{episodeMarkerCount}</dd>
+                  </div>
+                  <div className="bg-background p-3">
+                    <dt className="text-muted-foreground">结构块</dt>
+                    <dd className="mt-1 text-lg font-semibold">
+                      {analysis.blocks.length}
+                    </dd>
+                  </div>
+                </dl>
+                {analysis.issues.length ? (
+                  <div className="mt-4 grid gap-3">
+                    {analysis.issues.map((issue) => (
+                      <div className="bg-muted p-3" key={issue.id}>
+                        <p className="text-sm font-medium">
+                          {issueLabels[issue.code] ?? issue.code} · 第 {issue.line_number}
+                          行，第 {issue.column_number} 列
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          {nextActionLabels[issue.next_action] ?? issue.next_action}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    集号连续且没有阻断问题；下一阶段可生成分集计划。
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </aside>
+        </CardContent>
+      </Card>
+      {analysis ? (
+        <EpisodePlanWorkspace
+          analysis={analysis}
+          canWrite={canWrite}
+          targetDurationMs={targetDurationMs}
+        />
+      ) : null}
     </>
   );
 }

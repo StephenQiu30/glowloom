@@ -26,6 +26,8 @@ from app.modules.scripts.documents.schemas import (
     PaginatedScriptDocuments,
     ScriptDocumentAnalysisResponse,
     ScriptDocumentImportRequest,
+    ScriptDocumentPreviewRequest,
+    ScriptDocumentPreviewResponse,
     ScriptDocumentResponse,
 )
 from app.modules.scripts.models import (
@@ -33,6 +35,13 @@ from app.modules.scripts.models import (
     FormatIssue,
     NarrativeBlock,
     ScriptDocument,
+)
+
+SCRIPT_DOCUMENT_MIME_TYPES = frozenset(
+    {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/markdown",
+    }
 )
 
 
@@ -208,6 +217,34 @@ def _conflicting_idempotency() -> ApiError:
     )
 
 
+async def preview_document(
+    session: AsyncSession,
+    claims: AccessTokenClaims,
+    project_id: UUID,
+    request: ScriptDocumentPreviewRequest,
+    storage: MediaStorage,
+    settings: Settings,
+) -> ScriptDocumentPreviewResponse:
+    async with session.begin():
+        project = await lock_active_project_for_content_write(
+            session, claims, project_id
+        )
+        raw_text = await read_utf8_document_version(
+            session,
+            project.workspace_id,
+            request.media_version_id,
+            storage,
+            max_bytes=settings.media_max_upload_bytes,
+            allowed_mime_types=SCRIPT_DOCUMENT_MIME_TYPES,
+        )
+    return ScriptDocumentPreviewResponse(
+        media_version_id=request.media_version_id,
+        raw_text=raw_text,
+        raw_hash=hashlib.sha256(raw_text.encode("utf-8")).hexdigest(),
+        codepoint_count=len(raw_text),
+    )
+
+
 async def import_document(
     session: AsyncSession,
     claims: AccessTokenClaims,
@@ -248,6 +285,7 @@ async def import_document(
                 request.media_version_id,
                 storage,
                 max_bytes=settings.media_max_upload_bytes,
+                allowed_mime_types=SCRIPT_DOCUMENT_MIME_TYPES,
             )
         raw_hash = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
         analysis = analyze_document(raw_text)

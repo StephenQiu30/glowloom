@@ -131,8 +131,8 @@
     @apply font-sans;
     }
   ::selection {
-    background: color-mix(in oklab, #000 16%, transparent);
-    color: #000;
+    background: color-mix(in oklab, var(--foreground) 18%, transparent);
+    color: var(--foreground);
   }
 }
 

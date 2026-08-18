@@ -19,7 +19,7 @@ import { cn } from "@/lib/class-names";
 import { type EpisodePanel, episodePanels } from "@/app/studio/[episodeId]/episode-studio-model";
 
 const projectStageLabels: Record<API.ProjectProductionSnapshot["current_stage"], string> = {
-  project_setup: "项目设置",
+  project_setup: "剧本导入",
   script_import: "剧本导入",
   structure_review: "结构确认",
   asset_preparation: "资产准备",
@@ -220,7 +220,7 @@ export function ProductionWorkflowSidebar({
             <div className="mt-3 rounded-xl border border-dashed px-3 py-4 text-sm text-muted-foreground">
               <p>选择剧集后进入剧本、资产、分镜和任务流程。</p>
               {episodes.length === 0 ? (
-                <span className="mt-2 inline-flex items-center gap-1 text-xs"><CheckCircle2 className="size-3.5" aria-hidden="true" />等待创建第一集</span>
+                <span className="mt-2 inline-flex items-center gap-1 text-xs"><CheckCircle2 className="size-3.5" aria-hidden="true" />等待导入整剧剧本</span>
               ) : (
                 <span className="mt-2 inline-flex items-center gap-1 text-xs">从上方选择剧集<ArrowRight className="size-3.5" aria-hidden="true" /></span>
               )}

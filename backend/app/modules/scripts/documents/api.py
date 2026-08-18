@@ -19,9 +19,35 @@ from app.modules.scripts.documents.schemas import (
     PaginatedScriptDocuments,
     ScriptDocumentAnalysisResponse,
     ScriptDocumentImportRequest,
+    ScriptDocumentPreviewRequest,
+    ScriptDocumentPreviewResponse,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["script-documents"])
+
+
+@router.post(
+    "/projects/{project_id}/script-import-previews",
+    response_model=ApiResponse[ScriptDocumentPreviewResponse],
+)
+async def preview_document(
+    project_id: UUID,
+    payload: ScriptDocumentPreviewRequest,
+    claims: Annotated[AccessTokenClaims, Depends(get_access_token_claims)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+    storage: Annotated[MediaStorage, Depends(get_media_storage)],
+    settings: Annotated[Settings, Depends(get_request_settings)],
+) -> ApiResponse[ScriptDocumentPreviewResponse]:
+    return ApiResponse(
+        data=await service.preview_document(
+            session,
+            claims,
+            project_id,
+            payload,
+            storage,
+            settings,
+        )
+    )
 
 
 @router.post(

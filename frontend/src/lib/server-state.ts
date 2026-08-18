@@ -78,6 +78,7 @@ import {
 import {
   importDocumentApiV1ProjectsProjectIdScriptImportsPost,
   listDocumentsApiV1ProjectsProjectIdScriptDocumentsGet,
+  previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost,
 } from "@/api/scriptDocuments";
 import {
   archiveEpisodeApiV1EpisodesEpisodeIdArchivePost,
@@ -584,6 +585,18 @@ export const appApi = createApi({
       providesTags: (_result, _error, projectId) => [
         { type: "ScriptDocuments", id: projectId },
       ],
+    }),
+    previewScriptDocument: builder.mutation<
+      API.ScriptDocumentPreviewResponse,
+      { projectId: string; body: API.ScriptDocumentPreviewRequest }
+    >({
+      queryFn: ({ projectId, body }) =>
+        runRequest(() =>
+          previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost(
+            { project_id: projectId },
+            body,
+          ),
+        ),
     }),
     importScriptDocument: builder.mutation<
       API.ScriptDocumentAnalysisResponse,
@@ -2483,6 +2496,7 @@ export const {
   useExtractionCandidatesQuery,
   useImportScriptMutation,
   useImportScriptDocumentMutation,
+  usePreviewScriptDocumentMutation,
   useLazyEpisodePlanQuery,
   useCreateEpisodePlanMutation,
   useRenameEpisodeProposalMutation,

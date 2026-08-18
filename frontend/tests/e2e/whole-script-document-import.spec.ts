@@ -4,8 +4,6 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { registerUser } from "./auth-support";
-import { chooseOption } from "./select-support";
-
 test("上传整剧样本并恢复确定性格式体检结果", async ({ page }) => {
   test.setTimeout(120_000);
   const unique = `${Date.now()}-${test.info().workerIndex}`;
@@ -31,7 +29,6 @@ test("上传整剧样本并恢复确定性格式体检结果", async ({ page }) 
   const importCard = page.getByRole("region", {
     name: "整剧导入与格式体检",
   });
-  await chooseOption(importCard.getByLabel("导入方式"), "上传 UTF-8 .txt / .md");
   await importCard.getByLabel("剧本文档").setInputFiles({
     name: "golden-candidate.md",
     mimeType: "text/markdown",
@@ -40,23 +37,33 @@ test("上传整剧样本并恢复确定性格式体检结果", async ({ page }) 
   await importCard
     .getByLabel("我确认拥有该剧本用于本项目制作与分析的权利")
     .check();
-  await importCard.getByRole("button", { name: "上传并分析" }).click();
+  await importCard.getByRole("button", { name: "上传并预览" }).click();
+
+  const preview = importCard.getByRole("region", { name: "剧本内容预览" });
+  await expect(preview).toContainText(sample.full_script.slice(0, 24), {
+    timeout: 30_000,
+  });
+  await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
+
+  await importCard
+    .getByRole("button", { name: "确认剧本并开始解析" })
+    .click();
 
   await expect(importCard.getByRole("status")).toContainText(
-    "整剧原稿已保存为不可变修订",
+    "剧本已固定为不可变修订",
     { timeout: 30_000 },
   );
   await expect(importCard.getByText("可确定性分集")).toBeVisible();
   await expect(importCard.getByText("集标记").locator("..")).toContainText("5");
   await expect(importCard.getByText("集号连续且没有阻断问题")).toBeVisible();
-  await expect(importCard.getByText(`${projectName} · 整剧原稿`)).toBeVisible();
+  await expect(importCard.getByText("golden-candidate.md")).toBeVisible();
   await expect(importCard.getByText("文件", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
 
   await page.reload();
   await expect(
     page.getByRole("region", { name: "整剧导入与格式体检" }).getByText(
-      `${projectName} · 整剧原稿`,
+      "golden-candidate.md",
     ),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);

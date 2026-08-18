@@ -232,7 +232,7 @@ export function ScriptWorkspace({
             <div className="grid gap-2">
               <Label htmlFor="scriptBody">剧本文本</Label>
               <Textarea
-                className="min-h-[360px] w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm leading-7 outline-none transition focus:border-ring focus:ring-3 focus:ring-ring/20"
+                className="min-h-[360px] w-full resize-y rounded-xl border bg-background px-4 py-3 font-mono text-sm leading-7 outline-none transition focus:border-ring focus:ring-3 focus:ring-ring/20"
                 id="scriptBody"
                 name="body"
                 required
@@ -308,7 +308,7 @@ export function ScriptWorkspace({
             <Label className="sr-only" htmlFor="currentScriptBody">剧本文本</Label>
             <Textarea
               aria-label="当前剧本文本"
-              className="min-h-[400px] w-full resize-y rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 font-mono text-sm leading-7 outline-none transition focus:border-ring focus:bg-white focus:ring-3 focus:ring-ring/20"
+              className="min-h-[400px] w-full resize-y rounded-xl border bg-muted/40 px-4 py-3 font-mono text-sm leading-7 outline-none transition focus:border-ring focus:bg-background focus:ring-3 focus:ring-ring/20"
               id="currentScriptBody"
               maxLength={20_000}
               value={editorBody}

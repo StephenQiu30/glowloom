@@ -307,7 +307,7 @@ async def test_document_import_is_concurrency_safe_and_cross_workspace_hidden(
 
 
 @pytest.mark.asyncio
-async def test_ready_utf8_document_media_is_bounded_and_imported_by_fixed_version(
+async def test_ready_markdown_is_previewed_before_importing_fixed_version(
     app: FastAPI,
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
@@ -349,6 +349,24 @@ async def test_ready_utf8_document_media_is_bounded_and_imported_by_fixed_versio
         assert version is not None
         version.probe_status = "ready"
 
+    previewed = await client.post(
+        f"/api/v1/projects/{project['id']}/script-import-previews",
+        headers=headers,
+        json={"media_version_id": media_version_id},
+    )
+
+    assert previewed.status_code == 200
+    assert previewed.json()["data"] == {
+        "media_version_id": media_version_id,
+        "raw_text": body.decode(),
+        "raw_hash": hashlib.sha256(body).hexdigest(),
+        "codepoint_count": len(body.decode()),
+    }
+    async with session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(ScriptDocument)) == 0
+        assert await session.scalar(select(func.count()).select_from(DocumentRevision)) == 0
+        assert await session.scalar(select(func.count()).select_from(Episode)) == 0
+
     imported = await client.post(
         f"/api/v1/projects/{project['id']}/script-imports",
         headers=headers,
@@ -369,3 +387,59 @@ async def test_ready_utf8_document_media_is_bounded_and_imported_by_fixed_versio
     assert result["revision"]["source_media_version_id"] == media_version_id
     assert result["revision"]["raw_text"] == body.decode()
     assert result["revision"]["analysis_status"] == "deterministic"
+
+
+@pytest.mark.asyncio
+async def test_script_preview_rejects_plain_text_media(
+    app: FastAPI,
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    storage = MemoryDocumentStorage()
+    app.dependency_overrides[get_media_storage] = lambda: MediaStorage(
+        port=storage,
+        profile="memory",
+        bucket="documents",
+    )
+    headers, workspace_id, project = await _project(
+        client, email="whole-script-plain-text@example.com"
+    )
+    body = "第一集\n纯文本不再作为项目剧本入口。".encode()
+    initialized = await client.post(
+        "/api/v1/media/uploads",
+        headers=headers,
+        json={
+            "workspace_id": workspace_id,
+            "kind": "document",
+            "filename": "legacy-script.txt",
+            "size_bytes": len(body),
+            "mime_type": "text/plain",
+            "sha256": hashlib.sha256(body).hexdigest(),
+            "idempotency_key": "legacy-script-upload",
+        },
+    )
+    assert initialized.status_code == 201
+    storage.objects[storage.upload_keys[-1]] = (body, "text/plain")
+    completed = await client.post(
+        f"/api/v1/media/uploads/{initialized.json()['data']['upload_session']['id']}/complete",
+        headers=headers,
+        json={},
+    )
+    media_version_id = completed.json()["data"]["version"]["id"]
+    async with session_factory.begin() as session:
+        version = await session.get(MediaVersion, UUID(media_version_id))
+        assert version is not None
+        version.probe_status = "ready"
+
+    previewed = await client.post(
+        f"/api/v1/projects/{project['id']}/script-import-previews",
+        headers=headers,
+        json={"media_version_id": media_version_id},
+    )
+
+    assert previewed.status_code == 422
+    assert previewed.json()["error"]["code"] == "validation_failed"
+    assert previewed.json()["error"]["details"]["allowed_mime_types"] == [
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/markdown",
+    ]

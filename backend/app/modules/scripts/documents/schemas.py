@@ -117,6 +117,19 @@ class ScriptDocumentAnalysisResponse(BaseModel):
     issues: list[FormatIssueResponse]
 
 
+class ScriptDocumentPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    media_version_id: UUID
+
+
+class ScriptDocumentPreviewResponse(BaseModel):
+    media_version_id: UUID
+    raw_text: str
+    raw_hash: str
+    codepoint_count: int
+
+
 class PaginatedScriptDocuments(BaseModel):
     items: list[ScriptDocumentResponse]
     total: int
