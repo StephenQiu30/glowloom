@@ -29,13 +29,23 @@ test("审阅五集计划后原子创建并批量发布单集剧本", async ({ pa
   const importCard = page.getByRole("region", {
     name: "整剧导入与格式体检",
   });
-  await importCard.getByLabel("整剧文本").fill(fixture.full_script);
+  await importCard.getByLabel("剧本文档").setInputFiles({
+    name: "golden-candidate.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(fixture.full_script, "utf8"),
+  });
   await importCard
     .getByLabel("我确认拥有该剧本用于本项目制作与分析的权利")
     .check();
-  await importCard.getByRole("button", { name: "导入并分析" }).click();
+  await importCard.getByRole("button", { name: "上传并预览" }).click();
+  await expect(
+    importCard.getByRole("region", { name: "剧本内容预览" }),
+  ).toContainText(fixture.full_script.slice(0, 24));
+  await importCard
+    .getByRole("button", { name: "确认剧本并开始解析" })
+    .click();
   await expect(importCard.getByRole("status")).toContainText(
-    "整剧原稿已保存为不可变修订",
+    "剧本已固定为不可变修订",
   );
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
 

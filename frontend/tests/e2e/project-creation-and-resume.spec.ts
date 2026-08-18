@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { registerUser } from "./auth-support";
 
-test("首次登录后创建项目和单集并恢复服务端事实", async ({ page }) => {
+test("首次登录后创建项目并恢复项目工作流事实", async ({ page }) => {
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const email = `creator-${unique}@example.com`;
   const projectName = `海边来信-${unique}`;
@@ -25,19 +25,16 @@ test("首次登录后创建项目和单集并恢复服务端事实", async ({ pa
   await projectLink.click();
 
   await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
-  await page
-    .getByRole("button", { name: /创建(?:第一集|单集)/ })
-    .click();
-  await page.getByLabel("单集名称").fill("第一集");
-  await page.getByRole("button", { name: "确认创建" }).click();
-
-  await expect(page.getByRole("link", { name: "进入第一集", exact: true })).toBeVisible();
-  await expect(page.getByText("导入剧本", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "整剧导入与格式体检" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "上传并预览" })).toBeDisabled();
 
   await page.reload();
   await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
-  await expect(page.getByRole("link", { name: "进入第一集", exact: true })).toBeVisible();
-  await expect(page.getByText("导入剧本", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "整剧导入与格式体检" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "验收创作者" }).click();
   await page.getByRole("menuitem", { name: "退出登录" }).click();

@@ -56,15 +56,16 @@ test("上传整剧样本并恢复确定性格式体检结果", async ({ page }) 
   await expect(importCard.getByText("可确定性分集")).toBeVisible();
   await expect(importCard.getByText("集标记").locator("..")).toContainText("5");
   await expect(importCard.getByText("集号连续且没有阻断问题")).toBeVisible();
-  await expect(importCard.getByText("golden-candidate.md")).toBeVisible();
+  await expect(importCard.getByText("golden-candidate.md").first()).toBeVisible();
   await expect(importCard.getByText("文件", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
 
   await page.reload();
   await expect(
-    page.getByRole("region", { name: "整剧导入与格式体检" }).getByText(
-      "golden-candidate.md",
-    ),
+    page
+      .getByRole("region", { name: "整剧导入与格式体检" })
+      .getByText("golden-candidate.md")
+      .first(),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
 });
