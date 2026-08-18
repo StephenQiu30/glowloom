@@ -400,6 +400,16 @@ describe("真实项目生产入口", () => {
     );
 
     expect(await screen.findByRole("heading", { name: project.name })).toBeInTheDocument();
+    const globalHeader = screen.getByRole("banner", { name: "Lanverse 全局页眉" });
+    const productionFlow = within(globalHeader).getByLabelText("制作进度");
+    expect(within(globalHeader).getByText("当前项目")).toBeInTheDocument();
+    expect(within(productionFlow).getByText("剧本解析")).toHaveAttribute(
+      "aria-current",
+      "step",
+    );
+    for (const stage of ["资产", "分镜", "生成", "审核", "交付"]) {
+      expect(within(productionFlow).getByText(stage)).toBeInTheDocument();
+    }
     expect(screen.queryByText("预算与生命周期")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "更新预算" })).not.toBeInTheDocument();
     expect(screen.getAllByText("单集尚未导入剧本").length).toBeGreaterThan(0);
