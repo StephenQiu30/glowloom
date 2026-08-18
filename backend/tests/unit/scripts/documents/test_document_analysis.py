@@ -102,6 +102,18 @@ def test_line_taxonomy_preserves_separators_and_does_not_use_order_as_identity()
     ]
 
 
+def test_i_e_scene_heading_is_recognized_for_script_chunk_boundaries() -> None:
+    analysis = analyze_document(
+        "EPISODE 1\nI/E. CHILDREN'S CABIN / SHAFT – DAY\nA door opens."
+    )
+
+    assert [block.kind for block in analysis.blocks] == [
+        "episode_marker",
+        "scene_heading",
+        "action",
+    ]
+
+
 def test_bom_is_precisely_reported_without_losing_the_first_marker() -> None:
     text = "\ufeff第一集\n正文。"
 
@@ -117,16 +129,15 @@ def test_bom_is_precisely_reported_without_losing_the_first_marker() -> None:
     assert analysis.markers[0].start_codepoint == 1
 
 
-def test_more_than_ten_explicit_episodes_is_rejected_before_materialization() -> None:
+def test_explicit_episode_count_is_not_limited_by_an_import_cap() -> None:
     text = "\n".join(
         part
-        for number in range(1, 12)
+        for number in range(1, 102)
         for part in (f"第{number}集", f"第{number}集的正文。")
     )
 
     analysis = analyze_document(text)
 
-    assert analysis.status == "rejected"
-    assert [marker.episode_number for marker in analysis.markers] == list(range(1, 12))
-    assert [issue.code for issue in analysis.issues] == ["episode_limit_exceeded"]
-    assert analysis.issues[0].next_action == "reduce_episode_count"
+    assert analysis.status == "deterministic"
+    assert [marker.episode_number for marker in analysis.markers] == list(range(1, 102))
+    assert analysis.issues == ()

@@ -2158,48 +2158,66 @@ async def get_asset_bible(
 
 
 def _candidate_spec(command: AssetCandidateCommand) -> AssetSpec:
+    details = command.details or {}
+
+    def text(key: str, fallback: str = "") -> str:
+        value = details.get(key)
+        return value if isinstance(value, str) else fallback
+
+    def strings(key: str) -> list[str]:
+        value = details.get(key)
+        if not isinstance(value, list):
+            return []
+        return [
+            item for item in cast(list[object], value) if isinstance(item, str)
+        ]
+
     payloads: dict[str, dict[str, object]] = {
         "character": {
             "kind": "character",
             "identity": command.name,
-            "appearance": command.description,
+            "appearance": text("appearance", command.description),
             "age_impression": "",
-            "temperament": [],
+            "temperament": strings("temperament"),
+            "goals": strings("goals"),
+            "relationships": strings("relationships"),
+            "arc_summary": text("arc_summary"),
+            "voice_profile": text("voice_profile"),
         },
         "location": {
             "kind": "location",
-            "spatial_description": command.description,
-            "time_weather": "",
-            "visual_elements": [],
-            "lighting": "",
+            "spatial_description": text("spatial_description", command.description),
+            "time_weather": text("time_weather"),
+            "visual_elements": strings("visual_elements"),
+            "lighting": text("lighting"),
         },
         "prop": {
             "kind": "prop",
-            "appearance": command.description,
-            "material": "",
-            "usage_context": "",
+            "appearance": text("appearance", command.description),
+            "material": text("material"),
+            "usage_context": text("usage_context"),
             "holder_character_id": None,
         },
         "costume": {
             "kind": "costume",
-            "appearance": command.description,
-            "material": "",
-            "usage_context": "",
+            "appearance": text("appearance", command.description),
+            "material": text("material"),
+            "usage_context": text("usage_context"),
             "wearer_character_id": None,
         },
         "visual_style": {
             "kind": "visual_style",
-            "visual_language": command.description,
-            "palette": "",
-            "lighting_language": "",
-            "negative_constraints": [],
+            "visual_language": text("visual_language", command.description),
+            "palette": text("palette"),
+            "lighting_language": text("lighting_language"),
+            "negative_constraints": strings("negative_constraints"),
         },
         "voice": {
             "kind": "voice",
             "source_kind": None,
-            "language": "",
-            "performance_traits": [],
-            "allowed_usage": [],
+            "language": text("language"),
+            "performance_traits": strings("performance_traits"),
+            "allowed_usage": strings("allowed_usage"),
         },
     }
     return parse_asset_spec(command.kind, payloads[command.kind])
@@ -2247,7 +2265,7 @@ async def create_or_link_candidate(
         kind=command.kind,
         name=command.name.strip(),
         normalized_name=normalized_name,
-        aliases=[],
+        aliases=list(command.aliases),
         tags=["script_candidate"],
         status="active",
         availability="enabled",

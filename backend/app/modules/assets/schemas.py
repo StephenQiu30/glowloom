@@ -30,6 +30,10 @@ class CharacterSpec(CommandModel):
     appearance: str = Field(default="", max_length=4000)
     age_impression: str = Field(default="", max_length=200)
     temperament: list[str] = Field(default_factory=list, max_length=20)
+    goals: list[str] = Field(default_factory=list, max_length=50)
+    relationships: list[str] = Field(default_factory=list, max_length=100)
+    arc_summary: str = Field(default="", max_length=4000)
+    voice_profile: str = Field(default="", max_length=1000)
 
 
 class LocationSpec(CommandModel):

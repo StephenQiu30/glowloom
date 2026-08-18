@@ -20,11 +20,17 @@ from app.modules.scripts.contracts import (
     ScriptVersionSnapshot,
     StoryboardNarrativeSnapshot,
 )
+from app.modules.scripts.documents import analyze_document
 from app.modules.scripts.extractions.ports import (
     ScriptExtractionProviderError,
     ScriptStructureExtractor,
 )
-from app.modules.scripts.extractions.schemas import ScriptExtractionResult
+from app.modules.scripts.extractions.schemas import (
+    ContinuityCandidateProposal,
+    DialogueCandidateProposal,
+    ScriptExtractionResult,
+    ShotCandidateProposal,
+)
 from app.modules.scripts.extractions.service import (
     count_asset_candidate_decisions,
     get_script_extraction_input,
@@ -61,6 +67,7 @@ from app.modules.scripts.versions.service import (
 __all__ = [
     "AdaptationInput",
     "AdaptationInputChanged",
+    "analyze_document",
     "count_asset_candidate_decisions",
     "record_extraction_result",
     "ConfirmedStructureReference",
@@ -69,6 +76,8 @@ __all__ = [
     "NarrativeDependencySnapshot",
     "StoryboardNarrativeSnapshot",
     "ConfirmedShotCandidateReference",
+    "ContinuityCandidateProposal",
+    "DialogueCandidateProposal",
     "count_episode_script_versions",
     "EpisodePlanner",
     "EpisodePlanningInput",
@@ -79,6 +88,7 @@ __all__ = [
     "ScriptExtractionInput",
     "ScriptExtractionProviderError",
     "ScriptExtractionResult",
+    "ShotCandidateProposal",
     "ScriptAdaptationProviderError",
     "ScriptAdaptationProviderResult",
     "ScriptProductionSummary",

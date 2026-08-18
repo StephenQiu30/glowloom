@@ -105,7 +105,7 @@ class EpisodeBatchMaterializeCommand(BaseModel):
     project_id: UUID
     expected_project_revision: int = Field(ge=1)
     expected_active_order_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    items: list[EpisodeBatchItem] = Field(min_length=1, max_length=10)
+    items: list[EpisodeBatchItem] = Field(min_length=1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,7 +138,7 @@ class EpisodeScriptPublishBatchCommand(BaseModel):
 
     project_id: UUID
     expected_project_revision: int = Field(ge=1)
-    items: list[EpisodeScriptPublishItem] = Field(min_length=1, max_length=10)
+    items: list[EpisodeScriptPublishItem] = Field(min_length=1)
 
 
 @dataclass(frozen=True, slots=True)

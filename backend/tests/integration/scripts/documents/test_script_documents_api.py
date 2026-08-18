@@ -251,7 +251,7 @@ async def test_format_problems_are_persisted_with_next_actions_before_materializ
     too_long = await client.post(
         endpoint,
         headers=headers,
-        json=_text_payload("字" * 100_001, idempotency_key="whole-script-too-long"),
+        json=_text_payload("字" * 500_001, idempotency_key="whole-script-too-long"),
     )
     both_inputs = await client.post(
         endpoint,
@@ -260,13 +260,16 @@ async def test_format_problems_are_persisted_with_next_actions_before_materializ
         | {"media_version_id": "00000000-0000-0000-0000-000000000001"},
     )
     assert blank.status_code == 422
-    assert too_long.status_code == 422
+    assert too_long.status_code == 201
+    assert too_long.json()["data"]["revision"]["analysis_status"] == (
+        "ai_candidate_required"
+    )
     assert both_inputs.status_code == 422
 
     async with session_factory() as session:
-        assert await session.scalar(select(func.count()).select_from(ScriptDocument)) == 3
-        assert await session.scalar(select(func.count()).select_from(DocumentRevision)) == 3
-        assert await session.scalar(select(func.count()).select_from(FormatIssue)) == 3
+        assert await session.scalar(select(func.count()).select_from(ScriptDocument)) == 4
+        assert await session.scalar(select(func.count()).select_from(DocumentRevision)) == 4
+        assert await session.scalar(select(func.count()).select_from(FormatIssue)) == 4
         assert await session.scalar(select(func.count()).select_from(Episode)) == 0
 
 

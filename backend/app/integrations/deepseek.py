@@ -14,6 +14,16 @@ from openai import (
 )
 from pydantic import SecretStr, ValidationError
 
+from app.modules.agents import (
+    AgentExecutionContext,
+    AgentExecutionError,
+    SkillDefinition,
+)
+from app.modules.agents.script_structure import (
+    DEFAULT_MAX_CHUNK_CHARS,
+    ScriptStructureExtractionWorkflow,
+)
+from app.modules.agents.script_structure_prompt import script_structure_system_prompt
 from app.modules.scripts.adaptations import (
     SCRIPT_ADAPTATION_PROMPT_VERSION,
     ScriptAdaptationProviderError,
@@ -37,27 +47,16 @@ from app.modules.storyboards.drafts.provider_schema import (
 )
 
 DEEPSEEK_SCRIPT_EXTRACTOR_VERSION = SCRIPT_STRUCTURE_EXTRACTOR_VERSION
+SCRIPT_STRUCTURE_EXTRACTION_SKILL = SkillDefinition(
+    name="script.structure.extract",
+    version=DEEPSEEK_SCRIPT_EXTRACTOR_VERSION,
+    max_input_chars=DEFAULT_MAX_CHUNK_CHARS,
+    timeout_seconds=120,
+)
 _DEEPSEEK_MODEL = "deepseek-v4-pro"
 _DEEPSEEK_API_BASE = "https://api.deepseek.com"
-_PROMPT_VERSION = "prompt-v1"
 _EPISODE_PLAN_PROMPT_VERSION = "episode-plan-prompt-v2"
 _STORYBOARD_DRAFT_PROMPT_VERSION = "storyboard-draft-prompt-v1"
-
-
-def _system_prompt() -> str:
-    schema = json.dumps(
-        ScriptExtractionResult.model_json_schema(),
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
-    return (
-        "你是 AI 漫剧平台的剧本结构提取器。只提取用户给出的剧本文本，不改写、"
-        "补写或猜测不存在的内容。必须返回一个符合下列 JSON Schema 的 JSON 对象；"
-        "source_range 使用 Python 字符串的零起始字符索引，end 为开区间；dialogue 和 "
-        "shot 的 scene_candidate_key 必须引用同一响应中的 scene candidate_key。"
-        f"当前提示版本为 {_PROMPT_VERSION}。JSON Schema: {schema}"
-    )
 
 
 def _provider_error(error: Exception) -> ScriptExtractionProviderError:
@@ -275,7 +274,7 @@ def _episode_planning_system_prompt(
         "你是 AI 短剧分集规划器。用户消息是只读 JSON，source_blocks 中每项包含 "
         "position 和原文 text。只基于这些原文提出一个分集候选，不改写、补写或删除正文。"
         "按叙事冲突、钩子和场景边界规划，每集目标时长为 "
-        f"{target_duration_ms} 毫秒，最多 {maximum_episode_count} 集。"
+        f"{target_duration_ms} 毫秒；不设置业务上的集数上限，必须完整覆盖输入原文。"
         "全文明显不足一集目标时长时只输出一集，不要把每行当成一集。"
         "end_block_position 必须逐字复制所选 source_block 的 position，不是候选集序号；"
         "各项必须严格递增，最后一项必须等于 "
@@ -314,13 +313,27 @@ class DeepSeekScriptStructureExtractor:
             ScriptExtractionResult,
             method="json_mode",
         )
+        self._workflow = ScriptStructureExtractionWorkflow(
+            skill=SCRIPT_STRUCTURE_EXTRACTION_SKILL,
+            model=self._structured_model,
+            system_prompt=script_structure_system_prompt(),
+        )
 
-    async def extract(self, script_body: str) -> ScriptExtractionResult:
+    async def extract(
+        self,
+        script_body: str,
+        *,
+        trace_id: str | None = None,
+    ) -> ScriptExtractionResult:
         try:
-            value = await self._structured_model.ainvoke(
-                [SystemMessage(content=_system_prompt()), HumanMessage(content=script_body)]
+            result = await self._workflow.run(
+                script_body,
+                context=AgentExecutionContext(
+                    skill_name=SCRIPT_STRUCTURE_EXTRACTION_SKILL.name,
+                    skill_version=SCRIPT_STRUCTURE_EXTRACTION_SKILL.version,
+                    trace_id=trace_id,
+                ),
             )
-            result = ScriptExtractionResult.model_validate(value)
             if any(
                 candidate.source_range.end > len(script_body) for candidate in result.candidates
             ):
@@ -332,6 +345,18 @@ class DeepSeekScriptStructureExtractor:
                     next_action="start_new_extraction",
                 )
             return result
+        except AgentExecutionError as error:
+            raise ScriptExtractionProviderError(
+                outcome=error.outcome,
+                code=error.code,
+                summary=error.summary,
+                retryable=error.retryable,
+                next_action=(
+                    "start_new_extraction"
+                    if error.next_action == "start_new_skill_run"
+                    else error.next_action
+                ),
+            ) from error
         except ValidationError as error:
             raise ScriptExtractionProviderError(
                 outcome="failed",

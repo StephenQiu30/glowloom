@@ -394,18 +394,6 @@ async def materialize_episode_batch(
             next_action="refresh_episode_plan_impact",
             details={"active_order_hash": current_order_hash},
         )
-    if len(active) + len(command.items) > 10:
-        raise ApiError(
-            ErrorCode.STATE_CONFLICT,
-            "Episode limit would be exceeded",
-            status_code=409,
-            next_action="reduce_episode_count",
-            details={
-                "active_episode_count": len(active),
-                "requested_episode_count": len(command.items),
-                "maximum_episode_count": 10,
-            },
-        )
     next_position = max((episode.position for episode in active), default=0) + 1
     created: list[tuple[Episode, UUID]] = []
     now = datetime.now(UTC)

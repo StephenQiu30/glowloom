@@ -21,6 +21,7 @@ from app.modules.production import ScriptExtractionTaskCommand, TaskResponse
 from app.modules.production.models import Task
 from app.modules.scripts.extractions import schemas as script_schemas
 from app.modules.scripts.extractions import service as scripts_service
+from app.modules.scripts.extractions.ports import SCRIPT_STRUCTURE_EXTRACTOR_VERSION
 from tests.support.identity_builders import register_identity_response
 
 
@@ -123,9 +124,7 @@ async def test_start_extraction_is_atomic_concurrent_and_body_free(
     assert batch["workspace_id"] == workspace_id
     assert batch["script_version_id"] == published["id"]
     assert batch["scope"] == "full"
-    assert batch["extractor_version"] == (
-        "deepseek-v4-pro:thinking-off:lc-deepseek-1.1.0:prompt-v1:schema-v1"
-    )
+    assert batch["extractor_version"] == SCRIPT_STRUCTURE_EXTRACTOR_VERSION
     assert batch["input_hash"] == published["content_hash"]
     assert batch["status"] == "queued"
     assert batch["confirmed_script_version_id"] is None
@@ -375,9 +374,16 @@ class _RecordingExtractionMessage:
 class _RecordingScriptExtractor:
     def __init__(self) -> None:
         self.inputs: list[str] = []
+        self.trace_ids: list[str | None] = []
 
-    async def extract(self, script_body: str) -> script_schemas.ScriptExtractionResult:
+    async def extract(
+        self,
+        script_body: str,
+        *,
+        trace_id: str | None = None,
+    ) -> script_schemas.ScriptExtractionResult:
         self.inputs.append(script_body)
+        self.trace_ids.append(trace_id)
         return script_schemas.ScriptExtractionResult.model_validate(
             _typed_extraction_result()
         )
@@ -411,7 +417,8 @@ async def test_configured_worker_records_real_adapter_result_once(
             )
         )
         assert event is not None
-        body = envelope_from_event(event).model_dump_json().encode()
+        envelope = envelope_from_event(event)
+        body = envelope.model_dump_json().encode()
 
     extractor = _RecordingScriptExtractor()
     first_message = _RecordingExtractionMessage(body)
@@ -425,6 +432,7 @@ async def test_configured_worker_records_real_adapter_result_once(
     assert first_message.ack_count == 1
     assert first_message.nack_requeues == []
     assert extractor.inputs == [published["body"]]
+    assert extractor.trace_ids == [envelope.trace_id]
 
     fetched = await client.get(
         f"/api/v1/extraction-batches/{batch['id']}", headers=headers
@@ -447,6 +455,7 @@ async def test_configured_worker_records_real_adapter_result_once(
     assert duplicate_message.ack_count == 1
     assert duplicate_message.nack_requeues == []
     assert extractor.inputs == [published["body"]]
+    assert extractor.trace_ids == [envelope.trace_id]
     async with session_factory() as session:
         inbox = await session.scalar(select(InboxDelivery))
         assert inbox is not None

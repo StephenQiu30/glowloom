@@ -74,6 +74,7 @@ def _scene_responses(
             location=scene.location,
             time_of_day=scene.time_of_day,
             summary=scene.summary,
+            semantic_context=scene.semantic_context,
             source_range=CandidateSourceRange(
                 start=scene.source_start,
                 end=scene.source_end,
@@ -394,6 +395,19 @@ async def confirm_structure(
                 location=proposal.location,
                 time_of_day=proposal.time_of_day,
                 summary=proposal.summary,
+                semantic_context={
+                    "episode_number": proposal.episode_number,
+                    "scene_number": proposal.scene_number,
+                    "story_beat": proposal.story_beat,
+                    "characters": proposal.characters,
+                    "props": proposal.props,
+                    "environment_details": proposal.environment_details,
+                    "continuity_notes": proposal.continuity_notes,
+                    "production_tasks": [
+                        task.model_dump(mode="json")
+                        for task in proposal.production_tasks
+                    ],
+                },
                 source_start=candidate.source_start,
                 source_end=candidate.source_end,
                 created_at=now,

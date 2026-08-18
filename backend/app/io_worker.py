@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import logging
 import time
 from typing import Literal, Protocol
@@ -18,6 +19,7 @@ from app.core.telemetry import (
     start_span,
     traceparent_from_headers,
 )
+from app.integrations.codex_local import CodexLocalScriptStructureExtractor
 from app.integrations.deepseek import (
     DeepSeekEpisodePlanner,
     DeepSeekScriptAdapter,
@@ -288,7 +290,10 @@ async def _process_valid_envelope(
 
     extraction_result: ScriptExtractionResult | None = None
     try:
-        extraction_result = await extractor.extract(prepared.extraction_input.body)
+        extraction_result = await extractor.extract(
+            prepared.extraction_input.body,
+            trace_id=envelope.trace_id,
+        )
     except ScriptExtractionProviderError as error:
         provider_error = error
     except Exception:
@@ -583,11 +588,19 @@ async def run_io_worker(settings: Settings) -> None:
     register_implemented_models()
     await assert_database_schema()
     initialize_worker_metrics(queue=QUEUE_NAME, capacity=IO_WORKER_MAX_IN_FLIGHT)
-    extractor = (
-        DeepSeekScriptStructureExtractor(settings.deepseek_api_key)
-        if settings.deepseek_api_key is not None
-        else None
-    )
+    if settings.script_extraction_provider == "codex_local":
+        extractor = CodexLocalScriptStructureExtractor(
+            codex_cli_path=settings.codex_cli_path,
+            model=settings.codex_model,
+            max_concurrency=settings.codex_max_concurrency,
+        )
+    elif (
+        settings.script_extraction_provider == "deepseek"
+        and settings.deepseek_api_key is not None
+    ):
+        extractor = DeepSeekScriptStructureExtractor(settings.deepseek_api_key)
+    else:
+        extractor = None
     episode_planner = (
         DeepSeekEpisodePlanner(settings.deepseek_api_key)
         if settings.deepseek_api_key is not None
@@ -623,6 +636,17 @@ async def run_io_worker(settings: Settings) -> None:
         await asyncio.Future()
     finally:
         await connection.close()
+        for provider in (
+            extractor,
+            episode_planner,
+            adaptation_provider,
+            storyboard_drafter,
+        ):
+            close = getattr(provider, "aclose", None)
+            if close is not None:
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
 
 
 def main() -> None:

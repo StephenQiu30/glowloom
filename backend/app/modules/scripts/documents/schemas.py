@@ -22,7 +22,7 @@ class ScriptDocumentImportRequest(BaseModel):
 
     input_type: DocumentSourceType
     title: str = Field(min_length=1, max_length=120)
-    text: str | None = Field(default=None, max_length=100_000)
+    text: str | None = None
     media_version_id: UUID | None = None
     language: str = Field(min_length=1, max_length=35)
     rights_declaration: str = Field(min_length=1, max_length=1000)

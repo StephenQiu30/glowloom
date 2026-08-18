@@ -247,8 +247,7 @@ async def import_document(
                 project.workspace_id,
                 request.media_version_id,
                 storage,
-                max_bytes=settings.script_document_max_bytes,
-                max_codepoints=settings.script_document_max_codepoints,
+                max_bytes=settings.media_max_upload_bytes,
             )
         raw_hash = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
         analysis = analyze_document(raw_text)

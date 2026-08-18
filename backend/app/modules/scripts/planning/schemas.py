@@ -30,7 +30,7 @@ class EpisodePlanCreateRequest(BaseModel):
 
     strategy: EpisodePlanStrategy
     target_duration_ms: int = Field(ge=15_000, le=600_000)
-    requested_episode_count: int | None = Field(default=None, ge=1, le=10)
+    requested_episode_count: int | None = Field(default=None, ge=1)
     idempotency_key: str = Field(min_length=1, max_length=200)
 
     @field_validator("idempotency_key")
@@ -246,4 +246,4 @@ class EpisodePlanningProviderProposal(BaseModel):
 class EpisodePlanningProviderResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    proposals: list[EpisodePlanningProviderProposal] = Field(min_length=1, max_length=10)
+    proposals: list[EpisodePlanningProviderProposal] = Field(min_length=1)

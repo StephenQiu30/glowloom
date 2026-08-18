@@ -28,6 +28,7 @@ class SceneResponse(BaseModel):
     location: str
     time_of_day: str
     summary: str
+    semantic_context: dict[str, object]
     source_range: CandidateSourceRange
     dialogues: list[DialogueResponse]
     created_at: datetime

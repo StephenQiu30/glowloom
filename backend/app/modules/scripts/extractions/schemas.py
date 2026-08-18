@@ -45,12 +45,34 @@ class CandidateSourceRange(CommandModel):
         return self
 
 
+class SceneProductionTask(CommandModel):
+    task_type: Literal[
+        "asset_prepare",
+        "shot_breakdown",
+        "continuity_review",
+        "voice_prepare",
+    ]
+    title: str = Field(min_length=1, max_length=200)
+    objective: str = Field(min_length=1, max_length=1000)
+    priority: Literal["low", "normal", "high", "blocking"] = "normal"
+
+
 class SceneCandidateProposal(CommandModel):
     kind: Literal["scene"]
     heading: str = Field(min_length=1, max_length=200)
     location: str = Field(min_length=1, max_length=200)
     time_of_day: str = Field(min_length=1, max_length=100)
     summary: str = Field(min_length=1, max_length=2000)
+    episode_number: int | None = Field(default=None, ge=1)
+    scene_number: int | None = Field(default=None, ge=1, le=1000)
+    story_beat: str | None = Field(default=None, max_length=1000)
+    characters: list[str] = Field(default_factory=list, max_length=50)
+    props: list[str] = Field(default_factory=list, max_length=100)
+    environment_details: str | None = Field(default=None, max_length=2000)
+    continuity_notes: list[str] = Field(default_factory=list, max_length=50)
+    production_tasks: list[SceneProductionTask] = Field(
+        default_factory=lambda: list[SceneProductionTask](), max_length=20
+    )
 
 
 class DialogueCandidateProposal(CommandModel):
@@ -60,6 +82,9 @@ class DialogueCandidateProposal(CommandModel):
     dialogue_kind: Literal["spoken", "narration", "internal", "voice_over"]
     text: str = Field(min_length=1, max_length=4000)
     performance_note: str | None = Field(default=None, max_length=1000)
+    emotion: str | None = Field(default=None, max_length=200)
+    action_before: str | None = Field(default=None, max_length=1000)
+    subtext: str | None = Field(default=None, max_length=1000)
 
 
 class AssetCandidateProposal(CommandModel):
@@ -69,6 +94,19 @@ class AssetCandidateProposal(CommandModel):
     ]
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=2000)
+    aliases: list[str] = Field(default_factory=list, max_length=20)
+    role: str | None = Field(default=None, max_length=500)
+    visual_identity: str | None = Field(default=None, max_length=2000)
+    appearance: str | None = Field(default=None, max_length=2000)
+    voice_profile: str | None = Field(default=None, max_length=1000)
+    goals: list[str] = Field(default_factory=list, max_length=50)
+    relationships: list[str] = Field(default_factory=list, max_length=100)
+    arc_summary: str | None = Field(default=None, max_length=2000)
+    continuity_notes: list[str] = Field(default_factory=list, max_length=50)
+    first_seen_episode: int | None = Field(default=None, ge=1)
+    episode_numbers: list[int] = Field(
+        default_factory=lambda: list[int](), max_length=1000
+    )
 
 
 class ShotCandidateProposal(CommandModel):
@@ -76,13 +114,35 @@ class ShotCandidateProposal(CommandModel):
     scene_candidate_key: str = Field(min_length=1, max_length=100)
     title: str = Field(min_length=1, max_length=200)
     purpose: str = Field(min_length=1, max_length=2000)
+    shot_number: int | None = Field(default=None, ge=1, le=1000)
+    shot_type: str | None = Field(default=None, max_length=100)
+    framing: str | None = Field(default=None, max_length=300)
+    camera_movement: str | None = Field(default=None, max_length=300)
+    action: str | None = Field(default=None, max_length=2000)
+    visual_prompt: str | None = Field(default=None, max_length=3000)
+    dialogue_excerpt: str | None = Field(default=None, max_length=1000)
+    asset_names: list[str] = Field(default_factory=list, max_length=50)
+    duration_ms: int | None = Field(default=None, ge=500, le=15_000)
+    continuity_notes: list[str] = Field(default_factory=list, max_length=50)
 
 
 class ContinuityCandidateProposal(CommandModel):
     kind: Literal["continuity"]
+    scope: Literal["scene", "episode", "character", "world"] = "scene"
     severity: Literal["info", "warning", "blocking"]
     issue: str = Field(min_length=1, max_length=2000)
     suggestion: str = Field(min_length=1, max_length=2000)
+    episode_number: int | None = Field(default=None, ge=1)
+    entities: list[str] = Field(default_factory=list, max_length=50)
+    evidence: str | None = Field(default=None, max_length=2000)
+    topic: str | None = Field(default=None, max_length=200)
+    title: str | None = Field(default=None, max_length=200)
+    logline: str | None = Field(default=None, max_length=1000)
+    summary: str | None = Field(default=None, max_length=3000)
+    facts: list[str] = Field(default_factory=list, max_length=100)
+    rules: list[str] = Field(default_factory=list, max_length=100)
+    scene_candidate_key: str | None = Field(default=None, max_length=100)
+    scene_candidate_keys: list[str] = Field(default_factory=list, max_length=1000)
 
 
 CandidateProposal = Annotated[
@@ -142,7 +202,7 @@ class ExtractionCandidateInput(CommandModel):
 
 
 class ScriptExtractionResult(CommandModel):
-    candidates: list[ExtractionCandidateInput] = Field(max_length=500)
+    candidates: list[ExtractionCandidateInput]
 
     @model_validator(mode="after")
     def validate_candidate_references(self) -> "ScriptExtractionResult":
@@ -157,6 +217,16 @@ class ScriptExtractionResult(CommandModel):
                 scene = candidates_by_key.get(proposal.scene_candidate_key)
                 if scene is None or scene.proposal.kind != "scene":
                     raise ValueError("scene candidate reference is invalid")
+            if isinstance(proposal, ContinuityCandidateProposal):
+                scene_keys = set(proposal.scene_candidate_keys)
+                if proposal.scene_candidate_key is not None:
+                    scene_keys.add(proposal.scene_candidate_key)
+                if any(
+                    candidates_by_key.get(scene_key) is None
+                    or candidates_by_key[scene_key].proposal.kind != "scene"
+                    for scene_key in scene_keys
+                ):
+                    raise ValueError("continuity scene candidate reference is invalid")
         return self
 
 

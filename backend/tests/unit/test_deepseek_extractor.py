@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 import pytest
@@ -81,13 +82,13 @@ async def test_deepseek_extractor_uses_fixed_non_thinking_structured_contract(
     assert "JSON" in system_content
     assert '"candidates"' in system_content
     assert "只提取" in system_content
-    assert user_content == "第一场\n角色甲：开始。"
+    assert json.loads(user_content)["script_text"] == "第一场\n角色甲：开始。"
 
 
 def test_deepseek_extractor_snapshot_is_complete_and_bounded() -> None:
     snapshot = deepseek_integration.DEEPSEEK_SCRIPT_EXTRACTOR_VERSION
 
-    assert snapshot == ("deepseek-v4-pro:thinking-off:lc-deepseek-1.1.0:prompt-v1:schema-v1")
+    assert snapshot == ("langgraph-map-reduce-v1:prompt-v3:schema-v3")
     assert len(snapshot) <= 80
 
 

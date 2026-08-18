@@ -739,6 +739,8 @@ async def decide_extraction_candidate(
                     kind=proposal_raw.asset_kind,
                     name=proposal_raw.name,
                     description=proposal_raw.description,
+                    aliases=tuple(proposal_raw.aliases),
+                    details=proposal_raw.model_dump(mode="json"),
                     target_asset_id=(
                         decision.downstream_id
                         if isinstance(decision, LinkExistingDecision)

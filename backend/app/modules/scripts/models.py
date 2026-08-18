@@ -266,7 +266,7 @@ class EpisodePlan(Base):
         CheckConstraint("target_duration_ms >= 1000", name="ck_scr_episode_plan_duration"),
         CheckConstraint(
             "requested_episode_count IS NULL OR "
-            "(requested_episode_count >= 1 AND requested_episode_count <= 10)",
+            "requested_episode_count >= 1",
             name="ck_scr_episode_plan_requested_count",
         ),
         CheckConstraint(
@@ -750,6 +750,7 @@ class Scene(Base):
     location: Mapped[str] = mapped_column(String(200))
     time_of_day: Mapped[str] = mapped_column(String(100))
     summary: Mapped[str] = mapped_column(Text)
+    semantic_context: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     source_start: Mapped[int] = mapped_column(Integer)
     source_end: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)

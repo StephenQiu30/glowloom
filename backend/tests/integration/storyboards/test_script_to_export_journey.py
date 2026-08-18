@@ -1,4 +1,5 @@
 import io
+import json
 import zipfile
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -33,8 +34,13 @@ from tests.support.project_builders import project_payload, register_project_own
 
 FIXTURE = (
     Path(__file__).parents[4]
-    / "docs/fixtures/mvp_a/002-雾港倒计时整剧导入样例.txt"
+    / "backend/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json"
 )
+
+
+def _fixture_text() -> str:
+    raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    return str(raw["full_script"])
 
 
 class JourneyStorage(ObjectStoragePort):
@@ -124,7 +130,7 @@ async def _materialize_first_episode(
         json={
             "input_type": "text",
             "title": "雾港倒计时整剧原稿",
-            "text": FIXTURE.read_text(encoding="utf-8"),
+            "text": _fixture_text(),
             "language": "zh-CN",
             "rights_declaration": "原创合成黄金样本",
             "idempotency_key": "journey-document-import",

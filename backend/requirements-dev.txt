@@ -74,6 +74,7 @@ httptools==0.8.0
     # via uvicorn
 httpx==0.28.1
     # via
+    #   langgraph-sdk
     #   langsmith
     #   lanverse-backend (pyproject.toml)
     #   openai
@@ -96,12 +97,28 @@ langchain-core==1.5.2
     # via
     #   langchain-deepseek
     #   langchain-openai
+    #   langgraph
+    #   langgraph-checkpoint
+    #   langgraph-prebuilt
+    #   langgraph-sdk
 langchain-deepseek==1.1.0
     # via lanverse-backend (pyproject.toml)
 langchain-openai==1.4.1
     # via langchain-deepseek
 langchain-protocol==0.0.18
-    # via langchain-core
+    # via
+    #   langchain-core
+    #   langgraph-sdk
+langgraph==1.2.9
+    # via lanverse-backend (pyproject.toml)
+langgraph-checkpoint==4.2.0
+    # via
+    #   langgraph
+    #   langgraph-prebuilt
+langgraph-prebuilt==1.1.0
+    # via langgraph
+langgraph-sdk==0.4.2
+    # via langgraph
 langsmith==0.10.12
     # via langchain-core
 minio==7.2.20
@@ -112,6 +129,10 @@ nodeenv==1.10.0
     # via pyright
 openai==2.50.0
     # via langchain-openai
+openai-codex==0.144.4
+    # via lanverse-backend (pyproject.toml)
+openai-codex-cli-bin==0.144.4
+    # via openai-codex
 opentelemetry-api==1.44.0
     # via
     #   lanverse-backend (pyproject.toml)
@@ -122,7 +143,11 @@ opentelemetry-sdk==1.44.0
 opentelemetry-semantic-conventions==0.65b0
     # via opentelemetry-sdk
 orjson==3.11.9
-    # via langsmith
+    # via
+    #   langgraph-sdk
+    #   langsmith
+ormsgpack==1.12.2
+    # via langgraph-checkpoint
 packaging==26.2
     # via
     #   build
@@ -152,9 +177,11 @@ pydantic==2.13.4
     # via
     #   fastapi
     #   langchain-core
+    #   langgraph
     #   langsmith
     #   lanverse-backend (pyproject.toml)
     #   openai
+    #   openai-codex
     #   pydantic-settings
 pydantic-core==2.46.4
     # via pydantic
@@ -263,8 +290,9 @@ uvloop==0.22.1
     # via uvicorn
 watchfiles==1.2.0
     # via uvicorn
-websockets==17.0
+websockets==15.0.1
     # via
+    #   langgraph-sdk
     #   langsmith
     #   uvicorn
 wheel==0.47.0
@@ -272,7 +300,9 @@ wheel==0.47.0
 wrapt==2.3.0
     # via testcontainers
 xxhash==3.8.1
-    # via langsmith
+    # via
+    #   langgraph
+    #   langsmith
 yarl==1.24.5
     # via
     #   aio-pika

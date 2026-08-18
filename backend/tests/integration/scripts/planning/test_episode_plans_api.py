@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -37,7 +38,15 @@ from app.modules.scripts.planning.schemas import (
 )
 from tests.support.project_builders import project_payload, register_project_owner
 
-FIXTURE = Path(__file__).parents[5] / "docs/fixtures/mvp_a/002-雾港倒计时整剧导入样例.txt"
+FIXTURE = (
+    Path(__file__).parents[3]
+    / "fixtures/mvp_a/golden_candidate_harbor_countdown.json"
+)
+
+
+def _fixture_text() -> str:
+    raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    return str(raw["full_script"])
 
 
 async def _project_and_document(
@@ -60,7 +69,7 @@ async def _project_and_document(
         json={
             "input_type": "text",
             "title": "原创整剧原稿",
-            "text": text if text is not None else FIXTURE.read_text(encoding="utf-8"),
+            "text": text if text is not None else _fixture_text(),
             "language": "zh-CN",
             "rights_declaration": "确认拥有该原创测试文本的使用权",
             "idempotency_key": f"document:{email}",

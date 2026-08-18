@@ -60,8 +60,6 @@ class Settings(BaseSettings):
     media_upload_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     media_access_ttl_seconds: int = Field(default=300, ge=30, le=900)
     media_probe_timeout_seconds: int = Field(default=120, ge=5, le=600)
-    script_document_max_bytes: int = Field(default=400_000, ge=1, le=4_000_000)
-    script_document_max_codepoints: int = Field(default=100_000, ge=1, le=1_000_000)
     media_cleanup_interval_seconds: int = Field(default=3600, ge=60, le=86400)
     media_cleanup_batch_size: int = Field(default=100, ge=1, le=500)
     media_location_rollback_seconds: int = Field(
@@ -98,6 +96,12 @@ class Settings(BaseSettings):
     )
     email_verification_source_limit: int = Field(default=20, ge=1, le=1000)
     deepseek_api_key: SecretStr | None = None
+    script_extraction_provider: Literal["codex_local", "deepseek", "disabled"] = (
+        "codex_local"
+    )
+    codex_cli_path: str | None = None
+    codex_model: str | None = None
+    codex_max_concurrency: int = Field(default=2, ge=1, le=16)
     ark_api_key: SecretStr | None = None
     provider_credential_key_id: str = Field(
         default="local-provider-v1", min_length=1, max_length=100

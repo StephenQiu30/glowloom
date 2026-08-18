@@ -16,9 +16,7 @@ BlockKind = Literal[
 ]
 IssueSeverity = Literal["warning", "blocking"]
 
-ANALYZER_VERSION = "whole-script-lines-v1"
-MAX_EXPLICIT_EPISODES = 10
-
+ANALYZER_VERSION = "whole-script-lines-v2"
 _CHINESE_DIGITS = {
     "零": 0,
     "〇": 0,
@@ -42,7 +40,7 @@ _ENGLISH_MARKER = re.compile(
     re.IGNORECASE,
 )
 _SCENE_HEADING = re.compile(
-    r"^(?:内景|外景|场景\s*\d+|INT\.?|EXT\.?|INT\s*/\s*EXT\.?)",
+    r"^(?:内景|外景|场景\s*\d+|INT\.?|EXT\.?|I/E\.?|INT\s*/\s*EXT\.?)",
     re.IGNORECASE,
 )
 _NARRATION = re.compile(r"^(?:旁白|画外音|内心|独白)\s*[：:]")
@@ -289,17 +287,6 @@ def _structural_issues(
                         },
                     )
                 )
-
-    if len(markers) > MAX_EXPLICIT_EPISODES:
-        marker = markers[MAX_EXPLICIT_EPISODES]
-        issues.append(
-            _issue_for_marker(
-                "episode_limit_exceeded",
-                marker,
-                next_action="reduce_episode_count",
-                details={"maximum_episode_count": MAX_EXPLICIT_EPISODES},
-            )
-        )
 
     if text[: markers[0].line_start].strip():
         first = markers[0].marker

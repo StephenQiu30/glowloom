@@ -81,7 +81,13 @@ ALLOWED_MIME_TYPES: dict[str, frozenset[str]] = {
     "delivery": frozenset(
         {"application/zip", "application/json", "video/mp4", "application/x-subrip"}
     ),
-    "document": frozenset({"text/plain", "text/markdown"}),
+    "document": frozenset(
+        {
+            "text/plain",
+            "text/markdown",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }
+    ),
 }
 
 
@@ -284,11 +290,7 @@ def _media_location_response(location: MediaLocation) -> MediaLocationResponse:
 
 
 def _validate_declaration(request: UploadDeclaration, settings: Settings) -> None:
-    max_size_bytes = (
-        settings.script_document_max_bytes
-        if request.kind == "document"
-        else settings.media_max_upload_bytes
-    )
+    max_size_bytes = settings.media_max_upload_bytes
     if request.size_bytes > max_size_bytes:
         raise ApiError(
             ErrorCode.VALIDATION_FAILED,
@@ -305,10 +307,10 @@ def _validate_declaration(request: UploadDeclaration, settings: Settings) -> Non
     if request.kind == "document":
         suffix = request.filename.strip().lower().rsplit(".", 1)
         extension = f".{suffix[-1]}" if len(suffix) == 2 else ""
-        if extension not in {".txt", ".md"}:
+        if extension not in {".txt", ".md", ".docx"}:
             raise ApiError(
                 ErrorCode.VALIDATION_FAILED,
-                "Document filename must end with .txt or .md",
+                "Document filename must end with .txt, .md or .docx",
                 status_code=422,
             )
 
@@ -948,7 +950,6 @@ async def read_utf8_document_version(
     storage: MediaStorage,
     *,
     max_bytes: int,
-    max_codepoints: int,
 ) -> str:
     """Read one immutable, ready document version without granting a public URL."""
 
@@ -984,7 +985,6 @@ async def read_utf8_document_version(
             storage.port.stream(location.object_key),
             mime_type=version.mime_type,
             max_bytes=max_bytes,
-            max_codepoints=max_codepoints,
         )
     except MediaProbeError as error:
         raise ApiError(

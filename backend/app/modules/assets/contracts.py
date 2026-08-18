@@ -77,6 +77,8 @@ class AssetCandidateCommand:
     name: str
     description: str
     target_asset_id: UUID | None = None
+    aliases: tuple[str, ...] = ()
+    details: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)

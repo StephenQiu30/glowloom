@@ -20,6 +20,10 @@ FORBIDDEN_SOURCE_STEMS = {
     "misc",
     "processor",
 }
+PUBLIC_PACKAGE_IMPORTS = {
+    "app.modules.governance.audit",
+    "app.modules.scripts",
+}
 MAX_SOURCE_FILE_NAME_LENGTH = 64
 
 FORBIDDEN_CONTRACT_IMPORTS = (
@@ -72,7 +76,7 @@ def _cross_module_internal_imports() -> set[str]:
             imported = ",".join(sorted(alias.name for alias in node.names))
             if target == f"app.modules.{target_module}.contracts":
                 continue
-            if target == "app.modules.governance.audit":
+            if target in PUBLIC_PACKAGE_IMPORTS:
                 continue
             if target == f"app.modules.{target_module}" and not any(
                 alias.name in {"api", "models", "repository", "service"} for alias in node.names

@@ -73,8 +73,6 @@ from app.modules.scripts.planning.schemas import (
 
 PLANNING_ENGINE_VERSION = "episode-planning-v1"
 DEEPSEEK_EPISODE_MODEL = "deepseek-v4-pro"
-MAX_EPISODES = 10
-MAX_EPISODE_CODEPOINTS = 20_000
 _TITLE_LINE = re.compile(r"^《(.{1,118})》$")
 
 
@@ -360,12 +358,6 @@ def _provider_proposals(
     result: EpisodePlanningProviderResult,
     now: datetime,
 ) -> list[EpisodeProposal]:
-    if len(result.proposals) > MAX_EPISODES:
-        raise ApiError(
-            ErrorCode.VALIDATION_FAILED,
-            "AI episode plan exceeds the episode limit",
-            status_code=422,
-        )
     previous_end_position = 0
     proposals: list[EpisodeProposal] = []
     block_by_position = {block.position: block for block in blocks}
@@ -456,23 +448,6 @@ async def _detail_response(
     snapshot = await project_episode_order_snapshot(session, claims, plan.project_id)
     projected = snapshot.active_episode_count + len(proposals)
     blockers: list[EpisodePlanImpactBlocker] = []
-    if projected > MAX_EPISODES:
-        blockers.append(
-            EpisodePlanImpactBlocker(
-                code="EPISODE_LIMIT_EXCEEDED",
-                summary=f"当前 {snapshot.active_episode_count} 集，加上计划后将达到 {projected} 集",
-                next_action="reduce_episode_count",
-            )
-        )
-    for proposal in proposals:
-        if proposal.source_end - proposal.source_start > MAX_EPISODE_CODEPOINTS:
-            blockers.append(
-                EpisodePlanImpactBlocker(
-                    code="EPISODE_TEXT_TOO_LONG",
-                    summary=f"第 {proposal.position} 集超过 20,000 字符",
-                    next_action="move_episode_boundary",
-                )
-            )
     return EpisodePlanDetailResponse(
         plan=_plan_response(plan),
         proposals=[_proposal_response(item) for item in proposals],
@@ -884,13 +859,6 @@ async def split_proposal(
         ):
             _require_editable(plan, request.expected_revision)
             proposals = await repository.list_proposals(session, plan.id, for_update=True)
-            if len(proposals) >= MAX_EPISODES:
-                raise ApiError(
-                    ErrorCode.STATE_CONFLICT,
-                    "Episode limit would be exceeded",
-                    status_code=409,
-                    next_action="merge_episodes",
-                )
             target_index = next(
                 (index for index, item in enumerate(proposals) if item.id == request.proposal_id),
                 -1,
@@ -1086,16 +1054,6 @@ async def confirm_plan(
             blocks = await repository.list_blocks(session, revision.id)
             proposals = await repository.list_proposals(session, plan.id, for_update=True)
             _require_conservation(revision, blocks, proposals)
-            if any(
-                proposal.source_end - proposal.source_start > MAX_EPISODE_CODEPOINTS
-                for proposal in proposals
-            ):
-                raise ApiError(
-                    ErrorCode.STATE_CONFLICT,
-                    "An episode exceeds the text limit",
-                    status_code=409,
-                    next_action="move_episode_boundary",
-                )
             plan.status = "confirmed"
             plan.confirmed_by = claims.sub
             confirmed_at = datetime.now(UTC)
@@ -1305,15 +1263,6 @@ async def materialize_plan(
             proposals = await repository.list_proposals(session, plan.id, for_update=True)
             blocks = await repository.list_blocks(session, revision.id)
             _require_conservation(revision, blocks, proposals)
-            if len(proposals) > MAX_EPISODES or any(
-                item.source_end - item.source_start > MAX_EPISODE_CODEPOINTS for item in proposals
-            ):
-                raise ApiError(
-                    ErrorCode.STATE_CONFLICT,
-                    "Episode plan exceeds MVP limits",
-                    status_code=409,
-                    next_action="edit_episode_plan",
-                )
             now = datetime.now(UTC)
             commit = ImportCommit(
                 id=uuid7(),
@@ -1665,7 +1614,7 @@ async def get_episode_planning_input(
         input_hash=plan.input_hash,
         normalized_text=revision.normalized_text,
         target_duration_ms=plan.target_duration_ms,
-        maximum_episode_count=MAX_EPISODES,
+        maximum_episode_count=max(1, len(revision.normalized_text.splitlines())),
     )
 
 

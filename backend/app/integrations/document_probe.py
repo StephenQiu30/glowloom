@@ -5,7 +5,7 @@ from app.modules.media.document_content import read_strict_utf8_document
 
 
 class Utf8DocumentProbe:
-    def __init__(self, *, max_bytes: int, max_codepoints: int) -> None:
+    def __init__(self, *, max_bytes: int, max_codepoints: int | None = None) -> None:
         self._max_bytes = max_bytes
         self._max_codepoints = max_codepoints
 
@@ -19,7 +19,7 @@ class Utf8DocumentProbe:
         if kind != "document":
             raise MediaProbeError(
                 "unsupported_document_mime",
-                "Document must be UTF-8 text/plain or text/markdown",
+                "Document must be UTF-8 text/plain, text/markdown or DOCX",
             )
         _, normalized_mime = await read_strict_utf8_document(
             content,

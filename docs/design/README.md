@@ -2,7 +2,7 @@
 
 ## 1. 当前事实范围
 
-本目录是当前 Requirement 的技术/模块设计事实源，不是现有代码说明或历史技术债汇总。目标产品从剧本、叙事、资产、分镜、关键帧和视频候选到“每镜恰有一个显式主选，并导出有序原始视频素材包”为止。
+本目录是当前 Requirement 的技术/模块设计事实源，不是现有代码说明或历史技术债汇总。目标产品从剧本、叙事、资产、分镜、关键帧和视频候选到“每镜恰有一个显式主选，并导出有序原始视频素材包”为止。当前 MVP 优先完成不依赖画布的业务闭环和 Agent Harness。
 
 当前明确排除：Timeline、剪辑、拼接、转码、成片、字幕/音频后期、发布投放、支付计费和商业运营。可视化画布是同一领域事实的 Read Model/Projection，不是第二业务引擎。
 
@@ -26,6 +26,7 @@
 | 013 | [安全、隐私、权利与内容治理](./013-安全隐私权利与内容治理设计.md) | 数据分类、权利/内容/Provider 准入、AIGC、审计、保留/删除和安全事件 |
 | 014 | [NFR、SLO、容量、观测、备份与灾备](./014-非功能服务目标容量观测备份与灾备设计.md) | 统一 SLI/SLO、容量口径、部署、OTel、降级、RPO/RTO 和恢复演练 |
 | 015 | [Requirement → Design 追踪矩阵](./015-Requirement到Design追踪矩阵.md) | FR/NFR/AC、不变式和开放 Gate 的双向追踪 |
+| 017 | [Agent Harness 与 MVP 业务闭环](./017-Agent Harness与MVP业务闭环设计.md) | 不依赖画布的 Skill 执行、剧本解析和候选审核闭环 |
 
 已归档的已实施设计：[DES-016 跨页面 BasicLayout 与壳层布局](../archive/design/016-跨页面BasicLayout与壳层布局设计.md)。
 
@@ -36,9 +37,10 @@ flowchart TD
     R["Current Requirements"] --> A["DES-001 目标架构"]
     A --> B["DES-002 模块边界/契约"]
     B --> D["DES-003～010 领域模块"]
-    D --> C["DES-011 Canvas 投影"]
+    D --> C["DES-011 Canvas 投影（MVP 后）"]
     D --> P["DES-012 Platform"]
     P --> G["DES-013 Governance"]
+    P --> H["DES-017 Agent Harness MVP"]
     C --> N["DES-014 NFR/DR"]
     P --> N
     G --> N
@@ -50,6 +52,7 @@ flowchart TD
     P --> T
     G --> T
     N --> T
+    H --> T
 ```
 
 箭头不表示代码必须拆服务。DES-003～013 是模块化单体中的逻辑边界；长任务 Worker 与 API 进程隔离，但复用同一 TypeScript 领域契约。

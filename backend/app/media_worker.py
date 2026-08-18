@@ -264,8 +264,7 @@ async def run_media_worker(settings: Settings) -> None:
             timeout_seconds=settings.media_probe_timeout_seconds
         ),
         document_probe=Utf8DocumentProbe(
-            max_bytes=settings.script_document_max_bytes,
-            max_codepoints=settings.script_document_max_codepoints,
+            max_bytes=settings.media_max_upload_bytes,
         ),
     )
     connection = await aio_pika.connect_robust(settings.rabbitmq_url, timeout=3)

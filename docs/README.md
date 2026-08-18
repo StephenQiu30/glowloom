@@ -12,9 +12,9 @@ Lanverse 当前从零定义一款 AI 短剧核心制作平台。产品从身份�
 
 ## 2. 正式文档链路
 
-Research → Requirement（含 AC）→ Design → PRD → Plan → 实现与测试 → Acceptance Evidence → Release。
+Research → Requirement（含 AC）→ Design → Plan → 实现与测试 → Acceptance Evidence → Release。
 
-范围或业务事实变化从 Requirement 开始更新；技术设计不能反向扩大产品范围。当前 Requirement 尚未完成评审，因此新的 PRD、Plan、开发周期和 Acceptance 尚未建立。
+范围或业务事实变化从 Requirement 开始更新；技术设计不能反向扩大产品范围。当前 MVP 直接以已评审的 Requirement、Design 和 Plan 驱动实现，暂不维护独立 PRD 目录。
 
 ## 3. 文档入口
 
@@ -23,7 +23,6 @@ Research → Requirement（含 AC）→ Design → PRD → Plan → 实现与测
 | research | 固定证据、产品观察、开源工作流模式与明确拒绝点 | [AI 短剧研究索引](./research/ai-short-drama/README.md) |
 | requirement | 用户、场景、功能、规则、边界与验收条件 | [当前需求索引](./requirement/README.md) |
 | design | 产品模块协作、状态、交接、失败与技术约束 | [Design 索引](./design/README.md) |
-| prd | 评审通过后的产品任务与优先级 | [PRD 状态](./prd/README.md) |
 | plan | 评审通过后的实施工作包与验证门禁 | [Plan 状态](./plan/README.md) |
 | acceptance | 实现完成后的真实验收证据 | [Acceptance 状态](./acceptance/README.md) |
 | archive | 已归档但仍需追溯的历史设计与交付文档 | [归档索引](./archive/README.md) |
@@ -53,5 +52,5 @@ Research → Requirement（含 AC）→ Design → PRD → Plan → 实现与测
 - 每条需求使用稳定全局 ID，并追踪到 Design、AC、测试和发布证据；
 - accepted 只表示需求已通过评审，verified 只表示实现已有真实证据；
 - Mock、字段占位、路由名称和历史代码行为均不能证明需求完成；
-- 新模块分析产生的 Design、PRD、Plan、周期表和验收设计属于当前成果，必须保留并回链 CUR ID；
+- 新模块分析产生的 Design、Plan、周期表和验收设计属于当前成果，必须保留并回链 CUR ID；
 - 开发周期只能在模块范围、开放问题、验收条件和关键技术风险完成评审后估算。

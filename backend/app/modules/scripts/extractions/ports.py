@@ -3,15 +3,22 @@ from typing import Literal, Protocol
 from app.modules.scripts.extractions.schemas import ScriptExtractionResult
 
 SCRIPT_STRUCTURE_EXTRACTOR_VERSION = (
-    "deepseek-v4-pro:thinking-off:lc-deepseek-1.1.0:prompt-v1:schema-v1"
+    "langgraph-map-reduce-v1:prompt-v3:schema-v3"
 )
 
 
 class ScriptStructureExtractor(Protocol):
-    async def extract(self, script_body: str) -> ScriptExtractionResult: ...
+    async def extract(
+        self,
+        script_body: str,
+        *,
+        trace_id: str | None = None,
+    ) -> ScriptExtractionResult: ...
 
 
 class ScriptExtractionProviderError(Exception):
+    outcome: Literal["failed", "unknown"]
+
     def __init__(
         self,
         *,
