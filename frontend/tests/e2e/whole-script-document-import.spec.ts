@@ -34,9 +34,6 @@ test("上传整剧样本并恢复确定性格式体检结果", async ({ page }) 
     mimeType: "text/markdown",
     buffer: Buffer.from(sample.full_script, "utf8"),
   });
-  await importCard
-    .getByLabel("我确认拥有该剧本用于本项目制作与分析的权利")
-    .check();
   await importCard.getByRole("button", { name: "上传并预览" }).click();
 
   const preview = importCard.getByRole("region", { name: "剧本内容预览" });
@@ -56,16 +53,11 @@ test("上传整剧样本并恢复确定性格式体检结果", async ({ page }) 
   await expect(importCard.getByText("可确定性分集")).toBeVisible();
   await expect(importCard.getByText("集标记").locator("..")).toContainText("5");
   await expect(importCard.getByText("集号连续且没有阻断问题")).toBeVisible();
-  await expect(importCard.getByText("golden-candidate.md").first()).toBeVisible();
-  await expect(importCard.getByText("文件", { exact: true })).toBeVisible();
+  await expect(importCard.getByText("已导入剧本文档")).toHaveCount(0);
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
 
   await page.reload();
-  await expect(
-    page
-      .getByRole("region", { name: "整剧导入与格式体检" })
-      .getByText("golden-candidate.md")
-      .first(),
-  ).toBeVisible();
+  await expect(page.getByText("已导入剧本文档")).toHaveCount(0);
+  await expect(page.getByText("golden-candidate.md")).toHaveCount(0);
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
 });

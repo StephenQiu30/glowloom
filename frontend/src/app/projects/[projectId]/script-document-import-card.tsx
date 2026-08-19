@@ -22,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Item,
@@ -39,7 +38,6 @@ import {
   useInitializeMediaUploadMutation,
   useLazyMediaVersionQuery,
   usePreviewScriptDocumentMutation,
-  useScriptDocumentsQuery,
 } from "@/lib/server-state";
 
 import { EpisodePlanWorkspace } from "./episode-plan-workspace";
@@ -124,7 +122,6 @@ export function ScriptDocumentImportCard({
   targetDurationMs: number;
   workspaceId: string;
 }) {
-  const documents = useScriptDocumentsQuery(projectId);
   const [initializeUpload, initializeState] = useInitializeMediaUploadMutation();
   const [completeUpload, completeState] = useCompleteMediaUploadMutation();
   const [loadMediaVersion] = useLazyMediaVersionQuery();
@@ -135,7 +132,6 @@ export function ScriptDocumentImportCard({
   const [mediaVersionId, setMediaVersionId] = useState<string | null>(null);
   const [preview, setPreview] =
     useState<API.ScriptDocumentPreviewResponse | null>(null);
-  const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [analysis, setAnalysis] =
     useState<API.ScriptDocumentAnalysisResponse | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -215,7 +211,6 @@ export function ScriptDocumentImportCard({
 
   function resetFile(): void {
     selectFile(null);
-    setRightsConfirmed(false);
     if (fileInput.current) fileInput.current.value = "";
   }
 
@@ -229,10 +224,6 @@ export function ScriptDocumentImportCard({
     }
     if (!file) {
       setActionError("请选择 .docx 或 .md 剧本文件。");
-      return;
-    }
-    if (!rightsConfirmed) {
-      setActionError("请先确认剧本使用权声明。");
       return;
     }
     try {
@@ -311,7 +302,7 @@ export function ScriptDocumentImportCard({
             上传 DOCX 或 Markdown 原稿，先确认内容预览，再固定版本并进入剧本解析。
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-7 pt-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <CardContent className={analysis ? "grid gap-7 pt-6 xl:grid-cols-[minmax(0,1fr)_360px]" : "grid gap-7 pt-6"}>
           <form className="grid gap-5" onSubmit={createPreview}>
             <div className="grid gap-2">
               <Label htmlFor="scriptDocumentFile">剧本文档</Label>
@@ -343,18 +334,6 @@ export function ScriptDocumentImportCard({
               </Item>
             ) : null}
 
-            <div className="flex items-start gap-3 bg-muted/45 p-4">
-              <Checkbox
-                checked={rightsConfirmed}
-                disabled={!canWrite || busy}
-                id="scriptDocumentRights"
-                onCheckedChange={(checked) => setRightsConfirmed(checked === true)}
-              />
-              <Label className="font-normal leading-6" htmlFor="scriptDocumentRights">
-                {RIGHTS_DECLARATION}
-              </Label>
-            </div>
-
             {actionError ? (
               <Alert variant="destructive">
                 <AlertCircle aria-hidden="true" />
@@ -372,7 +351,7 @@ export function ScriptDocumentImportCard({
 
             {!preview ? (
               <Button
-                disabled={!canWrite || uploadBusy || !file || !rightsConfirmed}
+                disabled={!canWrite || uploadBusy || !file}
                 type="submit"
               >
                 {uploadBusy ? (
@@ -424,37 +403,8 @@ export function ScriptDocumentImportCard({
             )}
           </form>
 
-          <aside className="grid content-start gap-5">
-            <div className="bg-muted/45 p-5">
-              <p className="text-sm font-medium">已导入剧本文档</p>
-              {documents.isLoading ? (
-                <p className="mt-2 text-sm text-muted-foreground">正在读取……</p>
-              ) : documents.error ? (
-                <p className="mt-2 text-sm text-destructive">
-                  {appApiErrorMessage(documents.error)}
-                </p>
-              ) : documents.data?.items.length ? (
-                <div className="mt-3 grid gap-3">
-                  {documents.data.items.map((document) => (
-                    <Item key={document.id} size="sm" variant="outline">
-                      <ItemContent>
-                        <ItemTitle>{document.title}</ItemTitle>
-                        <ItemDescription>
-                          {document.language} · revision {document.revision}
-                        </ItemDescription>
-                      </ItemContent>
-                      <Badge variant="outline">文件</Badge>
-                    </Item>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  尚未导入剧本原稿。
-                </p>
-              )}
-            </div>
-
-            {analysis ? (
+          {analysis ? (
+            <aside className="grid content-start gap-5">
               <div className="bg-muted/45 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="font-medium">最近一次格式解析</p>
@@ -500,8 +450,8 @@ export function ScriptDocumentImportCard({
                   </p>
                 )}
               </div>
-            ) : null}
-          </aside>
+            </aside>
+          ) : null}
         </CardContent>
       </Card>
       {analysis ? (

@@ -34,9 +34,6 @@ test("审阅五集计划后原子创建并批量发布单集剧本", async ({ pa
     mimeType: "text/markdown",
     buffer: Buffer.from(fixture.full_script, "utf8"),
   });
-  await importCard
-    .getByLabel("我确认拥有该剧本用于本项目制作与分析的权利")
-    .check();
   await importCard.getByRole("button", { name: "上传并预览" }).click();
   await expect(
     importCard.getByRole("region", { name: "剧本内容预览" }),
@@ -71,9 +68,11 @@ test("审阅五集计划后原子创建并批量发布单集剧本", async ({ pa
   await planner.getByRole("button", { name: "原子创建 5 集" }).click();
   await planner.getByRole("button", { name: "发布 5 集剧本" }).click();
   await expect(planner.getByRole("status")).toContainText("5 集剧本已批量发布");
-  await expect(page.getByRole("link", { name: /进入/ })).toHaveCount(5);
+  const episodeWorkspace = page.getByRole("region", { name: "单集工作区" });
+  await expect(episodeWorkspace.getByRole("link", { name: /进入/ })).toHaveCount(5);
 
   await page.reload();
-  await expect(page.getByRole("link", { name: "进入警报前夜" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "进入公开日志" })).toBeVisible();
+  const reloadedEpisodeWorkspace = page.getByRole("region", { name: "单集工作区" });
+  await expect(reloadedEpisodeWorkspace.getByRole("link", { name: "进入警报前夜" })).toBeVisible();
+  await expect(reloadedEpisodeWorkspace.getByRole("link", { name: "进入公开日志" })).toBeVisible();
 });

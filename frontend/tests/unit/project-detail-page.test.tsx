@@ -443,7 +443,7 @@ describe("真实项目生产入口", () => {
     );
     const summary = screen.getByRole("region", { name: "项目生产摘要" });
     expect(within(summary).getByText("Ready 资产").nextElementSibling).toHaveTextContent(
-      "3",
+      "6",
     );
     expect(within(summary).getByText("Ready 分镜").nextElementSibling).toHaveTextContent(
       "3",
@@ -488,11 +488,7 @@ describe("真实项目生产入口", () => {
     await user.upload(fileInput, file);
     expect(screen.getByText("whole-script.md")).toBeInTheDocument();
     expect(screen.getByText(/Markdown 剧本/)).toBeInTheDocument();
-    await user.click(
-      screen.getByRole("checkbox", {
-        name: "我确认拥有该剧本用于本项目制作与分析的权利",
-      }),
-    );
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     const uploadButton = screen.getByRole("button", { name: "上传并预览" });
     expect(uploadButton).toBeEnabled();
     await user.click(uploadButton);
@@ -567,11 +563,7 @@ describe("真实项目生产入口", () => {
       value: async () => new TextEncoder().encode("docx-bytes").buffer,
     });
     await user.upload(screen.getByLabelText("剧本文档"), file);
-    await user.click(
-      screen.getByRole("checkbox", {
-        name: "我确认拥有该剧本用于本项目制作与分析的权利",
-      }),
-    );
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "上传并预览" }));
 
     await waitFor(() => expect(apiMocks.initializeUpload).toHaveBeenCalled());
