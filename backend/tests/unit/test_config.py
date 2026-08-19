@@ -289,6 +289,11 @@ def test_production_smtp_requires_complete_secure_configuration() -> None:
         "email_verification_hmac_secret": (
             "production-registration-secret-with-at-least-32-bytes"
         ),
+        # Keep this behavior test independent from a developer's local SMTP profile.
+        "smtp_host": None,
+        "smtp_username": None,
+        "smtp_password": None,
+        "smtp_from_email": None,
     }
 
     with pytest.raises(ValueError, match="SMTP_HOST"):

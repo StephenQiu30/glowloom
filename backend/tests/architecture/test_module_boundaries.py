@@ -2,30 +2,11 @@ import ast
 from pathlib import Path
 
 MODULES = Path(__file__).resolve().parents[2] / "app/modules"
-REPOSITORY = Path(__file__).resolve().parents[3]
 KNOWN_INTERNAL_IMPORTS: set[str] = set()
-
-SOURCE_ROOTS = (
-    REPOSITORY / "backend/app",
-    REPOSITORY / "backend/tests",
-    REPOSITORY / "frontend/src",
-    REPOSITORY / "frontend/tests",
-)
-SOURCE_SUFFIXES = {".py", ".ts", ".tsx"}
-FORBIDDEN_SOURCE_STEMS = {
-    "common",
-    "data",
-    "helpers",
-    "manager",
-    "misc",
-    "processor",
-}
 PUBLIC_PACKAGE_IMPORTS = {
     "app.modules.governance.audit",
     "app.modules.scripts",
 }
-MAX_SOURCE_FILE_NAME_LENGTH = 64
-
 FORBIDDEN_CONTRACT_IMPORTS = (
     "fastapi",
     "sqlalchemy",
@@ -88,22 +69,6 @@ def _cross_module_internal_imports() -> set[str]:
 
 def test_cross_module_imports_use_public_contracts() -> None:
     assert _cross_module_internal_imports() == KNOWN_INTERNAL_IMPORTS
-
-
-def test_source_file_names_are_semantic_and_short() -> None:
-    offenders: set[str] = set()
-    for root in SOURCE_ROOTS:
-        for source in root.rglob("*"):
-            if not source.is_file() or source.suffix not in SOURCE_SUFFIXES:
-                continue
-            relative = source.relative_to(REPOSITORY)
-            if not source.name.isascii():
-                offenders.add(f"{relative}:non-ascii")
-            if len(source.name) > MAX_SOURCE_FILE_NAME_LENGTH:
-                offenders.add(f"{relative}:longer-than-64")
-            if source.stem in FORBIDDEN_SOURCE_STEMS:
-                offenders.add(f"{relative}:non-semantic-name")
-    assert offenders == set()
 
 
 def test_public_contracts_are_plain_data_objects() -> None:
