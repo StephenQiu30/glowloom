@@ -1,14 +1,14 @@
 # Lanverse 软件工程文档导航
 
 - 状态：active
-- 最近审查：2026-08-14
+- 最近审查：2026-08-19
 - 当前产品需求状态：proposed
 
 ## 1. 当前产品边界
 
-Lanverse 当前从零定义一款 AI 短剧核心制作平台。产品从身份与 Workspace 开始，依次完成项目与剧集组织、剧本结构化、角色/场景/道具资产、分镜与镜头设计、关键帧、逐镜视频候选、每镜唯一主选，以及固定、有序、可追溯的镜头视频素材包导出。列表与可视化制作画布读取同一领域事实，用于理解依赖、阻塞、任务进度和局部返工。
+Lanverse 当前从零定义一款 AI 短剧核心制作平台。产品以 Workspace 作为授权、协作和隔离边界，以 Project 作为一部短剧及其制作运行边界；Production Harness 从整剧导入和深度理解开始，依次控制正式资产、分镜与镜头设计、关键帧、逐镜视频候选、每镜唯一主选，以及固定、有序、可追溯的镜头视频素材包导出。Project/Episode 工作台读取同一流程与领域事实，用于理解依赖、阻塞、任务状态和局部返工。
 
-当前阶段不建设时间线、多轨剪辑、镜头拼接、转场、调色、字幕与音频后期、整集渲染、单一成片 MP4、发布分发、支付计费或商业运营。
+当前阶段不建设可视化画布、用户自定义流程、时间线、多轨剪辑、镜头拼接、转场、调色、字幕与音频后期、整集渲染、单一成片 MP4、发布分发、支付计费或商业运营。CUR-CAN/DES-011 仅保留为 post-MVP 投影设计，不进入当前实现与验收 Gate。
 
 ## 2. 正式文档链路
 
@@ -24,7 +24,7 @@ Research → Requirement（含 AC）→ Design → Plan → 实现与测试 → 
 | requirement | 用户、场景、功能、规则、边界与验收条件 | [当前需求索引](./requirement/README.md) |
 | design | 产品模块协作、状态、交接、失败与技术约束 | [Design 索引](./design/README.md) |
 | plan | 评审通过后的实施工作包与验证门禁 | [Plan 状态](./plan/README.md) |
-| acceptance | 实现完成后的真实验收证据 | [Acceptance 状态](./acceptance/README.md) |
+| acceptance | 实施前验收计划与实现完成后的真实验收证据；两者状态严格区分 | [Acceptance 状态](./acceptance/README.md) |
 | archive | 已归档但仍需追溯的历史设计与交付文档 | [归档索引](./archive/README.md) |
 
 ## 4. 推荐阅读顺序
@@ -40,10 +40,11 @@ Research → Requirement（含 AC）→ Design → Plan → 实现与测试 → 
 9. [008 镜头视频生成与候选选择](./requirement/008-镜头视频生成与候选选择需求.md)；
 10. [009 镜头检查与素材包导出](./requirement/009-镜头检查与素材包导出需求.md)；
 11. [010 平台支撑与跨模块质量](./requirement/010-平台支撑与跨模块质量需求.md)；
-12. [011 可视化制作画布与工作流信息](./requirement/011-可视化制作画布与工作流信息需求.md)；
-13. [012 安全、隐私、权利与内容治理](./requirement/012-安全隐私权利与内容治理需求.md)；
-14. [目标技术架构与选型](./design/001-目标技术架构与选型.md)及[Design 索引](./design/README.md)；
-15. [Requirement → Design 追踪矩阵](./design/015-Requirement到Design追踪矩阵.md)。
+12. [012 安全、隐私、权利与内容治理](./requirement/012-安全隐私权利与内容治理需求.md)；
+13. [013 制作流程控制与 Agent Harness](./requirement/013-制作流程控制与Agent-Harness需求.md)；
+14. [目标技术架构与选型](./design/001-目标技术架构与选型.md)、[Production Harness 与 Agent Skill 总体设计](<./design/017-Agent Harness与MVP业务闭环设计.md>)及[Design 索引](./design/README.md)；
+15. [Requirement → Design 追踪矩阵](./design/015-Requirement到Design追踪矩阵.md)；
+16. post-MVP 评审时再阅读 [011 可视化制作画布与工作流信息](./requirement/011-可视化制作画布与工作流信息需求.md)。
 
 ## 5. 维护规则
 

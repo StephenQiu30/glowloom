@@ -1,8 +1,8 @@
 # Lanverse Plan 状态
 
 - 状态：in_progress
-- 最近审查：2026-08-18
+- 最近审查：2026-08-19
 
-当前 MVP 工作包见 [Agent Harness MVP 实施计划](./001-Agent Harness MVP实施计划.md)。本计划只覆盖 Agent Harness 和剧本导入/解析闭环，不包含画布、面向产品用户的通用工作流编排器或社区 Skill。
+当前 MVP 工作包见 [Agent Harness MVP 实施计划](<./001-Agent Harness MVP实施计划.md>)。本计划覆盖从剧本导入、深度理解、分集确认到 Project 级 ProductionRun、分层 StageRun、人工 Gate 和工作台投影的 Production Harness 最小闭环；不包含画布、面向产品用户的通用工作流编排器或社区 Skill。
 
 由新模块化分析产生的 Plan、开发周期表、工作包、依赖图和验收计划属于当前产品成果，必须保留并在本目录按新顺序登记。新 Plan 必须记录团队容量、依赖、关键路径、三点估算、外部等待、缓冲、验证命令和停止条件；模块名称或历史代码完成度不能直接作为工期估算单位。

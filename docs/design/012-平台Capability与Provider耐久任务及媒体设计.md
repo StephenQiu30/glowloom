@@ -17,7 +17,7 @@
 
 - 经真实证据核验的 Capability Catalog 和 Provider Adapter；
 - WorkTask、ExecutionAttempt、ProviderSubmission、取消/重试/对账；
-- 耐久 Workflow 与 PostgreSQL 用户事实的双状态边界；
+- Production Harness/LangGraph、WorkTask/RabbitMQ 与 PostgreSQL 用户事实的三层边界；
 - 上传/Provider 输出的隔离接收、私有存储、hash、探测、预览与短期访问；
 - Lineage、Impact 输入摘要和内部 CostRecord；
 - 幂等、容量保护、诊断关联、可观测和故障 PoC。
@@ -37,15 +37,15 @@
 | CapabilityDefinition | 业务用途、输入/输出契约、参数边界、计量单位 | 版本化；不暴露 Provider Secret |
 | CapabilityVerification | 账号/地域/模型权限/参数/配额/计量的真实验证证据 | 有验证时间、有效期和证据摘要；过期不可 active |
 | ProviderProfile | Provider/Endpoint/region、secret reference、限流/回调能力 | 技术配置版本；数据处理准入由 DES-013 拥有 |
-| WorkTask | 用户可观察主状态、stage、进度证据、错误、next action、revision | 一个业务请求一个 Task；不等于 Job |
-| ExecutionAttempt | 一次可能产生外部副作用的执行尝试 | 追加；不等于轮询/消息次数 |
+| WorkTask | Workspace 内用户可观察主状态、stage、进度证据、错误、next action、revision | 一个业务请求一个 Task；不等于 Job；只能引用同一 Workspace 的业务目标 |
+| ExecutionAttempt | 一次可能产生外部副作用的执行尝试 | 继承 WorkTask 的 Workspace；追加；不等于轮询/消息次数 |
 | ProviderSubmission | submission key、配置版本、发送时间、external job ID、ack/证据 | submit 前先存；超时可为 unknown |
 | ProviderCallbackInbox | Provider event ID/signature/replay 摘要、接收时间 | 重复/乱序幂等；不存敏感完整响应 |
 | MediaArtifact | Workspace 内稳定媒体身份、purpose/source | 稳定 ID |
 | MediaArtifactVersion | 对象位置版本、size、实际类型、探测规格、SHA-256、state | 字节就绪后不可变 |
 | MediaDerivative | 缩略图/安全预览到原媒体版本的血缘 | 独立版本；不替代导出原件 |
 | LineageRecord | 固定输出→固定输入/Task/Attempt/Capability/actor | 只追加；不自环、不用 current 回填历史 |
-| CostRecord | reserve/settle/release/adjust 的单位、值、证据及关联 Preflight estimate | 只追加、精确数值；estimate 本身不是账本，CostRecord 不是客户账单 |
+| CostRecord | submitted/not_submitted/unknown、内部预占、Provider 返回的单位/值、来源版本与关联 Attempt | 只追加；计量 unavailable 时不自行估价；不是项目预算、币种设置或客户账单 |
 
 RightsDecision、ContentDecision、DataProcessingProfile 和 AuditRecord 由 DES-013 Governance 拥有。Platform 在每个外发/媒体/下载边界调用门禁并提交最小审计记录，不保存第二份决定。
 
@@ -87,7 +87,7 @@ Secret 存在、公开文档列出模型或测试一次 200 均不等于 active�
 | --- | --- | --- |
 | ListCapabilities | purpose、actor、输入类型 | 已验证能力、限制、计量和不可用原因；不返回 Secret |
 | PreflightCapability | 固定业务输入、参数、用途、scope | ready/warning/blocked/unavailable、input hash、config version、estimate、有效期；零任务/预占/外发 |
-| CreateWorkTask | 业务 request ref、有效 Preflight、确认、幂等键 | WorkTask + reserve + StartWorkflow Outbox；任一失败零半任务 |
+| CreateWorkTask | 业务 request ref、有效 Preflight、确认、幂等键 | WorkTask + reserve + StartExecution Outbox；任一失败零半任务 |
 | GetTask/ListTasks | actor、scope/filter | canonical state、stage、Attempt 摘要、消耗、错误、next action |
 | RequestCancel | Task、expected revision、幂等键 | 本地取消或 cancel_requested，不伪造 Provider 确认 |
 | RequestSafeRetry | failed Task、固定输入、失败证据、幂等键 | 带 predecessor 引用的新 WorkTask/ExecutionAttempt 或明确不可重试；原 failed Task 不逆转，unknown 拒绝 |
@@ -119,12 +119,12 @@ Canonical 终态只有 `succeeded`、`failed`、`cancelled`、`manual_attention`
 sequenceDiagram
     participant B as 业务模块/API
     participant DB as PostgreSQL + Outbox
-    participant W as Durable Workflow
+    participant W as WorkTask Worker
     participant A as Provider Adapter
     participant M as Media Worker
-    B->>DB: Request + Task + reserve + StartWorkflow
+    B->>DB: Request + Task + reserve + StartExecution
     DB-->>B: Task ID
-    DB-->>W: 幂等启动 workflow_id=task_id
+    DB-->>W: 幂等启动 execution_id=task_id
     W->>DB: 先创建 Attempt/SubmissionKey
     W->>A: submit(attempt key)
     alt 返回 external job ID
@@ -142,11 +142,13 @@ sequenceDiagram
     W->>DB: Task succeeded
 ```
 
-Workflow 引擎内部 history/Job 不是用户事实。每个可观察转移先写 PostgreSQL WorkTask/Attempt，Workflow 从稳定 ID 继续。回调先验签/防重放并写 Inbox，再 Signal Workflow；重复/乱序回调不产生新 Attempt/Candidate/Cost。
+Worker/队列内部 Job 不是用户事实。每个可观察转移先写 PostgreSQL WorkTask/Attempt，Worker 从稳定 ID 继续。回调先验签/防重放并写 Inbox，再通知对应执行；重复/乱序回调不产生新 Attempt/Candidate/Cost。
 
-### 5.3 Temporal 与 PostgreSQL Queue
+### 5.3 Production Harness 与 WorkTask 的边界
 
-Temporal 为优先候选，原因是长定时器、Signal、重启恢复和可编程对账。PostgreSQL Queue 为简化对照。ADR-003 必须在两者上执行同一故障矩阵：外发前退出、已外发未回应退出、得到 external ID 后退出、回调重复/乱序、媒体下载/登记中断和打包中断。任一选项都不能声称外部副作用 Exactly-once。
+MVP 使用 Production Harness/LangGraph 管理项目级阶段、Skill 编排、门禁、人工等待和恢复引用；使用现有 WorkTask、Outbox/Inbox、RabbitMQ 与 Python Worker 承载异步执行、Provider 交互和媒体对账。两者不能共享一套“当前状态”字段：ProductionRun/StageRun/Gate 是生产流程事实，WorkTask/Attempt 是一次可观察执行事实，LangGraph checkpoint 只是恢复指针。
+
+MVP 不引入 Temporal 或另一个独立耐久 Workflow 服务。Temporal 仅作为规模、定时器或跨服务恢复证据出现后的 post-MVP 对比候选；届时必须证明不会产生第二个 ProductionRun/StageRun/Gate 事实源。无论采用何种内部执行机制，都不能声称外部副作用 Exactly-once。
 
 ## 6. Provider 外部副作用、取消、重试与 unknown
 
@@ -206,7 +208,7 @@ cancel/fail_before_use → release
 later evidence → adjust
 ```
 
-CostRecord 使用精确 decimal + unit/currency + evidence source/version。unknown 保留预占并显示待对账；任务最终处置必须能以 settle/release/adjust 解释收敛。任何数据都不对外表达客户应付或余额。
+CostRecord 固定是否已外发、Attempt、evidence source/version；Provider 真实返回计量时才保存精确 decimal + unit/currency，未返回时记录 unavailable 而不自行估价。unknown 显示可能已外发和待对账。普通工作台不展示预算、币种输入或项目成本面板，任何内部数据都不表达客户应付或余额。
 
 ## 9. 容量保护和真实降级
 
@@ -231,13 +233,13 @@ CostRecord 使用精确 decimal + unit/currency + evidence source/version。unkn
 稳定关联链：
 
 ```text
-request_id → business_request_id → task_id → workflow_id
+request_id → business_request_id → task_id → execution_id
 → attempt_id → provider_submission/external_job_id
 → media_artifact/version → lineage_id → cost_record
 → candidate/selection/export_snapshot/package_build → audit/diagnostic_id
 ```
 
-- OTel Trace 跨 API、Outbox、Workflow、Worker、Adapter、媒体和业务候选登记；
+- OTel Trace 跨 API、Production Harness、Outbox、Worker、Adapter、媒体和业务候选登记；
 - Metric：任务提交延迟、queue age、状态可见延迟、stage age、unknown age、取消结果、回调重复/验签失败、Provider latency/error、下载/探测/登记失败、成本未收敛、隔离对象 age；
 - Metric label 仅使用模块、capability/provider 受控码、state/stage、result/error code；不用 User/Workspace/Task/Media/Prompt 作 label；
 - 用户错误提供安全摘要、retryable、next action、时间和诊断 ID；受控支持查询仍按 Workspace/最小必要授权并审计。
@@ -262,13 +264,13 @@ request_id → business_request_id → task_id → workflow_id
 
 ### 12.2 故障 Gate
 
-在 Temporal 与 PostgreSQL Queue 对照中至少执行 100 次重复提交/回调、所有关键 kill point、网络超时、URL 过期、损坏/伪 MIME、hash 不符、对象存储中断和跨 Workspace payload。重复外发/重复正式媒体/跨空间成功必须为 0；不能自动恢复的项必须进明确 unknown/manual action。
+在 Production Harness、WorkTask/RabbitMQ 和 Python Worker 的当前边界上至少执行 100 次重复提交/回调、所有关键 kill point、网络超时、URL 过期、损坏/伪 MIME、hash 不符、对象存储中断和跨 Workspace payload。重复外发/重复正式媒体/跨空间成功必须为 0；不能自动恢复的项必须进明确 unknown/manual action。
 
 ## 13. 待决策
 
 | 问题 | 当前建议 | 关闭点 |
 | --- | --- | --- |
-| Temporal 或 PostgreSQL Queue | Temporal 优先，两者执行同一故障矩阵 | ADR-003 |
+| Production Harness + WorkTask/RabbitMQ | MVP 固定该边界；Temporal 仅作为 post-MVP 对比候选 | DES-001 / ADR-003 |
 | 首个图片/视频 Provider | 仅以真实账号、地域、样片质量和故障证据选择 | CUR-PLT-Q-001/G-B/G-C |
 | 对象存储 | 私有托管 S3 兼容，验证 object version、Range、生命周期与 20 GiB 包 | ADR-004/G-D |
 | 断点上传 | 对外上传进入 P0 时在 tus 和对象存储 multipart 中 PoC | 真实用户上传样本 |

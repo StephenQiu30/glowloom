@@ -310,7 +310,7 @@ owner 把 Workspace 所有权转给现有 editor。转移原子完成：新 owne
 | NFR ID | 类别 | 可测要求 |
 | --- | --- | --- |
 | CUR-IAM-NFR-001 | 隔离 | 在用户读取、直接 ID、业务命令、异步执行、预览和下载六类测试中，跨 Workspace 成功访问数为 0。 |
-| CUR-IAM-NFR-002 | 授权失效 | Session 撤销、Membership 移除/降权或 Workspace 归档事实提交后，所有业务列表/详情/CUR-CAN 画布在 ≤5 秒内反映；高风险下载和外部副作用提交必须在执行时同步复核并立即阻止，不等待页面刷新。 |
+| CUR-IAM-NFR-002 | 授权失效 | Session 撤销、Membership 移除/降权或 Workspace 归档事实提交后，所有业务列表/详情在 ≤5 秒内反映；post-MVP CUR-CAN 画布同样必须遵守该边界。高风险下载和外部副作用提交必须在执行时同步复核并立即阻止，不等待页面刷新。 |
 | CUR-IAM-NFR-003 | owner 一致性 | owner 转移在并发和故障注入测试中 100% 保持恰有一个 current owner，零中间可观察半状态。 |
 | CUR-IAM-NFR-004 | 幂等 | 首次 Workspace 建立、邀请发送/接受、成员移除和 owner 转移在 100 次重复/超时重试中只产生一个业务结果。 |
 | CUR-IAM-NFR-005 | 交互性能 | 在单用户 20 个 Workspace、单 Workspace 100 个 Membership 的基准数据集上，Workspace 列表及授权读取 P95 ≤ 1 秒；成员列表 P95 ≤ 1.5 秒。 |
