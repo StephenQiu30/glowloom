@@ -2,7 +2,7 @@
 
 - 状态：active
 - 最近审查：2026-08-20
-- 当前需求与设计状态：proposed
+- 当前状态：Requirement 已审核为 ready_for_design；Design、PRD 与 Plan 为 proposed
 
 ## 1. 当前产品边界
 
@@ -18,9 +18,12 @@ Research
   → Domain & Data
   → Product Modules
   → Requirement
+  → Requirement Review
   → Interface / Workflow
   → Module Detail Design
+  → Slice PRD
   → Plan
+  → Traceability
   → Implementation & Test
   → Acceptance Evidence
 ```
@@ -34,7 +37,10 @@ Research
 | research | 公开事实、固定证据、产品模式和待验证推断 | [AI 短剧研究索引](./research/ai-short-drama/README.md) |
 | design | 架构、领域数据、模块、接口工作流与模块详细设计 | [Design 索引](./design/README.md) |
 | requirement | 用户结果、业务规则、边界和验收条件 | [Requirement 索引](./requirement/README.md) |
-| plan | 已接受需求与设计形成的纵向实施计划 | [Plan 状态](./plan/README.md) |
+| review | 需求/设计审核发现、修正和签认状态 | [Review 索引](./review/README.md) |
+| prd | A—F 纵向交付切片的产品范围和发布 Gate | [PRD 索引](./prd/README.md) |
+| plan | 与 PRD 对应的工作包、验证和停止条件 | [Plan 索引](./plan/README.md) |
+| traceability | Requirement、Design、PRD、Plan 和验收关系 | [追踪矩阵](./traceability/README.md) |
 | acceptance | 实施后的真实验收证据 | [Acceptance 状态](./acceptance/README.md) |
 | archive | 被替代但仍需追溯的历史文档 | [归档索引](./archive/README.md) |
 
@@ -45,8 +51,11 @@ Research
 3. [002 目标产品与功能模块](./design/002-AI视频生产平台目标产品与功能模块设计.md)；
 4. [000 目标需求总览](./requirement/000-AI视频生产平台目标需求总览.md)；
 5. [M01—M15 详细 Requirement 索引](./requirement/README.md)；
-6. [003 接口、工作流与功能实现](./design/003-AI视频生产平台接口工作流与功能实现设计.md)；
-7. [004 剧本基础分析与人物拆解详细设计](./design/004-AI视频生产平台剧本基础分析与人物拆解详细设计.md)。
+6. [需求基线专业审核记录](./review/001-M01至M15需求基线专业审核记录.md)；
+7. [003 接口、工作流与功能实现](./design/003-AI视频生产平台接口工作流与功能实现设计.md)；
+8. [M01—M15 模块详细 Design](./design/modules/README.md)；
+9. [A—F PRD](./prd/README.md)与[实施 Plan](./plan/README.md)；
+10. [Requirement—Design—PRD—Plan 追踪矩阵](./traceability/001-Requirement-Design-PRD-Plan追踪矩阵.md)。
 
 ## 5. 当前技术结论
 

@@ -7,4 +7,6 @@
 
 实现完成后，每份证据必须关联需求 ID、固定测试数据、环境、执行命令、结果、失败边界和残余风险。系统级基准使用同一份 3—5 分钟金标脚本，并执行换装、地点状态和镜头重排的中途变更实验；文档、Mock、代码存在或测试源码不能代替真实执行结果。
 
+Requirement、Design、PRD、Plan 与未来 Evidence 的映射入口见[追踪矩阵](../traceability/001-Requirement-Design-PRD-Plan追踪矩阵.md)。
+
 旧 MVP 验收计划位于 [v1 Acceptance 归档](../archive/v1/acceptance/README.md)，不覆盖当前需求。
