@@ -1,8 +1,8 @@
 # Lanverse Plan 状态
 
-- 状态：in_progress
-- 最近审查：2026-08-19
+- 状态：waiting_for_design_acceptance
+- 最近审查：2026-08-20
 
-当前 MVP 工作包见 [Agent Harness MVP 实施计划](<./001-Agent Harness MVP实施计划.md>)。本计划覆盖从剧本导入、深度理解、分集确认到 Project 级 ProductionRun、分层 StageRun、人工 Gate 和工作台投影的 Production Harness 最小闭环；不包含画布、面向产品用户的通用工作流编排器或社区 Skill。
+当前 M01—M15 详细 Requirement 与 Design 仍为 `proposed`，因此没有有效实施计划。后续 Plan 必须从已接受的纵向切片形成，首先覆盖 M03 来源与叙事、M04 人物/场景最小知识和 M05 手工镜头闭环，再进入 M06 受限 Agent；每一步记录需求 ID、依赖、停止条件、验证命令和真实外部条件。
 
-由新模块化分析产生的 Plan、开发周期表、工作包、依赖图和验收计划属于当前产品成果，必须保留并在本目录按新顺序登记。新 Plan 必须记录团队容量、依赖、关键路径、三点估算、外部等待、缓冲、验证命令和停止条件；模块名称或历史代码完成度不能直接作为工期估算单位。
+旧 Agent Harness 计划位于 [v1 Plan 归档](../archive/v1/plan/README.md)，不参与当前排期或完成度判断。

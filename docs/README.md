@@ -1,57 +1,70 @@
 # Lanverse 软件工程文档导航
 
 - 状态：active
-- 最近审查：2026-08-19
-- 当前产品需求状态：proposed
+- 最近审查：2026-08-20
+- 当前需求与设计状态：proposed
 
 ## 1. 当前产品边界
 
-Lanverse 当前从零定义一款 AI 短剧核心制作平台。产品以 Workspace 作为授权、协作和隔离边界，以 Project 作为一部短剧及其制作运行边界；Production Harness 从整剧导入和深度理解开始，依次控制正式资产、分镜与镜头设计、关键帧、逐镜视频候选、每镜唯一主选，以及固定、有序、可追溯的镜头视频素材包导出。Project/Episode 工作台读取同一流程与领域事实，用于理解依赖、阻塞、任务状态和局部返工。
+Lanverse 当前目标是一套可控制、可审阅、可恢复的 AI 连续视频生产平台。系统从创意或脚本开始，建立结构化叙事与生产知识，完成镜头规划、生成计划、候选比较、质量修复、版本审阅、基础装配和不可变交付。
 
-当前阶段不建设可视化画布、用户自定义流程、时间线、多轨剪辑、镜头拼接、转场、调色、字幕与音频后期、整集渲染、单一成片 MP4、发布分发、支付计费或商业运营。CUR-CAN/DES-011 仅保留为 post-MVP 投影设计，不进入当前实现与验收 Gate。
+系统不替代专业 NLE，不提供任意代码工作流，不承诺无审阅自动发布，也不建设定价、订阅、账单、支付和增长系统。资源用量只服务外部模型和媒体任务治理。
 
-## 2. 正式文档链路
+## 2. 当前正式文档链路
 
-Research → Requirement（含 AC）→ Design → Plan → 实现与测试 → Acceptance Evidence → Release。
+```text
+Research
+  → System Architecture
+  → Domain & Data
+  → Product Modules
+  → Requirement
+  → Interface / Workflow
+  → Module Detail Design
+  → Plan
+  → Implementation & Test
+  → Acceptance Evidence
+```
 
-范围或业务事实变化从 Requirement 开始更新；技术设计不能反向扩大产品范围。当前 MVP 直接以已评审的 Requirement、Design 和 Plan 驱动实现，暂不维护独立 PRD 目录。
+阅读从架构到模块展开；变更治理仍遵守 Requirement 定义“要什么”、Design 定义“如何满足”。如果架构研究暴露新的用户风险，必须回到 Requirement 形成可观察结果和验收条件，不能只留在技术文档中。
 
 ## 3. 文档入口
 
 | 目录 | 作用 | 当前入口 |
 | --- | --- | --- |
-| research | 固定证据、产品观察、开源工作流模式与明确拒绝点 | [AI 短剧研究索引](./research/ai-short-drama/README.md) |
-| requirement | 用户、场景、功能、规则、边界与验收条件 | [当前需求索引](./requirement/README.md) |
-| design | 产品模块协作、状态、交接、失败与技术约束 | [Design 索引](./design/README.md) |
-| plan | 评审通过后的实施工作包与验证门禁 | [Plan 状态](./plan/README.md) |
-| acceptance | 实施前验收计划与实现完成后的真实验收证据；两者状态严格区分 | [Acceptance 状态](./acceptance/README.md) |
-| archive | 已归档但仍需追溯的历史设计与交付文档 | [归档索引](./archive/README.md) |
+| research | 公开事实、固定证据、产品模式和待验证推断 | [AI 短剧研究索引](./research/ai-short-drama/README.md) |
+| design | 架构、领域数据、模块、接口工作流与模块详细设计 | [Design 索引](./design/README.md) |
+| requirement | 用户结果、业务规则、边界和验收条件 | [Requirement 索引](./requirement/README.md) |
+| plan | 已接受需求与设计形成的纵向实施计划 | [Plan 状态](./plan/README.md) |
+| acceptance | 实施后的真实验收证据 | [Acceptance 状态](./acceptance/README.md) |
+| archive | 被替代但仍需追溯的历史文档 | [归档索引](./archive/README.md) |
 
 ## 4. 推荐阅读顺序
 
-1. [AI 短剧研究与工作流证据](./research/ai-short-drama/README.md)，重点阅读[跨项目产品决策](./research/ai-short-drama/021-跨项目工作流模式与Lanverse产品决策.md)；
-2. [001 当前核心产品需求总览](./requirement/001-当前核心产品需求总览.md)；
-3. [002 身份、Workspace 与成员协作](./requirement/002-身份Workspace与成员协作需求.md)；
-4. [003 项目与剧集工作台](./requirement/003-项目与剧集工作台需求.md)；
-5. [004 剧本分析与叙事结构](./requirement/004-剧本分析与叙事结构需求.md)；
-6. [005 角色、场景与道具资产](./requirement/005-角色场景与道具资产需求.md)；
-7. [006 分镜与镜头设计](./requirement/006-分镜与镜头设计需求.md)；
-8. [007 镜头关键帧与视觉参考](./requirement/007-镜头关键帧与视觉参考需求.md)；
-9. [008 镜头视频生成与候选选择](./requirement/008-镜头视频生成与候选选择需求.md)；
-10. [009 镜头检查与素材包导出](./requirement/009-镜头检查与素材包导出需求.md)；
-11. [010 平台支撑与跨模块质量](./requirement/010-平台支撑与跨模块质量需求.md)；
-12. [012 安全、隐私、权利与内容治理](./requirement/012-安全隐私权利与内容治理需求.md)；
-13. [013 制作流程控制与 Agent Harness](./requirement/013-制作流程控制与Agent-Harness需求.md)；
-14. [目标技术架构与选型](./design/001-目标技术架构与选型.md)、[Production Harness 与 Agent Skill 总体设计](<./design/017-Agent Harness与MVP业务闭环设计.md>)及[Design 索引](./design/README.md)；
-15. [Requirement → Design 追踪矩阵](./design/015-Requirement到Design追踪矩阵.md)；
-16. post-MVP 评审时再阅读 [011 可视化制作画布与工作流信息](./requirement/011-可视化制作画布与工作流信息需求.md)。
+1. [000 目标系统架构](./design/000-AI视频生产平台目标系统架构设计.md)；
+2. [001 核心领域与数据模型](./design/001-AI视频生产平台核心领域与数据模型设计.md)；
+3. [002 目标产品与功能模块](./design/002-AI视频生产平台目标产品与功能模块设计.md)；
+4. [000 目标需求总览](./requirement/000-AI视频生产平台目标需求总览.md)；
+5. [M01—M15 详细 Requirement 索引](./requirement/README.md)；
+6. [003 接口、工作流与功能实现](./design/003-AI视频生产平台接口工作流与功能实现设计.md)；
+7. [004 剧本基础分析与人物拆解详细设计](./design/004-AI视频生产平台剧本基础分析与人物拆解详细设计.md)。
 
-## 5. 维护规则
+## 5. 当前技术结论
 
-- Requirement 只描述业务事实和用户可观察结果，不复制代码目录、数据库表或供应商 SDK；
-- Research 必须固定证据时间和 GitHub commit，并区分公开事实、合理推断与待验证；开源项目只用于工作流和模块模式研究，不授权复制代码；
-- 每条需求使用稳定全局 ID，并追踪到 Design、AC、测试和发布证据；
-- accepted 只表示需求已通过评审，verified 只表示实现已有真实证据；
-- Mock、字段占位、路由名称和历史代码行为均不能证明需求完成；
-- 新模块分析产生的 Design、Plan、周期表和验收设计属于当前成果，必须保留并回链 CUR ID；
-- 开发周期只能在模块范围、开放问题、验收条件和关键技术风险完成评审后估算。
+- 后端以 Python 为唯一业务主栈；FastAPI 承载短请求与短事务。
+- Agent、Provider 和媒体任务由独立 Python Worker 执行，LangGraph 只编排单次 Agent 运行。
+- PostgreSQL 保存业务事实和用户可见操作状态；Outbox 可靠触发 RabbitMQ 后台任务。
+- 首期不引入 Go。只有真实容量、资源或尾延迟证据满足架构 Gate 后才进行局部 Go PoC。
+
+## 6. 历史文档处理
+
+旧 Requirement、DES-000—017、Agent Harness Plan 和旧 MVP Acceptance 已整体移动到 [v1 归档](./archive/v1/README.md)。它们没有被删除，但已退出当前事实源；旧 `CUR-*`、`DES-*` 和完成状态不能证明当前目标方案已接受或已实现。
+
+## 7. 维护规则
+
+- 当前正式目录中只保留一套编号和事实源；历史文件只进入 archive；
+- Requirement 使用稳定 ID 并包含成功、失败、权限、恢复和验收场景；
+- Design 明确问题、范围、非目标、边界、数据、接口、状态和失败路径；
+- Plan 只能从已接受的 Requirement 与 Design 形成，不能反向改变范围；
+- accepted 表示评审通过，verified 表示已有真实执行证据，两者不得混用；
+- 代码、Mock、字段占位和文档本身不能证明需求完成；
+- 新的详细模块按依赖和实施优先级追加，不预建未来目录、服务或抽象层。

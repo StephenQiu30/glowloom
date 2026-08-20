@@ -1,103 +1,67 @@
 # AI 视频生产平台 Design 索引
 
-## 0. 目标态重设计提案 v4（2026-08-20）
+- 状态：active
+- 基线日期：2026-08-20
+- 当前设计生命周期：proposed
 
-以下文档响应“允许全面重新设计、聚焦系统本身并评估后端技术栈”的方向。它们不继承本目录 000—017 的需求、对象模型、模块边界或路线图；项目功能、模块拆分、数据、接口、服务进程、执行顺序和失败恢复是主线。当前目标技术路径为 Python 单栈、多进程角色：FastAPI 与 Python 应用层拥有唯一业务实现，LangGraph、Provider 和媒体任务运行在独立 Python Worker；首期不引入 Go，Go 仅在容量与剖析证据满足 019 Gate 后重新评估。
+## 1. 当前设计顺序
 
-| Design | 责任 | 当前结论 |
-| --- | --- | --- |
-| [018-AI 视频生产平台目标产品与功能模块设计](./018-AI视频生产平台目标产品与功能模块设计.md) | 产品边界、用户流程、15 个功能模块、对象所有权、状态、失败路径、权限和系统验收 | proposed |
-| [019-AI 视频生产平台目标系统架构设计](./019-AI视频生产平台目标系统架构设计.md) | Python 单栈、多进程角色、服务启动/执行顺序、耐久任务、Go Gate、数据、媒体、可靠性和部署 | proposed |
-| [020-AI 视频生产平台核心领域与数据模型设计](./020-AI视频生产平台核心领域与数据模型设计.md) | 聚合、数据表、模块所有权、关系、数据库约束、版本、投影、删除和迁移 | proposed |
-| [021-AI 视频生产平台接口、工作流与功能实现设计](./021-AI视频生产平台接口工作流与功能实现设计.md) | HTTP/事件契约、导入/生成/影响/修复/审阅/交付工作流、Agent、画布、媒体和研发切片 | proposed |
+正式 Design 从 000 重新编号，并按“架构 → 领域与数据 → 产品模块 → 接口工作流 → 模块详细设计”评审。
 
-018—021 是一组独立、可整体评审的目标态方案。v2 修正计划/任务状态混合、Operation 缺失、交付快照可变、有效范围依赖漂移序号和模块依赖问题；v3 完成 Python、Go、Java 可行性对照；v4 根据实际负载类型和现有工程基线，将 Python 单栈确定为主路径，并把服务顺序调整为“手工业务主线 → Agent 提案 → 真实生成 → 质量修复 → 审阅交付 → 协作画布”。运行上始终先提交 PostgreSQL 事实与 Outbox，再执行 Agent/Provider/媒体任务。商业定价、收费、订阅、支付和增长不在本方案范围；用量只用于系统资源治理。
+| 序号 | Design | 责任 | 状态 |
+| --- | --- | --- | --- |
+| 000 | [AI 视频生产平台目标系统架构设计](./000-AI视频生产平台目标系统架构设计.md) | Python 主栈、多进程角色、可靠执行、数据与媒体、Go Gate、部署和恢复 | proposed |
+| 001 | [AI 视频生产平台核心领域与数据模型设计](./001-AI视频生产平台核心领域与数据模型设计.md) | 聚合、事实所有权、数据关系、约束、版本、投影和迁移 | proposed |
+| 002 | [AI 视频生产平台目标产品与功能模块设计](./002-AI视频生产平台目标产品与功能模块设计.md) | 产品边界、用户流程、M01—M15、状态、失败路径、权限和验收切片 | proposed |
+| 003 | [AI 视频生产平台接口、工作流与功能实现设计](./003-AI视频生产平台接口工作流与功能实现设计.md) | HTTP/事件契约、耐久流程、Agent、媒体、失败恢复和纵向切片 | proposed |
+| 004 | [AI 视频生产平台剧本基础分析与人物拆解详细设计](./004-AI视频生产平台剧本基础分析与人物拆解详细设计.md) | M03 全部及 M04 人物子域的结构、身份、资料、状态、关系、弧光、证据和迁移；地点/道具详细设计待续 | proposed |
 
-### 0.1 接受与替代规则
+004 起为模块详细设计，按依赖与实施优先级增加，不按模块编号预建空文件。逻辑模块不等于微服务数量。
 
-- 018 是产品范围与功能模块事实源；019 是技术架构事实源；020 是对象所有权与数据约束事实源；021 是接口、工作流和实施切片事实源。
-- 四份文档必须整体接受，不能只接受对象名而继续沿用 000—017 的 ProductionRun/StageRun/WorkTask/LangGraph 状态组合。
-- 接受后，000—017 只保留为历史决策证据；旧需求、计划和追踪矩阵必须另行迁移或归档，不能自动继承“已完成”状态。
-- 实现任务只能从 021 的纵向切片产生；文档中的逻辑模块不是微服务数量，也不是要求一次性创建全部目录。
-
-## 1. 当前已登记事实范围（000—017，待替代）
-
-本目录是当前 Requirement 的技术/模块设计事实源，不是现有代码说明或历史技术债汇总。目标产品在 Workspace 授权边界内，以 Project 作为一部短剧及其制作运行边界，从剧本、叙事、资产、分镜、关键帧和视频候选到“每镜恰有一个显式主选，并导出有序原始视频素材包”为止。当前 MVP 优先完成不依赖画布的业务闭环，并由 Production Harness 统一管理阶段、门禁、恢复和 Skill 执行；Episode/Shot/Package 是 Project ProductionRun 下可独立推进的 StageRun 作用域。
-
-当前明确排除：Timeline、剪辑、拼接、转码、成片、字幕/音频后期、发布投放、支付计费和商业运营。可视化画布在 MVP 后若实施，只能是同一领域事实的 Read Model/Projection，不是第二业务引擎。
-
-## 2. 旧方案阅读顺序
-
-| 序号 | Design | 责任 |
-| --- | --- | --- |
-| 000 | [项目顶层结构与工程规范](./000-项目顶层结构与工程规范.md) | 目标仓库结构、依赖、契约、测试和交付门禁 |
-| 001 | [目标技术架构与选型](./001-目标技术架构与选型.md) | 真实运行栈、目标架构、选项权衡和 PoC Gate |
-| 002 | [领域模块边界与跨模块契约](./002-领域模块边界与跨模块契约.md) | 事实所有者、Command/Query/Event、Outbox/Inbox、stale 和批量失败 |
-| 003 | [身份、Workspace 与权限](./003-身份Workspace与权限设计.md) | UserAccount/Session/Membership、强隔离、action policy 和 ServiceGrant |
-| 004 | [项目与剧集工作台](./004-项目与剧集工作台设计.md) | Project/Episode、顺序、概览、blocker 和 next action |
-| 005 | [剧本与叙事版本](./005-剧本与叙事版本设计.md) | 原稿、分集、ScriptVersion、NarrativeUnit、AI 候选和生产处置 |
-| 006 | [资产候选与选择](./006-资产候选与选择设计.md) | 角色/场景/道具、状态/版本、图片候选、就绪和影响 |
-| 007 | [分镜基线与叙事覆盖](./007-分镜基线与叙事覆盖设计.md) | Shot/Spec/Order、拆合守恒、Coverage 和 StoryboardBaseline |
-| 008 | [关键帧与视觉参考](./008-关键帧与视觉参考设计.md) | Slot/Brief、图片 Candidate/Selection、VisualReferenceRevision |
-| 009 | [视频生成候选与主选](./009-视频生成候选与主选设计.md) | 固定生成请求、原始视频 Candidate、唯一主选与重新确认 |
-| 010 | [镜头检查、快照与素材包导出](./010-镜头检查快照与素材包导出设计.md) | 逐镜检查、complete/partial、ExportSnapshot、ZIP64 原始素材包 |
-| 011 | [可视化制作画布与工作流投影（MVP 后）](./011-可视化制作画布与工作流投影设计.md) | CanvasLayout、DomainNode/Edge、独立图层、SSE 恢复、列表等价和 Agent Proposal |
-| 012 | [平台 Capability、Provider、耐久任务与媒体](./012-平台Capability与Provider耐久任务及媒体设计.md) | Capability Catalog、Adapter、WorkTask/Attempt、unknown、私有媒体、血缘和消耗 |
-| 013 | [安全、隐私、权利与内容治理](./013-安全隐私权利与内容治理设计.md) | 数据分类、权利/内容/Provider 准入、AIGC、审计、保留/删除和安全事件 |
-| 014 | [NFR、SLO、容量、观测、备份与灾备](./014-非功能服务目标容量观测备份与灾备设计.md) | 统一 SLI/SLO、容量口径、部署、OTel、降级、RPO/RTO 和恢复演练 |
-| 015 | [Requirement → Design 追踪矩阵](./015-Requirement到Design追踪矩阵.md) | FR/NFR/AC、不变式和开放 Gate 的双向追踪 |
-| 017 | [Production Harness 与 Agent Skill 总体设计](<./017-Agent Harness与MVP业务闭环设计.md>) | Project 级运行、分作用域阶段/门禁、LangGraph Skill 和候选审核闭环 |
-
-历史索引曾记录 DES-016“跨页面 BasicLayout 与壳层布局”；对应归档文件当前不在工作区，且不属于本次目标态设计事实源。
-
-## 3. 旧方案关键依赖
+## 2. 依赖关系
 
 ```mermaid
 flowchart TD
-    R["Current Requirements"] --> A["DES-001 目标架构"]
-    A --> B["DES-002 模块边界/契约"]
-    B --> D["DES-003～010 领域模块"]
-    D --> C["DES-011 Canvas 投影（MVP 后）"]
-    D --> P["DES-012 Platform"]
-    P --> G["DES-013 Governance"]
-    P --> H["DES-017 Production Harness"]
-    C --> N["DES-014 NFR/DR"]
-    P --> N
-    G --> N
-    R --> T["DES-015 追踪矩阵"]
-    A --> T
-    B --> T
-    D --> T
-    C --> T
-    P --> T
-    G --> T
-    N --> T
-    H --> T
+    A["000 系统架构"] --> B["001 核心领域与数据"]
+    A --> C["002 产品与功能模块"]
+    B --> C
+    A --> D["003 接口与工作流"]
+    B --> D
+    C --> D
+    B --> E["004 剧本分析与人物拆解"]
+    C --> E
+    D --> E
 ```
 
-箭头不表示代码必须拆服务。DES-003～013 是模块化单体中的逻辑边界；Production Harness 负责业务阶段控制，LangGraph 负责 Skill 内部图，WorkTask 负责异步执行；API 与 Worker 复用同一 Python 领域契约。
+000 决定运行和技术边界；001 决定事实所有权与不可合并对象；002 决定系统包含什么模块和用户结果；003 统一跨模块接口与运行语义；004 细化首个核心智能闭环。
 
-## 4. 旧方案技术提案状态
+## 3. 当前关键决策
 
-| 提案 | 当前状态 | 接受前证据 |
-| --- | --- | --- |
-| TypeScript + React/Next.js | proposed | 构建/E2E/无障碍/桌面工作台 PoC |
-| Python FastAPI 模块化单体 API | proposed | FastAPI/OpenAPI、SSE、模块边界和性能验证 |
-| Python Worker 进程 | proposed | 本地 Codex、LangGraph、Provider/媒体/导出故障闭环 |
-| PostgreSQL | proposed 优先 | 事务/唯一约束/Outbox/Inbox/并发/PITR 验证 |
-| Production Harness + LangGraph | proposed | 与 WorkTask/RabbitMQ、LangGraph checkpoint 执行同一故障 PoC 后 ADR；Temporal 仅为 MVP 后对照候选 |
-| 私有托管 S3 兼容存储 | proposed | 地域、权限、版本、生命周期、Range、20 GiB、备份/恢复 PoC |
-| REST/OpenAPI + SSE/轮询降级 | proposed | 契约漂移、断线/游标缺口、代理和多实例 PoC |
-| Redis | 非默认；可选 | 只能用于限流/缓存/SSE fan-out，不是事实源；证明必需后才引入 |
-| OpenTelemetry | proposed | 全链关联、低基数标签和敏感 canary 为 0 |
+- 后端当前采用 Python 单栈、多进程角色；FastAPI 与 Python 应用层拥有唯一业务实现。
+- Agent、Provider 和媒体任务在独立 Python Worker 运行；API 不执行长任务。
+- LangGraph 只编排单次 Agent 运行，不成为审批、人物资料或生产流程事实源。
+- PostgreSQL 事实与事务 Outbox 先提交，再执行队列、外部模型和媒体副作用。
+- 首期不引入 Go；只有 000 中的容量与剖析 Gate 满足后才进行 Go PoC。
+- 商业计费、订阅、支付和增长不属于系统范围；用量只服务资源治理。
 
-## 5. 证据使用边界
+## 4. 事实源规则
 
-GitHub/公开项目仅用于证明可行模式、发现风险和构造 PoC，不是技术选型或需求事实源。特别是 [waoowaoo 固定提交](https://github.com/waooAI/waoowaoo/tree/ce8edebf7cd2fe32c37a8d628aa3edc67f544586) 的根 LICENSE 是 CC BY-NC-SA 4.0 人类可读摘要并含 NonCommercial；本项目只参考“可视化制作信息”交互模式，不复制其代码、UI、资产、领域结构或技术 DAG。
+- 000 是技术架构事实源；
+- 001 是对象所有权、版本与数据约束事实源；
+- 002 是目标产品边界与模块责任事实源；
+- 003 是接口、事件、耐久流程和实施切片事实源；
+- 004 及后续详细 Design 是对应模块的实现事实源；
+- [Requirement](../requirement/README.md) 定义用户结果和验收，Design 不得反向扩大范围；
+- 多份文档冲突时不得任选一份实现，应先按上述所有权修正事实源和所有下游引用。
+
+## 5. 历史设计
+
+旧 DES-000—017 已移动到 [v1 Design 归档](../archive/v1/design/README.md)。它们保留历史编号，但不再与当前 000—004 并列，也不参与当前实现和验收。
 
 ## 6. 文档治理
 
-- 编号是当前阅读顺序，每个编号只有一份 Design；不并存另一份“总核心模块设计”制造双事实源。
-- 需求变更时先更新 Requirement，再更新对应 Design 和 DES-015；不在 Plan/代码中隐式改范围。
-- 技术决策只在 PoC 证据完整后通过 ADR 从 proposed 转 accepted。
-- 历史技术债、旧实现说明、剪辑/成片/商业运营设计不进入当前 Design 序列。
+- 当前编号只表达推荐阅读顺序，每个编号只有一份正式 Design；
+- 模块详细设计必须回链稳定 Requirement ID 和上游 Design；
+- 技术提案只有在 ADR/PoC 和相应故障验证完成后才能从 `proposed` 进入 `accepted`；
+- 设计变化先更新事实所有者，再更新接口、数据、计划和验收；
+- 不为未来可能出现的服务、兼容层、目录或工作流提前创建空设计。
