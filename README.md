@@ -122,4 +122,4 @@ docker compose --env-file .env.example config >/dev/null
 
 CI 在 PR、merge queue 和 main push 上运行完整门禁，并由稳定检查 `Required / CI` 汇总后端、前端、OpenAPI、真实基础设施、浏览器和交付边界。GitHub main 规则应禁止绕过并要求该检查成功；本地 commit 不等于远端 CI 已通过。
 
-产品研究、需求、架构与执行计划分别位于 `docs/research`、`docs/requirement`、`docs/design` 和 `docs/plan`；验收证据位于 `docs/acceptance`。真实凭据、媒体、日志和本地数据不得提交。
+正式产品文档只位于 `docs/requirement`、`docs/design`、`docs/prd`、`docs/plan` 和 `docs/acceptance`；分析过程、审核日志和历史归档不在项目内建立独立文档目录。真实凭据、媒体、日志和本地数据不得提交。
