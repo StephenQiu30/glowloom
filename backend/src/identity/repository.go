@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stephenqiu30/lanverse/backend/src/platform/database"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/httpapi"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -88,7 +89,7 @@ func (r *IdentityRepository) CreateSession(ctx context.Context, subject string, 
 	token := hex.EncodeToString(raw)
 	expires := time.Now().UTC().Add(24 * time.Hour)
 	var userID uuid.UUID
-	if err := r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
 		var user identityUserRecord
 		if err := tx.Where("identity_subject = ?", subject).First(&user).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 			user = identityUserRecord{ID: uuid.New(), IdentitySubject: subject, DisplayName: subject, Status: "active"}
@@ -123,92 +124,101 @@ func (r *IdentityRepository) Authenticate(ctx context.Context, token string, wor
 	if r.orm == nil {
 		return Principal{}, fmt.Errorf("identity repository ORM is not configured")
 	}
-	var session identitySessionRecord
-	if err := r.orm.WithContext(ctx).Where("token_hash = ? AND workspace_id = ? AND revoked_at IS NULL AND expires_at > ?", hashToken(token), workspaceID, time.Now().UTC()).First(&session).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Principal{}, httpapi.NotFound("会话")
+	var principal Principal
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		var session identitySessionRecord
+		if err := tx.Where("token_hash = ? AND workspace_id = ? AND revoked_at IS NULL AND expires_at > ?", hashToken(token), workspaceID, time.Now().UTC()).First(&session).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("会话")
+			}
+			return fmt.Errorf("authenticate session: %w", err)
 		}
-		return Principal{}, fmt.Errorf("authenticate session: %w", err)
-	}
-	var user identityUserRecord
-	if err := r.orm.WithContext(ctx).Where("id = ? AND status = ?", session.UserID, "active").First(&user).Error; err != nil {
-		return Principal{}, httpapi.NotFound("会话")
-	}
-	var membership identityMembershipRecord
-	if err := r.orm.WithContext(ctx).Where("user_id = ? AND workspace_id = ? AND status = ?", session.UserID, workspaceID, "active").First(&membership).Error; err != nil {
-		return Principal{}, httpapi.NotFound("Workspace 成员关系")
-	}
-	var role identityRoleRecord
-	if err := r.orm.WithContext(ctx).Where("id = ?", membership.RoleID).First(&role).Error; err != nil {
-		return Principal{}, fmt.Errorf("load membership role: %w", err)
-	}
-	return Principal{UserID: user.ID, WorkspaceID: workspaceID, MembershipID: membership.ID, Role: role.Code}, nil
+		var user identityUserRecord
+		if err := tx.Where("id = ? AND status = ?", session.UserID, "active").First(&user).Error; err != nil {
+			return httpapi.NotFound("会话")
+		}
+		var membership identityMembershipRecord
+		if err := tx.Where("user_id = ? AND workspace_id = ? AND status = ?", session.UserID, workspaceID, "active").First(&membership).Error; err != nil {
+			return httpapi.NotFound("Workspace 成员关系")
+		}
+		var role identityRoleRecord
+		if err := tx.Where("id = ?", membership.RoleID).First(&role).Error; err != nil {
+			return fmt.Errorf("load membership role: %w", err)
+		}
+		principal = Principal{UserID: user.ID, WorkspaceID: workspaceID, MembershipID: membership.ID, Role: role.Code}
+		return nil
+	})
+	return principal, err
 }
 
-func (r *IdentityRepository) Revoke(ctx context.Context, token string) error {
+func (r *IdentityRepository) Revoke(ctx context.Context, token string, workspaceID uuid.UUID) error {
 	if r.orm == nil {
 		return fmt.Errorf("identity repository ORM is not configured")
 	}
 	now := time.Now().UTC()
-	return r.orm.WithContext(ctx).Model(&identitySessionRecord{}).Where("token_hash = ? AND revoked_at IS NULL", hashToken(token)).Update("revoked_at", now).Error
+	return database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		return tx.Model(&identitySessionRecord{}).Where("token_hash = ? AND workspace_id = ? AND revoked_at IS NULL", hashToken(token), workspaceID).Update("revoked_at", now).Error
+	})
 }
 
 func (r *IdentityRepository) AuthorizePath(ctx context.Context, workspaceID uuid.UUID, path string) error {
 	if r.orm == nil {
 		return fmt.Errorf("identity repository ORM is not configured")
 	}
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	for index, part := range parts {
-		if index+1 >= len(parts) {
-			continue
+	return database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		for index, part := range parts {
+			if index+1 >= len(parts) {
+				continue
+			}
+			id, err := uuid.Parse(parts[index+1])
+			if err != nil {
+				continue
+			}
+			var owned bool
+			switch part {
+			case "workspaces":
+				owned = id == workspaceID
+			case "projects":
+				var project workspaceProjectRecord
+				err = tx.Where("id = ? AND workspace_id = ?", id, workspaceID).First(&project).Error
+				owned = err == nil
+			case "content-units":
+				owned, err = r.resourceInWorkspace(tx, "prj_content_units", id, workspaceID)
+			case "script-revisions":
+				owned, err = r.resourceInWorkspace(tx, "script_revisions", id, workspaceID)
+			case "operations":
+				owned, err = r.resourceInWorkspace(tx, "operations", id, workspaceID)
+			case "agent-runs":
+				owned, err = r.resourceInWorkspace(tx, "m06_agent_runs", id, workspaceID)
+			case "shots":
+				owned, err = r.resourceInWorkspace(tx, "sht_shots", id, workspaceID)
+			case "candidates":
+				owned, err = r.resourceInWorkspace(tx, "media_candidates", id, workspaceID)
+			case "generation-plans":
+				owned, err = r.resourceInWorkspace(tx, "gen_plans", id, workspaceID)
+			}
+			if err != nil {
+				return fmt.Errorf("authorize resource: %w", err)
+			}
+			if !owned {
+				return httpapi.NotFound("资源")
+			}
 		}
-		id, err := uuid.Parse(parts[index+1])
-		if err != nil {
-			continue
-		}
-		var owned bool
-		switch part {
-		case "workspaces":
-			owned = id == workspaceID
-		case "projects":
-			var project workspaceProjectRecord
-			err = r.orm.WithContext(ctx).Where("id = ? AND workspace_id = ?", id, workspaceID).First(&project).Error
-			owned = err == nil
-		case "content-units":
-			owned, err = r.resourceInWorkspace(ctx, "prj_content_units", id, workspaceID)
-		case "script-revisions":
-			owned, err = r.resourceInWorkspace(ctx, "script_revisions", id, workspaceID)
-		case "operations":
-			owned, err = r.resourceInWorkspace(ctx, "operations", id, workspaceID)
-		case "agent-runs":
-			owned, err = r.resourceInWorkspace(ctx, "m06_agent_runs", id, workspaceID)
-		case "shots":
-			owned, err = r.resourceInWorkspace(ctx, "sht_shots", id, workspaceID)
-		case "candidates":
-			owned, err = r.resourceInWorkspace(ctx, "media_candidates", id, workspaceID)
-		case "generation-plans":
-			owned, err = r.resourceInWorkspace(ctx, "gen_plans", id, workspaceID)
-		}
-		if err != nil {
-			return fmt.Errorf("authorize resource: %w", err)
-		}
-		if !owned {
-			return httpapi.NotFound("资源")
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
-func (r *IdentityRepository) resourceInWorkspace(ctx context.Context, table string, resourceID, workspaceID uuid.UUID) (bool, error) {
+func (r *IdentityRepository) resourceInWorkspace(tx *gorm.DB, table string, resourceID, workspaceID uuid.UUID) (bool, error) {
 	var resource workspaceResourceRecord
-	if err := r.orm.WithContext(ctx).Table(table).Where("id = ?", resourceID).First(&resource).Error; err != nil {
+	if err := tx.Table(table).Where("id = ?", resourceID).First(&resource).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return false, nil
 		}
 		return false, err
 	}
 	var project workspaceProjectRecord
-	if err := r.orm.WithContext(ctx).Where("id = ? AND workspace_id = ?", resource.ProjectID, workspaceID).First(&project).Error; err != nil {
+	if err := tx.Where("id = ? AND workspace_id = ?", resource.ProjectID, workspaceID).First(&project).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return false, nil
 		}

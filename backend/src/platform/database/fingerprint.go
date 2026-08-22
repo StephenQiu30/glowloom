@@ -22,6 +22,12 @@ var requiredTables = []string{
 	"ops_task_attempts", "ops_search_projection_checkpoints", "audit_events",
 }
 
+var requiredTenantPolicies = []string{
+	"projects", "iam_memberships", "iam_project_grants", "iam_sessions",
+	"iam_service_identities", "audit_events", "tpl_templates", "int_api_clients",
+	"int_webhook_subscriptions", "ops_idempotency_records", "ops_search_projection_checkpoints",
+}
+
 func VerifyCurrent(ctx context.Context, pool *pgxpool.Pool) error {
 	for _, table := range requiredTables {
 		var present bool
@@ -30,6 +36,22 @@ func VerifyCurrent(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 		if !present {
 			return fmt.Errorf("current schema is missing table %s", table)
+		}
+	}
+	for _, table := range requiredTenantPolicies {
+		var present bool
+		if err := pool.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM pg_policies
+				WHERE schemaname = current_schema()
+				  AND tablename = $1
+				  AND policyname = 'tenant_isolation'
+			)`, table).Scan(&present); err != nil {
+			return fmt.Errorf("check tenant policy %s: %w", table, err)
+		}
+		if !present {
+			return fmt.Errorf("current schema is missing tenant policy for %s", table)
 		}
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/stephenqiu30/lanverse/backend/src/platform/database"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/httpapi"
 )
 
@@ -29,16 +30,17 @@ func Require(identityService *IdentityService, next http.Handler) http.Handler {
 			httpapi.WriteError(w, r, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "Bearer 会话缺失", "创建或刷新当前 Workspace 会话"))
 			return
 		}
-		principal, err := identityService.Authenticate(r.Context(), authorization[len(prefix):], workspaceID)
+		workspaceContext := database.WithWorkspaceID(r.Context(), workspaceID)
+		principal, err := identityService.Authenticate(workspaceContext, authorization[len(prefix):], workspaceID)
 		if err != nil {
 			httpapi.WriteError(w, r, httpapi.NewError(httpapi.StatusForbidden, httpapi.CodeForbidden, "Workspace 访问被拒绝", "确认当前会话拥有该 Workspace 权限"))
 			return
 		}
-		if err := identityService.AuthorizePath(r.Context(), workspaceID, r.URL.Path); err != nil {
+		if err := identityService.AuthorizePath(workspaceContext, workspaceID, r.URL.Path); err != nil {
 			httpapi.WriteError(w, r, httpapi.NotFound("资源"))
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), contextKey{}, principal)))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(workspaceContext, contextKey{}, principal)))
 	})
 }
 

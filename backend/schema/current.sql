@@ -757,3 +757,51 @@ DROP POLICY IF EXISTS tenant_isolation ON iam_project_grants;
 CREATE POLICY tenant_isolation ON iam_project_grants
     USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
     WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);
+
+ALTER TABLE iam_sessions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam_sessions;
+CREATE POLICY tenant_isolation ON iam_sessions
+    USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
+    WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);
+
+ALTER TABLE iam_service_identities ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam_service_identities;
+CREATE POLICY tenant_isolation ON iam_service_identities
+    USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
+    WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);
+
+ALTER TABLE audit_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON audit_events;
+CREATE POLICY tenant_isolation ON audit_events
+    USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
+    WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);
+
+ALTER TABLE tpl_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON tpl_templates;
+CREATE POLICY tenant_isolation ON tpl_templates
+    USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
+    WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);
+
+ALTER TABLE int_api_clients ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON int_api_clients;
+CREATE POLICY tenant_isolation ON int_api_clients
+    USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
+    WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);
+
+ALTER TABLE int_webhook_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON int_webhook_subscriptions;
+CREATE POLICY tenant_isolation ON int_webhook_subscriptions
+    USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
+    WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);
+
+ALTER TABLE ops_idempotency_records ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON ops_idempotency_records;
+CREATE POLICY tenant_isolation ON ops_idempotency_records
+    USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
+    WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);
+
+ALTER TABLE ops_search_projection_checkpoints ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON ops_search_projection_checkpoints;
+CREATE POLICY tenant_isolation ON ops_search_projection_checkpoints
+    USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
+    WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);

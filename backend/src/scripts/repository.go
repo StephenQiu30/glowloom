@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"github.com/stephenqiu30/lanverse/backend/src/platform/database"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/httpapi"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/messaging"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/objectstorage"
@@ -62,7 +63,9 @@ func (r *ScriptRepository) CreateProject(ctx context.Context, workspaceID uuid.U
 		return Project{}, fmt.Errorf("script repository ORM is not configured")
 	}
 	record := projectRecord{ID: uuid.New(), WorkspaceID: workspaceID, Name: name}
-	if err := r.orm.WithContext(ctx).Create(&record).Error; err != nil {
+	if err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		return tx.Create(&record).Error
+	}); err != nil {
 		return Project{}, fmt.Errorf("create project: %w", err)
 	}
 	return Project{ID: record.ID, WorkspaceID: record.WorkspaceID, Name: record.Name, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339)}, nil

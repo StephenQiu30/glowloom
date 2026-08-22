@@ -9,6 +9,6 @@ import (
 type IdentityStore interface {
 	CreateSession(context.Context, string, uuid.UUID) (Session, error)
 	Authenticate(context.Context, string, uuid.UUID) (Principal, error)
-	Revoke(context.Context, string) error
+	Revoke(context.Context, string, uuid.UUID) error
 	AuthorizePath(context.Context, uuid.UUID, string) error
 }
