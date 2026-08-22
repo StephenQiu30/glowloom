@@ -5,6 +5,7 @@ Lanverse 是前后端分离的 AI 视频生产平台。当前交付切片聚焦�
 ## 固定架构
 
 - `frontend/`：Next.js App Router、TypeScript、View/ViewModel 分层；API 客户端由 Umi OpenAPI 根据 Swagger 文档生成。
+- `admin/`：官方 Ant Design Pro v6 仓库模板的独立管理端，当前只保留登录/注册、管理入口、账号设置、错误页和权限基线，后续按 Lanverse 后端契约接入。
 - `backend/`：Go 模块化单体，负责公共 HTTP、PostgreSQL 业务事务、MinIO 对象存储和 Kafka outbox/worker；`backend/cmd/main.go` 是唯一启动入口，使用 `LANVERSE_ROLE` 选择角色。
 - `agent/`：Python 私有 Agent 服务，只承载 Harness/Skill 编排，不连接数据库或 Kafka，也不暴露公共 API。
 - `docs/`：唯一事实来源，按 `requirement → design → prd → plan → acceptance` 维护。
@@ -56,9 +57,18 @@ OPENAPI_SCHEMA_URL=../backend/api/openapi.json npm run openapi2ts
 npm run dev
 ```
 
+启动管理端：
+
+```bash
+cd admin
+pnpm install --frozen-lockfile
+pnpm run dev
+```
+
 访问：
 
 - 前端：`http://127.0.0.1:8123`
+- 管理端：Umi 默认开发端口（终端输出为准）
 - Go API 就绪检查：`http://127.0.0.1:8686/readyz`
 - Agent 私有就绪检查：`http://127.0.0.1:8790/readyz`
 - Swagger/OpenAPI 源：`backend/api/openapi.json`
