@@ -23,8 +23,8 @@
 
 ## 4. 范围与边界
 
-- 顶层 `agent/` 中独立 Python Agent Worker、LangGraph checkpoint、版本化 AgentRun Request/Result；
-- Go `backend/` 创建 AgentRun、校验结果并保存 Proposal；Python Agent 不持有业务数据库或通用 MinIO 凭据；
+- 顶层 `agent/` 中独立但仅内网运行的 Python FastAPI/LangGraph Agent Service、checkpoint、版本化 AgentRun Request/Result；不提供公共 API/Ingress；
+- Go `backend/` 创建 AgentRun、从平台唯一 Kafka 集群接管后台 Task 后通过私有 start/get/cancel 契约调用 Agent、校验结果并保存 Proposal；Python Agent 不连接 Kafka/Redis/Elasticsearch，不持有业务数据库或通用 MinIO 凭据；剧本检索只能调用 run-scoped backend Search Tool；
 - 只读 Tool 白名单和结构化 ProposalItem；
 - Agent token/tool 用量记录和 M14 外发评估；
 - 不允许 Agent 直接写表、自动批准事实、启动媒体生成、选主候选、接受风险或交付；
@@ -43,5 +43,6 @@
 5. 关闭 Agent 后切片 A 和已接受结果正常可用；
 6. 最小接管视图不保存第二套业务关系；
 7. Agent 外发和用量可追踪到 run/model/tool。
+8. frontend/第三方不能直连 Agent；部署清单只有一个 Kafka 集群且只有 backend 连接，停止 Agent 不影响其他 Topic 的 Go Worker。
 
 退出后才允许 Agent 提议媒体 GenerationPlan；实际媒体仍在切片 C。

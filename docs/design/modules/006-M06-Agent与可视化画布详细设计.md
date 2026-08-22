@@ -9,9 +9,9 @@
 
 LangGraph 只编排一次 AgentRun 内部推理；业务 Operation、批准和 current 状态固定由 Go Application Service 与 PostgreSQL 管理。Go M06 对业务变更只拥有 `AgentRun`/`AgentProposal`/`ProposalItem` 的运行与提案信封，不拥有信封内的领域命令语义和接受后写入。信封中的 `target_module + command_type + command_schema_version + payload/hash` 由 Go M03、M04、M05、M07 或 M10 等目标模块定义；用户接受时必须重新鉴权并调用目标 Go 命令端口。
 
-代码上明确分离 `backend/internal/modules/agents` 与顶层 `agent/`：前者是 Go M06 业务模块，后者是 Python、无业务写权限的 Harness/Skill 执行内核。Agent 文件可以承载完整的剧本、人物和生产需求 **推理编排**，但不能承载权威 **业务编排**；Go M03 拥有 Manifest/Narrative 批准，Go M02 拥有物化与顺序，Go M04 拥有人物身份、出场投影和生产需求 current。
+代码上明确分离 `backend/internal/modules/agents` 与顶层 `agent/`：前者是 Go M06 业务模块，后者是 Python、无 Kafka/Redis/Elasticsearch/业务写权限且不提供公共 API/Ingress 的内网计算微服务。Agent 文件可以承载完整的剧本、人物和生产需求 **推理编排**，但不能承载权威 **业务编排**；Go M03 拥有 Manifest/Narrative 批准与受控检索，Go M02 拥有物化与顺序，Go M04 拥有人物身份、出场投影和生产需求 current。
 
-M06 另外拥有 `CanvasView` 和 `CanvasLayout` 等展示状态，但不拥有节点代表的领域对象或业务依赖。Agent、列表、表格和画布最终提交同一目标命令，不为画布或 Agent 建第二套业务 API。本模块是模块化单体内的逻辑边界，不拆为独立微服务。
+M06 另外拥有 `CanvasView` 和 `CanvasLayout` 等展示状态，但不拥有节点代表的领域对象或业务依赖。Agent、列表、表格和画布最终提交同一目标命令，不为画布或 Agent 建第二套业务 API。Go M06 是模块化单体内的逻辑边界，不拆为领域微服务；只有无业务事实的 Python Runtime 是独立内网计算微服务。
 
 ## 2. 事实所有权与跨模块契约
 
@@ -24,7 +24,7 @@ M06 另外拥有 `CanvasView` 和 `CanvasLayout` 等展示状态，但不拥有�
 | 会话 | 受保留策略控制的 instruction/session 索引 | 从会话推断的正式人物、镜头、计划或决定 |
 | 画布 | 视图所有者、可见性、过滤器、节点位置/大小/分组、装饰边 | 节点领域内容、真实依赖边、执行顺序、对象删除语义 |
 
-`AgentProposalItem` 的最小信封为：`item_id`、`agent_run_id`、`target_module`、`command_type`、`command_schema_version`、二选一的 `command_payload | command_payload_ref`、`payload_hash`、`payload_size`、`based_on_refs[]`、`conflict_scope_keys[]`、`evidence_refs[]`、`change_summary_ref`、`confidence`、`uncertainty_refs[]`、`conflict_refs[]`、`impact_summary_ref`、`usage_estimate_ref`、`required_capabilities[]`、`external_effect`、`expires_at`。M06 只校验信封结构、大小、引用范围和 hash；大 payload 使用绑定 workspace/run、不可变且内容寻址的受限引用，不进入 RabbitMQ/checkpoint。目标模块版本化并校验 payload，M06 不会对字段做领域级补默认值或迁移。`confidence` 必须注明校准方法/版本，未知时显式为空并给出不确定原因，不能伪造精度；`change_summary_ref` 必须能由目标模块 Preview 展开为字段级 diff。`conflict_scope_keys` 只是供预览和路由使用的声明；接受时必须由目标模块根据 Command 重新计算实际 read/write set，不能信任模型声明。
+`AgentProposalItem` 的最小信封为：`item_id`、`agent_run_id`、`target_module`、`command_type`、`command_schema_version`、二选一的 `command_payload | command_payload_ref`、`payload_hash`、`payload_size`、`based_on_refs[]`、`conflict_scope_keys[]`、`evidence_refs[]`、`change_summary_ref`、`confidence`、`uncertainty_refs[]`、`conflict_refs[]`、`impact_summary_ref`、`usage_estimate_ref`、`required_capabilities[]`、`external_effect`、`expires_at`。M06 只校验信封结构、大小、引用范围和 hash；大 payload 使用绑定 workspace/run、不可变且内容寻址的受限引用，不进入 Kafka/checkpoint。目标模块版本化并校验 payload，M06 不会对字段做领域级补默认值或迁移。`confidence` 必须注明校准方法/版本，未知时显式为空并给出不确定原因，不能伪造精度；`change_summary_ref` 必须能由目标模块 Preview 展开为字段级 diff。`conflict_scope_keys` 只是供预览和路由使用的声明；接受时必须由目标模块根据 Command 重新计算实际 read/write set，不能信任模型声明。
 
 `AgentAdvisoryItem` 专门表达不能执行的 `explanation | suggestion | validation_gap | schema_change_suggestion | deferred_dependency`，最小字段为 `advisory_id`、`run_id`、稳定 `logical_key`、`generation`、可选 `supersedes_id`、`kind`、`code`、`summary`、`based_on_refs[]`、`evidence_refs[]`、`scope_refs[]`、`recommended_actions[]`。它没有 `target_module/command/payload`，只能查看、以 append-only Resolution 消除/标 stale，或打开人工工作台，不能 Accept。同一 Run 跨 Result sequence 的同 logical key/hash 回读既有项，并为每个包含它的 Result 追加独立 membership；内容变化必须创建 successor generation 并显式 supersede，不能重复制造同一 blocker。Result hash/count 按该 sequence 的有序 membership 计算，不按本次新建 Advisory 行数计算。非可执行结果不得伪装为 AgentProposalItem。
 
@@ -64,7 +64,7 @@ M03 自有的 `NarrativeProposal/ProposalItem/DecideProposalItem` 继续服务 I
 | 层次 | 目标位置 | 责任 | 输出/事实 |
 | --- | --- | --- | --- |
 | Go M06 Application Service | `backend/internal/modules/agents/application` | 创建/取消 Run、冻结授权输入、记录 Proposal/Decision、重新鉴权并转交目标命令 | AgentRun、Proposal、Decision、Operation 引用 |
-| Python 通用 Harness | `agent/src/lanverse_agent/runtime` | graph/contract 版本、节点调度、Tool policy、预算/超时、checkpoint、恢复和结构校验 | 版本化 AgentRunResult，不拥有领域事实 |
+| Python 通用 Harness | 私有 `agent/src/lanverse_agent/runtime` 计算微服务 | 经内部 HTTP 接受 AgentRun、graph/contract 版本、节点调度、Tool policy、预算/超时、checkpoint、恢复和结构校验 | 版本化 AgentRunResult；无 Kafka/Redis/Elasticsearch/公共 API，不拥有领域事实 |
 | Python 具体 Skill | `agent/src/lanverse_agent/skills/<skill>` | State、Node、Prompt、确定性合并、覆盖校验和提案映射 | 带 evidence/baseline/failed scope 的 ProposalItem |
 | Go 目标模块 Service | M03/M04/M05/M07/M10 `application/services` | 权限、不变量、expected revision、幂等、短事务、Outbox 与事实写入 | 目标领域 Result 与 revision；M02 仅消费 M03 approved Manifest，不接受 Agent Proposal |
 
@@ -80,7 +80,8 @@ backend/
     adapters/postgres/
     transport/http/controllers/
 
-agent/src/lanverse_agent/         # Python，无业务数据库/通用 MinIO 权限
+agent/src/lanverse_agent/         # 私有 Python Service；无 Kafka/Redis/Elasticsearch、公共 API、业务数据库或通用 MinIO 权限
+  entrypoints/server.py           # FastAPI/Uvicorn；仅 start/get/cancel/health
   runtime/
     runner.py
     policies.py
@@ -98,7 +99,15 @@ agent/src/lanverse_agent/         # Python，无业务数据库/通用 MinIO 权
 
 `AgentRunRequest` 在首次模型调用前冻结 `workspace_id`、`project_id`、统一用户/服务发起者 `initiator_principal_ref`、可选 `actor_ref`、执行 `service_identity_ref`、`scope_refs[]`、`based_on_versions[]`、`allowed_tools[]`、`allowed_command_schema_descriptors[]/set_hash`、`model_profile_revision`、`usage_cap`、`governance_evaluation_id`、`skill_id/version/stage/stage_generation`、可选 `parent_workflow_ref`、`root_operation_id`、该 Run 的 `operation_id`、`graph_id/version`、`input_contract_version`、`result_contract_version`、`input_snapshot_ref/hash`、`trace_id`、`request_idempotency_key/request_hash`。request hash 覆盖除 trace/时间外全部不可变语义字段。Runtime State 只保存小型引用与节点结果引用，不复制剧本或媒体正文。
 
-`AgentRunResult` 必须包含 `run_id`、`stage/stage_generation`、`sequence`、`graph_version`、`result_contract_version`、`input_snapshot_hash`、`allowed_command_schema_set_hash`、`result_hash`、`proposal_items[]`、`advisory_items[]`、`evidence_refs[]`、`usage`、`partial_errors[]`、`checkpoint_ref`。Worker 只通过结果端口提交；非法 Schema、run/stage generation/version 不匹配、越界引用、Command Schema set 漂移或重复 sequence 在业务副作用之前拒绝。
+`AgentRunResult` 必须包含 `run_id`、`stage/stage_generation`、`sequence`、`graph_version`、`result_contract_version`、`input_snapshot_hash`、`allowed_command_schema_set_hash`、`result_hash`、`proposal_items[]`、`advisory_items[]`、`evidence_refs[]`、`usage`、`partial_errors[]`、`checkpoint_ref`。Agent Service 先把结果持久化到 checkpoint/result store，再由 Go `AgentExecutorPort.GetRun` 拉取并经结果端口提交；非法 Schema、run/stage generation/version 不匹配、越界引用、Command Schema set 漂移或重复 sequence 在业务副作用之前拒绝。
+
+#### 3.2.1 私有微服务调用与单一消息总线
+
+Go M06 只依赖 `AgentExecutorPort.StartRun/GetRun/CancelRun`；唯一首期 adapter 位于 backend，使用 private HTTP/JSON 调用 Python FastAPI/Uvicorn Service。平台唯一 Kafka 集群只把 Agent invoke/poll 作为 `lanverse.tasks.operation` 中的 Go Task 投递给 operation-worker；Python 不安装 Kafka/Redis client。Agent 不注册公共 OpenAPI、公共域名或 Ingress，生产关闭 FastAPI 的 docs/schema 路由；frontend、用户和第三方均不能获得 Agent 地址。
+
+`POST /internal/agent-runs` 仅在 checkpoint store 持久化 `run_id + request_idempotency_key + request_hash + accepted` 后返回；同 key/hash 回读既有 Run，异 hash 冲突。`GET /internal/agent-runs/{run_id}` 返回持久化进度/Result，`POST /internal/agent-runs/{run_id}:cancel` 幂等请求取消。Go 在 Kafka Inbox 接管 Task 并提交 offset 后才调用 start；HTTP 超时只以同 key/hash 重试或 GET 对账。accepted/running 时写 PostgreSQL `waiting_external + available_at`，Scheduler 重投同一 operation Task 后再次查询，不保持长连接、不占 Kafka partition。
+
+网络权限固定为：Agent 只接受 operation-worker 的 mTLS/服务身份，可访问 checkpoint store、模型 allowlist，以及 backend 签发的 run-scoped 只读 Tool、ModelCallGate 和载荷 capability；不得访问公共 Go API、Kafka、Redis、Elasticsearch、业务数据库、通用 MinIO 或媒体 Provider 网络。backend 是消息、跨服务契约、检索、重试、限流和死信的唯一 owner。
 
 通用 Harness 的固定执行外壳为：
 
@@ -107,14 +116,18 @@ validate_run_envelope
   → load_authorized_snapshot_refs
   → execute_versioned_skill_graph
   → validate_result_contract_and_scope
-  → commit_via_result_port
+  → persist_result_for_backend_pull
 ```
 
 Tool 只读且使用限定 run、scope、tool、expiry 的短期 capability token。所有写入意图只能变成 ProposalItem；Python 图节点不能调用领域写 API、业务数据库或通用对象存储凭据。
 
-大型 Proposal payload 通过 Go M06 受限 `StageResultPayloadPort` 暂存：Python Worker 以 `run/item/request_idempotency_key/request_hash` 请求绑定 `workspace/run/item/content_type/max_bytes/expected_hash/expires_at` 的一次性 MinIO PUT capability，上传并由 Go ResultPort 校验大小/hash 后，M06 才登记不可变 `payload_ref`。capability/request 唯一；提交成功但响应丢失时，`GetStageResultPayloadByCapability` 或重复同 key/hash 必须回读原 ref，异 hash 返回幂等冲突。Python Worker 不获得通用 MinIO、桶级或 root 凭据；唯一 MinIO adapter 位于 Go `backend/internal/platform/objectstorage`，引用不进入 RabbitMQ/checkpoint，`CommitAgentRunResult` 只提交 ref/hash。ref 保留期至少覆盖 Proposal 的审阅、过期和执行审计期限；上传失败、取消或未被有效 Result 引用的对象由具名 orphan cleanup Operation 清理，已被 Proposal/Decision 引用的 payload 不按孤儿删除。
+剧本检索 Tool 固定调用 Go M03 `SearchApprovedNarrative`，capability 绑定 run/workspace/project/exact approved revision set、允许 filter、最大结果数和 expiry。Go 重新鉴权并强制注入租户/修订范围，返回 node/scene/content-unit refs、高亮短片段和 SourceAnchor；Python 不获得 Elasticsearch 地址、索引名、query DSL 或 API key。搜索 stale/unavailable 时 Tool 返回具名 partial error，Agent 不把零结果解释为剧本中不存在该人物/资产。
 
-对于 `script_analysis`，`parent_workflow_ref` 固定为 M03 `AnalysisRun`，`root_operation_id` 指向该整本分析的根 Operation。breakdown、narrative、knowledge 三个 M06 AgentRun 各自创建一个 `parent_operation_id=root_operation_id` 的 child Operation；child 只表达单 stage 的排队、运行、恢复和结果提交。child 完成后根 Operation 进入 `waiting_user` 并展示对应批准门禁；批准后由业务编排器创建下一 stage 的新 AgentRun/child Operation。Agent Worker 无权把根 Operation 标记 completed；只有 M03/M02/M04 的门禁和最终投影都满足后，根 AnalysisRun/Operation 才能完成。
+每次模型调用前，Agent 必须调用 backend 内部 `ModelCallGate`，由 Go 同时执行 `DistributedRateLimiterPort` 的 workspace/model-profile GCRA 与 M11 UsageGate，并返回单次、限 run/model/expiry 的调用 capability。Redis 不可用或 UsageGate 阻止时不调用模型，Run 保持可恢复等待；Python 不直接读取 Redis 计数或 M11 表。
+
+大型 Proposal payload 通过 Go M06 受限 `StageResultPayloadPort` 暂存：Python Agent Service 以 `run/item/request_idempotency_key/request_hash` 请求绑定 `workspace/run/item/content_type/max_bytes/expected_hash/expires_at` 的一次性 MinIO PUT capability，上传并由 Go ResultPort 校验大小/hash 后，M06 才登记不可变 `payload_ref`。capability/request 唯一；提交成功但响应丢失时，`GetStageResultPayloadByCapability` 或重复同 key/hash 必须回读原 ref，异 hash 返回幂等冲突。Python Agent 不获得通用 MinIO、桶级或 root 凭据；唯一 MinIO adapter 位于 Go `backend/internal/platform/objectstorage`，引用不进入 Kafka/checkpoint，`CommitAgentRunResult` 只提交 ref/hash。ref 保留期至少覆盖 Proposal 的审阅、过期和执行审计期限；上传失败、取消或未被有效 Result 引用的对象由具名 orphan cleanup Operation 清理，已被 Proposal/Decision 引用的 payload 不按孤儿删除。
+
+对于 `script_analysis`，`parent_workflow_ref` 固定为 M03 `AnalysisRun`，`root_operation_id` 指向该整本分析的根 Operation。breakdown、narrative、knowledge 三个 M06 AgentRun 各自创建一个 `parent_operation_id=root_operation_id` 的 child Operation；child 只表达单 stage 的排队、运行、恢复和结果提交。child 完成后根 Operation 进入 `waiting_user` 并展示对应批准门禁；批准后由业务编排器创建下一 stage 的新 AgentRun/child Operation。Agent Service 无权把根 Operation 标记 completed；只有 M03/M02/M04 的门禁和最终投影都满足后，根 AnalysisRun/Operation 才能完成。
 
 ### 3.3 `script_analysis` Skill
 
@@ -198,7 +211,7 @@ SourceRevision
   → M04 Service 确定性重建 EntityOccurrence / Inventory / Readiness
 ```
 
-`AcceptProposalItem` 只表示接受 Agent 建议并执行目标 draft/knowledge Command，不等于 `ApproveEpisodeBreakdown` 或 `ApproveNarrativeRevision`；接受建议与批准内容是两个可分离 capability，批准者必须在 M03 工作台重新查看 coverage/conflict 后单独提交。M03 拥有 SourceRevision、EpisodeBreakdownManifest、NarrativeDraftImport、NarrativeScene、Beat、ProductionElementMention、Anchor 和 approved NarrativeRevision；M02 只拥有 ContentUnitMaterialization、稳定 ContentUnit、OrderRevision 与返回给 M03 的 mapping；M04 拥有 ProductionEntity、UnresolvedSubjectRevision、MentionResolution、ProductionRequirementRevision、ProductionRequirementInventoryProjection、RequirementReadinessProjection 和 EntityOccurrenceProjection。人物出场集数不是模型独立批准的字段，而是 M04 根据 approved Narrative、Order、UnresolvedSubjectRevision/MentionResolution 确定性重建的带版本投影。M06 只保留三个 Run 及其 Agent Proposal 信封。切片 A 的手工表单直接调用相同 M03/M04 Command，必须在 Agent Worker 完全关闭时仍可完成，并与接受 Agent Proposal 后得到相同领域结果。
+`AcceptProposalItem` 只表示接受 Agent 建议并执行目标 draft/knowledge Command，不等于 `ApproveEpisodeBreakdown` 或 `ApproveNarrativeRevision`；接受建议与批准内容是两个可分离 capability，批准者必须在 M03 工作台重新查看 coverage/conflict 后单独提交。M03 拥有 SourceRevision、EpisodeBreakdownManifest、NarrativeDraftImport、NarrativeScene、Beat、ProductionElementMention、Anchor 和 approved NarrativeRevision；M02 只拥有 ContentUnitMaterialization、稳定 ContentUnit、OrderRevision 与返回给 M03 的 mapping；M04 拥有 ProductionEntity、UnresolvedSubjectRevision、MentionResolution、ProductionRequirementRevision、ProductionRequirementInventoryProjection、RequirementReadinessProjection 和 EntityOccurrenceProjection。人物出场集数不是模型独立批准的字段，而是 M04 根据 approved Narrative、Order、UnresolvedSubjectRevision/MentionResolution 确定性重建的带版本投影。M06 只保留三个 Run 及其 Agent Proposal 信封。切片 A 的手工表单直接调用相同 M03/M04 Command，必须在 Agent Service 完全关闭时仍可完成，并与接受 Agent Proposal 后得到相同领域结果。
 
 ## 4. 功能分解
 
@@ -206,8 +219,8 @@ SourceRevision
 | --- | --- | --- | --- | --- | --- | --- |
 | 创建受限 Run | `StartAgentRun`、`GetAgentRun` | 作用域、基线引用、Skill/graph/stage/stage_generation、可选 parent workflow/root Operation、Tool/Command Schema 白名单、输入/结果契约、用量上限 | AgentRun + 自身 Operation 与可选 root 引用 | 调模型前冻结 input snapshot/ref/hash、允许 Command descriptor/set hash、Agent 资源和 M14 结论；有 parent 时本 Run Operation 必须挂 root；相同业务幂等键回读原 Run | 模型不可用时 Run 失败但手工工作台可用；可以用新 stage generation 新建 successor Run | B |
 | 运行进度与恢复 | `CancelAgentRun`、`ResumeAgentRun`、`ListAgentRuns` | run/revision、checkpoint sequence、取消原因 | 节点进度、覆盖率、部分错误、恢复动作 | checkpoint 只恢复 Run；终态 Run 不原地重启 | 租约过期后继续同一 Run/sequence；无安全 checkpoint 则以新 Run 重跑 | B |
-| 暂存大型结果载荷 | `CreateStageResultPayloadCapability`、`CommitStageResultPayload`、`GetStageResultPayloadByCapability` | workspace/run/item、请求 key/hash、content type、max bytes、expected hash、expiry、流式 bytes | immutable payload_ref/hash/size/retention | capability/request 唯一、短期、限作用域；同 key/hash 或已消费 capability 回读原 ref，异 hash 冲突；服务端校验后登记；Worker 无通用对象存储凭据 | 超限/hash 不符零 Proposal 副作用；响应丢失可安全查询/重放；取消/未引用对象进入 orphan cleanup，已引用对象不清理 | B |
-| 提交结构化结果 | `CommitAgentRunResult` | run/version、sequence、input/result hash、Proposal/Advisory envelopes | Run 结果、Proposal 批次、Advisory 清单、逐项错误 | Worker 结果只能追加；先解析 payload/ref 并调用目标模块 `ValidateAndPreviewProposedCommand`，由服务器生成 canonical field diff、实际 based-on/read/write set 与 hash 后，才在同一 M06 事务持久化不可变 Item；相同 run/sequence/result hash 幂等；Advisory 按 logical key/hash 创建或回读，并始终为当前 Result 追加有序 membership，不进入可接受状态机 | payload/Schema/Preview 非法时保留诊断且零领域副作用；部分 Tool 失败保留成功项和具名 gap；目标 Preview 暂不可用可安全重试同 sequence | B |
+| 暂存大型结果载荷 | `CreateStageResultPayloadCapability`、`CommitStageResultPayload`、`GetStageResultPayloadByCapability` | workspace/run/item、请求 key/hash、content type、max bytes、expected hash、expiry、流式 bytes | immutable payload_ref/hash/size/retention | capability/request 唯一、短期、限作用域；同 key/hash 或已消费 capability 回读原 ref，异 hash 冲突；服务端校验后登记；Agent 无通用对象存储凭据 | 超限/hash 不符零 Proposal 副作用；响应丢失可安全查询/重放；取消/未引用对象进入 orphan cleanup，已引用对象不清理 | B |
+| 提交结构化结果 | `CommitAgentRunResult` | operation-worker 从 Agent Service 拉取的 run/version、sequence、input/result hash、Proposal/Advisory envelopes | Run 结果、Proposal 批次、Advisory 清单、逐项错误 | Service 结果只能追加；先解析 payload/ref 并调用目标模块 `ValidateAndPreviewProposedCommand`，由 Go 生成 canonical field diff、实际 based-on/read/write set 与 hash 后，才在同一 M06 事务持久化不可变 Item；相同 run/sequence/result hash 幂等；Advisory 按 logical key/hash 创建或回读，并始终为当前 Result 追加有序 membership，不进入可接受状态机 | HTTP 超时先 GET 对账；payload/Schema/Preview 非法时保留诊断且零领域副作用；部分 Tool 失败保留成功项和具名 gap | B |
 | 审阅逐项提案 | `ListProposalItems`、`ListAdvisoryItems`、`PreviewProposalItem` | proposal/item、当前 actor、当前基线 | 说明/建议/validation gap、可执行提案/外部动作分类、字段级 diff、置信与不确定项、证据、影响、资源、权限 | 必须由目标模块生成字段级 Preview；Advisory 只能查看、消除或打开人工工作台，不把说明性回复展示为已执行 | 实际依赖基线变化才标记 expired，可重算或手工迁移，不删历史 | B |
 | 决定与执行提案 | `Accept/AcceptWithChanges/Reject/Defer/UndeferProposalItem` | item hash、expected latest decision generation、可选修改后目标 payload、决定请求幂等键 | append-only ProposalDecision、接受动作的唯一逻辑 ProposalExecution 与逐 attempt Receipt/result ref | M06 以 expected generation 做 CAS 并记录 request key/hash；accept 使用原 payload，accept_with_changes 的有效 payload inline/ref 二选一；reject/defer/undefer 禁止 payload/read-write set 且不执行目标 Command；目标模块重新鉴权/校验/写入 | 同请求键同 payload 回读；同键不同 payload 返回 idempotency conflict；并发不同决定仅一个追加成功；Execution 的 decision/command key 唯一，Receipt 只以 execution/attempt 唯一且所有重试复用同一 command key；一项失败不阻断其他项 | B |
 | 处置不可执行建议 | `ResolveAdvisoryItem`、`MarkAdvisoryStale` | advisory item hash、expected latest resolution generation、外部事实 ref、理由、请求 key/hash | append-only AdvisoryResolution 与派生 resolved/stale 状态 | 不能 Accept 或执行 Command；同 request key/hash 回读，expected generation CAS；gap 再现创建 successor Advisory generation，不 reopen/覆盖旧内容 | 外部事实已变返回 stale/current；并发处置只成功一个；历史说明和证据始终可读 | B |
@@ -228,9 +241,9 @@ SourceRevision
 
 | 当前状态 | 允许命令/证据 | 下一状态 | 不变量 |
 | --- | --- | --- | --- |
-| `queued` | Worker 领取 / 用户取消 | `running` / `cancelled` | 作用域、输入 hash、graph/contract 版本不再改 |
+| `queued` | Agent Service durable accept / 用户取消 | `running` / `cancelled` | 作用域、输入 hash、graph/contract 版本不再改 |
 | `running` | 节点 checkpoint、部分结果、需人工输入、取消 | `waiting_user` / `partial` / `completed` / `failed` / `cancelled` | 节点 sequence 单调；结果只追加 |
-| `waiting_user` | 授权输入、超时、取消 | `running` / `failed` / `cancelled` | 不保持数据库事务或 Worker 租约 |
+| `waiting_user` | 授权输入、超时、取消 | `running` / `failed` / `cancelled` | 不保持数据库事务、Kafka consumer 或 Agent HTTP 连接 |
 | `partial` | 结果端口确认覆盖缺口 | 终态 | 已有 Proposal 仍可决定，未执行项明确标记 |
 | `completed` / `failed` / `cancelled` | 新证据只可写诊断 | 终态 | 需重跑时创建新 Run，不原地复活 |
 | 非终态 | 基线已被新批准版替代 | `superseded` | 已产生结果保留，Proposal 转 expired |
@@ -242,7 +255,7 @@ SourceRevision
 ### 5.3 幂等键与冲突
 
 - Run 创建业务幂等范围：`workspace + initiator_principal_ref + request_idempotency_key`；规范化 request hash 覆盖 project/scope、Skill/stage generation、parent/root/run Operation、graph/input/result contract、input snapshot、Tool/Command Schema set、model/usage/governance 等不可变语义字段；同键同 hash 回读、同键异 hash 返回 `idempotency_conflict`，service-only Run 不制造假 actor。
-- Worker 结果唯一：`agent_run_id + sequence`，再比较 `result_hash`；同 sequence 不同 hash 进入隔离和审计。Advisory 使用 Run 内稳定 logical key/generation：跨 result sequence 的同 key/hash 回读既有 Item，但每个 Result 都追加 `(run, result_sequence, advisory_id, ordinal)` membership；membership 不复制 hash，result hash 按 ordinal 读取其所指不可变 Advisory.item_hash 计算，内容变化显式 supersede。Resolution 以请求 key/hash + expected generation 做 CAS，外部事实消除 gap 或使其 stale 时只追加记录，不覆盖原文。
+- Agent Service 结果唯一：`agent_run_id + sequence`，再比较 `result_hash`；同 sequence 不同 hash 进入隔离和审计。Advisory 使用 Run 内稳定 logical key/generation：跨 result sequence 的同 key/hash 回读既有 Item，但每个 Result 都追加 `(run, result_sequence, advisory_id, ordinal)` membership；membership 不复制 hash，result hash 按 ordinal 读取其所指不可变 Advisory.item_hash 计算，内容变化显式 supersede。Resolution 以请求 key/hash + expected generation 做 CAS，外部事实消除 gap 或使其 stale 时只追加记录，不覆盖原文。
 - Proposal 决定以 `(proposal_item_id, decision_generation)` 单调追加，并以 `(proposal_item_id, actor_id, request_idempotency_key)` 唯一；请求携带 expected latest generation，同键同 request hash 回读、同键不同 hash 冲突、并发不同决定只允许一个 CAS 成功。传给目标模块的命令幂等键从 `proposal_item_id + accepted decision generation + target_module + effective_payload_hash` 稳定派生，并在唯一逻辑 Execution 上保存；所有 attempt Receipt 复用该 key。
 - Run 的 `input_snapshot_hash` 只用于复现和审计，不直接作为每项接受的全局 CAS token。
 - `CommitAgentRunResult` 落 Item 前调用目标模块 Preview，从模型 payload 计算并持久化 canonical read/write set/hash；模型声明仅用于差异诊断，不能成为 CAS 权威。
@@ -258,13 +271,14 @@ SourceRevision
 | 最小关系接管视图 | M04 依赖投影 + 各模块批量 Query | 节点版本、blocked/unknown/stale、投影 as-of、权限禁用原因 | 选中、跳转权威表单、对受影响对象创建提案 |
 | 完整画布 | CanvasView/Layout + 各模块 Query | 个人/团队可见性、布局修订、连接状态、未保存冲突 | 布局、缩放、分组、删除布局项、批量预览/提交 |
 
-页面不从 RabbitMQ delivery、Worker 进程或 checkpoint 推断完成。可观测指标包括 Run 排队/节点耗时、Tool 失败率、checkpoint 恢复率、提案接受/修改/拒绝/过期率、非法输出拒绝数、人工接管次数和关闭 Agent 后任务完成率；日志只记录 ID、hash、版本和短摘要。
+页面不从 Kafka delivery/offset、Agent 进程或 checkpoint 推断完成。可观测指标包括 Run 排队/节点耗时、private HTTP start/get/cancel 延迟与超时、ModelCallGate 限流/额度拒绝、Tool 失败率、checkpoint 恢复率、提案接受/修改/拒绝/过期率、非法输出拒绝数、人工接管次数和关闭 Agent 后任务完成率；日志只记录 ID、hash、版本和短摘要。
 
 ## 7. 失败、安全与恢复
 
 | 错误码/场景 | 用户可见结果 | 恢复动作 |
 | --- | --- | --- |
 | `agent_model_unavailable` | Run failed/partial，手工工作台可用 | 稍后创建新 Run 或手工完成 |
+| `agent_service_unavailable` / private HTTP timeout | Operation/Run 保持 queued/waiting_external，不显示完成 | 同 key/hash 重试 start 或 GET 对账；不创建第二 Run，不占 Kafka partition |
 | `agent_tool_partial_failure` | 逐项成功、失败与未执行清单 | 只为失败范围新建 Run |
 | `agent_output_invalid` | 保留契约诊断，零领域副作用 | 修正输入、model profile 或 contract 后新建 Run |
 | `agent_scope_denied` / `tool_token_expired` | 拒绝节点并审计 | 由用户重新授权，不自动扩大 scope |
@@ -284,8 +298,8 @@ SourceRevision
 | AIC-FR-002 | ProposalItem 信封的 target/baseline/evidence/impact/permission | Schema 缺任一必需引用时结果端口拒绝 |
 | AIC-FR-003 | 逐项 Decision 状态机 | 10 项提案混合接受、修改、拒绝、暂缓后其他项不受影响 |
 | AIC-FR-004 | `ExecuteProposedCommand` 目标模块端口 | 权限、revision、幂等或门禁任一不通过时领域事实不变 |
-| AIC-FR-005 | Tool 只读、Worker 结果端口和模块边界 | 架构测试拒绝 Agent Runtime 导入领域 repository/数据库写端口 |
-| AIC-FR-006 | AgentRun 全状态与 checkpoint 恢复 | 分别演练 waiting_user、partial、cancel、Worker 重启和 baseline superseded |
+| AIC-FR-005 | Tool 只读、Service 结果端口和模块边界 | 架构测试拒绝 Agent Runtime 导入 Kafka/Redis/Elasticsearch client、领域 repository/数据库写端口；剧本检索只经 run-scoped backend Tool |
+| AIC-FR-006 | AgentRun 全状态与 checkpoint 恢复 | 分别演练 waiting_user、partial、cancel、Agent Service 重启和 baseline superseded |
 | AIC-FR-007 | Skill/Tool 白名单 + 目标模块 Command Registry | 剧本、实体、拆镜、阻塞解释、修复草案均只输出允许的类型契约 |
 | AIC-FR-008 | `external_effect`/risk + M01/M14 重新鉴权 | 高消耗、外发、风险接受、主选、交付提案无显式授权均不执行 |
 | AIC-FR-009 | 最小关系接管视图 | 从人物状态节点找到受影响镜头并打开 M05 修订表单 |
@@ -300,7 +314,7 @@ SourceRevision
 
 | Requirement ID | 设计落点 | 最小可执行验收 |
 | --- | --- | --- |
-| AIC-NFR-001 | Agent 入口与手工命令解耦 | 禁用 Agent Worker 后 M03—M10 P0 手工命令契约测试继续通过 |
+| AIC-NFR-001 | Agent 入口与手工命令解耦 | 禁用 Agent Service 后 M03—M10 P0 手工命令契约测试继续通过 |
 | AIC-NFR-002 | 版本化 result/proposal/target command Schema | 未知版本、多余字段和非法 payload 在写业务事实前拒绝 |
 | AIC-NFR-003 | 最小字段 Query、hash 日志、checkpoint 保留 | 日志/事件/审计扫描不含来源正文、Token 或凭据 |
 | AIC-NFR-004 | 画布切片 F 容量 Gate | 真实规模节点/边下渲染、内存、键盘可访问性达到签认基线才启用 |
@@ -315,7 +329,7 @@ SourceRevision
 | AC-AIC-002 | 目标 CommandPort | 同一 payload 从 Agent 与 M05 表单执行，比较领域结果 hash |
 | AC-AIC-003 | 信封/Schema/鉴权/基线/幂等门禁 | 非法、重复、越权、过期四类负向测试校验业务表无变化 |
 | AC-AIC-004 | Agent 媒体意图只生成 M07 payload | 测试 Agent 无法创建 M08 Job，只得到待批准 GenerationPlan 草稿 |
-| AC-AIC-005 | 手工闭环 | 停止 Agent Worker 后读取已有结构/实体/镜头并继续规划成功 |
+| AC-AIC-005 | 手工闭环 | 停止 Agent Service 后读取已有结构/实体/镜头并继续规划成功 |
 | AC-AIC-006 | M04 真实依赖投影 + M05 跳转 | 人物状态变化 Fixture 仅标出真实引用镜头并打开修订 |
 | AC-AIC-007 | Layout 删除语义 | 删除画布节点后校验实体/镜头/候选表及引用不变 |
 | AC-AIC-008 | 共用目标命令错误契约 | 画布、列表、API 并发修改同一 revision，比较 code/current revision/recovery action |

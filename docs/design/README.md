@@ -10,7 +10,7 @@
 
 | 序号 | Design | 责任 | 状态 |
 | --- | --- | --- | --- |
-| 000 | [AI 视频生产平台目标系统架构设计](./000-AI视频生产平台目标系统架构设计.md) | 前后端分离、MVVC、TypeScript 前端、Go 业务后端、Python Agent、MinIO、最终 Schema、无兼容、物理目录、POJO + Controller + Service、六个运行角色 | accepted |
+| 000 | [AI 视频生产平台目标系统架构设计](./000-AI视频生产平台目标系统架构设计.md) | 前后端分离、MVVC、TypeScript 前端、Go 业务后端、私有 Python Agent 微服务、单一 Kafka、Redis 协调、MinIO、单一 Elastic 派生检索/观测、最终 Schema、无兼容、物理目录、POJO + Controller + Service、六个运行角色 | accepted |
 | 001 | [AI 视频生产平台核心领域与数据模型设计](./001-AI视频生产平台核心领域与数据模型设计.md) | 聚合、事实所有权、PostgreSQL 最终 Schema、物理类型、主外键、索引、约束、版本和投影 | proposed |
 | 002 | [AI 视频生产平台目标产品与功能模块设计](./002-AI视频生产平台目标产品与功能模块设计.md) | 产品边界、用户流程、M01—M15、状态、失败路径、权限和验收切片 | proposed |
 | 003 | [AI 视频生产平台接口、工作流与功能实现设计](./003-AI视频生产平台接口工作流与功能实现设计.md) | 无路径版本 `/api`、HTTP/事件信封、幂等、ETag、游标、错误、耐久流程与 Agent | proposed |
@@ -44,19 +44,23 @@ flowchart TD
 
 ## 3. 当前关键决策
 
-- 前端固定在 `frontend/`，采用 TypeScript、Next.js、React、OpenAPI 生成客户端和 RTK Query；只拥有交互与视图状态，不形成第二套业务后端。
+- 前端固定在 `frontend/`，采用 TypeScript、Next.js、React、`@umijs/openapi` 生成 API 和唯一 Axios `request.ts`；ViewModel 只调用生成函数，不拼 URL/DTO、不直用 Axios、不登记第二套 endpoint，只拥有交互与视图状态。
 - 后端固定在 `backend/`，采用 Go 模块化单体；Go Application Service 拥有唯一业务规则、事务和业务表写入。
-- Agent 固定在顶层 `agent/`，采用 Python/LangGraph；只运行 Harness/Skill、模型和只读 Tool，不拥有业务数据库、批准或 current。
+- Agent 固定在顶层 `agent/`，采用 Python/FastAPI/Uvicorn/LangGraph 私有计算微服务；只运行 Harness/Skill、模型和 backend run-scoped 只读 Tool，不连接 Kafka/Redis/Elasticsearch、不提供公共 API/Ingress，不拥有业务数据库、批准或 current。
 - 前后端调用风格固定为 Model–View–ViewModel–Controller（MVVC）；View/ViewModel 在前端，Controller/Application Service/POJO Model 在后端按边界分层。
 - 公开 HTTP 路径只使用无版本前缀 `/api`；事件 topic 也不带版本后缀，信封 `schema_version` 只用于当前契约一致性校验。
-- 项目只实现本 Design 定义的数据库、API、消息和 MinIO key；`schema_version` 只接受当前契约，其他值拒绝，不建立 alias、转换器、双读或回退路径。
+- 项目只实现本 Design 定义的数据库、API、消息和 MinIO key；`schema_version` 只接受当前契约，其他值拒绝，不建立兼容 alias、转换器、双读或回退路径；Elastic 搜索 alias 仅原子指向一个当前物理索引。
 - 数据库只保留 `backend/schema/current.sql`、空库初始化和非空 fingerprint 严格校验；不采用 ORM，不建立结构演进目录或历史链。
 - 对象存储固定为私有 MinIO；`ObjectStoragePort` 只隔离 SDK/I/O 与测试，S3-compatible API 只是协议，不建设 AWS S3 adapter 或运行时多存储切换。
 - Go 中按 plain struct/value object 落实 POJO 目标：领域对象不依赖 HTTP、pgx、sqlc 或 Provider SDK；Service 以用例而不是数据表组织。
 - 000 §6 是唯一物理目录事实源；目标路径在开发前评审，但实际目录只随真实用例、owner 和测试创建，禁止空目录、全局 `shared/utils/managers` 和纯转发层。
-- 目标运行边界为 `api`、`operation-worker`、`import-worker`、`provider-worker`、`agent-worker`、`media-worker` 六类安全隔离入口，按切片启用；API 不执行长任务。
+- 目标运行边界为 `api`、`operation-worker`、`import-worker`、`provider-worker`、`agent-service`、`media-worker` 六类安全隔离入口，按切片启用；公共 API 不执行长任务。
 - Go `modules/agents` 拥有 M06 Run/Proposal；顶层 Python `agent/` 拥有无业务写权限的 Harness/Skill。LangGraph 只编排单次 Agent 运行，不成为审批、人物资料、人物出场矩阵或生产流程事实源。
-- PostgreSQL 事实与事务 Outbox 先提交，再执行队列、外部模型和媒体副作用。
+- 全部后台任务固定共用一个 Kafka 集群；Go backend 统一拥有 Kafka client、Topic、契约、Outbox/Inbox、重试、DLQ 与 ACL。Agent 不连接 Kafka/Redis/Elasticsearch，只由 operation-worker 通过私有 Run HTTP 契约和 run-scoped Tool 调用。
+- Redis 固定只做会话、GCRA 分布式限流、带 fencing 的短租约锁和短缓存；批准、current、主选、任务唯一与额度等不变量仍由 PostgreSQL 保证。
+- PostgreSQL 事实与事务 Outbox 先提交，再向唯一 Kafka 集群投递，之后执行外部模型和媒体副作用。
+- Outbox 不被 Elasticsearch/应用日志替代；首期 Go Publisher 负责 PostgreSQL→Kafka，拒绝增加 Debezium/Kafka Connect。Elasticsearch 是业务检索数据面，OpenTelemetry 是观测数据面；首期可共用一次 Elastic 部署但使用独立权限和生命周期，ToC 生产前拆为独立故障域，Logstash 不部署。
+- approved 剧本全文检索固定由 Go operation-worker 从现有 `lanverse.domain.events` 重建、由 Go Search Service 强制租户与 revision filter；frontend/Python Agent 不直连 Elasticsearch，索引丢失不影响业务事实。
 - 五个非 Agent 运行角色固定由 Go 实现，唯一 Agent 运行角色固定由 Python 实现；不得创建第二套业务后端。
 - 商业计费、订阅、支付和增长不属于系统范围；用量只服务资源治理。
 

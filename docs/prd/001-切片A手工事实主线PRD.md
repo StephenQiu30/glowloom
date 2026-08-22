@@ -18,6 +18,7 @@
   → 原子物化稳定 ContentUnit 与顺序
   → 手工校对每集 Scene/Beat/ProductionElementMention
   → 批准 NarrativeRevision
+  → 按正文/短语/剧集/场次/人物/地点/生产类型检索 approved 剧本并回跳原文
   → 以默认 published CoverageSchema 建立全剧人物/地点/道具事实与 ProductionRequirementItem
   → 校对人物×剧集矩阵并回跳场次/原文
   → 手工创建并重排不少于 10 个 Shot
@@ -33,6 +34,7 @@
 - EpisodeBreakdownRevision/Manifest、ContentUnit 原子物化/OrderRevision、每集 Scene 与全局 occurrence 完整度；
 - 人物身份/别名/稳定外观、地点身份、关键道具和最小状态；项目默认 published ProductionCoverageSchemaRevision，人工创建/修订 UnresolvedSubjectRevision、MentionResolution、ProductionRequirementRevision、CoverageSchemaRevision 与 ProductionCoverageDecision 的完整命令；Inventory/ReadinessProjection 与 MediaArtifact 分离；
 - 人物×剧集矩阵以正式实体或 M04 权威 revision-bound 未决主体为行；每个 approved character Mention 恰有 entity、active unresolved 或 explicit reject 一个 current 结果，缺失/重叠使投影 incomplete；返回完整基线、failed scopes、resolution coverage counters，区分 resolved/unresolved/conflict/confirmed_absent/not_analyzed，并可回跳 Scene/Anchor；
+- approved NarrativeRevision 的中文/中英全文、短语和结构 filter 检索；结果带高亮、SourceAnchor、indexed revision set/checkpoint/as_of/stale，只经 Go backend 鉴权，不索引 draft/Agent Proposal；解析和批准不依赖 Elasticsearch；
 - ShotPlan/Order、覆盖检查、谱系、Fixture Candidate/Selection；
 - 最小 GenerationPlanItem/Operation/Job/Attempt/Outbox/Worker 恢复、项目资源硬上限、来源权利声明；
 - 简单顺序预演，不含真实 Provider、Agent、正式审阅或交付。
@@ -46,6 +48,7 @@ Fixture Adapter 必须接收与真实执行同版本的最小任务契约，生�
 | 项目创建 | 目标、时长、画幅、资源上限 |
 | 整本导入/拆集 | 每集边界、标题、顺序、忽略范围和物化是否正确；首期可完全手工 |
 | 结构校对 | 每集 Scene/Beat/Mention 是否正确，失败范围是否完整披露 |
+| 剧本检索 | 查询正文/台词/人物/地点/道具，按剧集/场次/类型过滤并回跳 Anchor；识别 stale/unavailable 与零命中的区别 |
 | 全剧实体/生产清单 | 绑定哪个 CoverageSchema；哪个身份/状态/需求可以发布，哪些只是 mentioned_only、不需要生产或仍 unassessed；零 Requirement 引用的 coverage row 仍可见 |
 | 人物×剧集矩阵 | 出现、未决、冲突、确认未出现和未分析是否正确并有证据；failed scopes、unassigned/overlap 是否为零 |
 | 镜头表 | 每个 Beat 如何覆盖、镜头顺序和锁定 |
@@ -67,5 +70,6 @@ LangGraph、真实图像/视频、质量 AI、外部审片、正式时间线、�
 7. 重复命令/Outbox/Worker 重启不产生重复事实；
 8. 跨 Workspace 对象/媒体/Worker 负向测试通过；
 9. 关闭全部 AI/Provider 后用户仍完成上述旅程。
+10. approved 中文/中英剧本可全文/短语/结构筛选并回跳正确 Anchor；搜索只返回当前有权访问的 approved revisions，索引删除后可重建且跨 Workspace 命中为 0，Elastic 中断不影响导入、校对和批准。
 
 未满足任一项，不进入切片 B 的正式实现。
