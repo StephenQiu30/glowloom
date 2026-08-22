@@ -1,0 +1,13 @@
+[project]
+name = "lanverse-agent"
+version = "0.1.0"
+description = "Lanverse private script-analysis Agent runtime"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.140.12",
+  "uvicorn[standard]==0.41.0",
+  "pydantic==2.12.5"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

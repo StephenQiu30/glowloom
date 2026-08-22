@@ -1,0 +1,110 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Lanverse API",
+    "version": "2026-08-22",
+    "description": "当前剧本事实分析合同；路径不包含兼容版本段。"
+  },
+  "servers": [{"url": "http://127.0.0.1:8686"}],
+  "paths": {
+    "/readyz": {
+      "get": {
+        "operationId": "getReadiness",
+        "responses": {"200": {"description": "服务已就绪", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReadinessResponse"}}}}}
+      }
+    },
+    "/api/workspaces": {
+      "post": {
+        "operationId": "createWorkspace",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateWorkspaceRequest"}}}},
+        "responses": {"201": {"description": "Workspace 已创建", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkspaceResponse"}}}}, "422": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
+    "/api/workspaces/{workspace_id}/projects": {
+      "post": {
+        "operationId": "createProject",
+        "parameters": [{"name": "workspace_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateProjectRequest"}}}},
+        "responses": {"201": {"description": "项目已创建", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProjectResponse"}}}}, "422": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
+    "/api/projects/{project_id}/script-revisions": {
+      "post": {
+        "operationId": "createScriptRevision",
+        "parameters": [{"name": "project_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateScriptRevisionRequest"}}}},
+        "responses": {"201": {"description": "来源已保全", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScriptRevisionResponse"}}}}, "422": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
+    "/api/script-revisions/{revision_id}/analyze": {
+      "post": {
+        "operationId": "queueScriptAnalysis",
+        "parameters": [{"name": "revision_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"202": {"description": "分析任务已排队", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OperationResponse"}}}}, "404": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
+    "/api/script-revisions/{revision_id}/approve": {
+      "post": {
+        "operationId": "approveScriptAnalysis",
+        "parameters": [{"name": "revision_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"200": {"description": "分析事实已批准", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AnalysisResponse"}}}}, "422": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
+    "/api/script-revisions/{revision_id}/analysis-draft": {
+      "get": {
+        "operationId": "getAnalysisDraft",
+        "parameters": [{"name": "revision_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"200": {"description": "待批准的分析事实", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AnalysisResponse"}}}}, "404": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
+    "/api/operations/{operation_id}": {
+      "get": {
+        "operationId": "getOperation",
+        "parameters": [{"name": "operation_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"200": {"description": "任务状态", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OperationResponse"}}}}, "404": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
+    "/api/projects/{project_id}/analysis": {
+      "get": {
+        "operationId": "getProjectAnalysis",
+        "parameters": [{"name": "project_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"200": {"description": "已批准剧本事实", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AnalysisResponse"}}}}, "404": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "WorkspaceID": {"name": "workspace_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "ProjectID": {"name": "project_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "RevisionID": {"name": "revision_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "OperationID": {"name": "operation_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+    },
+    "responses": {
+      "BusinessError": {"description": "当前业务合同错误", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+    },
+    "schemas": {
+      "CreateWorkspaceRequest": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 120}}},
+      "CreateProjectRequest": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 160}}},
+      "CreateScriptRevisionRequest": {"type": "object", "required": ["name", "content"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 240}, "content": {"type": "string", "minLength": 1}}},
+      "Readiness": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "enum": ["ready"]}}},
+      "ReadinessResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Readiness"}}},
+      "Workspace": {"type": "object", "required": ["id", "name", "created_at"], "properties": {"id": {"type": "string", "format": "uuid"}, "name": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}}},
+      "WorkspaceResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Workspace"}}},
+      "Project": {"type": "object", "required": ["id", "workspace_id", "name", "created_at"], "properties": {"id": {"type": "string", "format": "uuid"}, "workspace_id": {"type": "string", "format": "uuid"}, "name": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}}},
+      "ProjectResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Project"}}},
+      "ScriptRevision": {"type": "object", "required": ["id", "project_id", "name", "content_hash", "content_length", "status", "created_at"], "properties": {"id": {"type": "string", "format": "uuid"}, "project_id": {"type": "string", "format": "uuid"}, "name": {"type": "string"}, "content_hash": {"type": "string"}, "content_length": {"type": "integer"}, "status": {"type": "string", "enum": ["uploaded", "analyzing", "approved", "failed"]}, "created_at": {"type": "string", "format": "date-time"}}},
+      "ScriptRevisionResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/ScriptRevision"}}},
+      "Operation": {"type": "object", "required": ["id", "project_id", "type", "status", "progress"], "properties": {"id": {"type": "string", "format": "uuid"}, "project_id": {"type": "string", "format": "uuid"}, "type": {"type": "string", "enum": ["script_analysis"]}, "status": {"type": "string", "enum": ["queued", "running", "succeeded", "failed"]}, "progress": {"type": "integer", "minimum": 0, "maximum": 100}, "error_code": {"type": "string"}, "error": {"type": "string"}}},
+      "OperationResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Operation"}}},
+      "Anchor": {"type": "object", "required": ["line", "start_offset", "end_offset"], "properties": {"line": {"type": "integer"}, "start_offset": {"type": "integer"}, "end_offset": {"type": "integer"}}},
+      "NarrativeUnit": {"type": "object", "required": ["id", "kind", "text", "anchor"], "properties": {"id": {"type": "string"}, "kind": {"type": "string", "enum": ["scene", "dialogue", "action"]}, "text": {"type": "string"}, "anchor": {"$ref": "#/components/schemas/Anchor"}, "speaker": {"type": "string"}}},
+      "Scene": {"type": "object", "required": ["id", "heading", "anchor", "narratives"], "properties": {"id": {"type": "string"}, "heading": {"type": "string"}, "anchor": {"$ref": "#/components/schemas/Anchor"}, "narratives": {"type": "array", "items": {"$ref": "#/components/schemas/NarrativeUnit"}}}},
+      "Episode": {"type": "object", "required": ["number", "title", "anchor", "scenes"], "properties": {"number": {"type": "integer"}, "title": {"type": "string"}, "anchor": {"$ref": "#/components/schemas/Anchor"}, "scenes": {"type": "array", "items": {"$ref": "#/components/schemas/Scene"}}}},
+      "Asset": {"type": "object", "required": ["kind", "name", "episode_numbers", "evidence"], "properties": {"kind": {"type": "string", "enum": ["character", "location", "prop", "costume"]}, "name": {"type": "string"}, "episode_numbers": {"type": "array", "items": {"type": "integer"}}, "evidence": {"type": "array", "items": {"$ref": "#/components/schemas/Anchor"}}}},
+      "Analysis": {"type": "object", "required": ["source_hash", "episodes", "characters", "locations", "props", "costumes"], "properties": {"source_hash": {"type": "string"}, "episodes": {"type": "array", "items": {"$ref": "#/components/schemas/Episode"}}, "characters": {"type": "array", "items": {"$ref": "#/components/schemas/Asset"}}, "locations": {"type": "array", "items": {"$ref": "#/components/schemas/Asset"}}, "props": {"type": "array", "items": {"$ref": "#/components/schemas/Asset"}}, "costumes": {"type": "array", "items": {"$ref": "#/components/schemas/Asset"}}}},
+      "AnalysisResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Analysis"}}},
+      "ApiError": {"type": "object", "required": ["code", "message", "next_action"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}, "next_action": {"type": "string"}}},
+      "ErrorResponse": {"type": "object", "required": ["error"], "properties": {"error": {"$ref": "#/components/schemas/ApiError"}}}
+    }
+  }
+}

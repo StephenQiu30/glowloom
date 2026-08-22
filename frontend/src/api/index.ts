@@ -2,33 +2,23 @@
 /* eslint-disable */
 // API 更新时间：
 // API 唯一标识：
-import * as assets from "./assets";
-import * as identity from "./identity";
-import * as governance from "./governance";
-import * as media from "./media";
-import * as projects from "./projects";
-import * as tasks from "./tasks";
-import * as production from "./production";
-import * as scriptAdaptations from "./scriptAdaptations";
-import * as scriptDocuments from "./scriptDocuments";
-import * as scripts from "./scripts";
-import * as episodePlanning from "./episodePlanning";
-import * as schedules from "./schedules";
-import * as storyboards from "./storyboards";
-import * as system from "./system";
+import * as getReadiness from "./getReadiness";
+import * as createWorkspace from "./createWorkspace";
+import * as createProject from "./createProject";
+import * as createScriptRevision from "./createScriptRevision";
+import * as queueScriptAnalysis from "./queueScriptAnalysis";
+import * as approveScriptAnalysis from "./approveScriptAnalysis";
+import * as getAnalysisDraft from "./getAnalysisDraft";
+import * as getOperation from "./getOperation";
+import * as getProjectAnalysis from "./getProjectAnalysis";
 export default {
-  assets,
-  identity,
-  governance,
-  media,
-  projects,
-  tasks,
-  production,
-  scriptAdaptations,
-  scriptDocuments,
-  scripts,
-  episodePlanning,
-  schedules,
-  storyboards,
-  system,
+  getReadiness,
+  createWorkspace,
+  createProject,
+  createScriptRevision,
+  queueScriptAnalysis,
+  approveScriptAnalysis,
+  getAnalysisDraft,
+  getOperation,
+  getProjectAnalysis,
 };

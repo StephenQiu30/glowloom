@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lanverse.agent.script-analysis.current",
+  "title": "ScriptAnalysisAgentRun",
+  "type": "object",
+  "required": ["run_id", "skill", "stage", "status", "request_hash", "items"],
+  "properties": {
+    "run_id": {"type": "string", "format": "uuid"},
+    "skill": {"const": "script_analysis"},
+    "stage": {"enum": ["manifest", "narrative", "knowledge"]},
+    "status": {"enum": ["queued", "running", "succeeded", "failed", "cancelled"]},
+    "request_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "items": {"type": "array", "items": {"$ref": "#/$defs/proposal_item"}},
+    "error": {"type": "string"}
+  },
+  "$defs": {
+    "proposal_item": {
+      "type": "object",
+      "required": ["item_id", "kind", "value", "evidence"],
+      "properties": {
+        "item_id": {"type": "string"},
+        "kind": {"type": "string"},
+        "value": {},
+        "evidence": {"type": "array", "items": {"type": "object", "required": ["line", "start_offset", "end_offset"], "properties": {"line": {"type": "integer"}, "start_offset": {"type": "integer"}, "end_offset": {"type": "integer"}}}}
+      }
+    }
+  }
+}

@@ -1,125 +1,78 @@
 # Lanverse
 
-Lanverse 是面向 AI 短剧生产的模块化单体应用。后端使用 FastAPI，前端使用 Next.js App Router、shadcn/ui 与 Radix UI。
+Lanverse 是前后端分离的 AI 视频生产平台。当前交付切片聚焦“剧本事实主线”：上传整本剧本，异步解析剧集、场景、人物和生产资产，人工批准后将事实写入项目数据。
 
-## 本地开发
+## 固定架构
 
-本地模式直接复用 Homebrew 安装的 PostgreSQL 18.4、Redis 8.8.1、RabbitMQ 4.3.4 和 MinIO；应用使用 Python 3.11.15、Node.js 22.23.1 与 npm 10.9.8。Docker 不是本地开发前置。
+- `frontend/`：Next.js App Router、TypeScript、View/ViewModel 分层；API 客户端由 Umi OpenAPI 根据 Swagger 文档生成。
+- `backend/`：Go 模块化单体，负责公共 HTTP、PostgreSQL 业务事务、MinIO 对象存储和 Kafka outbox/worker。
+- `agent/`：Python 私有 Agent 服务，只承载 Harness/Skill 编排，不连接数据库或 Kafka，也不暴露公共 API。
+- `docs/`：唯一事实来源，按 `requirement → design → prd → plan → acceptance` 维护。
 
-首次安装项目依赖：
+项目不保留旧 Python 业务后端、RabbitMQ、`/api/v1` 路由或迁移兼容链。数据库由 `backend/schema/current.sql` 初始化为当前结构；不在服务启动时自动改表。
+
+## 本机开发
+
+不使用 Docker，直接复用本机已安装的 PostgreSQL、Kafka、MinIO 和 Node.js 环境。Redis 不是当前剧本解析闭环的依赖。
 
 ```bash
 cp .env.example .env
-python3.11 -m venv backend/.venv
-backend/.venv/bin/python -m pip install 'pip==26.1.2'
-backend/.venv/bin/python -m pip install --requirement backend/requirements-dev.txt
-backend/.venv/bin/python -m pip check
-cd frontend && npm ci
-```
-
-启动本机 PostgreSQL、Redis 和 RabbitMQ：
-
-```bash
 brew services start postgresql@18
-brew services start redis
-brew services start rabbitmq
+brew services start kafka
 ```
 
-MinIO 不由项目启动或管理，直接复用本机通过 Homebrew 安装并已运行的实例。当前应用连接 `127.0.0.1:9000`，Console 位于 `127.0.0.1:9001`；确认端口即可：
+确认 PostgreSQL、Kafka、MinIO 已监听 `5432`、`9092`、`9000`，并将 `.env` 中 MinIO 凭据改为本机实例真实值。
 
-```bash
-lsof -nP -iTCP:9000 -sTCP:LISTEN
-```
-
-`.env` 中的 `MINIO_ACCESS_KEY` 和 `MINIO_SECRET_KEY` 必须与该实例一致。项目不会重启、停止或修改这项本机服务。
-
-初始化最终数据库结构并启动完整后端角色：
+初始化当前数据库结构：
 
 ```bash
 cd backend
-.venv/bin/python -m app.initialize_database
-.venv/bin/python -m app.server
+go mod download
+set -a; source ../.env; set +a
+go run ./cmd/schema-init
 ```
 
-`app.initialize_database` 只在空库创建最终 ORM schema；已有数据库只做严格结构校验，并清理遗留的 Alembic revision marker，不在 Web/Worker 启动时自动改表。结构不匹配时命令失败，不执行猜测式修复。
+启动 Go API 和 Kafka worker（分别使用两个终端）：
 
 ```bash
 cd backend
-.venv/bin/python -m app.initialize_database
+set -a; source ../.env; set +a
+go run ./cmd/api
+go run ./cmd/operation-worker
 ```
 
-已有重要数据的数据库在重新初始化前必须先完成可恢复备份和一次性数据转换；项目不保留旧 schema 的增量迁移兼容链。
+启动私有 Agent（可选；当前事实解析使用 Go 当前解析器）：
 
-另开终端启动前端：
+```bash
+PYTHONPATH=agent/src backend/.venv/bin/python -m lanverse_agent.entrypoints.server
+```
+
+启动前端：
 
 ```bash
 cd frontend
+npm ci
+OPENAPI_SCHEMA_URL=../backend/api/openapi.json npm run openapi2ts
 npm run dev
 ```
 
-Web、API 文档和依赖就绪状态分别位于：
+访问：
 
-- `http://127.0.0.1:8123`
-- `http://127.0.0.1:8686/docs`
-- `http://127.0.0.1:8686/readyz`
-
-## Docker 一键启动
-
-Docker Compose 保留完整六服务环境，包含 PostgreSQL、Redis、RabbitMQ、MinIO、server 和 web：
-
-```bash
-docker compose up -d --build --wait
-```
-
-查看日志与停止环境：
-
-```bash
-docker compose logs --follow
-docker compose down
-```
-
-为避免占用本机 MinIO 的 `9000/9001`，Compose 将自己的 MinIO 发布到宿主机 `9100/9101`；容器内部仍通过 `minio:9000` 通信。两套环境可以并存。
-
-生产环境在镜像已发布且 `.env.production` 已填写后执行：
-
-```bash
-docker compose \
-  --env-file .env.production \
-  -f docker-compose.yml \
-  -f docker-compose.prod.yml \
-  up -d --no-build --pull always --wait
-```
+- 前端：`http://127.0.0.1:8123`
+- Go API 就绪检查：`http://127.0.0.1:8686/readyz`
+- Agent 私有就绪检查：`http://127.0.0.1:8790/readyz`
+- Swagger/OpenAPI 源：`backend/api/openapi.json`
 
 ## 验证
 
-后端：
-
 ```bash
-cd backend
-.venv/bin/ruff check app tests
-.venv/bin/pyright
-.venv/bin/python -m pytest
-.venv/bin/python -m pip check
+cd backend && gofmt -w cmd internal tests && go test ./...
+cd ../frontend && npm run lint && npm run typecheck && npm run test && npm run build
+cd .. && PYTHONPATH=agent/src backend/.venv/bin/python -m pytest agent/tests -q
 ```
 
-前端：
+剧本解析的验收路径是：前端提交 → Go 创建 revision → MinIO 保存原文 → PostgreSQL outbox → Kafka → operation-worker 解析 → draft → 人工批准 → episode/narrative/entity/production requirement 同事务物化。该路径使用本机真实服务验证，不使用模拟队列或兼容接口。
 
-```bash
-cd frontend
-npm run lint
-npm run typecheck
-npm run test
-npm run build
-```
+## 文档与安全
 
-Compose 配置：
-
-```bash
-docker compose --env-file .env.example config >/dev/null
-```
-
-需要真实外部依赖的契约通过对应 `LANVERSE_RUN_*` 环境变量显式开启；CI 中保留了 Redis、RabbitMQ、MinIO、ffprobe、Scheduler、媒体栈和浏览器的完整原生命令作为可执行事实源。
-
-CI 在 PR、merge queue 和 main push 上运行完整门禁，并由稳定检查 `Required / CI` 汇总后端、前端、OpenAPI、真实基础设施、浏览器和交付边界。GitHub main 规则应禁止绕过并要求该检查成功；本地 commit 不等于远端 CI 已通过。
-
-正式产品文档只位于 `docs/requirement`、`docs/design`、`docs/prd`、`docs/plan` 和 `docs/acceptance`；分析过程、审核日志和历史归档不在项目内建立独立文档目录。真实凭据、媒体、日志和本地数据不得提交。
+正式设计只位于 `docs/requirement`、`docs/design`、`docs/prd`、`docs/plan` 和 `docs/acceptance`。真实凭据、媒体、日志、数据库和对象存储数据不得提交。
