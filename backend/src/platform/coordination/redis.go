@@ -2,8 +2,6 @@ package coordination
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +9,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/stephenqiu30/lanverse/backend/src/platform/toolkit"
 )
 
 // RedisCoordinator is the only Redis adapter exposed to business modules. Redis stores
@@ -35,7 +35,83 @@ func (c *RedisCoordinator) Ping(ctx context.Context) error {
 	return c.redis.Ping(ctx).Err()
 }
 
-func (c *RedisCoordinator) Close() error { return c.redis.Close() }
+func (c *RedisCoordinator) Close() error {
+	if c == nil || c.redis == nil {
+		return nil
+	}
+	return c.redis.Close()
+}
+
+// IdentityGet reads a short-lived identity marker. The marker value is never
+// an access or refresh token; identity uses it for revocation state only.
+func (c *RedisCoordinator) IdentityGet(ctx context.Context, key string) (string, bool, error) {
+	if c == nil || c.redis == nil {
+		return "", false, errors.New("redis client is not configured")
+	}
+	value, err := c.redis.Get(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("get identity marker: %w", err)
+	}
+	return value, true, nil
+}
+
+func (c *RedisCoordinator) IdentitySet(ctx context.Context, key, value string, ttl time.Duration) error {
+	if c == nil || c.redis == nil {
+		return errors.New("redis client is not configured")
+	}
+	if ttl <= 0 {
+		return errors.New("identity marker ttl must be positive")
+	}
+	if err := c.redis.Set(ctx, key, value, ttl).Err(); err != nil {
+		return fmt.Errorf("set identity marker: %w", err)
+	}
+	return nil
+}
+
+func (c *RedisCoordinator) IdentitySetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	if c == nil || c.redis == nil {
+		return false, errors.New("redis client is not configured")
+	}
+	if ttl <= 0 {
+		return false, errors.New("identity lock ttl must be positive")
+	}
+	ok, err := c.redis.SetNX(ctx, key, value, ttl).Result()
+	if err != nil {
+		return false, fmt.Errorf("set identity lock: %w", err)
+	}
+	return ok, nil
+}
+
+var deleteIdentityValue = redis.NewScript(`
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`)
+
+func (c *RedisCoordinator) IdentityCompareAndDelete(ctx context.Context, key, value string) error {
+	if c == nil || c.redis == nil {
+		return errors.New("redis client is not configured")
+	}
+	if _, err := deleteIdentityValue.Run(ctx, c.redis, []string{key}, value).Result(); err != nil {
+		return fmt.Errorf("release identity lock: %w", err)
+	}
+	return nil
+}
+
+// AllowIdentityGCRA exposes the existing atomic GCRA implementation through a
+// small identity-specific shape so the identity module depends on a port, not
+// on this Redis adapter's result types.
+func (c *RedisCoordinator) AllowIdentityGCRA(ctx context.Context, key string, limit int64, period time.Duration, burst int64) (bool, time.Duration, int64, error) {
+	decision, err := c.AllowGCRA(ctx, key, limit, period, burst)
+	if err != nil {
+		return false, 0, 0, err
+	}
+	return decision.Allowed, decision.RetryAfter, decision.Remaining, nil
+}
 
 type RedisLease struct {
 	Key   string
@@ -73,11 +149,10 @@ func (c *RedisCoordinator) Acquire(ctx context.Context, key string, ttl time.Dur
 	if ttl <= 0 || ttl > 5*time.Minute {
 		return nil, fmt.Errorf("lease ttl must be between 1ns and 5m")
 	}
-	tokenBytes := make([]byte, 16)
-	if _, err := rand.Read(tokenBytes); err != nil {
+	token, err := toolkit.RandomHexToken(16)
+	if err != nil {
 		return nil, fmt.Errorf("create lease owner: %w", err)
 	}
-	token := hex.EncodeToString(tokenBytes)
 	leaseKey := "lanverse:lock:" + key
 	fenceKey := "lanverse:fence:" + key
 	value, err := acquireLease.Run(ctx, c.redis, []string{leaseKey, fenceKey}, token, ttl.Milliseconds()).Int64()

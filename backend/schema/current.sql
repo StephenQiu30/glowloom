@@ -139,8 +139,11 @@ CREATE TABLE IF NOT EXISTS production_requirements (
 CREATE TABLE IF NOT EXISTS iam_users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     identity_subject text NOT NULL UNIQUE,
+    email text,
+    password_hash text,
     display_name text NOT NULL CHECK (length(trim(display_name)) BETWEEN 1 AND 160),
     status text NOT NULL CHECK (status IN ('active', 'suspended', 'removed')),
+    email_verified_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -174,12 +177,30 @@ CREATE TABLE IF NOT EXISTS iam_project_grants (
 
 CREATE TABLE IF NOT EXISTS iam_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    family_id uuid NOT NULL DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES iam_users(id),
     workspace_id uuid NOT NULL REFERENCES workspaces(id),
     token_hash text NOT NULL UNIQUE,
     expires_at timestamptz NOT NULL,
-    revoked_at timestamptz
+    revoked_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    last_used_at timestamptz
 );
+
+-- The current schema is also applied to existing development databases. These
+-- additive clauses keep legacy identity rows readable while converging them to
+-- the email/password and refresh-family shape used by the current contract.
+ALTER TABLE iam_users ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE iam_users ADD COLUMN IF NOT EXISTS password_hash text;
+ALTER TABLE iam_users ADD COLUMN IF NOT EXISTS email_verified_at timestamptz;
+ALTER TABLE iam_sessions ADD COLUMN IF NOT EXISTS family_id uuid;
+UPDATE iam_sessions SET family_id = id WHERE family_id IS NULL;
+ALTER TABLE iam_sessions ALTER COLUMN family_id SET DEFAULT gen_random_uuid();
+ALTER TABLE iam_sessions ALTER COLUMN family_id SET NOT NULL;
+ALTER TABLE iam_sessions ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE iam_sessions ADD COLUMN IF NOT EXISTS last_used_at timestamptz;
+CREATE UNIQUE INDEX IF NOT EXISTS iam_users_email_unique_idx ON iam_users(email) WHERE email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS iam_sessions_family_idx ON iam_sessions(family_id, revoked_at, expires_at);
 
 CREATE TABLE IF NOT EXISTS iam_service_identities (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,8 +1,6 @@
 package scripts
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -12,6 +10,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+
+	"github.com/stephenqiu30/lanverse/backend/src/platform/toolkit"
 )
 
 var (
@@ -132,8 +132,7 @@ type Selection struct {
 }
 
 func HashContent(content string) string {
-	sum := sha256.Sum256([]byte(content))
-	return hex.EncodeToString(sum[:])
+	return toolkit.SHA256String(content)
 }
 
 func ValidateSource(content string) error {

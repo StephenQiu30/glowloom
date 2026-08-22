@@ -2,12 +2,11 @@ package generationplanning
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 
 	"github.com/google/uuid"
 
 	"github.com/stephenqiu30/lanverse/backend/src/platform/httpapi"
+	"github.com/stephenqiu30/lanverse/backend/src/platform/toolkit"
 )
 
 type GenerationPlanService struct{ repository GenerationPlanStore }
@@ -32,8 +31,8 @@ func (s *GenerationPlanService) Create(ctx context.Context, input CreateInput) (
 	if input.Count < 1 || input.Count > 100 {
 		input.Count = 1
 	}
-	hash := sha256.Sum256([]byte(input.Prompt + "\x00" + input.Capability))
-	plan := Plan{ID: uuid.New(), ProjectID: input.ProjectID, TargetType: input.TargetType, TargetID: input.TargetID, Status: "draft", InputSnapshotHash: hex.EncodeToString(hash[:]), PromptHash: hex.EncodeToString(hash[:])}
+	hash := toolkit.SHA256String(input.Prompt + "\x00" + input.Capability)
+	plan := Plan{ID: uuid.New(), ProjectID: input.ProjectID, TargetType: input.TargetType, TargetID: input.TargetID, Status: "draft", InputSnapshotHash: hash, PromptHash: hash}
 	items := make([]Item, 0, input.Count)
 	for index := 1; index <= input.Count; index++ {
 		items = append(items, Item{ID: uuid.New(), PlanID: plan.ID, Ordinal: index, CapabilityKey: input.Capability, Prompt: input.Prompt, Status: "proposed"})

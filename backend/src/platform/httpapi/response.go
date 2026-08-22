@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 )
 
 type Envelope[T any] struct {
@@ -18,6 +19,9 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	apiErr := From(err)
 	if requestID := RequestID(r); requestID != "" {
 		apiErr.RequestID = requestID
+	}
+	if apiErr.RetryAfterSeconds > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(apiErr.RetryAfterSeconds))
 	}
 	WriteJSON(w, apiErr.Status, Envelope[any]{Error: apiErr})
 }

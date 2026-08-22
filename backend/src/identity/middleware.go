@@ -3,11 +3,13 @@ package identity
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/stephenqiu30/lanverse/backend/src/platform/database"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/httpapi"
+	"github.com/stephenqiu30/lanverse/backend/src/platform/toolkit"
 )
 
 type contextKey struct{}
@@ -19,21 +21,20 @@ func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 
 func Require(identityService *IdentityService, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, err := uuid.Parse(r.Header.Get("X-Workspace-Id"))
-		if err != nil {
+		workspaceID, err := uuid.Parse(strings.TrimSpace(r.Header.Get("X-Workspace-Id")))
+		if err != nil || workspaceID == uuid.Nil {
 			httpapi.WriteError(w, r, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "Workspace 上下文缺失", "提供 X-Workspace-Id 后重试"))
 			return
 		}
-		authorization := r.Header.Get("Authorization")
-		const prefix = "Bearer "
-		if len(authorization) <= len(prefix) || authorization[:len(prefix)] != prefix {
-			httpapi.WriteError(w, r, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "Bearer 会话缺失", "创建或刷新当前 Workspace 会话"))
+		rawAccessToken, ok := toolkit.BearerToken(r.Header.Get("Authorization"))
+		if !ok {
+			httpapi.WriteError(w, r, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "Bearer 会话缺失", "刷新登录会话后重试"))
 			return
 		}
 		workspaceContext := database.WithWorkspaceID(r.Context(), workspaceID)
-		principal, err := identityService.Authenticate(workspaceContext, authorization[len(prefix):], workspaceID)
+		principal, err := identityService.Authenticate(workspaceContext, rawAccessToken, workspaceID)
 		if err != nil {
-			httpapi.WriteError(w, r, httpapi.NewError(httpapi.StatusForbidden, httpapi.CodeForbidden, "Workspace 访问被拒绝", "确认当前会话拥有该 Workspace 权限"))
+			httpapi.WriteError(w, r, err)
 			return
 		}
 		if err := identityService.AuthorizePath(workspaceContext, workspaceID, r.URL.Path); err != nil {
@@ -47,11 +48,23 @@ func Require(identityService *IdentityService, next http.Handler) http.Handler {
 func RequireForBusiness(identityService *IdentityService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if (r.Method == http.MethodPost && (r.URL.Path == "/api/workspaces" || r.URL.Path == "/api/sessions")) || r.URL.Path == "/readyz" || r.URL.Path == "/api/openapi.json" || r.URL.Path == "/api/docs" {
+			if isPublicIdentityRoute(r) || r.URL.Path == "/readyz" || r.URL.Path == "/api/openapi.json" || r.URL.Path == "/api/docs" {
 				next.ServeHTTP(w, r)
 				return
 			}
 			Require(identityService, next).ServeHTTP(w, r)
 		})
+	}
+}
+
+func isPublicIdentityRoute(r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		return false
+	}
+	switch r.URL.Path {
+	case "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout":
+		return true
+	default:
+		return false
 	}
 }

@@ -6,6 +6,7 @@
     "description": "当前剧本事实分析合同；路径不包含兼容版本段。"
   },
   "servers": [{"url": "http://127.0.0.1:8686"}],
+  "security": [{"BearerAccessToken": []}],
   "paths": {
     "/readyz": {
       "get": {
@@ -20,11 +21,44 @@
         "responses": {"201": {"description": "Workspace 已创建", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkspaceResponse"}}}}, "422": {"$ref": "#/components/responses/BusinessError"}}
       }
     },
-    "/api/sessions": {
+    "/api/auth/register": {
       "post": {
-        "operationId": "createSession",
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateSessionRequest"}}}},
-        "responses": {"201": {"description": "会话已创建", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SessionResponse"}}}}, "422": {"$ref": "#/components/responses/BusinessError"}}
+        "operationId": "registerAccount",
+        "security": [],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RegisterRequest"}}}},
+        "responses": {"201": {"description": "账户已创建", "headers": {"Set-Cookie": {"schema": {"type": "string"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthResponse"}}}}, "409": {"$ref": "#/components/responses/BusinessError"}, "422": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "loginAccount",
+        "security": [],
+        "parameters": [{"$ref": "#/components/parameters/WorkspaceHeader"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LoginRequest"}}}},
+        "responses": {"200": {"description": "登录成功", "headers": {"Set-Cookie": {"schema": {"type": "string"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthResponse"}}}}, "401": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "operationId": "refreshIdentitySession",
+        "security": [{"RefreshCookie": []}],
+        "parameters": [{"$ref": "#/components/parameters/WorkspaceHeader"}],
+        "responses": {"200": {"description": "会话已无感刷新", "headers": {"Set-Cookie": {"schema": {"type": "string"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthResponse"}}}}, "401": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logoutIdentitySession",
+        "security": [],
+        "parameters": [{"$ref": "#/components/parameters/WorkspaceHeader"}],
+        "responses": {"204": {"description": "会话已退出"}}
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "operationId": "getCurrentIdentity",
+        "parameters": [{"$ref": "#/components/parameters/WorkspaceHeader"}],
+        "responses": {"200": {"description": "当前主体", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CurrentIdentityResponse"}}}}, "401": {"$ref": "#/components/responses/BusinessError"}}
       }
     },
     "/api/workspaces/{workspace_id}/projects": {
@@ -151,6 +185,7 @@
   },
   "components": {
     "parameters": {
+      "WorkspaceHeader": {"name": "X-Workspace-Id", "in": "header", "required": true, "schema": {"type": "string", "format": "uuid"}},
       "WorkspaceID": {"name": "workspace_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
       "ProjectID": {"name": "project_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
       "RevisionID": {"name": "revision_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
@@ -159,11 +194,20 @@
     "responses": {
       "BusinessError": {"description": "当前业务合同错误", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
     },
+    "securitySchemes": {
+      "BearerAccessToken": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
+      "RefreshCookie": {"type": "apiKey", "in": "cookie", "name": "lanverse_refresh"}
+    },
     "schemas": {
       "CreateWorkspaceRequest": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 120}}},
-      "CreateSessionRequest": {"type": "object", "required": ["identity_subject", "workspace_id"], "properties": {"identity_subject": {"type": "string", "minLength": 1, "maxLength": 200}, "workspace_id": {"type": "string", "format": "uuid"}}},
-      "Session": {"type": "object", "required": ["token", "user_id", "workspace_id", "expires_at"], "properties": {"token": {"type": "string"}, "user_id": {"type": "string", "format": "uuid"}, "workspace_id": {"type": "string", "format": "uuid"}, "expires_at": {"type": "string", "format": "date-time"}}},
-      "SessionResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Session"}}},
+      "RegisterRequest": {"type": "object", "required": ["email", "password", "workspace_name"], "properties": {"email": {"type": "string", "format": "email", "maxLength": 254}, "password": {"type": "string", "minLength": 12, "maxLength": 72}, "display_name": {"type": "string", "maxLength": 160}, "workspace_name": {"type": "string", "minLength": 1, "maxLength": 120}}},
+      "LoginRequest": {"type": "object", "required": ["email", "password"], "properties": {"email": {"type": "string", "format": "email", "maxLength": 254}, "password": {"type": "string", "minLength": 1, "maxLength": 72}}},
+      "Account": {"type": "object", "required": ["id", "email", "display_name"], "properties": {"id": {"type": "string", "format": "uuid"}, "email": {"type": "string", "format": "email"}, "display_name": {"type": "string"}}},
+      "AuthWorkspace": {"type": "object", "required": ["id", "name"], "properties": {"id": {"type": "string", "format": "uuid"}, "name": {"type": "string"}}},
+      "Auth": {"type": "object", "required": ["access_token", "token_type", "expires_at", "user", "workspace", "role"], "properties": {"access_token": {"type": "string"}, "token_type": {"type": "string", "enum": ["Bearer"]}, "expires_at": {"type": "string", "format": "date-time"}, "user": {"$ref": "#/components/schemas/Account"}, "workspace": {"$ref": "#/components/schemas/AuthWorkspace"}, "role": {"type": "string", "enum": ["owner", "admin", "producer", "operator", "reviewer"]}}},
+      "AuthResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Auth"}}},
+      "CurrentIdentity": {"type": "object", "required": ["user_id", "workspace_id", "membership_id", "session_id", "role"], "properties": {"user_id": {"type": "string", "format": "uuid"}, "workspace_id": {"type": "string", "format": "uuid"}, "membership_id": {"type": "string", "format": "uuid"}, "session_id": {"type": "string", "format": "uuid"}, "role": {"type": "string"}}},
+      "CurrentIdentityResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/CurrentIdentity"}}},
       "CreateProjectRequest": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 160}}},
       "CreateScriptRevisionRequest": {"type": "object", "required": ["name", "content"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 240}, "content": {"type": "string", "minLength": 1}}},
       "Readiness": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "enum": ["ready"]}}},
@@ -204,7 +248,7 @@
       "GenerationPlanItem": {"type": "object", "required": ["id", "plan_id", "ordinal", "capability_key", "prompt", "status"], "properties": {"id": {"type": "string", "format": "uuid"}, "plan_id": {"type": "string", "format": "uuid"}, "ordinal": {"type": "integer"}, "capability_key": {"type": "string"}, "prompt": {"type": "string"}, "status": {"type": "string"}}},
       "GenerationPlanData": {"type": "object", "required": ["plan", "items"], "properties": {"plan": {"$ref": "#/components/schemas/GenerationPlan"}, "items": {"type": "array", "items": {"$ref": "#/components/schemas/GenerationPlanItem"}}}},
       "GenerationPlanResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/GenerationPlanData"}}},
-      "ApiError": {"type": "object", "required": ["code", "message", "next_action"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}, "next_action": {"type": "string"}, "request_id": {"type": "string"}, "details": {}, "recovery_actions": {"type": "array", "items": {"type": "object", "required": ["code", "label"], "properties": {"code": {"type": "string"}, "label": {"type": "string"}}}}}},
+      "ApiError": {"type": "object", "required": ["code", "message", "next_action"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}, "next_action": {"type": "string"}, "request_id": {"type": "string"}, "details": {}, "retry_after_seconds": {"type": "integer", "minimum": 1}, "recovery_actions": {"type": "array", "items": {"type": "object", "required": ["code", "label"], "properties": {"code": {"type": "string"}, "label": {"type": "string"}}}}}},
       "ErrorResponse": {"type": "object", "required": ["error"], "properties": {"error": {"$ref": "#/components/schemas/ApiError"}}}
     }
   }

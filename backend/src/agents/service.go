@@ -2,14 +2,13 @@ package agents
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/google/uuid"
 
 	platformagent "github.com/stephenqiu30/lanverse/backend/src/platform/agent"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/httpapi"
+	"github.com/stephenqiu30/lanverse/backend/src/platform/toolkit"
 )
 
 type AgentService struct {
@@ -41,20 +40,18 @@ func (s *AgentService) Start(ctx context.Context, input StartInput) (AgentRun, [
 	if err != nil {
 		return AgentRun{}, nil, err
 	}
-	inputHash := sha256.Sum256([]byte(input.SnapshotRef))
-	run := AgentRun{ID: remote.RunID, ProjectID: input.ProjectID, OperationID: input.OperationID, Skill: remote.Skill, Stage: remote.Stage, StageGeneration: 1, RequestHash: remote.RequestHash, Status: remote.Status, InputSnapshotHash: hex.EncodeToString(inputHash[:])}
+	inputHash := toolkit.SHA256String(input.SnapshotRef)
+	run := AgentRun{ID: remote.RunID, ProjectID: input.ProjectID, OperationID: input.OperationID, Skill: remote.Skill, Stage: remote.Stage, StageGeneration: 1, RequestHash: remote.RequestHash, Status: remote.Status, InputSnapshotHash: inputHash}
 	items := make([]ProposalItem, 0, len(remote.Items))
 	for _, item := range remote.Items {
-		payloadHash := sha256.Sum256([]byte(fmt.Sprintf("%v", item.Value)))
-		items = append(items, ProposalItem{ID: uuid.New(), AgentRunID: remote.RunID, TargetModule: "narrative", TargetCommand: item.Kind, Payload: item.Value, Decision: "pending", ReadSetHash: inputHashHex(inputHash), WriteSetHash: hex.EncodeToString(payloadHash[:])})
+		payloadHash := toolkit.SHA256String(fmt.Sprintf("%v", item.Value))
+		items = append(items, ProposalItem{ID: uuid.New(), AgentRunID: remote.RunID, TargetModule: "narrative", TargetCommand: item.Kind, Payload: item.Value, Decision: "pending", ReadSetHash: inputHash, WriteSetHash: payloadHash})
 	}
 	if err := s.repository.CreateRun(ctx, run, items); err != nil {
 		return AgentRun{}, nil, err
 	}
 	return run, items, nil
 }
-
-func inputHashHex(value [32]byte) string { return hex.EncodeToString(value[:]) }
 
 func (s *AgentService) Get(ctx context.Context, id uuid.UUID) (AgentRun, []ProposalItem, error) {
 	return s.repository.GetRun(ctx, id)

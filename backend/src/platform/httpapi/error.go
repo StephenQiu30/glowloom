@@ -54,14 +54,15 @@ type RecoveryAction struct {
 }
 
 type APIError struct {
-	Status          HTTPStatus       `json:"-"`
-	Code            ErrorCode        `json:"code"`
-	Message         string           `json:"message"`
-	NextAction      string           `json:"next_action"`
-	Details         any              `json:"details,omitempty"`
-	RequestID       string           `json:"request_id,omitempty"`
-	RecoveryActions []RecoveryAction `json:"recovery_actions,omitempty"`
-	Cause           error            `json:"-"`
+	Status            HTTPStatus       `json:"-"`
+	Code              ErrorCode        `json:"code"`
+	Message           string           `json:"message"`
+	NextAction        string           `json:"next_action"`
+	Details           any              `json:"details,omitempty"`
+	RequestID         string           `json:"request_id,omitempty"`
+	RecoveryActions   []RecoveryAction `json:"recovery_actions,omitempty"`
+	RetryAfterSeconds int              `json:"retry_after_seconds,omitempty"`
+	Cause             error            `json:"-"`
 }
 
 func (e *APIError) Error() string {
@@ -99,6 +100,13 @@ func Validation(message, nextAction string) *APIError {
 
 func Conflict(message, nextAction string) *APIError {
 	return NewError(StatusConflict, CodeConflict, message, nextAction)
+}
+
+func RateLimited(retryAfterSeconds int, message, nextAction string) *APIError {
+	if retryAfterSeconds < 1 {
+		retryAfterSeconds = 1
+	}
+	return &APIError{Status: StatusTooManyRequests, Code: CodeRateLimited, Message: message, NextAction: nextAction, RetryAfterSeconds: retryAfterSeconds}
 }
 
 func From(err error) *APIError {

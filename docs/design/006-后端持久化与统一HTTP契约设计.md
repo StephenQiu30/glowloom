@@ -85,6 +85,10 @@ ports.go       # 仅真实用例需要的最小 Port/Store
 
 禁止 `Service`、`Repository`、`Controller`、`Store`、`Manager` 这种无语义公共类型，禁止 `domain/application/adapters/transport` 子目录，禁止跨模块直接导入另一模块的 Repository。
 
+### 2.1 泛用工具层
+
+允许 `backend/src/platform/toolkit` 承载跨模块且不包含业务语义的稳定工具：配置环境变量解析、HTTP Bearer/IP 解析、密码/令牌以外的通用随机值和 SHA-256 编码。工具按能力拆文件，不建设 Hutool 式万能 `utils` 包；业务状态、角色、错误码、限流策略和 Workspace 规则必须留在所属模块并使用 typed string/struct 表达。新增工具必须至少被两个模块使用，且能用标准库实现可直接单测。
+
 ## 3. 实施顺序
 
 1. 引入 GORM 和 `platform/database` 的单一连接初始化，不改变 `current.sql`，关闭 AutoMigrate。
