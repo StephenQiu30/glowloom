@@ -7,9 +7,9 @@
 
 ## 1. 设计结论
 
-LangGraph 只编排一次 AgentRun 内部推理；业务 Operation、批准和 current 状态仍在 Python Application Service 与 PostgreSQL。M06 对业务变更只拥有 `AgentRun`/`AgentProposal`/`ProposalItem` 的运行与提案信封，不拥有信封内的领域命令 Schema、语义校验和接受后写入。信封中的 `target_module + command_type + command_schema_version + payload/hash` 由 M03、M04、M05、M07 或 M10 等目标模块定义；用户接受时必须重新鉴权并调用目标模块公开命令端口。
+LangGraph 只编排一次 AgentRun 内部推理；业务 Operation、批准和 current 状态固定由 Go Application Service 与 PostgreSQL 管理。Go M06 对业务变更只拥有 `AgentRun`/`AgentProposal`/`ProposalItem` 的运行与提案信封，不拥有信封内的领域命令语义和接受后写入。信封中的 `target_module + command_type + command_schema_version + payload/hash` 由 Go M03、M04、M05、M07 或 M10 等目标模块定义；用户接受时必须重新鉴权并调用目标 Go 命令端口。
 
-代码上明确分离 `backend/app/modules/agents` 与 `backend/app/agent_runtime`：前者是 M06 业务模块，后者是无业务写权限的 Harness/Skill 执行内核。Agent 文件可以承载完整的剧本、人物和生产需求 **推理编排**，但不能承载完整的权威 **业务编排**；M03 拥有 Manifest/Narrative 批准，M02 拥有物化与顺序，M04 拥有人物身份、出场投影和生产需求 current。
+代码上明确分离 `backend/internal/modules/agents` 与顶层 `agent/`：前者是 Go M06 业务模块，后者是 Python、无业务写权限的 Harness/Skill 执行内核。Agent 文件可以承载完整的剧本、人物和生产需求 **推理编排**，但不能承载权威 **业务编排**；Go M03 拥有 Manifest/Narrative 批准，Go M02 拥有物化与顺序，Go M04 拥有人物身份、出场投影和生产需求 current。
 
 M06 另外拥有 `CanvasView` 和 `CanvasLayout` 等展示状态，但不拥有节点代表的领域对象或业务依赖。Agent、列表、表格和画布最终提交同一目标命令，不为画布或 Agent 建第二套业务 API。本模块是模块化单体内的逻辑边界，不拆为独立微服务。
 
@@ -47,7 +47,7 @@ M06 另外拥有 `CanvasView` 和 `CanvasLayout` 等展示状态，但不拥有�
 
 M06 不跨模块写表。`ExecuteProposedCommand` 返回 `target_result_ref`、`target_revision`、`idempotency_replayed`、`error_code`、`recovery_actions[]`；M06 只追加记录决定与回执，不复制目标对象正文。
 
-目标模块通过公开只读 `CommandSchemaRegistry` 发布唯一的 `CommandSchemaDescriptor(target_module, command_type, version, json_schema, schema_hash)`、golden fixture 与 `ValidateAndPreviewProposedCommand` 端口。M06 在创建 Run 时解析并冻结允许的 descriptor/hash；Runtime 只接收进程边界中的 JSON Schema descriptor，不导入目标模块 ORM、Service 或内部类型。`skills/<skill>/contracts.py` 只定义候选、中间 State、Advisory 和 Result 映射，不得复制 `CreateEpisodeBreakdownDraft`、`ResolveMentionGroup` 等目标 Command DTO。Harness 按冻结 Schema 校验模型输出，目标模块仍是 canonical Schema 和 fixture 的唯一所有者；架构测试比较 registry/hash 并禁止 Skill 自建同名 Command 类型。
+目标 Go 模块通过公开只读 `CommandSchemaRegistry` 发布唯一的 `CommandSchemaDescriptor(target_module, command_type, version, json_schema, schema_hash)`、golden fixture 与 `ValidateAndPreviewProposedCommand` 端口；当前描述文件归档在 `backend/contracts/agent/commands/`。M06 创建 Run 时解析并冻结 descriptor/hash；Python Runtime 只接收进程边界中的 JSON Schema descriptor，不导入 Go Service、sqlc row 或内部类型。`agent/.../skills/<skill>/contracts.py` 只定义候选、中间 State、Advisory 和 Result 映射，不得复制 `CreateEpisodeBreakdownDraft`、`ResolveMentionGroup` 等目标 Command DTO。Harness 按冻结 Schema 校验模型输出，目标 Go 模块仍是 canonical Schema、fixture 和语义校验的唯一所有者；架构测试比较 registry/hash 并禁止 Skill 自建同名 Command 类型。
 
 ### 2.3 Agent Proposal 与模块原生 Proposal 不双写
 
@@ -63,35 +63,35 @@ M03 自有的 `NarrativeProposal/ProposalItem/DecideProposalItem` 继续服务 I
 
 | 层次 | 目标位置 | 责任 | 输出/事实 |
 | --- | --- | --- | --- |
-| M06 Application Service | `modules/agents/application` | 创建/取消 Run、冻结授权输入、记录 Proposal/Decision、重新鉴权并转交目标命令 | AgentRun、Proposal、Decision、Operation 引用 |
-| 通用 Harness | `agent_runtime/harness` | graph/contract 版本、节点调度、Tool policy、预算/超时、checkpoint、恢复和结构校验 | 版本化 AgentRunResult，不拥有领域事实 |
-| 具体 Skill | `agent_runtime/skills/<skill>` | State、Node、Prompt、确定性合并、覆盖校验和提案映射 | 带 evidence/baseline/failed scope 的 ProposalItem |
-| 目标模块 Service | M03/M04/M05/M07/M10 `application/services` | 权限、不变量、expected revision、幂等、短事务、Outbox 与事实写入 | 目标领域 Result 与 revision；M02 仅消费 M03 approved Manifest，不接受 Agent Proposal |
+| Go M06 Application Service | `backend/internal/modules/agents/application` | 创建/取消 Run、冻结授权输入、记录 Proposal/Decision、重新鉴权并转交目标命令 | AgentRun、Proposal、Decision、Operation 引用 |
+| Python 通用 Harness | `agent/src/lanverse_agent/runtime` | graph/contract 版本、节点调度、Tool policy、预算/超时、checkpoint、恢复和结构校验 | 版本化 AgentRunResult，不拥有领域事实 |
+| Python 具体 Skill | `agent/src/lanverse_agent/skills/<skill>` | State、Node、Prompt、确定性合并、覆盖校验和提案映射 | 带 evidence/baseline/failed scope 的 ProposalItem |
+| Go 目标模块 Service | M03/M04/M05/M07/M10 `application/services` | 权限、不变量、expected revision、幂等、短事务、Outbox 与事实写入 | 目标领域 Result 与 revision；M02 仅消费 M03 approved Manifest，不接受 Agent Proposal |
 
 目标文件结构如下；只在切片 B 的真实用例落地时创建，不能先生成空 Skill：
 
 ```text
-backend/app/
-  modules/agents/                 # M06 业务事实
+backend/
+  contracts/agent/                # Go↔Python 唯一当前 JSON Schema
+    commands/
+  internal/modules/agents/        # Go M06 业务事实
     domain/
-    application/
-      services/
-    adapters/
-    transport/
-  agent_runtime/                  # 无通用业务写权限
-    harness/
-      contracts.py
-      runner.py
-      policies.py
-      checkpoint.py
-    skills/
-      script_analysis/
-        definition.py
-        contracts.py              # 仅候选/中间 State/Advisory；禁止复制目标 Command DTO
-        state.py
-        graph.py
-        nodes/
-        prompts/
+    application/services/
+    adapters/postgres/
+    transport/http/controllers/
+
+agent/src/lanverse_agent/         # Python，无业务数据库/通用 MinIO 权限
+  runtime/
+    runner.py
+    policies.py
+    checkpoint.py
+  contracts_generated/
+  skills/script_analysis/
+    contracts.py                  # 仅候选/中间 State/Advisory；禁止复制目标 Command DTO
+    state.py
+    graph.py
+    nodes/
+    prompts/
 ```
 
 ### 3.2 Run 与 Result 信封
@@ -110,9 +110,9 @@ validate_run_envelope
   → commit_via_result_port
 ```
 
-Tool 只读且使用限定 run、scope、tool、expiry 的短期 capability token。所有写入意图只能变成 ProposalItem；图节点不能调用领域写 API、对象存储凭据或数据库。
+Tool 只读且使用限定 run、scope、tool、expiry 的短期 capability token。所有写入意图只能变成 ProposalItem；Python 图节点不能调用领域写 API、业务数据库或通用对象存储凭据。
 
-大型 Proposal payload 通过 M06 受限 `StageResultPayloadPort` 暂存：Worker 以 `run/item/request_idempotency_key/request_hash` 请求绑定 `workspace/run/item/content_type/max_bytes/expected_hash/expires_at` 的一次性上传 capability，经 ResultPort 流式写入并校验大小/hash 后，M06 才登记不可变内容寻址 `payload_ref`。capability/request 唯一；提交成功但响应丢失时，`GetStageResultPayloadByCapability` 或重复同 key/hash 必须回读原 ref，异 hash 返回幂等冲突，不能因 token 已消费而重复上传。Worker 不获得通用 MinIO、桶级或 root 凭据；唯一 MinIO adapter 只由 ResultPort 背后的基础设施实现使用，引用不进入 RabbitMQ/checkpoint，`CommitAgentRunResult` 只提交 ref/hash。ref 保留期至少覆盖 Proposal 的审阅、过期和执行审计期限；上传失败、取消或未被有效 Result 引用的对象由具名 orphan cleanup Operation 清理，已被 Proposal/Decision 引用的 payload 不按孤儿删除。
+大型 Proposal payload 通过 Go M06 受限 `StageResultPayloadPort` 暂存：Python Worker 以 `run/item/request_idempotency_key/request_hash` 请求绑定 `workspace/run/item/content_type/max_bytes/expected_hash/expires_at` 的一次性 MinIO PUT capability，上传并由 Go ResultPort 校验大小/hash 后，M06 才登记不可变 `payload_ref`。capability/request 唯一；提交成功但响应丢失时，`GetStageResultPayloadByCapability` 或重复同 key/hash 必须回读原 ref，异 hash 返回幂等冲突。Python Worker 不获得通用 MinIO、桶级或 root 凭据；唯一 MinIO adapter 位于 Go `backend/internal/platform/objectstorage`，引用不进入 RabbitMQ/checkpoint，`CommitAgentRunResult` 只提交 ref/hash。ref 保留期至少覆盖 Proposal 的审阅、过期和执行审计期限；上传失败、取消或未被有效 Result 引用的对象由具名 orphan cleanup Operation 清理，已被 Proposal/Decision 引用的 payload 不按孤儿删除。
 
 对于 `script_analysis`，`parent_workflow_ref` 固定为 M03 `AnalysisRun`，`root_operation_id` 指向该整本分析的根 Operation。breakdown、narrative、knowledge 三个 M06 AgentRun 各自创建一个 `parent_operation_id=root_operation_id` 的 child Operation；child 只表达单 stage 的排队、运行、恢复和结果提交。child 完成后根 Operation 进入 `waiting_user` 并展示对应批准门禁；批准后由业务编排器创建下一 stage 的新 AgentRun/child Operation。Agent Worker 无权把根 Operation 标记 completed；只有 M03/M02/M04 的门禁和最终投影都满足后，根 AnalysisRun/Operation 才能完成。
 

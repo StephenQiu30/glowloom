@@ -23,7 +23,8 @@
 
 ## 4. 范围与边界
 
-- 独立 Agent Worker、LangGraph checkpoint、版本化 AgentRun Request/Result；
+- 顶层 `agent/` 中独立 Python Agent Worker、LangGraph checkpoint、版本化 AgentRun Request/Result；
+- Go `backend/` 创建 AgentRun、校验结果并保存 Proposal；Python Agent 不持有业务数据库或通用 MinIO 凭据；
 - 只读 Tool 白名单和结构化 ProposalItem；
 - Agent token/tool 用量记录和 M14 外发评估；
 - 不允许 Agent 直接写表、自动批准事实、启动媒体生成、选主候选、接受风险或交付；

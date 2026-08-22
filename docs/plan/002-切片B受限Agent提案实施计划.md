@@ -7,14 +7,14 @@
 
 ## 1. 前置 Gate
 
-切片 A 手工命令、Query、expected revision、审计和恢复证据通过；模型 Provider 的数据条款/地域/保留、Agent token 上限和金标提案样本签认。
+切片 A 的 Go 手工命令、Query、expected revision、审计和恢复证据通过；`backend/contracts/agent/` 当前契约、模型 Provider 的数据条款/地域/保留、Agent token 上限和金标提案样本签认。
 
 ## 2. 工作包顺序
 
 | WP | 工作 | 验证 |
 | --- | --- | --- |
-| B1 | AgentRun/Proposal/Item Schema、状态机和 result 幂等端口 | 非法/重复 result 副作用为 0 |
-| B2 | 独立 Agent Worker、队列、LangGraph checkpoint | 每节点前后重启恢复同一 run |
+| B1 | Go M06 AgentRun/Proposal/Item、Agent JSON Schema、状态机和结果幂等端口 | Go/Python golden/hash 一致；非法/重复 result 副作用为 0 |
+| B2 | 顶层 `agent/` Python Worker、RabbitMQ、LangGraph checkpoint | 无业务 DB/通用 MinIO 凭据；每节点前后重启恢复同一 run |
 | B3 | 受限 Query Tool 和 capability token | 越权/过期/跨 workspace 拒绝 |
 | B4 | 结构分析 Proposal | 原文证据、逐项决定、过期基线 |
 | B5 | 人物/地点/道具 Proposal | 同名/unknown/merge split 人工接管 |
@@ -33,4 +33,4 @@ Prompt injection、恶意来源指令、Tool 越权、模型超时、Tool 部分
 
 ## 5. 退出与停止条件
 
-满足 PRD-B 七项退出条件并通过 AC-AIC-001—009。若 Agent 需要直接写表、长期记忆成为批准事实或接受 Proposal 与手工命令不一致，停止并修正 Design；不通过扩大 Tool 权限解决。
+满足 PRD-B 七项退出条件并通过 AC-AIC-001—009。若 Python Agent 需要直接写表、导入 Go Service 内部实现、长期记忆成为批准事实或接受 Proposal 与 Go 手工命令不一致，停止并修正 Design；不通过扩大 Tool 权限解决。

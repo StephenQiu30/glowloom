@@ -2,7 +2,7 @@
 
 - 状态：active
 - 最近审查：2026-08-22
-- 当前状态：Requirement 已审核为 ready_for_design；Design、PRD 与 Plan 为 proposed
+- 当前状态：Requirement 已审核为 ready_for_design；000/005 顶层架构 accepted 并冻结，其余 Design、PRD 与 Plan 为 proposed
 
 ## 1. 当前产品边界
 
@@ -43,10 +43,11 @@ Requirement 定义“要什么”，Design 定义“如何满足”，PRD 和 Pl
 
 ## 5. 当前技术结论
 
-- 后端以 Python 为唯一业务主栈；FastAPI 承载短请求与短事务。
-- 生产以 `api`、`operation-worker`、`import-worker`、`provider-worker`、`agent-worker`、`media-worker` 六类安全隔离入口运行，按 A—F 切片逐步启用；LangGraph 只编排单次 Agent 运行。
-- PostgreSQL 保存业务事实和用户可见操作状态；Outbox 可靠触发 RabbitMQ 后台任务。
-- 首期不引入 Go。只有真实容量、资源或尾延迟证据满足架构 Gate 后才进行局部 Go PoC。
+- 顶层固定为 `frontend/` TypeScript/Next.js、`backend/` Go 业务系统、`agent/` Python/LangGraph Agent Runtime。
+- 全部领域规则、业务事务、公共 `/api` 和非 Agent Worker 由 Go 实现；Python 只执行受限 AgentRun，不写业务数据库。
+- 生产以五个 Go 角色 `api`、`operation-worker`、`import-worker`、`provider-worker`、`media-worker` 和一个 Python `agent-worker` 运行，按 A—F 切片启用。
+- PostgreSQL 保存业务事实和用户可见 Operation；Outbox 可靠触发 RabbitMQ；MinIO 是唯一对象存储。
+- 数据库只使用当前最终 Schema，不建立 migration、旧接口兼容、双读或双写链。
 
 ## 6. 目录约束
 

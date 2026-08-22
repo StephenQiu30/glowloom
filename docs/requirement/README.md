@@ -70,7 +70,7 @@ Requirement 按“一个权威功能模块一份详细需求”组织。M01—M1
 
 ## 5. 需求与设计边界
 
-Requirement 定义用户结果、范围、业务规则、失败、权限、恢复、非功能要求和验收，不指定 FastAPI、PostgreSQL、RabbitMQ、LangGraph、表名、队列或代码目录。Design 决定实现；若 Design 暴露新的用户风险，必须先补充对应 Requirement 和验收。
+Requirement 定义用户结果、范围、业务规则、失败、权限、恢复、非功能要求和验收，不指定实现语言、框架、数据库、队列、Agent Runtime、表名或代码目录。Design 决定实现；若 Design 暴露新的用户风险，必须先补充对应 Requirement 和验收。
 
 详细 Design 可以跨模块解释一个纵向流程，但必须分别链接每个模块的 Requirement，不得借跨模块 Design 重新合并需求所有权。
 
