@@ -9,5 +9,12 @@ dependencies = [
   "pydantic==2.12.5"
 ]
 
+[project.optional-dependencies]
+test = [
+  "pytest>=8",
+  "httpx2"
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]

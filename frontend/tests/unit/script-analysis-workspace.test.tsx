@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/api/approveScriptAnalysis", () => ({ approveScriptAnalysis: vi.fn() }));
 vi.mock("@/api/createProject", () => ({ createProject: vi.fn() }));
 vi.mock("@/api/createScriptRevision", () => ({ createScriptRevision: vi.fn() }));
+vi.mock("@/api/createSession", () => ({ createSession: vi.fn() }));
 vi.mock("@/api/createWorkspace", () => ({ createWorkspace: vi.fn() }));
 vi.mock("@/api/getAnalysisDraft", () => ({ getAnalysisDraft: vi.fn() }));
 vi.mock("@/api/getOperation", () => ({ getOperation: vi.fn() }));

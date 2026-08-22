@@ -20,6 +20,13 @@
         "responses": {"201": {"description": "Workspace 已创建", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkspaceResponse"}}}}, "422": {"$ref": "#/components/responses/BusinessError"}}
       }
     },
+    "/api/sessions": {
+      "post": {
+        "operationId": "createSession",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateSessionRequest"}}}},
+        "responses": {"201": {"description": "会话已创建", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SessionResponse"}}}}, "422": {"$ref": "#/components/responses/BusinessError"}}
+      }
+    },
     "/api/workspaces/{workspace_id}/projects": {
       "post": {
         "operationId": "createProject",
@@ -70,6 +77,76 @@
         "parameters": [{"name": "project_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
         "responses": {"200": {"description": "已批准剧本事实", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AnalysisResponse"}}}}, "404": {"$ref": "#/components/responses/BusinessError"}}
       }
+    },
+    "/api/projects/{project_id}/content-units/{content_unit_id}/shots": {
+      "post": {
+        "operationId": "createShots",
+        "parameters": [{"name": "project_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "content_unit_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateShotsRequest"}}}},
+        "responses": {"201": {"description": "镜头已创建", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ShotListResponse"}}}}, "422": {"$ref": "#/components/responses/BusinessError"}}
+      },
+      "get": {
+        "operationId": "listShots",
+        "parameters": [{"name": "project_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "content_unit_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"200": {"description": "镜头列表", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ShotListResponse"}}}}}
+      }
+    },
+    "/api/shots/{shot_id}/fixture-candidates": {
+      "post": {
+        "operationId": "createFixtureCandidate",
+        "parameters": [{"name": "shot_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FixtureCandidateRequest"}}}},
+        "responses": {"201": {"description": "Fixture 候选已创建", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CandidateResponse"}}}}}
+      }
+    },
+    "/api/candidates/{candidate_id}/selections": {
+      "post": {
+        "operationId": "selectCandidate",
+        "parameters": [{"name": "candidate_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SelectionRequest"}}}},
+        "responses": {"201": {"description": "候选已选择", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SelectionResponse"}}}}}
+      }
+    },
+    "/api/agent-runs": {
+      "post": {
+        "operationId": "startAgentRun",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/StartAgentRunRequest"}}}},
+        "responses": {"202": {"description": "AgentRun 已接收", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AgentRunResponse"}}}}}
+      }
+    },
+    "/api/agent-runs/{agent_run_id}": {
+      "get": {
+        "operationId": "getAgentRun",
+        "parameters": [{"name": "agent_run_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"200": {"description": "AgentRun 状态", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AgentRunResponse"}}}}}
+      }
+    },
+    "/api/agent-runs/{agent_run_id}/cancel": {
+      "post": {
+        "operationId": "cancelAgentRun",
+        "parameters": [{"name": "agent_run_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"200": {"description": "AgentRun 已取消", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AgentRunResponse"}}}}}
+      }
+    },
+    "/api/generation-plans": {
+      "post": {
+        "operationId": "createGenerationPlan",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateGenerationPlanRequest"}}}},
+        "responses": {"201": {"description": "生成计划已创建", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationPlanResponse"}}}}}
+      }
+    },
+    "/api/generation-plans/{plan_id}": {
+      "get": {
+        "operationId": "getGenerationPlan",
+        "parameters": [{"name": "plan_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"200": {"description": "生成计划", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationPlanResponse"}}}}}
+      }
+    },
+    "/api/generation-plans/{plan_id}/preflight": {
+      "post": {"operationId": "preflightGenerationPlan", "parameters": [{"name": "plan_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "responses": {"200": {"description": "预检完成", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationPlanResponse"}}}}}}
+    },
+    "/api/generation-plans/{plan_id}/approve": {
+      "post": {"operationId": "approveGenerationPlan", "parameters": [{"name": "plan_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApproveGenerationPlanRequest"}}}}, "responses": {"200": {"description": "计划已批准", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationPlanResponse"}}}}}}
     }
   },
   "components": {
@@ -84,6 +161,9 @@
     },
     "schemas": {
       "CreateWorkspaceRequest": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 120}}},
+      "CreateSessionRequest": {"type": "object", "required": ["identity_subject", "workspace_id"], "properties": {"identity_subject": {"type": "string", "minLength": 1, "maxLength": 200}, "workspace_id": {"type": "string", "format": "uuid"}}},
+      "Session": {"type": "object", "required": ["token", "user_id", "workspace_id", "expires_at"], "properties": {"token": {"type": "string"}, "user_id": {"type": "string", "format": "uuid"}, "workspace_id": {"type": "string", "format": "uuid"}, "expires_at": {"type": "string", "format": "date-time"}}},
+      "SessionResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Session"}}},
       "CreateProjectRequest": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 160}}},
       "CreateScriptRevisionRequest": {"type": "object", "required": ["name", "content"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 240}, "content": {"type": "string", "minLength": 1}}},
       "Readiness": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "enum": ["ready"]}}},
@@ -99,11 +179,32 @@
       "Anchor": {"type": "object", "required": ["line", "start_offset", "end_offset"], "properties": {"line": {"type": "integer"}, "start_offset": {"type": "integer"}, "end_offset": {"type": "integer"}}},
       "NarrativeUnit": {"type": "object", "required": ["id", "kind", "text", "anchor"], "properties": {"id": {"type": "string"}, "kind": {"type": "string", "enum": ["scene", "dialogue", "action"]}, "text": {"type": "string"}, "anchor": {"$ref": "#/components/schemas/Anchor"}, "speaker": {"type": "string"}}},
       "Scene": {"type": "object", "required": ["id", "heading", "anchor", "narratives"], "properties": {"id": {"type": "string"}, "heading": {"type": "string"}, "anchor": {"$ref": "#/components/schemas/Anchor"}, "narratives": {"type": "array", "items": {"$ref": "#/components/schemas/NarrativeUnit"}}}},
-      "Episode": {"type": "object", "required": ["number", "title", "anchor", "scenes"], "properties": {"number": {"type": "integer"}, "title": {"type": "string"}, "anchor": {"$ref": "#/components/schemas/Anchor"}, "scenes": {"type": "array", "items": {"$ref": "#/components/schemas/Scene"}}}},
+      "Episode": {"type": "object", "required": ["number", "title", "anchor", "scenes"], "properties": {"number": {"type": "integer"}, "title": {"type": "string"}, "content_unit_id": {"type": "string", "format": "uuid"}, "anchor": {"$ref": "#/components/schemas/Anchor"}, "scenes": {"type": "array", "items": {"$ref": "#/components/schemas/Scene"}}}},
       "Asset": {"type": "object", "required": ["kind", "name", "episode_numbers", "evidence"], "properties": {"kind": {"type": "string", "enum": ["character", "location", "prop", "costume"]}, "name": {"type": "string"}, "episode_numbers": {"type": "array", "items": {"type": "integer"}}, "evidence": {"type": "array", "items": {"$ref": "#/components/schemas/Anchor"}}}},
       "Analysis": {"type": "object", "required": ["source_hash", "episodes", "characters", "locations", "props", "costumes"], "properties": {"source_hash": {"type": "string"}, "episodes": {"type": "array", "items": {"$ref": "#/components/schemas/Episode"}}, "characters": {"type": "array", "items": {"$ref": "#/components/schemas/Asset"}}, "locations": {"type": "array", "items": {"$ref": "#/components/schemas/Asset"}}, "props": {"type": "array", "items": {"$ref": "#/components/schemas/Asset"}}, "costumes": {"type": "array", "items": {"$ref": "#/components/schemas/Asset"}}}},
       "AnalysisResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Analysis"}}},
-      "ApiError": {"type": "object", "required": ["code", "message", "next_action"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}, "next_action": {"type": "string"}}},
+      "CreateShotsRequest": {"type": "object", "required": ["count"], "properties": {"count": {"type": "integer", "minimum": 1, "maximum": 100}}},
+      "Shot": {"type": "object", "required": ["id", "project_id", "content_unit_id", "shot_key", "ordinal", "status"], "properties": {"id": {"type": "string", "format": "uuid"}, "project_id": {"type": "string", "format": "uuid"}, "content_unit_id": {"type": "string", "format": "uuid"}, "shot_key": {"type": "string"}, "ordinal": {"type": "integer"}, "status": {"type": "string"}}},
+      "ShotList": {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Shot"}}}},
+      "ShotListResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/ShotList"}}},
+      "FixtureCandidateRequest": {"type": "object", "required": ["purpose"], "properties": {"purpose": {"type": "string", "minLength": 1}}},
+      "Candidate": {"type": "object", "required": ["id", "project_id", "target_type", "target_id", "artifact_id", "status", "fixture"], "properties": {"id": {"type": "string", "format": "uuid"}, "project_id": {"type": "string", "format": "uuid"}, "target_type": {"type": "string"}, "target_id": {"type": "string", "format": "uuid"}, "artifact_id": {"type": "string", "format": "uuid"}, "status": {"type": "string"}, "fixture": {"type": "boolean"}, "object_key": {"type": "string"}, "content_hash": {"type": "string"}}},
+      "CandidateResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Candidate"}}},
+      "SelectionRequest": {"type": "object", "required": ["purpose"], "properties": {"purpose": {"type": "string", "minLength": 1}}},
+      "Selection": {"type": "object", "required": ["id", "project_id", "target_type", "target_id", "selection_purpose", "candidate_id", "status"], "properties": {"id": {"type": "string", "format": "uuid"}, "project_id": {"type": "string", "format": "uuid"}, "target_type": {"type": "string"}, "target_id": {"type": "string", "format": "uuid"}, "selection_purpose": {"type": "string"}, "candidate_id": {"type": "string", "format": "uuid"}, "status": {"type": "string"}}},
+      "SelectionResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/Selection"}}},
+      "StartAgentRunRequest": {"type": "object", "required": ["project_id", "operation_id", "skill", "stage", "request_hash", "snapshot_ref"], "properties": {"project_id": {"type": "string", "format": "uuid"}, "operation_id": {"type": "string", "format": "uuid"}, "skill": {"const": "script_analysis"}, "stage": {"type": "string", "enum": ["manifest", "narrative", "knowledge"]}, "request_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "snapshot_ref": {"type": "string", "minLength": 1}}},
+      "AgentRun": {"type": "object", "required": ["id", "project_id", "operation_id", "skill", "stage", "stage_generation", "request_hash", "status", "input_snapshot_hash", "created_at"], "properties": {"id": {"type": "string", "format": "uuid"}, "project_id": {"type": "string", "format": "uuid"}, "operation_id": {"type": "string", "format": "uuid"}, "skill": {"type": "string"}, "stage": {"type": "string"}, "stage_generation": {"type": "integer"}, "request_hash": {"type": "string"}, "status": {"type": "string"}, "input_snapshot_hash": {"type": "string"}, "result_hash": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}}},
+      "ProposalItem": {"type": "object", "required": ["id", "agent_run_id", "target_module", "target_command", "decision", "read_set_hash", "write_set_hash"], "properties": {"id": {"type": "string", "format": "uuid"}, "agent_run_id": {"type": "string", "format": "uuid"}, "target_module": {"type": "string"}, "target_command": {"type": "string"}, "payload": {}, "decision": {"type": "string"}, "read_set_hash": {"type": "string"}, "write_set_hash": {"type": "string"}}},
+      "AgentRunData": {"type": "object", "required": ["run", "items"], "properties": {"run": {"$ref": "#/components/schemas/AgentRun"}, "items": {"type": "array", "items": {"$ref": "#/components/schemas/ProposalItem"}}}},
+      "AgentRunResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/AgentRunData"}}},
+      "CreateGenerationPlanRequest": {"type": "object", "required": ["project_id", "target_type", "target_id", "prompt", "capability_key"], "properties": {"project_id": {"type": "string", "format": "uuid"}, "target_type": {"type": "string"}, "target_id": {"type": "string", "format": "uuid"}, "prompt": {"type": "string"}, "capability_key": {"type": "string"}, "count": {"type": "integer", "minimum": 1, "maximum": 100}}},
+      "ApproveGenerationPlanRequest": {"type": "object", "required": ["execution_disposition", "selected_item_ids"], "properties": {"execution_disposition": {"type": "string", "enum": ["start_now", "hold"]}, "selected_item_ids": {"type": "array", "items": {"type": "string", "format": "uuid"}}}},
+      "GenerationPlan": {"type": "object", "required": ["id", "project_id", "target_type", "target_id", "status", "input_snapshot_hash", "prompt_hash"], "properties": {"id": {"type": "string", "format": "uuid"}, "project_id": {"type": "string", "format": "uuid"}, "target_type": {"type": "string"}, "target_id": {"type": "string", "format": "uuid"}, "status": {"type": "string"}, "execution_disposition": {"type": "string"}, "input_snapshot_hash": {"type": "string"}, "prompt_hash": {"type": "string"}}},
+      "GenerationPlanItem": {"type": "object", "required": ["id", "plan_id", "ordinal", "capability_key", "prompt", "status"], "properties": {"id": {"type": "string", "format": "uuid"}, "plan_id": {"type": "string", "format": "uuid"}, "ordinal": {"type": "integer"}, "capability_key": {"type": "string"}, "prompt": {"type": "string"}, "status": {"type": "string"}}},
+      "GenerationPlanData": {"type": "object", "required": ["plan", "items"], "properties": {"plan": {"$ref": "#/components/schemas/GenerationPlan"}, "items": {"type": "array", "items": {"$ref": "#/components/schemas/GenerationPlanItem"}}}},
+      "GenerationPlanResponse": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/GenerationPlanData"}}},
+      "ApiError": {"type": "object", "required": ["code", "message", "next_action"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}, "next_action": {"type": "string"}, "request_id": {"type": "string"}, "details": {}, "recovery_actions": {"type": "array", "items": {"type": "object", "required": ["code", "label"], "properties": {"code": {"type": "string"}, "label": {"type": "string"}}}}}},
       "ErrorResponse": {"type": "object", "required": ["error"], "properties": {"error": {"$ref": "#/components/schemas/ApiError"}}}
     }
   }

@@ -1,1 +1,0 @@
-"""Agent Harness runtime boundary."""

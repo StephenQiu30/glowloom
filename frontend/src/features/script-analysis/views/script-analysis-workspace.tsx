@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { approveScriptAnalysis } from "@/api/approveScriptAnalysis";
 import { createProject } from "@/api/createProject";
 import { createScriptRevision } from "@/api/createScriptRevision";
+import { createSession } from "@/api/createSession";
 import { createWorkspace } from "@/api/createWorkspace";
 import { getAnalysisDraft } from "@/api/getAnalysisDraft";
 import { getOperation } from "@/api/getOperation";
@@ -67,6 +68,9 @@ export function ScriptAnalysisWorkspace() {
     setPhase("idle");
     try {
       const workspace = await createWorkspace({ name: "首轮试点工作区" });
+      const session = await createSession({ identity_subject: "local-owner", workspace_id: workspace.data.id });
+      window.localStorage.setItem("lanverse.workspace_id", workspace.data.id);
+      window.localStorage.setItem("lanverse.session_token", session.data.token);
       const project = await createProject({ workspace_id: workspace.data.id }, { name: "剧本事实分析项目" });
       const revision = await createScriptRevision(
         { project_id: project.data.id },
@@ -160,7 +164,7 @@ export function ScriptAnalysisWorkspace() {
               <div><strong>{operation.type}</strong><div className="hint">{operation.id}</div></div>
               <span>{operation.status}</span>
             </div>}
-            {operation && <div className="bar" aria-label="解析进度"><span style={{ width: `${operation.progress}%` }} /></div>}
+            {operation && <div className="bar" role="progressbar" aria-label="解析进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={operation.progress}><span style={{ width: `${operation.progress}%` }} /></div>}
             {projectID && <div className="hint" style={{ marginTop: 12 }}>Project：{projectID}</div>}
             {analysis && <div className="summary">
               <div className="metric"><strong>{analysis.episodes.length}</strong><span>剧集</span></div>
@@ -173,8 +177,8 @@ export function ScriptAnalysisWorkspace() {
 
         {analysis && <section className="card" style={{ marginTop: 18 }} aria-labelledby="result-title">
           <h2 id="result-title">3. 剧集、场景与资产</h2>
-          <div className="asset-list" aria-label="资产清单">
-            {assets.map((asset) => <span className="asset" key={`${asset.kind}-${asset.name}`}>{asset.name}<em>{asset.kind} · {asset.episode_numbers.join(", ")}</em></span>)}
+          <div className="asset-list" role="list" aria-label="资产清单">
+            {assets.map((asset) => <span className="asset" role="listitem" key={`${asset.kind}-${asset.name}`}>{asset.name}<em>{asset.kind} · {asset.episode_numbers.join(", ")}</em></span>)}
           </div>
           {analysis.episodes.map((episode) => <article className="episode" key={episode.number}>
             <div className="episode-head"><span className="episode-title">第 {episode.number} 集 · {episode.title}</span><span className="hint">{episode.scenes.length} 个场景</span></div>

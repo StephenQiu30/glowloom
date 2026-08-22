@@ -15,7 +15,7 @@ const config = {
   schemaPath: normalizedSchemaPath,
   serversPath: "./src/api",
   projectName: ".",
-  requestLibPath: "@/lib/request",
+  requestLibPath: "import request, { type RequestOptions } from '@/lib/request'",
   requestOptionsType: "RequestOptions",
   requestImportStatement:
     "import request, { type RequestOptions } from '@/lib/request';",

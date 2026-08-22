@@ -1,12 +1,12 @@
 # Lanverse 验收标准与证据规范
 
-> 状态：`waiting_for_implementation`
+> 状态：`in_progress`
 > 最近审查：2026-08-22
 > 适用范围：PRD-000、切片 A—F 及其引用的 Requirement 验收条件
 
 ## 1. 当前结论
 
-当前仓库没有目标方案的真实执行证据，因此所有 PRD 验收条件和 Requirement 中的 `AC-SYS-*`、`AC-IAM-*`、`AC-PRJ-*`、`AC-NAR-*`、`AC-KNO-*`、`AC-SHT-*`、`AC-AIC-*`、`AC-PLN-*`、`AC-EXE-*`、`AC-MED-*`、`AC-QAR-*`、`AC-USG-*`、`AC-REV-*`、`AC-DLV-*`、`AC-GOV-*`、`AC-INT-*` 均为待执行标准，不代表已经通过。
+当前已有针对 GORM canonical 物化、统一 HTTP 契约、前端生成链和剧本解析浏览器闭环的目标场景证据，见 [`EV-A-20260822-script-analysis-gorm-e2e.md`](./EV-A-20260822-script-analysis-gorm-e2e.md)。这不等于切片 A 或全量 PRD 已通过；其余 PRD 验收条件和 Requirement 中的 `AC-SYS-*`、`AC-IAM-*`、`AC-PRJ-*`、`AC-NAR-*`、`AC-KNO-*`、`AC-SHT-*`、`AC-AIC-*`、`AC-PLN-*`、`AC-EXE-*`、`AC-MED-*`、`AC-QAR-*`、`AC-USG-*`、`AC-REV-*`、`AC-DLV-*`、`AC-GOV-*`、`AC-INT-*` 仍按场景保持 `not_run` 或未实现。
 
 本文件定义判定规则、固定数据集、全局门禁和证据格式。实际实现并执行后，才为具体场景创建 Evidence 文件；当前不预建空证据文档。
 

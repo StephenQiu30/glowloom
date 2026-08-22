@@ -1,0 +1,32 @@
+package httpapi
+
+import (
+	"encoding/json"
+	"net/http"
+)
+
+type Envelope[T any] struct {
+	Data  T         `json:"data,omitempty"`
+	Error *APIError `json:"error,omitempty"`
+}
+
+func WriteData(w http.ResponseWriter, status HTTPStatus, data any) {
+	WriteJSON(w, status, Envelope[any]{Data: data})
+}
+
+func WriteError(w http.ResponseWriter, r *http.Request, err error) {
+	apiErr := From(err)
+	if requestID := RequestID(r); requestID != "" {
+		apiErr.RequestID = requestID
+	}
+	WriteJSON(w, apiErr.Status, Envelope[any]{Error: apiErr})
+}
+
+func WriteJSON(w http.ResponseWriter, status HTTPStatus, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	if requestID := w.Header().Get("X-Request-Id"); requestID != "" {
+		w.Header().Set("X-Request-Id", requestID)
+	}
+	w.WriteHeader(status.Int())
+	_ = json.NewEncoder(w).Encode(value)
+}

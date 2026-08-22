@@ -5,7 +5,7 @@ Lanverse 是前后端分离的 AI 视频生产平台。当前交付切片聚焦�
 ## 固定架构
 
 - `frontend/`：Next.js App Router、TypeScript、View/ViewModel 分层；API 客户端由 Umi OpenAPI 根据 Swagger 文档生成。
-- `backend/`：Go 模块化单体，负责公共 HTTP、PostgreSQL 业务事务、MinIO 对象存储和 Kafka outbox/worker。
+- `backend/`：Go 模块化单体，负责公共 HTTP、PostgreSQL 业务事务、MinIO 对象存储和 Kafka outbox/worker；`backend/cmd/main.go` 是唯一启动入口，使用 `LANVERSE_ROLE` 选择角色。
 - `agent/`：Python 私有 Agent 服务，只承载 Harness/Skill 编排，不连接数据库或 Kafka，也不暴露公共 API。
 - `docs/`：唯一事实来源，按 `requirement → design → prd → plan → acceptance` 维护。
 
@@ -29,7 +29,7 @@ brew services start kafka
 cd backend
 go mod download
 set -a; source ../.env; set +a
-go run ./cmd/schema-init
+LANVERSE_ROLE=schema-init go run ./cmd
 ```
 
 启动 Go API 和 Kafka worker（分别使用两个终端）：
@@ -37,14 +37,14 @@ go run ./cmd/schema-init
 ```bash
 cd backend
 set -a; source ../.env; set +a
-go run ./cmd/api
-go run ./cmd/operation-worker
+LANVERSE_ROLE=api go run ./cmd
+LANVERSE_ROLE=operation-worker go run ./cmd
 ```
 
 启动私有 Agent（可选；当前事实解析使用 Go 当前解析器）：
 
 ```bash
-PYTHONPATH=agent/src backend/.venv/bin/python -m lanverse_agent.entrypoints.server
+PYTHONPATH=agent/src uv run --project agent python -m main
 ```
 
 启动前端：
@@ -66,9 +66,9 @@ npm run dev
 ## 验证
 
 ```bash
-cd backend && gofmt -w cmd internal tests && go test ./...
+cd backend && gofmt -w cmd src && go test ./...
 cd ../frontend && npm run lint && npm run typecheck && npm run test && npm run build
-cd .. && PYTHONPATH=agent/src backend/.venv/bin/python -m pytest agent/tests -q
+cd .. && PYTHONPATH=agent/src uv run --project agent --extra test python -m pytest agent/tests -q
 ```
 
 剧本解析的验收路径是：前端提交 → Go 创建 revision → MinIO 保存原文 → PostgreSQL outbox → Kafka → operation-worker 解析 → draft → 人工批准 → episode/narrative/entity/production requirement 同事务物化。该路径使用本机真实服务验证，不使用模拟队列或兼容接口。

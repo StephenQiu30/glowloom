@@ -23,7 +23,7 @@ h2 { font-size: 22px; letter-spacing: -.025em; margin: 0 0 14px; }
 p { color: var(--muted); line-height: 1.7; }
 .hero { display: flex; gap: 32px; justify-content: space-between; align-items: end; margin-bottom: 28px; }
 .hero-copy { max-width: 800px; }
-.status { background: #fff2eb; border: 1px solid #ffd4c3; color: var(--accent-deep); border-radius: 999px; padding: 8px 13px; white-space: nowrap; font-size: 13px; }
+.status { background: #fff2eb; border: 1px solid #ffd4c3; color: #8f321c; border-radius: 999px; padding: 8px 13px; white-space: nowrap; font-size: 13px; }
 .grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(340px, .95fr); gap: 18px; align-items: start; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: 0 10px 28px rgba(34, 43, 58, .05); }
 .card + .card { margin-top: 18px; }

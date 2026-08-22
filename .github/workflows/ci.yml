@@ -27,7 +27,7 @@ jobs:
       - name: Test Go backend
         working-directory: backend
         run: |
-          gofmt -d cmd internal tests | tee /tmp/gofmt.diff
+          gofmt -d cmd src | tee /tmp/gofmt.diff
           test ! -s /tmp/gofmt.diff
           go vet ./...
           go test ./...
@@ -44,7 +44,7 @@ jobs:
           cache: pip
           cache-dependency-path: agent/pyproject.toml
       - name: Install agent dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -e agent pytest
+        run: python -m pip install --upgrade pip && python -m pip install -e 'agent[test]'
       - name: Test private agent
         run: PYTHONPATH=agent/src python -m pytest agent/tests -q
 
