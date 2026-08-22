@@ -10,12 +10,12 @@
 
 | 序号 | Design | 责任 | 状态 |
 | --- | --- | --- | --- |
-| 000 | [AI 视频生产平台目标系统架构设计](./000-AI视频生产平台目标系统架构设计.md) | Python 主栈、多进程角色、可靠执行、数据与媒体、Go Gate、部署和恢复 | proposed |
-| 001 | [AI 视频生产平台核心领域与数据模型设计](./001-AI视频生产平台核心领域与数据模型设计.md) | 聚合、事实所有权、数据关系、约束、版本、投影和迁移 | proposed |
+| 000 | [AI 视频生产平台目标系统架构设计](./000-AI视频生产平台目标系统架构设计.md) | 前后端分离、MVVC、TypeScript 前端、Python 主栈、MinIO、最终 Schema、无兼容、开源调研 Gate、物理目录、POJO + Controller + Service、Agent Harness、多进程角色 | proposed |
+| 001 | [AI 视频生产平台核心领域与数据模型设计](./001-AI视频生产平台核心领域与数据模型设计.md) | 聚合、事实所有权、PostgreSQL 最终 Schema、物理类型、主外键、索引、约束、版本和投影 | proposed |
 | 002 | [AI 视频生产平台目标产品与功能模块设计](./002-AI视频生产平台目标产品与功能模块设计.md) | 产品边界、用户流程、M01—M15、状态、失败路径、权限和验收切片 | proposed |
-| 003 | [AI 视频生产平台接口、工作流与功能实现设计](./003-AI视频生产平台接口工作流与功能实现设计.md) | HTTP/事件契约、耐久流程、Agent、媒体、失败恢复和纵向切片 | proposed |
-| 004 | [AI 视频生产平台剧本基础分析与人物拆解专题设计](./004-AI视频生产平台剧本基础分析与人物拆解详细设计.md) | M02/M03/M04 的整本拆集、每集场景、全剧生产清单、人物矩阵、证据与迁移专题补充，不再拥有模块边界 | proposed |
-| 005 | [AI 视频生产平台服务与模块实施基线](./005-AI视频生产平台服务与模块实施基线.md) | 产品能力、逻辑模块、六类安全隔离运行入口、基础设施、外部服务 Gate 和当前落地度 | proposed |
+| 003 | [AI 视频生产平台接口、工作流与功能实现设计](./003-AI视频生产平台接口工作流与功能实现设计.md) | 无路径版本 `/api`、HTTP/事件信封、幂等、ETag、游标、错误、耐久流程与 Agent | proposed |
+| 004 | [AI 视频生产平台剧本基础分析与人物拆解专题设计](./004-AI视频生产平台剧本基础分析与人物拆解详细设计.md) | M02/M03/M04 的整本拆集、每集场景、人物×集数、生产清单、实施级接口与关键物理表 | proposed |
+| 005 | [AI 视频生产平台服务与模块实施基线](./005-AI视频生产平台服务与模块实施基线.md) | 前后端/代码包边界、逻辑模块、六类安全隔离运行入口、基础设施、外部服务 Gate 和首次实施 Gate | proposed |
 | modules | [M01—M15 模块详细 Design](./modules/README.md) | 每个功能模块一份实现边界、数据、命令、状态、失败和验证设计 | proposed |
 
 M01—M15 当前已按模块一一拆分到 `modules/`；004 保留为跨 M03/M04 的专题细化。逻辑模块不等于微服务数量，研发仍按 A—F 纵向切片推进。
@@ -44,9 +44,17 @@ flowchart TD
 
 ## 3. 当前关键决策
 
-- 后端当前采用 Python 单栈、多进程角色；FastAPI 与 Python 应用层拥有唯一业务实现。
+- 前端固定在 `frontend/`，采用 TypeScript、Next.js、React、OpenAPI 生成客户端和 RTK Query；只拥有交互与视图状态，不形成第二套业务后端。
+- 后端固定在 `backend/`，采用 Python 模块化单体与多进程角色；FastAPI 与 Python Application Service 拥有唯一业务实现。
+- 前后端调用风格固定为 Model–View–ViewModel–Controller（MVVC）；View/ViewModel 在前端，Controller/Application Service/POJO Model 在后端按边界分层。
+- 公开 HTTP 路径只使用无版本前缀 `/api`；事件 topic 也不带版本后缀，信封 `schema_version` 只用于当前契约一致性校验。
+- 项目只实现本 Design 定义的数据库、API、消息和 MinIO key；`schema_version` 只接受当前契约，其他值拒绝，不建立 alias、转换器、双读或回退路径。
+- 数据库只保留最终 SQLAlchemy ORM Metadata、空库初始化和非空结构严格校验；不建立结构演进目录或历史链，真实持久数据演进出现前另行评审。
+- 对象存储固定为私有 MinIO；`ObjectStoragePort` 只隔离 SDK/I/O 与测试，S3-compatible API 只是协议，不建设 AWS S3 adapter 或运行时多存储切换。
+- Python 中按 Plain Object 落实 POJO 目标：领域对象不依赖框架，Pydantic、SQLAlchemy 和 Provider SDK 分别留在边界与 Adapter；Service 以用例而不是数据表组织。
+- 000 §6 是唯一物理目录事实源；目标路径在开发前评审，但实际目录只随真实用例、owner 和测试创建，禁止空目录、全局 `shared/utils/managers` 和纯转发层。
 - 目标运行边界为 `api`、`operation-worker`、`import-worker`、`provider-worker`、`agent-worker`、`media-worker` 六类安全隔离入口，按切片启用；API 不执行长任务。
-- LangGraph 只编排单次 Agent 运行，不成为审批、人物资料或生产流程事实源。
+- `modules/agents` 拥有 M06 Run/Proposal，`agent_runtime` 拥有无业务写权限的 Harness/Skill；LangGraph 只编排单次 Agent 运行，不成为审批、人物资料、人物出场矩阵或生产流程事实源。
 - PostgreSQL 事实与事务 Outbox 先提交，再执行队列、外部模型和媒体副作用。
 - 首期不引入 Go；只有 000 中的容量与剖析 Gate 满足后才进行 Go PoC。
 - 商业计费、订阅、支付和增长不属于系统范围；用量只服务资源治理。
@@ -57,14 +65,14 @@ flowchart TD
 - 001 是对象所有权、版本与数据约束事实源；
 - 002 是目标产品边界与模块责任事实源；
 - 003 是接口、事件、耐久流程和实施切片事实源；
-- 005 是运行服务、基础设施、外部服务 Gate、模块运行映射和当前实现分类的事实源；
+- 005 是运行服务、基础设施、外部服务 Gate、模块运行映射和首次实施 Gate 的事实源；
 - `modules/M01—M15` 是对应模块的详细实现事实源；004 等专题 Design 只能补充算法和交互细节；
 - [Requirement](../requirement/README.md) 定义用户结果和验收，Design 不得反向扩大范围；
 - 多份文档冲突时不得任选一份实现，应先按上述所有权修正事实源和所有下游引用。
 
 ## 5. 当前设计范围
 
-本目录只保存当前有效 Design。被替代方案不在 `docs/` 内建立归档目录；需要保留的决策原因进入当前 Design 或 Git 历史，但旧文件和旧完成状态不参与当前实现或验收。
+本目录只保存当前有效 Design。被替代方案不在 `docs/` 内建立归档目录；需要保留的决策原因进入当前 Design 或 Git 历史，目标实现和验收只以当前 Design 为准。
 
 ## 6. 文档治理
 
@@ -73,3 +81,4 @@ flowchart TD
 - 技术提案只有在 ADR/PoC 和相应故障验证完成后才能从 `proposed` 进入 `accepted`；
 - 设计变化先更新事实所有者，再更新接口、数据、计划和验收；
 - 不为未来可能出现的服务、兼容层、目录或工作流提前创建空设计。
+- 新增框架、基础设施、生产进程、顶层目录或跨模块抽象前，先核验官方资料与至少一个相近活跃开源实现，只记录与当前决策相关的采用/拒绝结论。
