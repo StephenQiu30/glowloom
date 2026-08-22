@@ -1,22 +1,24 @@
 import { request } from '@umijs/max';
-
-export interface StateType {
-  status?: 'ok' | 'error';
-  currentAuthority?: 'user' | 'guest' | 'admin';
-}
+import { setSession, type ApiEnvelope, type AuthData } from '@/services/session';
 
 export interface UserRegisterParams {
-  mail: string;
+  email: string;
   password: string;
-  confirm: string;
-  mobile: string;
-  captcha: string;
-  prefix: string;
+  displayName?: string;
+  workspaceName: string;
 }
 
-export async function fakeRegister(params: UserRegisterParams) {
-  return request('/api/register', {
+export async function register(params: UserRegisterParams) {
+  const response = await request<ApiEnvelope<AuthData>>('/api/auth/register', {
     method: 'POST',
-    data: params,
+    credentials: 'include',
+    data: {
+      email: params.email,
+      password: params.password,
+      display_name: params.displayName,
+      workspace_name: params.workspaceName,
+    },
   });
+  setSession(response.data);
+  return response.data;
 }

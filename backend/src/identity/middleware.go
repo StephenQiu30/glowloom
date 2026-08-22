@@ -48,13 +48,24 @@ func Require(identityService *IdentityService, next http.Handler) http.Handler {
 func RequireForBusiness(identityService *IdentityService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isPublicIdentityRoute(r) || r.URL.Path == "/readyz" || r.URL.Path == "/api/openapi.json" || r.URL.Path == "/api/docs" {
+			if isPublicIdentityRoute(r) || r.URL.Path == "/readyz" || r.URL.Path == "/api/swagger.json" || r.URL.Path == "/api/docs" {
 				next.ServeHTTP(w, r)
 				return
 			}
 			Require(identityService, next).ServeHTTP(w, r)
 		})
 	}
+}
+
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := PrincipalFromContext(r.Context())
+		if !ok || !principal.Role.IsAdmin() {
+			httpapi.WriteError(w, r, httpapi.Forbidden("只有管理员可以访问此内容", "请联系管理员"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func isPublicIdentityRoute(r *http.Request) bool {

@@ -11,6 +11,11 @@ type Envelope[T any] struct {
 	Error *APIError `json:"error,omitempty"`
 }
 
+// ErrorEnvelope 是 Swagger 注释使用的稳定错误响应模型。
+type ErrorEnvelope struct {
+	Error *APIError `json:"error"`
+}
+
 func WriteData(w http.ResponseWriter, status HTTPStatus, data any) {
 	WriteJSON(w, status, Envelope[any]{Data: data})
 }

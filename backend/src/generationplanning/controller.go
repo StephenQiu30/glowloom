@@ -36,6 +36,18 @@ func (h *GenerationPlanController) Mount(r chi.Router) {
 	r.Post("/api/generation-plans/{planID}/approve", h.approve)
 }
 func (h *GenerationPlanController) Router() http.Handler { r := chi.NewRouter(); h.Mount(r); return r }
+
+// create 创建生成计划。
+// @Summary 创建生成计划
+// @Tags generation
+// @ID generation_plan_create
+// @Accept json
+// @Produce json
+// @Param request body createRequest true "生成计划参数"
+// @Security BearerAccessToken
+// @Success 201 {object} map[string]interface{}
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/generation-plans [post]
 func (h *GenerationPlanController) create(w http.ResponseWriter, r *http.Request) {
 	var b createRequest
 	if !decode(w, r, &b) {
@@ -48,6 +60,17 @@ func (h *GenerationPlanController) create(w http.ResponseWriter, r *http.Request
 	}
 	httpapi.WriteData(w, httpapi.StatusCreated, map[string]any{"plan": p, "items": i})
 }
+
+// get 查询生成计划。
+// @Summary 查询生成计划
+// @Tags generation
+// @ID generation_plan_get
+// @Produce json
+// @Param planID path string true "Generation Plan UUID"
+// @Security BearerAccessToken
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Router /api/generation-plans/{planID} [get]
 func (h *GenerationPlanController) get(w http.ResponseWriter, r *http.Request) {
 	id, e := uuid.Parse(chi.URLParam(r, "planID"))
 	if e != nil {
@@ -61,6 +84,17 @@ func (h *GenerationPlanController) get(w http.ResponseWriter, r *http.Request) {
 	}
 	httpapi.WriteData(w, httpapi.StatusOK, map[string]any{"plan": p, "items": i})
 }
+
+// preflight 执行生成计划预检。
+// @Summary 预检生成计划
+// @Tags generation
+// @ID generation_plan_preflight
+// @Produce json
+// @Param planID path string true "Generation Plan UUID"
+// @Security BearerAccessToken
+// @Success 200 {object} map[string]interface{}
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/generation-plans/{planID}/preflight [post]
 func (h *GenerationPlanController) preflight(w http.ResponseWriter, r *http.Request) {
 	id, e := uuid.Parse(chi.URLParam(r, "planID"))
 	if e != nil {
@@ -74,6 +108,19 @@ func (h *GenerationPlanController) preflight(w http.ResponseWriter, r *http.Requ
 	}
 	httpapi.WriteData(w, httpapi.StatusOK, map[string]any{"plan": p, "items": i})
 }
+
+// approve 批准生成计划。
+// @Summary 批准生成计划
+// @Tags generation
+// @ID generation_plan_approve
+// @Accept json
+// @Produce json
+// @Param planID path string true "Generation Plan UUID"
+// @Param request body approveRequest true "批准参数"
+// @Security BearerAccessToken
+// @Success 200 {object} map[string]interface{}
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/generation-plans/{planID}/approve [post]
 func (h *GenerationPlanController) approve(w http.ResponseWriter, r *http.Request) {
 	id, e := uuid.Parse(chi.URLParam(r, "planID"))
 	if e != nil {

@@ -42,6 +42,17 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+// register 使用邮箱创建账户、Workspace 和 Admin Membership。
+// @Summary 邮箱注册
+// @Tags auth
+// @ID auth_register
+// @Accept json
+// @Produce json
+// @Param request body registerRequest true "注册参数"
+// @Success 201 {object} AuthResponseEnvelope
+// @Failure 409 {object} httpapi.ErrorEnvelope
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/auth/register [post]
 func (h *IdentityController) register(w http.ResponseWriter, r *http.Request) {
 	var body registerRequest
 	if !httpapi.DecodeJSON(w, r, &body, 64<<10) {
@@ -56,6 +67,18 @@ func (h *IdentityController) register(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteData(w, httpapi.StatusCreated, response)
 }
 
+// login 使用邮箱、密码和 Workspace ID 创建登录会话。
+// @Summary 邮箱登录
+// @Tags auth
+// @ID auth_login
+// @Accept json
+// @Produce json
+// @Param X-Workspace-Id header string true "Workspace UUID"
+// @Param request body loginRequest true "登录参数"
+// @Success 200 {object} AuthResponseEnvelope
+// @Failure 401 {object} httpapi.ErrorEnvelope
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/auth/login [post]
 func (h *IdentityController) login(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := workspaceIDFromRequest(w, r)
 	if !ok {
@@ -74,6 +97,16 @@ func (h *IdentityController) login(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteData(w, httpapi.StatusOK, response)
 }
 
+// refresh 轮换 HttpOnly refresh cookie 并签发新的短期 JWT。
+// @Summary 无感刷新登录会话
+// @Tags auth
+// @ID auth_refresh
+// @Produce json
+// @Param X-Workspace-Id header string true "Workspace UUID"
+// @Security RefreshCookie
+// @Success 200 {object} AuthResponseEnvelope
+// @Failure 401 {object} httpapi.ErrorEnvelope
+// @Router /api/auth/refresh [post]
 func (h *IdentityController) refresh(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := workspaceIDFromRequest(w, r)
 	if !ok {
@@ -93,6 +126,13 @@ func (h *IdentityController) refresh(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteData(w, httpapi.StatusOK, response)
 }
 
+// logout 撤销当前 refresh session 并清理 cookie。
+// @Summary 退出登录
+// @Tags auth
+// @ID auth_logout
+// @Param X-Workspace-Id header string true "Workspace UUID"
+// @Success 204
+// @Router /api/auth/logout [post]
 func (h *IdentityController) logout(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := workspaceIDFromRequest(w, r)
 	if !ok {
@@ -108,6 +148,16 @@ func (h *IdentityController) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// me 返回当前 JWT 对应的有效身份。
+// @Summary 获取当前身份
+// @Tags auth
+// @ID auth_me
+// @Produce json
+// @Param X-Workspace-Id header string true "Workspace UUID"
+// @Security BearerAccessToken
+// @Success 200 {object} CurrentIdentityEnvelope
+// @Failure 401 {object} httpapi.ErrorEnvelope
+// @Router /api/auth/me [get]
 func (h *IdentityController) me(w http.ResponseWriter, r *http.Request) {
 	principal, ok := PrincipalFromContext(r.Context())
 	if !ok {

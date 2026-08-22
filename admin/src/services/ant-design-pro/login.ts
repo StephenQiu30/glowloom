@@ -1,41 +1,44 @@
-// @ts-ignore
-/* eslint-disable */
-import { request } from "@umijs/max";
+import { request } from '@umijs/max';
+import {
+  clearSession,
+  getWorkspaceId,
+  setSession,
+  type ApiEnvelope,
+  type AuthData,
+} from '../session';
 
-/** 登录接口 POST /api/login/account */
 export async function login(
   body: API.LoginParams,
-  options?: { [key: string]: any }
+  options?: { [key: string]: unknown },
 ) {
-  return request<API.LoginResult>("/api/login/account", {
-    method: "POST",
+  const workspaceId = body.workspaceId || getWorkspaceId();
+  if (!workspaceId) {
+    throw new Error('请先填写 Workspace ID，或先完成注册');
+  }
+  const response = await request<ApiEnvelope<AuthData>>('/api/auth/login', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
+      'X-Workspace-Id': workspaceId,
     },
-    data: body,
+    credentials: 'include',
+    data: { email: body.email, password: body.password },
     ...(options || {}),
   });
+  setSession(response.data);
+  return { status: 'ok', type: 'account', currentAuthority: response.data.role };
 }
 
-/** 发送验证码 POST /api/login/captcha */
-export async function getFakeCaptcha(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.getFakeCaptchaParams,
-  options?: { [key: string]: any }
-) {
-  return request<API.FakeCaptcha>("/api/login/captcha", {
-    method: "POST",
-    params: {
-      ...params,
-    },
-    ...(options || {}),
-  });
-}
-
-/** 登录接口 POST /api/login/outLogin */
-export async function outLogin(options?: { [key: string]: any }) {
-  return request<Record<string, any>>("/api/login/outLogin", {
-    method: "POST",
-    ...(options || {}),
-  });
+export async function outLogin() {
+  try {
+    await request('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'X-Workspace-Id': getWorkspaceId() || '',
+      },
+    });
+  } finally {
+    clearSession();
+  }
 }

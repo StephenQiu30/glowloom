@@ -9,16 +9,17 @@ const RegisterResult: React.FC<Record<string, unknown>> = () => {
 
   const actions = (
     <div className={styles.actions}>
-      <Button size="large" type="primary">
-        <span>查看邮箱</span>
-      </Button>
+      <Link to="/admin" prefetch>
+        <Button size="large" type="primary">进入管理端</Button>
+      </Link>
       <Link to="/" prefetch>
         <Button size="large">返回首页</Button>
       </Link>
     </div>
   );
 
-  const email = params?.get('account') || 'AntDesign@example.com';
+  const email = params?.get('account') || '当前邮箱';
+  const workspaceID = params?.get('workspace');
   return (
     <Result
       className={styles.registerResult}
@@ -28,7 +29,11 @@ const RegisterResult: React.FC<Record<string, unknown>> = () => {
           <span>你的账户：{email} 注册成功</span>
         </div>
       }
-      subTitle="激活邮件已发送到你的邮箱中，邮件有效期为24小时。请及时登录邮箱，点击邮件中的链接激活帐户。"
+      subTitle={
+        workspaceID
+          ? `Workspace 已创建，Workspace ID：${workspaceID}。请保存该 ID，后续登录需要使用。`
+          : '账户已创建并自动登录。'
+      }
       extra={actions}
     />
   );

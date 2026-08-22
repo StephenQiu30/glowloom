@@ -36,6 +36,17 @@ func (h *AgentController) Mount(router chi.Router) {
 	router.Post("/api/agent-runs/{agentRunID}/cancel", h.cancel)
 }
 
+// start 创建 AgentRun。
+// @Summary 创建 AgentRun
+// @Tags agent
+// @ID agent_run_start
+// @Accept json
+// @Produce json
+// @Param request body startRequest true "AgentRun 参数"
+// @Security BearerAccessToken
+// @Success 202 {object} map[string]interface{}
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/agent-runs [post]
 func (h *AgentController) start(w http.ResponseWriter, r *http.Request) {
 	var body startRequest
 	if !httpapi.DecodeJSON(w, r, &body, 1<<20) {
@@ -49,6 +60,16 @@ func (h *AgentController) start(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteData(w, httpapi.StatusAccepted, map[string]any{"run": run, "items": items})
 }
 
+// get 查询 AgentRun。
+// @Summary 查询 AgentRun
+// @Tags agent
+// @ID agent_run_get
+// @Produce json
+// @Param agentRunID path string true "AgentRun UUID"
+// @Security BearerAccessToken
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Router /api/agent-runs/{agentRunID} [get]
 func (h *AgentController) get(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "agentRunID"))
 	if err != nil {
@@ -63,6 +84,16 @@ func (h *AgentController) get(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteData(w, httpapi.StatusOK, map[string]any{"run": run, "items": items})
 }
 
+// cancel 取消 AgentRun。
+// @Summary 取消 AgentRun
+// @Tags agent
+// @ID agent_run_cancel
+// @Produce json
+// @Param agentRunID path string true "AgentRun UUID"
+// @Security BearerAccessToken
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Router /api/agent-runs/{agentRunID}/cancel [post]
 func (h *AgentController) cancel(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "agentRunID"))
 	if err != nil {

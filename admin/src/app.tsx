@@ -35,9 +35,7 @@ export async function getInitialState(): Promise<{
 }> {
   const fetchUserInfo = async () => {
     try {
-      const msg = await queryCurrentUser({
-        skipErrorHandler: true,
-      });
+      const msg = await queryCurrentUser();
       return msg.data;
     } catch (_error) {
       const { pathname, search, hash } = history.location;
@@ -87,7 +85,7 @@ export const layout: RunTimeLayoutConfig = ({
     },
     avatarProps: {
       src: initialState?.currentUser?.avatar,
-      title: 'ProUser',
+      title: initialState?.currentUser?.name || 'Lanverse 用户',
       render: (_, avatarChildren) => (
         <AvatarDropdown>{avatarChildren}</AvatarDropdown>
       ),
@@ -127,10 +125,10 @@ export const layout: RunTimeLayoutConfig = ({
     ],
     links: isDev
       ? [
-          <Link key="openapi" to="/umi/plugin/openapi" target="_blank">
+          <a key="swagger" href={`${process.env.API_BASE_URL || ''}/api/docs`} target="_blank" rel="noreferrer">
             <LinkOutlined />
-            <span>OpenAPI 文档</span>
-          </Link>,
+            <span>Swagger 文档</span>
+          </a>,
         ]
       : [],
     // Replace ProLayout's default ErrorBoundary with our offline-aware version,
@@ -176,7 +174,7 @@ export const layout: RunTimeLayoutConfig = ({
  * @doc https://umijs.org/docs/max/request#配置
  */
 export const request: RequestConfig = {
-  baseURL: isDev ? '' : 'https://pro-api.ant-design-demo.workers.dev',
+  baseURL: process.env.API_BASE_URL || '',
   ...errorConfig,
 };
 

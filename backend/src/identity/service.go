@@ -176,6 +176,47 @@ func (s *IdentityService) AuthorizePath(ctx context.Context, workspaceID uuid.UU
 	return s.repository.AuthorizePath(database.WithWorkspaceID(ctx, workspaceID), workspaceID, path)
 }
 
+func (s *IdentityService) ListWorkspaceMembers(ctx context.Context, principal Principal, query WorkspaceMemberQuery) (WorkspaceMemberPage, error) {
+	if !principal.Role.IsAdmin() {
+		return WorkspaceMemberPage{}, httpapi.Forbidden("只有管理员可以管理成员", "请联系管理员")
+	}
+	if principal.WorkspaceID == uuid.Nil {
+		return WorkspaceMemberPage{}, httpapi.Validation("Workspace 无效", "提供有效 Workspace 后重试")
+	}
+	if len([]rune(strings.TrimSpace(query.Search))) > 80 {
+		return WorkspaceMemberPage{}, httpapi.Validation("成员搜索条件过长", "将搜索条件控制在 80 个字符以内")
+	}
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.PageSize < 1 || query.PageSize > 100 {
+		query.PageSize = 20
+	}
+	return s.repository.ListWorkspaceMembers(database.WithWorkspaceID(ctx, principal.WorkspaceID), principal.WorkspaceID, query)
+}
+
+func (s *IdentityService) UpdateWorkspaceMember(ctx context.Context, principal Principal, membershipID uuid.UUID, input WorkspaceMemberUpdate) (WorkspaceMember, error) {
+	if !principal.Role.IsAdmin() {
+		return WorkspaceMember{}, httpapi.Forbidden("只有管理员可以管理成员", "请联系管理员")
+	}
+	if principal.WorkspaceID == uuid.Nil || membershipID == uuid.Nil {
+		return WorkspaceMember{}, httpapi.Validation("Workspace 或 Membership 无效", "提供有效 ID 后重试")
+	}
+	if input.Role == nil && input.Status == nil {
+		return WorkspaceMember{}, httpapi.Validation("至少提供角色或成员状态", "修改 role 或 status 后重试")
+	}
+	if input.Role != nil && !input.Role.IsValid() {
+		return WorkspaceMember{}, httpapi.Validation("成员角色无效", "使用已登记的角色后重试")
+	}
+	if input.Status != nil && !input.Status.IsManageable() {
+		return WorkspaceMember{}, httpapi.Validation("成员状态无效", "使用 active、suspended 或 removed 后重试")
+	}
+	if principal.MembershipID == membershipID {
+		return WorkspaceMember{}, httpapi.Conflict("不能修改当前登录管理员", "请由其他管理员执行此操作")
+	}
+	return s.repository.UpdateWorkspaceMember(database.WithWorkspaceID(ctx, principal.WorkspaceID), principal.WorkspaceID, membershipID, principal, input)
+}
+
 func (s *IdentityService) issueAccessToken(issue SessionIssue) (AuthResponse, error) {
 	accessToken, expiresAt, err := s.jwt.Issue(issue, time.Now().UTC())
 	if err != nil {

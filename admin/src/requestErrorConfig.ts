@@ -12,11 +12,16 @@ enum ErrorShowType {
 }
 // 与后端约定的响应数据格式
 interface ResponseStructure {
-  success: boolean;
-  data: unknown;
+  success?: boolean;
+  data?: unknown;
   errorCode?: number;
   errorMessage?: string;
   showType?: ErrorShowType;
+  error?: {
+    code?: string;
+    message?: string;
+    details?: unknown;
+  };
 }
 
 /**
@@ -29,8 +34,19 @@ export const errorConfig: RequestConfig = {
   errorConfig: {
     // 错误抛出
     errorThrower: (res) => {
-      const { success, data, errorCode, errorMessage, showType } =
+      const { success, data, errorCode, errorMessage, showType, error } =
         res as unknown as ResponseStructure;
+      if (error) {
+        const apiError: any = new Error(error.message || '请求失败');
+        apiError.name = 'BizError';
+        apiError.info = {
+          errorCode: error.code,
+          errorMessage: error.message || '请求失败',
+          showType: ErrorShowType.ERROR_MESSAGE,
+          data: error.details,
+        };
+        throw apiError;
+      }
       if (!success) {
         const error: any = new Error(errorMessage);
         error.name = 'BizError';
@@ -69,6 +85,8 @@ export const errorConfig: RequestConfig = {
               message.error(errorMessage);
           }
         }
+      } else if (error.response?.data?.error) {
+        message.error(error.response.data.error.message || '请求失败');
       } else if (error.response) {
         // Axios 的错误
         // 请求成功发出且服务器也响应了状态码，但状态代码超出了 2xx 的范围

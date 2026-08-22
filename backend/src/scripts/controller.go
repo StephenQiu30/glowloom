@@ -28,7 +28,7 @@ func (h *ScriptController) Router() http.Handler {
 func (h *ScriptController) Mount(router chi.Router) {
 	router.Use(jsonContentType)
 	router.Get("/readyz", h.ready)
-	router.Get("/api/openapi.json", h.openapi)
+	router.Get("/api/swagger.json", h.swaggerSchema)
 	router.Get("/api/docs", h.swagger)
 	router.Route("/api", func(router chi.Router) {
 		router.Post("/workspaces", h.createWorkspace)
@@ -71,18 +71,33 @@ type selectCandidateRequest struct {
 	Purpose string `json:"purpose"`
 }
 
+// ready 返回服务就绪状态。
+// @Summary 服务就绪检查
+// @Tags system
+// @ID system_ready
+// @Produce json
+// @Success 200 {object} map[string]string
+// @Router /readyz [get]
 func (h *ScriptController) ready(writer http.ResponseWriter, request *http.Request) {
 	httpapi.WriteData(writer, httpapi.StatusOK, map[string]string{"status": "ready"})
 }
 
-func (h *ScriptController) openapi(writer http.ResponseWriter, request *http.Request) {
-	path := os.Getenv("OPENAPI_SCHEMA_PATH")
+// swaggerSchema 返回由 Swagger 注释生成的机器可读文档。
+// @Summary 获取 Swagger 文档
+// @Tags system
+// @ID system_swagger
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 503 {object} httpapi.ErrorEnvelope
+// @Router /api/swagger.json [get]
+func (h *ScriptController) swaggerSchema(writer http.ResponseWriter, request *http.Request) {
+	path := os.Getenv("SWAGGER_SCHEMA_PATH")
 	if path == "" {
-		path = "api/openapi.json"
+		path = "docs/swagger.json"
 	}
 	schema, err := os.ReadFile(path)
 	if err != nil {
-		httpapi.WriteError(writer, request, httpapi.NewError(httpapi.StatusServiceUnavailable, httpapi.CodeSchemaUnavailable, "当前 OpenAPI 合同不可用", "恢复本地当前 Schema 后重试"))
+		httpapi.WriteError(writer, request, httpapi.NewError(httpapi.StatusServiceUnavailable, httpapi.CodeSchemaUnavailable, "当前 Swagger 文档不可用", "先运行 make swagger 生成当前文档后重试"))
 		return
 	}
 	writer.Header().Set("Content-Type", "application/json")
@@ -93,9 +108,20 @@ func (h *ScriptController) openapi(writer http.ResponseWriter, request *http.Req
 func (h *ScriptController) swagger(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write([]byte(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>Lanverse Swagger</title><link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.10/swagger-ui.css"></head><body><div id="swagger-ui"></div><script src="https://unpkg.com/swagger-ui-dist@5.11.10/swagger-ui-bundle.js"></script><script>window.onload=()=>SwaggerUIBundle({url:'/api/openapi.json',dom_id:'#swagger-ui'});</script></body></html>`))
+	_, _ = writer.Write([]byte(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>Lanverse Swagger</title><link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.10/swagger-ui.css"></head><body><div id="swagger-ui"></div><script src="https://unpkg.com/swagger-ui-dist@5.11.10/swagger-ui-bundle.js"></script><script>window.onload=()=>SwaggerUIBundle({url:'/api/swagger.json',dom_id:'#swagger-ui'});</script></body></html>`))
 }
 
+// createWorkspace 创建 Workspace。
+// @Summary 创建 Workspace
+// @Tags workspace
+// @ID workspace_create
+// @Accept json
+// @Produce json
+// @Param request body createWorkspaceRequest true "Workspace 参数"
+// @Security BearerAccessToken
+// @Success 201 {object} map[string]interface{}
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/workspaces [post]
 func (h *ScriptController) createWorkspace(writer http.ResponseWriter, request *http.Request) {
 	var body createWorkspaceRequest
 	if !httpapi.DecodeJSON(writer, request, &body, 8<<20) {
@@ -109,6 +135,18 @@ func (h *ScriptController) createWorkspace(writer http.ResponseWriter, request *
 	httpapi.WriteData(writer, httpapi.StatusCreated, workspace)
 }
 
+// createProject 创建项目。
+// @Summary 创建项目
+// @Tags project
+// @ID project_create
+// @Accept json
+// @Produce json
+// @Param workspaceID path string true "Workspace UUID"
+// @Param request body createProjectRequest true "项目参数"
+// @Security BearerAccessToken
+// @Success 201 {object} map[string]interface{}
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/workspaces/{workspaceID}/projects [post]
 func (h *ScriptController) createProject(writer http.ResponseWriter, request *http.Request) {
 	workspaceID, ok := parseID(writer, request, chi.URLParam(request, "workspaceID"))
 	if !ok {
@@ -126,6 +164,18 @@ func (h *ScriptController) createProject(writer http.ResponseWriter, request *ht
 	httpapi.WriteData(writer, httpapi.StatusCreated, project)
 }
 
+// createScriptRevision 创建剧本修订。
+// @Summary 创建剧本修订
+// @Tags script
+// @ID script_revision_create
+// @Accept json
+// @Produce json
+// @Param projectID path string true "Project UUID"
+// @Param request body createScriptRevisionRequest true "剧本参数"
+// @Security BearerAccessToken
+// @Success 201 {object} map[string]interface{}
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/projects/{projectID}/script-revisions [post]
 func (h *ScriptController) createScriptRevision(writer http.ResponseWriter, request *http.Request) {
 	projectID, ok := parseID(writer, request, chi.URLParam(request, "projectID"))
 	if !ok {
@@ -143,6 +193,16 @@ func (h *ScriptController) createScriptRevision(writer http.ResponseWriter, requ
 	httpapi.WriteData(writer, httpapi.StatusCreated, revision)
 }
 
+// analyzeScript 将剧本分析任务加入队列。
+// @Summary 排队分析剧本
+// @Tags script
+// @ID script_analysis_queue
+// @Produce json
+// @Param revisionID path string true "Script Revision UUID"
+// @Security BearerAccessToken
+// @Success 202 {object} map[string]interface{}
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Router /api/script-revisions/{revisionID}/analyze [post]
 func (h *ScriptController) analyzeScript(writer http.ResponseWriter, request *http.Request) {
 	revisionID, ok := parseID(writer, request, chi.URLParam(request, "revisionID"))
 	if !ok {
@@ -156,6 +216,16 @@ func (h *ScriptController) analyzeScript(writer http.ResponseWriter, request *ht
 	httpapi.WriteData(writer, httpapi.StatusAccepted, operation)
 }
 
+// getOperation 查询任务状态。
+// @Summary 查询任务状态
+// @Tags operation
+// @ID operation_get
+// @Produce json
+// @Param operationID path string true "Operation UUID"
+// @Security BearerAccessToken
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Router /api/operations/{operationID} [get]
 func (h *ScriptController) getOperation(writer http.ResponseWriter, request *http.Request) {
 	operationID, ok := parseID(writer, request, chi.URLParam(request, "operationID"))
 	if !ok {
@@ -169,6 +239,16 @@ func (h *ScriptController) getOperation(writer http.ResponseWriter, request *htt
 	httpapi.WriteData(writer, httpapi.StatusOK, operation)
 }
 
+// approveAnalysis 批准剧本分析结果。
+// @Summary 批准剧本分析
+// @Tags script
+// @ID script_analysis_approve
+// @Produce json
+// @Param revisionID path string true "Script Revision UUID"
+// @Security BearerAccessToken
+// @Success 200 {object} map[string]interface{}
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/script-revisions/{revisionID}/approve [post]
 func (h *ScriptController) approveAnalysis(writer http.ResponseWriter, request *http.Request) {
 	revisionID, ok := parseID(writer, request, chi.URLParam(request, "revisionID"))
 	if !ok {
@@ -182,6 +262,16 @@ func (h *ScriptController) approveAnalysis(writer http.ResponseWriter, request *
 	httpapi.WriteData(writer, httpapi.StatusOK, analysis)
 }
 
+// getAnalysisDraft 获取待批准的剧本分析结果。
+// @Summary 获取分析草稿
+// @Tags script
+// @ID script_analysis_draft
+// @Produce json
+// @Param revisionID path string true "Script Revision UUID"
+// @Security BearerAccessToken
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Router /api/script-revisions/{revisionID}/analysis-draft [get]
 func (h *ScriptController) getAnalysisDraft(writer http.ResponseWriter, request *http.Request) {
 	revisionID, ok := parseID(writer, request, chi.URLParam(request, "revisionID"))
 	if !ok {
@@ -195,6 +285,16 @@ func (h *ScriptController) getAnalysisDraft(writer http.ResponseWriter, request 
 	httpapi.WriteData(writer, httpapi.StatusOK, analysis)
 }
 
+// getProjectAnalysis 获取项目分析结果。
+// @Summary 获取项目分析
+// @Tags project
+// @ID project_analysis_get
+// @Produce json
+// @Param projectID path string true "Project UUID"
+// @Security BearerAccessToken
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Router /api/projects/{projectID}/analysis [get]
 func (h *ScriptController) getProjectAnalysis(writer http.ResponseWriter, request *http.Request) {
 	projectID, ok := parseID(writer, request, chi.URLParam(request, "projectID"))
 	if !ok {
@@ -208,6 +308,19 @@ func (h *ScriptController) getProjectAnalysis(writer http.ResponseWriter, reques
 	httpapi.WriteData(writer, httpapi.StatusOK, analysis)
 }
 
+// createShots 生成镜头计划。
+// @Summary 创建镜头
+// @Tags shot
+// @ID shot_create
+// @Accept json
+// @Produce json
+// @Param projectID path string true "Project UUID"
+// @Param contentUnitID path string true "Content Unit UUID"
+// @Param request body createShotsRequest true "镜头参数"
+// @Security BearerAccessToken
+// @Success 201 {object} map[string]interface{}
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/projects/{projectID}/content-units/{contentUnitID}/shots [post]
 func (h *ScriptController) createShots(writer http.ResponseWriter, request *http.Request) {
 	projectID, ok := parseID(writer, request, chi.URLParam(request, "projectID"))
 	if !ok {
@@ -229,6 +342,16 @@ func (h *ScriptController) createShots(writer http.ResponseWriter, request *http
 	httpapi.WriteData(writer, httpapi.StatusCreated, map[string]any{"items": shots})
 }
 
+// listShots 查询镜头列表。
+// @Summary 查询镜头
+// @Tags shot
+// @ID shot_list
+// @Produce json
+// @Param projectID path string true "Project UUID"
+// @Param contentUnitID path string true "Content Unit UUID"
+// @Security BearerAccessToken
+// @Success 200 {object} map[string]interface{}
+// @Router /api/projects/{projectID}/content-units/{contentUnitID}/shots [get]
 func (h *ScriptController) listShots(writer http.ResponseWriter, request *http.Request) {
 	projectID, ok := parseID(writer, request, chi.URLParam(request, "projectID"))
 	if !ok {
@@ -246,6 +369,17 @@ func (h *ScriptController) listShots(writer http.ResponseWriter, request *http.R
 	httpapi.WriteData(writer, httpapi.StatusOK, map[string]any{"items": shots})
 }
 
+// createFixtureCandidate 创建 Fixture 候选。
+// @Summary 创建候选
+// @Tags candidate
+// @ID candidate_create_fixture
+// @Accept json
+// @Produce json
+// @Param shotID path string true "Shot UUID"
+// @Param request body createFixtureCandidateRequest true "候选参数"
+// @Security BearerAccessToken
+// @Success 201 {object} map[string]interface{}
+// @Router /api/shots/{shotID}/fixture-candidates [post]
 func (h *ScriptController) createFixtureCandidate(writer http.ResponseWriter, request *http.Request) {
 	shotID, ok := parseID(writer, request, chi.URLParam(request, "shotID"))
 	if !ok {
@@ -263,6 +397,17 @@ func (h *ScriptController) createFixtureCandidate(writer http.ResponseWriter, re
 	httpapi.WriteData(writer, httpapi.StatusCreated, candidate)
 }
 
+// selectCandidate 确认候选选择。
+// @Summary 选择候选
+// @Tags candidate
+// @ID candidate_select
+// @Accept json
+// @Produce json
+// @Param candidateID path string true "Candidate UUID"
+// @Param request body selectCandidateRequest true "选择参数"
+// @Security BearerAccessToken
+// @Success 201 {object} map[string]interface{}
+// @Router /api/candidates/{candidateID}/selections [post]
 func (h *ScriptController) selectCandidate(writer http.ResponseWriter, request *http.Request) {
 	candidateID, ok := parseID(writer, request, chi.URLParam(request, "candidateID"))
 	if !ok {

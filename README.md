@@ -53,7 +53,7 @@ PYTHONPATH=agent/src uv run --project agent python -m main
 ```bash
 cd frontend
 npm ci
-OPENAPI_SCHEMA_URL=../backend/api/openapi.json npm run openapi2ts
+OPENAPI_SCHEMA_URL=../backend/docs/swagger.json npm run openapi2ts
 npm run dev
 ```
 
@@ -71,7 +71,7 @@ pnpm run dev
 - 管理端：Umi 默认开发端口（终端输出为准）
 - Go API 就绪检查：`http://127.0.0.1:8686/readyz`
 - Agent 私有就绪检查：`http://127.0.0.1:8790/readyz`
-- Swagger/OpenAPI 源：`backend/api/openapi.json`
+- Swagger 文档源：后端 Controller 中的 Swagger 注释；使用 `backend/Makefile` 的 `swagger` 目标生成 `backend/docs/swagger.json`
 
 ## 验证
 

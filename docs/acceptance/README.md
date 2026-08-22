@@ -128,7 +128,7 @@ F 的能力独立验收不表示全部 F 已完成。索引页和 PRD 只有在�
 
 `AC-SYS-012` 和 `ACC-GATE-002` 的证据必须包含：
 
-- 已提交的 `backend/api/openapi.json` hash，以及 Swagger UI 实际加载的 schema hash；
+- 已提交的 `backend/docs/swagger.json` hash，以及 Swagger UI 实际加载的 schema hash；
 - Go strict server 和 `@umijs/openapi` 的真实生成命令；
 - 生成后 `git diff --exit-code` 或等价无漂移结果；
 - 前端 ViewModel 只调用生成 API，生成 API 只调用唯一 Axios `request.ts` 的架构检查；

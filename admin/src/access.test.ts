@@ -8,7 +8,8 @@ describe('access', () => {
         userid: '1',
         name: 'Admin User',
         avatar: 'https://example.com/avatar.png',
-        access: 'admin',
+        role: 'admin' as const,
+        access: 'admin' as const,
       },
     };
 
@@ -23,7 +24,7 @@ describe('access', () => {
         userid: '2',
         name: 'Regular User',
         avatar: 'https://example.com/avatar.png',
-        access: 'user',
+        access: 'user' as const,
       },
     };
 

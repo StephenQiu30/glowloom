@@ -1,10 +1,10 @@
 # Lanverse Frontend
 
-前端使用 Next.js App Router 与 TypeScript。页面按 View/ViewModel 组织，HTTP 统一经过 `src/lib/request.ts`，接口文件由 `@umijs/openapi` 从 `backend/api/openapi.json` 生成。
+前端使用 Next.js App Router 与 TypeScript。页面按 View/ViewModel 组织，HTTP 统一经过 `src/lib/request.ts`，接口文件由 `@umijs/openapi` 从 `backend/docs/swagger.json` 生成。
 
 ```bash
 npm ci
-OPENAPI_SCHEMA_URL=../backend/api/openapi.json npm run openapi2ts
+OPENAPI_SCHEMA_URL=../backend/docs/swagger.json npm run openapi2ts
 npm run dev
 ```
 

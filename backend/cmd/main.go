@@ -28,6 +28,20 @@ import (
 	"github.com/stephenqiu30/lanverse/backend/src/scripts"
 )
 
+// @title Lanverse API
+// @version current
+// @description Lanverse 后端认证、管理和业务接口。
+// @BasePath /
+// @schemes http https
+// @securityDefinitions.apikey BearerAccessToken
+// @in header
+// @name Authorization
+// @description Bearer JWT access token
+// @securityDefinitions.apikey RefreshCookie
+// @in cookie
+// @name lanverse_refresh
+// @description HttpOnly refresh cookie
+//
 // One process entrypoint owns every Go runtime role. LANVERSE_ROLE selects the
 // role; this keeps deployment and local startup deterministic without creating
 // a parallel cmd tree or duplicate wiring.
@@ -91,6 +105,7 @@ func runAPI() {
 	agents.NewAgentController(agentService).Mount(root)
 	generationplanning.NewGenerationPlanController(generationService).Mount(root)
 	identity.NewIdentityController(identityService).Mount(root)
+	identity.NewIdentityAdminController(identityService).Mount(root)
 	server := &http.Server{Addr: toolkit.EnvOr("API_ADDR", "127.0.0.1:8686"), Handler: root, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() {
 		<-ctx.Done()

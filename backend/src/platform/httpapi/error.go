@@ -102,6 +102,10 @@ func Conflict(message, nextAction string) *APIError {
 	return NewError(StatusConflict, CodeConflict, message, nextAction)
 }
 
+func Forbidden(message, nextAction string) *APIError {
+	return NewError(StatusForbidden, CodeForbidden, message, nextAction)
+}
+
 func RateLimited(retryAfterSeconds int, message, nextAction string) *APIError {
 	if retryAfterSeconds < 1 {
 		retryAfterSeconds = 1

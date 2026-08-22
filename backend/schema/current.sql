@@ -149,8 +149,8 @@ CREATE TABLE IF NOT EXISTS iam_users (
 
 CREATE TABLE IF NOT EXISTS iam_roles (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    code text NOT NULL UNIQUE,
-    scope text NOT NULL CHECK (scope IN ('workspace', 'project', 'review')),
+    code text NOT NULL UNIQUE CHECK (code IN ('admin', 'user', 'ban')),
+    scope text NOT NULL CHECK (scope IN ('workspace')),
     is_system boolean NOT NULL DEFAULT false
 );
 
@@ -750,11 +750,9 @@ CREATE INDEX IF NOT EXISTS ix_review_packages_project ON review_packages(project
 CREATE INDEX IF NOT EXISTS ix_delivery_builds_project ON delivery_builds(project_id, created_at DESC);
 
 INSERT INTO iam_roles (code, scope, is_system) VALUES
-    ('owner', 'workspace', true),
     ('admin', 'workspace', true),
-    ('producer', 'project', true),
-    ('operator', 'project', true),
-    ('reviewer', 'review', true)
+    ('user', 'workspace', true),
+    ('ban', 'workspace', true)
 ON CONFLICT (code) DO NOTHING;
 
 -- Defense-in-depth tenant policies. Runtime business connections set

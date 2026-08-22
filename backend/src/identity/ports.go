@@ -34,6 +34,8 @@ type IdentityStore interface {
 	RevokeRefreshSession(context.Context, uuid.UUID, string) (uuid.UUID, error)
 	Authenticate(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (Principal, error)
 	AuthorizePath(context.Context, uuid.UUID, string) error
+	ListWorkspaceMembers(context.Context, uuid.UUID, WorkspaceMemberQuery) (WorkspaceMemberPage, error)
+	UpdateWorkspaceMember(context.Context, uuid.UUID, uuid.UUID, Principal, WorkspaceMemberUpdate) (WorkspaceMember, error)
 }
 
 // IdentityCache is implemented by the platform Redis adapter. The identity

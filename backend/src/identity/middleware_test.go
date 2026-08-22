@@ -17,6 +17,8 @@ type contextCaptureStore struct {
 	wantWorkspaceID uuid.UUID
 	seenAuth        bool
 	seenAuthorize   bool
+	memberPage      WorkspaceMemberPage
+	updatedMember   WorkspaceMember
 }
 
 func (s *contextCaptureStore) RegisterAccount(context.Context, PersistedRegisterInput) (SessionIssue, error) {
@@ -45,7 +47,7 @@ func (s *contextCaptureStore) Authenticate(ctx context.Context, userID, sessionI
 		return Principal{}, context.Canceled
 	}
 	s.seenAuth = true
-	return Principal{UserID: userID, WorkspaceID: workspaceID, MembershipID: uuid.New(), SessionID: sessionID, Role: RoleOwner}, nil
+	return Principal{UserID: userID, WorkspaceID: workspaceID, MembershipID: uuid.New(), SessionID: sessionID, Role: RoleAdmin}, nil
 }
 
 func (s *contextCaptureStore) AuthorizePath(ctx context.Context, workspaceID uuid.UUID, _ string) error {
@@ -55,6 +57,14 @@ func (s *contextCaptureStore) AuthorizePath(ctx context.Context, workspaceID uui
 	}
 	s.seenAuthorize = true
 	return nil
+}
+
+func (s *contextCaptureStore) ListWorkspaceMembers(context.Context, uuid.UUID, WorkspaceMemberQuery) (WorkspaceMemberPage, error) {
+	return s.memberPage, nil
+}
+
+func (s *contextCaptureStore) UpdateWorkspaceMember(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ Principal, _ WorkspaceMemberUpdate) (WorkspaceMember, error) {
+	return s.updatedMember, nil
 }
 
 type allowIdentityCache struct{}
@@ -83,7 +93,7 @@ func TestRequirePropagatesWorkspaceContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := NewIdentityService(store, allowIdentityCache{}, jwtManager, AuthConfig{RefreshTTL: time.Hour})
-	accessToken, _, err := jwtManager.Issue(SessionIssue{SessionID: sessionID, Identity: AuthIdentity{Account: Account{ID: userID}, Workspace: Workspace{ID: workspaceID}, Role: RoleOwner}}, time.Now())
+	accessToken, _, err := jwtManager.Issue(SessionIssue{SessionID: sessionID, Identity: AuthIdentity{Account: Account{ID: userID}, Workspace: Workspace{ID: workspaceID}, Role: RoleAdmin}}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,5 +117,20 @@ func TestRequirePropagatesWorkspaceContext(t *testing.T) {
 	}
 	if !store.seenAuth || !store.seenAuthorize {
 		t.Fatalf("identity calls = authenticate:%v, authorize:%v, want both true", store.seenAuth, store.seenAuthorize)
+	}
+}
+
+func TestRequireAdminRejectsNonAdministrator(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	handler := RequireAdmin(next)
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/members", nil).WithContext(context.WithValue(context.Background(), contextKey{}, Principal{Role: RoleUser}))
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
 	}
 }

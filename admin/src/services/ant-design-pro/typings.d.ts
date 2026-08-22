@@ -1,5 +1,8 @@
 declare namespace API {
+  type RoleCode = 'admin' | 'user' | 'ban';
+
   type CurrentUser = {
+    id?: string;
     name?: string;
     avatar?: string;
     userid?: string;
@@ -11,7 +14,11 @@ declare namespace API {
     notifyCount?: number;
     unreadCount?: number;
     country?: string;
-    access?: string;
+    access?: RoleCode;
+    role?: RoleCode;
+    workspaceId?: string;
+    workspaceName?: string;
+    membershipId?: string;
     geographic?: {
       province?: { label?: string; key?: string };
       city?: { label?: string; key?: string };
@@ -20,35 +27,11 @@ declare namespace API {
     phone?: string;
   };
 
-  type ErrorResponse = {
-    /** 业务约定的错误码 */
-    errorCode: string;
-    /** 业务上的错误信息 */
-    errorMessage?: string;
-    /** 业务上的请求是否成功 */
-    success?: boolean;
-  };
-
-  type FakeCaptcha = {
-    code?: number;
-    status?: string;
-  };
-
-  type getFakeCaptchaParams = {
-    /** 手机号 */
-    phone?: string;
-  };
-
   type LoginParams = {
-    username?: string;
+    email?: string;
+    workspaceId?: string;
     password?: string;
     autoLogin?: boolean;
-    type?: string;
   };
 
-  type LoginResult = {
-    status?: string;
-    type?: string;
-    currentAuthority?: string;
-  };
 }

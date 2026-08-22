@@ -62,3 +62,32 @@ func TestRegistrationValidatesEmailAndPasswordBeforePersistence(t *testing.T) {
 		t.Fatalf("error = %#v, want validation_failed/422", apiErr)
 	}
 }
+
+func TestWorkspaceMemberManagementRequiresAdministrator(t *testing.T) {
+	store := &contextCaptureStore{}
+	manager, err := NewJWTManager(strings.Repeat("s", 32), "test", "test", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewIdentityService(store, allowIdentityCache{}, manager, AuthConfig{RefreshTTL: time.Hour})
+	_, err = service.ListWorkspaceMembers(context.Background(), Principal{WorkspaceID: uuid.New(), Role: RoleUser}, WorkspaceMemberQuery{})
+	apiErr := httpapi.From(err)
+	if apiErr.Status != httpapi.StatusForbidden || apiErr.Code != httpapi.CodeForbidden {
+		t.Fatalf("error = %#v, want forbidden", apiErr)
+	}
+}
+
+func TestUserCannotGrantAdminRole(t *testing.T) {
+	store := &contextCaptureStore{}
+	manager, err := NewJWTManager(strings.Repeat("s", 32), "test", "test", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewIdentityService(store, allowIdentityCache{}, manager, AuthConfig{RefreshTTL: time.Hour})
+	admin := RoleAdmin
+	_, err = service.UpdateWorkspaceMember(context.Background(), Principal{WorkspaceID: uuid.New(), MembershipID: uuid.New(), Role: RoleUser}, uuid.New(), WorkspaceMemberUpdate{Role: &admin})
+	apiErr := httpapi.From(err)
+	if apiErr.Status != httpapi.StatusForbidden || apiErr.Code != httpapi.CodeForbidden {
+		t.Fatalf("error = %#v, want forbidden", apiErr)
+	}
+}

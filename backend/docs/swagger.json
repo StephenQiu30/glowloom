@@ -1,0 +1,1708 @@
+{
+    "schemes": [
+        "http",
+        "https"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "Lanverse 后端认证、管理和业务接口。",
+        "title": "Lanverse API",
+        "contact": {},
+        "version": "current"
+    },
+    "basePath": "/",
+    "paths": {
+        "/api/admin/members": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "查询 Workspace 用户",
+                "operationId": "admin_list_members",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace UUID",
+                        "name": "X-Workspace-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "按邮箱或显示名搜索",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/identity.WorkspaceMemberPageEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/members/{membership_id}": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "修改 Workspace 用户",
+                "operationId": "admin_update_member",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace UUID",
+                        "name": "X-Workspace-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Membership UUID",
+                        "name": "membership_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "角色或状态",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/identity.updateMemberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/identity.WorkspaceMemberEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agent-runs": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "agent"
+                ],
+                "summary": "创建 AgentRun",
+                "operationId": "agent_run_start",
+                "parameters": [
+                    {
+                        "description": "AgentRun 参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/agents.startRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agent-runs/{agentRunID}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "agent"
+                ],
+                "summary": "查询 AgentRun",
+                "operationId": "agent_run_get",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "AgentRun UUID",
+                        "name": "agentRunID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agent-runs/{agentRunID}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "agent"
+                ],
+                "summary": "取消 AgentRun",
+                "operationId": "agent_run_cancel",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "AgentRun UUID",
+                        "name": "agentRunID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/login": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "邮箱登录",
+                "operationId": "auth_login",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace UUID",
+                        "name": "X-Workspace-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "登录参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/identity.loginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/identity.AuthResponseEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/logout": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "退出登录",
+                "operationId": "auth_logout",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace UUID",
+                        "name": "X-Workspace-Id",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "获取当前身份",
+                "operationId": "auth_me",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace UUID",
+                        "name": "X-Workspace-Id",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/identity.CurrentIdentityEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/refresh": {
+            "post": {
+                "security": [
+                    {
+                        "RefreshCookie": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "无感刷新登录会话",
+                "operationId": "auth_refresh",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace UUID",
+                        "name": "X-Workspace-Id",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/identity.AuthResponseEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/register": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "邮箱注册",
+                "operationId": "auth_register",
+                "parameters": [
+                    {
+                        "description": "注册参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/identity.registerRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/identity.AuthResponseEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/candidates/{candidateID}/selections": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "candidate"
+                ],
+                "summary": "选择候选",
+                "operationId": "candidate_select",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Candidate UUID",
+                        "name": "candidateID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "选择参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/scripts.selectCandidateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/generation-plans": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "generation"
+                ],
+                "summary": "创建生成计划",
+                "operationId": "generation_plan_create",
+                "parameters": [
+                    {
+                        "description": "生成计划参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/generationplanning.createRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/generation-plans/{planID}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "generation"
+                ],
+                "summary": "查询生成计划",
+                "operationId": "generation_plan_get",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Generation Plan UUID",
+                        "name": "planID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/generation-plans/{planID}/approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "generation"
+                ],
+                "summary": "批准生成计划",
+                "operationId": "generation_plan_approve",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Generation Plan UUID",
+                        "name": "planID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "批准参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/generationplanning.approveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/generation-plans/{planID}/preflight": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "generation"
+                ],
+                "summary": "预检生成计划",
+                "operationId": "generation_plan_preflight",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Generation Plan UUID",
+                        "name": "planID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/operations/{operationID}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "operation"
+                ],
+                "summary": "查询任务状态",
+                "operationId": "operation_get",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Operation UUID",
+                        "name": "operationID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{projectID}/analysis": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "project"
+                ],
+                "summary": "获取项目分析",
+                "operationId": "project_analysis_get",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "projectID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{projectID}/content-units/{contentUnitID}/shots": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shot"
+                ],
+                "summary": "查询镜头",
+                "operationId": "shot_list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "projectID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Content Unit UUID",
+                        "name": "contentUnitID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shot"
+                ],
+                "summary": "创建镜头",
+                "operationId": "shot_create",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "projectID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Content Unit UUID",
+                        "name": "contentUnitID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "镜头参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/scripts.createShotsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{projectID}/script-revisions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "script"
+                ],
+                "summary": "创建剧本修订",
+                "operationId": "script_revision_create",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "projectID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "剧本参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/scripts.createScriptRevisionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/script-revisions/{revisionID}/analysis-draft": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "script"
+                ],
+                "summary": "获取分析草稿",
+                "operationId": "script_analysis_draft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Script Revision UUID",
+                        "name": "revisionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/script-revisions/{revisionID}/analyze": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "script"
+                ],
+                "summary": "排队分析剧本",
+                "operationId": "script_analysis_queue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Script Revision UUID",
+                        "name": "revisionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/script-revisions/{revisionID}/approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "script"
+                ],
+                "summary": "批准剧本分析",
+                "operationId": "script_analysis_approve",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Script Revision UUID",
+                        "name": "revisionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/shots/{shotID}/fixture-candidates": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "candidate"
+                ],
+                "summary": "创建候选",
+                "operationId": "candidate_create_fixture",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Shot UUID",
+                        "name": "shotID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "候选参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/scripts.createFixtureCandidateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/swagger.json": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "system"
+                ],
+                "summary": "获取 Swagger 文档",
+                "operationId": "system_swagger",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/workspaces": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "workspace"
+                ],
+                "summary": "创建 Workspace",
+                "operationId": "workspace_create",
+                "parameters": [
+                    {
+                        "description": "Workspace 参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/scripts.createWorkspaceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/workspaces/{workspaceID}/projects": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "project"
+                ],
+                "summary": "创建项目",
+                "operationId": "project_create",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace UUID",
+                        "name": "workspaceID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "项目参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/scripts.createProjectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/readyz": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "system"
+                ],
+                "summary": "服务就绪检查",
+                "operationId": "system_ready",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "agents.startRequest": {
+            "type": "object",
+            "properties": {
+                "operation_id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "request_hash": {
+                    "type": "string"
+                },
+                "skill": {
+                    "type": "string"
+                },
+                "snapshot_ref": {
+                    "type": "string"
+                },
+                "stage": {
+                    "type": "string"
+                }
+            }
+        },
+        "generationplanning.approveRequest": {
+            "type": "object",
+            "properties": {
+                "execution_disposition": {
+                    "type": "string"
+                },
+                "selected_item_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "generationplanning.createRequest": {
+            "type": "object",
+            "properties": {
+                "capability_key": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "prompt": {
+                    "type": "string"
+                },
+                "target_id": {
+                    "type": "string"
+                },
+                "target_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "httpapi.APIError": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "$ref": "#/definitions/httpapi.ErrorCode"
+                },
+                "details": {},
+                "message": {
+                    "type": "string"
+                },
+                "next_action": {
+                    "type": "string"
+                },
+                "recovery_actions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httpapi.RecoveryAction"
+                    }
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "retry_after_seconds": {
+                    "type": "integer"
+                }
+            }
+        },
+        "httpapi.ErrorCode": {
+            "type": "string",
+            "enum": [
+                "invalid_json",
+                "invalid_id",
+                "unauthorized",
+                "forbidden",
+                "not_found",
+                "conflict",
+                "validation_failed",
+                "rate_limited",
+                "dependency_unavailable",
+                "schema_unavailable",
+                "internal_error",
+                "request_failed",
+                "generation_plan_invalid",
+                "session_invalid",
+                "workspace_invalid",
+                "project_invalid",
+                "script_invalid"
+            ],
+            "x-enum-varnames": [
+                "CodeInvalidJSON",
+                "CodeInvalidID",
+                "CodeUnauthorized",
+                "CodeForbidden",
+                "CodeNotFound",
+                "CodeConflict",
+                "CodeValidationFailed",
+                "CodeRateLimited",
+                "CodeDependencyUnavailable",
+                "CodeSchemaUnavailable",
+                "CodeInternalError",
+                "CodeRequestFailed",
+                "CodeGenerationPlanInvalid",
+                "CodeSessionInvalid",
+                "CodeWorkspaceInvalid",
+                "CodeProjectInvalid",
+                "CodeScriptInvalid"
+            ]
+        },
+        "httpapi.ErrorEnvelope": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/httpapi.APIError"
+                }
+            }
+        },
+        "httpapi.RecoveryAction": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                }
+            }
+        },
+        "identity.Account": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "identity.AccountStatus": {
+            "type": "string",
+            "enum": [
+                "active",
+                "suspended",
+                "removed"
+            ],
+            "x-enum-varnames": [
+                "AccountStatusActive",
+                "AccountStatusSuspended",
+                "AccountStatusRemoved"
+            ]
+        },
+        "identity.AuthResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/identity.RoleCode"
+                },
+                "token_type": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/identity.Account"
+                },
+                "workspace": {
+                    "$ref": "#/definitions/identity.Workspace"
+                }
+            }
+        },
+        "identity.AuthResponseEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/identity.AuthResponse"
+                }
+            }
+        },
+        "identity.CurrentIdentity": {
+            "type": "object",
+            "properties": {
+                "membership_id": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/identity.RoleCode"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "identity.CurrentIdentityEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/identity.CurrentIdentity"
+                }
+            }
+        },
+        "identity.MembershipStatus": {
+            "type": "string",
+            "enum": [
+                "invited",
+                "active",
+                "suspended",
+                "removed"
+            ],
+            "x-enum-varnames": [
+                "MembershipStatusInvited",
+                "MembershipStatusActive",
+                "MembershipStatusSuspended",
+                "MembershipStatusRemoved"
+            ]
+        },
+        "identity.RoleCode": {
+            "type": "string",
+            "enum": [
+                "admin",
+                "user",
+                "ban"
+            ],
+            "x-enum-varnames": [
+                "RoleAdmin",
+                "RoleUser",
+                "RoleBan"
+            ]
+        },
+        "identity.Workspace": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "identity.WorkspaceMember": {
+            "type": "object",
+            "properties": {
+                "account_status": {
+                    "$ref": "#/definitions/identity.AccountStatus"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "membership_id": {
+                    "type": "string"
+                },
+                "membership_status": {
+                    "$ref": "#/definitions/identity.MembershipStatus"
+                },
+                "role": {
+                    "$ref": "#/definitions/identity.RoleCode"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "identity.WorkspaceMemberEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/identity.WorkspaceMember"
+                }
+            }
+        },
+        "identity.WorkspaceMemberPage": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/identity.WorkspaceMember"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "identity.WorkspaceMemberPageEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/identity.WorkspaceMemberPage"
+                }
+            }
+        },
+        "identity.loginRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "identity.registerRequest": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "workspace_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "identity.updateMemberRequest": {
+            "type": "object",
+            "properties": {
+                "role": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.createFixtureCandidateRequest": {
+            "type": "object",
+            "properties": {
+                "purpose": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.createProjectRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.createScriptRevisionRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.createShotsRequest": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "scripts.createWorkspaceRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.selectCandidateRequest": {
+            "type": "object",
+            "properties": {
+                "purpose": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAccessToken": {
+            "description": "Bearer JWT access token",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        },
+        "RefreshCookie": {
+            "description": "HttpOnly refresh cookie",
+            "type": "apiKey",
+            "name": "lanverse_refresh",
+            "in": "cookie"
+        }
+    }
+}

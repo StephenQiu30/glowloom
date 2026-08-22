@@ -13,7 +13,7 @@
 ```text
 DATABASE_URL='postgres://postgres@127.0.0.1:5432/lanverse' LANVERSE_INTEGRATION=1 go test ./src/scripts -run TestApproveAnalysisMaterializesCanonicalWithGORM -count=1
 DATABASE_URL='postgres://postgres@127.0.0.1:5432/lanverse' LANVERSE_ROLE=schema-init go run ./cmd
-cd frontend && OPENAPI_SCHEMA_URL=../backend/api/openapi.json npm run openapi2ts
+cd frontend && OPENAPI_SCHEMA_URL=../backend/docs/swagger.json npm run openapi2ts
 cd agent && uv run pytest
 agent-browser open http://127.0.0.1:8123
 ```

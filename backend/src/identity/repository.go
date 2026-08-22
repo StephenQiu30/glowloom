@@ -90,6 +90,18 @@ type workspaceMembershipRow struct {
 	Role          RoleCode  `gorm:"column:role"`
 }
 
+type workspaceMemberRow struct {
+	MembershipID     uuid.UUID        `gorm:"column:membership_id"`
+	UserID           uuid.UUID        `gorm:"column:user_id"`
+	RoleID           uuid.UUID        `gorm:"column:role_id"`
+	Email            string           `gorm:"column:email"`
+	DisplayName      string           `gorm:"column:display_name"`
+	AccountStatus    AccountStatus    `gorm:"column:account_status"`
+	MembershipStatus MembershipStatus `gorm:"column:membership_status"`
+	Role             RoleCode         `gorm:"column:role"`
+	CreatedAt        time.Time        `gorm:"column:created_at"`
+}
+
 type workspaceProjectRecord struct {
 	ID          uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
 	WorkspaceID uuid.UUID `gorm:"column:workspace_id;type:uuid"`
@@ -133,19 +145,19 @@ func (r *IdentityRepository) RegisterAccount(ctx context.Context, input Persiste
 			}
 			return fmt.Errorf("create account: %w", err)
 		}
-		var owner identityRoleRecord
-		if err := tx.Where("code = ? AND scope = ?", RoleOwner, RoleScopeWorkspace).First(&owner).Error; err != nil {
-			return fmt.Errorf("owner role is not seeded: %w", err)
+		var admin identityRoleRecord
+		if err := tx.Where("code = ? AND scope = ?", RoleAdmin, RoleScopeWorkspace).First(&admin).Error; err != nil {
+			return fmt.Errorf("admin role is not seeded: %w", err)
 		}
-		membership := identityMembershipRecord{ID: membershipID, WorkspaceID: workspaceID, UserID: userID, RoleID: owner.ID, Status: MembershipStatusActive}
+		membership := identityMembershipRecord{ID: membershipID, WorkspaceID: workspaceID, UserID: userID, RoleID: admin.ID, Status: MembershipStatusActive}
 		if err := tx.Create(&membership).Error; err != nil {
-			return fmt.Errorf("create owner membership: %w", err)
+			return fmt.Errorf("create admin membership: %w", err)
 		}
 		session := identitySessionRecord{ID: sessionID, FamilyID: familyID, UserID: userID, WorkspaceID: workspaceID, TokenHash: hashToken(refreshToken), ExpiresAt: expiresAt, CreatedAt: now, LastUsedAt: &now}
 		if err := tx.Create(&session).Error; err != nil {
 			return fmt.Errorf("create session: %w", err)
 		}
-		issue = SessionIssue{SessionID: sessionID, FamilyID: familyID, Identity: AuthIdentity{Account: Account{ID: userID, Email: input.Email.String(), DisplayName: input.DisplayName}, Workspace: Workspace{ID: workspaceID, Name: input.Workspace}, MembershipID: membershipID, Role: RoleOwner}, RefreshToken: refreshToken, RefreshExpiresAt: expiresAt}
+		issue = SessionIssue{SessionID: sessionID, FamilyID: familyID, Identity: AuthIdentity{Account: Account{ID: userID, Email: input.Email.String(), DisplayName: input.DisplayName}, Workspace: Workspace{ID: workspaceID, Name: input.Workspace}, MembershipID: membershipID, Role: RoleAdmin}, RefreshToken: refreshToken, RefreshExpiresAt: expiresAt}
 		return nil
 	})
 	if err != nil {
@@ -178,6 +190,9 @@ func (r *IdentityRepository) FindLoginAccount(ctx context.Context, email EmailAd
 				return ErrInvalidCredentials
 			}
 			return fmt.Errorf("load login membership: %w", err)
+		}
+		if membership.Role == RoleBan {
+			return ErrInvalidCredentials
 		}
 		result = LoginAccount{Identity: AuthIdentity{Account: Account{ID: user.ID, Email: user.Email, DisplayName: user.DisplayName}, Workspace: Workspace{ID: membership.WorkspaceID, Name: membership.WorkspaceName}, MembershipID: membership.MembershipID, Role: membership.Role}, PasswordHash: user.PasswordHash}
 		return nil
@@ -302,6 +317,144 @@ func (r *IdentityRepository) Authenticate(ctx context.Context, userID, sessionID
 	return principal, err
 }
 
+func (r *IdentityRepository) ListWorkspaceMembers(ctx context.Context, workspaceID uuid.UUID, query WorkspaceMemberQuery) (WorkspaceMemberPage, error) {
+	if r.orm == nil {
+		return WorkspaceMemberPage{}, fmt.Errorf("identity repository ORM is not configured")
+	}
+	if workspaceID == uuid.Nil {
+		return WorkspaceMemberPage{}, httpapi.Validation("Workspace 无效", "提供有效 Workspace 后重试")
+	}
+	page := query.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := query.PageSize
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	search := strings.TrimSpace(query.Search)
+	var result WorkspaceMemberPage
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		base := tx.Table("iam_memberships AS memberships").
+			Joins("JOIN iam_users AS users ON users.id = memberships.user_id").
+			Joins("JOIN iam_roles AS roles ON roles.id = memberships.role_id").
+			Where("memberships.workspace_id = ?", workspaceID)
+		if search != "" {
+			pattern := "%" + strings.ToLower(search) + "%"
+			base = base.Where("LOWER(users.email) LIKE ? OR LOWER(users.display_name) LIKE ?", pattern, pattern)
+		}
+		var total int64
+		if err := base.Count(&total).Error; err != nil {
+			return fmt.Errorf("count workspace members: %w", err)
+		}
+		var rows []workspaceMemberRow
+		if err := base.Select("memberships.id AS membership_id, memberships.user_id, memberships.role_id, users.email, users.display_name, users.status AS account_status, memberships.status AS membership_status, roles.code AS role, memberships.created_at").
+			Order("memberships.created_at DESC, memberships.id").
+			Offset((page - 1) * pageSize).
+			Limit(pageSize).
+			Scan(&rows).Error; err != nil {
+			return fmt.Errorf("list workspace members: %w", err)
+		}
+		items := make([]WorkspaceMember, 0, len(rows))
+		for _, row := range rows {
+			items = append(items, workspaceMemberFromRow(row))
+		}
+		result = WorkspaceMemberPage{Items: items, Total: total, Page: page, PageSize: pageSize}
+		return nil
+	})
+	return result, err
+}
+
+func (r *IdentityRepository) UpdateWorkspaceMember(ctx context.Context, workspaceID, membershipID uuid.UUID, actor Principal, input WorkspaceMemberUpdate) (WorkspaceMember, error) {
+	if r.orm == nil {
+		return WorkspaceMember{}, fmt.Errorf("identity repository ORM is not configured")
+	}
+	if workspaceID == uuid.Nil || membershipID == uuid.Nil {
+		return WorkspaceMember{}, httpapi.Validation("Workspace 或 Membership 无效", "提供有效 ID 后重试")
+	}
+	if !actor.Role.IsAdmin() {
+		return WorkspaceMember{}, httpapi.Forbidden("只有管理员可以管理成员", "请联系管理员")
+	}
+	if actor.MembershipID == membershipID {
+		return WorkspaceMember{}, httpapi.Conflict("不能修改当前登录管理员", "请由其他管理员执行此操作")
+	}
+	if input.Role == nil && input.Status == nil {
+		return WorkspaceMember{}, httpapi.Validation("至少提供角色或成员状态", "修改 role 或 status 后重试")
+	}
+	var result WorkspaceMember
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		target, err := loadWorkspaceMemberRow(tx, workspaceID, membershipID, true)
+		if err != nil {
+			return err
+		}
+		nextRole := target.Role
+		if input.Role != nil {
+			nextRole = *input.Role
+		}
+		nextStatus := target.MembershipStatus
+		if input.Status != nil {
+			nextStatus = *input.Status
+		}
+		if !nextRole.IsValid() {
+			return httpapi.Validation("成员角色无效", "使用已登记的角色后重试")
+		}
+		if !nextStatus.IsManageable() {
+			return httpapi.Validation("成员状态无效", "使用 active、suspended 或 removed 后重试")
+		}
+		if target.MembershipStatus == MembershipStatusRemoved && nextStatus != MembershipStatusRemoved {
+			return httpapi.Conflict("已移除成员不能直接恢复", "通过重新加入流程恢复成员")
+		}
+		if target.Role == RoleAdmin && target.MembershipStatus == MembershipStatusActive && (nextRole != RoleAdmin || nextStatus != MembershipStatusActive) {
+			var activeAdmins int64
+			if err := tx.Table("iam_memberships AS memberships").
+				Joins("JOIN iam_roles AS roles ON roles.id = memberships.role_id").
+				Where("memberships.workspace_id = ? AND memberships.id <> ? AND memberships.status = ? AND roles.code = ?", workspaceID, target.MembershipID, MembershipStatusActive, RoleAdmin).
+				Count(&activeAdmins).Error; err != nil {
+				return fmt.Errorf("count active admins: %w", err)
+			}
+			if activeAdmins < 1 {
+				return httpapi.Conflict("Workspace 至少需要一个 active 管理员", "先添加或提升其他管理员后重试")
+			}
+		}
+		updates := map[string]any{}
+		if input.Role != nil && nextRole != target.Role {
+			scope, ok := roleScopeForCode(nextRole)
+			if !ok {
+				return httpapi.Validation("成员角色无效", "使用已登记的角色后重试")
+			}
+			var role identityRoleRecord
+			if err := tx.Where("code = ? AND scope = ?", nextRole, scope).Take(&role).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("role is not seeded: %w", err)
+				}
+				return fmt.Errorf("load member role: %w", err)
+			}
+			updates["role_id"] = role.ID
+		}
+		if input.Status != nil && nextStatus != target.MembershipStatus {
+			updates["status"] = nextStatus
+		}
+		if len(updates) > 0 {
+			if err := tx.Model(&identityMembershipRecord{}).Where("id = ? AND workspace_id = ?", membershipID, workspaceID).Updates(updates).Error; err != nil {
+				return fmt.Errorf("update workspace member: %w", err)
+			}
+		}
+		if (input.Status != nil && nextStatus != MembershipStatusActive && nextStatus != target.MembershipStatus) || (input.Role != nil && nextRole == RoleBan && target.Role != RoleBan) {
+			now := time.Now().UTC()
+			if err := tx.Model(&identitySessionRecord{}).Where("user_id = ? AND workspace_id = ? AND revoked_at IS NULL", target.UserID, workspaceID).Updates(map[string]any{"revoked_at": now, "last_used_at": now}).Error; err != nil {
+				return fmt.Errorf("revoke member sessions: %w", err)
+			}
+		}
+		updated, err := loadWorkspaceMemberRow(tx, workspaceID, membershipID, false)
+		if err != nil {
+			return err
+		}
+		result = workspaceMemberFromRow(updated)
+		return nil
+	})
+	return result, err
+}
+
 func (r *IdentityRepository) identityForSession(tx *gorm.DB, userID, workspaceID, sessionID uuid.UUID) (AuthIdentity, error) {
 	var user identityUserRecord
 	if err := tx.Where("id = ? AND status = ?", userID, AccountStatusActive).First(&user).Error; err != nil {
@@ -323,6 +476,29 @@ func (r *IdentityRepository) identityForSession(tx *gorm.DB, userID, workspaceID
 		return AuthIdentity{}, fmt.Errorf("load session membership: %w", err)
 	}
 	return AuthIdentity{Account: Account{ID: user.ID, Email: user.Email, DisplayName: user.DisplayName}, Workspace: Workspace{ID: membership.WorkspaceID, Name: membership.WorkspaceName}, MembershipID: membership.MembershipID, Role: membership.Role}, nil
+}
+
+func loadWorkspaceMemberRow(tx *gorm.DB, workspaceID, membershipID uuid.UUID, lock bool) (workspaceMemberRow, error) {
+	var row workspaceMemberRow
+	db := tx.Table("iam_memberships AS memberships").
+		Select("memberships.id AS membership_id, memberships.user_id, memberships.role_id, users.email, users.display_name, users.status AS account_status, memberships.status AS membership_status, roles.code AS role, memberships.created_at").
+		Joins("JOIN iam_users AS users ON users.id = memberships.user_id").
+		Joins("JOIN iam_roles AS roles ON roles.id = memberships.role_id").
+		Where("memberships.id = ? AND memberships.workspace_id = ?", membershipID, workspaceID)
+	if lock {
+		db = db.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	if err := db.Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return workspaceMemberRow{}, httpapi.NotFound("成员")
+		}
+		return workspaceMemberRow{}, fmt.Errorf("load workspace member: %w", err)
+	}
+	return row, nil
+}
+
+func workspaceMemberFromRow(row workspaceMemberRow) WorkspaceMember {
+	return WorkspaceMember{MembershipID: row.MembershipID, UserID: row.UserID, Email: row.Email, DisplayName: row.DisplayName, AccountStatus: row.AccountStatus, MembershipStatus: row.MembershipStatus, Role: row.Role, CreatedAt: row.CreatedAt}
 }
 
 func (r *IdentityRepository) AuthorizePath(ctx context.Context, workspaceID uuid.UUID, path string) error {

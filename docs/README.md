@@ -48,7 +48,7 @@ Requirement 定义“要什么”，Design 定义“如何满足”，PRD 和 Pl
 - 生产以五个 Go 角色 `api`、`operation-worker`、`import-worker`、`provider-worker`、`media-worker` 和一个 Python `agent-service` 运行，按 A—F 切片启用。
 - PostgreSQL 保存业务事实和用户可见 Operation；Outbox 可靠触发平台唯一 Kafka 集群；MinIO 是唯一对象存储，Redis 只保存分布式协调运行态。Elasticsearch 固定为可重建业务检索数据面，OpenTelemetry 固定为观测数据面：首期可共用一次 Elastic 部署但逻辑隔离，ToC 生产前拆为独立故障域；二者都不替代 Outbox、审计或业务查询。
 - Go backend 是唯一公共服务与消息治理方，也是唯一 Kafka/Redis 客户端边界；Python Agent 是不提供公共 API/Ingress 的内网计算微服务，只通过私有 Run HTTP 契约被 backend 调用。
-- 公共接口以 `backend/api/openapi.json` 为唯一当前契约：Swagger UI、Go strict server 与 `@umijs/openapi` 前端 API 同源；前端统一经过 Axios `request.ts`，ViewModel 不手写 URL/DTO 或第二套 endpoint。
+- 公共接口以 Go Controller Swagger 注释生成的 `backend/docs/swagger.json` 为当前文档契约：Swagger UI 与 `@umijs/openapi` 前端 API 同源；前端统一经过 Axios `request.ts`，ViewModel 不手写 URL/DTO 或第二套 endpoint。
 - 数据库只使用当前最终 Schema，不建立 migration、旧接口兼容、双读或双写链。
 
 ## 6. 目录约束
