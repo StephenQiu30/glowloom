@@ -84,7 +84,7 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspaceID, projectID, revisionID, operationID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	workspaceID, projectID, revisionID, operationID, artifactID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	type cleanupRecord struct{ ID uuid.UUID }
 	deleteBy := func(table, condition string, args ...any) {
 		if result := orm.WithContext(ctx).Table(table).Where(condition, args...).Delete(&cleanupRecord{}); result.Error != nil {
@@ -122,12 +122,15 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 		deleteBy("nar_import_runs", "project_id = ?", projectID)
 		deleteBy("nar_analysis_drafts", "source_revision_id = ?", revisionID)
 		deleteBy("nar_source_revisions", "id = ?", revisionID)
+		deleteBy("media_artifact_locations", "artifact_id = ?", artifactID)
+		deleteBy("media_artifacts", "id = ?", artifactID)
 		deleteBy("outbox_events", "operation_id = ?", operationID)
 		deleteBy("operations", "id = ?", operationID)
 		deleteBy("projects", "id = ?", projectID)
 		deleteBy("workspaces", "id = ?", workspaceID)
 		pool.Close()
 	})
+	sourceHash := HashContent("source")
 	for _, entry := range []struct {
 		table  string
 		record any
@@ -141,7 +144,9 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 			WorkspaceID uuid.UUID
 			Name        string
 		}{projectID, workspaceID, "gorm integration project"}},
-		{"nar_source_revisions", map[string]any{"id": revisionID, "project_id": projectID, "name": "integration.txt", "object_key": "integration/" + revisionID.String() + ".txt", "content_hash": HashContent("source"), "content_length": 6, "source_type": "txt", "status": "waiting_user"}},
+		{"media_artifacts", map[string]any{"id": artifactID, "workspace_id": workspaceID, "project_id": projectID, "content_hash": sourceHash, "size_bytes": 6, "media_type": "text/plain", "purpose": "source", "retention_class": "standard", "status": "ready"}},
+		{"media_artifact_locations", map[string]any{"id": uuid.New(), "artifact_id": artifactID, "storage_profile": "test", "bucket": "test", "object_key": uuid.NewString(), "object_version_id": uuid.NewString(), "size_bytes": 6, "content_hash": sourceHash, "status": "active"}},
+		{"nar_source_revisions", map[string]any{"id": revisionID, "project_id": projectID, "artifact_id": artifactID, "name": "integration.txt", "source_type": "txt", "status": "waiting_user"}},
 		{"operations", map[string]any{"id": operationID, "project_id": projectID, "type": "script_analysis", "status": "succeeded", "progress": 100, "created_at": time.Now().UTC()}},
 	} {
 		if err := orm.WithContext(ctx).Table(entry.table).Create(entry.record).Error; err != nil {

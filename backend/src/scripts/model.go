@@ -130,7 +130,6 @@ type Candidate struct {
 	ArtifactID  uuid.UUID `json:"artifact_id"`
 	Status      string    `json:"status"`
 	Fixture     bool      `json:"fixture"`
-	ObjectKey   string    `json:"object_key,omitempty"`
 	ContentHash string    `json:"content_hash,omitempty"`
 }
 

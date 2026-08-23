@@ -91,7 +91,6 @@ declare namespace API {
     content_hash: string | null;
     fixture: boolean | null;
     id: string | null;
-    object_key: string | null;
     project_id: string | null;
     status: string | null;
     target_id: string | null;

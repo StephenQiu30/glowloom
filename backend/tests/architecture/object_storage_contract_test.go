@@ -21,7 +21,7 @@ func TestSourceAndMediaSchemaSeparateLogicalArtifactsFromPhysicalLocations(t *te
 	artifact := tableDefinition(t, schema, "media_artifacts")
 	location := tableDefinition(t, schema, "media_artifact_locations")
 
-	if !strings.Contains(source, "artifact_id uuid NOT NULL REFERENCES media_artifacts(id)") {
+	if !strings.Contains(source, "artifact_id uuid NOT NULL") || !strings.Contains(source, "FOREIGN KEY (artifact_id, project_id) REFERENCES media_artifacts(id, project_id)") {
 		t.Error("nar_source_revisions must reference a logical MediaArtifact")
 	}
 	for _, physicalColumn := range []string{"object_key", "object_version_id", "content_hash", "content_length"} {

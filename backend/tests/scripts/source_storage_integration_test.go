@@ -21,6 +21,7 @@ type versionedMemoryStore struct {
 	lastPutKey     string
 	lastGetKey     string
 	lastGetVersion string
+	putCount       int
 }
 
 func (s *versionedMemoryStore) PutVersioned(_ context.Context, key string, content []byte, _ string) (objectstorage.ObjectVersion, error) {
@@ -32,7 +33,74 @@ func (s *versionedMemoryStore) PutVersioned(_ context.Context, key string, conte
 	versionID := uuid.NewString()
 	s.objects[key+"@"+versionID] = append([]byte(nil), content...)
 	s.lastPutKey = key
+	s.putCount++
 	return objectstorage.ObjectVersion{StorageProfile: "test-primary", Bucket: "test-media", Key: key, VersionID: versionID, ETag: "fixture-etag", Size: int64(len(content))}, nil
+}
+
+func TestFixtureCandidateUsesOneOpaqueVersionedArtifact(t *testing.T) {
+	orm, closeDatabase := integrationDatabase(t)
+	t.Cleanup(closeDatabase)
+
+	workspaceID, projectID, contentUnitID, shotID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	seedWorkspaceProject(t, orm, workspaceID, projectID)
+	if err := orm.Table("prj_content_units").Create(map[string]any{"id": contentUnitID, "project_id": projectID, "kind": "episode", "title": "fixture", "status": "active", "ordinal": 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("sht_shots").Create(map[string]any{"id": shotID, "project_id": projectID, "content_unit_id": contentUnitID, "shot_key": "S001", "ordinal": 1, "status": "draft"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		deleteRecord := func(table, condition string, args ...any) {
+			if result := orm.Table(table).Where(condition, args...).Delete(&struct{ ID uuid.UUID }{}); result.Error != nil {
+				t.Logf("cleanup %s: %v", table, result.Error)
+			}
+		}
+		var artifactIDs, jobIDs, planIDs, operationIDs []uuid.UUID
+		orm.Table("media_artifacts").Where("project_id = ?", projectID).Pluck("id", &artifactIDs)
+		orm.Table("exec_generation_jobs").Where("operation_id IN (?)", orm.Table("operations").Select("id").Where("project_id = ?", projectID)).Pluck("id", &jobIDs)
+		orm.Table("gen_plans").Where("project_id = ?", projectID).Pluck("id", &planIDs)
+		orm.Table("operations").Where("project_id = ?", projectID).Pluck("id", &operationIDs)
+		deleteRecord("media_candidates", "project_id = ?", projectID)
+		deleteRecord("media_artifact_locations", "artifact_id IN ?", artifactIDs)
+		deleteRecord("media_artifacts", "id IN ?", artifactIDs)
+		deleteRecord("exec_attempts", "job_id IN ?", jobIDs)
+		deleteRecord("exec_generation_jobs", "id IN ?", jobIDs)
+		deleteRecord("gen_plan_items", "plan_id IN ?", planIDs)
+		deleteRecord("gen_plans", "id IN ?", planIDs)
+		deleteRecord("operations", "id IN ?", operationIDs)
+		deleteRecord("sht_shots", "id = ?", shotID)
+		deleteRecord("prj_content_units", "id = ?", contentUnitID)
+		deleteRecord("projects", "id = ?", projectID)
+		deleteRecord("workspaces", "id = ?", workspaceID)
+	})
+
+	store := &versionedMemoryStore{}
+	repository := scripts.NewScriptRepository(orm, store)
+	tenantContext := database.WithWorkspaceID(context.Background(), workspaceID)
+	first, err := repository.CreateFixtureCandidate(tenantContext, shotID, "storyboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := repository.CreateFixtureCandidate(tenantContext, shotID, "storyboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID != second.ID || first.ArtifactID != second.ArtifactID || store.putCount != 1 {
+		t.Fatalf("duplicate fixture command produced a second side effect: first=%#v second=%#v puts=%d", first, second, store.putCount)
+	}
+	if strings.Contains(store.lastPutKey, workspaceID.String()) || strings.Contains(store.lastPutKey, projectID.String()) || strings.Contains(store.lastPutKey, shotID.String()) {
+		t.Fatalf("fixture object key exposes a business identifier: %q", store.lastPutKey)
+	}
+	var location struct {
+		ObjectVersionID string
+		Status          string
+	}
+	if err := orm.Table("media_artifact_locations").Select("object_version_id", "status").Where("artifact_id = ?", first.ArtifactID).Take(&location).Error; err != nil {
+		t.Fatal(err)
+	}
+	if location.ObjectVersionID == "" || location.Status != "active" {
+		t.Fatalf("fixture location = %#v", location)
+	}
 }
 
 func (s *versionedMemoryStore) GetVersioned(_ context.Context, key, versionID string) ([]byte, error) {

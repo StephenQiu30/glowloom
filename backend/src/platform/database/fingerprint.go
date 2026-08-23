@@ -15,7 +15,7 @@ var requiredTables = []string{
 	"nar_narrative_revisions", "nar_scenes", "nar_beats", "nar_production_element_mentions",
 	"pk_entities", "pk_mention_resolutions", "pk_production_requirement_items", "pk_production_requirement_revisions",
 	"sht_shots", "sht_shot_plan_revisions", "m06_agent_runs", "m06_proposal_items", "gen_plans", "gen_plan_items",
-	"exec_generation_jobs", "exec_attempts", "media_artifacts", "media_candidates", "media_selection_decisions",
+	"exec_generation_jobs", "exec_attempts", "media_artifacts", "media_artifact_locations", "media_candidates", "media_selection_decisions",
 	"qa_evaluations", "qa_issues", "usage_reservations", "usage_entries", "review_packages", "review_decisions",
 	"delivery_assembly_revisions", "delivery_builds", "delivery_snapshots", "gov_rights_declarations", "gov_policy_evaluations",
 	"tpl_templates", "int_api_clients", "int_webhook_subscriptions", "ops_idempotency_records", "ops_operation_steps",
@@ -30,7 +30,7 @@ var forbiddenCompatibilityTables = []string{
 var requiredTenantPolicies = []string{
 	"projects", "iam_memberships", "iam_project_grants", "iam_sessions",
 	"iam_service_identities", "audit_events", "tpl_templates", "int_api_clients",
-	"int_webhook_subscriptions", "ops_idempotency_records", "ops_search_projection_checkpoints",
+	"int_webhook_subscriptions", "ops_idempotency_records", "ops_search_projection_checkpoints", "media_artifacts",
 }
 
 func VerifyCurrent(ctx context.Context, pool *pgxpool.Pool) error {

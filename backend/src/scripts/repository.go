@@ -23,7 +23,7 @@ const analysisTopic = messaging.OperationTaskTopic
 
 type ScriptRepository struct {
 	orm     *gorm.DB
-	storage *objectstorage.MinIOObjectStore
+	storage objectstorage.Port
 }
 
 type workspaceRecord struct {
@@ -43,7 +43,7 @@ type projectRecord struct {
 
 func (projectRecord) TableName() string { return "projects" }
 
-func NewScriptRepository(orm *gorm.DB, storage *objectstorage.MinIOObjectStore) *ScriptRepository {
+func NewScriptRepository(orm *gorm.DB, storage objectstorage.Port) *ScriptRepository {
 	return &ScriptRepository{orm: orm, storage: storage}
 }
 
@@ -82,16 +82,54 @@ func (r *ScriptRepository) CreateScriptRevision(ctx context.Context, projectID u
 	if r.storage == nil {
 		return ScriptRevision{}, fmt.Errorf("script source storage is not configured")
 	}
-	revisionID := uuid.New()
-	objectKey := fmt.Sprintf("sources/%s/%s.%s", projectID, revisionID, document.Format)
-	if err := r.storage.Put(ctx, objectKey, upload.Original, document.MediaType); err != nil {
+	workspaceID, ok := database.WorkspaceID(ctx)
+	if !ok {
+		return ScriptRevision{}, fmt.Errorf("workspace context is missing")
+	}
+	if err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		var project projectRecord
+		if err := tx.Where("id = ? AND workspace_id = ?", projectID, workspaceID).First(&project).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("项目")
+			}
+			return fmt.Errorf("validate source project: %w", err)
+		}
+		return nil
+	}); err != nil {
 		return ScriptRevision{}, err
 	}
-	record := sourceRevisionRecord{ID: revisionID, ProjectID: projectID, Name: upload.FileName, ObjectKey: objectKey, ContentHash: document.OriginalHash, ContentLength: document.OriginalLength, SourceType: document.Format, Status: "uploaded"}
-	if err := r.orm.WithContext(ctx).Create(&record).Error; err != nil {
-		return ScriptRevision{}, fmt.Errorf("create script revision: %w", err)
+
+	objectKey := "sources/" + uuid.NewString()
+	version, err := r.storage.PutVersioned(ctx, objectKey, upload.Original, document.MediaType)
+	if err != nil {
+		return ScriptRevision{}, err
 	}
-	return ScriptRevision{ID: record.ID, ProjectID: record.ProjectID, Name: record.Name, ContentHash: record.ContentHash, ContentLength: record.ContentLength, SourceType: record.SourceType, Status: record.Status, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339)}, nil
+	if err := validateStoredObject(version, objectKey, int64(document.OriginalLength)); err != nil {
+		r.discardStoredVersion(ctx, version)
+		return ScriptRevision{}, err
+	}
+
+	artifactID, revisionID := uuid.New(), uuid.New()
+	record := sourceRevisionRecord{ID: revisionID, ProjectID: projectID, ArtifactID: artifactID, Name: upload.FileName, SourceType: document.Format, Status: "uploaded"}
+	createdAt := time.Now().UTC()
+	err = database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		if err := tx.Create(&artifactRecord{ID: artifactID, WorkspaceID: workspaceID, ProjectID: projectID, ContentHash: document.OriginalHash, SizeBytes: int64(document.OriginalLength), MediaType: document.MediaType, Purpose: "source", RetentionClass: "standard", Status: "ready", CreatedAt: createdAt}).Error; err != nil {
+			return fmt.Errorf("create source artifact: %w", err)
+		}
+		location := artifactLocationRecord{ID: uuid.New(), ArtifactID: artifactID, StorageProfile: version.StorageProfile, Bucket: version.Bucket, ObjectKey: version.Key, ObjectVersionID: version.VersionID, SizeBytes: version.Size, ContentHash: document.OriginalHash, ETag: version.ETag, Status: "active", VerifiedAt: &createdAt, CreatedAt: createdAt}
+		if err := tx.Create(&location).Error; err != nil {
+			return fmt.Errorf("create source artifact location: %w", err)
+		}
+		if err := tx.Create(&record).Error; err != nil {
+			return fmt.Errorf("create script revision: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		r.discardStoredVersion(ctx, version)
+		return ScriptRevision{}, err
+	}
+	return ScriptRevision{ID: record.ID, ProjectID: record.ProjectID, Name: record.Name, ContentHash: document.OriginalHash, ContentLength: document.OriginalLength, SourceType: record.SourceType, Status: record.Status, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
 type AnalysisRequest struct {
@@ -204,10 +242,8 @@ type sourceRevisionRecord struct {
 	ID            uuid.UUID  `gorm:"column:id;type:uuid;primaryKey"`
 	ProjectID     uuid.UUID  `gorm:"column:project_id;type:uuid"`
 	ContentUnitID *uuid.UUID `gorm:"column:content_unit_id;type:uuid"`
+	ArtifactID    uuid.UUID  `gorm:"column:artifact_id;type:uuid"`
 	Name          string
-	ObjectKey     string `gorm:"column:object_key"`
-	ContentHash   string `gorm:"column:content_hash"`
-	ContentLength int    `gorm:"column:content_length"`
 	SourceType    string `gorm:"column:source_type"`
 	Status        string
 	CreatedAt     time.Time `gorm:"column:created_at"`
@@ -323,18 +359,36 @@ type fixtureAttemptRecord struct {
 func (fixtureAttemptRecord) TableName() string { return "exec_attempts" }
 
 type artifactRecord struct {
-	ID              uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
-	ProjectID       uuid.UUID `gorm:"column:project_id;type:uuid"`
-	ContentHash     string    `gorm:"column:content_hash"`
-	SizeBytes       int64     `gorm:"column:size_bytes"`
-	MediaType       string    `gorm:"column:media_type"`
-	Purpose         string
-	Status          string
-	ObjectKey       string `gorm:"column:object_key"`
-	ObjectVersionID string `gorm:"column:object_version_id"`
+	ID             uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
+	WorkspaceID    uuid.UUID `gorm:"column:workspace_id;type:uuid"`
+	ProjectID      uuid.UUID `gorm:"column:project_id;type:uuid"`
+	ContentHash    string    `gorm:"column:content_hash"`
+	SizeBytes      int64     `gorm:"column:size_bytes"`
+	MediaType      string    `gorm:"column:media_type"`
+	Purpose        string
+	RetentionClass string `gorm:"column:retention_class"`
+	Status         string
+	CreatedAt      time.Time `gorm:"column:created_at"`
 }
 
 func (artifactRecord) TableName() string { return "media_artifacts" }
+
+type artifactLocationRecord struct {
+	ID              uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
+	ArtifactID      uuid.UUID `gorm:"column:artifact_id;type:uuid"`
+	StorageProfile  string    `gorm:"column:storage_profile"`
+	Bucket          string
+	ObjectKey       string `gorm:"column:object_key"`
+	ObjectVersionID string `gorm:"column:object_version_id"`
+	SizeBytes       int64  `gorm:"column:size_bytes"`
+	ContentHash     string `gorm:"column:content_hash"`
+	ETag            string `gorm:"column:etag"`
+	Status          string
+	VerifiedAt      *time.Time `gorm:"column:verified_at"`
+	CreatedAt       time.Time  `gorm:"column:created_at"`
+}
+
+func (artifactLocationRecord) TableName() string { return "media_artifact_locations" }
 
 type candidateRecord struct {
 	ID         uuid.UUID  `gorm:"column:id;type:uuid;primaryKey"`
@@ -558,7 +612,7 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 		return httpapi.Validation("解析任务缺少完整租户绑定", "重新投递包含工作区、项目、任务和剧本版本标识的消息")
 	}
 	tenantContext := database.WithWorkspaceID(ctx, request.WorkspaceID)
-	revision, completed, err := r.startAnalysis(tenantContext, request)
+	source, completed, err := r.startAnalysis(tenantContext, request)
 	if err != nil {
 		return err
 	}
@@ -568,15 +622,18 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 	if r.storage == nil {
 		return r.failOperation(tenantContext, request, "source_unavailable", errors.New("script source storage is not configured"))
 	}
-	content, err := r.storage.Get(tenantContext, revision.ObjectKey)
+	content, err := r.storage.GetVersioned(tenantContext, source.location.ObjectKey, source.location.ObjectVersionID)
 	if err != nil {
 		return r.failOperation(tenantContext, request, "source_unavailable", err)
 	}
-	document, err := ParseSourceDocument(revision.Name, mediaTypeForSourceType(revision.SourceType), content)
+	if int64(len(content)) != source.artifact.SizeBytes || int64(len(content)) != source.location.SizeBytes {
+		return r.failOperation(tenantContext, request, "source_changed", errors.New("source object size does not match frozen artifact"))
+	}
+	document, err := ParseSourceDocument(source.revision.Name, mediaTypeForSourceType(source.revision.SourceType), content)
 	if err != nil {
 		return r.failOperation(tenantContext, request, "source_parse_failed", err)
 	}
-	if document.OriginalHash != revision.ContentHash {
+	if document.OriginalHash != source.artifact.ContentHash || document.OriginalHash != source.location.ContentHash {
 		return r.failOperation(tenantContext, request, "source_changed", errors.New("source object hash does not match revision"))
 	}
 	analysis, err := AnalyzeScript(document.Text)
@@ -590,11 +647,11 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 		return r.failOperation(tenantContext, request, "analysis_encode_failed", err)
 	}
 	return database.WithWorkspaceTransaction(tenantContext, r.orm, func(tx *gorm.DB) error {
-		draft := analysisDraftRecord{SourceRevisionID: request.RevisionID, SourceHash: revision.ContentHash, Analysis: datatypes.JSON(encoded), Status: "draft", CreatedAt: time.Now().UTC()}
+		draft := analysisDraftRecord{SourceRevisionID: request.RevisionID, SourceHash: source.artifact.ContentHash, Analysis: datatypes.JSON(encoded), Status: "draft", CreatedAt: time.Now().UTC()}
 		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "source_revision_id"}}, DoUpdates: clause.AssignmentColumns([]string{"source_hash", "analysis", "status", "created_at", "approved_at"})}).Create(&draft).Error; err != nil {
 			return err
 		}
-		result := tx.Model(&revision).Where("id = ? AND project_id = ?", request.RevisionID, request.ProjectID).Update("status", "waiting_user")
+		result := tx.Model(&source.revision).Where("id = ? AND project_id = ?", request.RevisionID, request.ProjectID).Update("status", "waiting_user")
 		if result.Error != nil {
 			return fmt.Errorf("mark source revision waiting for approval: %w", result.Error)
 		}
@@ -782,34 +839,74 @@ func (r *ScriptRepository) CreateFixtureCandidate(ctx context.Context, shotID uu
 	if r.orm == nil {
 		return Candidate{}, fmt.Errorf("script repository ORM is not configured")
 	}
+	workspaceID, ok := database.WorkspaceID(ctx)
+	if !ok {
+		return Candidate{}, fmt.Errorf("workspace context is missing")
+	}
 	var shot shotRecord
-	if err := r.orm.WithContext(ctx).Where("id = ?", shotID).First(&shot).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Candidate{}, httpapi.NotFound("镜头")
+	var existing Candidate
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		if err := tx.Where("id = ?", shotID).First(&shot).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("镜头")
+			}
+			return err
 		}
+		var project projectRecord
+		if err := tx.Where("id = ? AND workspace_id = ?", shot.ProjectID, workspaceID).First(&project).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("镜头")
+			}
+			return err
+		}
+		candidate, artifact, found, err := findFixtureCandidate(tx, shotID, purpose)
+		if err != nil {
+			return err
+		}
+		if found {
+			existing = Candidate{ID: candidate.ID, ProjectID: candidate.ProjectID, TargetType: candidate.TargetType, TargetID: candidate.TargetID, ArtifactID: candidate.ArtifactID, Status: candidate.Status, Fixture: true, ContentHash: artifact.ContentHash}
+		}
+		return nil
+	})
+	if err != nil {
 		return Candidate{}, err
 	}
-	var candidates []candidateRecord
-	if err := r.orm.WithContext(ctx).Where("target_type = ? AND target_id = ? AND status = ?", "shot", shotID, "ready").Order("created_at").Find(&candidates).Error; err != nil {
-		return Candidate{}, fmt.Errorf("find fixture candidate: %w", err)
+	if existing.ID != uuid.Nil {
+		return existing, nil
 	}
-	for _, candidate := range candidates {
-		var artifact artifactRecord
-		if err := r.orm.WithContext(ctx).Where("id = ? AND purpose = ? AND status = ?", candidate.ArtifactID, purpose, "ready").First(&artifact).Error; err == nil {
-			return Candidate{ID: candidate.ID, ProjectID: candidate.ProjectID, TargetType: candidate.TargetType, TargetID: candidate.TargetID, ArtifactID: candidate.ArtifactID, Status: candidate.Status, Fixture: true, ObjectKey: artifact.ObjectKey, ContentHash: artifact.ContentHash}, nil
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return Candidate{}, fmt.Errorf("find fixture artifact: %w", err)
-		}
+	if r.storage == nil {
+		return Candidate{}, fmt.Errorf("fixture storage is not configured")
 	}
 	content := []byte(fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="100%%" height="100%%" fill="#141414"/><text x="24" y="48" fill="white" font-size="24">Fixture %s</text></svg>`, shotID.String()))
-	objectKey := fmt.Sprintf("fixtures/%s/%s.svg", shot.ProjectID, shotID)
+	objectKey := "fixtures/" + uuid.NewString()
 	version, err := r.storage.PutVersioned(ctx, objectKey, content, "image/svg+xml")
 	if err != nil {
 		return Candidate{}, fmt.Errorf("store fixture: %w", err)
 	}
+	if err := validateStoredObject(version, objectKey, int64(len(content))); err != nil {
+		r.discardStoredVersion(ctx, version)
+		return Candidate{}, err
+	}
 	hash := HashContent(string(content))
 	operationID, planID, planItemID, jobID, attemptID, artifactID, candidateID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
-	if err := r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	createdCandidate := Candidate{}
+	reused := false
+	if err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND project_id = ?", shotID, shot.ProjectID).First(&shotRecord{}).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("镜头")
+			}
+			return err
+		}
+		candidate, artifact, found, err := findFixtureCandidate(tx, shotID, purpose)
+		if err != nil {
+			return err
+		}
+		if found {
+			reused = true
+			createdCandidate = Candidate{ID: candidate.ID, ProjectID: candidate.ProjectID, TargetType: candidate.TargetType, TargetID: candidate.TargetID, ArtifactID: candidate.ArtifactID, Status: candidate.Status, Fixture: true, ContentHash: artifact.ContentHash}
+			return nil
+		}
 		if err := tx.Create(&operationRecord{ID: operationID, ProjectID: shot.ProjectID, Type: "fixture_candidate", Status: "running", Progress: 50}).Error; err != nil {
 			return fmt.Errorf("create fixture operation: %w", err)
 		}
@@ -825,8 +922,12 @@ func (r *ScriptRepository) CreateFixtureCandidate(ctx context.Context, shotID uu
 		if err := tx.Create(&fixtureAttemptRecord{ID: attemptID, JobID: jobID, AttemptNo: 1, Status: "succeeded", ExternalJobID: "fixture:" + shotID.String(), ResultCertainty: "created"}).Error; err != nil {
 			return fmt.Errorf("create fixture attempt: %w", err)
 		}
-		if err := tx.Create(&artifactRecord{ID: artifactID, ProjectID: shot.ProjectID, ContentHash: hash, SizeBytes: int64(len(content)), MediaType: "image/svg+xml", Purpose: purpose, Status: "ready", ObjectKey: objectKey, ObjectVersionID: version.VersionID}).Error; err != nil {
+		now := time.Now().UTC()
+		if err := tx.Create(&artifactRecord{ID: artifactID, WorkspaceID: workspaceID, ProjectID: shot.ProjectID, ContentHash: hash, SizeBytes: int64(len(content)), MediaType: "image/svg+xml", Purpose: purpose, RetentionClass: "standard", Status: "ready", CreatedAt: now}).Error; err != nil {
 			return fmt.Errorf("create fixture artifact: %w", err)
+		}
+		if err := tx.Create(&artifactLocationRecord{ID: uuid.New(), ArtifactID: artifactID, StorageProfile: version.StorageProfile, Bucket: version.Bucket, ObjectKey: version.Key, ObjectVersionID: version.VersionID, SizeBytes: version.Size, ContentHash: hash, ETag: version.ETag, Status: "active", VerifiedAt: &now, CreatedAt: now}).Error; err != nil {
+			return fmt.Errorf("create fixture artifact location: %w", err)
 		}
 		if err := tx.Create(&candidateRecord{ID: candidateID, ProjectID: shot.ProjectID, JobID: &jobID, TargetType: "shot", TargetID: shotID, ArtifactID: artifactID, Status: "ready"}).Error; err != nil {
 			return fmt.Errorf("create fixture candidate: %w", err)
@@ -834,15 +935,52 @@ func (r *ScriptRepository) CreateFixtureCandidate(ctx context.Context, shotID uu
 		if err := tx.Model(&fixtureJobRecord{}).Where("id = ?", jobID).Update("status", "succeeded").Error; err != nil {
 			return fmt.Errorf("complete fixture job: %w", err)
 		}
-		now := time.Now().UTC()
 		if err := tx.Model(&operationRecord{}).Where("id = ?", operationID).Updates(map[string]any{"status": "succeeded", "progress": 100, "updated_at": now, "completed_at": now}).Error; err != nil {
 			return fmt.Errorf("complete fixture operation: %w", err)
 		}
+		createdCandidate = Candidate{ID: candidateID, ProjectID: shot.ProjectID, TargetType: "shot", TargetID: shotID, ArtifactID: artifactID, Status: "ready", Fixture: true, ContentHash: hash}
 		return nil
 	}); err != nil {
+		r.discardStoredVersion(ctx, version)
 		return Candidate{}, err
 	}
-	return Candidate{ID: candidateID, ProjectID: shot.ProjectID, TargetType: "shot", TargetID: shotID, ArtifactID: artifactID, Status: "ready", Fixture: true, ObjectKey: objectKey, ContentHash: hash}, nil
+	if reused {
+		r.discardStoredVersion(ctx, version)
+	}
+	return createdCandidate, nil
+}
+
+func findFixtureCandidate(tx *gorm.DB, shotID uuid.UUID, purpose string) (candidateRecord, artifactRecord, bool, error) {
+	var candidates []candidateRecord
+	if err := tx.Where("target_type = ? AND target_id = ? AND status = ?", "shot", shotID, "ready").Order("created_at").Find(&candidates).Error; err != nil {
+		return candidateRecord{}, artifactRecord{}, false, fmt.Errorf("find fixture candidate: %w", err)
+	}
+	for _, candidate := range candidates {
+		var artifact artifactRecord
+		if err := tx.Where("id = ? AND purpose = ? AND status = ?", candidate.ArtifactID, purpose, "ready").First(&artifact).Error; err == nil {
+			return candidate, artifact, true, nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return candidateRecord{}, artifactRecord{}, false, fmt.Errorf("find fixture artifact: %w", err)
+		}
+	}
+	return candidateRecord{}, artifactRecord{}, false, nil
+}
+
+func validateStoredObject(version objectstorage.ObjectVersion, expectedKey string, expectedSize int64) error {
+	if version.StorageProfile == "" || version.Bucket == "" || version.Key == "" || version.VersionID == "" {
+		return fmt.Errorf("object storage did not return a complete immutable location")
+	}
+	if version.Key != expectedKey || version.Size != expectedSize {
+		return fmt.Errorf("object storage receipt does not match uploaded object")
+	}
+	return nil
+}
+
+func (r *ScriptRepository) discardStoredVersion(ctx context.Context, version objectstorage.ObjectVersion) {
+	if r.storage == nil || version.Key == "" || version.VersionID == "" {
+		return
+	}
+	_ = r.storage.DeleteVersion(ctx, version.Key, version.VersionID)
 }
 
 func (r *ScriptRepository) SelectCandidate(ctx context.Context, candidateID uuid.UUID, purpose string) (Selection, error) {
@@ -889,11 +1027,17 @@ func (r *ScriptRepository) RecordInboxMessage(ctx context.Context, messageID, to
 	return r.orm.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&inboxRecord{MessageID: messageID, Topic: topic}).Error
 }
 
-func (r *ScriptRepository) startAnalysis(ctx context.Context, request AnalysisRequest) (sourceRevisionRecord, bool, error) {
+type analysisSource struct {
+	revision sourceRevisionRecord
+	artifact artifactRecord
+	location artifactLocationRecord
+}
+
+func (r *ScriptRepository) startAnalysis(ctx context.Context, request AnalysisRequest) (analysisSource, bool, error) {
 	if r.orm == nil {
-		return sourceRevisionRecord{}, false, fmt.Errorf("script repository ORM is not configured")
+		return analysisSource{}, false, fmt.Errorf("script repository ORM is not configured")
 	}
-	var revision sourceRevisionRecord
+	var source analysisSource
 	completed := false
 	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
 		var project projectRecord
@@ -903,11 +1047,26 @@ func (r *ScriptRepository) startAnalysis(ctx context.Context, request AnalysisRe
 			}
 			return fmt.Errorf("validate analysis project: %w", err)
 		}
-		if err := tx.Where("id = ? AND project_id = ?", request.RevisionID, request.ProjectID).First(&revision).Error; err != nil {
+		if err := tx.Where("id = ? AND project_id = ?", request.RevisionID, request.ProjectID).First(&source.revision).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return httpapi.NotFound("解析任务")
 			}
 			return fmt.Errorf("validate analysis revision: %w", err)
+		}
+		if err := tx.Where("id = ? AND workspace_id = ? AND project_id = ? AND status = ?", source.revision.ArtifactID, request.WorkspaceID, request.ProjectID, "ready").First(&source.artifact).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("解析任务")
+			}
+			return fmt.Errorf("validate analysis source artifact: %w", err)
+		}
+		if err := tx.Where("artifact_id = ? AND status = ?", source.artifact.ID, "active").First(&source.location).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("解析任务")
+			}
+			return fmt.Errorf("validate analysis source location: %w", err)
+		}
+		if source.location.ContentHash != source.artifact.ContentHash || source.location.SizeBytes != source.artifact.SizeBytes {
+			return httpapi.Conflict("剧本原件存储版本不一致", "恢复并重新校验精确对象版本后重试")
 		}
 		var outbox outboxRecord
 		if err := tx.Where("operation_id = ? AND topic = ?", request.OperationID, analysisTopic).First(&outbox).Error; err != nil {
@@ -947,9 +1106,9 @@ func (r *ScriptRepository) startAnalysis(ctx context.Context, request AnalysisRe
 		return nil
 	})
 	if err != nil {
-		return sourceRevisionRecord{}, false, err
+		return analysisSource{}, false, err
 	}
-	return revision, completed, nil
+	return source, completed, nil
 }
 
 func (r *ScriptRepository) failOperation(ctx context.Context, request AnalysisRequest, code string, cause error) error {

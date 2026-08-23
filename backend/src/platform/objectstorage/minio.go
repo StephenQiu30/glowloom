@@ -16,15 +16,24 @@ const defaultEndpoint = "127.0.0.1:9000"
 const defaultBucket = "lanverse-media"
 
 type MinIOObjectStore struct {
-	client *minio.Client
-	bucket string
+	client         *minio.Client
+	storageProfile string
+	bucket         string
 }
 
 type ObjectVersion struct {
-	Key       string
-	VersionID string
-	ETag      string
-	Size      int64
+	StorageProfile string
+	Bucket         string
+	Key            string
+	VersionID      string
+	ETag           string
+	Size           int64
+}
+
+type Port interface {
+	PutVersioned(context.Context, string, []byte, string) (ObjectVersion, error)
+	GetVersioned(context.Context, string, string) ([]byte, error)
+	DeleteVersion(context.Context, string, string) error
 }
 
 func NewMinIOObjectStore(ctx context.Context) (*MinIOObjectStore, error) {
@@ -37,7 +46,7 @@ func NewMinIOObjectStore(ctx context.Context) (*MinIOObjectStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create minio client: %w", err)
 	}
-	store := &MinIOObjectStore{client: client, bucket: envOr("MINIO_BUCKET", defaultBucket)}
+	store := &MinIOObjectStore{client: client, storageProfile: envOr("MINIO_STORAGE_PROFILE", "primary"), bucket: envOr("MINIO_BUCKET", defaultBucket)}
 	exists, err := client.BucketExists(ctx, store.bucket)
 	if err != nil {
 		return nil, fmt.Errorf("check minio bucket: %w", err)
@@ -56,33 +65,33 @@ func NewMinIOObjectStore(ctx context.Context) (*MinIOObjectStore, error) {
 	return store, nil
 }
 
-func (s *MinIOObjectStore) Put(ctx context.Context, key string, content []byte, contentType string) error {
-	_, err := s.PutVersioned(ctx, key, content, contentType)
-	return err
-}
-
 func (s *MinIOObjectStore) PutVersioned(ctx context.Context, key string, content []byte, contentType string) (ObjectVersion, error) {
 	info, err := s.client.PutObject(ctx, s.bucket, key, bytes.NewReader(content), int64(len(content)), minio.PutObjectOptions{ContentType: contentType})
 	if err != nil {
-		return ObjectVersion{}, fmt.Errorf("put object %s: %w", key, err)
+		return ObjectVersion{}, fmt.Errorf("put versioned object: %w", err)
 	}
-	return ObjectVersion{Key: key, VersionID: info.VersionID, ETag: info.ETag, Size: info.Size}, nil
+	return ObjectVersion{StorageProfile: s.storageProfile, Bucket: s.bucket, Key: key, VersionID: info.VersionID, ETag: info.ETag, Size: info.Size}, nil
 }
 
-func (s *MinIOObjectStore) Get(ctx context.Context, key string) ([]byte, error) {
-	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+func (s *MinIOObjectStore) GetVersioned(ctx context.Context, key, versionID string) ([]byte, error) {
+	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{VersionID: versionID})
 	if err != nil {
-		return nil, fmt.Errorf("get object %s: %w", key, err)
+		return nil, fmt.Errorf("get versioned object: %w", err)
 	}
 	defer object.Close()
 	content, err := io.ReadAll(object)
 	if err != nil {
-		return nil, fmt.Errorf("read object %s: %w", key, err)
+		return nil, fmt.Errorf("read versioned object: %w", err)
 	}
 	return content, nil
 }
 
-func (s *MinIOObjectStore) Bucket() string { return s.bucket }
+func (s *MinIOObjectStore) DeleteVersion(ctx context.Context, key, versionID string) error {
+	if err := s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{VersionID: versionID}); err != nil {
+		return fmt.Errorf("delete versioned object: %w", err)
+	}
+	return nil
+}
 
 func envOr(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {

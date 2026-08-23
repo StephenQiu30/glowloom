@@ -27,9 +27,11 @@ func TestAuthorizePathUsesCanonicalProjectAndSourceRevisionTables(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	workspaceID, projectID, revisionID := uuid.New(), uuid.New(), uuid.New()
+	workspaceID, projectID, revisionID, artifactID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	t.Cleanup(func() {
 		orm.Table("nar_source_revisions").Where("id = ?", revisionID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("media_artifact_locations").Where("artifact_id = ?", artifactID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("media_artifacts").Where("id = ?", artifactID).Delete(&struct{ ID uuid.UUID }{})
 		orm.Table("projects").Where("id = ?", projectID).Delete(&struct{ ID uuid.UUID }{})
 		orm.Table("workspaces").Where("id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
 		pool.Close()
@@ -48,15 +50,22 @@ func TestAuthorizePathUsesCanonicalProjectAndSourceRevisionTables(t *testing.T) 
 	}{projectID, workspaceID, "identity integration project"}).Error; err != nil {
 		t.Fatal(err)
 	}
+	contentHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	if err := orm.Table("media_artifacts").Create(map[string]any{
+		"id": artifactID, "workspace_id": workspaceID, "project_id": projectID, "content_hash": contentHash,
+		"size_bytes": 1, "media_type": "text/plain", "purpose": "source", "retention_class": "standard", "status": "ready",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("media_artifact_locations").Create(map[string]any{
+		"id": uuid.New(), "artifact_id": artifactID, "storage_profile": "test", "bucket": "test", "object_key": uuid.NewString(),
+		"object_version_id": uuid.NewString(), "size_bytes": 1, "content_hash": contentHash, "status": "active",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := orm.Table("nar_source_revisions").Create(map[string]any{
-		"id":             revisionID,
-		"project_id":     projectID,
-		"name":           "identity-integration.txt",
-		"object_key":     "identity-integration/" + revisionID.String() + ".txt",
-		"content_hash":   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		"content_length": 1,
-		"source_type":    "txt",
-		"status":         "uploaded",
+		"id": revisionID, "project_id": projectID, "artifact_id": artifactID, "name": "identity-integration.txt",
+		"source_type": "txt", "status": "uploaded",
 	}).Error; err != nil {
 		t.Fatal(err)
 	}

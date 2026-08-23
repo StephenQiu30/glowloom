@@ -189,17 +189,51 @@ CREATE TABLE IF NOT EXISTS prj_content_order_items (
     UNIQUE (order_revision_id, content_unit_id)
 );
 
+CREATE TABLE IF NOT EXISTS media_artifacts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id uuid NOT NULL REFERENCES workspaces(id),
+    project_id uuid NOT NULL REFERENCES projects(id),
+    content_hash text NOT NULL CHECK (content_hash ~ '^[a-f0-9]{64}$'),
+    size_bytes bigint NOT NULL CHECK (size_bytes > 0),
+    media_type text NOT NULL,
+    purpose text NOT NULL,
+    rights_scope_hash text,
+    retention_class text NOT NULL DEFAULT 'standard',
+    status text NOT NULL CHECK (status IN ('staging', 'ready', 'quarantined', 'retired')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (id, project_id)
+);
+
+CREATE INDEX IF NOT EXISTS media_artifacts_project_idx ON media_artifacts(project_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS media_artifact_locations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    artifact_id uuid NOT NULL,
+    storage_profile text NOT NULL,
+    bucket text NOT NULL,
+    object_key text NOT NULL,
+    object_version_id text NOT NULL,
+    size_bytes bigint NOT NULL CHECK (size_bytes > 0),
+    content_hash text NOT NULL CHECK (content_hash ~ '^[a-f0-9]{64}$'),
+    etag text,
+    status text NOT NULL CHECK (status IN ('staged', 'verified', 'active', 'retiring', 'retired', 'quarantined', 'missing', 'deletion_pending', 'deleted')),
+    verified_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (storage_profile, bucket, object_key, object_version_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS media_artifact_locations_active_idx ON media_artifact_locations(artifact_id) WHERE status = 'active';
+
 CREATE TABLE IF NOT EXISTS nar_source_revisions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id uuid NOT NULL REFERENCES projects(id),
     content_unit_id uuid REFERENCES prj_content_units(id),
+    artifact_id uuid NOT NULL REFERENCES media_artifacts(id),
     name text NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 240),
-    object_key text NOT NULL UNIQUE,
-    content_hash text NOT NULL CHECK (content_hash ~ '^[a-f0-9]{64}$'),
-    content_length bigint NOT NULL CHECK (content_length > 0),
     source_type text NOT NULL CHECK (source_type IN ('txt', 'markdown', 'docx')),
     status text NOT NULL CHECK (status IN ('uploaded', 'analyzing', 'waiting_user', 'approved', 'failed')),
-    created_at timestamptz NOT NULL DEFAULT now()
+    created_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (artifact_id, project_id) REFERENCES media_artifacts(id, project_id)
 );
 
 CREATE INDEX IF NOT EXISTS nar_source_revisions_project_idx ON nar_source_revisions(project_id, created_at DESC);
@@ -438,28 +472,16 @@ CREATE TABLE IF NOT EXISTS exec_attempts (
     UNIQUE (job_id, attempt_no)
 );
 
-CREATE TABLE IF NOT EXISTS media_artifacts (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id uuid NOT NULL REFERENCES projects(id),
-    content_hash text NOT NULL,
-    size_bytes bigint NOT NULL,
-    media_type text NOT NULL,
-    purpose text NOT NULL,
-    status text NOT NULL CHECK (status IN ('staging', 'ready', 'quarantined', 'retired')),
-    object_key text NOT NULL,
-    object_version_id text NOT NULL,
-    UNIQUE (project_id, object_key, object_version_id)
-);
-
 CREATE TABLE IF NOT EXISTS media_candidates (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id uuid NOT NULL REFERENCES projects(id),
     job_id uuid REFERENCES exec_generation_jobs(id),
     target_type text NOT NULL,
     target_id uuid NOT NULL,
-    artifact_id uuid NOT NULL REFERENCES media_artifacts(id),
+    artifact_id uuid NOT NULL,
     status text NOT NULL CHECK (status IN ('ready', 'quarantined', 'retired')),
-    created_at timestamptz NOT NULL DEFAULT now()
+    created_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (artifact_id, project_id) REFERENCES media_artifacts(id, project_id)
 );
 
 CREATE TABLE IF NOT EXISTS media_selection_decisions (
@@ -713,6 +735,12 @@ CREATE POLICY tenant_isolation ON iam_service_identities
 ALTER TABLE audit_events ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON audit_events;
 CREATE POLICY tenant_isolation ON audit_events
+    USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
+    WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);
+
+ALTER TABLE media_artifacts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON media_artifacts;
+CREATE POLICY tenant_isolation ON media_artifacts
     USING (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid)
     WITH CHECK (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid);
 

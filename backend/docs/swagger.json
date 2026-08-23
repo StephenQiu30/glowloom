@@ -1676,9 +1676,6 @@
                 "id": {
                     "type": "string"
                 },
-                "object_key": {
-                    "type": "string"
-                },
                 "project_id": {
                     "type": "string"
                 },

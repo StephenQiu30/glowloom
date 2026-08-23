@@ -116,7 +116,7 @@ func runAPI() {
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()
-	slog.Info("lanverse api listening", "addr", server.Addr, "storage_bucket", storage.Bucket())
+	slog.Info("lanverse api listening", "addr", server.Addr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logFatal("api server failed", err)
 	}

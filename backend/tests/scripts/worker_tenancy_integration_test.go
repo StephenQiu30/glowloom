@@ -3,6 +3,7 @@ package scripts_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 
@@ -52,18 +53,7 @@ func TestProcessAnalysisRejectsCrossWorkspaceMessageBeforeStateChange(t *testing
 	revisionB2 := uuid.New()
 	seedWorkspaceProject(t, orm, workspaceA, projectA)
 	seedAnalysisTenant(t, orm, workspaceB, projectB, revisionB)
-	if err := orm.Table("nar_source_revisions").Create(map[string]any{
-		"id":             revisionB2,
-		"project_id":     projectB,
-		"name":           "other-revision.txt",
-		"object_key":     "worker-tenancy/" + revisionB2.String() + ".txt",
-		"content_hash":   scripts.HashContent("other"),
-		"content_length": 5,
-		"source_type":    "txt",
-		"status":         "uploaded",
-	}).Error; err != nil {
-		t.Fatal(err)
-	}
+	seedSourceRevision(t, orm, workspaceB, projectB, revisionB2, "other")
 	if err := orm.Table("operations").Create(map[string]any{
 		"id":         operationB,
 		"project_id": projectB,
@@ -88,9 +78,7 @@ func TestProcessAnalysisRejectsCrossWorkspaceMessageBeforeStateChange(t *testing
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if result := orm.Table("nar_source_revisions").Where("id = ?", revisionB2).Delete(&struct{ ID uuid.UUID }{}); result.Error != nil {
-			t.Logf("cleanup second revision: %v", result.Error)
-		}
+		cleanupSourceRevision(t, orm, revisionB2)
 		cleanupAnalysisTenant(t, orm, workspaceB, projectB, revisionB)
 		cleanupAnalysisTenant(t, orm, workspaceA, projectA, uuid.Nil)
 	})
@@ -174,15 +162,28 @@ func integrationDatabase(t *testing.T) (*gorm.DB, func()) {
 func seedAnalysisTenant(t *testing.T, orm *gorm.DB, workspaceID, projectID, revisionID uuid.UUID) {
 	t.Helper()
 	seedWorkspaceProject(t, orm, workspaceID, projectID)
+	seedSourceRevision(t, orm, workspaceID, projectID, revisionID, "source")
+}
+
+func seedSourceRevision(t *testing.T, orm *gorm.DB, workspaceID, projectID, revisionID uuid.UUID, content string) {
+	t.Helper()
+	artifactID := uuid.New()
+	contentHash := scripts.HashContent(content)
+	if err := orm.Table("media_artifacts").Create(map[string]any{
+		"id": artifactID, "workspace_id": workspaceID, "project_id": projectID, "content_hash": contentHash,
+		"size_bytes": len(content), "media_type": "text/plain", "purpose": "source", "retention_class": "standard", "status": "ready",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("media_artifact_locations").Create(map[string]any{
+		"id": uuid.New(), "artifact_id": artifactID, "storage_profile": "test", "bucket": "test", "object_key": uuid.NewString(),
+		"object_version_id": uuid.NewString(), "size_bytes": len(content), "content_hash": contentHash, "status": "active",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := orm.Table("nar_source_revisions").Create(map[string]any{
-		"id":             revisionID,
-		"project_id":     projectID,
-		"name":           "worker-tenancy.txt",
-		"object_key":     "worker-tenancy/" + revisionID.String() + ".txt",
-		"content_hash":   scripts.HashContent("source"),
-		"content_length": 6,
-		"source_type":    "txt",
-		"status":         "uploaded",
+		"id": revisionID, "project_id": projectID, "artifact_id": artifactID, "name": "worker-tenancy.txt",
+		"source_type": "txt", "status": "uploaded",
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -209,8 +210,27 @@ func cleanupAnalysisTenant(t *testing.T, orm *gorm.DB, workspaceID, projectID, r
 	deleteBy("outbox_events", "operation_id IN (?)", orm.Table("operations").Select("id").Where("project_id = ?", projectID))
 	deleteBy("operations", "project_id = ?", projectID)
 	if revisionID != uuid.Nil {
-		deleteBy("nar_source_revisions", "id = ?", revisionID)
+		cleanupSourceRevision(t, orm, revisionID)
 	}
 	deleteBy("projects", "id = ?", projectID)
 	deleteBy("workspaces", "id = ?", workspaceID)
+}
+
+func cleanupSourceRevision(t *testing.T, orm *gorm.DB, revisionID uuid.UUID) {
+	t.Helper()
+	var source struct{ ArtifactID uuid.UUID }
+	if err := orm.Table("nar_source_revisions").Select("artifact_id").Where("id = ?", revisionID).Take(&source).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Logf("load source artifact for cleanup: %v", err)
+		}
+		return
+	}
+	deleteRecord := func(table, condition string, args ...any) {
+		if result := orm.Table(table).Where(condition, args...).Delete(&struct{ ID uuid.UUID }{}); result.Error != nil {
+			t.Logf("cleanup %s: %v", table, result.Error)
+		}
+	}
+	deleteRecord("nar_source_revisions", "id = ?", revisionID)
+	deleteRecord("media_artifact_locations", "artifact_id = ?", source.ArtifactID)
+	deleteRecord("media_artifacts", "id = ?", source.ArtifactID)
 }
