@@ -131,6 +131,42 @@ type Selection struct {
 	Status           string    `json:"status"`
 }
 
+type WorkspaceEnvelope struct {
+	Data Workspace `json:"data"`
+}
+
+type ProjectEnvelope struct {
+	Data Project `json:"data"`
+}
+
+type ScriptRevisionEnvelope struct {
+	Data ScriptRevision `json:"data"`
+}
+
+type OperationEnvelope struct {
+	Data Operation `json:"data"`
+}
+
+type AnalysisEnvelope struct {
+	Data Analysis `json:"data"`
+}
+
+type ShotList struct {
+	Items []Shot `json:"items"`
+}
+
+type ShotListEnvelope struct {
+	Data ShotList `json:"data"`
+}
+
+type CandidateEnvelope struct {
+	Data Candidate `json:"data"`
+}
+
+type SelectionEnvelope struct {
+	Data Selection `json:"data"`
+}
+
 func HashContent(content string) string {
 	return toolkit.SHA256String(content)
 }

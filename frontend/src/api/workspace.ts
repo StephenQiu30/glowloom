@@ -2,12 +2,12 @@
 /* eslint-disable */
 import request, { type RequestOptions } from "@/lib/request";
 
-/** 此处后端没有提供注释 POST /api/agent-runs */
-export async function startAgentRun(
-  body: API.StartAgentRunRequest,
+/** 创建 Workspace POST /api/workspaces */
+export async function workspaceCreate(
+  body: API.createWorkspaceRequest,
   options?: RequestOptions
 ) {
-  return request<any>("/api/agent-runs", {
+  return request<API.WorkspaceEnvelope>("/api/workspaces", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

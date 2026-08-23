@@ -36,14 +36,12 @@
                     },
                     {
                         "type": "integer",
-                        "default": 1,
                         "description": "页码",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "default": 20,
                         "description": "每页数量",
                         "name": "page_size",
                         "in": "query"
@@ -471,8 +469,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.SelectionEnvelope"
                         }
                     }
                 }
@@ -687,8 +684,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.OperationEnvelope"
                         }
                     },
                     "404": {
@@ -728,8 +724,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.AnalysisEnvelope"
                         }
                     },
                     "404": {
@@ -776,8 +771,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.ShotListEnvelope"
                         }
                     }
                 }
@@ -828,8 +822,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.ShotListEnvelope"
                         }
                     },
                     "422": {
@@ -881,8 +874,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.ScriptRevisionEnvelope"
                         }
                     },
                     "422": {
@@ -922,8 +914,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.AnalysisEnvelope"
                         }
                     },
                     "404": {
@@ -963,8 +954,7 @@
                     "202": {
                         "description": "Accepted",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.OperationEnvelope"
                         }
                     },
                     "404": {
@@ -1004,8 +994,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.AnalysisEnvelope"
                         }
                     },
                     "422": {
@@ -1057,8 +1046,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.CandidateEnvelope"
                         }
                     }
                 }
@@ -1124,8 +1112,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.WorkspaceEnvelope"
                         }
                     },
                     "422": {
@@ -1177,8 +1164,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/scripts.ProjectEnvelope"
                         }
                     },
                     "422": {
@@ -1588,6 +1574,386 @@
                 },
                 "status": {
                     "type": "string"
+                }
+            }
+        },
+        "scripts.Analysis": {
+            "type": "object",
+            "properties": {
+                "characters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.Asset"
+                    }
+                },
+                "costumes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.Asset"
+                    }
+                },
+                "episodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.Episode"
+                    }
+                },
+                "locations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.Asset"
+                    }
+                },
+                "props": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.Asset"
+                    }
+                },
+                "source_hash": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.AnalysisEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/scripts.Analysis"
+                }
+            }
+        },
+        "scripts.Anchor": {
+            "type": "object",
+            "properties": {
+                "end_offset": {
+                    "type": "integer"
+                },
+                "line": {
+                    "type": "integer"
+                },
+                "start_offset": {
+                    "type": "integer"
+                }
+            }
+        },
+        "scripts.Asset": {
+            "type": "object",
+            "properties": {
+                "episode_numbers": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "evidence": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.Anchor"
+                    }
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.Candidate": {
+            "type": "object",
+            "properties": {
+                "artifact_id": {
+                    "type": "string"
+                },
+                "content_hash": {
+                    "type": "string"
+                },
+                "fixture": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "object_key": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "target_id": {
+                    "type": "string"
+                },
+                "target_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.CandidateEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/scripts.Candidate"
+                }
+            }
+        },
+        "scripts.Episode": {
+            "type": "object",
+            "properties": {
+                "anchor": {
+                    "$ref": "#/definitions/scripts.Anchor"
+                },
+                "content_unit_id": {
+                    "type": "string"
+                },
+                "number": {
+                    "type": "integer"
+                },
+                "scenes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.Scene"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.NarrativeUnit": {
+            "type": "object",
+            "properties": {
+                "anchor": {
+                    "$ref": "#/definitions/scripts.Anchor"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "speaker": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.Operation": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "error_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.OperationEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/scripts.Operation"
+                }
+            }
+        },
+        "scripts.Project": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.ProjectEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/scripts.Project"
+                }
+            }
+        },
+        "scripts.Scene": {
+            "type": "object",
+            "properties": {
+                "anchor": {
+                    "$ref": "#/definitions/scripts.Anchor"
+                },
+                "heading": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "narratives": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.NarrativeUnit"
+                    }
+                }
+            }
+        },
+        "scripts.ScriptRevision": {
+            "type": "object",
+            "properties": {
+                "content_hash": {
+                    "type": "string"
+                },
+                "content_length": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.ScriptRevisionEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/scripts.ScriptRevision"
+                }
+            }
+        },
+        "scripts.Selection": {
+            "type": "object",
+            "properties": {
+                "candidate_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "selection_purpose": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "target_id": {
+                    "type": "string"
+                },
+                "target_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.SelectionEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/scripts.Selection"
+                }
+            }
+        },
+        "scripts.Shot": {
+            "type": "object",
+            "properties": {
+                "content_unit_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "ordinal": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "shot_key": {
+                    "type": "string"
+                },
+                "source_beat_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.ShotList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.Shot"
+                    }
+                }
+            }
+        },
+        "scripts.ShotListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/scripts.ShotList"
+                }
+            }
+        },
+        "scripts.Workspace": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.WorkspaceEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/scripts.Workspace"
                 }
             }
         },

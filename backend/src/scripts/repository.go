@@ -84,7 +84,7 @@ func (r *ScriptRepository) CreateScriptRevision(ctx context.Context, projectID u
 	if r.orm == nil {
 		return ScriptRevision{}, fmt.Errorf("script repository ORM is not configured")
 	}
-	record := scriptRevisionRecord{ID: revisionID, ProjectID: projectID, Name: name, ObjectKey: objectKey, ContentHash: hash, ContentLength: len([]byte(content)), Status: "uploaded"}
+	record := sourceRevisionRecord{ID: revisionID, ProjectID: projectID, Name: name, ObjectKey: objectKey, ContentHash: hash, ContentLength: len([]byte(content)), SourceType: "txt", Status: "uploaded"}
 	if err := r.orm.WithContext(ctx).Create(&record).Error; err != nil {
 		return ScriptRevision{}, fmt.Errorf("create script revision: %w", err)
 	}
@@ -102,7 +102,7 @@ func (r *ScriptRepository) QueueAnalysis(ctx context.Context, revisionID uuid.UU
 	}
 	var result Operation
 	err := r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var revision scriptRevisionRecord
+		var revision sourceRevisionRecord
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&revision, "id = ?", revisionID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return httpapi.NotFound("剧本版本")
@@ -184,21 +184,23 @@ type OutboxEvent struct {
 // The following records are persistence mappings only. They intentionally stay
 // private to ScriptRepository; module services continue to exchange plain
 // scripts.Model values and never see GORM or database column names.
-type scriptRevisionRecord struct {
-	ID            uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
-	ProjectID     uuid.UUID `gorm:"column:project_id;type:uuid"`
+type sourceRevisionRecord struct {
+	ID            uuid.UUID  `gorm:"column:id;type:uuid;primaryKey"`
+	ProjectID     uuid.UUID  `gorm:"column:project_id;type:uuid"`
+	ContentUnitID *uuid.UUID `gorm:"column:content_unit_id;type:uuid"`
 	Name          string
 	ObjectKey     string `gorm:"column:object_key"`
 	ContentHash   string `gorm:"column:content_hash"`
-	ContentLength int
+	ContentLength int    `gorm:"column:content_length"`
+	SourceType    string `gorm:"column:source_type"`
 	Status        string
 	CreatedAt     time.Time `gorm:"column:created_at"`
 }
 
-func (scriptRevisionRecord) TableName() string { return "script_revisions" }
+func (sourceRevisionRecord) TableName() string { return "nar_source_revisions" }
 
-type scriptAnalysisDraftRecord struct {
-	ScriptRevisionID uuid.UUID      `gorm:"column:script_revision_id;type:uuid;primaryKey"`
+type analysisDraftRecord struct {
+	SourceRevisionID uuid.UUID      `gorm:"column:source_revision_id;type:uuid;primaryKey"`
 	SourceHash       string         `gorm:"column:source_hash"`
 	Analysis         datatypes.JSON `gorm:"column:analysis;type:jsonb"`
 	Status           string
@@ -206,20 +208,7 @@ type scriptAnalysisDraftRecord struct {
 	ApprovedAt       *time.Time `gorm:"column:approved_at"`
 }
 
-func (scriptAnalysisDraftRecord) TableName() string { return "script_analysis_drafts" }
-
-type contentUnitRecord struct {
-	ID               uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
-	ProjectID        uuid.UUID `gorm:"column:project_id;type:uuid"`
-	ScriptRevisionID uuid.UUID `gorm:"column:script_revision_id;type:uuid"`
-	EpisodeNumber    int       `gorm:"column:episode_number"`
-	Title            string
-	StartOffset      int       `gorm:"column:start_offset"`
-	EndOffset        int       `gorm:"column:end_offset"`
-	CreatedAt        time.Time `gorm:"column:created_at"`
-}
-
-func (contentUnitRecord) TableName() string { return "content_units" }
+func (analysisDraftRecord) TableName() string { return "nar_analysis_drafts" }
 
 type projectContentUnitRecord struct {
 	ID        uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
@@ -232,38 +221,6 @@ type projectContentUnitRecord struct {
 }
 
 func (projectContentUnitRecord) TableName() string { return "prj_content_units" }
-
-type narrativeUnitRecord struct {
-	ID            uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
-	ContentUnitID uuid.UUID `gorm:"column:content_unit_id;type:uuid"`
-	Kind          string
-	Text          string
-	StartOffset   int `gorm:"column:start_offset"`
-	EndOffset     int `gorm:"column:end_offset"`
-}
-
-func (narrativeUnitRecord) TableName() string { return "narrative_units" }
-
-type entityRecord struct {
-	ID            uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
-	ProjectID     uuid.UUID `gorm:"column:project_id;type:uuid"`
-	Kind          string
-	CanonicalName string `gorm:"column:canonical_name"`
-	Status        string
-}
-
-func (entityRecord) TableName() string { return "entities" }
-
-type productionRequirementRecord struct {
-	ID          uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
-	ProjectID   uuid.UUID `gorm:"column:project_id;type:uuid"`
-	EntityID    uuid.UUID `gorm:"column:entity_id;type:uuid"`
-	Kind        string
-	Description string
-	Status      string
-}
-
-func (productionRequirementRecord) TableName() string { return "production_requirements" }
 
 type operationRecord struct {
 	ID           uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
@@ -394,17 +351,6 @@ type inboxRecord struct {
 }
 
 func (inboxRecord) TableName() string { return "inbox_messages" }
-
-type canonicalSourceRevisionRecord struct {
-	ID            uuid.UUID  `gorm:"column:id;type:uuid;primaryKey"`
-	ProjectID     uuid.UUID  `gorm:"column:project_id;type:uuid"`
-	ContentUnitID *uuid.UUID `gorm:"column:content_unit_id;type:uuid"`
-	ObjectKey     string     `gorm:"column:object_key"`
-	ContentHash   string     `gorm:"column:content_hash"`
-	SourceType    string     `gorm:"column:source_type"`
-}
-
-func (canonicalSourceRevisionRecord) TableName() string { return "nar_source_revisions" }
 
 type importRunRecord struct {
 	ID                 uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
@@ -595,7 +541,7 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 	if err := r.setOperationRunning(ctx, request.OperationID); err != nil {
 		return err
 	}
-	var revision scriptRevisionRecord
+	var revision sourceRevisionRecord
 	if err := r.orm.WithContext(ctx).Where("id = ?", request.RevisionID).First(&revision).Error; err != nil {
 		return r.failOperation(ctx, request.OperationID, request.RevisionID, "revision_not_found", err)
 	}
@@ -615,9 +561,12 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 		return r.failOperation(ctx, request.OperationID, request.RevisionID, "analysis_encode_failed", err)
 	}
 	return r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		draft := scriptAnalysisDraftRecord{ScriptRevisionID: request.RevisionID, SourceHash: revision.ContentHash, Analysis: datatypes.JSON(encoded), Status: "draft", CreatedAt: time.Now().UTC()}
-		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "script_revision_id"}}, DoUpdates: clause.AssignmentColumns([]string{"source_hash", "analysis", "status", "created_at", "approved_at"})}).Create(&draft).Error; err != nil {
+		draft := analysisDraftRecord{SourceRevisionID: request.RevisionID, SourceHash: revision.ContentHash, Analysis: datatypes.JSON(encoded), Status: "draft", CreatedAt: time.Now().UTC()}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "source_revision_id"}}, DoUpdates: clause.AssignmentColumns([]string{"source_hash", "analysis", "status", "created_at", "approved_at"})}).Create(&draft).Error; err != nil {
 			return err
+		}
+		if err := tx.Model(&revision).Where("id = ?", request.RevisionID).Update("status", "waiting_user").Error; err != nil {
+			return fmt.Errorf("mark source revision waiting for approval: %w", err)
 		}
 		completedAt := time.Now().UTC()
 		return tx.Model(&operationRecord{}).Where("id = ?", request.OperationID).Updates(map[string]any{"status": "succeeded", "progress": 100, "updated_at": completedAt, "completed_at": completedAt}).Error
@@ -630,15 +579,15 @@ func (r *ScriptRepository) ApproveAnalysis(ctx context.Context, revisionID uuid.
 	}
 	var analysis Analysis
 	err := r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var revision scriptRevisionRecord
+		var revision sourceRevisionRecord
 		if err := tx.Where("id = ?", revisionID).First(&revision).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return httpapi.NotFound("剧本版本")
 			}
 			return fmt.Errorf("load script revision: %w", err)
 		}
-		var draft scriptAnalysisDraftRecord
-		if err := tx.Where("script_revision_id = ?", revisionID).First(&draft).Error; err != nil {
+		var draft analysisDraftRecord
+		if err := tx.Where("source_revision_id = ?", revisionID).First(&draft).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return httpapi.NotFound("分析草稿")
 			}
@@ -651,14 +600,10 @@ func (r *ScriptRepository) ApproveAnalysis(ctx context.Context, revisionID uuid.
 			return nil
 		}
 		for episodeIndex, episode := range analysis.Episodes {
-			contentUnitProjection := contentUnitRecord{ID: uuid.New(), ProjectID: revision.ProjectID, ScriptRevisionID: revisionID, EpisodeNumber: episode.Number, Title: episode.Title, StartOffset: episode.Anchor.StartOffset, EndOffset: max(episode.Anchor.EndOffset, episode.Anchor.StartOffset+1)}
-			if err := tx.Create(&contentUnitProjection).Error; err != nil {
-				return fmt.Errorf("materialize episode %d: %w", episode.Number, err)
-			}
 			var contentUnit projectContentUnitRecord
 			contentErr := tx.Where("project_id = ? AND ordinal = ?", revision.ProjectID, episode.Number).Order("created_at DESC").First(&contentUnit).Error
 			if errors.Is(contentErr, gorm.ErrRecordNotFound) {
-				contentUnit = projectContentUnitRecord{ID: contentUnitProjection.ID, ProjectID: revision.ProjectID, Kind: "episode", Title: episode.Title, Status: "active", Ordinal: episode.Number}
+				contentUnit = projectContentUnitRecord{ID: uuid.New(), ProjectID: revision.ProjectID, Kind: "episode", Title: episode.Title, Status: "active", Ordinal: episode.Number}
 				if err := tx.Create(&contentUnit).Error; err != nil {
 					return fmt.Errorf("materialize project content unit %d: %w", episode.Number, err)
 				}
@@ -668,37 +613,8 @@ func (r *ScriptRepository) ApproveAnalysis(ctx context.Context, revisionID uuid.
 				return fmt.Errorf("update project content unit %d: %w", episode.Number, err)
 			}
 			analysis.Episodes[episodeIndex].ContentUnitID = contentUnit.ID
-			for _, scene := range episode.Scenes {
-				if err := tx.Create(&narrativeUnitRecord{ID: uuid.New(), ContentUnitID: contentUnitProjection.ID, Kind: "scene", Text: scene.Heading, StartOffset: scene.Anchor.StartOffset, EndOffset: max(scene.Anchor.EndOffset, scene.Anchor.StartOffset+1)}).Error; err != nil {
-					return fmt.Errorf("materialize scene: %w", err)
-				}
-				for _, unit := range scene.Narratives {
-					if err := tx.Create(&narrativeUnitRecord{ID: uuid.New(), ContentUnitID: contentUnitProjection.ID, Kind: unit.Kind, Text: unit.Text, StartOffset: unit.Anchor.StartOffset, EndOffset: max(unit.Anchor.EndOffset, unit.Anchor.StartOffset+1)}).Error; err != nil {
-						return fmt.Errorf("materialize narrative: %w", err)
-					}
-				}
-			}
 		}
-		for _, asset := range allAnalysisAssets(analysis) {
-			var entity entityRecord
-			entityErr := tx.Where("project_id = ? AND kind = ? AND canonical_name = ?", revision.ProjectID, asset.Kind, asset.Name).First(&entity).Error
-			if errors.Is(entityErr, gorm.ErrRecordNotFound) {
-				entity = entityRecord{ID: uuid.New(), ProjectID: revision.ProjectID, Kind: asset.Kind, CanonicalName: asset.Name, Status: "approved"}
-				if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&entity).Error; err != nil {
-					return fmt.Errorf("materialize asset %s: %w", asset.Name, err)
-				}
-				if err := tx.Where("project_id = ? AND kind = ? AND canonical_name = ?", revision.ProjectID, asset.Kind, asset.Name).First(&entity).Error; err != nil {
-					return fmt.Errorf("read materialized asset %s: %w", asset.Name, err)
-				}
-			} else if entityErr != nil {
-				return fmt.Errorf("read asset %s: %w", asset.Name, entityErr)
-			}
-			requirement := productionRequirementRecord{ID: uuid.New(), ProjectID: revision.ProjectID, EntityID: entity.ID, Kind: asset.Kind, Description: fmt.Sprintf("%s 的生产准备需求", asset.Name), Status: "unassessed"}
-			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&requirement).Error; err != nil {
-				return fmt.Errorf("materialize requirement %s: %w", asset.Name, err)
-			}
-		}
-		if err := materializeCanonicalAnalysis(ctx, tx, revision.ProjectID, revisionID, analysis); err != nil {
+		if err := materializeCanonicalAnalysis(ctx, tx, revision.ProjectID, analysis); err != nil {
 			return err
 		}
 		encodedApproved, err := json.Marshal(analysis)
@@ -706,7 +622,7 @@ func (r *ScriptRepository) ApproveAnalysis(ctx context.Context, revisionID uuid.
 			return fmt.Errorf("encode approved analysis: %w", err)
 		}
 		approvedAt := time.Now().UTC()
-		if err := tx.Model(&draft).Where("script_revision_id = ?", revisionID).Updates(map[string]any{"analysis": datatypes.JSON(encodedApproved), "status": "approved", "approved_at": approvedAt}).Error; err != nil {
+		if err := tx.Model(&draft).Where("source_revision_id = ?", revisionID).Updates(map[string]any{"analysis": datatypes.JSON(encodedApproved), "status": "approved", "approved_at": approvedAt}).Error; err != nil {
 			return fmt.Errorf("persist approved analysis: %w", err)
 		}
 		if err := tx.Model(&revision).Where("id = ?", revisionID).Update("status", "approved").Error; err != nil {
@@ -724,7 +640,7 @@ func (r *ScriptRepository) GetProjectAnalysis(ctx context.Context, projectID uui
 	if r.orm == nil {
 		return Analysis{}, fmt.Errorf("script repository ORM is not configured")
 	}
-	var revisions []scriptRevisionRecord
+	var revisions []sourceRevisionRecord
 	if err := r.orm.WithContext(ctx).Where("project_id = ?", projectID).Find(&revisions).Error; err != nil {
 		return Analysis{}, err
 	}
@@ -735,8 +651,8 @@ func (r *ScriptRepository) GetProjectAnalysis(ctx context.Context, projectID uui
 	for _, revision := range revisions {
 		revisionIDs = append(revisionIDs, revision.ID)
 	}
-	var draft scriptAnalysisDraftRecord
-	if err := r.orm.WithContext(ctx).Where("script_revision_id IN ? AND status = ?", revisionIDs, "approved").Order("approved_at DESC").First(&draft).Error; err != nil {
+	var draft analysisDraftRecord
+	if err := r.orm.WithContext(ctx).Where("source_revision_id IN ? AND status = ?", revisionIDs, "approved").Order("approved_at DESC").First(&draft).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return Analysis{}, httpapi.NotFound("已批准分析")
 		}
@@ -753,8 +669,8 @@ func (r *ScriptRepository) GetAnalysisDraft(ctx context.Context, revisionID uuid
 	if r.orm == nil {
 		return Analysis{}, fmt.Errorf("script repository ORM is not configured")
 	}
-	var draft scriptAnalysisDraftRecord
-	if err := r.orm.WithContext(ctx).Where("script_revision_id = ? AND status = ?", revisionID, "draft").First(&draft).Error; err != nil {
+	var draft analysisDraftRecord
+	if err := r.orm.WithContext(ctx).Where("source_revision_id = ? AND status = ?", revisionID, "draft").First(&draft).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return Analysis{}, httpapi.NotFound("分析草稿")
 		}
@@ -945,7 +861,7 @@ func (r *ScriptRepository) failOperation(ctx context.Context, operationID, revis
 		return fmt.Errorf("script repository ORM is not configured")
 	}
 	return r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&scriptRevisionRecord{}).Where("id = ?", revisionID).Update("status", "failed").Error; err != nil {
+		if err := tx.Model(&sourceRevisionRecord{}).Where("id = ?", revisionID).Update("status", "failed").Error; err != nil {
 			return err
 		}
 		now := time.Now().UTC()
@@ -963,21 +879,13 @@ func allAnalysisAssets(analysis Analysis) []Asset {
 }
 
 // materializeCanonicalAnalysis writes the current M02/M03/M04 facts in the
-// same transaction as human approval. The unprefixed tables are explicit
-// analysis projections for the pilot UI; the prefixed tables are the
-// authoritative module-owned facts consumed by later slices.
-func materializeCanonicalAnalysis(ctx context.Context, tx *gorm.DB, projectID, revisionID uuid.UUID, analysis Analysis) error {
+// same transaction as human approval. Only module-owned canonical tables are
+// written; the UI reads the approved M03 draft and never owns a second fact set.
+func materializeCanonicalAnalysis(ctx context.Context, tx *gorm.DB, projectID uuid.UUID, analysis Analysis) error {
 	tx = tx.WithContext(ctx)
 	var operation operationRecord
 	if err := tx.Where("project_id = ? AND type = ?", projectID, "script_analysis").Order("created_at DESC").First(&operation).Error; err != nil {
 		return fmt.Errorf("find analysis operation for canonical materialization: %w", err)
-	}
-	var source scriptRevisionRecord
-	if err := tx.Where("id = ?", revisionID).First(&source).Error; err != nil {
-		return fmt.Errorf("read source revision for canonical materialization: %w", err)
-	}
-	if err := tx.Create(&canonicalSourceRevisionRecord{ID: uuid.New(), ProjectID: projectID, ObjectKey: source.ObjectKey, ContentHash: source.ContentHash, SourceType: "txt"}).Error; err != nil {
-		return fmt.Errorf("materialize source revision: %w", err)
 	}
 	parseReport, err := json.Marshal(map[string]any{"source_hash": analysis.SourceHash, "episodes": len(analysis.Episodes), "status": "complete"})
 	if err != nil {

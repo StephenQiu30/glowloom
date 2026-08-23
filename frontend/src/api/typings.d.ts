@@ -1,360 +1,416 @@
 declare namespace API {
-  type AgentRun = {
-    id: string;
-    project_id: string;
-    operation_id: string;
-    skill: string;
-    stage: string;
-    stage_generation: number;
-    request_hash: string;
-    status: string;
-    input_snapshot_hash: string;
-    result_hash: string | null;
-    created_at: string;
+  type Account = {
+    display_name: string | null;
+    email: string | null;
+    id: string | null;
   };
 
-  type AgentRunData = {
-    run: AgentRun;
-    items: ProposalItem[];
+  type AccountStatus = "active" | "suspended" | "removed";
+
+  type adminListMembersParams = {
+    /** 按邮箱或显示名搜索 */
+    search: string | null;
+    /** 页码 */
+    page: number | null;
+    /** 每页数量 */
+    page_size: number | null;
   };
 
-  type AgentRunResponse = {
-    data: AgentRunData;
+  type adminUpdateMemberParams = {
+    /** Membership UUID */
+    membership_id: string;
+  };
+
+  type agentRunCancelParams = {
+    /** AgentRun UUID */
+    agentRunID: string;
+  };
+
+  type agentRunGetParams = {
+    /** AgentRun UUID */
+    agentRunID: string;
   };
 
   type Analysis = {
-    source_hash: string;
-    episodes: Episode[];
-    characters: Asset[];
-    locations: Asset[];
-    props: Asset[];
-    costumes: Asset[];
+    characters: Asset[] | null;
+    costumes: Asset[] | null;
+    episodes: Episode[] | null;
+    locations: Asset[] | null;
+    props: Asset[] | null;
+    source_hash: string | null;
   };
 
-  type AnalysisResponse = {
-    data: Analysis;
+  type AnalysisEnvelope = {
+    data: Analysis | null;
   };
 
   type Anchor = {
-    line: number;
-    start_offset: number;
-    end_offset: number;
+    end_offset: number | null;
+    line: number | null;
+    start_offset: number | null;
   };
 
-  type ApiError = {
-    code: string;
-    message: string;
-    next_action: string;
-    request_id: string | null;
+  type APIError = {
+    code: ErrorCode | null;
     details: any | null;
-    recovery_actions: { code: string; label: string }[] | null;
+    message: string | null;
+    next_action: string | null;
+    recovery_actions: RecoveryAction[] | null;
+    request_id: string | null;
+    retry_after_seconds: number | null;
   };
 
-  type approveGenerationPlanParams = {
-    plan_id: string;
-  };
-
-  type ApproveGenerationPlanRequest = {
-    execution_disposition: "start_now" | "hold";
-    selected_item_ids: string[];
-  };
-
-  type approveScriptAnalysisParams = {
-    revision_id: string;
+  type approveRequest = {
+    execution_disposition: string | null;
+    selected_item_ids: string[] | null;
   };
 
   type Asset = {
-    kind: "character" | "location" | "prop" | "costume";
-    name: string;
-    episode_numbers: number[];
-    evidence: Anchor[];
+    episode_numbers: number[] | null;
+    evidence: Anchor[] | null;
+    kind: string | null;
+    name: string | null;
   };
 
-  type cancelAgentRunParams = {
-    agent_run_id: string;
+  type AuthResponse = {
+    access_token: string | null;
+    expires_at: string | null;
+    role: RoleCode | null;
+    token_type: string | null;
+    user: Account | null;
+    workspace: Workspace | null;
+  };
+
+  type AuthResponseEnvelope = {
+    data: AuthResponse | null;
   };
 
   type Candidate = {
-    id: string;
-    project_id: string;
-    target_type: string;
-    target_id: string;
-    artifact_id: string;
-    status: string;
-    fixture: boolean;
-    object_key: string | null;
+    artifact_id: string | null;
     content_hash: string | null;
+    fixture: boolean | null;
+    id: string | null;
+    object_key: string | null;
+    project_id: string | null;
+    status: string | null;
+    target_id: string | null;
+    target_type: string | null;
   };
 
-  type CandidateResponse = {
-    data: Candidate;
+  type candidateCreateFixtureParams = {
+    /** Shot UUID */
+    shotID: string;
   };
 
-  type createFixtureCandidateParams = {
-    shot_id: string;
+  type CandidateEnvelope = {
+    data: Candidate | null;
   };
 
-  type CreateGenerationPlanRequest = {
-    project_id: string;
-    target_type: string;
-    target_id: string;
-    prompt: string;
-    capability_key: string;
+  type candidateSelectParams = {
+    /** Candidate UUID */
+    candidateID: string;
+  };
+
+  type createFixtureCandidateRequest = {
+    purpose: string | null;
+  };
+
+  type createProjectRequest = {
+    name: string | null;
+  };
+
+  type createRequest = {
+    capability_key: string | null;
+    count: number | null;
+    project_id: string | null;
+    prompt: string | null;
+    target_id: string | null;
+    target_type: string | null;
+  };
+
+  type createScriptRevisionRequest = {
+    content: string | null;
+    name: string | null;
+  };
+
+  type createShotsRequest = {
     count: number | null;
   };
 
-  type createProjectParams = {
-    workspace_id: string;
+  type createWorkspaceRequest = {
+    name: string | null;
   };
 
-  type CreateProjectRequest = {
-    name: string;
+  type CurrentIdentity = {
+    membership_id: string | null;
+    role: RoleCode | null;
+    session_id: string | null;
+    user_id: string | null;
+    workspace_id: string | null;
   };
 
-  type createScriptRevisionParams = {
-    project_id: string;
-  };
-
-  type CreateScriptRevisionRequest = {
-    name: string;
-    content: string;
-  };
-
-  type CreateSessionRequest = {
-    identity_subject: string;
-    workspace_id: string;
-  };
-
-  type createShotsParams = {
-    project_id: string;
-    content_unit_id: string;
-  };
-
-  type CreateShotsRequest = {
-    count: number;
-  };
-
-  type CreateWorkspaceRequest = {
-    name: string;
+  type CurrentIdentityEnvelope = {
+    data: CurrentIdentity | null;
   };
 
   type Episode = {
-    number: number;
-    title: string;
+    anchor: Anchor | null;
     content_unit_id: string | null;
-    anchor: Anchor;
-    scenes: Scene[];
+    number: number | null;
+    scenes: Scene[] | null;
+    title: string | null;
   };
 
-  type ErrorResponse = {
-    error: ApiError;
+  type ErrorCode =
+    | "invalid_json"
+    | "invalid_id"
+    | "unauthorized"
+    | "forbidden"
+    | "not_found"
+    | "conflict"
+    | "validation_failed"
+    | "rate_limited"
+    | "dependency_unavailable"
+    | "schema_unavailable"
+    | "internal_error"
+    | "request_failed"
+    | "generation_plan_invalid"
+    | "session_invalid"
+    | "workspace_invalid"
+    | "project_invalid"
+    | "script_invalid";
+
+  type ErrorEnvelope = {
+    error: APIError | null;
   };
 
-  type FixtureCandidateRequest = {
-    purpose: string;
+  type generationPlanApproveParams = {
+    /** Generation Plan UUID */
+    planID: string;
   };
 
-  type GenerationPlan = {
-    id: string;
-    project_id: string;
-    target_type: string;
-    target_id: string;
-    status: string;
-    execution_disposition: string | null;
-    input_snapshot_hash: string;
-    prompt_hash: string;
+  type generationPlanGetParams = {
+    /** Generation Plan UUID */
+    planID: string;
   };
 
-  type GenerationPlanData = {
-    plan: GenerationPlan;
-    items: GenerationPlanItem[];
+  type generationPlanPreflightParams = {
+    /** Generation Plan UUID */
+    planID: string;
   };
 
-  type GenerationPlanItem = {
-    id: string;
-    plan_id: string;
-    ordinal: number;
-    capability_key: string;
-    prompt: string;
-    status: string;
+  type loginRequest = {
+    email: string | null;
+    password: string | null;
   };
 
-  type GenerationPlanResponse = {
-    data: GenerationPlanData;
-  };
-
-  type getAgentRunParams = {
-    agent_run_id: string;
-  };
-
-  type getAnalysisDraftParams = {
-    revision_id: string;
-  };
-
-  type getGenerationPlanParams = {
-    plan_id: string;
-  };
-
-  type getOperationParams = {
-    operation_id: string;
-  };
-
-  type getProjectAnalysisParams = {
-    project_id: string;
-  };
-
-  type listShotsParams = {
-    project_id: string;
-    content_unit_id: string;
-  };
+  type MembershipStatus = "invited" | "active" | "suspended" | "removed";
 
   type NarrativeUnit = {
-    id: string;
-    kind: "scene" | "dialogue" | "action";
-    text: string;
-    anchor: Anchor;
+    anchor: Anchor | null;
+    id: string | null;
+    kind: string | null;
     speaker: string | null;
+    text: string | null;
   };
 
   type Operation = {
-    id: string;
-    project_id: string;
-    type: "script_analysis";
-    status: "queued" | "running" | "succeeded" | "failed";
-    progress: number;
-    error_code: string | null;
     error: string | null;
+    error_code: string | null;
+    id: string | null;
+    progress: number | null;
+    project_id: string | null;
+    status: string | null;
+    type: string | null;
   };
 
-  type OperationResponse = {
-    data: Operation;
+  type OperationEnvelope = {
+    data: Operation | null;
   };
 
-  type preflightGenerationPlanParams = {
-    plan_id: string;
+  type operationGetParams = {
+    /** Operation UUID */
+    operationID: string;
   };
 
   type Project = {
-    id: string;
-    workspace_id: string;
-    name: string;
-    created_at: string;
+    created_at: string | null;
+    id: string | null;
+    name: string | null;
+    workspace_id: string | null;
   };
 
-  type ProjectResponse = {
-    data: Project;
+  type projectAnalysisGetParams = {
+    /** Project UUID */
+    projectID: string;
   };
 
-  type ProposalItem = {
-    id: string;
-    agent_run_id: string;
-    target_module: string;
-    target_command: string;
-    payload: any | null;
-    decision: string;
-    read_set_hash: string;
-    write_set_hash: string;
+  type projectCreateParams = {
+    /** Workspace UUID */
+    workspaceID: string;
   };
 
-  type queueScriptAnalysisParams = {
-    revision_id: string;
+  type ProjectEnvelope = {
+    data: Project | null;
   };
 
-  type Readiness = {
-    status: "ready";
+  type RecoveryAction = {
+    code: string | null;
+    label: string | null;
   };
 
-  type ReadinessResponse = {
-    data: Readiness;
+  type registerRequest = {
+    display_name: string | null;
+    email: string | null;
+    password: string | null;
+    workspace_name: string | null;
   };
+
+  type RoleCode = "admin" | "user" | "ban";
 
   type Scene = {
-    id: string;
-    heading: string;
-    anchor: Anchor;
-    narratives: NarrativeUnit[];
+    anchor: Anchor | null;
+    heading: string | null;
+    id: string | null;
+    narratives: NarrativeUnit[] | null;
+  };
+
+  type scriptAnalysisApproveParams = {
+    /** Script Revision UUID */
+    revisionID: string;
+  };
+
+  type scriptAnalysisDraftParams = {
+    /** Script Revision UUID */
+    revisionID: string;
+  };
+
+  type scriptAnalysisQueueParams = {
+    /** Script Revision UUID */
+    revisionID: string;
   };
 
   type ScriptRevision = {
-    id: string;
-    project_id: string;
-    name: string;
-    content_hash: string;
-    content_length: number;
-    status: "uploaded" | "analyzing" | "approved" | "failed";
-    created_at: string;
+    content_hash: string | null;
+    content_length: number | null;
+    created_at: string | null;
+    id: string | null;
+    name: string | null;
+    project_id: string | null;
+    status: string | null;
   };
 
-  type ScriptRevisionResponse = {
-    data: ScriptRevision;
+  type scriptRevisionCreateParams = {
+    /** Project UUID */
+    projectID: string;
   };
 
-  type selectCandidateParams = {
-    candidate_id: string;
+  type ScriptRevisionEnvelope = {
+    data: ScriptRevision | null;
+  };
+
+  type selectCandidateRequest = {
+    purpose: string | null;
   };
 
   type Selection = {
-    id: string;
-    project_id: string;
-    target_type: string;
-    target_id: string;
-    selection_purpose: string;
-    candidate_id: string;
-    status: string;
+    candidate_id: string | null;
+    id: string | null;
+    project_id: string | null;
+    selection_purpose: string | null;
+    status: string | null;
+    target_id: string | null;
+    target_type: string | null;
   };
 
-  type SelectionRequest = {
-    purpose: string;
-  };
-
-  type SelectionResponse = {
-    data: Selection;
-  };
-
-  type Session = {
-    token: string;
-    user_id: string;
-    workspace_id: string;
-    expires_at: string;
-  };
-
-  type SessionResponse = {
-    data: Session;
+  type SelectionEnvelope = {
+    data: Selection | null;
   };
 
   type Shot = {
-    id: string;
-    project_id: string;
-    content_unit_id: string;
-    shot_key: string;
-    ordinal: number;
-    status: string;
+    content_unit_id: string | null;
+    id: string | null;
+    ordinal: number | null;
+    project_id: string | null;
+    shot_key: string | null;
+    source_beat_id: string | null;
+    status: string | null;
+  };
+
+  type shotCreateParams = {
+    /** Project UUID */
+    projectID: string;
+    /** Content Unit UUID */
+    contentUnitID: string;
   };
 
   type ShotList = {
-    items: Shot[];
+    items: Shot[] | null;
   };
 
-  type ShotListResponse = {
-    data: ShotList;
+  type ShotListEnvelope = {
+    data: ShotList | null;
   };
 
-  type StartAgentRunRequest = {
-    project_id: string;
-    operation_id: string;
-    skill: any;
-    stage: "manifest" | "narrative" | "knowledge";
-    request_hash: string;
-    snapshot_ref: string;
+  type shotListParams = {
+    /** Project UUID */
+    projectID: string;
+    /** Content Unit UUID */
+    contentUnitID: string;
+  };
+
+  type startRequest = {
+    operation_id: string | null;
+    project_id: string | null;
+    request_hash: string | null;
+    skill: string | null;
+    snapshot_ref: string | null;
+    stage: string | null;
+  };
+
+  type updateMemberRequest = {
+    role: string | null;
+    status: string | null;
   };
 
   type Workspace = {
-    id: string;
-    name: string;
-    created_at: string;
+    id: string | null;
+    name: string | null;
   };
 
-  type WorkspaceResponse = {
-    data: Workspace;
+  type Workspace = {
+    created_at: string | null;
+    id: string | null;
+    name: string | null;
+  };
+
+  type WorkspaceEnvelope = {
+    data: Workspace | null;
+  };
+
+  type WorkspaceMember = {
+    account_status: AccountStatus | null;
+    created_at: string | null;
+    display_name: string | null;
+    email: string | null;
+    membership_id: string | null;
+    membership_status: MembershipStatus | null;
+    role: RoleCode | null;
+    user_id: string | null;
+  };
+
+  type WorkspaceMemberEnvelope = {
+    data: WorkspaceMember | null;
+  };
+
+  type WorkspaceMemberPage = {
+    items: WorkspaceMember[] | null;
+    page: number | null;
+    page_size: number | null;
+    total: number | null;
+  };
+
+  type WorkspaceMemberPageEnvelope = {
+    data: WorkspaceMemberPage | null;
   };
 }

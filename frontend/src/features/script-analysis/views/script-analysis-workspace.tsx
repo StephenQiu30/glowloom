@@ -1,15 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { approveScriptAnalysis } from "@/api/approveScriptAnalysis";
-import { createProject } from "@/api/createProject";
-import { createScriptRevision } from "@/api/createScriptRevision";
-import { createSession } from "@/api/createSession";
-import { createWorkspace } from "@/api/createWorkspace";
-import { getAnalysisDraft } from "@/api/getAnalysisDraft";
-import { getOperation } from "@/api/getOperation";
-import { queueScriptAnalysis } from "@/api/queueScriptAnalysis";
+import { authLogin, authLogout, authRefresh, authRegister } from "@/api/auth";
+import { operationGet } from "@/api/operation";
+import { projectCreate } from "@/api/project";
+import {
+  scriptAnalysisApprove,
+  scriptAnalysisDraft,
+  scriptAnalysisQueue,
+  scriptRevisionCreate,
+} from "@/api/script";
+import { ApiClientError, setAccessToken } from "@/lib/request";
 
 const fixtureScript = `第1集 归途
 场景：海边码头
@@ -35,12 +37,33 @@ const fixtureScript = `第1集 归途
 
 type Analysis = API.Analysis;
 type Operation = API.Operation;
+type AuthenticatedWorkspace = { id: string; name: string };
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+let restorePromise: ReturnType<typeof authRefresh> | null = null;
+
+function restoreAuthSession() {
+  if (restorePromise) return restorePromise;
+  const current = authRefresh();
+  restorePromise = current;
+  const clear = () => {
+    if (restorePromise === current) restorePromise = null;
+  };
+  void current.then(clear, clear);
+  return current;
+}
+
 export function ScriptAnalysisWorkspace() {
+  const [authMode, setAuthMode] = useState<"register" | "login">("register");
+  const [restoringSession, setRestoringSession] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [workspace, setWorkspace] = useState<AuthenticatedWorkspace | null>(null);
   const [scriptName, setScriptName] = useState("首轮试点剧本");
   const [content, setContent] = useState(fixtureScript);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -53,13 +76,93 @@ export function ScriptAnalysisWorkspace() {
 
   const assets = useMemo(
     () => analysis ? [
-      ...analysis.characters,
-      ...analysis.locations,
-      ...analysis.props,
-      ...analysis.costumes,
+      ...(analysis.characters ?? []),
+      ...(analysis.locations ?? []),
+      ...(analysis.props ?? []),
+      ...(analysis.costumes ?? []),
     ] : [],
     [analysis],
   );
+
+  useEffect(() => {
+    let active = true;
+    restoreAuthSession()
+      .then((response) => {
+        const identity = response.data;
+        if (!active || !identity?.access_token || !identity.workspace?.id) return;
+        setAccessToken(identity.access_token);
+        setWorkspace({ id: identity.workspace.id, name: identity.workspace.name ?? "当前工作区" });
+      })
+      .catch(() => {
+        if (active) setAccessToken();
+      })
+      .finally(() => {
+        if (active) setRestoringSession(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function resetSession(message: string | null) {
+    setAccessToken();
+    setWorkspace(null);
+    setAuthMode("login");
+    setPassword("");
+    setAnalysis(null);
+    setOperation(null);
+    setRevisionID(null);
+    setProjectID(null);
+    setPhase("idle");
+    setError(message);
+  }
+
+  function reportAuthenticatedFailure(cause: unknown, fallback: string) {
+    if (cause instanceof ApiClientError && cause.status === 401) {
+      resetSession("登录会话已失效，请重新登录。");
+      return;
+    }
+    setError(cause instanceof Error ? cause.message : fallback);
+  }
+
+  async function authenticate() {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = authMode === "register"
+        ? await authRegister({
+          email: email.trim(),
+          password,
+          display_name: displayName.trim(),
+          workspace_name: workspaceName.trim(),
+        })
+        : await authLogin({ email: email.trim(), password });
+      const identity = response.data;
+      if (!identity?.access_token || !identity.workspace?.id) {
+        throw new Error("认证响应缺少访问令牌或工作区，请联系管理员。");
+      }
+      setAccessToken(identity.access_token);
+      setPassword("");
+      setWorkspace({ id: identity.workspace.id, name: identity.workspace.name ?? "当前工作区" });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "认证失败，请检查邮箱和密码。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function logout() {
+    setBusy(true);
+    setError(null);
+    try {
+      await authLogout();
+      resetSession(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "退出失败，请重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submitForAnalysis() {
     setBusy(true);
@@ -67,25 +170,36 @@ export function ScriptAnalysisWorkspace() {
     setAnalysis(null);
     setPhase("idle");
     try {
-      const workspace = await createWorkspace({ name: "首轮试点工作区" });
-      const session = await createSession({ identity_subject: "local-owner", workspace_id: workspace.data.id });
-      window.localStorage.setItem("lanverse.workspace_id", workspace.data.id);
-      window.localStorage.setItem("lanverse.session_token", session.data.token);
-      const project = await createProject({ workspace_id: workspace.data.id }, { name: "剧本事实分析项目" });
-      const revision = await createScriptRevision(
-        { project_id: project.data.id },
+      if (!workspace) {
+        throw new Error("登录会话缺失，请重新登录。");
+      }
+      const project = await projectCreate({ workspaceID: workspace.id }, { name: "剧本事实分析项目" });
+      if (!project.data?.id) {
+        throw new Error("创建项目后未返回项目 ID。");
+      }
+      const revision = await scriptRevisionCreate(
+        { projectID: project.data.id },
         { name: scriptName.trim() || "未命名剧本", content },
       );
+      if (!revision.data?.id) {
+        throw new Error("创建剧本版本后未返回版本 ID。");
+      }
       setProjectID(project.data.id);
       setRevisionID(revision.data.id);
-      const queued = await queueScriptAnalysis({ revision_id: revision.data.id }) as API.OperationResponse;
+      const queued = await scriptAnalysisQueue({ revisionID: revision.data.id });
+      if (!queued.data?.id) {
+        throw new Error("剧本解析任务未返回 Operation ID。");
+      }
       setOperation(queued.data);
       setPhase("queued");
 
       let latest = queued.data;
       for (let attempt = 0; attempt < 80; attempt += 1) {
         await sleep(250);
-        const response = await getOperation({ operation_id: latest.id });
+        const response = await operationGet({ operationID: latest.id });
+        if (!response.data?.id) {
+          throw new Error("Operation 查询返回无效结果。");
+        }
         latest = response.data;
         setOperation(latest);
         if (latest.status === "succeeded" || latest.status === "failed") break;
@@ -93,11 +207,14 @@ export function ScriptAnalysisWorkspace() {
       if (latest.status !== "succeeded") {
         throw new Error(latest.error ?? "剧本解析任务未成功完成");
       }
-      const draft = await getAnalysisDraft({ revision_id: revision.data.id });
+      const draft = await scriptAnalysisDraft({ revisionID: revision.data.id });
+      if (!draft.data) {
+        throw new Error("解析完成但未返回可审阅草稿。");
+      }
       setAnalysis(draft.data);
       setPhase("draft");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "剧本解析失败，请查看任务状态。");
+      reportAuthenticatedFailure(cause, "剧本解析失败，请查看任务状态。");
     } finally {
       setBusy(false);
     }
@@ -108,14 +225,63 @@ export function ScriptAnalysisWorkspace() {
     setBusy(true);
     setError(null);
     try {
-      const response = await approveScriptAnalysis({ revision_id: revisionID });
+      const response = await scriptAnalysisApprove({ revisionID });
+      if (!response.data) {
+        throw new Error("批准完成但未返回正式分析事实。");
+      }
       setAnalysis(response.data);
       setPhase("approved");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "批准失败，请修正当前事实后重试。");
+      reportAuthenticatedFailure(cause, "批准失败，请修正当前事实后重试。");
     } finally {
       setBusy(false);
     }
+  }
+
+  if (restoringSession) {
+    return <main className="page"><div className="shell"><div className="status" role="status">正在恢复登录会话…</div></div></main>;
+  }
+
+  if (!workspace) {
+    return (
+      <main className="page">
+        <div className="shell">
+          <section className="card" aria-labelledby="auth-title">
+            <div className="eyebrow">Lanverse · Identity Gate</div>
+            <h1 id="auth-title">登录后开始剧本事实分析</h1>
+            <p>认证工作区决定后续项目、剧本、任务和媒体的租户边界。</p>
+            <div className="actions" role="group" aria-label="认证方式">
+              <button className={authMode === "register" ? "primary" : "secondary"} type="button" onClick={() => setAuthMode("register")}>注册</button>
+              <button className={authMode === "login" ? "primary" : "secondary"} type="button" onClick={() => setAuthMode("login")}>登录</button>
+            </div>
+            <div className="field">
+              <label htmlFor="auth-email">邮箱</label>
+              <input id="auth-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="auth-password">密码</label>
+              <input id="auth-password" type="password" autoComplete={authMode === "register" ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} />
+            </div>
+            {authMode === "register" && <>
+              <div className="field">
+                <label htmlFor="display-name">显示名称</label>
+                <input id="display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="workspace-name">工作区名称</label>
+                <input id="workspace-name" value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} />
+              </div>
+            </>}
+            <div className="actions">
+              <button className="primary" type="button" onClick={authenticate} disabled={busy || !email.trim() || !password || (authMode === "register" && (!displayName.trim() || !workspaceName.trim()))}>
+                {busy ? "正在认证…" : authMode === "register" ? "注册并进入" : "登录并进入"}
+              </button>
+            </div>
+            {error && <div className="error" role="alert">{error}</div>}
+          </section>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -127,11 +293,17 @@ export function ScriptAnalysisWorkspace() {
             <h1>先把整本剧本，变成可核对的事实。</h1>
             <p>从来源保全开始，逐步拆出剧集、场景、人物、道具和服装。每一个结果都保留原文 Anchor，批准前不会写入正式生产事实。</p>
           </div>
-          <div className="status" data-testid="phase-status">
-            {phase === "idle" && "等待导入"}
-            {phase === "queued" && `解析中 ${operation?.progress ?? 0}%`}
-            {phase === "draft" && "待人工批准"}
-            {phase === "approved" && "事实已批准"}
+          <div>
+            <div className="status" data-testid="phase-status">
+              {phase === "idle" && "等待导入"}
+              {phase === "queued" && `解析中 ${operation?.progress ?? 0}%`}
+              {phase === "draft" && "待人工批准"}
+              {phase === "approved" && "事实已批准"}
+            </div>
+            <div className="actions" style={{ marginTop: 10, justifyContent: "flex-end" }}>
+              <span className="hint">{workspace.name}</span>
+              <button className="secondary" type="button" onClick={logout} disabled={busy}>退出登录</button>
+            </div>
           </div>
         </header>
 
@@ -164,12 +336,12 @@ export function ScriptAnalysisWorkspace() {
               <div><strong>{operation.type}</strong><div className="hint">{operation.id}</div></div>
               <span>{operation.status}</span>
             </div>}
-            {operation && <div className="bar" role="progressbar" aria-label="解析进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={operation.progress}><span style={{ width: `${operation.progress}%` }} /></div>}
+            {operation && <div className="bar" role="progressbar" aria-label="解析进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={operation.progress ?? 0}><span style={{ width: `${operation.progress ?? 0}%` }} /></div>}
             {projectID && <div className="hint" style={{ marginTop: 12 }}>Project：{projectID}</div>}
             {analysis && <div className="summary">
-              <div className="metric"><strong>{analysis.episodes.length}</strong><span>剧集</span></div>
-              <div className="metric"><strong>{analysis.episodes.reduce((total, episode) => total + episode.scenes.length, 0)}</strong><span>场景</span></div>
-              <div className="metric"><strong>{analysis.characters.length}</strong><span>人物</span></div>
+              <div className="metric"><strong>{analysis.episodes?.length ?? 0}</strong><span>剧集</span></div>
+              <div className="metric"><strong>{(analysis.episodes ?? []).reduce((total, episode) => total + (episode.scenes?.length ?? 0), 0)}</strong><span>场景</span></div>
+              <div className="metric"><strong>{analysis.characters?.length ?? 0}</strong><span>人物</span></div>
               <div className="metric"><strong>{assets.length}</strong><span>生产资产</span></div>
             </div>}
           </section>
@@ -178,11 +350,11 @@ export function ScriptAnalysisWorkspace() {
         {analysis && <section className="card" style={{ marginTop: 18 }} aria-labelledby="result-title">
           <h2 id="result-title">3. 剧集、场景与资产</h2>
           <div className="asset-list" role="list" aria-label="资产清单">
-            {assets.map((asset) => <span className="asset" role="listitem" key={`${asset.kind}-${asset.name}`}>{asset.name}<em>{asset.kind} · {asset.episode_numbers.join(", ")}</em></span>)}
+            {assets.map((asset) => <span className="asset" role="listitem" key={`${asset.kind}-${asset.name}`}>{asset.name}<em>{asset.kind} · {(asset.episode_numbers ?? []).join(", ")}</em></span>)}
           </div>
-          {analysis.episodes.map((episode) => <article className="episode" key={episode.number}>
-            <div className="episode-head"><span className="episode-title">第 {episode.number} 集 · {episode.title}</span><span className="hint">{episode.scenes.length} 个场景</span></div>
-            {episode.scenes.map((scene) => <div className="scene" key={scene.id}><strong>{scene.heading}</strong><p>{scene.narratives.slice(0, 4).map((narrative) => narrative.text).join(" · ")}</p></div>)}
+          {(analysis.episodes ?? []).map((episode) => <article className="episode" key={episode.number}>
+            <div className="episode-head"><span className="episode-title">第 {episode.number} 集 · {episode.title}</span><span className="hint">{episode.scenes?.length ?? 0} 个场景</span></div>
+            {(episode.scenes ?? []).map((scene) => <div className="scene" key={scene.id}><strong>{scene.heading}</strong><p>{(scene.narratives ?? []).slice(0, 4).map((narrative) => narrative.text).join(" · ")}</p></div>)}
           </article>)}
         </section>}
       </div>

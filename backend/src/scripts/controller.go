@@ -119,7 +119,7 @@ func (h *ScriptController) swagger(writer http.ResponseWriter, request *http.Req
 // @Produce json
 // @Param request body createWorkspaceRequest true "Workspace 参数"
 // @Security BearerAccessToken
-// @Success 201 {object} map[string]interface{}
+// @Success 201 {object} WorkspaceEnvelope
 // @Failure 422 {object} httpapi.ErrorEnvelope
 // @Router /api/workspaces [post]
 func (h *ScriptController) createWorkspace(writer http.ResponseWriter, request *http.Request) {
@@ -144,7 +144,7 @@ func (h *ScriptController) createWorkspace(writer http.ResponseWriter, request *
 // @Param workspaceID path string true "Workspace UUID"
 // @Param request body createProjectRequest true "项目参数"
 // @Security BearerAccessToken
-// @Success 201 {object} map[string]interface{}
+// @Success 201 {object} ProjectEnvelope
 // @Failure 422 {object} httpapi.ErrorEnvelope
 // @Router /api/workspaces/{workspaceID}/projects [post]
 func (h *ScriptController) createProject(writer http.ResponseWriter, request *http.Request) {
@@ -173,7 +173,7 @@ func (h *ScriptController) createProject(writer http.ResponseWriter, request *ht
 // @Param projectID path string true "Project UUID"
 // @Param request body createScriptRevisionRequest true "剧本参数"
 // @Security BearerAccessToken
-// @Success 201 {object} map[string]interface{}
+// @Success 201 {object} ScriptRevisionEnvelope
 // @Failure 422 {object} httpapi.ErrorEnvelope
 // @Router /api/projects/{projectID}/script-revisions [post]
 func (h *ScriptController) createScriptRevision(writer http.ResponseWriter, request *http.Request) {
@@ -200,7 +200,7 @@ func (h *ScriptController) createScriptRevision(writer http.ResponseWriter, requ
 // @Produce json
 // @Param revisionID path string true "Script Revision UUID"
 // @Security BearerAccessToken
-// @Success 202 {object} map[string]interface{}
+// @Success 202 {object} OperationEnvelope
 // @Failure 404 {object} httpapi.ErrorEnvelope
 // @Router /api/script-revisions/{revisionID}/analyze [post]
 func (h *ScriptController) analyzeScript(writer http.ResponseWriter, request *http.Request) {
@@ -223,7 +223,7 @@ func (h *ScriptController) analyzeScript(writer http.ResponseWriter, request *ht
 // @Produce json
 // @Param operationID path string true "Operation UUID"
 // @Security BearerAccessToken
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} OperationEnvelope
 // @Failure 404 {object} httpapi.ErrorEnvelope
 // @Router /api/operations/{operationID} [get]
 func (h *ScriptController) getOperation(writer http.ResponseWriter, request *http.Request) {
@@ -246,7 +246,7 @@ func (h *ScriptController) getOperation(writer http.ResponseWriter, request *htt
 // @Produce json
 // @Param revisionID path string true "Script Revision UUID"
 // @Security BearerAccessToken
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} AnalysisEnvelope
 // @Failure 422 {object} httpapi.ErrorEnvelope
 // @Router /api/script-revisions/{revisionID}/approve [post]
 func (h *ScriptController) approveAnalysis(writer http.ResponseWriter, request *http.Request) {
@@ -269,7 +269,7 @@ func (h *ScriptController) approveAnalysis(writer http.ResponseWriter, request *
 // @Produce json
 // @Param revisionID path string true "Script Revision UUID"
 // @Security BearerAccessToken
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} AnalysisEnvelope
 // @Failure 404 {object} httpapi.ErrorEnvelope
 // @Router /api/script-revisions/{revisionID}/analysis-draft [get]
 func (h *ScriptController) getAnalysisDraft(writer http.ResponseWriter, request *http.Request) {
@@ -292,7 +292,7 @@ func (h *ScriptController) getAnalysisDraft(writer http.ResponseWriter, request 
 // @Produce json
 // @Param projectID path string true "Project UUID"
 // @Security BearerAccessToken
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} AnalysisEnvelope
 // @Failure 404 {object} httpapi.ErrorEnvelope
 // @Router /api/projects/{projectID}/analysis [get]
 func (h *ScriptController) getProjectAnalysis(writer http.ResponseWriter, request *http.Request) {
@@ -318,7 +318,7 @@ func (h *ScriptController) getProjectAnalysis(writer http.ResponseWriter, reques
 // @Param contentUnitID path string true "Content Unit UUID"
 // @Param request body createShotsRequest true "镜头参数"
 // @Security BearerAccessToken
-// @Success 201 {object} map[string]interface{}
+// @Success 201 {object} ShotListEnvelope
 // @Failure 422 {object} httpapi.ErrorEnvelope
 // @Router /api/projects/{projectID}/content-units/{contentUnitID}/shots [post]
 func (h *ScriptController) createShots(writer http.ResponseWriter, request *http.Request) {
@@ -350,7 +350,7 @@ func (h *ScriptController) createShots(writer http.ResponseWriter, request *http
 // @Param projectID path string true "Project UUID"
 // @Param contentUnitID path string true "Content Unit UUID"
 // @Security BearerAccessToken
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} ShotListEnvelope
 // @Router /api/projects/{projectID}/content-units/{contentUnitID}/shots [get]
 func (h *ScriptController) listShots(writer http.ResponseWriter, request *http.Request) {
 	projectID, ok := parseID(writer, request, chi.URLParam(request, "projectID"))
@@ -378,7 +378,7 @@ func (h *ScriptController) listShots(writer http.ResponseWriter, request *http.R
 // @Param shotID path string true "Shot UUID"
 // @Param request body createFixtureCandidateRequest true "候选参数"
 // @Security BearerAccessToken
-// @Success 201 {object} map[string]interface{}
+// @Success 201 {object} CandidateEnvelope
 // @Router /api/shots/{shotID}/fixture-candidates [post]
 func (h *ScriptController) createFixtureCandidate(writer http.ResponseWriter, request *http.Request) {
 	shotID, ok := parseID(writer, request, chi.URLParam(request, "shotID"))
@@ -406,7 +406,7 @@ func (h *ScriptController) createFixtureCandidate(writer http.ResponseWriter, re
 // @Param candidateID path string true "Candidate UUID"
 // @Param request body selectCandidateRequest true "选择参数"
 // @Security BearerAccessToken
-// @Success 201 {object} map[string]interface{}
+// @Success 201 {object} SelectionEnvelope
 // @Router /api/candidates/{candidateID}/selections [post]
 func (h *ScriptController) selectCandidate(writer http.ResponseWriter, request *http.Request) {
 	candidateID, ok := parseID(writer, request, chi.URLParam(request, "candidateID"))

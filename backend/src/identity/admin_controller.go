@@ -38,8 +38,8 @@ type updateMemberRequest struct {
 // @ID admin_list_members
 // @Produce json
 // @Param search query string false "按邮箱或显示名搜索"
-// @Param page query int false "页码" default(1)
-// @Param page_size query int false "每页数量" default(20)
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
 // @Security BearerAccessToken
 // @Success 200 {object} WorkspaceMemberPageEnvelope
 // @Failure 403 {object} httpapi.ErrorEnvelope

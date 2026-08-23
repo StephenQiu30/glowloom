@@ -107,6 +107,8 @@ type workspaceProjectRecord struct {
 	WorkspaceID uuid.UUID `gorm:"column:workspace_id;type:uuid"`
 }
 
+func (workspaceProjectRecord) TableName() string { return "projects" }
+
 type workspaceResourceRecord struct {
 	ID        uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
 	ProjectID uuid.UUID `gorm:"column:project_id;type:uuid"`
@@ -533,7 +535,7 @@ func (r *IdentityRepository) AuthorizePath(ctx context.Context, workspaceID uuid
 			case "content-units":
 				owned, err = r.resourceInWorkspace(tx, "prj_content_units", id, workspaceID)
 			case "script-revisions":
-				owned, err = r.resourceInWorkspace(tx, "script_revisions", id, workspaceID)
+				owned, err = r.resourceInWorkspace(tx, "nar_source_revisions", id, workspaceID)
 			case "operations":
 				owned, err = r.resourceInWorkspace(tx, "operations", id, workspaceID)
 			case "agent-runs":

@@ -30,7 +30,7 @@ func Require(identityService *IdentityService, next http.Handler) http.Handler {
 		}
 		workspaceContext := database.WithWorkspaceID(r.Context(), principal.WorkspaceID)
 		if err := identityService.AuthorizePath(workspaceContext, principal.WorkspaceID, r.URL.Path); err != nil {
-			httpapi.WriteError(w, r, httpapi.NotFound("资源"))
+			httpapi.WriteError(w, r, err)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(workspaceContext, contextKey{}, principal)))

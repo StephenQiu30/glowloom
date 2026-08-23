@@ -15,19 +15,6 @@ CREATE TABLE IF NOT EXISTS projects (
 
 CREATE INDEX IF NOT EXISTS projects_workspace_id_idx ON projects(workspace_id);
 
-CREATE TABLE IF NOT EXISTS script_revisions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id uuid NOT NULL REFERENCES projects(id),
-    name text NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 240),
-    object_key text NOT NULL UNIQUE,
-    content_hash text NOT NULL CHECK (content_hash ~ '^[a-f0-9]{64}$'),
-    content_length bigint NOT NULL CHECK (content_length > 0),
-    status text NOT NULL CHECK (status IN ('uploaded', 'analyzing', 'approved', 'failed')),
-    created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS script_revisions_project_id_idx ON script_revisions(project_id);
-
 CREATE TABLE IF NOT EXISTS operations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id uuid NOT NULL REFERENCES projects(id),
@@ -42,15 +29,6 @@ CREATE TABLE IF NOT EXISTS operations (
 );
 
 CREATE INDEX IF NOT EXISTS operations_project_id_idx ON operations(project_id);
-
--- The current target contract is enforced directly; no historical migration
--- chain or compatibility decoder is part of this schema.
-ALTER TABLE operations DROP CONSTRAINT IF EXISTS operations_type_check;
-ALTER TABLE operations ADD CONSTRAINT operations_type_check
-    CHECK (type IN ('script_analysis', 'fixture_candidate', 'generation', 'delivery', 'quality'));
-ALTER TABLE operations DROP CONSTRAINT IF EXISTS operations_status_check;
-ALTER TABLE operations ADD CONSTRAINT operations_status_check
-    CHECK (status IN ('queued', 'running', 'waiting_user', 'partial', 'blocked', 'unknown', 'succeeded', 'failed', 'cancelled'));
 
 CREATE TABLE IF NOT EXISTS outbox_events (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -73,68 +51,10 @@ CREATE TABLE IF NOT EXISTS inbox_messages (
     consumed_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS script_analysis_drafts (
-    script_revision_id uuid PRIMARY KEY REFERENCES script_revisions(id),
-    source_hash text NOT NULL,
-    analysis jsonb NOT NULL,
-    status text NOT NULL CHECK (status IN ('draft', 'approved')),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    approved_at timestamptz
-);
-
-CREATE TABLE IF NOT EXISTS content_units (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id uuid NOT NULL REFERENCES projects(id),
-    script_revision_id uuid NOT NULL REFERENCES script_revisions(id),
-    episode_number integer NOT NULL CHECK (episode_number > 0),
-    title text NOT NULL,
-    start_offset integer NOT NULL CHECK (start_offset >= 0),
-    end_offset integer NOT NULL CHECK (end_offset > start_offset),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (script_revision_id, episode_number)
-);
-
-CREATE TABLE IF NOT EXISTS narrative_units (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    content_unit_id uuid NOT NULL REFERENCES content_units(id),
-    kind text NOT NULL CHECK (kind IN ('scene', 'dialogue', 'action')),
-    text text NOT NULL,
-    start_offset integer NOT NULL CHECK (start_offset >= 0),
-    end_offset integer NOT NULL CHECK (end_offset > start_offset)
-);
-
-CREATE TABLE IF NOT EXISTS entities (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id uuid NOT NULL REFERENCES projects(id),
-    kind text NOT NULL CHECK (kind IN ('character', 'location', 'prop', 'costume')),
-    canonical_name text NOT NULL,
-    status text NOT NULL DEFAULT 'approved' CHECK (status IN ('approved', 'unresolved', 'rejected')),
-    UNIQUE (project_id, kind, canonical_name)
-);
-
-CREATE TABLE IF NOT EXISTS entity_mentions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    narrative_unit_id uuid NOT NULL REFERENCES narrative_units(id),
-    entity_id uuid REFERENCES entities(id),
-    surface text NOT NULL,
-    start_offset integer NOT NULL CHECK (start_offset >= 0),
-    end_offset integer NOT NULL CHECK (end_offset > start_offset)
-);
-
-CREATE TABLE IF NOT EXISTS production_requirements (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id uuid NOT NULL REFERENCES projects(id),
-    entity_id uuid NOT NULL REFERENCES entities(id),
-    kind text NOT NULL,
-    description text NOT NULL,
-    status text NOT NULL DEFAULT 'unassessed' CHECK (status IN ('unassessed', 'required', 'not_required')),
-    UNIQUE (project_id, entity_id, kind)
-);
-
--- The following tables are the current (not historical) platform schema for
--- modules M01-M15.  Each module owns its tables; projections and execution
--- records are deliberately separate from domain facts.  schema-init is the
--- only command allowed to apply this file to an empty business database.
+-- The following tables are the current platform schema for modules M01-M15.
+-- Each module owns its tables; schema-init applies this file only to an empty
+-- business database, so this contract contains no migration or compatibility
+-- statements.
 
 CREATE TABLE IF NOT EXISTS iam_users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -187,73 +107,13 @@ CREATE TABLE IF NOT EXISTS iam_sessions (
     last_used_at timestamptz
 );
 
--- The current schema is also applied to existing development databases. These
--- additive clauses keep legacy identity rows readable while converging them to
--- the email/password and refresh-family shape used by the current contract.
-ALTER TABLE iam_users ADD COLUMN IF NOT EXISTS email text;
-ALTER TABLE iam_users ADD COLUMN IF NOT EXISTS password_hash text;
-ALTER TABLE iam_users ADD COLUMN IF NOT EXISTS email_verified_at timestamptz;
-ALTER TABLE iam_sessions ADD COLUMN IF NOT EXISTS family_id uuid;
-UPDATE iam_sessions SET family_id = id WHERE family_id IS NULL;
-ALTER TABLE iam_sessions ALTER COLUMN family_id SET DEFAULT gen_random_uuid();
-ALTER TABLE iam_sessions ALTER COLUMN family_id SET NOT NULL;
-ALTER TABLE iam_sessions ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
-ALTER TABLE iam_sessions ADD COLUMN IF NOT EXISTS last_used_at timestamptz;
 CREATE UNIQUE INDEX IF NOT EXISTS iam_users_email_unique_idx ON iam_users(email) WHERE email IS NOT NULL;
 CREATE INDEX IF NOT EXISTS iam_sessions_family_idx ON iam_sessions(family_id, revoked_at, expires_at);
 
--- Normalize legacy role rows before enforcing the current three-role contract.
--- Existing development databases may still contain owner/operator/producer/reviewer;
--- owner remains an administrator and every other legacy membership becomes user.
-ALTER TABLE iam_roles ADD COLUMN IF NOT EXISTS is_system boolean NOT NULL DEFAULT false;
-DO $$
-DECLARE
-    constraint_name text;
-    admin_role_id uuid;
-    user_role_id uuid;
-    ban_role_id uuid;
-BEGIN
-    FOR constraint_name IN
-        SELECT conname
-        FROM pg_constraint
-        WHERE conrelid = 'iam_roles'::regclass AND contype = 'c'
-    LOOP
-        EXECUTE format('ALTER TABLE iam_roles DROP CONSTRAINT %I', constraint_name);
-    END LOOP;
-
-    INSERT INTO iam_roles (code, scope, is_system) VALUES
-        ('admin', 'workspace', true),
-        ('user', 'workspace', true),
-        ('ban', 'workspace', true)
-    ON CONFLICT (code) DO UPDATE
-        SET scope = EXCLUDED.scope, is_system = EXCLUDED.is_system;
-
-    SELECT id INTO admin_role_id FROM iam_roles WHERE code = 'admin';
-    SELECT id INTO user_role_id FROM iam_roles WHERE code = 'user';
-    SELECT id INTO ban_role_id FROM iam_roles WHERE code = 'ban';
-
-    UPDATE iam_memberships AS memberships
-    SET role_id = CASE WHEN legacy.code = 'owner' THEN admin_role_id ELSE user_role_id END
-    FROM iam_roles AS legacy
-    WHERE memberships.role_id = legacy.id
-      AND legacy.code NOT IN ('admin', 'user', 'ban');
-
-    UPDATE iam_project_grants AS grants
-    SET role_id = user_role_id
-    FROM iam_roles AS legacy
-    WHERE grants.role_id = legacy.id
-      AND legacy.code NOT IN ('admin', 'user', 'ban');
-
-    DELETE FROM iam_roles
-    WHERE code NOT IN ('admin', 'user', 'ban');
-
-    IF admin_role_id IS NULL OR user_role_id IS NULL OR ban_role_id IS NULL THEN
-        RAISE EXCEPTION 'current identity roles were not seeded';
-    END IF;
-END $$;
-
-ALTER TABLE iam_roles ADD CONSTRAINT iam_roles_code_check CHECK (code IN ('admin', 'user', 'ban'));
-ALTER TABLE iam_roles ADD CONSTRAINT iam_roles_scope_check CHECK (scope IN ('workspace'));
+INSERT INTO iam_roles (code, scope, is_system) VALUES
+    ('admin', 'workspace', true),
+    ('user', 'workspace', true),
+    ('ban', 'workspace', true);
 
 CREATE TABLE IF NOT EXISTS iam_service_identities (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -333,10 +193,24 @@ CREATE TABLE IF NOT EXISTS nar_source_revisions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id uuid NOT NULL REFERENCES projects(id),
     content_unit_id uuid REFERENCES prj_content_units(id),
-    object_key text NOT NULL,
-    content_hash text NOT NULL,
+    name text NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 240),
+    object_key text NOT NULL UNIQUE,
+    content_hash text NOT NULL CHECK (content_hash ~ '^[a-f0-9]{64}$'),
+    content_length bigint NOT NULL CHECK (content_length > 0),
     source_type text NOT NULL CHECK (source_type IN ('txt', 'markdown', 'docx')),
+    status text NOT NULL CHECK (status IN ('uploaded', 'analyzing', 'waiting_user', 'approved', 'failed')),
     created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS nar_source_revisions_project_idx ON nar_source_revisions(project_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS nar_analysis_drafts (
+    source_revision_id uuid PRIMARY KEY REFERENCES nar_source_revisions(id),
+    source_hash text NOT NULL,
+    analysis jsonb NOT NULL,
+    status text NOT NULL CHECK (status IN ('draft', 'approved')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    approved_at timestamptz
 );
 
 CREATE TABLE IF NOT EXISTS nar_import_runs (

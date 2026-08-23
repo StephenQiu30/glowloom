@@ -71,6 +71,9 @@ func runAPI() {
 		logFatal("database connection failed", err)
 	}
 	defer pool.Close()
+	if err := database.VerifyCurrent(ctx, pool); err != nil {
+		logFatal("database schema verification failed", err)
+	}
 	orm, err := database.OpenGORM(pool)
 	if err != nil {
 		logFatal("gorm database initialization failed", err)
@@ -127,6 +130,9 @@ func runOperationWorker() {
 		logFatal("database connection failed", err)
 	}
 	defer pool.Close()
+	if err := database.VerifyCurrent(ctx, pool); err != nil {
+		logFatal("database schema verification failed", err)
+	}
 	storage, err := objectstorage.NewMinIOObjectStore(ctx)
 	if err != nil {
 		logFatal("object storage connection failed", err)
@@ -211,6 +217,9 @@ func runSchemaInit() {
 		logFatal("database connection failed", err)
 	}
 	defer pool.Close()
+	if err := database.EnsureEmpty(ctx, pool); err != nil {
+		logFatal("schema initialization refused", err)
+	}
 	schema, err := os.ReadFile("schema/current.sql")
 	if err != nil {
 		logFatal("read current schema failed", err)
