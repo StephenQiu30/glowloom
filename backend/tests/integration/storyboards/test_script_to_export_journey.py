@@ -11,7 +11,6 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app import io_worker, media_worker
 from app.modules.identity.models import Membership
 from app.modules.media import MediaProbePort, MediaProbeResult
 from app.modules.media.models import MediaVersion
@@ -27,6 +26,8 @@ from app.modules.scripts.models import ExtractionBatch
 from app.modules.scripts.narratives.parser import parse_narrative_units
 from app.modules.storyboards.drafts import DraftProviderResult, record_draft_result
 from app.modules.storyboards.exports.models import StoryboardExportManifest
+from app.runtime.workers import io as io_worker
+from app.runtime.workers import media as media_worker
 from tests.integration.storyboards.test_storyboards_api import (
     create_ready_location_asset,
 )

@@ -14,8 +14,11 @@ from app.modules.messaging.service import (
     release_outbox_for_retry,
     start_inbox_delivery,
 )
+from app.modules.messaging.topics import IO_TOPIC, MEDIA_TOPIC
 
 __all__ = [
+    "IO_TOPIC",
+    "MEDIA_TOPIC",
     "MessageEnvelope",
     "MessagePublisher",
     "OutboxBacklog",

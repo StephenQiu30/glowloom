@@ -13,8 +13,8 @@ from app.core.logging import RequestContextMiddleware, configure_logging
 from app.core.observability import MetricsMiddleware, metrics_response
 from app.core.schemas import DependencyStatus, HealthResponse, ReadinessResponse
 from app.core.telemetry import configure_telemetry
+from app.integrations.kafka import kafka_ping
 from app.integrations.minio import MinioObjectStorage
-from app.integrations.rabbitmq import rabbitmq_ping
 from app.integrations.redis import RedisCache, redis_ping
 from app.integrations.redis_auth_sessions import RedisAuthSessionStore
 from app.modules.assets.api import router as assets_router
@@ -136,7 +136,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         checks: dict[str, tuple[bool, Check]] = {
             "postgresql": (True, database_ping),
             "redis": (False, lambda: redis_ping(active.redis_url)),
-            "rabbitmq": (False, lambda: rabbitmq_ping(active.rabbitmq_url)),
+            "kafka": (True, lambda: kafka_ping(active.kafka_bootstrap_servers)),
             "minio": (False, storage.ensure_bucket),
         }
         dependencies: dict[str, DependencyStatus] = {}

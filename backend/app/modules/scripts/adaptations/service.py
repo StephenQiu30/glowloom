@@ -56,7 +56,7 @@ from app.modules.scripts.versions.schemas import (
     ScriptVersionResponse,
 )
 
-ADAPTATION_MODEL_NAME = "deepseek-v4-pro"
+ADAPTATION_MODEL_NAME = "codex-local"
 
 
 @dataclass(frozen=True, slots=True)

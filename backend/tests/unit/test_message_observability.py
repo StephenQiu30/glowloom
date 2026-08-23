@@ -4,7 +4,7 @@ from app.modules.messaging.metrics import (
     message_event_type_label,
     observe_message_result,
     observe_outbox_publish_result,
-    queue_label_for_routing_key,
+    topic_label,
 )
 
 
@@ -15,18 +15,18 @@ def test_message_metric_labels_are_registered_and_unknown_values_are_bounded() -
         "script_extraction.requested"
     )
     assert message_event_type_label(hostile_event_type) == "unregistered"
-    assert queue_label_for_routing_key("io.script.extract") == "lanverse.io"
-    assert queue_label_for_routing_key("media.probe") == "lanverse.media"
-    assert queue_label_for_routing_key("attacker.route") == "unregistered"
+    assert topic_label("lanverse.io.v1") == "lanverse.io.v1"
+    assert topic_label("lanverse.media.v1") == "lanverse.media.v1"
+    assert topic_label("attacker.route") == "unregistered"
 
     observe_message_result(
-        queue="lanverse.io",
+        topic="lanverse.io.v1",
         event_type=hostile_event_type,
         result="rejected",
         duration_seconds=0.002,
     )
     observe_outbox_publish_result(
-        routing_key="io.script.extract",
+        topic="lanverse.io.v1",
         event_type="script_extraction.requested",
         result="published",
         duration_seconds=0.003,
@@ -35,10 +35,10 @@ def test_message_metric_labels_are_registered_and_unknown_values_are_bounded() -
     rendered = generate_latest().decode("utf-8")
     assert (
         'lanverse_message_results_total{event_type="unregistered",'
-        'queue="lanverse.io",result="rejected"}'
+        'result="rejected",topic="lanverse.io.v1"}'
     ) in rendered
     assert hostile_event_type not in rendered
     assert (
         'lanverse_outbox_publish_results_total{event_type="script_extraction.requested",'
-        'queue="lanverse.io",result="published"}'
+        'result="published",topic="lanverse.io.v1"}'
     ) in rendered

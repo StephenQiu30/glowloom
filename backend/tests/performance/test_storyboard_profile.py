@@ -745,7 +745,6 @@ async def test_fixed_storyboard_performance_profile(
         "DATABASE_URL": database_url,
         "JWT_SECRET_KEY": PERFORMANCE_JWT_SECRET,
         "EMAIL_VERIFICATION_HMAC_SECRET": PERFORMANCE_EMAIL_SECRET,
-        "DEEPSEEK_API_KEY": "",
         "LOG_LEVEL": "INFO",
     }
     sample_request_ids: dict[int, list[tuple[str, str, str, str]]] = {

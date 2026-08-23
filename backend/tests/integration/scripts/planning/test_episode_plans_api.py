@@ -10,7 +10,6 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app import io_worker
 from app.modules.messaging import envelope_from_event
 from app.modules.messaging.contracts import MessageEnvelope
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
@@ -37,6 +36,7 @@ from app.modules.scripts.planning.schemas import (
     EpisodePlanningProviderProposal,
     EpisodePlanningProviderResult,
 )
+from app.runtime.workers import io as io_worker
 from tests.support.project_builders import project_payload, register_project_owner
 
 FIXTURE = Path(__file__).parents[3] / "fixtures/mvp_a/golden_candidate_harbor_countdown.json"

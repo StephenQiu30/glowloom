@@ -66,6 +66,14 @@ class StoryboardAssetInput:
 
 
 @dataclass(frozen=True, slots=True)
+class AssetCandidateOccurrence:
+    episode_id: UUID
+    narrative_unit_id: UUID
+    narrative_unit_version_id: UUID
+    text_hash: str
+
+
+@dataclass(frozen=True, slots=True)
 class AssetCandidateCommand:
     workspace_id: UUID
     project_id: UUID
@@ -79,6 +87,7 @@ class AssetCandidateCommand:
     target_asset_id: UUID | None = None
     aliases: tuple[str, ...] = ()
     details: dict[str, object] | None = None
+    occurrence: AssetCandidateOccurrence | None = None
 
 
 @dataclass(frozen=True, slots=True)

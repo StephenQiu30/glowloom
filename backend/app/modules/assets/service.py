@@ -14,6 +14,7 @@ from app.modules.assets import repository
 from app.modules.assets.contracts import (
     AssetCandidateCommand,
     AssetCandidateDecisionCountReader,
+    AssetCandidateOccurrence,
     AssetCandidateResult,
     AssetExportSnapshot,
     AssetOccurrenceNarrativeReader,
@@ -2221,6 +2222,82 @@ def _candidate_spec(command: AssetCandidateCommand) -> AssetSpec:
     return parse_asset_spec(command.kind, payloads[command.kind])
 
 
+async def _link_candidate_occurrence(
+    session: AsyncSession,
+    actor: ActorContext,
+    state: AssetState,
+    candidate_id: UUID,
+    occurrence: AssetCandidateOccurrence | None,
+) -> None:
+    if occurrence is None:
+        return
+    if state.workspace_id != actor.workspace_id:
+        raise asset_not_found()
+    if state.status != "active":
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Disabled asset state cannot receive script occurrences",
+            status_code=409,
+            next_action="enable_asset_state",
+        )
+    idempotency_key = f"script-candidate:{candidate_id}"
+    existing = await repository.find_occurrence_by_key(
+        session,
+        state.id,
+        idempotency_key,
+    )
+    if existing is not None:
+        if (
+            existing.decision != "link"
+            or existing.origin != "script_candidate"
+            or existing.episode_id != occurrence.episode_id
+            or existing.narrative_unit_id != occurrence.narrative_unit_id
+            or existing.narrative_unit_version_id != occurrence.narrative_unit_version_id
+        ):
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Script candidate occurrence was reused with different input",
+                status_code=409,
+            )
+        return
+    evidence_hash = sha256(
+        json.dumps(
+            {
+                "asset_state_id": str(state.id),
+                "candidate_id": str(candidate_id),
+                "decision": "link",
+                "episode_id": str(occurrence.episode_id),
+                "narrative_unit_id": str(occurrence.narrative_unit_id),
+                "narrative_unit_version_id": str(occurrence.narrative_unit_version_id),
+                "text_hash": occurrence.text_hash,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    now = datetime.now(UTC)
+    session.add(
+        AssetOccurrenceDecision(
+            id=uuid7(),
+            workspace_id=state.workspace_id,
+            asset_state_id=state.id,
+            episode_id=occurrence.episode_id,
+            narrative_unit_id=occurrence.narrative_unit_id,
+            narrative_unit_version_id=occurrence.narrative_unit_version_id,
+            sequence=await repository.latest_occurrence_sequence(session, state.id) + 1,
+            decision="link",
+            origin="script_candidate",
+            evidence_hash=evidence_hash,
+            idempotency_key=idempotency_key,
+            created_by=actor.user_id,
+            created_at=now,
+        )
+    )
+    state.revision += 1
+    state.updated_at = now
+    await session.flush()
+
+
 async def create_or_link_candidate(
     session: AsyncSession,
     actor: ActorContext,
@@ -2228,6 +2305,24 @@ async def create_or_link_candidate(
 ) -> AssetCandidateResult:
     existing_version = await repository.find_candidate_version(session, command.candidate_id)
     if existing_version is not None:
+        state = await repository.find_state(
+            session,
+            existing_version.asset_state_id,
+            for_update=True,
+        )
+        if state is None:
+            raise ApiError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE,
+                "Asset state is unavailable",
+                status_code=503,
+            )
+        await _link_candidate_occurrence(
+            session,
+            actor,
+            state,
+            command.candidate_id,
+            command.occurrence,
+        )
         return AssetCandidateResult(
             asset_id=existing_version.asset_id,
             asset_version_id=existing_version.id,
@@ -2243,13 +2338,31 @@ async def create_or_link_candidate(
             or asset.kind != command.kind
         ):
             raise asset_not_found()
-        base_state = await repository.find_state_by_key(session, asset.id, "base")
+        base_state_reference = await repository.find_state_by_key(session, asset.id, "base")
+        if base_state_reference is None:
+            raise ApiError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE,
+                "Asset base state is unavailable",
+                status_code=503,
+            )
+        base_state = await repository.find_state(
+            session,
+            base_state_reference.id,
+            for_update=True,
+        )
         if base_state is None:
             raise ApiError(
                 ErrorCode.DEPENDENCY_UNAVAILABLE,
                 "Asset base state is unavailable",
                 status_code=503,
             )
+        await _link_candidate_occurrence(
+            session,
+            actor,
+            base_state,
+            command.candidate_id,
+            command.occurrence,
+        )
         return AssetCandidateResult(
             asset_id=asset.id,
             asset_version_id=base_state.current_version_id,
@@ -2324,4 +2437,11 @@ async def create_or_link_candidate(
     state.current_version_id = version.id
     state.revision = 2
     await session.flush([state])
+    await _link_candidate_occurrence(
+        session,
+        actor,
+        state,
+        command.candidate_id,
+        command.occurrence,
+    )
     return AssetCandidateResult(asset_id=asset.id, asset_version_id=version.id)

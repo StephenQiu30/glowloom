@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
 from app.integrations.minio import MinioObjectStorage
-from app.media_worker import process_incoming_message
 from app.modules.governance.audit.models import AuditEvent
 from app.modules.media import MediaProbePort
 from app.modules.media.models import UploadSession
@@ -21,6 +20,7 @@ from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production.models import Task
 from app.modules.scheduling.dispatcher import dispatch_due_schedules
 from app.modules.scheduling.models import Schedule, ScheduleFire
+from app.runtime.workers.media import process_incoming_message
 from tests.support.identity_builders import register_identity_response
 
 
@@ -215,7 +215,7 @@ async def test_upload_expiration_schedule_is_owned_operable_and_dispatched_once(
         assert task.request_type == "upload_session"
         assert task.request_id == upload_id
         assert event is not None and event.event_type == "upload_expiration.requested"
-        assert event.routing_key == "media.upload.expire"
+        assert event.topic == "lanverse.media.v1"
         assert fire.task_id == task.id
         assert fire.outbox_event_id == event.id
 
@@ -462,7 +462,7 @@ async def test_workspace_cleanup_interval_is_unique_and_advances_past_missed_per
         assert task.request_id == workspace_id
         assert event is not None
         assert event.event_type == "upload_cleanup.requested"
-        assert event.routing_key == "media.upload.cleanup"
+        assert event.topic == "lanverse.media.v1"
 
 
 @pytest.mark.asyncio

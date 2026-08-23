@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.database import Base
-from app.modules.assets.models import Asset, AssetVersion
+from app.modules.assets.models import Asset, AssetOccurrenceDecision, AssetVersion
 from app.modules.projects.models import Episode
 from app.modules.scripts.extractions import schemas as extraction_schemas
 from app.modules.scripts.extractions import service as extraction_service
@@ -579,11 +579,25 @@ async def test_confirmed_asset_candidates_create_or_link_idempotently(
         headers=headers,
     )
     assert states.status_code == 200
-    assert states.json()["data"]["items"][0]["current_version_id"]
+    state = states.json()["data"]["items"][0]
+    assert state["current_version_id"]
+
+    occurrences = await client.get(
+        f"/api/v1/asset-states/{state['id']}/occurrences",
+        headers=headers,
+        params={"include_history": True},
+    )
+    assert occurrences.status_code == 200
+    occurrence_items = occurrences.json()["data"]["items"]
+    assert len(occurrence_items) == 2
+    assert {item["origin"] for item in occurrence_items} == {"script_candidate"}
+    assert {item["episode_id"] for item in occurrence_items} == {episode["id"]}
+    assert all(item["idempotency_key"].startswith("script-candidate:") for item in occurrence_items)
 
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Asset)) == 1
         assert await session.scalar(select(func.count()).select_from(AssetVersion)) == 1
+        assert await session.scalar(select(func.count()).select_from(AssetOccurrenceDecision)) == 2
 
 
 @pytest.mark.asyncio

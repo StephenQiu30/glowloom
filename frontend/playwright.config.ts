@@ -1,26 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const runDeepSeekE2E = process.env.LANVERSE_RUN_DEEPSEEK_E2E === "1";
-const deepSeekApiKey = runDeepSeekE2E
-  ? (process.env.DEEPSEEK_API_KEY ?? "")
-  : "";
 const backendPort = process.env.LANVERSE_E2E_BACKEND_PORT ?? "8687";
 const frontendPort = process.env.LANVERSE_E2E_FRONTEND_PORT ?? "8124";
 const backendBaseUrl = `http://127.0.0.1:${backendPort}`;
 const frontendBaseUrl = `http://127.0.0.1:${frontendPort}`;
 
-if (runDeepSeekE2E && !deepSeekApiKey) {
-  throw new Error(
-    "DEEPSEEK_API_KEY is required when LANVERSE_RUN_DEEPSEEK_E2E=1",
-  );
-}
-
 export default defineConfig({
   testDir: "./tests/e2e",
-  testIgnore: runDeepSeekE2E ? [] : ["**/deepseek-script-to-storyboard.spec.ts"],
-  testMatch: runDeepSeekE2E
-    ? ["**/deepseek-script-to-storyboard.spec.ts"]
-    : ["**/*.spec.ts"],
+  testMatch: ["**/*.spec.ts"],
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -32,20 +19,18 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "cd ../backend && .venv/bin/python -m app.initialize_database && .venv/bin/python -m tests.support.e2e_server",
+        "cd ../backend && .venv/bin/python -m app.runtime.commands.database && .venv/bin/python -m tests.support.e2e_server",
       env: {
         API_HOST: "127.0.0.1",
         API_PORT: backendPort,
         CORS_ORIGINS: JSON.stringify([frontendBaseUrl]),
         DATABASE_URL: "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
-        DEEPSEEK_API_KEY: deepSeekApiKey,
         ENVIRONMENT: "test",
         JWT_SECRET_KEY: "playwright-only-jwt-secret-with-at-least-32-bytes",
         MINIO_BUCKET: "lanverse-e2e",
-        RABBITMQ_URL:
-          "amqp://guest:guest@127.0.0.1:5672/lanverse_contract",
+        KAFKA_BOOTSTRAP_SERVERS:
+          process.env.KAFKA_BOOTSTRAP_SERVERS ?? "127.0.0.1:9092",
         EMAIL_VERIFICATION_SOURCE_LIMIT: "1000",
-        SCRIPT_EXTRACTION_PROVIDER: "disabled",
       },
       url: `${backendBaseUrl}/readyz`,
       reuseExistingServer: false,

@@ -12,7 +12,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
-from app import media_worker
 from app.core.telemetry import configure_telemetry
 from app.modules.governance.audit.models import AuditEvent
 from app.modules.identity import ActorContext
@@ -24,6 +23,7 @@ from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production import MediaProbeTaskCommand, create_media_probe_task
 from app.modules.production.models import Task
+from app.runtime.workers import media as media_worker
 
 
 class MemoryStorage(ObjectStoragePort):
@@ -243,13 +243,13 @@ async def test_media_worker_commits_probe_before_ack_and_is_idempotent(
         dict[str, object],
         completed_record.__dict__["context"],
     )
-    assert completed_context["queue"] == "lanverse.media"
+    assert completed_context["topic"] == "lanverse.media.v1"
     assert completed_context["event_type"] == "media_probe.requested"
     assert completed_context["result"] == "completed"
     rendered_metrics = generate_latest().decode("utf-8")
     assert (
         'lanverse_message_results_total{event_type="media_probe.requested",'
-        'queue="lanverse.media",result="completed"}'
+        'result="completed",topic="lanverse.media.v1"}'
     ) in rendered_metrics
 
     duplicate = RecordingMessage(body)

@@ -5,7 +5,6 @@ from typing import cast
 from urllib.parse import unquote, urlparse
 from uuid import UUID
 
-import aio_pika
 import httpx
 import pytest
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -16,9 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings
 from app.core.telemetry import configure_telemetry
 from app.integrations.ffprobe import FfprobeMediaProbe
+from app.integrations.kafka import MEDIA_TOPIC, KafkaPublisher
 from app.integrations.minio import MinioObjectStorage
-from app.integrations.rabbitmq import MEDIA_QUEUE, RabbitMQPublisher
-from app.media_worker import process_incoming_message
 from app.modules.media.models import MediaLocation, MediaVersion, UploadSession
 from app.modules.media.storage import StorageObjectNotFound
 from app.modules.messaging import envelope_from_event
@@ -26,8 +24,10 @@ from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production.models import Task
 from app.modules.scheduling.dispatcher import dispatch_due_schedules
 from app.modules.scheduling.models import Schedule, ScheduleFire
-from tests.support.external_contracts import rabbitmq_contract_url
+from app.runtime.workers.media import process_incoming_message
+from tests.support.external_contracts import kafka_contract_bootstrap_servers
 from tests.support.identity_builders import register_identity_response
+from tests.support.kafka_observer import KafkaContractMessage, KafkaContractObserver
 from tests.support.media_fixtures import ONE_PIXEL_PNG
 
 
@@ -46,7 +46,7 @@ async def _assert_object_metadata(
 
 @pytest.mark.skipif(
     os.getenv("LANVERSE_RUN_MEDIA_STACK_CONTRACT") != "1",
-    reason="set LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 with isolated RabbitMQ and MinIO",
+    reason="set LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 with isolated Kafka and MinIO",
 )
 @pytest.mark.asyncio
 async def test_private_upload_reaches_ready_through_the_real_media_stack(
@@ -54,7 +54,7 @@ async def test_private_upload_reaches_ready_through_the_real_media_stack(
     session_factory: async_sessionmaker[AsyncSession],
     test_settings: Settings,
 ) -> None:
-    rabbitmq_url = rabbitmq_contract_url()
+    bootstrap_servers = kafka_contract_bootstrap_servers()
     provider = configure_telemetry(
         service_name="lanverse-media-stack-contract",
         environment="test",
@@ -71,17 +71,15 @@ async def test_private_upload_reaches_ready_through_the_real_media_stack(
         thread_limit=test_settings.storage_thread_limit,
     )
     probe = FfprobeMediaProbe(timeout_seconds=test_settings.media_probe_timeout_seconds)
-    publisher = RabbitMQPublisher(rabbitmq_url)
-    observer = await aio_pika.connect_robust(rabbitmq_url, timeout=3)
-    message: aio_pika.abc.AbstractIncomingMessage | None = None
-    duplicate: aio_pika.abc.AbstractIncomingMessage | None = None
+    publisher = KafkaPublisher(bootstrap_servers)
+    observer = KafkaContractObserver(bootstrap_servers, topic=MEDIA_TOPIC)
+    message: KafkaContractMessage | None = None
+    duplicate: KafkaContractMessage | None = None
     object_key: str | None = None
     try:
         await storage.ensure_bucket()
         await publisher.connect()
-        channel = await observer.channel()
-        queue = await channel.declare_queue(MEDIA_QUEUE, durable=True)
-        assert queue.declaration_result.message_count == 0
+        await observer.start()
 
         identity = await register_identity_response(
             client, email="media-stack-contract@example.com"
@@ -137,8 +135,8 @@ async def test_private_upload_reaches_ready_through_the_real_media_stack(
             assert event is not None
             envelope = envelope_from_event(event)
 
-        await publisher.publish(envelope, "media.probe")
-        message = await queue.get(timeout=3, fail=False)
+        await publisher.publish(envelope, MEDIA_TOPIC)
+        message = await observer.get(wait_seconds=3, fail=False)
         assert message is not None
         assert (
             await process_incoming_message(
@@ -190,8 +188,8 @@ async def test_private_upload_reaches_ready_through_the_real_media_stack(
             assert version is not None and version.probe_status == "ready"
             assert delivery is not None and delivery.status == "completed"
 
-        await publisher.publish(envelope, "media.probe")
-        duplicate = await queue.get(timeout=3, fail=False)
+        await publisher.publish(envelope, MEDIA_TOPIC)
+        duplicate = await observer.get(wait_seconds=3, fail=False)
         assert duplicate is not None
         assert (
             await process_incoming_message(
@@ -203,9 +201,6 @@ async def test_private_upload_reaches_ready_through_the_real_media_stack(
             == "duplicate"
         )
         assert duplicate.processed is True
-        queue_state = await channel.declare_queue(MEDIA_QUEUE, durable=True, passive=True)
-        assert queue_state.declaration_result.message_count == 0
-        await channel.close()
     finally:
         if message is not None and not message.processed:
             await message.nack(requeue=True)
@@ -219,7 +214,7 @@ async def test_private_upload_reaches_ready_through_the_real_media_stack(
 
 @pytest.mark.skipif(
     os.getenv("LANVERSE_RUN_MEDIA_STACK_CONTRACT") != "1",
-    reason="set LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 with isolated RabbitMQ and MinIO",
+    reason="set LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 with isolated Kafka and MinIO",
 )
 @pytest.mark.asyncio
 async def test_expired_upload_is_dispatched_and_deleted_through_the_real_media_stack(
@@ -227,7 +222,7 @@ async def test_expired_upload_is_dispatched_and_deleted_through_the_real_media_s
     session_factory: async_sessionmaker[AsyncSession],
     test_settings: Settings,
 ) -> None:
-    rabbitmq_url = rabbitmq_contract_url()
+    bootstrap_servers = kafka_contract_bootstrap_servers()
     storage = MinioObjectStorage(
         test_settings.minio_endpoint,
         test_settings.minio_access_key,
@@ -237,17 +232,15 @@ async def test_expired_upload_is_dispatched_and_deleted_through_the_real_media_s
         thread_limit=test_settings.storage_thread_limit,
     )
     probe = FfprobeMediaProbe(timeout_seconds=test_settings.media_probe_timeout_seconds)
-    publisher = RabbitMQPublisher(rabbitmq_url)
-    observer = await aio_pika.connect_robust(rabbitmq_url, timeout=3)
-    message: aio_pika.abc.AbstractIncomingMessage | None = None
-    duplicate: aio_pika.abc.AbstractIncomingMessage | None = None
+    publisher = KafkaPublisher(bootstrap_servers)
+    observer = KafkaContractObserver(bootstrap_servers, topic=MEDIA_TOPIC)
+    message: KafkaContractMessage | None = None
+    duplicate: KafkaContractMessage | None = None
     object_key: str | None = None
     try:
         await storage.ensure_bucket()
         await publisher.connect()
-        channel = await observer.channel()
-        queue = await channel.declare_queue(MEDIA_QUEUE, durable=True)
-        assert queue.declaration_result.message_count == 0
+        await observer.start()
 
         identity = await register_identity_response(
             client, email="media-expiration-contract@example.com"
@@ -326,8 +319,8 @@ async def test_expired_upload_is_dispatched_and_deleted_through_the_real_media_s
             assert event is not None
             envelope = envelope_from_event(event)
 
-        await publisher.publish(envelope, "media.upload.expire")
-        message = await queue.get(timeout=3, fail=False)
+        await publisher.publish(envelope, MEDIA_TOPIC)
+        message = await observer.get(wait_seconds=3, fail=False)
         assert message is not None
         assert (
             await process_incoming_message(
@@ -351,8 +344,8 @@ async def test_expired_upload_is_dispatched_and_deleted_through_the_real_media_s
             assert task is not None and task.status == "succeeded"
             assert delivery is not None and delivery.status == "completed"
 
-        await publisher.publish(envelope, "media.upload.expire")
-        duplicate = await queue.get(timeout=3, fail=False)
+        await publisher.publish(envelope, MEDIA_TOPIC)
+        duplicate = await observer.get(wait_seconds=3, fail=False)
         assert duplicate is not None
         assert (
             await process_incoming_message(
@@ -363,7 +356,6 @@ async def test_expired_upload_is_dispatched_and_deleted_through_the_real_media_s
             )
             == "duplicate"
         )
-        await channel.close()
     finally:
         if message is not None and not message.processed:
             await message.nack(requeue=True)
@@ -377,7 +369,7 @@ async def test_expired_upload_is_dispatched_and_deleted_through_the_real_media_s
 
 @pytest.mark.skipif(
     os.getenv("LANVERSE_RUN_MEDIA_STACK_CONTRACT") != "1",
-    reason="set LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 with isolated RabbitMQ and MinIO",
+    reason="set LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 with isolated Kafka and MinIO",
 )
 @pytest.mark.asyncio
 async def test_workspace_cleanup_removes_only_unversioned_bytes_in_the_real_media_stack(
@@ -385,7 +377,7 @@ async def test_workspace_cleanup_removes_only_unversioned_bytes_in_the_real_medi
     session_factory: async_sessionmaker[AsyncSession],
     test_settings: Settings,
 ) -> None:
-    rabbitmq_url = rabbitmq_contract_url()
+    bootstrap_servers = kafka_contract_bootstrap_servers()
     storage = MinioObjectStorage(
         test_settings.minio_endpoint,
         test_settings.minio_access_key,
@@ -395,17 +387,15 @@ async def test_workspace_cleanup_removes_only_unversioned_bytes_in_the_real_medi
         thread_limit=test_settings.storage_thread_limit,
     )
     probe = FfprobeMediaProbe(timeout_seconds=test_settings.media_probe_timeout_seconds)
-    publisher = RabbitMQPublisher(rabbitmq_url)
-    observer = await aio_pika.connect_robust(rabbitmq_url, timeout=3)
-    message: aio_pika.abc.AbstractIncomingMessage | None = None
+    publisher = KafkaPublisher(bootstrap_servers)
+    observer = KafkaContractObserver(bootstrap_servers, topic=MEDIA_TOPIC)
+    message: KafkaContractMessage | None = None
     temporary_key: str | None = None
     versioned_key: str | None = None
     try:
         await storage.ensure_bucket()
         await publisher.connect()
-        channel = await observer.channel()
-        queue = await channel.declare_queue(MEDIA_QUEUE, durable=True)
-        assert queue.declaration_result.message_count == 0
+        await observer.start()
 
         identity = await register_identity_response(
             client, email="media-cleanup-contract@example.com"
@@ -497,8 +487,8 @@ async def test_workspace_cleanup_removes_only_unversioned_bytes_in_the_real_medi
             assert event is not None
             envelope = envelope_from_event(event)
 
-        await publisher.publish(envelope, "media.upload.cleanup")
-        message = await queue.get(timeout=3, fail=False)
+        await publisher.publish(envelope, MEDIA_TOPIC)
+        message = await observer.get(wait_seconds=3, fail=False)
         assert message is not None
         assert (
             await process_incoming_message(
@@ -536,7 +526,6 @@ async def test_workspace_cleanup_removes_only_unversioned_bytes_in_the_real_medi
             )
             assert active_location is not None
             assert active_location.object_key == versioned_key
-        await channel.close()
     finally:
         if message is not None and not message.processed:
             await message.nack(requeue=True)
@@ -550,7 +539,7 @@ async def test_workspace_cleanup_removes_only_unversioned_bytes_in_the_real_medi
 
 @pytest.mark.skipif(
     os.getenv("LANVERSE_RUN_MEDIA_STACK_CONTRACT") != "1",
-    reason="set LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 with isolated RabbitMQ and MinIO",
+    reason="set LANVERSE_RUN_MEDIA_STACK_CONTRACT=1 with isolated Kafka and MinIO",
 )
 @pytest.mark.asyncio
 async def test_media_location_migrates_rolls_back_and_retires_in_the_real_stack(
@@ -558,7 +547,7 @@ async def test_media_location_migrates_rolls_back_and_retires_in_the_real_stack(
     session_factory: async_sessionmaker[AsyncSession],
     test_settings: Settings,
 ) -> None:
-    rabbitmq_url = rabbitmq_contract_url()
+    bootstrap_servers = kafka_contract_bootstrap_servers()
     storage = MinioObjectStorage(
         test_settings.minio_endpoint,
         test_settings.minio_access_key,
@@ -568,17 +557,15 @@ async def test_media_location_migrates_rolls_back_and_retires_in_the_real_stack(
         thread_limit=test_settings.storage_thread_limit,
     )
     probe = FfprobeMediaProbe(timeout_seconds=test_settings.media_probe_timeout_seconds)
-    publisher = RabbitMQPublisher(rabbitmq_url)
-    observer = await aio_pika.connect_robust(rabbitmq_url, timeout=3)
-    messages: list[aio_pika.abc.AbstractIncomingMessage] = []
+    publisher = KafkaPublisher(bootstrap_servers)
+    observer = KafkaContractObserver(bootstrap_servers, topic=MEDIA_TOPIC)
+    messages: list[KafkaContractMessage] = []
     source_key: str | None = None
     migrated_key: str | None = None
     try:
         await storage.ensure_bucket()
         await publisher.connect()
-        channel = await observer.channel()
-        queue = await channel.declare_queue(MEDIA_QUEUE, durable=True)
-        assert queue.declaration_result.message_count == 0
+        await observer.start()
 
         identity = await register_identity_response(
             client, email="media-location-contract@example.com"
@@ -636,8 +623,8 @@ async def test_media_location_migrates_rolls_back_and_retires_in_the_real_stack(
             )
             assert migration_event is not None
             migration_envelope = envelope_from_event(migration_event)
-        await publisher.publish(migration_envelope, "media.location.migrate")
-        migration_message = await queue.get(timeout=3, fail=False)
+        await publisher.publish(migration_envelope, MEDIA_TOPIC)
+        migration_message = await observer.get(wait_seconds=3, fail=False)
         assert migration_message is not None
         messages.append(migration_message)
         assert (
@@ -712,8 +699,8 @@ async def test_media_location_migrates_rolls_back_and_retires_in_the_real_stack(
             )
             assert rollback_event is not None
             rollback_envelope = envelope_from_event(rollback_event)
-        await publisher.publish(rollback_envelope, "media.location.migrate")
-        rollback_message = await queue.get(timeout=3, fail=False)
+        await publisher.publish(rollback_envelope, MEDIA_TOPIC)
+        rollback_message = await observer.get(wait_seconds=3, fail=False)
         assert rollback_message is not None
         messages.append(rollback_message)
         assert (
@@ -767,8 +754,8 @@ async def test_media_location_migrates_rolls_back_and_retires_in_the_real_stack(
             )
             assert retirement_event is not None
             retirement_envelope = envelope_from_event(retirement_event)
-        await publisher.publish(retirement_envelope, "media.location.retire")
-        retirement_message = await queue.get(timeout=3, fail=False)
+        await publisher.publish(retirement_envelope, MEDIA_TOPIC)
+        retirement_message = await observer.get(wait_seconds=3, fail=False)
         assert retirement_message is not None
         messages.append(retirement_message)
         assert (
@@ -802,7 +789,6 @@ async def test_media_location_migrates_rolls_back_and_retires_in_the_real_stack(
             assert source is not None and source.status == "active"
             assert migrated is not None and migrated.status == "retired"
             assert migrated.retired_at is not None
-        await channel.close()
     finally:
         for message in messages:
             if not message.processed:

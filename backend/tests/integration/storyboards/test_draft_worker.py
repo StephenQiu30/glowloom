@@ -5,7 +5,6 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app import io_worker
 from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production.models import Task
@@ -16,6 +15,7 @@ from app.modules.storyboards import (
 )
 from app.modules.storyboards.drafts.models import StoryboardDraftBatch
 from app.modules.storyboards.models import Shot
+from app.runtime.workers import io as io_worker
 from tests.integration.storyboards.test_draft_batches import (
     create_batch_fixture,
     provider_result,
@@ -55,6 +55,16 @@ class UnknownDrafter(StoryboardDraftProvider):
             retryable=False,
             next_action="create_new_storyboard_draft_batch",
         )
+
+
+class SimulatedWorkerCrash(BaseException):
+    pass
+
+
+class InterruptingDrafter(StoryboardDraftProvider):
+    async def draft(self, value: StoryboardDraftInput) -> dict[str, object]:
+        del value
+        raise SimulatedWorkerCrash
 
 
 async def _message_body(
@@ -160,3 +170,52 @@ async def test_worker_records_unknown_without_partial_drafts(
         assert stored_batch.error_code == "ai_result_unknown"
         assert task is not None
         assert task.status == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_worker_resumes_interrupted_storyboard_harness_from_same_delivery(
+    client: Any,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, _project, episode, script = await published_episode(
+        client,
+        session_factory,
+        email="draft-worker-resume@example.com",
+    )
+    batch = await create_batch_fixture(
+        client,
+        headers=headers,
+        episode=episode,
+        version_id=script["version"]["id"],
+        key="draft-worker-resume",
+    )
+    body = await _message_body(session_factory, batch["task_id"])
+
+    with pytest.raises(SimulatedWorkerCrash):
+        await io_worker.process_incoming_message(
+            RecordingMessage(body),
+            session_factory,
+            storyboard_drafter=InterruptingDrafter(),
+        )
+
+    resumed_drafter = RecordingDrafter(provider_result(script["structure"]).model_dump(mode="json"))
+    resumed_message = RecordingMessage(body)
+    outcome = await io_worker.process_incoming_message(
+        resumed_message,
+        session_factory,
+        storyboard_drafter=resumed_drafter,
+    )
+
+    assert outcome == "completed"
+    assert resumed_message.ack_count == 1
+    assert len(resumed_drafter.inputs) == 1
+    async with session_factory() as session:
+        stored_batch = await session.get(StoryboardDraftBatch, UUID(batch["id"]))
+        task = await session.get(Task, UUID(batch["task_id"]))
+        delivery = await session.scalar(
+            select(InboxDelivery).where(InboxDelivery.task_id == UUID(batch["task_id"]))
+        )
+        assert stored_batch is not None and stored_batch.status == "needs_review"
+        assert task is not None and task.status == "succeeded"
+        assert delivery is not None and delivery.status == "completed"
+        assert delivery.attempt_count == 2

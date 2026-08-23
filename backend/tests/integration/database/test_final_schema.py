@@ -10,7 +10,7 @@ from app.core.schema import (
     assert_database_schema,
     initialize_database,
 )
-from app.model_registry import register_implemented_models
+from app.runtime.model_registry import register_implemented_models
 from tests.conftest import TEST_DATABASE_URL
 
 register_implemented_models()

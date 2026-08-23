@@ -41,8 +41,8 @@ def _snapshot() -> ExportSnapshot:
                 narrative_unit_id=_id(6),
                 unit_version_id=_id(7),
                 position=1,
-                kind="action",
-                exact_text="沈岚 <回头> & 决断",
+                kind="dialogue",
+                exact_text="沈岚：孩子还在里面！ <回头> & 决断",
                 text_hash=digest,
                 required_for_coverage=True,
                 coverage_status="covered",
@@ -75,16 +75,24 @@ def _snapshot() -> ExportSnapshot:
                         "script_reference": {
                             "confirmed_script_version_id": str(_id(4)),
                             "scene_id": str(_id(14)),
-                            "dialogue_ids": [],
+                            "dialogue_ids": [str(_id(15))],
                         },
-                        "narrative": {"purpose": "女帝确认孩子遇险"},
+                        "narrative": {
+                            "purpose": "女帝确认孩子遇险",
+                            "continuity_note": "承接上一镜向右回头，右手仍握住门框",
+                        },
                         "visual": {
                             "shot_size": "close_up",
                             "camera_angle": "eye_level",
                             "camera_movement": "static",
                             "composition": "沈岚占据画面中心",
                             "environment": "河岸",
-                            "subject_placements": [],
+                            "subject_placements": [
+                                {
+                                    "subject_key": "lead",
+                                    "placement": "画面中心偏左，面向右侧，右手握门框",
+                                }
+                            ],
                             "mood_lighting": "冷色逆光",
                         },
                         "action_beats": [
@@ -94,9 +102,26 @@ def _snapshot() -> ExportSnapshot:
                                 "description": "沈岚回头",
                             }
                         ],
-                        "dialogue_or_narration": [],
+                        "dialogue_or_narration": [
+                            {
+                                "source_dialogue_id": str(_id(15)),
+                                "beat_key": "turn",
+                                "speaker_subject_key": "lead",
+                                "render_as_audio": True,
+                                "performance_note": "压低声音后突然提高音量",
+                            }
+                        ],
                         "duration_ms": 3000,
-                        "generation_intent": {"mode": "text_to_video"},
+                        "audio_intent": {
+                            "ambient": "暴雨与远处警报",
+                            "sound_effects": ["手掌抓紧门框"],
+                        },
+                        "generation_intent": {
+                            "mode": "text_to_video",
+                            "first_frame": "沈岚背对镜头，右手握住门框",
+                            "keyframe_notes": "回头后视线落向画外右侧",
+                            "last_frame": "沈岚完成回头，仍握门框并看向右侧",
+                        },
                     }
                 ),
                 prompt="河岸，沈岚回头",
@@ -117,8 +142,8 @@ def _snapshot() -> ExportSnapshot:
                         reference_id=_id(13),
                         narrative_unit_id=_id(6),
                         unit_version_id=_id(7),
-                        channel="visual",
-                        role="primary",
+                        channel="both",
+                        role="dialogue",
                         coverage_mode="full",
                         segment_start=None,
                         segment_end=None,
@@ -187,9 +212,29 @@ def test_storyboard_package_keeps_machine_and_human_formats_safe() -> None:
         rows = list(csv.DictReader(io.StringIO(csv_content.decode("utf-8-sig"))))
         assert rows[0]["shot_title"] == "回头 <特写>"
         assert rows[0]["asset_names"] == '沈岚, "女帝"'
-        assert rows[0]["narrative_text"] == "沈岚 <回头> & 决断"
+        assert rows[0]["narrative_text"] == "沈岚：孩子还在里面！ <回头> & 决断"
+        assert rows[0]["timecode_in"] == "00:00:00.000"
+        assert rows[0]["timecode_out"] == "00:00:03.000"
+        assert rows[0]["duration_ms"] == "3000"
+        assert rows[0]["scene_id"] == str(_id(14))
+        assert rows[0]["narrative_purpose"] == "女帝确认孩子遇险"
+        assert rows[0]["narrative_roles"] == "dialogue/both/required"
+        assert rows[0]["shot_size"] == "close_up"
+        assert rows[0]["camera_angle"] == "eye_level"
+        assert rows[0]["camera_movement"] == "static"
+        assert "沈岚回头" in rows[0]["action_beats"]
+        assert "孩子还在里面" in rows[0]["dialogue_or_narration"]
+        assert "暴雨与远处警报" in rows[0]["audio_intent"]
+        assert rows[0]["continuity_note"] == "承接上一镜向右回头，右手仍握住门框"
+        assert rows[0]["first_frame"] == "沈岚背对镜头，右手握住门框"
+        assert rows[0]["last_frame"] == "沈岚完成回头，仍握门框并看向右侧"
 
         html = package.read("storyboard.html").decode()
         assert "回头 &lt;特写&gt;" in html
-        assert "沈岚 &lt;回头&gt; &amp; 决断" in html
+        assert "孩子还在里面！ &lt;回头&gt; &amp; 决断" in html
+        assert "00:00:00.000" in html
+        assert "00:00:03.000" in html
+        assert "孩子还在里面" in html
+        assert "承接上一镜向右回头" in html
+        assert "沈岚完成回头" in html
         assert "<script" not in html.lower()

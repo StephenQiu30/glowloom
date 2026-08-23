@@ -2,6 +2,7 @@
 
 from app.modules.assets.contracts import (
     AssetCandidateCommand,
+    AssetCandidateOccurrence,
     AssetCandidateResult,
     AssetExportSnapshot,
     AssetVersionReadinessReference,
@@ -25,6 +26,7 @@ from app.modules.assets.service import (
 
 __all__ = [
     "AssetCandidateCommand",
+    "AssetCandidateOccurrence",
     "AssetCandidateResult",
     "AssetExportSnapshot",
     "AssetVersionReadinessReference",

@@ -8,7 +8,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
-from app import io_worker
 from app.modules.governance.audit.models import AuditEvent
 from app.modules.messaging import MessageEnvelope, envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
@@ -18,6 +17,7 @@ from app.modules.production.models import (
     Reservation,
     Task,
 )
+from app.runtime.workers import io as io_worker
 from tests.integration.test_generation_task_cancellation import (
     submit_queued_generation,
 )

@@ -43,7 +43,7 @@ class Settings(BaseSettings):
         ge=1,
         le=86400,
     )
-    rabbitmq_url: str = "amqp://guest:guest@127.0.0.1:5672/"
+    kafka_bootstrap_servers: str = Field(default="127.0.0.1:9092", min_length=1)
     outbox_batch_size: int = Field(default=20, ge=1, le=100)
     outbox_claim_seconds: int = Field(default=60, ge=5, le=3600)
     outbox_poll_seconds: float = Field(default=1.0, ge=0.1, le=60)
@@ -87,8 +87,6 @@ class Settings(BaseSettings):
     email_verification_ticket_ttl_seconds: int = Field(default=600, ge=60, le=1800)
     email_verification_source_window_seconds: int = Field(default=3600, ge=60, le=86400)
     email_verification_source_limit: int = Field(default=20, ge=1, le=1000)
-    deepseek_api_key: SecretStr | None = None
-    script_extraction_provider: Literal["codex_local", "deepseek", "disabled"] = "codex_local"
     codex_cli_path: str | None = None
     codex_model: str | None = None
     codex_max_concurrency: int = Field(default=2, ge=1, le=16)
@@ -100,7 +98,8 @@ class Settings(BaseSettings):
     provider_credential_fingerprint_key: SecretStr | None = None
 
     @field_validator(
-        "deepseek_api_key",
+        "codex_cli_path",
+        "codex_model",
         "ark_api_key",
         "provider_credential_master_key",
         "provider_credential_fingerprint_key",

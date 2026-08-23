@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from app.server import supervise_services
+from app.runtime.server import supervise_services
 
 
 @pytest.mark.asyncio

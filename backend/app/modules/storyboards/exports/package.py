@@ -14,6 +14,36 @@ from app.modules.storyboards.exports.contracts import (
 from app.modules.storyboards.hashing import canonical_payload_hash
 
 _ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+_STORYBOARD_HEADERS: tuple[str, ...] = (
+    "shot_position",
+    "timecode_in",
+    "timecode_out",
+    "duration_ms",
+    "shot_id",
+    "shot_spec_version_id",
+    "shot_title",
+    "scene_id",
+    "narrative_purpose",
+    "narrative_roles",
+    "shot_size",
+    "camera_angle",
+    "camera_movement",
+    "composition",
+    "environment",
+    "mood_lighting",
+    "subject_placements",
+    "action_beats",
+    "dialogue_or_narration",
+    "audio_intent",
+    "continuity_note",
+    "first_frame",
+    "keyframe_notes",
+    "last_frame",
+    "prompt",
+    "asset_names",
+    "narrative_text",
+    "shot_spec_json",
+)
 
 
 def _json_bytes(value: object) -> bytes:
@@ -47,48 +77,98 @@ def _storyboard_json(snapshot: ExportSnapshot) -> PackageMember:
     )
 
 
-def _shot_rows(snapshot: ExportSnapshot) -> list[list[str | int]]:
+def _timecode(milliseconds: int) -> str:
+    hours, remainder = divmod(milliseconds, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    seconds, millis = divmod(remainder, 1_000)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}"
+
+
+def _shot_rows(snapshot: ExportSnapshot) -> list[dict[str, str | int]]:
     asset_names = {value.asset_version_id: value.name for value in snapshot.assets}
     narrative_text = {value.unit_version_id: value.exact_text for value in snapshot.units}
-    rows: list[list[str | int]] = []
+    narrative_kind = {value.unit_version_id: value.kind for value in snapshot.units}
+    rows: list[dict[str, str | int]] = []
+    elapsed_ms = 0
     for shot in snapshot.shots:
+        spec = shot.spec
+        audio = spec.audio_intent
+        generation = spec.generation_intent
+        source_texts = [
+            narrative_text[value.unit_version_id] for value in shot.narrative_references
+        ]
+        dialogue_texts = [
+            narrative_text[value.unit_version_id]
+            for value in shot.narrative_references
+            if narrative_kind[value.unit_version_id] in {"dialogue", "narration"}
+        ]
+        performance_notes = [
+            value.performance_note
+            for value in spec.dialogue_or_narration
+            if value.performance_note is not None
+        ]
+        audio_parts: list[str] = []
+        if audio is not None:
+            if audio.ambient:
+                audio_parts.append(f"ambient: {audio.ambient}")
+            if audio.sound_effects:
+                audio_parts.append(f"sfx: {'；'.join(audio.sound_effects)}")
+        timecode_in = _timecode(elapsed_ms)
+        elapsed_ms += spec.duration_ms
         rows.append(
-            [
-                shot.position,
-                str(shot.shot_id),
-                str(shot.shot_spec_version_id),
-                shot.title,
-                shot.prompt,
-                " | ".join(asset_names[value.asset_version_id] for value in shot.asset_references),
-                " | ".join(
-                    narrative_text[value.unit_version_id] for value in shot.narrative_references
+            {
+                "shot_position": shot.position,
+                "timecode_in": timecode_in,
+                "timecode_out": _timecode(elapsed_ms),
+                "duration_ms": spec.duration_ms,
+                "shot_id": str(shot.shot_id),
+                "shot_spec_version_id": str(shot.shot_spec_version_id),
+                "shot_title": shot.title,
+                "scene_id": str(spec.script_reference.scene_id),
+                "narrative_purpose": spec.narrative.purpose,
+                "narrative_roles": " | ".join(
+                    f"{value.role}/{value.channel}/{value.contribution}"
+                    for value in shot.narrative_references
                 ),
-                json.dumps(
-                    shot.spec.model_dump(mode="json"),
+                "shot_size": spec.visual.shot_size,
+                "camera_angle": spec.visual.camera_angle,
+                "camera_movement": spec.visual.camera_movement,
+                "composition": spec.visual.composition,
+                "environment": spec.visual.environment,
+                "mood_lighting": spec.visual.mood_lighting,
+                "subject_placements": " | ".join(
+                    f"{value.subject_key}: {value.placement}"
+                    for value in spec.visual.subject_placements
+                ),
+                "action_beats": " | ".join(
+                    f"{value.order}. {value.description}" for value in spec.action_beats
+                ),
+                "dialogue_or_narration": " | ".join([*dialogue_texts, *performance_notes]),
+                "audio_intent": " | ".join(audio_parts),
+                "continuity_note": spec.narrative.continuity_note or "",
+                "first_frame": generation.first_frame or "",
+                "keyframe_notes": generation.keyframe_notes or "",
+                "last_frame": generation.last_frame or "",
+                "prompt": shot.prompt,
+                "asset_names": " | ".join(
+                    asset_names[value.asset_version_id] for value in shot.asset_references
+                ),
+                "narrative_text": " | ".join(source_texts),
+                "shot_spec_json": json.dumps(
+                    spec.model_dump(mode="json"),
                     ensure_ascii=False,
                     sort_keys=True,
                     separators=(",", ":"),
                 ),
-            ]
+            }
         )
     return rows
 
 
 def _storyboard_csv(snapshot: ExportSnapshot) -> PackageMember:
     output = io.StringIO(newline="")
-    writer = csv.writer(output, lineterminator="\r\n")
-    writer.writerow(
-        (
-            "shot_position",
-            "shot_id",
-            "shot_spec_version_id",
-            "shot_title",
-            "prompt",
-            "asset_names",
-            "narrative_text",
-            "shot_spec_json",
-        )
-    )
+    writer = csv.DictWriter(output, fieldnames=_STORYBOARD_HEADERS, lineterminator="\r\n")
+    writer.writeheader()
     writer.writerows(_shot_rows(snapshot))
     return PackageMember(
         path="storyboard.csv",
@@ -102,20 +182,41 @@ def _storyboard_html(snapshot: ExportSnapshot) -> PackageMember:
         '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
         "<title>Storyboard Export</title><style>"
         "body{font-family:system-ui,sans-serif;margin:24px}"
-        "table{border-collapse:collapse;width:100%}"
+        "table{border-collapse:collapse;width:100%;font-size:13px}"
         "th,td{border:1px solid #ccc;padding:8px;text-align:left;vertical-align:top}"
         "th{background:#f3f4f6}pre{white-space:pre-wrap;margin:0}"
         "</style></head><body><h1>Storyboard Export</h1><table><thead><tr>"
-        "<th>#</th><th>Shot</th><th>Prompt</th><th>Assets</th>"
-        "<th>Narrative</th></tr></thead><tbody>"
+        "<th># / Time</th><th>Source / Purpose</th><th>Camera / Composition</th>"
+        "<th>Blocking / Action</th><th>Dialogue / Sound</th>"
+        "<th>Frames / Continuity</th><th>Assets / Prompt</th>"
+        "</tr></thead><tbody>"
     )
     body = "".join(
         "<tr>"
-        f"<td>{html.escape(str(row[0]))}</td>"
-        f"<td>{html.escape(str(row[3]))}</td>"
-        f"<td><pre>{html.escape(str(row[4]))}</pre></td>"
-        f"<td>{html.escape(str(row[5]))}</td>"
-        f"<td><pre>{html.escape(str(row[6]))}</pre></td>"
+        f"<td><strong>{html.escape(str(row['shot_position']))}</strong><br>"
+        f"{html.escape(str(row['timecode_in']))} → {html.escape(str(row['timecode_out']))}<br>"
+        f"{html.escape(str(row['duration_ms']))} ms</td>"
+        f"<td><strong>{html.escape(str(row['shot_title']))}</strong><br>"
+        f"Scene: {html.escape(str(row['scene_id']))}<br>"
+        f"{html.escape(str(row['narrative_purpose']))}<br>"
+        f"<pre>{html.escape(str(row['narrative_text']))}</pre>"
+        f"{html.escape(str(row['narrative_roles']))}</td>"
+        f"<td>{html.escape(str(row['shot_size']))} / "
+        f"{html.escape(str(row['camera_angle']))} / "
+        f"{html.escape(str(row['camera_movement']))}<br>"
+        f"<pre>{html.escape(str(row['composition']))}</pre>"
+        f"{html.escape(str(row['environment']))}<br>"
+        f"{html.escape(str(row['mood_lighting']))}</td>"
+        f"<td><pre>{html.escape(str(row['subject_placements']))}</pre>"
+        f"<pre>{html.escape(str(row['action_beats']))}</pre></td>"
+        f"<td><pre>{html.escape(str(row['dialogue_or_narration']))}</pre>"
+        f"<pre>{html.escape(str(row['audio_intent']))}</pre></td>"
+        f"<td>IN: <pre>{html.escape(str(row['first_frame']))}</pre>"
+        f"KEY: <pre>{html.escape(str(row['keyframe_notes']))}</pre>"
+        f"OUT: <pre>{html.escape(str(row['last_frame']))}</pre>"
+        f"CONT: <pre>{html.escape(str(row['continuity_note']))}</pre></td>"
+        f"<td>{html.escape(str(row['asset_names']))}<br>"
+        f"<pre>{html.escape(str(row['prompt']))}</pre></td>"
         "</tr>"
         for row in _shot_rows(snapshot)
     )

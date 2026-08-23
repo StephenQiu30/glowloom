@@ -71,6 +71,15 @@ class StoryboardDraftBatch(Base):
         CheckConstraint("narrative_revision >= 1", name="ck_sbd_draft_narrative_revision"),
         CheckConstraint("revision >= 1", name="ck_sbd_draft_batch_revision"),
         CheckConstraint(
+            "(agent_checkpoint IS NULL "
+            "AND agent_checkpoint_revision = 0 "
+            "AND agent_checkpoint_updated_at IS NULL) OR "
+            "(agent_checkpoint IS NOT NULL "
+            "AND agent_checkpoint_revision >= 1 "
+            "AND agent_checkpoint_updated_at IS NOT NULL)",
+            name="ck_sbd_draft_batch_agent_checkpoint",
+        ),
+        CheckConstraint(
             "target_duration_ms >= 1000 AND target_duration_ms <= 7200000",
             name="ck_sbd_draft_batch_duration",
         ),
@@ -120,6 +129,17 @@ class StoryboardDraftBatch(Base):
     base_order_hash: Mapped[str] = mapped_column(String(64))
     base_shot_hash: Mapped[str] = mapped_column(String(64))
     base_shots: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
+    agent_checkpoint: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=None,
+    )
+    agent_checkpoint_revision: Mapped[int] = mapped_column(Integer, default=0)
+    agent_checkpoint_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
     task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="queued")
     provider_result_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)

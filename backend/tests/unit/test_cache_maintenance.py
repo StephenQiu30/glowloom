@@ -1,8 +1,8 @@
 import pytest
 
-from app.cache_maintenance import invalidate_cache_namespace
 from app.core.config import Settings
 from app.modules.caching import CacheKey, CacheNamespace
+from app.runtime.commands.cache import invalidate_cache_namespace
 
 
 class NamespaceRecordingCache:

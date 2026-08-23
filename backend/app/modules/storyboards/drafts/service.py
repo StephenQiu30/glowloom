@@ -70,10 +70,9 @@ from app.modules.storyboards.hashing import (
 from app.modules.storyboards.models import AssetReference, Shot, ShotSpecVersion
 
 ENGINE_VERSION = "storyboard-draft-v1"
-MODEL_NAME = "deepseek-chat"
-SCHEMA_VERSION = "storyboard-draft-schema-v1"
+MODEL_NAME = "codex-local"
+SCHEMA_VERSION = "storyboard-draft-schema-v2"
 MAX_ACTIVE_SHOTS = 120
-MIN_AI_SHOT_DURATION_MS = 4_000
 DURATION_TOLERANCE = 0.25
 
 
@@ -571,12 +570,6 @@ def _validate_provider_result(
             "Storyboard drafts do not cover every required narrative unit",
             status_code=422,
         )
-    if any(shot.spec.duration_ms < MIN_AI_SHOT_DURATION_MS for shot in result.shots):
-        raise ApiError(
-            ErrorCode.VALIDATION_FAILED,
-            "AI storyboard shot duration must be between 4 and 15 seconds",
-            status_code=422,
-        )
     total_duration_ms = sum(shot.spec.duration_ms for shot in result.shots)
     duration_lower_ms = round(batch.target_duration_ms * (1 - DURATION_TOLERANCE))
     duration_upper_ms = round(batch.target_duration_ms * (1 + DURATION_TOLERANCE))
@@ -584,12 +577,6 @@ def _validate_provider_result(
         raise ApiError(
             ErrorCode.VALIDATION_FAILED,
             "Storyboard draft duration is outside the accepted target range",
-            status_code=422,
-        )
-    if 60_000 <= batch.target_duration_ms <= 120_000 and not 12 <= len(result.shots) <= 24:
-        raise ApiError(
-            ErrorCode.VALIDATION_FAILED,
-            "A 60-120 second episode requires 12-24 storyboard drafts",
             status_code=422,
         )
 

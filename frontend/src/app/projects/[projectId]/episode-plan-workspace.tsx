@@ -358,7 +358,7 @@ export function EpisodePlanWorkspace({
               <p className="mt-1 text-sm text-muted-foreground">
                 {strategy === "explicit_markers"
                   ? "沿用已验证的连续集标记，不调用模型。"
-                  : "DeepSeek 只生成候选边界，服务端仍会校验唯一锚点和全文守恒。"}
+                  : "本地 Codex 只生成候选边界，服务端仍会校验唯一锚点和全文守恒。"}
               </p>
             </div>
             <Button disabled={!canWrite || busy} onClick={create}>

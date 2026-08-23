@@ -73,7 +73,7 @@ from app.modules.scripts.planning.schemas import (
 )
 
 PLANNING_ENGINE_VERSION = "episode-planning-v1"
-DEEPSEEK_EPISODE_MODEL = "deepseek-v4-pro"
+CODEX_LOCAL_EPISODE_MODEL = "codex-local"
 _TITLE_LINE = re.compile(r"^《(.{1,118})》$")
 
 
@@ -544,7 +544,7 @@ async def create_plan(
                 input_hash=input_hash,
                 planning_engine_version=PLANNING_ENGINE_VERSION,
                 model_name=(
-                    DEEPSEEK_EPISODE_MODEL if request.strategy == "target_duration_ai" else None
+                    CODEX_LOCAL_EPISODE_MODEL if request.strategy == "target_duration_ai" else None
                 ),
                 prompt_version=(
                     EPISODE_PLANNER_PROMPT_VERSION

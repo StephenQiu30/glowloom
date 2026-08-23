@@ -122,6 +122,25 @@ async def test_workflow_applies_explicit_episode_number_without_source_marker() 
 
 
 @pytest.mark.asyncio
+async def test_workflow_accepts_authoritative_marker_for_later_episode() -> None:
+    model = _FakeStructureModel()
+    workflow = ScriptStructureExtractionWorkflow(
+        skill=_skill(),
+        model=model,
+        system_prompt="Extract screenplay structure.",
+    )
+
+    result = await workflow.run(
+        "第二集\nINT. HOUSE - DAY\nMara looks outside.",
+        context=_context(),
+        episode_number=2,
+    )
+
+    assert model.payloads[0]["episode_number"] == 2
+    assert result.candidates
+
+
+@pytest.mark.asyncio
 async def test_workflow_bounds_probabilistic_candidate_ranges_to_chunk() -> None:
     script = "外景·旧车站·夜\n林澈等待。"
 

@@ -79,13 +79,12 @@ def test_production_environment_example_is_fail_closed() -> None:
     for secret in (
         "DATABASE_URL",
         "TEST_DATABASE_URL",
-        "RABBITMQ_URL",
+        "KAFKA_BOOTSTRAP_SERVERS",
         "MINIO_ACCESS_KEY",
         "MINIO_SECRET_KEY",
         "JWT_SECRET_KEY",
         "SMTP_PASSWORD",
         "EMAIL_VERIFICATION_HMAC_SECRET",
-        "DEEPSEEK_API_KEY",
         "ARK_API_KEY",
         "PROVIDER_CREDENTIAL_MASTER_KEY",
         "PROVIDER_CREDENTIAL_FINGERPRINT_KEY",
@@ -200,22 +199,30 @@ def test_server_bind_address_is_explicit_and_validated() -> None:
 
 
 def test_provider_keys_are_optional_and_secret() -> None:
-    assert Settings.model_validate({"deepseek_api_key": None}).deepseek_api_key is None
-    assert Settings.model_validate({"deepseek_api_key": ""}).deepseek_api_key is None
     assert Settings.model_validate({"ark_api_key": None}).ark_api_key is None
     assert Settings.model_validate({"ark_api_key": ""}).ark_api_key is None
 
-    configured = Settings.model_validate(
+    configured = Settings.model_validate({"ark_api_key": "test-ark-key"})
+
+    assert isinstance(configured.ark_api_key, SecretStr)
+    assert str(configured.ark_api_key) == "**********"
+
+
+def test_local_codex_settings_are_available_without_provider_credentials() -> None:
+    defaults = Settings.model_validate({"codex_cli_path": "", "codex_model": ""})
+    settings = Settings.model_validate(
         {
-            "deepseek_api_key": "test-deepseek-key",
-            "ark_api_key": "test-ark-key",
+            "codex_cli_path": "/usr/local/bin/codex",
+            "codex_model": "gpt-5-codex",
+            "codex_max_concurrency": 3,
         }
     )
 
-    assert isinstance(configured.deepseek_api_key, SecretStr)
-    assert str(configured.deepseek_api_key) == "**********"
-    assert isinstance(configured.ark_api_key, SecretStr)
-    assert str(configured.ark_api_key) == "**********"
+    assert defaults.codex_cli_path is None
+    assert defaults.codex_model is None
+    assert settings.codex_cli_path == "/usr/local/bin/codex"
+    assert settings.codex_model == "gpt-5-codex"
+    assert settings.codex_max_concurrency == 3
 
 
 def test_provider_credential_encryption_keys_are_optional_independent_secrets() -> None:

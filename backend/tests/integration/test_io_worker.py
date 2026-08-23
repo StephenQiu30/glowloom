@@ -9,13 +9,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
-from app import io_worker
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
 from app.modules.production.models import Task
+from app.runtime.workers import io as io_worker
 
 
 async def _task_and_body(
@@ -140,7 +140,7 @@ async def test_worker_nacks_database_failure_without_persisting_result(
         if getattr(record, "event_name", None) == "message.consume.failed"
     )
     context = cast(dict[str, object], failed_record.__dict__["context"])
-    assert context["queue"] == "lanverse.io"
+    assert context["topic"] == "lanverse.io.v1"
     assert context["event_type"] == "script_extraction.requested"
     assert context["result"] == "requeued"
     assert context["retryable"] is True
@@ -178,6 +178,6 @@ async def test_worker_acknowledges_unparseable_or_oversized_poison_message(
     assert "not-json-and-no-stable-message-identity" not in str(rejected_records)
     rendered_metrics = generate_latest().decode("utf-8")
     assert (
-        'lanverse_message_results_total{event_type="invalid",queue="lanverse.io",result="rejected"}'
+        'lanverse_message_results_total{event_type="invalid",result="rejected",topic="lanverse.io.v1"}'
     ) in rendered_metrics
     assert "not-json-and-no-stable-message-identity" not in rendered_metrics

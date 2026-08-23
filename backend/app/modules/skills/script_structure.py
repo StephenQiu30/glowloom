@@ -80,10 +80,26 @@ def _line_break_before(text: str, start: int, limit: int) -> int:
     return line_break + 1
 
 
-def _episode_ranges(script_body: str) -> list[tuple[int | None, int, int]]:
+def _episode_ranges(
+    script_body: str,
+    *,
+    authoritative_episode_number: int | None = None,
+) -> list[tuple[int | None, int, int]]:
     analysis = analyze_document(script_body)
-    if any(issue.severity == "blocking" for issue in analysis.issues):
-        issue = next(issue for issue in analysis.issues if issue.severity == "blocking")
+    blocking_issues = [issue for issue in analysis.issues if issue.severity == "blocking"]
+    if authoritative_episode_number is not None and analysis.markers:
+        marker_numbers = {marker.episode_number for marker in analysis.markers}
+        if marker_numbers != {authoritative_episode_number}:
+            raise SkillExecutionError(
+                outcome="failed",
+                code="script_structure_input_invalid",
+                summary="Script episode marker does not match the authoritative episode",
+                retryable=False,
+                next_action="fix_skill_input",
+            )
+        blocking_issues = [issue for issue in blocking_issues if issue.code != "number_gap"]
+    if blocking_issues:
+        issue = blocking_issues[0]
         raise SkillExecutionError(
             outcome="failed",
             code="script_structure_input_invalid",
@@ -127,6 +143,7 @@ def segment_script(
     script_body: str,
     *,
     max_chunk_chars: int = DEFAULT_MAX_CHUNK_CHARS,
+    authoritative_episode_number: int | None = None,
 ) -> tuple[ScriptExtractionChunk, ...]:
     if not script_body.strip():
         raise SkillExecutionError(
@@ -141,7 +158,10 @@ def segment_script(
 
     chunks: list[ScriptExtractionChunk] = []
     sequence = 0
-    for episode_number, episode_start, episode_end in _episode_ranges(script_body):
+    for episode_number, episode_start, episode_end in _episode_ranges(
+        script_body,
+        authoritative_episode_number=authoritative_episode_number,
+    ):
         scene_starts = _scene_starts(script_body, episode_start, episode_end)
         natural_starts = [episode_start, *scene_starts[1:]] if scene_starts else [episode_start]
         natural_ends = [*natural_starts[1:], episode_end]
@@ -612,7 +632,11 @@ class ScriptStructureExtractionWorkflow:
             chunks = (
                 self._chunker(script_body)
                 if self._chunker is not None
-                else segment_script(script_body, max_chunk_chars=self._max_chunk_chars)
+                else segment_script(
+                    script_body,
+                    max_chunk_chars=self._max_chunk_chars,
+                    authoritative_episode_number=state.get("episode_number"),
+                )
             )
             explicit_episode_number = state.get("episode_number")
             chunk_states = [chunk.as_state() for chunk in chunks]
@@ -724,12 +748,15 @@ class ScriptStructureExtractionWorkflow:
                     retryable=False,
                     next_action="start_new_skill_run",
                 )
+            explicit_episode_number = state.get("episode_number")
             expected_episodes = {
                 episode_number
-                for episode_number, _, _ in _episode_ranges(script_body)
+                for episode_number, _, _ in _episode_ranges(
+                    script_body,
+                    authoritative_episode_number=explicit_episode_number,
+                )
                 if episode_number is not None
             }
-            explicit_episode_number = state.get("episode_number")
             if explicit_episode_number is not None:
                 expected_episodes.add(explicit_episode_number)
             episode_summaries = {

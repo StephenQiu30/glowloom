@@ -1,0 +1,6 @@
+interface:
+  display_name: "Storyboard Shot Draft"
+  short_description: "Draft complete source-grounded key storyboard table rows"
+  default_prompt: "Use $storyboard-shot-draft to realize the fixed scene seed and accepted plan as schema-valid candidate shot rows."
+policy:
+  allow_implicit_invocation: false

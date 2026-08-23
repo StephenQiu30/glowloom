@@ -11,20 +11,21 @@ from uuid6 import uuid7
 from app.core.telemetry import persisted_traceparent
 from app.modules.messaging.contracts import MessageEnvelope, OutboxEventCommand
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
+from app.modules.messaging.topics import REGISTERED_TOPICS
 
 OutboxBacklogState = Literal["pending", "claimed", "manual_attention"]
 
 
 @dataclass(frozen=True, slots=True)
 class OutboxBacklog:
-    routing_key: str
+    topic: str
     state: OutboxBacklogState
     count: int
     oldest_created_at: datetime
 
 
 class MessagePublisher(Protocol):
-    async def publish(self, envelope: MessageEnvelope, routing_key: str) -> None: ...
+    async def publish(self, envelope: MessageEnvelope, topic: str) -> None: ...
 
 
 async def start_inbox_delivery(
@@ -99,6 +100,8 @@ async def enqueue_outbox_event(
     session: AsyncSession,
     command: OutboxEventCommand,
 ) -> UUID:
+    if command.topic not in REGISTERED_TOPICS:
+        raise ValueError("Kafka topic is not registered")
     event_id = uuid7()
     session.add(
         OutboxEvent(
@@ -108,7 +111,7 @@ async def enqueue_outbox_event(
             schema_version=command.schema_version,
             aggregate_type=command.aggregate_type,
             aggregate_id=command.aggregate_id,
-            routing_key=command.routing_key,
+            topic=command.topic,
             payload=command.payload,
             trace_id=command.trace_id,
             traceparent=persisted_traceparent(command.traceparent),
@@ -141,16 +144,16 @@ async def find_outbox_event_id(
 async def outbox_backlog(session: AsyncSession) -> list[OutboxBacklog]:
     rows = await session.execute(
         select(
-            OutboxEvent.routing_key,
+            OutboxEvent.topic,
             OutboxEvent.status,
             func.count(OutboxEvent.id),
             func.min(OutboxEvent.created_at),
         )
         .where(OutboxEvent.status.in_(("pending", "claimed", "manual_attention")))
-        .group_by(OutboxEvent.routing_key, OutboxEvent.status)
+        .group_by(OutboxEvent.topic, OutboxEvent.status)
     )
     backlog: list[OutboxBacklog] = []
-    for routing_key, state, count, oldest_created_at in rows.tuples():
+    for topic, state, count, oldest_created_at in rows.tuples():
         if state not in {
             "pending",
             "claimed",
@@ -159,7 +162,7 @@ async def outbox_backlog(session: AsyncSession) -> list[OutboxBacklog]:
             raise RuntimeError("outbox backlog returned invalid dimensions")
         backlog.append(
             OutboxBacklog(
-                routing_key=routing_key,
+                topic=topic,
                 state=cast(OutboxBacklogState, state),
                 count=int(count),
                 oldest_created_at=oldest_created_at,

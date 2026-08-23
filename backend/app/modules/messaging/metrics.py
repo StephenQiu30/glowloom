@@ -7,7 +7,7 @@ from prometheus_client import Counter, Gauge, Histogram
 
 from app.modules.messaging.service import OutboxBacklog
 
-QueueLabel = Literal["lanverse.io", "lanverse.media", "unregistered"]
+TopicLabel = Literal["lanverse.io.v1", "lanverse.media.v1", "unregistered"]
 MessageResult = Literal["completed", "duplicate", "rejected", "requeued"]
 OutboxPublishResult = Literal["published", "retry_scheduled"]
 OutboxState = Literal["pending", "claimed", "manual_attention"]
@@ -32,47 +32,47 @@ REGISTERED_MESSAGE_EVENT_TYPES = frozenset(
 OUTBOX_PUBLISH_RESULTS = Counter(
     "lanverse_outbox_publish_results_total",
     "Persisted Outbox publish outcomes",
-    ("queue", "event_type", "result"),
+    ("topic", "event_type", "result"),
 )
 OUTBOX_PUBLISH_DURATION = Histogram(
     "lanverse_outbox_publish_duration_seconds",
     "Outbox publish and persisted outcome duration",
-    ("queue", "event_type"),
+    ("topic", "event_type"),
 )
 MESSAGE_RESULTS = Counter(
     "lanverse_message_results_total",
     "Worker message processing outcomes",
-    ("queue", "event_type", "result"),
+    ("topic", "event_type", "result"),
 )
 MESSAGE_HANDLER_DURATION = Histogram(
     "lanverse_message_handler_duration_seconds",
     "Worker message handler duration",
-    ("queue", "event_type"),
+    ("topic", "event_type"),
 )
 OUTBOX_EVENTS = Gauge(
     "lanverse_outbox_events",
     "Current unpublished Outbox events from PostgreSQL facts",
-    ("queue", "state"),
+    ("topic", "state"),
 )
 OUTBOX_OLDEST_AGE = Gauge(
     "lanverse_outbox_oldest_age_seconds",
     "Age of the oldest unpublished Outbox event from PostgreSQL facts",
-    ("queue", "state"),
+    ("topic", "state"),
 )
 WORKER_INFLIGHT = Gauge(
     "lanverse_worker_inflight",
     "Messages currently handled by this worker process",
-    ("queue",),
+    ("topic",),
 )
 WORKER_CAPACITY = Gauge(
     "lanverse_worker_capacity",
-    "Configured RabbitMQ prefetch capacity for this worker process",
-    ("queue",),
+    "Configured Kafka message processing capacity for this worker process",
+    ("topic",),
 )
 
-_QUEUE_LABELS: tuple[QueueLabel, ...] = (
-    "lanverse.io",
-    "lanverse.media",
+_TOPIC_LABELS: tuple[TopicLabel, ...] = (
+    "lanverse.io.v1",
+    "lanverse.media.v1",
     "unregistered",
 )
 _OUTBOX_STATES: tuple[OutboxState, ...] = (
@@ -88,58 +88,50 @@ def message_event_type_label(value: str) -> str:
     return "unregistered"
 
 
-def message_queue_label(value: str) -> QueueLabel:
-    if value == "lanverse.io":
-        return "lanverse.io"
-    if value == "lanverse.media":
-        return "lanverse.media"
-    return "unregistered"
-
-
-def queue_label_for_routing_key(routing_key: str) -> QueueLabel:
-    if routing_key.startswith("io."):
-        return "lanverse.io"
-    if routing_key.startswith("media."):
-        return "lanverse.media"
+def topic_label(value: str) -> TopicLabel:
+    if value == "lanverse.io.v1":
+        return "lanverse.io.v1"
+    if value == "lanverse.media.v1":
+        return "lanverse.media.v1"
     return "unregistered"
 
 
 def observe_message_result(
     *,
-    queue: str,
+    topic: str,
     event_type: str,
     result: MessageResult,
     duration_seconds: float,
 ) -> None:
-    queue_label = message_queue_label(queue)
+    destination = topic_label(topic)
     event_type_label = message_event_type_label(event_type)
     MESSAGE_RESULTS.labels(
-        queue=queue_label,
+        topic=destination,
         event_type=event_type_label,
         result=result,
     ).inc()
     MESSAGE_HANDLER_DURATION.labels(
-        queue=queue_label,
+        topic=destination,
         event_type=event_type_label,
     ).observe(max(duration_seconds, 0))
 
 
 def observe_outbox_publish_result(
     *,
-    routing_key: str,
+    topic: str,
     event_type: str,
     result: OutboxPublishResult,
     duration_seconds: float,
 ) -> None:
-    queue = queue_label_for_routing_key(routing_key)
+    destination = topic_label(topic)
     event_type_label = message_event_type_label(event_type)
     OUTBOX_PUBLISH_RESULTS.labels(
-        queue=queue,
+        topic=destination,
         event_type=event_type_label,
         result=result,
     ).inc()
     OUTBOX_PUBLISH_DURATION.labels(
-        queue=queue,
+        topic=destination,
         event_type=event_type_label,
     ).observe(max(duration_seconds, 0))
 
@@ -149,12 +141,12 @@ def observe_outbox_backlog(
     *,
     observed_at: datetime,
 ) -> None:
-    counts: dict[tuple[QueueLabel, OutboxState], int] = {}
-    ages: dict[tuple[QueueLabel, OutboxState], float] = {}
+    counts: dict[tuple[TopicLabel, OutboxState], int] = {}
+    ages: dict[tuple[TopicLabel, OutboxState], float] = {}
     for item in backlog:
         if item.state not in _OUTBOX_STATES:
             continue
-        key = (queue_label_for_routing_key(item.routing_key), item.state)
+        key = (topic_label(item.topic), item.state)
         counts[key] = counts.get(key, 0) + max(item.count, 0)
         try:
             age = max((observed_at - item.oldest_created_at).total_seconds(), 0)
@@ -162,36 +154,36 @@ def observe_outbox_backlog(
             continue
         ages[key] = max(ages.get(key, 0), age)
 
-    for queue in _QUEUE_LABELS:
+    for topic in _TOPIC_LABELS:
         for state in _OUTBOX_STATES:
-            key = (queue, state)
+            key = (topic, state)
             try:
-                OUTBOX_EVENTS.labels(queue=queue, state=state).set(counts.get(key, 0))
+                OUTBOX_EVENTS.labels(topic=topic, state=state).set(counts.get(key, 0))
             except Exception:
                 pass
             try:
-                OUTBOX_OLDEST_AGE.labels(queue=queue, state=state).set(ages.get(key, 0))
+                OUTBOX_OLDEST_AGE.labels(topic=topic, state=state).set(ages.get(key, 0))
             except Exception:
                 pass
 
 
-def initialize_worker_metrics(*, queue: str, capacity: int) -> None:
+def initialize_worker_metrics(*, topic: str, capacity: int) -> None:
     if capacity < 1:
         raise ValueError("worker capacity must be positive")
-    queue_label = message_queue_label(queue)
+    destination = topic_label(topic)
     try:
-        WORKER_CAPACITY.labels(queue=queue_label).set(capacity)
+        WORKER_CAPACITY.labels(topic=destination).set(capacity)
     except Exception:
         pass
     try:
-        WORKER_INFLIGHT.labels(queue=queue_label).set(0)
+        WORKER_INFLIGHT.labels(topic=destination).set(0)
     except Exception:
         pass
 
 
 def track_worker_inflight(
     *,
-    queue: str,
+    topic: str,
     capacity: int,
 ) -> Callable[
     [Callable[P, Coroutine[Any, Any, R]]],
@@ -199,7 +191,7 @@ def track_worker_inflight(
 ]:
     if capacity < 1:
         raise ValueError("worker capacity must be positive")
-    queue_label = message_queue_label(queue)
+    destination = topic_label(topic)
 
     def decorator(
         function: Callable[P, Coroutine[Any, Any, R]],
@@ -207,12 +199,12 @@ def track_worker_inflight(
         @wraps(function)
         async def tracked(*args: P.args, **kwargs: P.kwargs) -> R:
             try:
-                WORKER_CAPACITY.labels(queue=queue_label).set(capacity)
+                WORKER_CAPACITY.labels(topic=destination).set(capacity)
             except Exception:
                 pass
             incremented = False
             try:
-                WORKER_INFLIGHT.labels(queue=queue_label).inc()
+                WORKER_INFLIGHT.labels(topic=destination).inc()
                 incremented = True
             except Exception:
                 pass
@@ -221,7 +213,7 @@ def track_worker_inflight(
             finally:
                 if incremented:
                     try:
-                        WORKER_INFLIGHT.labels(queue=queue_label).dec()
+                        WORKER_INFLIGHT.labels(topic=destination).dec()
                     except Exception:
                         pass
 

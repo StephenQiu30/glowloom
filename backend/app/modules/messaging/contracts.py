@@ -36,7 +36,7 @@ class OutboxEventCommand:
     schema_version: int
     aggregate_type: str
     aggregate_id: UUID
-    routing_key: str
+    topic: str
     payload: dict[str, str]
     trace_id: str
     available_at: datetime

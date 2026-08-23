@@ -115,6 +115,8 @@ async def resolve_storyboard_narrative(
                 narrative_unit_id=version.unit_id,
                 unit_version_id=version.id,
                 position=version.position,
+                source_start=version.source_start,
+                source_end=version.source_end,
                 kind=cast(
                     Literal["scene_heading", "action", "dialogue", "narration"],
                     kind_by_id[version.unit_id],

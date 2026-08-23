@@ -26,12 +26,12 @@ def _connection(*, workspace_id: UUID, owner_id: UUID) -> ProviderConnection:
     return ProviderConnection(
         id=uuid7(),
         workspace_id=workspace_id,
-        preset_id="deepseek",
+        preset_id="example-provider",
         catalog_version=1,
-        display_name="DeepSeek production",
+        display_name="Example production provider",
         protocol="openai_compatible",
         region=None,
-        base_url="https://api.deepseek.com",
+        base_url="https://provider.example.com",
         non_secret_config={},
         configuration_status="valid",
         revision=1,
@@ -151,8 +151,8 @@ async def test_database_allows_only_one_active_binding_per_workspace_usage(
             connection = _connection(workspace_id=workspace_id, owner_id=owner_id)
             capability = ModelCapability(
                 id=uuid7(),
-                provider="deepseek",
-                model="deepseek-v4-pro",
+                provider="example-provider",
+                model="example-model-v1",
                 kind="text",
                 config_version=1,
                 input_types=["text"],
@@ -215,8 +215,8 @@ async def test_database_rejects_cross_workspace_binding_reference(
             connection = _connection(workspace_id=workspace_id, owner_id=owner_id)
             capability = ModelCapability(
                 id=uuid7(),
-                provider="deepseek",
-                model="deepseek-v4-pro",
+                provider="example-provider",
+                model="example-model-v1",
                 kind="text",
                 config_version=1,
                 input_types=["text"],
@@ -265,8 +265,8 @@ async def test_database_rejects_binding_with_unregistered_capability_version(
             connection = _connection(workspace_id=workspace_id, owner_id=owner_id)
             capability = ModelCapability(
                 id=uuid7(),
-                provider="deepseek",
-                model="deepseek-v4-pro",
+                provider="example-provider",
+                model="example-model-v1",
                 kind="text",
                 config_version=1,
                 input_types=["text"],

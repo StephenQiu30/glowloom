@@ -4,10 +4,8 @@
 #
 #    pip-compile --output-file=requirements.txt --strip-extras pyproject.toml
 #
-aio-pika==10.0.1
+aiokafka==0.14.0
     # via lanverse-backend (pyproject.toml)
-aiormq==7.0.0
-    # via aio-pika
 annotated-doc==0.0.5
     # via fastapi
 annotated-types==0.8.0
@@ -17,7 +15,6 @@ anyio==4.14.2
     #   httpx
     #   langsmith
     #   lanverse-backend (pyproject.toml)
-    #   openai
     #   starlette
     #   watchfiles
 argon2-cffi==25.1.0
@@ -26,6 +23,8 @@ argon2-cffi==25.1.0
     #   pwdlib
 argon2-cffi-bindings==25.1.0
     # via argon2-cffi
+async-timeout==5.0.1
+    # via aiokafka
 asyncpg==0.31.0
     # via lanverse-backend (pyproject.toml)
 certifi==2026.7.22
@@ -47,7 +46,6 @@ cryptography==50.0.0
 distro==1.9.0
     # via
     #   langsmith
-    #   openai
 dnspython==2.8.0
     # via email-validator
 email-validator==2.3.0
@@ -75,25 +73,16 @@ idna==3.18
     #   email-validator
     #   httpx
     #   requests
-    #   yarl
-jiter==0.16.0
-    # via openai
 jsonpatch==1.33
     # via langchain-core
 jsonpointer==3.1.1
     # via jsonpatch
 langchain-core==1.5.2
     # via
-    #   langchain-deepseek
-    #   langchain-openai
     #   langgraph
     #   langgraph-checkpoint
     #   langgraph-prebuilt
     #   langgraph-sdk
-langchain-deepseek==1.1.0
-    # via lanverse-backend (pyproject.toml)
-langchain-openai==1.4.1
-    # via langchain-deepseek
 langchain-protocol==0.0.18
     # via
     #   langchain-core
@@ -112,14 +101,6 @@ langsmith==0.10.12
     # via langchain-core
 minio==7.2.20
     # via lanverse-backend (pyproject.toml)
-multidict==6.7.1
-    # via yarl
-openai==2.50.0
-    # via langchain-openai
-openai-codex==0.144.4
-    # via lanverse-backend (pyproject.toml)
-openai-codex-cli-bin==0.144.4
-    # via openai-codex
 opentelemetry-api==1.44.0
     # via
     #   lanverse-backend (pyproject.toml)
@@ -137,14 +118,11 @@ ormsgpack==1.12.2
     # via langgraph-checkpoint
 packaging==26.2
     # via
+    #   aiokafka
     #   langchain-core
     #   langsmith
-pamqp==4.0.1
-    # via aiormq
 prometheus-client==0.26.0
     # via lanverse-backend (pyproject.toml)
-propcache==0.5.2
-    # via yarl
 pwdlib==0.3.0
     # via lanverse-backend (pyproject.toml)
 pycparser==3.0
@@ -158,8 +136,6 @@ pydantic==2.13.4
     #   langgraph
     #   langsmith
     #   lanverse-backend (pyproject.toml)
-    #   openai
-    #   openai-codex
     #   pydantic-settings
 pydantic-core==2.46.4
     # via pydantic
@@ -177,38 +153,30 @@ pyyaml==6.0.3
     #   uvicorn
 redis==8.0.1
     # via lanverse-backend (pyproject.toml)
-regex==2026.7.19
-    # via tiktoken
 requests==2.34.2
     # via
     #   langsmith
     #   requests-toolbelt
-    #   tiktoken
 requests-toolbelt==1.0.0
     # via langsmith
 sniffio==1.3.1
     # via
     #   langsmith
-    #   openai
 sqlalchemy==2.0.51
     # via lanverse-backend (pyproject.toml)
 starlette==1.3.1
     # via fastapi
 tenacity==9.1.4
     # via langchain-core
-tiktoken==0.13.0
-    # via langchain-openai
-tqdm==4.70.0
-    # via openai
 typing-extensions==4.16.0
     # via
+    #   aiokafka
     #   anyio
     #   fastapi
     #   langchain-core
     #   langchain-protocol
     #   langsmith
     #   minio
-    #   openai
     #   opentelemetry-api
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
@@ -249,9 +217,5 @@ xxhash==3.8.1
     # via
     #   langgraph
     #   langsmith
-yarl==1.24.5
-    # via
-    #   aio-pika
-    #   aiormq
 zstandard==0.25.0
     # via langsmith

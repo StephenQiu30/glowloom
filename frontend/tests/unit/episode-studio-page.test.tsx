@@ -290,7 +290,7 @@ function extractionBatch(
     script_version_id: versionId,
     scope: "full",
     extractor_version:
-      "deepseek-v4-pro:thinking-off:lc-deepseek-1.1.0:prompt-v1:schema-v1",
+      "codex-local:prompt-v1:schema-v1",
     input_hash: version.content_hash,
     status,
     confirmed_script_version_id: null,
@@ -315,7 +315,7 @@ function extractionBatch(
         ? {
             code: "ai_service_unavailable",
             retryable: true,
-            summary: "DeepSeek service is temporarily unavailable",
+            summary: "Local Codex service is temporarily unavailable",
           }
         : null,
       next_action: failed ? "start_new_extraction" : "review_candidates",

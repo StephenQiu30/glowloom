@@ -204,7 +204,7 @@ async def test_direct_upload_completion_is_atomic_idempotent_and_privately_acces
         event = await session.scalar(select(OutboxEvent))
         assert event is not None
         assert event.event_type == "media_probe.requested"
-        assert event.routing_key == "media.probe"
+        assert event.topic == "lanverse.media.v1"
         assert event.payload == {"task_id": probe_task["id"]}
 
     listed = await client.get(
@@ -317,7 +317,7 @@ async def test_owner_submits_idempotent_location_migration_and_reads_safe_status
         )
         assert event is not None
         assert event.event_type == "media_location_migration.requested"
-        assert event.routing_key == "media.location.migrate"
+        assert event.topic == "lanverse.media.v1"
 
 
 @pytest.mark.asyncio

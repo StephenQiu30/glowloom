@@ -56,7 +56,7 @@ class OutboxEvent(Base):
     schema_version: Mapped[int] = mapped_column(Integer)
     aggregate_type: Mapped[str] = mapped_column(String(50))
     aggregate_id: Mapped[UUID] = mapped_column(Uuid)
-    routing_key: Mapped[str] = mapped_column(String(100))
+    topic: Mapped[str] = mapped_column(String(100))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
     trace_id: Mapped[str] = mapped_column(String(64))
     traceparent: Mapped[str] = mapped_column(String(55), nullable=False)

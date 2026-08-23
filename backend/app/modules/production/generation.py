@@ -22,6 +22,7 @@ from app.modules.caching import (
 from app.modules.governance.audit import append_audit_event
 from app.modules.identity import ActorContext, Capability, actor_context
 from app.modules.messaging import (
+    IO_TOPIC,
     OutboxEventCommand,
     enqueue_outbox_event,
     find_outbox_event_id,
@@ -376,7 +377,7 @@ async def submit_generation(
                 schema_version=1,
                 aggregate_type="task",
                 aggregate_id=task.id,
-                routing_key="io.provider.submit",
+                topic=IO_TOPIC,
                 payload={"task_id": str(task.id)},
                 trace_id=trace_id,
                 available_at=now,

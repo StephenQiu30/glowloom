@@ -9,7 +9,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
-from app import io_worker
 from app.core.database import Base
 from app.core.errors import ApiError, ErrorCode
 from app.modules.governance.audit.models import AuditEvent
@@ -22,6 +21,7 @@ from app.modules.production.models import Task
 from app.modules.scripts.extractions import schemas as script_schemas
 from app.modules.scripts.extractions import service as scripts_service
 from app.modules.scripts.extractions.ports import SCRIPT_STRUCTURE_EXTRACTOR_VERSION
+from app.runtime.workers import io as io_worker
 from tests.support.identity_builders import register_identity_response
 
 
@@ -530,7 +530,7 @@ async def test_worker_redelivery_after_result_commit_failure_does_not_call_provi
     assert unknown["task"]["error"] == {
         "code": "ai_result_unknown",
         "retryable": False,
-        "summary": "DeepSeek response outcome is unknown",
+        "summary": "Provider response outcome is unknown",
     }
     assert unknown["task"]["next_action"] == "start_new_extraction"
     async with session_factory() as session:
@@ -552,7 +552,7 @@ async def test_worker_redelivery_after_result_commit_failure_does_not_call_provi
         assert audit_events[-1].trace_id == event.trace_id
         assert audit_events[-1].event_metadata["previous_status"] == "running"
         assert audit_events[-1].event_metadata["error_code"] == "ai_result_unknown"
-        assert "DeepSeek response outcome is unknown" not in str(audit_events[-1].event_metadata)
+        assert "Provider response outcome is unknown" not in str(audit_events[-1].event_metadata)
 
 
 @pytest.mark.asyncio

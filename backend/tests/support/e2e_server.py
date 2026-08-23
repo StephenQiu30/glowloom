@@ -9,7 +9,7 @@ import asyncio
 
 from app.core.config import get_settings
 from app.main import app
-from app.server import run_server
+from app.runtime.server import run_server
 from tests.support.registration_verification import RecordingRegistrationMailer
 
 

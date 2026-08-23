@@ -7,13 +7,13 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app import io_worker
 from app.modules.governance.audit.models import AuditEvent
 from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.production.models import Task
 from app.modules.projects.models import Episode
 from app.modules.scripts.models import ScriptVersion
+from app.runtime.workers import io as io_worker
 from tests.support.identity_builders import register_identity_response
 
 SOURCE_BODY = (

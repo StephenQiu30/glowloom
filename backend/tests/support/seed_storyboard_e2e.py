@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from uuid6 import uuid7
 
 from app.core.database import create_engine
-from app.model_registry import register_implemented_models
 from app.modules.assets.models import Asset, AssetState
 from app.modules.identity.models import Membership
 from app.modules.production.models import Task
@@ -28,6 +27,7 @@ from app.modules.scripts.models import (
     ScriptVersion,
 )
 from app.modules.scripts.narratives.service import ensure_structure
+from app.runtime.model_registry import register_implemented_models
 
 
 def _validated_database_url() -> str:

@@ -34,23 +34,23 @@ def _sample(name: str, labels: dict[str, str]) -> float:
 
 def test_outbox_backlog_metrics_are_bounded_and_clear_stale_values() -> None:
     observed_at = datetime(2026, 8, 4, 12, 0, tzinfo=UTC)
-    hostile_routing_key = "tenant.private.route.9f6297b8"
+    hostile_topic = "tenant.private.route.9f6297b8"
     observe_outbox_backlog(
         [
             OutboxBacklog(
-                routing_key="io.script.extract",
+                topic="lanverse.io.v1",
                 state="pending",
                 count=2,
                 oldest_created_at=observed_at - timedelta(seconds=10),
             ),
             OutboxBacklog(
-                routing_key="media.probe",
+                topic="lanverse.media.v1",
                 state="claimed",
                 count=1,
                 oldest_created_at=observed_at - timedelta(seconds=3),
             ),
             OutboxBacklog(
-                routing_key=hostile_routing_key,
+                topic=hostile_topic,
                 state="manual_attention",
                 count=4,
                 oldest_created_at=observed_at + timedelta(seconds=5),
@@ -62,53 +62,53 @@ def test_outbox_backlog_metrics_are_bounded_and_clear_stale_values() -> None:
     assert (
         _sample(
             "lanverse_outbox_events",
-            {"queue": "lanverse.io", "state": "pending"},
+            {"topic": "lanverse.io.v1", "state": "pending"},
         )
         == 2
     )
     assert (
         _sample(
             "lanverse_outbox_oldest_age_seconds",
-            {"queue": "lanverse.io", "state": "pending"},
+            {"topic": "lanverse.io.v1", "state": "pending"},
         )
         == 10
     )
     assert (
         _sample(
             "lanverse_outbox_events",
-            {"queue": "lanverse.media", "state": "claimed"},
+            {"topic": "lanverse.media.v1", "state": "claimed"},
         )
         == 1
     )
     assert (
         _sample(
             "lanverse_outbox_events",
-            {"queue": "unregistered", "state": "manual_attention"},
+            {"topic": "unregistered", "state": "manual_attention"},
         )
         == 4
     )
     assert (
         _sample(
             "lanverse_outbox_oldest_age_seconds",
-            {"queue": "unregistered", "state": "manual_attention"},
+            {"topic": "unregistered", "state": "manual_attention"},
         )
         == 0
     )
 
     observe_outbox_backlog([], observed_at=observed_at)
-    for queue in ("lanverse.io", "lanverse.media", "unregistered"):
+    for topic in ("lanverse.io.v1", "lanverse.media.v1", "unregistered"):
         for state in ("pending", "claimed", "manual_attention"):
             assert (
                 _sample(
                     "lanverse_outbox_events",
-                    {"queue": queue, "state": state},
+                    {"topic": topic, "state": state},
                 )
                 == 0
             )
             assert (
                 _sample(
                     "lanverse_outbox_oldest_age_seconds",
-                    {"queue": queue, "state": state},
+                    {"topic": topic, "state": state},
                 )
                 == 0
             )
@@ -120,9 +120,9 @@ async def test_worker_inflight_tracks_concurrency_and_always_returns_to_zero() -
     release = asyncio.Event()
     started = 0
 
-    initialize_worker_metrics(queue="lanverse.media", capacity=2)
+    initialize_worker_metrics(topic="lanverse.media.v1", capacity=2)
 
-    @track_worker_inflight(queue="lanverse.media", capacity=2)
+    @track_worker_inflight(topic="lanverse.media.v1", capacity=2)
     async def blocked_handler() -> str:
         nonlocal started
         started += 1
@@ -134,12 +134,12 @@ async def test_worker_inflight_tracks_concurrency_and_always_returns_to_zero() -
     first = asyncio.create_task(blocked_handler())
     second = asyncio.create_task(blocked_handler())
     await asyncio.wait_for(both_started.wait(), timeout=1)
-    assert _sample("lanverse_worker_inflight", {"queue": "lanverse.media"}) == 2
-    assert _sample("lanverse_worker_capacity", {"queue": "lanverse.media"}) == 2
+    assert _sample("lanverse_worker_inflight", {"topic": "lanverse.media.v1"}) == 2
+    assert _sample("lanverse_worker_capacity", {"topic": "lanverse.media.v1"}) == 2
 
     release.set()
     assert await asyncio.gather(first, second) == ["completed", "completed"]
-    assert _sample("lanverse_worker_inflight", {"queue": "lanverse.media"}) == 0
+    assert _sample("lanverse_worker_inflight", {"topic": "lanverse.media.v1"}) == 0
 
 
 @pytest.mark.asyncio
@@ -154,9 +154,9 @@ async def test_capacity_metric_failures_do_not_escape_business_handlers(
     monkeypatch.setattr(metrics, "WORKER_CAPACITY", _BrokenGauge())
 
     observe_outbox_backlog([], observed_at=datetime.now(UTC))
-    initialize_worker_metrics(queue="lanverse.io", capacity=4)
+    initialize_worker_metrics(topic="lanverse.io.v1", capacity=4)
 
-    @track_worker_inflight(queue="lanverse.io", capacity=4)
+    @track_worker_inflight(topic="lanverse.io.v1", capacity=4)
     async def handler() -> str:
         return "business-result"
 

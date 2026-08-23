@@ -1,5 +1,5 @@
 from app.core.database import Base
-from app.model_registry import register_implemented_models
+from app.runtime.model_registry import register_implemented_models
 
 
 def test_runtime_registry_resolves_every_implemented_foreign_key() -> None:

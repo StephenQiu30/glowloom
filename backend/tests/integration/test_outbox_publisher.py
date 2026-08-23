@@ -9,7 +9,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
-from app import scheduler
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.messaging import (
@@ -18,7 +17,8 @@ from app.modules.messaging import (
 )
 from app.modules.messaging.models import OutboxEvent
 from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
-from app.scheduler import publish_outbox_batch
+from app.runtime.workers import scheduler
+from app.runtime.workers.scheduler import publish_outbox_batch
 
 
 async def _actor(session_factory: async_sessionmaker[AsyncSession]) -> ActorContext:
@@ -75,8 +75,8 @@ class RecordingPublisher:
         self.failed_task_id = failed_task_id
         self.messages: list[tuple[MessageEnvelope, str]] = []
 
-    async def publish(self, envelope: MessageEnvelope, routing_key: str) -> None:
-        self.messages.append((envelope, routing_key))
+    async def publish(self, envelope: MessageEnvelope, topic: str) -> None:
+        self.messages.append((envelope, topic))
         if envelope.aggregate_id == self.failed_task_id:
             raise RuntimeError("synthetic-secret-must-not-be-stored")
 
@@ -147,8 +147,8 @@ async def test_publish_batch_persists_confirm_and_sanitized_retry(
     )
     assert published == 1
     assert len(publisher.messages) == 2
-    for envelope, routing_key in publisher.messages:
-        assert routing_key == "io.script.extract"
+    for envelope, topic in publisher.messages:
+        assert topic == "lanverse.io.v1"
         assert envelope.event_type == "script_extraction.requested"
         assert envelope.schema_version == 1
         assert envelope.payload == {"task_id": str(envelope.aggregate_id)}
@@ -186,29 +186,29 @@ async def test_publish_batch_persists_confirm_and_sanitized_retry(
     rendered_metrics = generate_latest().decode("utf-8")
     assert (
         'lanverse_outbox_publish_results_total{event_type="script_extraction.requested",'
-        'queue="lanverse.io",result="published"}'
+        'result="published",topic="lanverse.io.v1"}'
     ) in rendered_metrics
     assert (
         'lanverse_outbox_publish_results_total{event_type="script_extraction.requested",'
-        'queue="lanverse.io",result="retry_scheduled"}'
+        'result="retry_scheduled",topic="lanverse.io.v1"}'
     ) in rendered_metrics
     assert (
         REGISTRY.get_sample_value(
             "lanverse_outbox_events",
-            {"queue": "lanverse.io", "state": "pending"},
+            {"topic": "lanverse.io.v1", "state": "pending"},
         )
         == 1
     )
     assert (
         REGISTRY.get_sample_value(
             "lanverse_outbox_events",
-            {"queue": "lanverse.io", "state": "claimed"},
+            {"topic": "lanverse.io.v1", "state": "claimed"},
         )
         == 0
     )
     oldest_age = REGISTRY.get_sample_value(
         "lanverse_outbox_oldest_age_seconds",
-        {"queue": "lanverse.io", "state": "pending"},
+        {"topic": "lanverse.io.v1", "state": "pending"},
     )
     assert oldest_age is not None and oldest_age >= 0
     assert "synthetic-secret" not in rendered_metrics

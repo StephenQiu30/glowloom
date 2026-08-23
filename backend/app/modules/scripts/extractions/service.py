@@ -11,7 +11,11 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
-from app.modules.assets import AssetCandidateCommand, create_or_link_candidate
+from app.modules.assets import (
+    AssetCandidateCommand,
+    AssetCandidateOccurrence,
+    create_or_link_candidate,
+)
 from app.modules.identity import Capability, actor_context
 from app.modules.production import (
     ScriptExtractionTaskCommand,
@@ -59,6 +63,7 @@ from app.modules.scripts.models import (
     ExtractionCandidate,
     ScriptVersion,
 )
+from app.modules.scripts.narratives.service import resolve_storyboard_narrative
 
 
 async def count_asset_candidate_decisions(
@@ -734,6 +739,37 @@ async def decide_extraction_candidate(
             episode = await lock_active_episode_for_content_write(
                 session, claims, source.episode_id
             )
+            narrative = await resolve_storyboard_narrative(
+                session,
+                candidate.workspace_id,
+                batch.confirmed_script_version_id,
+            )
+            if narrative is None or narrative.episode_id != episode.episode_id:
+                raise ApiError(
+                    ErrorCode.DEPENDENCY_UNAVAILABLE,
+                    "Confirmed narrative structure is unavailable",
+                    status_code=503,
+                )
+            overlapping_units = [
+                unit
+                for unit in narrative.units
+                if unit.source_start < candidate.source_end
+                and unit.source_end > candidate.source_start
+            ]
+            if not overlapping_units:
+                raise ApiError(
+                    ErrorCode.INVALID_REQUEST,
+                    "Asset candidate is not anchored to the confirmed narrative",
+                    status_code=422,
+                )
+            occurrence_unit = max(
+                overlapping_units,
+                key=lambda unit: (
+                    min(unit.source_end, candidate.source_end)
+                    - max(unit.source_start, candidate.source_start),
+                    -unit.position,
+                ),
+            )
             result = await create_or_link_candidate(
                 session,
                 actor,
@@ -753,6 +789,12 @@ async def decide_extraction_candidate(
                         decision.downstream_id
                         if isinstance(decision, LinkExistingDecision)
                         else None
+                    ),
+                    occurrence=AssetCandidateOccurrence(
+                        episode_id=episode.episode_id,
+                        narrative_unit_id=occurrence_unit.narrative_unit_id,
+                        narrative_unit_version_id=occurrence_unit.unit_version_id,
+                        text_hash=occurrence_unit.text_hash,
                     ),
                 ),
             )

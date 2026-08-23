@@ -4,15 +4,13 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
-import aio_pika
 import httpx
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.integrations.kafka import MEDIA_TOPIC, KafkaPublisher
 from app.integrations.minio import MinioObjectStorage
-from app.integrations.rabbitmq import MEDIA_QUEUE, RabbitMQPublisher
-from app.media_worker import process_incoming_message
 from app.modules.media import MediaProbePort
 from app.modules.media.storage import ObjectStoragePort
 from app.modules.messaging import envelope_from_event
@@ -21,18 +19,20 @@ from app.modules.production.models import Task
 from app.modules.scheduling import repository
 from app.modules.scheduling.dispatcher import dispatch_due_schedules
 from app.modules.scheduling.models import Schedule, ScheduleFire
-from app.scheduler import publish_outbox_batch
-from tests.support.external_contracts import rabbitmq_contract_url
+from app.runtime.workers.media import process_incoming_message
+from app.runtime.workers.scheduler import publish_outbox_batch
+from tests.support.external_contracts import kafka_contract_bootstrap_servers
 from tests.support.identity_builders import register_identity_response
+from tests.support.kafka_observer import KafkaContractMessage, KafkaContractObserver
 
 
-class RabbitUnavailable(RuntimeError):
+class KafkaUnavailable(RuntimeError):
     pass
 
 
 class UnavailablePublisher:
     async def publish(self, *_: Any, **__: Any) -> None:
-        raise RabbitUnavailable("connection details must not be persisted")
+        raise KafkaUnavailable("connection details must not be persisted")
 
 
 class RecordingStorage:
@@ -50,7 +50,7 @@ class UnusedProbe:
 
 @pytest.mark.skipif(
     os.getenv("LANVERSE_RUN_SCHEDULER_STACK_CONTRACT") != "1",
-    reason="set LANVERSE_RUN_SCHEDULER_STACK_CONTRACT=1 with an isolated RabbitMQ vhost",
+    reason="set LANVERSE_RUN_SCHEDULER_STACK_CONTRACT=1 with the local Kafka broker",
 )
 @pytest.mark.asyncio
 async def test_cron_lease_outbox_and_worker_recover_once_on_real_stack(
@@ -62,14 +62,12 @@ async def test_cron_lease_outbox_and_worker_recover_once_on_real_stack(
         return f"https://storage.invalid/{object_key}?expires={expires_seconds}"
 
     monkeypatch.setattr(MinioObjectStorage, "presign_upload", presign_upload)
-    rabbitmq_url = rabbitmq_contract_url()
-    publisher = RabbitMQPublisher(rabbitmq_url)
-    observer = await aio_pika.connect_robust(rabbitmq_url, timeout=3)
-    messages: list[aio_pika.abc.AbstractIncomingMessage] = []
+    bootstrap_servers = kafka_contract_bootstrap_servers()
+    publisher = KafkaPublisher(bootstrap_servers)
+    observer = KafkaContractObserver(bootstrap_servers, topic=MEDIA_TOPIC)
+    messages: list[KafkaContractMessage] = []
     try:
-        channel = await observer.channel()
-        queue = await channel.declare_queue(MEDIA_QUEUE, durable=True)
-        assert queue.declaration_result.message_count == 0
+        await observer.start()
 
         identity = await register_identity_response(
             client, email="scheduler-recovery-stack@example.com"
@@ -175,7 +173,7 @@ async def test_cron_lease_outbox_and_worker_recover_once_on_real_stack(
             await publish_outbox_batch(
                 session_factory,
                 UnavailablePublisher(),
-                publisher_id="unavailable-rabbit-publisher",
+                publisher_id="unavailable-kafka-publisher",
                 batch_size=10,
                 claim_timeout=timedelta(seconds=30),
             )
@@ -191,7 +189,7 @@ async def test_cron_lease_outbox_and_worker_recover_once_on_real_stack(
             assert event is not None
             assert event.status == "pending"
             assert event.attempt_count == 1
-            assert event.last_error == "RabbitUnavailable"
+            assert event.last_error == "KafkaUnavailable"
             assert "connection details" not in event.last_error
             event_id = event.id
         async with session_factory() as session:
@@ -205,13 +203,13 @@ async def test_cron_lease_outbox_and_worker_recover_once_on_real_stack(
             await publish_outbox_batch(
                 session_factory,
                 publisher,
-                publisher_id="recovered-rabbit-publisher",
+                publisher_id="recovered-kafka-publisher",
                 batch_size=10,
                 claim_timeout=timedelta(seconds=30),
             )
             == 1
         )
-        message = await queue.get(timeout=3, fail=False)
+        message = await observer.get(wait_seconds=3, fail=False)
         assert message is not None
         messages.append(message)
         storage = RecordingStorage()
@@ -230,8 +228,8 @@ async def test_cron_lease_outbox_and_worker_recover_once_on_real_stack(
             event = await session.get(OutboxEvent, event_id)
             assert event is not None and event.status == "published"
             envelope = envelope_from_event(event)
-        await publisher.publish(envelope, "media.upload.cleanup")
-        duplicate = await queue.get(timeout=3, fail=False)
+        await publisher.publish(envelope, MEDIA_TOPIC)
+        duplicate = await observer.get(wait_seconds=3, fail=False)
         assert duplicate is not None
         messages.append(duplicate)
         assert (
@@ -279,7 +277,6 @@ async def test_cron_lease_outbox_and_worker_recover_once_on_real_stack(
                 )
                 == 1
             )
-        await channel.close()
     finally:
         for message in messages:
             if not message.processed:

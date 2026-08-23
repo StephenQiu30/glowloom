@@ -70,7 +70,7 @@ async def test_database_rejects_schedule_fire_with_cross_workspace_outbox(
                         schema_version=1,
                         aggregate_type="task",
                         aggregate_id=task_id,
-                        routing_key="io.media.upload.expiration",
+                        topic="lanverse.media.v1",
                         payload={"task_id": str(task_id)},
                         trace_id="trace-tenant-integrity-outbox",
                         traceparent=("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"),

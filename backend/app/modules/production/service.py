@@ -16,6 +16,8 @@ from app.modules.identity import (
     require_workspace_capability,
 )
 from app.modules.messaging import (
+    IO_TOPIC,
+    MEDIA_TOPIC,
     OutboxEventCommand,
     enqueue_outbox_event,
     find_outbox_event_id,
@@ -297,7 +299,7 @@ def _mark_script_extraction_task_unknown(task: Task, *, now: datetime) -> bool:
     task.progress_stage = "reconciliation_required"
     task.error_code = "ai_result_unknown"
     task.error_retryable = False
-    task.error_summary = "DeepSeek response outcome is unknown"
+    task.error_summary = "Provider response outcome is unknown"
     task.next_action = "start_new_extraction"
     task.revision += 1
     task.updated_at = now
@@ -554,7 +556,7 @@ async def mark_episode_planning_task_unknown(
     task.progress_stage = "reconciliation_required"
     task.error_code = "ai_result_unknown"
     task.error_retryable = False
-    task.error_summary = "DeepSeek response outcome is unknown"
+    task.error_summary = "Provider response outcome is unknown"
     task.next_action = "start_new_episode_plan"
     task.revision += 1
     task.updated_at = now
@@ -1467,7 +1469,7 @@ async def create_script_extraction_task(
             schema_version=1,
             aggregate_type="task",
             aggregate_id=inserted_id,
-            routing_key="io.script.extract",
+            topic=IO_TOPIC,
             payload={"task_id": str(inserted_id)},
             trace_id=trace_id,
             available_at=now,
@@ -1564,7 +1566,7 @@ async def create_media_probe_task(
             schema_version=1,
             aggregate_type="task",
             aggregate_id=inserted_id,
-            routing_key="media.probe",
+            topic=MEDIA_TOPIC,
             payload={"task_id": str(inserted_id)},
             trace_id=trace_id,
             available_at=now,
@@ -1666,7 +1668,7 @@ async def create_episode_planning_task(
             schema_version=1,
             aggregate_type="task",
             aggregate_id=inserted_id,
-            routing_key="io.script.plan",
+            topic=IO_TOPIC,
             payload={"task_id": str(inserted_id)},
             trace_id=trace_id,
             available_at=now,
@@ -1769,7 +1771,7 @@ async def create_script_adaptation_task(
             schema_version=1,
             aggregate_type="task",
             aggregate_id=inserted_id,
-            routing_key="io.script.adapt",
+            topic=IO_TOPIC,
             payload={"task_id": str(inserted_id)},
             trace_id=trace_id,
             available_at=now,
@@ -1867,7 +1869,7 @@ async def create_storyboard_draft_task(
             schema_version=1,
             aggregate_type="task",
             aggregate_id=inserted_id,
-            routing_key="io.storyboard.draft",
+            topic=IO_TOPIC,
             payload={"task_id": str(inserted_id)},
             trace_id=trace_id,
             available_at=now,
@@ -1977,7 +1979,7 @@ async def create_storyboard_export_task(
             schema_version=1,
             aggregate_type="task",
             aggregate_id=inserted_id,
-            routing_key="media.storyboard.export",
+            topic=MEDIA_TOPIC,
             payload={"task_id": str(inserted_id)},
             trace_id=trace_id,
             available_at=now,
@@ -2070,7 +2072,7 @@ async def create_upload_expiration_task(
             schema_version=1,
             aggregate_type="task",
             aggregate_id=task.id,
-            routing_key="media.upload.expire",
+            topic=MEDIA_TOPIC,
             payload={"task_id": str(task.id)},
             trace_id=trace_id,
             available_at=now,
@@ -2156,7 +2158,7 @@ async def create_upload_cleanup_task(
             schema_version=1,
             aggregate_type="task",
             aggregate_id=task.id,
-            routing_key="media.upload.cleanup",
+            topic=MEDIA_TOPIC,
             payload={"task_id": str(task.id)},
             trace_id=trace_id,
             available_at=now,
@@ -2255,7 +2257,7 @@ async def create_media_location_migration_task(
             schema_version=1,
             aggregate_type="task",
             aggregate_id=task.id,
-            routing_key="media.location.migrate",
+            topic=MEDIA_TOPIC,
             payload={"task_id": str(task.id)},
             trace_id=trace_id,
             available_at=now,
@@ -2348,7 +2350,7 @@ async def create_media_location_retirement_task(
             schema_version=1,
             aggregate_type="task",
             aggregate_id=task.id,
-            routing_key="media.location.retire",
+            topic=MEDIA_TOPIC,
             payload={"task_id": str(task.id)},
             trace_id=trace_id,
             available_at=now,

@@ -15,7 +15,6 @@ from app.core.database import (
 )
 from app.core.schema import initialize_database
 from app.main import create_app
-from app.model_registry import register_implemented_models
 from app.modules.caching.contracts import (
     CacheKey,
     CacheNamespace,
@@ -25,6 +24,7 @@ from app.modules.caching.contracts import (
     HighCostGuardResult,
 )
 from app.modules.caching.dependencies import get_cache_port, get_high_cost_guard
+from app.runtime.model_registry import register_implemented_models
 from tests.support.auth_sessions import MemoryAuthSessionStore
 from tests.support.registration_verification import (
     MemoryRegistrationVerificationStore,

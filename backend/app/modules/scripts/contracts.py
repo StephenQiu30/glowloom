@@ -56,6 +56,8 @@ class StoryboardNarrativeUnit:
     narrative_unit_id: UUID
     unit_version_id: UUID
     position: int
+    source_start: int
+    source_end: int
     kind: Literal["scene_heading", "action", "dialogue", "narration"]
     exact_text: str
     text_hash: str

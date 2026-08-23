@@ -10,7 +10,6 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app import media_worker
 from app.integrations.minio import MinioObjectStorage
 from app.modules.assets.models import Asset
 from app.modules.media import MediaProbePort, MediaProbeResult
@@ -27,6 +26,7 @@ from app.modules.storyboards.exports.models import (
     StoryboardExportJob,
     StoryboardExportManifest,
 )
+from app.runtime.workers import media as media_worker
 from tests.integration.media.test_media_worker import RecordingMessage
 from tests.integration.storyboards.test_storyboard_exports import (
     create_ready_export_episode,

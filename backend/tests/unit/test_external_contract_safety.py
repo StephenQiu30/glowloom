@@ -1,23 +1,24 @@
 import pytest
 
-from tests.support.external_contracts import require_isolated_rabbitmq_url
+from tests.support.external_contracts import require_local_kafka_bootstrap_servers
 
 
 @pytest.mark.parametrize(
-    "url",
+    "servers",
     (
-        "amqp://guest:guest@127.0.0.1:5672/",
-        "amqp://guest:guest@127.0.0.1:5672/%2F",
-        "amqp://guest:guest@127.0.0.1:5672",
+        "",
+        "kafka.example.com:9092",
+        "10.0.0.8:9092",
+        "127.0.0.1",
     ),
 )
-def test_rabbitmq_contract_rejects_the_default_vhost(url: str) -> None:
-    with pytest.raises(ValueError, match="isolated RabbitMQ vhost"):
-        require_isolated_rabbitmq_url(url)
+def test_kafka_contract_rejects_missing_or_non_loopback_brokers(servers: str) -> None:
+    with pytest.raises(ValueError, match="Kafka contract|Kafka contracts"):
+        require_local_kafka_bootstrap_servers(servers)
 
 
-def test_rabbitmq_contract_accepts_a_named_vhost() -> None:
+def test_kafka_contract_accepts_loopback_brokers() -> None:
     assert (
-        require_isolated_rabbitmq_url("amqp://guest:guest@127.0.0.1:5672/lanverse_contract")
-        == "amqp://guest:guest@127.0.0.1:5672/lanverse_contract"
+        require_local_kafka_bootstrap_servers("127.0.0.1:9092, localhost:9093")
+        == "127.0.0.1:9092,localhost:9093"
     )

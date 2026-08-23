@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
-from app import media_worker
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.media import MediaProbeResult
@@ -29,6 +28,7 @@ from app.modules.production import (
 )
 from app.modules.production.models import Task
 from app.modules.scheduling.models import Schedule
+from app.runtime.workers import media as media_worker
 
 
 class MemoryLocationStorage(ObjectStoragePort):

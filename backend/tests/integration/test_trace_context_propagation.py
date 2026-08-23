@@ -10,22 +10,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid6 import uuid7
 
-from app import io_worker
 from app.core.telemetry import configure_telemetry
 from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.messaging import MessageEnvelope
 from app.modules.messaging.models import OutboxEvent
 from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
-from app.scheduler import publish_outbox_batch
+from app.runtime.workers import io as io_worker
+from app.runtime.workers.scheduler import publish_outbox_batch
 
 
 class RecordingPublisher:
     def __init__(self) -> None:
         self.messages: list[tuple[MessageEnvelope, str]] = []
 
-    async def publish(self, envelope: MessageEnvelope, routing_key: str) -> None:
-        self.messages.append((envelope, routing_key))
+    async def publish(self, envelope: MessageEnvelope, topic: str) -> None:
+        self.messages.append((envelope, topic))
 
 
 class RecordingMessage:
@@ -100,7 +100,7 @@ async def _create_task_inside_server_span(
 
 
 @pytest.mark.asyncio
-async def test_http_outbox_rabbitmq_and_worker_keep_one_trace_with_distinct_spans(
+async def test_http_outbox_kafka_and_worker_keep_one_trace_with_distinct_spans(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     provider = configure_telemetry(
@@ -130,8 +130,8 @@ async def test_http_outbox_rabbitmq_and_worker_keep_one_trace_with_distinct_span
         claim_timeout=timedelta(seconds=60),
     )
     assert published == 1
-    envelope, routing_key = publisher.messages[0]
-    assert routing_key == "io.script.extract"
+    envelope, topic = publisher.messages[0]
+    assert topic == "lanverse.io.v1"
     assert envelope.traceparent is not None
     assert envelope.traceparent.split("-")[1] == format(server_context.trace_id, "032x")
     assert envelope.traceparent.split("-")[2] != format(server_context.span_id, "016x")

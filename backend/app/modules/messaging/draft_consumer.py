@@ -43,33 +43,91 @@ class PreparedStoryboardDraft:
 PreparationResult = ConsumerResult | PreparedStoryboardDraft
 
 
-async def _mark_interrupted_unknown(
+async def _complete_input_changed(
     session: AsyncSession,
     delivery: InboxDelivery,
     *,
+    task_id: UUID,
+    batch_id: UUID,
+    trace_id: str,
     now: datetime,
 ) -> ConsumerResult:
+    await fail_storyboard_draft_task(
+        session,
+        task_id,
+        error_code="input_version_changed",
+        error_summary="Storyboard draft input changed before generation",
+        next_action="create_new_storyboard_draft_batch",
+        now=now,
+        trace_id=trace_id,
+    )
+    await record_draft_error(
+        session,
+        batch_id=batch_id,
+        task_id=task_id,
+        error_code="input_version_changed",
+    )
+    complete_inbox_delivery(delivery, now=now, last_error="input_version_changed")
+    await session.flush()
+    return "completed"
+
+
+async def _resume_interrupted_draft(
+    session: AsyncSession,
+    delivery: InboxDelivery,
+    *,
+    configured: bool,
+    now: datetime,
+) -> PreparationResult:
     if delivery.task_id is None:
         return reject_inbox_delivery(delivery, error_code="task_not_found", now=now)
     task = await lock_task(session, delivery.task_id)
     if task is None:
         return reject_inbox_delivery(delivery, error_code="task_not_found", now=now)
-    await mark_storyboard_draft_task_unknown(
-        session,
-        task.id,
-        now=now,
-        trace_id=delivery.trace_id,
-    )
-    await record_draft_error(
-        session,
-        batch_id=task.request_id,
-        task_id=task.id,
-        error_code="ai_result_unknown",
-        unknown=True,
-    )
-    complete_inbox_delivery(delivery, now=now, last_error="ai_result_unknown")
+    if task.task_type != "storyboard_draft" or task.request_type != "storyboard_draft_batch":
+        return reject_inbox_delivery(delivery, error_code="unsupported_task_type", now=now)
+    if task.status in {"succeeded", "failed", "cancelled", "unknown"}:
+        complete_inbox_delivery(delivery, now=now)
+        await session.flush()
+        return "completed"
+    if task.status != "running":
+        return reject_inbox_delivery(delivery, error_code="invalid_task_state", now=now)
+    if not configured:
+        await fail_storyboard_draft_task(
+            session,
+            task.id,
+            error_code="ai_service_unavailable",
+            error_summary="AI storyboard draft service is not configured",
+            next_action="configure_ai_service",
+            now=now,
+            trace_id=delivery.trace_id,
+        )
+        await record_draft_error(
+            session,
+            batch_id=task.request_id,
+            task_id=task.id,
+            error_code="ai_service_unavailable",
+        )
+        complete_inbox_delivery(delivery, now=now, last_error="ai_service_unavailable")
+        await session.flush()
+        return "completed"
+    try:
+        draft_input = await prepare_draft_input(
+            session,
+            batch_id=task.request_id,
+            task_id=task.id,
+        )
+    except StoryboardDraftInputChanged:
+        return await _complete_input_changed(
+            session,
+            delivery,
+            task_id=task.id,
+            batch_id=task.request_id,
+            trace_id=delivery.trace_id,
+            now=now,
+        )
     await session.flush()
-    return "completed"
+    return PreparedStoryboardDraft(delivery_id=delivery.id, draft_input=draft_input)
 
 
 async def prepare_storyboard_draft(
@@ -87,7 +145,12 @@ async def prepare_storyboard_draft(
     )
     if not is_first:
         if delivery.status == "processing":
-            return await _mark_interrupted_unknown(session, delivery, now=now)
+            return await _resume_interrupted_draft(
+                session,
+                delivery,
+                configured=configured,
+                now=now,
+            )
         return "duplicate"
     task = await lock_task(session, envelope.aggregate_id)
     if task is None:
@@ -181,24 +244,14 @@ async def prepare_storyboard_draft(
             task_id=task.id,
         )
     except StoryboardDraftInputChanged:
-        await fail_storyboard_draft_task(
+        return await _complete_input_changed(
             session,
-            task.id,
-            error_code="input_version_changed",
-            error_summary="Storyboard draft input changed before generation",
-            next_action="create_new_storyboard_draft_batch",
-            now=now,
-            trace_id=envelope.trace_id,
-        )
-        await record_draft_error(
-            session,
-            batch_id=task.request_id,
+            delivery,
             task_id=task.id,
-            error_code="input_version_changed",
+            batch_id=task.request_id,
+            trace_id=envelope.trace_id,
+            now=now,
         )
-        complete_inbox_delivery(delivery, now=now, last_error="input_version_changed")
-        await session.flush()
-        return "completed"
     await session.flush()
     return PreparedStoryboardDraft(delivery_id=delivery.id, draft_input=draft_input)
 
