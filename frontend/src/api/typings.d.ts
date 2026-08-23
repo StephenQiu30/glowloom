@@ -215,6 +215,7 @@ declare namespace API {
     id: string | null;
     progress: number | null;
     project_id: string | null;
+    source_revision_id: string | null;
     status: string | null;
     type: string | null;
   };

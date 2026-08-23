@@ -27,6 +27,13 @@ func TestQueueAnalysisBindsWorkspaceAndProjectInOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueueAnalysis() error = %v", err)
 	}
+	replayed, err := repository.QueueAnalysis(database.WithWorkspaceID(context.Background(), workspaceID), revisionID)
+	if err != nil {
+		t.Fatalf("replayed QueueAnalysis() error = %v", err)
+	}
+	if replayed.ID != operation.ID || replayed.SourceRevisionID == nil || *replayed.SourceRevisionID != revisionID {
+		t.Fatalf("replayed analysis operation = %#v, want %s bound to %s", replayed, operation.ID, revisionID)
+	}
 	events, err := repository.PendingOutbox(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("PendingOutbox() error = %v", err)
@@ -41,6 +48,13 @@ func TestQueueAnalysisBindsWorkspaceAndProjectInOutbox(t *testing.T) {
 	}
 	if request.WorkspaceID != workspaceID || request.ProjectID != projectID || request.RevisionID != revisionID {
 		t.Fatalf("analysis request tenant binding = %#v", request)
+	}
+	loaded, err := repository.GetOperation(database.WithWorkspaceID(context.Background(), workspaceID), operation.ID)
+	if err != nil {
+		t.Fatalf("GetOperation() error = %v", err)
+	}
+	if loaded.SourceRevisionID == nil || *loaded.SourceRevisionID != revisionID {
+		t.Fatalf("operation source binding = %#v", loaded.SourceRevisionID)
 	}
 }
 

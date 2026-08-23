@@ -115,7 +115,7 @@ describe("ScriptAnalysisWorkspace", () => {
         workspace: { id: "11111111-1111-4111-8111-111111111111", name: "恢复工作区" },
       },
     });
-    api.operationGet.mockResolvedValue({ data: { id: operationID, project_id: projectID, type: "script_analysis", status: "succeeded", progress: 100 } });
+    api.operationGet.mockResolvedValue({ data: { id: operationID, project_id: projectID, source_revision_id: revisionID, type: "script_analysis", status: "succeeded", progress: 100 } });
     api.projectAnalysisGet.mockResolvedValue({
       data: {
         source_hash: "source-hash",
@@ -130,7 +130,7 @@ describe("ScriptAnalysisWorkspace", () => {
 
     render(<ScriptAnalysisWorkspace />);
 
-    expect(await screen.findByTestId("phase-status")).toHaveTextContent("事实已批准");
+    await waitFor(() => expect(screen.getByTestId("phase-status")).toHaveTextContent("事实已批准"));
     expect(screen.getByText(`Project：${projectID}`)).toBeInTheDocument();
     expect(screen.getByText("第 1 集 · 归途")).toBeInTheDocument();
     expect(api.operationGet).toHaveBeenCalledWith({ operationID });

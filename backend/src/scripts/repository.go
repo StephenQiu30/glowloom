@@ -168,8 +168,11 @@ func (r *ScriptRepository) QueueAnalysis(ctx context.Context, revisionID uuid.UU
 		}
 		if revision.Status == "analyzing" {
 			var existing operationRecord
-			if err := tx.Where("project_id = ? AND type = ? AND status IN ?", revision.ProjectID, "script_analysis", []string{"queued", "running"}).Order("created_at DESC").First(&existing).Error; err == nil {
-				result = Operation{ID: existing.ID, ProjectID: existing.ProjectID, Type: existing.Type, Status: existing.Status, Progress: existing.Progress, ErrorCode: existing.ErrorCode, Error: existing.ErrorMessage}
+			if err := tx.Model(&operationRecord{}).
+				Joins("JOIN outbox_events ON outbox_events.operation_id = operations.id").
+				Where("operations.project_id = ? AND operations.type = ? AND operations.status IN ? AND outbox_events.topic = ? AND outbox_events.payload ->> 'revision_id' = ?", revision.ProjectID, "script_analysis", []string{"queued", "running"}, analysisTopic, revisionID.String()).
+				Order("operations.created_at DESC").First(&existing).Error; err == nil {
+				result = Operation{ID: existing.ID, ProjectID: existing.ProjectID, SourceRevisionID: &revisionID, Type: existing.Type, Status: existing.Status, Progress: existing.Progress, ErrorCode: existing.ErrorCode, Error: existing.ErrorMessage}
 				return nil
 			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
@@ -189,7 +192,7 @@ func (r *ScriptRepository) QueueAnalysis(ctx context.Context, revisionID uuid.UU
 		if err := tx.Create(&outboxRecord{ID: uuid.New(), OperationID: operationID, Topic: analysisTopic, EventKey: revisionID.String(), Payload: datatypes.JSON(payload)}).Error; err != nil {
 			return fmt.Errorf("create outbox event: %w", err)
 		}
-		result = Operation{ID: operationID, ProjectID: revision.ProjectID, Type: "script_analysis", Status: "queued", Progress: 0}
+		result = Operation{ID: operationID, ProjectID: revision.ProjectID, SourceRevisionID: &revisionID, Type: "script_analysis", Status: "queued", Progress: 0}
 		return nil
 	})
 	if err != nil {
@@ -202,14 +205,50 @@ func (r *ScriptRepository) GetOperation(ctx context.Context, operationID uuid.UU
 	if r.orm == nil {
 		return Operation{}, fmt.Errorf("script repository ORM is not configured")
 	}
-	var record operationRecord
-	if err := r.orm.WithContext(ctx).Where("id = ?", operationID).First(&record).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Operation{}, httpapi.NotFound("Operation")
-		}
-		return Operation{}, fmt.Errorf("get operation: %w", err)
+	workspaceID, ok := database.WorkspaceID(ctx)
+	if !ok {
+		return Operation{}, fmt.Errorf("workspace context is missing")
 	}
-	return Operation{ID: record.ID, ProjectID: record.ProjectID, Type: record.Type, Status: record.Status, Progress: record.Progress, ErrorCode: record.ErrorCode, Error: record.ErrorMessage}, nil
+	var result Operation
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		var record operationRecord
+		if err := tx.Where("id = ?", operationID).First(&record).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("Operation")
+			}
+			return fmt.Errorf("get operation: %w", err)
+		}
+		var project projectRecord
+		if err := tx.Where("id = ? AND workspace_id = ?", record.ProjectID, workspaceID).First(&project).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("Operation")
+			}
+			return fmt.Errorf("authorize operation project: %w", err)
+		}
+		result = Operation{ID: record.ID, ProjectID: record.ProjectID, Type: record.Type, Status: record.Status, Progress: record.Progress, ErrorCode: record.ErrorCode, Error: record.ErrorMessage}
+		if record.Type == "script_analysis" {
+			var outbox outboxRecord
+			if err := tx.Where("operation_id = ? AND topic = ?", operationID, analysisTopic).First(&outbox).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return httpapi.NotFound("Operation")
+				}
+				return fmt.Errorf("load operation source binding: %w", err)
+			}
+			var request AnalysisRequest
+			if err := json.Unmarshal(outbox.Payload, &request); err != nil {
+				return fmt.Errorf("decode operation source binding: %w", err)
+			}
+			if request.WorkspaceID != workspaceID || request.ProjectID != record.ProjectID || request.OperationID != operationID || request.RevisionID == uuid.Nil {
+				return httpapi.NotFound("Operation")
+			}
+			result.SourceRevisionID = &request.RevisionID
+		}
+		return nil
+	})
+	if err != nil {
+		return Operation{}, err
+	}
+	return result, nil
 }
 
 func (r *ScriptRepository) PendingOutbox(ctx context.Context, limit int) ([]OutboxEvent, error) {

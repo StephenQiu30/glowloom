@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { authLogin, authLogout, authRefresh, authRegister } from "@/api/auth";
 import { operationGet } from "@/api/operation";
-import { projectCreate } from "@/api/project";
+import { projectAnalysisGet, projectCreate } from "@/api/project";
 import {
   scriptAnalysisApprove,
   scriptAnalysisDraft,
@@ -38,9 +38,76 @@ const fixtureScript = `第1集 归途
 type Analysis = API.Analysis;
 type Operation = API.Operation;
 type AuthenticatedWorkspace = { id: string; name: string };
+type WorkflowLocator = { projectID: string; revisionID: string; operationID: string };
+type WorkflowPhase = "idle" | "queued" | "draft" | "approved";
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function clearWorkflowLocator() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("project");
+  url.searchParams.delete("revision");
+  url.searchParams.delete("operation");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function readWorkflowLocator(): WorkflowLocator | null {
+  const params = new URLSearchParams(window.location.search);
+  const locator = {
+    projectID: params.get("project") ?? "",
+    revisionID: params.get("revision") ?? "",
+    operationID: params.get("operation") ?? "",
+  };
+  if (Object.values(locator).every((value) => uuidPattern.test(value))) return locator;
+  if (Object.values(locator).some(Boolean)) clearWorkflowLocator();
+  return null;
+}
+
+function writeWorkflowLocator(locator: WorkflowLocator) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("project", locator.projectID);
+  url.searchParams.set("revision", locator.revisionID);
+  url.searchParams.set("operation", locator.operationID);
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForOperation(initial: Operation, onProgress: (operation: Operation) => void) {
+  let latest = initial;
+  for (let attempt = 0; attempt < 80 && latest.status !== "succeeded" && latest.status !== "failed"; attempt += 1) {
+    await sleep(250);
+    if (!latest.id) throw new Error("Operation 缺少可恢复 ID。");
+    const response = await operationGet({ operationID: latest.id });
+    if (!response.data?.id) throw new Error("Operation 查询返回无效结果。");
+    latest = response.data;
+    onProgress(latest);
+  }
+  return latest;
+}
+
+async function restoreWorkflow(locator: WorkflowLocator, onProgress: (operation: Operation) => void): Promise<{ analysis: Analysis; operation: Operation; phase: Exclude<WorkflowPhase, "idle" | "queued"> }> {
+  const response = await operationGet({ operationID: locator.operationID });
+  if (!response.data?.id || response.data.project_id !== locator.projectID || response.data.source_revision_id !== locator.revisionID) {
+    throw new ApiClientError("无法恢复当前剧本工作流", "not_found", 404);
+  }
+  onProgress(response.data);
+  const latest = await waitForOperation(response.data, onProgress);
+  if (latest.status !== "succeeded") {
+    throw new Error(latest.error ?? "剧本解析任务未成功完成");
+  }
+  try {
+    const approved = await projectAnalysisGet({ projectID: locator.projectID });
+    if (!approved.data) throw new Error("项目分析查询返回无效结果。");
+    return { analysis: approved.data, operation: latest, phase: "approved" };
+  } catch (cause) {
+    if (!(cause instanceof ApiClientError) || cause.status !== 404) throw cause;
+  }
+  const draft = await scriptAnalysisDraft({ revisionID: locator.revisionID });
+  if (!draft.data) throw new Error("分析草稿查询返回无效结果。");
+  return { analysis: draft.data, operation: latest, phase: "draft" };
 }
 
 function userFacingError(cause: unknown, fallback: string) {
@@ -79,7 +146,7 @@ export function ScriptAnalysisWorkspace() {
   const [operation, setOperation] = useState<Operation | null>(null);
   const [revisionID, setRevisionID] = useState<string | null>(null);
   const [projectID, setProjectID] = useState<string | null>(null);
-  const [phase, setPhase] = useState<"idle" | "queued" | "draft" | "approved">("idle");
+  const [phase, setPhase] = useState<WorkflowPhase>("idle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,11 +163,33 @@ export function ScriptAnalysisWorkspace() {
   useEffect(() => {
     let active = true;
     restoreAuthSession()
-      .then((response) => {
+      .then(async (response) => {
         const identity = response.data;
         if (!active || !identity?.access_token || !identity.workspace?.id) return;
         setAccessToken(identity.access_token);
         setWorkspace({ id: identity.workspace.id, name: identity.workspace.name ?? "当前工作区" });
+        const locator = readWorkflowLocator();
+        if (!locator) return;
+        setProjectID(locator.projectID);
+        setRevisionID(locator.revisionID);
+        try {
+          const restored = await restoreWorkflow(locator, (nextOperation) => {
+            if (active) setOperation(nextOperation);
+          });
+          if (!active) return;
+          setOperation(restored.operation);
+          setAnalysis(restored.analysis);
+          setPhase(restored.phase);
+        } catch (cause) {
+          if (!active) return;
+          clearWorkflowLocator();
+          setProjectID(null);
+          setRevisionID(null);
+          setOperation(null);
+          setAnalysis(null);
+          setPhase("idle");
+          setError(userFacingError(cause, "无法恢复上次剧本工作流，请从项目入口重新打开。"));
+        }
       })
       .catch(() => {
         if (active) setAccessToken();
@@ -114,6 +203,7 @@ export function ScriptAnalysisWorkspace() {
   }, []);
 
   function resetSession(message: string | null) {
+    clearWorkflowLocator();
     setAccessToken();
     setWorkspace(null);
     setAuthMode("login");
@@ -151,6 +241,7 @@ export function ScriptAnalysisWorkspace() {
         throw new Error("认证响应缺少访问令牌或工作区，请联系管理员。");
       }
       setAccessToken(identity.access_token);
+      clearWorkflowLocator();
       setPassword("");
       setWorkspace({ id: identity.workspace.id, name: identity.workspace.name ?? "当前工作区" });
     } catch (cause) {
@@ -178,6 +269,7 @@ export function ScriptAnalysisWorkspace() {
     setError(null);
     setAnalysis(null);
     setPhase("idle");
+    clearWorkflowLocator();
     try {
       if (!workspace) {
         throw new Error("登录会话缺失，请重新登录。");
@@ -203,18 +295,9 @@ export function ScriptAnalysisWorkspace() {
       }
       setOperation(queued.data);
       setPhase("queued");
+      writeWorkflowLocator({ projectID: project.data.id, revisionID: revision.data.id, operationID: queued.data.id });
 
-      let latest = queued.data;
-      for (let attempt = 0; attempt < 80; attempt += 1) {
-        await sleep(250);
-        const response = await operationGet({ operationID: latest.id });
-        if (!response.data?.id) {
-          throw new Error("Operation 查询返回无效结果。");
-        }
-        latest = response.data;
-        setOperation(latest);
-        if (latest.status === "succeeded" || latest.status === "failed") break;
-      }
+      const latest = await waitForOperation(queued.data, setOperation);
       if (latest.status !== "succeeded") {
         throw new Error(latest.error ?? "剧本解析任务未成功完成");
       }

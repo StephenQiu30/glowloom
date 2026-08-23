@@ -103,13 +103,14 @@ type ScriptRevision struct {
 }
 
 type Operation struct {
-	ID        uuid.UUID `json:"id"`
-	ProjectID uuid.UUID `json:"project_id"`
-	Type      string    `json:"type"`
-	Status    string    `json:"status"`
-	Progress  int       `json:"progress"`
-	ErrorCode string    `json:"error_code,omitempty"`
-	Error     string    `json:"error,omitempty"`
+	ID               uuid.UUID  `json:"id"`
+	ProjectID        uuid.UUID  `json:"project_id"`
+	SourceRevisionID *uuid.UUID `json:"source_revision_id,omitempty"`
+	Type             string     `json:"type"`
+	Status           string     `json:"status"`
+	Progress         int        `json:"progress"`
+	ErrorCode        string     `json:"error_code,omitempty"`
+	Error            string     `json:"error,omitempty"`
 }
 
 type Shot struct {
