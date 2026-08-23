@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   operationGet: vi.fn(),
   projectAnalysisGet: vi.fn(),
   projectCreate: vi.fn(),
+  projectList: vi.fn(),
   scriptAnalysisApprove: vi.fn(),
   scriptAnalysisDraft: vi.fn(),
   scriptAnalysisQueue: vi.fn(),
@@ -23,7 +24,11 @@ vi.mock("@/api/auth", () => ({
   authRegister: api.authRegister,
 }));
 vi.mock("@/api/operation", () => ({ operationGet: api.operationGet }));
-vi.mock("@/api/project", () => ({ projectAnalysisGet: api.projectAnalysisGet, projectCreate: api.projectCreate }));
+vi.mock("@/api/project", () => ({
+  projectAnalysisGet: api.projectAnalysisGet,
+  projectCreate: api.projectCreate,
+  projectList: api.projectList,
+}));
 vi.mock("@/api/script", () => ({
   scriptAnalysisApprove: api.scriptAnalysisApprove,
   scriptAnalysisDraft: api.scriptAnalysisDraft,
@@ -41,6 +46,7 @@ describe("ScriptAnalysisWorkspace", () => {
     window.history.replaceState(null, "", "/");
     api.authRefresh.mockRejectedValue(new ApiClientError("刷新会话缺失", "unauthorized", 401));
     api.authLogout.mockResolvedValue(undefined);
+    api.projectList.mockResolvedValue({ data: { items: [], page: 1, page_size: 20, total: 0 } });
   });
 
   it("requires the current email authentication contract before showing the fact line", async () => {
@@ -136,6 +142,64 @@ describe("ScriptAnalysisWorkspace", () => {
     expect(api.operationGet).toHaveBeenCalledWith({ operationID });
     expect(api.projectAnalysisGet).toHaveBeenCalledWith({ projectID });
     expect(window.localStorage).toHaveLength(0);
+  });
+
+  it("lists authorized projects and resumes a workflow without a pre-existing URL", async () => {
+    const workspaceID = "11111111-1111-4111-8111-111111111111";
+    const projectID = "33333333-3333-4333-8333-333333333333";
+    const revisionID = "44444444-4444-4444-8444-444444444444";
+    const operationID = "55555555-5555-4555-8555-555555555555";
+    api.authRefresh.mockResolvedValue({
+      data: {
+        access_token: "refreshed-access-token",
+        workspace: { id: workspaceID, name: "恢复工作区" },
+      },
+    });
+    api.projectList.mockResolvedValue({
+      data: {
+        items: [{
+          id: projectID,
+          workspace_id: workspaceID,
+          name: "跨设备项目",
+          created_at: "2026-08-23T10:00:00Z",
+          latest_workflow: {
+            project_id: projectID,
+            source_revision_id: revisionID,
+            source_status: "approved",
+            operation_id: operationID,
+            operation_status: "succeeded",
+            progress: 100,
+          },
+        }],
+        page: 1,
+        page_size: 20,
+        total: 1,
+      },
+    });
+    api.operationGet.mockResolvedValue({
+      data: { id: operationID, project_id: projectID, source_revision_id: revisionID, type: "script_analysis", status: "succeeded", progress: 100 },
+    });
+    api.projectAnalysisGet.mockResolvedValue({
+      data: {
+        source_hash: "source-hash",
+        parse_report: { status: "complete", format: "txt", parser_version: "deterministic-script-parser-v1", original_hash: "source-hash", text_hash: "text-hash", character_count: 42, paragraph_count: 3, failed_scopes: [] },
+        episodes: [{ number: 1, title: "归途", content_unit_id: "66666666-6666-4666-8666-666666666666", anchor: { line: 1, start_offset: 0, end_offset: 5 }, scenes: [] }],
+        characters: [],
+        locations: [],
+        props: [],
+        costumes: [],
+      },
+    });
+    const user = userEvent.setup();
+    render(<ScriptAnalysisWorkspace />);
+
+    expect(await screen.findByRole("heading", { name: "继续已有项目" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "继续解析 跨设备项目" }));
+
+    await waitFor(() => expect(screen.getByTestId("phase-status")).toHaveTextContent("事实已批准"));
+    expect(api.projectList).toHaveBeenCalledWith({ workspaceID, page: 1, pageSize: 20 });
+    expect(api.operationGet).toHaveBeenCalledWith({ operationID });
+    expect(window.location.search).toBe(`?project=${projectID}&revision=${revisionID}&operation=${operationID}`);
   });
 
   it("uploads a DOCX original and exposes its deterministic ParseReport", async () => {
