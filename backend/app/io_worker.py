@@ -293,6 +293,7 @@ async def _process_valid_envelope(
         extraction_result = await extractor.extract(
             prepared.extraction_input.body,
             trace_id=envelope.trace_id,
+            episode_number=prepared.extraction_input.episode_number,
         )
     except ScriptExtractionProviderError as error:
         provider_error = error

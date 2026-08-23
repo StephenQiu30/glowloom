@@ -15,6 +15,7 @@ _SCENE_HEADING = re.compile(
 )
 _SPEAKER_PREFIX = re.compile(r"^[^：:\n]{1,30}[：:]")
 _NARRATION_PREFIX = re.compile(r"^(?:旁白|系统播报|画外音|内心独白)[：:]")
+_MARKDOWN_HEADING = re.compile(r"^#{1,6}\s+\S")
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,8 @@ class ParsedUnit:
 
 
 def _kind(text: str) -> NarrativeKind | None:
+    if _MARKDOWN_HEADING.match(text):
+        return None
     if _EPISODE_MARKER.fullmatch(text) or _TITLE.fullmatch(text):
         return None
     if _SCENE_HEADING.match(text):

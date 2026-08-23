@@ -419,7 +419,7 @@ export function StoryboardCoverage({
         </div>
       </CardHeader>
       <CardContent className="grid gap-5">
-        <div className="flex flex-wrap gap-2" aria-label="覆盖摘要">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="覆盖摘要">
           <Badge variant="outline">{report.summary.covered} 个已覆盖</Badge>
           <Badge className={statusClass("uncovered")} variant="outline">
             {report.summary.uncovered} 个未覆盖

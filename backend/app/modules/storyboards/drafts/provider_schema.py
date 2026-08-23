@@ -6,6 +6,8 @@ from app.modules.storyboards.contracts import StoryboardDraftInput
 from app.modules.storyboards.drafts.schemas import DraftProviderResult
 from app.modules.storyboards.schemas import CameraAngle, CameraMovement, ShotSize
 
+STORYBOARD_DRAFT_PROMPT_VERSION = "storyboard-draft-prompt-v2-compact-coverage"
+
 
 class ProviderModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)

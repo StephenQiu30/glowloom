@@ -150,6 +150,7 @@ def _episode_content_context(episode: Episode) -> EpisodeContentContext:
         episode_id=episode.id,
         workspace_id=episode.workspace_id,
         project_id=episode.project_id,
+        position=episode.position,
         current_script_version_id=episode.current_script_version_id,
         revision=episode.revision,
     )

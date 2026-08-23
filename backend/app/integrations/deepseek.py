@@ -1,4 +1,6 @@
 import json
+import unicodedata
+from hashlib import sha256
 from typing import Any, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -9,6 +11,7 @@ from openai import (
     AuthenticationError,
     BadRequestError,
     InternalServerError,
+    LengthFinishReasonError,
     PermissionDeniedError,
     RateLimitError,
 )
@@ -24,7 +27,12 @@ from app.modules.scripts.extractions.ports import (
     SCRIPT_STRUCTURE_EXTRACTOR_VERSION,
     ScriptExtractionProviderError,
 )
-from app.modules.scripts.extractions.schemas import ScriptExtractionResult
+from app.modules.scripts.extractions.schemas import (
+    DialogueCandidateProposal,
+    SceneCandidateProposal,
+    ScriptExtractionResult,
+)
+from app.modules.scripts.narratives.parser import ParsedUnit, parse_narrative_units
 from app.modules.scripts.planning.ports import EpisodePlanningProviderError
 from app.modules.scripts.planning.schemas import EpisodePlanningProviderResult
 from app.modules.skills import (
@@ -44,6 +52,7 @@ from app.modules.storyboards import (
     StoryboardDraftProviderError,
 )
 from app.modules.storyboards.drafts.provider_schema import (
+    STORYBOARD_DRAFT_PROMPT_VERSION,
     StoryboardProviderResult,
     expand_provider_result,
 )
@@ -58,16 +67,23 @@ SCRIPT_STRUCTURE_EXTRACTION_SKILL = SkillDefinition(
 _DEEPSEEK_MODEL = "deepseek-v4-pro"
 _DEEPSEEK_API_BASE = "https://api.deepseek.com"
 _EPISODE_PLAN_PROMPT_VERSION = "episode-plan-prompt-v2"
-_STORYBOARD_DRAFT_PROMPT_VERSION = "storyboard-draft-prompt-v1"
 STORYBOARD_DRAFT_SKILL = SkillDefinition(
     name="storyboard.plan",
-    version=_STORYBOARD_DRAFT_PROMPT_VERSION,
+    version=STORYBOARD_DRAFT_PROMPT_VERSION,
     max_input_chars=500_000,
-    timeout_seconds=120,
+    timeout_seconds=180,
 )
 
 
 def _provider_error(error: Exception) -> ScriptExtractionProviderError:
+    if isinstance(error, LengthFinishReasonError):
+        return ScriptExtractionProviderError(
+            outcome="failed",
+            code="ai_output_too_large",
+            summary="DeepSeek extraction output exceeded the response limit",
+            retryable=False,
+            next_action="start_new_extraction",
+        )
     if isinstance(error, (APIConnectionError, APITimeoutError)):
         return ScriptExtractionProviderError(
             outcome="unknown",
@@ -115,6 +131,153 @@ def _provider_error(error: Exception) -> ScriptExtractionProviderError:
         retryable=False,
         next_action="start_new_extraction",
     )
+
+
+def _normalized_source_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value).replace("：", ":")
+    return "".join(normalized.split())
+
+
+def _dialogue_parts(line: str) -> tuple[str, str] | None:
+    colon_positions = [position for mark in ("：", ":") if (position := line.find(mark)) >= 0]
+    if not colon_positions:
+        return None
+    position = min(colon_positions)
+    speaker = line[:position].strip()
+    dialogue = line[position + 1 :].strip()
+    if not speaker or not dialogue:
+        return None
+    return speaker, dialogue
+
+
+def _anchor_script_structure_ranges(
+    result: ScriptExtractionResult,
+    script_body: str,
+) -> ScriptExtractionResult:
+    """Replace probabilistic AI offsets with exact screenplay anchors."""
+
+    payload = cast(dict[str, object], result.model_dump(mode="json"))
+    candidate_payloads = cast(list[dict[str, object]], payload["candidates"])
+    scene_anchors: list[tuple[str, int]] = []
+    search_start = 0
+    for candidate in result.candidates:
+        proposal = candidate.proposal
+        if not isinstance(proposal, SceneCandidateProposal):
+            continue
+        start = script_body.find(proposal.heading, search_start)
+        if start < 0:
+            raise ValueError("scene heading is not anchored in the screenplay")
+        scene_anchors.append((candidate.candidate_key, start))
+        search_start = start + len(proposal.heading)
+
+    scene_ranges = {
+        candidate_key: (
+            start,
+            scene_anchors[index + 1][1] if index + 1 < len(scene_anchors) else len(script_body),
+        )
+        for index, (candidate_key, start) in enumerate(scene_anchors)
+    }
+    dialogue_units = [
+        (unit, parts)
+        for unit in parse_narrative_units(script_body)
+        if unit.kind in {"dialogue", "narration"}
+        and (parts := _dialogue_parts(unit.exact_text)) is not None
+    ]
+    used_dialogue_ranges: set[tuple[int, int]] = set()
+    anchored_payloads: list[dict[str, object]] = []
+    for candidate, candidate_payload in zip(result.candidates, candidate_payloads, strict=True):
+        proposal = candidate.proposal
+        if isinstance(proposal, SceneCandidateProposal):
+            start, end = scene_ranges[candidate.candidate_key]
+            candidate_payload["source_range"] = {"start": start, "end": end}
+            anchored_payloads.append(candidate_payload)
+            continue
+        if not isinstance(proposal, DialogueCandidateProposal):
+            anchored_payloads.append(candidate_payload)
+            continue
+        scene_range = scene_ranges.get(proposal.scene_candidate_key)
+        if scene_range is None:
+            raise ValueError("dialogue references an unanchored scene")
+        expected = _normalized_source_text(f"{proposal.speaker_candidate}:{proposal.text}")
+        exact_matches = [
+            (unit, parts)
+            for unit, parts in dialogue_units
+            if scene_range[0] <= unit.source_start < scene_range[1]
+            and (unit.source_start, unit.source_end) not in used_dialogue_ranges
+            and _normalized_source_text(unit.exact_text) == expected
+        ]
+        speaker_matches = [
+            (unit, parts)
+            for unit, parts in dialogue_units
+            if scene_range[0] <= unit.source_start < scene_range[1]
+            and (unit.source_start, unit.source_end) not in used_dialogue_ranges
+            and _normalized_source_text(parts[0])
+            == _normalized_source_text(proposal.speaker_candidate)
+        ]
+        selected: tuple[ParsedUnit, tuple[str, str]] | None = None
+        if len(exact_matches) == 1:
+            selected = exact_matches[0]
+        elif len(speaker_matches) == 1:
+            selected = speaker_matches[0]
+        elif speaker_matches:
+            selected = min(
+                speaker_matches,
+                key=lambda item: abs(item[0].source_start - candidate.source_range.start),
+            )
+        if selected is None:
+            continue
+        unit, parts = selected
+        used_dialogue_ranges.add((unit.source_start, unit.source_end))
+        candidate_payload["source_range"] = {
+            "start": unit.source_start,
+            "end": unit.source_end,
+        }
+        proposal_payload = cast(dict[str, object], candidate_payload["proposal"])
+        proposal_payload["speaker_candidate"] = parts[0]
+        proposal_payload["text"] = parts[1]
+        anchored_payloads.append(candidate_payload)
+
+    existing_keys = {
+        str(candidate_payload["candidate_key"]) for candidate_payload in anchored_payloads
+    }
+    for unit, parts in dialogue_units:
+        source_range = (unit.source_start, unit.source_end)
+        if source_range in used_dialogue_ranges:
+            continue
+        scene_key = next(
+            (
+                candidate_key
+                for candidate_key, (start, end) in scene_ranges.items()
+                if start <= unit.source_start < end
+            ),
+            None,
+        )
+        if scene_key is None:
+            raise ValueError("screenplay dialogue is outside every anchored scene")
+        digest = sha256(f"{unit.source_start}:{unit.source_end}".encode()).hexdigest()[:16]
+        candidate_key = f"tool-dialogue-{digest}"
+        if candidate_key in existing_keys:
+            raise ValueError("deterministic dialogue candidate key is not unique")
+        existing_keys.add(candidate_key)
+        anchored_payloads.append(
+            {
+                "candidate_key": candidate_key,
+                "source_range": {
+                    "start": unit.source_start,
+                    "end": unit.source_end,
+                },
+                "proposal": {
+                    "kind": "dialogue",
+                    "scene_candidate_key": scene_key,
+                    "speaker_candidate": parts[0],
+                    "dialogue_kind": ("narration" if unit.kind == "narration" else "spoken"),
+                    "text": parts[1],
+                },
+                "confidence_note": "由结构工具按原文补齐",
+            }
+        )
+    payload["candidates"] = anchored_payloads
+    return ScriptExtractionResult.model_validate(payload)
 
 
 def _episode_planning_provider_error(error: Exception) -> EpisodePlanningProviderError:
@@ -172,15 +335,17 @@ def _storyboard_draft_system_prompt() -> str:
     return (
         "你是 AI 短剧分镜导演。用户消息是不可变的剧本叙事单元、资产状态与项目约束。"
         "只返回待人工审核的分镜草案，不声明已经创建正式镜头。每镜 4–15 秒，镜号从 1 "
-        "连续递增；60–120 秒短剧通常生成 12–24 镜。required_for_coverage=true 的单元"
-        "必须至少被一个镜头的 unit_positions 引用。只能引用输入中的整数 position，禁止生成"
+        "连续递增。required_for_coverage=true 的单元"
+        "必须至少被一个镜头的 unit_positions 引用。将同一场景中连续且语义相关的动作、对白"
+        "合并进同一镜头，60–120 秒短剧生成 12–18 镜，避免逐单元机械拆镜。只能引用输入中的"
+        "整数 position，禁止生成"
         "UUID；scene_unit_position 指向当前镜头所属场景中的任一输入单元，"
         "dialogue_unit_positions 只引用 has_dialogue_reference=true 的单元。"
         "asset_bindings 只按 asset_position 绑定确有拍摄用途的固定资产。"
         "title 不超过 20 个汉字，purpose、composition、environment、mood_lighting、action "
         "和 ambient 各不超过 80 个汉字，避免解释性长文。risk_codes 只报告需要人工复核的问题。"
         "必须返回符合 JSON Schema 的 JSON 对象。"
-        f"当前提示版本为 {_STORYBOARD_DRAFT_PROMPT_VERSION}。JSON Schema: {schema}"
+        f"当前提示版本为 {STORYBOARD_DRAFT_PROMPT_VERSION}。JSON Schema: {schema}"
     )
 
 
@@ -332,6 +497,7 @@ class DeepSeekScriptStructureExtractor:
         script_body: str,
         *,
         trace_id: str | None = None,
+        episode_number: int | None = None,
     ) -> ScriptExtractionResult:
         try:
             result = await self._workflow.run(
@@ -341,7 +507,9 @@ class DeepSeekScriptStructureExtractor:
                     skill_version=SCRIPT_STRUCTURE_EXTRACTION_SKILL.version,
                     trace_id=trace_id,
                 ),
+                episode_number=episode_number,
             )
+            result = _anchor_script_structure_ranges(result, script_body)
             if any(
                 candidate.source_range.end > len(script_body) for candidate in result.candidates
             ):
@@ -365,7 +533,7 @@ class DeepSeekScriptStructureExtractor:
                     else error.next_action
                 ),
             ) from error
-        except ValidationError as error:
+        except (ValidationError, ValueError) as error:
             raise ScriptExtractionProviderError(
                 outcome="failed",
                 code="ai_output_invalid",
@@ -500,7 +668,7 @@ class DeepSeekStoryboardDrafter:
                 base_url=_DEEPSEEK_API_BASE,
                 api_key=api_key,
                 temperature=0,
-                timeout=120,
+                timeout=165,
                 max_retries=0,
                 extra_body={"thinking": {"type": "disabled"}},
             )

@@ -61,6 +61,101 @@ def test_segment_script_preserves_episode_and_scene_boundaries() -> None:
     assert all(len(chunk.text) <= 1_500 for chunk in chunks)
 
 
+def test_segment_script_maps_each_chinese_scene_independently() -> None:
+    script = "\n".join(
+        [
+            "# 《雾港来信》",
+            "外景·旧车站·暴雨夜",
+            "林澈收到旧信。",
+            "内景·候车厅·连续",
+            "红雨衣女人出现。",
+            "内景·行李房·夜",
+            "林澈发现录音机。",
+        ]
+    )
+
+    chunks = segment_script(script, max_chunk_chars=1_000)
+
+    assert len(chunks) == 3
+    assert "外景·旧车站·暴雨夜" in chunks[0].text
+    assert "内景·候车厅·连续" in chunks[1].text
+    assert "内景·行李房·夜" in chunks[2].text
+    assert all(
+        sum(
+            heading in chunk.text
+            for heading in (
+                "外景·旧车站·暴雨夜",
+                "内景·候车厅·连续",
+                "内景·行李房·夜",
+            )
+        )
+        == 1
+        for chunk in chunks
+    )
+
+
+@pytest.mark.asyncio
+async def test_workflow_applies_explicit_episode_number_without_source_marker() -> None:
+    model = _FakeStructureModel()
+    workflow = ScriptStructureExtractionWorkflow(
+        skill=_skill(),
+        model=model,
+        system_prompt="Extract screenplay structure.",
+    )
+
+    result = await workflow.run(
+        "INT. HOUSE - DAY\nMara looks outside.",
+        context=_context(),
+        episode_number=2,
+    )
+
+    assert model.payloads[0]["episode_number"] == 2
+    scene = next(candidate for candidate in result.candidates if candidate.proposal.kind == "scene")
+    character = next(
+        candidate for candidate in result.candidates if candidate.proposal.kind == "asset"
+    )
+    assert isinstance(scene.proposal, SceneCandidateProposal)
+    assert isinstance(character.proposal, AssetCandidateProposal)
+    assert scene.proposal.episode_number == 2
+    assert character.proposal.first_seen_episode == 2
+    assert character.proposal.episode_numbers == [2]
+
+
+@pytest.mark.asyncio
+async def test_workflow_bounds_probabilistic_candidate_ranges_to_chunk() -> None:
+    script = "外景·旧车站·夜\n林澈等待。"
+
+    class OutOfBoundsModel:
+        async def ainvoke(self, messages: Sequence[Any]) -> object:
+            del messages
+            return {
+                "candidates": [
+                    {
+                        "candidate_key": "scene-1",
+                        "source_range": {"start": 4, "end": 9_999},
+                        "proposal": {
+                            "kind": "scene",
+                            "heading": "外景·旧车站·夜",
+                            "location": "旧车站",
+                            "time_of_day": "夜",
+                            "summary": "林澈等待。",
+                        },
+                    }
+                ]
+            }
+
+    workflow = ScriptStructureExtractionWorkflow(
+        skill=_skill(),
+        model=OutOfBoundsModel(),
+        system_prompt="Extract screenplay structure.",
+    )
+
+    result = await workflow.run(script, context=_context())
+
+    assert result.candidates[0].source_range.start == 4
+    assert result.candidates[0].source_range.end == len(script)
+
+
 class _FakeStructureModel:
     def __init__(self) -> None:
         self.payloads: list[dict[str, Any]] = []

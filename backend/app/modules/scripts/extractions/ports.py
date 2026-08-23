@@ -2,7 +2,7 @@ from typing import Literal, Protocol
 
 from app.modules.scripts.extractions.schemas import ScriptExtractionResult
 
-SCRIPT_STRUCTURE_EXTRACTOR_VERSION = "langgraph-map-reduce-v1:prompt-v3:schema-v3"
+SCRIPT_STRUCTURE_EXTRACTOR_VERSION = "langgraph-map-reduce-v1:prompt-v5:schema-v3"
 
 
 class ScriptStructureExtractor(Protocol):
@@ -11,6 +11,7 @@ class ScriptStructureExtractor(Protocol):
         script_body: str,
         *,
         trace_id: str | None = None,
+        episode_number: int | None = None,
     ) -> ScriptExtractionResult: ...
 
 

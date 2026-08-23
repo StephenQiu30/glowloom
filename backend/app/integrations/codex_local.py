@@ -190,6 +190,7 @@ class CodexLocalScriptStructureExtractor:
         script_body: str,
         *,
         trace_id: str | None = None,
+        episode_number: int | None = None,
     ) -> ScriptExtractionResult:
         try:
             return await self._workflow.run(
@@ -199,6 +200,7 @@ class CodexLocalScriptStructureExtractor:
                     skill_version=CODEX_LOCAL_SCRIPT_STRUCTURE_SKILL.version,
                     trace_id=trace_id,
                 ),
+                episode_number=episode_number,
             )
         except SkillExecutionError as error:
             raise ScriptExtractionProviderError(

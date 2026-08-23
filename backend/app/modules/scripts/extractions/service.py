@@ -22,7 +22,10 @@ from app.modules.production import (
     get_task,
     lock_task,
 )
-from app.modules.projects import lock_active_episode_for_content_write
+from app.modules.projects import (
+    lock_active_episode_for_content_write,
+    resolve_episode_content_context,
+)
 from app.modules.scripts import repository
 from app.modules.scripts.authorization import (
     require_resource_access,
@@ -415,11 +418,28 @@ async def get_script_extraction_input(
             "Extraction input version is unavailable",
             status_code=500,
         )
+    source = await repository.find_source(session, version.source_id)
+    episode_context = (
+        None
+        if source is None
+        else await resolve_episode_content_context(
+            session,
+            batch.workspace_id,
+            source.episode_id,
+        )
+    )
+    if source is None or source.workspace_id != batch.workspace_id or episode_context is None:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Extraction episode context is unavailable",
+            status_code=500,
+        )
     return ScriptExtractionInput(
         batch_id=batch.id,
         task_id=task_id,
         workspace_id=batch.workspace_id,
         script_version_id=version.id,
+        episode_number=episode_context.position,
         body=version.body,
     )
 

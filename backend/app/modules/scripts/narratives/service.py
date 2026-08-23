@@ -1,3 +1,4 @@
+import unicodedata
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Literal, cast
@@ -49,7 +50,7 @@ from app.modules.scripts.narratives.schemas import (
     SourceRange,
 )
 
-PARSER_VERSION = "deterministic-lines-v1"
+PARSER_VERSION = "deterministic-lines-v2"
 INVALIDATED_SCOPES = ["shot_readiness", "coverage", "export"]
 
 
@@ -159,11 +160,17 @@ def _source_links(
     scenes: list[Scene],
     dialogues: list[Dialogue],
 ) -> tuple[UUID | None, UUID | None]:
+    def normalized_dialogue(value: str) -> str:
+        normalized = unicodedata.normalize("NFKC", value).replace("：", ":")
+        return "".join(normalized.split())
+
+    normalized_exact = normalized_dialogue(parsed.exact_text)
     dialogue = next(
         (
             item
             for item in dialogues
-            if item.source_start == parsed.source_start and item.source_end == parsed.source_end
+            if (item.source_start == parsed.source_start and item.source_end == parsed.source_end)
+            or normalized_exact == normalized_dialogue(f"{item.speaker_candidate}:{item.text}")
         ),
         None,
     )

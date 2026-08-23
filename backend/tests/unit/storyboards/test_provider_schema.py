@@ -5,6 +5,7 @@ import pytest
 from pydantic import SecretStr
 from uuid6 import uuid7
 
+from app.integrations import deepseek as deepseek_integration
 from app.integrations.deepseek import DeepSeekStoryboardDrafter
 from app.modules.storyboards import (
     StoryboardDraftInput,
@@ -12,6 +13,7 @@ from app.modules.storyboards import (
     StoryboardDraftUnit,
 )
 from app.modules.storyboards.drafts.provider_schema import (
+    STORYBOARD_DRAFT_PROMPT_VERSION,
     StoryboardProviderResult,
     expand_provider_result,
 )
@@ -115,3 +117,32 @@ async def test_deepseek_storyboard_generation_uses_skill_output_validation() -> 
 
     assert error.value.code == "skill_output_invalid"
     assert error.value.outcome == "failed"
+
+
+def test_storyboard_generation_has_compact_prompt_and_provider_headroom(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created: dict[str, Any] = {}
+
+    class FakeChatDeepSeek:
+        def __init__(self, **kwargs: Any) -> None:
+            created.update(kwargs)
+
+        def with_structured_output(
+            self,
+            schema: type[StoryboardProviderResult],
+            **kwargs: Any,
+        ) -> object:
+            del schema, kwargs
+            return object()
+
+    monkeypatch.setattr(deepseek_integration, "ChatDeepSeek", FakeChatDeepSeek)
+
+    DeepSeekStoryboardDrafter(SecretStr("unused-in-unit-test"))
+
+    assert created["timeout"] == 165
+    assert deepseek_integration.STORYBOARD_DRAFT_SKILL.timeout_seconds == 180
+    assert STORYBOARD_DRAFT_PROMPT_VERSION == "storyboard-draft-prompt-v2-compact-coverage"
+    prompt = deepseek_integration._storyboard_draft_system_prompt()  # pyright: ignore[reportPrivateUsage]
+    assert "12–18 镜" in prompt
+    assert "合并进同一镜头" in prompt

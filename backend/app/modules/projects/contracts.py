@@ -66,6 +66,7 @@ class EpisodeContentContext:
     episode_id: UUID
     workspace_id: UUID
     project_id: UUID
+    position: int
     current_script_version_id: UUID | None
     revision: int
 

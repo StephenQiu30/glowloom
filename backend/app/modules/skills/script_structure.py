@@ -31,7 +31,10 @@ from app.modules.skills.contracts import (
 )
 
 DEFAULT_MAX_CHUNK_CHARS = 18_000
-_SCENE_HEADING = re.compile(r"^(?:INT\.?|EXT\.?|I/E\.?)", re.IGNORECASE)
+_SCENE_HEADING = re.compile(
+    r"^(?:内景|外景|场景\s*\d+|INT\.?|EXT\.?|I/E\.?|INT\s*/\s*EXT\.?)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +57,7 @@ class ScriptExtractionChunk:
 
 class _ScriptStructureState(TypedDict, total=False):
     script_body: str
+    episode_number: int | None
     chunks: list[dict[str, object]]
     chunk_key: str
     chunk_episode_number: int | None
@@ -138,31 +142,28 @@ def segment_script(
     chunks: list[ScriptExtractionChunk] = []
     sequence = 0
     for episode_number, episode_start, episode_end in _episode_ranges(script_body):
-        cursor = episode_start
-        boundaries = [
-            boundary
-            for boundary in _scene_starts(script_body, episode_start, episode_end)
-            if episode_start < boundary < episode_end
-        ]
-        while cursor < episode_end:
-            limit = min(cursor + max_chunk_chars, episode_end)
-            candidates = [boundary for boundary in boundaries if cursor < boundary <= limit]
-            end = max(candidates, default=limit)
-            if end == limit and end < episode_end and end not in boundaries:
-                end = _line_break_before(script_body, cursor, limit)
-            if end <= cursor:
-                end = min(cursor + max_chunk_chars, episode_end)
-            sequence += 1
-            chunks.append(
-                ScriptExtractionChunk(
-                    key=_chunk_key(episode_number, sequence),
-                    episode_number=episode_number,
-                    start=cursor,
-                    end=end,
-                    text=script_body[cursor:end],
+        scene_starts = _scene_starts(script_body, episode_start, episode_end)
+        natural_starts = [episode_start, *scene_starts[1:]] if scene_starts else [episode_start]
+        natural_ends = [*natural_starts[1:], episode_end]
+        for natural_start, natural_end in zip(natural_starts, natural_ends, strict=True):
+            cursor = natural_start
+            while cursor < natural_end:
+                end = min(cursor + max_chunk_chars, natural_end)
+                if end < natural_end:
+                    end = _line_break_before(script_body, cursor, end)
+                if end <= cursor:
+                    end = min(cursor + max_chunk_chars, natural_end)
+                sequence += 1
+                chunks.append(
+                    ScriptExtractionChunk(
+                        key=_chunk_key(episode_number, sequence),
+                        episode_number=episode_number,
+                        start=cursor,
+                        end=end,
+                        text=script_body[cursor:end],
+                    )
                 )
-            )
-            cursor = end
+                cursor = end
 
     if not chunks:
         raise SkillExecutionError(
@@ -253,6 +254,28 @@ def _validate_chunk_result(result: ScriptExtractionResult, chunk_text: str) -> N
                     retryable=False,
                     next_action="start_new_skill_run",
                 )
+
+
+def _bound_chunk_result(
+    result: ScriptExtractionResult,
+    chunk_text: str,
+) -> ScriptExtractionResult:
+    """Keep probabilistic evidence ranges inside the immutable Chunk boundary."""
+
+    if not chunk_text:
+        return result
+    payload = cast(dict[str, object], result.model_dump(mode="json"))
+    candidates = cast(list[dict[str, object]], payload["candidates"])
+    last_start = len(chunk_text) - 1
+    for candidate in candidates:
+        source_range = cast(dict[str, object], candidate["source_range"])
+        raw_start = _state_int(source_range["start"], "source_range.start")
+        raw_end = _state_int(source_range["end"], "source_range.end")
+        start = min(raw_start, last_start)
+        end = min(max(raw_end, start + 1), len(chunk_text))
+        source_range["start"] = start
+        source_range["end"] = end
+    return ScriptExtractionResult.model_validate(payload)
 
 
 def _merge_strings(
@@ -539,6 +562,7 @@ class ScriptStructureExtractionWorkflow:
         script_body: str,
         *,
         context: SkillExecutionContext,
+        episode_number: int | None = None,
     ) -> ScriptExtractionResult:
         if context.skill_name != self._skill.name or context.skill_version != self._skill.version:
             raise SkillExecutionError(
@@ -556,7 +580,7 @@ class ScriptStructureExtractionWorkflow:
             }
         }
         result = await graph.ainvoke(
-            {"script_body": script_body},
+            {"script_body": script_body, "episode_number": episode_number},
             config=config,
         )
         output = result.get("output")
@@ -590,7 +614,13 @@ class ScriptStructureExtractionWorkflow:
                 if self._chunker is not None
                 else segment_script(script_body, max_chunk_chars=self._max_chunk_chars)
             )
-            return {"chunks": [chunk.as_state() for chunk in chunks]}
+            explicit_episode_number = state.get("episode_number")
+            chunk_states = [chunk.as_state() for chunk in chunks]
+            if explicit_episode_number is not None:
+                for chunk_state in chunk_states:
+                    if chunk_state["chunk_episode_number"] is None:
+                        chunk_state["chunk_episode_number"] = explicit_episode_number
+            return {"chunks": chunk_states}
 
         def fan_out(state: _ScriptStructureState) -> list[Send]:
             return [Send("extract_chunk", chunk) for chunk in state.get("chunks", [])]
@@ -626,6 +656,7 @@ class ScriptStructureExtractionWorkflow:
                     timeout=self._skill.timeout_seconds,
                 )
                 result = ScriptExtractionResult.model_validate(raw_output)
+                result = _bound_chunk_result(result, chunk_text)
                 _validate_chunk_result(result, chunk_text)
             except TimeoutError as error:
                 raise SkillExecutionError(
@@ -672,11 +703,35 @@ class ScriptStructureExtractionWorkflow:
                     next_action="start_new_skill_run",
                 )
             script_body = state.get("script_body", "")
+            expected_scene_headings: set[str] = set()
+            if self._chunker is None:
+                expected_scene_headings = {
+                    script_body[block.start_codepoint : block.end_codepoint].strip()
+                    for block in analyze_document(script_body).blocks
+                    if block.kind == "scene_heading"
+                }
+            actual_scene_headings = {
+                candidate.proposal.heading
+                for candidate in output.candidates
+                if candidate.proposal.kind == "scene"
+            }
+            missing_scene_headings = sorted(expected_scene_headings - actual_scene_headings)
+            if missing_scene_headings:
+                raise SkillExecutionError(
+                    outcome="failed",
+                    code="skill_output_incomplete",
+                    summary="Script extraction omitted deterministic scene headings",
+                    retryable=False,
+                    next_action="start_new_skill_run",
+                )
             expected_episodes = {
                 episode_number
                 for episode_number, _, _ in _episode_ranges(script_body)
                 if episode_number is not None
             }
+            explicit_episode_number = state.get("episode_number")
+            if explicit_episode_number is not None:
+                expected_episodes.add(explicit_episode_number)
             episode_summaries = {
                 candidate.proposal.episode_number
                 for candidate in output.candidates

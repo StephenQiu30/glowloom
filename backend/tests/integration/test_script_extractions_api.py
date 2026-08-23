@@ -357,15 +357,18 @@ class _RecordingScriptExtractor:
     def __init__(self) -> None:
         self.inputs: list[str] = []
         self.trace_ids: list[str | None] = []
+        self.episode_numbers: list[int | None] = []
 
     async def extract(
         self,
         script_body: str,
         *,
         trace_id: str | None = None,
+        episode_number: int | None = None,
     ) -> script_schemas.ScriptExtractionResult:
         self.inputs.append(script_body)
         self.trace_ids.append(trace_id)
+        self.episode_numbers.append(episode_number)
         return script_schemas.ScriptExtractionResult.model_validate(_typed_extraction_result())
 
 
@@ -411,6 +414,7 @@ async def test_configured_worker_records_real_adapter_result_once(
     assert first_message.nack_requeues == []
     assert extractor.inputs == [published["body"]]
     assert extractor.trace_ids == [envelope.trace_id]
+    assert extractor.episode_numbers == [1]
 
     fetched = await client.get(f"/api/v1/extraction-batches/{batch['id']}", headers=headers)
     assert fetched.status_code == 200
@@ -432,6 +436,7 @@ async def test_configured_worker_records_real_adapter_result_once(
     assert duplicate_message.nack_requeues == []
     assert extractor.inputs == [published["body"]]
     assert extractor.trace_ids == [envelope.trace_id]
+    assert extractor.episode_numbers == [1]
     async with session_factory() as session:
         inbox = await session.scalar(select(InboxDelivery))
         assert inbox is not None

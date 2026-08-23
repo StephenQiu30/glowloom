@@ -124,6 +124,7 @@ class ScriptExtractionInput:
     task_id: UUID
     workspace_id: UUID
     script_version_id: UUID
+    episode_number: int
     body: str
 
 

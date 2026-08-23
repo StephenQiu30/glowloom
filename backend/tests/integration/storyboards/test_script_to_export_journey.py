@@ -217,8 +217,9 @@ class JourneyScriptExtractor:
         script_body: str,
         *,
         trace_id: str | None = None,
+        episode_number: int | None = None,
     ) -> ScriptExtractionResult:
-        del trace_id
+        del trace_id, episode_number
         self.inputs.append(script_body)
         dialogue_units = [
             unit for unit in parse_narrative_units(script_body) if unit.kind == "dialogue"

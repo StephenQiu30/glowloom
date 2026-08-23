@@ -16,6 +16,7 @@ ALLOWED_ROUTING_KEYS = frozenset(
         "io.script.extract",
         "io.script.plan",
         "io.script.adapt",
+        "io.storyboard.draft",
         "io.provider.submit",
         "io.provider.query",
         "io.provider.cancel",

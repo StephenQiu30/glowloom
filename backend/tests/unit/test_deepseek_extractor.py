@@ -2,6 +2,8 @@ import json
 from typing import Any
 
 import pytest
+from openai import LengthFinishReasonError
+from openai.types.chat import ChatCompletion
 from pydantic import SecretStr
 
 from app.integrations import deepseek as deepseek_integration
@@ -63,7 +65,29 @@ async def test_deepseek_extractor_uses_fixed_non_thinking_structured_contract(
 
     result = await extractor.extract("第一场\n角色甲：开始。")
 
-    assert result == ScriptExtractionResult.model_validate(_structured_result())
+    expected_result = _structured_result()
+    expected_result["candidates"][0]["source_range"] = {
+        "start": 0,
+        "end": len("第一场\n角色甲：开始。"),
+    }
+    expected_result["candidates"].append(
+        {
+            "candidate_key": "tool-dialogue-5ac8a477a2d969c3",
+            "source_range": {
+                "start": len("第一场\n"),
+                "end": len("第一场\n角色甲：开始。"),
+            },
+            "proposal": {
+                "kind": "dialogue",
+                "scene_candidate_key": "scene-001",
+                "speaker_candidate": "角色甲",
+                "dialogue_kind": "spoken",
+                "text": "开始。",
+            },
+            "confidence_note": "由结构工具按原文补齐",
+        }
+    )
+    assert result == ScriptExtractionResult.model_validate(expected_result)
     constructor = created["constructor"]
     assert constructor["model"] == "deepseek-v4-pro"
     assert constructor["base_url"] == "https://api.deepseek.com"
@@ -88,8 +112,127 @@ async def test_deepseek_extractor_uses_fixed_non_thinking_structured_contract(
 def test_deepseek_extractor_snapshot_is_complete_and_bounded() -> None:
     snapshot = deepseek_integration.DEEPSEEK_SCRIPT_EXTRACTOR_VERSION
 
-    assert snapshot == ("langgraph-map-reduce-v1:prompt-v3:schema-v3")
+    assert snapshot == ("langgraph-map-reduce-v1:prompt-v5:schema-v3")
     assert len(snapshot) <= 80
+
+
+def test_deepseek_extractor_maps_length_truncation_to_actionable_failure() -> None:
+    completion = ChatCompletion.model_validate(
+        {
+            "id": "length-limited",
+            "choices": [
+                {
+                    "finish_reason": "length",
+                    "index": 0,
+                    "message": {"role": "assistant", "content": ""},
+                }
+            ],
+            "created": 0,
+            "model": "deepseek-v4-pro",
+            "object": "chat.completion",
+            "usage": {
+                "completion_tokens": 8192,
+                "prompt_tokens": 1,
+                "total_tokens": 8193,
+            },
+        }
+    )
+
+    error = deepseek_integration._provider_error(  # pyright: ignore[reportPrivateUsage]
+        LengthFinishReasonError(completion=completion)
+    )
+
+    assert error.outcome == "failed"
+    assert error.code == "ai_output_too_large"
+    assert error.summary == "DeepSeek extraction output exceeded the response limit"
+    assert error.retryable is False
+    assert error.next_action == "start_new_extraction"
+
+
+def test_deepseek_structure_prompt_keeps_storyboards_in_their_own_skill() -> None:
+    prompt = deepseek_integration.script_structure_system_prompt()
+
+    assert "禁止生成 shot 候选" in prompt
+    assert "storyboard.plan" in prompt
+    assert "Markdown 标题" in prompt
+    assert "逐字复制原文中的场景标题行" in prompt
+
+
+def test_deepseek_extractor_anchors_scene_and_dialogue_ranges_to_source() -> None:
+    script = "内景·屋内·日\n林澈：开始。\n外景·路口·夜\n周岑：停下。"
+    raw_result = ScriptExtractionResult.model_validate(
+        {
+            "candidates": [
+                {
+                    "candidate_key": "scene-1",
+                    "source_range": {"start": 1, "end": len(script)},
+                    "proposal": {
+                        "kind": "scene",
+                        "heading": "内景·屋内·日",
+                        "location": "屋内",
+                        "time_of_day": "日",
+                        "summary": "林澈开始行动。",
+                    },
+                },
+                {
+                    "candidate_key": "dialogue-1",
+                    "source_range": {"start": 1, "end": len(script)},
+                    "proposal": {
+                        "kind": "dialogue",
+                        "scene_candidate_key": "scene-1",
+                        "speaker_candidate": "林澈",
+                        "dialogue_kind": "spoken",
+                        "text": "开始。",
+                    },
+                },
+                {
+                    "candidate_key": "scene-2",
+                    "source_range": {"start": 1, "end": len(script)},
+                    "proposal": {
+                        "kind": "scene",
+                        "heading": "外景·路口·夜",
+                        "location": "路口",
+                        "time_of_day": "夜",
+                        "summary": "周岑阻止行动。",
+                    },
+                },
+                {
+                    "candidate_key": "dialogue-2",
+                    "source_range": {"start": 1, "end": len(script)},
+                    "proposal": {
+                        "kind": "dialogue",
+                        "scene_candidate_key": "scene-2",
+                        "speaker_candidate": "周岑",
+                        "dialogue_kind": "spoken",
+                        "text": "停下。",
+                    },
+                },
+            ]
+        }
+    )
+
+    result = deepseek_integration._anchor_script_structure_ranges(  # pyright: ignore[reportPrivateUsage]
+        raw_result,
+        script,
+    )
+
+    second_scene_start = script.index("外景·路口·夜")
+    ranges = {
+        item.candidate_key: (item.source_range.start, item.source_range.end)
+        for item in result.candidates
+    }
+    assert ranges == {
+        "scene-1": (0, second_scene_start),
+        "dialogue-1": (
+            script.index("林澈：开始。"),
+            script.index("林澈：开始。") + len("林澈：开始。"),
+        ),
+        "scene-2": (second_scene_start, len(script)),
+        "dialogue-2": (
+            script.index("周岑：停下。"),
+            script.index("周岑：停下。") + len("周岑：停下。"),
+        ),
+    }
 
 
 @pytest.mark.asyncio

@@ -42,6 +42,7 @@ from app.modules.storyboards.drafts.models import (
     DraftShotUnit,
     StoryboardDraftBatch,
 )
+from app.modules.storyboards.drafts.provider_schema import STORYBOARD_DRAFT_PROMPT_VERSION
 from app.modules.storyboards.drafts.schemas import (
     DraftApplyDiff,
     DraftApplyPreflightRequest,
@@ -70,7 +71,6 @@ from app.modules.storyboards.models import AssetReference, Shot, ShotSpecVersion
 
 ENGINE_VERSION = "storyboard-draft-v1"
 MODEL_NAME = "deepseek-chat"
-PROMPT_VERSION = "storyboard-draft-prompt-v1"
 SCHEMA_VERSION = "storyboard-draft-schema-v1"
 MAX_ACTIVE_SHOTS = 120
 MIN_AI_SHOT_DURATION_MS = 4_000
@@ -148,7 +148,7 @@ def _batch_input_hash(
             "base_shot_hash": base_shot_hash,
             "engine_version": ENGINE_VERSION,
             "model_name": MODEL_NAME,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": STORYBOARD_DRAFT_PROMPT_VERSION,
             "schema_version": SCHEMA_VERSION,
         }
     )
@@ -409,7 +409,7 @@ async def create_batch(
             visual_style=episode.visual_style,
             engine_version=ENGINE_VERSION,
             model_name=MODEL_NAME,
-            prompt_version=PROMPT_VERSION,
+            prompt_version=STORYBOARD_DRAFT_PROMPT_VERSION,
             schema_version=SCHEMA_VERSION,
             base_order_hash=base_order_hash,
             base_shot_hash=base_shot_hash,
