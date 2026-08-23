@@ -16,12 +16,14 @@ import (
 )
 
 type versionedMemoryStore struct {
-	mu             sync.Mutex
-	objects        map[string][]byte
-	lastPutKey     string
-	lastGetKey     string
-	lastGetVersion string
-	putCount       int
+	mu              sync.Mutex
+	objects         map[string][]byte
+	lastPutKey      string
+	lastGetKey      string
+	lastGetVersion  string
+	putCount        int
+	deleteCount     int
+	receiptOverride *objectstorage.ObjectVersion
 }
 
 func (s *versionedMemoryStore) PutVersioned(_ context.Context, key string, content []byte, _ string) (objectstorage.ObjectVersion, error) {
@@ -34,7 +36,11 @@ func (s *versionedMemoryStore) PutVersioned(_ context.Context, key string, conte
 	s.objects[key+"@"+versionID] = append([]byte(nil), content...)
 	s.lastPutKey = key
 	s.putCount++
-	return objectstorage.ObjectVersion{StorageProfile: "test-primary", Bucket: "test-media", Key: key, VersionID: versionID, ETag: "fixture-etag", Size: int64(len(content))}, nil
+	receipt := objectstorage.ObjectVersion{StorageProfile: "test-primary", Bucket: "test-media", Key: key, VersionID: versionID, ETag: "fixture-etag", Size: int64(len(content))}
+	if s.receiptOverride != nil {
+		receipt = *s.receiptOverride
+	}
+	return receipt, nil
 }
 
 func TestFixtureCandidateUsesOneOpaqueVersionedArtifact(t *testing.T) {
@@ -118,7 +124,37 @@ func (s *versionedMemoryStore) DeleteVersion(_ context.Context, key, versionID s
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.objects, key+"@"+versionID)
+	s.deleteCount++
 	return nil
+}
+
+func TestSourceRevisionRejectsIncompleteStorageReceipt(t *testing.T) {
+	orm, closeDatabase := integrationDatabase(t)
+	t.Cleanup(closeDatabase)
+
+	workspaceID, projectID := uuid.New(), uuid.New()
+	seedWorkspaceProject(t, orm, workspaceID, projectID)
+	t.Cleanup(func() {
+		orm.Table("projects").Where("id = ?", projectID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("workspaces").Where("id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+	})
+
+	store := &versionedMemoryStore{receiptOverride: &objectstorage.ObjectVersion{StorageProfile: "test-primary", Bucket: "test-media", Size: 6}}
+	repository := scripts.NewScriptRepository(orm, store)
+	_, err := repository.CreateScriptRevision(database.WithWorkspaceID(context.Background(), workspaceID), projectID, scripts.SourceUpload{FileName: "invalid-receipt.txt", MediaType: "text/plain", Original: []byte("source")})
+	if err == nil {
+		t.Fatal("CreateScriptRevision() accepted a receipt without key and object version")
+	}
+	var sources, artifacts int64
+	if err := orm.Table("nar_source_revisions").Where("project_id = ?", projectID).Count(&sources).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("media_artifacts").Where("project_id = ?", projectID).Count(&artifacts).Error; err != nil {
+		t.Fatal(err)
+	}
+	if sources != 0 || artifacts != 0 || store.deleteCount != 0 {
+		t.Fatalf("incomplete receipt side effects: sources=%d artifacts=%d unsafe_deletes=%d", sources, artifacts, store.deleteCount)
+	}
 }
 
 func TestSourceRevisionFreezesOpaqueExactObjectVersion(t *testing.T) {
