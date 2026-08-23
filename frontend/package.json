@@ -10,8 +10,8 @@
   },
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 --port 8123",
-    "build": "next build",
-    "start": "next start --hostname 0.0.0.0 --port 8123",
+    "build": "next build && cp -R .next/static .next/standalone/.next/ && cp -R public .next/standalone/",
+    "start": "HOSTNAME=0.0.0.0 PORT=8123 node .next/standalone/server.js",
     "lint": "eslint src tests openapi2ts.config.ts vitest.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
