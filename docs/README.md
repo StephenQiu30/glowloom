@@ -1,7 +1,7 @@
 # Lanverse 软件工程文档导航
 
 - 状态：active
-- 最近审查：2026-08-22
+- 最近审查：2026-08-23
 - 当前状态：Requirement 已审核为 ready_for_design；000/005 顶层架构 accepted 并冻结，其余 Design、PRD 与 Plan 为 proposed
 
 ## 1. 当前产品边界
@@ -41,7 +41,23 @@ Requirement 定义“要什么”，Design 定义“如何满足”，PRD 和 Pl
 4. [A—F PRD](./prd/README.md)与[实施 Plan](./plan/README.md)；
 5. [Acceptance 状态与证据](./acceptance/README.md)。
 
-## 5. 当前技术结论
+## 5. 实现追溯状态
+
+本表是 Requirement → Design → PRD → Plan → Acceptance 的执行入口，不把“已写入文档”误报为“已验收”。验收状态只以 `acceptance/README.md` 中的真实证据包为准，未产生真实证据前保持 `not_run`。
+
+| 范围 | 需求与设计 | PRD | Plan | 当前实现状态 |
+| --- | --- | --- | --- | --- |
+| 平台基线 | REQ-000、DES-000—005 | PRD-000 | PLAN-000 | 进行中：Go/Agent/frontend 固定，GORM、统一 HTTP envelope/状态码、无兼容 DDL 的空库 Schema、单 Kafka、MinIO、OpenAPI、HTTP 到事务的 workspace context、直接租户表 RLS 与策略启动校验已落地；Redis 身份接入已启用，Elastic 投影、OTel、严格 Swagger 仍待实现 |
+| A 手工事实主线 | M01—M05、M07—M09、M11、M14 | PRD-A | PLAN-A | 进行中：DOCX/Markdown/TXT 原件保全、确定性 ParseReport、剧本解析草稿/批准、canonical GORM 物化、人物×集数与资产投影、内存 Access Token/HttpOnly refresh 已可用并完成 production 浏览器闭环；会话/路径/直接表租户边界基础已落地，跨租户/Worker/媒体对象负向验收、边界手工修订、检索、完整镜头、交付预演待实现 |
+| B Agent 提案 | M03、M04、M06 | PRD-B | PLAN-B | 未实现：当前 Python 仅提供私有确定性 Harness 骨架 |
+| C 真实可恢复生成 | M07—M09、M11、M14 | PRD-C | PLAN-C | 未实现：真实 Provider、Usage 与完整 Candidate/Selection 状态机尚未启用；当前仅保留 Fixture Candidate/Selection 试点闭环 |
+| D 质量与修复 | M04、M09、M10、M14 | PRD-D | PLAN-D | 未实现 |
+| E 审阅与交付 | M10、M12、M13、M14 | PRD-E | PLAN-E | 未实现 |
+| F 团队与扩展 | M01、M06、M15 | PRD-F | PLAN-F | 未实现 |
+
+每完成一个工作包，必须同时更新本表、自动化测试和 Acceptance 证据。所有公共接口继续使用当前 `/api` 契约；PostgreSQL 是业务事实，MinIO 是对象存储，Go backend 是唯一 Kafka 接入方，Python Agent 不接入 Kafka、Redis、Elastic 或业务数据库。
+
+## 6. 当前技术结论
 
 - 顶层固定为 `frontend/` TypeScript/Next.js、`backend/` Go 业务系统、`agent/` Python/LangGraph Agent Runtime。
 - 全部领域规则、业务事务、公共 `/api` 和非 Agent Worker 由 Go 实现；Python 只执行受限 AgentRun，不写业务数据库。
@@ -51,11 +67,11 @@ Requirement 定义“要什么”，Design 定义“如何满足”，PRD 和 Pl
 - 公共接口以 Go Controller Swagger 注释生成的 `backend/docs/swagger.json` 为当前文档契约：Swagger UI 与 `@umijs/openapi` 前端 API 同源；前端统一经过 Axios `request.ts`，ViewModel 不手写 URL/DTO 或第二套 endpoint。
 - 数据库只使用当前最终 Schema，不建立 migration、旧接口兼容、双读或双写链。
 
-## 6. 目录约束
+## 7. 目录约束
 
 `docs/` 只保留 `requirement/`、`design/`、`prd/`、`plan/`、`acceptance/` 和本导航文件。研究过程、审核日志、追踪副本与历史归档不作为项目文档目录；需要保留的边界、决策、映射或证据必须分别写回 Design、Requirement、PRD/Plan 或 Acceptance。
 
-## 7. 维护规则
+## 8. 维护规则
 
 - 当前五类正式目录中只保留一套编号和事实源；
 - Requirement 使用稳定 ID 并包含成功、失败、权限、恢复和验收场景；
