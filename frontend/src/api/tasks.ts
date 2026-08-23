@@ -1,54 +1,40 @@
-// @ts-ignore
-/* eslint-disable */
 import request, { type RequestOptions } from "@/lib/request";
 
 /** List Tasks GET /api/v1/tasks */
 export async function listTasksApiV1TasksGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listTasksApiV1TasksGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  return request<API.ApiResponsePaginatedTasks_>("/api/v1/tasks", {
+  return request<API.ApiResponsePaginatedTasks_>(`/api/v1/tasks`, {
     method: "GET",
-    params: {
-      ...params,
-    },
-    ...(options || {}),
+    params,
+    ...(options ?? {}),
   });
 }
 
-/** Get Task GET /api/v1/tasks/${param0} */
+/** Get Task GET /api/v1/tasks/{task_id} */
 export async function getTaskApiV1TasksTaskIdGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getTaskApiV1TasksTaskIdGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { task_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseTaskResponse_>(`/api/v1/tasks/${param0}`, {
+  const { task_id: path0 } = params;
+  return request<API.ApiResponseTaskResponse_>(`/api/v1/tasks/${path0}`, {
     method: "GET",
-    params: { ...queryParams },
-    ...(options || {}),
+    ...(options ?? {}),
   });
 }
 
-/** Cancel Generation Task POST /api/v1/tasks/${param0}/cancel */
+/** Cancel Generation Task POST /api/v1/tasks/{task_id}/cancel */
 export async function cancelGenerationTaskApiV1TasksTaskIdCancelPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelGenerationTaskApiV1TasksTaskIdCancelPostParams,
   body: API.GenerationTaskCancellationRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { task_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseGenerationTaskCancellationResponse_>(
-    `/api/v1/tasks/${param0}/cancel`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { task_id: path0 } = params;
+  return request<API.ApiResponseGenerationTaskCancellationResponse_>(`/api/v1/tasks/${path0}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }

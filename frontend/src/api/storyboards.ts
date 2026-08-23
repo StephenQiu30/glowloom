@@ -1,731 +1,510 @@
-// @ts-ignore
-/* eslint-disable */
 import request, { type RequestOptions } from "@/lib/request";
 
-/** List Asset Shot Usages GET /api/v1/asset-versions/${param0}/shot-usages */
+/** List Asset Shot Usages GET /api/v1/asset-versions/{asset_version_id}/shot-usages */
 export async function listAssetShotUsagesApiV1AssetVersionsAssetVersionIdShotUsagesGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listAssetShotUsagesApiV1AssetVersionsAssetVersionIdShotUsagesGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { asset_version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponsePaginatedAssetShotUsages_>(
-    `/api/v1/asset-versions/${param0}/shot-usages`,
-    {
-      method: "GET",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { asset_version_id: path0, ...queryParams } = params;
+  return request<API.ApiResponsePaginatedAssetShotUsages_>(`/api/v1/asset-versions/${path0}/shot-usages`, {
+    method: "GET",
+    params: queryParams,
+    ...(options ?? {}),
+  });
 }
 
-/** Apply Asset Upgrade POST /api/v1/asset-versions/${param0}/upgrade */
+/** Apply Asset Upgrade POST /api/v1/asset-versions/{asset_version_id}/upgrade */
 export async function applyAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.applyAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePostParams,
   body: API.AssetUpgradeApplyRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { asset_version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseAssetUpgradeApplyResponse_>(
-    `/api/v1/asset-versions/${param0}/upgrade`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { asset_version_id: path0 } = params;
+  return request<API.ApiResponseAssetUpgradeApplyResponse_>(`/api/v1/asset-versions/${path0}/upgrade`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Preflight Asset Upgrade POST /api/v1/asset-versions/${param0}/upgrade-preflight */
+/** Preflight Asset Upgrade POST /api/v1/asset-versions/{asset_version_id}/upgrade-preflight */
 export async function preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.preflightAssetUpgradeApiV1AssetVersionsAssetVersionIdUpgradePreflightPostParams,
   body: API.AssetUpgradePreflightRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { asset_version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseAssetUpgradePreflightResponse_>(
-    `/api/v1/asset-versions/${param0}/upgrade-preflight`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { asset_version_id: path0 } = params;
+  return request<API.ApiResponseAssetUpgradePreflightResponse_>(`/api/v1/asset-versions/${path0}/upgrade-preflight`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** List Archived Shots GET /api/v1/episodes/${param0}/archived-shots */
+/** List Archived Shots GET /api/v1/episodes/{episode_id}/archived-shots */
 export async function listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listArchivedShotsApiV1EpisodesEpisodeIdArchivedShotsGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseListShotResponse_>(
-    `/api/v1/episodes/${param0}/archived-shots`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseListShotResponse_>(`/api/v1/episodes/${path0}/archived-shots`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** Get Coverage GET /api/v1/episodes/${param0}/coverage */
+/** Get Coverage GET /api/v1/episodes/{episode_id}/coverage */
 export async function getCoverageApiV1EpisodesEpisodeIdCoverageGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getCoverageApiV1EpisodesEpisodeIdCoverageGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseCoverageReportResponse_>(
-    `/api/v1/episodes/${param0}/coverage`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseCoverageReportResponse_>(`/api/v1/episodes/${path0}/coverage`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** Decide Coverage POST /api/v1/episodes/${param0}/coverage-decisions */
+/** Decide Coverage POST /api/v1/episodes/{episode_id}/coverage-decisions */
 export async function decideCoverageApiV1EpisodesEpisodeIdCoverageDecisionsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.decideCoverageApiV1EpisodesEpisodeIdCoverageDecisionsPostParams,
   body: API.CoverageDecisionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseCoverageDecisionApplyResponse_>(
-    `/api/v1/episodes/${param0}/coverage-decisions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseCoverageDecisionApplyResponse_>(`/api/v1/episodes/${path0}/coverage-decisions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Episode Readiness GET /api/v1/episodes/${param0}/shot-readiness */
+/** Get Episode Readiness GET /api/v1/episodes/{episode_id}/shot-readiness */
 export async function getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotReadinessBatchResponse_>(
-    `/api/v1/episodes/${param0}/shot-readiness`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseShotReadinessBatchResponse_>(`/api/v1/episodes/${path0}/shot-readiness`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** List Shots GET /api/v1/episodes/${param0}/shots */
+/** List Shots GET /api/v1/episodes/{episode_id}/shots */
 export async function listShotsApiV1EpisodesEpisodeIdShotsGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listShotsApiV1EpisodesEpisodeIdShotsGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotOrderResponse_>(
-    `/api/v1/episodes/${param0}/shots`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseShotOrderResponse_>(`/api/v1/episodes/${path0}/shots`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** Create Manual Shot POST /api/v1/episodes/${param0}/shots */
+/** Create Manual Shot POST /api/v1/episodes/{episode_id}/shots */
 export async function createManualShotApiV1EpisodesEpisodeIdShotsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createManualShotApiV1EpisodesEpisodeIdShotsPostParams,
   body: API.ShotCreateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotResponse_>(
-    `/api/v1/episodes/${param0}/shots`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseShotResponse_>(`/api/v1/episodes/${path0}/shots`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Reorder Shots POST /api/v1/episodes/${param0}/shots/reorder */
+/** Reorder Shots POST /api/v1/episodes/{episode_id}/shots/reorder */
 export async function reorderShotsApiV1EpisodesEpisodeIdShotsReorderPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.reorderShotsApiV1EpisodesEpisodeIdShotsReorderPostParams,
   body: API.ShotReorderRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotOrderResponse_>(
-    `/api/v1/episodes/${param0}/shots/reorder`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseShotOrderResponse_>(`/api/v1/episodes/${path0}/shots/reorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Create Batch POST /api/v1/episodes/${param0}/storyboard-draft-batches */
+/** Create Batch POST /api/v1/episodes/{episode_id}/storyboard-draft-batches */
 export async function createBatchApiV1EpisodesEpisodeIdStoryboardDraftBatchesPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createBatchApiV1EpisodesEpisodeIdStoryboardDraftBatchesPostParams,
   body: API.DraftBatchCreateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseDraftBatchResponse_>(
-    `/api/v1/episodes/${param0}/storyboard-draft-batches`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseDraftBatchResponse_>(`/api/v1/episodes/${path0}/storyboard-draft-batches`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** List Exports GET /api/v1/episodes/${param0}/storyboard-exports */
+/** List Exports GET /api/v1/episodes/{episode_id}/storyboard-exports */
 export async function listExportsApiV1EpisodesEpisodeIdStoryboardExportsGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listExportsApiV1EpisodesEpisodeIdStoryboardExportsGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseExportHistoryResponse_>(
-    `/api/v1/episodes/${param0}/storyboard-exports`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseExportHistoryResponse_>(`/api/v1/episodes/${path0}/storyboard-exports`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** Request Export POST /api/v1/episodes/${param0}/storyboard-exports */
+/** Request Export POST /api/v1/episodes/{episode_id}/storyboard-exports */
 export async function requestExportApiV1EpisodesEpisodeIdStoryboardExportsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.requestExportApiV1EpisodesEpisodeIdStoryboardExportsPostParams,
   body: API.ExportRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseExportResponse_>(
-    `/api/v1/episodes/${param0}/storyboard-exports`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
-}
-
-/** Preflight Export POST /api/v1/episodes/${param0}/storyboard-exports/preflight */
-export async function preflightExportApiV1EpisodesEpisodeIdStoryboardExportsPreflightPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.preflightExportApiV1EpisodesEpisodeIdStoryboardExportsPreflightPostParams,
-  options?: RequestOptions
-) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseExportPreflightResponse_>(
-    `/api/v1/episodes/${param0}/storyboard-exports/preflight`,
-    {
-      method: "POST",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
-}
-
-/** Create From Confirmed Candidate POST /api/v1/extraction-candidates/${param0}/shot */
-export async function createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPostParams,
-  options?: RequestOptions
-) {
-  const { candidate_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotResponse_>(
-    `/api/v1/extraction-candidates/${param0}/shot`,
-    {
-      method: "POST",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
-}
-
-/** Get Spec Version GET /api/v1/shot-spec-versions/${param0} */
-export async function getSpecVersionApiV1ShotSpecVersionsVersionIdGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.getSpecVersionApiV1ShotSpecVersionsVersionIdGetParams,
-  options?: RequestOptions
-) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotSpecVersionResponse_>(
-    `/api/v1/shot-spec-versions/${param0}`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
-}
-
-/** Get Shot GET /api/v1/shots/${param0} */
-export async function getShotApiV1ShotsShotIdGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.getShotApiV1ShotsShotIdGetParams,
-  options?: RequestOptions
-) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotResponse_>(`/api/v1/shots/${param0}`, {
-    method: "GET",
-    params: { ...queryParams },
-    ...(options || {}),
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseExportResponse_>(`/api/v1/episodes/${path0}/storyboard-exports`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
   });
 }
 
-/** Delete Shot DELETE /api/v1/shots/${param0} */
-export async function deleteShotApiV1ShotsShotIdDelete(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.deleteShotApiV1ShotsShotIdDeleteParams,
-  options?: RequestOptions
+/** Preflight Export POST /api/v1/episodes/{episode_id}/storyboard-exports/preflight */
+export async function preflightExportApiV1EpisodesEpisodeIdStoryboardExportsPreflightPost(
+  params: API.preflightExportApiV1EpisodesEpisodeIdStoryboardExportsPreflightPostParams,
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotDeleteResponse_>(
-    `/api/v1/shots/${param0}`,
-    {
-      method: "DELETE",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseExportPreflightResponse_>(`/api/v1/episodes/${path0}/storyboard-exports/preflight`, {
+    method: "POST",
+    ...(options ?? {}),
+  });
 }
 
-/** Update Shot PATCH /api/v1/shots/${param0} */
+/** Create From Confirmed Candidate POST /api/v1/extraction-candidates/{candidate_id}/shot */
+export async function createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPost(
+  params: API.createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPostParams,
+  options?: RequestOptions,
+) {
+  const { candidate_id: path0 } = params;
+  return request<API.ApiResponseShotResponse_>(`/api/v1/extraction-candidates/${path0}/shot`, {
+    method: "POST",
+    ...(options ?? {}),
+  });
+}
+
+/** Get Spec Version GET /api/v1/shot-spec-versions/{version_id} */
+export async function getSpecVersionApiV1ShotSpecVersionsVersionIdGet(
+  params: API.getSpecVersionApiV1ShotSpecVersionsVersionIdGetParams,
+  options?: RequestOptions,
+) {
+  const { version_id: path0 } = params;
+  return request<API.ApiResponseShotSpecVersionResponse_>(`/api/v1/shot-spec-versions/${path0}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
+}
+
+/** Delete Shot DELETE /api/v1/shots/{shot_id} */
+export async function deleteShotApiV1ShotsShotIdDelete(
+  params: API.deleteShotApiV1ShotsShotIdDeleteParams,
+  options?: RequestOptions,
+) {
+  const { shot_id: path0, ...queryParams } = params;
+  return request<API.ApiResponseShotDeleteResponse_>(`/api/v1/shots/${path0}`, {
+    method: "DELETE",
+    params: queryParams,
+    ...(options ?? {}),
+  });
+}
+
+/** Get Shot GET /api/v1/shots/{shot_id} */
+export async function getShotApiV1ShotsShotIdGet(
+  params: API.getShotApiV1ShotsShotIdGetParams,
+  options?: RequestOptions,
+) {
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseShotResponse_>(`/api/v1/shots/${path0}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
+}
+
+/** Update Shot PATCH /api/v1/shots/{shot_id} */
 export async function updateShotApiV1ShotsShotIdPatch(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.updateShotApiV1ShotsShotIdPatchParams,
   body: API.ShotUpdateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotResponse_>(`/api/v1/shots/${param0}`, {
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseShotResponse_>(`/api/v1/shots/${path0}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    params: { ...queryParams },
+    headers: { "Content-Type": "application/json" },
     data: body,
-    ...(options || {}),
+    ...(options ?? {}),
   });
 }
 
-/** Archive Shot POST /api/v1/shots/${param0}/archive */
+/** Archive Shot POST /api/v1/shots/{shot_id}/archive */
 export async function archiveShotApiV1ShotsShotIdArchivePost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.archiveShotApiV1ShotsShotIdArchivePostParams,
   body: API.ShotStateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotStateResponse_>(
-    `/api/v1/shots/${param0}/archive`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseShotStateResponse_>(`/api/v1/shots/${path0}/archive`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Copy Shot POST /api/v1/shots/${param0}/copy */
+/** Copy Shot POST /api/v1/shots/{shot_id}/copy */
 export async function copyShotApiV1ShotsShotIdCopyPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.copyShotApiV1ShotsShotIdCopyPostParams,
   body: API.CopyShotRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotTransformResponse_>(
-    `/api/v1/shots/${param0}/copy`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseShotTransformResponse_>(`/api/v1/shots/${path0}/copy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Set Current Spec Version POST /api/v1/shots/${param0}/current-spec-version */
+/** Set Current Spec Version POST /api/v1/shots/{shot_id}/current-spec-version */
 export async function setCurrentSpecVersionApiV1ShotsShotIdCurrentSpecVersionPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.setCurrentSpecVersionApiV1ShotsShotIdCurrentSpecVersionPostParams,
   body: API.ShotCurrentSpecRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotResponse_>(
-    `/api/v1/shots/${param0}/current-spec-version`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseShotResponse_>(`/api/v1/shots/${path0}/current-spec-version`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Shot Delete Preflight GET /api/v1/shots/${param0}/delete-preflight */
+/** Shot Delete Preflight GET /api/v1/shots/{shot_id}/delete-preflight */
 export async function shotDeletePreflightApiV1ShotsShotIdDeletePreflightGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.shotDeletePreflightApiV1ShotsShotIdDeletePreflightGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotDeletePreflightResponse_>(
-    `/api/v1/shots/${param0}/delete-preflight`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseShotDeletePreflightResponse_>(`/api/v1/shots/${path0}/delete-preflight`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** Replace References POST /api/v1/shots/${param0}/narrative-references */
+/** Replace References POST /api/v1/shots/{shot_id}/narrative-references */
 export async function replaceReferencesApiV1ShotsShotIdNarrativeReferencesPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.replaceReferencesApiV1ShotsShotIdNarrativeReferencesPostParams,
   body: API.NarrativeReferenceReplaceRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseNarrativeReferenceReplaceResponse_>(
-    `/api/v1/shots/${param0}/narrative-references`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseNarrativeReferenceReplaceResponse_>(`/api/v1/shots/${path0}/narrative-references`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Readiness GET /api/v1/shots/${param0}/readiness */
+/** Get Readiness GET /api/v1/shots/{shot_id}/readiness */
 export async function getReadinessApiV1ShotsShotIdReadinessGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getReadinessApiV1ShotsShotIdReadinessGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotReadinessResponse_>(
-    `/api/v1/shots/${param0}/readiness`,
-    {
-      method: "GET",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0, ...queryParams } = params;
+  return request<API.ApiResponseShotReadinessResponse_>(`/api/v1/shots/${path0}/readiness`, {
+    method: "GET",
+    params: queryParams,
+    ...(options ?? {}),
+  });
 }
 
-/** Restore Shot POST /api/v1/shots/${param0}/restore */
+/** Restore Shot POST /api/v1/shots/{shot_id}/restore */
 export async function restoreShotApiV1ShotsShotIdRestorePost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.restoreShotApiV1ShotsShotIdRestorePostParams,
   body: API.ShotStateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotStateResponse_>(
-    `/api/v1/shots/${param0}/restore`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseShotStateResponse_>(`/api/v1/shots/${path0}/restore`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** List Spec Versions GET /api/v1/shots/${param0}/spec-versions */
+/** List Spec Versions GET /api/v1/shots/{shot_id}/spec-versions */
 export async function listSpecVersionsApiV1ShotsShotIdSpecVersionsGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listSpecVersionsApiV1ShotsShotIdSpecVersionsGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseListShotSpecVersionResponse_>(
-    `/api/v1/shots/${param0}/spec-versions`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseListShotSpecVersionResponse_>(`/api/v1/shots/${path0}/spec-versions`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** Append Spec Version POST /api/v1/shots/${param0}/spec-versions */
+/** Append Spec Version POST /api/v1/shots/{shot_id}/spec-versions */
 export async function appendSpecVersionApiV1ShotsShotIdSpecVersionsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.appendSpecVersionApiV1ShotsShotIdSpecVersionsPostParams,
   body: API.ShotSpecCreateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotSpecCreateResponse_>(
-    `/api/v1/shots/${param0}/spec-versions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseShotSpecCreateResponse_>(`/api/v1/shots/${path0}/spec-versions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Split Shot POST /api/v1/shots/${param0}/split */
+/** Split Shot POST /api/v1/shots/{shot_id}/split */
 export async function splitShotApiV1ShotsShotIdSplitPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.splitShotApiV1ShotsShotIdSplitPostParams,
   body: API.SplitShotRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotTransformResponse_>(
-    `/api/v1/shots/${param0}/split`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseShotTransformResponse_>(`/api/v1/shots/${path0}/split`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Split Preflight POST /api/v1/shots/${param0}/split-preflight */
+/** Split Preflight POST /api/v1/shots/{shot_id}/split-preflight */
 export async function splitPreflightApiV1ShotsShotIdSplitPreflightPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.splitPreflightApiV1ShotsShotIdSplitPreflightPostParams,
   body: API.SplitPreflightRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { shot_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseShotTransformPreflightResponse_>(
-    `/api/v1/shots/${param0}/split-preflight`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { shot_id: path0 } = params;
+  return request<API.ApiResponseShotTransformPreflightResponse_>(`/api/v1/shots/${path0}/split-preflight`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
 /** Merge Shots POST /api/v1/shots/merge */
 export async function mergeShotsApiV1ShotsMergePost(
   body: API.MergeShotRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  return request<API.ApiResponseShotTransformResponse_>("/api/v1/shots/merge", {
+  return request<API.ApiResponseShotTransformResponse_>(`/api/v1/shots/merge`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     data: body,
-    ...(options || {}),
+    ...(options ?? {}),
   });
 }
 
 /** Merge Preflight POST /api/v1/shots/merge-preflight */
 export async function mergePreflightApiV1ShotsMergePreflightPost(
   body: API.MergePreflightRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  return request<API.ApiResponseShotTransformPreflightResponse_>(
-    "/api/v1/shots/merge-preflight",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  return request<API.ApiResponseShotTransformPreflightResponse_>(`/api/v1/shots/merge-preflight`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Batch GET /api/v1/storyboard-draft-batches/${param0} */
+/** Get Batch GET /api/v1/storyboard-draft-batches/{batch_id} */
 export async function getBatchApiV1StoryboardDraftBatchesBatchIdGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getBatchApiV1StoryboardDraftBatchesBatchIdGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { batch_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseDraftBatchResponse_>(
-    `/api/v1/storyboard-draft-batches/${param0}`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { batch_id: path0 } = params;
+  return request<API.ApiResponseDraftBatchResponse_>(`/api/v1/storyboard-draft-batches/${path0}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** Apply Batch POST /api/v1/storyboard-draft-batches/${param0}/apply */
+/** Apply Batch POST /api/v1/storyboard-draft-batches/{batch_id}/apply */
 export async function applyBatchApiV1StoryboardDraftBatchesBatchIdApplyPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.applyBatchApiV1StoryboardDraftBatchesBatchIdApplyPostParams,
   body: API.DraftApplyRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { batch_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseDraftApplyResponse_>(
-    `/api/v1/storyboard-draft-batches/${param0}/apply`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { batch_id: path0 } = params;
+  return request<API.ApiResponseDraftApplyResponse_>(`/api/v1/storyboard-draft-batches/${path0}/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Preflight Apply POST /api/v1/storyboard-draft-batches/${param0}/apply-preflight */
+/** Preflight Apply POST /api/v1/storyboard-draft-batches/{batch_id}/apply-preflight */
 export async function preflightApplyApiV1StoryboardDraftBatchesBatchIdApplyPreflightPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.preflightApplyApiV1StoryboardDraftBatchesBatchIdApplyPreflightPostParams,
   body: API.DraftApplyPreflightRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { batch_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseDraftApplyPreflightResponse_>(
-    `/api/v1/storyboard-draft-batches/${param0}/apply-preflight`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { batch_id: path0 } = params;
+  return request<API.ApiResponseDraftApplyPreflightResponse_>(`/api/v1/storyboard-draft-batches/${path0}/apply-preflight`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Approve Batch POST /api/v1/storyboard-draft-batches/${param0}/approve */
+/** Approve Batch POST /api/v1/storyboard-draft-batches/{batch_id}/approve */
 export async function approveBatchApiV1StoryboardDraftBatchesBatchIdApprovePost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.approveBatchApiV1StoryboardDraftBatchesBatchIdApprovePostParams,
   body: API.DraftApproveRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { batch_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseDraftBatchResponse_>(
-    `/api/v1/storyboard-draft-batches/${param0}/approve`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { batch_id: path0 } = params;
+  return request<API.ApiResponseDraftBatchResponse_>(`/api/v1/storyboard-draft-batches/${path0}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Decide Draft POST /api/v1/storyboard-drafts/${param0}/decisions */
+/** Decide Draft POST /api/v1/storyboard-drafts/{draft_id}/decisions */
 export async function decideDraftApiV1StoryboardDraftsDraftIdDecisionsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.decideDraftApiV1StoryboardDraftsDraftIdDecisionsPostParams,
   body: API.DraftDecisionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { draft_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseDraftDecisionResult_>(
-    `/api/v1/storyboard-drafts/${param0}/decisions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { draft_id: path0 } = params;
+  return request<API.ApiResponseDraftDecisionResult_>(`/api/v1/storyboard-drafts/${path0}/decisions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }

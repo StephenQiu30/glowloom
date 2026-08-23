@@ -528,7 +528,7 @@ function ShotSpecEditor({
     Object.fromEntries(
       (initial.dialogue_or_narration ?? []).map((dialogue) => [
         dialogue.source_dialogue_id,
-        dialogue.render_as_audio ? dialogue.speaker_subject_key : null,
+        dialogue.render_as_audio ? (dialogue.speaker_subject_key ?? null) : null,
       ]),
     ),
   );

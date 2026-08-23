@@ -12,7 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // @umijs/openapi output is reviewed through schema generation and typecheck.
+    // Generated API output is reviewed through deterministic regeneration and typecheck.
     "src/api/**",
   ]),
 ]);

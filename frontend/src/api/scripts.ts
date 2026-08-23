@@ -1,450 +1,309 @@
-// @ts-ignore
-/* eslint-disable */
 import request, { type RequestOptions } from "@/lib/request";
 
-/** Set Current Version POST /api/v1/episodes/${param0}/current-script-version */
+/** Set Current Version POST /api/v1/episodes/{episode_id}/current-script-version */
 export async function setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.setCurrentVersionApiV1EpisodesEpisodeIdCurrentScriptVersionPostParams,
   body: API.CurrentScriptVersionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseCurrentScriptVersionResponse_>(
-    `/api/v1/episodes/${param0}/current-script-version`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseCurrentScriptVersionResponse_>(`/api/v1/episodes/${path0}/current-script-version`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Narrative Dependency GET /api/v1/episodes/${param0}/narrative-dependency */
+/** Get Narrative Dependency GET /api/v1/episodes/{episode_id}/narrative-dependency */
 export async function getNarrativeDependencyApiV1EpisodesEpisodeIdNarrativeDependencyGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getNarrativeDependencyApiV1EpisodesEpisodeIdNarrativeDependencyGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseNarrativeDependencyResponse_>(
-    `/api/v1/episodes/${param0}/narrative-dependency`,
-    {
-      method: "GET",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0, ...queryParams } = params;
+  return request<API.ApiResponseNarrativeDependencyResponse_>(`/api/v1/episodes/${path0}/narrative-dependency`, {
+    method: "GET",
+    params: queryParams,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Latest Narrative Impact GET /api/v1/episodes/${param0}/narrative-impacts/latest */
+/** Get Latest Narrative Impact GET /api/v1/episodes/{episode_id}/narrative-impacts/latest */
 export async function getLatestNarrativeImpactApiV1EpisodesEpisodeIdNarrativeImpactsLatestGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getLatestNarrativeImpactApiV1EpisodesEpisodeIdNarrativeImpactsLatestGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseNarrativeImpactResponse_>(
-    `/api/v1/episodes/${param0}/narrative-impacts/latest`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseNarrativeImpactResponse_>(`/api/v1/episodes/${path0}/narrative-impacts/latest`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** List Sources GET /api/v1/episodes/${param0}/script-sources */
+/** List Sources GET /api/v1/episodes/{episode_id}/script-sources */
 export async function listSourcesApiV1EpisodesEpisodeIdScriptSourcesGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listSourcesApiV1EpisodesEpisodeIdScriptSourcesGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponsePaginatedScriptSources_>(
-    `/api/v1/episodes/${param0}/script-sources`,
-    {
-      method: "GET",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0, ...queryParams } = params;
+  return request<API.ApiResponsePaginatedScriptSources_>(`/api/v1/episodes/${path0}/script-sources`, {
+    method: "GET",
+    params: queryParams,
+    ...(options ?? {}),
+  });
 }
 
-/** Import Text Source POST /api/v1/episodes/${param0}/script-sources */
+/** Import Text Source POST /api/v1/episodes/{episode_id}/script-sources */
 export async function importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.importTextSourceApiV1EpisodesEpisodeIdScriptSourcesPostParams,
   body: API.ScriptImportRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { episode_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseScriptImportResponse_>(
-    `/api/v1/episodes/${param0}/script-sources`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { episode_id: path0 } = params;
+  return request<API.ApiResponseScriptImportResponse_>(`/api/v1/episodes/${path0}/script-sources`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Extraction Batch GET /api/v1/extraction-batches/${param0} */
+/** Get Extraction Batch GET /api/v1/extraction-batches/{batch_id} */
 export async function getExtractionBatchApiV1ExtractionBatchesBatchIdGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getExtractionBatchApiV1ExtractionBatchesBatchIdGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { batch_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseExtractionBatchResponse_>(
-    `/api/v1/extraction-batches/${param0}`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { batch_id: path0 } = params;
+  return request<API.ApiResponseExtractionBatchResponse_>(`/api/v1/extraction-batches/${path0}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** List Extraction Candidates GET /api/v1/extraction-batches/${param0}/candidates */
+/** List Extraction Candidates GET /api/v1/extraction-batches/{batch_id}/candidates */
 export async function listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listExtractionCandidatesApiV1ExtractionBatchesBatchIdCandidatesGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { batch_id: param0, ...queryParams } = params;
-  return request<API.ApiResponsePaginatedExtractionCandidates_>(
-    `/api/v1/extraction-batches/${param0}/candidates`,
-    {
-      method: "GET",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { batch_id: path0, ...queryParams } = params;
+  return request<API.ApiResponsePaginatedExtractionCandidates_>(`/api/v1/extraction-batches/${path0}/candidates`, {
+    method: "GET",
+    params: queryParams,
+    ...(options ?? {}),
+  });
 }
 
-/** Confirm Structure POST /api/v1/extraction-batches/${param0}/confirm-structure */
+/** Confirm Structure POST /api/v1/extraction-batches/{batch_id}/confirm-structure */
 export async function confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePostParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { batch_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseStructureConfirmationResponse_>(
-    `/api/v1/extraction-batches/${param0}/confirm-structure`,
-    {
-      method: "POST",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { batch_id: path0 } = params;
+  return request<API.ApiResponseStructureConfirmationResponse_>(`/api/v1/extraction-batches/${path0}/confirm-structure`, {
+    method: "POST",
+    ...(options ?? {}),
+  });
 }
 
-/** Get Extraction Candidate GET /api/v1/extraction-candidates/${param0} */
+/** Get Extraction Candidate GET /api/v1/extraction-candidates/{candidate_id} */
 export async function getExtractionCandidateApiV1ExtractionCandidatesCandidateIdGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getExtractionCandidateApiV1ExtractionCandidatesCandidateIdGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { candidate_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseExtractionCandidateResponse_>(
-    `/api/v1/extraction-candidates/${param0}`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { candidate_id: path0 } = params;
+  return request<API.ApiResponseExtractionCandidateResponse_>(`/api/v1/extraction-candidates/${path0}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** List Candidate Decisions GET /api/v1/extraction-candidates/${param0}/decisions */
+/** List Candidate Decisions GET /api/v1/extraction-candidates/{candidate_id}/decisions */
 export async function listCandidateDecisionsApiV1ExtractionCandidatesCandidateIdDecisionsGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listCandidateDecisionsApiV1ExtractionCandidatesCandidateIdDecisionsGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { candidate_id: param0, ...queryParams } = params;
-  return request<API.ApiResponsePaginatedCandidateDecisions_>(
-    `/api/v1/extraction-candidates/${param0}/decisions`,
-    {
-      method: "GET",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { candidate_id: path0, ...queryParams } = params;
+  return request<API.ApiResponsePaginatedCandidateDecisions_>(`/api/v1/extraction-candidates/${path0}/decisions`, {
+    method: "GET",
+    params: queryParams,
+    ...(options ?? {}),
+  });
 }
 
-/** Decide Extraction Candidate POST /api/v1/extraction-candidates/${param0}/decisions */
+/** Decide Extraction Candidate POST /api/v1/extraction-candidates/{candidate_id}/decisions */
 export async function decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.decideExtractionCandidateApiV1ExtractionCandidatesCandidateIdDecisionsPostParams,
   body: API.CandidateDecisionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { candidate_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseCandidateDecisionResultResponse_>(
-    `/api/v1/extraction-candidates/${param0}/decisions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { candidate_id: path0 } = params;
+  return request<API.ApiResponseCandidateDecisionResultResponse_>(`/api/v1/extraction-candidates/${path0}/decisions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Revise Narrative Structure POST /api/v1/narrative-structures/${param0}/revisions */
+/** Revise Narrative Structure POST /api/v1/narrative-structures/{structure_id}/revisions */
 export async function reviseNarrativeStructureApiV1NarrativeStructuresStructureIdRevisionsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.reviseNarrativeStructureApiV1NarrativeStructuresStructureIdRevisionsPostParams,
   body: API.NarrativeStructureRevisionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { structure_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseNarrativeRevisionResponse_>(
-    `/api/v1/narrative-structures/${param0}/revisions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { structure_id: path0 } = params;
+  return request<API.ApiResponseNarrativeRevisionResponse_>(`/api/v1/narrative-structures/${path0}/revisions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Source GET /api/v1/script-sources/${param0} */
+/** Get Source GET /api/v1/script-sources/{source_id} */
 export async function getSourceApiV1ScriptSourcesSourceIdGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getSourceApiV1ScriptSourcesSourceIdGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { source_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseScriptSourceResponse_>(
-    `/api/v1/script-sources/${param0}`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { source_id: path0 } = params;
+  return request<API.ApiResponseScriptSourceResponse_>(`/api/v1/script-sources/${path0}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** Archive Source POST /api/v1/script-sources/${param0}/archive */
+/** Archive Source POST /api/v1/script-sources/{source_id}/archive */
 export async function archiveSourceApiV1ScriptSourcesSourceIdArchivePost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.archiveSourceApiV1ScriptSourcesSourceIdArchivePostParams,
   body: API.ScriptSourceStateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { source_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseScriptSourceResponse_>(
-    `/api/v1/script-sources/${param0}/archive`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { source_id: path0 } = params;
+  return request<API.ApiResponseScriptSourceResponse_>(`/api/v1/script-sources/${path0}/archive`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Restore Source POST /api/v1/script-sources/${param0}/restore */
+/** Restore Source POST /api/v1/script-sources/{source_id}/restore */
 export async function restoreSourceApiV1ScriptSourcesSourceIdRestorePost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.restoreSourceApiV1ScriptSourcesSourceIdRestorePostParams,
   body: API.ScriptSourceStateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { source_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseScriptSourceResponse_>(
-    `/api/v1/script-sources/${param0}/restore`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { source_id: path0 } = params;
+  return request<API.ApiResponseScriptSourceResponse_>(`/api/v1/script-sources/${path0}/restore`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** List Versions GET /api/v1/script-sources/${param0}/versions */
+/** List Versions GET /api/v1/script-sources/{source_id}/versions */
 export async function listVersionsApiV1ScriptSourcesSourceIdVersionsGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listVersionsApiV1ScriptSourcesSourceIdVersionsGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { source_id: param0, ...queryParams } = params;
-  return request<API.ApiResponsePaginatedScriptVersions_>(
-    `/api/v1/script-sources/${param0}/versions`,
-    {
-      method: "GET",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { source_id: path0, ...queryParams } = params;
+  return request<API.ApiResponsePaginatedScriptVersions_>(`/api/v1/script-sources/${path0}/versions`, {
+    method: "GET",
+    params: queryParams,
+    ...(options ?? {}),
+  });
 }
 
-/** Publish Version POST /api/v1/script-sources/${param0}/versions */
+/** Publish Version POST /api/v1/script-sources/{source_id}/versions */
 export async function publishVersionApiV1ScriptSourcesSourceIdVersionsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.publishVersionApiV1ScriptSourcesSourceIdVersionsPostParams,
   body: API.ScriptVersionPublishRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { source_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseScriptVersionPublishResponse_>(
-    `/api/v1/script-sources/${param0}/versions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { source_id: path0 } = params;
+  return request<API.ApiResponseScriptVersionPublishResponse_>(`/api/v1/script-sources/${path0}/versions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Version GET /api/v1/script-versions/${param0} */
-export async function getVersionApiV1ScriptVersionsVersionIdGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.getVersionApiV1ScriptVersionsVersionIdGetParams,
-  options?: RequestOptions
-) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseScriptVersionResponse_>(
-    `/api/v1/script-versions/${param0}`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
-}
-
-/** Delete Draft Version DELETE /api/v1/script-versions/${param0} */
+/** Delete Draft Version DELETE /api/v1/script-versions/{version_id} */
 export async function deleteDraftVersionApiV1ScriptVersionsVersionIdDelete(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.deleteDraftVersionApiV1ScriptVersionsVersionIdDeleteParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseScriptVersionDeleteResponse_>(
-    `/api/v1/script-versions/${param0}`,
-    {
-      method: "DELETE",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0, ...queryParams } = params;
+  return request<API.ApiResponseScriptVersionDeleteResponse_>(`/api/v1/script-versions/${path0}`, {
+    method: "DELETE",
+    params: queryParams,
+    ...(options ?? {}),
+  });
 }
 
-/** Diff Versions GET /api/v1/script-versions/${param0}/diff */
+/** Get Version GET /api/v1/script-versions/{version_id} */
+export async function getVersionApiV1ScriptVersionsVersionIdGet(
+  params: API.getVersionApiV1ScriptVersionsVersionIdGetParams,
+  options?: RequestOptions,
+) {
+  const { version_id: path0 } = params;
+  return request<API.ApiResponseScriptVersionResponse_>(`/api/v1/script-versions/${path0}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
+}
+
+/** Diff Versions GET /api/v1/script-versions/{version_id}/diff */
 export async function diffVersionsApiV1ScriptVersionsVersionIdDiffGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.diffVersionsApiV1ScriptVersionsVersionIdDiffGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseScriptVersionDiffResponse_>(
-    `/api/v1/script-versions/${param0}/diff`,
-    {
-      method: "GET",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0, ...queryParams } = params;
+  return request<API.ApiResponseScriptVersionDiffResponse_>(`/api/v1/script-versions/${path0}/diff`, {
+    method: "GET",
+    params: queryParams,
+    ...(options ?? {}),
+  });
 }
 
-/** Start Extraction POST /api/v1/script-versions/${param0}/extractions */
+/** Start Extraction POST /api/v1/script-versions/{version_id}/extractions */
 export async function startExtractionApiV1ScriptVersionsVersionIdExtractionsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.startExtractionApiV1ScriptVersionsVersionIdExtractionsPostParams,
   body: API.ScriptExtractionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseExtractionBatchResponse_>(
-    `/api/v1/script-versions/${param0}/extractions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0 } = params;
+  return request<API.ApiResponseExtractionBatchResponse_>(`/api/v1/script-versions/${path0}/extractions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Narrative Structure GET /api/v1/script-versions/${param0}/narrative-structure */
+/** Get Narrative Structure GET /api/v1/script-versions/{version_id}/narrative-structure */
 export async function getNarrativeStructureApiV1ScriptVersionsVersionIdNarrativeStructureGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getNarrativeStructureApiV1ScriptVersionsVersionIdNarrativeStructureGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseNarrativeStructureResponse_>(
-    `/api/v1/script-versions/${param0}/narrative-structure`,
-    {
-      method: "GET",
-      params: {
-        ...queryParams,
-      },
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0, ...queryParams } = params;
+  return request<API.ApiResponseNarrativeStructureResponse_>(`/api/v1/script-versions/${path0}/narrative-structure`, {
+    method: "GET",
+    params: queryParams,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Confirmed Structure GET /api/v1/script-versions/${param0}/structure */
+/** Get Confirmed Structure GET /api/v1/script-versions/{version_id}/structure */
 export async function getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseConfirmedStructureResponse_>(
-    `/api/v1/script-versions/${param0}/structure`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0 } = params;
+  return request<API.ApiResponseConfirmedStructureResponse_>(`/api/v1/script-versions/${path0}/structure`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }

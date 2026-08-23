@@ -1,263 +1,182 @@
-// @ts-ignore
-/* eslint-disable */
 import request, { type RequestOptions } from "@/lib/request";
 
 /** List Media GET /api/v1/media */
 export async function listMediaApiV1MediaGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listMediaApiV1MediaGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  return request<API.ApiResponsePaginatedMedia_>("/api/v1/media", {
+  return request<API.ApiResponsePaginatedMedia_>(`/api/v1/media`, {
     method: "GET",
-    params: {
-      ...params,
-    },
-    ...(options || {}),
+    params,
+    ...(options ?? {}),
   });
 }
 
-/** Archive Media POST /api/v1/media-objects/${param0}/archive */
+/** Archive Media POST /api/v1/media-objects/{media_object_id}/archive */
 export async function archiveMediaApiV1MediaObjectsMediaObjectIdArchivePost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.archiveMediaApiV1MediaObjectsMediaObjectIdArchivePostParams,
   body: API.ArchiveMediaRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { media_object_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseMediaObjectResponse_>(
-    `/api/v1/media-objects/${param0}/archive`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { media_object_id: path0 } = params;
+  return request<API.ApiResponseMediaObjectResponse_>(`/api/v1/media-objects/${path0}/archive`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Set Current Media Version POST /api/v1/media-objects/${param0}/current-version */
+/** Set Current Media Version POST /api/v1/media-objects/{media_object_id}/current-version */
 export async function setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.setCurrentMediaVersionApiV1MediaObjectsMediaObjectIdCurrentVersionPostParams,
   body: API.CurrentMediaVersionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { media_object_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseMediaObjectResponse_>(
-    `/api/v1/media-objects/${param0}/current-version`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { media_object_id: path0 } = params;
+  return request<API.ApiResponseMediaObjectResponse_>(`/api/v1/media-objects/${path0}/current-version`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Restore Media POST /api/v1/media-objects/${param0}/restore */
+/** Restore Media POST /api/v1/media-objects/{media_object_id}/restore */
 export async function restoreMediaApiV1MediaObjectsMediaObjectIdRestorePost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.restoreMediaApiV1MediaObjectsMediaObjectIdRestorePostParams,
   body: API.ArchiveMediaRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { media_object_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseMediaObjectResponse_>(
-    `/api/v1/media-objects/${param0}/restore`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { media_object_id: path0 } = params;
+  return request<API.ApiResponseMediaObjectResponse_>(`/api/v1/media-objects/${path0}/restore`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Initialize Version Upload POST /api/v1/media-objects/${param0}/versions */
+/** Initialize Version Upload POST /api/v1/media-objects/{media_object_id}/versions */
 export async function initializeVersionUploadApiV1MediaObjectsMediaObjectIdVersionsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.initializeVersionUploadApiV1MediaObjectsMediaObjectIdVersionsPostParams,
   body: API.AppendVersionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { media_object_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseUploadInitializationResponse_>(
-    `/api/v1/media-objects/${param0}/versions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { media_object_id: path0 } = params;
+  return request<API.ApiResponseUploadInitializationResponse_>(`/api/v1/media-objects/${path0}/versions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Get Media GET /api/v1/media/${param0} */
+/** Get Media GET /api/v1/media/{version_id} */
 export async function getMediaApiV1MediaVersionIdGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getMediaApiV1MediaVersionIdGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseMediaVersionResponse_>(
-    `/api/v1/media/${param0}`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0 } = params;
+  return request<API.ApiResponseMediaVersionResponse_>(`/api/v1/media/${path0}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** Create Access POST /api/v1/media/${param0}/access */
+/** Create Access POST /api/v1/media/{version_id}/access */
 export async function createAccessApiV1MediaVersionIdAccessPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createAccessApiV1MediaVersionIdAccessPostParams,
   body: API.MediaAccessRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseMediaAccessResponse_>(
-    `/api/v1/media/${param0}/access`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0 } = params;
+  return request<API.ApiResponseMediaAccessResponse_>(`/api/v1/media/${path0}/access`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Request Media Location Migration POST /api/v1/media/${param0}/location-migrations */
+/** Request Media Location Migration POST /api/v1/media/{version_id}/location-migrations */
 export async function requestMediaLocationMigrationApiV1MediaVersionIdLocationMigrationsPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.requestMediaLocationMigrationApiV1MediaVersionIdLocationMigrationsPostParams,
   body: API.MediaLocationMigrationRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseTaskResponse_>(
-    `/api/v1/media/${param0}/location-migrations`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0 } = params;
+  return request<API.ApiResponseTaskResponse_>(`/api/v1/media/${path0}/location-migrations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Request Media Location Rollback POST /api/v1/media/${param0}/location-rollbacks */
+/** Request Media Location Rollback POST /api/v1/media/{version_id}/location-rollbacks */
 export async function requestMediaLocationRollbackApiV1MediaVersionIdLocationRollbacksPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.requestMediaLocationRollbackApiV1MediaVersionIdLocationRollbacksPostParams,
   body: API.MediaLocationRollbackRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseTaskResponse_>(
-    `/api/v1/media/${param0}/location-rollbacks`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0 } = params;
+  return request<API.ApiResponseTaskResponse_>(`/api/v1/media/${path0}/location-rollbacks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** List Media Locations GET /api/v1/media/${param0}/locations */
+/** List Media Locations GET /api/v1/media/{version_id}/locations */
 export async function listMediaLocationsApiV1MediaVersionIdLocationsGet(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listMediaLocationsApiV1MediaVersionIdLocationsGetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseMediaLocationsResponse_>(
-    `/api/v1/media/${param0}/locations`,
-    {
-      method: "GET",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0 } = params;
+  return request<API.ApiResponseMediaLocationsResponse_>(`/api/v1/media/${path0}/locations`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
-/** Retry Probe POST /api/v1/media/${param0}/probe-retry */
+/** Retry Probe POST /api/v1/media/{version_id}/probe-retry */
 export async function retryProbeApiV1MediaVersionIdProbeRetryPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.retryProbeApiV1MediaVersionIdProbeRetryPostParams,
   body: API.ProbeRetryRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { version_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseTaskResponse_>(
-    `/api/v1/media/${param0}/probe-retry`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      params: { ...queryParams },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  const { version_id: path0 } = params;
+  return request<API.ApiResponseTaskResponse_>(`/api/v1/media/${path0}/probe-retry`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
 /** Initialize Upload POST /api/v1/media/uploads */
 export async function initializeUploadApiV1MediaUploadsPost(
   body: API.UploadDeclaration,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  return request<API.ApiResponseUploadInitializationResponse_>(
-    "/api/v1/media/uploads",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: body,
-      ...(options || {}),
-    }
-  );
+  return request<API.ApiResponseUploadInitializationResponse_>(`/api/v1/media/uploads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
-/** Complete Upload POST /api/v1/media/uploads/${param0}/complete */
+/** Complete Upload POST /api/v1/media/uploads/{upload_session_id}/complete */
 export async function completeUploadApiV1MediaUploadsUploadSessionIdCompletePost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.completeUploadApiV1MediaUploadsUploadSessionIdCompletePostParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
-  const { upload_session_id: param0, ...queryParams } = params;
-  return request<API.ApiResponseUploadCompletionResponse_>(
-    `/api/v1/media/uploads/${param0}/complete`,
-    {
-      method: "POST",
-      params: { ...queryParams },
-      ...(options || {}),
-    }
-  );
+  const { upload_session_id: path0 } = params;
+  return request<API.ApiResponseUploadCompletionResponse_>(`/api/v1/media/uploads/${path0}/complete`, {
+    method: "POST",
+    ...(options ?? {}),
+  });
 }

@@ -388,8 +388,8 @@ function assetBibleState(
             temperament: ["克制"],
             goals: [],
             relationships: [],
-            arc_summary: null,
-            voice_profile: null,
+            arc_summary: "",
+            voice_profile: "",
           };
   const state: API.AssetStateResponse = {
     id: stateId,
@@ -481,9 +481,9 @@ const acceptedShotCandidate: API.ExtractionCandidateResponse = {
     action: null,
     visual_prompt: null,
     dialogue_excerpt: null,
-    asset_names: null,
+    asset_names: [],
     duration_ms: null,
-    continuity_notes: null,
+    continuity_notes: [],
   },
   confidence_note: "镜头意图明确",
   required: false,
