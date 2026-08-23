@@ -17,6 +17,7 @@ type contextCaptureStore struct {
 	wantWorkspaceID uuid.UUID
 	seenAuth        bool
 	seenAuthorize   bool
+	authorizeErr    error
 	memberPage      WorkspaceMemberPage
 	updatedMember   WorkspaceMember
 }
@@ -56,7 +57,7 @@ func (s *contextCaptureStore) AuthorizePath(ctx context.Context, workspaceID uui
 		return context.Canceled
 	}
 	s.seenAuthorize = true
-	return nil
+	return s.authorizeErr
 }
 
 func (s *contextCaptureStore) ListWorkspaceMembers(context.Context, uuid.UUID, WorkspaceMemberQuery) (WorkspaceMemberPage, error) {
@@ -131,5 +132,39 @@ func TestRequireAdminRejectsNonAdministrator(t *testing.T) {
 
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
+func TestRequireDoesNotHideAuthorizationRepositoryFailureAsNotFound(t *testing.T) {
+	workspaceID := uuid.New()
+	store := &contextCaptureStore{wantWorkspaceID: workspaceID, authorizeErr: context.DeadlineExceeded}
+	jwtManager, err := NewJWTManager(strings.Repeat("a", 32), "test", "test", 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewIdentityService(store, allowIdentityCache{}, jwtManager, AuthConfig{RefreshTTL: time.Hour})
+	accessToken, _, err := jwtManager.Issue(SessionIssue{
+		SessionID: uuid.New(),
+		Identity: AuthIdentity{
+			Account:   Account{ID: uuid.New()},
+			Workspace: Workspace{ID: workspaceID},
+			Role:      RoleAdmin,
+		},
+	}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := Require(service, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("next handler must not run")
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/api/projects/"+uuid.NewString(), nil)
+	request.Header.Set("Authorization", "Bearer "+accessToken)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusInternalServerError, recorder.Body.String())
 	}
 }

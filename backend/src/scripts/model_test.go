@@ -102,25 +102,18 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 		orm.Table("prj_content_units").Where("project_id = ?", projectID).Pluck("id", &orderUnitIDs)
 		contentUnitIDs = append(contentUnitIDs, orderUnitIDs...)
 		deleteBy("sht_shots", "content_unit_id IN ?", contentUnitIDs)
-		deleteBy("nar_source_revisions", "project_id = ?", projectID)
 		deleteBy("prj_content_units", "project_id = ?", projectID)
-		var projectionContentIDs []uuid.UUID
-		orm.Table("content_units").Where("project_id = ?", projectID).Pluck("id", &projectionContentIDs)
-		deleteBy("narrative_units", "content_unit_id IN ?", projectionContentIDs)
-		deleteBy("content_units", "project_id = ?", projectID)
 		orm.Table("pk_production_requirement_items").Where("project_id = ?", projectID).Pluck("id", &requirementItemIDs)
 		deleteBy("pk_production_requirement_revisions", "item_id IN ?", requirementItemIDs)
 		deleteBy("pk_production_requirement_items", "project_id = ?", projectID)
 		orm.Table("pk_entities").Where("project_id = ?", projectID).Pluck("id", &entityIDs)
 		deleteBy("pk_mention_resolutions", "entity_id IN ?", entityIDs)
-		deleteBy("production_requirements", "project_id = ?", projectID)
-		deleteBy("entities", "project_id = ?", projectID)
 		deleteBy("pk_entities", "project_id = ?", projectID)
 		deleteBy("nar_import_runs", "project_id = ?", projectID)
-		deleteBy("script_analysis_drafts", "script_revision_id = ?", revisionID)
+		deleteBy("nar_analysis_drafts", "source_revision_id = ?", revisionID)
+		deleteBy("nar_source_revisions", "id = ?", revisionID)
 		deleteBy("outbox_events", "operation_id = ?", operationID)
 		deleteBy("operations", "id = ?", operationID)
-		deleteBy("script_revisions", "id = ?", revisionID)
 		deleteBy("projects", "id = ?", projectID)
 		deleteBy("workspaces", "id = ?", workspaceID)
 		pool.Close()
@@ -138,15 +131,7 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 			WorkspaceID uuid.UUID
 			Name        string
 		}{projectID, workspaceID, "gorm integration project"}},
-		{"script_revisions", &struct {
-			ID            uuid.UUID
-			ProjectID     uuid.UUID
-			Name          string
-			ObjectKey     string
-			ContentHash   string
-			ContentLength int
-			Status        string
-		}{revisionID, projectID, "integration.txt", "integration/" + revisionID.String() + ".txt", HashContent("source"), 6, "uploaded"}},
+		{"nar_source_revisions", &sourceRevisionRecord{ID: revisionID, ProjectID: projectID, Name: "integration.txt", ObjectKey: "integration/" + revisionID.String() + ".txt", ContentHash: HashContent("source"), ContentLength: 6, SourceType: "txt", Status: "waiting_user"}},
 		{"operations", &operationRecord{ID: operationID, ProjectID: projectID, Type: "script_analysis", Status: "succeeded", Progress: 100, CreatedAt: time.Now().UTC()}},
 	} {
 		if err := orm.WithContext(ctx).Table(entry.table).Create(entry.record).Error; err != nil {
@@ -158,7 +143,7 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := orm.WithContext(ctx).Create(&scriptAnalysisDraftRecord{ScriptRevisionID: revisionID, SourceHash: analysis.SourceHash, Analysis: datatypes.JSON(mustJSON(analysis)), Status: "draft"}).Error; err != nil {
+	if err := orm.WithContext(ctx).Create(&analysisDraftRecord{SourceRevisionID: revisionID, SourceHash: analysis.SourceHash, Analysis: datatypes.JSON(mustJSON(analysis)), Status: "draft"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	repository := NewScriptRepository(orm, nil)
