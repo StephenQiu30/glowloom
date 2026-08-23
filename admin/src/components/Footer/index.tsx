@@ -23,7 +23,7 @@ const useStyles = createStyles(({ token, css }) => ({
   footer: css`
     padding: 16px 24px;
     text-align: center;
-    color: ${token.colorTextDescription};
+    color: ${token.colorTextSecondary};
     font-size: ${token.fontSizeSM}px;
     line-height: ${token.lineHeight};
     background: transparent;
@@ -32,7 +32,7 @@ const useStyles = createStyles(({ token, css }) => ({
     margin-bottom: 6px;
   `,
   link: css`
-    color: ${token.colorTextDescription};
+    color: ${token.colorTextSecondary};
     text-decoration: none;
     transition: color ${token.motionDurationMid};
 
@@ -55,7 +55,7 @@ const useStyles = createStyles(({ token, css }) => ({
     gap: 4px;
   `,
   label: css`
-    color: ${token.colorTextQuaternary};
+    color: ${token.colorTextSecondary};
   `,
   divider: css`
     display: inline-block;
@@ -68,7 +68,7 @@ const Footer: React.FC = () => {
   const year = new Date().getFullYear();
 
   return (
-    <div className={styles.footer}>
+    <footer className={styles.footer}>
       <div className={styles.copyright}>Ant Design Pro &copy; {year}</div>
       <div className={styles.meta}>
         <span className={styles.group}>
@@ -127,7 +127,7 @@ const Footer: React.FC = () => {
           GitHub
         </a>
       </div>
-    </div>
+    </footer>
   );
 };
 

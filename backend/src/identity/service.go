@@ -208,6 +208,17 @@ func (s *IdentityService) UpdateWorkspaceMember(ctx context.Context, principal P
 	if input.Status != nil && !input.Status.IsManageable() {
 		return WorkspaceMember{}, httpapi.Validation("成员状态无效", "使用 active、suspended 或 removed 后重试")
 	}
+	input.Reason = strings.TrimSpace(input.Reason)
+	if input.Reason == "" || len([]rune(input.Reason)) > 500 {
+		return WorkspaceMember{}, httpapi.Validation("成员变更理由无效", "填写 1 到 500 个字符的明确理由后重试")
+	}
+	input.RequestID = strings.TrimSpace(input.RequestID)
+	if input.RequestID == "" || len([]byte(input.RequestID)) > 200 {
+		return WorkspaceMember{}, httpapi.Validation("请求关联标识无效", "使用服务端生成的有效 request_id 后重试")
+	}
+	if principal.UserID == uuid.Nil {
+		return WorkspaceMember{}, httpapi.Validation("操作者无效", "重新登录后重试")
+	}
 	if principal.MembershipID == membershipID {
 		return WorkspaceMember{}, httpapi.Conflict("不能修改当前登录管理员", "请由其他管理员执行此操作")
 	}

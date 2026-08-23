@@ -51,7 +51,7 @@ export function authRequestOptions(options: RequestOptions = {}): RequestOptions
   if (token) headers.Authorization = `Bearer ${token}`;
   return {
     ...options,
-    credentials: 'include',
+    withCredentials: true,
     headers,
   };
 }

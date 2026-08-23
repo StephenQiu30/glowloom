@@ -1,9 +1,9 @@
-import { currentUser as queryIdentity } from '@/services/ant-design-pro/api';
+import { queryCurrentIdentity } from '@/services/identity';
 import { getCityOptions, provinceOptions } from '@/utils/chinaDivision';
 import type { CurrentUser, GeographicItemType } from './data';
 
 export async function queryCurrent(): Promise<{ data: CurrentUser }> {
-  const response = await queryIdentity();
+  const response = await queryCurrentIdentity();
   const identity = response.data;
   return {
     data: {
@@ -19,7 +19,10 @@ export async function queryCurrent(): Promise<{ data: CurrentUser }> {
       notifyCount: 0,
       unreadCount: 0,
       country: 'China',
-      geographic: { province: { label: '', key: '' }, city: { label: '', key: '' } },
+      geographic: {
+        province: { label: '', key: '' },
+        city: { label: '', key: '' },
+      },
       address: '',
       phone: '',
     },

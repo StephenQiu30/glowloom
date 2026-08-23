@@ -377,6 +377,7 @@ declare namespace API {
   };
 
   type updateMemberRequest = {
+    reason: string | null;
     role: string | null;
     status: string | null;
   };

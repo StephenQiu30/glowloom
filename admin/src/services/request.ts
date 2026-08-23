@@ -4,6 +4,7 @@ import {
   ApiEnvelope,
   authRequestOptions,
   clearSession,
+  getAccessToken,
   isUnauthorized,
   setSession,
   type AuthData,
@@ -30,6 +31,11 @@ export async function refreshSession() {
       });
   }
   return refreshing;
+}
+
+export async function restoreSession() {
+  if (getAccessToken()) return true;
+  return refreshSession();
 }
 
 export async function apiRequest<T>(

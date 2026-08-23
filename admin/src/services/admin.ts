@@ -30,7 +30,11 @@ export async function listMembers(search = '') {
 
 export async function updateMember(
   membershipID: string,
-  update: { role?: RoleCode; status?: MembershipStatus },
+  update: {
+    reason: string;
+    role?: RoleCode;
+    status?: MembershipStatus;
+  },
 ) {
   const response = await apiRequest<ApiEnvelope<WorkspaceMember>>(`/api/admin/members/${membershipID}`, {
     method: 'PATCH',

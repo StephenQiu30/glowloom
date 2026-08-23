@@ -2,6 +2,7 @@ package identity_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -79,5 +80,172 @@ func TestAuthorizePathUsesCanonicalProjectAndSourceRevisionTables(t *testing.T) 
 		if err := repository.AuthorizePath(authorizedContext, workspaceID, path); err != nil {
 			t.Fatalf("AuthorizePath(%q) error = %v", path, err)
 		}
+	}
+}
+
+func TestWorkspaceMemberChangeWritesRestorableAuditInSameTransaction(t *testing.T) {
+	if os.Getenv("LANVERSE_INTEGRATION") != "1" {
+		t.Skip("set LANVERSE_INTEGRATION=1 to run PostgreSQL/GORM integration")
+	}
+
+	ctx := context.Background()
+	pool, err := database.Connect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orm, err := database.OpenGORM(pool)
+	if err != nil {
+		pool.Close()
+		t.Fatal(err)
+	}
+
+	workspaceID, actorUserID, targetUserID := uuid.New(), uuid.New(), uuid.New()
+	actorMembershipID, targetMembershipID := uuid.New(), uuid.New()
+	t.Cleanup(func() {
+		orm.Table("audit_events").Where("workspace_id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("iam_memberships").Where("workspace_id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("iam_users").Where("id IN ?", []uuid.UUID{actorUserID, targetUserID}).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("workspaces").Where("id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+		pool.Close()
+	})
+
+	if err := orm.Table("workspaces").Create(map[string]any{"id": workspaceID, "name": "audit integration workspace"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, user := range []map[string]any{
+		{"id": actorUserID, "identity_subject": "audit-actor-" + actorUserID.String(), "display_name": "Audit Actor", "status": "active"},
+		{"id": targetUserID, "identity_subject": "audit-target-" + targetUserID.String(), "display_name": "Audit Target", "status": "active"},
+	} {
+		if err := orm.Table("iam_users").Create(user).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	var adminRole, userRole struct {
+		ID uuid.UUID `gorm:"column:id"`
+	}
+	if err := orm.Table("iam_roles").Select("id").Where("code = ?", RoleAdmin).Take(&adminRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("iam_roles").Select("id").Where("code = ?", RoleUser).Take(&userRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, membership := range []map[string]any{
+		{"id": actorMembershipID, "workspace_id": workspaceID, "user_id": actorUserID, "role_id": adminRole.ID, "status": "active"},
+		{"id": targetMembershipID, "workspace_id": workspaceID, "user_id": targetUserID, "role_id": userRole.ID, "status": "active"},
+	} {
+		if err := orm.Table("iam_memberships").Create(membership).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	requestID := "audit-member-change-" + uuid.NewString()
+	reason := "项目职责调整"
+	role := RoleBan
+	repository := NewIdentityRepository(orm)
+	updated, err := repository.UpdateWorkspaceMember(database.WithWorkspaceID(ctx, workspaceID), workspaceID, targetMembershipID, Principal{
+		UserID:       actorUserID,
+		WorkspaceID:  workspaceID,
+		MembershipID: actorMembershipID,
+		Role:         RoleAdmin,
+	}, WorkspaceMemberUpdate{Role: &role, Reason: reason, RequestID: requestID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Role != RoleBan || updated.MembershipStatus != MembershipStatusActive {
+		t.Fatalf("updated member = %#v", updated)
+	}
+
+	var event struct {
+		WorkspaceID uuid.UUID       `gorm:"column:workspace_id"`
+		ActorType   string          `gorm:"column:actor_type"`
+		ActorID     string          `gorm:"column:actor_id"`
+		Action      string          `gorm:"column:action"`
+		ObjectType  string          `gorm:"column:object_type"`
+		ObjectID    uuid.UUID       `gorm:"column:object_id"`
+		BeforeState json.RawMessage `gorm:"column:before_state"`
+		AfterState  json.RawMessage `gorm:"column:after_state"`
+		BeforeHash  string          `gorm:"column:before_hash"`
+		AfterHash   string          `gorm:"column:after_hash"`
+		RequestID   string          `gorm:"column:request_id"`
+		Reason      string          `gorm:"column:reason"`
+		Result      string          `gorm:"column:result"`
+	}
+	if err := orm.Table("audit_events").Where("workspace_id = ? AND request_id = ?", workspaceID, requestID).Take(&event).Error; err != nil {
+		t.Fatal(err)
+	}
+	if event.WorkspaceID != workspaceID || event.ActorType != "user" || event.ActorID != actorUserID.String() ||
+		event.Action != "iam.membership.updated" || event.ObjectType != "iam_membership" || event.ObjectID != targetMembershipID ||
+		event.RequestID != requestID || event.Reason != reason || event.Result != "succeeded" {
+		t.Fatalf("audit identity = %#v", event)
+	}
+	var before, after struct {
+		Role   RoleCode         `json:"role"`
+		Status MembershipStatus `json:"status"`
+	}
+	if err := json.Unmarshal(event.BeforeState, &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(event.AfterState, &after); err != nil {
+		t.Fatal(err)
+	}
+	if before.Role != RoleUser || before.Status != MembershipStatusActive || after.Role != RoleBan || after.Status != MembershipStatusActive {
+		t.Fatalf("audit states before=%#v after=%#v", before, after)
+	}
+	if len(event.BeforeHash) != 64 || len(event.AfterHash) != 64 || event.BeforeHash == event.AfterHash {
+		t.Fatalf("audit hashes before=%q after=%q", event.BeforeHash, event.AfterHash)
+	}
+
+	if err := orm.Exec(`
+		CREATE OR REPLACE FUNCTION lanverse_test_reject_audit_write() RETURNS trigger AS $test$
+		BEGIN
+			IF NEW.reason = 'force audit failure' THEN
+				RAISE EXCEPTION 'forced audit failure';
+			END IF;
+			RETURN NEW;
+		END;
+		$test$ LANGUAGE plpgsql;
+	`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Exec(`CREATE TRIGGER lanverse_test_reject_audit_write
+		BEFORE INSERT ON audit_events
+		FOR EACH ROW EXECUTE FUNCTION lanverse_test_reject_audit_write()`).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		orm.Exec("DROP TRIGGER IF EXISTS lanverse_test_reject_audit_write ON audit_events")
+		orm.Exec("DROP FUNCTION IF EXISTS lanverse_test_reject_audit_write()")
+	})
+
+	rejectedRequestID := "audit-member-change-rejected-" + uuid.NewString()
+	role = RoleUser
+	_, err = repository.UpdateWorkspaceMember(database.WithWorkspaceID(ctx, workspaceID), workspaceID, targetMembershipID, Principal{
+		UserID:       actorUserID,
+		WorkspaceID:  workspaceID,
+		MembershipID: actorMembershipID,
+		Role:         RoleAdmin,
+	}, WorkspaceMemberUpdate{Role: &role, Reason: "force audit failure", RequestID: rejectedRequestID})
+	if err == nil {
+		t.Fatal("member update succeeded while audit insert failed")
+	}
+	var persisted struct {
+		Role RoleCode `gorm:"column:role"`
+	}
+	if err := orm.Table("iam_memberships AS memberships").
+		Select("roles.code AS role").
+		Joins("JOIN iam_roles AS roles ON roles.id = memberships.role_id").
+		Where("memberships.id = ? AND memberships.workspace_id = ?", targetMembershipID, workspaceID).
+		Take(&persisted).Error; err != nil {
+		t.Fatal(err)
+	}
+	if persisted.Role != RoleBan {
+		t.Fatalf("member role = %q after audit failure, want %q", persisted.Role, RoleBan)
+	}
+	var rejectedAuditCount int64
+	if err := orm.Table("audit_events").Where("workspace_id = ? AND request_id = ?", workspaceID, rejectedRequestID).Count(&rejectedAuditCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if rejectedAuditCount != 0 {
+		t.Fatalf("rejected audit count = %d, want 0", rejectedAuditCount)
 	}
 }

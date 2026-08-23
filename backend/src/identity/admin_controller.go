@@ -30,6 +30,7 @@ func (h *IdentityAdminController) Mount(router chi.Router) {
 type updateMemberRequest struct {
 	Role   *string `json:"role"`
 	Status *string `json:"status"`
+	Reason string  `json:"reason"`
 }
 
 // listMembers 返回当前 Workspace 的成员列表，仅 Admin 可访问。
@@ -99,6 +100,7 @@ func (h *IdentityAdminController) updateMember(w http.ResponseWriter, r *http.Re
 		httpapi.WriteError(w, r, err)
 		return
 	}
+	input.RequestID = httpapi.RequestID(r)
 	result, err := h.service.UpdateWorkspaceMember(r.Context(), principal, membershipID, input)
 	if err != nil {
 		httpapi.WriteError(w, r, err)
@@ -138,7 +140,7 @@ func parseMembershipID(raw string) (uuid.UUID, error) {
 }
 
 func parseMemberUpdate(body updateMemberRequest) (WorkspaceMemberUpdate, error) {
-	var input WorkspaceMemberUpdate
+	input := WorkspaceMemberUpdate{Reason: strings.TrimSpace(body.Reason)}
 	if body.Role != nil {
 		role := RoleCode(strings.TrimSpace(*body.Role))
 		input.Role = &role

@@ -217,6 +217,8 @@ type WorkspaceMemberQuery struct {
 }
 
 type WorkspaceMemberUpdate struct {
-	Role   *RoleCode
-	Status *MembershipStatus
+	Role      *RoleCode
+	Status    *MembershipStatus
+	Reason    string
+	RequestID string
 }

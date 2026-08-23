@@ -1567,6 +1567,9 @@
         "identity.updateMemberRequest": {
             "type": "object",
             "properties": {
+                "reason": {
+                    "type": "string"
+                },
                 "role": {
                     "type": "string"
                 },

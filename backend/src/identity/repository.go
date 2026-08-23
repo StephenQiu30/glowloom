@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -74,6 +76,31 @@ type identitySessionRecord struct {
 }
 
 func (identitySessionRecord) TableName() string { return "iam_sessions" }
+
+type membershipAuditState struct {
+	Role   RoleCode         `json:"role"`
+	Status MembershipStatus `json:"status"`
+}
+
+type identityAuditEventRecord struct {
+	ID          uuid.UUID      `gorm:"column:id;type:uuid;primaryKey"`
+	WorkspaceID uuid.UUID      `gorm:"column:workspace_id;type:uuid"`
+	ActorType   string         `gorm:"column:actor_type"`
+	ActorID     string         `gorm:"column:actor_id"`
+	Action      string         `gorm:"column:action"`
+	ObjectType  string         `gorm:"column:object_type"`
+	ObjectID    uuid.UUID      `gorm:"column:object_id;type:uuid"`
+	BeforeState datatypes.JSON `gorm:"column:before_state;type:jsonb"`
+	AfterState  datatypes.JSON `gorm:"column:after_state;type:jsonb"`
+	BeforeHash  string         `gorm:"column:before_hash"`
+	AfterHash   string         `gorm:"column:after_hash"`
+	RequestID   string         `gorm:"column:request_id"`
+	Reason      string         `gorm:"column:reason"`
+	Result      string         `gorm:"column:result"`
+	OccurredAt  time.Time      `gorm:"column:occurred_at"`
+}
+
+func (identityAuditEventRecord) TableName() string { return "audit_events" }
 
 type workspaceRecord struct {
 	ID        uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
@@ -390,6 +417,14 @@ func (r *IdentityRepository) UpdateWorkspaceMember(ctx context.Context, workspac
 	if input.Role == nil && input.Status == nil {
 		return WorkspaceMember{}, httpapi.Validation("至少提供角色或成员状态", "修改 role 或 status 后重试")
 	}
+	input.Reason = strings.TrimSpace(input.Reason)
+	input.RequestID = strings.TrimSpace(input.RequestID)
+	if input.Reason == "" || len([]rune(input.Reason)) > 500 {
+		return WorkspaceMember{}, httpapi.Validation("成员变更理由无效", "填写 1 到 500 个字符的明确理由后重试")
+	}
+	if actor.UserID == uuid.Nil || input.RequestID == "" || len([]byte(input.RequestID)) > 200 {
+		return WorkspaceMember{}, httpapi.Validation("审计主体或请求关联标识无效", "重新登录后重试")
+	}
 	var result WorkspaceMember
 	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
 		target, err := loadWorkspaceMemberRow(tx, workspaceID, membershipID, true)
@@ -452,6 +487,36 @@ func (r *IdentityRepository) UpdateWorkspaceMember(ctx context.Context, workspac
 			now := time.Now().UTC()
 			if err := tx.Model(&identitySessionRecord{}).Where("user_id = ? AND workspace_id = ? AND revoked_at IS NULL", target.UserID, workspaceID).Updates(map[string]any{"revoked_at": now, "last_used_at": now}).Error; err != nil {
 				return fmt.Errorf("revoke member sessions: %w", err)
+			}
+		}
+		if len(updates) > 0 {
+			beforeState, err := json.Marshal(membershipAuditState{Role: target.Role, Status: target.MembershipStatus})
+			if err != nil {
+				return fmt.Errorf("encode member audit baseline: %w", err)
+			}
+			afterState, err := json.Marshal(membershipAuditState{Role: nextRole, Status: nextStatus})
+			if err != nil {
+				return fmt.Errorf("encode member audit result: %w", err)
+			}
+			event := identityAuditEventRecord{
+				ID:          uuid.New(),
+				WorkspaceID: workspaceID,
+				ActorType:   "user",
+				ActorID:     actor.UserID.String(),
+				Action:      "iam.membership.updated",
+				ObjectType:  "iam_membership",
+				ObjectID:    membershipID,
+				BeforeState: datatypes.JSON(beforeState),
+				AfterState:  datatypes.JSON(afterState),
+				BeforeHash:  toolkit.SHA256Hex(beforeState),
+				AfterHash:   toolkit.SHA256Hex(afterState),
+				RequestID:   input.RequestID,
+				Reason:      input.Reason,
+				Result:      "succeeded",
+				OccurredAt:  time.Now().UTC(),
+			}
+			if err := tx.Create(&event).Error; err != nil {
+				return fmt.Errorf("write member audit event: %w", err)
 			}
 		}
 		updated, err := loadWorkspaceMemberRow(tx, workspaceID, membershipID, false)

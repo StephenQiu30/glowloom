@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryCity } from '@/pages/account/settings/service';
 
-vi.mock('@/services/ant-design-pro/api', () => ({
-  currentUser: vi.fn(),
+vi.mock('@/services/identity', () => ({
+  queryCurrentIdentity: vi.fn(),
 }));
 
 describe('account settings service', () => {

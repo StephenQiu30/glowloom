@@ -127,16 +127,19 @@ CREATE TABLE IF NOT EXISTS iam_service_identities (
 
 CREATE TABLE IF NOT EXISTS audit_events (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id uuid REFERENCES workspaces(id),
-    actor_type text NOT NULL,
+    workspace_id uuid NOT NULL REFERENCES workspaces(id),
+    actor_type text NOT NULL CHECK (actor_type IN ('user', 'service', 'system')),
     actor_id text NOT NULL,
     action text NOT NULL,
     object_type text NOT NULL,
-    object_id uuid,
-    before_hash text,
-    after_hash text,
-    request_id text,
-    reason text,
+    object_id uuid NOT NULL,
+    before_state jsonb NOT NULL,
+    after_state jsonb NOT NULL,
+    before_hash text NOT NULL CHECK (before_hash ~ '^[0-9a-f]{64}$'),
+    after_hash text NOT NULL CHECK (after_hash ~ '^[0-9a-f]{64}$'),
+    request_id text NOT NULL CHECK (length(trim(request_id)) BETWEEN 1 AND 200),
+    reason text NOT NULL CHECK (length(trim(reason)) BETWEEN 1 AND 500),
+    result text NOT NULL CHECK (result IN ('succeeded', 'denied', 'failed')),
     occurred_at timestamptz NOT NULL DEFAULT now()
 );
 

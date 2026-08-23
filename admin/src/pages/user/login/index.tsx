@@ -1,11 +1,15 @@
 import { LockOutlined, MailOutlined } from '@ant-design/icons';
-import { LoginForm, ProFormCheckbox, ProFormText } from '@ant-design/pro-components';
+import {
+  LoginForm,
+  ProFormCheckbox,
+  ProFormText,
+} from '@ant-design/pro-components';
 import { Helmet, history, Link, useModel } from '@umijs/max';
 import { Alert, App } from 'antd';
 import { createStyles } from 'antd-style';
 import React, { startTransition, useState } from 'react';
 import { Footer } from '@/components';
-import { login } from '@/services/ant-design-pro/login';
+import { loginWithEmail } from '@/services/identity';
 import Settings from '../../../../config/defaultSettings';
 
 const getSafeRedirectUrl = (redirect: string | null): string => {
@@ -42,7 +46,7 @@ const Login: React.FC = () => {
   const handleSubmit = async (values: API.LoginParams) => {
     setError('');
     try {
-      await login(values);
+      await loginWithEmail(values);
       const userInfo = await initialState?.fetchUserInfo?.();
       if (userInfo) {
         startTransition(() => {
@@ -54,10 +58,13 @@ const Login: React.FC = () => {
         return;
       }
       message.success('登录成功');
-      const redirect = new URL(window.location.href).searchParams.get('redirect');
+      const redirect = new URL(window.location.href).searchParams.get(
+        'redirect',
+      );
       history.replace(getSafeRedirectUrl(redirect));
     } catch (reason) {
-      const messageText = reason instanceof Error ? reason.message : '邮箱或密码错误';
+      const messageText =
+        reason instanceof Error ? reason.message : '邮箱或密码错误';
       setError(messageText);
     }
   };
@@ -80,7 +87,9 @@ const Login: React.FC = () => {
             name="email"
             fieldProps={{ size: 'large', prefix: <MailOutlined /> }}
             placeholder="邮箱"
-            rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}
+            rules={[
+              { required: true, type: 'email', message: '请输入有效邮箱' },
+            ]}
           />
           <ProFormText.Password
             name="password"
@@ -88,9 +97,13 @@ const Login: React.FC = () => {
             placeholder="密码"
             rules={[{ required: true, message: '请输入密码' }]}
           />
-          <ProFormCheckbox noStyle name="autoLogin">保持本次会话</ProFormCheckbox>
+          <ProFormCheckbox noStyle name="autoLogin">
+            保持本次会话
+          </ProFormCheckbox>
           <div style={{ marginTop: 24, textAlign: 'center' }}>
-            <Link to="/user/register" prefetch>还没有账户？立即注册</Link>
+            <Link to="/user/register" prefetch>
+              还没有账户？立即注册
+            </Link>
           </div>
         </LoginForm>
       </div>

@@ -1,6 +1,7 @@
 package identity_test
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -8,10 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	. "github.com/stephenqiu30/lanverse/backend/src/identity"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/database"
+	"github.com/stephenqiu30/lanverse/backend/src/platform/httpapi"
 )
 
 type contextCaptureStore struct {
@@ -22,6 +25,7 @@ type contextCaptureStore struct {
 	authorizeErr    error
 	memberPage      WorkspaceMemberPage
 	updatedMember   WorkspaceMember
+	memberUpdate    WorkspaceMemberUpdate
 }
 
 func (s *contextCaptureStore) RegisterAccount(context.Context, PersistedRegisterInput) (SessionIssue, error) {
@@ -70,7 +74,8 @@ func (s *contextCaptureStore) ListWorkspaceMembers(context.Context, uuid.UUID, W
 	return s.memberPage, nil
 }
 
-func (s *contextCaptureStore) UpdateWorkspaceMember(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ Principal, _ WorkspaceMemberUpdate) (WorkspaceMember, error) {
+func (s *contextCaptureStore) UpdateWorkspaceMember(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ Principal, input WorkspaceMemberUpdate) (WorkspaceMember, error) {
+	s.memberUpdate = input
 	return s.updatedMember, nil
 }
 
@@ -157,6 +162,53 @@ func TestRequireAdminRejectsNonAdministrator(t *testing.T) {
 
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
+func TestAdminMemberUpdatePropagatesReasonAndServerRequestID(t *testing.T) {
+	workspaceID, userID, sessionID, targetMembershipID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	store := &contextCaptureStore{
+		wantWorkspaceID: workspaceID,
+		updatedMember: WorkspaceMember{
+			MembershipID:     targetMembershipID,
+			UserID:           uuid.New(),
+			Role:             RoleBan,
+			MembershipStatus: MembershipStatusActive,
+		},
+	}
+	jwtManager, err := NewJWTManager(strings.Repeat("a", 32), "test", "test", 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewIdentityService(store, allowIdentityCache{}, jwtManager, AuthConfig{RefreshTTL: time.Hour})
+	accessToken, _, err := jwtManager.Issue(SessionIssue{
+		SessionID: sessionID,
+		Identity: AuthIdentity{
+			Account:   Account{ID: userID},
+			Workspace: Workspace{ID: workspaceID},
+			Role:      RoleAdmin,
+		},
+	}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	router := chi.NewRouter()
+	NewIdentityAdminController(service).Mount(router)
+	handler := httpapi.RequestIDMiddleware(Require(service, router))
+	request := httptest.NewRequest(http.MethodPatch, "/api/admin/members/"+targetMembershipID.String(), bytes.NewBufferString(`{"role":"ban","reason":"违规访问处置"}`))
+	request.Header.Set("Authorization", "Bearer "+accessToken)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Request-Id", "member-audit-request")
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if store.memberUpdate.Reason != "违规访问处置" || store.memberUpdate.RequestID != "member-audit-request" {
+		t.Fatalf("member update = %#v", store.memberUpdate)
 	}
 }
 

@@ -17,7 +17,7 @@ import {
   Footer,
   OfflineBanner,
 } from '@/components';
-import { currentUser as queryCurrentUser } from '@/services/ant-design-pro/api';
+import { queryCurrentIdentity } from '@/services/identity';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig, installRequestFeedback } from './requestErrorConfig';
 
@@ -36,7 +36,7 @@ export async function getInitialState(): Promise<{
 }> {
   const fetchUserInfo = async () => {
     try {
-      const msg = await queryCurrentUser();
+      const msg = await queryCurrentIdentity();
       return msg.data;
     } catch (_error) {
       const { pathname, search, hash } = history.location;
@@ -104,26 +104,6 @@ export const layout: RunTimeLayoutConfig = ({
         );
       }
     },
-    bgLayoutImgList: [
-      {
-        src: 'https://mdn.alipayobjects.com/yuyan_qk0oxh/afts/img/D2LWSqNny4sAAAAAAAAAAAAAFl94AQBr',
-        left: 85,
-        bottom: 100,
-        height: '303px',
-      },
-      {
-        src: 'https://mdn.alipayobjects.com/yuyan_qk0oxh/afts/img/C2TWRpJpiC0AAAAAAAAAAAAAFl94AQBr',
-        bottom: -68,
-        right: -45,
-        height: '303px',
-      },
-      {
-        src: 'https://mdn.alipayobjects.com/yuyan_qk0oxh/afts/img/F6vSTbj8KpYAAAAAAAAAAAAAFl94AQBr',
-        bottom: 0,
-        left: 0,
-        width: '331px',
-      },
-    ],
     links: isDev
       ? [
           <a

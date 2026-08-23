@@ -5,6 +5,7 @@ import {
   App,
   Card,
   Input,
+  Modal,
   Select,
   Space,
   Table,
@@ -44,6 +45,11 @@ const statusOptions = (status: MembershipStatus) =>
     .filter((value) => !(status === 'removed' && value !== 'removed'))
     .map((value) => ({ label: statusLabels[value], value }));
 
+type PendingMemberChange = {
+  member: WorkspaceMember;
+  update: { role?: RoleCode; status?: MembershipStatus };
+};
+
 const Admin: React.FC = () => {
   const { message } = App.useApp();
   const { initialState } = useModel('@@initialState');
@@ -52,6 +58,8 @@ const Admin: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updatingID, setUpdatingID] = useState('');
+  const [pendingChange, setPendingChange] = useState<PendingMemberChange>();
+  const [changeReason, setChangeReason] = useState('');
   const currentMembershipID = initialState?.currentUser?.membershipId;
 
   const loadMembers = async (keyword = search) => {
@@ -71,19 +79,32 @@ const Admin: React.FC = () => {
     void loadMembers('');
   }, []);
 
-  const changeMember = async (
+  const requestMemberChange = (
     member: WorkspaceMember,
     update: { role?: RoleCode; status?: MembershipStatus },
   ) => {
+    setPendingChange({ member, update });
+    setChangeReason('');
+  };
+
+  const changeMember = async () => {
+    if (!pendingChange || !changeReason.trim()) return;
+
+    const { member, update } = pendingChange;
     setUpdatingID(member.membership_id);
     try {
-      const updated = await updateMember(member.membership_id, update);
+      const updated = await updateMember(member.membership_id, {
+        ...update,
+        reason: changeReason.trim(),
+      });
       setMembers((items) =>
         items.map((item) =>
           item.membership_id === updated.membership_id ? updated : item,
         ),
       );
       message.success('成员信息已更新');
+      setPendingChange(undefined);
+      setChangeReason('');
     } catch {
       message.error('成员信息更新失败');
     } finally {
@@ -99,7 +120,7 @@ const Admin: React.FC = () => {
         render: (_, member) => (
           <Space orientation="vertical" size={0}>
             <Typography.Text strong>{member.display_name}</Typography.Text>
-            <Typography.Text type="secondary">{member.email}</Typography.Text>
+            <Typography.Text>{member.email}</Typography.Text>
           </Space>
         ),
       },
@@ -116,8 +137,9 @@ const Admin: React.FC = () => {
               updatingID === member.membership_id
             }
             loading={updatingID === member.membership_id}
+            aria-label={`修改 ${member.display_name} 的角色`}
             onChange={(value: RoleCode) =>
-              void changeMember(member, { role: value })
+              requestMemberChange(member, { role: value })
             }
             style={{ minWidth: 120 }}
           />
@@ -136,8 +158,9 @@ const Admin: React.FC = () => {
               updatingID === member.membership_id
             }
             loading={updatingID === member.membership_id}
+            aria-label={`修改 ${member.display_name} 的状态`}
             onChange={(value: MembershipStatus) =>
-              void changeMember(member, { status: value })
+              requestMemberChange(member, { status: value })
             }
             style={{ minWidth: 110 }}
           />
@@ -148,7 +171,7 @@ const Admin: React.FC = () => {
         dataIndex: 'account_status',
         key: 'account_status',
         render: (status: WorkspaceMember['account_status']) => (
-          <Tag color={status === 'active' ? 'green' : 'default'}>{status}</Tag>
+          <Tag>{status}</Tag>
         ),
       },
       {
@@ -192,6 +215,41 @@ const Admin: React.FC = () => {
           />
         </Space>
       </Card>
+      <Modal
+        title="确认成员权限变更"
+        open={Boolean(pendingChange)}
+        okText="确认变更"
+        cancelText="取消"
+        confirmLoading={Boolean(updatingID)}
+        okButtonProps={{ disabled: !changeReason.trim() }}
+        destroyOnHidden
+        onCancel={() => {
+          if (updatingID) return;
+          setPendingChange(undefined);
+          setChangeReason('');
+        }}
+        onOk={() => void changeMember()}
+      >
+        {pendingChange && (
+          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+            <Typography.Text>
+              {pendingChange.update.role
+                ? `将 ${pendingChange.member.display_name} 的角色从“${roleLabels[pendingChange.member.role]}”改为“${roleLabels[pendingChange.update.role]}”。`
+                : `将 ${pendingChange.member.display_name} 的状态从“${statusLabels[pendingChange.member.membership_status]}”改为“${statusLabels[pendingChange.update.status as MembershipStatus]}”。`}
+            </Typography.Text>
+            <Input.TextArea
+              aria-label="成员变更理由"
+              autoFocus
+              autoSize={{ minRows: 3, maxRows: 6 }}
+              maxLength={500}
+              showCount
+              placeholder="填写可供审计复核的明确理由"
+              value={changeReason}
+              onChange={(event) => setChangeReason(event.target.value)}
+            />
+          </Space>
+        )}
+      </Modal>
     </PageContainer>
   );
 };

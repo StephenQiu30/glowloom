@@ -42,21 +42,15 @@ export default [
     component: './Admin',
   },
   {
-    path: '/account',
+    path: '/account/settings',
     name: '账号',
     icon: 'user',
-    routes: [
-      {
-        path: '/account',
-        redirect: '/account/settings',
-      },
-      {
-        path: '/account/settings',
-        name: '个人设置',
-        icon: 'setting',
-        component: './account/settings',
-      },
-    ],
+    component: './account/settings',
+  },
+  {
+    path: '/account',
+    redirect: '/account/settings',
+    hideInMenu: true,
   },
   {
     path: '/exception',

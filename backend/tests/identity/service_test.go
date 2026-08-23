@@ -48,6 +48,26 @@ func TestLoginFailsClosedWhenRedisRateLimitIsUnavailable(t *testing.T) {
 	}
 }
 
+func TestUpdateWorkspaceMemberRequiresExplicitAuditReason(t *testing.T) {
+	store := &contextCaptureStore{}
+	manager, err := NewJWTManager(strings.Repeat("s", 32), "test", "test", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewIdentityService(store, allowIdentityCache{}, manager, AuthConfig{RefreshTTL: time.Hour})
+	role := RoleUser
+	_, err = service.UpdateWorkspaceMember(context.Background(), Principal{
+		UserID:       uuid.New(),
+		WorkspaceID:  uuid.New(),
+		MembershipID: uuid.New(),
+		Role:         RoleAdmin,
+	}, uuid.New(), WorkspaceMemberUpdate{Role: &role, Reason: "   ", RequestID: "request-audit-reason"})
+	apiErr := httpapi.From(err)
+	if apiErr.Status != httpapi.StatusUnprocessableEntity || apiErr.Code != httpapi.CodeValidationFailed {
+		t.Fatalf("error = %#v, want validation/422", apiErr)
+	}
+}
+
 func TestRegistrationValidatesEmailAndPasswordBeforePersistence(t *testing.T) {
 	workspaceID := uuid.New()
 	store := &contextCaptureStore{wantWorkspaceID: workspaceID}

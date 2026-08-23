@@ -1,5 +1,9 @@
 import { request } from '@umijs/max';
-import { setSession, type ApiEnvelope, type AuthData } from '@/services/session';
+import {
+  type ApiEnvelope,
+  type AuthData,
+  setSession,
+} from '@/services/session';
 
 export interface UserRegisterParams {
   email: string;
@@ -11,7 +15,7 @@ export interface UserRegisterParams {
 export async function register(params: UserRegisterParams) {
   const response = await request<ApiEnvelope<AuthData>>('/api/auth/register', {
     method: 'POST',
-    credentials: 'include',
+    withCredentials: true,
     data: {
       email: params.email,
       password: params.password,
