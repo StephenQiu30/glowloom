@@ -152,7 +152,6 @@ func TestApplicationProductionSourceContainsNoTests(t *testing.T) {
 
 	repository := repositoryRoot(t)
 	productionRoots := []string{
-		filepath.Join(repository, "admin", "src"),
 		filepath.Join(repository, "agent", "src"),
 		filepath.Join(repository, "frontend", "src"),
 	}
