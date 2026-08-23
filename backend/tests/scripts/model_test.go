@@ -1,4 +1,4 @@
-package scripts
+package scripts_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"gorm.io/datatypes"
 
 	"github.com/stephenqiu30/lanverse/backend/src/platform/database"
+	. "github.com/stephenqiu30/lanverse/backend/src/scripts"
 )
 
 func TestAnalyzeScriptBuildsEpisodesScenesAndAssetEpisodeMatrix(t *testing.T) {
@@ -34,7 +35,7 @@ func TestAnalyzeScriptBuildsEpisodesScenesAndAssetEpisodeMatrix(t *testing.T) {
 		t.Fatalf("dialogue speaker = %q, want 林夏", got)
 	}
 	for _, asset := range analysis.Characters {
-		if asset.Name == "林夏" && !containsInt(asset.EpisodeNumbers, 1) || asset.Name == "林夏" && !containsInt(asset.EpisodeNumbers, 2) {
+		if asset.Name == "林夏" && !containsEpisode(asset.EpisodeNumbers, 1) || asset.Name == "林夏" && !containsEpisode(asset.EpisodeNumbers, 2) {
 			t.Fatalf("林夏 episode matrix = %#v, want [1 2]", asset.EpisodeNumbers)
 		}
 	}
@@ -50,6 +51,15 @@ func TestAnalyzeScriptBuildsEpisodesScenesAndAssetEpisodeMatrix(t *testing.T) {
 	if !foundProp {
 		t.Fatal("旧怀表 was not extracted")
 	}
+}
+
+func containsEpisode(values []int, target int) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func TestAnalyzeScriptRejectsEmptyAndOversizedSource(t *testing.T) {
@@ -131,8 +141,8 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 			WorkspaceID uuid.UUID
 			Name        string
 		}{projectID, workspaceID, "gorm integration project"}},
-		{"nar_source_revisions", &sourceRevisionRecord{ID: revisionID, ProjectID: projectID, Name: "integration.txt", ObjectKey: "integration/" + revisionID.String() + ".txt", ContentHash: HashContent("source"), ContentLength: 6, SourceType: "txt", Status: "waiting_user"}},
-		{"operations", &operationRecord{ID: operationID, ProjectID: projectID, Type: "script_analysis", Status: "succeeded", Progress: 100, CreatedAt: time.Now().UTC()}},
+		{"nar_source_revisions", map[string]any{"id": revisionID, "project_id": projectID, "name": "integration.txt", "object_key": "integration/" + revisionID.String() + ".txt", "content_hash": HashContent("source"), "content_length": 6, "source_type": "txt", "status": "waiting_user"}},
+		{"operations", map[string]any{"id": operationID, "project_id": projectID, "type": "script_analysis", "status": "succeeded", "progress": 100, "created_at": time.Now().UTC()}},
 	} {
 		if err := orm.WithContext(ctx).Table(entry.table).Create(entry.record).Error; err != nil {
 			t.Fatal(entry.table, err)
@@ -143,7 +153,7 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := orm.WithContext(ctx).Create(&analysisDraftRecord{SourceRevisionID: revisionID, SourceHash: analysis.SourceHash, Analysis: datatypes.JSON(mustJSON(analysis)), Status: "draft"}).Error; err != nil {
+	if err := orm.WithContext(ctx).Table("nar_analysis_drafts").Create(map[string]any{"source_revision_id": revisionID, "source_hash": analysis.SourceHash, "analysis": datatypes.JSON(mustJSON(analysis)), "status": "draft"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	repository := NewScriptRepository(orm, nil)

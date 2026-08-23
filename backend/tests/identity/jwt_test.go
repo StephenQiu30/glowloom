@@ -1,4 +1,4 @@
-package identity
+package identity_test
 
 import (
 	"strings"
@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	. "github.com/stephenqiu30/lanverse/backend/src/identity"
 )
 
 func TestJWTManagerIssuesAndValidatesAccessToken(t *testing.T) {
@@ -35,7 +37,7 @@ func TestJWTManagerRejectsWrongAudienceAndShortSecret(t *testing.T) {
 	if _, err := NewJWTManager("short", "issuer", "audience", time.Minute); err == nil {
 		t.Fatal("short secret should be rejected")
 	}
-	if _, err := NewJWTManager(insecureJWTSecretPlaceholder, "issuer", "audience", time.Minute); err == nil {
+	if _, err := NewJWTManager("replace-with-at-least-32-random-characters", "issuer", "audience", time.Minute); err == nil {
 		t.Fatal("example placeholder secret should be rejected")
 	}
 	manager, err := NewJWTManager(strings.Repeat("s", 32), "issuer", "audience", time.Minute)

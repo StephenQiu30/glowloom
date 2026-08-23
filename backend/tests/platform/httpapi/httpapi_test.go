@@ -1,4 +1,4 @@
-package httpapi
+package httpapi_test
 
 import (
 	"errors"
@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	. "github.com/stephenqiu30/lanverse/backend/src/platform/httpapi"
 )
 
 func TestWriteErrorUsesStableEnvelopeAndRequestID(t *testing.T) {

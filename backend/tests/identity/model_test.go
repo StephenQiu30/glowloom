@@ -1,6 +1,10 @@
-package identity
+package identity_test
 
-import "testing"
+import (
+	"testing"
+
+	. "github.com/stephenqiu30/lanverse/backend/src/identity"
+)
 
 func TestRoleCodeOnlySupportsAdminUserAndBan(t *testing.T) {
 	for _, role := range []RoleCode{RoleAdmin, RoleUser, RoleBan} {

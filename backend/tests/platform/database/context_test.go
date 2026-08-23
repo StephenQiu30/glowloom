@@ -1,4 +1,4 @@
-package database
+package database_test
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	. "github.com/stephenqiu30/lanverse/backend/src/platform/database"
 )
 
 func TestWorkspaceIDContextRoundTrip(t *testing.T) {

@@ -1,4 +1,4 @@
-package identity
+package identity_test
 
 import (
 	"context"
@@ -10,11 +10,13 @@ import (
 
 	"github.com/google/uuid"
 
+	. "github.com/stephenqiu30/lanverse/backend/src/identity"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/database"
 )
 
 type contextCaptureStore struct {
 	wantWorkspaceID uuid.UUID
+	principalRole   RoleCode
 	seenAuth        bool
 	seenAuthorize   bool
 	authorizeErr    error
@@ -48,7 +50,11 @@ func (s *contextCaptureStore) Authenticate(ctx context.Context, userID, sessionI
 		return Principal{}, context.Canceled
 	}
 	s.seenAuth = true
-	return Principal{UserID: userID, WorkspaceID: workspaceID, MembershipID: uuid.New(), SessionID: sessionID, Role: RoleAdmin}, nil
+	role := s.principalRole
+	if role == "" {
+		role = RoleAdmin
+	}
+	return Principal{UserID: userID, WorkspaceID: workspaceID, MembershipID: uuid.New(), SessionID: sessionID, Role: role}, nil
 }
 
 func (s *contextCaptureStore) AuthorizePath(ctx context.Context, workspaceID uuid.UUID, _ string) error {
@@ -121,11 +127,30 @@ func TestRequirePropagatesWorkspaceContext(t *testing.T) {
 }
 
 func TestRequireAdminRejectsNonAdministrator(t *testing.T) {
+	workspaceID := uuid.New()
+	store := &contextCaptureStore{wantWorkspaceID: workspaceID, principalRole: RoleUser}
+	jwtManager, err := NewJWTManager(strings.Repeat("a", 32), "test", "test", 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewIdentityService(store, allowIdentityCache{}, jwtManager, AuthConfig{RefreshTTL: time.Hour})
+	accessToken, _, err := jwtManager.Issue(SessionIssue{
+		SessionID: uuid.New(),
+		Identity: AuthIdentity{
+			Account:   Account{ID: uuid.New()},
+			Workspace: Workspace{ID: workspaceID},
+			Role:      RoleUser,
+		},
+	}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	handler := RequireAdmin(next)
-	request := httptest.NewRequest(http.MethodGet, "/api/admin/members", nil).WithContext(context.WithValue(context.Background(), contextKey{}, Principal{Role: RoleUser}))
+	handler := Require(service, RequireAdmin(next))
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/members", nil)
+	request.Header.Set("Authorization", "Bearer "+accessToken)
 	recorder := httptest.NewRecorder()
 
 	handler.ServeHTTP(recorder, request)

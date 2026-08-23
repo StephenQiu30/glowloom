@@ -1,8 +1,10 @@
-package toolkit
+package toolkit_test
 
 import (
 	"net/http/httptest"
 	"testing"
+
+	. "github.com/stephenqiu30/lanverse/backend/src/platform/toolkit"
 )
 
 func TestBearerToken(t *testing.T) {

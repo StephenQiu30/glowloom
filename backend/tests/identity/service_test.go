@@ -1,4 +1,4 @@
-package identity
+package identity_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	. "github.com/stephenqiu30/lanverse/backend/src/identity"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/httpapi"
 )
 

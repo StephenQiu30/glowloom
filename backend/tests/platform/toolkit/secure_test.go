@@ -1,8 +1,10 @@
-package toolkit
+package toolkit_test
 
 import (
 	"strings"
 	"testing"
+
+	. "github.com/stephenqiu30/lanverse/backend/src/platform/toolkit"
 )
 
 func TestRandomHexTokenAndSHA256Helpers(t *testing.T) {
