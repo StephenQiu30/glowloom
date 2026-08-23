@@ -129,6 +129,28 @@ type workspaceMemberRow struct {
 	CreatedAt        time.Time        `gorm:"column:created_at"`
 }
 
+type accessAuditRow struct {
+	ID                uuid.UUID         `gorm:"column:id"`
+	WorkspaceID       uuid.UUID         `gorm:"column:workspace_id"`
+	ActorType         string            `gorm:"column:actor_type"`
+	ActorID           string            `gorm:"column:actor_id"`
+	ActorDisplayName  string            `gorm:"column:actor_display_name"`
+	ActorEmail        string            `gorm:"column:actor_email"`
+	Action            string            `gorm:"column:action"`
+	ObjectType        string            `gorm:"column:object_type"`
+	ObjectID          uuid.UUID         `gorm:"column:object_id"`
+	ObjectDisplayName string            `gorm:"column:object_display_name"`
+	ObjectEmail       string            `gorm:"column:object_email"`
+	BeforeState       datatypes.JSON    `gorm:"column:before_state"`
+	AfterState        datatypes.JSON    `gorm:"column:after_state"`
+	BeforeHash        string            `gorm:"column:before_hash"`
+	AfterHash         string            `gorm:"column:after_hash"`
+	RequestID         string            `gorm:"column:request_id"`
+	Reason            string            `gorm:"column:reason"`
+	Result            AccessAuditResult `gorm:"column:result"`
+	OccurredAt        time.Time         `gorm:"column:occurred_at"`
+}
+
 type workspaceProjectRecord struct {
 	ID          uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
 	WorkspaceID uuid.UUID `gorm:"column:workspace_id;type:uuid"`
@@ -399,6 +421,102 @@ func (r *IdentityRepository) ListWorkspaceMembers(ctx context.Context, workspace
 		return nil
 	})
 	return result, err
+}
+
+func (r *IdentityRepository) ListAccessAudit(ctx context.Context, workspaceID uuid.UUID, query AccessAuditQuery) (AccessAuditPage, error) {
+	if r.orm == nil {
+		return AccessAuditPage{}, fmt.Errorf("identity repository ORM is not configured")
+	}
+	if workspaceID == uuid.Nil {
+		return AccessAuditPage{}, httpapi.Validation("Workspace 无效", "提供有效 Workspace 后重试")
+	}
+	page := query.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := query.PageSize
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	var result AccessAuditPage
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		base := tx.Table("audit_events AS events").
+			Joins("LEFT JOIN iam_users AS actors ON events.actor_type = 'user' AND actors.id::text = events.actor_id").
+			Joins("LEFT JOIN iam_memberships AS objects ON events.object_type = 'iam_membership' AND objects.id = events.object_id AND objects.workspace_id = events.workspace_id").
+			Joins("LEFT JOIN iam_users AS object_users ON object_users.id = objects.user_id").
+			Where("events.workspace_id = ?", workspaceID)
+		if search := strings.TrimSpace(query.Search); search != "" {
+			pattern := "%" + strings.ToLower(search) + "%"
+			base = base.Where(`LOWER(COALESCE(actors.display_name, '')) LIKE ? OR LOWER(COALESCE(actors.email, '')) LIKE ? OR LOWER(events.actor_id) LIKE ? OR LOWER(events.action) LIKE ? OR LOWER(events.object_type) LIKE ? OR LOWER(events.object_id::text) LIKE ? OR LOWER(COALESCE(object_users.display_name, '')) LIKE ? OR LOWER(COALESCE(object_users.email, '')) LIKE ? OR LOWER(events.reason) LIKE ? OR LOWER(events.request_id) LIKE ?`, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern)
+		}
+		if actor := strings.TrimSpace(query.Actor); actor != "" {
+			pattern := "%" + strings.ToLower(actor) + "%"
+			base = base.Where("LOWER(COALESCE(actors.display_name, '')) LIKE ? OR LOWER(COALESCE(actors.email, '')) LIKE ? OR LOWER(events.actor_id) LIKE ?", pattern, pattern, pattern)
+		}
+		if object := strings.TrimSpace(query.Object); object != "" {
+			pattern := "%" + strings.ToLower(object) + "%"
+			base = base.Where("LOWER(events.object_type) LIKE ? OR LOWER(events.object_id::text) LIKE ? OR LOWER(COALESCE(object_users.display_name, '')) LIKE ? OR LOWER(COALESCE(object_users.email, '')) LIKE ?", pattern, pattern, pattern, pattern)
+		}
+		if action := strings.TrimSpace(query.Action); action != "" {
+			base = base.Where("events.action = ?", action)
+		}
+		if query.Result != "" {
+			base = base.Where("events.result = ?", query.Result)
+		}
+		if query.OccurredFrom != nil {
+			base = base.Where("events.occurred_at >= ?", query.OccurredFrom.UTC())
+		}
+		if query.OccurredTo != nil {
+			base = base.Where("events.occurred_at <= ?", query.OccurredTo.UTC())
+		}
+		var total int64
+		if err := base.Count(&total).Error; err != nil {
+			return fmt.Errorf("count access audit events: %w", err)
+		}
+		var rows []accessAuditRow
+		if err := base.Select(`events.id, events.workspace_id, events.actor_type, events.actor_id,
+			COALESCE(actors.display_name, '') AS actor_display_name, COALESCE(actors.email, '') AS actor_email,
+			events.action, events.object_type, events.object_id,
+			COALESCE(object_users.display_name, '') AS object_display_name, COALESCE(object_users.email, '') AS object_email,
+			events.before_state, events.after_state, events.before_hash, events.after_hash,
+			events.request_id, events.reason, events.result, events.occurred_at`).
+			Order("events.occurred_at DESC, events.id DESC").
+			Offset((page - 1) * pageSize).
+			Limit(pageSize).
+			Scan(&rows).Error; err != nil {
+			return fmt.Errorf("list access audit events: %w", err)
+		}
+		items := make([]AccessAuditEvent, 0, len(rows))
+		for _, row := range rows {
+			beforeState, err := decodeAuditState(row.BeforeState)
+			if err != nil {
+				return fmt.Errorf("decode access audit baseline %s: %w", row.ID, err)
+			}
+			afterState, err := decodeAuditState(row.AfterState)
+			if err != nil {
+				return fmt.Errorf("decode access audit result %s: %w", row.ID, err)
+			}
+			items = append(items, AccessAuditEvent{
+				ID: row.ID, WorkspaceID: row.WorkspaceID, ActorType: row.ActorType, ActorID: row.ActorID,
+				ActorDisplayName: row.ActorDisplayName, ActorEmail: row.ActorEmail, Action: row.Action,
+				ObjectType: row.ObjectType, ObjectID: row.ObjectID, ObjectDisplayName: row.ObjectDisplayName,
+				ObjectEmail: row.ObjectEmail, BeforeState: beforeState, AfterState: afterState,
+				BeforeHash: row.BeforeHash, AfterHash: row.AfterHash, RequestID: row.RequestID,
+				Reason: row.Reason, Result: row.Result, OccurredAt: row.OccurredAt,
+			})
+		}
+		result = AccessAuditPage{Items: items, Total: total, Page: page, PageSize: pageSize}
+		return nil
+	})
+	return result, err
+}
+
+func decodeAuditState(value datatypes.JSON) (map[string]any, error) {
+	state := make(map[string]any)
+	if err := json.Unmarshal(value, &state); err != nil {
+		return nil, err
+	}
+	return state, nil
 }
 
 func (r *IdentityRepository) UpdateWorkspaceMember(ctx context.Context, workspaceID, membershipID uuid.UUID, actor Principal, input WorkspaceMemberUpdate) (WorkspaceMember, error) {

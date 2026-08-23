@@ -1,4 +1,39 @@
 declare namespace API {
+  type AccessAuditEvent = {
+    action?: string;
+    actor_display_name?: string;
+    actor_email?: string;
+    actor_id?: string;
+    actor_type?: string;
+    after_hash?: string;
+    after_state?: Record<string, any>;
+    before_hash?: string;
+    before_state?: Record<string, any>;
+    id?: string;
+    object_display_name?: string;
+    object_email?: string;
+    object_id?: string;
+    object_type?: string;
+    occurred_at?: string;
+    reason?: string;
+    request_id?: string;
+    result?: AccessAuditResult;
+    workspace_id?: string;
+  };
+
+  type AccessAuditPage = {
+    items?: AccessAuditEvent[];
+    page?: number;
+    page_size?: number;
+    total?: number;
+  };
+
+  type AccessAuditPageEnvelope = {
+    data?: AccessAuditPage;
+  };
+
+  type AccessAuditResult = "succeeded" | "denied" | "failed";
+
   type Account = {
     display_name?: string;
     email?: string;
@@ -6,6 +41,27 @@ declare namespace API {
   };
 
   type AccountStatus = "active" | "suspended" | "removed";
+
+  type adminListAccessAuditParams = {
+    /** 跨主体、对象、动作、理由和 Request ID 搜索 */
+    search?: string;
+    /** 按主体名称、邮箱或 ID 搜索 */
+    actor?: string;
+    /** 按对象类型、名称、邮箱或 ID 搜索 */
+    object?: string;
+    /** 按动作精确筛选 */
+    action?: string;
+    /** 按结果筛选 */
+    result?: "succeeded" | "denied" | "failed";
+    /** 起始时间（RFC3339，含） */
+    occurred_from?: string;
+    /** 结束时间（RFC3339，含） */
+    occurred_to?: string;
+    /** 页码 */
+    page?: number;
+    /** 每页数量 */
+    page_size?: number;
+  };
 
   type adminListMembersParams = {
     /** 按邮箱或显示名搜索 */

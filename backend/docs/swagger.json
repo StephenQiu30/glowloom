@@ -12,6 +12,104 @@
     },
     "basePath": "/",
     "paths": {
+        "/api/admin/audit-events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "查询 Workspace 访问审计",
+                "operationId": "admin_list_access_audit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "跨主体、对象、动作、理由和 Request ID 搜索",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "按主体名称、邮箱或 ID 搜索",
+                        "name": "actor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "按对象类型、名称、邮箱或 ID 搜索",
+                        "name": "object",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "按动作精确筛选",
+                        "name": "action",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "succeeded",
+                            "denied",
+                            "failed"
+                        ],
+                        "type": "string",
+                        "description": "按结果筛选",
+                        "name": "result",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "起始时间（RFC3339，含）",
+                        "name": "occurred_from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束时间（RFC3339，含）",
+                        "name": "occurred_to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/identity.AccessAuditPageEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/admin/members": {
             "get": {
                 "security": [
@@ -1401,6 +1499,111 @@
                     "type": "string"
                 }
             }
+        },
+        "identity.AccessAuditEvent": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "actor_display_name": {
+                    "type": "string"
+                },
+                "actor_email": {
+                    "type": "string"
+                },
+                "actor_id": {
+                    "type": "string"
+                },
+                "actor_type": {
+                    "type": "string"
+                },
+                "after_hash": {
+                    "type": "string"
+                },
+                "after_state": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "before_hash": {
+                    "type": "string"
+                },
+                "before_state": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "id": {
+                    "type": "string"
+                },
+                "object_display_name": {
+                    "type": "string"
+                },
+                "object_email": {
+                    "type": "string"
+                },
+                "object_id": {
+                    "type": "string"
+                },
+                "object_type": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "result": {
+                    "$ref": "#/definitions/identity.AccessAuditResult"
+                },
+                "workspace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "identity.AccessAuditPage": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/identity.AccessAuditEvent"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "identity.AccessAuditPageEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/identity.AccessAuditPage"
+                }
+            }
+        },
+        "identity.AccessAuditResult": {
+            "type": "string",
+            "enum": [
+                "succeeded",
+                "denied",
+                "failed"
+            ],
+            "x-enum-varnames": [
+                "AccessAuditSucceeded",
+                "AccessAuditDenied",
+                "AccessAuditFailed"
+            ]
         },
         "identity.Account": {
             "type": "object",

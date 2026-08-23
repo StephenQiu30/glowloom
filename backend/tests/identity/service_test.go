@@ -97,6 +97,32 @@ func TestWorkspaceMemberManagementRequiresAdministrator(t *testing.T) {
 	}
 }
 
+func TestAccessAuditRequiresAdministratorAndValidFilters(t *testing.T) {
+	store := &contextCaptureStore{}
+	manager, err := NewJWTManager(strings.Repeat("s", 32), "test", "test", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewIdentityService(store, allowIdentityCache{}, manager, AuthConfig{RefreshTTL: time.Hour})
+	workspaceID := uuid.New()
+
+	_, err = service.ListAccessAudit(context.Background(), Principal{WorkspaceID: workspaceID, Role: RoleUser}, AccessAuditQuery{})
+	if apiErr := httpapi.From(err); apiErr.Status != httpapi.StatusForbidden || apiErr.Code != httpapi.CodeForbidden {
+		t.Fatalf("user access audit error = %#v, want forbidden", apiErr)
+	}
+
+	_, err = service.ListAccessAudit(context.Background(), Principal{WorkspaceID: workspaceID, Role: RoleAdmin}, AccessAuditQuery{Result: "unknown"})
+	if apiErr := httpapi.From(err); apiErr.Status != httpapi.StatusUnprocessableEntity || apiErr.Code != httpapi.CodeValidationFailed {
+		t.Fatalf("invalid result error = %#v, want validation/422", apiErr)
+	}
+
+	from, to := time.Now().UTC(), time.Now().UTC().Add(-time.Hour)
+	_, err = service.ListAccessAudit(context.Background(), Principal{WorkspaceID: workspaceID, Role: RoleAdmin}, AccessAuditQuery{OccurredFrom: &from, OccurredTo: &to})
+	if apiErr := httpapi.From(err); apiErr.Status != httpapi.StatusUnprocessableEntity || apiErr.Code != httpapi.CodeValidationFailed {
+		t.Fatalf("invalid range error = %#v, want validation/422", apiErr)
+	}
+}
+
 func TestUserCannotGrantAdminRole(t *testing.T) {
 	store := &contextCaptureStore{}
 	manager, err := NewJWTManager(strings.Repeat("s", 32), "test", "test", time.Minute)

@@ -2,6 +2,21 @@
 /* eslint-disable */
 import request, { type RequestOptions } from "@/lib/request";
 
+/** 查询 Workspace 访问审计 GET /api/admin/audit-events */
+export async function adminListAccessAudit(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.adminListAccessAuditParams,
+  options?: RequestOptions
+) {
+  return request<API.AccessAuditPageEnvelope>("/api/admin/audit-events", {
+    method: "GET",
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
+
 /** 查询 Workspace 用户 GET /api/admin/members */
 export async function adminListMembers(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

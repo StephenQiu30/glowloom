@@ -35,6 +35,7 @@ type IdentityStore interface {
 	Authenticate(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (Principal, error)
 	AuthorizePath(context.Context, uuid.UUID, string) error
 	ListWorkspaceMembers(context.Context, uuid.UUID, WorkspaceMemberQuery) (WorkspaceMemberPage, error)
+	ListAccessAudit(context.Context, uuid.UUID, AccessAuditQuery) (AccessAuditPage, error)
 	UpdateWorkspaceMember(context.Context, uuid.UUID, uuid.UUID, Principal, WorkspaceMemberUpdate) (WorkspaceMember, error)
 }
 

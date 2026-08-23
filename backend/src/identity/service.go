@@ -192,6 +192,42 @@ func (s *IdentityService) ListWorkspaceMembers(ctx context.Context, principal Pr
 	return s.repository.ListWorkspaceMembers(database.WithWorkspaceID(ctx, principal.WorkspaceID), principal.WorkspaceID, query)
 }
 
+func (s *IdentityService) ListAccessAudit(ctx context.Context, principal Principal, query AccessAuditQuery) (AccessAuditPage, error) {
+	if !principal.Role.IsAdmin() {
+		return AccessAuditPage{}, httpapi.Forbidden("只有管理员可以查询访问审计", "请联系管理员")
+	}
+	if principal.WorkspaceID == uuid.Nil {
+		return AccessAuditPage{}, httpapi.Validation("Workspace 无效", "提供有效 Workspace 后重试")
+	}
+	for label, value := range map[string]string{
+		"审计搜索条件": query.Search,
+		"审计主体条件": query.Actor,
+		"审计对象条件": query.Object,
+		"审计动作条件": query.Action,
+	} {
+		if len([]rune(strings.TrimSpace(value))) > 120 {
+			return AccessAuditPage{}, httpapi.Validation(label+"过长", "将条件控制在 120 个字符以内")
+		}
+	}
+	query.Search = strings.TrimSpace(query.Search)
+	query.Actor = strings.TrimSpace(query.Actor)
+	query.Object = strings.TrimSpace(query.Object)
+	query.Action = strings.TrimSpace(query.Action)
+	if query.Result != "" && !query.Result.IsValid() {
+		return AccessAuditPage{}, httpapi.Validation("审计结果条件无效", "使用 succeeded、denied 或 failed 后重试")
+	}
+	if query.OccurredFrom != nil && query.OccurredTo != nil && query.OccurredFrom.After(*query.OccurredTo) {
+		return AccessAuditPage{}, httpapi.Validation("审计时间范围无效", "确保开始时间不晚于结束时间")
+	}
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.PageSize < 1 || query.PageSize > 100 {
+		query.PageSize = 20
+	}
+	return s.repository.ListAccessAudit(database.WithWorkspaceID(ctx, principal.WorkspaceID), principal.WorkspaceID, query)
+}
+
 func (s *IdentityService) UpdateWorkspaceMember(ctx context.Context, principal Principal, membershipID uuid.UUID, input WorkspaceMemberUpdate) (WorkspaceMember, error) {
 	if !principal.Role.IsAdmin() {
 		return WorkspaceMember{}, httpapi.Forbidden("只有管理员可以管理成员", "请联系管理员")

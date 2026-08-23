@@ -222,3 +222,66 @@ type WorkspaceMemberUpdate struct {
 	Reason    string
 	RequestID string
 }
+
+type AccessAuditResult string
+
+const (
+	AccessAuditSucceeded AccessAuditResult = "succeeded"
+	AccessAuditDenied    AccessAuditResult = "denied"
+	AccessAuditFailed    AccessAuditResult = "failed"
+)
+
+func (r AccessAuditResult) IsValid() bool {
+	switch r {
+	case AccessAuditSucceeded, AccessAuditDenied, AccessAuditFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+type AccessAuditEvent struct {
+	ID                uuid.UUID         `json:"id"`
+	WorkspaceID       uuid.UUID         `json:"workspace_id"`
+	ActorType         string            `json:"actor_type"`
+	ActorID           string            `json:"actor_id"`
+	ActorDisplayName  string            `json:"actor_display_name"`
+	ActorEmail        string            `json:"actor_email"`
+	Action            string            `json:"action"`
+	ObjectType        string            `json:"object_type"`
+	ObjectID          uuid.UUID         `json:"object_id"`
+	ObjectDisplayName string            `json:"object_display_name"`
+	ObjectEmail       string            `json:"object_email"`
+	BeforeState       map[string]any    `json:"before_state"`
+	AfterState        map[string]any    `json:"after_state"`
+	BeforeHash        string            `json:"before_hash"`
+	AfterHash         string            `json:"after_hash"`
+	RequestID         string            `json:"request_id"`
+	Reason            string            `json:"reason"`
+	Result            AccessAuditResult `json:"result"`
+	OccurredAt        time.Time         `json:"occurred_at"`
+}
+
+type AccessAuditPage struct {
+	Items    []AccessAuditEvent `json:"items"`
+	Total    int64              `json:"total"`
+	Page     int                `json:"page"`
+	PageSize int                `json:"page_size"`
+}
+
+// AccessAuditPageEnvelope 是 Swagger 注释使用的审计列表响应模型。
+type AccessAuditPageEnvelope struct {
+	Data AccessAuditPage `json:"data"`
+}
+
+type AccessAuditQuery struct {
+	Search       string
+	Actor        string
+	Object       string
+	Action       string
+	Result       AccessAuditResult
+	OccurredFrom *time.Time
+	OccurredTo   *time.Time
+	Page         int
+	PageSize     int
+}
