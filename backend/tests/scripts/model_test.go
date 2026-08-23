@@ -137,6 +137,32 @@ func TestReviseEpisodeBreakdownRejectsBoundaryInsideScene(t *testing.T) {
 	}
 }
 
+func TestReviseEpisodeBreakdownKeepsNamedIgnoredRangeWithoutPublishingEpisode(t *testing.T) {
+	analysis, err := AnalyzeScript("片头说明\n场景：说明页\n这段不属于正片。\n\n第1集 归途\n场景：码头\n林夏：出发。\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if analysis.Breakdown.Status != BreakdownStatusBlocked {
+		t.Fatalf("initial breakdown = %#v, want blocked unlabeled range", analysis.Breakdown)
+	}
+
+	revised, err := ReviseEpisodeBreakdown(analysis, analysis.SourceHash, []EpisodeBreakdownOperation{{
+		Type: BreakdownOperationIgnore, CandidateKey: analysis.Episodes[0].TemporaryKey, Title: "片头说明，不属于正片",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revised.Breakdown.Status != BreakdownStatusReady {
+		t.Fatalf("revised breakdown = %#v, want ready with named ignore", revised.Breakdown)
+	}
+	if revised.Episodes[0].Decision != "ignored" || revised.Episodes[0].Title != "片头说明，不属于正片" {
+		t.Fatalf("ignored candidate = %#v", revised.Episodes[0])
+	}
+	if revised.Episodes[0].Anchor.StartOffset != 0 || revised.Episodes[0].Anchor.EndOffset != revised.Episodes[1].Anchor.StartOffset {
+		t.Fatalf("ignored range no longer conserves source coverage: %#v", revised.Episodes)
+	}
+}
+
 func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	if os.Getenv("LANVERSE_INTEGRATION") != "1" {
 		t.Skip("set LANVERSE_INTEGRATION=1 to run PostgreSQL/GORM integration")
@@ -220,7 +246,7 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 			t.Fatal(entry.table, err)
 		}
 	}
-	content := "第1集 归途\n场景：海边码头\n人物：林夏\n林夏：我们走。\n"
+	content := "片头说明\n场景：说明页\n这段不属于正片。\n\n第1集 归途\n场景：海边码头\n人物：林夏\n林夏：我们走。\n"
 	analysis, err := AnalyzeScript(content)
 	if err != nil {
 		t.Fatal(err)
@@ -256,13 +282,14 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	}
 	repository := NewScriptRepository(orm, nil)
 	tenantContext := database.WithWorkspaceID(ctx, workspaceID)
-	revised, err := repository.ReviseAnalysisDraft(tenantContext, revisionID, analysis.SourceHash, []EpisodeBreakdownOperation{{
-		Type: BreakdownOperationRename, CandidateKey: analysis.Episodes[0].TemporaryKey, Title: "归途·修订",
-	}})
+	revised, err := repository.ReviseAnalysisDraft(tenantContext, revisionID, analysis.SourceHash, []EpisodeBreakdownOperation{
+		{Type: BreakdownOperationIgnore, CandidateKey: analysis.Episodes[0].TemporaryKey, Title: "片头说明，不属于正片"},
+		{Type: BreakdownOperationRename, CandidateKey: analysis.Episodes[1].TemporaryKey, Title: "归途·修订"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if revised.Breakdown.RevisionNo != 2 || revised.Episodes[0].Title != "归途·修订" {
+	if revised.Breakdown.RevisionNo != 2 || revised.Episodes[0].Decision != "ignored" || revised.Episodes[1].Title != "归途·修订" {
 		t.Fatalf("persisted breakdown revision = %#v", revised)
 	}
 	var supersededCount, draftCount int64
@@ -280,8 +307,15 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if approved.Episodes[0].ContentUnitID == uuid.Nil {
+	if approved.Episodes[0].ContentUnitID != uuid.Nil || approved.Episodes[1].ContentUnitID == uuid.Nil {
 		t.Fatal("approval did not persist canonical content unit id")
+	}
+	var contentUnitCount int64
+	if err := orm.Table("prj_content_units").Where("project_id = ?", projectID).Count(&contentUnitCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if contentUnitCount != 1 {
+		t.Fatalf("canonical content unit count = %d, want 1 non-ignored episode", contentUnitCount)
 	}
 	var count int64
 	if err := orm.Table("nar_scenes").Where("narrative_revision_id IN (?)", orm.Table("nar_narrative_revisions").Select("id").Where("project_id = ?", projectID)).Count(&count).Error; err != nil {

@@ -62,6 +62,28 @@ export async function scriptAnalysisDraft(
   );
 }
 
+/** 修订剧集拆解草稿 POST /api/script-revisions/${param0}/analysis-draft/revisions */
+export async function scriptAnalysisDraftRevise(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.scriptAnalysisDraftReviseParams,
+  body: API.reviseAnalysisDraftRequest,
+  options?: RequestOptions
+) {
+  const { revisionID: param0, ...queryParams } = params;
+  return request<API.AnalysisEnvelope>(
+    `/api/script-revisions/${param0}/analysis-draft/revisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** 排队分析剧本 POST /api/script-revisions/${param0}/analyze */
 export async function scriptAnalysisQueue(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

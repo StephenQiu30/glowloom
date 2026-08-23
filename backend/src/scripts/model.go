@@ -85,6 +85,7 @@ const (
 	BreakdownOperationMoveBoundary BreakdownOperationType = "move_boundary"
 	BreakdownOperationRename       BreakdownOperationType = "rename"
 	BreakdownOperationReorder      BreakdownOperationType = "reorder"
+	BreakdownOperationIgnore       BreakdownOperationType = "ignore"
 )
 
 type EpisodeBreakdownOperation struct {
@@ -505,6 +506,19 @@ func applyEpisodeBreakdownOperation(analysis *Analysis, operation EpisodeBreakdo
 		analysis.Episodes[index].Title = title
 		analysis.Episodes[index].Decision = "accepted_with_changes"
 		return nil
+	case BreakdownOperationIgnore:
+		index := episodeIndexByKey(analysis.Episodes, operation.CandidateKey)
+		if index < 0 {
+			return errors.New("ignore candidate does not exist")
+		}
+		reason := strings.TrimSpace(operation.Title)
+		if len([]rune(reason)) < 1 || len([]rune(reason)) > 200 {
+			return errors.New("ignored range reason must contain 1 to 200 characters")
+		}
+		analysis.Episodes[index].Title = reason
+		analysis.Episodes[index].BoundaryRule = "manual_ignore"
+		analysis.Episodes[index].Decision = "ignored"
+		return nil
 	case BreakdownOperationReorder:
 		if len(operation.OrderedCandidateKeys) != len(analysis.Episodes) {
 			return errors.New("reorder must contain the complete candidate key set")
@@ -588,12 +602,19 @@ func applyEpisodeBreakdownOperation(analysis *Analysis, operation EpisodeBreakdo
 func refreshEpisodeBreakdown(analysis *Analysis) {
 	issues := make([]BreakdownIssue, 0)
 	numbers := map[int][]string{}
+	publishedCount := 0
 	for _, episode := range analysis.Episodes {
-		numbers[episode.Number] = append(numbers[episode.Number], episode.TemporaryKey)
-		if episode.BoundaryRule == "unlabeled_source_range" {
+		if episode.Decision != "ignored" {
+			publishedCount++
+			numbers[episode.Number] = append(numbers[episode.Number], episode.TemporaryKey)
+		}
+		if episode.Decision != "ignored" && episode.BoundaryRule == "unlabeled_source_range" {
 			anchor := episode.Anchor
 			issues = append(issues, BreakdownIssue{Code: "unlabeled_episode_range", Message: "来源范围缺少可证明的剧集标题，需要人工校对", CandidateKeys: []string{episode.TemporaryKey}, Anchor: &anchor})
 		}
+	}
+	if publishedCount == 0 {
+		issues = append(issues, BreakdownIssue{Code: "all_episode_ranges_ignored", Message: "至少保留一个可发布剧集", CandidateKeys: nil})
 	}
 	for number, keys := range numbers {
 		if len(keys) > 1 {
@@ -718,7 +739,7 @@ func rebuildAssetEpisodeNumbers(analysis *Analysis) {
 			numbers := make([]int, 0)
 			for _, evidence := range (*group)[index].Evidence {
 				for _, episode := range analysis.Episodes {
-					if evidence.StartOffset >= episode.Anchor.StartOffset && evidence.StartOffset < episode.Anchor.EndOffset && !containsInt(numbers, episode.Number) {
+					if episode.Decision != "ignored" && evidence.StartOffset >= episode.Anchor.StartOffset && evidence.StartOffset < episode.Anchor.EndOffset && !containsInt(numbers, episode.Number) {
 						numbers = append(numbers, episode.Number)
 					}
 				}

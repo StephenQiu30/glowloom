@@ -884,6 +884,9 @@ func (r *ScriptRepository) ApproveAnalysis(ctx context.Context, revisionID uuid.
 			return httpapi.Conflict("剧集拆解校验基线已经变化", "刷新当前拆解后重试")
 		}
 		for episodeIndex, episode := range analysis.Episodes {
+			if episode.Decision == "ignored" {
+				continue
+			}
 			var contentUnit projectContentUnitRecord
 			contentErr := tx.Where("project_id = ? AND ordinal = ?", revision.ProjectID, episode.Ordinal).Order("created_at DESC").First(&contentUnit).Error
 			if errors.Is(contentErr, gorm.ErrRecordNotFound) {
@@ -1471,6 +1474,9 @@ func materializeCanonicalAnalysis(ctx context.Context, tx *gorm.DB, projectID, b
 	}
 	allScenes := make([]sceneRecord, 0)
 	for _, episode := range analysis.Episodes {
+		if episode.Decision == "ignored" {
+			continue
+		}
 		var contentUnit projectContentUnitRecord
 		if err := tx.Where("project_id = ? AND ordinal = ?", projectID, episode.Ordinal).Order("created_at DESC").First(&contentUnit).Error; err != nil {
 			return fmt.Errorf("read materialized content unit %d: %w", episode.Ordinal, err)

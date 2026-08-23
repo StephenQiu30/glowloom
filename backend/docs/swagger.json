@@ -1022,6 +1022,70 @@
                 }
             }
         },
+        "/api/script-revisions/{revisionID}/analysis-draft/revisions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "script"
+                ],
+                "summary": "修订剧集拆解草稿",
+                "operationId": "script_analysis_draft_revise",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Script Revision UUID",
+                        "name": "revisionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "剧集拆解操作",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/scripts.reviseAnalysisDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/scripts.AnalysisEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/script-revisions/{revisionID}/analyze": {
             "post": {
                 "security": [
@@ -1838,6 +1902,9 @@
         "scripts.Analysis": {
             "type": "object",
             "properties": {
+                "breakdown": {
+                    "$ref": "#/definitions/scripts.EpisodeBreakdown"
+                },
                 "characters": {
                     "type": "array",
                     "items": {
@@ -1921,6 +1988,56 @@
                 }
             }
         },
+        "scripts.BreakdownIssue": {
+            "type": "object",
+            "properties": {
+                "anchor": {
+                    "$ref": "#/definitions/scripts.Anchor"
+                },
+                "candidate_keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "code": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.BreakdownOperationType": {
+            "type": "string",
+            "enum": [
+                "split",
+                "merge",
+                "move_boundary",
+                "rename",
+                "reorder",
+                "ignore"
+            ],
+            "x-enum-varnames": [
+                "BreakdownOperationSplit",
+                "BreakdownOperationMerge",
+                "BreakdownOperationMoveBoundary",
+                "BreakdownOperationRename",
+                "BreakdownOperationReorder",
+                "BreakdownOperationIgnore"
+            ]
+        },
+        "scripts.BreakdownStatus": {
+            "type": "string",
+            "enum": [
+                "ready",
+                "blocked"
+            ],
+            "x-enum-varnames": [
+                "BreakdownStatusReady",
+                "BreakdownStatusBlocked"
+            ]
+        },
         "scripts.Candidate": {
             "type": "object",
             "properties": {
@@ -1964,10 +2081,19 @@
                 "anchor": {
                     "$ref": "#/definitions/scripts.Anchor"
                 },
+                "boundary_rule": {
+                    "type": "string"
+                },
                 "content_unit_id": {
                     "type": "string"
                 },
+                "decision": {
+                    "type": "string"
+                },
                 "number": {
+                    "type": "integer"
+                },
+                "ordinal": {
                     "type": "integer"
                 },
                 "scenes": {
@@ -1976,8 +2102,81 @@
                         "$ref": "#/definitions/scripts.Scene"
                     }
                 },
+                "temporary_key": {
+                    "type": "string"
+                },
                 "title": {
                     "type": "string"
+                }
+            }
+        },
+        "scripts.EpisodeBreakdown": {
+            "type": "object",
+            "properties": {
+                "coverage_hash": {
+                    "type": "string"
+                },
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.BreakdownIssue"
+                    }
+                },
+                "revision_no": {
+                    "type": "integer"
+                },
+                "segmentation_hash": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/scripts.BreakdownStatus"
+                }
+            }
+        },
+        "scripts.EpisodeBreakdownOperation": {
+            "type": "object",
+            "properties": {
+                "boundary_offset": {
+                    "type": "integer"
+                },
+                "candidate_key": {
+                    "type": "string"
+                },
+                "candidate_keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "left_key": {
+                    "type": "string"
+                },
+                "left_title": {
+                    "type": "string"
+                },
+                "ordered_candidate_keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "right_key": {
+                    "type": "string"
+                },
+                "right_title": {
+                    "type": "string"
+                },
+                "target_key": {
+                    "type": "string"
+                },
+                "target_title": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/scripts.BreakdownOperationType"
                 }
             }
         },
@@ -2336,6 +2535,20 @@
             "properties": {
                 "name": {
                     "type": "string"
+                }
+            }
+        },
+        "scripts.reviseAnalysisDraftRequest": {
+            "type": "object",
+            "properties": {
+                "expected_source_hash": {
+                    "type": "string"
+                },
+                "operations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.EpisodeBreakdownOperation"
+                    }
                 }
             }
         },

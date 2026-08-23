@@ -88,6 +88,7 @@ declare namespace API {
   };
 
   type Analysis = {
+    breakdown: EpisodeBreakdown | null;
     characters: Asset[] | null;
     costumes: Asset[] | null;
     episodes: Episode[] | null;
@@ -141,6 +142,23 @@ declare namespace API {
   type AuthResponseEnvelope = {
     data: AuthResponse | null;
   };
+
+  type BreakdownIssue = {
+    anchor: Anchor | null;
+    candidate_keys: string[] | null;
+    code: string | null;
+    message: string | null;
+  };
+
+  type BreakdownOperationType =
+    | "split"
+    | "merge"
+    | "move_boundary"
+    | "rename"
+    | "reorder"
+    | "ignore";
+
+  type BreakdownStatus = "ready" | "blocked";
 
   type Candidate = {
     artifact_id: string | null;
@@ -206,10 +224,37 @@ declare namespace API {
 
   type Episode = {
     anchor: Anchor | null;
+    boundary_rule: string | null;
     content_unit_id: string | null;
+    decision: string | null;
     number: number | null;
+    ordinal: number | null;
     scenes: Scene[] | null;
+    temporary_key: string | null;
     title: string | null;
+  };
+
+  type EpisodeBreakdown = {
+    coverage_hash: string | null;
+    issues: BreakdownIssue[] | null;
+    revision_no: number | null;
+    segmentation_hash: string | null;
+    status: BreakdownStatus | null;
+  };
+
+  type EpisodeBreakdownOperation = {
+    boundary_offset: number | null;
+    candidate_key: string | null;
+    candidate_keys: string[] | null;
+    left_key: string | null;
+    left_title: string | null;
+    ordered_candidate_keys: string[] | null;
+    right_key: string | null;
+    right_title: string | null;
+    target_key: string | null;
+    target_title: string | null;
+    title: string | null;
+    type: BreakdownOperationType | null;
   };
 
   type ErrorCode =
@@ -359,6 +404,11 @@ declare namespace API {
     workspace_name: string | null;
   };
 
+  type reviseAnalysisDraftRequest = {
+    expected_source_hash: string | null;
+    operations: EpisodeBreakdownOperation[] | null;
+  };
+
   type RoleCode = "admin" | "user" | "ban";
 
   type Scene = {
@@ -374,6 +424,11 @@ declare namespace API {
   };
 
   type scriptAnalysisDraftParams = {
+    /** Script Revision UUID */
+    revisionID: string;
+  };
+
+  type scriptAnalysisDraftReviseParams = {
     /** Script Revision UUID */
     revisionID: string;
   };
