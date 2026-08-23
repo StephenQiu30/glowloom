@@ -123,6 +123,30 @@ func TestEveryPRDAcHasAPlanEvidenceMapping(t *testing.T) {
 	}
 }
 
+func TestBackendProductionSourceContainsNoTests(t *testing.T) {
+	t.Parallel()
+
+	sourceRoot := filepath.Join(repositoryRoot(t), "backend", "src")
+	var testFiles []string
+	err := filepath.WalkDir(sourceRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), "_test.go") {
+			testFiles = append(testFiles, relativeToRepository(t, path))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk backend production source: %v", err)
+	}
+
+	sort.Strings(testFiles)
+	for _, testFile := range testFiles {
+		t.Errorf("production source contains test file %s", testFile)
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 
