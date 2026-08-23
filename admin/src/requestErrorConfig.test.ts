@@ -1,16 +1,13 @@
-import { message, notification } from 'antd';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { errorConfig } from './requestErrorConfig';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { errorConfig, installRequestFeedback } from './requestErrorConfig';
 
-vi.mock('antd', () => ({
-  message: {
-    warning: vi.fn(),
-    error: vi.fn(),
-  },
-  notification: {
-    open: vi.fn(),
-  },
-}));
+const feedback = {
+  warning: vi.fn(),
+  error: vi.fn(),
+  notify: vi.fn(),
+};
+
+let uninstallFeedback: (() => void) | undefined;
 
 describe('requestErrorConfig', () => {
   // biome-ignore lint/style/noNonNullAssertion: config handlers are always defined
@@ -20,7 +17,10 @@ describe('requestErrorConfig', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    uninstallFeedback = installRequestFeedback(feedback);
   });
+
+  afterEach(() => uninstallFeedback?.());
 
   describe('errorThrower', () => {
     it('should throw error when success is false', () => {
@@ -91,9 +91,9 @@ describe('requestErrorConfig', () => {
 
       errorHandler(error, {});
 
-      expect(message.warning).not.toHaveBeenCalled();
-      expect(message.error).not.toHaveBeenCalled();
-      expect(notification.open).not.toHaveBeenCalled();
+      expect(feedback.warning).not.toHaveBeenCalled();
+      expect(feedback.error).not.toHaveBeenCalled();
+      expect(feedback.notify).not.toHaveBeenCalled();
     });
 
     it('should handle WARN_MESSAGE showType', () => {
@@ -107,7 +107,7 @@ describe('requestErrorConfig', () => {
 
       errorHandler(error, {});
 
-      expect(message.warning).toHaveBeenCalledWith('This is a warning');
+      expect(feedback.warning).toHaveBeenCalledWith('This is a warning');
     });
 
     it('should handle ERROR_MESSAGE showType', () => {
@@ -121,7 +121,7 @@ describe('requestErrorConfig', () => {
 
       errorHandler(error, {});
 
-      expect(message.error).toHaveBeenCalledWith('This is an error');
+      expect(feedback.error).toHaveBeenCalledWith('This is an error');
     });
 
     it('should handle NOTIFICATION showType', () => {
@@ -135,10 +135,10 @@ describe('requestErrorConfig', () => {
 
       errorHandler(error, {});
 
-      expect(notification.open).toHaveBeenCalledWith({
-        title: 1004,
-        description: 'This is a notification',
-      });
+      expect(feedback.notify).toHaveBeenCalledWith(
+        1004,
+        'This is a notification',
+      );
     });
 
     it('should handle REDIRECT showType', () => {
@@ -153,9 +153,9 @@ describe('requestErrorConfig', () => {
       errorHandler(error, {});
 
       // REDIRECT 分支不应触发任何消息/通知提示
-      expect(message.warning).not.toHaveBeenCalled();
-      expect(message.error).not.toHaveBeenCalled();
-      expect(notification.open).not.toHaveBeenCalled();
+      expect(feedback.warning).not.toHaveBeenCalled();
+      expect(feedback.error).not.toHaveBeenCalled();
+      expect(feedback.notify).not.toHaveBeenCalled();
     });
 
     it('should handle default case for unknown showType', () => {
@@ -169,7 +169,7 @@ describe('requestErrorConfig', () => {
 
       errorHandler(error, {});
 
-      expect(message.error).toHaveBeenCalledWith('Unknown error type');
+      expect(feedback.error).toHaveBeenCalledWith('Unknown error type');
     });
 
     it('should handle axios response error', () => {
@@ -181,7 +181,7 @@ describe('requestErrorConfig', () => {
 
       errorHandler(error, {});
 
-      expect(message.error).toHaveBeenCalledWith('Response status:500');
+      expect(feedback.error).toHaveBeenCalledWith('Response status:500');
     });
 
     it('should handle offline error', () => {
@@ -197,7 +197,7 @@ describe('requestErrorConfig', () => {
       try {
         errorHandler(error, {});
 
-        expect(message.error).toHaveBeenCalledWith(
+        expect(feedback.error).toHaveBeenCalledWith(
           '网络不可用，请检查连接后重试。',
         );
       } finally {
@@ -214,9 +214,7 @@ describe('requestErrorConfig', () => {
 
       errorHandler(error, {});
 
-      expect(message.error).toHaveBeenCalledWith(
-        'None response! Please retry.',
-      );
+      expect(feedback.error).toHaveBeenCalledWith('服务未响应，请稍后重试。');
     });
 
     it('should handle generic error', () => {
@@ -224,39 +222,7 @@ describe('requestErrorConfig', () => {
 
       errorHandler(error, {});
 
-      expect(message.error).toHaveBeenCalledWith(
-        'Request error, please retry.',
-      );
-    });
-  });
-
-  describe('requestInterceptors', () => {
-    // The interceptor is registered as a plain function (not a tuple),
-    // so narrow the union type to a callable for the test.
-    const interceptor = errorConfig.requestInterceptors?.[0] as (config: {
-      url?: string;
-      method?: string;
-    }) => { url?: string };
-
-    it('should pass through config without modification', () => {
-      const config = {
-        url: 'https://api.example.com/users',
-        method: 'GET',
-      };
-
-      const result = interceptor(config);
-
-      // Token attachment is intentionally commented out in the source;
-      // interceptor currently returns config as-is
-      expect(result.url).toBe('https://api.example.com/users');
-    });
-
-    it('should handle URL without config', () => {
-      const config = {};
-
-      const result = interceptor(config);
-
-      expect(result.url).toBeUndefined();
+      expect(feedback.error).toHaveBeenCalledWith('请求失败，请稍后重试。');
     });
   });
 });

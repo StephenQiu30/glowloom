@@ -3,6 +3,7 @@ import type { Settings as LayoutSettings } from '@ant-design/pro-components';
 import { SettingDrawer } from '@ant-design/pro-components';
 import type { RequestConfig, RunTimeLayoutConfig } from '@umijs/max';
 import { history, Link } from '@umijs/max';
+import { App as AntdApp } from 'antd';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import React from 'react';
@@ -18,7 +19,7 @@ import {
 } from '@/components';
 import { currentUser as queryCurrentUser } from '@/services/ant-design-pro/api';
 import defaultSettings from '../config/defaultSettings';
-import { errorConfig } from './requestErrorConfig';
+import { errorConfig, installRequestFeedback } from './requestErrorConfig';
 
 const isDev = process.env.NODE_ENV === 'development';
 const loginPath = '/user/login';
@@ -125,7 +126,12 @@ export const layout: RunTimeLayoutConfig = ({
     ],
     links: isDev
       ? [
-          <a key="swagger" href={`${process.env.API_BASE_URL || ''}/api/docs`} target="_blank" rel="noreferrer">
+          <a
+            key="swagger"
+            href={`${process.env.API_BASE_URL || ''}/api/docs`}
+            target="_blank"
+            rel="noreferrer"
+          >
             <LinkOutlined />
             <span>Swagger 文档</span>
           </a>,
@@ -178,11 +184,31 @@ export const request: RequestConfig = {
   ...errorConfig,
 };
 
+const RequestFeedbackBridge: React.FC = () => {
+  const { message, notification } = AntdApp.useApp();
+
+  React.useEffect(
+    () =>
+      installRequestFeedback({
+        warning: (content) => message.warning(content),
+        error: (content) => message.error(content),
+        notify: (title, description) =>
+          notification.open({ title: title as React.ReactNode, description }),
+      }),
+    [message, notification],
+  );
+
+  return null;
+};
+
 export function rootContainer(container: React.ReactNode) {
   return (
     <>
       <OfflineBanner />
-      <ErrorBoundary>{container}</ErrorBoundary>
+      <ErrorBoundary>
+        <RequestFeedbackBridge />
+        {container}
+      </ErrorBoundary>
     </>
   );
 }

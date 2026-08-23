@@ -9,7 +9,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Input, message, Upload } from 'antd';
+import { App, Button, Input, Upload } from 'antd';
 import React from 'react';
 import { getCityOptions, provinceOptions } from '@/utils/chinaDivision';
 import type { GeographicItemType } from '../data';
@@ -48,13 +48,14 @@ const toSelectOptions = (items: GeographicItemType[]) =>
     })
     .filter((item): item is { label: string; value: string } => Boolean(item));
 
-const handleFinish = async () => {
-  message.success('更新基本信息成功');
-};
-
 const BaseView: React.FC = () => {
   const { styles } = useStyles();
+  const { message } = App.useApp();
   const formRef = React.useRef<ProFormInstance>(undefined);
+
+  const handleFinish = async () => {
+    message.success('更新基本信息成功');
+  };
 
   const handleValuesChange = (changedValues: Record<string, unknown>) => {
     if ('province' in changedValues) {
@@ -71,9 +72,7 @@ const BaseView: React.FC = () => {
       if (currentUser.avatar) {
         return currentUser.avatar;
       }
-      const url =
-        'https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxka.png';
-      return url;
+      return '/logo.svg';
     }
     return '';
   };

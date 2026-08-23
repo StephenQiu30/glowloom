@@ -1,15 +1,30 @@
 import { PageContainer } from '@ant-design/pro-components';
-import { Alert, App, Card, Input, Select, Space, Table, Tag, Typography } from 'antd';
+import { useModel } from '@umijs/max';
+import {
+  Alert,
+  App,
+  Card,
+  Input,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import React, { useEffect, useMemo, useState } from 'react';
-import { useModel } from '@umijs/max';
-import { listMembers, updateMember, type MembershipStatus, type WorkspaceMember } from '@/services/admin';
+import {
+  listMembers,
+  type MembershipStatus,
+  updateMember,
+  type WorkspaceMember,
+} from '@/services/admin';
 import type { RoleCode } from '@/services/session';
 
 const roleLabels: Record<RoleCode, string> = {
-	admin: '管理员',
-	user: '普通用户',
-	ban: '已封禁',
+  admin: '管理员',
+  user: '普通用户',
+  ban: '已封禁',
 };
 
 const statusLabels: Record<MembershipStatus, string> = {
@@ -19,8 +34,10 @@ const statusLabels: Record<MembershipStatus, string> = {
 };
 
 const roleOptions = () =>
-  (Object.keys(roleLabels) as RoleCode[])
-    .map((role) => ({ label: roleLabels[role], value: role }));
+  (Object.keys(roleLabels) as RoleCode[]).map((role) => ({
+    label: roleLabels[role],
+    value: role,
+  }));
 
 const statusOptions = (status: MembershipStatus) =>
   (Object.keys(statusLabels) as MembershipStatus[])
@@ -54,11 +71,18 @@ const Admin: React.FC = () => {
     void loadMembers('');
   }, []);
 
-  const changeMember = async (member: WorkspaceMember, update: { role?: RoleCode; status?: MembershipStatus }) => {
+  const changeMember = async (
+    member: WorkspaceMember,
+    update: { role?: RoleCode; status?: MembershipStatus },
+  ) => {
     setUpdatingID(member.membership_id);
     try {
       const updated = await updateMember(member.membership_id, update);
-      setMembers((items) => items.map((item) => (item.membership_id === updated.membership_id ? updated : item)));
+      setMembers((items) =>
+        items.map((item) =>
+          item.membership_id === updated.membership_id ? updated : item,
+        ),
+      );
       message.success('成员信息已更新');
     } catch {
       message.error('成员信息更新失败');
@@ -73,7 +97,7 @@ const Admin: React.FC = () => {
         title: '成员',
         key: 'member',
         render: (_, member) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Typography.Text strong>{member.display_name}</Typography.Text>
             <Typography.Text type="secondary">{member.email}</Typography.Text>
           </Space>
@@ -87,9 +111,14 @@ const Admin: React.FC = () => {
           <Select
             value={role}
             options={roleOptions()}
-            disabled={member.membership_id === currentMembershipID || updatingID === member.membership_id}
+            disabled={
+              member.membership_id === currentMembershipID ||
+              updatingID === member.membership_id
+            }
             loading={updatingID === member.membership_id}
-            onChange={(value: RoleCode) => void changeMember(member, { role: value })}
+            onChange={(value: RoleCode) =>
+              void changeMember(member, { role: value })
+            }
             style={{ minWidth: 120 }}
           />
         ),
@@ -102,9 +131,14 @@ const Admin: React.FC = () => {
           <Select
             value={status}
             options={statusOptions(status)}
-            disabled={member.membership_id === currentMembershipID || updatingID === member.membership_id}
+            disabled={
+              member.membership_id === currentMembershipID ||
+              updatingID === member.membership_id
+            }
             loading={updatingID === member.membership_id}
-            onChange={(value: MembershipStatus) => void changeMember(member, { status: value })}
+            onChange={(value: MembershipStatus) =>
+              void changeMember(member, { status: value })
+            }
             style={{ minWidth: 110 }}
           />
         ),
@@ -121,16 +155,23 @@ const Admin: React.FC = () => {
         title: 'Membership ID',
         dataIndex: 'membership_id',
         key: 'membership_id',
-        render: (id: string) => <Typography.Text copyable={{ text: id }}>{id.slice(0, 8)}…</Typography.Text>,
+        render: (id: string) => (
+          <Typography.Text copyable={{ text: id }}>
+            {id.slice(0, 8)}…
+          </Typography.Text>
+        ),
       },
     ],
     [currentMembershipID, updatingID],
   );
 
   return (
-    <PageContainer title="用户管理" content="管理当前 Workspace 的成员、角色和访问状态">
+    <PageContainer
+      title="用户管理"
+      content="管理当前 Workspace 的成员、角色和访问状态"
+    >
       <Card>
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <Input.Search
             allowClear
             placeholder="按邮箱或显示名搜索"
@@ -140,7 +181,7 @@ const Admin: React.FC = () => {
             }}
             style={{ maxWidth: 360 }}
           />
-          {error && <Alert type="error" showIcon message={error} />}
+          {error && <Alert type="error" showIcon title={error} />}
           <Table
             rowKey="membership_id"
             loading={loading}

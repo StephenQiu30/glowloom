@@ -1,6 +1,26 @@
-﻿import type { RequestOptions } from '@@/plugin-request/request';
-import type { RequestConfig } from '@umijs/max';
-import { message, notification } from 'antd';
+﻿import type { RequestConfig } from '@umijs/max';
+
+type RequestFeedback = {
+  warning: (content?: string) => void;
+  error: (content?: string) => void;
+  notify: (title: unknown, description?: string) => void;
+};
+
+let requestFeedback: RequestFeedback | undefined;
+
+export const installRequestFeedback = (feedback: RequestFeedback) => {
+  requestFeedback = feedback;
+  return () => {
+    if (requestFeedback === feedback) {
+      requestFeedback = undefined;
+    }
+  };
+};
+
+const showWarning = (content?: string) => requestFeedback?.warning(content);
+const showError = (content?: string) => requestFeedback?.error(content);
+const showNotification = (title: unknown, description?: string) =>
+  requestFeedback?.notify(title, description);
 
 // 错误处理方案： 错误类型
 enum ErrorShowType {
@@ -67,52 +87,36 @@ export const errorConfig: RequestConfig = {
               // do nothing
               break;
             case ErrorShowType.WARN_MESSAGE:
-              message.warning(errorMessage);
+              showWarning(errorMessage);
               break;
             case ErrorShowType.ERROR_MESSAGE:
-              message.error(errorMessage);
+              showError(errorMessage);
               break;
             case ErrorShowType.NOTIFICATION:
-              notification.open({
-                title: errorCode,
-                description: errorMessage,
-              });
+              showNotification(errorCode, errorMessage);
               break;
             case ErrorShowType.REDIRECT:
               window.location.href = '/user/login';
               break;
             default:
-              message.error(errorMessage);
+              showError(errorMessage);
           }
         }
       } else if (error.response?.data?.error) {
-        message.error(error.response.data.error.message || '请求失败');
+        showError(error.response.data.error.message || '请求失败');
       } else if (error.response) {
         // Axios 的错误
         // 请求成功发出且服务器也响应了状态码，但状态代码超出了 2xx 的范围
-        message.error(`Response status:${error.response.status}`);
+        showError(`Response status:${error.response.status}`);
       } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        message.error('网络不可用，请检查连接后重试。');
+        showError('网络不可用，请检查连接后重试。');
       } else if (error.request) {
-        message.error('None response! Please retry.');
+        showError('服务未响应，请稍后重试。');
       } else {
-        message.error('Request error, please retry.');
+        showError('请求失败，请稍后重试。');
       }
     },
   },
-
-  // 请求拦截器
-  requestInterceptors: [
-    (config: RequestOptions) => {
-      // 拦截请求配置，进行个性化处理。
-      // 示例：为请求附加 token（按需启用）
-      // const token = localStorage.getItem('token');
-      // if (token) {
-      //   config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
-      // }
-      return config;
-    },
-  ],
 
   // 响应拦截器
   responseInterceptors: [],
