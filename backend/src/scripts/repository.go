@@ -95,6 +95,8 @@ func (r *ScriptRepository) CreateScriptRevision(ctx context.Context, projectID u
 }
 
 type AnalysisRequest struct {
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	ProjectID   uuid.UUID `json:"project_id"`
 	OperationID uuid.UUID `json:"operation_id"`
 	RevisionID  uuid.UUID `json:"revision_id"`
 }
@@ -103,14 +105,25 @@ func (r *ScriptRepository) QueueAnalysis(ctx context.Context, revisionID uuid.UU
 	if r.orm == nil {
 		return Operation{}, fmt.Errorf("script repository ORM is not configured")
 	}
+	workspaceID, ok := database.WorkspaceID(ctx)
+	if !ok {
+		return Operation{}, fmt.Errorf("workspace context is missing")
+	}
 	var result Operation
-	err := r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
 		var revision sourceRevisionRecord
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&revision, "id = ?", revisionID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return httpapi.NotFound("剧本版本")
 			}
 			return fmt.Errorf("lock script revision: %w", err)
+		}
+		var project projectRecord
+		if err := tx.Where("id = ? AND workspace_id = ?", revision.ProjectID, workspaceID).First(&project).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("剧本版本")
+			}
+			return fmt.Errorf("validate script revision workspace: %w", err)
 		}
 		if revision.Status == "approved" {
 			return httpapi.Validation("已批准剧本版本不能再次分析", "创建新的剧本版本后重试")
@@ -125,7 +138,7 @@ func (r *ScriptRepository) QueueAnalysis(ctx context.Context, revisionID uuid.UU
 			}
 		}
 		operationID := uuid.New()
-		payload, err := json.Marshal(AnalysisRequest{OperationID: operationID, RevisionID: revisionID})
+		payload, err := json.Marshal(AnalysisRequest{WorkspaceID: workspaceID, ProjectID: project.ID, OperationID: operationID, RevisionID: revisionID})
 		if err != nil {
 			return fmt.Errorf("marshal analysis request: %w", err)
 		}
@@ -541,44 +554,62 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 	if r.orm == nil {
 		return fmt.Errorf("script repository ORM is not configured")
 	}
-	if err := r.setOperationRunning(ctx, request.OperationID); err != nil {
+	if request.WorkspaceID == uuid.Nil || request.ProjectID == uuid.Nil || request.OperationID == uuid.Nil || request.RevisionID == uuid.Nil {
+		return httpapi.Validation("解析任务缺少完整租户绑定", "重新投递包含工作区、项目、任务和剧本版本标识的消息")
+	}
+	tenantContext := database.WithWorkspaceID(ctx, request.WorkspaceID)
+	revision, completed, err := r.startAnalysis(tenantContext, request)
+	if err != nil {
 		return err
 	}
-	var revision sourceRevisionRecord
-	if err := r.orm.WithContext(ctx).Where("id = ?", request.RevisionID).First(&revision).Error; err != nil {
-		return r.failOperation(ctx, request.OperationID, request.RevisionID, "revision_not_found", err)
+	if completed {
+		return nil
 	}
-	content, err := r.storage.Get(ctx, revision.ObjectKey)
+	if r.storage == nil {
+		return r.failOperation(tenantContext, request, "source_unavailable", errors.New("script source storage is not configured"))
+	}
+	content, err := r.storage.Get(tenantContext, revision.ObjectKey)
 	if err != nil {
-		return r.failOperation(ctx, request.OperationID, request.RevisionID, "source_unavailable", err)
+		return r.failOperation(tenantContext, request, "source_unavailable", err)
 	}
 	document, err := ParseSourceDocument(revision.Name, mediaTypeForSourceType(revision.SourceType), content)
 	if err != nil {
-		return r.failOperation(ctx, request.OperationID, request.RevisionID, "source_parse_failed", err)
+		return r.failOperation(tenantContext, request, "source_parse_failed", err)
 	}
 	if document.OriginalHash != revision.ContentHash {
-		return r.failOperation(ctx, request.OperationID, request.RevisionID, "source_changed", errors.New("source object hash does not match revision"))
+		return r.failOperation(tenantContext, request, "source_changed", errors.New("source object hash does not match revision"))
 	}
 	analysis, err := AnalyzeScript(document.Text)
 	if err != nil {
-		return r.failOperation(ctx, request.OperationID, request.RevisionID, "analysis_failed", err)
+		return r.failOperation(tenantContext, request, "analysis_failed", err)
 	}
 	analysis.SourceHash = document.OriginalHash
 	analysis.ParseReport = ParseReport{Status: "complete", Format: document.Format, ParserVersion: "deterministic-script-parser-v1", OriginalHash: document.OriginalHash, TextHash: document.TextHash, CharacterCount: len([]rune(document.Text)), ParagraphCount: document.ParagraphCount, FailedScopes: []string{}}
 	encoded, err := json.Marshal(analysis)
 	if err != nil {
-		return r.failOperation(ctx, request.OperationID, request.RevisionID, "analysis_encode_failed", err)
+		return r.failOperation(tenantContext, request, "analysis_encode_failed", err)
 	}
-	return r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return database.WithWorkspaceTransaction(tenantContext, r.orm, func(tx *gorm.DB) error {
 		draft := analysisDraftRecord{SourceRevisionID: request.RevisionID, SourceHash: revision.ContentHash, Analysis: datatypes.JSON(encoded), Status: "draft", CreatedAt: time.Now().UTC()}
 		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "source_revision_id"}}, DoUpdates: clause.AssignmentColumns([]string{"source_hash", "analysis", "status", "created_at", "approved_at"})}).Create(&draft).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&revision).Where("id = ?", request.RevisionID).Update("status", "waiting_user").Error; err != nil {
-			return fmt.Errorf("mark source revision waiting for approval: %w", err)
+		result := tx.Model(&revision).Where("id = ? AND project_id = ?", request.RevisionID, request.ProjectID).Update("status", "waiting_user")
+		if result.Error != nil {
+			return fmt.Errorf("mark source revision waiting for approval: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.NotFound("剧本版本")
 		}
 		completedAt := time.Now().UTC()
-		return tx.Model(&operationRecord{}).Where("id = ?", request.OperationID).Updates(map[string]any{"status": "succeeded", "progress": 100, "updated_at": completedAt, "completed_at": completedAt}).Error
+		result = tx.Model(&operationRecord{}).Where("id = ? AND project_id = ? AND type = ? AND status = ?", request.OperationID, request.ProjectID, "script_analysis", "running").Updates(map[string]any{"status": "succeeded", "progress": 100, "updated_at": completedAt, "completed_at": completedAt})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.Conflict("解析任务状态已变化", "刷新任务状态后重试")
+		}
+		return nil
 	})
 }
 
@@ -858,23 +889,90 @@ func (r *ScriptRepository) RecordInboxMessage(ctx context.Context, messageID, to
 	return r.orm.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&inboxRecord{MessageID: messageID, Topic: topic}).Error
 }
 
-func (r *ScriptRepository) setOperationRunning(ctx context.Context, operationID uuid.UUID) error {
+func (r *ScriptRepository) startAnalysis(ctx context.Context, request AnalysisRequest) (sourceRevisionRecord, bool, error) {
 	if r.orm == nil {
-		return fmt.Errorf("script repository ORM is not configured")
+		return sourceRevisionRecord{}, false, fmt.Errorf("script repository ORM is not configured")
 	}
-	return r.orm.WithContext(ctx).Model(&operationRecord{}).Where("id = ? AND status IN ?", operationID, []string{"queued", "running"}).Updates(map[string]any{"status": "running", "progress": 20, "updated_at": time.Now().UTC()}).Error
+	var revision sourceRevisionRecord
+	completed := false
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		var project projectRecord
+		if err := tx.Where("id = ? AND workspace_id = ?", request.ProjectID, request.WorkspaceID).First(&project).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("解析任务")
+			}
+			return fmt.Errorf("validate analysis project: %w", err)
+		}
+		if err := tx.Where("id = ? AND project_id = ?", request.RevisionID, request.ProjectID).First(&revision).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("解析任务")
+			}
+			return fmt.Errorf("validate analysis revision: %w", err)
+		}
+		var outbox outboxRecord
+		if err := tx.Where("operation_id = ? AND topic = ?", request.OperationID, analysisTopic).First(&outbox).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("解析任务")
+			}
+			return fmt.Errorf("validate analysis outbox binding: %w", err)
+		}
+		var boundRequest AnalysisRequest
+		if err := json.Unmarshal(outbox.Payload, &boundRequest); err != nil {
+			return fmt.Errorf("decode analysis outbox binding: %w", err)
+		}
+		if boundRequest != request {
+			return httpapi.NotFound("解析任务")
+		}
+		var operation operationRecord
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND project_id = ? AND type = ?", request.OperationID, request.ProjectID, "script_analysis").First(&operation).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("解析任务")
+			}
+			return fmt.Errorf("validate analysis operation: %w", err)
+		}
+		if operation.Status == "succeeded" {
+			completed = true
+			return nil
+		}
+		if operation.Status != "queued" && operation.Status != "running" {
+			return httpapi.Conflict("解析任务不可执行", "刷新任务状态并重新创建分析任务")
+		}
+		result := tx.Model(&operationRecord{}).Where("id = ? AND project_id = ? AND type = ? AND status IN ?", request.OperationID, request.ProjectID, "script_analysis", []string{"queued", "running"}).Updates(map[string]any{"status": "running", "progress": 20, "updated_at": time.Now().UTC()})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.Conflict("解析任务状态已变化", "刷新任务状态后重试")
+		}
+		return nil
+	})
+	if err != nil {
+		return sourceRevisionRecord{}, false, err
+	}
+	return revision, completed, nil
 }
 
-func (r *ScriptRepository) failOperation(ctx context.Context, operationID, revisionID uuid.UUID, code string, cause error) error {
+func (r *ScriptRepository) failOperation(ctx context.Context, request AnalysisRequest, code string, cause error) error {
 	if r.orm == nil {
 		return fmt.Errorf("script repository ORM is not configured")
 	}
-	return r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&sourceRevisionRecord{}).Where("id = ?", revisionID).Update("status", "failed").Error; err != nil {
-			return err
+	return database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		result := tx.Model(&sourceRevisionRecord{}).Where("id = ? AND project_id = ?", request.RevisionID, request.ProjectID).Update("status", "failed")
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.NotFound("剧本版本")
 		}
 		now := time.Now().UTC()
-		return tx.Model(&operationRecord{}).Where("id = ?", operationID).Updates(map[string]any{"status": "failed", "progress": 100, "error_code": code, "error_message": cause.Error(), "updated_at": now, "completed_at": now}).Error
+		result = tx.Model(&operationRecord{}).Where("id = ? AND project_id = ? AND type = ? AND status = ?", request.OperationID, request.ProjectID, "script_analysis", "running").Updates(map[string]any{"status": "failed", "progress": 100, "error_code": code, "error_message": cause.Error(), "updated_at": now, "completed_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.Conflict("解析任务状态已变化", "刷新任务状态后重试")
+		}
+		return nil
 	})
 }
 

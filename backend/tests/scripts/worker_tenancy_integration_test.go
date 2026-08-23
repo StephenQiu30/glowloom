@@ -15,7 +15,7 @@ import (
 
 func TestQueueAnalysisBindsWorkspaceAndProjectInOutbox(t *testing.T) {
 	orm, cleanup := integrationDatabase(t)
-	defer cleanup()
+	t.Cleanup(cleanup)
 
 	workspaceID, projectID, revisionID := uuid.New(), uuid.New(), uuid.New()
 	seedAnalysisTenant(t, orm, workspaceID, projectID, revisionID)
@@ -45,12 +45,25 @@ func TestQueueAnalysisBindsWorkspaceAndProjectInOutbox(t *testing.T) {
 
 func TestProcessAnalysisRejectsCrossWorkspaceMessageBeforeStateChange(t *testing.T) {
 	orm, cleanup := integrationDatabase(t)
-	defer cleanup()
+	t.Cleanup(cleanup)
 
 	workspaceA, projectA := uuid.New(), uuid.New()
 	workspaceB, projectB, revisionB, operationB := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	revisionB2 := uuid.New()
 	seedWorkspaceProject(t, orm, workspaceA, projectA)
 	seedAnalysisTenant(t, orm, workspaceB, projectB, revisionB)
+	if err := orm.Table("nar_source_revisions").Create(map[string]any{
+		"id":             revisionB2,
+		"project_id":     projectB,
+		"name":           "other-revision.txt",
+		"object_key":     "worker-tenancy/" + revisionB2.String() + ".txt",
+		"content_hash":   scripts.HashContent("other"),
+		"content_length": 5,
+		"source_type":    "txt",
+		"status":         "uploaded",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := orm.Table("operations").Create(map[string]any{
 		"id":         operationB,
 		"project_id": projectB,
@@ -60,7 +73,24 @@ func TestProcessAnalysisRejectsCrossWorkspaceMessageBeforeStateChange(t *testing
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
+	boundRequest := scripts.AnalysisRequest{WorkspaceID: workspaceB, ProjectID: projectB, OperationID: operationB, RevisionID: revisionB}
+	payload, err := json.Marshal(boundRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("outbox_events").Create(map[string]any{
+		"id":           uuid.New(),
+		"operation_id": operationB,
+		"topic":        "lanverse.tasks.operation",
+		"event_key":    revisionB.String(),
+		"payload":      string(payload),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
+		if result := orm.Table("nar_source_revisions").Where("id = ?", revisionB2).Delete(&struct{ ID uuid.UUID }{}); result.Error != nil {
+			t.Logf("cleanup second revision: %v", result.Error)
+		}
 		cleanupAnalysisTenant(t, orm, workspaceB, projectB, revisionB)
 		cleanupAnalysisTenant(t, orm, workspaceA, projectA, uuid.Nil)
 	})
@@ -93,6 +123,15 @@ func TestProcessAnalysisRejectsCrossWorkspaceMessageBeforeStateChange(t *testing
 			request: scripts.AnalysisRequest{
 				OperationID: operationB,
 				RevisionID:  revisionB,
+			},
+		},
+		{
+			name: "different revision in same project",
+			request: scripts.AnalysisRequest{
+				WorkspaceID: workspaceB,
+				ProjectID:   projectB,
+				OperationID: operationB,
+				RevisionID:  revisionB2,
 			},
 		},
 	}
