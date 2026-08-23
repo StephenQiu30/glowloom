@@ -35,7 +35,6 @@ const roleLabels: Record<RoleCode, string> = {
 };
 
 const statusLabels: Record<API.MembershipStatus, string> = {
-  invited: '待接受',
   active: '正常',
   suspended: '已停用',
   removed: '已移除',
@@ -81,12 +80,10 @@ const roleOptions = () =>
 
 const statusOptions = (status: API.MembershipStatus) =>
   (Object.keys(statusLabels) as API.MembershipStatus[])
-    .filter((value) => value !== 'invited' || status === 'invited')
     .filter((value) => !(status === 'removed' && value !== 'removed'))
     .map((value) => ({
       label: statusLabels[value],
       value,
-      disabled: value === 'invited',
     }));
 
 type PendingMemberChange = {
@@ -250,11 +247,9 @@ const Admin: React.FC = () => {
             }
             loading={updatingID === member.membership_id}
             aria-label={`修改 ${member.display_name} 的状态`}
-            onChange={(value: API.MembershipStatus) => {
-              if (value !== 'invited') {
-                requestMemberChange(member, { status: value });
-              }
-            }}
+            onChange={(value: API.MembershipStatus) =>
+              requestMemberChange(member, { status: value })
+            }
             style={{ minWidth: 110 }}
           />
         ),

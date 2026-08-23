@@ -72,7 +72,7 @@ agent-browser --session lanverse-audit-query close
 
 ## 偏差、残余风险和后续动作
 
-- 本证据没有覆盖邀请、并发接受邀请、项目职责、服务身份、媒体签名、临时 Grant、SSO/SCIM、紧急撤销批次或限时只读恢复，因此其余 `AC-IAM-001—007` 与完整 `AC-IAM-002` 继续为 `not_run`。
+- 本证据没有覆盖项目职责、服务身份、媒体签名、临时 Grant、SSO/SCIM、紧急撤销批次或限时只读恢复，因此其余适用的 `AC-IAM-001—007` 与完整 `AC-IAM-002` 继续为 `not_run`。
 - `ListAccessAudit` 的当前列表、关键字/主体/对象/动作/结果/时间筛选和分页已实现；事故批次、撤销传播剩余项和恢复审批仍未实现。
 - production 浏览器只执行 `user → ban`；`suspended/removed`、最后一个 active Admin 保护和并发管理员变更继续由自动化测试覆盖，完整 M01 数据集仍需人工复核。
 - axe 的 1 个 incomplete 需要在完整键盘/高对比主题验收中人工复核；当前没有已确认的 WCAG 违规。

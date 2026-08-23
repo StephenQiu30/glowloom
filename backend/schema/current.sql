@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS iam_memberships (
     workspace_id uuid NOT NULL REFERENCES workspaces(id),
     user_id uuid NOT NULL REFERENCES iam_users(id),
     role_id uuid NOT NULL REFERENCES iam_roles(id),
-    status text NOT NULL CHECK (status IN ('invited', 'active', 'suspended', 'removed')),
+    status text NOT NULL CHECK (status IN ('active', 'suspended', 'removed')),
     created_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (workspace_id, user_id)
 );

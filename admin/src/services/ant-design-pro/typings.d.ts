@@ -255,7 +255,7 @@ declare namespace API {
     password?: string;
   };
 
-  type MembershipStatus = "invited" | "active" | "suspended" | "removed";
+  type MembershipStatus = "active" | "suspended" | "removed";
 
   type NarrativeUnit = {
     anchor?: Anchor;

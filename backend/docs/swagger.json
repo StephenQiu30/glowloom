@@ -1694,13 +1694,11 @@
         "identity.MembershipStatus": {
             "type": "string",
             "enum": [
-                "invited",
                 "active",
                 "suspended",
                 "removed"
             ],
             "x-enum-varnames": [
-                "MembershipStatusInvited",
                 "MembershipStatusActive",
                 "MembershipStatusSuspended",
                 "MembershipStatusRemoved"

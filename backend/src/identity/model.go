@@ -20,7 +20,6 @@ const (
 type MembershipStatus string
 
 const (
-	MembershipStatusInvited   MembershipStatus = "invited"
 	MembershipStatusActive    MembershipStatus = "active"
 	MembershipStatusSuspended MembershipStatus = "suspended"
 	MembershipStatusRemoved   MembershipStatus = "removed"
