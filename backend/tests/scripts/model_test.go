@@ -167,8 +167,10 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 		deleteBy("nar_beats", "id IN ?", beatIDs)
 		deleteBy("nar_scenes", "id IN ?", sceneIDs)
 		deleteBy("nar_narrative_revisions", "id IN ?", narrativeIDs)
+		deleteBy("nar_analysis_drafts", "source_revision_id = ?", revisionID)
 		orm.Table("nar_analysis_runs").Where("project_id = ?", projectID).Pluck("id", &analysisRunIDs)
 		orm.Table("nar_episode_breakdown_revisions").Where("analysis_run_id IN ?", analysisRunIDs).Pluck("id", &breakdownIDs)
+		deleteBy("nar_episode_breakdown_manifests", "breakdown_revision_id IN ?", breakdownIDs)
 		deleteBy("nar_episode_candidates", "breakdown_revision_id IN ?", breakdownIDs)
 		deleteBy("nar_episode_breakdown_revisions", "id IN ?", breakdownIDs)
 		deleteBy("nar_analysis_runs", "id IN ?", analysisRunIDs)
@@ -186,7 +188,6 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 		deleteBy("pk_mention_resolutions", "entity_id IN ?", entityIDs)
 		deleteBy("pk_entities", "project_id = ?", projectID)
 		deleteBy("nar_import_runs", "project_id = ?", projectID)
-		deleteBy("nar_analysis_drafts", "source_revision_id = ?", revisionID)
 		deleteBy("nar_source_revisions", "id = ?", revisionID)
 		deleteBy("media_artifact_locations", "artifact_id = ?", artifactID)
 		deleteBy("media_artifacts", "id = ?", artifactID)
@@ -224,11 +225,58 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := orm.WithContext(ctx).Table("nar_analysis_drafts").Create(map[string]any{"source_revision_id": revisionID, "source_hash": analysis.SourceHash, "analysis": datatypes.JSON(mustJSON(analysis)), "status": "draft"}).Error; err != nil {
+	analysisRunID, breakdownID := uuid.New(), uuid.New()
+	if err := orm.WithContext(ctx).Table("nar_analysis_runs").Create(map[string]any{
+		"id": analysisRunID, "project_id": projectID, "source_revision_id": revisionID, "root_operation_id": operationID,
+		"source_manifest_hash": analysis.SourceHash, "current_stage": "breakdown", "current_stage_generation": 1,
+		"current_gate": "breakdown_review", "status": "waiting_user", "input_hash": analysis.SourceHash,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.WithContext(ctx).Table("nar_episode_breakdown_revisions").Create(map[string]any{
+		"id": breakdownID, "analysis_run_id": analysisRunID, "revision_no": analysis.Breakdown.RevisionNo,
+		"status": "draft", "segmentation_hash": analysis.Breakdown.SegmentationHash, "coverage_hash": analysis.Breakdown.CoverageHash,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, episode := range analysis.Episodes {
+		if err := orm.WithContext(ctx).Table("nar_episode_candidates").Create(map[string]any{
+			"id": uuid.New(), "breakdown_revision_id": breakdownID, "temporary_key": episode.TemporaryKey,
+			"ordinal": episode.Ordinal, "title": episode.Title, "rule_code": episode.BoundaryRule,
+			"confidence": 1, "decision": episode.Decision, "start_offset": episode.Anchor.StartOffset, "end_offset": episode.Anchor.EndOffset,
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := orm.WithContext(ctx).Table("nar_analysis_drafts").Create(map[string]any{
+		"source_revision_id": revisionID, "breakdown_revision_id": breakdownID, "source_hash": analysis.SourceHash,
+		"analysis": datatypes.JSON(mustJSON(analysis)), "status": "draft",
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 	repository := NewScriptRepository(orm, nil)
-	approved, err := repository.ApproveAnalysis(ctx, revisionID)
+	tenantContext := database.WithWorkspaceID(ctx, workspaceID)
+	revised, err := repository.ReviseAnalysisDraft(tenantContext, revisionID, analysis.SourceHash, []EpisodeBreakdownOperation{{
+		Type: BreakdownOperationRename, CandidateKey: analysis.Episodes[0].TemporaryKey, Title: "归途·修订",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revised.Breakdown.RevisionNo != 2 || revised.Episodes[0].Title != "归途·修订" {
+		t.Fatalf("persisted breakdown revision = %#v", revised)
+	}
+	var supersededCount, draftCount int64
+	if err := orm.Table("nar_episode_breakdown_revisions").Where("analysis_run_id = ? AND status = ?", analysisRunID, "superseded").Count(&supersededCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("nar_episode_breakdown_revisions").Where("analysis_run_id = ? AND status = ?", analysisRunID, "draft").Count(&draftCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if supersededCount != 1 || draftCount != 1 {
+		t.Fatalf("breakdown revision states superseded/draft = %d/%d, want 1/1", supersededCount, draftCount)
+	}
+
+	approved, err := repository.ApproveAnalysis(tenantContext, revisionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +290,20 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("canonical scene count = %d, want 1", count)
 	}
-	if _, err := repository.ApproveAnalysis(ctx, revisionID); err != nil {
+	var mentionCount, entityCount, requirementCount int64
+	if err := orm.Table("nar_production_element_mentions").Where("narrative_revision_id IN (?)", orm.Table("nar_narrative_revisions").Select("id").Where("project_id = ?", projectID)).Count(&mentionCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("pk_entities").Where("project_id = ?", projectID).Count(&entityCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("pk_production_requirement_items").Where("project_id = ?", projectID).Count(&requirementCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if mentionCount == 0 || entityCount != 0 || requirementCount != 0 {
+		t.Fatalf("approval published mentions/entities/requirements = %d/%d/%d, want >0/0/0", mentionCount, entityCount, requirementCount)
+	}
+	if _, err := repository.ApproveAnalysis(tenantContext, revisionID); err != nil {
 		t.Fatal("repeated approval should be idempotent:", err)
 	}
 	if err := orm.Table("nar_scenes").Where("narrative_revision_id IN (?)", orm.Table("nar_narrative_revisions").Select("id").Where("project_id = ?", projectID)).Count(&count).Error; err != nil {

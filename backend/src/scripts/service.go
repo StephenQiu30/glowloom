@@ -70,6 +70,13 @@ func (s *ScriptAnalysisService) GetAnalysisDraft(ctx context.Context, revisionID
 	return s.repository.GetAnalysisDraft(ctx, revisionID)
 }
 
+func (s *ScriptAnalysisService) ReviseAnalysisDraft(ctx context.Context, revisionID uuid.UUID, expectedSourceHash string, operations []EpisodeBreakdownOperation) (Analysis, error) {
+	if revisionID == uuid.Nil {
+		return Analysis{}, httpapi.Validation("剧本版本 ID 无效", "刷新当前工作流后重试")
+	}
+	return s.repository.ReviseAnalysisDraft(ctx, revisionID, expectedSourceHash, operations)
+}
+
 func (s *ScriptAnalysisService) CreateShots(ctx context.Context, projectID, contentUnitID uuid.UUID, count int) ([]Shot, error) {
 	if count < 1 || count > 100 {
 		return nil, httpapi.Validation("镜头数量必须在 1 到 100 之间", "调整镜头数量后重试")

@@ -40,6 +40,7 @@ func (h *ScriptController) Mount(router chi.Router) {
 		router.Post("/projects/{projectID}/script-revisions", h.createScriptRevision)
 		router.Post("/script-revisions/{revisionID}/analyze", h.analyzeScript)
 		router.Get("/script-revisions/{revisionID}/analysis-draft", h.getAnalysisDraft)
+		router.Post("/script-revisions/{revisionID}/analysis-draft/revisions", h.reviseAnalysisDraft)
 		router.Post("/script-revisions/{revisionID}/approve", h.approveAnalysis)
 		router.Get("/operations/{operationID}", h.getOperation)
 		router.Get("/projects/{projectID}/analysis", h.getProjectAnalysis)
@@ -68,6 +69,11 @@ type createFixtureCandidateRequest struct {
 
 type selectCandidateRequest struct {
 	Purpose string `json:"purpose"`
+}
+
+type reviseAnalysisDraftRequest struct {
+	ExpectedSourceHash string                      `json:"expected_source_hash"`
+	Operations         []EpisodeBreakdownOperation `json:"operations"`
 }
 
 // ready 返回服务就绪状态。
@@ -349,6 +355,37 @@ func (h *ScriptController) getAnalysisDraft(writer http.ResponseWriter, request 
 		return
 	}
 	httpapi.WriteData(writer, httpapi.StatusOK, analysis)
+}
+
+// reviseAnalysisDraft 以当前来源 hash 为基线创建新的 EpisodeBreakdownRevision。
+// @Summary 修订剧集拆解草稿
+// @Tags script
+// @ID script_analysis_draft_revise
+// @Accept json
+// @Produce json
+// @Param revisionID path string true "Script Revision UUID"
+// @Param request body reviseAnalysisDraftRequest true "剧集拆解操作"
+// @Security BearerAccessToken
+// @Success 201 {object} AnalysisEnvelope
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Failure 409 {object} httpapi.ErrorEnvelope
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/script-revisions/{revisionID}/analysis-draft/revisions [post]
+func (h *ScriptController) reviseAnalysisDraft(writer http.ResponseWriter, request *http.Request) {
+	revisionID, ok := parseID(writer, request, chi.URLParam(request, "revisionID"))
+	if !ok {
+		return
+	}
+	var body reviseAnalysisDraftRequest
+	if !httpapi.DecodeJSON(writer, request, &body, 64<<10) {
+		return
+	}
+	analysis, err := h.service.ReviseAnalysisDraft(request.Context(), revisionID, strings.TrimSpace(body.ExpectedSourceHash), body.Operations)
+	if err != nil {
+		httpapi.WriteError(writer, request, err)
+		return
+	}
+	httpapi.WriteData(writer, httpapi.StatusCreated, analysis)
 }
 
 // getProjectAnalysis 获取项目分析结果。

@@ -241,15 +241,6 @@ CREATE TABLE IF NOT EXISTS nar_source_revisions (
 
 CREATE INDEX IF NOT EXISTS nar_source_revisions_project_idx ON nar_source_revisions(project_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS nar_analysis_drafts (
-    source_revision_id uuid PRIMARY KEY REFERENCES nar_source_revisions(id),
-    source_hash text NOT NULL,
-    analysis jsonb NOT NULL,
-    status text NOT NULL CHECK (status IN ('draft', 'approved')),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    approved_at timestamptz
-);
-
 CREATE TABLE IF NOT EXISTS nar_import_runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id uuid NOT NULL REFERENCES projects(id),
@@ -258,12 +249,14 @@ CREATE TABLE IF NOT EXISTS nar_import_runs (
     parser_config_hash text NOT NULL,
     status text NOT NULL CHECK (status IN ('queued', 'parsing', 'partial', 'completed', 'failed', 'cancelled', 'superseded')),
     parse_report jsonb NOT NULL DEFAULT '{}',
-    created_at timestamptz NOT NULL DEFAULT now()
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (operation_id)
 );
 
 CREATE TABLE IF NOT EXISTS nar_analysis_runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id uuid NOT NULL REFERENCES projects(id),
+    source_revision_id uuid NOT NULL REFERENCES nar_source_revisions(id),
     root_operation_id uuid NOT NULL REFERENCES operations(id),
     source_manifest_hash text NOT NULL,
     current_stage text NOT NULL CHECK (current_stage IN ('breakdown', 'narrative', 'knowledge')),
@@ -271,14 +264,15 @@ CREATE TABLE IF NOT EXISTS nar_analysis_runs (
     current_gate text NOT NULL,
     status text NOT NULL CHECK (status IN ('queued', 'analyzing', 'waiting_user', 'materializing', 'partial', 'failed', 'cancelled', 'completed')),
     input_hash text NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now()
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (root_operation_id)
 );
 
 CREATE TABLE IF NOT EXISTS nar_episode_breakdown_revisions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     analysis_run_id uuid NOT NULL REFERENCES nar_analysis_runs(id),
     revision_no integer NOT NULL,
-    status text NOT NULL CHECK (status IN ('draft', 'approved', 'superseded')),
+    status text NOT NULL CHECK (status IN ('draft', 'proposed', 'approved', 'superseded')),
     segmentation_hash text NOT NULL,
     coverage_hash text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -293,9 +287,32 @@ CREATE TABLE IF NOT EXISTS nar_episode_candidates (
     title text NOT NULL,
     rule_code text NOT NULL,
     confidence numeric(5,4),
-    decision text NOT NULL CHECK (decision IN ('pending', 'accepted', 'ignored', 'rejected')),
+    decision text NOT NULL CHECK (decision IN ('pending', 'accepted', 'accepted_with_changes', 'ignored', 'rejected')),
+    start_offset integer NOT NULL CHECK (start_offset >= 0),
+    end_offset integer NOT NULL CHECK (end_offset > start_offset),
     UNIQUE (breakdown_revision_id, temporary_key),
     UNIQUE (breakdown_revision_id, ordinal)
+);
+
+CREATE TABLE IF NOT EXISTS nar_episode_breakdown_manifests (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    breakdown_revision_id uuid NOT NULL UNIQUE REFERENCES nar_episode_breakdown_revisions(id),
+    project_id uuid NOT NULL REFERENCES projects(id),
+    segmentation_hash text NOT NULL CHECK (segmentation_hash ~ '^[a-f0-9]{64}$'),
+    coverage_hash text NOT NULL CHECK (coverage_hash ~ '^[a-f0-9]{64}$'),
+    manifest_hash text NOT NULL UNIQUE CHECK (manifest_hash ~ '^[a-f0-9]{64}$'),
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS nar_analysis_drafts (
+    source_revision_id uuid PRIMARY KEY REFERENCES nar_source_revisions(id),
+    breakdown_revision_id uuid NOT NULL REFERENCES nar_episode_breakdown_revisions(id),
+    source_hash text NOT NULL,
+    analysis jsonb NOT NULL,
+    status text NOT NULL CHECK (status IN ('draft', 'approved')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    approved_at timestamptz
 );
 
 CREATE TABLE IF NOT EXISTS nar_narrative_revisions (

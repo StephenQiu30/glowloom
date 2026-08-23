@@ -45,6 +45,12 @@ func TestCurrentSchemaContainsOnlyCanonicalNarrativeFacts(t *testing.T) {
 		"CREATE TABLE IF NOT EXISTS nar_source_revisions",
 		"CREATE TABLE IF NOT EXISTS nar_analysis_drafts",
 		"source_revision_id uuid PRIMARY KEY REFERENCES nar_source_revisions(id)",
+		"breakdown_revision_id uuid NOT NULL REFERENCES nar_episode_breakdown_revisions(id)",
+		"source_revision_id uuid NOT NULL REFERENCES nar_source_revisions(id)",
+		"start_offset integer NOT NULL CHECK (start_offset >= 0)",
+		"end_offset integer NOT NULL CHECK (end_offset > start_offset)",
+		"CREATE TABLE IF NOT EXISTS nar_episode_breakdown_manifests",
+		"breakdown_revision_id uuid NOT NULL UNIQUE REFERENCES nar_episode_breakdown_revisions(id)",
 	} {
 		if !strings.Contains(schema, required) {
 			t.Errorf("current schema is missing canonical narrative contract %q", required)
