@@ -5,7 +5,6 @@ Lanverse 是前后端分离的 AI 视频生产平台。当前交付切片聚焦�
 ## 固定架构
 
 - `frontend/`：Next.js App Router、TypeScript、View/ViewModel 分层；API 客户端由 Umi OpenAPI 根据 Swagger 文档生成。
-- `admin/`：官方 Ant Design Pro v6 仓库模板的独立管理端，当前只保留登录/注册、管理入口、账号设置、错误页和权限基线，后续按 Lanverse 后端契约接入。
 - `backend/`：Go 模块化单体，负责公共 HTTP、PostgreSQL 业务事务、MinIO 对象存储和 Kafka outbox/worker；`backend/cmd/main.go` 是唯一启动入口，使用 `LANVERSE_ROLE` 选择角色。
 - `agent/`：Python 私有 Agent 服务，只承载 Harness/Skill 编排，不连接数据库或 Kafka，也不暴露公共 API。
 - `docs/`：唯一事实来源，按 `requirement → design → prd → plan → acceptance` 维护。
@@ -58,18 +57,9 @@ OPENAPI_SCHEMA_URL=../backend/docs/swagger.json npm run openapi2ts
 npm run dev
 ```
 
-启动管理端：
-
-```bash
-cd admin
-pnpm install --frozen-lockfile
-pnpm run dev
-```
-
 访问：
 
 - 前端：`http://127.0.0.1:8123`
-- 管理端：Umi 默认开发端口（终端输出为准）
 - Go API 就绪检查：`http://127.0.0.1:8686/readyz`
 - Agent 私有就绪检查：`http://127.0.0.1:8790/readyz`
 - Swagger 文档源：后端 Controller 中的 Swagger 注释；使用 `backend/Makefile` 的 `swagger` 目标生成 `backend/docs/swagger.json`
@@ -82,7 +72,7 @@ cd ../frontend && npm run lint && npm run typecheck && npm run test && npm run b
 cd .. && PYTHONPATH=agent/src uv run --project agent --extra test python -m pytest agent/tests -q
 ```
 
-剧本解析的验收路径是：前端提交 → Go 创建 revision → MinIO 保存原文 → PostgreSQL outbox → Kafka → operation-worker 解析 → draft → 人工批准 → episode/narrative/entity/production requirement 同事务物化。该路径使用本机真实服务验证，不使用模拟队列或兼容接口。
+剧本解析的当前验收路径是：前端提交 → Go 创建 revision → MinIO 保存原文 → PostgreSQL outbox → Kafka → operation-worker 解析 → EpisodeBreakdown 草稿与人工修订 → Manifest/M02/M03 批准 → ProductionElementMention 进入知识决议。M03 不自动发布 M04 实体或生产需求。该路径使用本机真实服务验证，不使用模拟队列或兼容接口。
 
 ## 文档与安全
 
