@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
   projectList: vi.fn(),
   scriptAnalysisApprove: vi.fn(),
   scriptAnalysisDraft: vi.fn(),
+  scriptAnalysisDraftRevise: vi.fn(),
   scriptAnalysisQueue: vi.fn(),
   scriptRevisionCreate: vi.fn(),
 }));
@@ -32,12 +33,68 @@ vi.mock("@/api/project", () => ({
 vi.mock("@/api/script", () => ({
   scriptAnalysisApprove: api.scriptAnalysisApprove,
   scriptAnalysisDraft: api.scriptAnalysisDraft,
+  scriptAnalysisDraftRevise: api.scriptAnalysisDraftRevise,
   scriptAnalysisQueue: api.scriptAnalysisQueue,
   scriptRevisionCreate: api.scriptRevisionCreate,
 }));
 
 import { ScriptAnalysisWorkspace } from "@/features/script-analysis/views/script-analysis-workspace";
 import { ApiClientError } from "@/lib/request";
+
+const workflowIDs = {
+  workspaceID: "11111111-1111-4111-8111-111111111111",
+  projectID: "33333333-3333-4333-8333-333333333333",
+  revisionID: "44444444-4444-4444-8444-444444444444",
+  operationID: "55555555-5555-4555-8555-555555555555",
+};
+
+function breakdownAnalysis(status: "ready" | "blocked" = "ready") {
+  return {
+    source_hash: "source-hash",
+    parse_report: { status: "complete", format: "txt", parser_version: "deterministic-script-parser-v1", original_hash: "source-hash", text_hash: "text-hash", character_count: 300, paragraph_count: 9, failed_scopes: [] },
+    breakdown: {
+      revision_no: 2,
+      status,
+      coverage_hash: "coverage-hash",
+      segmentation_hash: "segmentation-hash",
+      issues: status === "blocked" ? [{ code: "duplicate_episode_number", message: "集号 1 重复，需要人工拆解或重排", candidate_keys: ["episode-a", "episode-b"] }] : [],
+    },
+    episodes: [
+      {
+        temporary_key: "episode-a", ordinal: 1, number: 1, title: "归途", decision: "pending", boundary_rule: "explicit_episode_heading_v1",
+        anchor: { line: 1, start_offset: 0, end_offset: 100 },
+        scenes: [
+          { id: "scene-a1", heading: "码头", anchor: { line: 2, start_offset: 0, end_offset: 50 }, narratives: [] },
+          { id: "scene-a2", heading: "仓库", anchor: { line: 3, start_offset: 50, end_offset: 100 }, narratives: [] },
+        ],
+      },
+      {
+        temporary_key: "episode-b", ordinal: 2, number: 2, title: "回声", decision: "pending", boundary_rule: "explicit_episode_heading_v1",
+        anchor: { line: 4, start_offset: 100, end_offset: 200 },
+        scenes: [
+          { id: "scene-b1", heading: "车站", anchor: { line: 5, start_offset: 100, end_offset: 150 }, narratives: [] },
+          { id: "scene-b2", heading: "长街", anchor: { line: 6, start_offset: 150, end_offset: 200 }, narratives: [] },
+        ],
+      },
+      {
+        temporary_key: "episode-c", ordinal: 3, number: 3, title: "终局", decision: "pending", boundary_rule: "explicit_episode_heading_v1",
+        anchor: { line: 7, start_offset: 200, end_offset: 300 },
+        scenes: [{ id: "scene-c1", heading: "山顶", anchor: { line: 8, start_offset: 200, end_offset: 300 }, narratives: [] }],
+      },
+    ],
+    characters: [], locations: [], props: [], costumes: [],
+  };
+}
+
+function restoreDraft(analysis = breakdownAnalysis()) {
+  const { workspaceID, projectID, revisionID, operationID } = workflowIDs;
+  window.history.replaceState(null, "", `/?project=${projectID}&revision=${revisionID}&operation=${operationID}`);
+  api.authRefresh.mockResolvedValue({ data: { access_token: "refreshed-access-token", workspace: { id: workspaceID, name: "恢复工作区" } } });
+  api.operationGet.mockResolvedValue({ data: { id: operationID, project_id: projectID, source_revision_id: revisionID, type: "script_analysis", status: "succeeded", progress: 100 } });
+  api.projectAnalysisGet.mockRejectedValue(new ApiClientError("正式分析不存在", "not_found", 404));
+  api.scriptAnalysisDraft.mockResolvedValue({ data: analysis });
+  api.scriptAnalysisDraftRevise.mockResolvedValue({ data: analysis });
+}
 
 describe("ScriptAnalysisWorkspace", () => {
   beforeEach(() => {
@@ -136,12 +193,99 @@ describe("ScriptAnalysisWorkspace", () => {
 
     render(<ScriptAnalysisWorkspace />);
 
-    await waitFor(() => expect(screen.getByTestId("phase-status")).toHaveTextContent("事实已批准"));
+    await waitFor(() => expect(screen.getByTestId("phase-status")).toHaveTextContent("叙事已批准 · 知识待决议"));
     expect(screen.getByText(`Project：${projectID}`)).toBeInTheDocument();
     expect(screen.getByText("第 1 集 · 归途")).toBeInTheDocument();
     expect(api.operationGet).toHaveBeenCalledWith({ operationID });
     expect(api.projectAnalysisGet).toHaveBeenCalledWith({ projectID });
+    expect(screen.getByText("叙事已批准，ProductionElementMention 已冻结；实体与生产需求仍待知识决议。")).toBeInTheDocument();
     expect(window.localStorage).toHaveLength(0);
+  });
+
+  it("shows breakdown blockers and prevents approval until source coverage is valid", async () => {
+    restoreDraft(breakdownAnalysis("blocked"));
+    render(<ScriptAnalysisWorkspace />);
+
+    expect(await screen.findByRole("heading", { name: "3. 校对剧集边界" })).toBeInTheDocument();
+    expect(screen.getByText("集号 1 重复，需要人工拆解或重排")).toBeInTheDocument();
+    expect(screen.getByTestId("approve-button")).toBeDisabled();
+  });
+
+  it("revises an episode title against the current source hash", async () => {
+    restoreDraft();
+    const user = userEvent.setup();
+    render(<ScriptAnalysisWorkspace />);
+
+    const title = await screen.findByLabelText("范围 1 标题");
+    await user.clear(title);
+    await user.type(title, "归途·人工修订");
+    await user.click(screen.getByRole("button", { name: "保存范围 1 标题" }));
+
+    await waitFor(() => expect(api.scriptAnalysisDraftRevise).toHaveBeenCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      {
+        expected_source_hash: "source-hash",
+        operations: [expect.objectContaining({ type: "rename", candidate_key: "episode-a", title: "归途·人工修订" })],
+      },
+    ));
+  });
+
+  it("splits only at a complete scene boundary", async () => {
+    restoreDraft();
+    const user = userEvent.setup();
+    render(<ScriptAnalysisWorkspace />);
+
+    await user.selectOptions(await screen.findByLabelText("范围 1 拆分边界"), "50");
+    await user.clear(screen.getByLabelText("范围 1 拆分后左侧标题"));
+    await user.type(screen.getByLabelText("范围 1 拆分后左侧标题"), "归途上");
+    await user.clear(screen.getByLabelText("范围 1 拆分后右侧标题"));
+    await user.type(screen.getByLabelText("范围 1 拆分后右侧标题"), "归途下");
+    await user.click(screen.getByRole("button", { name: "拆分范围 1" }));
+
+    await waitFor(() => expect(api.scriptAnalysisDraftRevise).toHaveBeenCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      {
+        expected_source_hash: "source-hash",
+        operations: [expect.objectContaining({
+          type: "split", candidate_key: "episode-a", boundary_offset: 50,
+          left_title: "归途上", right_title: "归途下",
+        })],
+      },
+    ));
+  });
+
+  it("supports merge, boundary move, reorder, and named ignore commands", async () => {
+    const analysis = breakdownAnalysis();
+    restoreDraft(analysis);
+    const user = userEvent.setup();
+    render(<ScriptAnalysisWorkspace />);
+
+    await user.click(await screen.findByRole("button", { name: "合并范围 1 与 2" }));
+    await waitFor(() => expect(api.scriptAnalysisDraftRevise).toHaveBeenLastCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      { expected_source_hash: "source-hash", operations: [expect.objectContaining({ type: "merge", candidate_keys: ["episode-a", "episode-b"] })] },
+    ));
+
+    await user.selectOptions(screen.getByLabelText("范围 1 与 2 边界"), "150");
+    await user.click(screen.getByRole("button", { name: "移动范围 1 与 2 边界" }));
+    await waitFor(() => expect(api.scriptAnalysisDraftRevise).toHaveBeenLastCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      { expected_source_hash: "source-hash", operations: [expect.objectContaining({ type: "move_boundary", left_key: "episode-a", right_key: "episode-b", boundary_offset: 150 })] },
+    ));
+
+    await user.click(screen.getByRole("button", { name: "下移范围 1" }));
+    await waitFor(() => expect(api.scriptAnalysisDraftRevise).toHaveBeenLastCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      { expected_source_hash: "source-hash", operations: [expect.objectContaining({ type: "reorder", ordered_candidate_keys: ["episode-b", "episode-a", "episode-c"] })] },
+    ));
+
+    await user.clear(screen.getByLabelText("范围 1 忽略理由"));
+    await user.type(screen.getByLabelText("范围 1 忽略理由"), "片头说明，不属于正片");
+    await user.click(screen.getByRole("button", { name: "具名忽略范围 1" }));
+    await waitFor(() => expect(api.scriptAnalysisDraftRevise).toHaveBeenLastCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      { expected_source_hash: "source-hash", operations: [expect.objectContaining({ type: "ignore", candidate_key: "episode-a", title: "片头说明，不属于正片" })] },
+    ));
   });
 
   it("lists authorized projects and resumes a workflow without a pre-existing URL", async () => {
@@ -198,7 +342,7 @@ describe("ScriptAnalysisWorkspace", () => {
     expect(screen.getByRole("navigation", { name: "项目列表分页" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "继续解析 跨设备项目" }));
 
-    await waitFor(() => expect(screen.getByTestId("phase-status")).toHaveTextContent("事实已批准"));
+    await waitFor(() => expect(screen.getByTestId("phase-status")).toHaveTextContent("叙事已批准 · 知识待决议"));
     expect(api.projectList).toHaveBeenCalledWith({ workspaceID, page: 1, page_size: 20 });
     expect(api.operationGet).toHaveBeenCalledWith({ operationID });
     expect(screen.getByLabelText("项目名称")).toHaveValue("跨设备项目");

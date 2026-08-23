@@ -8,10 +8,12 @@ import { projectAnalysisGet, projectCreate, projectList } from "@/api/project";
 import {
   scriptAnalysisApprove,
   scriptAnalysisDraft,
+  scriptAnalysisDraftRevise,
   scriptAnalysisQueue,
   scriptRevisionCreate,
 } from "@/api/script";
 import { ApiClientError, setAccessToken } from "@/lib/request";
+import { EpisodeBreakdownEditor } from "@/features/script-analysis/views/episode-breakdown-editor";
 
 const fixtureScript = `第1集 归途
 场景：海边码头
@@ -440,7 +442,7 @@ export function ScriptAnalysisWorkspace() {
   }
 
   async function approve() {
-    if (!revisionID) return;
+    if (!revisionID || analysis?.breakdown?.status !== "ready") return;
     setBusy(true);
     setError(null);
     try {
@@ -453,6 +455,27 @@ export function ScriptAnalysisWorkspace() {
       if (workspace) await reloadProjects(workspace.id, 1);
     } catch (cause) {
       reportAuthenticatedFailure(cause, "批准失败，请修正当前事实后重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reviseBreakdown(operations: API.EpisodeBreakdownOperation[]) {
+    if (!revisionID || !analysis?.source_hash) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await scriptAnalysisDraftRevise(
+        { revisionID },
+        { expected_source_hash: analysis.source_hash, operations },
+      );
+      if (!response.data) {
+        throw new Error("拆解修订完成但未返回新版本。");
+      }
+      setAnalysis(response.data);
+      setPhase("draft");
+    } catch (cause) {
+      reportAuthenticatedFailure(cause, "剧集拆解修订失败，请刷新当前基线后重试。");
     } finally {
       setBusy(false);
     }
@@ -517,8 +540,8 @@ export function ScriptAnalysisWorkspace() {
             <div className="status" data-testid="phase-status">
               {phase === "idle" && "等待导入"}
               {phase === "queued" && `解析中 ${operation?.progress ?? 0}%`}
-              {phase === "draft" && "待人工批准"}
-              {phase === "approved" && "事实已批准"}
+              {phase === "draft" && "剧集边界待校对"}
+              {phase === "approved" && "叙事已批准 · 知识待决议"}
             </div>
             <div className="actions" style={{ marginTop: 10, justifyContent: "flex-end" }}>
               <span className="hint">{workspace.name}</span>
@@ -621,10 +644,10 @@ export function ScriptAnalysisWorkspace() {
               <button className="primary" type="button" onClick={submitForAnalysis} disabled={busy || (!sourceFile && !content.trim())} data-testid="analyze-button">
                 {busy && phase !== "draft" ? "正在解析…" : "提交解析任务"}
               </button>
-              {phase === "draft" && <button className="secondary" type="button" onClick={approve} disabled={busy} data-testid="approve-button">批准事实并物化</button>}
+              {phase === "draft" && <button className="secondary" type="button" onClick={approve} disabled={busy || analysis?.breakdown?.status !== "ready"} data-testid="approve-button">批准当前拆解与叙事</button>}
             </div>
             {error && <div className="error" role="alert">{error}</div>}
-            {phase === "approved" && <div className="success" role="status">已批准。剧集、叙事单元、资产和生产需求已在同一事务中物化。</div>}
+            {phase === "approved" && <div className="success" role="status">叙事已批准，ProductionElementMention 已冻结；实体与生产需求仍待知识决议。</div>}
           </section>
 
           <section className="card" aria-labelledby="operation-title">
@@ -640,7 +663,7 @@ export function ScriptAnalysisWorkspace() {
               <div className="metric"><strong>{analysis.episodes?.length ?? 0}</strong><span>剧集</span></div>
               <div className="metric"><strong>{(analysis.episodes ?? []).reduce((total, episode) => total + (episode.scenes?.length ?? 0), 0)}</strong><span>场景</span></div>
               <div className="metric"><strong>{analysis.characters?.length ?? 0}</strong><span>人物</span></div>
-              <div className="metric"><strong>{assets.length}</strong><span>生产资产</span></div>
+              <div className="metric"><strong>{assets.length}</strong><span>来源 Mention</span></div>
             </div>}
             {analysis?.parse_report && <div className="operation" data-testid="parse-report">
               <div>
@@ -652,12 +675,14 @@ export function ScriptAnalysisWorkspace() {
           </section>
         </div>
 
+        {analysis?.breakdown && <EpisodeBreakdownEditor analysis={analysis} disabled={busy} editable={phase === "draft"} onRevise={reviseBreakdown} />}
+
         {analysis && <section className="card" style={{ marginTop: 18 }} aria-labelledby="result-title">
-          <h2 id="result-title">3. 剧集、场景与资产</h2>
-          <div className="asset-list" role="list" aria-label="资产清单">
+          <h2 id="result-title">{analysis.breakdown ? "4" : "3"}. 场景与来源 Mention</h2>
+          <div className="asset-list" role="list" aria-label="来源 Mention 清单">
             {assets.map((asset) => <span className="asset" role="listitem" key={`${asset.kind}-${asset.name}`}>{asset.name}<em>{asset.kind} · {(asset.episode_numbers ?? []).join(", ")}</em></span>)}
           </div>
-          {(analysis.episodes ?? []).map((episode) => <article className="episode" key={episode.number}>
+          {(analysis.episodes ?? []).filter((episode) => episode.decision !== "ignored").map((episode) => <article className="episode" key={episode.temporary_key ?? episode.number}>
             <div className="episode-head"><span className="episode-title">第 {episode.number} 集 · {episode.title}</span><span className="hint">{episode.scenes?.length ?? 0} 个场景</span></div>
             {(episode.scenes ?? []).map((scene) => <div className="scene" key={scene.id}><strong>{scene.heading}</strong><p>{(scene.narratives ?? []).slice(0, 4).map((narrative) => narrative.text).join(" · ")}</p></div>)}
           </article>)}
