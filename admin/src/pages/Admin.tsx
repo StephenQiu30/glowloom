@@ -1,5 +1,5 @@
 import { PageContainer } from '@ant-design/pro-components';
-import { Alert, Card, Input, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { Alert, App, Card, Input, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useModel } from '@umijs/max';
@@ -28,6 +28,7 @@ const statusOptions = (status: MembershipStatus) =>
     .map((value) => ({ label: statusLabels[value], value }));
 
 const Admin: React.FC = () => {
+  const { message } = App.useApp();
   const { initialState } = useModel('@@initialState');
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [search, setSearch] = useState('');

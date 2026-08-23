@@ -166,12 +166,12 @@ func (r *IdentityRepository) RegisterAccount(ctx context.Context, input Persiste
 	return issue, nil
 }
 
-func (r *IdentityRepository) FindLoginAccount(ctx context.Context, email EmailAddress, workspaceID uuid.UUID) (LoginAccount, error) {
+func (r *IdentityRepository) FindLoginAccount(ctx context.Context, email EmailAddress) (LoginAccount, error) {
 	if r.orm == nil {
 		return LoginAccount{}, fmt.Errorf("identity repository ORM is not configured")
 	}
 	var result LoginAccount
-	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+	err := r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var user identityUserRecord
 		if err := tx.Where("email = ? AND status = ?", email.String(), AccountStatusActive).First(&user).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -184,8 +184,9 @@ func (r *IdentityRepository) FindLoginAccount(ctx context.Context, email EmailAd
 			Select("memberships.id AS membership_id, memberships.workspace_id, workspaces.name AS workspace_name, roles.code AS role").
 			Joins("JOIN workspaces ON workspaces.id = memberships.workspace_id").
 			Joins("JOIN iam_roles AS roles ON roles.id = memberships.role_id").
-			Where("memberships.user_id = ? AND memberships.workspace_id = ? AND memberships.status = ?", user.ID, workspaceID, MembershipStatusActive).
-			First(&membership).Error; err != nil {
+			Where("memberships.user_id = ? AND memberships.status = ?", user.ID, MembershipStatusActive).
+			Order("CASE WHEN roles.code = 'admin' THEN 0 ELSE 1 END, memberships.created_at ASC").
+			Take(&membership).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrInvalidCredentials
 			}
@@ -193,6 +194,9 @@ func (r *IdentityRepository) FindLoginAccount(ctx context.Context, email EmailAd
 		}
 		if membership.Role == RoleBan {
 			return ErrInvalidCredentials
+		}
+		if err := setWorkspaceConfig(tx, membership.WorkspaceID); err != nil {
+			return err
 		}
 		result = LoginAccount{Identity: AuthIdentity{Account: Account{ID: user.ID, Email: user.Email, DisplayName: user.DisplayName}, Workspace: Workspace{ID: membership.WorkspaceID, Name: membership.WorkspaceName}, MembershipID: membership.MembershipID, Role: membership.Role}, PasswordHash: user.PasswordHash}
 		return nil
@@ -221,12 +225,9 @@ func (r *IdentityRepository) CreateSession(ctx context.Context, identity AuthIde
 	return SessionIssue{SessionID: session.ID, FamilyID: session.FamilyID, Identity: identity, RefreshToken: refreshToken, RefreshExpiresAt: session.ExpiresAt}, nil
 }
 
-func (r *IdentityRepository) RotateRefreshSession(ctx context.Context, workspaceID uuid.UUID, refreshToken string) (SessionIssue, error) {
+func (r *IdentityRepository) RotateRefreshSession(ctx context.Context, refreshToken string) (SessionIssue, error) {
 	if r.orm == nil {
 		return SessionIssue{}, fmt.Errorf("identity repository ORM is not configured")
-	}
-	if workspaceID == uuid.Nil {
-		return SessionIssue{}, ErrRefreshInvalid
 	}
 	newRefreshToken, err := newOpaqueToken()
 	if err != nil {
@@ -234,13 +235,16 @@ func (r *IdentityRepository) RotateRefreshSession(ctx context.Context, workspace
 	}
 	now := time.Now().UTC()
 	var issue SessionIssue
-	err = database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+	err = r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var current identitySessionRecord
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_hash = ? AND workspace_id = ?", hashToken(refreshToken), workspaceID).First(&current).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_hash = ?", hashToken(refreshToken)).First(&current).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrRefreshInvalid
 			}
 			return fmt.Errorf("load refresh session: %w", err)
+		}
+		if err := setWorkspaceConfig(tx, current.WorkspaceID); err != nil {
+			return err
 		}
 		if current.RevokedAt != nil {
 			if err := tx.Model(&identitySessionRecord{}).Where("family_id = ? AND revoked_at IS NULL", current.FamilyID).Updates(map[string]any{"revoked_at": now, "last_used_at": now}).Error; err != nil {
@@ -271,18 +275,21 @@ func (r *IdentityRepository) RotateRefreshSession(ctx context.Context, workspace
 	return issue, nil
 }
 
-func (r *IdentityRepository) RevokeRefreshSession(ctx context.Context, workspaceID uuid.UUID, refreshToken string) (uuid.UUID, error) {
+func (r *IdentityRepository) RevokeRefreshSession(ctx context.Context, refreshToken string) (uuid.UUID, error) {
 	if r.orm == nil {
 		return uuid.Nil, fmt.Errorf("identity repository ORM is not configured")
 	}
 	var sessionID uuid.UUID
-	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+	err := r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var session identitySessionRecord
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_hash = ? AND workspace_id = ?", hashToken(refreshToken), workspaceID).First(&session).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_hash = ?", hashToken(refreshToken)).First(&session).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrRefreshInvalid
 			}
 			return fmt.Errorf("load logout session: %w", err)
+		}
+		if err := setWorkspaceConfig(tx, session.WorkspaceID); err != nil {
+			return err
 		}
 		sessionID = session.ID
 		if session.RevokedAt != nil {
@@ -469,7 +476,7 @@ func (r *IdentityRepository) identityForSession(tx *gorm.DB, userID, workspaceID
 		Joins("JOIN workspaces ON workspaces.id = memberships.workspace_id").
 		Joins("JOIN iam_roles AS roles ON roles.id = memberships.role_id").
 		Where("memberships.user_id = ? AND memberships.workspace_id = ? AND memberships.status = ?", userID, workspaceID, MembershipStatusActive).
-		First(&membership).Error; err != nil {
+		Take(&membership).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return AuthIdentity{}, ErrRefreshInvalid
 		}

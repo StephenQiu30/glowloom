@@ -62,7 +62,7 @@ Next.js App Router 工程的唯一 HTTP 适配器固定为 `frontend/src/lib/req
 - `frontend/src/api` 只保存 `@umijs/openapi` 生成文件，生成模板通过 `requestLibPath` 指向 `@/lib/request`；禁止手写 API 文件。
 - ViewModel 只导入生成函数；ViewModel、View 和 Server Component 不创建 Axios 实例、不拼 URL、不复制 DTO。
 - `request.ts` 使用一个 `axios.create` 实例，统一 runtime base URL、超时、凭据、Authorization、AbortSignal、request/trace ID 和错误 envelope 解包。
-- 写请求不自动重试；幂等键、`If-Match`、Workspace Header 和取消信号由生成函数的调用方显式传入。
+- 写请求不自动重试；幂等键、`If-Match` 和取消信号由生成函数的调用方显式传入。认证请求不接受客户端 Workspace Header，后端从已验证 JWT 恢复 Workspace 上下文。
 - `ApiClientError` 只暴露 `status/code/request_id/recovery_actions` 等安全字段；不向用户透出后端堆栈、SQL 或 SDK 原始错误。
 
 ## 2. 模块文件与语义命名

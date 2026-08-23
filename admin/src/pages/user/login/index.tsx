@@ -1,4 +1,4 @@
-import { KeyOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
+import { LockOutlined, MailOutlined } from '@ant-design/icons';
 import { LoginForm, ProFormCheckbox, ProFormText } from '@ant-design/pro-components';
 import { Helmet, history, Link, useModel } from '@umijs/max';
 import { Alert, App } from 'antd';
@@ -6,7 +6,6 @@ import { createStyles } from 'antd-style';
 import React, { startTransition, useState } from 'react';
 import { Footer } from '@/components';
 import { login } from '@/services/ant-design-pro/login';
-import { getWorkspaceId } from '@/services/session';
 import Settings from '../../../../config/defaultSettings';
 
 const getSafeRedirectUrl = (redirect: string | null): string => {
@@ -74,7 +73,6 @@ const Login: React.FC = () => {
           logo={<img alt="Lanverse" src="/logo.svg" />}
           title="Lanverse 管理端"
           subTitle="仅 Admin 可访问后台管理内容"
-          initialValues={{ workspaceId: getWorkspaceId() }}
           onFinish={(values) => handleSubmit(values as API.LoginParams)}
         >
           {error && <Alert title={error} type="error" showIcon />}
@@ -89,12 +87,6 @@ const Login: React.FC = () => {
             fieldProps={{ size: 'large', prefix: <LockOutlined /> }}
             placeholder="密码"
             rules={[{ required: true, message: '请输入密码' }]}
-          />
-          <ProFormText
-            name="workspaceId"
-            fieldProps={{ size: 'large', prefix: <KeyOutlined /> }}
-            placeholder="Workspace ID（注册后可查看）"
-            rules={[{ required: true, message: '请输入 Workspace ID' }]}
           />
           <ProFormCheckbox noStyle name="autoLogin">保持本次会话</ProFormCheckbox>
           <div style={{ marginTop: 24, textAlign: 'center' }}>

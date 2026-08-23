@@ -64,15 +64,15 @@ func (s *IdentityService) Register(ctx context.Context, input RegisterInput, rem
 	return response, issue, err
 }
 
-func (s *IdentityService) Login(ctx context.Context, email, password string, workspaceID uuid.UUID, remoteIP string) (AuthResponse, SessionIssue, error) {
+func (s *IdentityService) Login(ctx context.Context, email, password, remoteIP string) (AuthResponse, SessionIssue, error) {
 	emailAddress, err := ParseEmailAddress(email)
-	if err != nil || password == "" || workspaceID == uuid.Nil {
-		return AuthResponse{}, SessionIssue{}, httpapi.Validation("邮箱、密码和 Workspace 不能为空", "提供有效的邮箱、密码和 Workspace 后重试")
+	if err != nil || password == "" {
+		return AuthResponse{}, SessionIssue{}, httpapi.Validation("邮箱和密码不能为空", "提供有效的邮箱和密码后重试")
 	}
 	if err := s.allow(ctx, IdentityActionLogin, emailAddress.String(), remoteIP); err != nil {
 		return AuthResponse{}, SessionIssue{}, err
 	}
-	account, err := s.repository.FindLoginAccount(database.WithWorkspaceID(ctx, workspaceID), emailAddress, workspaceID)
+	account, err := s.repository.FindLoginAccount(ctx, emailAddress)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
 			return AuthResponse{}, SessionIssue{}, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "邮箱或密码错误", "确认凭据后重试")
@@ -82,7 +82,7 @@ func (s *IdentityService) Login(ctx context.Context, email, password string, wor
 	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
 		return AuthResponse{}, SessionIssue{}, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "邮箱或密码错误", "确认凭据后重试")
 	}
-	issue, err := s.repository.CreateSession(database.WithWorkspaceID(ctx, workspaceID), account.Identity)
+	issue, err := s.repository.CreateSession(database.WithWorkspaceID(ctx, account.Identity.Workspace.ID), account.Identity)
 	if err != nil {
 		return AuthResponse{}, SessionIssue{}, err
 	}
@@ -90,8 +90,8 @@ func (s *IdentityService) Login(ctx context.Context, email, password string, wor
 	return response, issue, err
 }
 
-func (s *IdentityService) Refresh(ctx context.Context, refreshToken string, workspaceID uuid.UUID, remoteIP string) (AuthResponse, SessionIssue, error) {
-	if strings.TrimSpace(refreshToken) == "" || workspaceID == uuid.Nil {
+func (s *IdentityService) Refresh(ctx context.Context, refreshToken, remoteIP string) (AuthResponse, SessionIssue, error) {
+	if strings.TrimSpace(refreshToken) == "" {
 		return AuthResponse{}, SessionIssue{}, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "刷新会话缺失", "重新登录后重试")
 	}
 	if err := s.allow(ctx, IdentityActionRefresh, hashSecret(refreshToken), remoteIP); err != nil {
@@ -108,7 +108,7 @@ func (s *IdentityService) Refresh(ctx context.Context, refreshToken string, work
 	}
 	defer func() { _ = s.cache.IdentityCompareAndDelete(context.Background(), lockKey, lockValue) }()
 
-	issue, err := s.repository.RotateRefreshSession(database.WithWorkspaceID(ctx, workspaceID), workspaceID, refreshToken)
+	issue, err := s.repository.RotateRefreshSession(ctx, refreshToken)
 	if err != nil {
 		var replay *RefreshReplayError
 		if errors.As(err, &replay) && replay.SessionID != uuid.Nil {
@@ -129,11 +129,11 @@ func (s *IdentityService) Refresh(ctx context.Context, refreshToken string, work
 	return response, issue, err
 }
 
-func (s *IdentityService) Logout(ctx context.Context, refreshToken string, workspaceID uuid.UUID) error {
+func (s *IdentityService) Logout(ctx context.Context, refreshToken string) error {
 	if strings.TrimSpace(refreshToken) == "" {
 		return nil
 	}
-	sessionID, err := s.repository.RevokeRefreshSession(database.WithWorkspaceID(ctx, workspaceID), workspaceID, refreshToken)
+	sessionID, err := s.repository.RevokeRefreshSession(ctx, refreshToken)
 	if errors.Is(err, ErrRefreshInvalid) {
 		return nil
 	}
@@ -146,15 +146,12 @@ func (s *IdentityService) Logout(ctx context.Context, refreshToken string, works
 	return nil
 }
 
-func (s *IdentityService) Authenticate(ctx context.Context, rawAccessToken string, workspaceID uuid.UUID) (Principal, error) {
+func (s *IdentityService) Authenticate(ctx context.Context, rawAccessToken string) (Principal, error) {
 	claims, err := s.jwt.Parse(rawAccessToken)
 	if err != nil {
 		return Principal{}, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "访问令牌无效", "刷新登录会话后重试")
 	}
 	claimWorkspace, _ := uuid.Parse(claims.WorkspaceID)
-	if workspaceID == uuid.Nil || claimWorkspace != workspaceID {
-		return Principal{}, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "访问令牌与 Workspace 不匹配", "切换到令牌所属 Workspace 后重试")
-	}
 	sessionID, _ := uuid.Parse(claims.SessionID)
 	userID, _ := uuid.Parse(claims.Subject)
 	if _, revoked, err := s.cache.IdentityGet(ctx, revokedKey(sessionID)); err != nil {
@@ -162,7 +159,7 @@ func (s *IdentityService) Authenticate(ctx context.Context, rawAccessToken strin
 	} else if revoked {
 		return Principal{}, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "登录会话已撤销", "刷新登录会话后重试")
 	}
-	principal, err := s.repository.Authenticate(database.WithWorkspaceID(ctx, workspaceID), userID, sessionID, workspaceID)
+	principal, err := s.repository.Authenticate(database.WithWorkspaceID(ctx, claimWorkspace), userID, sessionID, claimWorkspace)
 	if err != nil {
 		if apiErr := httpapi.From(err); apiErr.Status == httpapi.StatusServiceUnavailable {
 			return Principal{}, apiErr

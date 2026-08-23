@@ -4,7 +4,6 @@ import {
   ApiEnvelope,
   authRequestOptions,
   clearSession,
-  getWorkspaceId,
   isUnauthorized,
   setSession,
   type AuthData,
@@ -13,7 +12,6 @@ import {
 let refreshing: Promise<boolean> | undefined;
 
 export async function refreshSession() {
-  if (!getWorkspaceId()) return false;
   if (!refreshing) {
     refreshing = request<ApiEnvelope<AuthData>>('/api/auth/refresh', {
       method: 'POST',

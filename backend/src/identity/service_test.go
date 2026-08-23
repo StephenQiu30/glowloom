@@ -31,14 +31,13 @@ func (failingIdentityCache) IdentityCompareAndDelete(context.Context, string, st
 }
 
 func TestLoginFailsClosedWhenRedisRateLimitIsUnavailable(t *testing.T) {
-	workspaceID := uuid.New()
-	store := &contextCaptureStore{wantWorkspaceID: workspaceID}
+	store := &contextCaptureStore{}
 	manager, err := NewJWTManager(strings.Repeat("s", 32), "test", "test", time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
 	service := NewIdentityService(store, failingIdentityCache{}, manager, AuthConfig{RefreshTTL: time.Hour})
-	_, _, err = service.Login(context.Background(), "user@example.com", "a-valid-password", workspaceID, "127.0.0.1")
+	_, _, err = service.Login(context.Background(), "user@example.com", "a-valid-password", "127.0.0.1")
 	apiErr := httpapi.From(err)
 	if apiErr.Status != httpapi.StatusServiceUnavailable || apiErr.Code != httpapi.CodeDependencyUnavailable {
 		t.Fatalf("error = %#v, want dependency_unavailable/503", apiErr)

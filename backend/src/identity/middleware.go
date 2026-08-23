@@ -3,9 +3,6 @@ package identity
 import (
 	"context"
 	"net/http"
-	"strings"
-
-	"github.com/google/uuid"
 
 	"github.com/stephenqiu30/lanverse/backend/src/platform/database"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/httpapi"
@@ -21,23 +18,18 @@ func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 
 func Require(identityService *IdentityService, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, err := uuid.Parse(strings.TrimSpace(r.Header.Get("X-Workspace-Id")))
-		if err != nil || workspaceID == uuid.Nil {
-			httpapi.WriteError(w, r, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "Workspace 上下文缺失", "提供 X-Workspace-Id 后重试"))
-			return
-		}
 		rawAccessToken, ok := toolkit.BearerToken(r.Header.Get("Authorization"))
 		if !ok {
 			httpapi.WriteError(w, r, httpapi.NewError(httpapi.StatusUnauthorized, httpapi.CodeUnauthorized, "Bearer 会话缺失", "刷新登录会话后重试"))
 			return
 		}
-		workspaceContext := database.WithWorkspaceID(r.Context(), workspaceID)
-		principal, err := identityService.Authenticate(workspaceContext, rawAccessToken, workspaceID)
+		principal, err := identityService.Authenticate(r.Context(), rawAccessToken)
 		if err != nil {
 			httpapi.WriteError(w, r, err)
 			return
 		}
-		if err := identityService.AuthorizePath(workspaceContext, workspaceID, r.URL.Path); err != nil {
+		workspaceContext := database.WithWorkspaceID(r.Context(), principal.WorkspaceID)
+		if err := identityService.AuthorizePath(workspaceContext, principal.WorkspaceID, r.URL.Path); err != nil {
 			httpapi.WriteError(w, r, httpapi.NotFound("资源"))
 			return
 		}

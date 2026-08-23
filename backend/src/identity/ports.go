@@ -28,10 +28,10 @@ type LoginAccount struct {
 
 type IdentityStore interface {
 	RegisterAccount(context.Context, PersistedRegisterInput) (SessionIssue, error)
-	FindLoginAccount(context.Context, EmailAddress, uuid.UUID) (LoginAccount, error)
+	FindLoginAccount(context.Context, EmailAddress) (LoginAccount, error)
 	CreateSession(context.Context, AuthIdentity) (SessionIssue, error)
-	RotateRefreshSession(context.Context, uuid.UUID, string) (SessionIssue, error)
-	RevokeRefreshSession(context.Context, uuid.UUID, string) (uuid.UUID, error)
+	RotateRefreshSession(context.Context, string) (SessionIssue, error)
+	RevokeRefreshSession(context.Context, string) (uuid.UUID, error)
 	Authenticate(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (Principal, error)
 	AuthorizePath(context.Context, uuid.UUID, string) error
 	ListWorkspaceMembers(context.Context, uuid.UUID, WorkspaceMemberQuery) (WorkspaceMemberPage, error)

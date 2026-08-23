@@ -25,7 +25,7 @@ func (s *contextCaptureStore) RegisterAccount(context.Context, PersistedRegister
 	return SessionIssue{}, nil
 }
 
-func (s *contextCaptureStore) FindLoginAccount(context.Context, EmailAddress, uuid.UUID) (LoginAccount, error) {
+func (s *contextCaptureStore) FindLoginAccount(context.Context, EmailAddress) (LoginAccount, error) {
 	return LoginAccount{}, nil
 }
 
@@ -33,11 +33,11 @@ func (s *contextCaptureStore) CreateSession(context.Context, AuthIdentity) (Sess
 	return SessionIssue{}, nil
 }
 
-func (s *contextCaptureStore) RotateRefreshSession(context.Context, uuid.UUID, string) (SessionIssue, error) {
+func (s *contextCaptureStore) RotateRefreshSession(context.Context, string) (SessionIssue, error) {
 	return SessionIssue{}, nil
 }
 
-func (s *contextCaptureStore) RevokeRefreshSession(context.Context, uuid.UUID, string) (uuid.UUID, error) {
+func (s *contextCaptureStore) RevokeRefreshSession(context.Context, string) (uuid.UUID, error) {
 	return uuid.Nil, nil
 }
 
@@ -106,7 +106,6 @@ func TestRequirePropagatesWorkspaceContext(t *testing.T) {
 	})
 	handler := Require(service, next)
 	request := httptest.NewRequest(http.MethodGet, "/api/projects/"+uuid.NewString()+"/analysis", nil)
-	request.Header.Set("X-Workspace-Id", workspaceID.String())
 	request.Header.Set("Authorization", "Bearer "+accessToken)
 	recorder := httptest.NewRecorder()
 

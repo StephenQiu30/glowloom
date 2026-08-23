@@ -19,7 +19,6 @@ const RegisterResult: React.FC<Record<string, unknown>> = () => {
   );
 
   const email = params?.get('account') || '当前邮箱';
-  const workspaceID = params?.get('workspace');
   return (
     <Result
       className={styles.registerResult}
@@ -29,11 +28,7 @@ const RegisterResult: React.FC<Record<string, unknown>> = () => {
           <span>你的账户：{email} 注册成功</span>
         </div>
       }
-      subTitle={
-        workspaceID
-          ? `Workspace 已创建，Workspace ID：${workspaceID}。请保存该 ID，后续登录需要使用。`
-          : '账户已创建并自动登录。'
-      }
+      subTitle="账户已创建并自动登录，可直接进入管理端。"
       extra={actions}
     />
   );

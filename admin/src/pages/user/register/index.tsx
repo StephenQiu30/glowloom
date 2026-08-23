@@ -1,12 +1,13 @@
 import { LockOutlined, MailOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { LoginForm, ProFormText } from '@ant-design/pro-components';
-import { history, Link } from '@umijs/max';
+import { history, Link, useModel } from '@umijs/max';
 import { Alert, App } from 'antd';
 import React, { useState } from 'react';
 import { register } from './service';
 
 const Register: React.FC = () => {
   const { message } = App.useApp();
+  const { initialState, setInitialState } = useModel('@@initialState');
   const [error, setError] = useState('');
 
   const handleSubmit = async (values: Record<string, string>) => {
@@ -18,8 +19,12 @@ const Register: React.FC = () => {
         displayName: values.displayName,
         workspaceName: values.workspaceName,
       });
+      const userInfo = await initialState?.fetchUserInfo?.();
+      if (userInfo) {
+        setInitialState((state) => ({ ...state, currentUser: userInfo }));
+      }
       message.success('注册成功，已自动登录');
-      history.replace(`/user/register-result?account=${encodeURIComponent(auth.user.email)}&workspace=${encodeURIComponent(auth.workspace.id)}`);
+      history.replace(`/user/register-result?account=${encodeURIComponent(auth.user.email)}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '注册失败，请重试');
     }

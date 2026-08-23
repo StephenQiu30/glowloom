@@ -22,7 +22,6 @@ export type ApiEnvelope<T> = {
   data: T;
 };
 
-const workspaceStorageKey = 'lanverse.workspace_id';
 let accessToken: string | undefined;
 let currentAuth: AuthData | undefined;
 
@@ -34,25 +33,14 @@ export function getSessionAuth() {
   return currentAuth;
 }
 
-export function getWorkspaceId() {
-  if (typeof window === 'undefined') return undefined;
-  return window.localStorage.getItem(workspaceStorageKey) || undefined;
-}
-
 export function setSession(auth: AuthData) {
   accessToken = auth.access_token;
   currentAuth = auth;
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(workspaceStorageKey, auth.workspace.id);
-  }
 }
 
 export function clearSession() {
   accessToken = undefined;
   currentAuth = undefined;
-  if (typeof window !== 'undefined') {
-    window.localStorage.removeItem(workspaceStorageKey);
-  }
 }
 
 export function authRequestOptions(options: RequestOptions = {}): RequestOptions {
@@ -60,9 +48,7 @@ export function authRequestOptions(options: RequestOptions = {}): RequestOptions
     ...((options.headers || {}) as Record<string, string>),
   };
   const token = getAccessToken();
-  const workspaceId = getWorkspaceId();
   if (token) headers.Authorization = `Bearer ${token}`;
-  if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
   return {
     ...options,
     credentials: 'include',

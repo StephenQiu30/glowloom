@@ -1,7 +1,6 @@
 import { request } from '@umijs/max';
 import {
   clearSession,
-  getWorkspaceId,
   setSession,
   type ApiEnvelope,
   type AuthData,
@@ -11,16 +10,9 @@ export async function login(
   body: API.LoginParams,
   options?: { [key: string]: unknown },
 ) {
-  const workspaceId = body.workspaceId || getWorkspaceId();
-  if (!workspaceId) {
-    throw new Error('请先填写 Workspace ID，或先完成注册');
-  }
   const response = await request<ApiEnvelope<AuthData>>('/api/auth/login', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Workspace-Id': workspaceId,
-    },
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     data: { email: body.email, password: body.password },
     ...(options || {}),
@@ -34,9 +26,6 @@ export async function outLogin() {
     await request('/api/auth/logout', {
       method: 'POST',
       credentials: 'include',
-      headers: {
-        'X-Workspace-Id': getWorkspaceId() || '',
-      },
     });
   } finally {
     clearSession();

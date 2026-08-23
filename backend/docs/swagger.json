@@ -30,13 +30,6 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Workspace UUID",
-                        "name": "X-Workspace-Id",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
                         "description": "按邮箱或显示名搜索",
                         "name": "search",
                         "in": "query"
@@ -91,13 +84,6 @@
                 "summary": "修改 Workspace 用户",
                 "operationId": "admin_update_member",
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace UUID",
-                        "name": "X-Workspace-Id",
-                        "in": "header",
-                        "required": true
-                    },
                     {
                         "type": "string",
                         "description": "Membership UUID",
@@ -292,13 +278,6 @@
                 "operationId": "auth_login",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Workspace UUID",
-                        "name": "X-Workspace-Id",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
                         "description": "登录参数",
                         "name": "request",
                         "in": "body",
@@ -337,15 +316,6 @@
                 ],
                 "summary": "退出登录",
                 "operationId": "auth_logout",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace UUID",
-                        "name": "X-Workspace-Id",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "204": {
                         "description": "No Content"
@@ -368,15 +338,6 @@
                 ],
                 "summary": "获取当前身份",
                 "operationId": "auth_me",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace UUID",
-                        "name": "X-Workspace-Id",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -408,15 +369,6 @@
                 ],
                 "summary": "无感刷新登录会话",
                 "operationId": "auth_refresh",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace UUID",
-                        "name": "X-Workspace-Id",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",

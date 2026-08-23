@@ -37,7 +37,6 @@ type updateMemberRequest struct {
 // @Tags admin
 // @ID admin_list_members
 // @Produce json
-// @Param X-Workspace-Id header string true "Workspace UUID"
 // @Param search query string false "按邮箱或显示名搜索"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(20)
@@ -72,7 +71,6 @@ func (h *IdentityAdminController) listMembers(w http.ResponseWriter, r *http.Req
 // @ID admin_update_member
 // @Accept json
 // @Produce json
-// @Param X-Workspace-Id header string true "Workspace UUID"
 // @Param membership_id path string true "Membership UUID"
 // @Param request body updateMemberRequest true "角色或状态"
 // @Security BearerAccessToken

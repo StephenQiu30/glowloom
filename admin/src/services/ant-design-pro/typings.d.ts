@@ -29,7 +29,6 @@ declare namespace API {
 
   type LoginParams = {
     email?: string;
-    workspaceId?: string;
     password?: string;
     autoLogin?: boolean;
   };

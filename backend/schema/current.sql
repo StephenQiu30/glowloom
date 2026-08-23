@@ -202,6 +202,59 @@ ALTER TABLE iam_sessions ADD COLUMN IF NOT EXISTS last_used_at timestamptz;
 CREATE UNIQUE INDEX IF NOT EXISTS iam_users_email_unique_idx ON iam_users(email) WHERE email IS NOT NULL;
 CREATE INDEX IF NOT EXISTS iam_sessions_family_idx ON iam_sessions(family_id, revoked_at, expires_at);
 
+-- Normalize legacy role rows before enforcing the current three-role contract.
+-- Existing development databases may still contain owner/operator/producer/reviewer;
+-- owner remains an administrator and every other legacy membership becomes user.
+ALTER TABLE iam_roles ADD COLUMN IF NOT EXISTS is_system boolean NOT NULL DEFAULT false;
+DO $$
+DECLARE
+    constraint_name text;
+    admin_role_id uuid;
+    user_role_id uuid;
+    ban_role_id uuid;
+BEGIN
+    FOR constraint_name IN
+        SELECT conname
+        FROM pg_constraint
+        WHERE conrelid = 'iam_roles'::regclass AND contype = 'c'
+    LOOP
+        EXECUTE format('ALTER TABLE iam_roles DROP CONSTRAINT %I', constraint_name);
+    END LOOP;
+
+    INSERT INTO iam_roles (code, scope, is_system) VALUES
+        ('admin', 'workspace', true),
+        ('user', 'workspace', true),
+        ('ban', 'workspace', true)
+    ON CONFLICT (code) DO UPDATE
+        SET scope = EXCLUDED.scope, is_system = EXCLUDED.is_system;
+
+    SELECT id INTO admin_role_id FROM iam_roles WHERE code = 'admin';
+    SELECT id INTO user_role_id FROM iam_roles WHERE code = 'user';
+    SELECT id INTO ban_role_id FROM iam_roles WHERE code = 'ban';
+
+    UPDATE iam_memberships AS memberships
+    SET role_id = CASE WHEN legacy.code = 'owner' THEN admin_role_id ELSE user_role_id END
+    FROM iam_roles AS legacy
+    WHERE memberships.role_id = legacy.id
+      AND legacy.code NOT IN ('admin', 'user', 'ban');
+
+    UPDATE iam_project_grants AS grants
+    SET role_id = user_role_id
+    FROM iam_roles AS legacy
+    WHERE grants.role_id = legacy.id
+      AND legacy.code NOT IN ('admin', 'user', 'ban');
+
+    DELETE FROM iam_roles
+    WHERE code NOT IN ('admin', 'user', 'ban');
+
+    IF admin_role_id IS NULL OR user_role_id IS NULL OR ban_role_id IS NULL THEN
+        RAISE EXCEPTION 'current identity roles were not seeded';
+    END IF;
+END $$;
+
+ALTER TABLE iam_roles ADD CONSTRAINT iam_roles_code_check CHECK (code IN ('admin', 'user', 'ban'));
+ALTER TABLE iam_roles ADD CONSTRAINT iam_roles_scope_check CHECK (scope IN ('workspace'));
+
 CREATE TABLE IF NOT EXISTS iam_service_identities (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id uuid NOT NULL REFERENCES workspaces(id),
@@ -748,12 +801,6 @@ CREATE INDEX IF NOT EXISTS ix_qa_issues_status ON qa_issues(status, severity);
 CREATE INDEX IF NOT EXISTS ix_usage_entries_project_time ON usage_entries(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_review_packages_project ON review_packages(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_delivery_builds_project ON delivery_builds(project_id, created_at DESC);
-
-INSERT INTO iam_roles (code, scope, is_system) VALUES
-    ('admin', 'workspace', true),
-    ('user', 'workspace', true),
-    ('ban', 'workspace', true)
-ON CONFLICT (code) DO NOTHING;
 
 -- Defense-in-depth tenant policies. Runtime business connections set
 -- `app.workspace_id` inside each transaction. Tables whose tenant is reached
