@@ -1,7 +1,7 @@
 # 剧本解析与批准物化真实闭环
 
 - Evidence ID：`EV-A-20260822-script-analysis-gorm-e2e`
-- 结论：`passed`（仅覆盖本证据列出的目标场景，不代表切片 A 全部验收通过）
+- 结论：`superseded`（Schema、身份会话和前端合同已变化，由 [`EV-A-20260823-script-analysis-canonical-browser`](./EV-A-20260823-script-analysis-canonical-browser.md) 替代）
 - 执行时间与时区：2026-08-22，Asia/Shanghai
 - 执行人 / 复核人：Codex / 待复核
 - Git commit / 制品 digest：当前工作区，尚未提交
