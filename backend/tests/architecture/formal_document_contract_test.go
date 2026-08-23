@@ -147,6 +147,38 @@ func TestBackendProductionSourceContainsNoTests(t *testing.T) {
 	}
 }
 
+func TestApplicationProductionSourceContainsNoTests(t *testing.T) {
+	t.Parallel()
+
+	repository := repositoryRoot(t)
+	productionRoots := []string{
+		filepath.Join(repository, "admin", "src"),
+		filepath.Join(repository, "agent", "src"),
+		filepath.Join(repository, "frontend", "src"),
+	}
+	var testFiles []string
+	for _, sourceRoot := range productionRoots {
+		err := filepath.WalkDir(sourceRoot, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			name := entry.Name()
+			if !entry.IsDir() && (strings.Contains(name, ".test.") || strings.Contains(name, ".spec.") || strings.HasSuffix(name, "_test.py") || strings.HasSuffix(name, ".snap")) {
+				testFiles = append(testFiles, relativeToRepository(t, path))
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk application production source %s: %v", sourceRoot, err)
+		}
+	}
+
+	sort.Strings(testFiles)
+	for _, testFile := range testFiles {
+		t.Errorf("application production source contains test file %s", testFile)
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 
