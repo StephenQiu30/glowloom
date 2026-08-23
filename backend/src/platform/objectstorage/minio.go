@@ -53,7 +53,12 @@ func NewMinIOObjectStore(ctx context.Context) (*MinIOObjectStore, error) {
 	}
 	if !exists {
 		if err := client.MakeBucket(ctx, store.bucket, minio.MakeBucketOptions{}); err != nil {
-			return nil, fmt.Errorf("create minio bucket: %w", err)
+			// API and workers are expected to start concurrently. Another role may
+			// create the same bucket after BucketExists and before MakeBucket; only
+			// the explicit same-owner result is safe to treat as success.
+			if minio.ToErrorResponse(err).Code != minio.BucketAlreadyOwnedByYou {
+				return nil, fmt.Errorf("create minio bucket: %w", err)
+			}
 		}
 	}
 	// Every object reference records an exact version. Enabling versioning is
