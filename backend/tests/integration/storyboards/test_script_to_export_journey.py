@@ -10,9 +10,8 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from uuid6 import uuid7
 
-from app import media_worker
+from app import io_worker, media_worker
 from app.modules.identity.models import Membership
 from app.modules.media import MediaProbePort, MediaProbeResult
 from app.modules.media.models import MediaVersion
@@ -23,8 +22,9 @@ from app.modules.media.storage import (
 )
 from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
-from app.modules.scripts.models import Dialogue, Scene, ScriptVersion
-from app.modules.scripts.narratives.models import NarrativeUnit, NarrativeUnitVersion
+from app.modules.scripts.extractions.schemas import ScriptExtractionResult
+from app.modules.scripts.models import ExtractionBatch
+from app.modules.scripts.narratives.parser import parse_narrative_units
 from app.modules.storyboards.drafts import DraftProviderResult, record_draft_result
 from app.modules.storyboards.exports.models import StoryboardExportManifest
 from tests.integration.storyboards.test_storyboards_api import (
@@ -208,61 +208,181 @@ async def _materialize_first_episode(
     )
 
 
-async def _confirm_narrative_sources(
+class JourneyScriptExtractor:
+    def __init__(self) -> None:
+        self.inputs: list[str] = []
+
+    async def extract(
+        self,
+        script_body: str,
+        *,
+        trace_id: str | None = None,
+    ) -> ScriptExtractionResult:
+        del trace_id
+        self.inputs.append(script_body)
+        dialogue_units = [
+            unit for unit in parse_narrative_units(script_body) if unit.kind == "dialogue"
+        ]
+        if not dialogue_units:
+            raise AssertionError("journey fixture must contain dialogue")
+        dialogue_candidates: list[dict[str, object]] = []
+        speakers: list[str] = []
+        for position, unit in enumerate(dialogue_units, start=1):
+            separator = "：" if "：" in unit.exact_text else ":"
+            speaker, dialogue_text = unit.exact_text.split(separator, maxsplit=1)
+            speakers.append(speaker.strip())
+            dialogue_candidates.append(
+                {
+                    "candidate_key": f"journey-dialogue-{position}",
+                    "source_range": {
+                        "start": unit.source_start,
+                        "end": unit.source_end,
+                    },
+                    "proposal": {
+                        "kind": "dialogue",
+                        "scene_candidate_key": "journey-scene",
+                        "speaker_candidate": speaker.strip(),
+                        "dialogue_kind": "spoken",
+                        "text": dialogue_text.strip(),
+                    },
+                }
+            )
+        first_dialogue = dialogue_units[0]
+        first_speaker = speakers[0]
+        return ScriptExtractionResult.model_validate(
+            {
+                "candidates": [
+                    {
+                        "candidate_key": "journey-scene",
+                        "source_range": {"start": 0, "end": len(script_body)},
+                        "proposal": {
+                            "kind": "scene",
+                            "heading": "雾港控制室",
+                            "location": "雾港控制室",
+                            "time_of_day": "夜",
+                            "summary": "警报触发后，角色开始处理港口危机。",
+                            "episode_number": 1,
+                            "scene_number": 1,
+                            "characters": list(dict.fromkeys(speakers)),
+                            "production_tasks": [
+                                {
+                                    "task_type": "shot_breakdown",
+                                    "title": "拆解雾港危机镜头",
+                                    "objective": "生成可执行的逐镜分镜候选。",
+                                    "priority": "high",
+                                }
+                            ],
+                        },
+                    },
+                    *dialogue_candidates,
+                    {
+                        "candidate_key": "journey-character",
+                        "source_range": {
+                            "start": first_dialogue.source_start,
+                            "end": first_dialogue.source_start + len(first_speaker),
+                        },
+                        "proposal": {
+                            "kind": "asset",
+                            "asset_kind": "character",
+                            "name": first_speaker,
+                            "description": "雾港危机现场的核心角色。",
+                            "first_seen_episode": 1,
+                            "episode_numbers": [1],
+                        },
+                    },
+                    {
+                        "candidate_key": "journey-shot",
+                        "source_range": {"start": 0, "end": len(script_body)},
+                        "proposal": {
+                            "kind": "shot",
+                            "scene_candidate_key": "journey-scene",
+                            "title": "雾港警报",
+                            "purpose": "建立本集危机并推进角色行动。",
+                            "shot_type": "wide",
+                            "asset_names": [first_speaker],
+                        },
+                    },
+                ]
+            }
+        )
+
+
+async def _extract_and_confirm_narrative_sources(
+    client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
+    headers: dict[str, str],
     refs: dict[str, UUID],
 ) -> tuple[UUID, list[UUID]]:
-    async with session_factory() as session, session.begin():
-        version = await session.get(ScriptVersion, refs["script_version_id"])
-        assert version is not None
-        rows = list(
-            await session.execute(
-                select(NarrativeUnitVersion, NarrativeUnit)
-                .join(NarrativeUnit, NarrativeUnit.id == NarrativeUnitVersion.unit_id)
-                .where(NarrativeUnitVersion.script_version_id == refs["script_version_id"])
-                .order_by(NarrativeUnitVersion.position)
+    async with session_factory() as session:
+        batch = await session.scalar(
+            select(ExtractionBatch).where(
+                ExtractionBatch.script_version_id == refs["script_version_id"]
             )
         )
-        assert rows
-        scene = Scene(
-            workspace_id=refs["workspace_id"],
-            script_version_id=version.id,
-            position=1,
-            heading="第一集确认场景",
-            location="雾港控制室",
-            time_of_day="夜",
-            summary="黄金剧第一集确认结构",
-            source_start=0,
-            source_end=len(version.body),
+        assert batch is not None and batch.task_id is not None
+        event = await session.scalar(
+            select(OutboxEvent).where(OutboxEvent.aggregate_id == batch.task_id)
         )
-        session.add(scene)
-        await session.flush()
-        dialogue_ids: list[UUID] = []
-        for item, unit in rows:
-            item.source_scene_id = scene.id
-            if unit.kind != "dialogue":
-                continue
-            dialogue = Dialogue(
-                workspace_id=refs["workspace_id"],
-                scene_id=scene.id,
-                position=len(dialogue_ids) + 1,
-                speaker_candidate="黄金剧角色",
-                dialogue_kind="spoken",
-                text=item.exact_text,
-                source_start=item.source_start,
-                source_end=item.source_end,
-            )
-            session.add(dialogue)
-            await session.flush()
-            item.source_dialogue_id = dialogue.id
-            dialogue_ids.append(dialogue.id)
-        version.structure_summary = {
-            **version.structure_summary,
-            "confirmation_batch_id": str(uuid7()),
-            "scene_count": 1,
-            "dialogue_count": len(dialogue_ids),
-        }
-        return scene.id, dialogue_ids
+        assert event is not None
+
+    extractor = JourneyScriptExtractor()
+    message = RecordedDelivery(envelope_from_event(event).model_dump_json().encode())
+    assert (
+        await io_worker.process_incoming_message(
+            message,
+            session_factory,
+            extractor=extractor,
+        )
+        == "completed"
+    )
+    assert len(extractor.inputs) == 1
+
+    listed = await client.get(
+        f"/api/v1/extraction-batches/{batch.id}/candidates",
+        headers=headers,
+        params={"limit": 100},
+    )
+    assert listed.status_code == 200
+    candidates = cast(list[dict[str, Any]], listed.json()["data"]["items"])
+    assert {item["kind"] for item in candidates} == {"scene", "dialogue", "asset", "shot"}
+    scene_candidate = next(item for item in candidates if item["kind"] == "scene")
+    assert scene_candidate["proposal"]["production_tasks"][0]["task_type"] == "shot_breakdown"
+    character_candidate = next(item for item in candidates if item["kind"] == "asset")
+    assert character_candidate["proposal"]["episode_numbers"] == [1]
+    for candidate in candidates:
+        if candidate["kind"] not in {"scene", "dialogue"}:
+            continue
+        decided = await client.post(
+            f"/api/v1/extraction-candidates/{candidate['id']}/decisions",
+            headers=headers,
+            json={
+                "decision_key": f"journey-accept:{candidate['id']}",
+                "expected_revision": candidate["revision"],
+                "decision": {"action": "accept_new"},
+            },
+        )
+        assert decided.status_code == 201
+
+    confirmed = await client.post(
+        f"/api/v1/extraction-batches/{batch.id}/confirm-structure",
+        headers=headers,
+    )
+    assert confirmed.status_code == 201
+    structure = confirmed.json()["data"]
+    confirmed_version_id = UUID(structure["confirmed_version"]["id"])
+    switched = await client.post(
+        f"/api/v1/episodes/{refs['episode_id']}/current-script-version",
+        headers=headers,
+        json={
+            "version_id": str(confirmed_version_id),
+            "expected_current_version_id": str(refs["script_version_id"]),
+        },
+    )
+    assert switched.status_code == 200
+    refs["script_version_id"] = confirmed_version_id
+    scenes = cast(list[dict[str, Any]], structure["scenes"])
+    assert len(scenes) == 1
+    return UUID(scenes[0]["id"]), [UUID(dialogue["id"]) for dialogue in scenes[0]["dialogues"]]
 
 
 def _draft_result(
@@ -496,8 +616,10 @@ async def test_whole_script_reaches_stable_export_after_restart(
         client,
         session_factory,
     )
-    scene_id, _dialogue_ids = await _confirm_narrative_sources(
+    scene_id, _dialogue_ids = await _extract_and_confirm_narrative_sources(
+        client,
         session_factory,
+        headers,
         refs,
     )
     asset_version, _consent = await create_ready_location_asset(
@@ -590,7 +712,14 @@ async def test_whole_script_reaches_stable_export_after_restart(
     assert interrupted.nack_requeues == [True]
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(StoryboardExportManifest)) == 1
-        assert await session.scalar(select(func.count()).select_from(InboxDelivery)) == 1
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(InboxDelivery)
+                .where(InboxDelivery.event_type == "storyboard_export.requested")
+            )
+            == 1
+        )
 
     restarted = RecordedDelivery(second_body)
     assert (

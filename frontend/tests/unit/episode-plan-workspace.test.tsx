@@ -44,6 +44,9 @@ const revisionId = "019ff900-a000-7000-8000-000000000001";
 const planId = "019ff900-a000-7000-8000-000000000002";
 const proposalOneId = "019ff900-a000-7000-8000-000000000003";
 const proposalTwoId = "019ff900-a000-7000-8000-000000000004";
+const commitId = "019ff900-a000-7000-8000-000000000030";
+const episodeOneId = "019ff900-a000-7000-8000-000000000031";
+const episodeTwoId = "019ff900-a000-7000-8000-000000000032";
 const source = "第一集\n场景1：控制室，夜\n甲：开始。\n第二集\n场景2：港口，雨\n乙：继续。";
 
 const analysis = {
@@ -171,6 +174,25 @@ function planDetail(
   };
 }
 
+function commitSegments(published: boolean): API.EpisodeSegmentOriginResponse[] {
+  return [episodeOneId, episodeTwoId].map((episodeId, index) => ({
+    id: `019ff900-a000-7000-8000-00000000004${index}`,
+    import_commit_id: commitId,
+    proposal_id: index === 0 ? proposalOneId : proposalTwoId,
+    document_revision_id: revisionId,
+    episode_id: episodeId,
+    source_id: `019ff900-a000-7000-8000-00000000005${index}`,
+    draft_version_id: `019ff900-a000-7000-8000-00000000006${index}`,
+    published_version_id: published
+      ? `019ff900-a000-7000-8000-00000000007${index}`
+      : null,
+    position: index + 1,
+    source_start: index === 0 ? 0 : source.indexOf("第二集"),
+    source_end: index === 0 ? source.indexOf("第二集") : source.length,
+    source_hash: (index === 0 ? "1" : "2").repeat(64),
+  }));
+}
+
 describe("分集计划向导", () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -186,7 +208,7 @@ describe("分集计划向导", () => {
     apiMocks.materializePlan.mockResolvedValue({
       data: {
         commit: {
-          id: "019ff900-a000-7000-8000-000000000030",
+          id: commitId,
           workspace_id: analysis.revision.workspace_id,
           project_id: analysis.document.project_id,
           plan_id: planId,
@@ -201,13 +223,13 @@ describe("分集计划向导", () => {
           created_at: "2026-08-13T04:02:00Z",
           updated_at: "2026-08-13T04:02:00Z",
         },
-        segments: [],
+        segments: commitSegments(false),
       } satisfies API.ImportCommitDetailResponse,
     });
     apiMocks.publishCommit.mockResolvedValue({
       data: {
         commit: {
-          id: "019ff900-a000-7000-8000-000000000030",
+          id: commitId,
           workspace_id: analysis.revision.workspace_id,
           project_id: analysis.document.project_id,
           plan_id: planId,
@@ -222,7 +244,7 @@ describe("分集计划向导", () => {
           created_at: "2026-08-13T04:02:00Z",
           updated_at: "2026-08-13T04:03:00Z",
         },
-        segments: [],
+        segments: commitSegments(true),
       } satisfies API.ImportCommitDetailResponse,
     });
   });
@@ -280,7 +302,10 @@ describe("分集计划向导", () => {
       expect.objectContaining({ expected_revision: 2 }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "2 集剧本已批量发布",
+      "2 集剧本已批量发布，全部结构 Skill 任务已自动创建",
     );
+    expect(
+      screen.getByRole("link", { name: "审阅第 1 集结构" }),
+    ).toHaveAttribute("href", `/studio/${episodeOneId}/script`);
   });
 });

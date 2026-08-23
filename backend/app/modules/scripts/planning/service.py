@@ -32,6 +32,7 @@ from app.modules.projects import (
 )
 from app.modules.projects.contracts import MaterializedEpisodeReference
 from app.modules.scripts.documents.schemas import NarrativeBlockResponse
+from app.modules.scripts.extractions.schemas import ScriptExtractionRequest
 from app.modules.scripts.models import (
     DocumentRevision,
     EpisodePlan,
@@ -1530,6 +1531,22 @@ async def publish_import_commit(
                     published_by_episode = {item.episode_id: item for item in batch.items}
                     for origin in origins:
                         origin.published_version_id = versions_by_origin[origin.id].id
+                    from app.modules.scripts.extractions.service import enqueue_extraction
+
+                    for origin in origins:
+                        published_version = versions_by_origin[origin.id]
+                        await enqueue_extraction(
+                            session,
+                            claims,
+                            published_version.id,
+                            ScriptExtractionRequest(
+                                scope="full",
+                                idempotency_key=(
+                                    f"import-commit:{commit.id}:extraction:{origin.id}"
+                                ),
+                            ),
+                            trace_id=trace_id,
+                        )
                     commit.result_snapshot = {
                         **commit.result_snapshot,
                         "published": [

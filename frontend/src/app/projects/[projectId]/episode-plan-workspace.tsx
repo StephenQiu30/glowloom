@@ -8,6 +8,7 @@ import {
   Scissors,
   Sparkles,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -316,7 +317,9 @@ export function EpisodePlanWorkspace({
     );
     if (published) {
       setCommit(published);
-      setNotice(`${plan.proposals.length} 集剧本已批量发布，可以进入单集工作台。`);
+      setNotice(
+        `${plan.proposals.length} 集剧本已批量发布，全部结构 Skill 任务已自动创建。`,
+      );
     }
   }
 
@@ -534,6 +537,26 @@ export function EpisodePlanWorkspace({
               ) : null}
               {busy ? <LoaderCircle className="size-5 animate-spin self-center" aria-label="正在执行分集操作" /> : null}
             </div>
+
+            {commit?.commit.status === "published" ? (
+              <div className="grid gap-3 bg-muted/45 p-5">
+                <div>
+                  <p className="font-medium">逐集结构解析已启动</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    每一集都已进入场景、人物、制作任务与镜头候选提取；进入剧本工作台审阅 Skill 结果。
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {commit.segments.map((segment) => (
+                    <Button asChild key={segment.id} size="sm" variant="outline">
+                      <Link href={`/studio/${segment.episode_id}/script`}>
+                        审阅第 {segment.position} 集结构
+                      </Link>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </>
         )}
       </CardContent>

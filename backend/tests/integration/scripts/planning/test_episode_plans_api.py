@@ -24,6 +24,7 @@ from app.modules.scripts.models import (
     EpisodePlan,
     EpisodeProposal,
     EpisodeSegmentOrigin,
+    ExtractionBatch,
     ImportCommit,
     ScriptSource,
     ScriptVersion,
@@ -426,6 +427,21 @@ async def test_confirm_materialize_and_publish_are_concurrent_idempotent_batches
         assert await session.scalar(select(func.count()).select_from(Episode)) == 5
         assert await session.scalar(select(func.count()).select_from(ScriptSource)) == 5
         assert await session.scalar(select(func.count()).select_from(ScriptVersion)) == 10
+        assert await session.scalar(select(func.count()).select_from(ExtractionBatch)) == 5
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(Task).where(Task.task_type == "script_extraction")
+            )
+            == 5
+        )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(OutboxEvent)
+                .where(OutboxEvent.event_type == "script_extraction.requested")
+            )
+            == 5
+        )
         assert await session.scalar(select(func.count()).select_from(NarrativeStructure)) == 5
         assert (
             await session.scalar(select(func.count()).select_from(NarrativeImpactAssessment)) == 5
