@@ -71,6 +71,6 @@ agent-browser --session lanverse-storage close
 ## 偏差、残余风险和后续动作
 
 - 本证据没有实现或验收外部分享、受控下载网关、短时签名媒体访问、Range、撤销传播、LegalHold 和 retention；这些 M09/M13/M14 场景继续为 `not_run`。
-- 当前只恢复 URL 指向的单个最近工作流；正式项目列表、多个项目切换、草稿/失败 Operation 中心和跨设备继续工作仍未实现，必须在 A9/A10 前验收。
+- 本次执行时只恢复 URL 指向的单个最近工作流；正式项目列表和无预存 URL 的跨设备继续已由 [`EV-A-20260823-project-list-browser`](./EV-A-20260823-project-list-browser.md) 后续验证，多个项目复杂切换、草稿/失败 Operation 中心仍须在 A9/A10 前验收。
 - 只执行了顺序重复 Fixture 命令和浏览器进程重启；Kafka 重平衡、并发双请求及 MinIO 中断的完整 A8/A10 故障矩阵尚未通过。
 - 数据集不满足完整 DS-A-SCRIPT/DS-A-MEDIA，PRD-A-AC-007/008 和切片 A 不能据此标记为 passed/verified。

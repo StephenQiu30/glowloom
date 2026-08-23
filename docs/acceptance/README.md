@@ -6,7 +6,7 @@
 
 ## 1. 当前结论
 
-当前已有针对 DOCX 原件保全、确定性 ParseReport、Canonical GORM 物化、当前 multipart/OpenAPI 前端生成链和 production 浏览器闭环的目标场景证据，见 [`EV-A-20260823-docx-source-import-browser.md`](./EV-A-20260823-docx-source-import-browser.md)；逻辑 Artifact/精确对象版本分离、Worker 版本读取和 Fixture 重复命令证据见 [`EV-A-20260823-versioned-object-storage-browser.md`](./EV-A-20260823-versioned-object-storage-browser.md)；成员角色变更、事务内审计、刷新会话和管理页 production 可访问性证据见 [`EV-A-20260823-membership-audit-browser.md`](./EV-A-20260823-membership-audit-browser.md)。此前纯文本入口证据已因公共上传合同被替换而失效，只保留历史审计。这不等于 M01、切片 A 或全量 PRD 已通过；其余 PRD 验收条件和 Requirement 中的 `AC-SYS-*`、`AC-IAM-*`、`AC-PRJ-*`、`AC-NAR-*`、`AC-KNO-*`、`AC-SHT-*`、`AC-AIC-*`、`AC-PLN-*`、`AC-EXE-*`、`AC-MED-*`、`AC-QAR-*`、`AC-USG-*`、`AC-REV-*`、`AC-DLV-*`、`AC-GOV-*`、`AC-INT-*` 仍按场景保持 `not_run` 或未实现。
+当前已有针对 DOCX 原件保全、确定性 ParseReport、Canonical GORM 物化、当前 multipart/OpenAPI 前端生成链和 production 浏览器闭环的目标场景证据，见 [`EV-A-20260823-docx-source-import-browser.md`](./EV-A-20260823-docx-source-import-browser.md)；逻辑 Artifact/精确对象版本分离、Worker 版本读取和 Fixture 重复命令证据见 [`EV-A-20260823-versioned-object-storage-browser.md`](./EV-A-20260823-versioned-object-storage-browser.md)；成员角色变更、事务内审计、刷新会话和管理页 production 可访问性证据见 [`EV-A-20260823-membership-audit-browser.md`](./EV-A-20260823-membership-audit-browser.md)；正式项目列表、无预存 URL 跨设备恢复和多角色并发存储启动证据见 [`EV-A-20260823-project-list-browser.md`](./EV-A-20260823-project-list-browser.md)。此前纯文本入口证据已因公共上传合同被替换而失效，只保留历史审计。这不等于 M01、M02、切片 A 或全量 PRD 已通过；其余 PRD 验收条件和 Requirement 中的 `AC-SYS-*`、`AC-IAM-*`、`AC-PRJ-*`、`AC-NAR-*`、`AC-KNO-*`、`AC-SHT-*`、`AC-AIC-*`、`AC-PLN-*`、`AC-EXE-*`、`AC-MED-*`、`AC-QAR-*`、`AC-USG-*`、`AC-REV-*`、`AC-DLV-*`、`AC-GOV-*`、`AC-INT-*` 仍按场景保持 `not_run` 或未实现。
 
 本文件定义判定规则、固定数据集、全局门禁和证据格式。实际实现并执行后，才为具体场景创建 Evidence 文件；当前不预建空证据文档。
 
