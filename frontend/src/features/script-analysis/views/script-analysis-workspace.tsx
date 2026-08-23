@@ -43,6 +43,14 @@ function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function userFacingError(cause: unknown, fallback: string) {
+  if (!(cause instanceof Error)) return fallback;
+  if (cause instanceof ApiClientError && cause.nextAction) {
+    return `${cause.message}。下一步：${cause.nextAction}`;
+  }
+  return cause.message;
+}
+
 let restorePromise: ReturnType<typeof authRefresh> | null = null;
 
 function restoreAuthSession() {
@@ -66,6 +74,7 @@ export function ScriptAnalysisWorkspace() {
   const [workspace, setWorkspace] = useState<AuthenticatedWorkspace | null>(null);
   const [scriptName, setScriptName] = useState("首轮试点剧本");
   const [content, setContent] = useState(fixtureScript);
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
   const [revisionID, setRevisionID] = useState<string | null>(null);
@@ -122,7 +131,7 @@ export function ScriptAnalysisWorkspace() {
       resetSession("登录会话已失效，请重新登录。");
       return;
     }
-    setError(cause instanceof Error ? cause.message : fallback);
+    setError(userFacingError(cause, fallback));
   }
 
   async function authenticate() {
@@ -145,7 +154,7 @@ export function ScriptAnalysisWorkspace() {
       setPassword("");
       setWorkspace({ id: identity.workspace.id, name: identity.workspace.name ?? "当前工作区" });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "认证失败，请检查邮箱和密码。");
+      setError(userFacingError(cause, "认证失败，请检查邮箱和密码。"));
     } finally {
       setBusy(false);
     }
@@ -158,7 +167,7 @@ export function ScriptAnalysisWorkspace() {
       await authLogout();
       resetSession(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "退出失败，请重试。");
+      setError(userFacingError(cause, "退出失败，请重试。"));
     } finally {
       setBusy(false);
     }
@@ -177,10 +186,12 @@ export function ScriptAnalysisWorkspace() {
       if (!project.data?.id) {
         throw new Error("创建项目后未返回项目 ID。");
       }
-      const revision = await scriptRevisionCreate(
-        { projectID: project.data.id },
-        { name: scriptName.trim() || "未命名剧本", content },
+      const source = sourceFile ?? new File(
+        [content],
+        `${scriptName.trim() || "未命名剧本"}.txt`,
+        { type: "text/plain;charset=utf-8" },
       );
+      const revision = await scriptRevisionCreate({ projectID: project.data.id }, {}, source);
       if (!revision.data?.id) {
         throw new Error("创建剧本版本后未返回版本 ID。");
       }
@@ -311,16 +322,35 @@ export function ScriptAnalysisWorkspace() {
           <section className="card" aria-labelledby="source-title">
             <h2 id="source-title">1. 导入整本剧本</h2>
             <div className="field">
-              <label htmlFor="script-name">剧本名称</label>
-              <input id="script-name" value={scriptName} onChange={(event) => setScriptName(event.target.value)} />
+              <label htmlFor="script-file">剧本文件</label>
+              <input
+                id="script-file"
+                type="file"
+                accept=".docx,.md,.markdown,.txt,text/markdown,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={(event) => {
+                  const nextFile = event.target.files?.item(0) ?? null;
+                  setSourceFile(nextFile);
+                  if (nextFile) setContent("");
+                }}
+              />
+              <span className="hint">支持 DOCX、Markdown 与 UTF-8 TXT；原件按原始字节计算 hash 并保全到 MinIO。</span>
             </div>
             <div className="field">
-              <label htmlFor="script-content">剧本文本</label>
-              <textarea id="script-content" value={content} onChange={(event) => setContent(event.target.value)} />
-              <span className="hint">支持当前首轮的纯文本输入；原文会计算 hash 并保全到 MinIO。</span>
+              <label htmlFor="script-name">粘贴文本名称</label>
+              <input id="script-name" value={scriptName} onChange={(event) => setScriptName(event.target.value)} disabled={sourceFile !== null} />
+              <label htmlFor="script-content">或粘贴 UTF-8 纯文本</label>
+              <textarea
+                id="script-content"
+                value={content}
+                disabled={sourceFile !== null}
+                onChange={(event) => {
+                  setSourceFile(null);
+                  setContent(event.target.value);
+                }}
+              />
             </div>
             <div className="actions">
-              <button className="primary" type="button" onClick={submitForAnalysis} disabled={busy || !content.trim()} data-testid="analyze-button">
+              <button className="primary" type="button" onClick={submitForAnalysis} disabled={busy || (!sourceFile && !content.trim())} data-testid="analyze-button">
                 {busy && phase !== "draft" ? "正在解析…" : "提交解析任务"}
               </button>
               {phase === "draft" && <button className="secondary" type="button" onClick={approve} disabled={busy} data-testid="approve-button">批准事实并物化</button>}
@@ -343,6 +373,13 @@ export function ScriptAnalysisWorkspace() {
               <div className="metric"><strong>{(analysis.episodes ?? []).reduce((total, episode) => total + (episode.scenes?.length ?? 0), 0)}</strong><span>场景</span></div>
               <div className="metric"><strong>{analysis.characters?.length ?? 0}</strong><span>人物</span></div>
               <div className="metric"><strong>{assets.length}</strong><span>生产资产</span></div>
+            </div>}
+            {analysis?.parse_report && <div className="operation" data-testid="parse-report">
+              <div>
+                <strong>{analysis.parse_report.format?.toUpperCase()} · {analysis.parse_report.paragraph_count ?? 0} 段 · {analysis.parse_report.character_count ?? 0} 字符</strong>
+                <div className="hint">Parser：{analysis.parse_report.parser_version}</div>
+              </div>
+              <span>{(analysis.parse_report.failed_scopes?.length ?? 0) === 0 ? "解析完整，无失败范围" : `${analysis.parse_report.failed_scopes?.length} 个失败范围`}</span>
             </div>}
           </section>
         </div>

@@ -36,6 +36,7 @@ declare namespace API {
     costumes: Asset[] | null;
     episodes: Episode[] | null;
     locations: Asset[] | null;
+    parse_report: ParseReport | null;
     props: Asset[] | null;
     source_hash: string | null;
   };
@@ -126,11 +127,6 @@ declare namespace API {
     prompt: string | null;
     target_id: string | null;
     target_type: string | null;
-  };
-
-  type createScriptRevisionRequest = {
-    content: string | null;
-    name: string | null;
   };
 
   type createShotsRequest = {
@@ -233,6 +229,17 @@ declare namespace API {
     operationID: string;
   };
 
+  type ParseReport = {
+    character_count: number | null;
+    failed_scopes: string[] | null;
+    format: string | null;
+    original_hash: string | null;
+    paragraph_count: number | null;
+    parser_version: string | null;
+    status: string | null;
+    text_hash: string | null;
+  };
+
   type Project = {
     created_at: string | null;
     id: string | null;
@@ -297,6 +304,7 @@ declare namespace API {
     id: string | null;
     name: string | null;
     project_id: string | null;
+    source_type: string | null;
     status: string | null;
   };
 

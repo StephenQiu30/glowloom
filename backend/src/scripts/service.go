@@ -30,11 +30,11 @@ func (s *ScriptAnalysisService) CreateProject(ctx context.Context, workspaceID u
 	return s.repository.CreateProject(ctx, workspaceID, name)
 }
 
-func (s *ScriptAnalysisService) CreateScriptRevision(ctx context.Context, projectID uuid.UUID, name, content string) (ScriptRevision, error) {
-	if name == "" {
-		return ScriptRevision{}, httpapi.Validation("剧本名称不能为空", "提供剧本名称后重试")
+func (s *ScriptAnalysisService) CreateScriptRevision(ctx context.Context, projectID uuid.UUID, upload SourceUpload) (ScriptRevision, error) {
+	if upload.FileName == "" {
+		return ScriptRevision{}, httpapi.Validation("剧本文件名不能为空", "选择 DOCX、Markdown 或 TXT 文件后重试")
 	}
-	return s.repository.CreateScriptRevision(ctx, projectID, name, content)
+	return s.repository.CreateScriptRevision(ctx, projectID, upload)
 }
 
 func (s *ScriptAnalysisService) QueueAnalysis(ctx context.Context, revisionID uuid.UUID) (Operation, error) {

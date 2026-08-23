@@ -6,19 +6,40 @@ import request, { type RequestOptions } from "@/lib/request";
 export async function scriptRevisionCreate(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.scriptRevisionCreateParams,
-  body: API.createScriptRevisionRequest,
+  body: {},
+  file?: File,
   options?: RequestOptions
 ) {
   const { projectID: param0, ...queryParams } = params;
+  const formData = new FormData();
+
+  if (file) {
+    formData.append("file", file);
+  }
+
+  Object.keys(body).forEach((ele) => {
+    const item = (body as any)[ele];
+
+    if (item !== undefined && item !== null) {
+      if (typeof item === "object" && !(item instanceof File)) {
+        if (item instanceof Array) {
+          item.forEach((f) => formData.append(ele, f || ""));
+        } else {
+          formData.append(ele, JSON.stringify(item));
+        }
+      } else {
+        formData.append(ele, item);
+      }
+    }
+  });
+
   return request<API.ScriptRevisionEnvelope>(
     `/api/projects/${param0}/script-revisions`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
       params: { ...queryParams },
-      data: body,
+      data: formData,
+      requestType: "form",
       ...(options || {}),
     }
   );

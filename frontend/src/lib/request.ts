@@ -1,6 +1,8 @@
 import axios, { type AxiosRequestConfig } from "axios";
 
-export type RequestOptions = AxiosRequestConfig;
+export type RequestOptions = AxiosRequestConfig & {
+  requestType?: "form";
+};
 
 type ErrorEnvelope = {
   error?: {
@@ -29,8 +31,9 @@ export class ApiClientError extends Error {
   readonly requestID?: string;
   readonly details?: unknown;
   readonly recoveryActions: Array<{ code: string; label: string }>;
+  readonly nextAction?: string;
 
-  constructor(message: string, code = "request_failed", status?: number, requestID?: string, recoveryActions: Array<{ code: string; label: string }> = [], details?: unknown) {
+  constructor(message: string, code = "request_failed", status?: number, requestID?: string, recoveryActions: Array<{ code: string; label: string }> = [], details?: unknown, nextAction?: string) {
     super(message);
     this.name = "ApiClientError";
     this.code = code;
@@ -38,6 +41,7 @@ export class ApiClientError extends Error {
     this.requestID = requestID;
     this.recoveryActions = recoveryActions;
     this.details = details;
+    this.nextAction = nextAction;
   }
 }
 
@@ -45,7 +49,6 @@ const client = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8686",
   timeout: 15_000,
   withCredentials: true,
-  headers: { "Content-Type": "application/json" },
 });
 
 let accessToken: string | undefined;
@@ -96,7 +99,9 @@ client.interceptors.response.use(undefined, async (cause: unknown) => {
 
 export default async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
   try {
-    const response = await client.request<T>({ ...options, url });
+    const { requestType, ...axiosOptions } = options;
+    void requestType;
+    const response = await client.request<T>({ ...axiosOptions, url });
     return response.data;
   } catch (cause: unknown) {
     if (axios.isAxiosError<ErrorEnvelope>(cause)) {
@@ -108,6 +113,7 @@ export default async function request<T>(url: string, options: RequestOptions = 
         error?.request_id,
         error?.recovery_actions,
         error?.details,
+        error?.next_action,
       );
     }
     throw cause;

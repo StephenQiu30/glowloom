@@ -71,24 +71,27 @@ func (r *ScriptRepository) CreateProject(ctx context.Context, workspaceID uuid.U
 	return Project{ID: record.ID, WorkspaceID: record.WorkspaceID, Name: record.Name, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
-func (r *ScriptRepository) CreateScriptRevision(ctx context.Context, projectID uuid.UUID, name, content string) (ScriptRevision, error) {
-	if err := ValidateSource(content); err != nil {
+func (r *ScriptRepository) CreateScriptRevision(ctx context.Context, projectID uuid.UUID, upload SourceUpload) (ScriptRevision, error) {
+	document, err := ParseSourceDocument(upload.FileName, upload.MediaType, upload.Original)
+	if err != nil {
 		return ScriptRevision{}, err
 	}
-	revisionID := uuid.New()
-	objectKey := fmt.Sprintf("sources/%s/%s.txt", projectID, revisionID)
-	if err := r.storage.Put(ctx, objectKey, []byte(content), "text/plain; charset=utf-8"); err != nil {
-		return ScriptRevision{}, err
-	}
-	hash := HashContent(content)
 	if r.orm == nil {
 		return ScriptRevision{}, fmt.Errorf("script repository ORM is not configured")
 	}
-	record := sourceRevisionRecord{ID: revisionID, ProjectID: projectID, Name: name, ObjectKey: objectKey, ContentHash: hash, ContentLength: len([]byte(content)), SourceType: "txt", Status: "uploaded"}
+	if r.storage == nil {
+		return ScriptRevision{}, fmt.Errorf("script source storage is not configured")
+	}
+	revisionID := uuid.New()
+	objectKey := fmt.Sprintf("sources/%s/%s.%s", projectID, revisionID, document.Format)
+	if err := r.storage.Put(ctx, objectKey, upload.Original, document.MediaType); err != nil {
+		return ScriptRevision{}, err
+	}
+	record := sourceRevisionRecord{ID: revisionID, ProjectID: projectID, Name: upload.FileName, ObjectKey: objectKey, ContentHash: document.OriginalHash, ContentLength: document.OriginalLength, SourceType: document.Format, Status: "uploaded"}
 	if err := r.orm.WithContext(ctx).Create(&record).Error; err != nil {
 		return ScriptRevision{}, fmt.Errorf("create script revision: %w", err)
 	}
-	return ScriptRevision{ID: record.ID, ProjectID: record.ProjectID, Name: record.Name, ContentHash: record.ContentHash, ContentLength: record.ContentLength, Status: record.Status, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339)}, nil
+	return ScriptRevision{ID: record.ID, ProjectID: record.ProjectID, Name: record.Name, ContentHash: record.ContentHash, ContentLength: record.ContentLength, SourceType: record.SourceType, Status: record.Status, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
 type AnalysisRequest struct {
@@ -549,13 +552,19 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 	if err != nil {
 		return r.failOperation(ctx, request.OperationID, request.RevisionID, "source_unavailable", err)
 	}
-	analysis, err := AnalyzeScript(string(content))
+	document, err := ParseSourceDocument(revision.Name, mediaTypeForSourceType(revision.SourceType), content)
+	if err != nil {
+		return r.failOperation(ctx, request.OperationID, request.RevisionID, "source_parse_failed", err)
+	}
+	if document.OriginalHash != revision.ContentHash {
+		return r.failOperation(ctx, request.OperationID, request.RevisionID, "source_changed", errors.New("source object hash does not match revision"))
+	}
+	analysis, err := AnalyzeScript(document.Text)
 	if err != nil {
 		return r.failOperation(ctx, request.OperationID, request.RevisionID, "analysis_failed", err)
 	}
-	if analysis.SourceHash != revision.ContentHash {
-		return r.failOperation(ctx, request.OperationID, request.RevisionID, "source_changed", errors.New("source object hash does not match revision"))
-	}
+	analysis.SourceHash = document.OriginalHash
+	analysis.ParseReport = ParseReport{Status: "complete", Format: document.Format, ParserVersion: "deterministic-script-parser-v1", OriginalHash: document.OriginalHash, TextHash: document.TextHash, CharacterCount: len([]rune(document.Text)), ParagraphCount: document.ParagraphCount, FailedScopes: []string{}}
 	encoded, err := json.Marshal(analysis)
 	if err != nil {
 		return r.failOperation(ctx, request.OperationID, request.RevisionID, "analysis_encode_failed", err)
@@ -887,7 +896,10 @@ func materializeCanonicalAnalysis(ctx context.Context, tx *gorm.DB, projectID uu
 	if err := tx.Where("project_id = ? AND type = ?", projectID, "script_analysis").Order("created_at DESC").First(&operation).Error; err != nil {
 		return fmt.Errorf("find analysis operation for canonical materialization: %w", err)
 	}
-	parseReport, err := json.Marshal(map[string]any{"source_hash": analysis.SourceHash, "episodes": len(analysis.Episodes), "status": "complete"})
+	parseReport, err := json.Marshal(struct {
+		ParseReport
+		EpisodeCount int `json:"episode_count"`
+	}{ParseReport: analysis.ParseReport, EpisodeCount: len(analysis.Episodes)})
 	if err != nil {
 		return fmt.Errorf("encode parse report: %w", err)
 	}

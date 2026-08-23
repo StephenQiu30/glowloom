@@ -58,12 +58,24 @@ type Asset struct {
 }
 
 type Analysis struct {
-	SourceHash string    `json:"source_hash"`
-	Episodes   []Episode `json:"episodes"`
-	Characters []Asset   `json:"characters"`
-	Locations  []Asset   `json:"locations"`
-	Props      []Asset   `json:"props"`
-	Costumes   []Asset   `json:"costumes"`
+	SourceHash  string      `json:"source_hash"`
+	ParseReport ParseReport `json:"parse_report"`
+	Episodes    []Episode   `json:"episodes"`
+	Characters  []Asset     `json:"characters"`
+	Locations   []Asset     `json:"locations"`
+	Props       []Asset     `json:"props"`
+	Costumes    []Asset     `json:"costumes"`
+}
+
+type ParseReport struct {
+	Status         string   `json:"status"`
+	Format         string   `json:"format"`
+	ParserVersion  string   `json:"parser_version"`
+	OriginalHash   string   `json:"original_hash"`
+	TextHash       string   `json:"text_hash"`
+	CharacterCount int      `json:"character_count"`
+	ParagraphCount int      `json:"paragraph_count"`
+	FailedScopes   []string `json:"failed_scopes"`
 }
 
 type Workspace struct {
@@ -85,6 +97,7 @@ type ScriptRevision struct {
 	Name          string    `json:"name"`
 	ContentHash   string    `json:"content_hash"`
 	ContentLength int       `json:"content_length"`
+	SourceType    string    `json:"source_type"`
 	Status        string    `json:"status"`
 	CreatedAt     string    `json:"created_at"`
 }

@@ -842,7 +842,7 @@
                     }
                 ],
                 "consumes": [
-                    "application/json"
+                    "multipart/form-data"
                 ],
                 "produces": [
                     "application/json"
@@ -861,13 +861,11 @@
                         "required": true
                     },
                     {
-                        "description": "剧本参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/scripts.createScriptRevisionRequest"
-                        }
+                        "type": "file",
+                        "description": "DOCX、Markdown 或 TXT 剧本原件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -1604,6 +1602,9 @@
                         "$ref": "#/definitions/scripts.Asset"
                     }
                 },
+                "parse_report": {
+                    "$ref": "#/definitions/scripts.ParseReport"
+                },
                 "props": {
                     "type": "array",
                     "items": {
@@ -1777,6 +1778,38 @@
                 }
             }
         },
+        "scripts.ParseReport": {
+            "type": "object",
+            "properties": {
+                "character_count": {
+                    "type": "integer"
+                },
+                "failed_scopes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "format": {
+                    "type": "string"
+                },
+                "original_hash": {
+                    "type": "string"
+                },
+                "paragraph_count": {
+                    "type": "integer"
+                },
+                "parser_version": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "text_hash": {
+                    "type": "string"
+                }
+            }
+        },
         "scripts.Project": {
             "type": "object",
             "properties": {
@@ -1841,6 +1874,9 @@
                     "type": "string"
                 },
                 "project_id": {
+                    "type": "string"
+                },
+                "source_type": {
                     "type": "string"
                 },
                 "status": {
@@ -1968,17 +2004,6 @@
         "scripts.createProjectRequest": {
             "type": "object",
             "properties": {
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "scripts.createScriptRevisionRequest": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
                 "name": {
                     "type": "string"
                 }

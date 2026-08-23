@@ -1,8 +1,10 @@
 package scripts
 
 import (
+	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -52,11 +54,6 @@ type createWorkspaceRequest struct {
 
 type createProjectRequest struct {
 	Name string `json:"name"`
-}
-
-type createScriptRevisionRequest struct {
-	Name    string `json:"name"`
-	Content string `json:"content"`
 }
 
 type createShotsRequest struct {
@@ -168,10 +165,10 @@ func (h *ScriptController) createProject(writer http.ResponseWriter, request *ht
 // @Summary 创建剧本修订
 // @Tags script
 // @ID script_revision_create
-// @Accept json
+// @Accept multipart/form-data
 // @Produce json
 // @Param projectID path string true "Project UUID"
-// @Param request body createScriptRevisionRequest true "剧本参数"
+// @Param file formData file true "DOCX、Markdown 或 TXT 剧本原件"
 // @Security BearerAccessToken
 // @Success 201 {object} ScriptRevisionEnvelope
 // @Failure 422 {object} httpapi.ErrorEnvelope
@@ -181,13 +178,32 @@ func (h *ScriptController) createScriptRevision(writer http.ResponseWriter, requ
 	if !ok {
 		return
 	}
-	var body createScriptRevisionRequest
-	if !httpapi.DecodeJSON(writer, request, &body, 8<<20) {
+	request.Body = http.MaxBytesReader(writer, request.Body, maxSourceBytes+(1<<20))
+	if err := request.ParseMultipartForm(1 << 20); err != nil {
+		httpapi.WriteError(writer, request, httpapi.NewError(httpapi.StatusBadRequest, httpapi.CodeScriptInvalid, "剧本上传请求无效或超过大小限制", "选择不超过 32 MiB 的 DOCX、Markdown 或 TXT 文件后重试"))
 		return
 	}
-	revision, err := h.service.CreateScriptRevision(request.Context(), projectID, strings.TrimSpace(body.Name), body.Content)
+	if request.MultipartForm != nil {
+		defer request.MultipartForm.RemoveAll()
+	}
+	file, header, err := request.FormFile("file")
 	if err != nil {
-		httpapi.WriteError(writer, request, httpapi.Wrap(err, httpapi.StatusUnprocessableEntity, httpapi.CodeScriptInvalid, err.Error(), "提供有内容的整本剧本"))
+		httpapi.WriteError(writer, request, httpapi.NewError(httpapi.StatusBadRequest, httpapi.CodeScriptInvalid, "未收到剧本文件", "选择 DOCX、Markdown 或 TXT 文件后重试"))
+		return
+	}
+	defer file.Close()
+	original, err := io.ReadAll(io.LimitReader(file, maxSourceBytes+1))
+	if err != nil || len(original) > maxSourceBytes {
+		httpapi.WriteError(writer, request, httpapi.NewError(httpapi.StatusBadRequest, httpapi.CodeScriptInvalid, "读取剧本原件失败或超过大小限制", "选择不超过 32 MiB 的剧本文件后重试"))
+		return
+	}
+	revision, err := h.service.CreateScriptRevision(request.Context(), projectID, SourceUpload{
+		FileName:  filepath.Base(strings.TrimSpace(header.Filename)),
+		MediaType: header.Header.Get("Content-Type"),
+		Original:  original,
+	})
+	if err != nil {
+		httpapi.WriteError(writer, request, httpapi.Wrap(err, httpapi.StatusUnprocessableEntity, httpapi.CodeScriptInvalid, "剧本文件格式无效或内容损坏", "确认文件是未加密、可正常打开的 DOCX、Markdown 或 UTF-8 TXT 后重试"))
 		return
 	}
 	httpapi.WriteData(writer, httpapi.StatusCreated, revision)
