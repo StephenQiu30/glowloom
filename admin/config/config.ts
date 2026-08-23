@@ -2,6 +2,7 @@
 
 import { join } from 'node:path';
 import { defineConfig } from '@umijs/max';
+import { accessibleThemeToken } from './accessibleTheme';
 import defaultSettings from './defaultSettings';
 import proxy from './proxy';
 
@@ -139,6 +140,7 @@ export default defineConfig({
       variant: 'filled',
       theme: {
         token: {
+          ...accessibleThemeToken,
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif',
         },

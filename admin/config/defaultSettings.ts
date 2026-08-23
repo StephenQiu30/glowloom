@@ -1,4 +1,5 @@
 import type { ProLayoutProps } from '@ant-design/pro-components';
+import { accessibleThemeToken } from './accessibleTheme';
 
 /**
  * @name
@@ -7,7 +8,7 @@ const Settings: ProLayoutProps & {
   logo?: string;
 } = {
   navTheme: 'light',
-  colorPrimary: '#1677ff',
+  colorPrimary: accessibleThemeToken.colorPrimary,
   layout: 'top',
   contentWidth: 'Fluid',
   fixedHeader: false,
