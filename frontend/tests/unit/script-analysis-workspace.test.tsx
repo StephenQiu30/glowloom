@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   authRefresh: vi.fn(),
   authRegister: vi.fn(),
   operationGet: vi.fn(),
+  projectAnalysisGet: vi.fn(),
   projectCreate: vi.fn(),
   scriptAnalysisApprove: vi.fn(),
   scriptAnalysisDraft: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock("@/api/auth", () => ({
   authRegister: api.authRegister,
 }));
 vi.mock("@/api/operation", () => ({ operationGet: api.operationGet }));
-vi.mock("@/api/project", () => ({ projectCreate: api.projectCreate }));
+vi.mock("@/api/project", () => ({ projectAnalysisGet: api.projectAnalysisGet, projectCreate: api.projectCreate }));
 vi.mock("@/api/script", () => ({
   scriptAnalysisApprove: api.scriptAnalysisApprove,
   scriptAnalysisDraft: api.scriptAnalysisDraft,
@@ -37,6 +38,7 @@ describe("ScriptAnalysisWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
+    window.history.replaceState(null, "", "/");
     api.authRefresh.mockRejectedValue(new ApiClientError("刷新会话缺失", "unauthorized", 401));
     api.authLogout.mockResolvedValue(undefined);
   });
@@ -99,6 +101,40 @@ describe("ScriptAnalysisWorkspace", () => {
     expect(await screen.findByRole("heading", { name: "先把整本剧本，变成可核对的事实。" })).toBeInTheDocument();
     expect(api.authRefresh).toHaveBeenCalledOnce();
     expect(screen.getByText("恢复工作区")).toBeInTheDocument();
+    expect(window.localStorage).toHaveLength(0);
+  });
+
+  it("restores an approved workflow from authorized URL object references after reload", async () => {
+    const projectID = "33333333-3333-4333-8333-333333333333";
+    const revisionID = "44444444-4444-4444-8444-444444444444";
+    const operationID = "55555555-5555-4555-8555-555555555555";
+    window.history.replaceState(null, "", `/?project=${projectID}&revision=${revisionID}&operation=${operationID}`);
+    api.authRefresh.mockResolvedValue({
+      data: {
+        access_token: "refreshed-access-token",
+        workspace: { id: "11111111-1111-4111-8111-111111111111", name: "恢复工作区" },
+      },
+    });
+    api.operationGet.mockResolvedValue({ data: { id: operationID, project_id: projectID, type: "script_analysis", status: "succeeded", progress: 100 } });
+    api.projectAnalysisGet.mockResolvedValue({
+      data: {
+        source_hash: "source-hash",
+        parse_report: { status: "complete", format: "txt", parser_version: "deterministic-script-parser-v1", original_hash: "source-hash", text_hash: "text-hash", character_count: 42, paragraph_count: 3, failed_scopes: [] },
+        episodes: [{ number: 1, title: "归途", content_unit_id: "66666666-6666-4666-8666-666666666666", anchor: { line: 1, start_offset: 0, end_offset: 5 }, scenes: [] }],
+        characters: [],
+        locations: [],
+        props: [],
+        costumes: [],
+      },
+    });
+
+    render(<ScriptAnalysisWorkspace />);
+
+    expect(await screen.findByTestId("phase-status")).toHaveTextContent("事实已批准");
+    expect(screen.getByText(`Project：${projectID}`)).toBeInTheDocument();
+    expect(screen.getByText("第 1 集 · 归途")).toBeInTheDocument();
+    expect(api.operationGet).toHaveBeenCalledWith({ operationID });
+    expect(api.projectAnalysisGet).toHaveBeenCalledWith({ projectID });
     expect(window.localStorage).toHaveLength(0);
   });
 
