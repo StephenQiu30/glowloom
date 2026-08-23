@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { errorConfig, installRequestFeedback } from './requestErrorConfig';
+import { errorConfig, installRequestFeedback } from '@/requestErrorConfig';
 
 const feedback = {
   warning: vi.fn(),

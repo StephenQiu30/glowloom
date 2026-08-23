@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import access from './access';
+import access from '@/access';
 
 describe('access', () => {
   it('should return canAdmin true when user has admin access', () => {

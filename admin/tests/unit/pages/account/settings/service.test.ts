@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { queryCity } from './service';
+import { queryCity } from '@/pages/account/settings/service';
 
 vi.mock('@/services/ant-design-pro/api', () => ({
   currentUser: vi.fn(),

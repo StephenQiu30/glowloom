@@ -16,9 +16,8 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     setupFiles: ['./tests/setupTests.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    include: ['tests/**/*.{test,spec}.{ts,tsx}'],
     exclude: [
-      'src/pages/user/login/login.test.tsx',
       'node_modules',
       'dist',
       '.umi',

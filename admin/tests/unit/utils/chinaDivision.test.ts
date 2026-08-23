@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCityOptions, provinceOptions } from './chinaDivision';
+import { getCityOptions, provinceOptions } from '@/utils/chinaDivision';
 
 describe('chinaDivision geographic options', () => {
   it('keeps province values compatible with existing six-digit province ids', () => {

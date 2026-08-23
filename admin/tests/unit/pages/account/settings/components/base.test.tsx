@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import * as service from '../service';
-import BaseView from './base';
+import BaseView from '@/pages/account/settings/components/base';
+import * as service from '@/pages/account/settings/service';
 
 const mocks = vi.hoisted(() => ({
   form: {
@@ -67,7 +67,7 @@ vi.mock('@ant-design/icons', () => ({
   UploadOutlined: () => <span />,
 }));
 
-vi.mock('./index.style', () => ({
+vi.mock('@/pages/account/settings/components/index.style', () => ({
   default: () => ({
     styles: {
       area_code: 'area-code',
@@ -82,7 +82,7 @@ vi.mock('./index.style', () => ({
   }),
 }));
 
-vi.mock('../service', () => ({
+vi.mock('@/pages/account/settings/service', () => ({
   queryCity: vi.fn(),
   queryCurrent: vi.fn(),
   queryProvince: vi.fn(),
