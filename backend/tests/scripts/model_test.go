@@ -71,6 +71,72 @@ func TestAnalyzeScriptRejectsEmptyAndOversizedSource(t *testing.T) {
 	}
 }
 
+func TestAnalyzeScriptKeepsConflictingEpisodeHeadingsAsReviewableCandidates(t *testing.T) {
+	content := "第1集 归途\n场景：码头\n林夏：出发。\n\n第1集 回声\n场景：仓库\n顾远：等等。\n"
+
+	analysis, err := AnalyzeScript(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(analysis.Episodes) != 2 {
+		t.Fatalf("episodes = %d, want 2 reviewable candidates", len(analysis.Episodes))
+	}
+	if analysis.Episodes[0].TemporaryKey == analysis.Episodes[1].TemporaryKey || analysis.Episodes[0].TemporaryKey == "" {
+		t.Fatalf("candidate keys are not stable and unique: %#v", analysis.Episodes)
+	}
+	if analysis.Episodes[0].Anchor.StartOffset != 0 || analysis.Episodes[0].Anchor.EndOffset != analysis.Episodes[1].Anchor.StartOffset || analysis.Episodes[1].Anchor.EndOffset != len(content) {
+		t.Fatalf("episode source ranges do not conserve coverage: %#v", analysis.Episodes)
+	}
+	if analysis.Breakdown.Status != BreakdownStatusBlocked || len(analysis.Breakdown.Issues) == 0 || analysis.Breakdown.Issues[0].Code != "duplicate_episode_number" {
+		t.Fatalf("breakdown validation = %#v, want duplicate blocker", analysis.Breakdown)
+	}
+}
+
+func TestReviseEpisodeBreakdownCreatesNewRevisionAndPreservesSourceCoverage(t *testing.T) {
+	content := "第1集 合集\n场景：码头\n林夏：出发。\n场景：仓库\n顾远：等等。\n"
+	analysis, err := AnalyzeScript(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundary := analysis.Episodes[0].Scenes[1].Anchor.StartOffset
+	originalKey := analysis.Episodes[0].TemporaryKey
+
+	revised, err := ReviseEpisodeBreakdown(analysis, analysis.SourceHash, []EpisodeBreakdownOperation{{
+		Type: BreakdownOperationSplit, CandidateKey: originalKey, BoundaryOffset: boundary,
+		LeftKey: "episode-left", LeftTitle: "归途", RightKey: "episode-right", RightTitle: "回声",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(analysis.Episodes) != 1 {
+		t.Fatal("revision mutated the original draft")
+	}
+	if revised.Breakdown.RevisionNo != analysis.Breakdown.RevisionNo+1 || len(revised.Episodes) != 2 {
+		t.Fatalf("revised breakdown = %#v", revised.Breakdown)
+	}
+	if revised.Episodes[0].Anchor.StartOffset != 0 || revised.Episodes[0].Anchor.EndOffset != boundary || revised.Episodes[1].Anchor.StartOffset != boundary || revised.Episodes[1].Anchor.EndOffset != len(content) {
+		t.Fatalf("revised ranges = %#v", revised.Episodes)
+	}
+	if revised.Breakdown.Status != BreakdownStatusReady || revised.Breakdown.CoverageHash == "" || revised.Breakdown.SegmentationHash == "" {
+		t.Fatalf("revised validation = %#v", revised.Breakdown)
+	}
+}
+
+func TestReviseEpisodeBreakdownRejectsBoundaryInsideScene(t *testing.T) {
+	analysis, err := AnalyzeScript("第1集 合集\n场景：码头\n林夏：出发。\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = ReviseEpisodeBreakdown(analysis, analysis.SourceHash, []EpisodeBreakdownOperation{{
+		Type: BreakdownOperationSplit, CandidateKey: analysis.Episodes[0].TemporaryKey,
+		BoundaryOffset: analysis.Episodes[0].Scenes[0].Anchor.StartOffset + 1,
+		LeftKey:        "episode-left", LeftTitle: "归途", RightKey: "episode-right", RightTitle: "回声",
+	}})
+	if err == nil {
+		t.Fatal("split inside a scene must be rejected")
+	}
+}
+
 func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	if os.Getenv("LANVERSE_INTEGRATION") != "1" {
 		t.Skip("set LANVERSE_INTEGRATION=1 to run PostgreSQL/GORM integration")
