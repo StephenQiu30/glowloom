@@ -26,6 +26,8 @@ type contextCaptureStore struct {
 	memberPage      WorkspaceMemberPage
 	updatedMember   WorkspaceMember
 	memberUpdate    WorkspaceMemberUpdate
+	auditPage       AccessAuditPage
+	auditQuery      AccessAuditQuery
 }
 
 func (s *contextCaptureStore) RegisterAccount(context.Context, PersistedRegisterInput) (SessionIssue, error) {
@@ -72,6 +74,11 @@ func (s *contextCaptureStore) AuthorizePath(ctx context.Context, workspaceID uui
 
 func (s *contextCaptureStore) ListWorkspaceMembers(context.Context, uuid.UUID, WorkspaceMemberQuery) (WorkspaceMemberPage, error) {
 	return s.memberPage, nil
+}
+
+func (s *contextCaptureStore) ListAccessAudit(_ context.Context, _ uuid.UUID, query AccessAuditQuery) (AccessAuditPage, error) {
+	s.auditQuery = query
+	return s.auditPage, nil
 }
 
 func (s *contextCaptureStore) UpdateWorkspaceMember(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ Principal, input WorkspaceMemberUpdate) (WorkspaceMember, error) {
@@ -209,6 +216,50 @@ func TestAdminMemberUpdatePropagatesReasonAndServerRequestID(t *testing.T) {
 	}
 	if store.memberUpdate.Reason != "违规访问处置" || store.memberUpdate.RequestID != "member-audit-request" {
 		t.Fatalf("member update = %#v", store.memberUpdate)
+	}
+}
+
+func TestAdminAccessAuditPropagatesScopedFiltersAndPagination(t *testing.T) {
+	workspaceID, userID, sessionID := uuid.New(), uuid.New(), uuid.New()
+	store := &contextCaptureStore{
+		wantWorkspaceID: workspaceID,
+		auditPage: AccessAuditPage{
+			Items: []AccessAuditEvent{{WorkspaceID: workspaceID, Action: "iam.membership.updated", Result: "succeeded"}},
+			Total: 1, Page: 2, PageSize: 10,
+		},
+	}
+	jwtManager, err := NewJWTManager(strings.Repeat("a", 32), "test", "test", 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewIdentityService(store, allowIdentityCache{}, jwtManager, AuthConfig{RefreshTTL: time.Hour})
+	accessToken, _, err := jwtManager.Issue(SessionIssue{
+		SessionID: sessionID,
+		Identity: AuthIdentity{
+			Account: Account{ID: userID}, Workspace: Workspace{ID: workspaceID}, Role: RoleAdmin,
+		},
+	}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	router := chi.NewRouter()
+	NewIdentityAdminController(service).Mount(router)
+	handler := Require(service, router)
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/audit-events?actor=Audit+Actor&object=Audit+Target&action=iam.membership.updated&result=succeeded&occurred_from=2026-08-23T00%3A00%3A00Z&occurred_to=2026-08-24T00%3A00%3A00Z&page=2&page_size=10", nil)
+	request.Header.Set("Authorization", "Bearer "+accessToken)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if store.auditQuery.Actor != "Audit Actor" || store.auditQuery.Object != "Audit Target" ||
+		store.auditQuery.Action != "iam.membership.updated" || store.auditQuery.Result != "succeeded" ||
+		store.auditQuery.OccurredFrom == nil || store.auditQuery.OccurredTo == nil ||
+		store.auditQuery.Page != 2 || store.auditQuery.PageSize != 10 {
+		t.Fatalf("audit query = %#v", store.auditQuery)
 	}
 }
 

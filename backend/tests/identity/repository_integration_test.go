@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -99,18 +101,23 @@ func TestWorkspaceMemberChangeWritesRestorableAuditInSameTransaction(t *testing.
 		t.Fatal(err)
 	}
 
-	workspaceID, actorUserID, targetUserID := uuid.New(), uuid.New(), uuid.New()
+	workspaceID, foreignWorkspaceID, actorUserID, targetUserID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	actorMembershipID, targetMembershipID := uuid.New(), uuid.New()
 	t.Cleanup(func() {
-		orm.Table("audit_events").Where("workspace_id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("audit_events").Where("workspace_id IN ?", []uuid.UUID{workspaceID, foreignWorkspaceID}).Delete(&struct{ ID uuid.UUID }{})
 		orm.Table("iam_memberships").Where("workspace_id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
 		orm.Table("iam_users").Where("id IN ?", []uuid.UUID{actorUserID, targetUserID}).Delete(&struct{ ID uuid.UUID }{})
-		orm.Table("workspaces").Where("id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("workspaces").Where("id IN ?", []uuid.UUID{workspaceID, foreignWorkspaceID}).Delete(&struct{ ID uuid.UUID }{})
 		pool.Close()
 	})
 
-	if err := orm.Table("workspaces").Create(map[string]any{"id": workspaceID, "name": "audit integration workspace"}).Error; err != nil {
-		t.Fatal(err)
+	for _, workspace := range []map[string]any{
+		{"id": workspaceID, "name": "audit integration workspace"},
+		{"id": foreignWorkspaceID, "name": "foreign audit workspace"},
+	} {
+		if err := orm.Table("workspaces").Create(workspace).Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 	for _, user := range []map[string]any{
 		{"id": actorUserID, "identity_subject": "audit-actor-" + actorUserID.String(), "display_name": "Audit Actor", "status": "active"},
@@ -193,6 +200,33 @@ func TestWorkspaceMemberChangeWritesRestorableAuditInSameTransaction(t *testing.
 	}
 	if len(event.BeforeHash) != 64 || len(event.AfterHash) != 64 || event.BeforeHash == event.AfterHash {
 		t.Fatalf("audit hashes before=%q after=%q", event.BeforeHash, event.AfterHash)
+	}
+
+	if err := orm.Table("audit_events").Create(map[string]any{
+		"id": uuid.New(), "workspace_id": foreignWorkspaceID, "actor_type": "user", "actor_id": actorUserID.String(),
+		"action": "iam.membership.updated", "object_type": "iam_membership", "object_id": targetMembershipID,
+		"before_state": json.RawMessage(`{"role":"user","status":"active"}`), "after_state": json.RawMessage(`{"role":"ban","status":"active"}`),
+		"before_hash": strings.Repeat("0", 64), "after_hash": strings.Repeat("1", 64),
+		"request_id": "foreign-audit-request", "reason": reason, "result": "succeeded", "occurred_at": time.Now().UTC(),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	from, to := time.Now().UTC().Add(-time.Minute), time.Now().UTC().Add(time.Minute)
+	auditPage, err := repository.ListAccessAudit(database.WithWorkspaceID(ctx, workspaceID), workspaceID, AccessAuditQuery{
+		Actor: "Audit Actor", Object: "Audit Target", Action: "iam.membership.updated", Result: "succeeded",
+		OccurredFrom: &from, OccurredTo: &to, Page: 1, PageSize: 20,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auditPage.Total != 1 || len(auditPage.Items) != 1 {
+		t.Fatalf("audit page = %#v, want one current-workspace event", auditPage)
+	}
+	listed := auditPage.Items[0]
+	if listed.WorkspaceID != workspaceID || listed.ActorDisplayName != "Audit Actor" || listed.ObjectDisplayName != "Audit Target" ||
+		listed.RequestID != requestID || listed.Reason != reason || listed.Result != "succeeded" ||
+		listed.BeforeState["role"] != "user" || listed.AfterState["role"] != "ban" {
+		t.Fatalf("listed audit event = %#v", listed)
 	}
 
 	if err := orm.Exec(`
