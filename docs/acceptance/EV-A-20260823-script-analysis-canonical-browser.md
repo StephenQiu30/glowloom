@@ -1,7 +1,8 @@
 # 剧本解析 Canonical 物化与会话恢复闭环
 
 - Evidence ID：`EV-A-20260823-script-analysis-canonical-browser`
-- 结论：`passed`（只覆盖本文列出的剧本解析目标场景，不代表切片 A 或 PRD-000 全部通过）
+- 结论：`superseded`（公共上传合同已由 `f6aee1f` 替换；本文件只保留历史审计，不计入当前通过）
+- 替代证据：[`EV-A-20260823-docx-source-import-browser.md`](./EV-A-20260823-docx-source-import-browser.md)
 - 执行时间与时区：2026-08-23，Asia/Shanghai
 - 执行人 / 复核人：Codex / 待复核
 - Git commit / 制品 digest：实现提交 `1755e2d`；证据文档由后续 docs 提交固化
