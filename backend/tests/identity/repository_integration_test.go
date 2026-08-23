@@ -3,16 +3,144 @@ package identity_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 
 	. "github.com/stephenqiu30/lanverse/backend/src/identity"
 	"github.com/stephenqiu30/lanverse/backend/src/platform/database"
 )
+
+func TestInvitationAcceptanceConvergesToOneMembershipAndAudit(t *testing.T) {
+	if os.Getenv("LANVERSE_INTEGRATION") != "1" {
+		t.Skip("set LANVERSE_INTEGRATION=1 to run PostgreSQL/GORM integration")
+	}
+
+	ctx := context.Background()
+	pool, err := database.Connect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orm, err := database.OpenGORM(pool)
+	if err != nil {
+		pool.Close()
+		t.Fatal(err)
+	}
+
+	workspaceID, actorUserID, actorMembershipID := uuid.New(), uuid.New(), uuid.New()
+	email := EmailAddress("invited-" + uuid.NewString() + "@example.test")
+	requestPrefix := "invitation-integration-" + uuid.NewString()
+	t.Cleanup(func() {
+		orm.Table("iam_sessions").Where("workspace_id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("audit_events").Where("workspace_id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("iam_invitations").Where("workspace_id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("iam_memberships").Where("workspace_id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("iam_users").Where("id = ? OR email = ?", actorUserID, email.String()).Delete(&struct{ ID uuid.UUID }{})
+		orm.Table("workspaces").Where("id = ?", workspaceID).Delete(&struct{ ID uuid.UUID }{})
+		pool.Close()
+	})
+
+	if err := orm.Table("workspaces").Create(map[string]any{"id": workspaceID, "name": "invitation integration workspace"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("iam_users").Create(map[string]any{
+		"id": actorUserID, "identity_subject": "invitation-actor-" + actorUserID.String(),
+		"email": "invitation-actor-" + actorUserID.String() + "@example.test", "password_hash": "unused",
+		"display_name": "Invitation Actor", "status": "active",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	var adminRole struct{ ID uuid.UUID }
+	if err := orm.Table("iam_roles").Select("id").Where("code = ?", RoleAdmin).Take(&adminRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("iam_memberships").Create(map[string]any{
+		"id": actorMembershipID, "workspace_id": workspaceID, "user_id": actorUserID,
+		"role_id": adminRole.ID, "status": "active",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	repository := NewIdentityRepository(orm)
+	principal := Principal{UserID: actorUserID, WorkspaceID: workspaceID, MembershipID: actorMembershipID, Role: RoleAdmin}
+	tokenHash := strings.Repeat("a", 64)
+	invitation, err := repository.CreateWorkspaceInvitation(database.WithWorkspaceID(ctx, workspaceID), workspaceID, principal, PersistedInvitationInput{
+		Email: email, Role: RoleUser, TokenHash: tokenHash, ExpiresAt: time.Now().UTC().Add(time.Hour),
+		Reason: "邀请剪辑成员", RequestID: requestPrefix + "-create",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invitation.Email != email.String() || invitation.Role != RoleUser || invitation.Status != InvitationStatusPending {
+		t.Fatalf("invitation = %#v", invitation)
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("InvitationPassword2026!"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	issues := make(chan SessionIssue, 2)
+	errs := make(chan error, 2)
+	var wait sync.WaitGroup
+	for index := 1; index <= 2; index++ {
+		wait.Add(1)
+		go func(attempt int) {
+			defer wait.Done()
+			<-start
+			issue, acceptErr := repository.AcceptWorkspaceInvitation(database.WithWorkspaceID(ctx, workspaceID), workspaceID, PersistedInvitationAcceptance{
+				TokenHash: tokenHash, PasswordHash: string(passwordHash), DisplayName: "Invited Member",
+				RequestID: requestPrefix + "-accept-" + string(rune('0'+attempt)),
+			})
+			if acceptErr != nil {
+				errs <- acceptErr
+				return
+			}
+			issues <- issue
+		}(index)
+	}
+	close(start)
+	wait.Wait()
+	close(issues)
+	close(errs)
+
+	if len(issues) != 1 || len(errs) != 1 {
+		t.Fatalf("concurrent results success=%d errors=%d, want 1/1", len(issues), len(errs))
+	}
+	for acceptErr := range errs {
+		if !errors.Is(acceptErr, ErrInvitationConsumed) {
+			t.Fatalf("concurrent error = %v, want ErrInvitationConsumed", acceptErr)
+		}
+	}
+	var issue SessionIssue
+	for accepted := range issues {
+		issue = accepted
+	}
+	if issue.Identity.Workspace.ID != workspaceID || issue.Identity.Role != RoleUser || issue.Identity.Account.Email != email.String() {
+		t.Fatalf("accepted issue = %#v", issue)
+	}
+
+	var membershipCount, invitationCount, auditCount int64
+	if err := orm.Table("iam_memberships AS memberships").Joins("JOIN iam_users AS users ON users.id = memberships.user_id").
+		Where("memberships.workspace_id = ? AND users.email = ?", workspaceID, email.String()).Count(&membershipCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("iam_invitations").Where("id = ? AND workspace_id = ? AND token_hash = ? AND status = ? AND accepted_membership_id = ?", invitation.ID, workspaceID, tokenHash, InvitationStatusAccepted, issue.Identity.MembershipID).Count(&invitationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := orm.Table("audit_events").Where("workspace_id = ? AND action IN ?", workspaceID, []string{"iam.invitation.created", "iam.invitation.accepted"}).Count(&auditCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if membershipCount != 1 || invitationCount != 1 || auditCount != 2 {
+		t.Fatalf("persistent counts membership=%d invitation=%d audit=%d, want 1/1/2", membershipCount, invitationCount, auditCount)
+	}
+}
 
 func TestAuthorizePathUsesCanonicalProjectAndSourceRevisionTables(t *testing.T) {
 	if os.Getenv("LANVERSE_INTEGRATION") != "1" {
