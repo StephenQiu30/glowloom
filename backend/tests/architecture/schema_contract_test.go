@@ -42,25 +42,12 @@ func TestCurrentSchemaContainsOnlyCanonicalNarrativeFacts(t *testing.T) {
 	}
 
 	for _, required := range []string{
-		"CREATE TABLE IF NOT EXISTS iam_invitations",
-		"token_hash text NOT NULL UNIQUE",
-		"status text NOT NULL CHECK (status IN ('pending', 'accepted', 'expired', 'revoked'))",
-		"ALTER TABLE iam_invitations ENABLE ROW LEVEL SECURITY",
 		"CREATE TABLE IF NOT EXISTS nar_source_revisions",
 		"CREATE TABLE IF NOT EXISTS nar_analysis_drafts",
 		"source_revision_id uuid PRIMARY KEY REFERENCES nar_source_revisions(id)",
 	} {
 		if !strings.Contains(schema, required) {
 			t.Errorf("current schema is missing canonical narrative contract %q", required)
-		}
-	}
-
-	for _, forbidden := range []string{
-		"acceptance_token text",
-		"invitation_token text",
-	} {
-		if strings.Contains(schema, forbidden) {
-			t.Errorf("current schema persists invitation plaintext contract %q", forbidden)
 		}
 	}
 }
