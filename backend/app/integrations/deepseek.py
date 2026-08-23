@@ -1,5 +1,5 @@
 import json
-from typing import Any
+from typing import Any, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_deepseek import ChatDeepSeek
@@ -31,6 +31,8 @@ from app.modules.skills import (
     SkillDefinition,
     SkillExecutionContext,
     SkillExecutionError,
+    SkillHarness,
+    StructuredSkillModel,
 )
 from app.modules.skills.script_structure import (
     DEFAULT_MAX_CHUNK_CHARS,
@@ -57,6 +59,12 @@ _DEEPSEEK_MODEL = "deepseek-v4-pro"
 _DEEPSEEK_API_BASE = "https://api.deepseek.com"
 _EPISODE_PLAN_PROMPT_VERSION = "episode-plan-prompt-v2"
 _STORYBOARD_DRAFT_PROMPT_VERSION = "storyboard-draft-prompt-v1"
+STORYBOARD_DRAFT_SKILL = SkillDefinition(
+    name="storyboard.plan",
+    version=_STORYBOARD_DRAFT_PROMPT_VERSION,
+    max_input_chars=500_000,
+    timeout_seconds=120,
+)
 
 
 def _provider_error(error: Exception) -> ScriptExtractionProviderError:
@@ -479,31 +487,57 @@ class DeepSeekScriptAdapter:
 
 
 class DeepSeekStoryboardDrafter:
-    def __init__(self, api_key: SecretStr) -> None:
-        chat = ChatDeepSeek(
-            model=_DEEPSEEK_MODEL,
-            base_url=_DEEPSEEK_API_BASE,
-            api_key=api_key,
-            temperature=0,
-            timeout=120,
-            max_retries=0,
-            extra_body={"thinking": {"type": "disabled"}},
-        )
-        self._structured_model: Any = chat.with_structured_output(
-            StoryboardProviderResult,
-            method="json_mode",
-        )
+    def __init__(
+        self,
+        api_key: SecretStr,
+        *,
+        model: StructuredSkillModel | None = None,
+    ) -> None:
+        resolved_model = model
+        if resolved_model is None:
+            chat = ChatDeepSeek(
+                model=_DEEPSEEK_MODEL,
+                base_url=_DEEPSEEK_API_BASE,
+                api_key=api_key,
+                temperature=0,
+                timeout=120,
+                max_retries=0,
+                extra_body={"thinking": {"type": "disabled"}},
+            )
+            resolved_model = cast(
+                StructuredSkillModel,
+                chat.with_structured_output(
+                    StoryboardProviderResult,
+                    method="json_mode",
+                ),
+            )
+        self._structured_model = resolved_model
+        self._harness = SkillHarness()
 
     async def draft(self, value: StoryboardDraftInput) -> dict[str, object]:
         try:
-            provider_result = await self._structured_model.ainvoke(
-                [
-                    SystemMessage(content=_storyboard_draft_system_prompt()),
-                    HumanMessage(content=_storyboard_draft_payload(value)),
-                ]
+            run = await self._harness.run(
+                skill=STORYBOARD_DRAFT_SKILL,
+                model=self._structured_model,
+                system_prompt=_storyboard_draft_system_prompt(),
+                user_payload=_storyboard_draft_payload(value),
+                output_model=StoryboardProviderResult,
+                context=SkillExecutionContext(
+                    skill_name=STORYBOARD_DRAFT_SKILL.name,
+                    skill_version=STORYBOARD_DRAFT_SKILL.version,
+                    trace_id=f"draft-{value.batch_id}",
+                    task_id=str(value.task_id),
+                ),
             )
-            result = StoryboardProviderResult.model_validate(provider_result)
-            return expand_provider_result(result, value).model_dump(mode="json")
+            return expand_provider_result(run.output, value).model_dump(mode="json")
+        except SkillExecutionError as error:
+            raise StoryboardDraftProviderError(
+                outcome=error.outcome,
+                code=error.code,
+                summary=error.summary,
+                retryable=error.retryable,
+                next_action="create_new_storyboard_draft_batch",
+            ) from error
         except (ValidationError, ValueError) as error:
             raise StoryboardDraftProviderError(
                 outcome="failed",

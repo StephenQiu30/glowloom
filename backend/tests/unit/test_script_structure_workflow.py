@@ -205,6 +205,59 @@ async def test_workflow_maps_ranges_references_and_deduplicates_assets() -> None
 
 
 @pytest.mark.asyncio
+async def test_workflow_aggregates_character_appearances_across_episodes() -> None:
+    script = "Mara appears in episode two.\nMara appears in episode one."
+    midpoint = script.index("\n") + 1
+
+    class CharacterModel:
+        async def ainvoke(self, messages: Sequence[Any]) -> object:
+            message = cast(HumanMessage, messages[1])
+            payload = cast(dict[str, Any], json.loads(cast(str, message.content)))
+            episode_number = cast(int, payload["episode_number"])
+            alias = "The Captain" if episode_number == 2 else "Captain Mara"
+            return {
+                "candidates": [
+                    {
+                        "candidate_key": f"mara-{episode_number}",
+                        "source_range": {"start": 0, "end": 4},
+                        "proposal": {
+                            "kind": "asset",
+                            "asset_kind": "character",
+                            "name": "Mara",
+                            "description": "The expedition leader.",
+                            "aliases": [alias],
+                        },
+                    }
+                ]
+            }
+
+    def chunker(value: str) -> tuple[ScriptExtractionChunk, ...]:
+        return (
+            ScriptExtractionChunk("ep002-c001", 2, 0, midpoint, value[:midpoint]),
+            ScriptExtractionChunk("ep001-c002", 1, midpoint, len(value), value[midpoint:]),
+        )
+
+    workflow = ScriptStructureExtractionWorkflow(
+        skill=_skill(),
+        model=CharacterModel(),
+        system_prompt="Extract character appearances.",
+        chunker=chunker,
+    )
+
+    result = await workflow.run(script, context=_context())
+
+    character = next(
+        candidate
+        for candidate in result.candidates
+        if isinstance(candidate.proposal, AssetCandidateProposal)
+    )
+    assert isinstance(character.proposal, AssetCandidateProposal)
+    assert character.proposal.episode_numbers == [1, 2]
+    assert character.proposal.first_seen_episode == 1
+    assert character.proposal.aliases == ["The Captain", "Captain Mara"]
+
+
+@pytest.mark.asyncio
 async def test_workflow_rejects_empty_aggregated_result() -> None:
     class EmptyModel:
         async def ainvoke(self, messages: Sequence[Any]) -> object:

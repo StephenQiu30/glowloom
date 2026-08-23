@@ -200,6 +200,21 @@ def _state_int(value: object, field_name: str) -> int:
     return value
 
 
+def _state_optional_positive_int(value: object, field_name: str) -> int | None:
+    if value is None:
+        return None
+    parsed = _state_int(value, field_name)
+    if parsed < 1:
+        raise SkillExecutionError(
+            outcome="failed",
+            code="skill_output_invalid",
+            summary=f"Extraction state field {field_name} is invalid",
+            retryable=False,
+            next_action="start_new_skill_run",
+        )
+    return parsed
+
+
 def _validate_chunk_result(result: ScriptExtractionResult, chunk_text: str) -> None:
     candidate_keys = {candidate.candidate_key for candidate in result.candidates}
     candidate_by_key = {candidate.candidate_key: candidate for candidate in result.candidates}
@@ -271,6 +286,27 @@ def _merge_optional_text(
         target[field_name] = value
 
 
+def _merge_episode_appearances(
+    target: dict[str, object],
+    values: object,
+    *episode_hints: object,
+) -> None:
+    episode_numbers: set[int] = set()
+    for source in (target.get("episode_numbers"), values):
+        if not isinstance(source, list):
+            continue
+        for value in cast(list[object], source):
+            if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                episode_numbers.add(value)
+    for value in (target.get("first_seen_episode"), *episode_hints):
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            episode_numbers.add(value)
+    ordered_episode_numbers = sorted(episode_numbers)[:1000]
+    target["episode_numbers"] = ordered_episode_numbers
+    if ordered_episode_numbers:
+        target["first_seen_episode"] = ordered_episode_numbers[0]
+
+
 def _aggregate_results(
     chunk_results: list[dict[str, object]],
 ) -> ScriptExtractionResult:
@@ -285,6 +321,10 @@ def _aggregate_results(
     for item in ordered_results:
         chunk_key = str(item["chunk_key"])
         chunk_start = _state_int(item["chunk_start"], "chunk_start")
+        chunk_episode_number = _state_optional_positive_int(
+            item.get("chunk_episode_number"),
+            "chunk_episode_number",
+        )
         chunk_text = str(item["chunk_text"])
         raw_result = item["result"]
         try:
@@ -320,6 +360,12 @@ def _aggregate_results(
             )
             source_range["end"] = _state_int(source_range["end"], "source_range.end") + chunk_start
             proposal = cast(dict[str, object], candidate_data["proposal"])
+            if (
+                candidate.proposal.kind == "scene"
+                and proposal.get("episode_number") is None
+                and chunk_episode_number is not None
+            ):
+                proposal["episode_number"] = chunk_episode_number
             if candidate.proposal.kind in {"dialogue", "shot"}:
                 scene_key = str(proposal["scene_candidate_key"])
                 proposal["scene_candidate_key"] = scene_key_map.get(
@@ -331,6 +377,12 @@ def _aggregate_results(
                     ),
                 )
             if candidate.proposal.kind == "continuity":
+                if (
+                    proposal.get("scope") == "episode"
+                    and proposal.get("episode_number") is None
+                    and chunk_episode_number is not None
+                ):
+                    proposal["episode_number"] = chunk_episode_number
                 scene_key = proposal.get("scene_candidate_key")
                 if isinstance(scene_key, str):
                     proposal["scene_candidate_key"] = scene_key_map.get(
@@ -388,13 +440,12 @@ def _aggregate_results(
                     continue
                 continuity_by_key[continuity_key] = candidate_data
             if candidate.proposal.kind == "asset":
-                first_seen_episode = proposal.get("first_seen_episode")
-                raw_episode_numbers = proposal.get("episode_numbers")
-                if isinstance(first_seen_episode, int) and isinstance(raw_episode_numbers, list):
-                    episode_numbers = cast(list[object], raw_episode_numbers)
-                    if first_seen_episode not in episode_numbers:
-                        episode_numbers.append(first_seen_episode)
-                    proposal["episode_numbers"] = episode_numbers[:1000]
+                _merge_episode_appearances(
+                    proposal,
+                    proposal.get("episode_numbers"),
+                    proposal.get("first_seen_episode"),
+                    chunk_episode_number,
+                )
                 asset_key = _normalized_asset_key(
                     str(proposal["asset_kind"]), str(proposal["name"])
                 )
@@ -406,14 +457,22 @@ def _aggregate_results(
                     if isinstance(raw_aliases, list):
                         aliases = [str(alias) for alias in cast(list[object], raw_aliases)]
                     current_name = str(proposal["name"])
-                    if current_name not in aliases:
+                    if (
+                        current_name != str(existing_proposal["name"])
+                        and current_name not in aliases
+                    ):
                         aliases.append(current_name)
                     existing_proposal["aliases"] = aliases[:20]
+                    _merge_strings(
+                        existing_proposal,
+                        "aliases",
+                        proposal.get("aliases"),
+                        limit=20,
+                    )
                     for field_name, limit in (
                         ("goals", 50),
                         ("relationships", 100),
                         ("continuity_notes", 50),
-                        ("episode_numbers", 1000),
                     ):
                         _merge_strings(
                             existing_proposal,
@@ -433,12 +492,12 @@ def _aggregate_results(
                             field_name,
                             proposal.get(field_name),
                         )
-                    first_seen = existing_proposal.get("first_seen_episode")
-                    incoming_first_seen = proposal.get("first_seen_episode")
-                    if isinstance(incoming_first_seen, int) and (
-                        not isinstance(first_seen, int) or incoming_first_seen < first_seen
-                    ):
-                        existing_proposal["first_seen_episode"] = incoming_first_seen
+                    _merge_episode_appearances(
+                        existing_proposal,
+                        proposal.get("episode_numbers"),
+                        proposal.get("first_seen_episode"),
+                        chunk_episode_number,
+                    )
                     continue
                 assets_by_key[asset_key] = candidate_data
             candidates.append(candidate_data)
@@ -592,6 +651,7 @@ class ScriptStructureExtractionWorkflow:
                         "chunk_key": state.get("chunk_key"),
                         "chunk_start": state.get("chunk_start"),
                         "chunk_end": state.get("chunk_end"),
+                        "chunk_episode_number": state.get("chunk_episode_number"),
                         "chunk_text": chunk_text,
                         "result": result.model_dump(mode="json"),
                     }

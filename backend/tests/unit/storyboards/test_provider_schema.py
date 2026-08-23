@@ -1,7 +1,16 @@
+from collections.abc import Sequence
+from typing import Any
+
 import pytest
+from pydantic import SecretStr
 from uuid6 import uuid7
 
-from app.modules.storyboards import StoryboardDraftInput, StoryboardDraftUnit
+from app.integrations.deepseek import DeepSeekStoryboardDrafter
+from app.modules.storyboards import (
+    StoryboardDraftInput,
+    StoryboardDraftProviderError,
+    StoryboardDraftUnit,
+)
 from app.modules.storyboards.drafts.provider_schema import (
     StoryboardProviderResult,
     expand_provider_result,
@@ -87,3 +96,22 @@ def test_compact_provider_positions_expand_to_fixed_storyboard_ids() -> None:
 def test_compact_provider_rejects_unknown_input_position() -> None:
     with pytest.raises(ValueError, match="unknown input position"):
         expand_provider_result(provider_result([99]), draft_input())
+
+
+@pytest.mark.asyncio
+async def test_deepseek_storyboard_generation_uses_skill_output_validation() -> None:
+    class InvalidModel:
+        async def ainvoke(self, messages: Sequence[Any]) -> object:
+            del messages
+            return {"unexpected": True}
+
+    drafter = DeepSeekStoryboardDrafter(
+        SecretStr("unused-in-unit-test"),
+        model=InvalidModel(),
+    )
+
+    with pytest.raises(StoryboardDraftProviderError) as error:
+        await drafter.draft(draft_input())
+
+    assert error.value.code == "skill_output_invalid"
+    assert error.value.outcome == "failed"
