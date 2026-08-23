@@ -27,7 +27,7 @@ jobs:
       - name: Test Go backend
         working-directory: backend
         run: |
-          gofmt -d cmd src | tee /tmp/gofmt.diff
+          gofmt -d cmd src tests | tee /tmp/gofmt.diff
           test ! -s /tmp/gofmt.diff
           go vet ./...
           go test ./...
@@ -64,7 +64,7 @@ jobs:
         run: npm ci
       - name: Generate current API client
         working-directory: frontend
-        run: OPENAPI_SCHEMA_URL=../backend/api/openapi.json npm run openapi2ts
+        run: OPENAPI_SCHEMA_URL=../backend/docs/swagger.json npm run openapi2ts
       - name: Check frontend
         working-directory: frontend
         run: |
@@ -73,6 +73,30 @@ jobs:
           npm run test
           npm run build
 
+  admin:
+    name: Admin / Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.17.0
+      - name: Install locked admin dependencies
+        working-directory: admin
+        run: pnpm install --frozen-lockfile
+      - name: Check admin
+        working-directory: admin
+        run: |
+          pnpm run lint
+          antd_output="$(pnpm exec antd lint ./src)"
+          printf '%s\n' "$antd_output"
+          printf '%s\n' "$antd_output" | grep -q 'No issues found\.'
+          pnpm run test
+          pnpm run build
+
   openapi:
     name: API / OpenAPI Drift
     runs-on: ubuntu-latest
@@ -80,6 +104,9 @@ jobs:
     needs: frontend
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
@@ -89,15 +116,16 @@ jobs:
         working-directory: frontend
         run: |
           npm ci
-          OPENAPI_SCHEMA_URL=../backend/api/openapi.json npm run openapi2ts
+          make -C ../backend swagger
+          OPENAPI_SCHEMA_URL=../backend/docs/swagger.json npm run openapi2ts
       - name: Ensure generated client is committed
-        run: git diff --exit-code -- frontend/src/api
+        run: git diff --exit-code -- backend/docs/swagger.json frontend/src/api
 
   delivery:
     name: Delivery / Hygiene
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [backend, agent, frontend, openapi]
+    needs: [backend, agent, frontend, admin, openapi]
     steps:
       - uses: actions/checkout@v4
       - name: Check repository hygiene
@@ -111,7 +139,7 @@ jobs:
   required:
     name: Required / CI
     if: ${{ always() }}
-    needs: [backend, agent, frontend, openapi, delivery]
+    needs: [backend, agent, frontend, admin, openapi, delivery]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -120,5 +148,6 @@ jobs:
           test "${{ needs.backend.result }}" = success
           test "${{ needs.agent.result }}" = success
           test "${{ needs.frontend.result }}" = success
+          test "${{ needs.admin.result }}" = success
           test "${{ needs.openapi.result }}" = success
           test "${{ needs.delivery.result }}" = success
