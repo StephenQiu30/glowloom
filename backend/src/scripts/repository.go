@@ -71,6 +71,99 @@ func (r *ScriptRepository) CreateProject(ctx context.Context, workspaceID uuid.U
 	return Project{ID: record.ID, WorkspaceID: record.WorkspaceID, Name: record.Name, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
+type projectListRow struct {
+	ID              uuid.UUID  `gorm:"column:id"`
+	WorkspaceID     uuid.UUID  `gorm:"column:workspace_id"`
+	Name            string     `gorm:"column:name"`
+	CreatedAt       time.Time  `gorm:"column:created_at"`
+	OperationID     *uuid.UUID `gorm:"column:operation_id"`
+	OperationStatus *string    `gorm:"column:operation_status"`
+	Progress        *int       `gorm:"column:progress"`
+	RevisionID      *uuid.UUID `gorm:"column:revision_id"`
+	SourceStatus    *string    `gorm:"column:source_status"`
+}
+
+func (r *ScriptRepository) ListProjects(ctx context.Context, workspaceID uuid.UUID, query ProjectQuery) (ProjectPage, error) {
+	if r.orm == nil {
+		return ProjectPage{}, fmt.Errorf("script repository ORM is not configured")
+	}
+	if workspaceID == uuid.Nil {
+		return ProjectPage{}, fmt.Errorf("workspace context is missing")
+	}
+	page, pageSize := query.Page, query.PageSize
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	result := ProjectPage{Items: []Project{}, Page: page, PageSize: pageSize}
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		if err := tx.Model(&projectRecord{}).Where("workspace_id = ?", workspaceID).Count(&result.Total).Error; err != nil {
+			return fmt.Errorf("count workspace projects: %w", err)
+		}
+		var rows []projectListRow
+		if err := tx.Raw(`
+			SELECT projects.id,
+			       projects.workspace_id,
+			       projects.name,
+			       projects.created_at,
+			       workflow.operation_id,
+			       workflow.operation_status,
+			       workflow.progress,
+			       workflow.revision_id,
+			       workflow.source_status
+			FROM projects
+			LEFT JOIN LATERAL (
+				SELECT operations.id AS operation_id,
+				       operations.status AS operation_status,
+				       operations.progress,
+				       revisions.id AS revision_id,
+				       revisions.status AS source_status
+				FROM operations
+				JOIN outbox_events
+				  ON outbox_events.operation_id = operations.id
+				 AND outbox_events.topic = ?
+				JOIN nar_source_revisions AS revisions
+				  ON revisions.project_id = projects.id
+				 AND outbox_events.payload ->> 'revision_id' = revisions.id::text
+				WHERE operations.project_id = projects.id
+				  AND operations.type = 'script_analysis'
+				  AND outbox_events.payload ->> 'workspace_id' = projects.workspace_id::text
+				  AND outbox_events.payload ->> 'project_id' = projects.id::text
+				  AND outbox_events.payload ->> 'operation_id' = operations.id::text
+				ORDER BY operations.created_at DESC, operations.id DESC
+				LIMIT 1
+			) AS workflow ON true
+			WHERE projects.workspace_id = ?
+			ORDER BY projects.created_at DESC, projects.id DESC
+			LIMIT ? OFFSET ?
+		`, analysisTopic, workspaceID, pageSize, (page-1)*pageSize).Scan(&rows).Error; err != nil {
+			return fmt.Errorf("list workspace projects: %w", err)
+		}
+		result.Items = make([]Project, 0, len(rows))
+		for _, row := range rows {
+			project := Project{
+				ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name,
+				CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339),
+			}
+			if row.OperationID != nil && row.OperationStatus != nil && row.Progress != nil && row.RevisionID != nil && row.SourceStatus != nil {
+				project.LatestWorkflow = &ProjectWorkflow{
+					ProjectID: project.ID, SourceRevisionID: *row.RevisionID, SourceStatus: *row.SourceStatus,
+					OperationID: *row.OperationID, OperationStatus: *row.OperationStatus, Progress: *row.Progress,
+				}
+			}
+			result.Items = append(result.Items, project)
+		}
+		return nil
+	})
+	if err != nil {
+		return ProjectPage{}, err
+	}
+	return result, nil
+}
+
 func (r *ScriptRepository) CreateScriptRevision(ctx context.Context, projectID uuid.UUID, upload SourceUpload) (ScriptRevision, error) {
 	document, err := ParseSourceDocument(upload.FileName, upload.MediaType, upload.Original)
 	if err != nil {

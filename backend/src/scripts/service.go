@@ -30,6 +30,19 @@ func (s *ScriptAnalysisService) CreateProject(ctx context.Context, workspaceID u
 	return s.repository.CreateProject(ctx, workspaceID, name)
 }
 
+func (s *ScriptAnalysisService) ListProjects(ctx context.Context, workspaceID uuid.UUID, query ProjectQuery) (ProjectPage, error) {
+	if workspaceID == uuid.Nil {
+		return ProjectPage{}, httpapi.Validation("Workspace ID 无效", "重新登录后重试")
+	}
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.PageSize < 1 || query.PageSize > 100 {
+		query.PageSize = 20
+	}
+	return s.repository.ListProjects(ctx, workspaceID, query)
+}
+
 func (s *ScriptAnalysisService) CreateScriptRevision(ctx context.Context, projectID uuid.UUID, upload SourceUpload) (ScriptRevision, error) {
 	if upload.FileName == "" {
 		return ScriptRevision{}, httpapi.Validation("剧本文件名不能为空", "选择 DOCX、Markdown 或 TXT 文件后重试")

@@ -243,6 +243,7 @@ declare namespace API {
   type Project = {
     created_at: string | null;
     id: string | null;
+    latest_workflow: ProjectWorkflow | null;
     name: string | null;
     workspace_id: string | null;
   };
@@ -259,6 +260,35 @@ declare namespace API {
 
   type ProjectEnvelope = {
     data: Project | null;
+  };
+
+  type projectListParams = {
+    /** Workspace UUID */
+    workspaceID: string;
+    /** 页码 */
+    page: number | null;
+    /** 每页数量 */
+    page_size: number | null;
+  };
+
+  type ProjectPage = {
+    items: Project[] | null;
+    page: number | null;
+    page_size: number | null;
+    total: number | null;
+  };
+
+  type ProjectPageEnvelope = {
+    data: ProjectPage | null;
+  };
+
+  type ProjectWorkflow = {
+    operation_id: string | null;
+    operation_status: string | null;
+    progress: number | null;
+    project_id: string | null;
+    source_revision_id: string | null;
+    source_status: string | null;
   };
 
   type RecoveryAction = {

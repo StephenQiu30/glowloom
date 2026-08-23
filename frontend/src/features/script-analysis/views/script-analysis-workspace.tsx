@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { authLogin, authLogout, authRefresh, authRegister } from "@/api/auth";
 import { operationGet } from "@/api/operation";
-import { projectAnalysisGet, projectCreate } from "@/api/project";
+import { projectAnalysisGet, projectCreate, projectList } from "@/api/project";
 import {
   scriptAnalysisApprove,
   scriptAnalysisDraft,
@@ -37,6 +37,7 @@ const fixtureScript = `第1集 归途
 
 type Analysis = API.Analysis;
 type Operation = API.Operation;
+type Project = API.Project;
 type AuthenticatedWorkspace = { id: string; name: string };
 type WorkflowLocator = { projectID: string; revisionID: string; operationID: string };
 type WorkflowPhase = "idle" | "queued" | "draft" | "approved";
@@ -110,6 +111,26 @@ async function restoreWorkflow(locator: WorkflowLocator, onProgress: (operation:
   return { analysis: draft.data, operation: latest, phase: "draft" };
 }
 
+function projectWorkflowLocator(project: Project): WorkflowLocator | null {
+  const workflow = project.latest_workflow;
+  const locator = {
+    projectID: workflow?.project_id ?? "",
+    revisionID: workflow?.source_revision_id ?? "",
+    operationID: workflow?.operation_id ?? "",
+  };
+  if (project.id !== locator.projectID) return null;
+  return Object.values(locator).every((value) => uuidPattern.test(value)) ? locator : null;
+}
+
+async function listWorkspaceProjects(workspaceID: string, page: number) {
+  const response = await projectList({ workspaceID, page, page_size: 20 });
+  return {
+    items: response.data?.items ?? [],
+    page: response.data?.page ?? page,
+    total: response.data?.total ?? 0,
+  };
+}
+
 function userFacingError(cause: unknown, fallback: string) {
   if (!(cause instanceof Error)) return fallback;
   if (cause instanceof ApiClientError && cause.nextAction) {
@@ -139,6 +160,12 @@ export function ScriptAnalysisWorkspace() {
   const [displayName, setDisplayName] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspace, setWorkspace] = useState<AuthenticatedWorkspace | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectPage, setProjectPage] = useState(1);
+  const [projectTotal, setProjectTotal] = useState(0);
+  const [projectListLoading, setProjectListLoading] = useState(false);
+  const [projectListError, setProjectListError] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState("剧本事实分析项目");
   const [scriptName, setScriptName] = useState("首轮试点剧本");
   const [content, setContent] = useState(fixtureScript);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
@@ -168,9 +195,29 @@ export function ScriptAnalysisWorkspace() {
         if (!active || !identity?.access_token || !identity.workspace?.id) return;
         setAccessToken(identity.access_token);
         setWorkspace({ id: identity.workspace.id, name: identity.workspace.name ?? "当前工作区" });
+        setProjectListLoading(true);
+        setProjectListError(null);
+        let listedProjects: Project[] = [];
+        try {
+          const projectPage = await listWorkspaceProjects(identity.workspace.id, 1);
+          listedProjects = projectPage.items;
+          if (active) {
+            setProjects(listedProjects);
+            setProjectPage(projectPage.page);
+            setProjectTotal(projectPage.total);
+          }
+        } catch (cause) {
+          if (!active) return;
+          if (cause instanceof ApiClientError && cause.status === 401) throw cause;
+          setProjectListError(userFacingError(cause, "项目列表加载失败，请重试。"));
+        } finally {
+          if (active) setProjectListLoading(false);
+        }
         const locator = readWorkflowLocator();
         if (!locator) return;
         setProjectID(locator.projectID);
+        const locatedProject = listedProjects.find((project) => project.id === locator.projectID);
+        if (locatedProject?.name) setProjectName(locatedProject.name);
         setRevisionID(locator.revisionID);
         try {
           const restored = await restoreWorkflow(locator, (nextOperation) => {
@@ -192,7 +239,13 @@ export function ScriptAnalysisWorkspace() {
         }
       })
       .catch(() => {
-        if (active) setAccessToken();
+        if (active) {
+          setAccessToken();
+          setWorkspace(null);
+          setProjects([]);
+          setProjectPage(1);
+          setProjectTotal(0);
+        }
       })
       .finally(() => {
         if (active) setRestoringSession(false);
@@ -206,6 +259,10 @@ export function ScriptAnalysisWorkspace() {
     clearWorkflowLocator();
     setAccessToken();
     setWorkspace(null);
+    setProjects([]);
+    setProjectPage(1);
+    setProjectTotal(0);
+    setProjectListError(null);
     setAuthMode("login");
     setPassword("");
     setAnalysis(null);
@@ -214,6 +271,65 @@ export function ScriptAnalysisWorkspace() {
     setProjectID(null);
     setPhase("idle");
     setError(message);
+  }
+
+  async function reloadProjects(workspaceID: string, page = projectPage) {
+    setProjectListLoading(true);
+    setProjectListError(null);
+    try {
+      const projectPage = await listWorkspaceProjects(workspaceID, page);
+      setProjects(projectPage.items);
+      setProjectPage(projectPage.page);
+      setProjectTotal(projectPage.total);
+    } catch (cause) {
+      if (cause instanceof ApiClientError && cause.status === 401) {
+        resetSession("登录会话已失效，请重新登录。");
+        return;
+      }
+      setProjectListError(userFacingError(cause, "项目列表加载失败，请重试。"));
+    } finally {
+      setProjectListLoading(false);
+    }
+  }
+
+  async function openProject(project: Project) {
+    if (!project.id) return;
+    const locator = projectWorkflowLocator(project);
+    setError(null);
+    setProjectID(project.id);
+    if (project.name) setProjectName(project.name);
+    setRevisionID(locator?.revisionID ?? null);
+    setAnalysis(null);
+    setOperation(null);
+    setPhase("idle");
+    if (!locator) {
+      clearWorkflowLocator();
+      return;
+    }
+
+    setBusy(true);
+    writeWorkflowLocator(locator);
+    try {
+      const restored = await restoreWorkflow(locator, setOperation);
+      setOperation(restored.operation);
+      setAnalysis(restored.analysis);
+      setPhase(restored.phase);
+    } catch (cause) {
+      clearWorkflowLocator();
+      reportAuthenticatedFailure(cause, "无法恢复所选项目的剧本工作流。可在该项目中导入新版本。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startNewProject() {
+    clearWorkflowLocator();
+    setProjectID(null);
+    setRevisionID(null);
+    setOperation(null);
+    setAnalysis(null);
+    setPhase("idle");
+    setError(null);
   }
 
   function reportAuthenticatedFailure(cause: unknown, fallback: string) {
@@ -244,6 +360,7 @@ export function ScriptAnalysisWorkspace() {
       clearWorkflowLocator();
       setPassword("");
       setWorkspace({ id: identity.workspace.id, name: identity.workspace.name ?? "当前工作区" });
+      await reloadProjects(identity.workspace.id, 1);
     } catch (cause) {
       setError(userFacingError(cause, "认证失败，请检查邮箱和密码。"));
     } finally {
@@ -274,20 +391,27 @@ export function ScriptAnalysisWorkspace() {
       if (!workspace) {
         throw new Error("登录会话缺失，请重新登录。");
       }
-      const project = await projectCreate({ workspaceID: workspace.id }, { name: "剧本事实分析项目" });
-      if (!project.data?.id) {
-        throw new Error("创建项目后未返回项目 ID。");
+      let targetProjectID = projectID;
+      if (!targetProjectID) {
+        const project = await projectCreate(
+          { workspaceID: workspace.id },
+          { name: projectName.trim() || "剧本事实分析项目" },
+        );
+        if (!project.data?.id) {
+          throw new Error("创建项目后未返回项目 ID。");
+        }
+        targetProjectID = project.data.id;
       }
       const source = sourceFile ?? new File(
         [content],
         `${scriptName.trim() || "未命名剧本"}.txt`,
         { type: "text/plain;charset=utf-8" },
       );
-      const revision = await scriptRevisionCreate({ projectID: project.data.id }, {}, source);
+      const revision = await scriptRevisionCreate({ projectID: targetProjectID }, {}, source);
       if (!revision.data?.id) {
         throw new Error("创建剧本版本后未返回版本 ID。");
       }
-      setProjectID(project.data.id);
+      setProjectID(targetProjectID);
       setRevisionID(revision.data.id);
       const queued = await scriptAnalysisQueue({ revisionID: revision.data.id });
       if (!queued.data?.id) {
@@ -295,7 +419,7 @@ export function ScriptAnalysisWorkspace() {
       }
       setOperation(queued.data);
       setPhase("queued");
-      writeWorkflowLocator({ projectID: project.data.id, revisionID: revision.data.id, operationID: queued.data.id });
+      writeWorkflowLocator({ projectID: targetProjectID, revisionID: revision.data.id, operationID: queued.data.id });
 
       const latest = await waitForOperation(queued.data, setOperation);
       if (latest.status !== "succeeded") {
@@ -307,6 +431,7 @@ export function ScriptAnalysisWorkspace() {
       }
       setAnalysis(draft.data);
       setPhase("draft");
+      await reloadProjects(workspace.id, 1);
     } catch (cause) {
       reportAuthenticatedFailure(cause, "剧本解析失败，请查看任务状态。");
     } finally {
@@ -325,6 +450,7 @@ export function ScriptAnalysisWorkspace() {
       }
       setAnalysis(response.data);
       setPhase("approved");
+      if (workspace) await reloadProjects(workspace.id, 1);
     } catch (cause) {
       reportAuthenticatedFailure(cause, "批准失败，请修正当前事实后重试。");
     } finally {
@@ -401,9 +527,68 @@ export function ScriptAnalysisWorkspace() {
           </div>
         </header>
 
+        <section className="card project-browser" aria-labelledby="project-browser-title">
+          <div className="section-heading">
+            <div>
+              <h2 id="project-browser-title">继续已有项目</h2>
+              <p>项目和最近一次剧本工作流来自当前 Workspace 的服务端事实，可在刷新或更换设备后继续。</p>
+            </div>
+            <button className="secondary" type="button" onClick={startNewProject} disabled={busy || projectID === null}>创建新项目</button>
+          </div>
+          {projectListLoading && <div className="hint" role="status">正在加载项目…</div>}
+          {projectListError && <div className="error" role="alert">
+            {projectListError}
+            <button className="secondary inline-action" type="button" onClick={() => void reloadProjects(workspace.id)}>重试</button>
+          </div>}
+          {!projectListLoading && !projectListError && projects.length === 0 && <p>当前 Workspace 暂无项目。首次提交解析任务时会创建一个新项目。</p>}
+          {projects.length > 0 && <ul className="project-list">
+            {projects.map((project) => {
+              if (!project.id) return null;
+              const locator = projectWorkflowLocator(project);
+              const selected = project.id === projectID;
+              return <li key={project.id} className={selected ? "selected" : undefined}>
+                <div>
+                  <strong>{project.name ?? "未命名项目"}</strong>
+                  <div className="hint">
+                    {locator
+                      ? `${project.latest_workflow?.source_status ?? "unknown"} · ${project.latest_workflow?.operation_status ?? "unknown"} · ${project.latest_workflow?.progress ?? 0}%`
+                      : "尚无可恢复的剧本工作流"}
+                  </div>
+                </div>
+                <button
+                  className={selected ? "primary" : "secondary"}
+                  type="button"
+                  aria-label={`${locator ? "继续解析" : "在项目中导入"} ${project.name ?? "未命名项目"}`}
+                  onClick={() => void openProject(project)}
+                  disabled={busy}
+                >
+                  {selected ? "当前项目" : locator ? "继续" : "选择"}
+                </button>
+              </li>;
+            })}
+          </ul>}
+          {projectTotal > 0 && <nav className="project-pagination" aria-label="项目列表分页">
+            <span className="hint">共 {projectTotal} 个项目 · 第 {projectPage} 页</span>
+            <div className="actions">
+              <button className="secondary" type="button" disabled={busy || projectListLoading || projectPage <= 1} onClick={() => void reloadProjects(workspace.id, projectPage - 1)}>上一页</button>
+              <button className="secondary" type="button" disabled={busy || projectListLoading || projectPage * 20 >= projectTotal} onClick={() => void reloadProjects(workspace.id, projectPage + 1)}>下一页</button>
+            </div>
+          </nav>}
+        </section>
+
         <div className="grid">
           <section className="card" aria-labelledby="source-title">
             <h2 id="source-title">1. 导入整本剧本</h2>
+            <div className="field">
+              <label htmlFor="project-name">项目名称</label>
+              <input
+                id="project-name"
+                value={projectName}
+                disabled={projectID !== null}
+                onChange={(event) => setProjectName(event.target.value)}
+              />
+              <span className="hint">{projectID ? "新版本将导入当前选中项目；如需新项目，请先点击“创建新项目”。" : "尚未选择已有项目，提交时会创建此项目。"}</span>
+            </div>
             <div className="field">
               <label htmlFor="script-file">剧本文件</label>
               <input

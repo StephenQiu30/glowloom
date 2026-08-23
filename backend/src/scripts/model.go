@@ -85,10 +85,32 @@ type Workspace struct {
 }
 
 type Project struct {
-	ID          uuid.UUID `json:"id"`
-	WorkspaceID uuid.UUID `json:"workspace_id"`
-	Name        string    `json:"name"`
-	CreatedAt   string    `json:"created_at"`
+	ID             uuid.UUID        `json:"id"`
+	WorkspaceID    uuid.UUID        `json:"workspace_id"`
+	Name           string           `json:"name"`
+	CreatedAt      string           `json:"created_at"`
+	LatestWorkflow *ProjectWorkflow `json:"latest_workflow,omitempty"`
+}
+
+type ProjectWorkflow struct {
+	ProjectID        uuid.UUID `json:"project_id"`
+	SourceRevisionID uuid.UUID `json:"source_revision_id"`
+	SourceStatus     string    `json:"source_status"`
+	OperationID      uuid.UUID `json:"operation_id"`
+	OperationStatus  string    `json:"operation_status"`
+	Progress         int       `json:"progress"`
+}
+
+type ProjectPage struct {
+	Items    []Project `json:"items"`
+	Total    int64     `json:"total"`
+	Page     int       `json:"page"`
+	PageSize int       `json:"page_size"`
+}
+
+type ProjectQuery struct {
+	Page     int
+	PageSize int
 }
 
 type ScriptRevision struct {
@@ -150,6 +172,10 @@ type WorkspaceEnvelope struct {
 
 type ProjectEnvelope struct {
 	Data Project `json:"data"`
+}
+
+type ProjectPageEnvelope struct {
+	Data ProjectPage `json:"data"`
 }
 
 type ScriptRevisionEnvelope struct {

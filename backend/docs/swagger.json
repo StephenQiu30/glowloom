@@ -1123,6 +1123,62 @@
             }
         },
         "/api/workspaces/{workspaceID}/projects": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "project"
+                ],
+                "summary": "查询项目列表",
+                "operationId": "project_list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace UUID",
+                        "name": "workspaceID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/scripts.ProjectPageEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -1822,6 +1878,9 @@
                 "id": {
                     "type": "string"
                 },
+                "latest_workflow": {
+                    "$ref": "#/definitions/scripts.ProjectWorkflow"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -1835,6 +1894,57 @@
             "properties": {
                 "data": {
                     "$ref": "#/definitions/scripts.Project"
+                }
+            }
+        },
+        "scripts.ProjectPage": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.Project"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "scripts.ProjectPageEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/scripts.ProjectPage"
+                }
+            }
+        },
+        "scripts.ProjectWorkflow": {
+            "type": "object",
+            "properties": {
+                "operation_id": {
+                    "type": "string"
+                },
+                "operation_status": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "source_revision_id": {
+                    "type": "string"
+                },
+                "source_status": {
+                    "type": "string"
                 }
             }
         },

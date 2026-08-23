@@ -16,6 +16,25 @@ export async function projectAnalysisGet(
   });
 }
 
+/** 查询项目列表 GET /api/workspaces/${param0}/projects */
+export async function projectList(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.projectListParams,
+  options?: RequestOptions
+) {
+  const { workspaceID: param0, ...queryParams } = params;
+  return request<API.ProjectPageEnvelope>(
+    `/api/workspaces/${param0}/projects`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
+      ...(options || {}),
+    }
+  );
+}
+
 /** 创建项目 POST /api/workspaces/${param0}/projects */
 export async function projectCreate(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

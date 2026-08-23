@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -35,6 +36,7 @@ func (h *ScriptController) Mount(router chi.Router) {
 	router.Route("/api", func(router chi.Router) {
 		router.Post("/workspaces", h.createWorkspace)
 		router.Post("/workspaces/{workspaceID}/projects", h.createProject)
+		router.Get("/workspaces/{workspaceID}/projects", h.listProjects)
 		router.Post("/projects/{projectID}/script-revisions", h.createScriptRevision)
 		router.Post("/script-revisions/{revisionID}/analyze", h.analyzeScript)
 		router.Get("/script-revisions/{revisionID}/analysis-draft", h.getAnalysisDraft)
@@ -159,6 +161,54 @@ func (h *ScriptController) createProject(writer http.ResponseWriter, request *ht
 		return
 	}
 	httpapi.WriteData(writer, httpapi.StatusCreated, project)
+}
+
+// listProjects 查询当前 Workspace 的项目和最新可恢复剧本工作流。
+// @Summary 查询项目列表
+// @Tags project
+// @ID project_list
+// @Produce json
+// @Param workspaceID path string true "Workspace UUID"
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Security BearerAccessToken
+// @Success 200 {object} ProjectPageEnvelope
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/workspaces/{workspaceID}/projects [get]
+func (h *ScriptController) listProjects(writer http.ResponseWriter, request *http.Request) {
+	workspaceID, ok := parseID(writer, request, chi.URLParam(request, "workspaceID"))
+	if !ok {
+		return
+	}
+	page, err := parseProjectQueryInt(request, "page", 1)
+	if err != nil {
+		httpapi.WriteError(writer, request, err)
+		return
+	}
+	pageSize, err := parseProjectQueryInt(request, "page_size", 20)
+	if err != nil {
+		httpapi.WriteError(writer, request, err)
+		return
+	}
+	projects, err := h.service.ListProjects(request.Context(), workspaceID, ProjectQuery{Page: page, PageSize: pageSize})
+	if err != nil {
+		httpapi.WriteError(writer, request, err)
+		return
+	}
+	httpapi.WriteData(writer, httpapi.StatusOK, projects)
+}
+
+func parseProjectQueryInt(request *http.Request, key string, fallback int) (int, error) {
+	raw := strings.TrimSpace(request.URL.Query().Get(key))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, httpapi.Validation(key+" 必须是整数", "修改查询参数后重试")
+	}
+	return value, nil
 }
 
 // createScriptRevision 创建剧本修订。

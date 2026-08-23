@@ -194,11 +194,14 @@ describe("ScriptAnalysisWorkspace", () => {
     render(<ScriptAnalysisWorkspace />);
 
     expect(await screen.findByRole("heading", { name: "继续已有项目" })).toBeInTheDocument();
+    expect(screen.getByText("共 1 个项目 · 第 1 页")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "项目列表分页" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "继续解析 跨设备项目" }));
 
     await waitFor(() => expect(screen.getByTestId("phase-status")).toHaveTextContent("事实已批准"));
-    expect(api.projectList).toHaveBeenCalledWith({ workspaceID, page: 1, pageSize: 20 });
+    expect(api.projectList).toHaveBeenCalledWith({ workspaceID, page: 1, page_size: 20 });
     expect(api.operationGet).toHaveBeenCalledWith({ operationID });
+    expect(screen.getByLabelText("项目名称")).toHaveValue("跨设备项目");
     expect(window.location.search).toBe(`?project=${projectID}&revision=${revisionID}&operation=${operationID}`);
   });
 
