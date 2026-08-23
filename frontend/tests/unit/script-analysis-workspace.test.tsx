@@ -102,6 +102,81 @@ describe("ScriptAnalysisWorkspace", () => {
     expect(window.localStorage).toHaveLength(0);
   });
 
+  it("uploads a DOCX original and exposes its deterministic ParseReport", async () => {
+    api.authRefresh.mockResolvedValue({
+      data: {
+        access_token: "refreshed-access-token",
+        workspace: { id: "11111111-1111-4111-8111-111111111111", name: "恢复工作区" },
+      },
+    });
+    api.projectCreate.mockResolvedValue({ data: { id: "33333333-3333-4333-8333-333333333333" } });
+    api.scriptRevisionCreate.mockResolvedValue({ data: { id: "44444444-4444-4444-8444-444444444444" } });
+    api.scriptAnalysisQueue.mockResolvedValue({ data: { id: "55555555-5555-4555-8555-555555555555", status: "queued", progress: 0 } });
+    api.operationGet.mockResolvedValue({ data: { id: "55555555-5555-4555-8555-555555555555", status: "succeeded", progress: 100 } });
+    api.scriptAnalysisDraft.mockResolvedValue({
+      data: {
+        source_hash: "source-hash",
+        parse_report: {
+          status: "complete",
+          format: "docx",
+          parser_version: "deterministic-script-parser-v1",
+          original_hash: "source-hash",
+          text_hash: "text-hash",
+          character_count: 42,
+          paragraph_count: 3,
+          failed_scopes: [],
+        },
+        episodes: [],
+        characters: [],
+        locations: [],
+        props: [],
+        costumes: [],
+      },
+    });
+    const user = userEvent.setup();
+    render(<ScriptAnalysisWorkspace />);
+
+    const file = new File(["PK fixture"], "全剧本.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    await user.upload(await screen.findByLabelText("剧本文件"), file);
+    await user.click(screen.getByTestId("analyze-button"));
+
+    await waitFor(() => expect(api.scriptRevisionCreate).toHaveBeenCalledWith(
+      { projectID: "33333333-3333-4333-8333-333333333333" },
+      {},
+      file,
+    ));
+    expect(await screen.findByText("DOCX · 3 段 · 42 字符")).toBeInTheDocument();
+    expect(screen.getByText("解析完整，无失败范围")).toBeInTheDocument();
+  });
+
+  it("shows the stable API recovery action for an import failure", async () => {
+    api.authRefresh.mockResolvedValue({
+      data: {
+        access_token: "refreshed-access-token",
+        workspace: { id: "11111111-1111-4111-8111-111111111111", name: "恢复工作区" },
+      },
+    });
+    api.projectCreate.mockRejectedValue(new ApiClientError(
+      "剧本文件格式无效或内容损坏",
+      "script_invalid",
+      422,
+      undefined,
+      [],
+      undefined,
+      "确认文件是未加密、可正常打开的 DOCX、Markdown 或 UTF-8 TXT 后重试",
+    ));
+    const user = userEvent.setup();
+    render(<ScriptAnalysisWorkspace />);
+
+    await user.click(await screen.findByTestId("analyze-button"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "剧本文件格式无效或内容损坏。下一步：确认文件是未加密、可正常打开的 DOCX、Markdown 或 UTF-8 TXT 后重试",
+    );
+  });
+
   it("returns to the identity gate when an authenticated request reports an expired session", async () => {
     api.authRegister.mockResolvedValue({
       data: {
