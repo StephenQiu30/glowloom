@@ -1,19 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { authLogin, authLogout, authRefresh, authRegister } from "@/api/auth";
 import { operationGet } from "@/api/operation";
 import { projectAnalysisGet, projectCreate, projectList } from "@/api/project";
 import {
-  scriptAnalysisApprove,
   scriptAnalysisDraft,
   scriptAnalysisDraftRevise,
   scriptAnalysisQueue,
+  scriptEpisodeBreakdownApprove,
+  scriptNarrativeApprove,
+  scriptNarrativeDraftRevise,
   scriptRevisionCreate,
 } from "@/api/script";
-import { ApiClientError, setAccessToken } from "@/lib/request";
 import { EpisodeBreakdownEditor } from "@/features/script-analysis/views/episode-breakdown-editor";
+import { NarrativeEditor } from "@/features/script-analysis/views/narrative-editor";
+import { ApiClientError, setAccessToken } from "@/lib/request";
 
 const fixtureScript = `第1集 归途
 场景：海边码头
@@ -42,7 +45,7 @@ type Operation = API.Operation;
 type Project = API.Project;
 type AuthenticatedWorkspace = { id: string; name: string };
 type WorkflowLocator = { projectID: string; revisionID: string; operationID: string };
-type WorkflowPhase = "idle" | "queued" | "draft" | "approved";
+type WorkflowPhase = "idle" | "queued" | "breakdown" | "narrative" | "knowledge";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -79,8 +82,8 @@ function sleep(milliseconds: number) {
 }
 
 async function waitForOperation(initial: Operation, onProgress: (operation: Operation) => void) {
-  let latest = initial;
-  for (let attempt = 0; attempt < 80 && latest.status !== "succeeded" && latest.status !== "failed"; attempt += 1) {
+	let latest = initial;
+	for (let attempt = 0; attempt < 80 && (latest.status === "queued" || latest.status === "running"); attempt += 1) {
     await sleep(250);
     if (!latest.id) throw new Error("Operation 缺少可恢复 ID。");
     const response = await operationGet({ operationID: latest.id });
@@ -91,6 +94,12 @@ async function waitForOperation(initial: Operation, onProgress: (operation: Oper
   return latest;
 }
 
+function phaseForAnalysis(analysis: Analysis): Exclude<WorkflowPhase, "idle" | "queued"> {
+	if (analysis.narrative?.status === "approved") return "knowledge";
+	if (analysis.narrative?.id) return "narrative";
+	return "breakdown";
+}
+
 async function restoreWorkflow(locator: WorkflowLocator, onProgress: (operation: Operation) => void): Promise<{ analysis: Analysis; operation: Operation; phase: Exclude<WorkflowPhase, "idle" | "queued"> }> {
   const response = await operationGet({ operationID: locator.operationID });
   if (!response.data?.id || response.data.project_id !== locator.projectID || response.data.source_revision_id !== locator.revisionID) {
@@ -98,19 +107,19 @@ async function restoreWorkflow(locator: WorkflowLocator, onProgress: (operation:
   }
   onProgress(response.data);
   const latest = await waitForOperation(response.data, onProgress);
-  if (latest.status !== "succeeded") {
-    throw new Error(latest.error ?? "剧本解析任务未成功完成");
+	if (latest.status === "failed" || latest.status === "cancelled") {
+		throw new Error(latest.error ?? "剧本解析任务未成功完成");
   }
   try {
     const approved = await projectAnalysisGet({ projectID: locator.projectID });
     if (!approved.data) throw new Error("项目分析查询返回无效结果。");
-    return { analysis: approved.data, operation: latest, phase: "approved" };
+		return { analysis: approved.data, operation: latest, phase: "knowledge" };
   } catch (cause) {
     if (!(cause instanceof ApiClientError) || cause.status !== 404) throw cause;
   }
   const draft = await scriptAnalysisDraft({ revisionID: locator.revisionID });
   if (!draft.data) throw new Error("分析草稿查询返回无效结果。");
-  return { analysis: draft.data, operation: latest, phase: "draft" };
+	return { analysis: draft.data, operation: latest, phase: phaseForAnalysis(draft.data) };
 }
 
 function projectWorkflowLocator(project: Project): WorkflowLocator | null {
@@ -178,16 +187,6 @@ export function ScriptAnalysisWorkspace() {
   const [phase, setPhase] = useState<WorkflowPhase>("idle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const assets = useMemo(
-    () => analysis ? [
-      ...(analysis.characters ?? []),
-      ...(analysis.locations ?? []),
-      ...(analysis.props ?? []),
-      ...(analysis.costumes ?? []),
-    ] : [],
-    [analysis],
-  );
 
   useEffect(() => {
     let active = true;
@@ -342,6 +341,12 @@ export function ScriptAnalysisWorkspace() {
     setError(userFacingError(cause, fallback));
   }
 
+  async function refreshCurrentOperation() {
+    if (!operation?.id) return;
+    const response = await operationGet({ operationID: operation.id });
+    if (response.data?.id) setOperation(response.data);
+  }
+
   async function authenticate() {
     setBusy(true);
     setError(null);
@@ -424,7 +429,7 @@ export function ScriptAnalysisWorkspace() {
       writeWorkflowLocator({ projectID: targetProjectID, revisionID: revision.data.id, operationID: queued.data.id });
 
       const latest = await waitForOperation(queued.data, setOperation);
-      if (latest.status !== "succeeded") {
+      if (latest.status === "failed" || latest.status === "cancelled") {
         throw new Error(latest.error ?? "剧本解析任务未成功完成");
       }
       const draft = await scriptAnalysisDraft({ revisionID: revision.data.id });
@@ -432,7 +437,7 @@ export function ScriptAnalysisWorkspace() {
         throw new Error("解析完成但未返回可审阅草稿。");
       }
       setAnalysis(draft.data);
-      setPhase("draft");
+      setPhase("breakdown");
       await reloadProjects(workspace.id, 1);
     } catch (cause) {
       reportAuthenticatedFailure(cause, "剧本解析失败，请查看任务状态。");
@@ -441,20 +446,65 @@ export function ScriptAnalysisWorkspace() {
     }
   }
 
-  async function approve() {
+  async function approveBreakdown() {
     if (!revisionID || analysis?.breakdown?.status !== "ready") return;
     setBusy(true);
     setError(null);
     try {
-      const response = await scriptAnalysisApprove({ revisionID });
+      const response = await scriptEpisodeBreakdownApprove({ revisionID });
       if (!response.data) {
-        throw new Error("批准完成但未返回正式分析事实。");
+        throw new Error("拆解批准完成但未返回叙事草稿。");
       }
       setAnalysis(response.data);
-      setPhase("approved");
+      setPhase("narrative");
+      await refreshCurrentOperation();
       if (workspace) await reloadProjects(workspace.id, 1);
     } catch (cause) {
-      reportAuthenticatedFailure(cause, "批准失败，请修正当前事实后重试。");
+      reportAuthenticatedFailure(cause, "剧集拆解批准失败，请修正覆盖问题后重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reviseNarrative(operations: API.NarrativeOperation[]) {
+    if (!revisionID || !analysis?.narrative?.content_hash) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await scriptNarrativeDraftRevise(
+        { revisionID },
+        { expected_narrative_hash: analysis.narrative.content_hash, operations },
+      );
+      if (!response.data) {
+        throw new Error("叙事修订完成但未返回新版本。");
+      }
+      setAnalysis(response.data);
+      setPhase("narrative");
+    } catch (cause) {
+      reportAuthenticatedFailure(cause, "叙事修订失败，请刷新当前基线后重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function approveNarrative() {
+    if (!revisionID || analysis?.narrative?.status !== "ready" || !analysis.narrative.content_hash) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await scriptNarrativeApprove(
+        { revisionID },
+        { expected_narrative_hash: analysis.narrative.content_hash },
+      );
+      if (!response.data) {
+        throw new Error("叙事批准完成但未返回正式叙事事实。");
+      }
+      setAnalysis(response.data);
+      setPhase("knowledge");
+      await refreshCurrentOperation();
+      if (workspace) await reloadProjects(workspace.id, 1);
+    } catch (cause) {
+      reportAuthenticatedFailure(cause, "叙事批准失败，请解决结构与 Mention 阻塞项后重试。");
     } finally {
       setBusy(false);
     }
@@ -473,7 +523,7 @@ export function ScriptAnalysisWorkspace() {
         throw new Error("拆解修订完成但未返回新版本。");
       }
       setAnalysis(response.data);
-      setPhase("draft");
+      setPhase("breakdown");
     } catch (cause) {
       reportAuthenticatedFailure(cause, "剧集拆解修订失败，请刷新当前基线后重试。");
     } finally {
@@ -540,8 +590,9 @@ export function ScriptAnalysisWorkspace() {
             <div className="status" data-testid="phase-status">
               {phase === "idle" && "等待导入"}
               {phase === "queued" && `解析中 ${operation?.progress ?? 0}%`}
-              {phase === "draft" && "剧集边界待校对"}
-              {phase === "approved" && "叙事已批准 · 知识待决议"}
+              {phase === "breakdown" && "剧集边界待校对"}
+              {phase === "narrative" && "叙事结构待校对"}
+              {phase === "knowledge" && "叙事已批准 · 知识待决议"}
             </div>
             <div className="actions" style={{ marginTop: 10, justifyContent: "flex-end" }}>
               <span className="hint">{workspace.name}</span>
@@ -642,12 +693,13 @@ export function ScriptAnalysisWorkspace() {
             </div>
             <div className="actions">
               <button className="primary" type="button" onClick={submitForAnalysis} disabled={busy || (!sourceFile && !content.trim())} data-testid="analyze-button">
-                {busy && phase !== "draft" ? "正在解析…" : "提交解析任务"}
+                {busy && (phase === "idle" || phase === "queued") ? "正在解析…" : "提交解析任务"}
               </button>
-              {phase === "draft" && <button className="secondary" type="button" onClick={approve} disabled={busy || analysis?.breakdown?.status !== "ready"} data-testid="approve-button">批准当前拆解与叙事</button>}
+              {phase === "breakdown" && <button className="secondary" type="button" onClick={approveBreakdown} disabled={busy || analysis?.breakdown?.status !== "ready"} data-testid="approve-button">批准剧集拆解并创建叙事草稿</button>}
+              {phase === "narrative" && <button className="secondary" type="button" onClick={approveNarrative} disabled={busy || analysis?.narrative?.status !== "ready"} data-testid="approve-narrative-button">批准 NarrativeRevision</button>}
             </div>
             {error && <div className="error" role="alert">{error}</div>}
-            {phase === "approved" && <div className="success" role="status">叙事已批准，ProductionElementMention 已冻结；实体与生产需求仍待知识决议。</div>}
+            {phase === "knowledge" && <div className="success" role="status">叙事已批准，ProductionElementMention 已冻结；实体与生产需求仍待知识决议。</div>}
           </section>
 
           <section className="card" aria-labelledby="operation-title">
@@ -662,8 +714,8 @@ export function ScriptAnalysisWorkspace() {
             {analysis && <div className="summary">
               <div className="metric"><strong>{analysis.episodes?.length ?? 0}</strong><span>剧集</span></div>
               <div className="metric"><strong>{(analysis.episodes ?? []).reduce((total, episode) => total + (episode.scenes?.length ?? 0), 0)}</strong><span>场景</span></div>
-              <div className="metric"><strong>{analysis.characters?.length ?? 0}</strong><span>人物</span></div>
-              <div className="metric"><strong>{assets.length}</strong><span>来源 Mention</span></div>
+              <div className="metric"><strong>{new Set((analysis.mentions ?? []).filter((mention) => mention.element_type === "character").map((mention) => mention.surface_text)).size}</strong><span>人物 Mention</span></div>
+              <div className="metric"><strong>{analysis.mentions?.length ?? 0}</strong><span>来源 Mention</span></div>
             </div>}
             {analysis?.parse_report && <div className="operation" data-testid="parse-report">
               <div>
@@ -675,12 +727,14 @@ export function ScriptAnalysisWorkspace() {
           </section>
         </div>
 
-        {analysis?.breakdown && <EpisodeBreakdownEditor analysis={analysis} disabled={busy} editable={phase === "draft"} onRevise={reviseBreakdown} />}
+        {analysis?.breakdown && <EpisodeBreakdownEditor analysis={analysis} disabled={busy} editable={phase === "breakdown"} onRevise={reviseBreakdown} />}
+
+        {analysis?.narrative?.id && <NarrativeEditor key={analysis.narrative.content_hash ?? analysis.narrative.id} analysis={analysis} disabled={busy} editable={phase === "narrative"} onRevise={reviseNarrative} />}
 
         {analysis && <section className="card" style={{ marginTop: 18 }} aria-labelledby="result-title">
-          <h2 id="result-title">{analysis.breakdown ? "4" : "3"}. 场景与来源 Mention</h2>
+          <h2 id="result-title">{analysis.narrative?.id ? "5" : analysis.breakdown ? "4" : "3"}. 场景与来源 Mention</h2>
           <div className="asset-list" role="list" aria-label="来源 Mention 清单">
-            {assets.map((asset) => <span className="asset" role="listitem" key={`${asset.kind}-${asset.name}`}>{asset.name}<em>{asset.kind} · {(asset.episode_numbers ?? []).join(", ")}</em></span>)}
+            {(analysis.mentions ?? []).map((mention) => <span className="asset" role="listitem" key={mention.id ?? `${mention.element_type}-${mention.surface_text}-${mention.anchor?.start_offset}`}>{mention.surface_text}<em>{mention.element_type} · Offset {mention.anchor?.start_offset}—{mention.anchor?.end_offset}</em></span>)}
           </div>
           {(analysis.episodes ?? []).filter((episode) => episode.decision !== "ignored").map((episode) => <article className="episode" key={episode.temporary_key ?? episode.number}>
             <div className="episode-head"><span className="episode-title">第 {episode.number} 集 · {episode.title}</span><span className="hint">{episode.scenes?.length ?? 0} 个场景</span></div>

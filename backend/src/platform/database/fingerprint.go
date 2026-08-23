@@ -12,7 +12,7 @@ var requiredTables = []string{
 	"iam_users", "iam_memberships", "iam_roles", "iam_project_grants", "iam_sessions",
 	"prj_brief_revisions", "prj_content_units", "prj_content_order_revisions", "prj_content_order_items",
 	"nar_source_revisions", "nar_analysis_drafts", "nar_import_runs", "nar_analysis_runs", "nar_episode_breakdown_revisions", "nar_episode_candidates", "nar_episode_breakdown_manifests",
-	"nar_narrative_revisions", "nar_scenes", "nar_beats", "nar_production_element_mentions",
+	"nar_narrative_revisions", "nar_scenes", "nar_narrative_nodes", "nar_production_element_mentions",
 	"pk_entities", "pk_mention_resolutions", "pk_production_requirement_items", "pk_production_requirement_revisions",
 	"sht_shots", "sht_shot_plan_revisions", "m06_agent_runs", "m06_proposal_items", "gen_plans", "gen_plan_items",
 	"exec_generation_jobs", "exec_attempts", "media_artifacts", "media_artifact_locations", "media_candidates", "media_selection_decisions",

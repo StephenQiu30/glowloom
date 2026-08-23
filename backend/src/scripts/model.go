@@ -28,12 +28,30 @@ type Anchor struct {
 	EndOffset   int `json:"end_offset"`
 }
 
+type NarrativeNodeKind string
+
+const (
+	NarrativeNodeBeat      NarrativeNodeKind = "beat"
+	NarrativeNodeDialogue  NarrativeNodeKind = "dialogue"
+	NarrativeNodeAction    NarrativeNodeKind = "action"
+	NarrativeNodeNarration NarrativeNodeKind = "narration"
+)
+
+type NarrativeNodeStatus string
+
+const (
+	NarrativeNodeStatusActive  NarrativeNodeStatus = "active"
+	NarrativeNodeStatusIgnored NarrativeNodeStatus = "ignored"
+)
+
 type NarrativeUnit struct {
-	ID      string `json:"id"`
-	Kind    string `json:"kind"`
-	Text    string `json:"text"`
-	Anchor  Anchor `json:"anchor"`
-	Speaker string `json:"speaker,omitempty"`
+	ID           string              `json:"id"`
+	Kind         NarrativeNodeKind   `json:"kind"`
+	Text         string              `json:"text"`
+	Anchor       Anchor              `json:"anchor"`
+	Speaker      string              `json:"speaker,omitempty"`
+	Status       NarrativeNodeStatus `json:"status"`
+	IgnoreReason string              `json:"ignore_reason,omitempty"`
 }
 
 type Scene struct {
@@ -103,6 +121,83 @@ type EpisodeBreakdownOperation struct {
 	Title                string                 `json:"title,omitempty"`
 }
 
+type NarrativeStatus string
+
+const (
+	NarrativeStatusReady    NarrativeStatus = "ready"
+	NarrativeStatusBlocked  NarrativeStatus = "blocked"
+	NarrativeStatusApproved NarrativeStatus = "approved"
+)
+
+type NarrativeIssue struct {
+	Code      string  `json:"code"`
+	Message   string  `json:"message"`
+	SceneID   string  `json:"scene_id,omitempty"`
+	NodeID    string  `json:"node_id,omitempty"`
+	MentionID string  `json:"mention_id,omitempty"`
+	Anchor    *Anchor `json:"anchor,omitempty"`
+}
+
+type NarrativeRevision struct {
+	ID           uuid.UUID        `json:"id"`
+	RevisionNo   int              `json:"revision_no"`
+	Status       NarrativeStatus  `json:"status"`
+	ContentHash  string           `json:"content_hash"`
+	Completeness string           `json:"completeness"`
+	Issues       []NarrativeIssue `json:"issues"`
+}
+
+type ProductionElementMention struct {
+	ID          string `json:"id"`
+	SceneID     string `json:"scene_id"`
+	ElementType string `json:"element_type"`
+	SurfaceText string `json:"surface_text"`
+	Status      string `json:"status"`
+	Anchor      Anchor `json:"anchor"`
+}
+
+type NarrativeOperationType string
+
+const (
+	NarrativeOperationUpdateScene   NarrativeOperationType = "update_scene"
+	NarrativeOperationSplitScene    NarrativeOperationType = "split_scene"
+	NarrativeOperationMergeScenes   NarrativeOperationType = "merge_scenes"
+	NarrativeOperationReorderScenes NarrativeOperationType = "reorder_scenes"
+	NarrativeOperationCreateNode    NarrativeOperationType = "create_node"
+	NarrativeOperationUpdateNode    NarrativeOperationType = "update_node"
+	NarrativeOperationDeleteNode    NarrativeOperationType = "delete_node"
+	NarrativeOperationReorderNodes  NarrativeOperationType = "reorder_nodes"
+	NarrativeOperationIgnoreNode    NarrativeOperationType = "ignore_node"
+	NarrativeOperationCreateMention NarrativeOperationType = "create_mention"
+	NarrativeOperationUpdateMention NarrativeOperationType = "update_mention"
+	NarrativeOperationDeleteMention NarrativeOperationType = "delete_mention"
+)
+
+type NarrativeOperation struct {
+	Type            NarrativeOperationType `json:"type"`
+	EpisodeKey      string                 `json:"episode_key,omitempty"`
+	SceneID         string                 `json:"scene_id,omitempty"`
+	SceneIDs        []string               `json:"scene_ids,omitempty"`
+	OrderedSceneIDs []string               `json:"ordered_scene_ids,omitempty"`
+	Heading         string                 `json:"heading,omitempty"`
+	BoundaryNodeID  string                 `json:"boundary_node_id,omitempty"`
+	LeftSceneID     string                 `json:"left_scene_id,omitempty"`
+	LeftHeading     string                 `json:"left_heading,omitempty"`
+	RightSceneID    string                 `json:"right_scene_id,omitempty"`
+	RightHeading    string                 `json:"right_heading,omitempty"`
+	TargetSceneID   string                 `json:"target_scene_id,omitempty"`
+	NodeID          string                 `json:"node_id,omitempty"`
+	OrderedNodeIDs  []string               `json:"ordered_node_ids,omitempty"`
+	NodeKind        NarrativeNodeKind      `json:"node_kind,omitempty"`
+	Text            string                 `json:"text,omitempty"`
+	Speaker         string                 `json:"speaker,omitempty"`
+	IgnoreReason    string                 `json:"ignore_reason,omitempty"`
+	MentionID       string                 `json:"mention_id,omitempty"`
+	ElementType     string                 `json:"element_type,omitempty"`
+	SurfaceText     string                 `json:"surface_text,omitempty"`
+	Anchor          Anchor                 `json:"anchor"`
+}
+
 type Asset struct {
 	Kind           string   `json:"kind"`
 	Name           string   `json:"name"`
@@ -111,14 +206,16 @@ type Asset struct {
 }
 
 type Analysis struct {
-	SourceHash  string           `json:"source_hash"`
-	ParseReport ParseReport      `json:"parse_report"`
-	Breakdown   EpisodeBreakdown `json:"breakdown"`
-	Episodes    []Episode        `json:"episodes"`
-	Characters  []Asset          `json:"characters"`
-	Locations   []Asset          `json:"locations"`
-	Props       []Asset          `json:"props"`
-	Costumes    []Asset          `json:"costumes"`
+	SourceHash  string                     `json:"source_hash"`
+	ParseReport ParseReport                `json:"parse_report"`
+	Breakdown   EpisodeBreakdown           `json:"breakdown"`
+	Narrative   NarrativeRevision          `json:"narrative"`
+	Episodes    []Episode                  `json:"episodes"`
+	Mentions    []ProductionElementMention `json:"mentions"`
+	Characters  []Asset                    `json:"characters"`
+	Locations   []Asset                    `json:"locations"`
+	Props       []Asset                    `json:"props"`
+	Costumes    []Asset                    `json:"costumes"`
 }
 
 type ParseReport struct {
@@ -282,6 +379,7 @@ func AnalyzeScript(content string) (Analysis, error) {
 	lines := strings.SplitAfter(content, "\n")
 	analysis := Analysis{SourceHash: HashContent(content), Breakdown: EpisodeBreakdown{RevisionNo: 1}}
 	assetIndex := map[string]*Asset{}
+	mentionIndex := map[string]bool{}
 	currentEpisode := -1
 	currentScene := -1
 	offset := 0
@@ -301,7 +399,7 @@ func AnalyzeScript(content string) (Analysis, error) {
 		if len(*scenes) > 0 && strings.TrimSpace(heading) == "" {
 			return len(*scenes) - 1
 		}
-		id := fmt.Sprintf("%s-scene-%d", analysis.Episodes[episodeIndex].TemporaryKey, len(*scenes)+1)
+		id := stableNarrativeMemberID("scene", analysis.SourceHash, anchor.StartOffset, heading)
 		*scenes = append(*scenes, Scene{ID: id, Heading: firstNonEmpty(strings.TrimSpace(heading), "未命名场景"), Anchor: anchor})
 		return len(*scenes) - 1
 	}
@@ -355,6 +453,17 @@ func AnalyzeScript(content string) (Analysis, error) {
 		}
 		// The slices above contain value copies; update the canonical output entry.
 		updateAsset(&analysis, asset)
+		if currentEpisode >= 0 && currentScene >= 0 {
+			sceneID := analysis.Episodes[currentEpisode].Scenes[currentScene].ID
+			mentionKey := fmt.Sprintf("%s:%s:%d:%d", kind, strings.ToLower(name), anchor.StartOffset, anchor.EndOffset)
+			if !mentionIndex[mentionKey] {
+				mentionIndex[mentionKey] = true
+				analysis.Mentions = append(analysis.Mentions, ProductionElementMention{
+					ID:      stableNarrativeMemberID("mention", analysis.SourceHash, anchor.StartOffset, kind+":"+strings.ToLower(name)),
+					SceneID: sceneID, ElementType: kind, SurfaceText: name, Status: "active", Anchor: anchor,
+				})
+			}
+		}
 	}
 
 	for lineNumber, raw := range lines {
@@ -395,14 +504,17 @@ func AnalyzeScript(content string) (Analysis, error) {
 			continue
 		}
 
-		kind := "action"
+		kind := NarrativeNodeAction
 		speaker := ""
 		if match := speakerPattern.FindStringSubmatch(trimmed); match != nil && !isMetadataPrefix(match[1]) {
-			kind = "dialogue"
+			kind = NarrativeNodeDialogue
 			speaker = strings.TrimSpace(match[1])
 			addAsset("character", speaker, analysis.Episodes[currentEpisode].Number, anchor)
 		}
-		unit := NarrativeUnit{ID: fmt.Sprintf("%s-unit-%d", analysis.Episodes[currentEpisode].Scenes[currentScene].ID, len(analysis.Episodes[currentEpisode].Scenes[currentScene].Narratives)+1), Kind: kind, Text: trimmed, Anchor: anchor, Speaker: speaker}
+		unit := NarrativeUnit{
+			ID:   stableNarrativeMemberID("node", analysis.SourceHash, anchor.StartOffset, string(kind)),
+			Kind: kind, Text: trimmed, Anchor: anchor, Speaker: speaker, Status: NarrativeNodeStatusActive,
+		}
 		analysis.Episodes[currentEpisode].Scenes[currentScene].Narratives = append(analysis.Episodes[currentEpisode].Scenes[currentScene].Narratives, unit)
 		for _, asset := range allAssets(&analysis) {
 			if strings.Contains(trimmed, asset.Name) {
@@ -418,7 +530,7 @@ func AnalyzeScript(content string) (Analysis, error) {
 	for i := range analysis.Episodes {
 		if len(analysis.Episodes[i].Scenes) == 0 {
 			analysis.Episodes[i].Scenes = append(analysis.Episodes[i].Scenes, Scene{
-				ID: analysis.Episodes[i].TemporaryKey + "-scene-1", Heading: "未命名场景", Anchor: analysis.Episodes[i].Anchor,
+				ID: stableNarrativeMemberID("scene", analysis.SourceHash, analysis.Episodes[i].Anchor.StartOffset, "unnamed"), Heading: "未命名场景", Anchor: analysis.Episodes[i].Anchor,
 			})
 		}
 	}
@@ -442,18 +554,26 @@ func ReviseEpisodeBreakdown(current Analysis, expectedSourceHash string, operati
 			return Analysis{}, err
 		}
 	}
+	publishedNumber := 0
 	for index := range revised.Episodes {
 		revised.Episodes[index].Ordinal = index + 1
-		revised.Episodes[index].Number = index + 1
+		if revised.Episodes[index].Decision == "ignored" {
+			revised.Episodes[index].Number = 0
+		} else {
+			publishedNumber++
+			revised.Episodes[index].Number = publishedNumber
+		}
 		revised.Episodes[index].ContentUnitID = uuid.Nil
 	}
 	rebuildAssetEpisodeNumbers(&revised)
 	revised.Breakdown.RevisionNo = current.Breakdown.RevisionNo + 1
 	refreshEpisodeBreakdown(&revised)
-	if revised.Breakdown.Status != BreakdownStatusReady {
-		return Analysis{}, fmt.Errorf("episode breakdown is blocked: %s", revised.Breakdown.Issues[0].Code)
-	}
 	return revised, nil
+}
+
+func stableNarrativeMemberID(kind, sourceHash string, startOffset int, discriminator string) string {
+	material := fmt.Sprintf("lanverse:%s:%s:%d:%s", kind, sourceHash, startOffset, discriminator)
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte(material)).String()
 }
 
 func applyEpisodeBreakdownOperation(analysis *Analysis, operation EpisodeBreakdownOperation) error {

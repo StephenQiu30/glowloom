@@ -304,17 +304,6 @@ CREATE TABLE IF NOT EXISTS nar_episode_breakdown_manifests (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS nar_analysis_drafts (
-    source_revision_id uuid PRIMARY KEY REFERENCES nar_source_revisions(id),
-    breakdown_revision_id uuid NOT NULL REFERENCES nar_episode_breakdown_revisions(id),
-    source_hash text NOT NULL,
-    analysis jsonb NOT NULL,
-    status text NOT NULL CHECK (status IN ('draft', 'approved')),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now(),
-    approved_at timestamptz
-);
-
 CREATE TABLE IF NOT EXISTS nar_narrative_revisions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id uuid NOT NULL REFERENCES projects(id),
@@ -323,12 +312,26 @@ CREATE TABLE IF NOT EXISTS nar_narrative_revisions (
     status text NOT NULL CHECK (status IN ('draft', 'proposed', 'approved', 'current', 'superseded')),
     content_hash text NOT NULL,
     completeness text NOT NULL CHECK (completeness IN ('complete', 'partial', 'incomplete', 'stale')),
+    snapshot jsonb NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (project_id, revision_no)
 );
 
+CREATE TABLE IF NOT EXISTS nar_analysis_drafts (
+    source_revision_id uuid PRIMARY KEY REFERENCES nar_source_revisions(id),
+    breakdown_revision_id uuid NOT NULL REFERENCES nar_episode_breakdown_revisions(id),
+    narrative_revision_id uuid REFERENCES nar_narrative_revisions(id),
+    source_hash text NOT NULL,
+    analysis jsonb NOT NULL,
+    status text NOT NULL CHECK (status IN ('breakdown_draft', 'narrative_draft', 'narrative_approved')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    approved_at timestamptz
+);
+
 CREATE TABLE IF NOT EXISTS nar_scenes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id uuid NOT NULL,
     narrative_revision_id uuid NOT NULL REFERENCES nar_narrative_revisions(id),
     content_unit_id uuid NOT NULL REFERENCES prj_content_units(id),
     ordinal integer NOT NULL,
@@ -336,28 +339,38 @@ CREATE TABLE IF NOT EXISTS nar_scenes (
     location_hint text,
     start_offset integer NOT NULL,
     end_offset integer NOT NULL,
+    UNIQUE (narrative_revision_id, member_id),
     UNIQUE (narrative_revision_id, content_unit_id, ordinal)
 );
 
-CREATE TABLE IF NOT EXISTS nar_beats (
+CREATE TABLE IF NOT EXISTS nar_narrative_nodes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id uuid NOT NULL,
     scene_id uuid NOT NULL REFERENCES nar_scenes(id),
     ordinal integer NOT NULL,
-    goal text,
-    conflict text,
+    kind text NOT NULL CHECK (kind IN ('beat', 'dialogue', 'action', 'narration')),
+    text text NOT NULL,
+    speaker text,
+    status text NOT NULL CHECK (status IN ('active', 'ignored')),
+    ignore_reason text,
+    start_offset integer NOT NULL,
+    end_offset integer NOT NULL,
+    UNIQUE (scene_id, member_id),
     UNIQUE (scene_id, ordinal)
 );
 
 CREATE TABLE IF NOT EXISTS nar_production_element_mentions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id uuid NOT NULL,
     narrative_revision_id uuid NOT NULL REFERENCES nar_narrative_revisions(id),
     scene_id uuid REFERENCES nar_scenes(id),
-    beat_id uuid REFERENCES nar_beats(id),
+    node_id uuid REFERENCES nar_narrative_nodes(id),
     element_type text NOT NULL CHECK (element_type IN ('character', 'location', 'prop', 'costume')),
     surface_text text NOT NULL,
     status text NOT NULL CHECK (status IN ('active', 'rejected')),
     start_offset integer NOT NULL,
-    end_offset integer NOT NULL
+    end_offset integer NOT NULL,
+    UNIQUE (narrative_revision_id, member_id)
 );
 
 CREATE TABLE IF NOT EXISTS pk_entities (
@@ -410,7 +423,7 @@ CREATE TABLE IF NOT EXISTS sht_shots (
     shot_key text NOT NULL,
     ordinal integer NOT NULL,
     status text NOT NULL CHECK (status IN ('draft', 'approved', 'locked', 'archived')),
-    source_beat_id uuid REFERENCES nar_beats(id),
+    source_beat_id uuid REFERENCES nar_narrative_nodes(id),
     UNIQUE (content_unit_id, shot_key),
     UNIQUE (content_unit_id, ordinal)
 );

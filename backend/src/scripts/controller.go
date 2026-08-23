@@ -41,7 +41,9 @@ func (h *ScriptController) Mount(router chi.Router) {
 		router.Post("/script-revisions/{revisionID}/analyze", h.analyzeScript)
 		router.Get("/script-revisions/{revisionID}/analysis-draft", h.getAnalysisDraft)
 		router.Post("/script-revisions/{revisionID}/analysis-draft/revisions", h.reviseAnalysisDraft)
-		router.Post("/script-revisions/{revisionID}/approve", h.approveAnalysis)
+		router.Post("/script-revisions/{revisionID}/episode-breakdown-approvals", h.approveEpisodeBreakdown)
+		router.Post("/script-revisions/{revisionID}/narrative-draft/revisions", h.reviseNarrativeDraft)
+		router.Post("/script-revisions/{revisionID}/narrative-approvals", h.approveNarrative)
 		router.Get("/operations/{operationID}", h.getOperation)
 		router.Get("/projects/{projectID}/analysis", h.getProjectAnalysis)
 		router.Post("/projects/{projectID}/content-units/{contentUnitID}/shots", h.createShots)
@@ -74,6 +76,15 @@ type selectCandidateRequest struct {
 type reviseAnalysisDraftRequest struct {
 	ExpectedSourceHash string                      `json:"expected_source_hash"`
 	Operations         []EpisodeBreakdownOperation `json:"operations"`
+}
+
+type reviseNarrativeDraftRequest struct {
+	ExpectedNarrativeHash string               `json:"expected_narrative_hash"`
+	Operations            []NarrativeOperation `json:"operations"`
+}
+
+type approveNarrativeRequest struct {
+	ExpectedNarrativeHash string `json:"expected_narrative_hash"`
 }
 
 // ready 返回服务就绪状态。
@@ -311,22 +322,84 @@ func (h *ScriptController) getOperation(writer http.ResponseWriter, request *htt
 	httpapi.WriteData(writer, httpapi.StatusOK, operation)
 }
 
-// approveAnalysis 批准剧本分析结果。
-// @Summary 批准剧本分析
+// approveEpisodeBreakdown 批准剧集拆解并物化稳定 ContentUnit。
+// @Summary 批准剧集拆解
 // @Tags script
-// @ID script_analysis_approve
+// @ID script_episode_breakdown_approve
 // @Produce json
 // @Param revisionID path string true "Script Revision UUID"
 // @Security BearerAccessToken
 // @Success 200 {object} AnalysisEnvelope
 // @Failure 422 {object} httpapi.ErrorEnvelope
-// @Router /api/script-revisions/{revisionID}/approve [post]
-func (h *ScriptController) approveAnalysis(writer http.ResponseWriter, request *http.Request) {
+// @Router /api/script-revisions/{revisionID}/episode-breakdown-approvals [post]
+func (h *ScriptController) approveEpisodeBreakdown(writer http.ResponseWriter, request *http.Request) {
 	revisionID, ok := parseID(writer, request, chi.URLParam(request, "revisionID"))
 	if !ok {
 		return
 	}
-	analysis, err := h.service.ApproveAnalysis(request.Context(), revisionID)
+	analysis, err := h.service.ApproveEpisodeBreakdown(request.Context(), revisionID)
+	if err != nil {
+		httpapi.WriteError(writer, request, err)
+		return
+	}
+	httpapi.WriteData(writer, httpapi.StatusOK, analysis)
+}
+
+// reviseNarrativeDraft 基于当前 Narrative content hash 创建不可变修订。
+// @Summary 修订叙事草稿
+// @Tags script
+// @ID script_narrative_draft_revise
+// @Accept json
+// @Produce json
+// @Param revisionID path string true "Script Revision UUID"
+// @Param request body reviseNarrativeDraftRequest true "叙事修订操作"
+// @Security BearerAccessToken
+// @Success 201 {object} AnalysisEnvelope
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Failure 409 {object} httpapi.ErrorEnvelope
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/script-revisions/{revisionID}/narrative-draft/revisions [post]
+func (h *ScriptController) reviseNarrativeDraft(writer http.ResponseWriter, request *http.Request) {
+	revisionID, ok := parseID(writer, request, chi.URLParam(request, "revisionID"))
+	if !ok {
+		return
+	}
+	var body reviseNarrativeDraftRequest
+	if !httpapi.DecodeJSON(writer, request, &body, 128<<10) {
+		return
+	}
+	analysis, err := h.service.ReviseNarrativeDraft(request.Context(), revisionID, strings.TrimSpace(body.ExpectedNarrativeHash), body.Operations)
+	if err != nil {
+		httpapi.WriteError(writer, request, err)
+		return
+	}
+	httpapi.WriteData(writer, httpapi.StatusCreated, analysis)
+}
+
+// approveNarrative 批准通过覆盖与冲突检查的 NarrativeRevision。
+// @Summary 批准叙事修订
+// @Tags script
+// @ID script_narrative_approve
+// @Accept json
+// @Produce json
+// @Param revisionID path string true "Script Revision UUID"
+// @Param request body approveNarrativeRequest true "叙事批准基线"
+// @Security BearerAccessToken
+// @Success 200 {object} AnalysisEnvelope
+// @Failure 404 {object} httpapi.ErrorEnvelope
+// @Failure 409 {object} httpapi.ErrorEnvelope
+// @Failure 422 {object} httpapi.ErrorEnvelope
+// @Router /api/script-revisions/{revisionID}/narrative-approvals [post]
+func (h *ScriptController) approveNarrative(writer http.ResponseWriter, request *http.Request) {
+	revisionID, ok := parseID(writer, request, chi.URLParam(request, "revisionID"))
+	if !ok {
+		return
+	}
+	var body approveNarrativeRequest
+	if !httpapi.DecodeJSON(writer, request, &body, 16<<10) {
+		return
+	}
+	analysis, err := h.service.ApproveNarrative(request.Context(), revisionID, strings.TrimSpace(body.ExpectedNarrativeHash))
 	if err != nil {
 		httpapi.WriteError(writer, request, err)
 		return

@@ -58,8 +58,8 @@ func (s *ScriptAnalysisService) GetOperation(ctx context.Context, operationID uu
 	return s.repository.GetOperation(ctx, operationID)
 }
 
-func (s *ScriptAnalysisService) ApproveAnalysis(ctx context.Context, revisionID uuid.UUID) (Analysis, error) {
-	return s.repository.ApproveAnalysis(ctx, revisionID)
+func (s *ScriptAnalysisService) ApproveEpisodeBreakdown(ctx context.Context, revisionID uuid.UUID) (Analysis, error) {
+	return s.repository.ApproveEpisodeBreakdown(ctx, revisionID)
 }
 
 func (s *ScriptAnalysisService) GetProjectAnalysis(ctx context.Context, projectID uuid.UUID) (Analysis, error) {
@@ -75,6 +75,20 @@ func (s *ScriptAnalysisService) ReviseAnalysisDraft(ctx context.Context, revisio
 		return Analysis{}, httpapi.Validation("剧本版本 ID 无效", "刷新当前工作流后重试")
 	}
 	return s.repository.ReviseAnalysisDraft(ctx, revisionID, expectedSourceHash, operations)
+}
+
+func (s *ScriptAnalysisService) ReviseNarrativeDraft(ctx context.Context, revisionID uuid.UUID, expectedContentHash string, operations []NarrativeOperation) (Analysis, error) {
+	if revisionID == uuid.Nil {
+		return Analysis{}, httpapi.Validation("剧本版本 ID 无效", "刷新当前工作流后重试")
+	}
+	return s.repository.ReviseNarrativeDraft(ctx, revisionID, expectedContentHash, operations)
+}
+
+func (s *ScriptAnalysisService) ApproveNarrative(ctx context.Context, revisionID uuid.UUID, expectedContentHash string) (Analysis, error) {
+	if revisionID == uuid.Nil {
+		return Analysis{}, httpapi.Validation("剧本版本 ID 无效", "刷新当前工作流后重试")
+	}
+	return s.repository.ApproveNarrative(ctx, revisionID, expectedContentHash)
 }
 
 func (s *ScriptAnalysisService) CreateShots(ctx context.Context, projectID, contentUnitID uuid.UUID, count int) ([]Shot, error) {

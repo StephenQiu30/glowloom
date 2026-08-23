@@ -11,10 +11,12 @@ const api = vi.hoisted(() => ({
   projectAnalysisGet: vi.fn(),
   projectCreate: vi.fn(),
   projectList: vi.fn(),
-  scriptAnalysisApprove: vi.fn(),
   scriptAnalysisDraft: vi.fn(),
   scriptAnalysisDraftRevise: vi.fn(),
   scriptAnalysisQueue: vi.fn(),
+  scriptEpisodeBreakdownApprove: vi.fn(),
+  scriptNarrativeApprove: vi.fn(),
+  scriptNarrativeDraftRevise: vi.fn(),
   scriptRevisionCreate: vi.fn(),
 }));
 
@@ -31,10 +33,12 @@ vi.mock("@/api/project", () => ({
   projectList: api.projectList,
 }));
 vi.mock("@/api/script", () => ({
-  scriptAnalysisApprove: api.scriptAnalysisApprove,
   scriptAnalysisDraft: api.scriptAnalysisDraft,
   scriptAnalysisDraftRevise: api.scriptAnalysisDraftRevise,
   scriptAnalysisQueue: api.scriptAnalysisQueue,
+  scriptEpisodeBreakdownApprove: api.scriptEpisodeBreakdownApprove,
+  scriptNarrativeApprove: api.scriptNarrativeApprove,
+  scriptNarrativeDraftRevise: api.scriptNarrativeDraftRevise,
   scriptRevisionCreate: api.scriptRevisionCreate,
 }));
 
@@ -48,7 +52,7 @@ const workflowIDs = {
   operationID: "55555555-5555-4555-8555-555555555555",
 };
 
-function breakdownAnalysis(status: "ready" | "blocked" = "ready") {
+function breakdownAnalysis(status: "ready" | "blocked" = "ready"): API.Analysis {
   return {
     source_hash: "source-hash",
     parse_report: { status: "complete", format: "txt", parser_version: "deterministic-script-parser-v1", original_hash: "source-hash", text_hash: "text-hash", character_count: 300, paragraph_count: 9, failed_scopes: [] },
@@ -57,11 +61,11 @@ function breakdownAnalysis(status: "ready" | "blocked" = "ready") {
       status,
       coverage_hash: "coverage-hash",
       segmentation_hash: "segmentation-hash",
-      issues: status === "blocked" ? [{ code: "duplicate_episode_number", message: "集号 1 重复，需要人工拆解或重排", candidate_keys: ["episode-a", "episode-b"] }] : [],
+      issues: status === "blocked" ? [{ code: "duplicate_episode_number", message: "集号 1 重复，需要人工拆解或重排", candidate_keys: ["episode-a", "episode-b"], anchor: null }] : [],
     },
     episodes: [
       {
-        temporary_key: "episode-a", ordinal: 1, number: 1, title: "归途", decision: "pending", boundary_rule: "explicit_episode_heading_v1",
+        temporary_key: "episode-a", ordinal: 1, number: 1, title: "归途", decision: "pending", boundary_rule: "explicit_episode_heading_v1", content_unit_id: null,
         anchor: { line: 1, start_offset: 0, end_offset: 100 },
         scenes: [
           { id: "scene-a1", heading: "码头", anchor: { line: 2, start_offset: 0, end_offset: 50 }, narratives: [] },
@@ -69,7 +73,7 @@ function breakdownAnalysis(status: "ready" | "blocked" = "ready") {
         ],
       },
       {
-        temporary_key: "episode-b", ordinal: 2, number: 2, title: "回声", decision: "pending", boundary_rule: "explicit_episode_heading_v1",
+        temporary_key: "episode-b", ordinal: 2, number: 2, title: "回声", decision: "pending", boundary_rule: "explicit_episode_heading_v1", content_unit_id: null,
         anchor: { line: 4, start_offset: 100, end_offset: 200 },
         scenes: [
           { id: "scene-b1", heading: "车站", anchor: { line: 5, start_offset: 100, end_offset: 150 }, narratives: [] },
@@ -77,23 +81,59 @@ function breakdownAnalysis(status: "ready" | "blocked" = "ready") {
         ],
       },
       {
-        temporary_key: "episode-c", ordinal: 3, number: 3, title: "终局", decision: "pending", boundary_rule: "explicit_episode_heading_v1",
+        temporary_key: "episode-c", ordinal: 3, number: 3, title: "终局", decision: "pending", boundary_rule: "explicit_episode_heading_v1", content_unit_id: null,
         anchor: { line: 7, start_offset: 200, end_offset: 300 },
         scenes: [{ id: "scene-c1", heading: "山顶", anchor: { line: 8, start_offset: 200, end_offset: 300 }, narratives: [] }],
       },
     ],
+    narrative: null,
+    mentions: [],
     characters: [], locations: [], props: [], costumes: [],
   };
 }
 
-function restoreDraft(analysis = breakdownAnalysis()) {
+function narrativeAnalysis(status: "ready" | "blocked" | "approved" = "ready"): API.Analysis {
+  const analysis = breakdownAnalysis();
+  return {
+    ...analysis,
+    narrative: {
+      id: "66666666-6666-4666-8666-666666666666",
+      revision_no: 3,
+      status,
+      content_hash: "narrative-hash",
+      completeness: status === "blocked" ? "partial" : "complete",
+      issues: status === "blocked" ? [{ code: "unknown_speaker", message: "对白缺少明确说话人", scene_id: "77777777-7777-4777-8777-777777777777", node_id: "88888888-8888-4888-8888-888888888888", mention_id: null, anchor: null }] : [],
+    },
+    episodes: [{
+      temporary_key: "episode-a", ordinal: 1, number: 1, title: "归途", decision: "accepted", boundary_rule: "explicit_episode_heading_v1",
+      content_unit_id: "99999999-9999-4999-8999-999999999999",
+      anchor: { line: 1, start_offset: 0, end_offset: 100 },
+      scenes: [{
+        id: "77777777-7777-4777-8777-777777777777", heading: "码头", anchor: { line: 2, start_offset: 10, end_offset: 100 },
+        narratives: [
+          { id: "88888888-8888-4888-8888-888888888888", kind: "dialogue", text: "林夏：我们走。", speaker: status === "blocked" ? "" : "林夏", status: "active", ignore_reason: null, anchor: { line: 3, start_offset: 20, end_offset: 35 } },
+          { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", kind: "action", text: "海风渐强。", speaker: "", status: "active", ignore_reason: null, anchor: { line: 4, start_offset: 36, end_offset: 50 } },
+        ],
+      }],
+    }],
+    mentions: [{
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", scene_id: "77777777-7777-4777-8777-777777777777",
+      element_type: "character", surface_text: "林夏", status: "active", anchor: { line: 3, start_offset: 20, end_offset: 22 },
+    }],
+  };
+}
+
+function restoreDraft(analysis: API.Analysis = breakdownAnalysis()) {
   const { workspaceID, projectID, revisionID, operationID } = workflowIDs;
   window.history.replaceState(null, "", `/?project=${projectID}&revision=${revisionID}&operation=${operationID}`);
   api.authRefresh.mockResolvedValue({ data: { access_token: "refreshed-access-token", workspace: { id: workspaceID, name: "恢复工作区" } } });
-  api.operationGet.mockResolvedValue({ data: { id: operationID, project_id: projectID, source_revision_id: revisionID, type: "script_analysis", status: "succeeded", progress: 100 } });
+  api.operationGet.mockResolvedValue({ data: { id: operationID, project_id: projectID, source_revision_id: revisionID, type: "script_analysis", status: "waiting_user", progress: 35 } });
   api.projectAnalysisGet.mockRejectedValue(new ApiClientError("正式分析不存在", "not_found", 404));
   api.scriptAnalysisDraft.mockResolvedValue({ data: analysis });
   api.scriptAnalysisDraftRevise.mockResolvedValue({ data: analysis });
+  api.scriptEpisodeBreakdownApprove.mockResolvedValue({ data: narrativeAnalysis() });
+  api.scriptNarrativeDraftRevise.mockResolvedValue({ data: analysis });
+  api.scriptNarrativeApprove.mockResolvedValue({ data: narrativeAnalysis("approved") });
 }
 
 describe("ScriptAnalysisWorkspace", () => {
@@ -286,6 +326,89 @@ describe("ScriptAnalysisWorkspace", () => {
       { revisionID: workflowIDs.revisionID },
       { expected_source_hash: "source-hash", operations: [expect.objectContaining({ type: "ignore", candidate_key: "episode-a", title: "片头说明，不属于正片" })] },
     ));
+  });
+
+  it("approves only the episode breakdown before opening narrative review", async () => {
+    restoreDraft();
+    const user = userEvent.setup();
+    render(<ScriptAnalysisWorkspace />);
+
+    await user.click(await screen.findByRole("button", { name: "批准剧集拆解并创建叙事草稿" }));
+
+    await waitFor(() => expect(api.scriptEpisodeBreakdownApprove).toHaveBeenCalledWith({ revisionID: workflowIDs.revisionID }));
+    expect(await screen.findByRole("heading", { name: "4. 校对叙事与 Mention" })).toBeInTheDocument();
+    expect(screen.getByTestId("phase-status")).toHaveTextContent("叙事结构待校对");
+  });
+
+  it("revises a scene and typed narrative node against the current narrative hash", async () => {
+    const analysis = narrativeAnalysis();
+    restoreDraft(analysis);
+    api.scriptNarrativeDraftRevise.mockResolvedValue({ data: analysis });
+    const user = userEvent.setup();
+    render(<ScriptAnalysisWorkspace />);
+
+    const sceneHeading = await screen.findByLabelText("第 1 集场景 1 标题");
+    await user.clear(sceneHeading);
+    await user.type(sceneHeading, "海边码头");
+    await user.click(screen.getByRole("button", { name: "保存第 1 集场景 1 标题" }));
+    await waitFor(() => expect(api.scriptNarrativeDraftRevise).toHaveBeenLastCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      { expected_narrative_hash: "narrative-hash", operations: [expect.objectContaining({ type: "update_scene", scene_id: "77777777-7777-4777-8777-777777777777", heading: "海边码头" })] },
+    ));
+
+    await user.selectOptions(screen.getByLabelText("第 1 集场景 1节点 1 类型"), "narration");
+    await user.clear(screen.getByLabelText("第 1 集场景 1节点 1 正文"));
+    await user.type(screen.getByLabelText("第 1 集场景 1节点 1 正文"), "远处传来汽笛声。");
+    await user.click(screen.getByRole("button", { name: "保存第 1 集场景 1节点 1" }));
+    await waitFor(() => expect(api.scriptNarrativeDraftRevise).toHaveBeenLastCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      { expected_narrative_hash: "narrative-hash", operations: [expect.objectContaining({ type: "update_node", node_id: "88888888-8888-4888-8888-888888888888", node_kind: "narration", text: "远处传来汽笛声。" })] },
+    ));
+  });
+
+  it("creates and deletes an anchored Mention without publishing an M04 entity", async () => {
+    const analysis = narrativeAnalysis();
+    restoreDraft(analysis);
+    api.scriptNarrativeDraftRevise.mockResolvedValue({ data: analysis });
+    const user = userEvent.setup();
+    render(<ScriptAnalysisWorkspace />);
+
+    await user.selectOptions(await screen.findByLabelText("场景 1 新 Mention 类型"), "prop");
+    await user.type(screen.getByLabelText("场景 1 新 Mention 来源文本"), "旧怀表");
+    await user.clear(screen.getByLabelText("场景 1 新 Mention 起始 Offset"));
+    await user.type(screen.getByLabelText("场景 1 新 Mention 起始 Offset"), "36");
+    await user.clear(screen.getByLabelText("场景 1 新 Mention 结束 Offset"));
+    await user.type(screen.getByLabelText("场景 1 新 Mention 结束 Offset"), "40");
+    await user.click(screen.getByRole("button", { name: "在场景 1 创建 Mention" }));
+    await waitFor(() => expect(api.scriptNarrativeDraftRevise).toHaveBeenLastCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      { expected_narrative_hash: "narrative-hash", operations: [expect.objectContaining({ type: "create_mention", scene_id: "77777777-7777-4777-8777-777777777777", element_type: "prop", surface_text: "旧怀表", anchor: expect.objectContaining({ start_offset: 36, end_offset: 40 }) })] },
+    ));
+
+    await user.click(screen.getByRole("button", { name: "删除 Mention 林夏" }));
+    await waitFor(() => expect(api.scriptNarrativeDraftRevise).toHaveBeenLastCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      { expected_narrative_hash: "narrative-hash", operations: [expect.objectContaining({ type: "delete_mention", mention_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" })] },
+    ));
+  });
+
+  it("blocks narrative approval on named validation issues and approves a clean revision only", async () => {
+    restoreDraft(narrativeAnalysis("blocked"));
+    const user = userEvent.setup();
+    const { unmount } = render(<ScriptAnalysisWorkspace />);
+
+    expect(await screen.findByText("对白缺少明确说话人")).toBeInTheDocument();
+    expect(screen.getByTestId("approve-narrative-button")).toBeDisabled();
+
+    unmount();
+    restoreDraft(narrativeAnalysis());
+    render(<ScriptAnalysisWorkspace />);
+    await user.click(await screen.findByTestId("approve-narrative-button"));
+    await waitFor(() => expect(api.scriptNarrativeApprove).toHaveBeenCalledWith(
+      { revisionID: workflowIDs.revisionID },
+      { expected_narrative_hash: "narrative-hash" },
+    ));
+    expect(await screen.findByTestId("phase-status")).toHaveTextContent("叙事已批准 · 知识待决议");
   });
 
   it("lists authorized projects and resumes a workflow without a pre-existing URL", async () => {

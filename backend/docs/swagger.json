@@ -1126,7 +1126,7 @@
                 }
             }
         },
-        "/api/script-revisions/{revisionID}/approve": {
+        "/api/script-revisions/{revisionID}/episode-breakdown-approvals": {
             "post": {
                 "security": [
                     {
@@ -1139,8 +1139,8 @@
                 "tags": [
                     "script"
                 ],
-                "summary": "批准剧本分析",
-                "operationId": "script_analysis_approve",
+                "summary": "批准剧集拆解",
+                "operationId": "script_episode_breakdown_approve",
                 "parameters": [
                     {
                         "type": "string",
@@ -1155,6 +1155,134 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/scripts.AnalysisEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/script-revisions/{revisionID}/narrative-approvals": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "script"
+                ],
+                "summary": "批准叙事修订",
+                "operationId": "script_narrative_approve",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Script Revision UUID",
+                        "name": "revisionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "叙事批准基线",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/scripts.approveNarrativeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/scripts.AnalysisEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/script-revisions/{revisionID}/narrative-draft/revisions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAccessToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "script"
+                ],
+                "summary": "修订叙事草稿",
+                "operationId": "script_narrative_draft_revise",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Script Revision UUID",
+                        "name": "revisionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "叙事修订操作",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/scripts.reviseNarrativeDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/scripts.AnalysisEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorEnvelope"
                         }
                     },
                     "422": {
@@ -1929,6 +2057,15 @@
                         "$ref": "#/definitions/scripts.Asset"
                     }
                 },
+                "mentions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.ProductionElementMention"
+                    }
+                },
+                "narrative": {
+                    "$ref": "#/definitions/scripts.NarrativeRevision"
+                },
                 "parse_report": {
                     "$ref": "#/definitions/scripts.ParseReport"
                 },
@@ -2180,6 +2317,205 @@
                 }
             }
         },
+        "scripts.NarrativeIssue": {
+            "type": "object",
+            "properties": {
+                "anchor": {
+                    "$ref": "#/definitions/scripts.Anchor"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "mention_id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "node_id": {
+                    "type": "string"
+                },
+                "scene_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.NarrativeNodeKind": {
+            "type": "string",
+            "enum": [
+                "beat",
+                "dialogue",
+                "action",
+                "narration"
+            ],
+            "x-enum-varnames": [
+                "NarrativeNodeBeat",
+                "NarrativeNodeDialogue",
+                "NarrativeNodeAction",
+                "NarrativeNodeNarration"
+            ]
+        },
+        "scripts.NarrativeNodeStatus": {
+            "type": "string",
+            "enum": [
+                "active",
+                "ignored"
+            ],
+            "x-enum-varnames": [
+                "NarrativeNodeStatusActive",
+                "NarrativeNodeStatusIgnored"
+            ]
+        },
+        "scripts.NarrativeOperation": {
+            "type": "object",
+            "properties": {
+                "anchor": {
+                    "$ref": "#/definitions/scripts.Anchor"
+                },
+                "boundary_node_id": {
+                    "type": "string"
+                },
+                "element_type": {
+                    "type": "string"
+                },
+                "episode_key": {
+                    "type": "string"
+                },
+                "heading": {
+                    "type": "string"
+                },
+                "ignore_reason": {
+                    "type": "string"
+                },
+                "left_heading": {
+                    "type": "string"
+                },
+                "left_scene_id": {
+                    "type": "string"
+                },
+                "mention_id": {
+                    "type": "string"
+                },
+                "node_id": {
+                    "type": "string"
+                },
+                "node_kind": {
+                    "$ref": "#/definitions/scripts.NarrativeNodeKind"
+                },
+                "ordered_node_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ordered_scene_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "right_heading": {
+                    "type": "string"
+                },
+                "right_scene_id": {
+                    "type": "string"
+                },
+                "scene_id": {
+                    "type": "string"
+                },
+                "scene_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "speaker": {
+                    "type": "string"
+                },
+                "surface_text": {
+                    "type": "string"
+                },
+                "target_scene_id": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/scripts.NarrativeOperationType"
+                }
+            }
+        },
+        "scripts.NarrativeOperationType": {
+            "type": "string",
+            "enum": [
+                "update_scene",
+                "split_scene",
+                "merge_scenes",
+                "reorder_scenes",
+                "create_node",
+                "update_node",
+                "delete_node",
+                "reorder_nodes",
+                "ignore_node",
+                "create_mention",
+                "update_mention",
+                "delete_mention"
+            ],
+            "x-enum-varnames": [
+                "NarrativeOperationUpdateScene",
+                "NarrativeOperationSplitScene",
+                "NarrativeOperationMergeScenes",
+                "NarrativeOperationReorderScenes",
+                "NarrativeOperationCreateNode",
+                "NarrativeOperationUpdateNode",
+                "NarrativeOperationDeleteNode",
+                "NarrativeOperationReorderNodes",
+                "NarrativeOperationIgnoreNode",
+                "NarrativeOperationCreateMention",
+                "NarrativeOperationUpdateMention",
+                "NarrativeOperationDeleteMention"
+            ]
+        },
+        "scripts.NarrativeRevision": {
+            "type": "object",
+            "properties": {
+                "completeness": {
+                    "type": "string"
+                },
+                "content_hash": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.NarrativeIssue"
+                    }
+                },
+                "revision_no": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/scripts.NarrativeStatus"
+                }
+            }
+        },
+        "scripts.NarrativeStatus": {
+            "type": "string",
+            "enum": [
+                "ready",
+                "blocked",
+                "approved"
+            ],
+            "x-enum-varnames": [
+                "NarrativeStatusReady",
+                "NarrativeStatusBlocked",
+                "NarrativeStatusApproved"
+            ]
+        },
         "scripts.NarrativeUnit": {
             "type": "object",
             "properties": {
@@ -2189,11 +2525,17 @@
                 "id": {
                     "type": "string"
                 },
-                "kind": {
+                "ignore_reason": {
                     "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/scripts.NarrativeNodeKind"
                 },
                 "speaker": {
                     "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/scripts.NarrativeNodeStatus"
                 },
                 "text": {
                     "type": "string"
@@ -2265,6 +2607,29 @@
                     "type": "string"
                 },
                 "text_hash": {
+                    "type": "string"
+                }
+            }
+        },
+        "scripts.ProductionElementMention": {
+            "type": "object",
+            "properties": {
+                "anchor": {
+                    "$ref": "#/definitions/scripts.Anchor"
+                },
+                "element_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "scene_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "surface_text": {
                     "type": "string"
                 }
             }
@@ -2506,6 +2871,14 @@
                 }
             }
         },
+        "scripts.approveNarrativeRequest": {
+            "type": "object",
+            "properties": {
+                "expected_narrative_hash": {
+                    "type": "string"
+                }
+            }
+        },
         "scripts.createFixtureCandidateRequest": {
             "type": "object",
             "properties": {
@@ -2548,6 +2921,20 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/scripts.EpisodeBreakdownOperation"
+                    }
+                }
+            }
+        },
+        "scripts.reviseNarrativeDraftRequest": {
+            "type": "object",
+            "properties": {
+                "expected_narrative_hash": {
+                    "type": "string"
+                },
+                "operations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/scripts.NarrativeOperation"
                     }
                 }
             }

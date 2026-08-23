@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -385,6 +386,7 @@ func (sourceRevisionRecord) TableName() string { return "nar_source_revisions" }
 type analysisDraftRecord struct {
 	SourceRevisionID    uuid.UUID      `gorm:"column:source_revision_id;type:uuid;primaryKey"`
 	BreakdownRevisionID uuid.UUID      `gorm:"column:breakdown_revision_id;type:uuid"`
+	NarrativeRevisionID *uuid.UUID     `gorm:"column:narrative_revision_id;type:uuid"`
 	SourceHash          string         `gorm:"column:source_hash"`
 	Analysis            datatypes.JSON `gorm:"column:analysis;type:jsonb"`
 	Status              string
@@ -628,6 +630,7 @@ type narrativeRevisionRecord struct {
 	Status              string
 	ContentHash         string `gorm:"column:content_hash"`
 	Completeness        string
+	Snapshot            datatypes.JSON `gorm:"column:snapshot;type:jsonb"`
 }
 
 func (narrativeRevisionRecord) TableName() string { return "nar_narrative_revisions" }
@@ -653,6 +656,7 @@ func (contentOrderItemRecord) TableName() string { return "prj_content_order_ite
 
 type sceneRecord struct {
 	ID                  uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
+	MemberID            uuid.UUID `gorm:"column:member_id;type:uuid"`
 	NarrativeRevisionID uuid.UUID `gorm:"column:narrative_revision_id;type:uuid"`
 	ContentUnitID       uuid.UUID `gorm:"column:content_unit_id;type:uuid"`
 	Ordinal             int
@@ -664,21 +668,28 @@ type sceneRecord struct {
 
 func (sceneRecord) TableName() string { return "nar_scenes" }
 
-type beatRecord struct {
-	ID       uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
-	SceneID  uuid.UUID `gorm:"column:scene_id;type:uuid"`
-	Ordinal  int
-	Goal     string
-	Conflict *string
+type narrativeNodeRecord struct {
+	ID           uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
+	MemberID     uuid.UUID `gorm:"column:member_id;type:uuid"`
+	SceneID      uuid.UUID `gorm:"column:scene_id;type:uuid"`
+	Ordinal      int
+	Kind         string
+	Text         string
+	Speaker      *string
+	Status       string
+	IgnoreReason *string `gorm:"column:ignore_reason"`
+	StartOffset  int     `gorm:"column:start_offset"`
+	EndOffset    int     `gorm:"column:end_offset"`
 }
 
-func (beatRecord) TableName() string { return "nar_beats" }
+func (narrativeNodeRecord) TableName() string { return "nar_narrative_nodes" }
 
 type mentionRecord struct {
 	ID                  uuid.UUID  `gorm:"column:id;type:uuid;primaryKey"`
+	MemberID            uuid.UUID  `gorm:"column:member_id;type:uuid"`
 	NarrativeRevisionID uuid.UUID  `gorm:"column:narrative_revision_id;type:uuid"`
 	SceneID             *uuid.UUID `gorm:"column:scene_id;type:uuid"`
-	BeatID              *uuid.UUID `gorm:"column:beat_id;type:uuid"`
+	NodeID              *uuid.UUID `gorm:"column:node_id;type:uuid"`
 	ElementType         string     `gorm:"column:element_type"`
 	SurfaceText         string     `gorm:"column:surface_text"`
 	Status              string
@@ -805,7 +816,7 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 		}
 		var previousDraft analysisDraftRecord
 		if err := tx.Where("source_revision_id = ?", request.RevisionID).Take(&previousDraft).Error; err == nil {
-			if previousDraft.Status == "approved" {
+			if previousDraft.Status == "narrative_approved" {
 				return httpapi.Conflict("已批准来源不可覆盖", "导入新的 SourceRevision 后重新分析")
 			}
 			if err := tx.Model(&breakdownRecord{}).Where("id = ? AND status = ?", previousDraft.BreakdownRevisionID, "draft").Update("status", "superseded").Error; err != nil {
@@ -816,12 +827,12 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 		}
 		draft := analysisDraftRecord{
 			SourceRevisionID: request.RevisionID, BreakdownRevisionID: breakdown.ID,
-			SourceHash: source.artifact.ContentHash, Analysis: datatypes.JSON(encoded), Status: "draft",
+			SourceHash: source.artifact.ContentHash, Analysis: datatypes.JSON(encoded), Status: "breakdown_draft",
 			CreatedAt: now, UpdatedAt: now,
 		}
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "source_revision_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"breakdown_revision_id", "source_hash", "analysis", "status", "updated_at", "approved_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"breakdown_revision_id", "narrative_revision_id", "source_hash", "analysis", "status", "updated_at", "approved_at"}),
 		}).Create(&draft).Error; err != nil {
 			return fmt.Errorf("persist analysis draft: %w", err)
 		}
@@ -832,8 +843,7 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 		if result.RowsAffected != 1 {
 			return httpapi.NotFound("剧本版本")
 		}
-		completedAt := now
-		result = tx.Model(&operationRecord{}).Where("id = ? AND project_id = ? AND type = ? AND status = ?", request.OperationID, request.ProjectID, "script_analysis", "running").Updates(map[string]any{"status": "succeeded", "progress": 100, "updated_at": completedAt, "completed_at": completedAt})
+		result = tx.Model(&operationRecord{}).Where("id = ? AND project_id = ? AND type = ? AND status = ?", request.OperationID, request.ProjectID, "script_analysis", "running").Updates(map[string]any{"status": "waiting_user", "progress": 35, "updated_at": now})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -844,14 +854,20 @@ func (r *ScriptRepository) ProcessAnalysis(ctx context.Context, request Analysis
 	})
 }
 
-func (r *ScriptRepository) ApproveAnalysis(ctx context.Context, revisionID uuid.UUID) (Analysis, error) {
+func (r *ScriptRepository) ApproveEpisodeBreakdown(ctx context.Context, revisionID uuid.UUID) (Analysis, error) {
 	if r.orm == nil {
 		return Analysis{}, fmt.Errorf("script repository ORM is not configured")
 	}
+	workspaceID, ok := database.WorkspaceID(ctx)
+	if !ok || workspaceID == uuid.Nil {
+		return Analysis{}, fmt.Errorf("workspace context is missing")
+	}
 	var analysis Analysis
-	err := r.orm.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
 		var revision sourceRevisionRecord
-		if err := tx.Where("id = ?", revisionID).First(&revision).Error; err != nil {
+		if err := tx.Table("nar_source_revisions AS revisions").Select("revisions.*").
+			Joins("JOIN projects ON projects.id = revisions.project_id").
+			Where("revisions.id = ? AND projects.workspace_id = ?", revisionID, workspaceID).Take(&revision).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return httpapi.NotFound("剧本版本")
 			}
@@ -867,8 +883,11 @@ func (r *ScriptRepository) ApproveAnalysis(ctx context.Context, revisionID uuid.
 		if err := json.Unmarshal(draft.Analysis, &analysis); err != nil {
 			return fmt.Errorf("decode analysis draft: %w", err)
 		}
-		if draft.Status == "approved" {
+		if draft.Status == "narrative_draft" || draft.Status == "narrative_approved" {
 			return nil
+		}
+		if draft.Status != "breakdown_draft" {
+			return httpapi.Conflict("剧集拆解当前不可批准", "刷新当前分析流程后重试")
 		}
 		if analysis.Breakdown.Status != BreakdownStatusReady || analysis.Breakdown.CoverageHash == "" || analysis.Breakdown.SegmentationHash == "" {
 			return httpapi.Validation("剧集拆解尚未通过覆盖校验", "修正拆解页面列出的阻塞项后重试")
@@ -883,37 +902,54 @@ func (r *ScriptRepository) ApproveAnalysis(ctx context.Context, revisionID uuid.
 		if breakdown.RevisionNo != analysis.Breakdown.RevisionNo || breakdown.CoverageHash != analysis.Breakdown.CoverageHash || breakdown.SegmentationHash != analysis.Breakdown.SegmentationHash {
 			return httpapi.Conflict("剧集拆解校验基线已经变化", "刷新当前拆解后重试")
 		}
-		for episodeIndex, episode := range analysis.Episodes {
-			if episode.Decision == "ignored" {
-				continue
-			}
-			var contentUnit projectContentUnitRecord
-			contentErr := tx.Where("project_id = ? AND ordinal = ?", revision.ProjectID, episode.Ordinal).Order("created_at DESC").First(&contentUnit).Error
-			if errors.Is(contentErr, gorm.ErrRecordNotFound) {
-				contentUnit = projectContentUnitRecord{ID: uuid.New(), ProjectID: revision.ProjectID, Kind: "episode", Title: episode.Title, Status: "active", Ordinal: episode.Ordinal}
-				if err := tx.Create(&contentUnit).Error; err != nil {
-					return fmt.Errorf("materialize project content unit %d: %w", episode.Ordinal, err)
-				}
-			} else if contentErr != nil {
-				return fmt.Errorf("read project content unit %d: %w", episode.Ordinal, contentErr)
-			} else if err := tx.Model(&contentUnit).Where("id = ?", contentUnit.ID).Updates(map[string]any{"title": episode.Title, "status": "active"}).Error; err != nil {
-				return fmt.Errorf("update project content unit %d: %w", episode.Ordinal, err)
-			}
-			analysis.Episodes[episodeIndex].ContentUnitID = contentUnit.ID
-		}
-		if err := materializeCanonicalAnalysis(ctx, tx, revision.ProjectID, draft.BreakdownRevisionID, analysis); err != nil {
+		if err := materializeEpisodeBreakdown(ctx, tx, revision.ProjectID, draft.BreakdownRevisionID, &analysis); err != nil {
 			return err
 		}
-		encodedApproved, err := json.Marshal(analysis)
+		narrativeRevisionNo := 1
+		var latestNarrative narrativeRevisionRecord
+		if err := tx.Where("project_id = ?", revision.ProjectID).Order("revision_no DESC").Take(&latestNarrative).Error; err == nil {
+			narrativeRevisionNo = latestNarrative.RevisionNo + 1
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("allocate narrative revision: %w", err)
+		}
+		narrativeID := uuid.New()
+		analysis = PrepareNarrativeDraft(analysis, narrativeID, narrativeRevisionNo)
+		encodedDraft, err := json.Marshal(analysis)
 		if err != nil {
-			return fmt.Errorf("encode approved analysis: %w", err)
+			return fmt.Errorf("encode narrative draft: %w", err)
 		}
-		approvedAt := time.Now().UTC()
-		if err := tx.Model(&draft).Where("source_revision_id = ?", revisionID).Updates(map[string]any{"analysis": datatypes.JSON(encodedApproved), "status": "approved", "approved_at": approvedAt}).Error; err != nil {
-			return fmt.Errorf("persist approved analysis: %w", err)
+		narrative := narrativeRevisionRecord{
+			ID: narrativeID, ProjectID: revision.ProjectID, BreakdownRevisionID: &draft.BreakdownRevisionID,
+			RevisionNo: narrativeRevisionNo, Status: "draft", ContentHash: analysis.Narrative.ContentHash,
+			Completeness: analysis.Narrative.Completeness, Snapshot: datatypes.JSON(encodedDraft),
 		}
-		if err := tx.Model(&revision).Where("id = ?", revisionID).Update("status", "approved").Error; err != nil {
-			return fmt.Errorf("mark script revision approved: %w", err)
+		if err := tx.Create(&narrative).Error; err != nil {
+			return fmt.Errorf("create narrative draft revision: %w", err)
+		}
+		result := tx.Model(&draft).Where("source_revision_id = ? AND breakdown_revision_id = ? AND status = ?", revisionID, draft.BreakdownRevisionID, "breakdown_draft").Updates(map[string]any{
+			"narrative_revision_id": narrativeID, "analysis": datatypes.JSON(encodedDraft), "status": "narrative_draft", "updated_at": time.Now().UTC(),
+		})
+		if result.Error != nil {
+			return fmt.Errorf("publish narrative draft pointer: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.Conflict("分析草稿基线已经变化", "刷新当前分析流程后重试")
+		}
+		var breakdownRun breakdownRecord
+		if err := tx.Select("analysis_run_id").Where("id = ?", draft.BreakdownRevisionID).Take(&breakdownRun).Error; err != nil {
+			return fmt.Errorf("load approved breakdown analysis run: %w", err)
+		}
+		result = tx.Model(&analysisRunRecord{}).Where("id = ? AND current_gate = ?", breakdownRun.AnalysisRunID, "breakdown_review").Updates(map[string]any{
+			"current_stage": "narrative", "current_gate": "narrative_review", "status": "waiting_user",
+		})
+		if result.Error != nil {
+			return fmt.Errorf("advance analysis run to narrative review: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.Conflict("分析运行基线已经变化", "刷新当前分析运行后重试")
+		}
+		if err := updateRootOperation(tx, breakdownRun.AnalysisRunID, 65); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -921,6 +957,171 @@ func (r *ScriptRepository) ApproveAnalysis(ctx context.Context, revisionID uuid.
 		return Analysis{}, err
 	}
 	return analysis, nil
+}
+
+func (r *ScriptRepository) ReviseNarrativeDraft(ctx context.Context, revisionID uuid.UUID, expectedContentHash string, operations []NarrativeOperation) (Analysis, error) {
+	if r.orm == nil {
+		return Analysis{}, fmt.Errorf("script repository ORM is not configured")
+	}
+	workspaceID, ok := database.WorkspaceID(ctx)
+	if !ok || workspaceID == uuid.Nil {
+		return Analysis{}, fmt.Errorf("workspace context is missing")
+	}
+	var revised Analysis
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		var revision sourceRevisionRecord
+		if err := tx.Table("nar_source_revisions AS revisions").Select("revisions.*").Joins("JOIN projects ON projects.id = revisions.project_id").
+			Where("revisions.id = ? AND projects.workspace_id = ?", revisionID, workspaceID).Take(&revision).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("叙事草稿")
+			}
+			return fmt.Errorf("validate narrative draft revision: %w", err)
+		}
+		var draft analysisDraftRecord
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("source_revision_id = ? AND status = ?", revisionID, "narrative_draft").Take(&draft).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("叙事草稿")
+			}
+			return fmt.Errorf("lock narrative draft: %w", err)
+		}
+		if draft.NarrativeRevisionID == nil {
+			return httpapi.Conflict("叙事草稿缺少修订基线", "重新批准剧集拆解后重试")
+		}
+		var current Analysis
+		if err := json.Unmarshal(draft.Analysis, &current); err != nil {
+			return fmt.Errorf("decode narrative draft: %w", err)
+		}
+		nextID := uuid.New()
+		next, err := ReviseNarrative(current, expectedContentHash, nextID, operations)
+		if err != nil {
+			if strings.Contains(err.Error(), "stale") {
+				return httpapi.Conflict("叙事修订基线已经变化", "刷新当前叙事草稿后重新提交")
+			}
+			return httpapi.Validation("叙事修订无效", err.Error())
+		}
+		encoded, err := json.Marshal(next)
+		if err != nil {
+			return fmt.Errorf("encode revised narrative: %w", err)
+		}
+		result := tx.Model(&narrativeRevisionRecord{}).Where("id = ? AND project_id = ? AND status = ? AND content_hash = ?", *draft.NarrativeRevisionID, revision.ProjectID, "draft", expectedContentHash).Update("status", "superseded")
+		if result.Error != nil {
+			return fmt.Errorf("supersede narrative draft: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.Conflict("叙事修订基线已经变化", "刷新当前叙事草稿后重新提交")
+		}
+		nextRecord := narrativeRevisionRecord{
+			ID: nextID, ProjectID: revision.ProjectID, BreakdownRevisionID: &draft.BreakdownRevisionID,
+			RevisionNo: next.Narrative.RevisionNo, Status: "draft", ContentHash: next.Narrative.ContentHash,
+			Completeness: next.Narrative.Completeness, Snapshot: datatypes.JSON(encoded),
+		}
+		if err := tx.Create(&nextRecord).Error; err != nil {
+			return fmt.Errorf("create narrative revision: %w", err)
+		}
+		result = tx.Model(&draft).Where("source_revision_id = ? AND narrative_revision_id = ? AND status = ?", revisionID, *draft.NarrativeRevisionID, "narrative_draft").Updates(map[string]any{
+			"narrative_revision_id": nextID, "analysis": datatypes.JSON(encoded), "updated_at": time.Now().UTC(),
+		})
+		if result.Error != nil {
+			return fmt.Errorf("advance narrative draft pointer: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.Conflict("叙事修订基线已经变化", "刷新当前叙事草稿后重新提交")
+		}
+		revised = next
+		return nil
+	})
+	return revised, err
+}
+
+func (r *ScriptRepository) ApproveNarrative(ctx context.Context, revisionID uuid.UUID, expectedContentHash string) (Analysis, error) {
+	if r.orm == nil {
+		return Analysis{}, fmt.Errorf("script repository ORM is not configured")
+	}
+	workspaceID, ok := database.WorkspaceID(ctx)
+	if !ok || workspaceID == uuid.Nil {
+		return Analysis{}, fmt.Errorf("workspace context is missing")
+	}
+	var analysis Analysis
+	err := database.WithWorkspaceTransaction(ctx, r.orm, func(tx *gorm.DB) error {
+		var revision sourceRevisionRecord
+		if err := tx.Table("nar_source_revisions AS revisions").Select("revisions.*").Joins("JOIN projects ON projects.id = revisions.project_id").
+			Where("revisions.id = ? AND projects.workspace_id = ?", revisionID, workspaceID).Take(&revision).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("叙事草稿")
+			}
+			return fmt.Errorf("validate narrative approval revision: %w", err)
+		}
+		var draft analysisDraftRecord
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("source_revision_id = ?", revisionID).Take(&draft).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return httpapi.NotFound("叙事草稿")
+			}
+			return fmt.Errorf("lock narrative approval draft: %w", err)
+		}
+		if err := json.Unmarshal(draft.Analysis, &analysis); err != nil {
+			return fmt.Errorf("decode narrative approval draft: %w", err)
+		}
+		if draft.Status == "narrative_approved" {
+			if expectedContentHash != analysis.Narrative.ContentHash {
+				return httpapi.Conflict("叙事批准基线已经变化", "刷新已批准叙事后重试")
+			}
+			return nil
+		}
+		if draft.Status != "narrative_draft" || draft.NarrativeRevisionID == nil {
+			return httpapi.Conflict("叙事当前不可批准", "先批准剧集拆解并完成叙事校对")
+		}
+		if expectedContentHash == "" || expectedContentHash != analysis.Narrative.ContentHash {
+			return httpapi.Conflict("叙事批准基线已经变化", "刷新当前叙事草稿后重试")
+		}
+		if analysis.Narrative.Status != NarrativeStatusReady || analysis.Narrative.Completeness != "complete" || len(analysis.Narrative.Issues) > 0 {
+			return httpapi.Validation("叙事校验尚未通过", "修正叙事页面列出的阻塞项后重试")
+		}
+		if err := materializeApprovedNarrative(ctx, tx, analysis); err != nil {
+			return err
+		}
+		analysis.Narrative.Status = NarrativeStatusApproved
+		encoded, err := json.Marshal(analysis)
+		if err != nil {
+			return fmt.Errorf("encode approved narrative: %w", err)
+		}
+		result := tx.Model(&narrativeRevisionRecord{}).Where("id = ? AND project_id = ? AND status = ? AND content_hash = ?", *draft.NarrativeRevisionID, revision.ProjectID, "draft", expectedContentHash).Updates(map[string]any{
+			"status": "current", "snapshot": datatypes.JSON(encoded),
+		})
+		if result.Error != nil {
+			return fmt.Errorf("approve narrative revision: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.Conflict("叙事批准基线已经变化", "刷新当前叙事草稿后重试")
+		}
+		now := time.Now().UTC()
+		result = tx.Model(&draft).Where("source_revision_id = ? AND narrative_revision_id = ? AND status = ?", revisionID, *draft.NarrativeRevisionID, "narrative_draft").Updates(map[string]any{
+			"analysis": datatypes.JSON(encoded), "status": "narrative_approved", "approved_at": now, "updated_at": now,
+		})
+		if result.Error != nil {
+			return fmt.Errorf("publish approved narrative pointer: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.Conflict("叙事批准基线已经变化", "刷新当前叙事草稿后重试")
+		}
+		if err := tx.Model(&revision).Where("id = ?", revisionID).Update("status", "approved").Error; err != nil {
+			return fmt.Errorf("mark source revision approved: %w", err)
+		}
+		var breakdown breakdownRecord
+		if err := tx.Select("analysis_run_id").Where("id = ?", draft.BreakdownRevisionID).Take(&breakdown).Error; err != nil {
+			return fmt.Errorf("load narrative analysis run: %w", err)
+		}
+		result = tx.Model(&analysisRunRecord{}).Where("id = ? AND current_gate = ?", breakdown.AnalysisRunID, "narrative_review").Updates(map[string]any{
+			"current_stage": "knowledge", "current_gate": "knowledge_review", "status": "waiting_user",
+		})
+		if result.Error != nil {
+			return fmt.Errorf("advance analysis run after narrative approval: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return httpapi.Conflict("分析运行基线已经变化", "刷新当前分析运行后重试")
+		}
+		return updateRootOperation(tx, breakdown.AnalysisRunID, 80)
+	})
+	return analysis, err
 }
 
 func (r *ScriptRepository) GetProjectAnalysis(ctx context.Context, projectID uuid.UUID) (Analysis, error) {
@@ -939,7 +1140,7 @@ func (r *ScriptRepository) GetProjectAnalysis(ctx context.Context, projectID uui
 		revisionIDs = append(revisionIDs, revision.ID)
 	}
 	var draft analysisDraftRecord
-	if err := r.orm.WithContext(ctx).Where("source_revision_id IN ? AND status = ?", revisionIDs, "approved").Order("approved_at DESC").First(&draft).Error; err != nil {
+	if err := r.orm.WithContext(ctx).Where("source_revision_id IN ? AND status = ?", revisionIDs, "narrative_approved").Order("approved_at DESC").First(&draft).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return Analysis{}, httpapi.NotFound("已批准分析")
 		}
@@ -957,7 +1158,7 @@ func (r *ScriptRepository) GetAnalysisDraft(ctx context.Context, revisionID uuid
 		return Analysis{}, fmt.Errorf("script repository ORM is not configured")
 	}
 	var draft analysisDraftRecord
-	if err := r.orm.WithContext(ctx).Where("source_revision_id = ? AND status = ?", revisionID, "draft").First(&draft).Error; err != nil {
+	if err := r.orm.WithContext(ctx).Where("source_revision_id = ? AND status IN ?", revisionID, []string{"breakdown_draft", "narrative_draft"}).First(&draft).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return Analysis{}, httpapi.NotFound("分析草稿")
 		}
@@ -990,7 +1191,7 @@ func (r *ScriptRepository) ReviseAnalysisDraft(ctx context.Context, revisionID u
 			return fmt.Errorf("validate analysis draft revision: %w", err)
 		}
 		var draft analysisDraftRecord
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("source_revision_id = ? AND status = ?", revisionID, "draft").Take(&draft).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("source_revision_id = ? AND status = ?", revisionID, "breakdown_draft").Take(&draft).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return httpapi.NotFound("分析草稿")
 			}
@@ -1035,7 +1236,7 @@ func (r *ScriptRepository) ReviseAnalysisDraft(ctx context.Context, revisionID u
 		if err != nil {
 			return fmt.Errorf("encode revised analysis draft: %w", err)
 		}
-		result = tx.Model(&draft).Where("source_revision_id = ? AND breakdown_revision_id = ? AND status = ?", revisionID, currentBreakdown.ID, "draft").Updates(map[string]any{
+		result = tx.Model(&draft).Where("source_revision_id = ? AND breakdown_revision_id = ? AND status = ?", revisionID, currentBreakdown.ID, "breakdown_draft").Updates(map[string]any{
 			"breakdown_revision_id": nextBreakdown.ID, "analysis": datatypes.JSON(encoded), "updated_at": time.Now().UTC(),
 		})
 		if result.Error != nil {
@@ -1405,19 +1606,9 @@ func (r *ScriptRepository) failOperation(ctx context.Context, request AnalysisRe
 	})
 }
 
-func allAnalysisAssets(analysis Analysis) []Asset {
-	result := make([]Asset, 0, len(analysis.Characters)+len(analysis.Locations)+len(analysis.Props)+len(analysis.Costumes))
-	result = append(result, analysis.Characters...)
-	result = append(result, analysis.Locations...)
-	result = append(result, analysis.Props...)
-	result = append(result, analysis.Costumes...)
-	return result
-}
-
-// materializeCanonicalAnalysis freezes the approved M03 breakdown/narrative
-// and the M02 content-unit order. M03 mentions remain unresolved source facts;
-// this function deliberately does not publish M04 entities or requirements.
-func materializeCanonicalAnalysis(ctx context.Context, tx *gorm.DB, projectID, breakdownRevisionID uuid.UUID, analysis Analysis) error {
+// materializeEpisodeBreakdown freezes the approved M03 manifest and publishes
+// the M02 content-unit mapping/order without approving any M03 narrative fact.
+func materializeEpisodeBreakdown(ctx context.Context, tx *gorm.DB, projectID, breakdownRevisionID uuid.UUID, analysis *Analysis) error {
 	tx = tx.WithContext(ctx)
 	manifestHash := HashContent(analysis.Breakdown.SegmentationHash + ":" + analysis.Breakdown.CoverageHash)
 	manifest := breakdownManifestRecord{
@@ -1461,78 +1652,117 @@ func materializeCanonicalAnalysis(ctx context.Context, tx *gorm.DB, projectID, b
 	if err := tx.Create(&orderRevision).Error; err != nil {
 		return fmt.Errorf("materialize content order revision: %w", err)
 	}
-	var previousNarrative narrativeRevisionRecord
-	narrativeRevisionNo := 1
-	if err := tx.Where("project_id = ?", projectID).Order("revision_no DESC").First(&previousNarrative).Error; err == nil {
-		narrativeRevisionNo = previousNarrative.RevisionNo + 1
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return fmt.Errorf("allocate narrative revision: %w", err)
-	}
-	narrativeRevision := narrativeRevisionRecord{ID: uuid.New(), ProjectID: projectID, BreakdownRevisionID: &breakdownRevisionID, RevisionNo: narrativeRevisionNo, Status: "approved", ContentHash: HashContent(analysis.SourceHash + ":" + analysis.Breakdown.SegmentationHash), Completeness: "complete"}
-	if err := tx.Create(&narrativeRevision).Error; err != nil {
-		return fmt.Errorf("materialize narrative revision: %w", err)
-	}
-	allScenes := make([]sceneRecord, 0)
-	for _, episode := range analysis.Episodes {
+	publishedOrdinal := 0
+	for episodeIndex := range analysis.Episodes {
+		episode := analysis.Episodes[episodeIndex]
 		if episode.Decision == "ignored" {
 			continue
 		}
-		var contentUnit projectContentUnitRecord
-		if err := tx.Where("project_id = ? AND ordinal = ?", projectID, episode.Ordinal).Order("created_at DESC").First(&contentUnit).Error; err != nil {
-			return fmt.Errorf("read materialized content unit %d: %w", episode.Ordinal, err)
+		publishedOrdinal++
+		contentUnit := projectContentUnitRecord{
+			ID: uuid.New(), ProjectID: projectID, Kind: "episode", Title: episode.Title,
+			Status: "active", Ordinal: publishedOrdinal,
 		}
-		if err := tx.Create(&contentOrderItemRecord{ID: uuid.New(), OrderRevisionID: orderRevision.ID, ContentUnitID: contentUnit.ID, Ordinal: episode.Ordinal}).Error; err != nil {
-			return fmt.Errorf("materialize content order item %d: %w", episode.Ordinal, err)
+		if err := tx.Create(&contentUnit).Error; err != nil {
+			return fmt.Errorf("materialize project content unit %d: %w", publishedOrdinal, err)
 		}
-		for sceneOrdinal, scene := range episode.Scenes {
-			sceneRecord := sceneRecord{ID: uuid.New(), NarrativeRevisionID: narrativeRevision.ID, ContentUnitID: contentUnit.ID, Ordinal: sceneOrdinal + 1, Heading: scene.Heading, LocationHint: scene.Heading, StartOffset: scene.Anchor.StartOffset, EndOffset: max(scene.Anchor.EndOffset, scene.Anchor.StartOffset+1)}
-			if err := tx.Create(&sceneRecord).Error; err != nil {
-				return fmt.Errorf("materialize scene %s: %w", scene.Heading, err)
-			}
-			allScenes = append(allScenes, sceneRecord)
-			if err := tx.Create(&beatRecord{ID: uuid.New(), SceneID: sceneRecord.ID, Ordinal: 1, Goal: scene.Heading}).Error; err != nil {
-				return fmt.Errorf("materialize scene beat %s: %w", scene.Heading, err)
-			}
+		analysis.Episodes[episodeIndex].ContentUnitID = contentUnit.ID
+		if err := tx.Create(&contentOrderItemRecord{ID: uuid.New(), OrderRevisionID: orderRevision.ID, ContentUnitID: contentUnit.ID, Ordinal: publishedOrdinal}).Error; err != nil {
+			return fmt.Errorf("materialize content order item %d: %w", publishedOrdinal, err)
 		}
-	}
-	for _, asset := range allAnalysisAssets(analysis) {
-		for _, evidence := range asset.Evidence {
-			var selectedScene *sceneRecord
-			for index := range allScenes {
-				candidate := &allScenes[index]
-				if candidate.StartOffset <= evidence.StartOffset && candidate.EndOffset >= evidence.StartOffset {
-					selectedScene = candidate
-					break
-				}
-			}
-			if selectedScene == nil {
-				continue
-			}
-			mention := mentionRecord{ID: uuid.New(), NarrativeRevisionID: narrativeRevision.ID, SceneID: &selectedScene.ID, ElementType: asset.Kind, SurfaceText: asset.Name, Status: "active", StartOffset: evidence.StartOffset, EndOffset: max(evidence.EndOffset, evidence.StartOffset+1)}
-			if err := tx.Create(&mention).Error; err != nil {
-				return fmt.Errorf("materialize mention %s: %w", asset.Name, err)
-			}
-		}
-	}
-	var breakdown breakdownRecord
-	if err := tx.Select("analysis_run_id").Where("id = ?", breakdownRevisionID).Take(&breakdown).Error; err != nil {
-		return fmt.Errorf("load approved breakdown analysis run: %w", err)
-	}
-	result = tx.Model(&analysisRunRecord{}).Where("id = ?", breakdown.AnalysisRunID).Updates(map[string]any{
-		"current_stage": "knowledge", "current_gate": "knowledge_review", "status": "waiting_user",
-	})
-	if result.Error != nil {
-		return fmt.Errorf("advance analysis run after narrative approval: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return httpapi.Conflict("分析运行基线已经变化", "刷新当前分析运行后重试")
 	}
 	return nil
 }
 
-func max(left, right int) int {
-	if left > right {
-		return left
+// materializeApprovedNarrative writes only M03 source structure and mentions.
+// M04 entities, resolutions, coverage and requirements remain absent until the
+// separate manual knowledge workflow decides them.
+func materializeApprovedNarrative(ctx context.Context, tx *gorm.DB, analysis Analysis) error {
+	tx = tx.WithContext(ctx)
+	if analysis.Narrative.ID == uuid.Nil {
+		return errors.New("approved narrative revision id is missing")
 	}
-	return right
+	sceneRows := map[string]sceneRecord{}
+	for _, episode := range analysis.Episodes {
+		if episode.Decision == "ignored" {
+			continue
+		}
+		if episode.ContentUnitID == uuid.Nil {
+			return fmt.Errorf("episode %s has no materialized content unit", episode.TemporaryKey)
+		}
+		for sceneOrdinal, scene := range episode.Scenes {
+			memberID, err := uuid.Parse(scene.ID)
+			if err != nil {
+				return fmt.Errorf("scene member id %q is invalid: %w", scene.ID, err)
+			}
+			row := sceneRecord{
+				ID: uuid.New(), MemberID: memberID, NarrativeRevisionID: analysis.Narrative.ID,
+				ContentUnitID: episode.ContentUnitID, Ordinal: sceneOrdinal + 1, Heading: scene.Heading,
+				LocationHint: scene.Heading, StartOffset: scene.Anchor.StartOffset, EndOffset: scene.Anchor.EndOffset,
+			}
+			if err := tx.Create(&row).Error; err != nil {
+				return fmt.Errorf("materialize scene %s: %w", scene.Heading, err)
+			}
+			sceneRows[scene.ID] = row
+			for nodeOrdinal, node := range scene.Narratives {
+				memberID, err := uuid.Parse(node.ID)
+				if err != nil {
+					return fmt.Errorf("narrative node member id %q is invalid: %w", node.ID, err)
+				}
+				nodeRow := narrativeNodeRecord{
+					ID: uuid.New(), MemberID: memberID, SceneID: row.ID, Ordinal: nodeOrdinal + 1,
+					Kind: string(node.Kind), Text: node.Text, Speaker: nullableText(node.Speaker),
+					Status: string(node.Status), IgnoreReason: nullableText(node.IgnoreReason),
+					StartOffset: node.Anchor.StartOffset, EndOffset: node.Anchor.EndOffset,
+				}
+				if err := tx.Create(&nodeRow).Error; err != nil {
+					return fmt.Errorf("materialize narrative node %s: %w", node.ID, err)
+				}
+			}
+		}
+	}
+	for _, mention := range analysis.Mentions {
+		memberID, err := uuid.Parse(mention.ID)
+		if err != nil {
+			return fmt.Errorf("mention member id %q is invalid: %w", mention.ID, err)
+		}
+		scene, ok := sceneRows[mention.SceneID]
+		if !ok {
+			return fmt.Errorf("mention %s references an unpublished scene", mention.ID)
+		}
+		row := mentionRecord{
+			ID: uuid.New(), MemberID: memberID, NarrativeRevisionID: analysis.Narrative.ID,
+			SceneID: &scene.ID, ElementType: mention.ElementType, SurfaceText: mention.SurfaceText,
+			Status: mention.Status, StartOffset: mention.Anchor.StartOffset, EndOffset: mention.Anchor.EndOffset,
+		}
+		if err := tx.Create(&row).Error; err != nil {
+			return fmt.Errorf("materialize mention %s: %w", mention.ID, err)
+		}
+	}
+	return nil
+}
+
+func nullableText(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func updateRootOperation(tx *gorm.DB, analysisRunID uuid.UUID, progress int) error {
+	var run analysisRunRecord
+	if err := tx.Select("root_operation_id").Where("id = ?", analysisRunID).Take(&run).Error; err != nil {
+		return fmt.Errorf("load root analysis operation: %w", err)
+	}
+	result := tx.Model(&operationRecord{}).Where("id = ? AND type = ? AND status IN ?", run.RootOperationID, "script_analysis", []string{"running", "waiting_user"}).Updates(map[string]any{
+		"status": "waiting_user", "progress": progress, "updated_at": time.Now().UTC(),
+	})
+	if result.Error != nil {
+		return fmt.Errorf("advance root analysis operation: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return httpapi.Conflict("根解析任务状态已经变化", "刷新任务状态后重试")
+	}
+	return nil
 }

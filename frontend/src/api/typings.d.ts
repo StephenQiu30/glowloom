@@ -93,6 +93,8 @@ declare namespace API {
     costumes: Asset[] | null;
     episodes: Episode[] | null;
     locations: Asset[] | null;
+    mentions: ProductionElementMention[] | null;
+    narrative: NarrativeRevision | null;
     parse_report: ParseReport | null;
     props: Asset[] | null;
     source_hash: string | null;
@@ -116,6 +118,10 @@ declare namespace API {
     recovery_actions: RecoveryAction[] | null;
     request_id: string | null;
     retry_after_seconds: number | null;
+  };
+
+  type approveNarrativeRequest = {
+    expected_narrative_hash: string | null;
   };
 
   type approveRequest = {
@@ -302,11 +308,76 @@ declare namespace API {
 
   type MembershipStatus = "active" | "suspended" | "removed";
 
+  type NarrativeIssue = {
+    anchor: Anchor | null;
+    code: string | null;
+    mention_id: string | null;
+    message: string | null;
+    node_id: string | null;
+    scene_id: string | null;
+  };
+
+  type NarrativeNodeKind = "beat" | "dialogue" | "action" | "narration";
+
+  type NarrativeNodeStatus = "active" | "ignored";
+
+  type NarrativeOperation = {
+    anchor: Anchor | null;
+    boundary_node_id: string | null;
+    element_type: string | null;
+    episode_key: string | null;
+    heading: string | null;
+    ignore_reason: string | null;
+    left_heading: string | null;
+    left_scene_id: string | null;
+    mention_id: string | null;
+    node_id: string | null;
+    node_kind: NarrativeNodeKind | null;
+    ordered_node_ids: string[] | null;
+    ordered_scene_ids: string[] | null;
+    right_heading: string | null;
+    right_scene_id: string | null;
+    scene_id: string | null;
+    scene_ids: string[] | null;
+    speaker: string | null;
+    surface_text: string | null;
+    target_scene_id: string | null;
+    text: string | null;
+    type: NarrativeOperationType | null;
+  };
+
+  type NarrativeOperationType =
+    | "update_scene"
+    | "split_scene"
+    | "merge_scenes"
+    | "reorder_scenes"
+    | "create_node"
+    | "update_node"
+    | "delete_node"
+    | "reorder_nodes"
+    | "ignore_node"
+    | "create_mention"
+    | "update_mention"
+    | "delete_mention";
+
+  type NarrativeRevision = {
+    completeness: string | null;
+    content_hash: string | null;
+    id: string | null;
+    issues: NarrativeIssue[] | null;
+    revision_no: number | null;
+    status: NarrativeStatus | null;
+  };
+
+  type NarrativeStatus = "ready" | "blocked" | "approved";
+
   type NarrativeUnit = {
     anchor: Anchor | null;
     id: string | null;
-    kind: string | null;
+    ignore_reason: string | null;
+    kind: NarrativeNodeKind | null;
     speaker: string | null;
+    status: NarrativeNodeStatus | null;
     text: string | null;
   };
 
@@ -339,6 +410,15 @@ declare namespace API {
     parser_version: string | null;
     status: string | null;
     text_hash: string | null;
+  };
+
+  type ProductionElementMention = {
+    anchor: Anchor | null;
+    element_type: string | null;
+    id: string | null;
+    scene_id: string | null;
+    status: string | null;
+    surface_text: string | null;
   };
 
   type Project = {
@@ -409,6 +489,11 @@ declare namespace API {
     operations: EpisodeBreakdownOperation[] | null;
   };
 
+  type reviseNarrativeDraftRequest = {
+    expected_narrative_hash: string | null;
+    operations: NarrativeOperation[] | null;
+  };
+
   type RoleCode = "admin" | "user" | "ban";
 
   type Scene = {
@@ -416,11 +501,6 @@ declare namespace API {
     heading: string | null;
     id: string | null;
     narratives: NarrativeUnit[] | null;
-  };
-
-  type scriptAnalysisApproveParams = {
-    /** Script Revision UUID */
-    revisionID: string;
   };
 
   type scriptAnalysisDraftParams = {
@@ -434,6 +514,21 @@ declare namespace API {
   };
 
   type scriptAnalysisQueueParams = {
+    /** Script Revision UUID */
+    revisionID: string;
+  };
+
+  type scriptEpisodeBreakdownApproveParams = {
+    /** Script Revision UUID */
+    revisionID: string;
+  };
+
+  type scriptNarrativeApproveParams = {
+    /** Script Revision UUID */
+    revisionID: string;
+  };
+
+  type scriptNarrativeDraftReviseParams = {
     /** Script Revision UUID */
     revisionID: string;
   };

@@ -80,5 +80,18 @@ textarea { min-height: 270px; resize: vertical; line-height: 1.55; }
 .breakdown-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .breakdown-columns > div { display: grid; gap: 8px; }
 .boundary-bridge { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; border-top: 1px dashed #c9ced7; margin-top: 16px; padding-top: 16px; }
+.narrative-card { margin-top: 18px; }
+.narrative-episodes, .narrative-scenes, .narrative-nodes { display: grid; gap: 16px; }
+.narrative-episode { border-top: 1px solid var(--line); padding-top: 16px; }
+.narrative-scene { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #fcfcfd; }
+.narrative-controls, .narrative-controls form, .narrative-node form, .narrative-create, .mention-row form { display: grid; gap: 10px; }
+.narrative-controls { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
+.narrative-node { border-left: 3px solid #d8dce4; padding: 12px 14px; background: #fff; }
+.narrative-node.ignored { border-left-style: dashed; opacity: .72; }
+.compact-textarea { min-height: 96px; }
+.node-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.narrative-create { border: 1px dashed #c9ced7; border-radius: 12px; padding: 14px; margin-top: 14px; }
+.mention-list { display: grid; gap: 10px; margin-top: 16px; }
+.mention-row { border-radius: 12px; background: #f4f6f9; padding: 12px; }
 @media (max-width: 840px) { .hero, .grid { display: block; } .status { display: inline-block; margin-top: 12px; } .grid > * + * { margin-top: 18px; } .summary { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 680px) { .breakdown-columns, .boundary-bridge { grid-template-columns: 1fr; } }

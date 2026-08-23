@@ -163,7 +163,205 @@ func TestReviseEpisodeBreakdownKeepsNamedIgnoredRangeWithoutPublishingEpisode(t 
 	}
 }
 
-func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
+func TestPrepareNarrativeDraftBuildsTypedNodesAndStableMentions(t *testing.T) {
+	analysis, err := AnalyzeScript("第1集 归途\n场景：码头\n人物：林夏\n林夏：我们走。\n海风吹动雨衣。\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	analysis = PrepareNarrativeDraft(analysis, uuid.MustParse("11111111-1111-4111-8111-111111111111"), 1)
+
+	if analysis.Narrative.Status != NarrativeStatusReady || analysis.Narrative.ContentHash == "" {
+		t.Fatalf("narrative validation = %#v, want ready with content hash", analysis.Narrative)
+	}
+	nodes := analysis.Episodes[0].Scenes[0].Narratives
+	if len(nodes) != 2 || nodes[0].Kind != NarrativeNodeDialogue || nodes[1].Kind != NarrativeNodeAction {
+		t.Fatalf("typed narrative nodes = %#v", nodes)
+	}
+	if _, err := uuid.Parse(nodes[0].ID); err != nil {
+		t.Fatalf("narrative node id is not stable UUID: %q", nodes[0].ID)
+	}
+	if len(analysis.Mentions) < 2 {
+		t.Fatalf("mentions = %#v, want character and location/source mentions", analysis.Mentions)
+	}
+	for _, mention := range analysis.Mentions {
+		if _, err := uuid.Parse(mention.ID); err != nil || mention.SceneID == "" || mention.Anchor.EndOffset <= mention.Anchor.StartOffset {
+			t.Fatalf("mention is not stably anchored: %#v", mention)
+		}
+	}
+}
+
+func TestReviseNarrativeCreatesImmutableRevisionAndSupportsManualCommands(t *testing.T) {
+	analysis, err := AnalyzeScript("第1集 归途\n场景：码头\n林夏：我们走。\n海风吹动雨衣。\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	analysis = PrepareNarrativeDraft(analysis, uuid.MustParse("11111111-1111-4111-8111-111111111111"), 1)
+	scene := analysis.Episodes[0].Scenes[0]
+	node := scene.Narratives[1]
+	mentionID := uuid.MustParse("22222222-2222-4222-8222-222222222222")
+
+	revised, err := ReviseNarrative(analysis, analysis.Narrative.ContentHash, uuid.MustParse("33333333-3333-4333-8333-333333333333"), []NarrativeOperation{
+		{Type: NarrativeOperationUpdateScene, SceneID: scene.ID, Heading: "海边码头"},
+		{Type: NarrativeOperationUpdateNode, NodeID: node.ID, NodeKind: NarrativeNodeNarration, Text: "海风掠过空旷码头。", Anchor: node.Anchor},
+		{Type: NarrativeOperationCreateMention, MentionID: mentionID.String(), SceneID: scene.ID, ElementType: "costume", SurfaceText: "雨衣", Anchor: node.Anchor},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if analysis.Episodes[0].Scenes[0].Heading != "码头" || revised.Episodes[0].Scenes[0].Heading != "海边码头" {
+		t.Fatal("narrative revision mutated its immutable base")
+	}
+	if revised.Narrative.RevisionNo != 2 || revised.Narrative.ID.String() != "33333333-3333-4333-8333-333333333333" || revised.Narrative.ContentHash == analysis.Narrative.ContentHash {
+		t.Fatalf("narrative revision metadata = %#v", revised.Narrative)
+	}
+	if revised.Episodes[0].Scenes[0].Narratives[1].Kind != NarrativeNodeNarration {
+		t.Fatalf("node was not reclassified: %#v", revised.Episodes[0].Scenes[0].Narratives[1])
+	}
+	if got := findMention(revised.Mentions, mentionID.String()); got == nil || got.ElementType != "costume" || got.SurfaceText != "雨衣" {
+		t.Fatalf("created mention = %#v", got)
+	}
+}
+
+func TestReviseNarrativeSupportsSceneSplitMergeReorderAndNamedIgnore(t *testing.T) {
+	analysis, err := AnalyzeScript("第1集 合集\n场景：码头\n林夏：出发。\n海风渐强。\n场景：仓库\n顾远：等等。\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	analysis = PrepareNarrativeDraft(analysis, uuid.New(), 1)
+	originalScene := analysis.Episodes[0].Scenes[0]
+	leftID, rightID := uuid.New(), uuid.New()
+
+	split, err := ReviseNarrative(analysis, analysis.Narrative.ContentHash, uuid.New(), []NarrativeOperation{{
+		Type: NarrativeOperationSplitScene, SceneID: originalScene.ID, BoundaryNodeID: originalScene.Narratives[1].ID,
+		LeftSceneID: leftID.String(), LeftHeading: "码头外", RightSceneID: rightID.String(), RightHeading: "码头内",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(split.Episodes[0].Scenes) != 3 || split.Episodes[0].Scenes[0].ID != leftID.String() || split.Episodes[0].Scenes[1].ID != rightID.String() {
+		t.Fatalf("split scenes = %#v", split.Episodes[0].Scenes)
+	}
+
+	ignored, err := ReviseNarrative(split, split.Narrative.ContentHash, uuid.New(), []NarrativeOperation{{
+		Type: NarrativeOperationIgnoreNode, NodeID: split.Episodes[0].Scenes[1].Narratives[0].ID, IgnoreReason: "环境说明不进入叙事",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ignored.Episodes[0].Scenes[1].Narratives[0].Status != NarrativeNodeStatusIgnored {
+		t.Fatalf("named ignore was not preserved: %#v", ignored.Episodes[0].Scenes[1].Narratives[0])
+	}
+
+	mergedID := uuid.New()
+	merged, err := ReviseNarrative(ignored, ignored.Narrative.ContentHash, uuid.New(), []NarrativeOperation{{
+		Type: NarrativeOperationMergeScenes, SceneIDs: []string{leftID.String(), rightID.String()}, TargetSceneID: mergedID.String(), Heading: "码头",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(merged.Episodes[0].Scenes) != 2 || merged.Episodes[0].Scenes[0].ID != mergedID.String() {
+		t.Fatalf("merged scenes = %#v", merged.Episodes[0].Scenes)
+	}
+
+	reordered, err := ReviseNarrative(merged, merged.Narrative.ContentHash, uuid.New(), []NarrativeOperation{{
+		Type: NarrativeOperationReorderScenes, EpisodeKey: merged.Episodes[0].TemporaryKey,
+		OrderedSceneIDs: []string{merged.Episodes[0].Scenes[1].ID, merged.Episodes[0].Scenes[0].ID},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reordered.Episodes[0].Scenes[0].ID != merged.Episodes[0].Scenes[1].ID {
+		t.Fatalf("scene reorder failed: %#v", reordered.Episodes[0].Scenes)
+	}
+}
+
+func TestReviseNarrativeCreatesDeletesNodesAndUpdatesDeletesMentions(t *testing.T) {
+	analysis, err := AnalyzeScript("第1集 归途\n场景：码头\n人物：林夏\n林夏：我们走。\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	analysis = PrepareNarrativeDraft(analysis, uuid.New(), 1)
+	scene := analysis.Episodes[0].Scenes[0]
+	nodeID := uuid.New().String()
+	mention := analysis.Mentions[0]
+
+	created, err := ReviseNarrative(analysis, analysis.Narrative.ContentHash, uuid.New(), []NarrativeOperation{
+		{Type: NarrativeOperationCreateNode, NodeID: nodeID, SceneID: scene.ID, NodeKind: NarrativeNodeBeat, Text: "林夏决定离开", Anchor: Anchor{Line: 4, StartOffset: 31, EndOffset: 32}},
+		{Type: NarrativeOperationUpdateMention, MentionID: mention.ID, SceneID: scene.ID, ElementType: "character", SurfaceText: "林夏（成年）", Anchor: mention.Anchor},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, node := findNodeForTest(created, nodeID); node == nil || node.Kind != NarrativeNodeBeat {
+		t.Fatalf("created node = %#v", node)
+	}
+	if updated := findMention(created.Mentions, mention.ID); updated == nil || updated.SurfaceText != "林夏（成年）" {
+		t.Fatalf("updated mention = %#v", updated)
+	}
+
+	deleted, err := ReviseNarrative(created, created.Narrative.ContentHash, uuid.New(), []NarrativeOperation{
+		{Type: NarrativeOperationDeleteNode, NodeID: nodeID},
+		{Type: NarrativeOperationDeleteMention, MentionID: mention.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, node := findNodeForTest(deleted, nodeID); node != nil || findMention(deleted.Mentions, mention.ID) != nil {
+		t.Fatalf("deleted members remain in draft: node=%#v mention=%#v", node, findMention(deleted.Mentions, mention.ID))
+	}
+}
+
+func TestNarrativeValidationBlocksUnknownSpeakerPartialAndStaleEdits(t *testing.T) {
+	analysis, err := AnalyzeScript("第1集 归途\n场景：码头\n旁白响起。\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	analysis.Episodes[0].Scenes[0].Narratives[0].Kind = NarrativeNodeDialogue
+	analysis.Episodes[0].Scenes[0].Narratives[0].Speaker = ""
+	analysis.ParseReport.FailedScopes = []string{"episode:1/page:2"}
+	analysis = PrepareNarrativeDraft(analysis, uuid.New(), 1)
+
+	if analysis.Narrative.Status != NarrativeStatusBlocked || !hasNarrativeIssue(analysis.Narrative.Issues, "unknown_speaker") || !hasNarrativeIssue(analysis.Narrative.Issues, "partial_source_scope") {
+		t.Fatalf("narrative blockers = %#v", analysis.Narrative)
+	}
+	if _, err := ReviseNarrative(analysis, "stale-hash", uuid.New(), []NarrativeOperation{{Type: NarrativeOperationUpdateScene, SceneID: analysis.Episodes[0].Scenes[0].ID, Heading: "新标题"}}); err == nil {
+		t.Fatal("stale narrative edit must be rejected")
+	}
+}
+
+func findMention(mentions []ProductionElementMention, id string) *ProductionElementMention {
+	for index := range mentions {
+		if mentions[index].ID == id {
+			return &mentions[index]
+		}
+	}
+	return nil
+}
+
+func hasNarrativeIssue(issues []NarrativeIssue, code string) bool {
+	for _, issue := range issues {
+		if issue.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func findNodeForTest(analysis Analysis, id string) (*Scene, *NarrativeUnit) {
+	for episodeIndex := range analysis.Episodes {
+		for sceneIndex := range analysis.Episodes[episodeIndex].Scenes {
+			scene := &analysis.Episodes[episodeIndex].Scenes[sceneIndex]
+			for nodeIndex := range scene.Narratives {
+				if scene.Narratives[nodeIndex].ID == id {
+					return scene, &scene.Narratives[nodeIndex]
+				}
+			}
+		}
+	}
+	return nil, nil
+}
+
+func TestApproveBreakdownThenReviseAndApproveNarrativeWithGORM(t *testing.T) {
 	if os.Getenv("LANVERSE_INTEGRATION") != "1" {
 		t.Skip("set LANVERSE_INTEGRATION=1 to run PostgreSQL/GORM integration")
 	}
@@ -184,16 +382,16 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 		}
 	}
 	t.Cleanup(func() {
-		var narrativeIDs, sceneIDs, beatIDs, orderRevisionIDs, orderUnitIDs, analysisRunIDs, breakdownIDs, contentUnitIDs, entityIDs, requirementItemIDs []uuid.UUID
+		var narrativeIDs, sceneIDs, nodeIDs, orderRevisionIDs, orderUnitIDs, analysisRunIDs, breakdownIDs, contentUnitIDs, entityIDs, requirementItemIDs []uuid.UUID
 		orm.Table("nar_narrative_revisions").Where("project_id = ?", projectID).Pluck("id", &narrativeIDs)
 		orm.Table("nar_scenes").Where("narrative_revision_id IN ?", narrativeIDs).Pluck("id", &sceneIDs)
-		orm.Table("nar_beats").Where("scene_id IN ?", sceneIDs).Pluck("id", &beatIDs)
+		orm.Table("nar_narrative_nodes").Where("scene_id IN ?", sceneIDs).Pluck("id", &nodeIDs)
 		deleteBy("pk_mention_resolutions", "narrative_revision_id IN ?", narrativeIDs)
 		deleteBy("nar_production_element_mentions", "narrative_revision_id IN ?", narrativeIDs)
-		deleteBy("nar_beats", "id IN ?", beatIDs)
+		deleteBy("nar_narrative_nodes", "id IN ?", nodeIDs)
 		deleteBy("nar_scenes", "id IN ?", sceneIDs)
-		deleteBy("nar_narrative_revisions", "id IN ?", narrativeIDs)
 		deleteBy("nar_analysis_drafts", "source_revision_id = ?", revisionID)
+		deleteBy("nar_narrative_revisions", "id IN ?", narrativeIDs)
 		orm.Table("nar_analysis_runs").Where("project_id = ?", projectID).Pluck("id", &analysisRunIDs)
 		orm.Table("nar_episode_breakdown_revisions").Where("analysis_run_id IN ?", analysisRunIDs).Pluck("id", &breakdownIDs)
 		deleteBy("nar_episode_breakdown_manifests", "breakdown_revision_id IN ?", breakdownIDs)
@@ -240,7 +438,7 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 		{"media_artifacts", map[string]any{"id": artifactID, "workspace_id": workspaceID, "project_id": projectID, "content_hash": sourceHash, "size_bytes": 6, "media_type": "text/plain", "purpose": "source", "retention_class": "standard", "status": "ready"}},
 		{"media_artifact_locations", map[string]any{"id": uuid.New(), "artifact_id": artifactID, "storage_profile": "test", "bucket": "test", "object_key": uuid.NewString(), "object_version_id": uuid.NewString(), "size_bytes": 6, "content_hash": sourceHash, "status": "active"}},
 		{"nar_source_revisions", map[string]any{"id": revisionID, "project_id": projectID, "artifact_id": artifactID, "name": "integration.txt", "source_type": "txt", "status": "waiting_user"}},
-		{"operations", map[string]any{"id": operationID, "project_id": projectID, "type": "script_analysis", "status": "succeeded", "progress": 100, "created_at": time.Now().UTC()}},
+		{"operations", map[string]any{"id": operationID, "project_id": projectID, "type": "script_analysis", "status": "waiting_user", "progress": 35, "created_at": time.Now().UTC()}},
 	} {
 		if err := orm.WithContext(ctx).Table(entry.table).Create(entry.record).Error; err != nil {
 			t.Fatal(entry.table, err)
@@ -276,7 +474,7 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	}
 	if err := orm.WithContext(ctx).Table("nar_analysis_drafts").Create(map[string]any{
 		"source_revision_id": revisionID, "breakdown_revision_id": breakdownID, "source_hash": analysis.SourceHash,
-		"analysis": datatypes.JSON(mustJSON(analysis)), "status": "draft",
+		"analysis": datatypes.JSON(mustJSON(analysis)), "status": "breakdown_draft",
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -303,12 +501,15 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 		t.Fatalf("breakdown revision states superseded/draft = %d/%d, want 1/1", supersededCount, draftCount)
 	}
 
-	approved, err := repository.ApproveAnalysis(tenantContext, revisionID)
+	narrativeDraft, err := repository.ApproveEpisodeBreakdown(tenantContext, revisionID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if approved.Episodes[0].ContentUnitID != uuid.Nil || approved.Episodes[1].ContentUnitID == uuid.Nil {
-		t.Fatal("approval did not persist canonical content unit id")
+	if narrativeDraft.Episodes[0].ContentUnitID != uuid.Nil || narrativeDraft.Episodes[1].ContentUnitID == uuid.Nil {
+		t.Fatal("breakdown approval did not persist canonical content unit id")
+	}
+	if narrativeDraft.Narrative.ID == uuid.Nil || narrativeDraft.Narrative.RevisionNo != 1 || narrativeDraft.Narrative.Status != NarrativeStatusReady {
+		t.Fatalf("narrative draft = %#v", narrativeDraft.Narrative)
 	}
 	var contentUnitCount int64
 	if err := orm.Table("prj_content_units").Where("project_id = ?", projectID).Count(&contentUnitCount).Error; err != nil {
@@ -319,6 +520,29 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	}
 	var count int64
 	if err := orm.Table("nar_scenes").Where("narrative_revision_id IN (?)", orm.Table("nar_narrative_revisions").Select("id").Where("project_id = ?", projectID)).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("unapproved narrative materialized %d canonical scenes", count)
+	}
+	activeScene := narrativeDraft.Episodes[1].Scenes[0]
+	revisedNarrative, err := repository.ReviseNarrativeDraft(tenantContext, revisionID, narrativeDraft.Narrative.ContentHash, []NarrativeOperation{{
+		Type: NarrativeOperationUpdateScene, SceneID: activeScene.ID, Heading: "海边码头·人工校对",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revisedNarrative.Narrative.RevisionNo != 2 || revisedNarrative.Episodes[1].Scenes[0].Heading != "海边码头·人工校对" {
+		t.Fatalf("revised narrative = %#v", revisedNarrative.Narrative)
+	}
+	approved, err := repository.ApproveNarrative(tenantContext, revisionID, revisedNarrative.Narrative.ContentHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if approved.Narrative.Status != NarrativeStatusApproved {
+		t.Fatalf("approved narrative = %#v", approved.Narrative)
+	}
+	if err := orm.Table("nar_scenes").Where("narrative_revision_id = ?", approved.Narrative.ID).Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -337,8 +561,11 @@ func TestApproveAnalysisMaterializesCanonicalWithGORM(t *testing.T) {
 	if mentionCount == 0 || entityCount != 0 || requirementCount != 0 {
 		t.Fatalf("approval published mentions/entities/requirements = %d/%d/%d, want >0/0/0", mentionCount, entityCount, requirementCount)
 	}
-	if _, err := repository.ApproveAnalysis(tenantContext, revisionID); err != nil {
-		t.Fatal("repeated approval should be idempotent:", err)
+	if _, err := repository.ApproveEpisodeBreakdown(tenantContext, revisionID); err != nil {
+		t.Fatal("repeated breakdown approval should be idempotent:", err)
+	}
+	if _, err := repository.ApproveNarrative(tenantContext, revisionID, revisedNarrative.Narrative.ContentHash); err != nil {
+		t.Fatal("repeated narrative approval should be idempotent:", err)
 	}
 	if err := orm.Table("nar_scenes").Where("narrative_revision_id IN (?)", orm.Table("nar_narrative_revisions").Select("id").Where("project_id = ?", projectID)).Count(&count).Error; err != nil {
 		t.Fatal(err)

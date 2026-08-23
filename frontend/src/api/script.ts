@@ -98,18 +98,62 @@ export async function scriptAnalysisQueue(
   });
 }
 
-/** 批准剧本分析 POST /api/script-revisions/${param0}/approve */
-export async function scriptAnalysisApprove(
+/** 批准剧集拆解 POST /api/script-revisions/${param0}/episode-breakdown-approvals */
+export async function scriptEpisodeBreakdownApprove(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.scriptAnalysisApproveParams,
+  params: API.scriptEpisodeBreakdownApproveParams,
   options?: RequestOptions
 ) {
   const { revisionID: param0, ...queryParams } = params;
   return request<API.AnalysisEnvelope>(
-    `/api/script-revisions/${param0}/approve`,
+    `/api/script-revisions/${param0}/episode-breakdown-approvals`,
     {
       method: "POST",
       params: { ...queryParams },
+      ...(options || {}),
+    }
+  );
+}
+
+/** 批准叙事修订 POST /api/script-revisions/${param0}/narrative-approvals */
+export async function scriptNarrativeApprove(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.scriptNarrativeApproveParams,
+  body: API.approveNarrativeRequest,
+  options?: RequestOptions
+) {
+  const { revisionID: param0, ...queryParams } = params;
+  return request<API.AnalysisEnvelope>(
+    `/api/script-revisions/${param0}/narrative-approvals`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
+/** 修订叙事草稿 POST /api/script-revisions/${param0}/narrative-draft/revisions */
+export async function scriptNarrativeDraftRevise(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.scriptNarrativeDraftReviseParams,
+  body: API.reviseNarrativeDraftRequest,
+  options?: RequestOptions
+) {
+  const { revisionID: param0, ...queryParams } = params;
+  return request<API.AnalysisEnvelope>(
+    `/api/script-revisions/${param0}/narrative-draft/revisions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
       ...(options || {}),
     }
   );
