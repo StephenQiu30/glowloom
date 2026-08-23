@@ -2,17 +2,25 @@
 /* eslint-disable */
 import request, { type RequestOptions } from "@/lib/request";
 
-/** 获取 Swagger 文档 GET /api/swagger.json */
-export async function systemSwagger(options?: RequestOptions) {
-  return request<Record<string, any>>("/api/swagger.json", {
+/**  Healthz GET /healthz */
+export async function healthzHealthzGet(options?: RequestOptions) {
+  return request<API.HealthResponse>("/healthz", {
     method: "GET",
     ...(options || {}),
   });
 }
 
-/** 服务就绪检查 GET /readyz */
-export async function systemReady(options?: RequestOptions) {
-  return request<Record<string, any>>("/readyz", {
+/**  Metrics GET /metrics */
+export async function metricsMetricsGet(options?: RequestOptions) {
+  return request<any>("/metrics", {
+    method: "GET",
+    ...(options || {}),
+  });
+}
+
+/**  Readyz GET /readyz */
+export async function readyzReadyzGet(options?: RequestOptions) {
+  return request<API.ReadinessResponse>("/readyz", {
     method: "GET",
     ...(options || {}),
   });

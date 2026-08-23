@@ -1,0 +1,669 @@
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import operator
+import re
+import unicodedata
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Annotated, Any, TypedDict, cast
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.graph import END, START, StateGraph  # pyright: ignore[reportMissingTypeStubs]
+from langgraph.types import Send  # pyright: ignore[reportMissingTypeStubs]
+from pydantic import ValidationError
+
+from app.modules.scripts import (
+    ContinuityCandidateProposal,
+    DialogueCandidateProposal,
+    ScriptExtractionResult,
+    ShotCandidateProposal,
+    analyze_document,
+)
+from app.modules.skills.contracts import (
+    SkillDefinition,
+    SkillExecutionContext,
+    SkillExecutionError,
+    StructuredSkillModel,
+    input_hash,
+)
+
+DEFAULT_MAX_CHUNK_CHARS = 18_000
+_SCENE_HEADING = re.compile(r"^(?:INT\.?|EXT\.?|I/E\.?)", re.IGNORECASE)
+
+
+@dataclass(frozen=True, slots=True)
+class ScriptExtractionChunk:
+    key: str
+    episode_number: int | None
+    start: int
+    end: int
+    text: str
+
+    def as_state(self) -> dict[str, object]:
+        return {
+            "chunk_key": self.key,
+            "chunk_episode_number": self.episode_number,
+            "chunk_start": self.start,
+            "chunk_end": self.end,
+            "chunk_text": self.text,
+        }
+
+
+class _ScriptStructureState(TypedDict, total=False):
+    script_body: str
+    chunks: list[dict[str, object]]
+    chunk_key: str
+    chunk_episode_number: int | None
+    chunk_start: int
+    chunk_end: int
+    chunk_text: str
+    chunk_results: Annotated[list[dict[str, object]], operator.add]
+    output: ScriptExtractionResult
+
+
+def _chunk_key(episode_number: int | None, sequence: int) -> str:
+    prefix = f"ep{episode_number:03d}" if episode_number is not None else "pre"
+    return f"{prefix}-c{sequence:03d}"
+
+
+def _line_break_before(text: str, start: int, limit: int) -> int:
+    line_break = text.rfind("\n", start, limit)
+    if line_break <= start:
+        return limit
+    return line_break + 1
+
+
+def _episode_ranges(script_body: str) -> list[tuple[int | None, int, int]]:
+    analysis = analyze_document(script_body)
+    if any(issue.severity == "blocking" for issue in analysis.issues):
+        issue = next(issue for issue in analysis.issues if issue.severity == "blocking")
+        raise SkillExecutionError(
+            outcome="failed",
+            code="script_structure_input_invalid",
+            summary=f"Script structure cannot be segmented: {issue.code}",
+            retryable=False,
+            next_action=issue.next_action,
+        )
+    if not analysis.markers:
+        return [(None, 0, len(script_body))]
+    ranges: list[tuple[int | None, int, int]] = []
+    first_start = 0
+    first_marker = analysis.markers[0]
+    if first_marker.start_codepoint > 0:
+        ranges.append((None, 0, first_marker.start_codepoint))
+    for index, marker in enumerate(analysis.markers):
+        end = (
+            analysis.markers[index + 1].start_codepoint
+            if index + 1 < len(analysis.markers)
+            else len(script_body)
+        )
+        ranges.append((marker.episode_number, marker.start_codepoint, end))
+        first_start = end
+    if first_start == 0:
+        return [(None, 0, len(script_body))]
+    return ranges
+
+
+def _scene_starts(script_body: str, start: int, end: int) -> list[int]:
+    analysis = analyze_document(script_body[start:end])
+    starts: list[int] = []
+    for block in analysis.blocks:
+        if block.kind != "scene_heading":
+            continue
+        heading = script_body[start + block.start_codepoint : start + block.end_codepoint]
+        if _SCENE_HEADING.match(heading.strip()):
+            starts.append(start + block.start_codepoint)
+    return starts
+
+
+def segment_script(
+    script_body: str,
+    *,
+    max_chunk_chars: int = DEFAULT_MAX_CHUNK_CHARS,
+) -> tuple[ScriptExtractionChunk, ...]:
+    if not script_body.strip():
+        raise SkillExecutionError(
+            outcome="failed",
+            code="skill_input_invalid",
+            summary="Script input is empty",
+            retryable=False,
+            next_action="fix_skill_input",
+        )
+    if max_chunk_chars < 1_000:
+        raise ValueError("max_chunk_chars must be at least 1000")
+
+    chunks: list[ScriptExtractionChunk] = []
+    sequence = 0
+    for episode_number, episode_start, episode_end in _episode_ranges(script_body):
+        cursor = episode_start
+        boundaries = [
+            boundary
+            for boundary in _scene_starts(script_body, episode_start, episode_end)
+            if episode_start < boundary < episode_end
+        ]
+        while cursor < episode_end:
+            limit = min(cursor + max_chunk_chars, episode_end)
+            candidates = [boundary for boundary in boundaries if cursor < boundary <= limit]
+            end = max(candidates, default=limit)
+            if end == limit and end < episode_end and end not in boundaries:
+                end = _line_break_before(script_body, cursor, limit)
+            if end <= cursor:
+                end = min(cursor + max_chunk_chars, episode_end)
+            sequence += 1
+            chunks.append(
+                ScriptExtractionChunk(
+                    key=_chunk_key(episode_number, sequence),
+                    episode_number=episode_number,
+                    start=cursor,
+                    end=end,
+                    text=script_body[cursor:end],
+                )
+            )
+            cursor = end
+
+    if not chunks:
+        raise SkillExecutionError(
+            outcome="failed",
+            code="script_structure_input_invalid",
+            summary="Script did not produce any extraction chunks",
+            retryable=False,
+            next_action="fix_skill_input",
+        )
+    return tuple(chunks)
+
+
+def _qualified_candidate_key(chunk_key: str, candidate_key: str) -> str:
+    qualified = f"{chunk_key}:{candidate_key}"
+    if len(qualified) <= 100:
+        return qualified
+    digest = hashlib.sha256(qualified.encode("utf-8")).hexdigest()[:24]
+    return f"{chunk_key}:{digest}"
+
+
+def _normalized_asset_key(asset_kind: str, name: str) -> str:
+    normalized = unicodedata.normalize("NFKC", name).casefold()
+    return f"{asset_kind}:{' '.join(normalized.split())}"
+
+
+def _state_int(value: object, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise SkillExecutionError(
+            outcome="failed",
+            code="skill_output_invalid",
+            summary=f"Extraction state field {field_name} is invalid",
+            retryable=False,
+            next_action="start_new_skill_run",
+        )
+    return value
+
+
+def _validate_chunk_result(result: ScriptExtractionResult, chunk_text: str) -> None:
+    candidate_keys = {candidate.candidate_key for candidate in result.candidates}
+    candidate_by_key = {candidate.candidate_key: candidate for candidate in result.candidates}
+    for candidate in result.candidates:
+        if candidate.source_range.end > len(chunk_text):
+            raise SkillExecutionError(
+                outcome="failed",
+                code="skill_output_invalid",
+                summary="Chunk candidate source range exceeds the chunk",
+                retryable=False,
+                next_action="start_new_skill_run",
+            )
+        proposal = candidate.proposal
+        if isinstance(proposal, (DialogueCandidateProposal, ShotCandidateProposal)):
+            if proposal.scene_candidate_key not in candidate_keys:
+                raise SkillExecutionError(
+                    outcome="failed",
+                    code="skill_output_invalid",
+                    summary="Chunk candidate references an unknown scene",
+                    retryable=False,
+                    next_action="start_new_skill_run",
+                )
+        if isinstance(proposal, ContinuityCandidateProposal):
+            scene_keys = set(proposal.scene_candidate_keys)
+            if proposal.scene_candidate_key is not None:
+                scene_keys.add(proposal.scene_candidate_key)
+            if any(
+                scene_key not in candidate_keys
+                or candidate_by_key[scene_key].proposal.kind != "scene"
+                for scene_key in scene_keys
+            ):
+                raise SkillExecutionError(
+                    outcome="failed",
+                    code="skill_output_invalid",
+                    summary="Chunk continuity candidate references an unknown scene",
+                    retryable=False,
+                    next_action="start_new_skill_run",
+                )
+
+
+def _merge_strings(
+    target: dict[str, object],
+    field_name: str,
+    values: object,
+    *,
+    limit: int,
+) -> None:
+    current_raw = target.get(field_name)
+    current = (
+        [str(item) for item in cast(list[object], current_raw)]
+        if isinstance(current_raw, list)
+        else []
+    )
+    incoming = (
+        [str(item) for item in cast(list[object], values)] if isinstance(values, list) else []
+    )
+    for value in incoming:
+        if value and value not in current:
+            current.append(value)
+    target[field_name] = current[:limit]
+
+
+def _merge_optional_text(
+    target: dict[str, object],
+    field_name: str,
+    value: object,
+) -> None:
+    if target.get(field_name) in (None, "") and isinstance(value, str) and value:
+        target[field_name] = value
+
+
+def _aggregate_results(
+    chunk_results: list[dict[str, object]],
+) -> ScriptExtractionResult:
+    candidates: list[dict[str, object]] = []
+    assets_by_key: dict[str, dict[str, object]] = {}
+    continuity_by_key: dict[str, dict[str, object]] = {}
+    qualify_candidate_keys = len(chunk_results) > 1
+    ordered_results = sorted(
+        chunk_results,
+        key=lambda item: _state_int(item["chunk_start"], "chunk_start"),
+    )
+    for item in ordered_results:
+        chunk_key = str(item["chunk_key"])
+        chunk_start = _state_int(item["chunk_start"], "chunk_start")
+        chunk_text = str(item["chunk_text"])
+        raw_result = item["result"]
+        try:
+            result = ScriptExtractionResult.model_validate(raw_result)
+        except ValidationError as error:
+            raise SkillExecutionError(
+                outcome="failed",
+                code="skill_output_invalid",
+                summary="Chunk result does not satisfy the extraction schema",
+                retryable=False,
+                next_action="start_new_skill_run",
+            ) from error
+        _validate_chunk_result(result, chunk_text)
+        scene_key_map = {
+            candidate.candidate_key: (
+                _qualified_candidate_key(chunk_key, candidate.candidate_key)
+                if qualify_candidate_keys
+                else candidate.candidate_key
+            )
+            for candidate in result.candidates
+            if candidate.proposal.kind == "scene"
+        }
+        for candidate in result.candidates:
+            candidate_data = cast(dict[str, object], candidate.model_dump(mode="json"))
+            candidate_data["candidate_key"] = (
+                _qualified_candidate_key(chunk_key, candidate.candidate_key)
+                if qualify_candidate_keys
+                else candidate.candidate_key
+            )
+            source_range = cast(dict[str, object], candidate_data["source_range"])
+            source_range["start"] = (
+                _state_int(source_range["start"], "source_range.start") + chunk_start
+            )
+            source_range["end"] = _state_int(source_range["end"], "source_range.end") + chunk_start
+            proposal = cast(dict[str, object], candidate_data["proposal"])
+            if candidate.proposal.kind in {"dialogue", "shot"}:
+                scene_key = str(proposal["scene_candidate_key"])
+                proposal["scene_candidate_key"] = scene_key_map.get(
+                    scene_key,
+                    (
+                        _qualified_candidate_key(chunk_key, scene_key)
+                        if qualify_candidate_keys
+                        else scene_key
+                    ),
+                )
+            if candidate.proposal.kind == "continuity":
+                scene_key = proposal.get("scene_candidate_key")
+                if isinstance(scene_key, str):
+                    proposal["scene_candidate_key"] = scene_key_map.get(
+                        scene_key,
+                        (
+                            _qualified_candidate_key(chunk_key, scene_key)
+                            if qualify_candidate_keys
+                            else scene_key
+                        ),
+                    )
+                raw_scene_keys = proposal.get("scene_candidate_keys")
+                if isinstance(raw_scene_keys, list):
+                    scene_keys = cast(list[object], raw_scene_keys)
+                    proposal["scene_candidate_keys"] = [
+                        scene_key_map.get(
+                            str(scene_key),
+                            (
+                                _qualified_candidate_key(chunk_key, str(scene_key))
+                                if qualify_candidate_keys
+                                else str(scene_key)
+                            ),
+                        )
+                        for scene_key in scene_keys
+                    ]
+                continuity_scope = str(proposal.get("scope", "scene"))
+                if continuity_scope == "episode":
+                    continuity_key = f"episode:{proposal.get('episode_number')}"
+                elif continuity_scope == "world":
+                    continuity_key = "world:" + " ".join(
+                        str(proposal.get("topic") or proposal.get("issue") or "").casefold().split()
+                    )
+                else:
+                    continuity_key = str(candidate_data["candidate_key"])
+                existing_continuity = continuity_by_key.get(continuity_key)
+                if existing_continuity is not None:
+                    existing_proposal = cast(dict[str, object], existing_continuity["proposal"])
+                    for field_name, limit in (
+                        ("entities", 50),
+                        ("facts", 100),
+                        ("rules", 100),
+                        ("scene_candidate_keys", 1000),
+                    ):
+                        _merge_strings(
+                            existing_proposal,
+                            field_name,
+                            proposal.get(field_name),
+                            limit=limit,
+                        )
+                    for field_name in ("title", "logline", "summary", "topic"):
+                        _merge_optional_text(
+                            existing_proposal,
+                            field_name,
+                            proposal.get(field_name),
+                        )
+                    continue
+                continuity_by_key[continuity_key] = candidate_data
+            if candidate.proposal.kind == "asset":
+                first_seen_episode = proposal.get("first_seen_episode")
+                raw_episode_numbers = proposal.get("episode_numbers")
+                if isinstance(first_seen_episode, int) and isinstance(raw_episode_numbers, list):
+                    episode_numbers = cast(list[object], raw_episode_numbers)
+                    if first_seen_episode not in episode_numbers:
+                        episode_numbers.append(first_seen_episode)
+                    proposal["episode_numbers"] = episode_numbers[:1000]
+                asset_key = _normalized_asset_key(
+                    str(proposal["asset_kind"]), str(proposal["name"])
+                )
+                existing = assets_by_key.get(asset_key)
+                if existing is not None:
+                    existing_proposal = cast(dict[str, object], existing["proposal"])
+                    raw_aliases: object = existing_proposal.get("aliases")
+                    aliases: list[str] = []
+                    if isinstance(raw_aliases, list):
+                        aliases = [str(alias) for alias in cast(list[object], raw_aliases)]
+                    current_name = str(proposal["name"])
+                    if current_name not in aliases:
+                        aliases.append(current_name)
+                    existing_proposal["aliases"] = aliases[:20]
+                    for field_name, limit in (
+                        ("goals", 50),
+                        ("relationships", 100),
+                        ("continuity_notes", 50),
+                        ("episode_numbers", 1000),
+                    ):
+                        _merge_strings(
+                            existing_proposal,
+                            field_name,
+                            proposal.get(field_name),
+                            limit=limit,
+                        )
+                    for field_name in (
+                        "appearance",
+                        "voice_profile",
+                        "arc_summary",
+                        "visual_identity",
+                        "role",
+                    ):
+                        _merge_optional_text(
+                            existing_proposal,
+                            field_name,
+                            proposal.get(field_name),
+                        )
+                    first_seen = existing_proposal.get("first_seen_episode")
+                    incoming_first_seen = proposal.get("first_seen_episode")
+                    if isinstance(incoming_first_seen, int) and (
+                        not isinstance(first_seen, int) or incoming_first_seen < first_seen
+                    ):
+                        existing_proposal["first_seen_episode"] = incoming_first_seen
+                    continue
+                assets_by_key[asset_key] = candidate_data
+            candidates.append(candidate_data)
+
+    try:
+        return ScriptExtractionResult.model_validate({"candidates": candidates})
+    except ValidationError as error:
+        raise SkillExecutionError(
+            outcome="failed",
+            code="skill_output_invalid",
+            summary="Aggregated extraction result does not satisfy the schema",
+            retryable=False,
+            next_action="start_new_skill_run",
+        ) from error
+
+
+class ScriptStructureExtractionWorkflow:
+    """LangGraph map-reduce workflow for long screenplay structure extraction."""
+
+    def __init__(
+        self,
+        *,
+        skill: SkillDefinition,
+        model: StructuredSkillModel,
+        system_prompt: str,
+        max_chunk_chars: int = DEFAULT_MAX_CHUNK_CHARS,
+        chunker: Callable[[str], tuple[ScriptExtractionChunk, ...]] | None = None,
+        checkpointer: Any | None = None,
+    ) -> None:
+        self._skill = skill
+        self._model = model
+        self._system_prompt = system_prompt
+        self._max_chunk_chars = max_chunk_chars
+        self._chunker = chunker
+        self._checkpointer = checkpointer
+
+    async def run(
+        self,
+        script_body: str,
+        *,
+        context: SkillExecutionContext,
+    ) -> ScriptExtractionResult:
+        if context.skill_name != self._skill.name or context.skill_version != self._skill.version:
+            raise SkillExecutionError(
+                outcome="failed",
+                code="skill_context_invalid",
+                summary="Skill execution context does not match the Skill",
+                retryable=False,
+                next_action="contact_support",
+            )
+        graph = self._build_graph()
+        config = {
+            "configurable": {
+                "thread_id": context.task_id
+                or f"{context.workspace_id or 'local'}:{input_hash(script_body)}"
+            }
+        }
+        result = await graph.ainvoke(
+            {"script_body": script_body},
+            config=config,
+        )
+        output = result.get("output")
+        if not isinstance(output, ScriptExtractionResult):
+            raise SkillExecutionError(
+                outcome="failed",
+                code="skill_output_invalid",
+                summary="Script structure workflow returned no result",
+                retryable=False,
+                next_action="start_new_skill_run",
+            )
+        return output
+
+    def _build_graph(self) -> Any:
+        async def validate_input(state: _ScriptStructureState) -> dict[str, object]:
+            script_body = state.get("script_body", "")
+            if not script_body.strip():
+                raise SkillExecutionError(
+                    outcome="failed",
+                    code="skill_input_invalid",
+                    summary="Script input is empty",
+                    retryable=False,
+                    next_action="fix_skill_input",
+                )
+            return {}
+
+        async def segment(state: _ScriptStructureState) -> dict[str, object]:
+            script_body = state.get("script_body", "")
+            chunks = (
+                self._chunker(script_body)
+                if self._chunker is not None
+                else segment_script(script_body, max_chunk_chars=self._max_chunk_chars)
+            )
+            return {"chunks": [chunk.as_state() for chunk in chunks]}
+
+        def fan_out(state: _ScriptStructureState) -> list[Send]:
+            return [Send("extract_chunk", chunk) for chunk in state.get("chunks", [])]
+
+        async def extract_chunk(state: _ScriptStructureState) -> dict[str, object]:
+            chunk_text = state.get("chunk_text", "")
+            if len(chunk_text) > self._skill.max_input_chars:
+                raise SkillExecutionError(
+                    outcome="failed",
+                    code="skill_chunk_too_large",
+                    summary="Script chunk exceeds the Skill input limit",
+                    retryable=False,
+                    next_action="adjust_chunk_size",
+                )
+            payload = json.dumps(
+                {
+                    "episode_number": state.get("chunk_episode_number"),
+                    "source_start": state.get("chunk_start"),
+                    "source_end": state.get("chunk_end"),
+                    "script_text": chunk_text,
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            try:
+                raw_output = await asyncio.wait_for(
+                    self._model.ainvoke(
+                        [
+                            SystemMessage(content=self._system_prompt),
+                            HumanMessage(content=payload),
+                        ]
+                    ),
+                    timeout=self._skill.timeout_seconds,
+                )
+                result = ScriptExtractionResult.model_validate(raw_output)
+                _validate_chunk_result(result, chunk_text)
+            except TimeoutError as error:
+                raise SkillExecutionError(
+                    outcome="unknown",
+                    code="skill_timeout",
+                    summary="Skill response outcome is unknown",
+                    retryable=False,
+                    next_action="reconcile_skill_run",
+                ) from error
+            except SkillExecutionError:
+                raise
+            except (TypeError, ValueError, ValidationError) as error:
+                raise SkillExecutionError(
+                    outcome="failed",
+                    code="skill_output_invalid",
+                    summary="Skill returned an invalid chunk result",
+                    retryable=False,
+                    next_action="start_new_skill_run",
+                ) from error
+            return {
+                "chunk_results": [
+                    {
+                        "chunk_key": state.get("chunk_key"),
+                        "chunk_start": state.get("chunk_start"),
+                        "chunk_end": state.get("chunk_end"),
+                        "chunk_text": chunk_text,
+                        "result": result.model_dump(mode="json"),
+                    }
+                ]
+            }
+
+        async def aggregate(state: _ScriptStructureState) -> dict[str, object]:
+            return {"output": _aggregate_results(state.get("chunk_results", []))}
+
+        async def validate_output(state: _ScriptStructureState) -> dict[str, object]:
+            output = state.get("output")
+            if not isinstance(output, ScriptExtractionResult) or not output.candidates:
+                raise SkillExecutionError(
+                    outcome="failed",
+                    code="skill_output_invalid",
+                    summary="Script structure extraction produced no candidates",
+                    retryable=False,
+                    next_action="start_new_skill_run",
+                )
+            script_body = state.get("script_body", "")
+            expected_episodes = {
+                episode_number
+                for episode_number, _, _ in _episode_ranges(script_body)
+                if episode_number is not None
+            }
+            episode_summaries = {
+                candidate.proposal.episode_number
+                for candidate in output.candidates
+                if isinstance(candidate.proposal, ContinuityCandidateProposal)
+                and candidate.proposal.scope == "episode"
+                and candidate.proposal.episode_number is not None
+            }
+            missing_episodes = sorted(expected_episodes - episode_summaries)
+            if missing_episodes:
+                raise SkillExecutionError(
+                    outcome="failed",
+                    code="skill_output_incomplete",
+                    summary=(
+                        "Deep script extraction did not produce episode summaries for: "
+                        + ", ".join(str(item) for item in missing_episodes)
+                    ),
+                    retryable=False,
+                    next_action="start_new_skill_run",
+                )
+            return {}
+
+        async def candidate_gate(state: _ScriptStructureState) -> dict[str, object]:
+            del state
+            if not self._skill.candidate_only:
+                raise SkillExecutionError(
+                    outcome="failed",
+                    code="skill_side_effect_policy_invalid",
+                    summary="MVP Skills must produce candidates only",
+                    retryable=False,
+                    next_action="contact_support",
+                )
+            return {}
+
+        builder: Any = StateGraph(_ScriptStructureState)
+        builder.add_node("validate_input", validate_input)
+        builder.add_node("segment_script", segment)
+        builder.add_node("extract_chunk", extract_chunk)
+        builder.add_node("aggregate_candidates", aggregate)
+        builder.add_node("validate_output", validate_output)
+        builder.add_node("candidate_gate", candidate_gate)
+        builder.add_edge(START, "validate_input")
+        builder.add_edge("validate_input", "segment_script")
+        builder.add_conditional_edges("segment_script", fan_out)
+        builder.add_edge("extract_chunk", "aggregate_candidates")
+        builder.add_edge("aggregate_candidates", "validate_output")
+        builder.add_edge("validate_output", "candidate_gate")
+        builder.add_edge("candidate_gate", END)
+        if self._checkpointer is None:
+            return builder.compile()
+        return builder.compile(checkpointer=self._checkpointer)

@@ -15,38 +15,26 @@ defaults:
 
 jobs:
   backend:
-    name: Backend / Go
+    name: Backend / FastAPI
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.26.x"
-          cache-dependency-path: backend/go.sum
-      - name: Test Go backend
-        working-directory: backend
-        run: |
-          gofmt -d cmd src tests | tee /tmp/gofmt.diff
-          test ! -s /tmp/gofmt.diff
-          go vet ./...
-          go test ./...
-
-  agent:
-    name: Agent / Python
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
-          cache-dependency-path: agent/pyproject.toml
-      - name: Install agent dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -e 'agent[test]'
-      - name: Test private agent
-        run: PYTHONPATH=agent/src python -m pytest agent/tests -q
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install backend dependencies
+        working-directory: backend
+        run: python -m pip install -e '.[dev]'
+      - name: Check and test FastAPI backend
+        working-directory: backend
+        run: |
+          ruff check app tests scripts
+          ruff format --check app tests scripts
+          pyright app tests scripts
+          pytest tests/unit tests/contract tests/architecture -q
 
   frontend:
     name: Frontend / Quality
@@ -64,7 +52,7 @@ jobs:
         run: npm ci
       - name: Generate current API client
         working-directory: frontend
-        run: OPENAPI_SCHEMA_URL=../backend/docs/swagger.json npm run openapi2ts
+        run: OPENAPI_SCHEMA_URL=../backend/openapi.json npm run openapi2ts
       - name: Check frontend
         working-directory: frontend
         run: |
@@ -80,28 +68,33 @@ jobs:
     needs: frontend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-python@v5
         with:
-          go-version: "1.26.x"
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install and regenerate API client
-        working-directory: frontend
         run: |
-          npm ci
-          make -C ../backend swagger
-          OPENAPI_SCHEMA_URL=../backend/docs/swagger.json npm run openapi2ts
+          python -m pip install -e backend
+          cd backend
+          python -m scripts.export_openapi
+          cd ..
+          npm ci --prefix frontend
+          cd frontend
+          OPENAPI_SCHEMA_URL=../backend/openapi.json npm run openapi2ts
       - name: Ensure generated client is committed
-        run: git diff --exit-code -- backend/docs/swagger.json frontend/src/api
+        run: git diff --exit-code -- backend/openapi.json frontend/src/api
 
   delivery:
     name: Delivery / Hygiene
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [backend, agent, frontend, openapi]
+    needs: [backend, frontend, openapi]
     steps:
       - uses: actions/checkout@v4
       - name: Check repository hygiene
@@ -110,19 +103,19 @@ jobs:
             echo 'tracked secret/data/report artifact detected' >&2
             exit 1
           fi
-          ! rg -n -i 'rabbitmq|/api/v1|postgresql\+asyncpg' --glob '!docs/**' --glob '!frontend/package-lock.json' --glob '!README.md' .
+          test ! -d agent
+          ! find backend -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -print -quit | grep -q .
 
   required:
     name: Required / CI
     if: ${{ always() }}
-    needs: [backend, agent, frontend, openapi, delivery]
+    needs: [backend, frontend, openapi, delivery]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require every project boundary to pass
         run: |
           test "${{ needs.backend.result }}" = success
-          test "${{ needs.agent.result }}" = success
           test "${{ needs.frontend.result }}" = success
           test "${{ needs.openapi.result }}" = success
           test "${{ needs.delivery.result }}" = success

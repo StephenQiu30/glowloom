@@ -2,35 +2,68 @@ import type { OpenAPIObject } from "openapi3-ts";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const schemaPath = process.env.OPENAPI_SCHEMA_URL;
+const schemaInput = process.env.OPENAPI_SCHEMA_URL;
 
-if (!schemaPath) {
+if (!schemaInput) {
   throw new Error("OPENAPI_SCHEMA_URL is required");
 }
 
-const normalizedSchemaPath = resolve(process.cwd(), schemaPath);
+const schemaPath = schemaInput.startsWith("http://") || schemaInput.startsWith("https://")
+  ? schemaInput
+  : resolve(process.cwd(), schemaInput);
 
-if (!existsSync(normalizedSchemaPath)) {
-  process.exitCode = 1;
-  throw new Error(`OPENAPI_SCHEMA_URL does not exist: ${normalizedSchemaPath}`);
+if (!schemaPath.startsWith("http") && !existsSync(schemaPath)) {
+  throw new Error(`OPENAPI_SCHEMA_URL does not exist: ${schemaPath}`);
+}
+
+const HTTP_METHODS = [
+  "get",
+  "post",
+  "put",
+  "patch",
+  "delete",
+  "options",
+  "head",
+] as const;
+
+function normalizeGeneratorSuccessResponses(
+  openAPIData: OpenAPIObject
+): OpenAPIObject {
+  exposeConstAsEnum(openAPIData);
+  for (const pathItem of Object.values(openAPIData.paths)) {
+    if (!pathItem) continue;
+    for (const method of HTTP_METHODS) {
+      const responses = pathItem[method]?.responses;
+      if (!responses || responses.default || responses["200"] || responses["201"])
+        continue;
+      const successStatus = Object.keys(responses).find((status) =>
+        /^2\d\d$/.test(status)
+      );
+      if (successStatus) responses["200"] = responses[successStatus];
+    }
+  }
+  return openAPIData;
+}
+
+function exposeConstAsEnum(value: unknown): void {
+  if (typeof value !== "object" || value === null) return;
+  const object = value as Record<string, unknown>;
+  if ("const" in object && !("enum" in object)) object.enum = [object.const];
+  for (const child of Object.values(object)) exposeConstAsEnum(child);
 }
 
 const config = {
-  schemaPath: normalizedSchemaPath,
+  schemaPath,
   serversPath: "./src/api",
   projectName: ".",
-  requestLibPath: "import request, { type RequestOptions } from '@/lib/request'",
+  requestLibPath: "@/lib/request",
   requestOptionsType: "RequestOptions",
   requestImportStatement:
     "import request, { type RequestOptions } from '@/lib/request';",
   isCamelCase: true,
   nullable: true,
   enumStyle: "string-literal",
-  hook: {
-    afterOpenApiDataInited(data: OpenAPIObject) {
-      return data;
-    },
-  },
+  hook: { afterOpenApiDataInited: normalizeGeneratorSuccessResponses },
 };
 
 export default config;

@@ -1,118 +1,100 @@
 import axios, { type AxiosRequestConfig } from "axios";
 
+import {
+  clearAccessToken,
+  getAccessToken,
+  setAccessToken,
+} from "@/lib/auth-session";
+
 export type RequestOptions = AxiosRequestConfig & {
-  requestType?: "form";
+  skipAuthRefresh?: boolean;
 };
 
-type ErrorEnvelope = {
-  error?: {
-    code?: string;
-    message?: string;
-    next_action?: string;
-    request_id?: string;
-    details?: unknown;
-    recovery_actions?: Array<{ code: string; label: string }>;
-  };
-};
-
-type AuthEnvelope = {
-  data?: {
-    access_token?: string;
-  };
-};
-
-type RetriableRequest = AxiosRequestConfig & {
-  _lanverseRetried?: boolean;
+type ApiErrorEnvelope = {
+  error?: { code?: string; message?: string; next_action?: string };
 };
 
 export class ApiClientError extends Error {
   readonly code: string;
-  readonly status?: number;
-  readonly requestID?: string;
-  readonly details?: unknown;
-  readonly recoveryActions: Array<{ code: string; label: string }>;
   readonly nextAction?: string;
 
-  constructor(message: string, code = "request_failed", status?: number, requestID?: string, recoveryActions: Array<{ code: string; label: string }> = [], details?: unknown, nextAction?: string) {
+  constructor(message: string, code = "request_failed", nextAction?: string) {
     super(message);
     this.name = "ApiClientError";
     this.code = code;
-    this.status = status;
-    this.requestID = requestID;
-    this.recoveryActions = recoveryActions;
-    this.details = details;
     this.nextAction = nextAction;
   }
 }
 
 const client = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8686",
-  timeout: 15_000,
+  timeout: 10_000,
   withCredentials: true,
 });
 
-let accessToken: string | undefined;
-let refreshPromise: Promise<string> | null = null;
+let refreshPromise: Promise<string | null> | null = null;
 
-export function setAccessToken(token?: string) {
-  accessToken = token?.trim() || undefined;
-}
-
-client.interceptors.request.use((config) => {
-  const requestID = config.headers?.["X-Request-Id"] ?? globalThis.crypto?.randomUUID?.();
-  if (requestID) config.headers["X-Request-Id"] = requestID;
-  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
-  return config;
-});
-
-async function refreshAccessToken() {
+export async function refreshAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
-  const current = client
-    .post<AuthEnvelope>("/api/auth/refresh")
+  refreshPromise = client
+    .post<API.ApiResponseAuthResponse_>(
+      "/api/v1/auth/refresh",
+      undefined,
+      { withCredentials: true },
+    )
     .then((response) => {
-      const token = response.data.data?.access_token;
-      if (!token) throw new ApiClientError("刷新响应缺少访问令牌", "session_invalid", 401);
+      const token = response.data.data.access_token;
       setAccessToken(token);
       return token;
     })
-    .catch((cause) => {
-      setAccessToken();
-      throw cause;
+    .catch(() => {
+      clearAccessToken();
+      return null;
+    })
+    .finally(() => {
+      refreshPromise = null;
     });
-  refreshPromise = current;
-  try {
-    return await current;
-  } finally {
-    if (refreshPromise === current) refreshPromise = null;
-  }
+  return refreshPromise;
 }
 
-client.interceptors.response.use(undefined, async (cause: unknown) => {
-  if (!axios.isAxiosError(cause) || cause.response?.status !== 401) throw cause;
-  const config = cause.config as RetriableRequest | undefined;
-  if (!config || config._lanverseRetried || config.url?.startsWith("/api/auth/")) throw cause;
-  config._lanverseRetried = true;
-  const token = await refreshAccessToken();
-  config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
-  return client.request(config);
-});
+const AUTH_REFRESH_EXCLUDED_PATHS = new Set([
+  "/api/v1/auth/login",
+  "/api/v1/auth/register",
+  "/api/v1/auth/refresh",
+]);
 
-export default async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
+export default async function request<T>(
+  url: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  const { skipAuthRefresh = false, ...axiosOptions } = options;
   try {
-    const { requestType, ...axiosOptions } = options;
-    void requestType;
-    const response = await client.request<T>({ ...axiosOptions, url });
+    const accessToken = getAccessToken();
+    const response = await client.request<T>({
+      ...axiosOptions,
+      url,
+      headers: accessToken
+        ? { ...axiosOptions.headers, Authorization: `Bearer ${accessToken}` }
+        : axiosOptions.headers,
+    });
     return response.data;
   } catch (cause: unknown) {
-    if (axios.isAxiosError<ErrorEnvelope>(cause)) {
+    if (axios.isAxiosError<ApiErrorEnvelope>(cause)) {
+      if (
+        cause.response?.status === 401 &&
+        !skipAuthRefresh &&
+        !AUTH_REFRESH_EXCLUDED_PATHS.has(url)
+      ) {
+        const refreshed = await refreshAccessToken();
+        if (refreshed) {
+          return request(url, { ...options, skipAuthRefresh: true });
+        }
+      }
+      if (cause.response?.status === 401) clearAccessToken();
       const error = cause.response?.data.error;
       throw new ApiClientError(
-        error?.message ?? "服务暂时不可用，请确认 API 和 Worker 已启动。",
+        error?.message ?? "服务暂时不可用，请稍后重试。",
         error?.code,
-        cause.response?.status,
-        error?.request_id,
-        error?.recovery_actions,
-        error?.details,
         error?.next_action,
       );
     }

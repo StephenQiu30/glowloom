@@ -1,5 +1,5 @@
-import { ScriptAnalysisWorkspace } from "@/features/script-analysis/views/script-analysis-workspace";
+import { CreationHome } from "./creation-home";
 
 export default function Home() {
-  return <ScriptAnalysisWorkspace />;
+  return <CreationHome />;
 }

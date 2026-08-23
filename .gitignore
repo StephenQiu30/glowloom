@@ -14,6 +14,7 @@ skills-lock.json
 .idea/
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .ruff_cache/
 .pyright/

@@ -1,79 +1,70 @@
 # Lanverse
 
-Lanverse 是前后端分离的 AI 视频生产平台。当前交付切片聚焦“剧本事实主线”：上传整本剧本，异步解析剧集、场景、人物和生产资产，人工批准后将事实写入项目数据。
+Lanverse 是一个以前后端分离方式实现的剧本解析与分镜生产服务。当前唯一优先主线是：上传剧本，通过受控 Skill Harness 解析剧集、场景、人物及人物出场集数，再按剧集生成可编辑的分镜表。
 
-## 固定架构
+## 架构边界
 
-- `frontend/`：Next.js App Router、TypeScript、View/ViewModel 分层；API 客户端由 Umi OpenAPI 根据 Swagger 文档生成。
-- `backend/`：Go 模块化单体，负责公共 HTTP、PostgreSQL 业务事务、MinIO 对象存储和 Kafka outbox/worker；`backend/cmd/main.go` 是唯一启动入口，使用 `LANVERSE_ROLE` 选择角色。
-- `agent/`：Python 私有 Agent 服务，只承载 Harness/Skill 编排，不连接数据库或 Kafka，也不暴露公共 API。
-- `docs/`：唯一事实来源，按 `requirement → design → prd → plan → acceptance` 维护。
+- `backend/`：Python 3.11 + FastAPI 模块化单体，持有业务事务、Skill Harness、剧本解析和分镜能力。
+- `frontend/`：Next.js App Router + TypeScript；API 客户端由 FastAPI OpenAPI 契约生成。
+- `docs/`：按 `requirement → design → prd → plan → acceptance` 记录长期有效的产品与工程事实。
 
-项目不保留旧 Python 业务后端、RabbitMQ、`/api/v1` 路由或迁移兼容链。数据库由 `backend/schema/current.sql` 初始化为当前结构；不在服务启动时自动改表。
+项目不包含 Go 后端、独立 Agent 服务、独立 Admin 服务或邀请功能。Harness/Skill 是 FastAPI 进程内的受控执行能力，不是另一套业务服务。
 
 ## 本机开发
 
-不使用 Docker，直接复用本机已安装的 PostgreSQL、Redis、Kafka、MinIO 和 Node.js 环境。Go API 的身份会话、撤销和限流默认 fail closed，因此 Redis 是 API 启动与认证的必需依赖。
+项目不要求 Docker，直接复用本机 Python、PostgreSQL、Redis、RabbitMQ、MinIO 和 Node.js 环境。
 
 ```bash
 cp .env.example .env
-brew services start postgresql@18
-brew services start redis
-brew services start kafka
-```
-
-确认 PostgreSQL、Kafka、MinIO 已监听 `5432`、`9092`、`9000`，并将 `.env` 中 MinIO 凭据改为本机实例真实值。
-
-初始化当前数据库结构：
-
-```bash
 cd backend
-go mod download
+uv venv --python 3.11 .venv
+uv pip install -e '.[dev]'
 set -a; source ../.env; set +a
-LANVERSE_ROLE=schema-init go run ./cmd
+.venv/bin/python -m app.initialize_database
+.venv/bin/python -m app.server
 ```
 
-启动 Go API 和 Kafka worker（分别使用两个终端）：
-
-```bash
-cd backend
-set -a; source ../.env; set +a
-LANVERSE_ROLE=api go run ./cmd
-LANVERSE_ROLE=operation-worker go run ./cmd
-```
-
-启动私有 Agent（可选；当前事实解析使用 Go 当前解析器）：
-
-```bash
-PYTHONPATH=agent/src uv run --project agent python -m main
-```
-
-启动前端：
+另开终端启动前端：
 
 ```bash
 cd frontend
 npm ci
-OPENAPI_SCHEMA_URL=../backend/docs/swagger.json npm run openapi2ts
+OPENAPI_SCHEMA_URL=../backend/openapi.json npm run openapi2ts
 npm run dev
 ```
 
-访问：
+默认地址：
 
 - 前端：`http://127.0.0.1:8123`
-- Go API 就绪检查：`http://127.0.0.1:8686/readyz`
-- Agent 私有就绪检查：`http://127.0.0.1:8790/readyz`
-- Swagger 文档源：后端 Controller 中的 Swagger 注释；使用 `backend/Makefile` 的 `swagger` 目标生成 `backend/docs/swagger.json`
+- FastAPI：`http://127.0.0.1:8686`
+- 健康检查：`http://127.0.0.1:8686/healthz`
+- OpenAPI：`http://127.0.0.1:8686/openapi.json`
 
-## 验证
+## 契约与验证
+
+修改 FastAPI 路由或响应模型后，重新生成 OpenAPI 和前端客户端：
 
 ```bash
-cd backend && gofmt -w cmd src && go test ./...
-cd ../frontend && npm run lint && npm run typecheck && npm run test && npm run build
-cd .. && PYTHONPATH=agent/src uv run --project agent --extra test python -m pytest agent/tests -q
+cd backend
+.venv/bin/python -m scripts.export_openapi
+cd ../frontend
+OPENAPI_SCHEMA_URL=../backend/openapi.json npm run openapi2ts
 ```
 
-剧本解析的当前验收路径是：前端提交 → Go 创建 revision → MinIO 保存原文 → PostgreSQL outbox → Kafka → operation-worker 解析 → EpisodeBreakdown 草稿与人工修订 → Manifest/M02/M03 批准 → ProductionElementMention 进入知识决议。M03 不自动发布 M04 实体或生产需求。该路径使用本机真实服务验证，不使用模拟队列或兼容接口。
+本机质量检查：
 
-## 文档与安全
+```bash
+cd backend
+.venv/bin/ruff check app tests scripts
+.venv/bin/ruff format --check app tests scripts
+.venv/bin/pyright app tests scripts
+.venv/bin/python -m pytest tests/unit tests/contract tests/architecture -q
 
-正式设计只位于 `docs/requirement`、`docs/design`、`docs/prd`、`docs/plan` 和 `docs/acceptance`。真实凭据、媒体、日志、数据库和对象存储数据不得提交。
+cd ../frontend
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+```
+
+数据库集成测试只连接 `.env` 中显式配置、名称以 `_test` 结尾的 `TEST_DATABASE_URL`，不会自动创建容器。

@@ -1,0 +1,1 @@
+"""Lanverse backend application."""

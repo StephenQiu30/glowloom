@@ -1,0 +1,1 @@
+"""Script structure confirmation capability."""
