@@ -14,11 +14,12 @@ Lanverse 是前后端分离的 AI 视频生产平台。当前交付切片聚焦�
 
 ## 本机开发
 
-不使用 Docker，直接复用本机已安装的 PostgreSQL、Kafka、MinIO 和 Node.js 环境。Redis 不是当前剧本解析闭环的依赖。
+不使用 Docker，直接复用本机已安装的 PostgreSQL、Redis、Kafka、MinIO 和 Node.js 环境。Go API 的身份会话、撤销和限流默认 fail closed，因此 Redis 是 API 启动与认证的必需依赖。
 
 ```bash
 cp .env.example .env
 brew services start postgresql@18
+brew services start redis
 brew services start kafka
 ```
 
