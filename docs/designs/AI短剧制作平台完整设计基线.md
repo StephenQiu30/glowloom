@@ -1,0 +1,3490 @@
+# Lanverse AI 短剧制作平台完整设计文档 V1.0
+
+**项目名称：Lanverse**  
+**文档类型：Product + Architecture + Technical Design Baseline**  
+**版本：V1.0**  
+**产品阶段：V1 / MVP**  
+**核心目标：端到端 AI 短剧制作**
+
+---
+
+# 1. 文档目标
+
+本文档作为 Lanverse V1 的统一设计基线，用于约束后续：
+
+- PRD；
+- 前端设计；
+- Backend 开发；
+- Agent 开发；
+- Workflow 开发；
+- Canvas 开发；
+- 模型接入；
+- 对象存储；
+- Kafka；
+- Elasticsearch；
+- 数据库设计；
+- Docker 部署；
+- 开发计划；
+- 测试与验收。
+
+后续实现发生架构变化时，应先更新对应设计或 ADR，而不是直接在代码中形成新的隐式架构。
+
+---
+
+# 2. 产品定位
+
+Lanverse V1 定位为：
+
+> **面向 AI 短剧生产的端到端 AI 内容制作平台。**
+
+V1 同时需要覆盖：
+
+- AI 真人短剧；
+- AI 漫剧；
+- 写实、半写实、国漫、日漫等不同视觉风格；
+- 静态漫画动态化；
+- AI 图生视频；
+- AI 配音；
+- 自动字幕；
+- 自动粗剪；
+- 人工审核；
+- AI QC 与局部修复。
+
+但真人短剧和 AI 漫剧**不是两套产品、两套 Backend 或两套 Workflow**。
+
+统一抽象为：
+
+```text
+AI Short Drama Production Core
+            │
+            ├── Preset
+            ├── Style
+            ├── Skill
+            ├── Model Policy
+            ├── QC Policy
+            └── Motion Strategy
+```
+
+不同内容形态只是不同能力组合。
+
+---
+
+# 3. V1 核心产品目标
+
+Lanverse V1 最重要的目标不是拥有最多的模型或者最多的节点，而是：
+
+> 用户输入一个短剧故事或剧本，Lanverse 能够经过 AI 和人工审核共同完成角色、场景、分镜、关键帧、视频、声音和成片生产，并能够稳定恢复失败任务、局部重生成以及追踪所有生成结果。
+
+核心闭环：
+
+```text
+Project
+   ↓
+Script
+   ↓
+Story Bible
+   ↓
+Character
+   ↓
+Scene
+   ↓
+Storyboard
+   ↓
+Shot
+   ↓
+Image
+   ↓
+Motion / Video
+   ↓
+Voice
+   ↓
+Subtitle
+   ↓
+Render
+   ↓
+Review
+   ↓
+Export
+```
+
+---
+
+# 4. V1 非目标
+
+V1 不优先实现：
+
+- 通用 AI 视频平台；
+- 专业 Premiere 级时间线；
+- 复杂 3D 编辑；
+- MV 制作；
+- 广告制作；
+- 数字人直播；
+- 工作流市场；
+- Skill 市场；
+- 第三方插件市场；
+- 任意代码执行节点；
+- 完全自主、无限循环 Agent；
+- 多地域多活；
+- 超大型企业组织权限系统。
+
+这些能力都应建立在 V1 Production Core 成熟之后。
+
+---
+
+# 5. 两种产品使用方式
+
+Lanverse 需要同时支持两种创作方式。
+
+## 5.1 Guided Studio
+
+适合普通创作者。
+
+用户看到的是业务流程：
+
+```text
+剧本
+ ↓
+角色
+ ↓
+场景
+ ↓
+分镜
+ ↓
+镜头生产
+ ↓
+声音
+ ↓
+审核
+ ↓
+成片
+```
+
+不要求用户理解：
+
+```text
+DAG
+Node
+Port
+Temporal
+Agent Graph
+Tool Calling
+```
+
+---
+
+## 5.2 Canvas Studio
+
+适合高级创作者。
+
+参考 RunningHub 的无限画布体验：
+
+```text
+Infinite Canvas
+├── Node
+├── Edge
+├── Group
+├── Frame
+├── Subflow
+├── Model Node
+├── Agent Node
+├── Asset Node
+├── Human Gate
+├── Run Node
+├── Run Branch
+└── Partial Execution
+```
+
+Canvas 是 Lanverse 的一级产品领域。
+
+但工程上：
+
+> **Canvas 不是根目录第四个项目。**
+
+它分别存在于：
+
+```text
+Frontend
+→ Canvas UI
+
+Backend
+→ Canvas Authoring Domain
+
+Agent
+→ Canvas Builder Agent
+```
+
+---
+
+# 6. Guided 与 Canvas 共用同一个执行系统
+
+禁止：
+
+```text
+Guided Workflow
++
+Canvas Workflow
+```
+
+形成两套逻辑。
+
+统一：
+
+```text
+Guided Studio ───────┐
+                     │
+                     ▼
+               Authoring Draft
+                     ▲
+                     │
+Canvas Studio ───────┘
+                     ↓
+              Authoring Revision
+                     ↓
+              Workflow Compiler
+                     ↓
+        Workflow Definition Version
+                     ↓
+                  Temporal
+```
+
+因此 Guided 和 Canvas 只是两种 Authoring UI。
+
+---
+
+# 7. 核心架构原则
+
+Lanverse V1 固定以下架构原则。
+
+## 7.1 一个 Backend Go Project
+
+Backend 是：
+
+```text
+一个 Go Module
++
+多个领域模块
++
+多个运行程序
+```
+
+统一：
+
+```text
+backend/go.mod
+backend/go.sum
+```
+
+不使用多个 Go Module。
+
+不使用：
+
+```text
+go.work
+```
+
+---
+
+## 7.2 Agent 是独立 Python Project
+
+统一：
+
+```text
+agent/pyproject.toml
+agent/uv.lock
+```
+
+Agent 内部不允许出现重复：
+
+```text
+agent/src/agent/
+```
+
+正式结构：
+
+```text
+agent/src/api
+agent/src/runtime
+agent/src/harness
+...
+```
+
+---
+
+## 7.3 Frontend 是独立 TypeScript Project
+
+包含：
+
+```text
+Web
+UI
+AI UI
+Canvas
+SDK
+Collaboration
+```
+
+---
+
+## 7.4 Temporal 是唯一全局工作流引擎
+
+Temporal 负责：
+
+```text
+可靠执行
+暂停
+恢复
+重试
+超时
+人工等待
+子工作流
+长任务状态
+```
+
+---
+
+## 7.5 LangGraph 只存在于复杂 Agent 内部
+
+正确：
+
+```text
+Temporal
+   ↓
+Agent Node
+   ↓
+LangGraph
+```
+
+错误：
+
+```text
+Temporal
++
+LangGraph
+
+共同管理整个 Episode
+```
+
+---
+
+## 7.6 PostgreSQL 是事实源
+
+```text
+PostgreSQL
+= Source of Truth
+```
+
+Elasticsearch：
+
+```text
+= Search Projection
+```
+
+Redis：
+
+```text
+= Cache / Rate Limit / Ephemeral State
+```
+
+---
+
+## 7.7 MinIO 是 V1 默认对象存储
+
+业务不能直接依赖 MinIO。
+
+必须：
+
+```text
+ObjectStore Interface
+       ↓
+Storage Adapter
+       ↓
+MinIO
+```
+
+后续支持：
+
+```text
+TOS
+S3
+OSS
+COS
+```
+
+---
+
+# 8. 顶层系统架构
+
+```text
+                         Lanverse
+
+┌─────────────────────────────────────────────────────────┐
+│                     Frontend                            │
+│                                                         │
+│ Guided Studio    Canvas Studio    Review    AI Copilot  │
+└────────────────────────┬────────────────────────────────┘
+                         │ HTTP / SSE / WS
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│                     Backend Go                          │
+│                                                         │
+│ Studio       Canvas       Workflow       Review         │
+│ Preset       Model        Asset          Cost           │
+│ Search       Event        Media          Quota          │
+└──────────────┬─────────────┬───────────────┬────────────┘
+               │             │               │
+               │             ▼               ▼
+               │          Temporal       Model Gateway
+               │             │               │
+               │             │               ├─ LLM
+               │             │               ├─ Image
+               │             │               ├─ Video
+               │             │               └─ Audio
+               │             │
+               │             ▼
+               │        Agent Runtime
+               │           Python
+               │             │
+               │     Harness / LangGraph
+               │
+               ▼
+          PostgreSQL
+               │
+               ├── Redis
+               ├── MinIO
+               ├── Kafka
+               └── Elasticsearch
+```
+
+---
+
+# 9. 最终仓库结构
+
+```text
+lanverse/
+│
+├── frontend/
+├── backend/
+├── agent/
+├── docs/
+│
+├── docker-compose.yml
+├── docker-compose-env.yml
+├── docker-compose-prod.yml
+│
+├── .env.example
+├── .gitignore
+├── README.md
+└── CONTRIBUTING.md
+```
+
+根目录不创建：
+
+```text
+contracts/
+infra/
+tools/
+tests/
+```
+
+相关能力跟随自己的项目。
+
+---
+
+# 10. Frontend 项目结构
+
+```text
+frontend/
+├── package.json
+├── pnpm-lock.yaml
+├── pnpm-workspace.yaml
+├── turbo.json
+├── tsconfig.json
+├── eslint.config.mjs
+├── .env.example
+├── README.md
+│
+├── apps/
+│   ├── web/
+│   │   ├── app/
+│   │   ├── src/
+│   │   ├── public/
+│   │   ├── test/
+│   │   ├── package.json
+│   │   └── Dockerfile
+│   │
+│   └── collab/
+│       ├── src/
+│       ├── test/
+│       ├── package.json
+│       └── Dockerfile
+│
+├── packages/
+│   ├── ui/
+│   ├── ai/
+│   ├── canvas/
+│   ├── sdk/
+│   └── auth/
+│
+└── test/
+    ├── e2e/
+    ├── visual/
+    └── fixture/
+```
+
+---
+
+# 11. Frontend 技术栈
+
+固定：
+
+```text
+Next.js
+React
+TypeScript
+pnpm
+Turborepo
+
+Radix UI
+shadcn/ui
+Tailwind CSS
+
+TanStack Query
+Zustand
+React Hook Form
+Zod
+
+React Flow
+Yjs
+Hocuspocus
+ELK.js
+Konva
+Tiptap
+
+AI SDK UI
+AI Elements
+```
+
+---
+
+# 12. Frontend UI 分层
+
+## `@lanverse/ui`
+
+负责基础 Design System：
+
+```text
+Button
+Input
+Select
+Dialog
+Sheet
+Tabs
+Popover
+Tooltip
+Command
+Form
+Table
+Dropdown
+```
+
+技术：
+
+```text
+Radix UI
++
+shadcn/ui
++
+Tailwind CSS
+```
+
+---
+
+## `@lanverse/ai`
+
+负责 AI 原生交互：
+
+```text
+Chat
+Message
+Reasoning
+ToolCall
+AgentStatus
+Streaming
+ArtifactPreview
+PromptInput
+```
+
+---
+
+## `@lanverse/canvas`
+
+负责无限画布：
+
+```text
+Editor
+Node
+Edge
+Handle
+Inspector
+Toolbar
+Node Library
+Subflow
+Run Overlay
+Selection
+Clipboard
+Keyboard
+Layout
+Collaboration Client
+```
+
+依赖方向：
+
+```text
+@lanverse/ui
+     ↑
+@lanverse/ai
+     ↑
+@lanverse/canvas
+     ↑
+web
+```
+
+实际 `canvas` 可以同时依赖 `ui` 和部分 `ai` 组件。
+
+---
+
+# 13. Canvas 技术设计
+
+Canvas 采用：
+
+```text
+React Flow
+```
+
+负责主图编辑。
+
+采用：
+
+```text
+Yjs + Hocuspocus
+```
+
+负责多人协作。
+
+采用：
+
+```text
+ELK.js
+```
+
+负责自动布局。
+
+采用：
+
+```text
+Konva
+```
+
+负责图片局部蒙版、标注和编辑。
+
+---
+
+# 14. Canvas 与 Backend 边界
+
+Frontend Canvas 负责：
+
+```text
+显示
+拖拽
+平移
+缩放
+连接
+选择
+快捷键
+属性面板
+运行状态展示
+```
+
+Backend Canvas 负责：
+
+```text
+Draft
+Revision
+Node Registry
+Template
+Graph Validation
+GraphPatch
+Permission
+Publish
+```
+
+Canvas 前端不能直接：
+
+```text
+调用 Temporal
+调用 Model Provider
+修改 PostgreSQL
+运行 Agent Runtime
+```
+
+---
+
+# 15. Canvas 数据模型
+
+Canvas 编辑态：
+
+```text
+CanvasDraft
+├── Graph
+│   ├── Nodes
+│   ├── Edges
+│   ├── Variables
+│   └── Bindings
+│
+├── Layout
+│   ├── Position
+│   ├── Size
+│   ├── Group
+│   ├── Frame
+│   └── Viewport
+│
+└── Metadata
+```
+
+执行时：
+
+```text
+CanvasDraft
+   ↓
+CanvasRevision
+   ↓
+WorkflowDefinition
+```
+
+每次运行必须绑定一个不可变 Revision。
+
+---
+
+# 16. Canvas Node Registry
+
+节点不能前端写死。
+
+Backend 提供：
+
+```text
+Node Registry
+```
+
+一个 Node Definition 包含：
+
+```text
+key
+version
+name
+category
+input ports
+output ports
+config schema
+executor
+permission
+cost policy
+cache policy
+```
+
+例如：
+
+```text
+generation.image@1.0.0
+```
+
+Frontend：
+
+```text
+GET /api/v1/nodes
+```
+
+获取当前可用 Node Catalog。
+
+---
+
+# 17. Canvas 节点分类
+
+基础：
+
+```text
+Text
+Image
+Video
+Audio
+Asset
+```
+
+AI：
+
+```text
+Agent
+LLM
+Image Generation
+Video Generation
+TTS
+Vision
+```
+
+控制：
+
+```text
+Condition
+Map
+Join
+Loop
+Subflow
+Human Gate
+Quality Gate
+```
+
+媒体：
+
+```text
+Transform
+Motion
+Subtitle
+Render
+Export
+```
+
+视觉：
+
+```text
+Frame
+Comment
+Group
+```
+
+视觉节点不参与 Workflow 执行。
+
+---
+
+# 18. Canvas 局部执行
+
+必须支持：
+
+```text
+Run Node
+Run To Node
+Run From Node
+Run Branch
+Run Selection
+Run Dirty
+Retry Failed
+Run All
+```
+
+---
+
+# 19. Dirty Graph
+
+以下修改使节点 Dirty：
+
+```text
+Prompt
+输入 Artifact
+模型策略
+节点配置
+Skill
+连接关系
+候选选择
+```
+
+以下修改不 Dirty：
+
+```text
+节点坐标
+颜色
+Frame
+Comment
+Viewport
+```
+
+---
+
+# 20. Canvas Agent
+
+Agent 可以帮助用户创建工作流。
+
+例如：
+
+> “帮我建立一个剧本到成片的短剧工作流。”
+
+Canvas Agent 不直接修改 Yjs。
+
+流程：
+
+```text
+User
+ ↓
+Canvas Agent
+ ↓
+Node Catalog
+ ↓
+GraphPatch
+ ↓
+Backend Validate
+ ↓
+Frontend Preview
+ ↓
+User Confirm
+ ↓
+Yjs Transaction
+```
+
+---
+
+# 21. Backend 作为一个完整 Go Project
+
+正式结构：
+
+```text
+backend/
+├── go.mod
+├── go.sum
+├── README.md
+├── Makefile
+├── .env.example
+│
+├── buf.yaml
+├── buf.gen.yaml
+├── sqlc.yaml
+├── .golangci.yml
+│
+├── cmd/
+├── api/
+├── internal/
+├── migrations/
+├── config/
+├── build/
+└── test/
+```
+
+只使用：
+
+```text
+backend/go.mod
+backend/go.sum
+```
+
+---
+
+# 22. Backend 可执行程序
+
+```text
+backend/cmd/
+├── api/
+├── workflow/
+├── model/
+├── media/
+└── event/
+```
+
+编译为：
+
+```text
+lanverse-api
+workflow-worker
+model-gateway
+media-worker
+event-worker
+```
+
+一个 Go Module 完全可以构建多个 Binary。
+
+---
+
+# 23. `lanverse-api`
+
+负责：
+
+```text
+Workspace
+Project
+Episode
+Scene
+Shot
+Script
+Character
+Scene Bible
+Style
+
+Canvas Draft
+Canvas Revision
+
+Preset
+
+Asset API
+Upload Session
+
+Workflow Commands
+Review
+Cost
+Quota
+Search
+
+Provider Callback HTTP Entry
+```
+
+---
+
+# 24. `workflow-worker`
+
+负责：
+
+```text
+Temporal Workflow
+Temporal Activity
+
+Episode Workflow
+Shot Workflow
+
+Pause
+Resume
+Retry
+Cancel
+
+Human Gate
+
+Agent Activity
+Model Activity
+Media Activity
+
+Cache
+Recovery
+```
+
+---
+
+# 25. `model-gateway`
+
+负责：
+
+```text
+LLM
+Vision
+Image
+Video
+TTS
+
+Provider Registry
+Capability Registry
+Routing
+Fallback
+Rate Limit
+Provider Job
+Callback
+Pricing
+```
+
+---
+
+# 26. `media-worker`
+
+负责：
+
+```text
+FFmpeg
+ffprobe
+
+Thumbnail
+Proxy
+Transcode
+Subtitle
+Mix
+Motion Composition
+Render
+Export
+```
+
+---
+
+# 27. `event-worker`
+
+负责：
+
+```text
+Kafka Consumer
+Search Index Projection
+Workflow Projection
+Notification
+Cost Projection
+Audit
+DLQ
+Replay
+```
+
+---
+
+# 28. Backend 领域模块
+
+```text
+backend/internal/
+├── app/
+├── studio/
+├── preset/
+├── canvas/
+├── workflow/
+├── agent/
+├── model/
+├── asset/
+├── media/
+├── event/
+├── search/
+├── review/
+├── cost/
+├── quota/
+├── config/
+├── database/
+├── cache/
+└── telemetry/
+```
+
+---
+
+# 29. Backend Studio
+
+```text
+backend/internal/studio/
+├── workspace/
+├── project/
+├── episode/
+├── scene/
+├── shot/
+├── script/
+├── character/
+├── location/
+└── style/
+```
+
+核心领域关系：
+
+```text
+Workspace
+ ↓
+Project
+ ↓
+Episode
+ ↓
+Scene
+ ↓
+Shot
+```
+
+---
+
+# 30. Backend 模块开发规范
+
+不要使用整个项目横向：
+
+```text
+controller/
+service/
+repository/
+model/
+```
+
+应该：
+
+```text
+internal/studio/project/
+├── domain/
+├── application/
+├── port/
+└── adapter/
+```
+
+但只有真正需要时才创建这些层级。
+
+不要为了目录完整制造空目录。
+
+固定依赖：
+
+```text
+Adapter
+   ↓
+Application
+   ↓
+Domain
+```
+
+Domain 不依赖：
+
+```text
+Kratos
+pgx
+Redis
+Kafka
+Temporal
+MinIO
+Provider SDK
+```
+
+---
+
+# 31. 同进程与跨进程调用
+
+同一个 Binary 中的模块可以使用 Go Interface。
+
+例如：
+
+```text
+Project
+ ↓
+Asset Interface
+```
+
+不需要强制 gRPC。
+
+跨进程：
+
+```text
+workflow-worker
+→ model-gateway
+
+workflow-worker
+→ agent-runtime
+```
+
+必须使用正式 RPC。
+
+原则：
+
+> 网络边界由部署边界决定，而不是由目录边界决定。
+
+---
+
+# 32. Agent Project
+
+正式结构：
+
+```text
+agent/
+├── pyproject.toml
+├── uv.lock
+├── .python-version
+├── pyrightconfig.json
+├── .env.example
+├── README.md
+├── Dockerfile
+│
+├── api/
+│   └── proto/
+│
+├── src/
+│   ├── api/
+│   ├── runtime/
+│   ├── harness/
+│   ├── executor/
+│   ├── context/
+│   ├── tool/
+│   ├── skill/
+│   ├── prompt/
+│   ├── memory/
+│   ├── evaluate/
+│   ├── guard/
+│   ├── client/
+│   ├── schema/
+│   ├── telemetry/
+│   └── generated/
+│
+├── definitions/
+│   ├── agent/
+│   ├── skill/
+│   ├── prompt/
+│   ├── rubric/
+│   └── policy/
+│
+├── config/
+│
+└── test/
+    ├── unit/
+    ├── golden/
+    ├── regression/
+    ├── integration/
+    └── safety/
+```
+
+明确不允许：
+
+```text
+agent/src/agent/
+```
+
+---
+
+# 33. Agent Runtime
+
+Agent Runtime 固定提供三类 Executor：
+
+```text
+StructuredExecutor
+ToolLoopExecutor
+LangGraphExecutor
+```
+
+---
+
+## 33.1 StructuredExecutor
+
+适合：
+
+```text
+Script Parsing
+Character Extraction
+Scene Extraction
+Prompt Composition
+Simple QC
+Metadata Extraction
+```
+
+流程：
+
+```text
+Context
+ ↓
+Prompt
+ ↓
+Model
+ ↓
+Pydantic
+ ↓
+Result
+```
+
+---
+
+## 33.2 ToolLoopExecutor
+
+用于：
+
+```text
+2~5 次有限工具调用
+```
+
+不需要复杂状态图。
+
+---
+
+## 33.3 LangGraphExecutor
+
+仅用于真正需要：
+
+```text
+Plan
+ ↓
+Execute
+ ↓
+Check
+ ↓
+Repair
+ ↓
+Recheck
+```
+
+的复杂 Agent。
+
+V1 推荐：
+
+```text
+StoryboardAgent
+QCRepairAgent
+CanvasAgent
+```
+
+按需使用 LangGraph。
+
+---
+
+# 34. LangGraph 约束
+
+每次 LangGraph Run：
+
+```text
+max_steps
+max_model_calls
+max_tool_calls
+max_tokens
+max_cost
+timeout
+```
+
+全部必须有限。
+
+禁止：
+
+```text
+无限 ReAct
+跨天等待用户
+控制整个 Episode
+直接调用昂贵视频生成无限重试
+```
+
+---
+
+# 35. V1 核心 Agent
+
+不按真人 / 漫剧复制 Agent。
+
+统一：
+
+```text
+ScriptAgent
+CharacterAgent
+SceneAgent
+StoryboardAgent
+PromptAgent
+MotionAgent
+QCRepairAgent
+CanvasAgent
+```
+
+差异来自：
+
+```text
+Style
+Skill
+Preset
+Model Policy
+```
+
+---
+
+# 36. Skill 设计
+
+Skill 回答：
+
+> **这个 AI 任务应该怎样完成。**
+
+例如：
+
+```text
+short-drama-director
+cinematic-shot
+comic-storyboard
+continuity
+realistic-character
+comic-character
+dynamic-motion
+suspense
+romance
+```
+
+Skill 包含：
+
+```text
+Instructions
+Rules
+Examples
+Tools
+Output Requirements
+Evaluation Rubric
+Model Requirements
+```
+
+位置：
+
+```text
+agent/definitions/skill/
+```
+
+---
+
+# 37. Style 设计
+
+Style 回答：
+
+> **最终作品看起来应该是什么样。**
+
+例如：
+
+```text
+cinematic-realistic
+urban-realistic
+ancient-realistic
+chinese-comic
+anime
+semi-realistic-comic
+retro
+cyberpunk
+```
+
+Style 内容：
+
+```text
+visual
+character
+environment
+palette
+lighting
+composition
+texture
+camera
+reference assets
+positive anchors
+negative anchors
+```
+
+---
+
+# 38. Style 层级覆盖
+
+Style 最终解析优先级：
+
+```text
+Shot Override
+    >
+Project Override
+    >
+Preset
+    >
+System Default
+```
+
+形成：
+
+```text
+EffectiveStyle
+```
+
+---
+
+# 39. Preset
+
+Preset 是面向用户的一等产品能力。
+
+Preset 组合：
+
+```text
+Style
++
+Skills
++
+Model Policy
++
+QC Policy
++
+Motion Strategy
++
+Render Policy
+```
+
+系统预设例如：
+
+```text
+真人电影短剧
+都市真人短剧
+古装真人短剧
+
+国漫动态剧
+日漫动态剧
+半写实漫剧
+```
+
+这些是 UI 分类和系统 Preset。
+
+不是 Backend 的：
+
+```text
+REAL_DRAMA
+COMIC_DRAMA
+```
+
+硬编码分支。
+
+---
+
+# 40. Preset 数据模型
+
+例如：
+
+```yaml
+id: cinematic-drama
+version: 1.0.0
+
+style:
+  visual: cinematic-realistic
+
+skills:
+  - short-drama-director
+  - cinematic-shot
+  - continuity
+
+models:
+  character: character-quality
+  image: image-quality
+  motion: video-quality
+  voice: voice-natural
+
+motion:
+  strategy: GENERATE
+
+qc:
+  policy: realistic-quality
+
+render:
+  policy: standard-short-drama
+```
+
+漫剧：
+
+```yaml
+id: chinese-comic
+version: 1.0.0
+
+style:
+  visual: chinese-comic
+
+skills:
+  - short-drama-director
+  - comic-storyboard
+  - comic-continuity
+  - dynamic-motion
+
+models:
+  image: comic-image-quality
+  motion: comic-motion
+
+motion:
+  strategy: HYBRID
+
+qc:
+  policy: comic-quality
+```
+
+---
+
+# 41. Workflow 总体设计
+
+Lanverse V1 只有一个主要业务 Workflow：
+
+```text
+ShortDramaEpisodeWorkflow
+```
+
+不同 Preset 不创建新的主 Workflow。
+
+---
+
+# 42. ShortDramaEpisodeWorkflow
+
+```text
+Create Episode
+      ↓
+Structure Script
+      ↓
+Build Story Bible
+      ↓
+Build Character Bible
+      ↓
+Build Scene Bible
+      ↓
+Build Storyboard
+      ↓
+Storyboard Review
+      ↓
+Generate Reference Assets
+      ↓
+Reference Review
+      ↓
+ShotWorkflow × N
+      ↓
+Voice
+      ↓
+Subtitle
+      ↓
+Render
+      ↓
+Episode QC
+      ↓
+Final Review
+      ↓
+Export
+```
+
+---
+
+# 43. ShotWorkflow
+
+这是整个 Lanverse 最重要的执行单元。
+
+```text
+ShotWorkflow
+│
+├── ResolveContext
+│
+├── ComposePrompt
+│
+├── GenerateImageCandidates
+│
+├── ImageQC
+│
+├── HumanImageSelect
+│
+├── PlanMotion
+│
+├── GenerateMotion
+│
+├── VideoQC
+│
+├── Repair
+│
+└── HumanVideoSelect
+```
+
+Shot 出错：
+
+```text
+只重新运行当前 Shot
+```
+
+不需要重跑 Episode。
+
+---
+
+# 44. Motion Strategy
+
+统一定义：
+
+```text
+GENERATE
+COMPOSE
+HYBRID
+```
+
+## GENERATE
+
+```text
+Image
+ ↓
+Video Model
+ ↓
+Video
+```
+
+适合真人、部分高质量漫剧镜头。
+
+## COMPOSE
+
+```text
+Image
+ ↓
+Layer / Pan / Zoom / Parallax
+ ↓
+Media Worker
+ ↓
+Clip
+```
+
+适合动态漫。
+
+## HYBRID
+
+根据 Shot 自动选择。
+
+---
+
+# 45. Workflow 状态
+
+Workflow：
+
+```text
+DRAFT
+RUNNING
+PAUSED
+WAITING
+SUCCEEDED
+FAILED
+CANCELLED
+```
+
+Node：
+
+```text
+READY
+QUEUED
+RUNNING
+WAITING_PROVIDER
+WAITING_HUMAN
+SUCCEEDED
+FAILED
+CACHED
+CANCELLED
+STALE
+```
+
+---
+
+# 46. Human Gate
+
+以下阶段保留人工审核能力：
+
+```text
+Storyboard
+Character Reference
+Scene Reference
+Image Candidate
+Video Candidate
+Final Episode
+```
+
+系统支持：
+
+```text
+APPROVE
+REJECT
+SELECT
+REGENERATE
+EDIT
+SKIP
+```
+
+---
+
+# 47. Node Cache
+
+缓存键：
+
+```text
+Node Version
++
+Config
++
+Input Artifact Hash
++
+Prompt Version
++
+Skill Version
++
+Model Policy
++
+Seed
+```
+
+如果没有变化：
+
+```text
+CACHED
+```
+
+直接复用历史 Artifact。
+
+---
+
+# 48. Model Gateway
+
+所有模型统一通过：
+
+```text
+backend/internal/model
+```
+
+业务和 Agent 都不直接连接 Provider。
+
+逻辑接口：
+
+```text
+GenerateText
+StructuredGenerate
+Vision
+GenerateImage
+GenerateVideo
+GenerateAudio
+Embedding
+Moderation
+```
+
+---
+
+# 49. Provider Adapter
+
+Provider：
+
+```text
+OpenAI
+Anthropic
+Gemini
+Doubao
+Seedream
+Kling
+Veo
+Runway
+ComfyUI
+其他 Provider
+```
+
+每个 Provider 实现统一 Adapter。
+
+---
+
+# 50. Capability Registry
+
+每个模型记录：
+
+```text
+modalities
+reference image
+multi reference
+first frame
+last frame
+character reference
+seed
+camera control
+audio
+lip sync
+duration
+resolution
+callback
+rate limit
+```
+
+Workflow 不根据模型名称写业务逻辑。
+
+应该：
+
+```text
+Requirement
+ ↓
+Capability Match
+ ↓
+Model Policy
+ ↓
+Provider
+```
+
+---
+
+# 51. Model Policy
+
+业务使用：
+
+```text
+image.fast
+image.quality
+
+motion.fast
+motion.quality
+
+story.standard
+story.reasoning
+
+voice.standard
+```
+
+而不是硬编码：
+
+```text
+model = xxx
+```
+
+---
+
+# 52. 生成任务模型
+
+所有生成任务统一：
+
+```text
+GenerationRequest
+       ↓
+ProviderJob
+       ↓
+GenerationCandidate[]
+       ↓
+SelectedCandidate
+```
+
+绝不能在 Shot 上只保存：
+
+```text
+image_url
+video_url
+```
+
+候选机制是 AI 生产系统的基础。
+
+---
+
+# 53. Asset 系统
+
+所有生产结果统一抽象：
+
+```text
+Artifact
+```
+
+类型包括：
+
+```text
+SCRIPT
+CHARACTER_REFERENCE
+SCENE_REFERENCE
+IMAGE
+VIDEO
+AUDIO
+SUBTITLE
+PROMPT
+PREVIEW
+EXPORT
+```
+
+---
+
+# 54. Artifact 元数据
+
+```text
+artifact_id
+workspace_id
+project_id
+episode_id
+shot_id
+
+type
+mime
+size
+sha256
+
+storage_profile
+bucket
+object_key
+
+source_workflow_run
+source_node_run
+
+model
+prompt
+skill
+created_at
+```
+
+---
+
+# 55. MinIO 设计
+
+V1 默认：
+
+```text
+MinIO
+```
+
+但内部必须抽象：
+
+```go
+type ObjectStore interface {
+    Put(...)
+    Open(...)
+    Head(...)
+    Delete(...)
+    Copy(...)
+    PresignUpload(...)
+    PresignDownload(...)
+    Multipart(...)
+}
+```
+
+---
+
+# 56. Storage Adapter
+
+```text
+ObjectStore
+├── MinIOAdapter
+├── TOSAdapter
+├── S3Adapter
+├── OSSAdapter
+└── COSAdapter
+```
+
+所有 SDK 只能存在于：
+
+```text
+backend/internal/asset/storage/adapter/
+```
+
+---
+
+# 57. Storage Router
+
+用于决定：
+
+```text
+当前 Workspace
+当前环境
+数据类型
+地域
+成本
+```
+
+应该写入哪个 Storage Profile。
+
+例如：
+
+```text
+default → MinIO
+production-cn → TOS
+```
+
+---
+
+# 58. 上传流程
+
+```text
+Browser
+ ↓
+Asset API
+ ↓
+Create Upload Session
+ ↓
+Presigned URL
+ ↓
+Browser → MinIO
+ ↓
+Complete Upload
+ ↓
+Validate
+ ↓
+Create Artifact
+```
+
+大文件不经过 Go API 中转。
+
+---
+
+# 59. 切换到 TOS
+
+切换新文件：
+
+```text
+StorageProfile
+MinIO → TOS
+```
+
+新文件直接写 TOS。
+
+历史数据迁移：
+
+```text
+StorageMigrationWorkflow
+ ↓
+Copy
+ ↓
+Checksum
+ ↓
+Dual Read
+ ↓
+Switch Primary
+ ↓
+Retire Old
+```
+
+---
+
+# 60. Media 系统
+
+Media Worker 负责：
+
+```text
+ffprobe
+thumbnail
+proxy
+transcode
+subtitle
+audio
+motion
+render
+export
+```
+
+技术：
+
+```text
+FFmpeg
+ffprobe
+OpenCV
+```
+
+---
+
+# 61. 动态漫 Motion
+
+Media Worker V1 即支持：
+
+```text
+Pan
+Zoom
+Push
+Pull
+Parallax
+Shake
+Fade
+Transition
+Basic Layer Motion
+```
+
+这样漫剧不必每个 Shot 都支付高成本 AI 视频生成。
+
+---
+
+# 62. Render Manifest
+
+粗剪不使用专业时间线。
+
+定义：
+
+```text
+RenderManifest
+```
+
+例如：
+
+```text
+canvas
+fps
+video track
+voice track
+music track
+subtitle track
+transitions
+```
+
+Media Worker 根据 Manifest 输出：
+
+```text
+Preview
+Final MP4
+```
+
+---
+
+# 63. 数据存储
+
+固定：
+
+| 数据 | 存储 |
+|---|---|
+| 项目业务 | PostgreSQL |
+| Workflow 历史 | Temporal |
+| 缓存 | Redis |
+| 图片视频 | MinIO |
+| 事件 | Kafka |
+| 业务全文搜索 | Elasticsearch |
+| 日志检索 | Elasticsearch |
+| Trace | OpenTelemetry + Elastic |
+| 指标 | Prometheus |
+
+---
+
+# 64. PostgreSQL
+
+核心业务表：
+
+```text
+workspace
+member
+
+project
+episode
+scene
+shot
+
+script
+
+character
+character_version
+
+location
+location_version
+
+style
+preset
+
+canvas
+canvas_revision
+
+workflow_run
+node_run
+
+generation_request
+generation_candidate
+
+artifact
+
+human_task
+review
+
+cost_ledger
+
+outbox_event
+```
+
+---
+
+# 65. Kafka
+
+Kafka 从 V1 正式接入。
+
+用途：
+
+```text
+领域事件
+搜索同步
+通知
+运行投影
+费用统计
+审计
+异步集成
+```
+
+Kafka 不负责：
+
+```text
+Workflow Timer
+Workflow Retry
+人工审核等待
+Yjs 光标
+LLM Token Stream
+```
+
+---
+
+# 66. PostgreSQL 与 Kafka 一致性
+
+不能：
+
+```text
+UPDATE PostgreSQL
++
+Producer.Send()
+```
+
+直接双写。
+
+使用：
+
+```text
+PostgreSQL Transaction
+├── Business Data
+└── Outbox Event
+        ↓
+Debezium
+        ↓
+Kafka
+```
+
+Kafka 仍然是正式事件总线。
+
+Outbox 只是可靠发布机制。
+
+---
+
+# 67. Kafka Event
+
+主要事件：
+
+```text
+project.created.v1
+episode.updated.v1
+
+canvas.published.v1
+
+workflow.started.v1
+workflow.completed.v1
+node.completed.v1
+
+generation.completed.v1
+
+artifact.created.v1
+
+review.created.v1
+review.completed.v1
+
+cost.settled.v1
+```
+
+---
+
+# 68. Elasticsearch
+
+V1 使用 Elasticsearch 同时承担：
+
+```text
+Business Search
++
+Observability Search
+```
+
+逻辑上分开索引。
+
+后续数据规模增长时可以拆两个集群。
+
+---
+
+# 69. Business Search
+
+搜索：
+
+```text
+Project
+Script
+Character
+Scene
+Shot
+Prompt
+Artifact
+Canvas Node
+Workflow Template
+```
+
+支持：
+
+```text
+Full Text
+Highlight
+Filter
+Suggest
+Chinese Search
+```
+
+---
+
+# 70. Elasticsearch 数据同步
+
+```text
+PostgreSQL
+ ↓
+Outbox
+ ↓
+Kafka
+ ↓
+Search Indexer
+ ↓
+Elasticsearch
+```
+
+Elasticsearch 只是 Projection。
+
+必须支持：
+
+```text
+Reindex
+```
+
+从 PostgreSQL 全量恢复。
+
+---
+
+# 71. 日志与 Observability
+
+统一：
+
+```text
+JSON Structured Log
+        ↓
+OpenTelemetry Collector
+        ↓
+Elasticsearch
+        ↓
+Kibana
+```
+
+同时：
+
+```text
+OpenTelemetry
+ ↓
+Prometheus
+ ↓
+Grafana
+```
+
+Logstash 不作为默认依赖。
+
+---
+
+# 72. Trace 标识
+
+所有系统传播：
+
+```text
+trace_id
+
+workspace_id
+project_id
+episode_id
+scene_id
+shot_id
+
+canvas_revision_id
+
+workflow_run_id
+node_run_id
+
+agent_run_id
+
+generation_request_id
+provider_job_id
+
+artifact_id
+```
+
+用户在 Shot 页面可以直接定位：
+
+```text
+Workflow
+Agent
+Provider
+Artifact
+Cost
+Log
+```
+
+---
+
+# 73. Cost 系统
+
+所有昂贵操作：
+
+```text
+Estimate
+ ↓
+Reserve
+ ↓
+Execute
+ ↓
+Settle
+```
+
+统计：
+
+```text
+Workspace
+Project
+Episode
+Shot
+Node
+Agent
+Provider
+Model
+```
+
+前端能够显示：
+
+```text
+本集成本
+本镜成本
+本次生成成本
+累计成本
+预算剩余
+```
+
+---
+
+# 74. QC 系统
+
+统一 Quality Gate。
+
+QC Policy 根据 Preset 和 Style 决定。
+
+---
+
+## 真人内容重点
+
+```text
+Face Identity
+Body
+Hands
+Costume
+Scene
+Prop
+Temporal Drift
+Flicker
+Motion
+```
+
+---
+
+## 漫剧内容重点
+
+```text
+Character Design
+Style
+Color Palette
+Line Style
+Proportion
+Background
+Style Drift
+Motion Distortion
+```
+
+Workflow 不拆成真人 QC / 漫剧 QC 节点。
+
+只是：
+
+```text
+QualityGate
+ ↓
+QCPolicy
+```
+
+---
+
+# 75. Review 系统
+
+统一审核队列：
+
+```text
+WAITING
+APPROVED
+REJECTED
+REGENERATE
+```
+
+审核对象：
+
+```text
+Storyboard
+Reference
+Image Candidate
+Video Candidate
+Episode
+```
+
+---
+
+# 76. API 通信规范
+
+Browser → Backend：
+
+```text
+REST / JSON
+```
+
+Backend Go → Agent：
+
+```text
+gRPC / Protobuf
+```
+
+Backend Process → Backend Process：
+
+```text
+gRPC
+```
+
+业务事件：
+
+```text
+Kafka
+```
+
+AI 流：
+
+```text
+SSE
+```
+
+Canvas 协同：
+
+```text
+Yjs WebSocket
+```
+
+大文件：
+
+```text
+Presigned URL
+```
+
+工作流：
+
+```text
+Temporal Task Queue
+```
+
+---
+
+# 77. API Contract 放置
+
+不创建根：
+
+```text
+contracts/
+```
+
+Backend 对外契约：
+
+```text
+backend/api/
+```
+
+包含：
+
+```text
+proto/
+openapi/
+event/
+gen/
+```
+
+Agent 自己的服务契约：
+
+```text
+agent/api/proto/
+```
+
+Frontend Backend SDK：
+
+```text
+frontend/packages/sdk/
+```
+
+---
+
+# 78. Backend API Version
+
+统一：
+
+```text
+/api/v1/
+```
+
+例如：
+
+```text
+/api/v1/projects
+/api/v1/episodes
+/api/v1/shots
+/api/v1/assets
+/api/v1/canvas
+/api/v1/workflows
+/api/v1/reviews
+/api/v1/search
+```
+
+---
+
+# 79. 安全设计
+
+基本认证：
+
+```text
+JWT / Session
+Workspace RBAC
+```
+
+模型密钥：
+
+```text
+仅 Backend
+```
+
+对象存储：
+
+```text
+Private Bucket
++
+Presigned URL
+```
+
+Agent：
+
+```text
+Tool Allowlist
+No DB Credential
+No Storage Credential
+No Arbitrary Shell
+No Arbitrary Network
+Execution Budget
+```
+
+---
+
+# 80. Agent Tool 安全
+
+Agent 只能通过 Tool API：
+
+```text
+project.read
+script.read
+character.read
+scene.read
+asset.search
+canvas.validate
+canvas.patch
+cost.estimate
+```
+
+禁止：
+
+```text
+直接连接 PostgreSQL
+直接访问 Yjs DB
+直接修改 MinIO
+直接执行 Shell
+```
+
+---
+
+# 81. Docker Compose
+
+根目录固定：
+
+```text
+docker-compose.yml
+docker-compose-env.yml
+docker-compose-prod.yml
+```
+
+---
+
+## docker-compose.yml
+
+定义：
+
+```text
+有哪些 Service
+```
+
+主要：
+
+```text
+frontend
+collab
+
+backend
+workflow
+model
+media
+event
+
+agent
+
+postgres
+redis
+minio
+kafka
+temporal
+elasticsearch
+kibana
+```
+
+---
+
+## docker-compose-env.yml
+
+定义：
+
+```text
+环境
+网络
+Volume
+Health Check
+公共变量
+服务依赖
+```
+
+---
+
+## docker-compose-prod.yml
+
+只描述：
+
+```text
+Production Override
+```
+
+例如：
+
+```text
+正式镜像
+restart
+资源限制
+隐藏内部端口
+Production ENV
+```
+
+---
+
+# 82. 开发启动
+
+本地：
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose-env.yml \
+  up -d
+```
+
+生产：
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose-env.yml \
+  -f docker-compose-prod.yml \
+  up -d
+```
+
+---
+
+# 83. Docs
+
+正式目录：
+
+```text
+docs/
+├── prd/
+├── design/
+├── architecture/
+├── workflow/
+├── agent/
+├── canvas/
+├── api/
+├── plan/
+├── adr/
+├── database/
+├── deployment/
+└── guides/
+```
+
+---
+
+# 84. PRD
+
+```text
+docs/prd/
+├── product.md
+├── studio.md
+├── canvas.md
+├── asset.md
+├── review.md
+└── preset.md
+```
+
+回答：
+
+> 做什么、为什么做。
+
+---
+
+# 85. Architecture
+
+```text
+docs/architecture/
+├── overview.md
+├── repository.md
+├── frontend.md
+├── backend.md
+├── agent.md
+├── data.md
+├── event.md
+└── runtime.md
+```
+
+回答：
+
+> 整个系统怎么拆。
+
+---
+
+# 86. Design
+
+```text
+docs/design/
+├── studio.md
+├── preset.md
+├── storage.md
+├── model.md
+├── media.md
+├── search.md
+├── review.md
+├── cost.md
+└── security.md
+```
+
+回答：
+
+> 具体模块如何实现。
+
+---
+
+# 87. Workflow Docs
+
+```text
+docs/workflow/
+├── overview.md
+├── compiler.md
+├── temporal.md
+├── episode.md
+├── shot.md
+├── cache.md
+└── human.md
+```
+
+---
+
+# 88. Agent Docs
+
+```text
+docs/agent/
+├── overview.md
+├── harness.md
+├── executor.md
+├── langgraph.md
+├── skill.md
+├── prompt.md
+├── tool.md
+└── evaluation.md
+```
+
+---
+
+# 89. Canvas Docs
+
+```text
+docs/canvas/
+├── overview.md
+├── node.md
+├── graph.md
+├── collaboration.md
+├── revision.md
+├── execution.md
+├── performance.md
+└── agent.md
+```
+
+---
+
+# 90. Plan Docs
+
+```text
+docs/plan/
+├── roadmap.md
+├── v1.md
+├── phase1.md
+├── phase2.md
+└── backlog.md
+```
+
+---
+
+# 91. ADR
+
+至少包括：
+
+```text
+0001-monorepo.md
+0002-go-backend.md
+0003-temporal.md
+0004-langgraph.md
+0005-kafka.md
+0006-minio.md
+0007-elasticsearch.md
+0008-canvas.md
+0009-preset.md
+```
+
+---
+
+# 92. Lanverse V1 研发阶段
+
+## Phase 1：Core
+
+完成：
+
+```text
+Workspace
+Project
+Episode
+Scene
+Shot
+
+PostgreSQL
+
+MinIO
+Asset
+
+Basic Backend API
+Frontend Project
+```
+
+---
+
+## Phase 2：AI Production
+
+完成：
+
+```text
+Script Agent
+Character Agent
+Scene Agent
+Storyboard Agent
+
+Model Gateway
+
+Image Generation
+Motion Generation
+
+Candidate System
+```
+
+---
+
+## Phase 3：Workflow
+
+完成：
+
+```text
+Temporal
+
+Episode Workflow
+Shot Workflow
+
+Pause
+Retry
+Recovery
+
+Human Gate
+```
+
+---
+
+## Phase 4：Completion
+
+完成：
+
+```text
+Voice
+Subtitle
+Media Worker
+Render
+QC
+Review
+Export
+```
+
+此时 Guided Studio 已经完成完整 V1 闭环。
+
+---
+
+## Phase 5：Platform Capability
+
+完善：
+
+```text
+Kafka
+Outbox
+Search
+Elasticsearch
+Cost
+Observability
+```
+
+Kafka 架构应从开发初期预留并接入，Phase 5 指业务消费者和治理能力完整化。
+
+---
+
+## Phase 6：Canvas
+
+完成：
+
+```text
+React Flow
+Node Registry
+Canvas Draft
+Canvas Revision
+Workflow Compiler
+Run Node
+Run Branch
+Dirty
+Cache
+Run Overlay
+```
+
+---
+
+## Phase 7：Collaboration & Copilot
+
+完成：
+
+```text
+Yjs
+Hocuspocus
+Presence
+Comment
+Canvas Agent
+GraphPatch
+```
+
+---
+
+# 93. V1 产品验收标准
+
+## Product
+
+能够：
+
+```text
+创建项目
+选择 Preset
+导入剧本
+生成角色
+生成场景
+生成分镜
+生成镜头图片
+生成动态镜头
+生成配音
+生成字幕
+自动合成
+审核
+导出
+```
+
+---
+
+## Workflow
+
+必须：
+
+```text
+任务失败可恢复
+单 Shot 可重跑
+局部节点可重跑
+人工审核可暂停
+服务重启后可恢复
+```
+
+---
+
+## Agent
+
+必须：
+
+```text
+结构化输出
+Prompt 版本可追踪
+Skill 可追踪
+Tool 有权限
+调用有成本限制
+```
+
+---
+
+## Asset
+
+必须：
+
+```text
+所有生产结果登记 Artifact
+所有媒体使用 MinIO
+大文件 Presigned Upload
+能够切换 Storage Adapter
+```
+
+---
+
+## AI 短剧
+
+必须：
+
+```text
+同一角色具有基本一致性
+场景具有基本一致性
+镜头内容符合剧本
+用户可以选择候选
+错误 Shot 可以单独修复
+```
+
+---
+
+## 漫剧
+
+必须：
+
+```text
+画风基本统一
+角色造型基本统一
+支持漫画图动态化
+支持生成式视频与合成式 Motion
+```
+
+---
+
+# 94. V1 最终仓库结构
+
+```text
+lanverse/
+│
+├── frontend/
+│   ├── package.json
+│   ├── pnpm-lock.yaml
+│   ├── pnpm-workspace.yaml
+│   ├── turbo.json
+│   │
+│   ├── apps/
+│   │   ├── web/
+│   │   └── collab/
+│   │
+│   ├── packages/
+│   │   ├── ui/
+│   │   ├── ai/
+│   │   ├── canvas/
+│   │   ├── sdk/
+│   │   └── auth/
+│   │
+│   └── test/
+│
+├── backend/
+│   ├── go.mod
+│   ├── go.sum
+│   ├── Makefile
+│   │
+│   ├── cmd/
+│   │   ├── api/
+│   │   ├── workflow/
+│   │   ├── model/
+│   │   ├── media/
+│   │   └── event/
+│   │
+│   ├── api/
+│   │   ├── proto/
+│   │   ├── openapi/
+│   │   ├── event/
+│   │   └── gen/
+│   │
+│   ├── internal/
+│   │   ├── app/
+│   │   ├── studio/
+│   │   ├── preset/
+│   │   ├── canvas/
+│   │   ├── workflow/
+│   │   ├── agent/
+│   │   ├── model/
+│   │   ├── asset/
+│   │   ├── media/
+│   │   ├── event/
+│   │   ├── search/
+│   │   ├── review/
+│   │   ├── cost/
+│   │   ├── quota/
+│   │   ├── config/
+│   │   ├── database/
+│   │   ├── cache/
+│   │   └── telemetry/
+│   │
+│   ├── migrations/
+│   ├── config/
+│   ├── build/
+│   └── test/
+│
+├── agent/
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   ├── .python-version
+│   ├── pyrightconfig.json
+│   │
+│   ├── api/
+│   │   └── proto/
+│   │
+│   ├── src/
+│   │   ├── api/
+│   │   ├── runtime/
+│   │   ├── harness/
+│   │   ├── executor/
+│   │   ├── context/
+│   │   ├── tool/
+│   │   ├── skill/
+│   │   ├── prompt/
+│   │   ├── memory/
+│   │   ├── evaluate/
+│   │   ├── guard/
+│   │   ├── client/
+│   │   ├── schema/
+│   │   ├── telemetry/
+│   │   └── generated/
+│   │
+│   ├── definitions/
+│   │   ├── agent/
+│   │   ├── skill/
+│   │   ├── prompt/
+│   │   ├── rubric/
+│   │   └── policy/
+│   │
+│   ├── config/
+│   └── test/
+│
+├── docs/
+│   ├── prd/
+│   ├── design/
+│   ├── architecture/
+│   ├── workflow/
+│   ├── agent/
+│   ├── canvas/
+│   ├── api/
+│   ├── plan/
+│   ├── adr/
+│   ├── database/
+│   ├── deployment/
+│   └── guides/
+│
+├── docker-compose.yml
+├── docker-compose-env.yml
+├── docker-compose-prod.yml
+│
+├── .env.example
+├── .gitignore
+├── README.md
+└── CONTRIBUTING.md
+```
+
+---
+
+# 95. 最终架构定义
+
+Lanverse V1 最终应被定义为：
+
+> **一套面向 AI 短剧生产的 AI Native Production Platform。它通过统一的 Guided Studio 与 Canvas Studio 作为创作入口，通过 Preset、Style 和 Skill 描述不同真人短剧与 AI 漫剧的生产特征，通过 Go + Temporal 管理稳定可恢复的 Workflow，通过 Python Agent Runtime 和可选 LangGraph 承担智能决策，通过统一 Model Gateway 调用多模型，通过 MinIO 管理全部生产资产，并使用 PostgreSQL、Kafka、Elasticsearch 构建可靠的数据、事件和检索体系。**
+
+核心关系最终固定为：
+
+```text
+                    Lanverse
+
+         Guided Studio     Canvas Studio
+                \             /
+                 \           /
+                  Authoring
+                      ↓
+                 Revision
+                      ↓
+             Workflow Compiler
+                      ↓
+                  Temporal
+          ┌───────────┼────────────┐
+          ▼           ▼            ▼
+        Agent       Model        Media
+          │           │            │
+          └───────────┼────────────┘
+                      ▼
+                   Artifact
+                      ↓
+                    MinIO
+
+             PostgreSQL
+                  ↓
+                Outbox
+                  ↓
+                 Kafka
+             ┌────┴─────┐
+             ▼          ▼
+           Search     Projection
+             ↓
+        Elasticsearch
+```
+
+这个版本可以作为 **Lanverse V1 后续 PRD、Detailed Design、数据库设计、Workflow 设计、Agent 设计、Canvas 设计以及实际代码开发的统一基线**。

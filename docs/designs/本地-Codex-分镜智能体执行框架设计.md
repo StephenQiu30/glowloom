@@ -1,4 +1,4 @@
-# Local Codex Storyboard Agent Harness Design
+# 本地 Codex 分镜智能体执行框架设计
 
 状态：Accepted / Implemented for MVP
 日期：2026-08-24

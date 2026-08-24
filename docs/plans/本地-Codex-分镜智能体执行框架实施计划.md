@@ -1,4 +1,4 @@
-# Local Codex Storyboard Agent Harness Implementation Plan
+# 本地 Codex 分镜智能体执行框架实施计划
 
 日期：2026-08-24
 

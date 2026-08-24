@@ -1,4 +1,4 @@
-# Local Codex Storyboard Agent Harness Requirements
+# 本地 Codex 分镜智能体执行框架需求规格
 
 状态：Storyboard Harness 已实现；整剧业务闭环正在真实原稿验收
 日期：2026-08-24
