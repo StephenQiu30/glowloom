@@ -1,3 +1,5 @@
+import asyncio
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -65,6 +67,19 @@ class InterruptingDrafter(StoryboardDraftProvider):
     async def draft(self, value: StoryboardDraftInput) -> dict[str, object]:
         del value
         raise SimulatedWorkerCrash
+
+
+class BlockingDrafter(StoryboardDraftProvider):
+    def __init__(self, result: dict[str, object]) -> None:
+        self.result = result
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def draft(self, value: StoryboardDraftInput) -> dict[str, object]:
+        del value
+        self.entered.set()
+        await self.release.wait()
+        return self.result
 
 
 async def _message_body(
@@ -168,6 +183,8 @@ async def test_worker_records_unknown_without_partial_drafts(
         assert stored_batch is not None
         assert stored_batch.status == "unknown"
         assert stored_batch.error_code == "ai_result_unknown"
+        assert stored_batch.agent_run_token is None
+        assert stored_batch.agent_lease_expires_at is None
         assert task is not None
         assert task.status == "unknown"
 
@@ -198,6 +215,12 @@ async def test_worker_resumes_interrupted_storyboard_harness_from_same_delivery(
             storyboard_drafter=InterruptingDrafter(),
         )
 
+    async with session_factory() as session, session.begin():
+        interrupted_batch = await session.get(StoryboardDraftBatch, UUID(batch["id"]))
+        assert interrupted_batch is not None
+        assert interrupted_batch.agent_run_token is not None
+        interrupted_batch.agent_lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+
     resumed_drafter = RecordingDrafter(provider_result(script["structure"]).model_dump(mode="json"))
     resumed_message = RecordingMessage(body)
     outcome = await io_worker.process_incoming_message(
@@ -219,3 +242,70 @@ async def test_worker_resumes_interrupted_storyboard_harness_from_same_delivery(
         assert task is not None and task.status == "succeeded"
         assert delivery is not None and delivery.status == "completed"
         assert delivery.attempt_count == 2
+
+
+@pytest.mark.asyncio
+async def test_worker_requeues_redelivery_while_storyboard_run_lease_is_active(
+    client: Any,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(io_worker, "STORYBOARD_DRAFT_LEASE_HEARTBEAT_SECONDS", 0.01)
+    headers, _project, episode, script = await published_episode(
+        client,
+        session_factory,
+        email="draft-worker-active-lease@example.com",
+    )
+    batch = await create_batch_fixture(
+        client,
+        headers=headers,
+        episode=episode,
+        version_id=script["version"]["id"],
+        key="draft-worker-active-lease",
+    )
+    body = await _message_body(session_factory, batch["task_id"])
+    provider_payload = provider_result(script["structure"]).model_dump(mode="json")
+    blocking = BlockingDrafter(provider_payload)
+    first_message = RecordingMessage(body)
+    first_run = asyncio.create_task(
+        io_worker.process_incoming_message(
+            first_message,
+            session_factory,
+            storyboard_drafter=blocking,
+        )
+    )
+    await asyncio.wait_for(blocking.entered.wait(), timeout=2)
+    async with session_factory() as session:
+        running_batch = await session.get(StoryboardDraftBatch, UUID(batch["id"]))
+        assert running_batch is not None
+        initial_expiry = running_batch.agent_lease_expires_at
+        assert initial_expiry is not None
+    await asyncio.sleep(0.05)
+    async with session_factory() as session:
+        renewed_batch = await session.get(StoryboardDraftBatch, UUID(batch["id"]))
+        assert renewed_batch is not None
+        assert renewed_batch.agent_lease_expires_at is not None
+        assert renewed_batch.agent_lease_expires_at > initial_expiry
+
+    duplicate_drafter = RecordingDrafter(provider_payload)
+    redelivery = RecordingMessage(body)
+    try:
+        outcome = await io_worker.process_incoming_message(
+            redelivery,
+            session_factory,
+            storyboard_drafter=duplicate_drafter,
+        )
+
+        assert outcome == "requeued"
+        assert redelivery.ack_count == 0
+        assert redelivery.nack_requeues == [True]
+        assert not duplicate_drafter.inputs
+    finally:
+        blocking.release.set()
+
+    assert await first_run == "completed"
+    async with session_factory() as session:
+        completed_batch = await session.get(StoryboardDraftBatch, UUID(batch["id"]))
+        assert completed_batch is not None
+        assert completed_batch.agent_run_token is None
+        assert completed_batch.agent_lease_expires_at is None

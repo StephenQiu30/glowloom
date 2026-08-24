@@ -8,7 +8,9 @@ from app.modules.storyboards import (
     StoryboardDraftUnit,
 )
 from app.modules.storyboards.agents import (
+    ReviewIssue,
     SceneDraft,
+    annotate_storyboard_issues,
     assemble_storyboard,
     build_scene_contexts,
     validate_scene_draft,
@@ -23,6 +25,10 @@ def _input(
 ) -> StoryboardDraftInput:
     first_scene = uuid7()
     second_scene = uuid7()
+    first_heading = uuid7()
+    first_dialogue = uuid7()
+    second_heading = uuid7()
+    second_action = uuid7()
     return StoryboardDraftInput(
         batch_id=uuid7(),
         task_id=uuid7(),
@@ -33,7 +39,7 @@ def _input(
         visual_style="冷色现实主义",
         units=(
             StoryboardDraftUnit(
-                unit_version_id=uuid7(),
+                unit_version_id=first_heading,
                 position=1,
                 kind="scene_heading",
                 exact_text="内景·泵站·夜",
@@ -42,7 +48,7 @@ def _input(
                 source_dialogue_id=None,
             ),
             StoryboardDraftUnit(
-                unit_version_id=uuid7(),
+                unit_version_id=first_dialogue,
                 position=2,
                 kind="dialogue",
                 exact_text="沈岚：快走！",
@@ -51,7 +57,7 @@ def _input(
                 source_dialogue_id=uuid7(),
             ),
             StoryboardDraftUnit(
-                unit_version_id=uuid7(),
+                unit_version_id=second_heading,
                 position=3,
                 kind="scene_heading",
                 exact_text="外景·堤坝·夜",
@@ -60,7 +66,7 @@ def _input(
                 source_dialogue_id=None,
             ),
             StoryboardDraftUnit(
-                unit_version_id=uuid7(),
+                unit_version_id=second_action,
                 position=4,
                 kind="action",
                 exact_text="洪水越过堤坝。",
@@ -77,6 +83,7 @@ def _input(
                     kind="location",
                     name="泵站",
                     state_label="夜间运行中",
+                    unit_version_ids=(first_heading, first_dialogue),
                 ),
             )
             if include_mentioned_asset
@@ -150,6 +157,13 @@ def test_context_builder_groups_fixed_input_by_scene_and_allocates_duration() ->
     assert all(isinstance(context.scene_id, UUID) for context in contexts)
 
 
+def test_context_builder_scopes_occurrence_bound_assets_to_their_scene() -> None:
+    contexts = build_scene_contexts(_input(include_mentioned_asset=True))
+
+    assert [asset.name for asset in contexts[0].assets] == ["泵站"]
+    assert contexts[1].assets == ()
+
+
 def test_hard_gates_report_reference_coverage_duration_and_continuity_issues() -> None:
     context = build_scene_contexts(_input())[0]
     missing_coverage = _result(positions=[1], duration_ms=1_000)
@@ -192,6 +206,36 @@ def test_hard_gates_report_reference_coverage_duration_and_continuity_issues() -
         issue.code for issue in validate_scene_draft(context, discontinuous)
     }
 
+    stable_anchor_with_opposing_motion = StoryboardProviderResult.model_validate(
+        {
+            "shots": [
+                _result(
+                    positions=[1],
+                    duration_ms=2_000,
+                    proposal_key="right-look-left",
+                    placement="画面右侧，视线朝向左侧",
+                )
+                .shots[0]
+                .model_dump(mode="json"),
+                {
+                    **_result(
+                        positions=[2],
+                        duration_ms=2_000,
+                        proposal_key="right-throw-left",
+                        placement="画面右侧，由右向左抛出",
+                    )
+                    .shots[0]
+                    .model_dump(mode="json"),
+                    "position": 2,
+                },
+            ]
+        }
+    )
+    assert "continuity.side_jump" not in {
+        issue.code
+        for issue in validate_scene_draft(context, stable_anchor_with_opposing_motion)
+    }
+
     unknown_asset = _result(positions=[1, 2], duration_ms=4_000, asset_position=99)
     assert "asset.unknown_position" in {
         issue.code for issue in validate_scene_draft(context, unknown_asset)
@@ -230,3 +274,39 @@ def test_assembler_renumbers_scene_shots_and_calculates_timecodes() -> None:
     assert [row.timecode_in_ms for row in assembled.timeline] == [0, 4_000]
     assert [row.timecode_out_ms for row in assembled.timeline] == [4_000, 8_000]
     assert len(assembled.result_hash) == 64
+
+
+def test_review_warning_risk_codes_take_priority_over_existing_risk_limit() -> None:
+    contexts = build_scene_contexts(_input())
+    existing_codes = [f"existing-{position}" for position in range(20)]
+    first_result = _result(positions=[1, 2], duration_ms=4_000)
+    first_shot = first_result.shots[0].model_copy(update={"risk_codes": existing_codes})
+    assembled = assemble_storyboard(
+        contexts,
+        (
+            SceneDraft(
+                scene_key=1,
+                result=StoryboardProviderResult(shots=[first_shot]),
+            ),
+            SceneDraft(scene_key=2, result=_result(positions=[3, 4], duration_ms=4_000)),
+        ),
+    )
+    warning = ReviewIssue(
+        issue_id="review-priority",
+        code="review.priority",
+        severity="warning",
+        scope="shot",
+        scene_key=1,
+        shot_positions=(1,),
+        evidence="需要人工优先复核",
+        repair_hint=None,
+        source="reviewer",
+    )
+
+    annotated = annotate_storyboard_issues(assembled, (warning, warning))
+
+    assert annotated.candidate.shots[0].risk_codes == [
+        "review.priority",
+        *existing_codes[:19],
+    ]
+    assert annotated.timeline[0].shot.risk_codes == annotated.candidate.shots[0].risk_codes

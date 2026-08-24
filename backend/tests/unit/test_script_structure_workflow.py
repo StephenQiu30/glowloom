@@ -4,9 +4,18 @@ from typing import Any, cast
 
 import pytest
 from langchain_core.messages import HumanMessage
+from uuid6 import uuid7
 
+from app.modules.scripts.contracts import (
+    ProductionBibleEntityInput,
+    ProductionBibleExtractionInput,
+    ProductionBibleStateInput,
+    ProductionBibleWorldInput,
+)
+from app.modules.scripts.extractions.anchoring import anchor_script_structure_ranges
 from app.modules.scripts.extractions.schemas import (
     AssetCandidateProposal,
+    AssetOccurrenceCandidateProposal,
     ContinuityCandidateProposal,
     DialogueCandidateProposal,
     SceneCandidateProposal,
@@ -25,7 +34,6 @@ def _skill() -> SkillDefinition:
         name="script.structure.extract",
         version="v2",
         max_input_chars=20_000,
-        timeout_seconds=1,
     )
 
 
@@ -35,6 +43,86 @@ def _context() -> SkillExecutionContext:
         skill_version="v2",
         workspace_id="workspace-test",
         task_id="task-test",
+    )
+
+
+def _production_bible() -> ProductionBibleExtractionInput:
+    entity_key = "character:mara"
+    return ProductionBibleExtractionInput(
+        bible_id=uuid7(),
+        revision=4,
+        result_hash="a" * 64,
+        entities=(
+            ProductionBibleEntityInput(
+                entity_key=entity_key,
+                kind="character",
+                canonical_name="Mara",
+                aliases=("The Empress",),
+                stable_spec={"identity": "The same protagonist across every episode"},
+                states=(
+                    ProductionBibleStateInput(
+                        entity_key=entity_key,
+                        state_key="base",
+                        label="Base",
+                        asset_state_id=uuid7(),
+                        asset_version_id=uuid7(),
+                        state_spec={"appearance": "Black hair and an imperial signet"},
+                    ),
+                ),
+            ),
+            ProductionBibleEntityInput(
+                entity_key="location:palace",
+                kind="location",
+                canonical_name="Imperial Palace",
+                aliases=("PALACE",),
+                stable_spec={"identity": "The imperial residence"},
+                states=(
+                    ProductionBibleStateInput(
+                        entity_key="location:palace",
+                        state_key="base",
+                        label="Base",
+                        asset_state_id=uuid7(),
+                        asset_version_id=uuid7(),
+                        state_spec={},
+                    ),
+                    ProductionBibleStateInput(
+                        entity_key="location:palace",
+                        state_key="under_siege",
+                        label="Under Siege",
+                        asset_state_id=uuid7(),
+                        asset_version_id=uuid7(),
+                        state_spec={"condition": "The palace is under siege"},
+                    ),
+                ),
+            ),
+            ProductionBibleEntityInput(
+                entity_key="prop:water_panel",
+                kind="prop",
+                canonical_name="Water Recycling Control Panel",
+                aliases=(),
+                stable_spec={"identity": "The estate water-system control panel"},
+                states=(
+                    ProductionBibleStateInput(
+                        entity_key="prop:water_panel",
+                        state_key="base",
+                        label="Base",
+                        asset_state_id=uuid7(),
+                        asset_version_id=uuid7(),
+                        state_spec={},
+                    ),
+                ),
+            ),
+        ),
+        world_entries=(
+            ProductionBibleWorldInput(
+                entry_key="world:imperial_identity",
+                category="identity_rule",
+                title="Hidden imperial identity",
+                facts=("Mara is the Empress.",),
+                rules=("Her signet remains visually consistent.",),
+                entity_keys=(entity_key,),
+            ),
+        ),
     )
 
 
@@ -119,6 +207,229 @@ async def test_workflow_applies_explicit_episode_number_without_source_marker() 
     assert scene.proposal.episode_number == 2
     assert character.proposal.first_seen_episode == 2
     assert character.proposal.episode_numbers == [2]
+
+
+@pytest.mark.asyncio
+async def test_workflow_completes_scene_skeleton_when_model_omits_supported_heading() -> None:
+    script = (
+        "EPISODE 1\n"
+        "INT. HOUSE - DAY\nCARD: HOURS AGO\nMara checks the door.\n"
+        "I/E. HOUSE / WATER SHAFT - NIGHT\nThe children hear the storm."
+    )
+
+    class OmittedSceneModel:
+        async def ainvoke(self, messages: Sequence[Any]) -> object:
+            message = cast(HumanMessage, messages[1])
+            payload = cast(dict[str, Any], json.loads(cast(str, message.content)))
+            chunk = cast(str, payload["script_text"])
+            candidates: list[dict[str, object]] = [
+                {
+                    "candidate_key": "episode-1",
+                    "source_range": {"start": 0, "end": len(chunk)},
+                    "proposal": {
+                        "kind": "continuity",
+                        "scope": "episode",
+                        "severity": "info",
+                        "issue": "The storm isolates the children.",
+                        "suggestion": "Preserve the storm escalation.",
+                        "episode_number": 1,
+                        "title": "The Storm",
+                        "logline": "Mara leaves before the storm reaches the children.",
+                        "summary": "The household separates as the storm arrives.",
+                    },
+                }
+            ]
+            if "INT. HOUSE - DAY" in chunk:
+                start = chunk.index("INT. HOUSE - DAY")
+                card_start = chunk.index("CARD: HOURS AGO")
+                candidates[0:0] = [
+                    {
+                        "candidate_key": "scene-house",
+                        "source_range": {"start": start, "end": len(chunk)},
+                        "proposal": {
+                            "kind": "scene",
+                            "heading": "INT. HOUSE - DAY",
+                            "location": "HOUSE",
+                            "time_of_day": "DAY",
+                            "summary": "Mara checks the door.",
+                            "episode_number": 1,
+                        },
+                    },
+                    {
+                        "candidate_key": "hallucinated-card-scene",
+                        "source_range": {"start": card_start, "end": len(chunk)},
+                        "proposal": {
+                            "kind": "scene",
+                            "heading": "CARD: HOURS AGO",
+                            "location": "HOUSE",
+                            "time_of_day": "DAY",
+                            "summary": "A time card appears.",
+                            "episode_number": 1,
+                        },
+                    },
+                    {
+                        "candidate_key": "card-dialogue",
+                        "source_range": {"start": card_start, "end": len(chunk)},
+                        "proposal": {
+                            "kind": "dialogue",
+                            "scene_candidate_key": "hallucinated-card-scene",
+                            "speaker_candidate": "Mara",
+                            "dialogue_kind": "spoken",
+                            "text": "Check the door.",
+                        },
+                    },
+                ]
+            return {"candidates": candidates}
+
+    workflow = ScriptStructureExtractionWorkflow(
+        skill=_skill(),
+        model=OmittedSceneModel(),
+        system_prompt="Extract screenplay structure.",
+    )
+
+    result = await workflow.run(
+        script,
+        context=_context(),
+        episode_number=1,
+    )
+
+    scenes = [
+        candidate
+        for candidate in result.candidates
+        if isinstance(candidate.proposal, SceneCandidateProposal)
+    ]
+    assert [cast(SceneCandidateProposal, scene.proposal).heading for scene in scenes] == [
+        "INT. HOUSE - DAY",
+        "I/E. HOUSE / WATER SHAFT - NIGHT",
+    ]
+    fallback = scenes[1]
+    fallback_proposal = cast(SceneCandidateProposal, fallback.proposal)
+    assert fallback.source_range.start == script.index("I/E. HOUSE / WATER SHAFT - NIGHT")
+    assert fallback_proposal.location == "HOUSE / WATER SHAFT"
+    assert fallback_proposal.time_of_day == "NIGHT"
+    assert fallback.confidence_note == (
+        "Deterministic scene heading fallback; semantic enrichment requires review."
+    )
+    dialogue = next(
+        candidate
+        for candidate in result.candidates
+        if candidate.candidate_key.endswith(":card-dialogue")
+    )
+    assert isinstance(dialogue.proposal, DialogueCandidateProposal)
+    assert dialogue.proposal.scene_candidate_key.endswith(":scene-house")
+    anchored = anchor_script_structure_ranges(result, script)
+    assert [
+        candidate.proposal.heading
+        for candidate in anchored.candidates
+        if isinstance(candidate.proposal, SceneCandidateProposal)
+    ] == ["INT. HOUSE - DAY", "I/E. HOUSE / WATER SHAFT - NIGHT"]
+
+
+@pytest.mark.asyncio
+async def test_bible_bound_workflow_passes_fixed_context_and_emits_occurrences() -> None:
+    class BibleBoundModel:
+        def __init__(self) -> None:
+            self.payload: dict[str, Any] = {}
+
+        async def ainvoke(self, messages: Sequence[Any]) -> object:
+            message = cast(HumanMessage, messages[1])
+            self.payload = cast(dict[str, Any], json.loads(cast(str, message.content)))
+            return {
+                "candidates": [
+                    {
+                        "candidate_key": "scene-1",
+                        "source_range": {"start": 0, "end": 16},
+                        "proposal": {
+                            "kind": "scene",
+                            "heading": "INT. PALACE - DAY",
+                            "location": "PALACE",
+                            "time_of_day": "DAY",
+                            "summary": "Mara enters.",
+                            "episode_number": 2,
+                        },
+                    },
+                    {
+                        "candidate_key": "mara-occurrence",
+                        "source_range": {"start": 0, "end": 16},
+                        "proposal": {
+                            "kind": "asset_occurrence",
+                            "entity_key": "character:mara",
+                            "state_key": "base",
+                            "scene_candidate_key": "scene-1",
+                            "role": "character",
+                        },
+                    },
+                    {
+                        "candidate_key": "episode-2",
+                        "source_range": {"start": 0, "end": 16},
+                        "proposal": {
+                            "kind": "continuity",
+                            "scope": "episode",
+                            "severity": "info",
+                            "issue": "Mara enters the palace.",
+                            "suggestion": "Keep the signet consistent.",
+                            "episode_number": 2,
+                        },
+                    },
+                ]
+            }
+
+    model = BibleBoundModel()
+    workflow = ScriptStructureExtractionWorkflow(
+        skill=_skill(),
+        model=model,
+        system_prompt="Extract screenplay structure.",
+    )
+    bible = _production_bible()
+
+    result = await workflow.run(
+        "INT. PALACE - DAY\nMara checks the WATER-RECYCLING CONTROL PANEL.",
+        context=_context(),
+        episode_number=2,
+        production_bible=bible,
+    )
+
+    assert model.payload["asset_policy"].startswith("Reference only")
+    assert model.payload["production_bible"]["bible_id"] == str(bible.bible_id)
+    occurrences = [
+        candidate.proposal
+        for candidate in result.candidates
+        if isinstance(candidate.proposal, AssetOccurrenceCandidateProposal)
+    ]
+    assert {occurrence.entity_key for occurrence in occurrences} == {
+        "character:mara",
+        "location:palace",
+        "prop:water_panel",
+    }
+    assert {
+        occurrence.state_key
+        for occurrence in occurrences
+        if occurrence.entity_key == "location:palace"
+    } == {"base", "under_siege"}
+    assert all(
+        occurrence.scene_candidate_key == "scene-1"
+        for occurrence in occurrences
+        if occurrence.entity_key == "location:palace"
+    )
+    assert all(candidate.proposal.kind != "asset" for candidate in result.candidates)
+
+
+@pytest.mark.asyncio
+async def test_bible_bound_workflow_rejects_independent_asset_candidates() -> None:
+    model = _FakeStructureModel()
+    workflow = ScriptStructureExtractionWorkflow(
+        skill=_skill(),
+        model=model,
+        system_prompt="Extract screenplay structure.",
+    )
+
+    with pytest.raises(SkillExecutionError, match="independent asset"):
+        await workflow.run(
+            "INT. HOUSE - DAY\nMara looks outside.",
+            context=_context(),
+            episode_number=2,
+            production_bible=_production_bible(),
+        )
 
 
 @pytest.mark.asyncio

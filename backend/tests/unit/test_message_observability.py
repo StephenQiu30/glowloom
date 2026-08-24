@@ -14,6 +14,9 @@ def test_message_metric_labels_are_registered_and_unknown_values_are_bounded() -
     assert message_event_type_label("script_extraction.requested") == (
         "script_extraction.requested"
     )
+    assert message_event_type_label("production_bible.requested") == (
+        "production_bible.requested"
+    )
     assert message_event_type_label(hostile_event_type) == "unregistered"
     assert topic_label("lanverse.io.v1") == "lanverse.io.v1"
     assert topic_label("lanverse.media.v1") == "lanverse.media.v1"

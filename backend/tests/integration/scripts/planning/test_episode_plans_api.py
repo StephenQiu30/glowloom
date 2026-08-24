@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -36,7 +37,9 @@ from app.modules.scripts.planning.schemas import (
     EpisodePlanningProviderProposal,
     EpisodePlanningProviderResult,
 )
+from app.modules.scripts.production_bibles.models import ProductionBible
 from app.runtime.workers import io as io_worker
+from tests.support.production_bibles import seed_confirmed_production_bible
 from tests.support.project_builders import project_payload, register_project_owner
 
 FIXTURE = Path(__file__).parents[3] / "fixtures/mvp_a/golden_candidate_harbor_countdown.json"
@@ -392,6 +395,49 @@ async def test_confirm_materialize_and_publish_are_concurrent_idempotent_batches
         "expected_revision": 2,
         "idempotency_key": "publish-batch",
     }
+    async with session_factory() as session:
+        commit_before_gate = await session.get(
+            ImportCommit,
+            UUID(batch["commit"]["id"]),
+        )
+        assert commit_before_gate is not None
+        snapshot_before_gate = deepcopy(commit_before_gate.result_snapshot)
+
+    blocked = await client.post(
+        f"/api/v1/import-commits/{batch['commit']['id']}/publish",
+        headers=headers,
+        json=publish_body,
+    )
+    assert blocked.status_code == 409
+    blocked_error = blocked.json()["error"]
+    assert blocked_error["code"] == "state_conflict"
+    assert blocked_error["message"] == (
+        "Production Bible must be confirmed before episode publishing"
+    )
+    assert blocked_error["details"] == {"document_revision_id": document["revision"]["id"]}
+    assert blocked_error["next_action"] == "confirm_production_bible"
+
+    async with session_factory() as session:
+        commit_after_gate = await session.get(
+            ImportCommit,
+            UUID(batch["commit"]["id"]),
+        )
+        assert commit_after_gate is not None
+        assert commit_after_gate.status == "materialized"
+        assert commit_after_gate.revision == 2
+        assert commit_after_gate.publish_idempotency_key is None
+        assert commit_after_gate.publish_input_hash is None
+        assert commit_after_gate.result_snapshot == snapshot_before_gate
+        assert await session.scalar(select(func.count()).select_from(ScriptVersion)) == 5
+
+    bible_id = await seed_confirmed_production_bible(
+        session_factory,
+        workspace_id=UUID(batch["commit"]["workspace_id"]),
+        project_id=UUID(project["id"]),
+        document_revision_id=UUID(document["revision"]["id"]),
+        input_hash=document["revision"]["normalized_hash"],
+        actor_id=UUID(batch["commit"]["created_by"]),
+    )
     published = await client.post(
         f"/api/v1/import-commits/{batch['commit']['id']}/publish",
         headers=headers,
@@ -447,6 +493,26 @@ async def test_confirm_materialize_and_publish_are_concurrent_idempotent_batches
             await session.scalar(select(func.count()).select_from(NarrativeImpactAssessment)) == 5
         )
         assert await session.scalar(select(func.count()).select_from(ImportCommit)) == 1
+        stored_commit = await session.get(ImportCommit, UUID(batch["commit"]["id"]))
+        seeded_bible = await session.get(ProductionBible, bible_id)
+        assert stored_commit is not None
+        assert seeded_bible is not None
+        assert stored_commit.result_snapshot["production_bible"] == {
+            "id": str(seeded_bible.id),
+            "document_revision_id": str(seeded_bible.document_revision_id),
+            "revision": seeded_bible.revision,
+            "result_hash": seeded_bible.result_hash,
+        }
+        extraction_batches = list(
+            await session.scalars(select(ExtractionBatch).order_by(ExtractionBatch.id))
+        )
+        assert all(
+            item.production_bible_id == seeded_bible.id
+            and item.production_bible_revision == seeded_bible.revision
+            and item.production_bible_result_hash == seeded_bible.result_hash
+            and item.script_content_hash != item.input_hash
+            for item in extraction_batches
+        )
         origins = list(
             await session.scalars(
                 select(EpisodeSegmentOrigin).order_by(EpisodeSegmentOrigin.position)

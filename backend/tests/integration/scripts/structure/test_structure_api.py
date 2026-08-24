@@ -1,4 +1,6 @@
 import asyncio
+from datetime import UTC, datetime
+from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
@@ -12,8 +14,14 @@ from app.modules.assets.models import Asset, AssetOccurrenceDecision, AssetVersi
 from app.modules.projects.models import Episode
 from app.modules.scripts.extractions import schemas as extraction_schemas
 from app.modules.scripts.extractions import service as extraction_service
-from app.modules.scripts.models import CandidateDecision
+from app.modules.scripts.models import CandidateDecision, ExtractionBatch
+from app.modules.scripts.production_bibles.models import (
+    ProductionBible,
+    ProductionBibleEntity,
+    ProductionBibleEntityState,
+)
 from tests.support.identity_builders import register_identity_response
+from tests.support.production_bibles import seed_confirmed_production_bible
 from tests.support.project_builders import project_payload
 
 SCRIPT_BODY = "A" * 100
@@ -151,8 +159,8 @@ def _ordered_candidates() -> list[dict[str, Any]]:
         ),
         _candidate(
             "asset-pending",
-            71,
-            80,
+            22,
+            29,
             {
                 "kind": "asset",
                 "asset_kind": "character",
@@ -484,6 +492,203 @@ async def test_confirm_structure_is_concurrent_idempotent_ordered_and_private(
 
 
 @pytest.mark.asyncio
+async def test_bible_occurrence_flows_from_structure_into_storyboard_assets(
+    client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    headers, episode, input_version, candidates = await _completed_batch(
+        client,
+        session_factory,
+        email="structure-bible-occurrence@example.com",
+        key="structure-bible-occurrence",
+        candidates=[
+            _candidate(
+                "scene-001",
+                0,
+                len(SCRIPT_BODY),
+                {
+                    "kind": "scene",
+                    "heading": "第一场",
+                    "location": "宫殿",
+                    "time_of_day": "白天",
+                    "summary": "女帝进入宫殿。",
+                },
+            ),
+            _candidate(
+                "mara-occurrence",
+                0,
+                len(SCRIPT_BODY),
+                {
+                    "kind": "asset_occurrence",
+                    "entity_key": "character:mara",
+                    "state_key": "base",
+                    "scene_candidate_key": "scene-001",
+                    "role": "character",
+                },
+            ),
+        ],
+    )
+    project_id = episode["project_id"]
+    document_response = await client.post(
+        f"/api/v1/projects/{project_id}/script-imports",
+        headers=headers,
+        json={
+            "input_type": "text",
+            "title": "Bible 绑定结构测试原稿",
+            "text": SCRIPT_BODY,
+            "language": "zh-CN",
+            "rights_declaration": "原创自动化测试文本",
+            "idempotency_key": "structure-bible-document",
+        },
+    )
+    assert document_response.status_code == 201
+    document = document_response.json()["data"]
+    asset_response = await client.post(
+        f"/api/v1/projects/{project_id}/assets",
+        headers=headers,
+        json={"kind": "character", "name": "Mara"},
+    )
+    assert asset_response.status_code == 201
+    asset = asset_response.json()["data"]
+    states_response = await client.get(
+        f"/api/v1/assets/{asset['id']}/states",
+        headers=headers,
+    )
+    assert states_response.status_code == 200
+    state = states_response.json()["data"]["items"][0]
+    version_response = await client.post(
+        f"/api/v1/asset-states/{state['id']}/versions",
+        headers=headers,
+        json={
+            "spec": {
+                "kind": "character",
+                "identity": "Mara, the hidden Empress",
+                "appearance": "Black hair and an imperial signet",
+                "age_impression": "30s",
+                "temperament": ["resolute"],
+            },
+            "prompt_description": "Stable semantic identity before reference art",
+            "media_references": [],
+            "source_type": "manual",
+            "source_id": None,
+            "expected_revision": state["revision"],
+            "expected_current_version_id": None,
+            "set_as_current": True,
+        },
+    )
+    assert version_response.status_code == 201
+    version = version_response.json()["data"]["version"]
+    state = version_response.json()["data"]["state"]
+
+    async with session_factory() as session:
+        stored_asset = await session.get(Asset, UUID(asset["id"]))
+        assert stored_asset is not None
+        bible_id = await seed_confirmed_production_bible(
+            session_factory,
+            workspace_id=stored_asset.workspace_id,
+            project_id=UUID(project_id),
+            document_revision_id=UUID(document["revision"]["id"]),
+            input_hash=document["revision"]["normalized_hash"],
+            actor_id=stored_asset.created_by,
+        )
+    evidence = {
+        "source_start": 0,
+        "source_end": 1,
+        "text_hash": sha256(b"A").hexdigest(),
+        "exact_anchor": "A",
+        "episode_number": 1,
+    }
+    now = datetime.now(UTC)
+    entity_id = UUID("00000000-0000-7000-8000-000000000101")
+    bible_state_id = UUID("00000000-0000-7000-8000-000000000102")
+    by_key = {candidate["candidate_key"]: candidate for candidate in candidates}
+    batch_id = UUID(by_key["scene-001"]["batch_id"])
+    async with session_factory() as session, session.begin():
+        batch = await session.get(ExtractionBatch, batch_id)
+        assert batch is not None
+        confirmed_bible = await session.get(ProductionBible, bible_id)
+        assert confirmed_bible is not None and confirmed_bible.result_hash is not None
+        batch.production_bible_id = bible_id
+        batch.production_bible_revision = confirmed_bible.revision
+        batch.production_bible_result_hash = confirmed_bible.result_hash
+        session.add(
+            ProductionBibleEntity(
+                id=entity_id,
+                workspace_id=batch.workspace_id,
+                project_id=UUID(project_id),
+                bible_id=bible_id,
+                entity_key="character:mara",
+                kind="character",
+                canonical_name="Mara",
+                normalized_name="mara",
+                aliases=["The Empress"],
+                stable_spec={"identity": "Mara, the hidden Empress"},
+                episode_numbers=[1],
+                evidence=[evidence],
+                asset_id=UUID(asset["id"]),
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            ProductionBibleEntityState(
+                id=bible_state_id,
+                workspace_id=batch.workspace_id,
+                project_id=UUID(project_id),
+                bible_id=bible_id,
+                entity_id=entity_id,
+                state_key="base",
+                label="Base",
+                state_spec={"appearance": "Black hair and an imperial signet"},
+                episode_numbers=[1],
+                evidence=[evidence],
+                asset_state_id=UUID(state["id"]),
+                asset_version_id=UUID(version["id"]),
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    await _decide(client, headers, by_key["scene-001"], {"action": "accept_new"})
+    confirmation = await client.post(
+        f"/api/v1/extraction-batches/{batch_id}/confirm-structure",
+        headers=headers,
+    )
+    assert confirmation.status_code == 201, confirmation.text
+    confirmed_version = confirmation.json()["data"]["confirmed_version"]
+    set_current = await client.post(
+        f"/api/v1/episodes/{episode['id']}/current-script-version",
+        headers=headers,
+        json={
+            "version_id": confirmed_version["id"],
+            "expected_current_version_id": input_version["id"],
+        },
+    )
+    assert set_current.status_code == 200
+
+    draft = await client.post(
+        f"/api/v1/episodes/{episode['id']}/storyboard-draft-batches",
+        headers=headers,
+        json={
+            "input_script_version_id": confirmed_version["id"],
+            "asset_state_ids": [],
+            "idempotency_key": "storyboard-from-bible-occurrence",
+        },
+    )
+    assert draft.status_code == 202
+    draft_input = draft.json()["data"]["input"]
+    assert draft_input["production_bible_id"] == str(bible_id)
+    assert draft_input["asset_state_ids"] == [state["id"]]
+    assert draft_input["asset_version_ids"] == [version["id"]]
+
+    async with session_factory() as session:
+        occurrences = list(await session.scalars(select(AssetOccurrenceDecision)))
+        assert len(occurrences) == 1
+        assert occurrences[0].asset_state_id == UUID(state["id"])
+        assert occurrences[0].episode_id == UUID(episode["id"])
+
+
+@pytest.mark.asyncio
 async def test_confirmed_asset_candidates_create_or_link_idempotently(
     client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
@@ -492,8 +697,8 @@ async def test_confirmed_asset_candidates_create_or_link_idempotently(
     candidates.append(
         _candidate(
             "asset-link",
-            81,
-            90,
+            22,
+            29,
             {
                 "kind": "asset",
                 "asset_kind": "character",

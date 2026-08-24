@@ -562,6 +562,7 @@ async def _seed_confirmed_shot_candidate(
             script_version_id=refs["script_version_id"],
             scope="full",
             extractor_version="test-confirmed-structure",
+            script_content_hash="2" * 64,
             input_hash="2" * 64,
             status="succeeded",
             confirmed_script_version_id=refs["script_version_id"],

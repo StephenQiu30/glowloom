@@ -11,7 +11,6 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.modules.identity.models import Membership
 from app.modules.media import MediaProbePort, MediaProbeResult
 from app.modules.media.models import MediaVersion
 from app.modules.media.storage import (
@@ -21,9 +20,11 @@ from app.modules.media.storage import (
 )
 from app.modules.messaging import envelope_from_event
 from app.modules.messaging.models import InboxDelivery, OutboxEvent
+from app.modules.scripts.contracts import ProductionBibleExtractionInput
 from app.modules.scripts.extractions.schemas import ScriptExtractionResult
-from app.modules.scripts.models import ExtractionBatch
+from app.modules.scripts.models import ExtractionBatch, ImportCommit
 from app.modules.scripts.narratives.parser import parse_narrative_units
+from app.modules.scripts.production_bibles.models import ProductionBible
 from app.modules.storyboards.drafts import DraftProviderResult, record_draft_result
 from app.modules.storyboards.exports.models import StoryboardExportManifest
 from app.runtime.workers import io as io_worker
@@ -31,6 +32,7 @@ from app.runtime.workers import media as media_worker
 from tests.integration.storyboards.test_storyboards_api import (
     create_ready_location_asset,
 )
+from tests.support.production_bibles import seed_confirmed_production_bible
 from tests.support.project_builders import project_payload, register_project_owner
 
 FIXTURE = (
@@ -175,6 +177,14 @@ async def _materialize_first_episode(
     )
     assert materialized.status_code == 201
     batch = materialized.json()["data"]
+    bible_id = await seed_confirmed_production_bible(
+        session_factory,
+        workspace_id=UUID(workspace_id),
+        project_id=UUID(project["id"]),
+        document_revision_id=UUID(revision["id"]),
+        input_hash=revision["normalized_hash"],
+        actor_id=UUID(batch["commit"]["created_by"]),
+    )
     published = await client.post(
         f"/api/v1/import-commits/{batch['commit']['id']}/publish",
         headers=headers,
@@ -189,20 +199,25 @@ async def _materialize_first_episode(
     assert all(item["published_version_id"] for item in published_batch["segments"])
     first = published_batch["segments"][0]
     async with session_factory() as session:
-        actor_id = await session.scalar(
-            select(Membership.user_id).where(
-                Membership.workspace_id == UUID(workspace_id),
-                Membership.role == "owner",
-                Membership.status == "active",
-            )
+        stored_commit = await session.get(
+            ImportCommit,
+            UUID(batch["commit"]["id"]),
         )
-    assert actor_id is not None
+        seeded_bible = await session.get(ProductionBible, bible_id)
+        assert stored_commit is not None
+        assert seeded_bible is not None
+        assert stored_commit.result_snapshot["production_bible"] == {
+            "id": str(seeded_bible.id),
+            "document_revision_id": str(seeded_bible.document_revision_id),
+            "revision": seeded_bible.revision,
+            "result_hash": seeded_bible.result_hash,
+        }
     return (
         headers,
         project,
         {
             "workspace_id": UUID(workspace_id),
-            "actor_id": actor_id,
+            "actor_id": UUID(batch["commit"]["created_by"]),
             "episode_id": UUID(first["episode_id"]),
             "script_version_id": UUID(first["published_version_id"]),
         },
@@ -219,8 +234,10 @@ class JourneyScriptExtractor:
         *,
         trace_id: str | None = None,
         episode_number: int | None = None,
+        production_bible: ProductionBibleExtractionInput | None = None,
     ) -> ScriptExtractionResult:
         del trace_id, episode_number
+        assert production_bible is not None
         self.inputs.append(script_body)
         dialogue_units = [
             unit for unit in parse_narrative_units(script_body) if unit.kind == "dialogue"
@@ -249,8 +266,6 @@ class JourneyScriptExtractor:
                     },
                 }
             )
-        first_dialogue = dialogue_units[0]
-        first_speaker = speakers[0]
         return ScriptExtractionResult.model_validate(
             {
                 "candidates": [
@@ -277,33 +292,6 @@ class JourneyScriptExtractor:
                         },
                     },
                     *dialogue_candidates,
-                    {
-                        "candidate_key": "journey-character",
-                        "source_range": {
-                            "start": first_dialogue.source_start,
-                            "end": first_dialogue.source_start + len(first_speaker),
-                        },
-                        "proposal": {
-                            "kind": "asset",
-                            "asset_kind": "character",
-                            "name": first_speaker,
-                            "description": "雾港危机现场的核心角色。",
-                            "first_seen_episode": 1,
-                            "episode_numbers": [1],
-                        },
-                    },
-                    {
-                        "candidate_key": "journey-shot",
-                        "source_range": {"start": 0, "end": len(script_body)},
-                        "proposal": {
-                            "kind": "shot",
-                            "scene_candidate_key": "journey-scene",
-                            "title": "雾港警报",
-                            "purpose": "建立本集危机并推进角色行动。",
-                            "shot_type": "wide",
-                            "asset_names": [first_speaker],
-                        },
-                    },
                 ]
             }
         )
@@ -346,11 +334,9 @@ async def _extract_and_confirm_narrative_sources(
     )
     assert listed.status_code == 200
     candidates = cast(list[dict[str, Any]], listed.json()["data"]["items"])
-    assert {item["kind"] for item in candidates} == {"scene", "dialogue", "asset", "shot"}
+    assert {item["kind"] for item in candidates} == {"scene", "dialogue"}
     scene_candidate = next(item for item in candidates if item["kind"] == "scene")
     assert scene_candidate["proposal"]["production_tasks"][0]["task_type"] == "shot_breakdown"
-    character_candidate = next(item for item in candidates if item["kind"] == "asset")
-    assert character_candidate["proposal"]["episode_numbers"] == [1]
     for candidate in candidates:
         if candidate["kind"] not in {"scene", "dialogue"}:
             continue
@@ -468,12 +454,35 @@ async def _apply_reviewed_draft(
     )
     assert structure_response.status_code == 200
     structure = structure_response.json()["data"]
+    states_response = await client.get(
+        f"/api/v1/assets/{asset_version['asset_id']}/states",
+        headers=headers,
+    )
+    assert states_response.status_code == 200
+    state = next(
+        item
+        for item in states_response.json()["data"]["items"]
+        if item["id"] == asset_version["asset_state_id"]
+    )
+    unit = structure["units"][0]
+    occurrence = await client.post(
+        f"/api/v1/asset-states/{state['id']}/occurrence-decisions",
+        headers=headers,
+        json={
+            "decision": "link",
+            "narrative_unit_id": unit["unit_id"],
+            "narrative_unit_version_id": unit["id"],
+            "expected_revision": state["revision"],
+            "idempotency_key": "journey-location-occurrence",
+        },
+    )
+    assert occurrence.status_code == 201, occurrence.text
     created = await client.post(
         f"/api/v1/episodes/{refs['episode_id']}/storyboard-draft-batches",
         headers=headers,
         json={
             "input_script_version_id": str(refs["script_version_id"]),
-            "asset_state_ids": [asset_version["asset_state_id"]],
+            "asset_state_ids": [],
             "idempotency_key": "journey-storyboard-draft",
         },
     )

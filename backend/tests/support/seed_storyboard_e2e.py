@@ -186,6 +186,7 @@ async def seed_confirmed_structure(episode_id: UUID) -> None:
                 task_id=task_id,
                 scope="full",
                 extractor_version="test-confirmed-structure",
+                script_content_hash=content_hash,
                 input_hash=content_hash,
                 status="succeeded",
                 confirmed_script_version_id=confirmed_version_id,

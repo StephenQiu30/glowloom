@@ -18,6 +18,7 @@ from app.modules.messaging.models import InboxDelivery, OutboxEvent
 from app.modules.messaging.service import envelope_from_event
 from app.modules.production import ScriptExtractionTaskCommand, TaskResponse
 from app.modules.production.models import Task
+from app.modules.scripts.contracts import ProductionBibleExtractionInput
 from app.modules.scripts.extractions import schemas as script_schemas
 from app.modules.scripts.extractions import service as scripts_service
 from app.modules.scripts.extractions.ports import SCRIPT_STRUCTURE_EXTRACTOR_VERSION
@@ -365,7 +366,9 @@ class _RecordingScriptExtractor:
         *,
         trace_id: str | None = None,
         episode_number: int | None = None,
+        production_bible: ProductionBibleExtractionInput | None = None,
     ) -> script_schemas.ScriptExtractionResult:
+        assert production_bible is None
         self.inputs.append(script_body)
         self.trace_ids.append(trace_id)
         self.episode_numbers.append(episode_number)

@@ -274,10 +274,10 @@ async def test_codex_storyboard_drafter_runs_four_specialized_stages_for_valid_c
 
     assert len(model.messages) == 4
     assert [cast(str, message[0].content).split(" ", 1)[0] for message in model.messages] == [
-        "$storyboard-source-analysis",
-        "$storyboard-scene-plan",
-        "$storyboard-shot-draft",
-        "$storyboard-review",
+        "$analyze-scene",
+        "$plan-scene",
+        "$draft-shots",
+        "$review-shots",
     ]
     assert result.shots[0].spec.generation_intent.last_frame == ("沈岚停在控制杆前，右手即将握杆")
 

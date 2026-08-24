@@ -292,6 +292,9 @@ function extractionBatch(
     extractor_version:
       "codex-local:prompt-v1:schema-v1",
     input_hash: version.content_hash,
+    production_bible_id: null,
+    production_bible_revision: null,
+    production_bible_result_hash: null,
     status,
     confirmed_script_version_id: null,
     candidate_count: status === "succeeded" ? 2 : 0,

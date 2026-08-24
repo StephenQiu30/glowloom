@@ -1,4 +1,6 @@
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
+from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
@@ -206,11 +208,11 @@ async def test_harness_runs_multiple_skills_tools_and_returns_candidate_only_res
     assert result.timeline[0].timecode_out_ms == 4_000
     assert result.repair_rounds == 0
     assert set(result.skill_versions) == {
-        "storyboard-source-analysis",
-        "storyboard-scene-plan",
-        "storyboard-shot-draft",
-        "storyboard-review",
-        "storyboard-repair",
+        "analyze-scene",
+        "plan-scene",
+        "draft-shots",
+        "review-shots",
+        "repair-shots",
     }
     assert all(
         len(model.messages) == 1 for model in models.values() if model is not models["repair"]
@@ -226,6 +228,21 @@ async def test_harness_runs_multiple_skills_tools_and_returns_candidate_only_res
         "reviewed",
         "final_gate_passed",
     ]
+
+
+@pytest.mark.asyncio
+async def test_harness_records_current_run_token_in_every_checkpoint() -> None:
+    run_token = uuid7()
+    value = replace(_input(), run_token=run_token)
+    bundle, _models_by_stage = _models(
+        drafts=(_draft(covered_positions=[1, 2]),)
+    )
+    store = _MemoryCheckpointStore()
+
+    await StoryboardAgentHarness(models=bundle, checkpoint_store=store).run(value)
+
+    assert store.items
+    assert {item.run_token for item in store.items} == {run_token}
 
 
 @pytest.mark.asyncio
@@ -317,6 +334,133 @@ async def test_harness_resumes_after_source_analysis_without_reinvoking_that_ski
     assert not models["analysis"].messages
     assert len(models["plan"].messages) == 1
     assert store.load_calls == [(value.batch_id, value.input_hash)]
+
+
+@pytest.mark.asyncio
+async def test_harness_rejects_non_completed_terminal_checkpoint() -> None:
+    value = _input()
+    initial_bundle, _initial_models = _models(
+        drafts=(_draft(covered_positions=[1, 2]),)
+    )
+    store = _MemoryCheckpointStore()
+    await StoryboardAgentHarness(
+        models=initial_bundle,
+        checkpoint_store=store,
+    ).run(value)
+    terminal = store.items[-1]
+    assert terminal.stage == "final_gate_passed"
+    store.items = [terminal.model_copy(update={"status": "running"})]
+    resumed_bundle, resumed_models = _models(
+        drafts=(_draft(covered_positions=[1, 2]),)
+    )
+
+    result = await StoryboardAgentHarness(
+        models=resumed_bundle,
+        checkpoint_store=store,
+    ).run(value)
+
+    assert result.status == "needs_review"
+    assert len(resumed_models["analysis"].messages) == 1
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    ["result_hash", "candidate", "timeline", "total_duration"],
+)
+@pytest.mark.asyncio
+async def test_harness_rejects_internally_inconsistent_terminal_checkpoint(
+    corruption: str,
+) -> None:
+    value = _input()
+    initial_bundle, _initial_models = _models(
+        drafts=(_draft(covered_positions=[1, 2]),)
+    )
+    store = _MemoryCheckpointStore()
+    await StoryboardAgentHarness(
+        models=initial_bundle,
+        checkpoint_store=store,
+    ).run(value)
+    terminal = store.items[-1]
+    assembled = terminal.assembled
+    assert assembled is not None
+
+    if corruption == "result_hash":
+        corrupted = assembled.model_copy(update={"result_hash": "f" * 64})
+    elif corruption == "candidate":
+        candidate_shot = assembled.candidate.shots[0].model_copy(
+            update={"title": "与时间线不一致的标题"}
+        )
+        candidate = assembled.candidate.model_copy(update={"shots": [candidate_shot]})
+        corrupted = assembled.model_copy(
+            update={
+                "candidate": candidate,
+                "result_hash": sha256(
+                    candidate.model_dump_json().encode("utf-8")
+                ).hexdigest(),
+            }
+        )
+    elif corruption == "timeline":
+        timeline_shot = assembled.timeline[0].shot.model_copy(
+            update={"title": "与候选不一致的标题"}
+        )
+        timeline_row = assembled.timeline[0].model_copy(update={"shot": timeline_shot})
+        corrupted = assembled.model_copy(update={"timeline": (timeline_row,)})
+    else:
+        corrupted = assembled.model_copy(
+            update={"total_duration_ms": assembled.total_duration_ms + 500}
+        )
+    store.items = [terminal.model_copy(update={"assembled": corrupted})]
+    resumed_bundle, resumed_models = _models(
+        drafts=(_draft(covered_positions=[1, 2]),)
+    )
+
+    result = await StoryboardAgentHarness(
+        models=resumed_bundle,
+        checkpoint_store=store,
+    ).run(value)
+
+    assert result.status == "needs_review"
+    assert len(resumed_models["analysis"].messages) == 1
+
+
+@pytest.mark.asyncio
+async def test_harness_restores_annotated_terminal_checkpoint_without_model_calls() -> None:
+    warning = {
+        "issue_id": "reaction-1",
+        "code": "review.reaction_subtle",
+        "severity": "warning",
+        "scope": "shot",
+        "scene_key": 1,
+        "shot_positions": [1],
+        "evidence": "接收者反应存在但不够突出",
+        "repair_hint": "人工审核时决定是否加强反应",
+        "source": "reviewer",
+    }
+    value = _input()
+    initial_bundle, _initial_models = _models(
+        drafts=(_draft(covered_positions=[1, 2]),),
+        reviews=(_review(warning),),
+    )
+    store = _MemoryCheckpointStore()
+    initial = await StoryboardAgentHarness(
+        models=initial_bundle,
+        checkpoint_store=store,
+    ).run(value)
+    resumed_bundle, resumed_models = _models(drafts=())
+
+    resumed = await StoryboardAgentHarness(
+        models=resumed_bundle,
+        checkpoint_store=store,
+    ).run(value)
+
+    assert resumed.candidate == initial.candidate
+    assert resumed.timeline == initial.timeline
+    assert resumed.result_hash == initial.result_hash
+    assert resumed.issues == initial.issues
+    assert resumed.candidate is not None
+    assert resumed.candidate.shots[0].risk_codes == ["review.reaction_subtle"]
+    assert all(not model.messages for model in resumed_models.values())
+    assert resumed.checkpoints_saved == 0
 
 
 @pytest.mark.asyncio

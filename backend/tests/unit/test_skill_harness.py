@@ -31,12 +31,11 @@ class _Model:
         return self.result
 
 
-def _skill(*, timeout_seconds: float = 1, max_input_chars: int = 100) -> SkillDefinition:
+def _skill(*, max_input_chars: int = 100) -> SkillDefinition:
     return SkillDefinition(
         name="test.skill",
         version="v1",
         max_input_chars=max_input_chars,
-        timeout_seconds=timeout_seconds,
     )
 
 
@@ -99,19 +98,16 @@ async def test_harness_rejects_invalid_structured_output() -> None:
 
 
 @pytest.mark.asyncio
-async def test_harness_marks_timeout_as_unknown_without_retrying() -> None:
-    with pytest.raises(SkillExecutionError) as error:
-        await SkillHarness().run(
-            skill=_skill(timeout_seconds=0.001),
-            model=_Model({"value": "late"}, delay=0.05),
-            system_prompt="system",
-            user_payload="payload",
-            output_model=_Output,
-        )
+async def test_harness_does_not_impose_a_wall_clock_timeout() -> None:
+    run = await SkillHarness().run(
+        skill=_skill(),
+        model=_Model({"value": "complete"}, delay=0.01),
+        system_prompt="system",
+        user_payload="payload",
+        output_model=_Output,
+    )
 
-    assert error.value.code == "skill_timeout"
-    assert error.value.outcome == "unknown"
-    assert error.value.retryable is False
+    assert run.output == _Output(value="complete")
 
 
 def test_harness_denies_tools_outside_skill_allowlist() -> None:
