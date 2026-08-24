@@ -1,0 +1,199 @@
+# Project Production Bible Harness
+
+## 当前方向与完成定义
+
+本项目的交付对象是完整的剧本生产业务闭环，不是某个 Skill 的演示、单次模型调用成功，
+也不是在固定时长内返回结果。运行耗时、lease 和 heartbeat 只属于故障恢复机制；它们不构成
+业务验收指标，也不能截断仍在正常推进的整剧任务。
+
+当前唯一完成定义为：
+
+`完整原稿 → Production Bible → 分集 → 单集场景/对白 → Bible occurrence → 关键分镜表 → 资产/世界观一致性复核 → 人工确认/发布`
+
+任何只得到 Bible、只得到分集、只得到场景，或要求调用方手工重新选择整项目资产的状态，
+都只能报告为中间阶段，不能报告整套业务已经跑通。
+
+## 问题
+
+当前导入提交发布后，会为每个剧集独立运行剧本结构提取。这个流程适合识别本集场景和对白，但不适合定义项目级角色、地点、道具和世界观：不同剧集可能用不同名字或不同外观描述同一角色，逐集创建资产会把“身份”和“状态”混为多个资产，最终导致人物三视图、场景图和分镜引用不一致。
+
+整剧首次阅读必须先形成一个项目级 Production Bible。后续分集分析只能引用已确认的全局实体，并为本集记录状态和出现证据；不能自行重新定义同一身份。
+
+## 目标
+
+- 对一个已固定的完整剧本文档执行一次可恢复的整剧理解运行。
+- 统一提取角色、地点、道具、服装、声音和视觉风格身份，以及世界观事实、规则、阵营、术语和时间线。
+- 合并别名和跨集描述，将稳定身份与阶段性外观、受伤、服装、年龄或阵营变化分开。
+- 确认后为每个全局实体物化唯一的项目资产，并把阶段性变化物化为该资产的多个状态。
+- 分集结构提取只创建场景、对白和引用全局实体的 occurrence；遇到未知或歧义实体时进入全局复核，不自动创建重复资产。
+- Storyboard Harness 消费已确认的资产状态和世界观事实，保证同一人物在不同集和镜头中保持同一身份。
+
+## 非目标
+
+- 本轮不生成人物三视图、场景图、道具图或视频。
+- 本轮不把所有世界观内容塞进一个不可查询的提示词文件。
+- 本轮不使用 `vendor`、外部仓库 checkout 或上游脚本作为运行时依赖。
+- 本轮不允许 LLM 直接写正式资产、场景或分镜；所有结果先成为候选并经过确定性校验与确认。
+
+## 核心不变量
+
+1. 一个项目中的同一故事身份只有一个 `asset_id`。
+2. `Asset` 表达稳定身份；`AssetState` 表达该身份在某一阶段的可见状态。
+3. 别名只能指向一个同类型实体；同类型别名冲突必须阻塞确认。
+4. 每个实体、状态和世界观事实必须保留完整剧本中的来源区间与集号证据。
+5. 分集 Provider 只能引用已确认的 Bible entity/state；未知引用不能静默创建新资产。
+6. 分镜只消费与本集叙事单元存在 occurrence 的资产状态，不把全项目资产无差别注入每个场景。
+7. 新 Bible revision 不得原地改变已经用于分镜的资产版本；变更通过新版本和影响分析传播。
+
+## Harness
+
+整剧理解不是单一 Skill，而是由 Agent Harness 编排三个职责明确的通用 Skill 和确定性 Tool Gate：
+
+1. `extract-bible-evidence`
+   - 将完整剧本文本按接近输入上限的连续区间切块，而不是按每个场景分别调用。
+   - 只提取带来源区间的局部实体、状态和世界观观察，不做跨块身份猜测。
+2. `reconcile-bible`
+   - 基于全部局部证据统一规范名、别名、关系、稳定身份和状态时间线。
+   - 明确把同一人物的不同服装、伤势、年龄或身份阶段保留为状态，而不是新人物。
+3. `review-bible`
+   - 检查重复身份、别名冲突、无来源事实、状态时间线重叠和世界规则冲突。
+   - 只能提出问题，不能绕过 Tool Gate 修改正式数据。
+4. Tool Gate
+   - 校验来源区间、集号、唯一 key、别名唯一性、状态区间、证据守恒和 schema。
+   - 阻塞问题进入 `needs_review`；没有证据的内容不能物化。
+
+Harness 必须保存阶段 checkpoint，并允许完整流程持续数小时，不设置固定的业务墙钟超时。进程终止、用户取消或 Provider 结果不确定时，运行进入 `unknown`，不得从头重复已确认阶段或把未知结果标记成功。
+
+Kafka 只负责投递持久任务事实，不能成为运行时钟。Consumer 在长任务期间必须持续 poll；任务所有权由可续租 lease 和 run token 管理，lease 时长只是 worker 故障检测窗口，不是任务预算，心跳正常时可无限续租。短暂数据库续租失败在当前 lease 有效期内重试，只有明确 fencing 或实际过期才取消本地 Codex。未显式指定模型或推理强度时继承本机 Codex 配置，不设置隐式低推理强度。
+
+## 数据边界
+
+### Production Bible
+
+`ProductionBible` 是完整文档某个 revision 的项目级分析运行，包含输入哈希、引擎/模型/提示版本、状态、checkpoint、review issues 和 revision。
+
+`ProductionBibleEntity` 保存候选或已确认的全局实体：
+
+- `entity_key`
+- `kind`
+- `name`、`normalized_name`、`aliases`
+- 稳定身份描述、角色作用、关系和目标
+- 首次出现和出现集数
+- 来源证据
+- 确认后关联的 `asset_id`
+
+`ProductionBibleEntityState` 保存同一实体的状态：
+
+- `state_key`、label、description
+- 生效集范围或离散集号
+- 状态来源证据
+- 确认后关联的 `asset_state_id` 和 `asset_version_id`
+
+`ProductionBibleWorldEntry` 保存可查询的世界观条目：
+
+- category、title、facts、rules、entity keys
+- 集号与来源证据
+- 冲突和确认状态
+
+### Production task
+
+Bible 使用现有持久任务、Outbox 和 Inbox 基础设施，但拥有独立类型：
+
+- `task_type=production_bible`
+- `request_type=production_bible`
+- `event_type=production_bible.requested`
+- `episode_id=NULL`
+- `usage_type=document_revision`
+- `usage_id=input_version_id=document_revision_id`
+- `input_hash=document_revision.normalized_hash`
+
+Provider 完整结果被校验和持久化后，Task 才进入 `succeeded`，Bible 进入 `needs_review`。人工确认是独立命令，不混入 Provider Task。每个 evidence chunk、reconcile 和 review 阶段均保存 checkpoint；重启只执行尚未完成的阶段。
+
+`needs_review` 中的 blocking issue 不允许通过直接确认或数据库修改跳过。审阅修订是独立、带类型的业务命令：必须声明 issue key、证据判断、目标字段、expected revision、expected result hash 和幂等键。每次修订以旧 result hash 与规范化修订命令生成新的哈希链节点，写入私有回放 receipt 和审计事件；当前最小闭环先支持修订 entity state 的集数边界，后续修订类型通过同一命令边界扩展。
+
+### Assets
+
+确认 Bible 时：
+
+- 一个 entity 物化一个 `Asset`。
+- 默认/阶段状态物化为同一 `Asset` 下的多个 `AssetState`。
+- `AssetVersion.source_type` 记录 Bible 来源，保证幂等与可追溯。
+- 已存在的同类型规范名或唯一别名只允许显式链接；歧义时停止，不按字符串近似自动合并。
+
+### Episode structure
+
+分集结构任务输入必须携带 `production_bible_id` 和 revision。输出只允许：
+
+- scene 候选；
+- dialogue 候选；
+- 引用 `entity_key` / `state_key` 的 occurrence 候选；
+- 指向 Bible 的连续性或歧义问题。
+
+分集结构确认后，occurrence 绑定到正式 narrative unit version。不存在于确认 Bible 的实体引用属于阻塞问题，必须先修订 Bible 或人工链接。
+
+每个 `ExtractionBatch` 冻结 `production_bible_id`、Bible revision 与 result hash；输入哈希由脚本内容哈希和 Bible snapshot 共同计算，extractor version 作为批次的独立可追溯版本。一个导入提交产生的所有分集 Batch 必须引用同一个已确认 Bible snapshot，避免长流程期间漂移。
+
+### Storyboard
+
+Storyboard draft input 从本集 occurrence 推导所需资产状态，并附加与本集/场景相关的已确认世界观事实。全项目资产不会被无差别注入。镜头仍只绑定固定输入中的 `asset_state_id` / `asset_version_id`。
+
+## API 与状态
+
+最小接口：
+
+- `POST /api/v1/document-revisions/{revision_id}/production-bibles`
+- `GET /api/v1/production-bibles/{bible_id}`
+- `POST /api/v1/production-bibles/{bible_id}/review-issue-resolutions`
+- `POST /api/v1/production-bibles/{bible_id}/confirm`
+- `GET /api/v1/projects/{project_id}/production-bible`
+
+首个 review resolution 类型是 `entity_state_episode_numbers`，用于修正状态时间线；它不能删除 issue 而不同时提交对应的数据修订。
+
+运行状态：
+
+`queued → running → needs_review → confirmed`
+
+异常终态：
+
+- `failed`：确定失败，可在修正输入后发起新运行。
+- `unknown`：Provider 结果不确定，只能对账或用新幂等键发起新运行。
+- `superseded`：同一项目已有更新文档 revision 的确认 Bible。
+
+确认使用 expected revision 和幂等键。确认事务同时写 Bible 确认状态、项目资产/状态/版本、世界观条目映射和审计事件；任一步失败则全部回滚。
+
+Episode plan 和物化可与 Bible 审阅并行，但导入提交的 `publish` 是硬门：只有同一个 `document_revision_id` 的 Bible 已确认才允许发布并创建分集结构任务。Bible 为 queued、running、needs_review、failed 或 unknown 时均不发布，也不创建 60 个逐集提取任务。
+
+## 失败路径
+
+- 同类型实体共享同一别名：阻塞确认，要求人工合并或拆分。
+- 同一实体的状态时间线互相冲突：保留候选，要求人工选择或修改。
+- 世界观事实没有来源证据：拒绝该条目。
+- 完整文档变化：旧运行 superseded；分集任务不能继续消费旧 Bible revision。
+- 分集遇到未知角色或资产：创建 Bible reconciliation issue，不创建新 Asset。
+- Provider 进程失联、服务重启或取消结果不确定：运行标为 unknown；保留已完成 checkpoint，不伪报空结果。
+
+## 真实剧本验收
+
+使用 `He Left Our Kids to Drown—He Didn’t Know I Was the Empress.docx`：
+
+- 先验证 60 集边界继续完整覆盖 139,723 个字符。
+- 整剧 Bible 中 Aurelia、Tristan、Valerie、Jace、Iris 等同一人物各只有一个 identity。
+- Aurelia 的 Empress 身份、不同服装或剧情阶段作为同一人物的状态/属性证据，不生成多个 Aurelia 资产。
+- 重复地点名称和别名统一到一个 location identity；每次出现通过 occurrence 关联集号和叙事单元。
+- 世界观、阵营、身份关系和规则都带来源证据。
+- E01、E07、E09、E31、E36、E60 的分集场景数与独立 DOCX 基线比较，并确认只引用 Bible 中的实体。
+- 代表集分镜必须引用相同 `asset_id`，按剧情阶段选择正确 `asset_state_id`。
+
+## 演进顺序
+
+1. 建立 Bible schema、Harness contract、checkpoint 和只读查询。
+2. 接入本地 Codex 的 evidence/reconcile/review Skills。
+3. 实现确认与项目资产/状态的原子物化。
+4. 将分集 extraction 的 asset 创建改为 Bible occurrence 引用。
+5. 将 occurrence 和世界观事实注入 Storyboard Harness。
+6. 最后接入人物三视图、场景图和资产图生成；图像生成只能消费已确认资产状态。
+
+当前代码已经完成 1–5 的主数据通路：发布批次冻结 Bible snapshot、Bible-bound extraction
+禁止新建资产候选、结构确认把 occurrence 锚定到 narrative unit version、Storyboard 从本集
+occurrence 自动派生语义资产并携带相关世界观。剩余工作以真实 60 集原稿完成 1–5 的全量验收，
+而不是用单元测试或代表性固定输入代替整剧结论；第 6 项仍是明确的后续范围。

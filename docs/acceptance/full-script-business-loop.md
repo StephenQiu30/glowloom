@@ -1,0 +1,46 @@
+# Full Script Business Loop Acceptance
+
+日期：2026-08-24
+
+## 验收原则
+
+验收以真实剧本产生的可审阅业务事实为准，不以执行时长、单个 Skill 返回、Provider 调用次数
+或测试桩输出为准。所有阶段必须共享同一个不可变原稿 revision 和已确认 Production Bible
+snapshot，并能从最终分镜反查实体状态、叙事单元和原文证据。
+
+## 必须完成的业务链
+
+1. 完整 DOCX 正文被无遗漏地规范化，并保存不可变 document revision。
+2. 首次通读形成全项目角色、地点、道具、服装、声音、视觉风格和世界观候选。
+3. Bible blocking issue 必须通过带证据、乐观锁、哈希链和审计记录的正式修订命令清零，不能绕过质量门禁。
+4. Bible 复核后原子物化唯一 Asset、AssetState 和 AssetVersion；同一人物不同阶段不得变成多个人。
+5. 分集边界覆盖全文；每集正文既不重叠也不丢失，并冻结相同 Bible snapshot。
+6. 单集抽取形成场景、对白和 `asset_occurrence`，禁止 Bible-bound 批次创建独立 asset candidate。
+7. 结构确认把 occurrence 锚定到正式 narrative unit version，并保留可追溯决议证据。
+8. Storyboard 自动从当前集 occurrence 选择资产状态，携带当前集世界观事实，生成可审核关键分镜表。
+9. 分镜表覆盖 required 叙事单元，引用合法场景/对白/资产版本，并通过连续性与确定性 hard gate。
+10. 人工确认、失败、恢复和重复投递均保持幂等，不产生重复资产、重复 occurrence 或半发布结果。
+
+## 真实原稿验收矩阵
+
+原稿：`He Left Our Kids to Drown—He Didn’t Know I Was the Empress.docx`
+
+- 文档：正文字符覆盖、原文 hash、60 集 marker 和每集区间。
+- Bible：实体数、状态数、世界观条目数、blocking issue 数、确认与物化结果。
+- 分集：60 个 Episode、60 个发布版本、60 个绑定同一 Bible snapshot 的 ExtractionBatch。
+- 结构：逐集场景数、对白数、未知 Bible 引用、独立 asset candidate 数。
+- 资产：每集 occurrence 数、跨集 identity 去重、状态选择和 narrative unit 锚点。
+- 分镜：逐集镜头数、required coverage、场景/对白/资产引用、连续性 issue 和审核状态。
+
+代表集 E01、E07、E09、E31、E36、E60 用于人工细查，但不能替代 60 集机器覆盖统计。
+
+## 当前自动化证据
+
+- 发布 ImportCommit 时，所有 ExtractionBatch 冻结同一个 Bible id/revision/result hash。
+- Bible-bound Codex 输入包含该集相关实体、状态和世界观；独立 asset 输出会被拒绝。
+- 合法 occurrence 在结构确认时绑定到既有 AssetState 和当前 narrative unit version。
+- Storyboard 请求无需手工传入资产；Bible-bound 单集会从当前 occurrence 自动派生资产。
+- 语义分镜允许使用尚未完成参考图的活动 AssetVersion；媒体、授权和生产就绪仍在生成/导出阶段阻塞。
+- Bible 状态集数修订会更新正式候选、移除对应 issue、推进 revision/result hash，并支持同命令幂等回放和冲突检测。
+
+这些自动化只证明主数据通路契约成立。只有真实原稿完成上述矩阵后，才能报告整套业务已跑通。
