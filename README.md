@@ -37,6 +37,7 @@ Lanverse 是面向 AI 短剧生产的端到端 AI Native Production Platform。�
 
 - `frontend`：Next.js Web 入口。
 - `backend`：Go `lanverse-api` 公共入口，自行提供健康、就绪、指标与构建版本接口；尚未迁移的业务路由透明转发到内部兼容服务。
+- `database-migrate`：使用同一 Go Backend 镜像运行 `lanverse-migrate`，在事务与 Advisory Lock 内应用唯一版本化 Migration；迁移元数据隔离在 `lanverse_migration` Schema。
 - `agent-api`：迁入 `agent/` 的 FastAPI 兼容运行时，当前仍是业务写入所有者，不对宿主机暴露端口。
 - `schedule-dispatcher` 与 `outbox-publisher`：使用同一 Agent 镜像，但拥有独立生命周期；旧 Publisher 通过 `OUTBOX_TOPICS` 只领取 `lanverse.io.v1` 与 `lanverse.media.v1`。
 - `io-worker` 与 `media-worker`：延续现有 Kafka 消费职责。
@@ -50,9 +51,11 @@ Lanverse 是面向 AI 短剧生产的端到端 AI Native Production Platform。�
 ./scripts/run-local-development.sh
 ```
 
-启动器会在本机运行 Python 兼容 API、Go Backend 和 Frontend，不创建基础设施容器，也不会启动 Kafka Consumer/Publisher 去领取本机共享 Topic 中的旧任务。为避免旧 Schema 被覆盖，它默认在同一个本机 PostgreSQL 实例中使用 `LOCAL_DATABASE_NAME=lanverse_development` 的隔离数据库；不会修改 `.env` 中原 `DATABASE_URL` 指向的数据库。需要 Scheduler/Worker 的执行链或完全隔离的全栈验收环境时，再运行：
+启动器会在本机运行 Python 兼容 API、Go Backend 和 Frontend，不创建基础设施容器，也不会启动 Kafka Consumer/Publisher 去领取本机共享 Topic 中的旧任务。为避免旧 Schema 被覆盖，它默认在同一个本机 PostgreSQL 实例中使用 `LOCAL_DATABASE_NAME=lanverse_development` 的隔离数据库；不会修改 `.env` 中原 `DATABASE_URL` 指向的数据库。隔离开发库与测试库允许由 Python 测试辅助函数从当前 Metadata 初始化；任何共享或生产数据库都只能由 Go Migration 写 Schema。
 
 Go 公共入口的运行端点是 `/healthz`、`/readyz`、`/metrics` 与 `/version`。其中 Readiness 会探测内部 Agent 兼容 API，Metrics 只使用方法、固定路由和状态族等有界标签，Version 由构建参数注入且不包含 Secret。
+
+需要 Scheduler/Worker 的执行链或完全隔离的全栈验收环境时运行：
 
 ```bash
 docker compose --env-file .env.example \
@@ -61,4 +64,16 @@ docker compose --env-file .env.example \
   up --build -d
 ```
 
-生产部署还需叠加 `docker-compose-prod.yml`，并显式提供 Frontend、Go Backend、Agent 三类已发布镜像和所有生产 secret。生产环境的 `agent-init` 只校验数据库 schema，不会自动建表；schema 发布必须由独立、可审计的迁移步骤完成。
+Compose 会先执行 `database-migrate`，成功后再运行只读 Schema Guard 和其他服务。生产部署还需叠加 `docker-compose-prod.yml`，并显式提供 Frontend、Go Backend、Agent 三类已发布镜像和所有生产 Secret。生产 `agent-init` 只校验 Agent 必需表/列和允许的 Migration 版本窗口，不会调用 `create_all`。
+
+首次接管已有、尚未登记版本的兼容数据库时，必须先使用新 Agent 镜像执行一次严格基线审计；审计失败不得强制登记：
+
+```bash
+docker compose --env-file .env.example \
+  -f docker-compose.yml \
+  -f docker-compose-env.yml \
+  run --rm --no-deps agent-init \
+  python -m app.runtime.commands.database adopt-baseline
+```
+
+登记后正常启动 Compose 即可。旧运行时只检查 `public`，迁移元数据位于独立 Schema，因此该动作不会破坏旧版本的回滚启动能力。

@@ -15,6 +15,7 @@ PRODUCTION_COMPOSE = REPOSITORY_ROOT / "docker-compose-prod.yml"
 CURRENT_RUNTIME_SERVICES = {
     "frontend",
     "backend",
+    "database-migrate",
     "agent-init",
     "agent-api",
     "schedule-dispatcher",
@@ -30,6 +31,7 @@ CURRENT_RUNTIME_SERVICES = {
 }
 STATEFUL_SERVICES = {"postgres", "redis", "minio", "kafka"}
 INTERNAL_PORT_SERVICES = STATEFUL_SERVICES | {
+    "database-migrate",
     "minio-init",
     "kafka-init",
     "agent-init",
@@ -107,6 +109,14 @@ def test_compose_files_define_the_current_runnable_top_level_slice() -> None:
     assert "app.runtime.workers.scheduler schedule" in commands["schedule-dispatcher"]
     assert "app.runtime.workers.scheduler outbox" in commands["outbox-publisher"]
     assert commands["schedule-dispatcher"] != commands["outbox-publisher"]
+    assert services["database-migrate"]["entrypoint"] == ["/usr/local/bin/lanverse-migrate"]
+    assert "app.runtime.commands.database check" in commands["agent-init"]
+
+    migration_dependencies = services["agent-init"].get("depends_on")
+    assert isinstance(migration_dependencies, dict)
+    assert migration_dependencies["database-migrate"]["condition"] == (
+        "service_completed_successfully"
+    )
 
     publisher_environment = services["outbox-publisher"].get("environment")
     assert isinstance(publisher_environment, dict)
@@ -154,6 +164,12 @@ def test_production_override_uses_published_images_and_hides_internal_ports() ->
     assert isinstance(agent_init, dict)
     assert "build" not in agent_init
     assert agent_init["restart"] == "on-failure"
+
+    database_migrate = services["database-migrate"]
+    assert isinstance(database_migrate, dict)
+    assert "build" not in database_migrate
+    assert database_migrate["restart"] == "on-failure"
+    assert database_migrate["image"] == "ghcr.io/example/lanverse-backend:test"
 
     assert services["frontend"]["image"] == "ghcr.io/example/lanverse-frontend:test"
     assert services["backend"]["image"] == "ghcr.io/example/lanverse-backend:test"

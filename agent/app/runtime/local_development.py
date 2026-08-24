@@ -63,11 +63,14 @@ async def run_local_development() -> None:
     os.environ["DATABASE_URL"] = database_url.render_as_string(hide_password=False)
     get_settings.cache_clear()
 
+    from app.core.database import engine
+    from app.core.schema import initialize_development_database
     from app.runtime.api import run_api
-    from app.runtime.commands.database import prepare_database
+    from app.runtime.model_registry import register_implemented_models
 
     active_settings = get_settings()
-    await prepare_database(active_settings)
+    register_implemented_models()
+    await initialize_development_database(engine)
     await run_api(active_settings)
 
 

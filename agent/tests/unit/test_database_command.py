@@ -8,21 +8,18 @@ from app.runtime.commands import database as database_command
 
 
 @pytest.mark.asyncio
-async def test_development_database_prepare_initializes_schema(
+async def test_database_prepare_only_validates_compatible_schema(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     engine = Mock()
     engine.dispose = AsyncMock()
-    initialize_database = AsyncMock()
     assert_database_schema = AsyncMock()
     monkeypatch.setattr(database_command, "engine", engine)
-    monkeypatch.setattr(database_command, "initialize_database", initialize_database)
     monkeypatch.setattr(database_command, "assert_database_schema", assert_database_schema)
 
     await database_command.prepare_database(Settings(environment="test"))
 
-    initialize_database.assert_awaited_once_with(engine)
-    assert_database_schema.assert_not_awaited()
+    assert_database_schema.assert_awaited_once_with(engine)
     engine.dispose.assert_awaited_once_with()
 
 
@@ -32,10 +29,8 @@ async def test_production_database_prepare_only_validates_schema(
 ) -> None:
     engine = Mock()
     engine.dispose = AsyncMock()
-    initialize_database = AsyncMock()
     assert_database_schema = AsyncMock()
     monkeypatch.setattr(database_command, "engine", engine)
-    monkeypatch.setattr(database_command, "initialize_database", initialize_database)
     monkeypatch.setattr(database_command, "assert_database_schema", assert_database_schema)
     settings = Settings(
         environment="production",
@@ -48,5 +43,24 @@ async def test_production_database_prepare_only_validates_schema(
     await database_command.prepare_database(settings)
 
     assert_database_schema.assert_awaited_once_with(engine)
-    initialize_database.assert_not_awaited()
+    engine.dispose.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_baseline_adoption_is_an_explicit_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = Mock()
+    engine.dispose = AsyncMock()
+    adopt_database_baseline = AsyncMock()
+    monkeypatch.setattr(database_command, "engine", engine)
+    monkeypatch.setattr(
+        database_command,
+        "adopt_database_baseline",
+        adopt_database_baseline,
+    )
+
+    await database_command.adopt_baseline()
+
+    adopt_database_baseline.assert_awaited_once_with(engine)
     engine.dispose.assert_awaited_once_with()

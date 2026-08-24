@@ -24,6 +24,17 @@ x-agent-runtime: &agent-runtime
     - internal
 
 services:
+  database-migrate:
+    environment:
+      MIGRATION_DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-lanverse-development-only}@postgres:5432/${POSTGRES_DB:-lanverse}
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   frontend:
     build:
       args:
@@ -41,8 +52,8 @@ services:
   agent-init:
     <<: *agent-runtime
     depends_on:
-      postgres:
-        condition: service_healthy
+      database-migrate:
+        condition: service_completed_successfully
     restart: "no"
 
   agent-api:

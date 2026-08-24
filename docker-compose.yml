@@ -17,6 +17,10 @@ x-agent-service: &agent-service
   image: lanverse/agent:development
 
 services:
+  database-migrate:
+    <<: *backend-service
+    entrypoint: ["/usr/local/bin/lanverse-migrate"]
+
   frontend:
     build:
       context: ./frontend
@@ -25,7 +29,7 @@ services:
 
   agent-init:
     <<: *agent-service
-    command: ["python", "-m", "app.runtime.commands.database"]
+    command: ["python", "-m", "app.runtime.commands.database", "check"]
 
   agent-api:
     <<: *agent-service

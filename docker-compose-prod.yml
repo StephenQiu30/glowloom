@@ -27,6 +27,21 @@ x-agent-production: &agent-production
         memory: 2G
 
 services:
+  database-migrate:
+    image: ${LANVERSE_BACKEND_IMAGE:?LANVERSE_BACKEND_IMAGE is required}
+    build: !reset null
+    pull_policy: always
+    restart: on-failure
+    init: true
+    environment:
+      MIGRATION_DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-lanverse}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
   frontend:
     image: ${LANVERSE_FRONTEND_IMAGE:?LANVERSE_FRONTEND_IMAGE is required}
     build: !reset null

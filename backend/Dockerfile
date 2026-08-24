@@ -5,12 +5,15 @@ WORKDIR /src
 COPY go.mod go.sum ./
 COPY cmd ./cmd
 COPY internal ./internal
+COPY migrations ./migrations
 ARG BUILD_VERSION=development
 ARG BUILD_COMMIT=unknown
 ARG BUILD_TIME=unknown
 RUN CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X main.buildVersion=${BUILD_VERSION} -X main.buildCommit=${BUILD_COMMIT} -X main.buildTime=${BUILD_TIME}" \
-    -o /out/lanverse-api ./cmd/api
+    -o /out/lanverse-api ./cmd/api && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
+    -o /out/lanverse-migrate ./cmd/migrate
 
 FROM alpine:3.23
 
@@ -19,6 +22,7 @@ RUN apk add --no-cache ca-certificates \
     && adduser -S -G lanverse lanverse
 
 COPY --from=builder /out/lanverse-api /usr/local/bin/lanverse-api
+COPY --from=builder /out/lanverse-migrate /usr/local/bin/lanverse-migrate
 
 USER lanverse
 EXPOSE 8686

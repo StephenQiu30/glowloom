@@ -13,7 +13,7 @@ from app.core.database import (
     get_async_session,
     validate_test_database_url,
 )
-from app.core.schema import initialize_database
+from app.core.schema import initialize_development_database
 from app.main import create_app
 from app.modules.caching.contracts import (
     CacheKey,
@@ -41,6 +41,7 @@ register_implemented_models()
 
 async def _drop_test_tables(target_engine: AsyncEngine) -> None:
     async with target_engine.begin() as connection:
+        await connection.execute(text("DROP SCHEMA IF EXISTS lanverse_migration CASCADE"))
         table_names = await connection.run_sync(lambda sync: inspect(sync).get_table_names())
         for table_name in sorted(table_names):
             quoted_name = connection.dialect.identifier_preparer.quote(table_name)
@@ -134,7 +135,7 @@ def auth_session_store() -> MemoryAuthSessionStore:
 async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_engine(TEST_DATABASE_URL)
     await _drop_test_tables(engine)
-    await initialize_database(engine)
+    await initialize_development_database(engine)
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
