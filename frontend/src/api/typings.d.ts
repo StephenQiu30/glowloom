@@ -348,9 +348,11 @@ declare global {
     type ProductionBibleConfirmRequest = components["schemas"]["ProductionBibleConfirmRequest"];
     type ProductionBibleCreateRequest = components["schemas"]["ProductionBibleCreateRequest"];
     type ProductionBibleEntityResponse = components["schemas"]["ProductionBibleEntityResponse"];
+    type ProductionBibleEntityStateEpisodeNumbersCorrection = components["schemas"]["ProductionBibleEntityStateEpisodeNumbersCorrection"];
     type ProductionBibleEntityStateResponse = components["schemas"]["ProductionBibleEntityStateResponse"];
     type ProductionBibleResponse = components["schemas"]["ProductionBibleResponse"];
     type ProductionBibleResumeRequest = components["schemas"]["ProductionBibleResumeRequest"];
+    type ProductionBibleReviewIssueResolutionRequest = components["schemas"]["ProductionBibleReviewIssueResolutionRequest"];
     type ProductionBibleWorldEntryResponse = components["schemas"]["ProductionBibleWorldEntryResponse"];
     type ProfileUpdateRequest = components["schemas"]["ProfileUpdateRequest"];
     type ProjectCreateRequest = components["schemas"]["ProjectCreateRequest"];
@@ -590,6 +592,7 @@ declare global {
     type requestExportApiV1EpisodesEpisodeIdStoryboardExportsPostParams = OperationParameters<"request_export_api_v1_episodes__episode_id__storyboard_exports_post">;
     type requestMediaLocationMigrationApiV1MediaVersionIdLocationMigrationsPostParams = OperationParameters<"request_media_location_migration_api_v1_media__version_id__location_migrations_post">;
     type requestMediaLocationRollbackApiV1MediaVersionIdLocationRollbacksPostParams = OperationParameters<"request_media_location_rollback_api_v1_media__version_id__location_rollbacks_post">;
+    type resolveBibleReviewIssueApiV1ProductionBiblesBibleIdReviewIssueResolutionsPostParams = OperationParameters<"resolve_bible_review_issue_api_v1_production_bibles__bible_id__review_issue_resolutions_post">;
     type restoreAssetApiV1AssetsAssetIdRestorePostParams = OperationParameters<"restore_asset_api_v1_assets__asset_id__restore_post">;
     type restoreEpisodeApiV1EpisodesEpisodeIdRestorePostParams = OperationParameters<"restore_episode_api_v1_episodes__episode_id__restore_post">;
     type restoreMediaApiV1MediaObjectsMediaObjectIdRestorePostParams = OperationParameters<"restore_media_api_v1_media_objects__media_object_id__restore_post">;

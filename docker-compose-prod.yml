@@ -1,0 +1,118 @@
+x-agent-production: &agent-production
+  image: ${LANVERSE_AGENT_IMAGE:?LANVERSE_AGENT_IMAGE is required}
+  build: !reset null
+  pull_policy: always
+  restart: unless-stopped
+  init: true
+  environment:
+    ENVIRONMENT: production
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    CORS_ORIGINS: ${LANVERSE_CORS_ORIGINS:?LANVERSE_CORS_ORIGINS is required}
+    DATABASE_URL: >-
+      postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-lanverse}
+    REDIS_URL: redis://redis:6379/0
+    KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    MINIO_ENDPOINT: minio:9000
+    MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required}
+    MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required}
+    MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
+    MINIO_SECURE: "false"
+    JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+    EMAIL_VERIFICATION_HMAC_SECRET: ${EMAIL_VERIFICATION_HMAC_SECRET:?EMAIL_VERIFICATION_HMAC_SECRET is required}
+    SMTP_ENABLED: ${SMTP_ENABLED:-false}
+  deploy:
+    resources:
+      limits:
+        cpus: "2.0"
+        memory: 2G
+
+services:
+  frontend:
+    image: ${LANVERSE_FRONTEND_IMAGE:?LANVERSE_FRONTEND_IMAGE is required}
+    build: !reset null
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  agent-init:
+    <<: *agent-production
+    restart: on-failure
+
+  agent-api:
+    <<: *agent-production
+
+  backend:
+    image: ${LANVERSE_BACKEND_IMAGE:?LANVERSE_BACKEND_IMAGE is required}
+    build: !reset null
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: 8686
+      LEGACY_API_URL: http://agent-api:8686
+      UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-3}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
+  schedule-dispatcher:
+    <<: *agent-production
+
+  outbox-publisher:
+    <<: *agent-production
+
+  io-worker:
+    <<: *agent-production
+
+  media-worker:
+    <<: *agent-production
+
+  postgres:
+    restart: unless-stopped
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  redis:
+    restart: unless-stopped
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  minio:
+    restart: unless-stopped
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  minio-init:
+    restart: "no"
+
+  kafka:
+    restart: unless-stopped
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  kafka-init:
+    restart: "no"

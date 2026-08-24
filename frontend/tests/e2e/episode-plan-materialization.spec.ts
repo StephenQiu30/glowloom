@@ -12,7 +12,7 @@ test("审阅五集计划后原子创建并批量发布单集剧本", async ({ pa
   const fixture = JSON.parse(readFileSync(
     path.resolve(
       process.cwd(),
-      "../backend/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json",
+      "../agent/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json",
     ),
     "utf8",
   )) as { full_script: string };

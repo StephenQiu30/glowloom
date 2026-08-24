@@ -19,7 +19,7 @@
 ## 可执行验收
 
 ```bash
-cd backend
+cd agent
 ./.venv/bin/pytest -q tests/unit/storyboards tests/integration/storyboards
 ./.venv/bin/pytest -q tests/architecture/test_agent_domain_layout.py
 LANVERSE_RUN_CODEX_LOCAL_CONTRACT=1 ./.venv/bin/pytest -q -s tests/contract/test_codex_local_storyboard_draft.py

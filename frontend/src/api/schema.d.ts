@@ -1699,6 +1699,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production-bibles/{bible_id}/review-issue-resolutions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Bible Review Issue */
+        post: operations["resolve_bible_review_issue_api_v1_production_bibles__bible_id__review_issue_resolutions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -7599,6 +7616,20 @@ export interface components {
              */
             updated_at: string;
         };
+        /** ProductionBibleEntityStateEpisodeNumbersCorrection */
+        ProductionBibleEntityStateEpisodeNumbersCorrection: {
+            /** Entity Key */
+            entity_key: string;
+            /** Episode Numbers */
+            episode_numbers?: number[];
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "entity_state_episode_numbers";
+            /** State Key */
+            state_key: string;
+        };
         /** ProductionBibleEntityStateResponse */
         ProductionBibleEntityStateResponse: {
             /** Asset State Id */
@@ -7716,6 +7747,20 @@ export interface components {
             expected_revision: number;
             /** Idempotency Key */
             idempotency_key: string;
+        };
+        /** ProductionBibleReviewIssueResolutionRequest */
+        ProductionBibleReviewIssueResolutionRequest: {
+            correction: components["schemas"]["ProductionBibleEntityStateEpisodeNumbersCorrection"];
+            /** Expected Result Hash */
+            expected_result_hash: string;
+            /** Expected Revision */
+            expected_revision: number;
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Issue Key */
+            issue_key: string;
+            /** Resolution Note */
+            resolution_note: string;
         };
         /** ProductionBibleWorldEntryResponse */
         ProductionBibleWorldEntryResponse: {
@@ -13317,6 +13362,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ProductionBibleResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_bible_review_issue_api_v1_production_bibles__bible_id__review_issue_resolutions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bible_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionBibleReviewIssueResolutionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

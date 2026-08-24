@@ -12,7 +12,7 @@ Lanverse 是面向 AI 短剧生产的端到端 AI Native Production Platform。�
 - `docs/`：产品、架构、详细设计、计划、ADR 与验收的长期事实来源。
 - PostgreSQL、Temporal、Redis、MinIO、Kafka 与 Elasticsearch 分别承担业务事实、工作流历史、临时状态、对象、事件和可重建检索投影。
 
-当前仓库仍处于从 FastAPI 模块化单体和单 Next.js 应用迁移到该目标架构的阶段。迁移期间不允许同一资源出现两个写入所有者，也不将目标目录误报为已实现能力。
+当前仓库已进入后端语言切换阶段：`backend/` 是 Go Module，`agent/` 暂时承载迁入的 FastAPI 兼容运行时与 Python Agent 能力，Frontend 仍是单 Next.js 应用。迁移期间不允许同一资源出现两个写入所有者，也不将目录移动误报为业务能力已经迁移。
 
 ## 文档入口
 
@@ -27,5 +27,36 @@ Lanverse 是面向 AI 短剧生产的端到端 AI Native Production Platform。�
 - [前端功能模块设计](docs/designs/前端功能模块设计.md)
 - [平台迁移与服务整合计划](docs/plans/平台迁移与服务整合计划.md)
 - [资源写入所有权迁移台账](docs/plans/资源写入所有权迁移台账.md)
+- [迁移期后端语言切换策略](docs/adr/迁移期后端语言切换策略.md)
 
 完整原始设计已作为 [AI 短剧制作平台完整设计基线](docs/designs/AI短剧制作平台完整设计基线.md) 持久化；来源校验信息记录在文档导航中。后续架构变化必须先更新对应设计或 ADR，再修改实现。
+
+## 当前可运行目录切片
+
+第一阶段已建立可验证的语言与运行边界：
+
+- `frontend`：Next.js Web 入口。
+- `backend`：Go `lanverse-api` 公共入口，自行提供健康与就绪接口；尚未迁移的业务路由透明转发到内部兼容服务。
+- `agent-api`：迁入 `agent/` 的 FastAPI 兼容运行时，当前仍是业务写入所有者，不对宿主机暴露端口。
+- `schedule-dispatcher` 与 `outbox-publisher`：使用同一 Agent 镜像，但拥有独立生命周期。
+- `io-worker` 与 `media-worker`：延续现有 Kafka 消费职责。
+- PostgreSQL、Redis、MinIO 与 Kafka：提供当前代码已经依赖的有状态基础设施。
+
+当前 `agent/` 仍包含数据库和 Worker 兼容代码，尚未达到最终受限 Agent Runtime 的安全边界。每个业务路由迁入 Go 并完成契约、数据、排空与回滚验收后，才删除对应 Python Writer；Temporal、Elasticsearch、Debezium 和可观测性栈会在真实消费者落地时接入，不预建空服务。
+
+本机开发默认复用已安装的 PostgreSQL、Redis、MinIO 与 Kafka。先根据 `.env.example` 准备根目录 `.env`，并安装 Agent/Frontend 依赖，然后运行：
+
+```bash
+./scripts/run-local-development.sh
+```
+
+启动器会在本机运行 Python 兼容 API、Go Backend 和 Frontend，不创建基础设施容器，也不会启动 Kafka Consumer/Publisher 去领取本机共享 Topic 中的旧任务。为避免旧 Schema 被覆盖，它默认在同一个本机 PostgreSQL 实例中使用 `LOCAL_DATABASE_NAME=lanverse_development` 的隔离数据库；不会修改 `.env` 中原 `DATABASE_URL` 指向的数据库。需要 Scheduler/Worker 的执行链或完全隔离的全栈验收环境时，再运行：
+
+```bash
+docker compose --env-file .env.example \
+  -f docker-compose.yml \
+  -f docker-compose-env.yml \
+  up --build -d
+```
+
+生产部署还需叠加 `docker-compose-prod.yml`，并显式提供 Frontend、Go Backend、Agent 三类已发布镜像和所有生产 secret。生产环境的 `agent-init` 只校验数据库 schema，不会自动建表；schema 发布必须由独立、可审计的迁移步骤完成。

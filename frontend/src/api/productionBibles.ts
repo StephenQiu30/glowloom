@@ -57,6 +57,21 @@ export async function resumeBibleApiV1ProductionBiblesBibleIdResumePost(
   });
 }
 
+/** Resolve Bible Review Issue POST /api/v1/production-bibles/{bible_id}/review-issue-resolutions */
+export async function resolveBibleReviewIssueApiV1ProductionBiblesBibleIdReviewIssueResolutionsPost(
+  params: API.resolveBibleReviewIssueApiV1ProductionBiblesBibleIdReviewIssueResolutionsPostParams,
+  body: API.ProductionBibleReviewIssueResolutionRequest,
+  options?: RequestOptions,
+) {
+  const { bible_id: path0 } = params;
+  return request<API.ApiResponseProductionBibleResponse_>(`/api/v1/production-bibles/${path0}/review-issue-resolutions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: body,
+    ...(options ?? {}),
+  });
+}
+
 /** Get Current Bible GET /api/v1/projects/{project_id}/production-bible */
 export async function getCurrentBibleApiV1ProjectsProjectIdProductionBibleGet(
   params: API.getCurrentBibleApiV1ProjectsProjectIdProductionBibleGetParams,

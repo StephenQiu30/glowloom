@@ -14,7 +14,7 @@
   draft-shots/
   review-shots/
   repair-shots/
-backend/app/
+agent/app/
   integrations/codex_local.py
   modules/storyboards/agents/{harness,schemas,tools,checkpoints}.py
   runtime/workers/io.py

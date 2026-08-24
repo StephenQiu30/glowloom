@@ -1,8 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const backendPort = process.env.LANVERSE_E2E_BACKEND_PORT ?? "8687";
+const agentPort = process.env.LANVERSE_E2E_AGENT_PORT ?? "8688";
 const frontendPort = process.env.LANVERSE_E2E_FRONTEND_PORT ?? "8124";
 const backendBaseUrl = `http://127.0.0.1:${backendPort}`;
+const agentBaseUrl = `http://127.0.0.1:${agentPort}`;
 const frontendBaseUrl = `http://127.0.0.1:${frontendPort}`;
 
 export default defineConfig({
@@ -19,10 +21,10 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "cd ../backend && .venv/bin/python -m app.runtime.commands.database && .venv/bin/python -m tests.support.e2e_server",
+        "cd ../agent && .venv/bin/python -m app.runtime.commands.database && .venv/bin/python -m tests.support.e2e_server",
       env: {
         API_HOST: "127.0.0.1",
-        API_PORT: backendPort,
+        API_PORT: agentPort,
         CORS_ORIGINS: JSON.stringify([frontendBaseUrl]),
         DATABASE_URL: "postgresql+asyncpg://postgres@127.0.0.1:5432/lanverse_test",
         ENVIRONMENT: "test",
@@ -31,6 +33,17 @@ export default defineConfig({
         KAFKA_BOOTSTRAP_SERVERS:
           process.env.KAFKA_BOOTSTRAP_SERVERS ?? "127.0.0.1:9092",
         EMAIL_VERIFICATION_SOURCE_LIMIT: "1000",
+      },
+      url: `${agentBaseUrl}/readyz`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      command: "cd ../backend && go run ./cmd/api",
+      env: {
+        API_HOST: "127.0.0.1",
+        API_PORT: backendPort,
+        LEGACY_API_URL: agentBaseUrl,
       },
       url: `${backendBaseUrl}/readyz`,
       reuseExistingServer: false,

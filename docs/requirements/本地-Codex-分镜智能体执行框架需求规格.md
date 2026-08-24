@@ -28,8 +28,8 @@ Harness 必须满足：
 - 通用 Skill 使用 2–3 个英文单词的“动作 + 对象”短名且不带产品前缀：`analyze-scene`、`plan-scene`、`draft-shots`、`review-shots`、`repair-shots`。Production Bible 使用 `extract-bible-evidence`、`reconcile-bible`、`review-bible`。
 - Skill 目录使用 `lowercase-kebab-case` 并与 frontmatter `name` 一致；Python 模块使用语义完整的 `lower_snake_case`，不得为了缩短名称引入难懂缩写。
 - 运行所需能力必须随项目自有 Skill/reference 交付；上游仓库只作公开研究来源，不得成为 submodule、运行时 checkout、Git revision 门禁或隐式文件依赖。
-- 当前 Harness 归属 `backend/app/modules/storyboards/agents/`。
-- 禁止顶层 `backend/app/modules/agents/`、万能 `AgentService`、跨域业务 `ToolRegistry` 和空 Agent 占位目录。
+- 当前 Harness 归属迁移期兼容路径 `agent/app/modules/storyboards/agents/`。
+- 禁止顶层 `agent/app/modules/agents/`、万能 `AgentService`、跨域业务 `ToolRegistry` 和空 Agent 占位目录。
 
 ## 场景图与资产图
 

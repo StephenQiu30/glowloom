@@ -10,7 +10,7 @@ test("上传整剧样本并恢复确定性格式体检结果", async ({ page }) 
   const projectName = `MVP-A-整剧导入-${unique}`;
   const sampleFixturePath = path.resolve(
     process.cwd(),
-    "../backend/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json",
+    "../agent/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json",
   );
   const sample = JSON.parse(readFileSync(sampleFixturePath, "utf8")) as {
     full_script: string;
