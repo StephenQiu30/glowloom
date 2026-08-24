@@ -141,7 +141,13 @@ async def find_outbox_event_id(
     )
 
 
-async def outbox_backlog(session: AsyncSession) -> list[OutboxBacklog]:
+async def outbox_backlog(
+    session: AsyncSession,
+    *,
+    topics: frozenset[str],
+) -> list[OutboxBacklog]:
+    if not topics:
+        raise ValueError("outbox topic allowlist must not be empty")
     rows = await session.execute(
         select(
             OutboxEvent.topic,
@@ -149,7 +155,10 @@ async def outbox_backlog(session: AsyncSession) -> list[OutboxBacklog]:
             func.count(OutboxEvent.id),
             func.min(OutboxEvent.created_at),
         )
-        .where(OutboxEvent.status.in_(("pending", "claimed", "manual_attention")))
+        .where(
+            OutboxEvent.status.in_(("pending", "claimed", "manual_attention")),
+            OutboxEvent.topic.in_(tuple(sorted(topics))),
+        )
         .group_by(OutboxEvent.topic, OutboxEvent.status)
     )
     backlog: list[OutboxBacklog] = []
@@ -197,7 +206,10 @@ async def claim_outbox_events(
     now: datetime,
     batch_size: int,
     claim_timeout: timedelta,
+    topics: frozenset[str],
 ) -> list[OutboxEvent]:
+    if not topics:
+        raise ValueError("outbox topic allowlist must not be empty")
     expired_before = now - claim_timeout
     rows = await session.scalars(
         select(OutboxEvent)
@@ -214,7 +226,8 @@ async def claim_outbox_events(
                         OutboxEvent.claimed_at <= expired_before,
                     ),
                 ),
-            )
+            ),
+            OutboxEvent.topic.in_(tuple(sorted(topics))),
         )
         .order_by(OutboxEvent.available_at, OutboxEvent.id)
         .limit(batch_size)

@@ -92,6 +92,9 @@ services:
 
   outbox-publisher:
     <<: *agent-runtime
+    environment:
+      <<: *agent-environment
+      OUTBOX_TOPICS: ${OUTBOX_TOPICS:-lanverse.io.v1,lanverse.media.v1}
     depends_on:
       agent-init:
         condition: service_completed_successfully

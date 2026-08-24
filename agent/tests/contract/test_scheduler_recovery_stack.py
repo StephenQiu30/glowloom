@@ -176,6 +176,7 @@ async def test_cron_lease_outbox_and_worker_recover_once_on_real_stack(
                 publisher_id="unavailable-kafka-publisher",
                 batch_size=10,
                 claim_timeout=timedelta(seconds=30),
+                topics=frozenset({MEDIA_TOPIC}),
             )
             == 0
         )
@@ -206,6 +207,7 @@ async def test_cron_lease_outbox_and_worker_recover_once_on_real_stack(
                 publisher_id="recovered-kafka-publisher",
                 batch_size=10,
                 claim_timeout=timedelta(seconds=30),
+                topics=frozenset({MEDIA_TOPIC}),
             )
             == 1
         )

@@ -12,9 +12,16 @@ import (
 
 	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
+	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 )
 
 const shutdownTimeout = 10 * time.Second
+
+var (
+	buildVersion = "development"
+	buildCommit  = "unknown"
+	buildTime    = "unknown"
+)
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -25,9 +32,22 @@ func main() {
 	}
 
 	upstreamClient := &http.Client{Timeout: configuration.UpstreamTimeout}
+	httpMetrics := telemetry.NewHTTPMetrics()
 	server := &http.Server{
-		Addr:              configuration.ListenAddress,
-		Handler:           bootstrap.NewAPIHandler(configuration.LegacyAPIURL, upstreamClient),
+		Addr: configuration.ListenAddress,
+		Handler: bootstrap.NewAPIHandler(
+			configuration.LegacyAPIURL,
+			upstreamClient,
+			bootstrap.RuntimeOptions{
+				Build: bootstrap.BuildInfo{
+					Service: "lanverse-api",
+					Version: buildVersion,
+					Commit:  buildCommit,
+					BuiltAt: buildTime,
+				},
+				Metrics: httpMetrics,
+			},
+		),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}

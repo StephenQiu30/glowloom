@@ -36,9 +36,9 @@ Lanverse 是面向 AI 短剧生产的端到端 AI Native Production Platform。�
 第一阶段已建立可验证的语言与运行边界：
 
 - `frontend`：Next.js Web 入口。
-- `backend`：Go `lanverse-api` 公共入口，自行提供健康与就绪接口；尚未迁移的业务路由透明转发到内部兼容服务。
+- `backend`：Go `lanverse-api` 公共入口，自行提供健康、就绪、指标与构建版本接口；尚未迁移的业务路由透明转发到内部兼容服务。
 - `agent-api`：迁入 `agent/` 的 FastAPI 兼容运行时，当前仍是业务写入所有者，不对宿主机暴露端口。
-- `schedule-dispatcher` 与 `outbox-publisher`：使用同一 Agent 镜像，但拥有独立生命周期。
+- `schedule-dispatcher` 与 `outbox-publisher`：使用同一 Agent 镜像，但拥有独立生命周期；旧 Publisher 通过 `OUTBOX_TOPICS` 只领取 `lanverse.io.v1` 与 `lanverse.media.v1`。
 - `io-worker` 与 `media-worker`：延续现有 Kafka 消费职责。
 - PostgreSQL、Redis、MinIO 与 Kafka：提供当前代码已经依赖的有状态基础设施。
 
@@ -51,6 +51,8 @@ Lanverse 是面向 AI 短剧生产的端到端 AI Native Production Platform。�
 ```
 
 启动器会在本机运行 Python 兼容 API、Go Backend 和 Frontend，不创建基础设施容器，也不会启动 Kafka Consumer/Publisher 去领取本机共享 Topic 中的旧任务。为避免旧 Schema 被覆盖，它默认在同一个本机 PostgreSQL 实例中使用 `LOCAL_DATABASE_NAME=lanverse_development` 的隔离数据库；不会修改 `.env` 中原 `DATABASE_URL` 指向的数据库。需要 Scheduler/Worker 的执行链或完全隔离的全栈验收环境时，再运行：
+
+Go 公共入口的运行端点是 `/healthz`、`/readyz`、`/metrics` 与 `/version`。其中 Readiness 会探测内部 Agent 兼容 API，Metrics 只使用方法、固定路由和状态族等有界标签，Version 由构建参数注入且不包含 Secret。
 
 ```bash
 docker compose --env-file .env.example \

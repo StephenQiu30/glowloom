@@ -108,6 +108,13 @@ def test_compose_files_define_the_current_runnable_top_level_slice() -> None:
     assert "app.runtime.workers.scheduler outbox" in commands["outbox-publisher"]
     assert commands["schedule-dispatcher"] != commands["outbox-publisher"]
 
+    publisher_environment = services["outbox-publisher"].get("environment")
+    assert isinstance(publisher_environment, dict)
+    assert publisher_environment["OUTBOX_TOPICS"] == ("lanverse.io.v1,lanverse.media.v1")
+    dispatcher_environment = services["schedule-dispatcher"].get("environment")
+    assert isinstance(dispatcher_environment, dict)
+    assert "OUTBOX_TOPICS" not in dispatcher_environment
+
     networks = cast(dict[str, dict[str, object]], config["networks"])
     assert networks["internal"]["internal"] is True
 

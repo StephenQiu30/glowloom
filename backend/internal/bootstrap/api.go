@@ -13,7 +13,12 @@ type healthResponse struct {
 	Reason  string `json:"reason,omitempty"`
 }
 
-func NewAPIHandler(legacyAPIURL *url.URL, upstreamClient *http.Client) http.Handler {
+func NewAPIHandler(
+	legacyAPIURL *url.URL,
+	upstreamClient *http.Client,
+	runtime RuntimeOptions,
+) http.Handler {
+	runtime = runtime.normalized()
 	proxy := httputil.NewSingleHostReverseProxy(legacyAPIURL)
 	proxy.Transport = upstreamClient.Transport
 	proxy.ErrorHandler = func(writer http.ResponseWriter, _ *http.Request, _ error) {
@@ -36,8 +41,12 @@ func NewAPIHandler(legacyAPIURL *url.URL, upstreamClient *http.Client) http.Hand
 		)
 	})
 	mux.HandleFunc("GET /readyz", readinessHandler(legacyAPIURL, upstreamClient))
+	mux.HandleFunc("GET /version", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSON(writer, http.StatusOK, runtime.Build)
+	})
+	mux.Handle("GET /metrics", runtime.Metrics.Handler())
 	mux.Handle("/", proxy)
-	return mux
+	return runtime.Metrics.Middleware(mux)
 }
 
 func readinessHandler(
@@ -89,6 +98,10 @@ func writeNotReady(writer http.ResponseWriter, reason string) {
 }
 
 func writeHealthResponse(writer http.ResponseWriter, status int, response healthResponse) {
+	writeJSON(writer, status, response)
+}
+
+func writeJSON(writer http.ResponseWriter, status int, response any) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(status)
 	_ = json.NewEncoder(writer).Encode(response)

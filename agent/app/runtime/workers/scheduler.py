@@ -36,6 +36,7 @@ from app.modules.messaging.metrics import (
     observe_outbox_publish_result,
     topic_label,
 )
+from app.modules.messaging.topics import REGISTERED_TOPICS
 from app.modules.scheduling.dispatcher import dispatch_due_schedules
 from app.runtime.model_registry import register_implemented_models
 
@@ -52,6 +53,7 @@ async def publish_outbox_batch(
     publisher_id: str,
     batch_size: int,
     claim_timeout: timedelta,
+    topics: frozenset[str],
 ) -> int:
     try:
         return await _publish_outbox_batch(
@@ -60,17 +62,20 @@ async def publish_outbox_batch(
             publisher_id=publisher_id,
             batch_size=batch_size,
             claim_timeout=claim_timeout,
+            topics=topics,
         )
     finally:
-        await refresh_outbox_backlog_metrics(factory)
+        await refresh_outbox_backlog_metrics(factory, topics=topics)
 
 
 async def refresh_outbox_backlog_metrics(
     factory: async_sessionmaker[AsyncSession],
+    *,
+    topics: frozenset[str],
 ) -> None:
     try:
         async with factory() as session:
-            backlog = await outbox_backlog(session)
+            backlog = await outbox_backlog(session, topics=topics)
         observe_outbox_backlog(backlog, observed_at=datetime.now(UTC))
     except Exception:
         pass
@@ -83,6 +88,7 @@ async def _publish_outbox_batch(
     publisher_id: str,
     batch_size: int,
     claim_timeout: timedelta,
+    topics: frozenset[str],
 ) -> int:
     claimed_at = datetime.now(UTC)
     async with factory() as session:
@@ -93,6 +99,7 @@ async def _publish_outbox_batch(
                 now=claimed_at,
                 batch_size=batch_size,
                 claim_timeout=claim_timeout,
+                topics=topics,
             )
 
     published = 0
@@ -221,6 +228,7 @@ async def run_schedule_dispatcher(settings: Settings) -> None:
 
 
 async def run_outbox_publisher(settings: Settings) -> None:
+    topics = parse_outbox_topics(settings.outbox_topics)
     await _prepare_runtime(settings, service_name="lanverse-outbox-publisher")
     publisher = KafkaPublisher(settings.kafka_bootstrap_servers)
     publisher_id = f"{socket.gethostname()}:{os.getpid()}:outbox"
@@ -233,6 +241,7 @@ async def run_outbox_publisher(settings: Settings) -> None:
                 publisher_id=publisher_id,
                 batch_size=settings.outbox_batch_size,
                 claim_timeout=timedelta(seconds=settings.outbox_claim_seconds),
+                topics=topics,
             )
             if published == 0:
                 await asyncio.sleep(settings.outbox_poll_seconds)
@@ -244,6 +253,17 @@ async def run_scheduler(settings: Settings) -> None:
     async with asyncio.TaskGroup() as tasks:
         tasks.create_task(run_schedule_dispatcher(settings))
         tasks.create_task(run_outbox_publisher(settings))
+
+
+def parse_outbox_topics(value: str) -> frozenset[str]:
+    topics = frozenset(topic.strip() for topic in value.split(",") if topic.strip())
+    if not topics:
+        raise ValueError("OUTBOX_TOPICS must not be empty")
+    unknown_topics = topics - REGISTERED_TOPICS
+    if unknown_topics:
+        names = ", ".join(sorted(unknown_topics))
+        raise ValueError(f"OUTBOX_TOPICS contains topics that are not registered: {names}")
+    return topics
 
 
 def scheduler_service(mode: SchedulerMode) -> SchedulerService:

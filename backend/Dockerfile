@@ -2,10 +2,15 @@ ARG GO_IMAGE=golang:1.26-alpine
 FROM ${GO_IMAGE} AS builder
 
 WORKDIR /src
-COPY go.mod ./go.mod
+COPY go.mod go.sum ./
 COPY cmd ./cmd
 COPY internal ./internal
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/lanverse-api ./cmd/api
+ARG BUILD_VERSION=development
+ARG BUILD_COMMIT=unknown
+ARG BUILD_TIME=unknown
+RUN CGO_ENABLED=0 go build -trimpath \
+    -ldflags="-s -w -X main.buildVersion=${BUILD_VERSION} -X main.buildCommit=${BUILD_COMMIT} -X main.buildTime=${BUILD_TIME}" \
+    -o /out/lanverse-api ./cmd/api
 
 FROM alpine:3.23
 

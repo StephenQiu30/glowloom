@@ -16,6 +16,7 @@ from app.modules.messaging import (
     claim_outbox_events,
 )
 from app.modules.messaging.models import OutboxEvent
+from app.modules.messaging.topics import IO_TOPIC, MEDIA_TOPIC
 from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
 from app.runtime.workers import scheduler
 from app.runtime.workers.scheduler import publish_outbox_batch
@@ -97,6 +98,7 @@ async def test_claim_is_exclusive_and_expired_claim_can_be_recovered(
                 now=now,
                 batch_size=10,
                 claim_timeout=timedelta(seconds=60),
+                topics=frozenset({IO_TOPIC, MEDIA_TOPIC}),
             )
         assert len(first) == 1
         assert first[0].status == "claimed"
@@ -111,6 +113,7 @@ async def test_claim_is_exclusive_and_expired_claim_can_be_recovered(
                 now=now + timedelta(seconds=30),
                 batch_size=10,
                 claim_timeout=timedelta(seconds=60),
+                topics=frozenset({IO_TOPIC, MEDIA_TOPIC}),
             )
         assert second == []
 
@@ -121,11 +124,61 @@ async def test_claim_is_exclusive_and_expired_claim_can_be_recovered(
                 now=now + timedelta(seconds=61),
                 batch_size=10,
                 claim_timeout=timedelta(seconds=60),
+                topics=frozenset({IO_TOPIC, MEDIA_TOPIC}),
             )
         assert len(recovered) == 1
         assert recovered[0].id == first[0].id
         assert recovered[0].claimed_by == "publisher-b"
-        assert recovered[0].attempt_count == 2
+    assert recovered[0].attempt_count == 2
+
+
+@pytest.mark.asyncio
+async def test_claim_only_leases_events_from_the_explicit_topic_lane(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    actor = await _actor(session_factory)
+    io_task_id = await _task(session_factory, actor, idempotency_key="topic-filter")
+    media_event_id = uuid7()
+    now = datetime.now(UTC)
+    async with session_factory() as session:
+        async with session.begin():
+            session.add(
+                OutboxEvent(
+                    id=media_event_id,
+                    workspace_id=actor.workspace_id,
+                    event_type="media_probe.requested",
+                    schema_version=1,
+                    aggregate_type="task",
+                    aggregate_id=uuid7(),
+                    topic=MEDIA_TOPIC,
+                    payload={"task_id": str(uuid7())},
+                    trace_id="topic-filter",
+                    traceparent=("00-11111111111111111111111111111111-2222222222222222-01"),
+                    status="pending",
+                    attempt_count=0,
+                    available_at=now,
+                    occurred_at=now,
+                    created_at=now,
+                )
+            )
+
+    async with session_factory() as session:
+        async with session.begin():
+            claimed = await claim_outbox_events(
+                session,
+                publisher_id="io-publisher",
+                now=now,
+                batch_size=10,
+                claim_timeout=timedelta(seconds=60),
+                topics=frozenset({IO_TOPIC}),
+            )
+
+    assert [event.aggregate_id for event in claimed] == [io_task_id]
+    async with session_factory() as session:
+        media_event = await session.get(OutboxEvent, media_event_id)
+    assert media_event is not None
+    assert media_event.status == "pending"
+    assert media_event.claimed_by is None
 
 
 @pytest.mark.asyncio
@@ -144,6 +197,7 @@ async def test_publish_batch_persists_confirm_and_sanitized_retry(
         publisher_id="publisher-test",
         batch_size=10,
         claim_timeout=timedelta(seconds=60),
+        topics=frozenset({IO_TOPIC, MEDIA_TOPIC}),
     )
     assert published == 1
     assert len(publisher.messages) == 2
@@ -237,6 +291,7 @@ async def test_backlog_observation_failure_does_not_replace_publish_result(
         publisher_id="publisher-observation-failure",
         batch_size=10,
         claim_timeout=timedelta(seconds=60),
+        topics=frozenset({IO_TOPIC, MEDIA_TOPIC}),
     )
 
     assert published == 1

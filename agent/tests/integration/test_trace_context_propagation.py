@@ -15,6 +15,7 @@ from app.modules.identity import ActorContext
 from app.modules.identity.models import UserAccount, Workspace
 from app.modules.messaging import MessageEnvelope
 from app.modules.messaging.models import OutboxEvent
+from app.modules.messaging.topics import IO_TOPIC
 from app.modules.production import ScriptExtractionTaskCommand, create_script_extraction_task
 from app.runtime.workers import io as io_worker
 from app.runtime.workers.scheduler import publish_outbox_batch
@@ -128,6 +129,7 @@ async def test_http_outbox_kafka_and_worker_keep_one_trace_with_distinct_spans(
         publisher_id="trace-context-publisher",
         batch_size=10,
         claim_timeout=timedelta(seconds=60),
+        topics=frozenset({IO_TOPIC}),
     )
     assert published == 1
     envelope, topic = publisher.messages[0]
