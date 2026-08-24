@@ -37,7 +37,7 @@ from .tools import (
     validate_scene_draft,
 )
 
-STORYBOARD_AGENT_HARNESS_VERSION = "storyboard-agent-harness-v1"
+STORYBOARD_AGENT_HARNESS_VERSION = "storyboard-agent-harness-v2"
 MAX_REPAIR_ROUNDS = 2
 
 
@@ -90,17 +90,16 @@ def default_storyboard_agent_skills() -> StoryboardAgentSkills:
             name=name,
             version="v1",
             max_input_chars=300_000,
-            timeout_seconds=180.0,
             candidate_only=True,
             allowed_tools=frozenset[str](),
         )
 
     return StoryboardAgentSkills(
-        source_analysis=definition("storyboard-source-analysis"),
-        scene_plan=definition("storyboard-scene-plan"),
-        shot_draft=definition("storyboard-shot-draft"),
-        review=definition("storyboard-review"),
-        repair=definition("storyboard-repair"),
+        source_analysis=definition("analyze-scene"),
+        scene_plan=definition("plan-scene"),
+        shot_draft=definition("draft-shots"),
+        review=definition("review-shots"),
+        repair=definition("repair-shots"),
     )
 
 
@@ -410,7 +409,7 @@ class StoryboardAgentHarness:
                 skill=self._skills.source_analysis,
                 model=self._models.source_analysis,
                 system_prompt=(
-                    "$storyboard-source-analysis 仅分析固定来源，将场景组织为可拍的"
+                    "$analyze-scene 仅分析固定来源，将场景组织为可拍的"
                     "语义节拍；不得改写来源或设计完整镜头表。只返回指定 JSON。"
                 ),
                 user_payload=context.model_dump_json(),
@@ -431,7 +430,7 @@ class StoryboardAgentHarness:
                 skill=self._skills.scene_plan,
                 model=self._models.scene_plan,
                 system_prompt=(
-                    "$storyboard-scene-plan 根据已验证节拍规划空间轴、调度、节奏、"
+                    "$plan-scene 根据已验证节拍规划空间轴、调度、节奏、"
                     "时长预算和有限镜头 seed；不得补写剧情。只返回指定 JSON。"
                 ),
                 user_payload=payload,
@@ -453,7 +452,7 @@ class StoryboardAgentHarness:
                 skill=self._skills.shot_draft,
                 model=self._models.shot_draft,
                 system_prompt=(
-                    "$storyboard-shot-draft 只按固定场景、节拍与计划填写候选分镜行；"
+                    "$draft-shots 只按固定场景、节拍与计划填写候选分镜行；"
                     "只能引用输入 position，不得写数据库或声明正式镜头已创建。只返回指定 JSON。"
                 ),
                 user_payload=payload,
@@ -484,7 +483,7 @@ class StoryboardAgentHarness:
                 skill=self._skills.review,
                 model=self._models.review,
                 system_prompt=(
-                    "$storyboard-review 独立审核候选关键分镜表，只输出有证据的问题；"
+                    "$review-shots 独立审核候选关键分镜表，只输出有证据的问题；"
                     "镜头问题使用 scene_key 和场景内局部镜号，不直接修改分镜。只返回指定 JSON。"
                 ),
                 user_payload=payload,
@@ -539,7 +538,7 @@ class StoryboardAgentHarness:
                     skill=self._skills.repair,
                     model=self._models.repair,
                     system_prompt=(
-                        "$storyboard-repair 只修复列出的 blocker 及其相邻上下文；"
+                        "$repair-shots 只修复列出的 blocker 及其相邻上下文；"
                         "不得自由重写已通过内容，不得新增来源事实。只返回指定 JSON。"
                     ),
                     user_payload=payload,
@@ -719,12 +718,22 @@ class StoryboardAgentHarness:
             "hard_gates_passed",
         }:
             return analyses_complete and plans_complete and drafts_complete
-        if checkpoint.stage in {"reviewed", "final_gate_passed"}:
+        if checkpoint.stage == "reviewed":
             return (
                 analyses_complete
                 and plans_complete
                 and drafts_complete
                 and checkpoint.assembled is not None
+                and checkpoint.assembled.has_consistent_payload()
+            )
+        if checkpoint.stage == "final_gate_passed":
+            return (
+                checkpoint.status == "completed"
+                and analyses_complete
+                and plans_complete
+                and drafts_complete
+                and checkpoint.assembled is not None
+                and checkpoint.assembled.has_consistent_payload()
             )
         return checkpoint.stage == "failed" and checkpoint.status == "failed"
 
@@ -810,6 +819,7 @@ class StoryboardAgentHarness:
             {
                 "batch_id": value.batch_id,
                 "task_id": value.task_id,
+                "run_token": value.run_token,
                 "harness_version": STORYBOARD_AGENT_HARNESS_VERSION,
                 "input_hash": value.input_hash,
                 "stage": stage,

@@ -1,6 +1,0 @@
-interface:
-  display_name: "Storyboard Source Analysis"
-  short_description: "Map one fixed scene into source-grounded dramatic beats"
-  default_prompt: "Use $storyboard-source-analysis to analyze the supplied immutable scene into schema-valid semantic beats."
-policy:
-  allow_implicit_invocation: false

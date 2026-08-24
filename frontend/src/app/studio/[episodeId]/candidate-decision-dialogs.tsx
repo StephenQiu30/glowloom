@@ -39,6 +39,11 @@ function editableProposalFields(candidate: API.ExtractionCandidateResponse) {
       };
     case "asset":
       return { title: candidate.proposal.name, description: candidate.proposal.description };
+    case "asset_occurrence":
+      return {
+        title: candidate.proposal.entity_key,
+        description: candidate.proposal.state_key,
+      };
     case "shot":
       return { title: candidate.proposal.title, description: candidate.proposal.purpose };
     case "continuity":
@@ -62,6 +67,8 @@ function editedProposal(
       };
     case "asset":
       return { ...candidate.proposal, name: title, description };
+    case "asset_occurrence":
+      return { ...candidate.proposal, entity_key: title, state_key: description };
     case "shot":
       return { ...candidate.proposal, title, purpose: description };
     case "continuity":

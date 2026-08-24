@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import logging
 import time
+from datetime import UTC, datetime
 from typing import Literal, Protocol
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
@@ -20,6 +21,7 @@ from app.core.telemetry import (
 )
 from app.integrations.codex_local import (
     CodexLocalEpisodePlanner,
+    CodexLocalProductionBibleBuilder,
     CodexLocalScriptAdapter,
     CodexLocalScriptStructureExtractor,
     CodexLocalStoryboardDrafter,
@@ -41,6 +43,7 @@ from app.modules.messaging.consumer import (
     prepare_configured_extraction,
 )
 from app.modules.messaging.draft_consumer import (
+    STORYBOARD_DRAFT_LEASE_DURATION,
     PreparedStoryboardDraft,
     finalize_storyboard_draft_failure,
     finalize_storyboard_draft_success,
@@ -63,6 +66,13 @@ from app.modules.messaging.planning_consumer import (
     finalize_episode_planning_success,
     prepare_episode_planning,
 )
+from app.modules.messaging.production_bible_consumer import (
+    PRODUCTION_BIBLE_LEASE_DURATION,
+    PreparedProductionBible,
+    finalize_production_bible_failure,
+    finalize_production_bible_success,
+    prepare_production_bible,
+)
 from app.modules.scripts import (
     ScriptExtractionProviderError,
     ScriptExtractionResult,
@@ -78,9 +88,21 @@ from app.modules.scripts.planning.ports import (
     EpisodePlanningProviderError,
 )
 from app.modules.scripts.planning.schemas import EpisodePlanningProviderResult
+from app.modules.scripts.production_bibles import (
+    ProductionBibleBuilder,
+    ProductionBibleLeaseLost,
+    ProductionBibleProviderError,
+    ProductionBibleProviderResult,
+)
+from app.modules.scripts.production_bibles.checkpoints import (
+    DatabaseProductionBibleCheckpointStore,
+)
+from app.modules.scripts.production_bibles.service import renew_bible_lease
 from app.modules.storyboards import (
+    StoryboardDraftLeaseLost,
     StoryboardDraftProvider,
     StoryboardDraftProviderError,
+    renew_draft_run_lease,
 )
 from app.modules.storyboards.agents import DatabaseStoryboardCheckpointStore
 from app.runtime.model_registry import register_implemented_models
@@ -91,6 +113,10 @@ WorkerResult = Literal["completed", "duplicate", "rejected", "requeued"]
 TOPIC_NAME = IO_TOPIC
 CONSUMER_GROUP = "lanverse.io-workers.v1"
 LOGGER = logging.getLogger("lanverse.worker")
+STORYBOARD_DRAFT_LEASE_HEARTBEAT_SECONDS = 60.0
+STORYBOARD_DRAFT_LEASE_RETRY_SECONDS = 5.0
+PRODUCTION_BIBLE_LEASE_HEARTBEAT_SECONDS = 60.0
+PRODUCTION_BIBLE_LEASE_RETRY_SECONDS = 5.0
 
 
 class IncomingMessage(Protocol):
@@ -110,6 +136,7 @@ async def process_incoming_message(
     episode_planner: EpisodePlanner | None = None,
     adaptation_provider: ScriptAdapter | None = None,
     storyboard_drafter: StoryboardDraftProvider | None = None,
+    production_bible_builder: ProductionBibleBuilder | None = None,
 ) -> WorkerResult:
     started = time.perf_counter()
     if len(message.body) > MAX_MESSAGE_BYTES:
@@ -146,6 +173,7 @@ async def process_incoming_message(
             episode_planner=episode_planner,
             adaptation_provider=adaptation_provider,
             storyboard_drafter=storyboard_drafter,
+            production_bible_builder=production_bible_builder,
         )
         span.set_attribute("messaging.operation.result", result)
         if result == "requeued":
@@ -223,7 +251,16 @@ async def _process_valid_envelope(
     episode_planner: EpisodePlanner | None,
     adaptation_provider: ScriptAdapter | None,
     storyboard_drafter: StoryboardDraftProvider | None,
+    production_bible_builder: ProductionBibleBuilder | None,
 ) -> WorkerResult:
+
+    if envelope.event_type == "production_bible.requested":
+        return await _process_production_bible_envelope(
+            message,
+            envelope,
+            factory,
+            production_bible_builder=production_bible_builder,
+        )
 
     if envelope.event_type == "storyboard_draft.requested":
         return await _process_storyboard_draft_envelope(
@@ -290,11 +327,19 @@ async def _process_valid_envelope(
 
     extraction_result: ScriptExtractionResult | None = None
     try:
-        extraction_result = await extractor.extract(
-            prepared.extraction_input.body,
-            trace_id=envelope.trace_id,
-            episode_number=prepared.extraction_input.episode_number,
-        )
+        if prepared.extraction_input.production_bible is None:
+            extraction_result = await extractor.extract(
+                prepared.extraction_input.body,
+                trace_id=envelope.trace_id,
+                episode_number=prepared.extraction_input.episode_number,
+            )
+        else:
+            extraction_result = await extractor.extract(
+                prepared.extraction_input.body,
+                trace_id=envelope.trace_id,
+                episode_number=prepared.extraction_input.episode_number,
+                production_bible=prepared.extraction_input.production_bible,
+            )
     except ScriptExtractionProviderError as error:
         provider_error = error
     except Exception:
@@ -509,6 +554,157 @@ async def _process_script_adaptation_envelope(
     return result
 
 
+async def _process_production_bible_envelope(
+    message: IncomingMessage,
+    envelope: MessageEnvelope,
+    factory: async_sessionmaker[AsyncSession],
+    *,
+    production_bible_builder: ProductionBibleBuilder | None,
+) -> WorkerResult:
+    try:
+        async with factory() as session:
+            async with session.begin():
+                prepared = await prepare_production_bible(
+                    session,
+                    envelope,
+                    configured=production_bible_builder is not None,
+                )
+    except Exception:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    if prepared == "lease_active":
+        await message.nack(requeue=True)
+        return "requeued"
+    if not isinstance(prepared, PreparedProductionBible):
+        await message.ack()
+        return prepared
+    if production_bible_builder is None:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    bible_result: ProductionBibleProviderResult | None = None
+    try:
+        bible_result = await _build_production_bible_with_lease(
+            factory,
+            prepared,
+            production_bible_builder,
+        )
+    except ProductionBibleLeaseLost:
+        await message.nack(requeue=True)
+        return "requeued"
+    except ProductionBibleProviderError as error:
+        provider_error = error
+    except Exception:
+        provider_error = ProductionBibleProviderError(
+            outcome="unknown",
+            code="ai_result_unknown",
+            summary="Production Bible response outcome is unknown",
+            retryable=False,
+            next_action="resume_production_bible",
+        )
+    else:
+        provider_error = None
+
+    try:
+        async with factory() as session:
+            async with session.begin():
+                if provider_error is None:
+                    if bible_result is None:
+                        raise RuntimeError("Production Bible result is unavailable")
+                    result = await finalize_production_bible_success(
+                        session,
+                        prepared,
+                        bible_result,
+                    )
+                else:
+                    result = await finalize_production_bible_failure(
+                        session,
+                        prepared,
+                        provider_error,
+                    )
+    except Exception:
+        await message.nack(requeue=True)
+        return "requeued"
+
+    await message.ack()
+    return result
+
+
+async def _build_production_bible_with_lease(
+    factory: async_sessionmaker[AsyncSession],
+    prepared: PreparedProductionBible,
+    builder: ProductionBibleBuilder,
+) -> ProductionBibleProviderResult:
+    stop = asyncio.Event()
+    provider_task = asyncio.create_task(builder.build(prepared.bible_input))
+    heartbeat_task = asyncio.create_task(
+        _maintain_production_bible_lease(factory, prepared, stop)
+    )
+    try:
+        done, _ = await asyncio.wait(
+            {provider_task, heartbeat_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if heartbeat_task in done:
+            heartbeat_error = heartbeat_task.exception()
+            if heartbeat_error is not None:
+                raise heartbeat_error
+            raise ProductionBibleLeaseLost("Production Bible lease heartbeat stopped")
+        return await provider_task
+    finally:
+        stop.set()
+        if not provider_task.done():
+            provider_task.cancel()
+            try:
+                await provider_task
+            except BaseException:
+                pass
+        await heartbeat_task
+
+
+async def _maintain_production_bible_lease(
+    factory: async_sessionmaker[AsyncSession],
+    prepared: PreparedProductionBible,
+    stop: asyncio.Event,
+) -> None:
+    lease_expires_at = prepared.lease_expires_at
+    next_attempt_seconds = PRODUCTION_BIBLE_LEASE_HEARTBEAT_SECONDS
+    while True:
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=next_attempt_seconds)
+            return
+        except TimeoutError:
+            now = datetime.now(UTC)
+            try:
+                async with factory() as session, session.begin():
+                    renewed = await renew_bible_lease(
+                        session,
+                        bible_id=prepared.bible_input.bible_id,
+                        task_id=prepared.bible_input.task_id,
+                        run_token=prepared.run_token,
+                        lease_expires_at=now + PRODUCTION_BIBLE_LEASE_DURATION,
+                    )
+            except Exception as error:
+                retry_time = datetime.now(UTC)
+                remaining_seconds = (lease_expires_at - retry_time).total_seconds()
+                if remaining_seconds <= 0:
+                    raise ProductionBibleLeaseLost(
+                        "Production Bible lease expired during heartbeat recovery"
+                    ) from error
+                next_attempt_seconds = min(
+                    PRODUCTION_BIBLE_LEASE_RETRY_SECONDS,
+                    remaining_seconds,
+                )
+                continue
+            if not renewed:
+                raise ProductionBibleLeaseLost(
+                    "Production Bible lease was fenced"
+                ) from None
+            lease_expires_at = now + PRODUCTION_BIBLE_LEASE_DURATION
+            next_attempt_seconds = PRODUCTION_BIBLE_LEASE_HEARTBEAT_SECONDS
+
+
 async def _process_storyboard_draft_envelope(
     message: IncomingMessage,
     envelope: MessageEnvelope,
@@ -528,6 +724,9 @@ async def _process_storyboard_draft_envelope(
         await message.nack(requeue=True)
         return "requeued"
 
+    if prepared == "lease_active":
+        await message.nack(requeue=True)
+        return "requeued"
     if not isinstance(prepared, PreparedStoryboardDraft):
         await message.ack()
         return prepared
@@ -537,7 +736,14 @@ async def _process_storyboard_draft_envelope(
 
     draft_result: dict[str, object] | None = None
     try:
-        draft_result = await storyboard_drafter.draft(prepared.draft_input)
+        draft_result = await _draft_storyboard_with_lease(
+            factory,
+            prepared,
+            storyboard_drafter,
+        )
+    except StoryboardDraftLeaseLost:
+        await message.nack(requeue=True)
+        return "requeued"
     except StoryboardDraftProviderError as error:
         provider_error = error
     except Exception:
@@ -576,6 +782,83 @@ async def _process_storyboard_draft_envelope(
     return result
 
 
+async def _draft_storyboard_with_lease(
+    factory: async_sessionmaker[AsyncSession],
+    prepared: PreparedStoryboardDraft,
+    storyboard_drafter: StoryboardDraftProvider,
+) -> dict[str, object]:
+    stop = asyncio.Event()
+    provider_task = asyncio.create_task(storyboard_drafter.draft(prepared.draft_input))
+    heartbeat_task = asyncio.create_task(
+        _maintain_storyboard_draft_lease(factory, prepared, stop)
+    )
+    try:
+        done, _pending = await asyncio.wait(
+            {provider_task, heartbeat_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if heartbeat_task in done:
+            heartbeat_error = heartbeat_task.exception()
+            if heartbeat_error is not None:
+                raise heartbeat_error
+            raise StoryboardDraftLeaseLost("Storyboard draft lease heartbeat stopped")
+        return await provider_task
+    finally:
+        stop.set()
+        if not provider_task.done():
+            provider_task.cancel()
+            try:
+                await provider_task
+            except BaseException:
+                pass
+        await heartbeat_task
+
+
+async def _maintain_storyboard_draft_lease(
+    factory: async_sessionmaker[AsyncSession],
+    prepared: PreparedStoryboardDraft,
+    stop: asyncio.Event,
+) -> None:
+    lease_expires_at = prepared.lease_expires_at
+    next_attempt_seconds = STORYBOARD_DRAFT_LEASE_HEARTBEAT_SECONDS
+    while True:
+        try:
+            await asyncio.wait_for(
+                stop.wait(),
+                timeout=next_attempt_seconds,
+            )
+            return
+        except TimeoutError:
+            now = datetime.now(UTC)
+            try:
+                async with factory() as session, session.begin():
+                    renewed = await renew_draft_run_lease(
+                        session,
+                        batch_id=prepared.draft_input.batch_id,
+                        task_id=prepared.draft_input.task_id,
+                        run_token=prepared.run_token,
+                        lease_expires_at=now + STORYBOARD_DRAFT_LEASE_DURATION,
+                    )
+            except Exception as error:
+                retry_time = datetime.now(UTC)
+                remaining_seconds = (lease_expires_at - retry_time).total_seconds()
+                if remaining_seconds <= 0:
+                    raise StoryboardDraftLeaseLost(
+                        "Storyboard draft lease expired during heartbeat recovery"
+                    ) from error
+                next_attempt_seconds = min(
+                    STORYBOARD_DRAFT_LEASE_RETRY_SECONDS,
+                    remaining_seconds,
+                )
+                continue
+            if not renewed:
+                raise StoryboardDraftLeaseLost(
+                    "Storyboard draft lease was fenced"
+                ) from None
+            lease_expires_at = now + STORYBOARD_DRAFT_LEASE_DURATION
+            next_attempt_seconds = STORYBOARD_DRAFT_LEASE_HEARTBEAT_SECONDS
+
+
 async def run_io_worker(settings: Settings) -> None:
     configure_logging(
         settings.log_level,
@@ -610,6 +893,12 @@ async def run_io_worker(settings: Settings) -> None:
         max_concurrency=settings.codex_max_concurrency,
         checkpoint_store=DatabaseStoryboardCheckpointStore(session_factory),
     )
+    production_bible_builder = CodexLocalProductionBibleBuilder(
+        codex_cli_path=settings.codex_cli_path,
+        codex_model=settings.codex_model,
+        max_concurrency=settings.codex_max_concurrency,
+        checkpoint_store=DatabaseProductionBibleCheckpointStore(session_factory),
+    )
     try:
 
         async def on_message(message: KafkaIncomingMessage) -> None:
@@ -620,6 +909,7 @@ async def run_io_worker(settings: Settings) -> None:
                 episode_planner=episode_planner,
                 adaptation_provider=adaptation_provider,
                 storyboard_drafter=storyboard_drafter,
+                production_bible_builder=production_bible_builder,
             )
 
         await consume_topic(
@@ -634,6 +924,7 @@ async def run_io_worker(settings: Settings) -> None:
             episode_planner,
             adaptation_provider,
             storyboard_drafter,
+            production_bible_builder,
         ):
             close = getattr(provider, "aclose", None)
             if close is not None:

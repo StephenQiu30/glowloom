@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import operator
 import re
 import unicodedata
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Annotated, Any, TypedDict, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -16,12 +15,14 @@ from langgraph.types import Send  # pyright: ignore[reportMissingTypeStubs]
 from pydantic import ValidationError
 
 from app.modules.scripts import (
+    AssetOccurrenceCandidateProposal,
     ContinuityCandidateProposal,
     DialogueCandidateProposal,
     ScriptExtractionResult,
     ShotCandidateProposal,
     analyze_document,
 )
+from app.modules.scripts.contracts import ProductionBibleExtractionInput
 from app.modules.skills.contracts import (
     SkillDefinition,
     SkillExecutionContext,
@@ -58,6 +59,7 @@ class ScriptExtractionChunk:
 class _ScriptStructureState(TypedDict, total=False):
     script_body: str
     episode_number: int | None
+    production_bible: dict[str, object] | None
     chunks: list[dict[str, object]]
     chunk_key: str
     chunk_episode_number: int | None
@@ -137,6 +139,348 @@ def _scene_starts(script_body: str, start: int, end: int) -> list[int]:
         if _SCENE_HEADING.match(heading.strip()):
             starts.append(start + block.start_codepoint)
     return starts
+
+
+def _scene_heading_parts(heading: str) -> tuple[str, str]:
+    remainder = _SCENE_HEADING.sub("", heading, count=1).strip(" .-–—")
+    parts = [
+        part.strip()
+        for part in re.split(r"\s+(?:-|–|—)\s+|\s*·\s*", remainder)
+        if part.strip()
+    ]
+    if len(parts) >= 2:
+        return " - ".join(parts[:-1])[:200], parts[-1][:100]
+    return (remainder or heading)[:200], "UNSPECIFIED"
+
+
+def _deterministic_scene_candidates(
+    script_body: str,
+    *,
+    episode_number: int | None,
+) -> ScriptExtractionResult:
+    blocks = [
+        block
+        for block in analyze_document(script_body).blocks
+        if block.kind == "scene_heading"
+        and _SCENE_HEADING.match(
+            script_body[block.start_codepoint : block.end_codepoint].strip()
+        )
+    ]
+    episode_ranges = _episode_ranges(
+        script_body,
+        authoritative_episode_number=episode_number,
+    )
+    candidates: list[dict[str, object]] = []
+    for index, block in enumerate(blocks, start=1):
+        heading = script_body[block.start_codepoint : block.end_codepoint].strip()
+        source_end = (
+            blocks[index].start_codepoint if index < len(blocks) else len(script_body)
+        )
+        location, time_of_day = _scene_heading_parts(heading)
+        scene_body = script_body[block.end_codepoint : source_end]
+        summary = " ".join(scene_body.split())[:1000] or heading
+        resolved_episode_number = episode_number
+        if resolved_episode_number is None:
+            resolved_episode_number = next(
+                (
+                    candidate_episode
+                    for candidate_episode, range_start, range_end in episode_ranges
+                    if range_start <= block.start_codepoint < range_end
+                ),
+                None,
+            )
+        candidates.append(
+            {
+                "candidate_key": f"deterministic-scene-{index:03d}-{block.start_codepoint}",
+                "source_range": {"start": block.start_codepoint, "end": source_end},
+                "proposal": {
+                    "kind": "scene",
+                    "heading": heading,
+                    "location": location,
+                    "time_of_day": time_of_day,
+                    "summary": summary,
+                    "episode_number": resolved_episode_number,
+                    "scene_number": index,
+                },
+                "confidence_note": (
+                    "Deterministic scene heading fallback; semantic enrichment requires review."
+                ),
+            }
+        )
+    return ScriptExtractionResult.model_validate({"candidates": candidates})
+
+
+def _exact_name_mention(
+    script_body: str,
+    *,
+    source_start: int,
+    source_end: int,
+    names: list[str],
+) -> tuple[int, int] | None:
+    scene_text = script_body[source_start:source_end]
+    for name in sorted({item.strip() for item in names if item.strip()}, key=len, reverse=True):
+        tokens = [token for token in re.split(r"[\s\-–—]+", name) if token]
+        escaped = r"[\s\-–—]+".join(re.escape(token) for token in tokens)
+        prefix = r"(?<!\w)" if name[0].isalnum() else ""
+        suffix = r"(?!\w)" if name[-1].isalnum() else ""
+        match = re.search(f"{prefix}{escaped}{suffix}", scene_text, re.IGNORECASE)
+        if match is not None:
+            return source_start + match.start(), source_start + match.end()
+    return None
+
+
+def _complete_bible_occurrences(
+    candidate_payloads: list[dict[str, object]],
+    *,
+    selected_scene_ranges: list[tuple[int, int, str]],
+    script_body: str,
+    production_bible: dict[str, object],
+) -> None:
+    raw_entities = production_bible.get("entities", [])
+    if not isinstance(raw_entities, list):
+        return
+    existing_occurrences: set[tuple[str, str, str]] = set()
+    existing_entity_scenes: set[tuple[str, str]] = set()
+    existing_keys = {str(candidate["candidate_key"]) for candidate in candidate_payloads}
+    for candidate in candidate_payloads:
+        proposal = candidate.get("proposal")
+        if not isinstance(proposal, dict):
+            continue
+        proposal_payload = cast(dict[str, object], proposal)
+        if proposal_payload.get("kind") != "asset_occurrence":
+            continue
+        entity_key = str(proposal_payload.get("entity_key", ""))
+        state_key = str(proposal_payload.get("state_key", ""))
+        scene_key = str(proposal_payload.get("scene_candidate_key", ""))
+        existing_occurrences.add((entity_key, state_key, scene_key))
+        existing_entity_scenes.add((entity_key, scene_key))
+
+    supported_roles = {"character", "location", "prop", "costume", "visual_style", "voice"}
+    for raw_entity in cast(list[object], raw_entities):
+        if not isinstance(raw_entity, dict):
+            continue
+        entity = cast(dict[str, object], raw_entity)
+        entity_key = str(entity.get("entity_key", ""))
+        role = str(entity.get("kind", ""))
+        raw_states = entity.get("states", [])
+        if not entity_key or role not in supported_roles or not isinstance(raw_states, list):
+            continue
+        states: list[dict[str, object]] = []
+        for raw_state in cast(list[object], raw_states):
+            if not isinstance(raw_state, dict):
+                continue
+            state = cast(dict[str, object], raw_state)
+            if state.get("state_key"):
+                states.append(state)
+        if not states:
+            continue
+        raw_aliases = entity.get("aliases", [])
+        aliases = (
+            [str(alias) for alias in cast(list[object], raw_aliases)]
+            if isinstance(raw_aliases, list)
+            else []
+        )
+        names = [str(entity.get("canonical_name", "")), *aliases]
+        for scene_start, scene_end, scene_key in selected_scene_ranges:
+            if (entity_key, scene_key) in existing_entity_scenes:
+                continue
+            mention = _exact_name_mention(
+                script_body,
+                source_start=scene_start,
+                source_end=scene_end,
+                names=names,
+            )
+            if mention is None:
+                continue
+            for state in states:
+                state_key = str(state["state_key"])
+                occurrence_key = (entity_key, state_key, scene_key)
+                if occurrence_key in existing_occurrences:
+                    continue
+                digest = hashlib.sha256(
+                    (
+                        f"{entity_key}:{state_key}:{scene_key}:"
+                        f"{mention[0]}:{mention[1]}"
+                    ).encode()
+                ).hexdigest()[:24]
+                candidate_key = f"tool-occurrence-{digest}"
+                if candidate_key in existing_keys:
+                    continue
+                existing_keys.add(candidate_key)
+                existing_occurrences.add(occurrence_key)
+                candidate_payloads.append(
+                    {
+                        "candidate_key": candidate_key,
+                        "source_range": {"start": mention[0], "end": mention[1]},
+                        "proposal": {
+                            "kind": "asset_occurrence",
+                            "entity_key": entity_key,
+                            "state_key": state_key,
+                            "scene_candidate_key": scene_key,
+                            "role": role,
+                        },
+                        "confidence_note": (
+                            "Deterministic Production Bible name or alias match with one "
+                            "episode-valid state."
+                            if len(states) == 1
+                            else "Deterministic Production Bible mention; multiple "
+                            "episode-valid states require review."
+                        ),
+                    }
+                )
+
+
+def _complete_deterministic_scenes(
+    result: ScriptExtractionResult,
+    script_body: str,
+    *,
+    episode_number: int | None,
+    production_bible: dict[str, object] | None = None,
+) -> ScriptExtractionResult:
+    deterministic = list(
+        _deterministic_scene_candidates(
+            script_body,
+            episode_number=episode_number,
+        ).candidates
+    )
+    model_scenes = [
+        candidate for candidate in result.candidates if candidate.proposal.kind == "scene"
+    ]
+    unused_scene_keys = {candidate.candidate_key for candidate in model_scenes}
+    selected_scenes = list(deterministic[:0])
+    scene_key_map: dict[str, str] = {}
+    selected_by_range: list[tuple[int, int, str]] = []
+    for expected in deterministic:
+        assert expected.proposal.kind == "scene"
+        matches = [
+            candidate
+            for candidate in model_scenes
+            if candidate.candidate_key in unused_scene_keys
+            and candidate.proposal.kind == "scene"
+            and candidate.proposal.heading == expected.proposal.heading
+        ]
+        selected = (
+            min(
+                matches,
+                key=lambda candidate: abs(
+                    candidate.source_range.start - expected.source_range.start
+                ),
+            )
+            if matches
+            else expected
+        )
+        selected_scenes.append(selected)
+        selected_by_range.append(
+            (
+                expected.source_range.start,
+                expected.source_range.end,
+                selected.candidate_key,
+            )
+        )
+        if matches:
+            unused_scene_keys.remove(selected.candidate_key)
+            scene_key_map[selected.candidate_key] = selected.candidate_key
+
+    def scene_key_for_offset(offset: int) -> str | None:
+        containing = next(
+            (
+                candidate_key
+                for start, end, candidate_key in selected_by_range
+                if start <= offset < end
+            ),
+            None,
+        )
+        if containing is not None:
+            return containing
+        if not selected_by_range:
+            return None
+        return min(
+            selected_by_range,
+            key=lambda item: abs(item[0] - offset),
+        )[2]
+
+    for candidate in model_scenes:
+        if candidate.candidate_key not in unused_scene_keys:
+            continue
+        replacement = scene_key_for_offset(candidate.source_range.start)
+        if replacement is not None:
+            scene_key_map[candidate.candidate_key] = replacement
+
+    scene_range_by_key = {
+        candidate_key: (start, end) for start, end, candidate_key in selected_by_range
+    }
+
+    def referenced_scene_key(raw_scene_key: str, source_start: int) -> str | None:
+        mapped = scene_key_map.get(raw_scene_key)
+        if mapped is not None:
+            mapped_range = scene_range_by_key.get(mapped)
+            if (
+                mapped_range is not None
+                and mapped_range[0] <= source_start < mapped_range[1]
+            ):
+                return mapped
+        return scene_key_for_offset(source_start) or mapped
+
+    candidate_payloads: list[dict[str, object]] = [
+        cast(dict[str, object], candidate.model_dump(mode="json"))
+        for candidate in selected_scenes
+    ]
+    for candidate in result.candidates:
+        if candidate.proposal.kind == "scene":
+            continue
+        candidate_payload = cast(dict[str, object], candidate.model_dump(mode="json"))
+        proposal = cast(dict[str, object], candidate_payload["proposal"])
+        raw_scene_key = proposal.get("scene_candidate_key")
+        if isinstance(raw_scene_key, str):
+            replacement = referenced_scene_key(
+                raw_scene_key,
+                candidate.source_range.start,
+            )
+            if replacement is not None:
+                proposal["scene_candidate_key"] = replacement
+        raw_scene_keys = proposal.get("scene_candidate_keys")
+        if isinstance(raw_scene_keys, list):
+            proposal["scene_candidate_keys"] = list(
+                dict.fromkeys(
+                    replacement
+                    for item in cast(list[object], raw_scene_keys)
+                    if (
+                        replacement := referenced_scene_key(
+                            str(item),
+                            candidate.source_range.start,
+                        )
+                    )
+                    is not None
+                )
+            )
+        candidate_payloads.append(candidate_payload)
+
+    if production_bible is not None:
+        _complete_bible_occurrences(
+            candidate_payloads,
+            selected_scene_ranges=selected_by_range,
+            script_body=script_body,
+            production_bible=production_bible,
+        )
+
+    reconciled = ScriptExtractionResult.model_validate({"candidates": candidate_payloads})
+    candidates = list(reconciled.candidates)
+    kind_order = {
+        "scene": 0,
+        "asset_occurrence": 1,
+        "dialogue": 2,
+        "continuity": 3,
+        "asset": 4,
+        "shot": 5,
+    }
+    candidates.sort(
+        key=lambda candidate: (
+            candidate.source_range.start,
+            kind_order[candidate.proposal.kind],
+            candidate.candidate_key,
+        )
+    )
+    return ScriptExtractionResult(candidates=candidates)
 
 
 def segment_script(
@@ -249,7 +593,14 @@ def _validate_chunk_result(result: ScriptExtractionResult, chunk_text: str) -> N
                 next_action="start_new_skill_run",
             )
         proposal = candidate.proposal
-        if isinstance(proposal, (DialogueCandidateProposal, ShotCandidateProposal)):
+        if isinstance(
+            proposal,
+            (
+                DialogueCandidateProposal,
+                AssetOccurrenceCandidateProposal,
+                ShotCandidateProposal,
+            ),
+        ):
             if proposal.scene_candidate_key not in candidate_keys:
                 raise SkillExecutionError(
                     outcome="failed",
@@ -409,7 +760,7 @@ def _aggregate_results(
                 and chunk_episode_number is not None
             ):
                 proposal["episode_number"] = chunk_episode_number
-            if candidate.proposal.kind in {"dialogue", "shot"}:
+            if candidate.proposal.kind in {"dialogue", "asset_occurrence", "shot"}:
                 scene_key = str(proposal["scene_candidate_key"])
                 proposal["scene_candidate_key"] = scene_key_map.get(
                     scene_key,
@@ -583,6 +934,7 @@ class ScriptStructureExtractionWorkflow:
         *,
         context: SkillExecutionContext,
         episode_number: int | None = None,
+        production_bible: ProductionBibleExtractionInput | None = None,
     ) -> ScriptExtractionResult:
         if context.skill_name != self._skill.name or context.skill_version != self._skill.version:
             raise SkillExecutionError(
@@ -600,7 +952,15 @@ class ScriptStructureExtractionWorkflow:
             }
         }
         result = await graph.ainvoke(
-            {"script_body": script_body, "episode_number": episode_number},
+            {
+                "script_body": script_body,
+                "episode_number": episode_number,
+                "production_bible": (
+                    json.loads(json.dumps(asdict(production_bible), default=str))
+                    if production_bible is not None
+                    else None
+                ),
+            },
             config=config,
         )
         output = result.get("output")
@@ -644,6 +1004,8 @@ class ScriptStructureExtractionWorkflow:
                 for chunk_state in chunk_states:
                     if chunk_state["chunk_episode_number"] is None:
                         chunk_state["chunk_episode_number"] = explicit_episode_number
+            for chunk_state in chunk_states:
+                chunk_state["production_bible"] = state.get("production_bible")
             return {"chunks": chunk_states}
 
         def fan_out(state: _ScriptStructureState) -> list[Send]:
@@ -665,31 +1027,27 @@ class ScriptStructureExtractionWorkflow:
                     "source_start": state.get("chunk_start"),
                     "source_end": state.get("chunk_end"),
                     "script_text": chunk_text,
+                    "production_bible": state.get("production_bible"),
+                    "asset_policy": (
+                        "Reference only production_bible entities/states using "
+                        "asset_occurrence proposals; never emit asset proposals."
+                        if state.get("production_bible") is not None
+                        else "Asset proposals are allowed."
+                    ),
                 },
                 ensure_ascii=False,
                 separators=(",", ":"),
             )
             try:
-                raw_output = await asyncio.wait_for(
-                    self._model.ainvoke(
-                        [
-                            SystemMessage(content=self._system_prompt),
-                            HumanMessage(content=payload),
-                        ]
-                    ),
-                    timeout=self._skill.timeout_seconds,
+                raw_output = await self._model.ainvoke(
+                    [
+                        SystemMessage(content=self._system_prompt),
+                        HumanMessage(content=payload),
+                    ]
                 )
                 result = ScriptExtractionResult.model_validate(raw_output)
                 result = _bound_chunk_result(result, chunk_text)
                 _validate_chunk_result(result, chunk_text)
-            except TimeoutError as error:
-                raise SkillExecutionError(
-                    outcome="unknown",
-                    code="skill_timeout",
-                    summary="Skill response outcome is unknown",
-                    retryable=False,
-                    next_action="reconcile_skill_run",
-                ) from error
             except SkillExecutionError:
                 raise
             except (TypeError, ValueError, ValidationError) as error:
@@ -729,10 +1087,19 @@ class ScriptStructureExtractionWorkflow:
             script_body = state.get("script_body", "")
             expected_scene_headings: set[str] = set()
             if self._chunker is None:
+                output = _complete_deterministic_scenes(
+                    output,
+                    script_body,
+                    episode_number=state.get("episode_number"),
+                    production_bible=state.get("production_bible"),
+                )
                 expected_scene_headings = {
                     script_body[block.start_codepoint : block.end_codepoint].strip()
                     for block in analyze_document(script_body).blocks
                     if block.kind == "scene_heading"
+                    and _SCENE_HEADING.match(
+                        script_body[block.start_codepoint : block.end_codepoint].strip()
+                    )
                 }
             actual_scene_headings = {
                 candidate.proposal.heading
@@ -778,7 +1145,47 @@ class ScriptStructureExtractionWorkflow:
                     retryable=False,
                     next_action="start_new_skill_run",
                 )
-            return {}
+            production_bible = state.get("production_bible")
+            if production_bible is not None:
+                raw_entities = production_bible.get("entities", [])
+                entity_states: dict[str, set[str]] = {}
+                entity_kinds: dict[str, str] = {}
+                if isinstance(raw_entities, list):
+                    for raw_entity in cast(list[object], raw_entities):
+                        if not isinstance(raw_entity, dict):
+                            continue
+                        entity = cast(dict[str, object], raw_entity)
+                        entity_key = str(entity.get("entity_key", ""))
+                        entity_kinds[entity_key] = str(entity.get("kind", ""))
+                        raw_states = entity.get("states", [])
+                        entity_states[entity_key] = {
+                            str(cast(dict[str, object], item).get("state_key", ""))
+                            for item in cast(list[object], raw_states)
+                            if isinstance(item, dict)
+                        }
+                for candidate in output.candidates:
+                    proposal = candidate.proposal
+                    if proposal.kind == "asset":
+                        raise SkillExecutionError(
+                            outcome="failed",
+                            code="skill_output_invalid",
+                            summary="Bible-bound extraction emitted an independent asset",
+                            retryable=False,
+                            next_action="start_new_skill_run",
+                        )
+                    if isinstance(proposal, AssetOccurrenceCandidateProposal) and (
+                        proposal.entity_key not in entity_states
+                        or proposal.state_key not in entity_states[proposal.entity_key]
+                        or proposal.role != entity_kinds[proposal.entity_key]
+                    ):
+                        raise SkillExecutionError(
+                            outcome="failed",
+                            code="skill_output_invalid",
+                            summary="Asset occurrence references an unknown Production Bible state",
+                            retryable=False,
+                            next_action="start_new_skill_run",
+                        )
+            return {"output": output}
 
         async def candidate_gate(state: _ScriptStructureState) -> dict[str, object]:
             del state

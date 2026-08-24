@@ -1,0 +1,6 @@
+interface:
+  display_name: "Analyze Scene"
+  short_description: "Map one fixed scene into source-grounded dramatic beats"
+  default_prompt: "Use $analyze-scene to analyze the supplied immutable scene into schema-valid semantic beats."
+policy:
+  allow_implicit_invocation: false

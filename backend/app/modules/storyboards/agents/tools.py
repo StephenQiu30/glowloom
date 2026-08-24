@@ -54,15 +54,11 @@ def build_scene_contexts(value: StoryboardDraftInput) -> tuple[SceneContext, ...
         max(1, sum(len(unit.exact_text) for unit in grouped[scene_id])) for scene_id in scene_order
     ]
     durations = _allocate_duration(value.target_duration_ms, weights)
-    assets = tuple(
-        SceneContextAsset(
-            asset_version_id=asset.asset_version_id,
-            position=asset.position,
-            kind=asset.kind,
-            name=asset.name,
-            state_label=asset.state_label,
-        )
-        for asset in value.assets
+    world_facts = tuple(
+        fact for entry in value.world_entries for fact in entry.facts
+    )
+    world_rules = tuple(
+        rule for entry in value.world_entries for rule in entry.rules
     )
     return tuple(
         SceneContext(
@@ -72,7 +68,24 @@ def build_scene_contexts(value: StoryboardDraftInput) -> tuple[SceneContext, ...
             aspect_ratio=value.aspect_ratio,
             visual_style=value.visual_style,
             units=tuple(grouped[scene_id]),
-            assets=assets,
+            assets=tuple(
+                SceneContextAsset(
+                    asset_version_id=asset.asset_version_id,
+                    position=asset.position,
+                    kind=asset.kind,
+                    name=asset.name,
+                    state_label=asset.state_label,
+                )
+                for asset in value.assets
+                if not asset.unit_version_ids
+                or bool(
+                    set(asset.unit_version_ids).intersection(
+                        unit.unit_version_id for unit in grouped[scene_id]
+                    )
+                )
+            ),
+            world_facts=world_facts,
+            world_rules=world_rules,
         )
         for index, scene_id in enumerate(scene_order, start=1)
     )
@@ -249,13 +262,18 @@ def _continuity_issues(
 
 def _placement_side(value: str) -> str | None:
     normalized = value.lower()
-    if "左" in normalized or "left" in normalized:
-        return "left"
-    if "右" in normalized or "right" in normalized:
-        return "right"
-    if "中" in normalized or "center" in normalized or "centre" in normalized:
-        return "center"
-    return None
+    anchors = {
+        "left": ("左", "left"),
+        "right": ("右", "right"),
+        "center": ("中", "center", "centre"),
+    }
+    matches = [
+        (index, side)
+        for side, terms in anchors.items()
+        for term in terms
+        if (index := normalized.find(term)) >= 0
+    ]
+    return min(matches)[1] if matches else None
 
 
 def validate_review_scope(
@@ -413,7 +431,10 @@ def annotate_storyboard_issues(
                 )
             )
         ]
-        risk_codes = list(dict.fromkeys((*row.shot.risk_codes, *scoped_codes)))[:20]
+        # Review warnings are the latest normalized evidence. Keep their stable
+        # order ahead of pre-existing risks so the 20-code schema limit cannot
+        # silently discard them; older risks fall off from the tail instead.
+        risk_codes = list(dict.fromkeys((*scoped_codes, *row.shot.risk_codes)))[:20]
         shot = row.shot.model_copy(update={"risk_codes": risk_codes})
         shots.append(shot)
         timeline.append(row.model_copy(update={"shot": shot}))

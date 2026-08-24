@@ -35,11 +35,16 @@ from app.modules.scripts.authorization import (
     require_resource_access,
     resource_not_found,
 )
-from app.modules.scripts.contracts import ScriptExtractionInput, ScriptProductionSummary
+from app.modules.scripts.contracts import (
+    ProductionBibleExtractionInput,
+    ScriptExtractionInput,
+    ScriptProductionSummary,
+)
 from app.modules.scripts.extractions.ports import SCRIPT_STRUCTURE_EXTRACTOR_VERSION
 from app.modules.scripts.extractions.schemas import (
     AcceptWithChangesDecision,
     AssetCandidateProposal,
+    AssetOccurrenceCandidateProposal,
     CandidateDecisionCommand,
     CandidateDecisionEvidenceResponse,
     CandidateDecisionRequest,
@@ -64,6 +69,10 @@ from app.modules.scripts.models import (
     ScriptVersion,
 )
 from app.modules.scripts.narratives.service import resolve_storyboard_narrative
+from app.modules.scripts.production_bibles import (
+    repository as production_bible_repository,
+)
+from app.modules.scripts.production_bibles import resolve_production_bible_context
 
 
 async def count_asset_candidate_decisions(
@@ -76,6 +85,26 @@ async def count_asset_candidate_decisions(
         workspace_id,
         asset_ids,
     )
+
+
+def ambiguous_occurrence_candidate_keys(
+    result: ScriptExtractionResult,
+) -> set[str]:
+    states_by_entity_scene: dict[tuple[str, str], set[str]] = {}
+    candidates_by_entity_scene: dict[tuple[str, str], list[str]] = {}
+    for candidate in result.candidates:
+        proposal = candidate.proposal
+        if not isinstance(proposal, AssetOccurrenceCandidateProposal):
+            continue
+        group = (proposal.entity_key, proposal.scene_candidate_key)
+        states_by_entity_scene.setdefault(group, set()).add(proposal.state_key)
+        candidates_by_entity_scene.setdefault(group, []).append(candidate.candidate_key)
+    return {
+        candidate_key
+        for group, state_keys in states_by_entity_scene.items()
+        if len(state_keys) > 1
+        for candidate_key in candidates_by_entity_scene[group]
+    }
 
 
 async def summarize_current_scripts(
@@ -163,6 +192,9 @@ def _batch_response(
         scope=cast(Literal["full"], batch.scope),
         extractor_version=batch.extractor_version,
         input_hash=batch.input_hash,
+        production_bible_id=batch.production_bible_id,
+        production_bible_revision=batch.production_bible_revision,
+        production_bible_result_hash=batch.production_bible_result_hash,
         status=task.status,
         confirmed_script_version_id=batch.confirmed_script_version_id,
         candidate_count=batch.candidate_count,
@@ -245,8 +277,30 @@ def _same_extraction(
         batch.script_version_id == version.id
         and batch.scope == request.scope
         and batch.extractor_version == SCRIPT_STRUCTURE_EXTRACTOR_VERSION
-        and batch.input_hash == version.content_hash
+        and batch.production_bible_id == request.production_bible_id
     )
+
+
+def _extraction_input_hash(
+    *,
+    script_content_hash: str,
+    production_bible_id: UUID | None,
+    production_bible_revision: int | None,
+    production_bible_result_hash: str | None,
+) -> str:
+    if production_bible_id is None:
+        return script_content_hash
+    canonical = json.dumps(
+        {
+            "production_bible_id": str(production_bible_id),
+            "production_bible_result_hash": production_bible_result_hash,
+            "production_bible_revision": production_bible_revision,
+            "script_content_hash": script_content_hash,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return sha256(canonical.encode()).hexdigest()
 
 
 def _task_idempotency_key(version_id: UUID, idempotency_key: str) -> str:
@@ -289,6 +343,34 @@ async def enqueue_extraction(
         source.workspace_id,
         Capability.CONTENT_WRITE,
     )
+    production_bible = None
+    if request.production_bible_id is not None:
+        production_bible = await production_bible_repository.find_bible(
+            session,
+            request.production_bible_id,
+        )
+        if (
+            production_bible is None
+            or production_bible.workspace_id != source.workspace_id
+            or production_bible.project_id != episode.project_id
+            or production_bible.status != "confirmed"
+            or production_bible.result_hash is None
+        ):
+            raise ApiError(
+                ErrorCode.STATE_CONFLICT,
+                "A confirmed Production Bible is required for Bible-bound extraction",
+                status_code=409,
+                next_action="confirm_production_bible",
+            )
+    bible_id = production_bible.id if production_bible is not None else None
+    bible_revision = production_bible.revision if production_bible is not None else None
+    bible_result_hash = production_bible.result_hash if production_bible is not None else None
+    input_hash = _extraction_input_hash(
+        script_content_hash=version.content_hash,
+        production_bible_id=bible_id,
+        production_bible_revision=bible_revision,
+        production_bible_result_hash=bible_result_hash,
+    )
     batch_id = uuid7()
     inserted_id = await session.scalar(
         insert(ExtractionBatch)
@@ -298,7 +380,11 @@ async def enqueue_extraction(
             script_version_id=version.id,
             scope=request.scope,
             extractor_version=SCRIPT_STRUCTURE_EXTRACTOR_VERSION,
-            input_hash=version.content_hash,
+            script_content_hash=version.content_hash,
+            input_hash=input_hash,
+            production_bible_id=bible_id,
+            production_bible_revision=bible_revision,
+            production_bible_result_hash=bible_result_hash,
             status="queued",
             idempotency_key=request.idempotency_key,
             created_by=claims.sub,
@@ -318,7 +404,7 @@ async def enqueue_extraction(
                 "Extraction batch state is unavailable",
                 status_code=500,
             )
-        if not _same_extraction(batch, version, request):
+        if not _same_extraction(batch, version, request) or batch.input_hash != input_hash:
             raise ApiError(
                 ErrorCode.RESOURCE_CONFLICT,
                 "Idempotency key was used with different input",
@@ -335,7 +421,7 @@ async def enqueue_extraction(
             episode_id=episode.episode_id,
             request_id=inserted_id,
             input_version_id=version.id,
-            input_hash=version.content_hash,
+            input_hash=input_hash,
             idempotency_key=_task_idempotency_key(version.id, request.idempotency_key),
         ),
         trace_id=trace_id,
@@ -415,8 +501,8 @@ async def get_script_extraction_input(
     if (
         version is None
         or version.workspace_id != batch.workspace_id
-        or version.content_hash != batch.input_hash
-        or sha256(version.body.encode()).hexdigest() != batch.input_hash
+        or version.content_hash != batch.script_content_hash
+        or sha256(version.body.encode()).hexdigest() != batch.script_content_hash
     ):
         raise ApiError(
             ErrorCode.INTERNAL_ERROR,
@@ -439,6 +525,27 @@ async def get_script_extraction_input(
             "Extraction episode context is unavailable",
             status_code=500,
         )
+    production_bible_input: ProductionBibleExtractionInput | None = None
+    if batch.production_bible_id is not None:
+        if batch.production_bible_revision is None or batch.production_bible_result_hash is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Extraction Production Bible snapshot is unavailable",
+                status_code=500,
+            )
+        production_bible_input = await resolve_production_bible_context(
+            session,
+            bible_id=batch.production_bible_id,
+            revision=batch.production_bible_revision,
+            result_hash=batch.production_bible_result_hash,
+            episode_number=episode_context.position,
+        )
+        if production_bible_input is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Extraction Production Bible snapshot is unavailable",
+                status_code=500,
+            )
     return ScriptExtractionInput(
         batch_id=batch.id,
         task_id=task_id,
@@ -446,7 +553,42 @@ async def get_script_extraction_input(
         script_version_id=version.id,
         episode_number=episode_context.position,
         body=version.body,
+        production_bible=production_bible_input,
     )
+
+
+async def resolve_confirmed_script_production_bible_context(
+    session: AsyncSession,
+    *,
+    confirmed_script_version_id: UUID,
+    episode_number: int,
+) -> ProductionBibleExtractionInput | None:
+    batch = await repository.find_extraction_batch_by_confirmed_version(
+        session,
+        confirmed_script_version_id,
+    )
+    if batch is None or batch.production_bible_id is None:
+        return None
+    if batch.production_bible_revision is None or batch.production_bible_result_hash is None:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Confirmed script Production Bible snapshot is unavailable",
+            status_code=503,
+        )
+    context = await resolve_production_bible_context(
+        session,
+        bible_id=batch.production_bible_id,
+        revision=batch.production_bible_revision,
+        result_hash=batch.production_bible_result_hash,
+        episode_number=episode_number,
+    )
+    if context is None:
+        raise ApiError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            "Confirmed script Production Bible snapshot is unavailable",
+            status_code=503,
+        )
+    return context
 
 
 async def record_extraction_result(
@@ -526,27 +668,103 @@ async def record_extraction_result(
                 status_code=422,
             )
 
-    now = datetime.now(UTC)
-    session.add_all(
-        [
-            ExtractionCandidate(
-                id=uuid7(),
-                workspace_id=batch.workspace_id,
-                batch_id=batch.id,
-                candidate_key=candidate.candidate_key,
-                kind=candidate.proposal.kind,
-                source_start=candidate.source_range.start,
-                source_end=candidate.source_range.end,
-                proposal=candidate.proposal.model_dump(mode="json"),
-                confidence_note=candidate.confidence_note,
-                required=candidate.proposal.kind in {"scene", "dialogue"},
-                status="pending",
-                revision=1,
-                created_at=now,
-                updated_at=now,
+    if batch.production_bible_id is not None:
+        bible = await production_bible_repository.find_bible(
+            session,
+            batch.production_bible_id,
+        )
+        if (
+            bible is None
+            or bible.status != "confirmed"
+            or bible.revision != batch.production_bible_revision
+            or bible.result_hash != batch.production_bible_result_hash
+        ):
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Extraction Production Bible snapshot has changed",
+                status_code=409,
+                next_action="start_new_extraction",
             )
-            for candidate in result.candidates
-        ]
+        entities = await production_bible_repository.list_entities(
+            session,
+            batch.production_bible_id,
+        )
+        states = await production_bible_repository.list_entity_states(
+            session,
+            batch.production_bible_id,
+        )
+        entity_by_key = {entity.entity_key: entity for entity in entities}
+        state_keys = {(state.entity_id, state.state_key) for state in states}
+        for candidate in result.candidates:
+            proposal = candidate.proposal
+            if isinstance(proposal, AssetCandidateProposal):
+                raise ApiError(
+                    ErrorCode.INVALID_REQUEST,
+                    "Bible-bound extraction cannot create independent asset candidates",
+                    status_code=422,
+                    next_action="reference_production_bible_entities",
+                )
+            if isinstance(proposal, AssetOccurrenceCandidateProposal):
+                entity = entity_by_key.get(proposal.entity_key)
+                if (
+                    entity is None
+                    or (entity.id, proposal.state_key) not in state_keys
+                    or entity.kind != proposal.role
+                ):
+                    raise ApiError(
+                        ErrorCode.INVALID_REQUEST,
+                        "Asset occurrence references an unknown Production Bible state",
+                        status_code=422,
+                        next_action="reference_production_bible_entities",
+                    )
+
+    ambiguous_occurrence_keys = ambiguous_occurrence_candidate_keys(result)
+    now = datetime.now(UTC)
+    candidate_rows = [
+        ExtractionCandidate(
+            id=uuid7(),
+            workspace_id=batch.workspace_id,
+            batch_id=batch.id,
+            candidate_key=candidate.candidate_key,
+            kind=candidate.proposal.kind,
+            source_start=candidate.source_range.start,
+            source_end=candidate.source_range.end,
+            proposal=candidate.proposal.model_dump(mode="json"),
+            confidence_note=candidate.confidence_note,
+            required=(
+                candidate.proposal.kind in {"scene", "dialogue"}
+                or candidate.candidate_key in ambiguous_occurrence_keys
+            ),
+            status=(
+                "accepted"
+                if candidate.proposal.kind == "asset_occurrence"
+                and candidate.candidate_key not in ambiguous_occurrence_keys
+                else "pending"
+            ),
+            revision=1,
+            created_at=now,
+            updated_at=now,
+        )
+        for candidate in result.candidates
+    ]
+    session.add_all(candidate_rows)
+    await session.flush(candidate_rows)
+    session.add_all(
+        CandidateDecision(
+            id=uuid7(),
+            workspace_id=batch.workspace_id,
+            candidate_id=row.id,
+            sequence=1,
+            decision_key=f"production-bible-binding:{row.candidate_key}",
+            action="accept_new",
+            payload={},
+            downstream_type=None,
+            downstream_id=None,
+            actor_id=batch.created_by,
+            created_at=now,
+        )
+        for row in candidate_rows
+        if row.kind == "asset_occurrence" and row.status == "accepted"
     )
     await complete_script_extraction_task(
         session,

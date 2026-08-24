@@ -9,6 +9,7 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
+from app.modules.assets import AssetCandidateOccurrence, link_existing_state_occurrence
 from app.modules.identity import Capability, actor_context
 from app.modules.projects import resolve_episode_content_context
 from app.modules.scripts import repository
@@ -18,6 +19,7 @@ from app.modules.scripts.authorization import (
 )
 from app.modules.scripts.contracts import ConfirmedShotCandidateReference
 from app.modules.scripts.extractions.schemas import (
+    AssetOccurrenceCandidateProposal,
     CandidateProposal,
     CandidateSourceRange,
     DialogueCandidateProposal,
@@ -32,7 +34,8 @@ from app.modules.scripts.models import (
     Scene,
     ScriptVersion,
 )
-from app.modules.scripts.narratives.service import ensure_structure
+from app.modules.scripts.narratives.service import ensure_structure, resolve_storyboard_narrative
+from app.modules.scripts.production_bibles import repository as production_bible_repository
 from app.modules.scripts.structure.schemas import (
     ConfirmedStructureResponse,
     DialogueResponse,
@@ -492,6 +495,120 @@ async def confirm_structure(
             episode=episode,
             actor_id=actor.user_id,
         )
+        if batch.production_bible_id is not None:
+            bible = await production_bible_repository.find_bible(
+                session,
+                batch.production_bible_id,
+            )
+            if (
+                bible is None
+                or bible.status != "confirmed"
+                or bible.revision != batch.production_bible_revision
+                or bible.result_hash != batch.production_bible_result_hash
+            ):
+                raise ApiError(
+                    ErrorCode.DEPENDENCY_UNAVAILABLE,
+                    "Production Bible snapshot is unavailable during structure confirmation",
+                    status_code=503,
+                )
+            bible_entities = await production_bible_repository.list_entities(
+                session,
+                bible.id,
+            )
+            entity_by_key = {entity.entity_key: entity for entity in bible_entities}
+            bible_states = await production_bible_repository.list_entity_states(
+                session,
+                bible.id,
+            )
+            state_by_key = {
+                (state.entity_id, state.state_key): state for state in bible_states
+            }
+            narrative = await resolve_storyboard_narrative(
+                session,
+                batch.workspace_id,
+                confirmed_version.id,
+            )
+            if narrative is None:
+                raise ApiError(
+                    ErrorCode.DEPENDENCY_UNAVAILABLE,
+                    "Confirmed narrative structure is unavailable for asset binding",
+                    status_code=503,
+                )
+            for candidate in candidates:
+                if candidate.kind != "asset_occurrence" or candidate.status != "accepted":
+                    continue
+                proposal = _proposal_for(candidate, decisions)
+                if not isinstance(proposal, AssetOccurrenceCandidateProposal):
+                    raise ApiError(
+                        ErrorCode.INTERNAL_ERROR,
+                        "Asset occurrence proposal type is invalid",
+                        status_code=500,
+                    )
+                referenced_scene = scene_by_key.get(proposal.scene_candidate_key)
+                if referenced_scene is None:
+                    raise ApiError(
+                        ErrorCode.STATE_CONFLICT,
+                        "Asset occurrence scene reference prevents confirmation",
+                        status_code=409,
+                        next_action="resolve_structure_candidates",
+                    )
+                resolved_scene_candidate = _resolve_scene_candidate(
+                    referenced_scene,
+                    scene_by_id,
+                    decisions,
+                )
+                resolved_scene = scene_by_candidate_id.get(resolved_scene_candidate.id)
+                if resolved_scene is None:
+                    raise ApiError(
+                        ErrorCode.STATE_CONFLICT,
+                        "Asset occurrence references an unaccepted scene",
+                        status_code=409,
+                        next_action="resolve_structure_candidates",
+                    )
+                matching_units = [
+                    unit
+                    for unit in narrative.units
+                    if unit.source_scene_id == resolved_scene.id
+                    and unit.source_start < candidate.source_end
+                    and unit.source_end > candidate.source_start
+                ]
+                if not matching_units:
+                    matching_units = [
+                        unit
+                        for unit in narrative.units
+                        if unit.source_scene_id == resolved_scene.id
+                    ]
+                if not matching_units:
+                    raise ApiError(
+                        ErrorCode.DEPENDENCY_UNAVAILABLE,
+                        "Asset occurrence cannot be anchored to a narrative unit",
+                        status_code=503,
+                    )
+                entity = entity_by_key.get(proposal.entity_key)
+                state = (
+                    None
+                    if entity is None
+                    else state_by_key.get((entity.id, proposal.state_key))
+                )
+                if state is None or state.asset_state_id is None:
+                    raise ApiError(
+                        ErrorCode.DEPENDENCY_UNAVAILABLE,
+                        "Production Bible asset state binding is unavailable",
+                        status_code=503,
+                    )
+                unit = matching_units[0]
+                await link_existing_state_occurrence(
+                    session,
+                    actor,
+                    asset_state_id=state.asset_state_id,
+                    candidate_id=candidate.id,
+                    occurrence=AssetCandidateOccurrence(
+                        episode_id=episode.episode_id,
+                        narrative_unit_id=unit.narrative_unit_id,
+                        narrative_unit_version_id=unit.unit_version_id,
+                        text_hash=unit.text_hash,
+                    ),
+                )
         batch.confirmed_script_version_id = confirmed_version.id
         batch.updated_at = now
         await session.flush()

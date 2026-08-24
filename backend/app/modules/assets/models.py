@@ -215,7 +215,8 @@ class AssetVersion(Base):
         CheckConstraint("version_no >= 1", name="ck_ast_version_number"),
         CheckConstraint("schema_version >= 1", name="ck_ast_schema_version"),
         CheckConstraint(
-            "source_type IN ('manual', 'script_extraction_candidate')",
+            "source_type IN ('manual', 'script_extraction_candidate', "
+            "'production_bible_state')",
             name="ck_ast_version_source_type",
         ),
         UniqueConstraint("id", "workspace_id", name="uq_ast_version_id_workspace"),

@@ -241,7 +241,11 @@ class AssetVersionResponse(BaseModel):
     schema_version: int
     spec: AssetSpec
     prompt_description: str
-    source_type: Literal["manual", "script_extraction_candidate"]
+    source_type: Literal[
+        "manual",
+        "script_extraction_candidate",
+        "production_bible_state",
+    ]
     source_id: UUID | None
     content_hash: str
     media_references: list[AssetMediaReferenceResponse]

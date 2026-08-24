@@ -18,7 +18,6 @@ class SkillDefinition:
     name: str
     version: str
     max_input_chars: int
-    timeout_seconds: float
     candidate_only: bool = True
     allowed_tools: frozenset[str] = field(default_factory=lambda: frozenset[str]())
 

@@ -30,6 +30,7 @@ from app.modules.production.contracts import (
     MediaLocationRetirementTaskCommand,
     MediaLocationTaskDispatch,
     MediaProbeTaskCommand,
+    ProductionBibleTaskCommand,
     ScriptAdaptationTaskCommand,
     ScriptExtractionTaskCommand,
     StoryboardDraftTaskCommand,
@@ -154,6 +155,20 @@ def _same_episode_planning_command(
 ) -> bool:
     return (
         task.request_id == command.plan_id
+        and task.input_version_id == command.document_revision_id
+        and task.input_hash == command.input_hash
+        and task.usage_type == "document_revision"
+        and task.usage_id == command.document_revision_id
+    )
+
+
+def _same_production_bible_command(
+    task: Task,
+    command: ProductionBibleTaskCommand,
+) -> bool:
+    return (
+        task.request_id == command.bible_id
+        and task.episode_id is None
         and task.input_version_id == command.document_revision_id
         and task.input_hash == command.input_hash
         and task.usage_type == "document_revision"
@@ -599,6 +614,160 @@ async def complete_episode_planning_task(
     task.error_retryable = None
     task.error_summary = None
     task.next_action = "review_episode_plan"
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.succeeded",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def start_production_bible_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+    trace_id: str,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "production_bible":
+        raise ValueError("task is not a production Bible task")
+    if task.status != "queued":
+        return False
+    previous_status = task.status
+    task.status = "running"
+    task.progress_stage = "calling_provider"
+    task.error_code = None
+    task.error_retryable = None
+    task.error_summary = None
+    task.next_action = "poll_task"
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.started",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def fail_production_bible_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    error_code: str,
+    error_summary: str,
+    next_action: str,
+    now: datetime,
+    trace_id: str,
+    retryable: bool = False,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "production_bible":
+        raise ValueError("task is not a production Bible task")
+    if task.status in {"succeeded", "failed", "cancelled"}:
+        return False
+    previous_status = task.status
+    task.status = "failed"
+    task.progress_stage = "blocked"
+    task.error_code = error_code
+    task.error_retryable = retryable
+    task.error_summary = error_summary
+    task.next_action = next_action
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.failed",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def mark_production_bible_task_unknown(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+    trace_id: str,
+    error_code: str = "ai_result_unknown",
+    error_summary: str = "Provider response outcome is unknown",
+    retryable: bool = False,
+    next_action: str = "resume_production_bible",
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "production_bible":
+        raise ValueError("task is not a production Bible task")
+    if task.status in {"succeeded", "failed", "cancelled", "unknown"}:
+        return False
+    previous_status = task.status
+    task.status = "unknown"
+    task.progress_stage = "reconciliation_required"
+    task.error_code = error_code
+    task.error_retryable = retryable
+    task.error_summary = error_summary
+    task.next_action = next_action
+    task.revision += 1
+    task.updated_at = now
+    _append_task_transition_audit(
+        session,
+        task,
+        action="task.unknown",
+        previous_status=previous_status,
+        trace_id=trace_id,
+        now=now,
+    )
+    await session.flush()
+    return True
+
+
+async def complete_production_bible_task(
+    session: AsyncSession,
+    task_id: UUID,
+    *,
+    now: datetime,
+    trace_id: str,
+) -> bool:
+    task = await repository.find_task(session, task_id, for_update=True)
+    if task is None:
+        raise ApiError(ErrorCode.INTERNAL_ERROR, "Task state is unavailable", status_code=500)
+    if task.task_type != "production_bible":
+        raise ValueError("task is not a production Bible task")
+    if task.status == "succeeded":
+        return False
+    if task.status in {"failed", "cancelled"}:
+        raise ApiError(
+            ErrorCode.STATE_CONFLICT,
+            "Task cannot be completed from its current state",
+            status_code=409,
+        )
+    previous_status = task.status
+    task.status = "succeeded"
+    task.progress_stage = "completed"
+    task.error_code = None
+    task.error_retryable = None
+    task.error_summary = None
+    task.next_action = "review_production_bible"
     task.revision += 1
     task.updated_at = now
     _append_task_transition_audit(
@@ -1688,6 +1857,113 @@ async def create_episode_planning_task(
             "task_type": "episode_planning",
             "request_type": "episode_plan",
             "request_id": str(command.plan_id),
+        },
+        occurred_at=now,
+    )
+    await session.flush()
+    task = await repository.find_task(session, inserted_id)
+    if task is None:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            "Task state is unavailable",
+            status_code=500,
+        )
+    return task_response(task)
+
+
+async def create_production_bible_task(
+    session: AsyncSession,
+    actor: ActorContext,
+    command: ProductionBibleTaskCommand,
+    *,
+    trace_id: str,
+) -> TaskResponse:
+    if actor.workspace_id != command.workspace_id:
+        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403)
+    try:
+        require_workspace_capability(actor.role, actor.workspace_status, Capability.CONTENT_WRITE)
+    except PermissionError as error:
+        raise ApiError(ErrorCode.FORBIDDEN, "Action is not allowed", status_code=403) from error
+    if not trace_id or len(trace_id) > 64:
+        raise ApiError(ErrorCode.INVALID_REQUEST, "Invalid trace identifier", status_code=422)
+
+    task_id = uuid7()
+    now = datetime.now(UTC)
+    inserted_id = await session.scalar(
+        insert(Task)
+        .values(
+            id=task_id,
+            workspace_id=command.workspace_id,
+            task_type="production_bible",
+            request_type="production_bible",
+            request_id=command.bible_id,
+            episode_id=None,
+            usage_type="document_revision",
+            usage_id=command.document_revision_id,
+            input_version_id=command.document_revision_id,
+            input_hash=command.input_hash,
+            status="queued",
+            progress_stage="queued",
+            next_action="poll_task",
+            cancel_status="none",
+            idempotency_key=command.idempotency_key,
+            requested_by=actor.user_id,
+            revision=1,
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(constraint="uq_prod_task_idempotency")
+        .returning(Task.id)
+    )
+    if inserted_id is None:
+        existing = await repository.find_idempotent_task(
+            session,
+            command.workspace_id,
+            "production_bible",
+            command.idempotency_key,
+        )
+        if existing is None:
+            raise ApiError(
+                ErrorCode.INTERNAL_ERROR,
+                "Task state is unavailable",
+                status_code=500,
+            )
+        if not _same_production_bible_command(existing, command):
+            raise ApiError(
+                ErrorCode.RESOURCE_CONFLICT,
+                "Idempotency key was used with different input",
+                status_code=409,
+            )
+        return task_response(existing)
+
+    await enqueue_outbox_event(
+        session,
+        OutboxEventCommand(
+            workspace_id=command.workspace_id,
+            event_type="production_bible.requested",
+            schema_version=1,
+            aggregate_type="task",
+            aggregate_id=inserted_id,
+            topic=IO_TOPIC,
+            payload={"task_id": str(inserted_id)},
+            trace_id=trace_id,
+            available_at=now,
+            occurred_at=now,
+        ),
+    )
+    append_audit_event(
+        session,
+        workspace_id=command.workspace_id,
+        actor_id=actor.user_id,
+        action="task.created",
+        target_type="task",
+        target_id=inserted_id,
+        trace_id=trace_id,
+        metadata={
+            "revision": 1,
+            "task_type": "production_bible",
+            "request_type": "production_bible",
+            "request_id": str(command.bible_id),
         },
         occurred_at=now,
     )

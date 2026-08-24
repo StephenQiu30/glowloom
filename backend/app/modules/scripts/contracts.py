@@ -121,6 +121,45 @@ class ScriptProductionSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class ProductionBibleStateInput:
+    entity_key: str
+    state_key: str
+    label: str
+    asset_state_id: UUID
+    asset_version_id: UUID
+    state_spec: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class ProductionBibleEntityInput:
+    entity_key: str
+    kind: str
+    canonical_name: str
+    aliases: tuple[str, ...]
+    stable_spec: dict[str, object]
+    states: tuple[ProductionBibleStateInput, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ProductionBibleWorldInput:
+    entry_key: str
+    category: str
+    title: str
+    facts: tuple[str, ...]
+    rules: tuple[str, ...]
+    entity_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ProductionBibleExtractionInput:
+    bible_id: UUID
+    revision: int
+    result_hash: str
+    entities: tuple[ProductionBibleEntityInput, ...]
+    world_entries: tuple[ProductionBibleWorldInput, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ScriptExtractionInput:
     batch_id: UUID
     task_id: UUID
@@ -128,6 +167,7 @@ class ScriptExtractionInput:
     script_version_id: UUID
     episode_number: int
     body: str
+    production_bible: ProductionBibleExtractionInput | None = None
 
 
 @dataclass(frozen=True, slots=True)

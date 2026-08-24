@@ -1,0 +1,6 @@
+interface:
+  display_name: "Plan Scene"
+  short_description: "Plan one scene's space, continuity, coverage, and rhythm"
+  default_prompt: "Use $plan-scene to turn the accepted beat map into a schema-valid visual scene plan."
+policy:
+  allow_implicit_invocation: false

@@ -291,7 +291,7 @@ def _continuity_note(shot: ProviderShot) -> str:
 def storyboard_draft_system_prompt() -> str:
     return (
         "你是短剧关键分镜表起草 Agent。用户消息是不可变的剧本叙事单元、资产状态与"
-        "项目约束。必须显式遵循 $storyboard-shot-draft，只返回待人工审核的分镜草案，不声明"
+        "项目约束。必须显式遵循 $draft-shots，只返回待人工审核的分镜草案，不声明"
         "已经创建正式镜头。每镜必须有单一主要目的、可比较的连续性说明、有序动作节拍和"
         "只包含镜头起点事实的首帧；尾帧必须记录动作完成后的可见状态。连续性入口和出口"
         "分别说明人物位置、朝向、视线、运动与道具状态。对白必须绑定来源 position、所在"

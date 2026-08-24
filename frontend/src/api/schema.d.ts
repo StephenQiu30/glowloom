@@ -774,6 +774,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/document-revisions/{revision_id}/production-bibles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Bible */
+        post: operations["create_bible_api_v1_document_revisions__revision_id__production_bibles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/episode-plans/{plan_id}": {
         parameters: {
             query?: never;
@@ -1631,6 +1648,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production-bibles/{bible_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Bible */
+        get: operations["get_bible_api_v1_production_bibles__bible_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production-bibles/{bible_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Bible */
+        post: operations["confirm_bible_api_v1_production_bibles__bible_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production-bibles/{bible_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Bible */
+        post: operations["resume_bible_api_v1_production_bibles__bible_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -1783,6 +1851,23 @@ export interface paths {
         put?: never;
         /** Reorder Episodes */
         post: operations["reorder_episodes_api_v1_projects__project_id__episodes_reorder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/production-bible": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Current Bible */
+        get: operations["get_current_bible_api_v1_projects__project_id__production_bible_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2666,7 +2751,7 @@ export interface components {
              */
             action: "accept_with_changes";
             /** Proposal */
-            proposal: components["schemas"]["SceneCandidateProposal"] | components["schemas"]["DialogueCandidateProposal"] | components["schemas"]["AssetCandidateProposal"] | components["schemas"]["ShotCandidateProposal"] | components["schemas"]["ContinuityCandidateProposal"];
+            proposal: components["schemas"]["SceneCandidateProposal"] | components["schemas"]["DialogueCandidateProposal"] | components["schemas"]["AssetCandidateProposal"] | components["schemas"]["AssetOccurrenceCandidateProposal"] | components["schemas"]["ShotCandidateProposal"] | components["schemas"]["ContinuityCandidateProposal"];
         };
         /** ActionBeat */
         ActionBeat: {
@@ -3125,6 +3210,10 @@ export interface components {
         ApiResponse_PaginatedTasks_: {
             data: components["schemas"]["PaginatedTasks"];
         };
+        /** ApiResponse[ProductionBibleResponse] */
+        ApiResponse_ProductionBibleResponse_: {
+            data: components["schemas"]["ProductionBibleResponse"];
+        };
         /** ApiResponse[ProjectProductionSnapshot] */
         ApiResponse_ProjectProductionSnapshot_: {
             data: components["schemas"]["ProjectProductionSnapshot"];
@@ -3533,6 +3622,25 @@ export interface components {
             position: number;
             /** Purpose */
             purpose: string;
+        };
+        /** AssetOccurrenceCandidateProposal */
+        AssetOccurrenceCandidateProposal: {
+            /** Entity Key */
+            entity_key: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "asset_occurrence";
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "location" | "character" | "prop" | "costume" | "visual_style" | "voice";
+            /** Scene Candidate Key */
+            scene_candidate_key: string;
+            /** State Key */
+            state_key: string;
         };
         /** AssetOccurrenceDecisionResponse */
         AssetOccurrenceDecisionResponse: {
@@ -4259,7 +4367,7 @@ export interface components {
              * Source Type
              * @enum {string}
              */
-            source_type: "manual" | "script_extraction_candidate";
+            source_type: "manual" | "script_extraction_candidate" | "production_bible_state";
             /** Spec */
             spec: components["schemas"]["CharacterSpec"] | components["schemas"]["LocationSpec"] | components["schemas"]["PropSpec"] | components["schemas"]["CostumeSpec"] | components["schemas"]["StyleSpec"] | components["schemas"]["VoiceSpec"];
             /** Version No */
@@ -4337,6 +4445,44 @@ export interface components {
             token_type: "bearer";
             user: components["schemas"]["UserResponse"];
             workspace: components["schemas"]["WorkspaceResponse"];
+        };
+        /** BibleEvidence */
+        BibleEvidence: {
+            /** Episode Number */
+            episode_number?: number | null;
+            /** Exact Anchor */
+            exact_anchor: string;
+            /** Source End */
+            source_end: number;
+            /** Source Start */
+            source_start: number;
+            /** Text Hash */
+            text_hash: string;
+        };
+        /** BibleReviewIssue */
+        BibleReviewIssue: {
+            /** Code */
+            code: string;
+            /** Evidence */
+            evidence?: components["schemas"]["BibleEvidence"][];
+            /** Issue Key */
+            issue_key: string;
+            /** Repair Hint */
+            repair_hint?: string | null;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "global" | "entity" | "entity_state" | "world_entry";
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "warning" | "blocking";
+            /** Subject Key */
+            subject_key?: string | null;
+            /** Summary */
+            summary: string;
         };
         /** BlockingReason */
         BlockingReason: {
@@ -5422,6 +5568,12 @@ export interface components {
             narrative_structure_id: string;
             /** Narrative Unit Version Ids */
             narrative_unit_version_ids: string[];
+            /** Production Bible Id */
+            production_bible_id: string | null;
+            /** Production Bible Result Hash */
+            production_bible_result_hash: string | null;
+            /** Production Bible Revision */
+            production_bible_revision: number | null;
             /**
              * Script Version Id
              * Format: uuid
@@ -5431,6 +5583,10 @@ export interface components {
             target_duration_ms: number;
             /** Visual Style */
             visual_style: string | null;
+            /** World Entries */
+            world_entries: {
+                [key: string]: unknown;
+            }[];
         };
         /** DraftShotResponse */
         DraftShotResponse: {
@@ -5995,6 +6151,12 @@ export interface components {
             id: string;
             /** Input Hash */
             input_hash: string;
+            /** Production Bible Id */
+            production_bible_id: string | null;
+            /** Production Bible Result Hash */
+            production_bible_result_hash: string | null;
+            /** Production Bible Revision */
+            production_bible_revision: number | null;
             /**
              * Scope
              * @constant
@@ -6042,9 +6204,9 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "scene" | "dialogue" | "asset" | "shot" | "continuity";
+            kind: "scene" | "dialogue" | "asset" | "asset_occurrence" | "shot" | "continuity";
             /** Proposal */
-            proposal: components["schemas"]["SceneCandidateProposal"] | components["schemas"]["DialogueCandidateProposal"] | components["schemas"]["AssetCandidateProposal"] | components["schemas"]["ShotCandidateProposal"] | components["schemas"]["ContinuityCandidateProposal"];
+            proposal: components["schemas"]["SceneCandidateProposal"] | components["schemas"]["DialogueCandidateProposal"] | components["schemas"]["AssetCandidateProposal"] | components["schemas"]["AssetOccurrenceCandidateProposal"] | components["schemas"]["ShotCandidateProposal"] | components["schemas"]["ContinuityCandidateProposal"];
             /** Required */
             required: boolean;
             /** Revision */
@@ -7380,6 +7542,215 @@ export interface components {
             /** Idempotency Key */
             idempotency_key: string;
         };
+        /** ProductionBibleConfirmRequest */
+        ProductionBibleConfirmRequest: {
+            /** Expected Result Hash */
+            expected_result_hash: string;
+            /** Expected Revision */
+            expected_revision: number;
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
+        /** ProductionBibleCreateRequest */
+        ProductionBibleCreateRequest: {
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
+        /** ProductionBibleEntityResponse */
+        ProductionBibleEntityResponse: {
+            /** Aliases */
+            aliases: string[];
+            /** Asset Id */
+            asset_id: string | null;
+            /** Canonical Name */
+            canonical_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Entity Key */
+            entity_key: string;
+            /** Episode Numbers */
+            episode_numbers: number[];
+            /** Evidence */
+            evidence: components["schemas"]["BibleEvidence"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "character" | "location" | "prop" | "costume" | "visual_style" | "voice";
+            /** Normalized Name */
+            normalized_name: string;
+            /** Stable Spec */
+            stable_spec: {
+                [key: string]: unknown;
+            };
+            /** States */
+            states?: components["schemas"]["ProductionBibleEntityStateResponse"][];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ProductionBibleEntityStateResponse */
+        ProductionBibleEntityStateResponse: {
+            /** Asset State Id */
+            asset_state_id: string | null;
+            /** Asset Version Id */
+            asset_version_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Episode Numbers */
+            episode_numbers: number[];
+            /** Evidence */
+            evidence: components["schemas"]["BibleEvidence"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /** State Key */
+            state_key: string;
+            /** State Spec */
+            state_spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ProductionBibleResponse */
+        ProductionBibleResponse: {
+            /** Checkpoint Revision */
+            checkpoint_revision: number;
+            /** Checkpoint Stage */
+            checkpoint_stage: string | null;
+            /** Checkpoint Updated At */
+            checkpoint_updated_at: string | null;
+            /** Confirmed At */
+            confirmed_at: string | null;
+            /** Confirmed By */
+            confirmed_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Document Revision Id
+             * Format: uuid
+             */
+            document_revision_id: string;
+            /** Engine Version */
+            engine_version: string;
+            /** Entities */
+            entities?: components["schemas"]["ProductionBibleEntityResponse"][];
+            /** Harness Version */
+            harness_version: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Input Hash */
+            input_hash: string;
+            /** Model Name */
+            model_name: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Prompt Version */
+            prompt_version: string;
+            /** Result Hash */
+            result_hash?: string | null;
+            /** Review Issues */
+            review_issues: components["schemas"]["BibleReviewIssue"][];
+            /** Revision */
+            revision: number;
+            /** Schema Version */
+            schema_version: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "needs_review" | "confirmed" | "failed" | "unknown" | "superseded" | "cancelled";
+            /** Task Id */
+            task_id: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** World Entries */
+            world_entries?: components["schemas"]["ProductionBibleWorldEntryResponse"][];
+        };
+        /** ProductionBibleResumeRequest */
+        ProductionBibleResumeRequest: {
+            /** Expected Revision */
+            expected_revision: number;
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
+        /** ProductionBibleWorldEntryResponse */
+        ProductionBibleWorldEntryResponse: {
+            /** Category */
+            category: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Entity Keys */
+            entity_keys: string[];
+            /** Entry Key */
+            entry_key: string;
+            /** Episode Numbers */
+            episode_numbers: number[];
+            /** Evidence */
+            evidence: components["schemas"]["BibleEvidence"][];
+            /** Facts */
+            facts: string[];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Rules */
+            rules: string[];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** ProfileUpdateRequest */
         ProfileUpdateRequest: {
             /** Avatar Url */
@@ -8062,6 +8433,8 @@ export interface components {
         ScriptExtractionRequest: {
             /** Idempotency Key */
             idempotency_key: string;
+            /** Production Bible Id */
+            production_bible_id?: string | null;
             /**
              * Scope
              * @constant
@@ -8931,7 +9304,7 @@ export interface components {
              * Request Type
              * @enum {string}
              */
-            request_type: "extraction_batch" | "episode_plan" | "adaptation_run" | "storyboard_draft_batch" | "storyboard_export_job" | "generation_request" | "media_version" | "upload_session" | "workspace" | "media_location";
+            request_type: "extraction_batch" | "episode_plan" | "production_bible" | "adaptation_run" | "storyboard_draft_batch" | "storyboard_export_job" | "generation_request" | "media_version" | "upload_session" | "workspace" | "media_location";
             /** Revision */
             revision: number;
             scope: components["schemas"]["TaskScopeResponse"];
@@ -8944,7 +9317,7 @@ export interface components {
              * Task Type
              * @enum {string}
              */
-            task_type: "script_extraction" | "episode_planning" | "script_adaptation" | "storyboard_draft" | "storyboard_export" | "image_generation" | "video_generation" | "media_probe" | "upload_expiration" | "upload_cleanup" | "media_location_migration" | "media_location_retirement";
+            task_type: "script_extraction" | "episode_planning" | "production_bible" | "script_adaptation" | "storyboard_draft" | "storyboard_export" | "image_generation" | "video_generation" | "media_probe" | "upload_expiration" | "upload_cleanup" | "media_location_migration" | "media_location_retirement";
             /**
              * Workspace Id
              * Format: uuid
@@ -10928,6 +11301,41 @@ export interface operations {
             };
         };
     };
+    create_bible_api_v1_document_revisions__revision_id__production_bibles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionBibleCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ProductionBibleResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_episode_plan_api_v1_episode_plans__plan_id__get: {
         parameters: {
             query?: never;
@@ -11998,7 +12406,7 @@ export interface operations {
     list_extraction_candidates_api_v1_extraction_batches__batch_id__candidates_get: {
         parameters: {
             query?: {
-                kind?: ("scene" | "dialogue" | "asset" | "shot" | "continuity") | null;
+                kind?: ("scene" | "dialogue" | "asset" | "asset_occurrence" | "shot" | "continuity") | null;
                 status?: ("pending" | "accepted" | "linked" | "merged" | "ignored") | null;
                 limit?: number | null;
                 offset?: number;
@@ -12826,6 +13234,107 @@ export interface operations {
             };
         };
     };
+    get_bible_api_v1_production_bibles__bible_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bible_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ProductionBibleResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_bible_api_v1_production_bibles__bible_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bible_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionBibleConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ProductionBibleResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_bible_api_v1_production_bibles__bible_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bible_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionBibleResumeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ProductionBibleResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_projects_api_v1_projects_get: {
         parameters: {
             query: {
@@ -13293,6 +13802,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_EpisodeOrderResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_current_bible_api_v1_projects__project_id__production_bible_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ProductionBibleResponse_"];
                 };
             };
             /** @description Validation Error */

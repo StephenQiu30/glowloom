@@ -63,6 +63,11 @@ class StoryboardDraftBatch(Base):
             ("prod_tasks.id", "prod_tasks.workspace_id"),
             name="fk_sbd_draft_batch_task",
         ),
+        ForeignKeyConstraint(
+            ("production_bible_id", "workspace_id"),
+            ("scr_production_bibles.id", "scr_production_bibles.workspace_id"),
+            name="fk_sbd_draft_batch_production_bible",
+        ),
         CheckConstraint(
             "status IN ('queued', 'running', 'needs_review', 'approved', "
             "'applied', 'failed', 'unknown', 'cancelled')",
@@ -71,6 +76,13 @@ class StoryboardDraftBatch(Base):
         CheckConstraint("narrative_revision >= 1", name="ck_sbd_draft_narrative_revision"),
         CheckConstraint("revision >= 1", name="ck_sbd_draft_batch_revision"),
         CheckConstraint(
+            "(production_bible_id IS NULL AND production_bible_revision IS NULL "
+            "AND production_bible_result_hash IS NULL) OR "
+            "(production_bible_id IS NOT NULL AND production_bible_revision >= 1 "
+            "AND char_length(production_bible_result_hash) = 64)",
+            name="ck_sbd_draft_batch_production_bible_snapshot",
+        ),
+        CheckConstraint(
             "(agent_checkpoint IS NULL "
             "AND agent_checkpoint_revision = 0 "
             "AND agent_checkpoint_updated_at IS NULL) OR "
@@ -78,6 +90,11 @@ class StoryboardDraftBatch(Base):
             "AND agent_checkpoint_revision >= 1 "
             "AND agent_checkpoint_updated_at IS NOT NULL)",
             name="ck_sbd_draft_batch_agent_checkpoint",
+        ),
+        CheckConstraint(
+            "(agent_run_token IS NULL AND agent_lease_expires_at IS NULL) OR "
+            "(agent_run_token IS NOT NULL AND agent_lease_expires_at IS NOT NULL)",
+            name="ck_sbd_draft_batch_agent_lease",
         ),
         CheckConstraint(
             "target_duration_ms >= 1000 AND target_duration_ms <= 7200000",
@@ -118,6 +135,13 @@ class StoryboardDraftBatch(Base):
     narrative_structure_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     narrative_revision: Mapped[int] = mapped_column(Integer)
     narrative_dependency_hash: Mapped[str] = mapped_column(String(64))
+    production_bible_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    production_bible_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    production_bible_result_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    production_bible_world: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB,
+        default=list,
+    )
     input_hash: Mapped[str] = mapped_column(String(64))
     target_duration_ms: Mapped[int] = mapped_column(Integer)
     aspect_ratio: Mapped[str] = mapped_column(String(10))
@@ -136,6 +160,12 @@ class StoryboardDraftBatch(Base):
     )
     agent_checkpoint_revision: Mapped[int] = mapped_column(Integer, default=0)
     agent_checkpoint_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
+    agent_run_token: Mapped[UUID | None] = mapped_column(Uuid, nullable=True, default=None)
+    agent_lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         default=None,

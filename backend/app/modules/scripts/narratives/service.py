@@ -185,6 +185,58 @@ def _source_links(
     return (scene.id if scene is not None else None), None
 
 
+def build_confirmed_narrative_units(
+    body: str,
+    parsed_units: list[ParsedUnit],
+    scenes: list[Scene],
+    dialogues: list[Dialogue],
+) -> list[ParsedUnit]:
+    if not scenes:
+        return parsed_units
+    dialogues_by_scene: dict[UUID, list[Dialogue]] = {}
+    for dialogue in dialogues:
+        dialogues_by_scene.setdefault(dialogue.scene_id, []).append(dialogue)
+
+    confirmed_units: list[ParsedUnit] = []
+    for scene in sorted(scenes, key=lambda item: item.source_start):
+        scene_dialogues = sorted(
+            dialogues_by_scene.get(scene.id, []),
+            key=lambda item: item.source_start,
+        )
+        for parsed in parsed_units:
+            if not scene.source_start <= parsed.source_start < scene.source_end:
+                continue
+            if any(
+                parsed.source_start < dialogue.source_end
+                and parsed.source_end > dialogue.source_start
+                for dialogue in scene_dialogues
+            ):
+                continue
+            kind = (
+                "scene_heading"
+                if parsed.source_start == scene.source_start
+                else "action" if parsed.kind == "dialogue" else parsed.kind
+            )
+            confirmed_units.append(
+                ParsedUnit(
+                    kind=kind,
+                    source_start=parsed.source_start,
+                    source_end=parsed.source_end,
+                    exact_text=parsed.exact_text,
+                )
+            )
+        confirmed_units.extend(
+            ParsedUnit(
+                kind="dialogue",
+                source_start=dialogue.source_start,
+                source_end=dialogue.source_end,
+                exact_text=body[dialogue.source_start : dialogue.source_end],
+            )
+            for dialogue in scene_dialogues
+        )
+    return sorted(confirmed_units, key=lambda item: (item.source_start, item.source_end))
+
+
 async def _script_context(
     session: AsyncSession,
     version_id: UUID,
@@ -232,7 +284,14 @@ async def ensure_structure(
             "Script version narrative scope is invalid",
             status_code=409,
         )
-    parsed_units = parse_narrative_units(version.body)
+    scenes = await scripts_repository.list_scenes(session, version.id)
+    dialogues = await scripts_repository.list_dialogues(session, [scene.id for scene in scenes])
+    parsed_units = build_confirmed_narrative_units(
+        version.body,
+        parse_narrative_units(version.body),
+        scenes,
+        dialogues,
+    )
     if not parsed_units:
         raise ApiError(
             ErrorCode.INVALID_REQUEST,
@@ -240,8 +299,6 @@ async def ensure_structure(
             status_code=422,
             next_action="edit_script_version",
         )
-    scenes = await scripts_repository.list_scenes(session, version.id)
-    dialogues = await scripts_repository.list_dialogues(session, [scene.id for scene in scenes])
     now = datetime.now(UTC)
     structure = NarrativeStructure(
         id=uuid7(),

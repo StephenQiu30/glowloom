@@ -103,6 +103,42 @@ _AUDIT_METADATA_FIELDS: dict[str, frozenset[str]] = {
             "issue_count",
         }
     ),
+    "script.production_bible_created": frozenset(
+        {"document_revision_id", "project_id", "input_hash"}
+    ),
+    "script.production_bible_resumed": frozenset(
+        {
+            "previous_status",
+            "previous_task_id",
+            "task_id",
+            "revision",
+            "checkpoint_revision",
+        }
+    ),
+    "script.production_bible_review_issue_resolved": frozenset(
+        {
+            "issue_key",
+            "issue_code",
+            "correction_kind",
+            "entity_key",
+            "state_key",
+            "previous_episode_numbers",
+            "episode_numbers",
+            "previous_result_hash",
+            "result_hash",
+            "revision",
+        }
+    ),
+    "script.production_bible_confirmed": frozenset(
+        {
+            "revision",
+            "document_revision_id",
+            "project_id",
+            "result_hash",
+            "entity_count",
+            "state_count",
+        }
+    ),
     "script.episode_plan_created": frozenset(
         {
             "project_id",

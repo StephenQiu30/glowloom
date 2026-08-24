@@ -16,6 +16,7 @@ TaskStatus = Literal[
 TaskType = Literal[
     "script_extraction",
     "episode_planning",
+    "production_bible",
     "script_adaptation",
     "storyboard_draft",
     "storyboard_export",
@@ -30,6 +31,7 @@ TaskType = Literal[
 TaskRequestType = Literal[
     "extraction_batch",
     "episode_plan",
+    "production_bible",
     "adaptation_run",
     "storyboard_draft_batch",
     "storyboard_export_job",
@@ -109,6 +111,16 @@ class EpisodePlanningTaskCommand(BaseModel):
 
     workspace_id: UUID
     plan_id: UUID
+    document_revision_id: UUID
+    input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class ProductionBibleTaskCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace_id: UUID
+    bible_id: UUID
     document_revision_id: UUID
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     idempotency_key: str = Field(min_length=1, max_length=200)

@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import Iterable
 from typing import Any, TypeVar, cast
 
@@ -118,24 +117,12 @@ class SkillHarness:
             return {}
 
         async def invoke_model(state: _SkillGraphState) -> dict[str, object]:
-            try:
-                raw_output = await asyncio.wait_for(
-                    model.ainvoke(
-                        [
-                            SystemMessage(content=state.get("system_prompt", "")),
-                            HumanMessage(content=state.get("user_payload", "")),
-                        ]
-                    ),
-                    timeout=skill.timeout_seconds,
-                )
-            except TimeoutError as error:
-                raise SkillExecutionError(
-                    outcome="unknown",
-                    code="skill_timeout",
-                    summary="Skill response outcome is unknown",
-                    retryable=False,
-                    next_action="reconcile_skill_run",
-                ) from error
+            raw_output = await model.ainvoke(
+                [
+                    SystemMessage(content=state.get("system_prompt", "")),
+                    HumanMessage(content=state.get("user_payload", "")),
+                ]
+            )
             return {"raw_output": raw_output}
 
         async def validate_output(state: _SkillGraphState) -> dict[str, object]:

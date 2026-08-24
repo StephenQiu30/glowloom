@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
-import subprocess
 import tempfile
 from collections.abc import Sequence
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Generic, TypeVar, cast
 
@@ -18,6 +18,7 @@ from app.modules.scripts.adaptations import (
     ScriptAdaptationProviderResult,
     adaptation_duration_bounds,
 )
+from app.modules.scripts.contracts import ProductionBibleExtractionInput
 from app.modules.scripts.extractions.anchoring import anchor_script_structure_ranges
 from app.modules.scripts.extractions.ports import (
     SCRIPT_STRUCTURE_EXTRACTOR_VERSION,
@@ -29,6 +30,16 @@ from app.modules.scripts.planning.ports import (
     EpisodePlanningProviderError,
 )
 from app.modules.scripts.planning.schemas import EpisodePlanningProviderResult
+from app.modules.scripts.production_bibles import (
+    ProductionBibleAgentHarness,
+    ProductionBibleAgentModels,
+    ProductionBibleCheckpointStore,
+    ProductionBibleInput,
+    ProductionBibleProviderError,
+    ProductionBibleProviderResult,
+    ProductionBibleReviewResult,
+)
+from app.modules.scripts.production_bibles.schemas import BibleEvidenceChunkResult
 from app.modules.skills import (
     SkillDefinition,
     SkillExecutionContext,
@@ -56,23 +67,28 @@ from app.modules.storyboards.drafts.provider_schema import (
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-SHUOHAO_STORYBOARD_REVISION = "0e5eb688ebf1b45e45c9bec31543aaa59e67c7bc"
 STORYBOARD_SKILL_NAMES = (
-    "storyboard-source-analysis",
-    "storyboard-scene-plan",
-    "storyboard-shot-draft",
-    "storyboard-review",
-    "storyboard-repair",
+    "analyze-scene",
+    "plan-scene",
+    "draft-shots",
+    "review-shots",
+    "repair-shots",
 )
-_UPSTREAM_REFERENCE_PATH = Path(
-    "vendor/shuohao-skills/skills/novel-storyboard/references/storyboard-pass.md"
+STORYBOARD_SKILL_REFERENCE_PATHS = (
+    Path(".agents/skills/plan-scene/references/visual-planning-rules.md"),
+    Path(".agents/skills/draft-shots/references/shot-table-rules.md"),
+    Path(".agents/skills/review-shots/references/review-rubric.md"),
+)
+PRODUCTION_BIBLE_SKILL_NAMES = (
+    "extract-bible-evidence",
+    "reconcile-bible",
+    "review-bible",
 )
 
 CODEX_LOCAL_SCRIPT_STRUCTURE_SKILL = SkillDefinition(
     name="script.structure.extract",
     version=SCRIPT_STRUCTURE_EXTRACTOR_VERSION,
     max_input_chars=DEFAULT_MAX_CHUNK_CHARS,
-    timeout_seconds=120,
 )
 ResultModelT = TypeVar("ResultModelT", bound=BaseModel)
 
@@ -144,18 +160,63 @@ def _codex_output_schema(output_model: type[BaseModel]) -> dict[str, object]:
     return schema
 
 
+def _derive_production_bible_evidence_hashes(value: object) -> object:
+    if isinstance(value, list):
+        return [
+            _derive_production_bible_evidence_hashes(item)
+            for item in cast(list[object], value)
+        ]
+    if not isinstance(value, dict):
+        return value
+    mapping = cast(dict[str, object], value)
+    normalized: dict[str, object] = {
+        key: _derive_production_bible_evidence_hashes(item)
+        for key, item in mapping.items()
+    }
+    canonical_name = normalized.get("canonical_name")
+    if isinstance(canonical_name, str) and "normalized_name" in normalized:
+        normalized["normalized_name"] = " ".join(
+            canonical_name.strip().casefold().split()
+        )
+    evidence_items = normalized.get("evidence")
+    if not isinstance(evidence_items, list):
+        return normalized
+    derived_items: list[object] = []
+    for item in cast(list[object], evidence_items):
+        if not isinstance(item, dict):
+            derived_items.append(item)
+            continue
+        evidence = cast(dict[str, object], item)
+        anchor = evidence.get("exact_anchor")
+        if not isinstance(anchor, str):
+            derived_items.append(evidence)
+            continue
+        derived_items.append(
+            {
+                **evidence,
+                "text_hash": sha256(anchor.encode()).hexdigest(),
+            }
+        )
+    normalized["evidence"] = derived_items
+    return normalized
+
+
 def verify_storyboard_skills(repository_root: Path = REPOSITORY_ROOT) -> None:
     skill_paths = tuple(
         repository_root / ".agents" / "skills" / skill_name / "SKILL.md"
         for skill_name in STORYBOARD_SKILL_NAMES
     )
     policy_paths = tuple(path.parent / "agents" / "openai.yaml" for path in skill_paths)
-    required_files = (*skill_paths, *policy_paths, repository_root / _UPSTREAM_REFERENCE_PATH)
+    reference_paths = tuple(
+        repository_root / relative_path
+        for relative_path in STORYBOARD_SKILL_REFERENCE_PATHS
+    )
+    required_files = (*skill_paths, *policy_paths, *reference_paths)
     missing = [
         str(path.relative_to(repository_root)) for path in required_files if not path.is_file()
     ]
     if missing:
-        raise RuntimeError(f"Lanverse storyboard skills are incomplete: {', '.join(missing)}")
+        raise RuntimeError(f"Storyboard skill pack is incomplete: {', '.join(missing)}")
     for skill_name, skill_path, policy_path in zip(
         STORYBOARD_SKILL_NAMES,
         skill_paths,
@@ -166,25 +227,47 @@ def verify_storyboard_skills(repository_root: Path = REPOSITORY_ROOT) -> None:
         policy_text = policy_path.read_text(encoding="utf-8")
         if f"name: {skill_name}" not in skill_text:
             raise RuntimeError(f"Storyboard skill name does not match: {skill_name}")
+        if f"${skill_name}" not in policy_text:
+            raise RuntimeError(
+                f"Storyboard skill default prompt does not match: {skill_name}"
+            )
         if "allow_implicit_invocation: false" not in policy_text:
             raise RuntimeError(f"Storyboard skill must disable implicit invocation: {skill_name}")
-    completed = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repository_root / "vendor/shuohao-skills"),
-            "rev-parse",
-            "HEAD",
-        ],
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=5,
+
+
+def verify_production_bible_skills(
+    repository_root: Path = REPOSITORY_ROOT,
+) -> None:
+    skill_paths = tuple(
+        repository_root / ".agents" / "skills" / skill_name / "SKILL.md"
+        for skill_name in PRODUCTION_BIBLE_SKILL_NAMES
     )
-    if completed.returncode != 0 or completed.stdout.strip() != SHUOHAO_STORYBOARD_REVISION:
-        raise RuntimeError(
-            "shuohao-skills revision does not match the reviewed storyboard contract"
-        )
+    policy_paths = tuple(path.parent / "agents" / "openai.yaml" for path in skill_paths)
+    missing = [
+        str(path.relative_to(repository_root))
+        for path in (*skill_paths, *policy_paths)
+        if not path.is_file()
+    ]
+    if missing:
+        raise RuntimeError(f"Production Bible skill pack is incomplete: {', '.join(missing)}")
+    for skill_name, skill_path, policy_path in zip(
+        PRODUCTION_BIBLE_SKILL_NAMES,
+        skill_paths,
+        policy_paths,
+        strict=True,
+    ):
+        skill_text = skill_path.read_text(encoding="utf-8")
+        policy_text = policy_path.read_text(encoding="utf-8")
+        if f"name: {skill_name}" not in skill_text:
+            raise RuntimeError(f"Production Bible skill name does not match: {skill_name}")
+        if f"${skill_name}" not in policy_text:
+            raise RuntimeError(
+                f"Production Bible skill default prompt does not match: {skill_name}"
+            )
+        if "allow_implicit_invocation: false" not in policy_text:
+            raise RuntimeError(
+                f"Production Bible skill must disable implicit invocation: {skill_name}"
+            )
 
 
 class CodexLocalStructuredModel(Generic[ResultModelT]):
@@ -199,7 +282,6 @@ class CodexLocalStructuredModel(Generic[ResultModelT]):
         codex_cli_path: str | None = None,
         model: str | None = None,
         max_concurrency: int = 2,
-        timeout_seconds: float = 165,
         validation_attempts: int = 1,
     ) -> None:
         if validation_attempts < 1:
@@ -212,7 +294,6 @@ class CodexLocalStructuredModel(Generic[ResultModelT]):
         self._service_name = service_name
         self._skill_name = skill_name
         self._model = model
-        self._timeout_seconds = timeout_seconds
         self._validation_attempts = validation_attempts
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
@@ -260,8 +341,6 @@ class CodexLocalStructuredModel(Generic[ResultModelT]):
                     "read-only",
                     "--cd",
                     str(REPOSITORY_ROOT),
-                    "--config",
-                    'model_reasoning_effort="low"',
                     "--output-schema",
                     str(schema_path),
                     "--output-last-message",
@@ -299,7 +378,6 @@ class CodexLocalStructuredModel(Generic[ResultModelT]):
                     await _run_codex_exec(
                         command,
                         "\n\n".join(attempt_parts),
-                        timeout_seconds=self._timeout_seconds,
                     )
                 if not response_path.is_file():
                     raise ValueError("Codex returned no final response")
@@ -308,6 +386,12 @@ class CodexLocalStructuredModel(Generic[ResultModelT]):
                     decoded = _decode_json_response(response)
                     if self._output_model is StoryboardProviderResult:
                         decoded = normalize_storyboard_provider_payload(decoded)
+                    if self._output_model in {
+                        BibleEvidenceChunkResult,
+                        ProductionBibleProviderResult,
+                        ProductionBibleReviewResult,
+                    }:
+                        decoded = _derive_production_bible_evidence_hashes(decoded)
                     return cast(ResultModelT, self._output_model.model_validate(decoded))
                 except ValidationError as error:
                     validation_error = error
@@ -321,8 +405,6 @@ class CodexLocalStructuredModel(Generic[ResultModelT]):
 async def _run_codex_exec(
     command: list[str],
     prompt: str,
-    *,
-    timeout_seconds: float,
 ) -> None:
     process = await asyncio.create_subprocess_exec(
         *command,
@@ -331,11 +413,8 @@ async def _run_codex_exec(
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        _, stderr = await asyncio.wait_for(
-            process.communicate(prompt.encode("utf-8")),
-            timeout=timeout_seconds,
-        )
-    except TimeoutError:
+        stdout, stderr = await process.communicate(prompt.encode("utf-8"))
+    except asyncio.CancelledError:
         process.terminate()
         try:
             await asyncio.wait_for(process.wait(), timeout=5)
@@ -344,8 +423,9 @@ async def _run_codex_exec(
             await process.wait()
         raise
     if process.returncode != 0:
-        detail = stderr.decode("utf-8", errors="replace").strip().splitlines()
-        suffix = f": {detail[-1]}" if detail else ""
+        error_stream = stderr if stderr.strip() else stdout
+        detail = error_stream.decode("utf-8", errors="replace").strip()
+        suffix = f": {detail[-1000:]}" if detail else ""
         raise RuntimeError(f"Local Codex exited with status {process.returncode}{suffix}")
 
 
@@ -415,6 +495,100 @@ def _script_adaptation_payload(
     )
 
 
+class CodexLocalProductionBibleBuilder:
+    def __init__(
+        self,
+        *,
+        checkpoint_store: ProductionBibleCheckpointStore,
+        codex_cli_path: str | None = None,
+        codex_model: str | None = None,
+        max_concurrency: int = 2,
+        models: ProductionBibleAgentModels | None = None,
+        verify_skill: bool = True,
+    ) -> None:
+        if verify_skill:
+            verify_production_bible_skills()
+        if models is None:
+            evidence = CodexLocalStructuredModel(
+                output_model=BibleEvidenceChunkResult,
+                service_name="lanverse-extract-bible-evidence",
+                skill_name="extract-bible-evidence",
+                codex_cli_path=codex_cli_path,
+                model=codex_model,
+                max_concurrency=max_concurrency,
+                validation_attempts=2,
+            )
+            reconcile = CodexLocalStructuredModel(
+                output_model=ProductionBibleProviderResult,
+                service_name="lanverse-reconcile-bible",
+                skill_name="reconcile-bible",
+                codex_cli_path=codex_cli_path,
+                model=codex_model,
+                max_concurrency=max_concurrency,
+                validation_attempts=2,
+            )
+            review = CodexLocalStructuredModel(
+                output_model=ProductionBibleReviewResult,
+                service_name="lanverse-review-bible",
+                skill_name="review-bible",
+                codex_cli_path=codex_cli_path,
+                model=codex_model,
+                max_concurrency=max_concurrency,
+                validation_attempts=2,
+            )
+            models = ProductionBibleAgentModels(
+                evidence=evidence,
+                reconcile=reconcile,
+                review=review,
+            )
+            self._owned_models: tuple[StructuredSkillModel, ...] = (
+                evidence,
+                reconcile,
+                review,
+            )
+        else:
+            self._owned_models = (
+                models.evidence,
+                models.reconcile,
+                models.review,
+            )
+        self._harness = ProductionBibleAgentHarness(
+            models=models,
+            checkpoint_store=checkpoint_store,
+        )
+
+    async def build(
+        self,
+        bible_input: ProductionBibleInput,
+    ) -> ProductionBibleProviderResult:
+        try:
+            return await self._harness.run(bible_input)
+        except (ValidationError, ValueError) as error:
+            raise ProductionBibleProviderError(
+                outcome="failed",
+                code="codex_output_invalid",
+                summary="Local Codex returned an invalid Production Bible candidate",
+                retryable=False,
+                next_action="start_new_production_bible",
+            ) from error
+        except ProductionBibleProviderError:
+            raise
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            raise ProductionBibleProviderError(
+                outcome="unknown",
+                code="codex_local_unavailable",
+                summary="Local Codex Production Bible analysis is unavailable",
+                retryable=True,
+                next_action="resume_production_bible",
+            ) from error
+
+    async def aclose(self) -> None:
+        for model in self._owned_models:
+            await _close_model(model)
+
+
 class CodexLocalScriptStructureExtractor:
     def __init__(
         self,
@@ -429,7 +603,7 @@ class CodexLocalScriptStructureExtractor:
             codex_cli_path=codex_cli_path,
             model=model,
             max_concurrency=max_concurrency,
-            timeout_seconds=120,
+            validation_attempts=2,
         )
         self._workflow = ScriptStructureExtractionWorkflow(
             skill=CODEX_LOCAL_SCRIPT_STRUCTURE_SKILL,
@@ -443,6 +617,7 @@ class CodexLocalScriptStructureExtractor:
         *,
         trace_id: str | None = None,
         episode_number: int | None = None,
+        production_bible: ProductionBibleExtractionInput | None = None,
     ) -> ScriptExtractionResult:
         try:
             result = await self._workflow.run(
@@ -453,6 +628,7 @@ class CodexLocalScriptStructureExtractor:
                     trace_id=trace_id,
                 ),
                 episode_number=episode_number,
+                production_bible=production_bible,
             )
             result = anchor_script_structure_ranges(result, script_body)
             if any(
@@ -479,14 +655,6 @@ class CodexLocalScriptStructureExtractor:
                 summary="Local Codex returned an invalid extraction result",
                 retryable=False,
                 next_action="start_new_extraction",
-            ) from error
-        except TimeoutError as error:
-            raise ScriptExtractionProviderError(
-                outcome="unknown",
-                code="codex_result_unknown",
-                summary="Local Codex response outcome is unknown",
-                retryable=False,
-                next_action="reconcile_skill_run",
             ) from error
         except ScriptExtractionProviderError:
             raise
@@ -518,7 +686,6 @@ class CodexLocalEpisodePlanner:
             codex_cli_path=codex_cli_path,
             model=codex_model,
             max_concurrency=max_concurrency,
-            timeout_seconds=120,
         )
 
     async def plan(
@@ -581,7 +748,6 @@ class CodexLocalScriptAdapter:
             codex_cli_path=codex_cli_path,
             model=codex_model,
             max_concurrency=max_concurrency,
-            timeout_seconds=120,
         )
 
     async def adapt(
@@ -657,52 +823,47 @@ class CodexLocalStoryboardDrafter:
         else:
             source_analysis = CodexLocalStructuredModel(
                 output_model=SceneAnalysis,
-                service_name="lanverse-storyboard-source-analysis",
-                skill_name="storyboard-source-analysis",
+                service_name="lanverse-analyze-scene",
+                skill_name="analyze-scene",
                 codex_cli_path=codex_cli_path,
                 model=codex_model,
                 max_concurrency=max_concurrency,
-                timeout_seconds=165,
                 validation_attempts=2,
             )
             scene_plan = CodexLocalStructuredModel(
                 output_model=ScenePlan,
-                service_name="lanverse-storyboard-scene-plan",
-                skill_name="storyboard-scene-plan",
+                service_name="lanverse-plan-scene",
+                skill_name="plan-scene",
                 codex_cli_path=codex_cli_path,
                 model=codex_model,
                 max_concurrency=max_concurrency,
-                timeout_seconds=165,
                 validation_attempts=2,
             )
             shot_draft = CodexLocalStructuredModel(
                 output_model=StoryboardProviderResult,
-                service_name="lanverse-storyboard-shot-draft",
-                skill_name="storyboard-shot-draft",
+                service_name="lanverse-draft-shots",
+                skill_name="draft-shots",
                 codex_cli_path=codex_cli_path,
                 model=codex_model,
                 max_concurrency=max_concurrency,
-                timeout_seconds=165,
                 validation_attempts=2,
             )
             review = CodexLocalStructuredModel(
                 output_model=StoryboardReview,
-                service_name="lanverse-storyboard-review",
-                skill_name="storyboard-review",
+                service_name="lanverse-review-shots",
+                skill_name="review-shots",
                 codex_cli_path=codex_cli_path,
                 model=codex_model,
                 max_concurrency=max_concurrency,
-                timeout_seconds=165,
                 validation_attempts=2,
             )
             repair = CodexLocalStructuredModel(
                 output_model=StoryboardProviderResult,
-                service_name="lanverse-storyboard-repair",
-                skill_name="storyboard-repair",
+                service_name="lanverse-repair-shots",
+                skill_name="repair-shots",
                 codex_cli_path=codex_cli_path,
                 model=codex_model,
                 max_concurrency=max_concurrency,
-                timeout_seconds=165,
                 validation_attempts=2,
             )
             models = StoryboardAgentModels(

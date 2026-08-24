@@ -200,7 +200,11 @@ def _version_response(
         spec=parse_asset_spec(str(version.spec["kind"]), version.spec),
         prompt_description=version.prompt_description,
         source_type=cast(
-            Literal["manual", "script_extraction_candidate"],
+            Literal[
+                "manual",
+                "script_extraction_candidate",
+                "production_bible_state",
+            ],
             version.source_type,
         ),
         source_id=version.source_id,
@@ -1859,6 +1863,109 @@ async def resolve_storyboard_assets(
     return tuple(inputs)
 
 
+async def resolve_storyboard_planning_assets(
+    session: AsyncSession,
+    workspace_id: UUID,
+    project_id: UUID,
+    state_ids: list[UUID],
+    *,
+    for_update: bool = False,
+) -> tuple[StoryboardAssetInput, ...]:
+    """Resolve semantic asset snapshots without requiring finished media.
+
+    Storyboard planning consumes stable Bible identities and versions. Media and
+    rights readiness remain hard gates for generation/export, not for deciding
+    which character, location, prop, or state appears in a shot.
+    """
+
+    unique_ids = list(dict.fromkeys(state_ids))
+    rows = await repository.find_state_scopes(
+        session,
+        unique_ids,
+        for_update=for_update,
+    )
+    by_state = {
+        state.id: (state, asset)
+        for state, asset in rows
+        if state.workspace_id == workspace_id
+        and asset.workspace_id == workspace_id
+        and asset.project_id == project_id
+        and state.status == "active"
+        and asset.status == "active"
+        and asset.availability == "enabled"
+        and state.current_version_id is not None
+    }
+    if len(by_state) != len(unique_ids):
+        return ()
+    version_ids = [
+        cast(UUID, by_state[state_id][0].current_version_id) for state_id in unique_ids
+    ]
+    readiness = await resolve_asset_versions_readiness(
+        session,
+        workspace_id,
+        project_id,
+        version_ids,
+        purpose="ai_short_drama_generation",
+        channel="lanverse_preview",
+        region="CN",
+    )
+    if len(readiness) != len(unique_ids):
+        return ()
+    return tuple(
+        StoryboardAssetInput(
+            workspace_id=workspace_id,
+            project_id=project_id,
+            asset_id=by_state[state_id][1].id,
+            asset_state_id=state_id,
+            asset_version_id=cast(UUID, by_state[state_id][0].current_version_id),
+            kind=by_state[state_id][1].kind,
+            name=by_state[state_id][1].name,
+            state_label=by_state[state_id][0].label,
+            state_revision=by_state[state_id][0].revision,
+            readiness_hash=readiness[
+                cast(UUID, by_state[state_id][0].current_version_id)
+            ].evaluation_hash,
+        )
+        for state_id in unique_ids
+    )
+
+
+async def resolve_episode_storyboard_asset_state_ids(
+    session: AsyncSession,
+    episode_id: UUID,
+    *,
+    narrative_unit_version_ids: set[UUID],
+) -> tuple[UUID, ...]:
+    return tuple(
+        await resolve_episode_storyboard_asset_units(
+            session,
+            episode_id,
+            narrative_unit_version_ids=narrative_unit_version_ids,
+        )
+    )
+
+
+async def resolve_episode_storyboard_asset_units(
+    session: AsyncSession,
+    episode_id: UUID,
+    *,
+    narrative_unit_version_ids: set[UUID],
+) -> dict[UUID, tuple[UUID, ...]]:
+    history = await repository.list_episode_occurrence_decisions(session, episode_id)
+    current = _current_occurrence_rows(history)
+    units_by_state: dict[UUID, list[UUID]] = {}
+    for row in current:
+        if row.narrative_unit_version_id not in narrative_unit_version_ids:
+            continue
+        units_by_state.setdefault(row.asset_state_id, []).append(
+            row.narrative_unit_version_id
+        )
+    return {
+        state_id: tuple(sorted(set(unit_ids), key=str))
+        for state_id, unit_ids in units_by_state.items()
+    }
+
+
 async def resolve_export_assets(
     session: AsyncSession,
     workspace_id: UUID,
@@ -2296,6 +2403,28 @@ async def _link_candidate_occurrence(
     state.revision += 1
     state.updated_at = now
     await session.flush()
+
+
+async def link_existing_state_occurrence(
+    session: AsyncSession,
+    actor: ActorContext,
+    *,
+    asset_state_id: UUID,
+    candidate_id: UUID,
+    occurrence: AssetCandidateOccurrence,
+) -> None:
+    """Bind accepted script evidence to an already materialized asset state."""
+
+    state = await repository.find_state(session, asset_state_id, for_update=True)
+    if state is None or state.workspace_id != actor.workspace_id:
+        raise asset_not_found()
+    await _link_candidate_occurrence(
+        session,
+        actor,
+        state,
+        candidate_id,
+        occurrence,
+    )
 
 
 async def create_or_link_candidate(

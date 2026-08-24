@@ -12,6 +12,7 @@ from app.modules.messaging import MessageEnvelope
 from app.modules.messaging.topics import IO_TOPIC, MEDIA_TOPIC, REGISTERED_TOPICS
 
 MAX_MESSAGE_BYTES = 64 * 1024
+KEEPALIVE_POLL_SECONDS = 1.0
 MessageHandler = Callable[["KafkaIncomingMessage"], Awaitable[object]]
 
 
@@ -115,7 +116,6 @@ async def consume_topic(
         enable_auto_commit=False,
         auto_offset_reset="earliest",
         max_partition_fetch_bytes=MAX_MESSAGE_BYTES,
-        max_poll_interval_ms=600_000,
     )
     try:
         await consumer.start()
@@ -128,7 +128,7 @@ async def consume_topic(
                 body=cast(bytes | None, record.value) or b"",
                 headers=cast(list[tuple[str, bytes | None]], record.headers),
             )
-            await handler(message)
+            await _run_handler_while_polling(consumer, message, handler)
             partition = TopicPartition(record.topic, record.partition)
             if message.should_retry:
                 consumer.seek(partition, record.offset)
@@ -146,6 +146,98 @@ async def consume_topic(
             )
     finally:
         await consumer.stop()
+
+
+async def _run_handler_while_polling(
+    consumer: Any,
+    message: KafkaIncomingMessage,
+    handler: MessageHandler,
+    *,
+    keepalive_poll_seconds: float = KEEPALIVE_POLL_SECONDS,
+) -> object:
+    """Keep the consumer polling while one durable handler owns its message."""
+
+    assigned = tuple(consumer.assignment())
+    already_paused = set(consumer.paused())
+    paused_here = tuple(partition for partition in assigned if partition not in already_paused)
+    if paused_here:
+        consumer.pause(*paused_here)
+    handler_task: asyncio.Task[object] = asyncio.create_task(
+        _invoke_handler(handler, message)
+    )
+    poll_task: asyncio.Task[object] | None = None
+    try:
+        while not handler_task.done():
+            poll_task = asyncio.create_task(
+                _poll_paused_partitions(
+                    consumer,
+                    assigned,
+                    delay_seconds=keepalive_poll_seconds,
+                )
+            )
+            done, _ = await asyncio.wait(
+                {handler_task, poll_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if poll_task in done:
+                polled = await poll_task
+                poll_task = None
+                if polled:
+                    raise RuntimeError("Paused Kafka partitions unexpectedly returned records")
+            if handler_task in done:
+                if poll_task is not None:
+                    poll_task.cancel()
+                    try:
+                        await poll_task
+                    except BaseException:
+                        pass
+                    poll_task = None
+                break
+        return await handler_task
+    finally:
+        if poll_task is not None and not poll_task.done():
+            poll_task.cancel()
+            try:
+                await poll_task
+            except BaseException:
+                pass
+        if not handler_task.done():
+            handler_task.cancel()
+            try:
+                await handler_task
+            except BaseException:
+                pass
+        current_assignment = set(consumer.assignment())
+        resumable = tuple(
+            partition for partition in paused_here if partition in current_assignment
+        )
+        if resumable:
+            consumer.resume(*resumable)
+
+
+async def _invoke_handler(
+    handler: MessageHandler,
+    message: KafkaIncomingMessage,
+) -> object:
+    return await handler(message)
+
+
+async def _poll_paused_partitions(
+    consumer: Any,
+    partitions: tuple[Any, ...],
+    *,
+    delay_seconds: float,
+) -> object:
+    if not partitions:
+        raise RuntimeError("Kafka handler lost its original partition assignment")
+    await asyncio.sleep(delay_seconds)
+    # Explicit partitions prevent a rebalance from exposing newly assigned
+    # records to this keepalive poll. Its result is still checked fail closed.
+    return await consumer.getmany(
+        *partitions,
+        timeout_ms=0,
+        max_records=1,
+    )
 
 
 async def kafka_ping(bootstrap_servers: str) -> None:

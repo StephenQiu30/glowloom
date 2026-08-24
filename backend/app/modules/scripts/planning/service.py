@@ -71,6 +71,7 @@ from app.modules.scripts.planning.schemas import (
     RenameEpisodeProposalRequest,
     SplitEpisodeProposalRequest,
 )
+from app.modules.scripts.production_bibles import repository as production_bible_repository
 
 PLANNING_ENGINE_VERSION = "episode-planning-v1"
 CODEX_LOCAL_EPISODE_MODEL = "codex-local"
@@ -1458,6 +1459,35 @@ async def publish_import_commit(
                 )
             now = datetime.now(UTC)
             origins = await repository.list_segment_origins(session, commit.id, for_update=True)
+            revision_ids = {origin.document_revision_id for origin in origins}
+            if len(revision_ids) != 1:
+                raise ApiError(
+                    ErrorCode.INTERNAL_ERROR,
+                    "Import commit document revision is unavailable",
+                    status_code=500,
+                )
+            document_revision_id = next(iter(revision_ids))
+            production_bible = (
+                await production_bible_repository.find_confirmed_bible_for_revision(
+                    session,
+                    commit.project_id,
+                    document_revision_id,
+                )
+            )
+            if production_bible is None:
+                raise ApiError(
+                    ErrorCode.STATE_CONFLICT,
+                    "Production Bible must be confirmed before episode publishing",
+                    status_code=409,
+                    next_action="confirm_production_bible",
+                    details={"document_revision_id": str(document_revision_id)},
+                )
+            if production_bible.result_hash is None:
+                raise ApiError(
+                    ErrorCode.INTERNAL_ERROR,
+                    "Confirmed Production Bible result is unavailable",
+                    status_code=500,
+                )
             episode_snapshots = {
                 UUID(str(item["episode_id"])): item
                 for item in cast(list[dict[str, object]], commit.result_snapshot["episodes"])
@@ -1541,6 +1571,7 @@ async def publish_import_commit(
                             published_version.id,
                             ScriptExtractionRequest(
                                 scope="full",
+                                production_bible_id=production_bible.id,
                                 idempotency_key=(
                                     f"import-commit:{commit.id}:extraction:{origin.id}"
                                 ),
@@ -1549,6 +1580,14 @@ async def publish_import_commit(
                         )
                     commit.result_snapshot = {
                         **commit.result_snapshot,
+                        "production_bible": {
+                            "id": str(production_bible.id),
+                            "document_revision_id": str(
+                                production_bible.document_revision_id
+                            ),
+                            "revision": production_bible.revision,
+                            "result_hash": production_bible.result_hash,
+                        },
                         "published": [
                             {
                                 "episode_id": str(item.episode_id),

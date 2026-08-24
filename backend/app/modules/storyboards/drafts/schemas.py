@@ -142,12 +142,16 @@ class DraftInputSummary(BaseModel):
     narrative_structure_id: UUID
     narrative_revision: int
     narrative_dependency_hash: str
+    production_bible_id: UUID | None
+    production_bible_revision: int | None
+    production_bible_result_hash: str | None
     narrative_unit_version_ids: list[UUID]
     asset_state_ids: list[UUID]
     asset_version_ids: list[UUID]
     target_duration_ms: int
     aspect_ratio: Literal["9:16", "16:9", "1:1"]
     visual_style: str | None
+    world_entries: list[dict[str, object]]
     input_hash: str
 
 

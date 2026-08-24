@@ -45,6 +45,7 @@ import { taskStatusLabels, taskTone } from "./episode-studio-model";
 
 const taskTypeLabels: Record<API.TaskResponse["task_type"], string> = {
   episode_planning: "分集规划",
+  production_bible: "项目制作圣经",
   script_adaptation: "剧本改写",
   script_extraction: "剧本结构提取",
   storyboard_draft: "AI 分镜草案",
@@ -60,6 +61,7 @@ const taskTypeLabels: Record<API.TaskResponse["task_type"], string> = {
 
 const requestTypeLabels: Record<API.TaskResponse["request_type"], string> = {
   episode_plan: "分集计划",
+  production_bible: "项目制作圣经",
   adaptation_run: "剧本改写运行",
   extraction_batch: "提取批次",
   storyboard_draft_batch: "分镜草案批次",

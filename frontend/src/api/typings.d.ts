@@ -92,6 +92,7 @@ declare global {
     type ApiResponsePaginatedScriptSources_ = components["schemas"]["ApiResponse_PaginatedScriptSources_"];
     type ApiResponsePaginatedScriptVersions_ = components["schemas"]["ApiResponse_PaginatedScriptVersions_"];
     type ApiResponsePaginatedTasks_ = components["schemas"]["ApiResponse_PaginatedTasks_"];
+    type ApiResponseProductionBibleResponse_ = components["schemas"]["ApiResponse_ProductionBibleResponse_"];
     type ApiResponseProjectProductionSnapshot_ = components["schemas"]["ApiResponse_ProjectProductionSnapshot_"];
     type ApiResponseProjectResponse_ = components["schemas"]["ApiResponse_ProjectResponse_"];
     type ApiResponseRegistrationVerificationAccepted_ = components["schemas"]["ApiResponse_RegistrationVerificationAccepted_"];
@@ -148,6 +149,7 @@ declare global {
     type AssetImpactSummary = components["schemas"]["AssetImpactSummary"];
     type AssetMediaReferenceRequest = components["schemas"]["AssetMediaReferenceRequest"];
     type AssetMediaReferenceResponse = components["schemas"]["AssetMediaReferenceResponse"];
+    type AssetOccurrenceCandidateProposal = components["schemas"]["AssetOccurrenceCandidateProposal"];
     type AssetOccurrenceDecisionResponse = components["schemas"]["AssetOccurrenceDecisionResponse"];
     type AssetOccurrenceRequest = components["schemas"]["AssetOccurrenceRequest"];
     type AssetOccurrenceResponse = components["schemas"]["AssetOccurrenceResponse"];
@@ -189,6 +191,8 @@ declare global {
     type AudioIntent = components["schemas"]["AudioIntent"];
     type AuditEventResponse = components["schemas"]["AuditEventResponse"];
     type AuthResponse = components["schemas"]["AuthResponse"];
+    type BibleEvidence = components["schemas"]["BibleEvidence"];
+    type BibleReviewIssue = components["schemas"]["BibleReviewIssue"];
     type BlockingReason = components["schemas"]["BlockingReason"];
     type BudgetLimitRequest = components["schemas"]["BudgetLimitRequest"];
     type CandidateDecisionEvidenceResponse = components["schemas"]["CandidateDecisionEvidenceResponse"];
@@ -341,6 +345,13 @@ declare global {
     type PaginatedTasks = components["schemas"]["PaginatedTasks"];
     type PartialFailure = components["schemas"]["PartialFailure"];
     type ProbeRetryRequest = components["schemas"]["ProbeRetryRequest"];
+    type ProductionBibleConfirmRequest = components["schemas"]["ProductionBibleConfirmRequest"];
+    type ProductionBibleCreateRequest = components["schemas"]["ProductionBibleCreateRequest"];
+    type ProductionBibleEntityResponse = components["schemas"]["ProductionBibleEntityResponse"];
+    type ProductionBibleEntityStateResponse = components["schemas"]["ProductionBibleEntityStateResponse"];
+    type ProductionBibleResponse = components["schemas"]["ProductionBibleResponse"];
+    type ProductionBibleResumeRequest = components["schemas"]["ProductionBibleResumeRequest"];
+    type ProductionBibleWorldEntryResponse = components["schemas"]["ProductionBibleWorldEntryResponse"];
     type ProfileUpdateRequest = components["schemas"]["ProfileUpdateRequest"];
     type ProjectCreateRequest = components["schemas"]["ProjectCreateRequest"];
     type ProjectProductionSnapshot = components["schemas"]["ProjectProductionSnapshot"];
@@ -467,6 +478,7 @@ declare global {
     type cancelRunApiV1AdaptationRunsRunIdCancelPostParams = OperationParameters<"cancel_run_api_v1_adaptation_runs__run_id__cancel_post">;
     type completeUploadApiV1MediaUploadsUploadSessionIdCompletePostParams = OperationParameters<"complete_upload_api_v1_media_uploads__upload_session_id__complete_post">;
     type configureScheduleApiV1SchedulesScheduleIdConfigurationPutParams = OperationParameters<"configure_schedule_api_v1_schedules__schedule_id__configuration_put">;
+    type confirmBibleApiV1ProductionBiblesBibleIdConfirmPostParams = OperationParameters<"confirm_bible_api_v1_production_bibles__bible_id__confirm_post">;
     type confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPostParams = OperationParameters<"confirm_episode_plan_api_v1_episode_plans__plan_id__confirm_post">;
     type confirmStructureApiV1ExtractionBatchesBatchIdConfirmStructurePostParams = OperationParameters<"confirm_structure_api_v1_extraction_batches__batch_id__confirm_structure_post">;
     type copyShotApiV1ShotsShotIdCopyPostParams = OperationParameters<"copy_shot_api_v1_shots__shot_id__copy_post">;
@@ -474,6 +486,7 @@ declare global {
     type createAssetApiV1ProjectsProjectIdAssetsPostParams = OperationParameters<"create_asset_api_v1_projects__project_id__assets_post">;
     type createAssetStateApiV1AssetsAssetIdStatesPostParams = OperationParameters<"create_asset_state_api_v1_assets__asset_id__states_post">;
     type createBatchApiV1EpisodesEpisodeIdStoryboardDraftBatchesPostParams = OperationParameters<"create_batch_api_v1_episodes__episode_id__storyboard_draft_batches_post">;
+    type createBibleApiV1DocumentRevisionsRevisionIdProductionBiblesPostParams = OperationParameters<"create_bible_api_v1_document_revisions__revision_id__production_bibles_post">;
     type createEpisodeApiV1ProjectsProjectIdEpisodesPostParams = OperationParameters<"create_episode_api_v1_projects__project_id__episodes_post">;
     type createEpisodePlanApiV1DocumentRevisionsRevisionIdEpisodePlansPostParams = OperationParameters<"create_episode_plan_api_v1_document_revisions__revision_id__episode_plans_post">;
     type createFromConfirmedCandidateApiV1ExtractionCandidatesCandidateIdShotPostParams = OperationParameters<"create_from_confirmed_candidate_api_v1_extraction_candidates__candidate_id__shot_post">;
@@ -504,10 +517,12 @@ declare global {
     type getAssetStateReadinessApiV1AssetStatesStateIdReadinessGetParams = OperationParameters<"get_asset_state_readiness_api_v1_asset_states__state_id__readiness_get">;
     type getAssetVersionApiV1AssetVersionsVersionIdGetParams = OperationParameters<"get_asset_version_api_v1_asset_versions__version_id__get">;
     type getBatchApiV1StoryboardDraftBatchesBatchIdGetParams = OperationParameters<"get_batch_api_v1_storyboard_draft_batches__batch_id__get">;
+    type getBibleApiV1ProductionBiblesBibleIdGetParams = OperationParameters<"get_bible_api_v1_production_bibles__bible_id__get">;
     type getConfirmedStructureApiV1ScriptVersionsVersionIdStructureGetParams = OperationParameters<"get_confirmed_structure_api_v1_script_versions__version_id__structure_get">;
     type getConsentApiV1ConsentsConsentIdGetParams = OperationParameters<"get_consent_api_v1_consents__consent_id__get">;
     type getCostsApiV1CostsGetParams = OperationParameters<"get_costs_api_v1_costs_get">;
     type getCoverageApiV1EpisodesEpisodeIdCoverageGetParams = OperationParameters<"get_coverage_api_v1_episodes__episode_id__coverage_get">;
+    type getCurrentBibleApiV1ProjectsProjectIdProductionBibleGetParams = OperationParameters<"get_current_bible_api_v1_projects__project_id__production_bible_get">;
     type getEpisodeApiV1EpisodesEpisodeIdGetParams = OperationParameters<"get_episode_api_v1_episodes__episode_id__get">;
     type getEpisodePlanApiV1EpisodePlansPlanIdGetParams = OperationParameters<"get_episode_plan_api_v1_episode_plans__plan_id__get">;
     type getEpisodeReadinessApiV1EpisodesEpisodeIdShotReadinessGetParams = OperationParameters<"get_episode_readiness_api_v1_episodes__episode_id__shot_readiness_get">;
@@ -582,6 +597,7 @@ declare global {
     type restoreShotApiV1ShotsShotIdRestorePostParams = OperationParameters<"restore_shot_api_v1_shots__shot_id__restore_post">;
     type restoreSourceApiV1ScriptSourcesSourceIdRestorePostParams = OperationParameters<"restore_source_api_v1_script_sources__source_id__restore_post">;
     type restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePostParams = OperationParameters<"restore_workspace_api_v1_workspaces__workspace_id__restore_post">;
+    type resumeBibleApiV1ProductionBiblesBibleIdResumePostParams = OperationParameters<"resume_bible_api_v1_production_bibles__bible_id__resume_post">;
     type resumeScheduleApiV1SchedulesScheduleIdResumePostParams = OperationParameters<"resume_schedule_api_v1_schedules__schedule_id__resume_post">;
     type retryProbeApiV1MediaVersionIdProbeRetryPostParams = OperationParameters<"retry_probe_api_v1_media__version_id__probe_retry_post">;
     type reviseConsentApiV1ConsentsConsentIdRevisionsPostParams = OperationParameters<"revise_consent_api_v1_consents__consent_id__revisions_post">;

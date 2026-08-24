@@ -7,7 +7,11 @@ from uuid6 import uuid7
 
 from app.core.auth import AccessTokenClaims
 from app.core.errors import ApiError, ErrorCode
-from app.modules.assets import StoryboardAssetInput, resolve_storyboard_assets
+from app.modules.assets import (
+    StoryboardAssetInput,
+    resolve_episode_storyboard_asset_units,
+    resolve_storyboard_planning_assets,
+)
 from app.modules.governance.audit import append_audit_event
 from app.modules.identity import Capability, actor_context
 from app.modules.production import (
@@ -19,15 +23,22 @@ from app.modules.production import (
 from app.modules.projects import (
     episode_for_content_read,
     lock_active_episode_for_content_write,
+    resolve_episode_content_context,
     resolve_storyboard_episode,
 )
-from app.modules.scripts import StoryboardNarrativeSnapshot, resolve_storyboard_narrative
+from app.modules.scripts import (
+    StoryboardNarrativeSnapshot,
+    resolve_confirmed_script_production_bible_context,
+    resolve_storyboard_narrative,
+)
 from app.modules.storyboards import repository as storyboard_repository
 from app.modules.storyboards.contracts import (
     StoryboardDraftAsset,
     StoryboardDraftInput,
     StoryboardDraftInputChanged,
+    StoryboardDraftLeaseActive,
     StoryboardDraftUnit,
+    StoryboardDraftWorldEntry,
 )
 from app.modules.storyboards.coverage import repository as coverage_repository
 from app.modules.storyboards.coverage.models import ShotNarrativeReference
@@ -71,7 +82,7 @@ from app.modules.storyboards.models import AssetReference, Shot, ShotSpecVersion
 
 ENGINE_VERSION = "storyboard-draft-v1"
 MODEL_NAME = "codex-local"
-SCHEMA_VERSION = "storyboard-draft-schema-v2"
+SCHEMA_VERSION = "storyboard-draft-schema-v3"
 MAX_ACTIVE_SHOTS = 120
 DURATION_TOLERANCE = 0.25
 
@@ -91,6 +102,12 @@ def _version_conflict(message: str) -> ApiError:
 
 def _command_hash(payload: object) -> str:
     return canonical_payload_hash(payload)
+
+
+def _string_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(str(item) for item in cast(list[object], value))
 
 
 def _shot_baseline(shots: list[Shot]) -> list[dict[str, object]]:
@@ -117,6 +134,11 @@ def _batch_input_hash(
     aspect_ratio: str,
     visual_style: str | None,
     base_shot_hash: str,
+    production_bible_id: UUID | None,
+    production_bible_revision: int | None,
+    production_bible_result_hash: str | None,
+    production_bible_world: list[dict[str, object]],
+    asset_unit_version_ids: dict[UUID, tuple[UUID, ...]],
 ) -> str:
     return canonical_payload_hash(
         {
@@ -138,6 +160,13 @@ def _batch_input_hash(
                     "asset_version_id": str(asset.asset_version_id),
                     "state_revision": asset.state_revision,
                     "readiness_hash": asset.readiness_hash,
+                    "unit_version_ids": [
+                        str(unit_version_id)
+                        for unit_version_id in asset_unit_version_ids.get(
+                            asset.asset_state_id,
+                            (),
+                        )
+                    ],
                 }
                 for asset in assets
             ],
@@ -145,6 +174,12 @@ def _batch_input_hash(
             "aspect_ratio": aspect_ratio,
             "visual_style": visual_style,
             "base_shot_hash": base_shot_hash,
+            "production_bible_id": (
+                str(production_bible_id) if production_bible_id is not None else None
+            ),
+            "production_bible_revision": production_bible_revision,
+            "production_bible_result_hash": production_bible_result_hash,
+            "production_bible_world": production_bible_world,
             "engine_version": ENGINE_VERSION,
             "model_name": MODEL_NAME,
             "prompt_version": STORYBOARD_DRAFT_PROMPT_VERSION,
@@ -285,12 +320,16 @@ async def _batch_response(
             narrative_structure_id=batch.narrative_structure_id,
             narrative_revision=batch.narrative_revision,
             narrative_dependency_hash=batch.narrative_dependency_hash,
+            production_bible_id=batch.production_bible_id,
+            production_bible_revision=batch.production_bible_revision,
+            production_bible_result_hash=batch.production_bible_result_hash,
             narrative_unit_version_ids=[unit.unit_version_id for unit in units],
             asset_state_ids=[asset.asset_state_id for asset in assets],
             asset_version_ids=[asset.asset_version_id for asset in assets],
             target_duration_ms=batch.target_duration_ms,
             aspect_ratio=cast(Literal["9:16", "16:9", "1:1"], batch.aspect_ratio),
             visual_style=batch.visual_style,
+            world_entries=list(batch.production_bible_world),
             input_hash=batch.input_hash,
         ),
         drafts=draft_responses,
@@ -349,18 +388,76 @@ async def create_batch(
                 status_code=503,
                 next_action="review_script_structure",
             )
-        assets = await resolve_storyboard_assets(
+        production_bible_context = (
+            await resolve_confirmed_script_production_bible_context(
+                session,
+                confirmed_script_version_id=request.input_script_version_id,
+                episode_number=content.position,
+            )
+        )
+        production_bible_id = (
+            production_bible_context.bible_id
+            if production_bible_context is not None
+            else None
+        )
+        production_bible_revision = (
+            production_bible_context.revision
+            if production_bible_context is not None
+            else None
+        )
+        production_bible_result_hash = (
+            production_bible_context.result_hash
+            if production_bible_context is not None
+            else None
+        )
+        production_bible_world: list[dict[str, object]] = (
+            [
+                {
+                    "entry_key": entry.entry_key,
+                    "category": entry.category,
+                    "title": entry.title,
+                    "facts": list(entry.facts),
+                    "rules": list(entry.rules),
+                    "entity_keys": list(entry.entity_keys),
+                }
+                for entry in production_bible_context.world_entries
+            ]
+            if production_bible_context is not None
+            else []
+        )
+        selected_state_ids = request.asset_state_ids
+        asset_unit_version_ids: dict[UUID, tuple[UUID, ...]] = {}
+        if production_bible_context is not None:
+            asset_unit_version_ids = await resolve_episode_storyboard_asset_units(
+                session,
+                episode_id,
+                narrative_unit_version_ids={
+                    unit.unit_version_id for unit in narrative.units
+                },
+            )
+            derived_state_ids = list(asset_unit_version_ids)
+            if request.asset_state_ids and set(request.asset_state_ids) != set(
+                derived_state_ids
+            ):
+                raise ApiError(
+                    ErrorCode.INVALID_REQUEST,
+                    "Bible-bound storyboard assets are derived from episode occurrences",
+                    status_code=422,
+                    next_action="review_script_asset_occurrences",
+                )
+            selected_state_ids = derived_state_ids
+        assets = await resolve_storyboard_planning_assets(
             session,
             content.workspace_id,
             episode.project_id,
-            request.asset_state_ids,
+            selected_state_ids,
         )
-        if len(assets) != len(request.asset_state_ids):
+        if len(assets) != len(selected_state_ids):
             raise ApiError(
                 ErrorCode.STATE_CONFLICT,
-                "Every selected asset state must have a ready current version",
+                "Every storyboard asset state must have an active semantic version",
                 status_code=409,
-                next_action="review_asset_readiness",
+                next_action="review_asset_states",
             )
         shots = await storyboard_repository.list_active_shots(
             session,
@@ -377,6 +474,11 @@ async def create_batch(
             aspect_ratio=episode.aspect_ratio,
             visual_style=episode.visual_style,
             base_shot_hash=base_shot_hash,
+            production_bible_id=production_bible_id,
+            production_bible_revision=production_bible_revision,
+            production_bible_result_hash=production_bible_result_hash,
+            production_bible_world=production_bible_world,
+            asset_unit_version_ids=asset_unit_version_ids,
         )
         existing = await repository.find_batch_by_key(
             session,
@@ -402,6 +504,10 @@ async def create_batch(
             narrative_structure_id=narrative.structure_id,
             narrative_revision=narrative.structure_revision,
             narrative_dependency_hash=narrative.dependency_hash,
+            production_bible_id=production_bible_id,
+            production_bible_revision=production_bible_revision,
+            production_bible_result_hash=production_bible_result_hash,
+            production_bible_world=production_bible_world,
             input_hash=input_hash,
             target_duration_ms=episode.target_duration_ms,
             aspect_ratio=episode.aspect_ratio,
@@ -672,6 +778,8 @@ async def record_draft_result(
         )
     batch.provider_result_hash = result_hash
     batch.status = "needs_review"
+    batch.agent_run_token = None
+    batch.agent_lease_expires_at = None
     batch.revision += 1
     batch.updated_at = now
     await complete_storyboard_draft_task(
@@ -697,6 +805,8 @@ async def record_draft_error(
     if batch.status in {"needs_review", "approved", "applied", "cancelled"}:
         return
     batch.status = "unknown" if unknown else "failed"
+    batch.agent_run_token = None
+    batch.agent_lease_expires_at = None
     batch.error_code = error_code
     batch.revision += 1
     batch.updated_at = datetime.now(UTC)
@@ -872,7 +982,11 @@ async def _assert_current_inputs(
     batch: StoryboardDraftBatch,
     *,
     for_update: bool,
-) -> tuple[tuple[StoryboardAssetInput, ...], list[Shot]]:
+) -> tuple[
+    tuple[StoryboardAssetInput, ...],
+    list[Shot],
+    dict[UUID, tuple[UUID, ...]],
+]:
     episode = await resolve_storyboard_episode(
         session,
         batch.workspace_id,
@@ -880,6 +994,13 @@ async def _assert_current_inputs(
         for_update=for_update,
     )
     if episode is None:
+        raise _version_conflict("Episode is no longer available")
+    content = await resolve_episode_content_context(
+        session,
+        batch.workspace_id,
+        batch.episode_id,
+    )
+    if content is None:
         raise _version_conflict("Episode is no longer available")
     if episode.current_script_version_id != batch.input_script_version_id:
         raise _version_conflict("Current script version has changed")
@@ -896,7 +1017,7 @@ async def _assert_current_inputs(
     ):
         raise _version_conflict("Narrative structure has changed")
     inputs = await repository.list_input_assets(session, batch.id)
-    current_assets = await resolve_storyboard_assets(
+    current_assets = await resolve_storyboard_planning_assets(
         session,
         batch.workspace_id,
         batch.project_id,
@@ -912,6 +1033,13 @@ async def _assert_current_inputs(
         for asset in inputs
     ):
         raise _version_conflict("Storyboard asset inputs have changed")
+    asset_unit_version_ids = await resolve_episode_storyboard_asset_units(
+        session,
+        batch.episode_id,
+        narrative_unit_version_ids={
+            unit.unit_version_id for unit in narrative.units
+        },
+    )
     if (
         episode.project_id != batch.project_id
         or episode.target_duration_ms != batch.target_duration_ms
@@ -919,6 +1047,19 @@ async def _assert_current_inputs(
         or episode.visual_style != batch.visual_style
     ):
         raise _version_conflict("Storyboard project settings have changed")
+    if batch.production_bible_id is not None:
+        context = await resolve_confirmed_script_production_bible_context(
+            session,
+            confirmed_script_version_id=batch.input_script_version_id,
+            episode_number=content.position,
+        )
+        if (
+            context is None
+            or context.bible_id != batch.production_bible_id
+            or context.revision != batch.production_bible_revision
+            or context.result_hash != batch.production_bible_result_hash
+        ):
+            raise _version_conflict("Production Bible snapshot has changed")
     shots = await storyboard_repository.list_active_shots(
         session,
         batch.episode_id,
@@ -932,7 +1073,24 @@ async def _assert_current_inputs(
         or baseline != batch.base_shots
     ):
         raise _version_conflict("Storyboard shot baseline has changed")
-    return current_assets, shots
+    current_input_hash = _batch_input_hash(
+        narrative=narrative,
+        assets=current_assets,
+        target_duration_ms=batch.target_duration_ms,
+        aspect_ratio=batch.aspect_ratio,
+        visual_style=batch.visual_style,
+        base_shot_hash=batch.base_shot_hash,
+        production_bible_id=batch.production_bible_id,
+        production_bible_revision=batch.production_bible_revision,
+        production_bible_result_hash=batch.production_bible_result_hash,
+        production_bible_world=batch.production_bible_world,
+        asset_unit_version_ids=(
+            asset_unit_version_ids if batch.production_bible_id is not None else {}
+        ),
+    )
+    if current_input_hash != batch.input_hash:
+        raise _version_conflict("Storyboard asset occurrences have changed")
+    return current_assets, shots, asset_unit_version_ids
 
 
 async def prepare_draft_input(
@@ -940,20 +1098,46 @@ async def prepare_draft_input(
     *,
     batch_id: UUID,
     task_id: UUID,
+    run_token: UUID | None = None,
+    lease_expires_at: datetime | None = None,
+    now: datetime | None = None,
 ) -> StoryboardDraftInput:
+    if (run_token is None) != (lease_expires_at is None):
+        raise ValueError("run_token and lease_expires_at must be provided together")
+    claim_time = now or datetime.now(UTC)
+    if lease_expires_at is not None and lease_expires_at <= claim_time:
+        raise ValueError("storyboard draft lease must expire in the future")
     batch = await repository.find_batch(session, batch_id, for_update=True)
     if batch is None or batch.task_id != task_id:
         raise StoryboardDraftInputChanged("Storyboard draft task input is unavailable")
     if batch.status not in {"queued", "running"}:
         raise StoryboardDraftInputChanged("Storyboard draft batch is no longer runnable")
+    if run_token is not None:
+        active_other_run = (
+            batch.agent_run_token is not None
+            and batch.agent_run_token != run_token
+            and (
+                batch.agent_lease_expires_at is None
+                or batch.agent_lease_expires_at > claim_time
+            )
+        )
+        if active_other_run:
+            raise StoryboardDraftLeaseActive("Storyboard draft run lease is active")
     try:
-        await _assert_current_inputs(session, batch, for_update=False)
+        _, _, asset_unit_version_ids = await _assert_current_inputs(
+            session,
+            batch,
+            for_update=False,
+        )
     except ApiError as error:
         raise StoryboardDraftInputChanged("Storyboard draft input has changed") from error
     units = await repository.list_input_units(session, batch.id)
     assets = await repository.list_input_assets(session, batch.id)
     if not units:
         raise StoryboardDraftInputChanged("Storyboard narrative input is unavailable")
+    if run_token is not None:
+        batch.agent_run_token = run_token
+        batch.agent_lease_expires_at = lease_expires_at
     if batch.status == "queued":
         batch.status = "running"
         batch.revision += 1
@@ -989,9 +1173,69 @@ async def prepare_draft_input(
                 kind=asset.kind,
                 name=asset.name,
                 state_label=asset.state_label,
+                unit_version_ids=asset_unit_version_ids.get(asset.asset_state_id, ()),
             )
             for asset in assets
         ),
+        production_bible_id=batch.production_bible_id,
+        production_bible_revision=batch.production_bible_revision,
+        production_bible_result_hash=batch.production_bible_result_hash,
+        world_entries=tuple(
+            StoryboardDraftWorldEntry(
+                entry_key=str(entry["entry_key"]),
+                category=str(entry["category"]),
+                title=str(entry["title"]),
+                facts=_string_tuple(entry.get("facts")),
+                rules=_string_tuple(entry.get("rules")),
+                entity_keys=_string_tuple(entry.get("entity_keys")),
+            )
+            for entry in batch.production_bible_world
+        ),
+        run_token=run_token,
+    )
+
+
+async def renew_draft_run_lease(
+    session: AsyncSession,
+    *,
+    batch_id: UUID,
+    task_id: UUID,
+    run_token: UUID,
+    lease_expires_at: datetime,
+) -> bool:
+    batch = await repository.find_batch(session, batch_id, for_update=True)
+    current_time = datetime.now(UTC)
+    if lease_expires_at <= current_time:
+        raise ValueError("storyboard draft lease must expire in the future")
+    if (
+        batch is None
+        or batch.task_id != task_id
+        or batch.status != "running"
+        or batch.agent_run_token != run_token
+        or batch.agent_lease_expires_at is None
+        or batch.agent_lease_expires_at <= current_time
+    ):
+        return False
+    batch.agent_lease_expires_at = lease_expires_at
+    await session.flush()
+    return True
+
+
+async def fence_draft_run(
+    session: AsyncSession,
+    *,
+    batch_id: UUID,
+    task_id: UUID,
+    run_token: UUID,
+) -> bool:
+    batch = await repository.find_batch(session, batch_id, for_update=True)
+    return bool(
+        batch is not None
+        and batch.task_id == task_id
+        and batch.status == "running"
+        and batch.agent_run_token == run_token
+        and batch.agent_lease_expires_at is not None
+        and batch.agent_lease_expires_at > datetime.now(UTC)
     )
 
 
@@ -1001,7 +1245,7 @@ async def _current_preflight(
     *,
     for_update: bool,
 ) -> DraftApplyPreflightResponse:
-    current_assets, shots = await _assert_current_inputs(
+    current_assets, shots, _ = await _assert_current_inputs(
         session,
         batch,
         for_update=for_update,

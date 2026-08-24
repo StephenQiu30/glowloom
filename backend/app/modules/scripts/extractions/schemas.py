@@ -14,6 +14,7 @@ class CommandModel(BaseModel):
 class ScriptExtractionRequest(CommandModel):
     scope: Literal["full"]
     idempotency_key: str = Field(min_length=1, max_length=200)
+    production_bible_id: UUID | None = None
 
 
 class ExtractionBatchResponse(BaseModel):
@@ -23,6 +24,9 @@ class ExtractionBatchResponse(BaseModel):
     scope: Literal["full"]
     extractor_version: str
     input_hash: str
+    production_bible_id: UUID | None
+    production_bible_revision: int | None
+    production_bible_result_hash: str | None
     status: TaskStatus
     confirmed_script_version_id: UUID | None
     candidate_count: int
@@ -30,7 +34,9 @@ class ExtractionBatchResponse(BaseModel):
     created_at: datetime
 
 
-CandidateKind = Literal["scene", "dialogue", "asset", "shot", "continuity"]
+CandidateKind = Literal[
+    "scene", "dialogue", "asset", "asset_occurrence", "shot", "continuity"
+]
 CandidateStatus = Literal["pending", "accepted", "linked", "merged", "ignored"]
 
 
@@ -105,6 +111,16 @@ class AssetCandidateProposal(CommandModel):
     episode_numbers: list[int] = Field(default_factory=lambda: list[int](), max_length=1000)
 
 
+class AssetOccurrenceCandidateProposal(CommandModel):
+    kind: Literal["asset_occurrence"]
+    entity_key: str = Field(min_length=1, max_length=100)
+    state_key: str = Field(min_length=1, max_length=80)
+    scene_candidate_key: str = Field(min_length=1, max_length=100)
+    role: Literal[
+        "location", "character", "prop", "costume", "visual_style", "voice"
+    ]
+
+
 class ShotCandidateProposal(CommandModel):
     kind: Literal["shot"]
     scene_candidate_key: str = Field(min_length=1, max_length=100)
@@ -145,6 +161,7 @@ CandidateProposal = Annotated[
     SceneCandidateProposal
     | DialogueCandidateProposal
     | AssetCandidateProposal
+    | AssetOccurrenceCandidateProposal
     | ShotCandidateProposal
     | ContinuityCandidateProposal,
     Field(discriminator="kind"),
@@ -207,7 +224,14 @@ class ScriptExtractionResult(CommandModel):
             raise ValueError("candidate keys must be unique")
         for candidate in self.candidates:
             proposal = candidate.proposal
-            if isinstance(proposal, (DialogueCandidateProposal, ShotCandidateProposal)):
+            if isinstance(
+                proposal,
+                (
+                    DialogueCandidateProposal,
+                    AssetOccurrenceCandidateProposal,
+                    ShotCandidateProposal,
+                ),
+            ):
                 scene = candidates_by_key.get(proposal.scene_candidate_key)
                 if scene is None or scene.proposal.kind != "scene":
                     raise ValueError("scene candidate reference is invalid")

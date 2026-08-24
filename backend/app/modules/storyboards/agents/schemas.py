@@ -1,3 +1,4 @@
+from hashlib import sha256
 from typing import Literal
 from uuid import UUID
 
@@ -50,6 +51,8 @@ class SceneContext(AgentModel):
     visual_style: str | None = None
     units: tuple[SceneContextUnit, ...] = Field(min_length=1)
     assets: tuple[SceneContextAsset, ...] = ()
+    world_facts: tuple[str, ...] = ()
+    world_rules: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def validate_positions(self) -> "SceneContext":
@@ -193,10 +196,42 @@ class AssembledStoryboard(AgentModel):
     total_duration_ms: int = Field(ge=500)
     result_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
+    def has_consistent_payload(self) -> bool:
+        if len(self.candidate.shots) != len(self.timeline):
+            return False
+        expected_timecode_ms = 0
+        for position, (candidate_shot, row) in enumerate(
+            zip(self.candidate.shots, self.timeline, strict=True),
+            start=1,
+        ):
+            if (
+                row.global_position != position
+                or row.shot != candidate_shot
+                or row.timecode_in_ms != expected_timecode_ms
+            ):
+                return False
+            expected_timecode_ms = row.timecode_out_ms
+        expected_hash = sha256(
+            self.candidate.model_dump_json().encode("utf-8")
+        ).hexdigest()
+        return (
+            expected_timecode_ms == self.total_duration_ms
+            and self.result_hash == expected_hash
+        )
+
+    @model_validator(mode="after")
+    def validate_payload_consistency(self) -> "AssembledStoryboard":
+        if not self.has_consistent_payload():
+            raise ValueError(
+                "assembled storyboard candidate, timeline, duration and hash must agree"
+            )
+        return self
+
 
 class StoryboardCheckpoint(AgentModel):
     batch_id: UUID
     task_id: UUID
+    run_token: UUID | None = None
     harness_version: str = Field(min_length=1)
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     stage: AgentStage
@@ -209,6 +244,12 @@ class StoryboardCheckpoint(AgentModel):
     scene_drafts: tuple[SceneDraft, ...] = ()
     issues: tuple[ReviewIssue, ...] = ()
     assembled: AssembledStoryboard | None = None
+
+    @model_validator(mode="after")
+    def validate_terminal_status(self) -> "StoryboardCheckpoint":
+        if self.stage == "final_gate_passed" and self.status != "completed":
+            raise ValueError("final checkpoint must be completed")
+        return self
 
 
 class StoryboardAgentRunResult(AgentModel):

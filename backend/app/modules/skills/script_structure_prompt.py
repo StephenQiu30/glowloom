@@ -2,7 +2,7 @@ import json
 
 from app.modules.scripts import ScriptExtractionResult
 
-SCRIPT_STRUCTURE_PROMPT_VERSION = "prompt-v5-source-anchored-structure"
+SCRIPT_STRUCTURE_PROMPT_VERSION = "prompt-v6-production-bible-occurrences"
 
 
 def script_structure_system_prompt() -> str:
@@ -27,11 +27,13 @@ def script_structure_system_prompt() -> str:
         "continuity_review 或 voice_prepare，每个场景最多给出 4 个不重复任务。"
         "结构提取阶段禁止生成 shot 候选；分镜拆解专由 storyboard.plan Skill 在结构确认后完成。"
         "对白要保留"
-        "speaker、原文和表演信息；连续性问题要说明涉及实体、证据和建议。asset 只提取可"
-        "复用的角色、地点、道具、服装、声音或视觉风格身份，跨场景同一身份应使用一致名称，"
-        "别名放入 aliases；角色资产还要尽量填写 appearance、goals、relationships、"
-        "arc_summary、voice_profile、episode_numbers 和 continuity_notes，"
-        "不要为每次出现重复创建身份。一个场景标题只生成一个 scene，每段实际对白只生成一个"
+        "speaker、原文和表演信息；连续性问题要说明涉及实体、证据和建议。"
+        "当输入 production_bible 非空时，它是本项目已确认的统一实体、状态与世界观命名空间："
+        "禁止输出 asset，角色、地点、道具、服装、声音或视觉风格的每次出现只能输出"
+        "asset_occurrence，并使用 production_bible 中原样存在的 entity_key、state_key 和 kind"
+        "作为 role，同时绑定同一响应中的 scene_candidate_key；不得按别名、服装变化或单集上下文"
+        "创建新身份。只有 production_bible 为空的旧入口才允许输出 asset 候选；此时跨场景同一"
+        "身份应使用一致名称，别名放入 aliases。一个场景标题只生成一个 scene，每段实际对白只生成一个"
         "dialogue，每个可复用身份只生成一个 asset；字段使用紧凑短句，不复述整段原文。"
         "scene 只允许来自以“内景”“外景”“INT.”或“EXT.”开头的真实场景标题行，"
         "heading 必须逐字复制原文中的场景标题行；以 # 开头的 Markdown 标题只是章节结构，"

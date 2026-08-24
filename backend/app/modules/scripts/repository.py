@@ -158,6 +158,21 @@ async def find_extraction_batch(
     return await session.scalar(query)
 
 
+async def find_extraction_batch_by_confirmed_version(
+    session: AsyncSession,
+    confirmed_script_version_id: UUID,
+) -> ExtractionBatch | None:
+    return await session.scalar(
+        select(ExtractionBatch)
+        .where(
+            ExtractionBatch.confirmed_script_version_id == confirmed_script_version_id,
+            ExtractionBatch.status == "succeeded",
+        )
+        .order_by(ExtractionBatch.updated_at.desc(), ExtractionBatch.id.desc())
+        .limit(1)
+    )
+
+
 async def list_extraction_batches_referencing_version(
     session: AsyncSession,
     version_id: UUID,
@@ -284,7 +299,9 @@ async def list_structure_candidates(
         select(ExtractionCandidate)
         .where(
             ExtractionCandidate.batch_id == batch_id,
-            ExtractionCandidate.kind.in_(("scene", "dialogue", "continuity")),
+            ExtractionCandidate.kind.in_(
+                ("scene", "dialogue", "asset_occurrence", "continuity")
+            ),
         )
         .order_by(
             ExtractionCandidate.source_start,

@@ -55,6 +55,7 @@ export const candidateKindLabels: Record<API.ExtractionCandidateResponse["kind"]
   scene: "场次",
   dialogue: "对白",
   asset: "资产",
+  asset_occurrence: "资产出现",
   shot: "镜头建议",
   continuity: "连续性",
 };
@@ -73,6 +74,9 @@ export function proposalTitle(candidate: API.ExtractionCandidateResponse): strin
   if (proposal.kind === "scene") return proposal.heading;
   if (proposal.kind === "dialogue") return `${proposal.speaker_candidate}：${proposal.text}`;
   if (proposal.kind === "asset") return proposal.name;
+  if (proposal.kind === "asset_occurrence") {
+    return `${proposal.entity_key} · ${proposal.state_key}`;
+  }
   if (proposal.kind === "shot") return proposal.title;
   return proposal.issue;
 }
@@ -82,6 +86,9 @@ export function proposalDescription(candidate: API.ExtractionCandidateResponse):
   if (proposal.kind === "scene") return `${proposal.location} · ${proposal.time_of_day} · ${proposal.summary}`;
   if (proposal.kind === "dialogue") return proposal.performance_note ?? "无额外表演备注";
   if (proposal.kind === "asset") return proposal.description;
+  if (proposal.kind === "asset_occurrence") {
+    return `${proposal.role} · 场景 ${proposal.scene_candidate_key}`;
+  }
   if (proposal.kind === "shot") return proposal.purpose;
   return proposal.suggestion;
 }

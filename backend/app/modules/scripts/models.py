@@ -810,6 +810,11 @@ class ExtractionBatch(Base):
             ["prod_tasks.id", "prod_tasks.workspace_id"],
             name="fk_scr_batch_task_workspace",
         ),
+        ForeignKeyConstraint(
+            ["production_bible_id", "workspace_id"],
+            ["scr_production_bibles.id", "scr_production_bibles.workspace_id"],
+            name="fk_scr_batch_production_bible_workspace",
+        ),
         CheckConstraint("scope = 'full'", name="ck_scr_batch_scope"),
         CheckConstraint(
             "status IN ('queued', 'running', 'waiting_provider', 'succeeded', "
@@ -817,6 +822,13 @@ class ExtractionBatch(Base):
             name="ck_scr_batch_status",
         ),
         CheckConstraint("candidate_count >= 0", name="ck_scr_batch_candidate_count"),
+        CheckConstraint(
+            "(production_bible_id IS NULL AND production_bible_revision IS NULL "
+            "AND production_bible_result_hash IS NULL) OR "
+            "(production_bible_id IS NOT NULL AND production_bible_revision >= 1 "
+            "AND char_length(production_bible_result_hash) = 64)",
+            name="ck_scr_batch_production_bible_snapshot",
+        ),
         UniqueConstraint("id", "workspace_id", name="uq_scr_batch_id_workspace"),
         UniqueConstraint(
             "script_version_id",
@@ -838,7 +850,11 @@ class ExtractionBatch(Base):
     task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     scope: Mapped[str] = mapped_column(String(20), default="full")
     extractor_version: Mapped[str] = mapped_column(String(80))
+    script_content_hash: Mapped[str] = mapped_column(String(64))
     input_hash: Mapped[str] = mapped_column(String(64))
+    production_bible_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    production_bible_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    production_bible_result_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="queued")
     confirmed_script_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     result_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -862,7 +878,7 @@ class ExtractionCandidate(Base):
             name="fk_scr_candidate_batch_workspace",
         ),
         CheckConstraint(
-            "kind IN ('scene', 'dialogue', 'asset', 'shot', 'continuity')",
+            "kind IN ('scene', 'dialogue', 'asset', 'asset_occurrence', 'shot', 'continuity')",
             name="ck_scr_candidate_kind",
         ),
         CheckConstraint(

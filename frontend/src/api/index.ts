@@ -4,6 +4,7 @@ import * as governance from "./governance";
 import * as identity from "./identity";
 import * as media from "./media";
 import * as production from "./production";
+import * as productionBibles from "./productionBibles";
 import * as projects from "./projects";
 import * as schedules from "./schedules";
 import * as scriptAdaptations from "./scriptAdaptations";
@@ -20,6 +21,7 @@ const api = {
   identity,
   media,
   production,
+  productionBibles,
   projects,
   schedules,
   scriptAdaptations,

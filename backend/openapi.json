@@ -28,6 +28,7 @@
             "discriminator": {
               "mapping": {
                 "asset": "#/components/schemas/AssetCandidateProposal",
+                "asset_occurrence": "#/components/schemas/AssetOccurrenceCandidateProposal",
                 "continuity": "#/components/schemas/ContinuityCandidateProposal",
                 "dialogue": "#/components/schemas/DialogueCandidateProposal",
                 "scene": "#/components/schemas/SceneCandidateProposal",
@@ -44,6 +45,9 @@
               },
               {
                 "$ref": "#/components/schemas/AssetCandidateProposal"
+              },
+              {
+                "$ref": "#/components/schemas/AssetOccurrenceCandidateProposal"
               },
               {
                 "$ref": "#/components/schemas/ShotCandidateProposal"
@@ -1388,6 +1392,18 @@
         "title": "ApiResponse[PaginatedTasks]",
         "type": "object"
       },
+      "ApiResponse_ProductionBibleResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ProductionBibleResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ProductionBibleResponse]",
+        "type": "object"
+      },
       "ApiResponse_ProjectProductionSnapshot_": {
         "properties": {
           "data": {
@@ -2620,6 +2636,55 @@
           "position"
         ],
         "title": "AssetMediaReferenceResponse",
+        "type": "object"
+      },
+      "AssetOccurrenceCandidateProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "entity_key": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Entity Key",
+            "type": "string"
+          },
+          "kind": {
+            "const": "asset_occurrence",
+            "title": "Kind",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "location",
+              "character",
+              "prop",
+              "costume",
+              "visual_style",
+              "voice"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "scene_candidate_key": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Scene Candidate Key",
+            "type": "string"
+          },
+          "state_key": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "State Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "entity_key",
+          "state_key",
+          "scene_candidate_key",
+          "role"
+        ],
+        "title": "AssetOccurrenceCandidateProposal",
         "type": "object"
       },
       "AssetOccurrenceDecisionResponse": {
@@ -4308,7 +4373,8 @@
           "source_type": {
             "enum": [
               "manual",
-              "script_extraction_candidate"
+              "script_extraction_candidate",
+              "production_bible_state"
             ],
             "title": "Source Type",
             "type": "string"
@@ -4503,6 +4569,132 @@
           "expires_in"
         ],
         "title": "AuthResponse",
+        "type": "object"
+      },
+      "BibleEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "episode_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Number"
+          },
+          "exact_anchor": {
+            "minLength": 1,
+            "title": "Exact Anchor",
+            "type": "string"
+          },
+          "source_end": {
+            "minimum": 1.0,
+            "title": "Source End",
+            "type": "integer"
+          },
+          "source_start": {
+            "minimum": 0.0,
+            "title": "Source Start",
+            "type": "integer"
+          },
+          "text_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Text Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_start",
+          "source_end",
+          "text_hash",
+          "exact_anchor"
+        ],
+        "title": "BibleEvidence",
+        "type": "object"
+      },
+      "BibleReviewIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BibleEvidence"
+            },
+            "maxItems": 100,
+            "title": "Evidence",
+            "type": "array"
+          },
+          "issue_key": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,99}$",
+            "title": "Issue Key",
+            "type": "string"
+          },
+          "repair_hint": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Hint"
+          },
+          "scope": {
+            "enum": [
+              "global",
+              "entity",
+              "entity_state",
+              "world_entry"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "warning",
+              "blocking"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "subject_key": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Key"
+          },
+          "summary": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_key",
+          "code",
+          "severity",
+          "scope",
+          "summary"
+        ],
+        "title": "BibleReviewIssue",
         "type": "object"
       },
       "BlockingReason": {
@@ -7128,6 +7320,40 @@
             "title": "Narrative Unit Version Ids",
             "type": "array"
           },
+          "production_bible_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Bible Id"
+          },
+          "production_bible_result_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Bible Result Hash"
+          },
+          "production_bible_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Bible Revision"
+          },
           "script_version_id": {
             "format": "uuid",
             "title": "Script Version Id",
@@ -7147,6 +7373,14 @@
               }
             ],
             "title": "Visual Style"
+          },
+          "world_entries": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "World Entries",
+            "type": "array"
           }
         },
         "required": [
@@ -7154,12 +7388,16 @@
           "narrative_structure_id",
           "narrative_revision",
           "narrative_dependency_hash",
+          "production_bible_id",
+          "production_bible_revision",
+          "production_bible_result_hash",
           "narrative_unit_version_ids",
           "asset_state_ids",
           "asset_version_ids",
           "target_duration_ms",
           "aspect_ratio",
           "visual_style",
+          "world_entries",
           "input_hash"
         ],
         "title": "DraftInputSummary",
@@ -8604,6 +8842,40 @@
             "title": "Input Hash",
             "type": "string"
           },
+          "production_bible_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Bible Id"
+          },
+          "production_bible_result_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Bible Result Hash"
+          },
+          "production_bible_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Bible Revision"
+          },
           "scope": {
             "const": "full",
             "title": "Scope",
@@ -8643,6 +8915,9 @@
           "scope",
           "extractor_version",
           "input_hash",
+          "production_bible_id",
+          "production_bible_revision",
+          "production_bible_result_hash",
           "status",
           "confirmed_script_version_id",
           "candidate_count",
@@ -8689,6 +8964,7 @@
               "scene",
               "dialogue",
               "asset",
+              "asset_occurrence",
               "shot",
               "continuity"
             ],
@@ -8699,6 +8975,7 @@
             "discriminator": {
               "mapping": {
                 "asset": "#/components/schemas/AssetCandidateProposal",
+                "asset_occurrence": "#/components/schemas/AssetOccurrenceCandidateProposal",
                 "continuity": "#/components/schemas/ContinuityCandidateProposal",
                 "dialogue": "#/components/schemas/DialogueCandidateProposal",
                 "scene": "#/components/schemas/SceneCandidateProposal",
@@ -8715,6 +8992,9 @@
               },
               {
                 "$ref": "#/components/schemas/AssetCandidateProposal"
+              },
+              {
+                "$ref": "#/components/schemas/AssetOccurrenceCandidateProposal"
               },
               {
                 "$ref": "#/components/schemas/ShotCandidateProposal"
@@ -11844,6 +12124,551 @@
         "title": "ProbeRetryRequest",
         "type": "object"
       },
+      "ProductionBibleConfirmRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_result_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Result Hash",
+            "type": "string"
+          },
+          "expected_revision": {
+            "minimum": 1.0,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "idempotency_key": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Idempotency Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "expected_result_hash",
+          "idempotency_key"
+        ],
+        "title": "ProductionBibleConfirmRequest",
+        "type": "object"
+      },
+      "ProductionBibleCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Idempotency Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "ProductionBibleCreateRequest",
+        "type": "object"
+      },
+      "ProductionBibleEntityResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Aliases",
+            "type": "array"
+          },
+          "asset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
+          "canonical_name": {
+            "title": "Canonical Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "entity_key": {
+            "title": "Entity Key",
+            "type": "string"
+          },
+          "episode_numbers": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Episode Numbers",
+            "type": "array"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BibleEvidence"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "character",
+              "location",
+              "prop",
+              "costume",
+              "visual_style",
+              "voice"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "normalized_name": {
+            "title": "Normalized Name",
+            "type": "string"
+          },
+          "stable_spec": {
+            "additionalProperties": true,
+            "title": "Stable Spec",
+            "type": "object"
+          },
+          "states": {
+            "items": {
+              "$ref": "#/components/schemas/ProductionBibleEntityStateResponse"
+            },
+            "title": "States",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "entity_key",
+          "kind",
+          "canonical_name",
+          "normalized_name",
+          "aliases",
+          "stable_spec",
+          "episode_numbers",
+          "evidence",
+          "asset_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProductionBibleEntityResponse",
+        "type": "object"
+      },
+      "ProductionBibleEntityStateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "asset_state_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset State Id"
+          },
+          "asset_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Version Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "entity_id": {
+            "format": "uuid",
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "episode_numbers": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Episode Numbers",
+            "type": "array"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BibleEvidence"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "state_key": {
+            "title": "State Key",
+            "type": "string"
+          },
+          "state_spec": {
+            "additionalProperties": true,
+            "title": "State Spec",
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "entity_id",
+          "state_key",
+          "label",
+          "state_spec",
+          "episode_numbers",
+          "evidence",
+          "asset_state_id",
+          "asset_version_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProductionBibleEntityStateResponse",
+        "type": "object"
+      },
+      "ProductionBibleResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_revision": {
+            "minimum": 0.0,
+            "title": "Checkpoint Revision",
+            "type": "integer"
+          },
+          "checkpoint_stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Stage"
+          },
+          "checkpoint_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Updated At"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_revision_id": {
+            "format": "uuid",
+            "title": "Document Revision Id",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/ProductionBibleEntityResponse"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "harness_version": {
+            "title": "Harness Version",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "result_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Hash"
+          },
+          "review_issues": {
+            "items": {
+              "$ref": "#/components/schemas/BibleReviewIssue"
+            },
+            "title": "Review Issues",
+            "type": "array"
+          },
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "needs_review",
+              "confirmed",
+              "failed",
+              "unknown",
+              "superseded",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "world_entries": {
+            "items": {
+              "$ref": "#/components/schemas/ProductionBibleWorldEntryResponse"
+            },
+            "title": "World Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "project_id",
+          "document_revision_id",
+          "task_id",
+          "status",
+          "input_hash",
+          "engine_version",
+          "model_name",
+          "prompt_version",
+          "schema_version",
+          "harness_version",
+          "checkpoint_stage",
+          "checkpoint_revision",
+          "checkpoint_updated_at",
+          "review_issues",
+          "revision",
+          "confirmed_at",
+          "confirmed_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProductionBibleResponse",
+        "type": "object"
+      },
+      "ProductionBibleResumeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_revision": {
+            "minimum": 1.0,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "idempotency_key": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Idempotency Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "idempotency_key"
+        ],
+        "title": "ProductionBibleResumeRequest",
+        "type": "object"
+      },
+      "ProductionBibleWorldEntryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "entity_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entity Keys",
+            "type": "array"
+          },
+          "entry_key": {
+            "title": "Entry Key",
+            "type": "string"
+          },
+          "episode_numbers": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Episode Numbers",
+            "type": "array"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BibleEvidence"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "facts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Facts",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "entry_key",
+          "category",
+          "title",
+          "facts",
+          "rules",
+          "entity_keys",
+          "episode_numbers",
+          "evidence",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProductionBibleWorldEntryResponse",
+        "type": "object"
+      },
       "ProfileUpdateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -13485,6 +14310,18 @@
             "minLength": 1,
             "title": "Idempotency Key",
             "type": "string"
+          },
+          "production_bible_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Bible Id"
           },
           "scope": {
             "const": "full",
@@ -15700,6 +16537,7 @@
             "enum": [
               "extraction_batch",
               "episode_plan",
+              "production_bible",
               "adaptation_run",
               "storyboard_draft_batch",
               "storyboard_export_job",
@@ -15736,6 +16574,7 @@
             "enum": [
               "script_extraction",
               "episode_planning",
+              "production_bible",
               "script_adaptation",
               "storyboard_draft",
               "storyboard_export",
@@ -19421,6 +20260,64 @@
         ]
       }
     },
+    "/api/v1/document-revisions/{revision_id}/production-bibles": {
+      "post": {
+        "operationId": "create_bible_api_v1_document_revisions__revision_id__production_bibles_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Revision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductionBibleCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ProductionBibleResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Bible",
+        "tags": [
+          "production-bibles"
+        ]
+      }
+    },
     "/api/v1/episode-plans/{plan_id}": {
       "get": {
         "operationId": "get_episode_plan_api_v1_episode_plans__plan_id__get",
@@ -21199,6 +22096,7 @@
                     "scene",
                     "dialogue",
                     "asset",
+                    "asset_occurrence",
                     "shot",
                     "continuity"
                   ],
@@ -22712,6 +23610,170 @@
         ]
       }
     },
+    "/api/v1/production-bibles/{bible_id}": {
+      "get": {
+        "operationId": "get_bible_api_v1_production_bibles__bible_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bible_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bible Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ProductionBibleResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bible",
+        "tags": [
+          "production-bibles"
+        ]
+      }
+    },
+    "/api/v1/production-bibles/{bible_id}/confirm": {
+      "post": {
+        "operationId": "confirm_bible_api_v1_production_bibles__bible_id__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bible_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bible Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductionBibleConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ProductionBibleResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm Bible",
+        "tags": [
+          "production-bibles"
+        ]
+      }
+    },
+    "/api/v1/production-bibles/{bible_id}/resume": {
+      "post": {
+        "operationId": "resume_bible_api_v1_production_bibles__bible_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bible_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bible Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductionBibleResumeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ProductionBibleResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Resume Bible",
+        "tags": [
+          "production-bibles"
+        ]
+      }
+    },
     "/api/v1/projects": {
       "get": {
         "operationId": "list_projects_api_v1_projects_get",
@@ -23659,6 +24721,54 @@
         "summary": "Reorder Episodes",
         "tags": [
           "projects"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/production-bible": {
+      "get": {
+        "operationId": "get_current_bible_api_v1_projects__project_id__production_bible_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ProductionBibleResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Current Bible",
+        "tags": [
+          "production-bibles"
         ]
       }
     },

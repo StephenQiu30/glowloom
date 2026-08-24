@@ -61,6 +61,14 @@ class DatabaseStoryboardCheckpointStore:
             return checkpoint
 
     async def save(self, checkpoint: StoryboardCheckpoint) -> None:
+        try:
+            checkpoint = StoryboardCheckpoint.model_validate(
+                checkpoint.model_dump(mode="json")
+            )
+        except (TypeError, ValidationError, ValueError) as error:
+            raise StoryboardCheckpointMismatchError(
+                "checkpoint payload is internally inconsistent"
+            ) from error
         async with self._session_factory() as session, session.begin():
             batch = await session.scalar(
                 select(StoryboardDraftBatch)
@@ -83,7 +91,27 @@ class DatabaseStoryboardCheckpointStore:
                 raise StoryboardCheckpointMismatchError(
                     "checkpoint harness_version is not supported"
                 )
+            if batch.status != "running":
+                raise StoryboardCheckpointMismatchError(
+                    "checkpoint target draft batch is not running"
+                )
+            now = datetime.now(UTC)
+            if checkpoint.run_token is None:
+                raise StoryboardCheckpointMismatchError(
+                    "database checkpoint requires an active run_token"
+                )
+            if batch.agent_run_token != checkpoint.run_token:
+                raise StoryboardCheckpointMismatchError(
+                    "checkpoint run_token no longer owns the draft lease"
+                )
+            if (
+                batch.agent_lease_expires_at is None
+                or batch.agent_lease_expires_at <= now
+            ):
+                raise StoryboardCheckpointMismatchError(
+                    "checkpoint draft lease has expired"
+                )
 
             batch.agent_checkpoint = checkpoint.model_dump(mode="json")
             batch.agent_checkpoint_revision += 1
-            batch.agent_checkpoint_updated_at = datetime.now(UTC)
+            batch.agent_checkpoint_updated_at = now

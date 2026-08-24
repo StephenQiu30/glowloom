@@ -92,6 +92,17 @@ class StoryboardDraftAsset:
     kind: str
     name: str
     state_label: str
+    unit_version_ids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class StoryboardDraftWorldEntry:
+    entry_key: str
+    category: str
+    title: str
+    facts: tuple[str, ...]
+    rules: tuple[str, ...]
+    entity_keys: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,9 +116,22 @@ class StoryboardDraftInput:
     visual_style: str | None
     units: tuple[StoryboardDraftUnit, ...]
     assets: tuple[StoryboardDraftAsset, ...]
+    production_bible_id: UUID | None = None
+    production_bible_revision: int | None = None
+    production_bible_result_hash: str | None = None
+    world_entries: tuple[StoryboardDraftWorldEntry, ...] = ()
+    run_token: UUID | None = None
 
 
 class StoryboardDraftInputChanged(RuntimeError):
+    pass
+
+
+class StoryboardDraftLeaseActive(RuntimeError):
+    pass
+
+
+class StoryboardDraftLeaseLost(RuntimeError):
     pass
 
 

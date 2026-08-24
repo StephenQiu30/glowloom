@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid6 import uuid7
 
 from app.core.errors import ApiError
 from app.modules.messaging.contracts import MessageEnvelope
@@ -24,13 +25,17 @@ from app.modules.production import (
 from app.modules.storyboards import (
     StoryboardDraftInput,
     StoryboardDraftInputChanged,
+    StoryboardDraftLeaseActive,
+    StoryboardDraftLeaseLost,
     StoryboardDraftProviderError,
+    fence_draft_run,
     prepare_draft_input,
     record_draft_error,
     record_draft_result,
 )
 
 IO_STORYBOARD_DRAFT_CONSUMER = "lanverse.io.storyboard-draft.v1"
+STORYBOARD_DRAFT_LEASE_DURATION = timedelta(minutes=5)
 ConsumerResult = Literal["completed", "duplicate", "rejected"]
 
 
@@ -38,9 +43,11 @@ ConsumerResult = Literal["completed", "duplicate", "rejected"]
 class PreparedStoryboardDraft:
     delivery_id: UUID
     draft_input: StoryboardDraftInput
+    run_token: UUID
+    lease_expires_at: datetime
 
 
-PreparationResult = ConsumerResult | PreparedStoryboardDraft
+PreparationResult = ConsumerResult | Literal["lease_active"] | PreparedStoryboardDraft
 
 
 async def _complete_input_changed(
@@ -111,12 +118,19 @@ async def _resume_interrupted_draft(
         complete_inbox_delivery(delivery, now=now, last_error="ai_service_unavailable")
         await session.flush()
         return "completed"
+    run_token = uuid7()
+    lease_expires_at = now + STORYBOARD_DRAFT_LEASE_DURATION
     try:
         draft_input = await prepare_draft_input(
             session,
             batch_id=task.request_id,
             task_id=task.id,
+            run_token=run_token,
+            lease_expires_at=lease_expires_at,
+            now=now,
         )
+    except StoryboardDraftLeaseActive:
+        return "lease_active"
     except StoryboardDraftInputChanged:
         return await _complete_input_changed(
             session,
@@ -127,7 +141,12 @@ async def _resume_interrupted_draft(
             now=now,
         )
     await session.flush()
-    return PreparedStoryboardDraft(delivery_id=delivery.id, draft_input=draft_input)
+    return PreparedStoryboardDraft(
+        delivery_id=delivery.id,
+        draft_input=draft_input,
+        run_token=run_token,
+        lease_expires_at=lease_expires_at,
+    )
 
 
 async def prepare_storyboard_draft(
@@ -237,12 +256,19 @@ async def prepare_storyboard_draft(
         complete_inbox_delivery(delivery, now=now)
         await session.flush()
         return "completed"
+    run_token = uuid7()
+    lease_expires_at = now + STORYBOARD_DRAFT_LEASE_DURATION
     try:
         draft_input = await prepare_draft_input(
             session,
             batch_id=task.request_id,
             task_id=task.id,
+            run_token=run_token,
+            lease_expires_at=lease_expires_at,
+            now=now,
         )
+    except StoryboardDraftLeaseActive:
+        return "lease_active"
     except StoryboardDraftInputChanged:
         return await _complete_input_changed(
             session,
@@ -253,7 +279,12 @@ async def prepare_storyboard_draft(
             now=now,
         )
     await session.flush()
-    return PreparedStoryboardDraft(delivery_id=delivery.id, draft_input=draft_input)
+    return PreparedStoryboardDraft(
+        delivery_id=delivery.id,
+        draft_input=draft_input,
+        run_token=run_token,
+        lease_expires_at=lease_expires_at,
+    )
 
 
 async def finalize_storyboard_draft_success(
@@ -264,6 +295,15 @@ async def finalize_storyboard_draft_success(
     delivery = await lock_inbox_delivery(session, prepared.delivery_id)
     if delivery.status != "processing":
         return "duplicate"
+    if not await fence_draft_run(
+        session,
+        batch_id=prepared.draft_input.batch_id,
+        task_id=prepared.draft_input.task_id,
+        run_token=prepared.run_token,
+    ):
+        raise StoryboardDraftLeaseLost(
+            "Storyboard draft result no longer owns an active lease"
+        )
     now = datetime.now(UTC)
     try:
         await record_draft_result(
@@ -303,6 +343,15 @@ async def finalize_storyboard_draft_failure(
     delivery = await lock_inbox_delivery(session, prepared.delivery_id)
     if delivery.status != "processing":
         return "duplicate"
+    if not await fence_draft_run(
+        session,
+        batch_id=prepared.draft_input.batch_id,
+        task_id=prepared.draft_input.task_id,
+        run_token=prepared.run_token,
+    ):
+        raise StoryboardDraftLeaseLost(
+            "Storyboard draft failure no longer owns an active lease"
+        )
     now = datetime.now(UTC)
     unknown = error.outcome == "unknown"
     if unknown:

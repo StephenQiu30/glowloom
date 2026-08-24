@@ -423,6 +423,23 @@ async def list_occurrence_decisions(
     )
 
 
+async def list_episode_occurrence_decisions(
+    session: AsyncSession,
+    episode_id: UUID,
+) -> list[AssetOccurrenceDecision]:
+    return list(
+        await session.scalars(
+            select(AssetOccurrenceDecision)
+            .where(AssetOccurrenceDecision.episode_id == episode_id)
+            .order_by(
+                AssetOccurrenceDecision.asset_state_id,
+                AssetOccurrenceDecision.narrative_unit_id,
+                AssetOccurrenceDecision.sequence,
+            )
+        )
+    )
+
+
 async def find_candidate_version(
     session: AsyncSession,
     candidate_id: UUID,
