@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     outbox_topics: str = "lanverse.io.v1,lanverse.media.v1"
 
     minio_endpoint: str = "127.0.0.1:9000"
+    minio_public_endpoint: str | None = None
+    minio_public_secure: bool | None = None
+    minio_region: str = "us-east-1"
     minio_access_key: str = "lanverse"
     minio_secret_key: str = "lanverse-development-only"
     minio_bucket: str = "lanverse-media"

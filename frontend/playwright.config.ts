@@ -44,6 +44,8 @@ export default defineConfig({
         API_HOST: "127.0.0.1",
         API_PORT: backendPort,
         LEGACY_API_URL: agentBaseUrl,
+        MIGRATION_DATABASE_URL:
+          "postgresql://postgres@127.0.0.1:5432/lanverse_test",
       },
       url: `${backendBaseUrl}/readyz`,
       reuseExistingServer: false,

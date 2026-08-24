@@ -194,6 +194,9 @@ class MinioObjectStorage:
         bucket: str,
         *,
         secure: bool,
+        public_endpoint: str | None = None,
+        public_secure: bool | None = None,
+        region: str | None = None,
         storage_profile: str = "default",
         thread_limit: int = 4,
         operation_timeout_seconds: float = 3,
@@ -203,7 +206,17 @@ class MinioObjectStorage:
             access_key=access_key,
             secret_key=secret_key,
             secure=secure,
+            region=region,
         )
+        self._presign_client = self._client
+        if public_endpoint is not None:
+            self._presign_client = Minio(
+                public_endpoint,
+                access_key=access_key,
+                secret_key=secret_key,
+                secure=secure if public_secure is None else public_secure,
+                region=region,
+            )
         self._bucket = bucket
         self._storage_profile = storage_profile_label(storage_profile)
         self._limiter = CapacityLimiter(thread_limit)
@@ -287,7 +300,7 @@ class MinioObjectStorage:
             try:
                 result = await self._run(
                     partial(
-                        self._client.presigned_put_object,
+                        self._presign_client.presigned_put_object,
                         self._bucket,
                         object_key,
                         timedelta(seconds=expires_seconds),
@@ -304,7 +317,7 @@ class MinioObjectStorage:
             try:
                 result = await self._run(
                     partial(
-                        self._client.presigned_get_object,
+                        self._presign_client.presigned_get_object,
                         self._bucket,
                         object_key,
                         timedelta(seconds=expires_seconds),

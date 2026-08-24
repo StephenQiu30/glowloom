@@ -17,10 +17,6 @@ x-agent-service: &agent-service
   image: lanverse/agent:development
 
 services:
-  database-migrate:
-    <<: *backend-service
-    entrypoint: ["/usr/local/bin/lanverse-migrate"]
-
   frontend:
     build:
       context: ./frontend

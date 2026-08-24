@@ -10,6 +10,9 @@ x-agent-environment: &agent-environment
   REDIS_URL: redis://redis:6379/0
   KAFKA_BOOTSTRAP_SERVERS: kafka:19092
   MINIO_ENDPOINT: minio:9000
+  MINIO_PUBLIC_ENDPOINT: 127.0.0.1:${MINIO_PORT:-9000}
+  MINIO_PUBLIC_SECURE: "false"
+  MINIO_REGION: ${MINIO_REGION:-us-east-1}
   MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-lanverse}
   MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-lanverse-development-only}
   MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
@@ -24,17 +27,6 @@ x-agent-runtime: &agent-runtime
     - internal
 
 services:
-  database-migrate:
-    environment:
-      MIGRATION_DATABASE_URL: >-
-        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-lanverse-development-only}@postgres:5432/${POSTGRES_DB:-lanverse}
-    networks:
-      - internal
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: "no"
-
   frontend:
     build:
       args:
@@ -52,8 +44,8 @@ services:
   agent-init:
     <<: *agent-runtime
     depends_on:
-      database-migrate:
-        condition: service_completed_successfully
+      backend:
+        condition: service_healthy
     restart: "no"
 
   agent-api:
@@ -79,6 +71,8 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 8686
       LEGACY_API_URL: http://agent-api:8686
+      MIGRATION_DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-lanverse-development-only}@postgres:5432/${POSTGRES_DB:-lanverse}
       UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-3}
     ports:
       - 127.0.0.1:${API_PORT:-8686}:8686
@@ -86,10 +80,10 @@ services:
       - edge
       - internal
     depends_on:
-      agent-api:
+      postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8686/readyz"]
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8686/healthz"]
       interval: 5s
       timeout: 3s
       retries: 24
@@ -171,6 +165,7 @@ services:
       - 127.0.0.1:${MINIO_PORT:-9000}:9000
       - 127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001
     networks:
+      - edge
       - internal
     volumes:
       - minio-data:/data

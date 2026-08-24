@@ -15,7 +15,6 @@ PRODUCTION_COMPOSE = REPOSITORY_ROOT / "docker-compose-prod.yml"
 CURRENT_RUNTIME_SERVICES = {
     "frontend",
     "backend",
-    "database-migrate",
     "agent-init",
     "agent-api",
     "schedule-dispatcher",
@@ -31,7 +30,6 @@ CURRENT_RUNTIME_SERVICES = {
 }
 STATEFUL_SERVICES = {"postgres", "redis", "minio", "kafka"}
 INTERNAL_PORT_SERVICES = STATEFUL_SERVICES | {
-    "database-migrate",
     "minio-init",
     "kafka-init",
     "agent-init",
@@ -109,13 +107,24 @@ def test_compose_files_define_the_current_runnable_top_level_slice() -> None:
     assert "app.runtime.workers.scheduler schedule" in commands["schedule-dispatcher"]
     assert "app.runtime.workers.scheduler outbox" in commands["outbox-publisher"]
     assert commands["schedule-dispatcher"] != commands["outbox-publisher"]
-    assert services["database-migrate"]["entrypoint"] == ["/usr/local/bin/lanverse-migrate"]
     assert "app.runtime.commands.database check" in commands["agent-init"]
 
     migration_dependencies = services["agent-init"].get("depends_on")
     assert isinstance(migration_dependencies, dict)
-    assert migration_dependencies["database-migrate"]["condition"] == (
-        "service_completed_successfully"
+    assert migration_dependencies["backend"]["condition"] == "service_healthy"
+    assert "database-migrate" not in services
+
+    backend = services["backend"]
+    backend_dependencies = backend.get("depends_on")
+    assert isinstance(backend_dependencies, dict)
+    assert backend_dependencies["postgres"]["condition"] == "service_healthy"
+    backend_environment = backend.get("environment")
+    assert isinstance(backend_environment, dict)
+    assert "MIGRATION_DATABASE_URL" in backend_environment
+    backend_healthcheck = backend.get("healthcheck")
+    assert isinstance(backend_healthcheck, dict)
+    assert "/healthz" in " ".join(
+        str(part) for part in cast(list[object], backend_healthcheck["test"])
     )
 
     publisher_environment = services["outbox-publisher"].get("environment")
@@ -124,6 +133,15 @@ def test_compose_files_define_the_current_runnable_top_level_slice() -> None:
     dispatcher_environment = services["schedule-dispatcher"].get("environment")
     assert isinstance(dispatcher_environment, dict)
     assert "OUTBOX_TOPICS" not in dispatcher_environment
+
+    agent_environment = services["agent-api"].get("environment")
+    assert isinstance(agent_environment, dict)
+    assert agent_environment["MINIO_ENDPOINT"] == "minio:9000"
+    assert agent_environment["MINIO_PUBLIC_ENDPOINT"] != agent_environment["MINIO_ENDPOINT"]
+
+    minio_networks = services["minio"].get("networks")
+    assert isinstance(minio_networks, dict)
+    assert set(minio_networks) == {"edge", "internal"}
 
     networks = cast(dict[str, dict[str, object]], config["networks"])
     assert networks["internal"]["internal"] is True
@@ -164,12 +182,6 @@ def test_production_override_uses_published_images_and_hides_internal_ports() ->
     assert isinstance(agent_init, dict)
     assert "build" not in agent_init
     assert agent_init["restart"] == "on-failure"
-
-    database_migrate = services["database-migrate"]
-    assert isinstance(database_migrate, dict)
-    assert "build" not in database_migrate
-    assert database_migrate["restart"] == "on-failure"
-    assert database_migrate["image"] == "ghcr.io/example/lanverse-backend:test"
 
     assert services["frontend"]["image"] == "ghcr.io/example/lanverse-frontend:test"
     assert services["backend"]["image"] == "ghcr.io/example/lanverse-backend:test"

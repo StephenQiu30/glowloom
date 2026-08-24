@@ -12,10 +12,14 @@ import (
 
 	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
+	"github.com/StephenQiu30/lanverse/backend/internal/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 )
 
-const shutdownTimeout = 10 * time.Second
+const (
+	shutdownTimeout  = 10 * time.Second
+	migrationTimeout = 2 * time.Minute
+)
 
 var (
 	buildVersion = "development"
@@ -30,6 +34,22 @@ func main() {
 		logger.Error("api configuration is invalid", "error", err)
 		os.Exit(1)
 	}
+	databaseURL, err := database.MigrationURL()
+	if err != nil {
+		logger.Error("database migration configuration is invalid", "error", err)
+		os.Exit(1)
+	}
+	migrationContext, cancelMigration := context.WithTimeout(
+		context.Background(),
+		migrationTimeout,
+	)
+	if err = database.ApplyMigrations(migrationContext, databaseURL); err != nil {
+		cancelMigration()
+		logger.Error("database migration failed", "error", err)
+		os.Exit(1)
+	}
+	cancelMigration()
+	logger.Info("database migrations applied")
 
 	upstreamClient := &http.Client{Timeout: configuration.UpstreamTimeout}
 	httpMetrics := telemetry.NewHTTPMetrics()
