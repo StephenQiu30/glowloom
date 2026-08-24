@@ -29,7 +29,11 @@ SCHEMA_LOCK_KEY = "lanverse.schema-migration"
 BASELINE_MIGRATION_VERSION = 1
 BASELINE_MIGRATION_NAME = "compatibility_runtime_baseline"
 MINIMUM_COMPATIBLE_MIGRATION_VERSION = 1
-MAXIMUM_COMPATIBLE_MIGRATION_VERSION = 1
+MAXIMUM_COMPATIBLE_MIGRATION_VERSION = 2
+COMPATIBLE_MIGRATION_NAMES = {
+    1: BASELINE_MIGRATION_NAME,
+    2: "audit_projection_foundation",
+}
 
 
 class DatabaseSchemaMismatchError(RuntimeError):
@@ -350,9 +354,15 @@ def _migration_version(connection: Connection) -> int:
     versions = [row.version for row in rows]
     if versions != list(range(1, versions[-1] + 1)):
         raise DatabaseSchemaMismatchError("database migration versions are not contiguous")
-    baseline = rows[0]
-    if baseline.name != BASELINE_MIGRATION_NAME or baseline.source not in {"migration", "adopted"}:
-        raise DatabaseSchemaMismatchError("database migration baseline identity is invalid")
+    for row in rows:
+        expected_name = COMPATIBLE_MIGRATION_NAMES.get(row.version)
+        if expected_name is not None and row.name != expected_name:
+            raise DatabaseSchemaMismatchError(
+                f"database migration {row.version} identity is invalid"
+            )
+        allowed_sources = {"migration", "adopted"} if row.version == 1 else {"migration"}
+        if expected_name is not None and row.source not in allowed_sources:
+            raise DatabaseSchemaMismatchError(f"database migration {row.version} source is invalid")
     return versions[-1]
 
 

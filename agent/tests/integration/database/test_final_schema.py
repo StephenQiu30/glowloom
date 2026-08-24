@@ -119,7 +119,7 @@ async def test_schema_guard_rejects_column_drift(
 
 
 @pytest.mark.asyncio
-async def test_schema_guard_rejects_migration_versions_outside_compatibility_window(
+async def test_schema_guard_accepts_the_preapproved_audit_foundation_version(
     schema_engine: AsyncEngine,
 ) -> None:
     await initialize_development_database(schema_engine)
@@ -128,11 +128,29 @@ async def test_schema_guard_rejects_migration_versions_outside_compatibility_win
             text(
                 "INSERT INTO lanverse_migration.schema_migrations "
                 "(version, name, checksum, source) "
-                "VALUES (2, 'future_migration', NULL, 'migration')"
+                "VALUES (2, 'audit_projection_foundation', NULL, 'migration')"
             )
         )
 
-    with pytest.raises(DatabaseSchemaMismatchError, match="migration version 2"):
+    await assert_database_schema(schema_engine)
+
+
+@pytest.mark.asyncio
+async def test_schema_guard_rejects_unknown_or_out_of_window_migrations(
+    schema_engine: AsyncEngine,
+) -> None:
+    await initialize_development_database(schema_engine)
+    async with schema_engine.begin() as connection:
+        await connection.execute(
+            text(
+                "INSERT INTO lanverse_migration.schema_migrations "
+                "(version, name, checksum, source) VALUES "
+                "(2, 'audit_projection_foundation', NULL, 'migration'), "
+                "(3, 'future_migration', NULL, 'migration')"
+            )
+        )
+
+    with pytest.raises(DatabaseSchemaMismatchError, match="migration version 3"):
         await assert_database_schema(schema_engine)
 
 
@@ -148,5 +166,5 @@ async def test_schema_guard_rejects_a_forged_baseline_identity(
             )
         )
 
-    with pytest.raises(DatabaseSchemaMismatchError, match="baseline identity"):
+    with pytest.raises(DatabaseSchemaMismatchError, match="migration 1 identity"):
         await assert_database_schema(schema_engine)
