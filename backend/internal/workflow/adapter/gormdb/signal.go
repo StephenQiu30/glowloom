@@ -364,6 +364,8 @@ func humanGateOwnerOperation(executor string) (string, bool) {
 		return "production_bible.confirm", true
 	case "gate.episode_plan_review":
 		return "episode_plan.confirm", true
+	case "gate.episode_structure_review":
+		return "episode_structure.confirm_batch", true
 	default:
 		return "", false
 	}

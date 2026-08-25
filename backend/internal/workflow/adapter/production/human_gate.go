@@ -15,24 +15,26 @@ import (
 )
 
 const (
-	productionBibleConfirmOperation = "production_bible.confirm"
-	episodePlanConfirmOperation     = "episode_plan.confirm"
+	productionBibleConfirmOperation       = "production_bible.confirm"
+	episodePlanConfirmOperation           = "episode_plan.confirm"
+	episodeStructureBatchConfirmOperation = "episode_structure.confirm_batch"
 )
 
 type BibleOwner interface {
 	Confirm(context.Context, bibleapp.Actor, bibleapp.ConfirmCommand) (bibleapp.ConfirmResult, error)
 }
 
-type EpisodePlanConfirmationOwner interface {
+type PlanningConfirmationOwner interface {
 	ConfirmPlan(context.Context, planningapp.Actor, planningapp.ConfirmPlanCommand) (planningapp.ConfirmPlanResult, error)
+	ConfirmPublishedStructureBatch(context.Context, planningapp.Actor, planningapp.ConfirmStructureBatchCommand) (planningapp.ConfirmStructureBatchResult, error)
 }
 
 type Applier struct {
 	bibles BibleOwner
-	plans  EpisodePlanConfirmationOwner
+	plans  PlanningConfirmationOwner
 }
 
-func New(bibles BibleOwner, plans EpisodePlanConfirmationOwner) *Applier {
+func New(bibles BibleOwner, plans PlanningConfirmationOwner) *Applier {
 	return &Applier{bibles: bibles, plans: plans}
 }
 
@@ -48,6 +50,9 @@ func (applier *Applier) ApplyHumanGateDecision(
 	}
 	if application.Executor == "gate.episode_plan_review" {
 		return applier.applyEpisodePlan(ctx, actor, application)
+	}
+	if application.Executor == "gate.episode_structure_review" {
+		return applier.applyEpisodeStructures(ctx, actor, application)
 	}
 	if applier.bibles == nil || application.Executor != "gate.production_bible_review" ||
 		application.Candidate.ValueType != "production_bible_candidate" ||
@@ -77,6 +82,60 @@ func (applier *Applier) ApplyHumanGateDecision(
 			Port: application.OutputPort, ValueType: application.OutputValueType,
 			ReferenceID: result.Bible.ID, ReferenceVersion: strconv.Itoa(result.Bible.Revision),
 			ContentHash: *result.Bible.ResultHash,
+		}},
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	return domain.HumanGateOwnerResult{
+		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
+	}, nil
+}
+
+func (applier *Applier) applyEpisodeStructures(
+	ctx context.Context,
+	actor workflowapp.Actor,
+	application domain.HumanGateOwnerApplication,
+) (domain.HumanGateOwnerResult, error) {
+	if applier.plans == nil || application.Candidate.ValueType != "episode_structure_candidate" ||
+		application.OutputPort != "structures" || application.OutputValueType != "episode_structures" {
+		return domain.HumanGateOwnerResult{}, errors.New("unsupported workflow human gate owner application")
+	}
+	expectedRevision, err := strconv.Atoi(application.Candidate.ReferenceVersion)
+	if err != nil || expectedRevision < 1 || len(application.Candidate.ContentHash) != 64 {
+		return domain.HumanGateOwnerResult{}, errors.New("invalid Episode Structure batch candidate")
+	}
+	result, err := applier.plans.ConfirmPublishedStructureBatch(ctx, planningapp.Actor{
+		UserID: actor.UserID, TokenVersion: actor.TokenVersion,
+	}, planningapp.ConfirmStructureBatchCommand{
+		CommitID: application.Candidate.ReferenceID, ExpectedRevision: expectedRevision,
+		ExpectedContentHash: application.Candidate.ContentHash,
+		IdempotencyKey:      "workflow-review:" + application.ReviewDecisionID,
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	batch := result.Batch
+	if batch.Commit.ID != application.Candidate.ReferenceID || batch.Commit.Status != "published" ||
+		batch.Commit.Revision != expectedRevision || batch.Commit.WorkspaceID != application.WorkspaceID ||
+		batch.Commit.ProjectID != application.ProjectID || batch.ContentHash != application.Candidate.ContentHash ||
+		len(batch.Structures) == 0 || result.Receipt.Operation != episodeStructureBatchConfirmOperation ||
+		result.Receipt.ResourceID != batch.Commit.ID || result.Receipt.WorkspaceID != application.WorkspaceID ||
+		result.Receipt.CreatedBy != actor.UserID {
+		return domain.HumanGateOwnerResult{}, errors.New("Episode Structure owner result does not match workflow gate")
+	}
+	for _, structure := range batch.Structures {
+		if structure.WorkspaceID != application.WorkspaceID || structure.ProjectID != application.ProjectID ||
+			structure.Status != "confirmed" || structure.ConfirmedBy == nil || *structure.ConfirmedBy != actor.UserID {
+			return domain.HumanGateOwnerResult{}, errors.New("Episode Structure owner result does not match workflow gate")
+		}
+	}
+	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: application.OutputPort, ValueType: application.OutputValueType,
+			ReferenceID: batch.Commit.ID, ReferenceVersion: strconv.Itoa(batch.Commit.Revision),
+			ContentHash: batch.ContentHash,
 		}},
 	})
 	if err != nil {

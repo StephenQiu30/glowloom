@@ -37,7 +37,7 @@ import (
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-func TestProductionWorkflowWorkerPublishesEpisodeStructuresAfterPlanReview(t *testing.T) {
+func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	temporalAddress := os.Getenv("LANVERSE_TEST_TEMPORAL_ADDRESS")
 	if databaseURL == "" || temporalAddress == "" {
@@ -398,6 +398,146 @@ func TestProductionWorkflowWorkerPublishesEpisodeStructuresAfterPlanReview(t *te
 		scriptVersion.Status != "published" || structure.Status != "needs_review" || structure.Revision != 1 || len(structure.ResultHash) != 64 ||
 		materializeReceiptCount != 1 || publishReceiptCount != 1 {
 		t.Fatalf("published Episode Structure boundary: run=%#v node=%#v gate=%#v binding=%#v candidates=%v commit=%#v episode=%#v version=%#v structure=%#v receipts=%d/%d", structureRun, structureNode, structureGateNode, structureBinding, structureCandidates, commit, episode, scriptVersion, structure, materializeReceiptCount, publishReceiptCount)
+	}
+
+	planningActor := planningapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
+	if _, err = planningService.ConfirmPublishedStructureBatch(ctx, planningActor, planningapp.ConfirmStructureBatchCommand{
+		CommitID: commit.ID.String(), ExpectedRevision: 2, ExpectedContentHash: batch.ContentHash,
+		IdempotencyKey: "episode-structure-premature-confirm",
+	}); err == nil {
+		t.Fatal("Episode Structure batch confirmation succeeded before required tasks were accepted")
+	}
+	for _, candidate := range batch.Structures {
+		current := candidate
+		for _, scene := range candidate.Scenes {
+			for _, task := range scene.Tasks {
+				if !task.Required {
+					continue
+				}
+				current, err = planningService.AcceptTask(ctx, planningActor, planningapp.AcceptTaskCommand{
+					StructureCommand: planningapp.StructureCommand{
+						StructureID: current.ID, ExpectedRevision: current.Revision,
+						IdempotencyKey: "episode-structure-accept:" + task.ID,
+					},
+					TaskID: task.ID,
+				})
+				if err != nil {
+					t.Fatalf("accept required Episode Structure task %s: %v", task.ID, err)
+				}
+			}
+		}
+	}
+	claimedStructure, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: structureTask.ID.String(), ExpectedRevision: structureTask.Revision,
+		IdempotencyKey: "episode-structure-review-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim Episode Structure review: %v", err)
+	}
+	structureDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: structureTask.ID.String(), ClaimToken: claimedStructure.ClaimToken,
+		ExpectedTaskRevision: claimedStructure.Task.Revision, ExpectedSubjectRevision: claimedStructure.Task.SubjectRevision,
+		Decision: "approved", IdempotencyKey: "episode-structure-review-decision",
+	})
+	if err != nil {
+		t.Fatalf("approve Episode Structure review: %v", err)
+	}
+	preconfirmedStructures, err := planningService.ConfirmPublishedStructureBatch(ctx, planningActor, planningapp.ConfirmStructureBatchCommand{
+		CommitID: commit.ID.String(), ExpectedRevision: 2, ExpectedContentHash: batch.ContentHash,
+		IdempotencyKey: "workflow-review:" + structureDecision.Decision.ID,
+	})
+	if err != nil || preconfirmedStructures.Receipt.ID == "" || len(preconfirmedStructures.Batch.Structures) != len(batch.Structures) {
+		t.Fatalf("precommit Episode Structure batch confirmation: result=%#v err=%v", preconfirmedStructures, err)
+	}
+	structureSignalCommand := workflowapp.SignalHumanGateCommand{
+		WorkspaceID: structureRun.WorkspaceID.String(), WorkflowRunID: run.ID, NodeRunID: structureGateNode.ID.String(),
+		HumanTaskID: structureDecision.Task.ID, ReviewDecisionID: structureDecision.Decision.ID,
+		SubjectRevision: structureDecision.Decision.SubjectRevision, Decision: structureDecision.Decision.Decision,
+		IdempotencyKey: "episode-structure-review-signal",
+	}
+	var structureSignal workflow.SignalIntent
+	signalDeadline = time.Now().Add(5 * time.Second)
+	for {
+		structureSignal, err = signalService.SignalHumanGate(ctx, workflowapp.Actor{
+			UserID: fixture.userID.String(), TokenVersion: 1,
+		}, structureSignalCommand)
+		if err == nil && structureSignal.Status == "completed" {
+			break
+		}
+		if err != nil || time.Now().After(signalDeadline) {
+			t.Fatalf("signal approved Episode Structure gate: intent=%#v err=%v", structureSignal, err)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	replayedStructureSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, structureSignalCommand)
+	if err != nil || replayedStructureSignal.ID != structureSignal.ID || replayedStructureSignal.Status != "completed" {
+		t.Fatalf("replay Episode Structure gate signal: intent=%#v err=%v", replayedStructureSignal, err)
+	}
+
+	completionDeadline := time.Now().Add(10 * time.Second)
+	var completedRun model.WorkflowRun
+	for {
+		if err = database.First(&completedRun, "id = ?", run.ID).Error; err != nil {
+			t.Fatalf("load completed Episode Structure Workflow: %v", err)
+		}
+		if completedRun.Status == "SUCCEEDED" {
+			break
+		}
+		if completedRun.Status == "FAILED" || time.Now().After(completionDeadline) {
+			t.Fatalf("Episode Structure Workflow did not complete after review: %#v", completedRun)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err = database.First(&structureGateNode, "id = ?", structureGateNode.ID).Error; err != nil {
+		t.Fatalf("reload applied Episode Structure gate: %v", err)
+	}
+	formalStructures, _, formalStructuresHash, err := workflow.ParseNodeOutput(json.RawMessage(structureGateNode.Output))
+	if err != nil || len(formalStructures.Bindings) != 1 || structureGateNode.OutputHash == nil || *structureGateNode.OutputHash != formalStructuresHash {
+		t.Fatalf("parse confirmed Episode Structure gate output: output=%#v node=%#v err=%v", formalStructures, structureGateNode, err)
+	}
+	formalBinding := formalStructures.Bindings[0]
+	confirmedBatch, err := planningService.GetPublishedStructureBatch(ctx, planningActor, plan.ID.String())
+	if err != nil {
+		t.Fatalf("load confirmed Episode Structure batch: %v", err)
+	}
+	var batchReceipt model.CommandReceipt
+	if err = database.Where("operation = ? AND resource_id = ?", "episode_structure.confirm_batch", commit.ID).First(&batchReceipt).Error; err != nil {
+		t.Fatalf("load Episode Structure batch receipt: %v", err)
+	}
+	var batchReceiptCount, individualConfirmReceiptCount int64
+	if err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", "episode_structure.confirm_batch", commit.ID).Count(&batchReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ?", structureRun.WorkspaceID, "episode_structure.confirm",
+	).Count(&individualConfirmReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	var structureApply model.WorkflowHumanGateApplyReceipt
+	if err = database.Where("node_run_id = ?", structureGateNode.ID).First(&structureApply).Error; err != nil {
+		t.Fatalf("load Episode Structure gate apply receipt: %v", err)
+	}
+	for _, confirmed := range confirmedBatch.Structures {
+		if confirmed.Status != "confirmed" || confirmed.ConfirmedBy == nil || *confirmed.ConfirmedBy != fixture.userID.String() {
+			t.Fatalf("Episode Structure was not confirmed by batch owner: %#v", confirmed)
+		}
+		for _, scene := range confirmed.Scenes {
+			for _, task := range scene.Tasks {
+				if task.Required && task.Status != "accepted" {
+					t.Fatalf("confirmed Episode Structure retained an unaccepted required task: %#v", task)
+				}
+			}
+		}
+	}
+	if structureGateNode.Status != "SUCCEEDED" || formalBinding.Port != "structures" || formalBinding.ValueType != "episode_structures" ||
+		formalBinding.ReferenceID != commit.ID.String() || formalBinding.ReferenceVersion != "2" || formalBinding.ContentHash != batch.ContentHash ||
+		confirmedBatch.ContentHash != batch.ContentHash || preconfirmedStructures.Receipt.ID != batchReceipt.ID.String() ||
+		structureApply.OwnerReceiptID == nil || *structureApply.OwnerReceiptID != batchReceipt.ID ||
+		structureApply.OwnerOperation == nil || *structureApply.OwnerOperation != "episode_structure.confirm_batch" ||
+		batchReceiptCount != 1 || individualConfirmReceiptCount != 0 {
+		t.Fatalf("confirmed Episode Structure batch boundary: run=%#v gate=%#v binding=%#v batch=%#v preconfirmed=%#v receipt=%#v apply=%#v counts=%d/%d", completedRun, structureGateNode, formalBinding, confirmedBatch, preconfirmedStructures, batchReceipt, structureApply, batchReceiptCount, individualConfirmReceiptCount)
 	}
 }
 

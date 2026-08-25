@@ -15,12 +15,13 @@ import (
 )
 
 const (
-	createPlanOperation       = "episode_plan.create"
-	confirmPlanOperation      = "episode_plan.confirm"
-	materializeOperation      = "episode_plan.materialize"
-	publishCommitOperation    = "episode_plan.publish"
-	acceptTaskOperation       = "episode_structure.accept_task"
-	confirmStructureOperation = "episode_structure.confirm"
+	createPlanOperation            = "episode_plan.create"
+	confirmPlanOperation           = "episode_plan.confirm"
+	materializeOperation           = "episode_plan.materialize"
+	publishCommitOperation         = "episode_plan.publish"
+	acceptTaskOperation            = "episode_structure.accept_task"
+	confirmStructureOperation      = "episode_structure.confirm"
+	confirmStructureBatchOperation = "episode_structure.confirm_batch"
 )
 
 var (
@@ -100,6 +101,14 @@ type PublishedStructureBatch struct {
 	Commit      domain.ImportCommit
 	Structures  []domain.Structure
 	ContentHash string
+}
+type ConfirmStructureBatchCommand struct {
+	CommitID, ExpectedContentHash, IdempotencyKey string
+	ExpectedRevision                              int
+}
+type ConfirmStructureBatchResult struct {
+	Batch   PublishedStructureBatch
+	Receipt platformcommand.Receipt
 }
 type MaterializeCommand struct {
 	PlanID, Mode, ExpectedActiveOrderHash, IdempotencyKey string
@@ -239,53 +248,173 @@ func (service *Service) GetPublishedStructureBatch(ctx context.Context, actor Ac
 		if err != nil {
 			return err
 		}
-		if plan.Status != "materialized" || commit.Status != "published" || commit.PlanID != plan.ID || len(commit.Segments) == 0 {
+		if plan.Status != "materialized" || commit.PlanID != plan.ID {
 			return conflict("Episode structures are not published")
 		}
-		type structureReference struct {
-			StructureID     string `json:"structure_id"`
-			EpisodeID       string `json:"episode_id"`
-			ScriptVersionID string `json:"script_version_id"`
-			ResultHash      string `json:"result_hash"`
-		}
-		structures := make([]domain.Structure, len(commit.Segments))
-		references := make([]structureReference, len(commit.Segments))
-		seenStructures := make(map[string]struct{}, len(commit.Segments))
-		seenEpisodes := make(map[string]struct{}, len(commit.Segments))
-		for index, segment := range commit.Segments {
-			if segment.PublishedVersionID == nil || *segment.PublishedVersionID == "" {
-				return conflict("Episode structure publication is incomplete")
-			}
-			structure, loadErr := repo.GetEpisodeStructure(ctx, actor, segment.EpisodeID)
-			if loadErr != nil {
-				return loadErr
-			}
-			if structure.WorkspaceID != commit.WorkspaceID || structure.ProjectID != commit.ProjectID ||
-				structure.EpisodeID != segment.EpisodeID || structure.ScriptVersionID != *segment.PublishedVersionID ||
-				len(structure.ResultHash) != 64 {
-				return conflict("Episode structure publication has drifted")
-			}
-			if _, exists := seenStructures[structure.ID]; exists {
-				return conflict("Episode structure publication contains duplicates")
-			}
-			if _, exists := seenEpisodes[structure.EpisodeID]; exists {
-				return conflict("Episode structure publication contains duplicates")
-			}
-			seenStructures[structure.ID], seenEpisodes[structure.EpisodeID] = struct{}{}, struct{}{}
-			structures[index] = structure
-			references[index] = structureReference{
-				StructureID: structure.ID, EpisodeID: structure.EpisodeID,
-				ScriptVersionID: structure.ScriptVersionID, ResultHash: structure.ResultHash,
-			}
-		}
-		contentHash, err := platformcommand.InputHash(references)
+		batch, err = publishedStructureBatch(ctx, repo, actor, commit, false)
+		return err
+	})
+	return batch, normalizeError(err)
+}
+
+func (service *Service) ConfirmPublishedStructureBatch(
+	ctx context.Context,
+	actor Actor,
+	command ConfirmStructureBatchCommand,
+) (ConfirmStructureBatchResult, error) {
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if strings.TrimSpace(command.CommitID) == "" || command.ExpectedRevision < 1 ||
+		len(command.ExpectedContentHash) != 64 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return ConfirmStructureBatchResult{}, invalid("Invalid Episode Structure batch confirmation request")
+	}
+	var result ConfirmStructureBatchResult
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		commit, err := repo.GetCommit(ctx, actor, command.CommitID, true)
 		if err != nil {
 			return err
 		}
-		batch = PublishedStructureBatch{Commit: commit, Structures: structures, ContentHash: contentHash}
+		inputHash, err := platformcommand.InputHash(command)
+		if err != nil {
+			return err
+		}
+		if receipt, receiptErr := repo.FindReceipt(ctx, commit.WorkspaceID, confirmStructureBatchOperation, command.IdempotencyKey); receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[resourceReceipt](receipt, inputHash)
+			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
+				return conflict("Idempotency key was already used with different input")
+			}
+			if replayErr != nil {
+				return replayErr
+			}
+			if replayed.ID != commit.ID {
+				return conflict("Episode Structure batch receipt has drifted")
+			}
+			batch, batchErr := publishedStructureBatch(ctx, repo, actor, commit, true)
+			if batchErr != nil {
+				return batchErr
+			}
+			if batch.ContentHash != command.ExpectedContentHash {
+				return conflict("Episode Structure batch content changed after confirmation")
+			}
+			for _, structure := range batch.Structures {
+				if structure.Status != "confirmed" {
+					return conflict("Episode Structure batch confirmation is incomplete")
+				}
+			}
+			result = ConfirmStructureBatchResult{Batch: batch, Receipt: receipt}
+			return nil
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		if commit.Status != "published" || commit.Revision != command.ExpectedRevision {
+			return conflict("Episode Structure batch changed before confirmation")
+		}
+		plan, err := repo.GetPlan(ctx, actor, commit.PlanID, false)
+		if err != nil {
+			return err
+		}
+		if plan.Status != "materialized" || plan.ID != commit.PlanID {
+			return conflict("Episode Structure batch plan has drifted")
+		}
+		batch, err := publishedStructureBatch(ctx, repo, actor, commit, true)
+		if err != nil {
+			return err
+		}
+		if batch.ContentHash != command.ExpectedContentHash {
+			return conflict("Episode Structure batch content changed before confirmation")
+		}
+		now := service.config.Now().UTC()
+		for index := range batch.Structures {
+			structure := &batch.Structures[index]
+			if structure.Status != "needs_review" {
+				return conflict("Episode Structure changed before batch confirmation")
+			}
+			if err = validateStructureTasks(*structure); err != nil {
+				return err
+			}
+			confirmedBy := actor.UserID
+			structure.Status, structure.ConfirmedAt, structure.ConfirmedBy, structure.UpdatedAt = "confirmed", &now, &confirmedBy, now
+			structure.Revision++
+			if err = repo.SaveStructure(ctx, *structure); err != nil {
+				return err
+			}
+		}
+		receiptResult, err := platformcommand.Result(resourceReceipt{ID: commit.ID})
+		if err != nil {
+			return err
+		}
+		receipt := platformcommand.Receipt{
+			ID: service.config.NewID(), WorkspaceID: commit.WorkspaceID, Operation: confirmStructureBatchOperation,
+			IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: commit.ID,
+			Result: receiptResult, CreatedBy: actor.UserID, CreatedAt: now,
+		}
+		if err = repo.CreateReceipt(ctx, receipt); err != nil {
+			return err
+		}
+		result = ConfirmStructureBatchResult{Batch: batch, Receipt: receipt}
 		return nil
 	})
-	return batch, normalizeError(err)
+	return result, normalizeError(err)
+}
+
+type structureReference struct {
+	StructureID     string `json:"structure_id"`
+	EpisodeID       string `json:"episode_id"`
+	ScriptVersionID string `json:"script_version_id"`
+	ResultHash      string `json:"result_hash"`
+}
+
+func publishedStructureBatch(
+	ctx context.Context,
+	repo Repository,
+	actor Actor,
+	commit domain.ImportCommit,
+	forUpdate bool,
+) (PublishedStructureBatch, error) {
+	if commit.Status != "published" || len(commit.Segments) == 0 {
+		return PublishedStructureBatch{}, conflict("Episode structures are not published")
+	}
+	structures := make([]domain.Structure, len(commit.Segments))
+	references := make([]structureReference, len(commit.Segments))
+	seenStructures := make(map[string]struct{}, len(commit.Segments))
+	seenEpisodes := make(map[string]struct{}, len(commit.Segments))
+	for index, segment := range commit.Segments {
+		if segment.PublishedVersionID == nil || *segment.PublishedVersionID == "" {
+			return PublishedStructureBatch{}, conflict("Episode structure publication is incomplete")
+		}
+		structure, err := repo.GetEpisodeStructure(ctx, actor, segment.EpisodeID)
+		if err != nil {
+			return PublishedStructureBatch{}, err
+		}
+		if forUpdate {
+			locked, lockErr := repo.GetStructure(ctx, actor, structure.ID, true)
+			if lockErr != nil {
+				return PublishedStructureBatch{}, lockErr
+			}
+			structure = locked
+		}
+		if structure.WorkspaceID != commit.WorkspaceID || structure.ProjectID != commit.ProjectID ||
+			structure.EpisodeID != segment.EpisodeID || structure.ScriptVersionID != *segment.PublishedVersionID ||
+			len(structure.ResultHash) != 64 || structure.Status == "superseded" {
+			return PublishedStructureBatch{}, conflict("Episode structure publication has drifted")
+		}
+		if _, exists := seenStructures[structure.ID]; exists {
+			return PublishedStructureBatch{}, conflict("Episode structure publication contains duplicates")
+		}
+		if _, exists := seenEpisodes[structure.EpisodeID]; exists {
+			return PublishedStructureBatch{}, conflict("Episode structure publication contains duplicates")
+		}
+		seenStructures[structure.ID], seenEpisodes[structure.EpisodeID] = struct{}{}, struct{}{}
+		structures[index] = structure
+		references[index] = structureReference{
+			StructureID: structure.ID, EpisodeID: structure.EpisodeID,
+			ScriptVersionID: structure.ScriptVersionID, ResultHash: structure.ResultHash,
+		}
+	}
+	contentHash, err := platformcommand.InputHash(references)
+	if err != nil {
+		return PublishedStructureBatch{}, err
+	}
+	return PublishedStructureBatch{Commit: commit, Structures: structures, ContentHash: contentHash}, nil
 }
 
 func (service *Service) ConfirmPlan(ctx context.Context, actor Actor, command ConfirmPlanCommand) (ConfirmPlanResult, error) {
@@ -594,22 +723,8 @@ func (service *Service) ConfirmStructure(ctx context.Context, actor Actor, comma
 		if structure.Status != "needs_review" || structure.Revision != command.ExpectedRevision {
 			return conflict("Episode structure changed before confirmation")
 		}
-		for _, scene := range structure.Scenes {
-			if len(scene.Tasks) < 1 || len(scene.Tasks) > 4 {
-				return conflict("Each scene must contain one to four production tasks")
-			}
-			hasBreakdown := false
-			for _, task := range scene.Tasks {
-				if task.Kind == "shot_breakdown" {
-					hasBreakdown = true
-				}
-				if task.Required && task.Status != "accepted" {
-					return conflict("Required production tasks must be accepted")
-				}
-			}
-			if !hasBreakdown {
-				return conflict("Each scene requires a shot breakdown task")
-			}
+		if err = validateStructureTasks(structure); err != nil {
+			return err
 		}
 		now := service.config.Now().UTC()
 		structure.Status, structure.ConfirmedAt, structure.ConfirmedBy, structure.UpdatedAt = "confirmed", &now, &actor.UserID, now
@@ -628,6 +743,27 @@ func (service *Service) ConfirmStructure(ctx context.Context, actor Actor, comma
 		return nil
 	})
 	return value, normalizeError(err)
+}
+
+func validateStructureTasks(structure domain.Structure) error {
+	for _, scene := range structure.Scenes {
+		if len(scene.Tasks) < 1 || len(scene.Tasks) > 4 {
+			return conflict("Each scene must contain one to four production tasks")
+		}
+		hasBreakdown := false
+		for _, task := range scene.Tasks {
+			if task.Kind == "shot_breakdown" {
+				hasBreakdown = true
+			}
+			if task.Required && task.Status != "accepted" {
+				return conflict("Required production tasks must be accepted")
+			}
+		}
+		if !hasBreakdown {
+			return conflict("Each scene requires a shot breakdown task")
+		}
+	}
+	return nil
 }
 
 func (service *Service) explicitProposals(source domain.Source, targetDuration int) ([]domain.Proposal, error) {
