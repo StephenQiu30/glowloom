@@ -1,47 +1,48 @@
 # Lanverse
 
-Lanverse 是面向 AI 短剧生产的端到端 AI Native Production Platform。产品通过 Guided Studio 与 Canvas Studio 提供两种创作入口，并由同一套 Authoring、Workflow、Agent、Generation、Media 与 Artifact 体系完成从剧本到成片的生产闭环。
+Lanverse 当前交付的是“整剧原稿 → 制作圣经 → 分集 → 场景/制作任务 → 分镜 → 确定性导出”的可审核 MVP。
 
-## 目标架构
+## 当前架构
 
-最新目标固定为：
+```text
+Browser / Next.js
+        ↓
+Go lanverse-api ──→ PostgreSQL（唯一 SQL 事实源）
+        ├─────────→ MinIO（私有对象字节）
+        └─────────→ Python Candidate Runtime ──→ 本机 Codex CLI
+```
 
-- `frontend/`：TypeScript Monorepo，承载 Web、协作服务、UI、AI UI、Canvas、SDK 与认证组件。
-- `backend/`：一个 Go Module、多个领域模块和五个运行程序。
-- `agent/`：独立 Python Agent Runtime，提供受限的 Structured、Tool Loop 与 LangGraph Executor。
-- `docs/`：PRD、Design、Requirement、Plan 与 Acceptance 的长期事实来源。
-- PostgreSQL、Temporal、Redis、MinIO、Kafka 与 Elasticsearch 分别承担业务事实、工作流历史、临时状态、对象、事件和可重建检索投影。
+- `frontend/`：Next.js 创作工作台，只读取服务端事实并提交人工决议。
+- `backend/`：唯一公共业务 API 与唯一业务 Writer；认证、项目、剧本、制作圣经、分集、结构、分镜、正式镜头、导出和持久任务都在此实现。
+- `agent/`：私有 Candidate Runtime；校验短时 Execution Grant，只执行结构化 Codex Harness，不连接 PostgreSQL/MinIO，不拥有公共业务路由。
+- `backend/internal/platform/database/model`：唯一 GORM Model Catalog 与表结构事实源。
+- `backend/api/openapi/lanverse-v1.json`：唯一公共 REST 契约源。
+- `backend/internal/agent/contract`：Backend ↔ Agent 的版本化调用/结果线协议所有者；`agent/app/candidate_runtime/schemas.py` 以禁止额外字段的 Pydantic 模型校验同一协议。
+- `docs/`：Design → PRD/Requirement → Plan → Acceptance 的事实链路。
 
-当前仓库已进入后端语言切换阶段：`backend/` 是 Go Module，`agent/` 暂时承载迁入的 FastAPI 兼容运行时与 Python Agent 能力，Frontend 仍是单 Next.js 应用。迁移期间不允许同一资源出现两个写入所有者，也不将目录移动误报为业务能力已经迁移。
+MVP 不依赖 Redis、Kafka、Temporal、Elasticsearch、多 Go Binary、第二套 ORM 或 Migration 框架。Backend 只接受一个 PostgreSQL `DATABASE_URL`；仓库不保留手写 SQL Schema/Migration、迁移版本字段或 Python SQLAlchemy Writer。
 
 ## 文档入口
 
-- [文档导航](docs/README.md)
-- [产品范围与验收基线](docs/prd/0001-产品范围与验收基线.md)
-- [平台完整设计基线](docs/design/0001-AI短剧制作平台完整设计基线.md)
-- [系统总体架构](docs/design/0003-系统总体架构.md)
-- [前端应用架构](docs/design/1001-前端应用架构.md)
+- [剧本到分镜 MVP 设计](docs/design/0009-剧本到分镜MVP垂直切片设计.md)
+- [剧本到分镜 MVP 产品需求](docs/prd/0009-剧本到分镜MVP产品需求.md)
+- [剧本到分镜 MVP 需求规格](docs/requirement/0009-剧本到分镜MVP需求规格.md)
+- [剧本到分镜 MVP 实施计划](docs/plan/0009-剧本到分镜MVP实施计划.md)
+- [剧本到分镜 MVP 验收记录](docs/acceptance/0009-剧本到分镜MVP验收记录.md)
 - [后端服务架构](docs/design/2001-后端服务架构.md)
-- [平台 0→1 交付计划](docs/plan/0007-平台0到1交付计划.md)
-- [资源所有权与交付台账](docs/plan/0008-资源所有权与交付台账.md)
-- [剧本到分镜 MVP 垂直切片](docs/design/0009-剧本到分镜MVP垂直切片设计.md)
 
-完整设计已作为 [AI 短剧制作平台完整设计基线](docs/design/0001-AI短剧制作平台完整设计基线.md) 持久化。后续架构变化必须先更新对应 Design 及其决策记录，再修改实现。
+## 本机启动
 
-## 当前可运行目录切片
+先按 `.env.example` 准备根目录 `.env`。私有 Agent 需要本机可用且已登录的 Codex CLI：
 
-第一阶段已建立可验证的语言与运行边界：
+```bash
+cd agent
+uv sync --extra dev
+AGENT_EXECUTION_SECRET=development-only-agent-execution-secret \
+  uv run uvicorn app.candidate_runtime.api:app --host 127.0.0.1 --port 8787
+```
 
-- `frontend`：Next.js Web 入口。
-- `backend`：唯一 Go `lanverse-api` 公共入口；启动时在事务与 Advisory Lock 内应用内嵌版本化 Migration，完成后才开放健康端点。迁移元数据隔离在 `lanverse_migration` Schema，不再运行独立 Migration 服务。
-- `agent-api`：迁入 `agent/` 的 FastAPI 兼容运行时，当前仍是业务写入所有者，不对宿主机暴露端口。
-- `schedule-dispatcher` 与 `outbox-publisher`：使用同一 Agent 镜像，但拥有独立生命周期；旧 Publisher 通过 `OUTBOX_TOPICS` 只领取 `lanverse.io.v1` 与 `lanverse.media.v1`。
-- `io-worker` 与 `media-worker`：延续现有 Kafka 消费职责。
-- PostgreSQL、Redis、MinIO 与 Kafka：提供当前代码已经依赖的有状态基础设施。
-
-当前 `agent/` 仍包含数据库和 Worker 兼容代码，尚未达到最终受限 Agent Runtime 的安全边界。每个业务路由迁入 Go 并完成契约、数据、排空与回滚验收后，才删除对应 Python Writer；Temporal、Elasticsearch、Debezium 和可观测性栈会在真实消费者落地时接入，不预建空服务。
-
-当前统一使用 Compose 作为服务启动入口。先根据 `.env.example` 准备根目录 `.env`，然后运行：
+另一个终端启动 Frontend、Backend、PostgreSQL 与 MinIO：
 
 ```bash
 docker compose --env-file .env \
@@ -50,10 +51,28 @@ docker compose --env-file .env \
   up --build -d
 ```
 
-`backend` 等待 PostgreSQL 健康后先执行唯一 Go Migration 流，再启动公共 API；`agent-init` 只在 Backend 健康后执行只读 Schema Guard，随后启动内部 Agent API 与 Workers。未登记版本且已有业务表的数据库会被拒绝，不会自动执行兼容或覆盖。
+开发 Compose 中 Backend 通过 `host.docker.internal:8787` 调用私有 Agent。生产环境必须把 `AGENT_URL` 指向私有网络端点，并为 Backend/Agent 注入相同的高强度 `AGENT_EXECUTION_SECRET`；Agent 不接收数据库、JWT 或对象存储凭据。
 
-对象存储同时声明容器内部地址 `MINIO_ENDPOINT` 与浏览器可达地址 `MINIO_PUBLIC_ENDPOINT`。前者用于服务端读写和健康检查，后者只用于签发短期上传/下载 URL；开发 MinIO 同时连接 `internal` 与 `edge` 网络并只向宿主机回环地址发布端口。远程或生产环境必须把公开地址配置为实际 HTTPS 域名，不能使用 Compose 内部主机名。
+需要独立部署 Agent 时，从仓库根目录构建，镜像会固定安装 Codex CLI 并带入本项目所需的 Skill Pack：
 
-Go 公共入口的运行端点是 `/healthz`、`/readyz`、`/metrics` 与 `/version`。其中 Readiness 会探测内部 Agent 兼容 API，Metrics 只使用方法、固定路由和状态族等有界标签，Version 由构建参数注入且不包含 Secret。
+```bash
+docker build --file agent/Dockerfile --tag lanverse/agent-runtime:development .
+```
 
-生产部署还需叠加 `docker-compose-prod.yml`，并显式提供 Frontend、Go Backend、Agent 三类已发布镜像和所有生产 Secret。生产 `agent-init` 只校验 Agent 必需表/列和允许的 Migration 版本窗口，不会调用 `create_all`。
+运行镜像时仍须通过运行平台向容器用户 `/home/lanverse/.codex` 提供有效的 Codex 登录配置；镜像不会复制本机凭据。未提供登录配置时健康检查仍可成功，但生成请求会返回可追踪的 Agent 不可用结果。
+
+对象存储区分 Backend 内部地址 `MINIO_ENDPOINT` 与 Browser 可达的 `MINIO_PUBLIC_ENDPOINT`。Bucket 保持私有，Browser 只使用短时预签名 URL。
+
+## 验证
+
+```bash
+cd backend && go test ./... && go vet ./...
+cd ../agent && uv run --all-extras python -m ruff check app/candidate_runtime tests/candidate_runtime tests/architecture/test_runtime_language_boundaries.py
+uv run --all-extras python -m pyright app/candidate_runtime tests/candidate_runtime tests/architecture/test_runtime_language_boundaries.py
+uv run --all-extras python -m pytest tests/candidate_runtime tests/architecture/test_runtime_language_boundaries.py
+cd ../frontend && npm run typecheck && npm run lint && npm test
+```
+
+最终 `agent-browser` 验收只在实现、真实空库/MinIO 全旅程与自动化回归全部完成后执行；当前进度和未决风险以[验收记录](docs/acceptance/0009-剧本到分镜MVP验收记录.md)为准。
+
+本地隔离环境可通过 `.env.example` 的固定验证码完成注册测试；生产环境未接入验证码投递 Provider 前，自助注册不属于可用能力。
