@@ -100,6 +100,13 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
   );
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
 
+  await page.reload();
+  const restoredImportCard = page.getByRole("region", {
+    name: "整剧导入与格式体检",
+  });
+  await expect(restoredImportCard).toContainText("golden-candidate.md");
+  await expect(restoredImportCard).toContainText("剧本解析已完成");
+
   const productionBible = page.getByRole("region", {
     name: "项目制作圣经",
   });

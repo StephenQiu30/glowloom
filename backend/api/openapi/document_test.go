@@ -19,6 +19,7 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 	for _, path := range []string{
 		"/api/v1/auth/register",
 		"/api/v1/projects",
+		"/api/v1/projects/{project_id}/current-script-document",
 		"/api/v1/document-revisions/{revision_id}/production-bibles",
 		"/api/v1/episodes/{episode_id}/storyboard-drafts",
 		"/api/v1/storyboard-draft-batches/{batch_id}/apply",

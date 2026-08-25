@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const apiMocks = vi.hoisted(() => ({
   createEpisode: vi.fn(),
   completeUpload: vi.fn(),
+  getCurrentScriptDocument: vi.fn(),
   getProject: vi.fn(),
   getMedia: vi.fn(),
   getSnapshot: vi.fn(),
@@ -44,6 +45,8 @@ vi.mock("@/api/scriptDocuments", async () => ({
   )),
   importDocumentApiV1ProjectsProjectIdScriptImportsPost:
     apiMocks.importScriptDocument,
+  getCurrentDocumentApiV1ProjectsProjectIdCurrentScriptDocumentGet:
+    apiMocks.getCurrentScriptDocument,
   listDocumentsApiV1ProjectsProjectIdScriptDocumentsGet:
     apiMocks.listScriptDocuments,
   previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost:
@@ -53,6 +56,7 @@ vi.mock("@/api/scriptDocuments", async () => ({
 import { AppProviders } from "@/app/providers";
 import { ProjectWorkspace } from "@/app/projects/[projectId]/project-workspace";
 import { setAccessToken } from "@/lib/auth-session";
+import { ApiClientError } from "@/lib/request";
 
 const workspaceId = "019fb2d0-a000-7000-8000-000000000001";
 const projectId = "019fb2d0-a000-7000-8000-000000000002";
@@ -250,6 +254,9 @@ describe("真实项目生产入口", () => {
     apiMocks.listScriptDocuments.mockResolvedValue({
       data: { items: [], total: 0, limit: 100, offset: 0 },
     });
+    apiMocks.getCurrentScriptDocument.mockRejectedValue(
+      new ApiClientError("Current script document not found", "not_found"),
+    );
     apiMocks.importScriptDocument.mockResolvedValue({ data: documentAnalysis });
     apiMocks.previewScriptDocument.mockResolvedValue({
       data: {
@@ -427,6 +434,26 @@ describe("真实项目生产入口", () => {
       "href",
       `/studio/${episodeId}/script`,
     );
+  });
+
+  it("新会话从服务端恢复当前不可变剧本及后续生产入口", async () => {
+    apiMocks.getCurrentScriptDocument.mockResolvedValue({ data: documentAnalysis });
+
+    render(
+      <AppProviders>
+        <ProjectWorkspace projectId={projectId} />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByText(documentAnalysis.document.title)).toBeInTheDocument();
+    expect(apiMocks.getCurrentScriptDocument).toHaveBeenCalledWith({
+      project_id: projectId,
+    });
+    expect(screen.getByText("剧本解析已完成")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "项目制作圣经" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "分集计划与批量创建" }),
+    ).toBeInTheDocument();
   });
 
   it("只接受 Markdown 或 DOCX，并在用户确认预览后才执行整剧解析", async () => {
