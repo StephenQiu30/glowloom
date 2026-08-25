@@ -47,5 +47,5 @@
 
 - Pause 是安全边界暂停，不抢占已经运行的 Activity；长 Activity 仍需依靠其自身 Heartbeat/取消契约。该语义已由真实 Activity 阻塞测试固定，不能在 UI 中描述为立即终止。
 - 当前控制服务只能由 Backend 内部用例调用；在公共查询与生产 Composition Root 装配前不开放公共 Control API，避免用户控制不存在或无人消费的运行。
-- 下一切片实现 Shot Workflow 与 Worker 恢复，再进入 Node Cache、输出绑定和单 Shot 局部重跑。
+- Worker 跨进程恢复已由后续验收记录固定；下一切片先细化并实现 Shot Workflow，再进入 Node Cache、输出绑定和单 Shot 局部重跑。
 - 最终 `agent-browser` 仍只在全部开发与自动化回归完成后执行，本记录不计作浏览器验收。
