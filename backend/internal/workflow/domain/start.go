@@ -36,6 +36,7 @@ type WorkflowRun struct {
 	Status, ProgressStage                           string
 	NextAction                                      *string
 	Error                                           json.RawMessage
+	PausedFromStatus, PausedFromProgressStage       *string
 	Revision                                        int
 	CreatedBy                                       string
 	CreatedAt, UpdatedAt                            time.Time

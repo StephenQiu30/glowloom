@@ -18,6 +18,7 @@ const (
 	ApplyHumanGateActivityName     = "lanverse.workflow.apply-human-gate"
 	CompleteRunActivityName        = "lanverse.workflow.complete-run"
 	HumanGateSignalName            = "lanverse.workflow.human-gate-decision"
+	WorkflowControlSignalName      = "lanverse.workflow.control"
 	workflowContractViolationError = "workflow_contract_violation"
 )
 
@@ -32,6 +33,13 @@ type HumanGateSignal struct {
 	SignalID       string `json:"signal_id"`
 	SignalIntentID string `json:"signal_intent_id"`
 	Decision       string `json:"decision"`
+}
+
+type WorkflowControlSignal struct {
+	WorkflowRunID string `json:"workflow_run_id"`
+	ControlID     string `json:"control_id"`
+	Action        string `json:"action"`
+	InputHash     string `json:"input_hash"`
 }
 
 type ApplyHumanGateCommand = workflowdomain.ApplyHumanGateCommand
@@ -57,8 +65,13 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 	}
 
 	signalChannel := workflow.GetSignalChannel(ctx, HumanGateSignalName)
+	controlChannel := workflow.GetSignalChannel(ctx, WorkflowControlSignalName)
+	controlState := workflowControlState{seen: make(map[string]string)}
 	pendingSignals := make(map[string]HumanGateSignal)
 	for _, node := range plan.Nodes {
+		if err := awaitWorkflowRunnable(ctx, controlChannel, &controlState, request.WorkflowRunID); err != nil {
+			return RunResult{}, err
+		}
 		command := NodeActivityCommand{
 			WorkflowRunID: request.WorkflowRunID, NodeRunID: node.NodeRunID,
 			NodeID: node.NodeID, Executor: node.Executor, Attempt: 1,
@@ -66,6 +79,9 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 		if node.RiskLevel == "human_gate" {
 			openContext := workflow.WithActivityOptions(ctx, shortActivityOptions("open-human-gate:"+node.NodeRunID))
 			if err := workflow.ExecuteActivity(openContext, OpenHumanGateActivityName, command).Get(ctx, nil); err != nil {
+				return RunResult{}, err
+			}
+			if err := awaitWorkflowRunnable(ctx, controlChannel, &controlState, request.WorkflowRunID); err != nil {
 				return RunResult{}, err
 			}
 			signal, err := awaitHumanGateSignal(ctx, signalChannel, pendingSignals, request.WorkflowRunID, node.NodeRunID)
@@ -96,6 +112,9 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 		}
 	}
 
+	if err := awaitWorkflowRunnable(ctx, controlChannel, &controlState, request.WorkflowRunID); err != nil {
+		return RunResult{}, err
+	}
 	completeContext := workflow.WithActivityOptions(ctx, shortActivityOptions("complete-run"))
 	if err := workflow.ExecuteActivity(completeContext, CompleteRunActivityName, CompleteRunCommand{
 		WorkflowRunID: request.WorkflowRunID,
@@ -103,6 +122,85 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 		return RunResult{}, err
 	}
 	return RunResult{WorkflowRunID: request.WorkflowRunID, Status: "SUCCEEDED"}, nil
+}
+
+type workflowControlState struct {
+	paused bool
+	seen   map[string]string
+}
+
+func awaitWorkflowRunnable(
+	ctx workflow.Context,
+	channel workflow.ReceiveChannel,
+	state *workflowControlState,
+	workflowRunID string,
+) error {
+	for {
+		var signal WorkflowControlSignal
+		if channel.ReceiveAsync(&signal) {
+			if err := applyWorkflowControlSignal(state, signal, workflowRunID); err != nil {
+				return err
+			}
+			continue
+		}
+		if !state.paused {
+			return nil
+		}
+		received := false
+		selector := workflow.NewSelector(ctx)
+		selector.AddReceive(channel, func(channel workflow.ReceiveChannel, _ bool) {
+			channel.Receive(ctx, &signal)
+			received = true
+		})
+		selector.AddReceive(ctx.Done(), func(workflow.ReceiveChannel, bool) {})
+		selector.Select(ctx)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if received {
+			if err := applyWorkflowControlSignal(state, signal, workflowRunID); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func applyWorkflowControlSignal(
+	state *workflowControlState,
+	signal WorkflowControlSignal,
+	workflowRunID string,
+) error {
+	if state == nil || !validWorkflowControlSignal(signal, workflowRunID) {
+		return contractViolation("invalid workflow control signal")
+	}
+	if observedHash, exists := state.seen[signal.ControlID]; exists {
+		if observedHash != signal.InputHash {
+			return contractViolation("workflow control signal identity drifted")
+		}
+		return nil
+	}
+	switch signal.Action {
+	case workflowdomain.ControlActionPause:
+		if state.paused {
+			return contractViolation("workflow is already paused")
+		}
+		state.paused = true
+	case workflowdomain.ControlActionResume:
+		if !state.paused {
+			return contractViolation("workflow is not paused")
+		}
+		state.paused = false
+	default:
+		return contractViolation("unsupported workflow control signal")
+	}
+	state.seen[signal.ControlID] = signal.InputHash
+	return nil
+}
+
+func validWorkflowControlSignal(signal WorkflowControlSignal, workflowRunID string) bool {
+	return signal.WorkflowRunID == workflowRunID && strings.TrimSpace(signal.ControlID) != "" &&
+		len(signal.InputHash) == 64 &&
+		(signal.Action == workflowdomain.ControlActionPause || signal.Action == workflowdomain.ControlActionResume)
 }
 
 func validEpisodeStart(request workflowdomain.StartRequest) bool {

@@ -31,6 +31,9 @@ func (runtime *Client) Control(
 	if runtime == nil || runtime.client == nil || !validControlRequest(request) {
 		return domain.ControlObservation{}, errors.New("invalid Temporal workflow control request")
 	}
+	if request.Action == domain.ControlActionPause || request.Action == domain.ControlActionResume {
+		return runtime.signalControl(ctx, request)
+	}
 	history, historyErr := runtime.findControl(ctx, request)
 	if history.found {
 		return reconciledControl(request.InputHash, history, false), nil
@@ -69,6 +72,141 @@ func (runtime *Client) Control(
 		return domain.ControlObservation{Outcome: domain.ControlOutcomeConflict}, nil
 	}
 	return domain.ControlObservation{Outcome: domain.ControlOutcomeUnknown}, errors.Join(controlErr, reconcileErr)
+}
+
+func (runtime *Client) signalControl(
+	ctx context.Context,
+	request domain.ControlRequest,
+) (domain.ControlObservation, error) {
+	observedHash, found, historyErr := runtime.findControlSignal(ctx, request)
+	if found {
+		return reconciledControlSignal(request.InputHash, observedHash, false), nil
+	}
+	if historyErr != nil {
+		var notFound *serviceerror.NotFound
+		if errors.As(historyErr, &notFound) {
+			return domain.ControlObservation{Outcome: domain.ControlOutcomeConflict}, nil
+		}
+	}
+	payloads, err := runtime.dataConverter.ToPayloads(WorkflowControlSignal{
+		WorkflowRunID: request.WorkflowRunID, ControlID: request.ControlID,
+		Action: request.Action, InputHash: request.InputHash,
+	})
+	if err != nil {
+		return domain.ControlObservation{}, err
+	}
+	_, signalErr := runtime.client.WorkflowService().SignalWorkflowExecution(
+		ctx,
+		&workflowservice.SignalWorkflowExecutionRequest{
+			Namespace: runtime.namespace,
+			WorkflowExecution: &commonpb.WorkflowExecution{
+				WorkflowId: request.TemporalWorkflowID,
+			},
+			SignalName: WorkflowControlSignalName,
+			Input:      payloads,
+			Identity:   signalIdentity,
+			RequestId:  request.ControlID,
+		},
+	)
+	if signalErr == nil {
+		observedHash, found, reconcileErr := runtime.awaitControlSignalHistory(ctx, request)
+		if found {
+			return reconciledControlSignal(request.InputHash, observedHash, true), nil
+		}
+		return domain.ControlObservation{Outcome: domain.ControlOutcomeUnknown}, reconcileErr
+	}
+	observedHash, found, reconcileErr := runtime.findControlSignal(ctx, request)
+	if found {
+		return reconciledControlSignal(request.InputHash, observedHash, false), nil
+	}
+	var notFound *serviceerror.NotFound
+	if errors.As(signalErr, &notFound) {
+		return domain.ControlObservation{Outcome: domain.ControlOutcomeConflict}, nil
+	}
+	return domain.ControlObservation{Outcome: domain.ControlOutcomeUnknown}, errors.Join(signalErr, reconcileErr)
+}
+
+func (runtime *Client) awaitControlSignalHistory(
+	ctx context.Context,
+	request domain.ControlRequest,
+) (string, bool, error) {
+	reconcileContext, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		observedHash, found, err := runtime.findControlSignal(reconcileContext, request)
+		if found || err != nil {
+			return observedHash, found, err
+		}
+		select {
+		case <-reconcileContext.Done():
+			return "", false, reconcileContext.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (runtime *Client) findControlSignal(
+	ctx context.Context,
+	request domain.ControlRequest,
+) (string, bool, error) {
+	iterator := runtime.client.GetWorkflowHistory(
+		ctx, request.TemporalWorkflowID, "", false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT,
+	)
+	for iterator.HasNext() {
+		event, err := iterator.Next()
+		if err != nil {
+			return "", false, err
+		}
+		attributes := event.GetWorkflowExecutionSignaledEventAttributes()
+		if attributes == nil {
+			continue
+		}
+		if attributes.GetSignalName() != WorkflowControlSignalName {
+			if attributes.GetRequestId() == request.ControlID {
+				return "", true, nil
+			}
+			continue
+		}
+		var signal WorkflowControlSignal
+		if err = runtime.dataConverter.FromPayloads(attributes.GetInput(), &signal); err != nil {
+			if attributes.GetRequestId() == request.ControlID {
+				return "", true, nil
+			}
+			continue
+		}
+		if signal.ControlID != request.ControlID {
+			if attributes.GetRequestId() == request.ControlID {
+				return "", true, nil
+			}
+			continue
+		}
+		observed := domain.ControlRequest{
+			TemporalWorkflowID: request.TemporalWorkflowID, ControlID: signal.ControlID,
+			WorkflowRunID: signal.WorkflowRunID, Action: signal.Action,
+		}
+		observedHash, hashErr := platformcommand.InputHash(observed)
+		if hashErr != nil {
+			return "", false, hashErr
+		}
+		if signal.InputHash != observedHash {
+			return signal.InputHash, true, nil
+		}
+		return observedHash, true, nil
+	}
+	return "", false, nil
+}
+
+func reconciledControlSignal(expectedHash, observedHash string, signaledNow bool) domain.ControlObservation {
+	outcome := domain.ControlOutcomeConflict
+	if expectedHash == observedHash {
+		outcome = domain.ControlOutcomeAlreadyApplied
+		if signaledNow {
+			outcome = domain.ControlOutcomeApplied
+		}
+	}
+	return domain.ControlObservation{Outcome: outcome, ObservedInputHash: observedHash}
 }
 
 func (runtime *Client) awaitControlHistory(
@@ -167,8 +305,13 @@ func parseControlReason(reason, controlID string) (string, bool) {
 
 func validControlRequest(request domain.ControlRequest) bool {
 	if strings.TrimSpace(request.TemporalWorkflowID) == "" || strings.TrimSpace(request.ControlID) == "" ||
-		strings.TrimSpace(request.WorkflowRunID) == "" || request.Action != domain.ControlActionCancel ||
+		strings.TrimSpace(request.WorkflowRunID) == "" ||
 		len(request.InputHash) != 64 {
+		return false
+	}
+	switch request.Action {
+	case domain.ControlActionCancel, domain.ControlActionPause, domain.ControlActionResume:
+	default:
 		return false
 	}
 	expectedHash, err := platformcommand.InputHash(domain.ControlRequest{

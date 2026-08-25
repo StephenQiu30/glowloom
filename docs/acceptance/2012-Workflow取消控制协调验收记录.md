@@ -19,7 +19,7 @@ PostgreSQL 仍是唯一业务 SQL 事实源，`WorkflowControlIntent` 与 `Workf
 | 契约 | 结果 |
 |---|---|
 | Revision 门禁 | 首次准备在事务中锁定 WorkflowRun，只接受同 Workspace、可取消状态和精确 Expected Revision |
-| 唯一 Intent | 每个 Run + Action 只有一个 Control Intent；Workspace Idempotency Key 不能绑定漂移输入 |
+| 唯一 Intent | 每个 Run + Action + Expected Revision 只有一个 Control Intent；Workspace Idempotency Key 不能绑定漂移输入；该身份同时支持后续多轮 Pause/Resume |
 | 稳定身份 | 同一 Intent 派生稳定 ControlID；Temporal `RequestCancelWorkflowExecution.RequestId` 使用该 ID，未知结果重试不换身份 |
 | History 对账 | Temporal Cancel Reason 保存 ControlID + Input Hash；相同控制重放返回 `already_applied`，相同 ID 的漂移输入返回 `conflict` |
 | 结果未知 | RPC 失败且 History 无法确认时写 `unknown` Receipt，Run 进入 `NEEDS_ATTENTION/cancel_unknown`，下一次用原 Intent 对账 |
@@ -48,5 +48,5 @@ PostgreSQL 仍是唯一业务 SQL 事实源，`WorkflowControlIntent` 与 `Workf
 
 - 当前取消服务只能由 Backend 内部用例调用；在真实 Node Executor 和 Worker Composition Root 就绪前不开放公共 Control API，避免用户控制不存在或无人消费的运行。
 - Cancel Requested 但 Temporal 尚未进入 Canceled 时，Backend 使用 `PAUSED/cancel_requested` 并要求继续 Reconcile；本次真实旅程直接收敛到 Canceled，尚需在长 Activity 故障注入中覆盖该中间态。
-- 下一切片实现 Pause/Resume Control Signal 与 Workflow 内部暂停门禁，复用同一 Control Intent/Receipt，不建立第二套协调模型。
+- Pause/Resume Control Signal 与 Workflow 内部暂停门禁已在[独立验收记录](2015-Workflow暂停与恢复控制协调验收记录.md)中完成；下一切片进入 Shot Workflow 与恢复。
 - 最终 `agent-browser` 仍只在全部开发与自动化回归完成后执行，本记录不计作浏览器验收。

@@ -4,6 +4,8 @@ import "time"
 
 const (
 	ControlActionCancel = "cancel"
+	ControlActionPause  = "pause"
+	ControlActionResume = "resume"
 
 	ControlOutcomeRequested      = "requested"
 	ControlOutcomeApplied        = "applied"

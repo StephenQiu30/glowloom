@@ -224,7 +224,9 @@ func runRecord(value domain.WorkflowRun) (model.WorkflowRun, error) {
 		WorkflowDefinitionVersionID: definitionID, RunInputSnapshotID: snapshotID,
 		TemporalWorkflowID: value.TemporalWorkflowID, StartInputHash: value.StartInputHash,
 		Status: value.Status, ProgressStage: value.ProgressStage, NextAction: value.NextAction,
-		Error: datatypes.JSON(value.Error), Revision: value.Revision, CreatedBy: createdBy,
+		Error: datatypes.JSON(value.Error), PausedFromStatus: value.PausedFromStatus,
+		PausedFromProgressStage: value.PausedFromProgressStage,
+		Revision:                value.Revision, CreatedBy: createdBy,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}, nil
 }
@@ -314,9 +316,19 @@ func runDomain(value model.WorkflowRun) domain.WorkflowRun {
 		AuthoringRevisionID: value.AuthoringRevisionID.String(), DefinitionVersionID: value.WorkflowDefinitionVersionID.String(),
 		RunInputSnapshotID: value.RunInputSnapshotID.String(), TemporalWorkflowID: value.TemporalWorkflowID,
 		StartInputHash: value.StartInputHash, Status: value.Status, ProgressStage: value.ProgressStage,
-		NextAction: value.NextAction, Error: append([]byte(nil), value.Error...), Revision: value.Revision,
+		NextAction: value.NextAction, Error: append([]byte(nil), value.Error...),
+		PausedFromStatus:        cloneStringPointer(value.PausedFromStatus),
+		PausedFromProgressStage: cloneStringPointer(value.PausedFromProgressStage), Revision: value.Revision,
 		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
+}
+
+func cloneStringPointer(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func nodeRunDomain(value model.NodeRunProjection) domain.NodeRunProjection {

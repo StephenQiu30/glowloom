@@ -132,6 +132,13 @@ func (store *Store) ClaimNode(
 			claim = domain.NodeExecutionClaim{Command: command, Status: node.Status, Attempt: node.Attempt, Revision: node.Revision, Replay: true}
 			return nil
 		}
+		stopped, stopErr := stoppingControlExists(transaction, run.ID)
+		if stopErr != nil {
+			return stopErr
+		}
+		if stopped {
+			return errors.New("workflow node is fenced by an active control")
+		}
 		if (run.Status != "RUNNING" && run.Status != "RETRYING") ||
 			(node.Status != "QUEUED" && node.Status != "RUNNING" && node.Status != "RETRYING") {
 			return errors.New("workflow node is not executable")
@@ -202,6 +209,10 @@ func (store *Store) finishNode(
 			node.Status != "RUNNING" || node.ActiveClaimToken == nil || *node.ActiveClaimToken != token || node.Revision != claim.Revision {
 			return &application.Error{Code: "resource_conflict", Message: "Workflow node claim is stale", Status: 409}
 		}
+		stopped, stopErr := stoppingControlExists(transaction, run.ID)
+		if stopErr != nil {
+			return stopErr
+		}
 		node.Status = nodeStatus
 		node.ActiveClaimToken = nil
 		node.Revision++
@@ -210,6 +221,9 @@ func (store *Store) finishNode(
 			"status": node.Status, "active_claim_token": nil, "revision": node.Revision, "updated_at": node.UpdatedAt,
 		}).Error; updateErr != nil {
 			return updateErr
+		}
+		if stopped || run.Status == "PAUSED" || run.Status == "NEEDS_ATTENTION" {
+			return nil
 		}
 		run.Status, run.ProgressStage = runStatus, progressStage
 		run.Revision++
@@ -245,6 +259,13 @@ func (store *Store) CompleteRun(ctx context.Context, command domain.CompleteRunC
 		}
 		if run.Status == "SUCCEEDED" {
 			return nil
+		}
+		stopped, stopErr := stoppingControlExists(transaction, run.ID)
+		if stopErr != nil {
+			return stopErr
+		}
+		if stopped {
+			return errors.New("workflow completion is fenced by an active control")
 		}
 		if run.Status != "RUNNING" && run.Status != "RETRYING" {
 			return errors.New("workflow run is not completable")
@@ -299,6 +320,13 @@ func (store *Store) PrepareHumanGate(
 			node.RiskLevel != "human_gate" || (node.Status != "QUEUED" && node.Status != "WAITING_HUMAN") ||
 			(run.Status != "RUNNING" && run.Status != "WAITING_HUMAN") {
 			return errors.New("workflow node is not an openable human gate")
+		}
+		stopped, stopErr := stoppingControlExists(transaction, run.ID)
+		if stopErr != nil {
+			return stopErr
+		}
+		if stopped {
+			return errors.New("workflow human gate is fenced by an active control")
 		}
 		if node.Status == "QUEUED" {
 			node.Status = "WAITING_HUMAN"
@@ -376,6 +404,13 @@ func (store *Store) ApplyHumanGate(
 			node.WorkflowRunID != run.ID || node.NodeID != command.NodeID || node.RiskLevel != "human_gate" {
 			return errors.New("workflow human gate apply identity has drifted")
 		}
+		stopped, stopErr := stoppingControlExists(transaction, run.ID)
+		if stopErr != nil {
+			return stopErr
+		}
+		if stopped {
+			return errors.New("workflow human gate apply is fenced by an active control")
+		}
 		targetNodeStatus, targetRunStatus, progressStage := "FAILED", "NEEDS_ATTENTION", "human_gate:rejected"
 		nextAction := "review_rejected"
 		if decision == "approved" || decision == "selected" {
@@ -412,6 +447,17 @@ func (store *Store) ApplyHumanGate(
 		}
 		return transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(updates).Error
 	})
+}
+
+func stoppingControlExists(transaction *gorm.DB, workflowRunID uuid.UUID) (bool, error) {
+	var count int64
+	err := transaction.Model(&model.WorkflowControlIntent{}).
+		Where(
+			"workflow_run_id = ? AND action IN ? AND status IN ?",
+			workflowRunID, []string{domain.ControlActionPause, domain.ControlActionCancel}, []string{"pending", "unknown"},
+		).
+		Count(&count).Error
+	return count != 0, err
 }
 
 var _ application.RuntimeRepository = (*Store)(nil)

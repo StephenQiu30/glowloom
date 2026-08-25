@@ -41,8 +41,17 @@ func (store *Store) PrepareControl(
 			return normalizeNotFound(loadErr)
 		}
 		if run.WorkspaceID != intentRecord.WorkspaceID || run.Revision != intentRecord.ExpectedRunRevision ||
-			!cancellableRunStatus(run.Status) {
-			return &application.Error{Code: "resource_conflict", Message: "Workflow run is not cancellable at the expected revision", Status: 409}
+			!controllableRunStatus(run, intentRecord.Action) {
+			return &application.Error{Code: "resource_conflict", Message: "Workflow run is not controllable at the expected revision", Status: 409}
+		}
+		var activeControlCount int64
+		if countErr := transaction.Model(&model.WorkflowControlIntent{}).
+			Where("workflow_run_id = ? AND status IN ?", run.ID, []string{"pending", "unknown"}).
+			Count(&activeControlCount).Error; countErr != nil {
+			return countErr
+		}
+		if activeControlCount != 0 {
+			return &application.Error{Code: "resource_conflict", Message: "Workflow run already has an active control", Status: 409}
 		}
 		intentRecord.TemporalWorkflowID = run.TemporalWorkflowID
 		request, requestErr := application.NewControlRequest(controlIntentDomain(intentRecord))
@@ -51,12 +60,15 @@ func (store *Store) PrepareControl(
 		}
 		intentRecord.InputHash = request.InputHash
 		if createErr := transaction.Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "workflow_run_id"}, {Name: "action"}}, DoNothing: true,
+			Columns: []clause.Column{{Name: "workflow_run_id"}, {Name: "action"}, {Name: "expected_run_revision"}}, DoNothing: true,
 		}).Omit(clause.Associations).Create(&intentRecord).Error; createErr != nil {
 			return createErr
 		}
 		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("workflow_run_id = ? AND action = ?", intentRecord.WorkflowRunID, intentRecord.Action).
+			Where(
+				"workflow_run_id = ? AND action = ? AND expected_run_revision = ?",
+				intentRecord.WorkflowRunID, intentRecord.Action, intentRecord.ExpectedRunRevision,
+			).
 			First(&intentRecord).Error; loadErr != nil {
 			return normalizeNotFound(loadErr)
 		}
@@ -124,7 +136,9 @@ func (store *Store) FinalizeControlAttempt(ctx context.Context, finalization dom
 			Where("id = ? AND revision = ?", run.ID, finalization.ExpectedRunRevision).
 			Updates(map[string]any{
 				"status": run.Status, "progress_stage": run.ProgressStage, "next_action": run.NextAction,
-				"error": run.Error, "revision": run.Revision, "updated_at": run.UpdatedAt,
+				"error": run.Error, "paused_from_status": run.PausedFromStatus,
+				"paused_from_progress_stage": run.PausedFromProgressStage,
+				"revision":                   run.Revision, "updated_at": run.UpdatedAt,
 			})
 		if runResult.Error != nil {
 			return runResult.Error
@@ -230,13 +244,22 @@ func sameControlIntentIdentity(record model.WorkflowControlIntent, desired domai
 		record.ExpectedRunRevision == desired.ExpectedRunRevision && record.CreatedBy.String() == desired.CreatedBy
 }
 
-func cancellableRunStatus(status string) bool {
-	switch status {
-	case "QUEUED", "RUNNING", "WAITING_HUMAN", "RETRYING", "PAUSED", "NEEDS_ATTENTION":
-		return true
-	default:
-		return false
+func controllableRunStatus(run model.WorkflowRun, action string) bool {
+	switch action {
+	case domain.ControlActionCancel:
+		switch run.Status {
+		case "QUEUED", "RUNNING", "WAITING_HUMAN", "RETRYING", "PAUSED", "NEEDS_ATTENTION":
+			return true
+		}
+	case domain.ControlActionPause:
+		return (run.Status == "RUNNING" || run.Status == "RETRYING") &&
+			run.PausedFromStatus == nil && run.PausedFromProgressStage == nil
+	case domain.ControlActionResume:
+		return run.Status == "PAUSED" && run.PausedFromStatus != nil &&
+			run.PausedFromProgressStage != nil &&
+			(*run.PausedFromStatus == "RUNNING" || *run.PausedFromStatus == "RETRYING")
 	}
+	return false
 }
 
 func controlIDs(values ...string) (uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, error) {

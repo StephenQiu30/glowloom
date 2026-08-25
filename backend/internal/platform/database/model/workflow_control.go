@@ -9,14 +9,14 @@ import (
 type WorkflowControlIntent struct {
 	ID                  uuid.UUID   `gorm:"type:uuid;primaryKey"`
 	WorkspaceID         uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_control_intent_key,priority:1"`
-	WorkflowRunID       uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_control_intent_run_action,priority:1"`
+	WorkflowRunID       uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_control_intent_run_action_revision,priority:1"`
 	IdempotencyKey      string      `gorm:"type:varchar(200);not null;uniqueIndex:uq_wrk_control_intent_key,priority:2"`
 	CommandInputHash    string      `gorm:"type:char(64);not null;check:ck_wrk_control_command_hash,char_length(command_input_hash) = 64"`
 	TemporalWorkflowID  string      `gorm:"type:varchar(220);not null"`
 	ControlID           uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_control_identity"`
 	InputHash           string      `gorm:"type:char(64);not null;check:ck_wrk_control_input_hash,char_length(input_hash) = 64"`
-	Action              string      `gorm:"type:varchar(20);not null;uniqueIndex:uq_wrk_control_intent_run_action,priority:2;check:ck_wrk_control_action,action IN ('pause','resume','cancel')"`
-	ExpectedRunRevision int         `gorm:"not null;check:ck_wrk_control_expected_revision,expected_run_revision >= 1"`
+	Action              string      `gorm:"type:varchar(20);not null;uniqueIndex:uq_wrk_control_intent_run_action_revision,priority:2;check:ck_wrk_control_action,action IN ('pause','resume','cancel')"`
+	ExpectedRunRevision int         `gorm:"not null;uniqueIndex:uq_wrk_control_intent_run_action_revision,priority:3;check:ck_wrk_control_expected_revision,expected_run_revision >= 1"`
 	Status              string      `gorm:"type:varchar(20);not null;check:ck_wrk_control_intent_status,status IN ('pending','completed','unknown','conflict')"`
 	AttemptNo           int         `gorm:"not null;check:ck_wrk_control_attempt,attempt_no >= 0"`
 	Revision            int         `gorm:"not null;check:ck_wrk_control_intent_revision,revision >= 1"`

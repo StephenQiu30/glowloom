@@ -62,6 +62,8 @@ type WorkflowRun struct {
 	ProgressStage               string                    `gorm:"type:varchar(80);not null"`
 	NextAction                  *string                   `gorm:"type:varchar(80)"`
 	Error                       datatypes.JSON            `gorm:"type:jsonb"`
+	PausedFromStatus            *string                   `gorm:"type:varchar(30);check:ck_wrk_run_paused_from_status,paused_from_status IS NULL OR paused_from_status IN ('RUNNING','RETRYING')"`
+	PausedFromProgressStage     *string                   `gorm:"type:varchar(80);check:ck_wrk_run_pause_source_pair,(paused_from_status IS NULL) = (paused_from_progress_stage IS NULL)"`
 	Revision                    int                       `gorm:"not null;check:ck_wrk_run_revision,revision >= 1"`
 	CreatedBy                   uuid.UUID                 `gorm:"type:uuid;not null"`
 	CreatedAt                   time.Time                 `gorm:"type:timestamptz;not null"`
