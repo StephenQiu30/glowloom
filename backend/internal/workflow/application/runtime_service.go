@@ -24,14 +24,40 @@ type RunCompletionRepository interface {
 	CompleteRun(context.Context, domain.CompleteRunCommand, time.Time) error
 }
 
+type HumanGateRepository interface {
+	PrepareHumanGate(context.Context, domain.NodeActivityCommand, time.Time) (domain.HumanGateBinding, error)
+}
+
+type HumanTaskOpener interface {
+	OpenHumanTask(context.Context, domain.HumanGateBinding) error
+}
+
 type NodeExecutor interface {
 	Execute(context.Context, domain.NodeExecutorCommand) (domain.NodeActivityResult, error)
 }
 
 type RuntimeConfig struct {
-	Now      func() time.Time
-	NewID    func() string
-	Executor NodeExecutor
+	Now        func() time.Time
+	NewID      func() string
+	Executor   NodeExecutor
+	HumanTasks HumanTaskOpener
+}
+
+func (service *RuntimeService) OpenHumanGate(ctx context.Context, command domain.NodeActivityCommand) error {
+	if service == nil || service.config.Now == nil || service.config.HumanTasks == nil ||
+		strings.TrimSpace(command.WorkflowRunID) == "" || strings.TrimSpace(command.NodeRunID) == "" ||
+		strings.TrimSpace(command.NodeID) == "" || strings.TrimSpace(command.Executor) == "" || command.Attempt < 1 {
+		return invalid("Invalid human gate input")
+	}
+	repository, supported := service.repository.(HumanGateRepository)
+	if !supported {
+		return errors.New("human gate repository is unavailable")
+	}
+	binding, err := repository.PrepareHumanGate(ctx, command, service.config.Now().UTC())
+	if err != nil {
+		return normalizeError(err)
+	}
+	return service.config.HumanTasks.OpenHumanTask(ctx, binding)
 }
 
 type RuntimeService struct {

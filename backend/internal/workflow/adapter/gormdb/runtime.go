@@ -271,6 +271,70 @@ func (store *Store) CompleteRun(ctx context.Context, command domain.CompleteRunC
 	})
 }
 
+func (store *Store) PrepareHumanGate(
+	ctx context.Context,
+	command domain.NodeActivityCommand,
+	now time.Time,
+) (domain.HumanGateBinding, error) {
+	runID, err := uuid.Parse(command.WorkflowRunID)
+	if err != nil {
+		return domain.HumanGateBinding{}, application.ErrNotFound
+	}
+	nodeID, err := uuid.Parse(command.NodeRunID)
+	if err != nil {
+		return domain.HumanGateBinding{}, application.ErrNotFound
+	}
+	var binding domain.HumanGateBinding
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var run model.WorkflowRun
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var node model.NodeRunProjection
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&node, "id = ?", nodeID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if node.WorkflowRunID != run.ID || node.NodeID != command.NodeID || node.Executor != command.Executor ||
+			node.RiskLevel != "human_gate" || (node.Status != "QUEUED" && node.Status != "WAITING_HUMAN") ||
+			(run.Status != "RUNNING" && run.Status != "WAITING_HUMAN") {
+			return errors.New("workflow node is not an openable human gate")
+		}
+		if node.Status == "QUEUED" {
+			node.Status = "WAITING_HUMAN"
+			node.Attempt++
+			node.Revision++
+			node.UpdatedAt = now.UTC()
+			if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
+				"status": node.Status, "attempt": node.Attempt, "revision": node.Revision, "updated_at": node.UpdatedAt,
+			}).Error; updateErr != nil {
+				return updateErr
+			}
+		}
+		if run.Status != "WAITING_HUMAN" || run.ProgressStage != "human_gate:"+node.NodeID {
+			run.Status, run.ProgressStage = "WAITING_HUMAN", "human_gate:"+node.NodeID
+			nextAction := "review_human_task"
+			run.NextAction = &nextAction
+			run.Revision++
+			run.UpdatedAt = now.UTC()
+			if updateErr := transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+				"status": run.Status, "progress_stage": run.ProgressStage, "next_action": run.NextAction,
+				"revision": run.Revision, "updated_at": run.UpdatedAt,
+			}).Error; updateErr != nil {
+				return updateErr
+			}
+		}
+		binding = domain.HumanGateBinding{
+			WorkspaceID: run.WorkspaceID.String(), ProjectID: run.ProjectID.String(), WorkflowRunID: run.ID.String(),
+			NodeRunID: node.ID.String(), SubjectType: "workflow_node_output", SubjectID: node.ID.String(),
+			SubjectRevision: node.Revision, CandidateIDs: []string{},
+			RubricVersion: node.Executor + "@" + node.DefinitionVersion,
+		}
+		return nil
+	})
+	return binding, err
+}
+
 var _ application.RuntimeRepository = (*Store)(nil)
 var _ application.NodeRuntimeRepository = (*Store)(nil)
 var _ application.RunCompletionRepository = (*Store)(nil)
+var _ application.HumanGateRepository = (*Store)(nil)

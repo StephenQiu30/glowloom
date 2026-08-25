@@ -45,3 +45,11 @@ type NodeExecutorCommand struct {
 type CompleteRunCommand struct {
 	WorkflowRunID string `json:"workflow_run_id"`
 }
+
+type HumanGateBinding struct {
+	WorkspaceID, ProjectID, WorkflowRunID, NodeRunID string
+	SubjectType, SubjectID                           string
+	SubjectRevision                                  int
+	CandidateIDs                                     []string
+	RubricVersion                                    string
+}
