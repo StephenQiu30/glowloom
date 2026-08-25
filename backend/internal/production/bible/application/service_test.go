@@ -122,7 +122,13 @@ func TestBlockingBibleIssuesRequireExplicitAcceptedDecisions(t *testing.T) {
 		t.Fatalf("accepted decision = %#v, error = %v", accepted, err)
 	}
 	confirmed, err := service.Confirm(context.Background(), actor, ConfirmCommand{BibleID: store.bible.ID, ExpectedResultHash: resultHash, ExpectedRevision: 4, IdempotencyKey: "confirm-3"})
-	if err != nil || confirmed.Status != "confirmed" || confirmed.Revision != 5 {
+	if err != nil || confirmed.Bible.Status != "confirmed" || confirmed.Bible.Revision != 5 ||
+		confirmed.Receipt.ID == "" || confirmed.Receipt.Operation != confirmOperation ||
+		confirmed.Receipt.ResourceID != store.bible.ID {
 		t.Fatalf("confirmed bible = %#v, error = %v", confirmed, err)
+	}
+	replayed, err := service.Confirm(context.Background(), actor, ConfirmCommand{BibleID: store.bible.ID, ExpectedResultHash: resultHash, ExpectedRevision: 4, IdempotencyKey: "confirm-3"})
+	if err != nil || replayed.Bible.ID != confirmed.Bible.ID || replayed.Receipt.ID != confirmed.Receipt.ID {
+		t.Fatalf("replayed bible confirmation = %#v, error = %v", replayed, err)
 	}
 }

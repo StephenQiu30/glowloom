@@ -72,6 +72,10 @@ type ConfirmCommand struct {
 	BibleID, ExpectedResultHash, IdempotencyKey string
 	ExpectedRevision                            int
 }
+type ConfirmResult struct {
+	Bible   domain.Bible
+	Receipt platformcommand.Receipt
+}
 type ResumeCommand struct {
 	BibleID, IdempotencyKey string
 	ExpectedRevision        int
@@ -166,12 +170,12 @@ func (service *Service) GetCurrent(ctx context.Context, actor Actor, projectID s
 	return result, normalizeError(err)
 }
 
-func (service *Service) Confirm(ctx context.Context, actor Actor, command ConfirmCommand) (domain.Bible, error) {
+func (service *Service) Confirm(ctx context.Context, actor Actor, command ConfirmCommand) (ConfirmResult, error) {
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	if command.ExpectedRevision < 1 || len(command.ExpectedResultHash) != 64 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
-		return domain.Bible{}, invalid("Invalid production bible confirmation")
+		return ConfirmResult{}, invalid("Invalid production bible confirmation")
 	}
-	var result domain.Bible
+	var result ConfirmResult
 	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
 		bible, err := repo.GetBible(ctx, actor, command.BibleID, true)
 		if err != nil {
@@ -189,7 +193,8 @@ func (service *Service) Confirm(ctx context.Context, actor Actor, command Confir
 			if replayErr != nil {
 				return replayErr
 			}
-			result, replayErr = repo.GetBible(ctx, actor, replayed.BibleID, false)
+			result.Bible, replayErr = repo.GetBible(ctx, actor, replayed.BibleID, false)
+			result.Receipt = receipt
 			return replayErr
 		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
 			return receiptErr
@@ -212,10 +217,11 @@ func (service *Service) Confirm(ctx context.Context, actor Actor, command Confir
 		if err != nil {
 			return err
 		}
-		if err = repo.CreateReceipt(ctx, platformcommand.Receipt{ID: service.config.NewID(), WorkspaceID: bible.WorkspaceID, Operation: confirmOperation, IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: bible.ID, Result: receiptResult, CreatedBy: actor.UserID, CreatedAt: now}); err != nil {
+		receipt := platformcommand.Receipt{ID: service.config.NewID(), WorkspaceID: bible.WorkspaceID, Operation: confirmOperation, IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: bible.ID, Result: receiptResult, CreatedBy: actor.UserID, CreatedAt: now}
+		if err = repo.CreateReceipt(ctx, receipt); err != nil {
 			return err
 		}
-		result = bible
+		result = ConfirmResult{Bible: bible, Receipt: receipt}
 		return nil
 	})
 	return result, normalizeError(err)

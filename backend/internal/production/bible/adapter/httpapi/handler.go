@@ -19,7 +19,7 @@ type Service interface {
 	Create(context.Context, application.Actor, application.CreateCommand) (domain.Bible, error)
 	Get(context.Context, application.Actor, string) (domain.Bible, error)
 	GetCurrent(context.Context, application.Actor, string) (domain.Bible, error)
-	Confirm(context.Context, application.Actor, application.ConfirmCommand) (domain.Bible, error)
+	Confirm(context.Context, application.Actor, application.ConfirmCommand) (application.ConfirmResult, error)
 	DecideReviewIssue(context.Context, application.Actor, application.DecideReviewIssueCommand) (domain.Bible, error)
 	Resume(context.Context, application.Actor, application.ResumeCommand) (domain.Bible, error)
 }
@@ -123,7 +123,7 @@ func (handler *Handler) confirm(writer http.ResponseWriter, request *http.Reques
 		handler.writeError(writer, request, err)
 		return
 	}
-	platformhttp.WriteJSON(writer, http.StatusOK, map[string]any{"data": presentBible(result)})
+	platformhttp.WriteJSON(writer, http.StatusOK, map[string]any{"data": presentBible(result.Bible)})
 }
 
 func (handler *Handler) resume(writer http.ResponseWriter, request *http.Request) {

@@ -105,6 +105,62 @@ func TestBibleResumePreservesClaimFenceAndRejectsLateResult(t *testing.T) {
 	}
 }
 
+func TestBibleConfirmationReturnsPersistedOwnerReceipt(t *testing.T) {
+	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set LANVERSE_TEST_DATABASE_URL to run the PostgreSQL workflow journey")
+	}
+
+	ctx := context.Background()
+	database, err := platformdatabase.Open(ctx, databaseURL, io.Discard)
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	t.Cleanup(func() { _ = platformdatabase.Close(database) })
+	if err = schema.Sync(ctx, database); err != nil {
+		t.Fatalf("synchronize GORM catalog: %v", err)
+	}
+
+	fixture := seedFailedBible(t, func(value any) error { return database.Create(value).Error })
+	if err = database.Model(&model.ProductionBible{}).Where("id = ?", fixture.bibleID).
+		Updates(map[string]any{"status": "needs_review", "error": nil}).Error; err != nil {
+		t.Fatalf("prepare reviewable production bible: %v", err)
+	}
+	confirmAt := fixture.now.Add(time.Minute)
+	service := bibleapp.NewService(biblegorm.New(database), bibleapp.Config{
+		Now: func() time.Time { return confirmAt }, NewID: uuid.NewString,
+	})
+	actor := bibleapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
+	command := bibleapp.ConfirmCommand{
+		BibleID: fixture.bibleID.String(), ExpectedResultHash: strings.Repeat("b", 64),
+		ExpectedRevision: fixture.bibleRevision, IdempotencyKey: "confirm-owner-receipt",
+	}
+
+	confirmed, err := service.Confirm(ctx, actor, command)
+	if err != nil || confirmed.Bible.Status != "confirmed" || confirmed.Bible.Revision != fixture.bibleRevision+1 ||
+		confirmed.Receipt.ID == "" || confirmed.Receipt.ResourceID != fixture.bibleID.String() {
+		t.Fatalf("confirm production bible with receipt: result=%#v err=%v", confirmed, err)
+	}
+	var persisted model.CommandReceipt
+	if err = database.First(&persisted, "id = ?", confirmed.Receipt.ID).Error; err != nil {
+		t.Fatalf("load production owner receipt: %v", err)
+	}
+	if persisted.Operation != "production_bible.confirm" || persisted.ResourceID != fixture.bibleID ||
+		persisted.InputHash != confirmed.Receipt.InputHash {
+		t.Fatalf("persisted production owner receipt = %#v", persisted)
+	}
+	replayed, err := service.Confirm(ctx, actor, command)
+	if err != nil || replayed.Bible.ID != confirmed.Bible.ID || replayed.Receipt.ID != confirmed.Receipt.ID {
+		t.Fatalf("replay production owner receipt: result=%#v err=%v", replayed, err)
+	}
+	var receiptCount int64
+	if err = database.Model(&model.CommandReceipt{}).
+		Where("workspace_id = ? AND operation = ? AND idempotency_key = ?", persisted.WorkspaceID, persisted.Operation, command.IdempotencyKey).
+		Count(&receiptCount).Error; err != nil || receiptCount != 1 {
+		t.Fatalf("production owner receipt count = %d err=%v", receiptCount, err)
+	}
+}
+
 type failedBibleFixture struct {
 	userID, bibleID, invocationID uuid.UUID
 	now                           time.Time
