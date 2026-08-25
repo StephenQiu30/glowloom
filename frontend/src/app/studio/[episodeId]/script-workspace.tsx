@@ -431,6 +431,28 @@ export function ScriptWorkspace({
                           <p className="mt-1 text-sm leading-6 text-slate-500">
                             {proposalDescription(candidate)}
                           </p>
+                          {candidate.proposal.kind === "scene" &&
+                          candidate.proposal.production_tasks?.length ? (
+                            <section
+                              aria-label={`${candidate.candidate_key} 制作任务`}
+                              className="mt-3 grid gap-2"
+                            >
+                              {candidate.proposal.production_tasks.map((task, index) => (
+                                <div
+                                  className="rounded-lg bg-muted/55 px-3 py-2 text-sm"
+                                  key={`${task.task_type}:${task.title}:${index}`}
+                                >
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-medium">{task.title}</span>
+                                    <Badge variant="outline">{task.priority}</Badge>
+                                  </div>
+                                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                    {task.objective}
+                                  </p>
+                                </div>
+                              ))}
+                            </section>
+                          ) : null}
                         </div>
                         {candidate.status === "pending" ? (
                           <div className="flex flex-wrap items-center justify-end gap-2">

@@ -81,6 +81,13 @@ import {
   previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost,
 } from "@/api/scriptDocuments";
 import {
+  confirmBibleApiV1ProductionBiblesBibleIdConfirmPost,
+  createBibleApiV1DocumentRevisionsRevisionIdProductionBiblesPost,
+  getBibleApiV1ProductionBiblesBibleIdGet,
+  getCurrentBibleApiV1ProjectsProjectIdProductionBibleGet,
+  resumeBibleApiV1ProductionBiblesBibleIdResumePost,
+} from "@/api/productionBibles";
+import {
   archiveEpisodeApiV1EpisodesEpisodeIdArchivePost,
   archiveProjectApiV1ProjectsProjectIdArchivePost,
   createEpisodeApiV1ProjectsProjectIdEpisodesPost,
@@ -251,6 +258,7 @@ export const appApi = createApi({
     "AssetShotUsages",
     "ScriptSources",
     "ScriptDocuments",
+    "ProductionBible",
     "EpisodePlans",
     "ScriptVersions",
     "ScriptVersion",
@@ -611,6 +619,81 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { projectId }) => [
         { type: "ScriptDocuments", id: projectId },
+        "AuditEvents",
+      ],
+    }),
+    currentProductionBible: builder.query<API.ProductionBibleResponse, string>({
+      queryFn: (projectId) =>
+        runRequest(() =>
+          getCurrentBibleApiV1ProjectsProjectIdProductionBibleGet({
+            project_id: projectId,
+          }),
+        ),
+      providesTags: (_result, _error, projectId) => [
+        { type: "ProductionBible", id: projectId },
+      ],
+    }),
+    productionBible: builder.query<API.ProductionBibleResponse, string>({
+      queryFn: (bibleId) =>
+        runRequest(() =>
+          getBibleApiV1ProductionBiblesBibleIdGet({ bible_id: bibleId }),
+        ),
+      providesTags: (_result, _error, bibleId) => [
+        { type: "ProductionBible", id: bibleId },
+      ],
+    }),
+    createProductionBible: builder.mutation<
+      API.ProductionBibleResponse,
+      { projectId: string; revisionId: string; body: API.ProductionBibleCreateRequest }
+    >({
+      queryFn: ({ revisionId, body }) =>
+        runRequest(() =>
+          createBibleApiV1DocumentRevisionsRevisionIdProductionBiblesPost(
+            { revision_id: revisionId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: "ProductionBible", id: projectId },
+        "Tasks",
+        "AuditEvents",
+      ],
+    }),
+    confirmProductionBible: builder.mutation<
+      API.ProductionBibleResponse,
+      { projectId: string; bibleId: string; body: API.ProductionBibleConfirmRequest }
+    >({
+      queryFn: ({ bibleId, body }) =>
+        runRequest(() =>
+          confirmBibleApiV1ProductionBiblesBibleIdConfirmPost(
+            { bible_id: bibleId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId, bibleId }) => [
+        { type: "ProductionBible", id: projectId },
+        { type: "ProductionBible", id: bibleId },
+        "Assets",
+        "AssetBible",
+        "Tasks",
+        "AuditEvents",
+      ],
+    }),
+    resumeProductionBible: builder.mutation<
+      API.ProductionBibleResponse,
+      { projectId: string; bibleId: string; body: API.ProductionBibleResumeRequest }
+    >({
+      queryFn: ({ bibleId, body }) =>
+        runRequest(() =>
+          resumeBibleApiV1ProductionBiblesBibleIdResumePost(
+            { bible_id: bibleId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId, bibleId }) => [
+        { type: "ProductionBible", id: projectId },
+        { type: "ProductionBible", id: bibleId },
+        "Tasks",
         "AuditEvents",
       ],
     }),
@@ -2496,6 +2579,11 @@ export const {
   useExtractionCandidatesQuery,
   useImportScriptMutation,
   useImportScriptDocumentMutation,
+  useCurrentProductionBibleQuery,
+  useProductionBibleQuery,
+  useCreateProductionBibleMutation,
+  useConfirmProductionBibleMutation,
+  useResumeProductionBibleMutation,
   usePreviewScriptDocumentMutation,
   useLazyEpisodePlanQuery,
   useCreateEpisodePlanMutation,

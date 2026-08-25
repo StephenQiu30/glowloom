@@ -41,6 +41,7 @@ import {
 } from "@/lib/server-state";
 
 import { EpisodePlanWorkspace } from "./episode-plan-workspace";
+import { ProductionBibleWorkspace } from "./production-bible-workspace";
 
 const RIGHTS_DECLARATION = "我确认拥有该剧本用于本项目制作与分析的权利";
 const DOCX_MIME_TYPE =
@@ -455,11 +456,18 @@ export function ScriptDocumentImportCard({
         </CardContent>
       </Card>
       {analysis ? (
-        <EpisodePlanWorkspace
-          analysis={analysis}
-          canWrite={canWrite}
-          targetDurationMs={targetDurationMs}
-        />
+        <>
+          <ProductionBibleWorkspace
+            analysis={analysis}
+            canWrite={canWrite}
+            projectId={projectId}
+          />
+          <EpisodePlanWorkspace
+            analysis={analysis}
+            canWrite={canWrite}
+            targetDurationMs={targetDurationMs}
+          />
+        </>
       ) : null}
     </>
   );
