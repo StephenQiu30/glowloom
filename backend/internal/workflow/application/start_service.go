@@ -101,6 +101,9 @@ func (service *StartService) Start(ctx context.Context, actor Actor, command Sta
 	if err != nil {
 		return domain.WorkflowRun{}, normalizeError(err)
 	}
+	if prepared.Intent.Status == "completed" || prepared.Intent.Status == "conflict" {
+		return prepared.Run, nil
+	}
 	observation, startErr := service.starter.Start(ctx, request)
 	updatedRun, updatedIntent, receipt := finalizeStart(
 		prepared, observation, startErr, service.config.NewID(), service.config.Now().UTC(),
