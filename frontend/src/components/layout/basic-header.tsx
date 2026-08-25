@@ -10,7 +10,6 @@ import {
   LogOut,
   Search,
   Settings,
-  ShieldCheck,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -69,7 +68,6 @@ const navigationItems: Array<{
 }> = [
   { id: "create", label: "首页", description: "欢迎与工作概览", href: "/", icon: Home },
   { id: "projects", label: "项目", description: "项目与短剧生产", href: "/projects", icon: Folder },
-  { id: "governance", label: "治理", description: "授权与审计", href: "/governance", icon: ShieldCheck },
   { id: "settings", label: "空间", description: "账户与工作空间", href: "/workspaces", icon: Settings },
 ];
 
@@ -278,9 +276,6 @@ function AccountMenu({
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild><Link href="/workspaces"><UserRound aria-hidden="true" />账户与空间</Link></DropdownMenuItem>
-          {canAccessPage(role, "governance") ? (
-            <DropdownMenuItem asChild><Link href="/governance"><ShieldCheck aria-hidden="true" />治理与审计</Link></DropdownMenuItem>
-          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={logoutState.isLoading}

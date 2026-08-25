@@ -3,119 +3,113 @@
 import {
   AlertCircle,
   CheckCircle2,
+  Clapperboard,
+  Download,
+  FileText,
   LoaderCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
-import { MetricGroup } from "@/components/studio/metric-group";
-import { PageHeader } from "@/components/studio/page-header";
-import { ProductionNextAction } from "@/components/studio/production-next-action";
-import { ProductionWorkflowSidebar } from "@/components/studio/production-workflow-sidebar";
-import { StudioShell } from "@/components/studio/studio-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
-import {
-  appApiErrorMessage,
-  useAdaptationRunQuery,
-  useApplyStoryboardDraftMutation,
-  useApproveStoryboardDraftMutation,
-  useAssetBibleQuery,
-  useAssetsQuery,
-  useAppendShotSpecMutation,
-  useArchivedShotsQuery,
-  useCompleteMediaUploadMutation,
-  useCreateMediaAccessMutation,
-  useCancelAdaptationRunMutation,
-  useCancelGenerationTaskMutation,
-  useConfigureScheduleMutation,
-  useCostsQuery,
-  useCoverageQuery,
-  useConfirmStructureMutation,
-  useConfirmedStructureQuery,
-  useCopyShotMutation,
-  useCreateShotMutation,
-  useCreateStoryboardDraftMutation,
-  useCreateAdaptationRunMutation,
-  useCreateShotFromCandidateMutation,
-  useDeleteScriptVersionMutation,
-  useDeleteShotMutation,
-  useDecideExtractionCandidateMutation,
-  useDecideCoverageMutation,
-  useDecideStoryboardDraftMutation,
-  useEpisodeQuery,
-  useEpisodeSnapshotQuery,
-  useEpisodesQuery,
-  useExtractionBatchQuery,
-  useExtractionCandidatesQuery,
-  useImportScriptMutation,
-  useInitializeMediaUploadMutation,
-  useInitializeMediaVersionUploadMutation,
-  useLazyShotSpecVersionQuery,
-  useLazyAdaptationDiffQuery,
-  useLazyScriptVersionDiffQuery,
-  useMeQuery,
-  useMergeShotsMutation,
-  useMergeShotsPreflightMutation,
-  useModelCapabilitiesQuery,
-  useMediaVersionsQuery,
-  useMediaLocationsQuery,
-  useNarrativeStructureQuery,
-  useProjectQuery,
-  usePreflightStoryboardDraftMutation,
-  usePreflightStoryboardExportMutation,
-  usePublishScriptVersionMutation,
-  usePublishAdaptationRunMutation,
-  usePauseScheduleMutation,
-  useRetryMediaProbeMutation,
-  useRequestMediaLocationMigrationMutation,
-  useRequestMediaLocationRollbackMutation,
-  useRequestStoryboardExportMutation,
-  useResumeScheduleMutation,
-  useReviseNarrativeStructureMutation,
-  useReorderShotsMutation,
-  useReplaceNarrativeReferencesMutation,
-  useScriptSourcesQuery,
-  useScriptVersionQuery,
-  useScriptVersionsQuery,
-  useSetCurrentScriptVersionMutation,
-  useSetCurrentMediaVersionMutation,
-  useSetScriptSourceArchivedMutation,
-  useSetCurrentShotSpecMutation,
-  useSetShotArchivedMutation,
-  useSetMediaArchivedMutation,
-  useShotDeletePreflightMutation,
-  useShotOrderQuery,
-  useShotReadinessQuery,
-  useShotSpecVersionsQuery,
-  useSplitShotMutation,
-  useSplitShotPreflightMutation,
-  useStartExtractionMutation,
-  useStoryboardDraftQuery,
-  useStoryboardExportsQuery,
-  useSchedulesQuery,
-  useTasksQuery,
-  useTriggerScheduleMutation,
-  useUpdateShotMutation,
-  useUpdateAdaptationDraftMutation,
-} from "@/lib/server-state";
+import request, { ApiClientError } from "@/lib/request";
 
-import { EpisodeAssetOverview } from "./episode-asset-overview";
-import {
-  type EpisodePanel,
-  sha256File,
-  stageLabels,
-} from "./episode-studio-model";
-import { MediaWorkspace } from "./media-workspace";
-import { ScriptWorkspace } from "./script-workspace";
-import { type MergePreparation } from "./storyboard-shot-operations";
-import { StoryboardDrafts } from "./storyboard-drafts";
-import { StoryboardExports } from "./StoryboardExports";
-import { StoryboardCoverage } from "./storyboard-coverage";
-import { StoryboardWorkspace } from "./storyboard-workspace";
-import { TaskWorkspace } from "./task-workspace";
+import type { EpisodePanel } from "./episode-studio-model";
+
+type Envelope<T> = { data: T };
+type Episode = {
+  id: string;
+  project_id: string;
+  name: string;
+  position: number;
+  target_duration_ms: number;
+  current_script_version_id: string | null;
+};
+type Project = { id: string; name: string; aspect_ratio: string };
+type Task = { id: string; kind: string; label: string; status: string; required: boolean };
+type NarrativeUnit = { id: string; kind: string; text: string };
+type Dialogue = { id: string; speaker: string; text: string };
+type Scene = {
+  id: string;
+  heading: string;
+  position: number;
+  narrative_units: NarrativeUnit[];
+  dialogues: Dialogue[];
+  tasks: Task[];
+};
+type Structure = {
+  id: string;
+  status: "needs_review" | "confirmed" | "superseded";
+  revision: number;
+  script_version_id: string;
+  scenes: Scene[];
+};
+type DraftShot = {
+  proposal_key: string;
+  position: number;
+  title: string;
+  narrative_unit_version_ids: string[];
+  spec: { duration_ms?: number; visual?: { shot_size?: string; camera_movement?: string } };
+  risk_codes: string[];
+};
+type DraftBatch = {
+  id: string;
+  status: "queued" | "running" | "needs_review" | "approved" | "applied" | "failed" | "unknown";
+  revision: number;
+  candidate: { shots: DraftShot[] };
+  decisions: Record<string, string>;
+  result_hash: string | null;
+};
+type Shot = {
+  id: string;
+  position: number;
+  title: string;
+  content_hash: string;
+  spec: DraftShot["spec"];
+};
+type ApplyPreflight = {
+  batch_id: string;
+  batch_revision: number;
+  order_hash: string;
+  impact_hash: string;
+  created: number;
+};
+type ExportPreflight = {
+  order_hash: string;
+  allowed: boolean;
+  shot_count: number;
+  blockers: Array<{ code: string; summary: string }>;
+};
+type StoryboardExport = {
+  id: string;
+  content_hash: string;
+  download_url: string;
+  files: Array<{ Name?: string; name?: string }>;
+};
+
+const panels: Array<{ id: EpisodePanel; label: string }> = [
+  { id: "script", label: "剧本结构" },
+  { id: "assets", label: "项目事实" },
+  { id: "storyboard", label: "分镜设计" },
+  { id: "media", label: "媒体" },
+  { id: "tasks", label: "制作任务" },
+];
+
+function key(prefix: string) {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
+
+async function optional<T>(operation: Promise<Envelope<T>>): Promise<T | undefined> {
+  try {
+    return (await operation).data;
+  } catch (error) {
+    if (error instanceof ApiClientError && error.code === "not_found") return undefined;
+    throw error;
+  }
+}
 
 export function EpisodeProductionStudio({
   episodeId,
@@ -124,1561 +118,253 @@ export function EpisodeProductionStudio({
   episodeId: string;
   initialPanel: EpisodePanel;
 }) {
-  const sessionState = useAuthSessionState();
-  const authenticated = sessionState === "authenticated";
-  const me = useMeQuery(undefined, { skip: !authenticated });
-  const workspaceId = me.data?.workspace.id;
-  const episodeQuery = useEpisodeQuery(episodeId, { skip: !authenticated });
-  const episode = episodeQuery.data;
-  const projectQuery = useProjectQuery(episode?.project_id ?? "", { skip: !episode });
-  const project = projectQuery.data;
-  const episodesQuery = useEpisodesQuery(episode?.project_id ?? "", {
-    skip: !episode,
-  });
-  const snapshotQuery = useEpisodeSnapshotQuery(episodeId, {
-    pollingInterval: 5_000,
-    skip: !authenticated,
-  });
-  const snapshot = snapshotQuery.data;
-  const sourcesQuery = useScriptSourcesQuery(episodeId, { skip: !authenticated });
-  const currentVersionQuery = useScriptVersionQuery(
-    episode?.current_script_version_id ?? "",
-    { skip: !episode?.current_script_version_id },
-  );
-  const scriptActive = initialPanel === "script";
-  const narrativeStructureQuery = useNarrativeStructureQuery(
-    episode?.current_script_version_id ?? "",
-    {
-      skip: !episode?.current_script_version_id || !scriptActive,
-    },
-  );
-  const sources = sourcesQuery.data?.items ?? [];
-  const activeSource =
-    sources.find((source) => source.id === currentVersionQuery.data?.source_id) ??
-    sources[0];
-  const versionsQuery = useScriptVersionsQuery(activeSource?.id ?? "", {
-    skip: !activeSource,
-  });
-  const versions = versionsQuery.data?.items ?? [];
-  const editableVersion =
-    currentVersionQuery.data ?? versions.at(-1);
-  const tasksQuery = useTasksQuery(workspaceId ?? "", {
-    pollingInterval: 4_000,
-    skip: !workspaceId,
-  });
-  const taskCenterActive = initialPanel === "tasks";
-  const modelCapabilitiesQuery = useModelCapabilitiesQuery(workspaceId ?? "", {
-    skip: !workspaceId || !taskCenterActive,
-  });
-  const costsQuery = useCostsQuery(
-    {
-      workspaceId: workspaceId ?? "",
-      projectId: episode?.project_id ?? "",
-    },
-    {
-      skip: !workspaceId || !episode?.project_id || !taskCenterActive,
-    },
-  );
-  const schedulesQuery = useSchedulesQuery(workspaceId ?? "", {
-    pollingInterval: 10_000,
-    skip: !workspaceId || !taskCenterActive,
-  });
-  const workspaceTasks = tasksQuery.data?.items;
-  const episodeTasks = useMemo(
-    () =>
-      (workspaceTasks ?? []).filter(
-        (task) => task.scope.episode_id === episodeId,
-      ),
-    [episodeId, workspaceTasks],
-  );
-  const [startedBatchId, setStartedBatchId] = useState<string | null>(null);
-  const taskBatchId = episodeTasks.find(
-    (task) => task.task_type === "script_extraction",
-  )?.request_id;
-  const batchId =
-    startedBatchId ?? snapshot?.script_summary.extraction_batch_id ?? taskBatchId;
-  const batchQuery = useExtractionBatchQuery(batchId ?? "", {
-    pollingInterval: 4_000,
-    skip: !batchId,
-  });
-  const candidatesQuery = useExtractionCandidatesQuery(batchId ?? "", {
-    pollingInterval: batchQuery.data?.status === "running" ? 4_000 : 0,
-    skip: !batchId,
-  });
-  const [startedAdaptationRunId, setStartedAdaptationRunId] = useState<
-    string | null | undefined
-  >(undefined);
-  const taskAdaptationRunId = episodeTasks.find(
-    (task) => task.task_type === "script_adaptation",
-  )?.request_id;
-  const adaptationRunId =
-    startedAdaptationRunId === undefined
-      ? taskAdaptationRunId
-      : startedAdaptationRunId;
-  const adaptationRunQuery = useAdaptationRunQuery(adaptationRunId ?? "", {
-    pollingInterval: adaptationRunId ? 3_000 : 0,
-    skip: !adaptationRunId,
-  });
-  const adaptationRun = adaptationRunId ? adaptationRunQuery.data : undefined;
-  const assetsQuery = useAssetsQuery(episode?.project_id ?? "", { skip: !episode });
-  const assetBibleQuery = useAssetBibleQuery(episode?.project_id ?? "", {
-    skip: !episode,
-  });
-  const mediaQuery = useMediaVersionsQuery(workspaceId ?? "", { skip: !workspaceId });
-  const [locationVersionId, setLocationVersionId] = useState<string | null>(null);
-  const mediaLocationsQuery = useMediaLocationsQuery(locationVersionId ?? "", {
-    pollingInterval: locationVersionId ? 4_000 : 0,
-    skip: !locationVersionId,
-  });
-  const storyboardActive = initialPanel === "storyboard";
-  const shotOrderQuery = useShotOrderQuery(episodeId, {
-    skip: !authenticated || !storyboardActive,
-  });
-  const archivedShotsQuery = useArchivedShotsQuery(episodeId, {
-    skip: !authenticated || !storyboardActive,
-  });
-  const shotReadinessQuery = useShotReadinessQuery(episodeId, {
-    pollingInterval: 5_000,
-    skip: !authenticated || !storyboardActive,
-  });
-  const coverageQuery = useCoverageQuery(episodeId, {
-    pollingInterval: 5_000,
-    skip: !authenticated || !storyboardActive,
-  });
-  const storyboardExportsQuery = useStoryboardExportsQuery(episodeId, {
-    pollingInterval: 3_000,
-    skip: !authenticated || !storyboardActive,
-  });
-  const confirmedVersionId =
-    snapshot?.script_summary.status === "confirmed"
-      ? episode?.current_script_version_id
-      : null;
-  const structureQuery = useConfirmedStructureQuery(confirmedVersionId ?? "", {
-    skip: !confirmedVersionId || !storyboardActive,
-  });
-  const taskDraftBatchId = episodeTasks.find(
-    (task) => task.task_type === "storyboard_draft",
-  )?.request_id;
-  const [startedDraftBatchId, setStartedDraftBatchId] = useState<
-    string | null | undefined
-  >(undefined);
-  const draftBatchId =
-    startedDraftBatchId === undefined ? taskDraftBatchId : startedDraftBatchId;
-  const draftBatchQuery = useStoryboardDraftQuery(draftBatchId ?? "", {
-    pollingInterval: draftBatchId ? 3_000 : 0,
-    skip: !draftBatchId || !storyboardActive,
-  });
-  const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
-  const selectedShot =
-    shotOrderQuery.data?.items.find((shot) => shot.id === selectedShotId) ??
-    shotOrderQuery.data?.items[0];
-  const confirmedShotCandidates = useMemo(() => {
-    const usedCandidateIds = new Set(
-      [
-        ...(shotOrderQuery.data?.items ?? []),
-        ...(archivedShotsQuery.data ?? []),
-      ].flatMap((shot) =>
-        shot.source_candidate_id ? [shot.source_candidate_id] : [],
-      ),
+  const authState = useAuthSessionState();
+  const [episode, setEpisode] = useState<Episode>();
+  const [project, setProject] = useState<Project>();
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [structure, setStructure] = useState<Structure>();
+  const [batch, setBatch] = useState<DraftBatch>();
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [applyPreflight, setApplyPreflight] = useState<ApplyPreflight>();
+  const [exportPreflight, setExportPreflight] = useState<ExportPreflight>();
+  const [storyboardExport, setStoryboardExport] = useState<StoryboardExport>();
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [notice, setNotice] = useState<string>();
+
+  const loadBatch = useCallback(async () => {
+    const value = await optional(
+      request<Envelope<DraftBatch>>(`/api/v1/episodes/${episodeId}/storyboard-draft`),
     );
-    return (candidatesQuery.data?.items ?? []).filter(
-      (candidate) =>
-        candidate.kind === "shot" &&
-        candidate.proposal.kind === "shot" &&
-        candidate.status === "accepted" &&
-        !usedCandidateIds.has(candidate.id),
-    );
-  }, [
-    archivedShotsQuery.data,
-    candidatesQuery.data?.items,
-    shotOrderQuery.data?.items,
-  ]);
-  const shotSpecVersionsQuery = useShotSpecVersionsQuery(selectedShot?.id ?? "", {
-    skip: !selectedShot || !storyboardActive,
-  });
-  const storyboardLoading =
-    storyboardActive &&
-    (shotOrderQuery.isLoading ||
-      archivedShotsQuery.isLoading ||
-      shotReadinessQuery.isLoading ||
-      coverageQuery.isLoading ||
-      storyboardExportsQuery.isLoading ||
-      structureQuery.isLoading);
-  const scriptLoading =
-    scriptActive &&
-    Boolean(episode?.current_script_version_id) &&
-    narrativeStructureQuery.isLoading;
+    setBatch(value);
+    return value;
+  }, [episodeId]);
 
-  const [importScript, importState] = useImportScriptMutation();
-  const [publishVersion, publishState] = usePublishScriptVersionMutation();
-  const [startExtraction, extractionState] = useStartExtractionMutation();
-  const [decideCandidate, decisionState] = useDecideExtractionCandidateMutation();
-  const [confirmStructure, confirmationState] = useConfirmStructureMutation();
-  const [setCurrentVersion, currentState] = useSetCurrentScriptVersionMutation();
-  const [reviseNarrativeStructure, narrativeRevisionState] =
-    useReviseNarrativeStructureMutation();
-  const [loadScriptVersionDiff, scriptDiffState] =
-    useLazyScriptVersionDiffQuery();
-  const [setScriptSourceArchived, scriptSourceState] =
-    useSetScriptSourceArchivedMutation();
-  const [deleteScriptVersion, scriptDeleteState] =
-    useDeleteScriptVersionMutation();
-  const [createAdaptationRun, adaptationCreateState] =
-    useCreateAdaptationRunMutation();
-  const [updateAdaptationDraft, adaptationDraftState] =
-    useUpdateAdaptationDraftMutation();
-  const [loadAdaptationDiff, adaptationDiffState] =
-    useLazyAdaptationDiffQuery();
-  const [publishAdaptationRun, adaptationPublishState] =
-    usePublishAdaptationRunMutation();
-  const [cancelAdaptationRun, adaptationCancelState] =
-    useCancelAdaptationRunMutation();
-  const [initializeUpload, initializationState] = useInitializeMediaUploadMutation();
-  const [initializeVersionUpload, versionInitializationState] =
-    useInitializeMediaVersionUploadMutation();
-  const [completeUpload, completionState] = useCompleteMediaUploadMutation();
-  const [retryProbe, retryState] = useRetryMediaProbeMutation();
-  const [requestLocationMigration, locationMigrationState] =
-    useRequestMediaLocationMigrationMutation();
-  const [requestLocationRollback, locationRollbackState] =
-    useRequestMediaLocationRollbackMutation();
-  const [configureSchedule, configureScheduleState] =
-    useConfigureScheduleMutation();
-  const [pauseSchedule, pauseScheduleState] = usePauseScheduleMutation();
-  const [resumeSchedule, resumeScheduleState] = useResumeScheduleMutation();
-  const [triggerSchedule, triggerScheduleState] = useTriggerScheduleMutation();
-  const [cancelGenerationTask, cancelGenerationTaskState] =
-    useCancelGenerationTaskMutation();
-  const [setCurrentMediaVersion, mediaCurrentState] =
-    useSetCurrentMediaVersionMutation();
-  const [setMediaArchived, mediaArchiveState] = useSetMediaArchivedMutation();
-  const [createShot, createShotState] = useCreateShotMutation();
-  const [createStoryboardDraft, storyboardDraftCreateState] =
-    useCreateStoryboardDraftMutation();
-  const [decideStoryboardDraft, storyboardDraftDecisionState] =
-    useDecideStoryboardDraftMutation();
-  const [approveStoryboardDraft, storyboardDraftApproveState] =
-    useApproveStoryboardDraftMutation();
-  const [preflightStoryboardDraft, storyboardDraftPreflightState] =
-    usePreflightStoryboardDraftMutation();
-  const [applyStoryboardDraft, storyboardDraftApplyState] =
-    useApplyStoryboardDraftMutation();
-  const [createShotFromCandidate, createShotFromCandidateState] =
-    useCreateShotFromCandidateMutation();
-  const [updateShot, updateShotState] = useUpdateShotMutation();
-  const [appendShotSpec, appendShotSpecState] = useAppendShotSpecMutation();
-  const [reorderShots, reorderShotsState] = useReorderShotsMutation();
-  const [copyShot, copyShotState] = useCopyShotMutation();
-  const [setShotArchived, shotArchiveState] = useSetShotArchivedMutation();
-  const [setCurrentShotSpec, currentShotSpecState] =
-    useSetCurrentShotSpecMutation();
-  const [splitShotPreflight, splitPreflightState] =
-    useSplitShotPreflightMutation();
-  const [splitShot, splitShotState] = useSplitShotMutation();
-  const [mergeShotsPreflight, mergePreflightState] =
-    useMergeShotsPreflightMutation();
-  const [mergeShots, mergeShotsState] = useMergeShotsMutation();
-  const [shotDeletePreflight, shotDeletePreflightState] =
-    useShotDeletePreflightMutation();
-  const [deleteShot, deleteShotState] = useDeleteShotMutation();
-  const [replaceNarrativeReferences, narrativeReferenceState] =
-    useReplaceNarrativeReferencesMutation();
-  const [decideCoverage, coverageDecisionState] = useDecideCoverageMutation();
-  const [preflightStoryboardExport, storyboardExportPreflightState] =
-    usePreflightStoryboardExportMutation();
-  const [requestStoryboardExport, storyboardExportRequestState] =
-    useRequestStoryboardExportMutation();
-  const [createMediaAccess, mediaAccessState] = useCreateMediaAccessMutation();
-  const [loadShotSpecVersion, shotSpecLookupState] =
-    useLazyShotSpecVersionQuery();
-  const [notice, setNotice] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [scriptVersionImpact, setScriptVersionImpact] =
-    useState<API.ScriptVersionImpactResponse | null>(null);
-  const [adaptationDifference, setAdaptationDifference] =
-    useState<API.AdaptationDiffResponse | null>(null);
+  useEffect(() => {
+    if (authState !== "authenticated") return;
+    let active = true;
+    void (async () => {
+      try {
+        setLoading(true);
+        const episodeResponse = await request<Envelope<Episode>>(`/api/v1/episodes/${episodeId}`);
+        const currentEpisode = episodeResponse.data;
+        const [projectResponse, episodeList, currentStructure, currentBatch, currentExport] = await Promise.all([
+          request<Envelope<Project>>(`/api/v1/projects/${currentEpisode.project_id}`),
+          request<Envelope<Episode[]>>(`/api/v1/projects/${currentEpisode.project_id}/episodes`),
+          optional(request<Envelope<Structure>>(`/api/v1/episodes/${episodeId}/structure`)),
+          optional(request<Envelope<DraftBatch>>(`/api/v1/episodes/${episodeId}/storyboard-draft`)),
+          optional(request<Envelope<StoryboardExport>>(`/api/v1/episodes/${episodeId}/storyboard-export`)),
+        ]);
+        const shotResponse = await request<Envelope<Shot[]>>(`/api/v1/episodes/${episodeId}/shots`);
+        if (!active) return;
+        setEpisode(currentEpisode);
+        setProject(projectResponse.data);
+        setEpisodes(episodeList.data);
+        setStructure(currentStructure);
+        setBatch(currentBatch);
+        setStoryboardExport(currentExport);
+        setShots(shotResponse.data);
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : "无法加载剧集工作台");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [authState, episodeId]);
 
-  const busy = [
-    importState,
-    publishState,
-    extractionState,
-    decisionState,
-    confirmationState,
-    currentState,
-    narrativeRevisionState,
-    scriptDiffState,
-    scriptSourceState,
-    scriptDeleteState,
-    adaptationCreateState,
-    adaptationDraftState,
-    adaptationDiffState,
-    adaptationPublishState,
-    adaptationCancelState,
-    initializationState,
-    versionInitializationState,
-    completionState,
-    retryState,
-    locationMigrationState,
-    locationRollbackState,
-    configureScheduleState,
-    pauseScheduleState,
-    resumeScheduleState,
-    triggerScheduleState,
-    cancelGenerationTaskState,
-    mediaCurrentState,
-    mediaArchiveState,
-    createShotState,
-    storyboardDraftCreateState,
-    storyboardDraftDecisionState,
-    storyboardDraftApproveState,
-    storyboardDraftPreflightState,
-    storyboardDraftApplyState,
-    createShotFromCandidateState,
-    updateShotState,
-    appendShotSpecState,
-    reorderShotsState,
-    copyShotState,
-    shotArchiveState,
-    currentShotSpecState,
-    splitPreflightState,
-    splitShotState,
-    mergePreflightState,
-    mergeShotsState,
-    shotDeletePreflightState,
-    deleteShotState,
-    narrativeReferenceState,
-    coverageDecisionState,
-    storyboardExportPreflightState,
-    storyboardExportRequestState,
-    mediaAccessState,
-    shotSpecLookupState,
-  ].some((state) => state.isLoading);
+  useEffect(() => {
+    if (batch?.status !== "queued" && batch?.status !== "running") return;
+    const timer = window.setInterval(() => {
+      void loadBatch().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "候选状态刷新失败"));
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [batch?.status, loadBatch]);
 
-  async function runAction(action: () => Promise<string>): Promise<boolean> {
-    setActionError(null);
-    setNotice(null);
-    try {
-      setNotice(await action());
-      return true;
-    } catch (error: unknown) {
-      setActionError(appApiErrorMessage(error));
-      return false;
-    }
+  const tasks = useMemo(
+    () => structure?.scenes.flatMap((scene) => scene.tasks) ?? [],
+    [structure],
+  );
+  const allTasksAccepted = tasks.length > 0 && tasks.every((task) => !task.required || task.status === "accepted");
+  const acceptedDrafts = batch?.candidate.shots.filter((shot) => batch.decisions[shot.proposal_key] === "accepted").length ?? 0;
+
+  async function run(operation: () => Promise<void>) {
+    setBusy(true);
+    setError(undefined);
+    setNotice(undefined);
+    try { await operation(); } catch (cause) { setError(cause instanceof Error ? cause.message : "操作失败"); } finally { setBusy(false); }
   }
 
-  async function handleImport(request: API.ScriptImportRequest) {
-    await runAction(async () => {
-      const result = await importScript({ episodeId, body: request }).unwrap();
-      return `剧本《${result.source.title}》已导入为 v${result.version.version_no} 草稿。`;
-    });
-  }
-
-  async function handlePauseSchedule(schedule: API.ScheduleResponse) {
-    if (!workspaceId) return;
-    await runAction(async () => {
-      await pauseSchedule({
-        scheduleId: schedule.id,
-        workspaceId,
-        body: { expected_revision: schedule.revision },
-      }).unwrap();
-      return "上传过期清理计划已暂停；已创建的清理任务不会被取消。";
-    });
-  }
-
-  async function handleConfigureSchedule(
-    schedule: API.ScheduleResponse,
-    configuration: Omit<
-      API.ScheduleConfigurationRequest,
-      "expected_revision" | "effective_from"
-    >,
-  ): Promise<boolean> {
-    if (!workspaceId) return false;
-    return runAction(async () => {
-      await configureSchedule({
-        scheduleId: schedule.id,
-        workspaceId,
-        body: {
-          ...configuration,
-          expected_revision: schedule.revision,
-          effective_from: new Date().toISOString(),
-        },
-      }).unwrap();
-      return "补偿清理计划配置已保存；下一触发时刻由服务端时区规则计算。";
-    });
-  }
-
-  async function handleResumeSchedule(
-    schedule: API.ScheduleResponse,
-    misfirePolicy: API.ScheduleResumeRequest["misfire_policy"],
-    maxCatchUp: number,
-  ): Promise<boolean> {
-    if (!workspaceId) return false;
-    return runAction(async () => {
-      await resumeSchedule({
-        scheduleId: schedule.id,
-        workspaceId,
-        body: {
-          expected_revision: schedule.revision,
-          resume_from: new Date().toISOString(),
-          misfire_policy: misfirePolicy,
-          max_catch_up: maxCatchUp,
-        },
-      }).unwrap();
-      return `清理计划已恢复，并将按 ${misfirePolicy} 策略处理到期工作。`;
-    });
-  }
-
-  async function handleTriggerSchedule(schedule: API.ScheduleResponse) {
-    if (!workspaceId) return;
-    await runAction(async () => {
-      const fire = await triggerSchedule({
-        scheduleId: schedule.id,
-        workspaceId,
-        body: {
-          expected_revision: schedule.revision,
-          idempotency_key: `studio-schedule-trigger:${crypto.randomUUID()}`,
-        },
-      }).unwrap();
-      return `清理任务已创建，任务 ID：${fire.task.id}`;
-    });
-  }
-
-  async function handleCancelGenerationTask(
-    task: API.TaskResponse,
-  ): Promise<boolean> {
-    if (!workspaceId || !episode) return false;
-    return runAction(async () => {
-      const result = await cancelGenerationTask({
-        taskId: task.id,
-        projectId: episode.project_id,
-        body: {
-          workspace_id: workspaceId,
-          expected_revision: task.revision,
-          idempotency_key: `studio-generation-cancel:${crypto.randomUUID()}`,
-          reason: "user_requested",
-        },
-      }).unwrap();
-      return `生成任务已取消，已释放 ${result.release_cost_entry.currency} ${result.release_cost_entry.amount} 预占。`;
-    });
-  }
-
-  async function handlePublish(body: string) {
-    if (!activeSource || !episode) return;
-    await runAction(async () => {
-      const result = await publishVersion({
-        episodeId,
-        sourceId: activeSource.id,
-        body: {
-          body,
-          expected_current_version_id: episode.current_script_version_id,
-        },
-      }).unwrap();
-      setStartedBatchId(null);
-      return `剧本 v${result.version.version_no} 已发布并设为当前版本。`;
-    });
-  }
-
-  async function handleStartExtraction() {
-    const versionId = episode?.current_script_version_id;
-    if (!versionId || !workspaceId) return;
-    await runAction(async () => {
-      const result = await startExtraction({
-        episodeId,
-        workspaceId,
-        versionId,
-        body: {
-          scope: "full",
-          idempotency_key: `studio-extraction:${versionId}:${crypto.randomUUID()}`,
-        },
-      }).unwrap();
-      setStartedBatchId(result.id);
-      return "提取任务已创建，可以离开页面后再回来查看状态。";
-    });
-  }
-
-  async function handleDecision(
-    candidate: API.ExtractionCandidateResponse,
-    decision: API.CandidateDecisionRequest["decision"],
-  ): Promise<boolean> {
-    if (!batchId || !episode?.project_id) return false;
-    let succeeded = false;
-    await runAction(async () => {
-      await decideCandidate({
-        candidateId: candidate.id,
-        batchId,
-        episodeId,
-        projectId: episode.project_id,
-        body: {
-          decision_key: `studio-decision:${candidate.id}:${crypto.randomUUID()}`,
-          expected_revision: candidate.revision,
-          decision,
-        },
-      }).unwrap();
-      succeeded = true;
-      return `候选“${candidate.candidate_key}”已完成决议。`;
-    });
-    return succeeded;
-  }
-
-  async function handleConfirm() {
-    if (!batchId) return;
-    await runAction(async () => {
-      const result = await confirmStructure({ batchId, episodeId }).unwrap();
-      return `结构已确认，生成剧本 v${result.confirmed_version.version_no}。`;
-    });
-  }
-
-  async function handleSetCurrent(
-    versionId: string,
-  ): Promise<API.CurrentScriptVersionResponse | undefined> {
-    if (!episode) return undefined;
-    let result: API.CurrentScriptVersionResponse | undefined;
-    await runAction(async () => {
-      result = await setCurrentVersion({
-        episodeId,
-        body: {
-          version_id: versionId,
-          expected_current_version_id: episode.current_script_version_id,
-        },
-      }).unwrap();
-      setScriptVersionImpact(result.impact);
-      setStartedBatchId(null);
-      const affected = result.impact.affected_shot_ids.length;
-      return affected
-        ? `剧本版本已切换；${affected} 个镜头仍引用其他版本。`
-        : "剧本版本已切换；现有镜头均引用该版本。";
-    });
-    return result;
-  }
-
-  async function handleReviseNarrative(
-    request: API.NarrativeStructureRevisionRequest,
-  ) {
-    const structure = narrativeStructureQuery.data;
+  async function acceptTask(task: Task) {
     if (!structure) return;
-    await runAction(async () => {
-      const result = await reviseNarrativeStructure({
-        episodeId,
-        versionId: structure.script_version_id,
-        structureId: structure.id,
-        body: request,
-      }).unwrap();
-      return `叙事结构已追加 revision ${result.structure.revision}；分镜准备度、覆盖和导出依赖已失效重算。`;
+    await run(async () => {
+      const response = await request<Envelope<Structure>>(`/api/v1/episode-structures/${structure.id}/tasks/${task.id}/accept`, { method: "POST", data: { expected_revision: structure.revision, idempotency_key: key("accept-task") } });
+      setStructure(response.data);
+      setNotice(`已接受制作任务：${task.label}`);
     });
   }
 
-  async function handleCompareVersions(
-    versionId: string,
-    otherVersionId: string,
-  ): Promise<API.ScriptVersionDiffResponse | undefined> {
-    let result: API.ScriptVersionDiffResponse | undefined;
-    await runAction(async () => {
-      result = await loadScriptVersionDiff(
-        { versionId, otherVersionId },
-        true,
-      ).unwrap();
-      return "剧本版本差异已加载。";
-    });
-    return result;
-  }
-
-  async function handleSetScriptSourceArchived(
-    source: API.ScriptSourceResponse,
-  ): Promise<boolean> {
-    let succeeded = false;
-    await runAction(async () => {
-      const archived = source.status === "active";
-      await setScriptSourceArchived({
-        episodeId,
-        sourceId: source.id,
-        expectedRevision: source.revision,
-        archived,
-      }).unwrap();
-      succeeded = true;
-      return archived ? "剧本来源已归档，历史版本仍可读取。" : "剧本来源已恢复。";
-    });
-    return succeeded;
-  }
-
-  async function handleDeleteScriptDraft(
-    version: API.ScriptVersionResponse,
-  ): Promise<boolean> {
-    if (!activeSource) return false;
-    let succeeded = false;
-    await runAction(async () => {
-      await deleteScriptVersion({
-        sourceId: activeSource.id,
-        versionId: version.id,
-      }).unwrap();
-      succeeded = true;
-      return `剧本草稿 v${version.version_no} 已删除。`;
-    });
-    return succeeded;
-  }
-
-  async function handleCreateAdaptation(
-    request: API.AdaptationRunCreateRequest,
-  ) {
-    await runAction(async () => {
-      const result = await createAdaptationRun({
-        episodeId,
-        body: request,
-      }).unwrap();
-      setStartedAdaptationRunId(result.id);
-      setAdaptationDifference(null);
-      return "剧本改写任务已创建；AI 只会生成候选，不会覆盖原稿。";
+  async function confirmStructure() {
+    if (!structure) return;
+    await run(async () => {
+      const response = await request<Envelope<Structure>>(`/api/v1/episode-structures/${structure.id}/confirm`, { method: "POST", data: { expected_revision: structure.revision, idempotency_key: key("confirm-structure") } });
+      setStructure(response.data);
+      setNotice(`结构已确认，生成剧本 v${response.data.revision} 的稳定叙事单元`);
     });
   }
 
-  async function handleSaveAdaptationDraft(body: string) {
-    const run = adaptationRun;
-    if (!run) return;
-    await runAction(async () => {
-      await updateAdaptationDraft({
-        runId: run.id,
-        body: { body, expected_revision: run.revision },
-      }).unwrap();
-      setAdaptationDifference(null);
-      return "改写工作稿已保存。";
+  async function createDraft() {
+    await run(async () => {
+      const response = await request<Envelope<DraftBatch>>(`/api/v1/episodes/${episodeId}/storyboard-drafts`, { method: "POST", data: { idempotency_key: key("storyboard-draft") } });
+      setBatch(response.data);
+      setApplyPreflight(undefined);
+      setNotice("分镜候选任务已进入队列");
     });
   }
 
-  async function handleCompareAdaptation() {
-    const run = adaptationRun;
-    if (!run) return;
-    await runAction(async () => {
-      setAdaptationDifference(
-        await loadAdaptationDiff(run.id, true).unwrap(),
-      );
-      return "已加载原稿与改写工作稿的服务端差异。";
-    });
-  }
-
-  async function handlePublishAdaptation() {
-    const run = adaptationRun;
-    const currentVersionId = episode?.current_script_version_id;
-    if (!run || !currentVersionId) return;
-    await runAction(async () => {
-      const result = await publishAdaptationRun({
-        episodeId,
-        sourceId: run.source_id,
-        runId: run.id,
-        body: {
-          expected_run_revision: run.revision,
-          expected_current_version_id: currentVersionId,
-          idempotency_key: `studio-adaptation-publish:${run.id}:${crypto.randomUUID()}`,
-        },
-      }).unwrap();
-      setScriptVersionImpact(result.current.impact);
-      setStartedBatchId(null);
-      return `改写稿已发布为 v${result.version.version_no} 并设为当前版本。`;
-    });
-  }
-
-  async function handleCancelAdaptation() {
-    const run = adaptationRun;
-    if (!run) return;
-    await runAction(async () => {
-      await cancelAdaptationRun({
-        runId: run.id,
-        body: {
-          expected_revision: run.revision,
-          idempotency_key: `studio-adaptation-cancel:${run.id}:${crypto.randomUUID()}`,
-        },
-      }).unwrap();
-      return "剧本改写任务已取消；原稿与当前版本未改变。";
-    });
-  }
-
-  async function handleUpload(
-    file: File,
-    kind: API.UploadDeclaration["kind"],
-  ): Promise<boolean> {
-    if (!workspaceId) return false;
-    let succeeded = false;
-    await runAction(async () => {
-      const sha256 = await sha256File(file);
-      const initialized = await initializeUpload({
-        workspace_id: workspaceId,
-        kind,
-        filename: file.name,
-        size_bytes: file.size,
-        mime_type: file.type || "application/octet-stream",
-        sha256,
-        idempotency_key: `studio-upload:${sha256}:${file.name}`,
-      }).unwrap();
-      const result = await uploadAndComplete(initialized, file, workspaceId);
-      succeeded = true;
-      return `${result.version.filename} 已上传，媒体探测任务已创建。`;
-    });
-    return succeeded;
-  }
-
-  async function uploadAndComplete(
-    initialized: API.UploadInitializationResponse,
-    file: File,
-    activeWorkspaceId: string,
-  ) {
-    if (!initialized.upload.url || !initialized.upload.method) {
-      throw new Error("对象存储未返回有效的上传地址");
-    }
-    const uploaded = await fetch(initialized.upload.url, {
-      method: initialized.upload.method,
-      headers: initialized.upload.headers as HeadersInit,
-      body: file,
-    });
-    if (!uploaded.ok) throw new Error(`对象存储返回 ${uploaded.status}`);
-    return completeUpload({
-      uploadSessionId: initialized.upload_session.id,
-      workspaceId: activeWorkspaceId,
-    }).unwrap();
-  }
-
-  async function handleAppendMediaVersion(
-    current: API.MediaVersionResponse,
-    file: File,
-  ): Promise<boolean> {
-    if (!workspaceId || !current.media_object_current_version_id) return false;
-    const expectedCurrentVersionId = current.media_object_current_version_id;
-    let succeeded = false;
-    await runAction(async () => {
-      const sha256 = await sha256File(file);
-      const initialized = await initializeVersionUpload({
-        mediaObjectId: current.media_object_id,
-        body: {
-          workspace_id: workspaceId,
-          kind: current.media_object_kind,
-          filename: file.name,
-          size_bytes: file.size,
-          mime_type: file.type || "application/octet-stream",
-          sha256,
-          idempotency_key: `studio-media-version:${current.media_object_id}:${sha256}:${file.name}`,
-          expected_current_version_id: expectedCurrentVersionId,
-        },
-      }).unwrap();
-      const result = await uploadAndComplete(initialized, file, workspaceId);
-      succeeded = true;
-      return `${result.version.filename} 已追加为 v${result.version.version_no} 并设为当前版本。`;
-    });
-    return succeeded;
-  }
-
-  async function handleSetCurrentMediaVersion(
-    version: API.MediaVersionResponse,
-  ) {
-    if (!workspaceId || !version.media_object_current_version_id) return;
-    const expectedCurrentVersionId = version.media_object_current_version_id;
-    await runAction(async () => {
-      await setCurrentMediaVersion({
-        mediaObjectId: version.media_object_id,
-        workspaceId,
-        body: {
-          version_id: version.id,
-          expected_current_version_id: expectedCurrentVersionId,
-          expected_revision: version.media_object_revision,
-        },
-      }).unwrap();
-      return `${version.filename} 已设为当前媒体版本。`;
-    });
-  }
-
-  async function handleToggleMediaArchived(
-    current: API.MediaVersionResponse,
-  ) {
-    if (!workspaceId) return;
-    const archived = current.media_object_status === "active";
-    await runAction(async () => {
-      await setMediaArchived({
-        mediaObjectId: current.media_object_id,
-        workspaceId,
-        archived,
-        body: { expected_revision: current.media_object_revision },
-      }).unwrap();
-      return archived
-        ? `${current.filename} 已归档，历史固定引用仍可读取。`
-        : `${current.filename} 已恢复，可继续追加版本和建立新引用。`;
-    });
-  }
-
-  async function handleRetry(version: API.MediaVersionResponse) {
-    if (!workspaceId) return;
-    await runAction(async () => {
-      await retryProbe({
-        versionId: version.id,
-        workspaceId,
-        body: { idempotency_key: `studio-probe-retry:${version.id}:${version.probe_attempt + 1}` },
-      }).unwrap();
-      return `${version.filename} 已重新进入探测队列。`;
-    });
-  }
-
-  async function handleLocationMigration(
-    version: API.MediaVersionResponse,
-    activeLocationId: string,
-  ) {
-    if (!workspaceId) return;
-    const locationEpoch =
-      mediaLocationsQuery.data?.items.find(
-        (location) => location.id !== activeLocationId,
-      )?.id ?? "initial";
-    await runAction(async () => {
-      await requestLocationMigration({
-        versionId: version.id,
-        workspaceId,
-        body: {
-          idempotency_key: `studio-location-migrate:${version.id}:${activeLocationId}:${locationEpoch}`,
-        },
-      }).unwrap();
-      return `${version.filename} 的位置迁移任务已创建；校验完成前仍从原位置读取。`;
-    });
-  }
-
-  async function handleLocationRollback(
-    version: API.MediaVersionResponse,
-    targetLocationId: string,
-    activeLocationId: string,
-  ) {
-    if (!workspaceId) return;
-    await runAction(async () => {
-      await requestLocationRollback({
-        versionId: version.id,
-        workspaceId,
-        body: {
-          target_location_id: targetLocationId,
-          idempotency_key: `studio-location-rollback:${version.id}:${targetLocationId}:${activeLocationId}`,
-        },
-      }).unwrap();
-      return `${version.filename} 的位置回滚任务已创建；旧 active 会重新进入完整保护窗口。`;
-    });
-  }
-
-  async function handleCreateShot(request: API.ShotCreateRequest): Promise<boolean> {
-    let succeeded = false;
-    await runAction(async () => {
-      const created = await createShot({ episodeId, body: request }).unwrap();
-      setSelectedShotId(created.id);
-      succeeded = true;
-      return `镜头“${created.title}”已加入清单。`;
-    });
-    return succeeded;
-  }
-
-  async function handleCreateStoryboardDraft(assetStateIds: string[]) {
-    if (!confirmedVersionId) return;
-    await runAction(async () => {
-      const created = await createStoryboardDraft({
-        episodeId,
-        body: {
-          input_script_version_id: confirmedVersionId,
-          asset_state_ids: assetStateIds,
-          idempotency_key: `studio-storyboard-draft:${crypto.randomUUID()}`,
-        },
-      }).unwrap();
-      setStartedDraftBatchId(created.id);
-      return `分镜草案批次已创建，固定了 ${created.input.narrative_unit_version_ids.length} 个叙事单元和 ${created.input.asset_version_ids.length} 个资产版本。`;
-    });
-  }
-
-  async function handleDecideStoryboardDraft(
-    draft: API.DraftShotResponse,
-    action: "accepted" | "modified" | "ignored",
-    target?: API.DraftTarget,
-  ) {
-    const batch = draftBatchQuery.data;
+  async function acceptDraft(shot: DraftShot) {
     if (!batch) return;
-    await runAction(async () => {
-      const result = await decideStoryboardDraft({
-        batchId: batch.id,
-        draftId: draft.id,
-        body: {
-          action,
-          expected_batch_revision: batch.revision,
-          idempotency_key: `studio-storyboard-decision:${crypto.randomUUID()}`,
-          target: target ?? null,
-        },
-      }).unwrap();
-      await draftBatchQuery.refetch();
-      return `镜头 ${String(draft.position).padStart(2, "0")} 已记录为 ${result.draft.decision_history.at(-1)?.action ?? action}。`;
+    await run(async () => {
+      const response = await request<Envelope<DraftBatch>>(`/api/v1/storyboard-draft-batches/${batch.id}/decisions`, { method: "POST", data: { proposal_key: shot.proposal_key, action: "accepted", expected_revision: batch.revision, idempotency_key: key("accept-shot") } });
+      setBatch(response.data);
+      setNotice(`已接受此镜：${shot.title}`);
     });
   }
 
-  async function handleApproveStoryboardDraft() {
-    const batch = draftBatchQuery.data;
+  async function approveBatch() {
     if (!batch) return;
-    await runAction(async () => {
-      await approveStoryboardDraft({
-        batchId: batch.id,
-        body: {
-          expected_revision: batch.revision,
-          idempotency_key: `studio-storyboard-approve:${crypto.randomUUID()}`,
-        },
-      }).unwrap();
-      await draftBatchQuery.refetch();
-      return "分镜草案已整批批准，正式镜头仍未写入。";
+    await run(async () => {
+      const response = await request<Envelope<DraftBatch>>(`/api/v1/storyboard-draft-batches/${batch.id}/approve`, { method: "POST", data: { expected_revision: batch.revision, idempotency_key: key("approve-storyboard") } });
+      setBatch(response.data);
+      setNotice("整批分镜草案已批准");
     });
   }
 
-  async function handleStoryboardDraftPreflight(): Promise<
-    API.DraftApplyPreflightResponse | undefined
-  > {
-    const batch = draftBatchQuery.data;
-    if (!batch) return undefined;
-    let preflight: API.DraftApplyPreflightResponse | undefined;
-    await runAction(async () => {
-      preflight = await preflightStoryboardDraft({
-        batchId: batch.id,
-        body: { expected_revision: batch.revision },
-      }).unwrap();
-      return `写入预检通过：保留 ${preflight.diff.kept} 个现有镜头，新建 ${preflight.diff.created} 个镜头。`;
-    });
-    return preflight;
-  }
-
-  async function handleApplyStoryboardDraft(
-    preflight: API.DraftApplyPreflightResponse,
-  ) {
-    const batch = draftBatchQuery.data;
+  async function preflightApply() {
     if (!batch) return;
-    await runAction(async () => {
-      const result = await applyStoryboardDraft({
-        episodeId,
-        batchId: batch.id,
-        body: {
-          expected_revision: preflight.batch_revision,
-          expected_order_hash: preflight.order_hash,
-          impact_hash: preflight.impact_hash,
-          idempotency_key: `studio-storyboard-apply:${crypto.randomUUID()}`,
-        },
-      }).unwrap();
-      setSelectedShotId(result.created_shot_ids[0] ?? selectedShotId);
-      await Promise.all([draftBatchQuery.refetch(), shotOrderQuery.refetch()]);
-      return `已原子写入 ${result.created_shot_ids.length} 个正式镜头。`;
+    await run(async () => {
+      const response = await request<Envelope<ApplyPreflight>>(`/api/v1/storyboard-draft-batches/${batch.id}/apply-preflight`, { method: "POST", data: { expected_revision: batch.revision } });
+      setApplyPreflight(response.data);
+      setNotice(`预检完成：将创建 ${response.data.created} 个正式镜头`);
     });
   }
 
-  async function handleCreateShotFromCandidate(
-    candidate: API.ExtractionCandidateResponse,
-  ): Promise<boolean> {
-    let succeeded = false;
-    await runAction(async () => {
-      const created = await createShotFromCandidate({
-        candidateId: candidate.id,
-        episodeId,
-      }).unwrap();
-      setSelectedShotId(created.id);
-      succeeded = true;
-      return `已确认候选“${created.title}”已加入镜头清单。`;
-    });
-    return succeeded;
-  }
-
-  async function handleUpdateShot(
-    shot: API.ShotResponse,
-    title: string,
-  ): Promise<boolean> {
-    let succeeded = false;
-    await runAction(async () => {
-      const updated = await updateShot({
-        episodeId,
-        shotId: shot.id,
-        body: { expected_revision: shot.revision, title },
-      }).unwrap();
-      succeeded = true;
-      return `镜头标题已更新为“${updated.title}”。`;
-    });
-    return succeeded;
-  }
-
-  async function handleSaveShotSpec(
-    shotId: string,
-    request: API.ShotSpecCreateRequest,
-  ): Promise<boolean> {
-    let succeeded = false;
-    await runAction(async () => {
-      const result = await appendShotSpec({
-        episodeId,
-        shotId,
-        body: request,
-      }).unwrap();
-      await Promise.all([
-        shotOrderQuery.refetch(),
-        shotSpecVersionsQuery.refetch(),
-      ]);
-      succeeded = true;
-      return `镜头规格 v${result.version.version_no} 已保存，准备度将按最新事实刷新。`;
-    });
-    return succeeded;
-  }
-
-  async function handleReorderShots(shotIds: string[]) {
-    const order = shotOrderQuery.data;
-    if (!order) return;
-    if (selectedShot) setSelectedShotId(selectedShot.id);
-    await runAction(async () => {
-      await reorderShots({
-        episodeId,
-        body: { shot_ids: shotIds, expected_order_hash: order.order_hash },
-      }).unwrap();
-      return "镜头顺序已更新。";
+  async function applyDraft() {
+    if (!batch || !applyPreflight) return;
+    await run(async () => {
+      const response = await request<Envelope<{ batch: DraftBatch; shots: Shot[] }>>(`/api/v1/storyboard-draft-batches/${batch.id}/apply`, { method: "POST", data: { expected_revision: applyPreflight.batch_revision, expected_order_hash: applyPreflight.order_hash, impact_hash: applyPreflight.impact_hash, idempotency_key: key("apply-storyboard") } });
+      setBatch(response.data.batch);
+      setShots(response.data.shots);
+      setExportPreflight(undefined);
+      setNotice(`已原子写入 ${response.data.shots.length} 个正式镜头`);
     });
   }
 
-  async function handleCopyShot(shot: API.ShotResponse) {
-    const order = shotOrderQuery.data;
-    const sourceSpecVersionId = shot.current_spec_version_id;
-    if (!order || !sourceSpecVersionId) return;
-    await runAction(async () => {
-      const result = await copyShot({
-        episodeId,
-        shotId: shot.id,
-        body: {
-          title: `${shot.title} · 副本`,
-          expected_source_spec_version_id: sourceSpecVersionId,
-          expected_order_hash: order.order_hash,
-          idempotency_key: `studio-copy:${shot.id}:${crypto.randomUUID()}`,
-        },
-      }).unwrap();
-      const copiedId = result.transform.result_shot_ids[0];
-      if (copiedId) setSelectedShotId(copiedId);
-      return `镜头“${shot.title}”已复制，历史生产证据不会被继承。`;
+  async function preflightExportPackage() {
+    await run(async () => {
+      const response = await request<Envelope<ExportPreflight>>(`/api/v1/episodes/${episodeId}/storyboard-exports/preflight`, { method: "POST", data: {} });
+      setExportPreflight(response.data);
+      setNotice(response.data.allowed ? "分镜包导出条件已满足" : "分镜包仍有阻塞项");
     });
   }
 
-  async function handleSetCurrentShotSpec(
-    shot: API.ShotResponse,
-    version: API.ShotSpecVersionResponse,
-  ) {
-    await runAction(async () => {
-      await setCurrentShotSpec({
-        episodeId,
-        shotId: shot.id,
-        body: {
-          version_id: version.id,
-          expected_current_spec_version_id: shot.current_spec_version_id,
-          expected_revision: shot.revision,
-        },
-      }).unwrap();
-      await Promise.all([
-        shotOrderQuery.refetch(),
-        shotSpecVersionsQuery.refetch(),
-      ]);
-      return `镜头“${shot.title}”已切换到规格 v${version.version_no}。`;
+  async function createExportPackage() {
+    if (!exportPreflight?.allowed) return;
+    await run(async () => {
+      const response = await request<Envelope<StoryboardExport>>(`/api/v1/episodes/${episodeId}/storyboard-exports`, { method: "POST", data: { expected_order_hash: exportPreflight.order_hash, idempotency_key: key("storyboard-export") } });
+      setStoryboardExport(response.data);
+      setNotice(`分镜包已生成，内容哈希 ${response.data.content_hash.slice(0, 12)}…`);
     });
   }
 
-  async function handleReplaceNarrativeReferences(
-    shot: API.ShotResponse,
-    references: API.NarrativeReferenceInput[],
-  ): Promise<boolean> {
-    const report = coverageQuery.data;
-    const currentSpecVersionId = shot.current_spec_version_id;
-    if (!report || !currentSpecVersionId) return false;
-    let succeeded = false;
-    await runAction(async () => {
-      await replaceNarrativeReferences({
-        episodeId,
-        shotId: shot.id,
-        body: {
-          expected_shot_revision: shot.revision,
-          expected_current_spec_version_id: currentSpecVersionId,
-          expected_evaluation_hash: report.evaluation_hash,
-          references,
-        },
-      }).unwrap();
-      succeeded = true;
-      return `镜头“${shot.title}”的叙事来源已保存为新规格版本。`;
-    });
-    return succeeded;
-  }
-
-  async function handleCoverageDecision(
-    request: API.CoverageDecisionRequest,
-  ): Promise<boolean> {
-    let succeeded = false;
-    await runAction(async () => {
-      await decideCoverage({ episodeId, body: request }).unwrap();
-      succeeded = true;
-      return "覆盖决议已追加保存，准备度将按固定版本重新计算。";
-    });
-    return succeeded;
-  }
-
-  async function handleStoryboardExportPreflight() {
-    await runAction(async () => {
-      const result = await preflightStoryboardExport(episodeId).unwrap();
-      if (result.status === "ready") {
-        return `导出预检通过，已固定 ${result.shot_spec_version_ids.length} 个镜头规格和 ${result.asset_version_ids.length} 个资产版本。`;
-      }
-      return `导出预检发现 ${result.blockers.length} 个阻断，请按清单修正后重试。`;
+  async function downloadExportPackage() {
+    if (!storyboardExport) return;
+    await run(async () => {
+      const contents = await request<Blob>(storyboardExport.download_url, {
+        responseType: "blob",
+      });
+      const objectURL = URL.createObjectURL(contents);
+      const anchor = document.createElement("a");
+      anchor.href = objectURL;
+      anchor.download = `storyboard-${episodeId}.zip`;
+      anchor.click();
+      URL.revokeObjectURL(objectURL);
+      setNotice("分镜包下载已开始");
     });
   }
 
-  async function handleStoryboardExport(inputHash: string) {
-    await runAction(async () => {
-      const result = await requestStoryboardExport({
-        episodeId,
-        body: {
-          expected_input_hash: inputHash,
-          idempotency_key: `studio-storyboard-export:${crypto.randomUUID()}`,
-        },
-      }).unwrap();
-      return `可信分镜包任务已创建：${result.id.slice(0, 8)}。`;
-    });
+  if (authState === "checking" || loading) {
+    return <main className="grid min-h-[60vh] place-items-center"><LoaderCircle className="size-6 animate-spin" aria-label="正在加载剧集工作台" /></main>;
   }
-
-  async function handleStoryboardExportDownload(mediaVersionId: string) {
-    await runAction(async () => {
-      const access = await createMediaAccess({
-        mediaVersionId,
-        purpose: "download",
-      }).unwrap();
-      window.open(access.url, "_blank", "noopener,noreferrer");
-      return "分镜包临时下载地址已打开。";
-    });
-  }
-
-  async function handleSplitPreflight(
-    shotId: string,
-    request: API.SplitPreflightRequest,
-  ): Promise<API.ShotTransformPreflightResponse | undefined> {
-    let result: API.ShotTransformPreflightResponse | undefined;
-    await runAction(async () => {
-      result = await splitShotPreflight({ shotId, body: request }).unwrap();
-      return "拆分影响已固定，请确认两个目标镜头。";
-    });
-    return result;
-  }
-
-  async function handleSplitShot(
-    shotId: string,
-    request: API.SplitShotRequest,
-  ): Promise<boolean> {
-    let succeeded = false;
-    await runAction(async () => {
-      const result = await splitShot({ episodeId, shotId, body: request }).unwrap();
-      const firstResultId = result.transform.result_shot_ids[0];
-      if (firstResultId) setSelectedShotId(firstResultId);
-      succeeded = true;
-      return "镜头已拆分为两个目标，来源镜头及其证据已归档保留。";
-    });
-    return succeeded;
-  }
-
-  async function handleMergePrepare(
-    source: API.ShotResponse,
-    partner: API.ShotResponse,
-  ): Promise<MergePreparation | undefined> {
-    const order = shotOrderQuery.data;
-    const sourceSpecId = source.current_spec_version_id;
-    const partnerSpecId = partner.current_spec_version_id;
-    if (!order || !sourceSpecId || !partnerSpecId || !coverageQuery.data) {
-      return undefined;
-    }
-    const orderedShots = [source, partner].sort((left, right) =>
-      left.position - right.position
-    );
-    const orderedSpecIds = orderedShots.map((shot) => {
-      const specId = shot.current_spec_version_id;
-      if (!specId) throw new Error("相邻镜头缺少当前规格");
-      return specId;
-    });
-    let result: MergePreparation | undefined;
-    await runAction(async () => {
-      const [firstVersion, secondVersion] = await Promise.all([
-        loadShotSpecVersion(orderedSpecIds[0], true).unwrap(),
-        loadShotSpecVersion(orderedSpecIds[1], true).unwrap(),
-      ]);
-      const preflight = await mergeShotsPreflight({
-        shot_ids: orderedShots.map((shot) => shot.id),
-        expected_spec_version_ids: orderedSpecIds,
-        expected_order_hash: order.order_hash,
-      }).unwrap();
-      result = {
-        preflight,
-        sources: [
-          {
-            shot: orderedShots[0],
-            version: firstVersion,
-            narrativeReferences:
-              coverageQuery.data?.references.filter(
-                (reference) =>
-                  reference.shot_spec_version_id === firstVersion.id,
-              ) ?? [],
-            narrativeUnits: coverageQuery.data?.units ?? [],
-          },
-          {
-            shot: orderedShots[1],
-            version: secondVersion,
-            narrativeReferences:
-              coverageQuery.data?.references.filter(
-                (reference) =>
-                  reference.shot_spec_version_id === secondVersion.id,
-              ) ?? [],
-            narrativeUnits: coverageQuery.data?.units ?? [],
-          },
-        ],
-      };
-      return "合并影响已固定，请确认目标镜头规格。";
-    });
-    return result;
-  }
-
-  async function handleMergeShots(
-    request: API.MergeShotRequest,
-  ): Promise<boolean> {
-    let succeeded = false;
-    await runAction(async () => {
-      const result = await mergeShots({ episodeId, body: request }).unwrap();
-      const resultId = result.transform.result_shot_ids[0];
-      if (resultId) setSelectedShotId(resultId);
-      succeeded = true;
-      return "相邻镜头已合并，两个来源及其证据已归档保留。";
-    });
-    return succeeded;
-  }
-
-  async function handleShotDeletePreflight(
-    shotId: string,
-  ): Promise<API.ShotDeletePreflightResponse | undefined> {
-    let result: API.ShotDeletePreflightResponse | undefined;
-    await runAction(async () => {
-      result = await shotDeletePreflight(shotId).unwrap();
-      return result.allowed
-        ? "删除条件已确认。"
-        : "镜头已有稳定证据，不能永久删除。";
-    });
-    return result;
-  }
-
-  async function handleDeleteShot(shot: API.ShotResponse): Promise<boolean> {
-    const order = shotOrderQuery.data;
-    if (!order) return false;
-    let succeeded = false;
-    await runAction(async () => {
-      const result = await deleteShot({
-        episodeId,
-        shotId: shot.id,
-        expectedRevision: shot.revision,
-        expectedOrderHash: order.order_hash,
-      }).unwrap();
-      setSelectedShotId(result.order.items[0]?.id ?? null);
-      succeeded = true;
-      return `空镜头“${shot.title}”已永久删除。`;
-    });
-    return succeeded;
-  }
-
-  async function handleToggleShotArchived(shot: API.ShotResponse) {
-    const order = shotOrderQuery.data;
-    if (!order) return;
-    const archived = shot.status === "active";
-    await runAction(async () => {
-      const result = await setShotArchived({
-        episodeId,
-        shotId: shot.id,
-        archived,
-        body: {
-          expected_revision: shot.revision,
-          expected_order_hash: order.order_hash,
-        },
-      }).unwrap();
-      if (archived && selectedShotId === shot.id) {
-        setSelectedShotId(result.order.items[0]?.id ?? null);
-      }
-      if (!archived) setSelectedShotId(result.shot.id);
-      return archived ? `镜头“${shot.title}”已归档。` : `镜头“${shot.title}”已恢复到清单末尾。`;
-    });
-  }
-
-  const pageError =
-    me.error ??
-    episodeQuery.error ??
-    projectQuery.error ??
-    episodesQuery.error ??
-    snapshotQuery.error ??
-    sourcesQuery.error ??
-    currentVersionQuery.error ??
-    (scriptActive ? narrativeStructureQuery.error : undefined) ??
-    versionsQuery.error ??
-    tasksQuery.error ??
-    schedulesQuery.error ??
-    batchQuery.error ??
-    candidatesQuery.error ??
-    assetsQuery.error ??
-    assetBibleQuery.error ??
-    mediaQuery.error;
-  const adaptationError = adaptationRunId
-    ? adaptationRunQuery.error
-    : undefined;
-  const storyboardError = storyboardActive
-    ? shotOrderQuery.error ??
-      archivedShotsQuery.error ??
-      shotReadinessQuery.error ??
-      coverageQuery.error ??
-      storyboardExportsQuery.error ??
-      structureQuery.error ??
-      draftBatchQuery.error ??
-      shotSpecVersionsQuery.error
-    : undefined;
-
-  if (sessionState === "checking") {
-    return (
-      <StudioShell active="projects">
-        <div className="grid min-h-[70dvh] place-items-center">
-          <LoaderCircle className="animate-spin text-foreground" aria-label="正在读取登录状态" />
-        </div>
-      </StudioShell>
-    );
+  if (authState !== "authenticated") {
+    return <main className="grid min-h-[60vh] place-items-center"><Link className="underline" href="/login">请先登录</Link></main>;
   }
 
   return (
-    <StudioShell
-      active="projects"
-      viewer={
-        me.data
-          ? {
-              displayName: me.data.user.display_name?.trim() || me.data.user.email,
-              workspaceName: me.data.workspace.name,
-            }
-          : undefined
-      }
-    >
-      {notice ? (
-        <div className="pointer-events-none fixed top-24 right-6 z-50 flex max-w-md items-center gap-2 rounded-xl border border-emerald-200 bg-card px-4 py-3 text-sm shadow-lg dark:border-emerald-900" role="status">
-          <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />
-          {notice}
-        </div>
-      ) : null}
-      <LayoutContainer className="py-8">
-        {!authenticated ? (
-          <Alert className="border-amber-200 bg-amber-50 text-amber-800">
-            <AlertCircle aria-hidden="true" />
-            <AlertTitle>需要登录</AlertTitle>
-            <AlertDescription><Link className="underline" href="/login">登录后进入单集生产工作台</Link></AlertDescription>
-          </Alert>
-        ) : pageError || storyboardError || adaptationError ? (
-          <Alert variant="destructive">
-            <AlertCircle aria-hidden="true" />
-            <AlertTitle>生产事实暂时无法读取</AlertTitle>
-            <AlertDescription>{appApiErrorMessage(pageError ?? storyboardError ?? adaptationError)}</AlertDescription>
-          </Alert>
-        ) : !episode || !project || !snapshot || storyboardLoading || scriptLoading ? (
-          <div className="grid min-h-96 place-items-center"><LoaderCircle className="animate-spin text-foreground" aria-label="正在加载生产工作台" /></div>
-        ) : (
-          <div className="grid gap-8 xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start xl:gap-10">
-            <ProductionWorkflowSidebar
-              activeEpisodeId={episode.id}
-              activePanel={initialPanel}
-              episodeSnapshot={snapshot}
-              episodes={episodesQuery.data ?? []}
-              projectId={project.id}
-              projectName={project.name}
-            />
-
-            <div className="min-w-0">
-              <PageHeader
-                accessibleTitle={episode.name}
-                actions={(
-                  <Button asChild variant="outline"><Link href={`/projects/${episode.project_id}`}>项目概览</Link></Button>
-                )}
-                badges={[
-                  { label: stageLabels[snapshot.current_stage] },
-                  { label: project.aspect_ratio },
-                  { label: project.visual_style ?? "未设视觉风格" },
-                ]}
-                breadcrumbs={[
-                  { label: project.name, href: `/projects/${project.id}` },
-                  { label: `第 ${episode.position} 集 · ${episode.name}` },
-                ]}
-                description={`${episode.name} · 当前进度 ${snapshot.completion}%`}
-                note="AI 候选经人工确认后才进入下游事实。"
-                title="今天，把这一集往前推进。"
-              />
-
-              <ProductionNextAction
-                action={snapshot.next_actions[0]}
-                blockingReasons={snapshot.blocking_reasons}
-              />
-
-              <MetricGroup
-                className="mt-8"
-                items={[
-                  { label: "当前阶段", value: stageLabels[snapshot.current_stage] },
-                  { label: "剧本状态", value: `v${editableVersion?.version_no ?? "-"}` },
-                  { label: "Ready 资产", value: `${snapshot.asset_summary.ready} / ${snapshot.asset_summary.total}` },
-                  { label: "Ready 分镜", value: `${snapshot.storyboard_summary.ready ?? 0} / ${snapshot.storyboard_summary.total ?? 0}` },
-                  { label: "进行中任务", value: snapshot.task_summary.running },
-                ]}
-                label="生产摘要"
-              />
-
-              {snapshot.partial_failures.length ? (
-                <Alert className="mt-5 border-rose-200 bg-rose-50 text-rose-800">
-                  <AlertCircle aria-hidden="true" />
-                  <AlertTitle>部分摘要不可用</AlertTitle>
-                  <AlertDescription>{snapshot.partial_failures.map((failure) => failure.summary).join("；")}</AlertDescription>
-                </Alert>
-              ) : null}
-              {actionError ? (
-                <Alert className="mt-5" variant="destructive">
-                  <AlertCircle aria-hidden="true" />
-                  <AlertTitle>操作未完成</AlertTitle>
-                  <AlertDescription>{actionError}</AlertDescription>
-                </Alert>
-              ) : null}
-
-              <section className="mt-6">
-              {initialPanel === "script" ? (
-                <ScriptWorkspace
-                  assets={assetsQuery.data?.items ?? []}
-                  adaptationDifference={adaptationDifference}
-                  adaptationRun={adaptationRun}
-                  batch={batchQuery.data}
-                  busy={busy}
-                  candidates={candidatesQuery.data?.items ?? []}
-                  editableVersion={editableVersion}
-                  episode={episode}
-                  key={editableVersion?.id ?? activeSource?.id ?? "script-import"}
-                  narrativeStructure={narrativeStructureQuery.data}
-                  snapshot={snapshot}
-                  source={activeSource}
-                  versionImpact={scriptVersionImpact}
-                  versions={versions}
-                  onConfirm={handleConfirm}
-                  onCancelAdaptation={handleCancelAdaptation}
-                  onCompareAdaptation={handleCompareAdaptation}
-                  onCompareVersions={handleCompareVersions}
-                  onDecide={handleDecision}
-                  onDeleteDraft={handleDeleteScriptDraft}
-                  onCreateAdaptation={handleCreateAdaptation}
-                  onImport={handleImport}
-                  onPublish={handlePublish}
-                  onPublishAdaptation={handlePublishAdaptation}
-                  onResetAdaptation={() => {
-                    setStartedAdaptationRunId(null);
-                    setAdaptationDifference(null);
-                  }}
-                  onSaveAdaptationDraft={handleSaveAdaptationDraft}
-                  onReviseNarrative={handleReviseNarrative}
-                  onDismissVersionImpact={() => setScriptVersionImpact(null)}
-                  onSetCurrent={handleSetCurrent}
-                  onSetSourceArchived={handleSetScriptSourceArchived}
-                  onStartExtraction={handleStartExtraction}
-                />
-              ) : initialPanel === "assets" ? (
-                <EpisodeAssetOverview
-                  assetBible={assetBibleQuery.data}
-                  assets={assetsQuery.data?.items ?? []}
-                  projectId={project.id}
-                  summary={snapshot.asset_summary}
-                />
-              ) : initialPanel === "storyboard" ? (
-                <div className="grid gap-5">
-                  <StoryboardExports
-                    busy={busy}
-                    history={storyboardExportsQuery.data}
-                    preflight={storyboardExportPreflightState.data}
-                    onDownload={handleStoryboardExportDownload}
-                    onExport={handleStoryboardExport}
-                    onPreflight={handleStoryboardExportPreflight}
-                  />
-                  <StoryboardDrafts
-                    assetBible={assetBibleQuery.data}
-                    batch={draftBatchQuery.data}
-                    busy={busy}
-                    canCreate={Boolean(confirmedVersionId && structureQuery.data?.scenes.length)}
-                    episodeId={episodeId}
-                    onApply={handleApplyStoryboardDraft}
-                    onApprove={handleApproveStoryboardDraft}
-                    onCreate={handleCreateStoryboardDraft}
-                    onDecide={handleDecideStoryboardDraft}
-                    onPreflight={handleStoryboardDraftPreflight}
-                  />
-                  {coverageQuery.data ? (
-                    <StoryboardCoverage
-                      busy={busy}
-                      report={coverageQuery.data}
-                      selectedShotId={selectedShot?.id ?? null}
-                      shots={shotOrderQuery.data?.items ?? []}
-                      onDecide={handleCoverageDecision}
-                      onReplace={handleReplaceNarrativeReferences}
-                      onSelectShot={setSelectedShotId}
-                    />
-                  ) : null}
-                  <StoryboardWorkspace
-                    archivedShots={archivedShotsQuery.data ?? []}
-                    assetBible={assetBibleQuery.data}
-                    busy={busy}
-                    confirmedShotCandidates={confirmedShotCandidates}
-                    order={shotOrderQuery.data ?? { items: [], order_hash: "" }}
-                    coverage={coverageQuery.data}
-                    readiness={shotReadinessQuery.data}
-                    selectedShotId={selectedShot?.id ?? null}
-                    structure={structureQuery.data}
-                    versions={shotSpecVersionsQuery.currentData ?? []}
-                    onCopy={handleCopyShot}
-                    onCreate={handleCreateShot}
-                    onCreateFromCandidate={handleCreateShotFromCandidate}
-                    onDelete={handleDeleteShot}
-                    onDeletePreflight={handleShotDeletePreflight}
-                    onMerge={handleMergeShots}
-                    onMergePrepare={handleMergePrepare}
-                    onReorder={handleReorderShots}
-                    onSaveSpec={handleSaveShotSpec}
-                    onSelectShot={setSelectedShotId}
-                    onSetCurrentSpec={handleSetCurrentShotSpec}
-                    onSplit={handleSplitShot}
-                    onSplitPreflight={handleSplitPreflight}
-                    onToggleArchived={handleToggleShotArchived}
-                    onUpdate={handleUpdateShot}
-                  />
-                </div>
-              ) : initialPanel === "media" ? (
-                <MediaWorkspace
-                  busy={busy}
-                  locationBusy={
-                    mediaLocationsQuery.isFetching ||
-                    locationMigrationState.isLoading ||
-                    locationRollbackState.isLoading
-                  }
-                  locationVersionId={locationVersionId}
-                  locations={mediaLocationsQuery.data?.items ?? []}
-                  media={mediaQuery.data?.items ?? []}
-                  onCloseLocations={() => setLocationVersionId(null)}
-                  onLocationMigration={handleLocationMigration}
-                  onLocationRollback={handleLocationRollback}
-                  onOpenLocations={(version) => setLocationVersionId(version.id)}
-                  onAppendVersion={handleAppendMediaVersion}
-                  onRetry={handleRetry}
-                  onSetCurrent={handleSetCurrentMediaVersion}
-                  onToggleArchived={handleToggleMediaArchived}
-                  onUpload={handleUpload}
-                />
-              ) : (
-                <TaskWorkspace
-                  busy={busy}
-                  capabilities={modelCapabilitiesQuery.data ?? []}
-                  costs={costsQuery.data ?? null}
-                  productionFactsLoading={
-                    modelCapabilitiesQuery.isLoading || costsQuery.isLoading
-                  }
-                  productionFactsUnavailable={
-                    modelCapabilitiesQuery.isError || costsQuery.isError
-                  }
-                  schedules={schedulesQuery.data?.items ?? []}
-                  tasks={workspaceTasks ?? []}
-                  onCancelGenerationTask={handleCancelGenerationTask}
-                  onConfigureSchedule={handleConfigureSchedule}
-                  onPauseSchedule={handlePauseSchedule}
-                  onResumeSchedule={handleResumeSchedule}
-                  onTriggerSchedule={handleTriggerSchedule}
-                />
-              )}
-              </section>
-            </div>
+    <main className="py-8">
+      <LayoutContainer>
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+          <div>
+            <Link className="text-sm text-muted-foreground hover:underline" href={episode ? `/projects/${episode.project_id}` : "/projects"}>{project?.name ?? "项目"}</Link>
+            <h1 className="mt-2 text-3xl font-semibold">第 {episode?.position} 集 · {episode?.name}</h1>
+            <p className="mt-2 text-sm text-muted-foreground">确认结构事实后生成候选分镜，再经人工决议原子写入与导出。</p>
           </div>
-        )}
+          <select aria-label="切换当前剧集" className="h-10 rounded-md border bg-background px-3 text-sm" onChange={(event) => { window.location.href = `/studio/${event.target.value}/${initialPanel}`; }} value={episodeId}>
+            {episodes.map((item) => <option key={item.id} value={item.id}>第 {item.position} 集 · {item.name}</option>)}
+          </select>
+        </div>
+
+        <nav aria-label="剧集制作流程" className="my-6 flex flex-wrap gap-2">
+          {panels.map((panel) => <Link aria-current={panel.id === initialPanel ? "page" : undefined} className={panel.id === initialPanel ? "rounded-full bg-foreground px-4 py-2 text-sm text-background" : "rounded-full border px-4 py-2 text-sm hover:bg-muted"} href={`/studio/${episodeId}/${panel.id}`} key={panel.id}>{panel.label}</Link>)}
+        </nav>
+
+        {error ? <Alert className="mb-5" variant="destructive"><AlertCircle className="size-4" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
+        {notice ? <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status"><CheckCircle2 className="mr-2 inline size-4" />{notice}</div> : null}
+
+        {initialPanel === "script" || initialPanel === "tasks" ? (
+          <StructurePanel allTasksAccepted={allTasksAccepted} busy={busy} confirmStructure={confirmStructure} onAcceptTask={acceptTask} structure={structure} />
+        ) : null}
+        {initialPanel === "storyboard" ? (
+          <StoryboardPanel acceptedDrafts={acceptedDrafts} applyDraft={applyDraft} applyPreflight={applyPreflight} approveBatch={approveBatch} batch={batch} busy={busy} createDraft={createDraft} createExportPackage={createExportPackage} downloadExportPackage={downloadExportPackage} exportPreflight={exportPreflight} onAcceptDraft={acceptDraft} preflightApply={preflightApply} preflightExportPackage={preflightExportPackage} shots={shots} storyboardExport={storyboardExport} structure={structure} />
+        ) : null}
+        {initialPanel === "assets" ? <BoundaryPanel title="项目事实" description="MVP 使用已确认的制作圣经作为角色与世界观事实，不在剧集层复制资产写模型。" /> : null}
+        {initialPanel === "media" ? <BoundaryPanel title="媒体" description="媒体上传与版本由 Backend 的对象存储模块统一管理；分镜 MVP 不生成或复制媒体文件。" /> : null}
       </LayoutContainer>
-    </StudioShell>
+    </main>
   );
+}
+
+function StructurePanel({ allTasksAccepted, busy, confirmStructure, onAcceptTask, structure }: { allTasksAccepted: boolean; busy: boolean; confirmStructure: () => void; onAcceptTask: (task: Task) => void; structure?: Structure }) {
+  if (!structure) return <BoundaryPanel title="剧本结构" description="尚未发布剧集剧本。请先从项目页完成分集计划、原子创建剧集并发布剧本。" />;
+  const unitCount = structure.scenes.reduce((sum, scene) => sum + scene.narrative_units.length + scene.dialogues.length + 1, 0);
+  return <div className="grid gap-5">
+    <section className="rounded-2xl border bg-card p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">{structure.scenes.length} 项建议 · {structure.status === "confirmed" ? "已完成" : "待确认"}</p><h2 className="mt-1 text-xl font-semibold">场景与制作任务</h2></div>{structure.status === "needs_review" ? <Button disabled={busy || !allTasksAccepted} onClick={confirmStructure}>确认剧本结构</Button> : <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm text-emerald-800">结构已确认</span>}</div>
+      <div className="mt-6 grid gap-4">{structure.scenes.map((scene) => <section aria-label={`${scene.heading} 制作任务`} className="rounded-xl border p-4" key={scene.id}><div className="flex items-center justify-between gap-3"><h3 className="font-semibold">场景 {scene.position} · {scene.heading}</h3><span className="text-xs text-muted-foreground">{scene.narrative_units.length} 个叙事段 · {scene.dialogues.length} 段对白</span></div><div className="mt-3 grid gap-2">{scene.tasks.map((task) => <article className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 px-3 py-2" key={task.id}><p className="text-sm"><span className="font-medium">{task.label}</span><span className="ml-2 text-xs text-muted-foreground">{task.required ? "必需" : "可选"} · {task.status}</span></p>{task.status === "pending" ? <Button disabled={busy} onClick={() => onAcceptTask(task)} size="sm">接受</Button> : <CheckCircle2 className="size-4 text-emerald-600" aria-label="已接受" />}</article>)}</div></section>)}</div>
+    </section>
+    <section className="rounded-2xl border bg-card p-6"><p className="text-sm text-muted-foreground">稳定叙事单元</p><p className="mt-2 text-3xl font-semibold">{unitCount}</p><p className="mt-2 text-sm text-muted-foreground">场景标题、动作/叙述与对白均以来源 UUID 固定，作为分镜覆盖输入。</p></section>
+  </div>;
+}
+
+function StoryboardPanel({ acceptedDrafts, applyDraft, applyPreflight, approveBatch, batch, busy, createDraft, createExportPackage, downloadExportPackage, exportPreflight, onAcceptDraft, preflightApply, preflightExportPackage, shots, storyboardExport, structure }: { acceptedDrafts: number; applyDraft: () => void; applyPreflight?: ApplyPreflight; approveBatch: () => void; batch?: DraftBatch; busy: boolean; createDraft: () => void; createExportPackage: () => void; downloadExportPackage: () => void; exportPreflight?: ExportPreflight; onAcceptDraft: (shot: DraftShot) => void; preflightApply: () => void; preflightExportPackage: () => void; shots: Shot[]; storyboardExport?: StoryboardExport; structure?: Structure }) {
+  return <div className="grid gap-5">
+    {structure?.status !== "confirmed" ? <Alert><AlertCircle className="size-4" /><AlertTitle>需先确认剧本结构</AlertTitle><AlertDescription>分镜候选只能引用已确认的稳定叙事单元。</AlertDescription></Alert> : null}
+    <section className="rounded-2xl border bg-card p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">Agent 仅生成候选，不写正式业务数据</p><h2 className="mt-1 text-xl font-semibold">待审核分镜草案</h2></div><Button disabled={busy || structure?.status !== "confirmed" || batch?.status === "queued" || batch?.status === "running"} onClick={createDraft}><Clapperboard className="mr-2 size-4" />生成待审核草案</Button></div>
+      {batch?.status === "queued" || batch?.status === "running" ? <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />候选生成中，页面会自动刷新</div> : null}
+      {batch?.status === "failed" || batch?.status === "unknown" ? <p className="mt-5 text-sm text-destructive">候选生成失败，可检查私有 Agent 后创建新批次。</p> : null}
+      {batch?.candidate.shots.length ? <div className="mt-6 grid gap-3">{batch.candidate.shots.map((shot) => { const accepted = batch.decisions[shot.proposal_key] === "accepted"; return <article className="rounded-xl border p-4" key={shot.proposal_key}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs text-muted-foreground">镜头 {shot.position} · {shot.spec.duration_ms ?? "—"} ms</p><h3 className="mt-1 font-semibold">{shot.title}</h3><p className="mt-2 text-sm text-muted-foreground">覆盖 {shot.narrative_unit_version_ids.length} 个叙事单元</p></div>{accepted ? <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm text-emerald-800">accepted</span> : <Button disabled={busy || batch.status !== "needs_review"} onClick={() => onAcceptDraft(shot)} size="sm">接受此镜</Button>}</div></article>; })}</div> : <p className="mt-5 text-sm text-muted-foreground">尚无分镜候选。</p>}
+      {batch?.status === "needs_review" && batch.candidate.shots.length > 0 ? <div className="mt-5 flex items-center justify-between gap-3 border-t pt-5"><span className="text-sm text-muted-foreground">已接受 {acceptedDrafts}/{batch.candidate.shots.length}</span><Button disabled={busy || acceptedDrafts !== batch.candidate.shots.length} onClick={approveBatch}>批准整批草案</Button></div> : null}
+      {batch?.status === "approved" ? <div className="mt-5 flex flex-wrap gap-3 border-t pt-5"><Button disabled={busy} onClick={preflightApply} variant="outline">预检写入影响</Button><Button disabled={busy || !applyPreflight} onClick={applyDraft}>原子写入正式分镜</Button>{applyPreflight ? <span className="self-center text-sm text-muted-foreground">将创建 {applyPreflight.created} 个镜头</span> : null}</div> : null}
+    </section>
+
+    <section aria-label="分镜准备度摘要" className="rounded-2xl border bg-card p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">正式分镜</p><h2 className="mt-1 text-xl font-semibold">{shots.length} 个镜头</h2></div>{shots.length > 0 ? <CheckCircle2 className="size-6 text-emerald-600" /> : <AlertCircle className="size-6 text-muted-foreground" />}</div>{shots.length > 0 ? <ol className="mt-4 grid gap-2">{shots.map((shot) => <li className="flex items-center justify-between rounded-lg bg-muted/60 px-3 py-2 text-sm" key={shot.id}><span>{shot.position}. {shot.title}</span><code className="text-xs text-muted-foreground">{shot.content_hash.slice(0, 8)}</code></li>)}</ol> : null}</section>
+
+    <section className="rounded-2xl border bg-card p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">确定性 ZIP · manifest + JSON + CSV + HTML</p><h2 className="mt-1 text-xl font-semibold">分镜包导出</h2></div><Button disabled={busy} onClick={preflightExportPackage} variant="outline">检查导出条件</Button></div>{exportPreflight ? <div aria-label="分镜包预检结果" className="mt-4 rounded-lg bg-muted p-4 text-sm" role="region">{exportPreflight.allowed ? `允许导出 · ${exportPreflight.shot_count} 个镜头` : exportPreflight.blockers.map((blocker) => blocker.summary).join("；")}</div> : null}<div className="mt-4 flex flex-wrap items-center gap-3"><Button disabled={busy || !exportPreflight?.allowed} onClick={createExportPackage}><FileText className="mr-2 size-4" />生成分镜包</Button>{storyboardExport ? <Button disabled={busy} onClick={downloadExportPackage} variant="outline"><Download className="mr-2 size-4" />下载分镜包</Button> : null}{storyboardExport ? <code className="text-xs text-muted-foreground">SHA-256 {storyboardExport.content_hash}</code> : null}</div></section>
+  </div>;
+}
+
+function BoundaryPanel({ description, title }: { description: string; title: string }) {
+  return <section className="rounded-2xl border bg-card p-8"><h2 className="text-xl font-semibold">{title}</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p></section>;
 }
