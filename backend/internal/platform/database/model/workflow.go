@@ -66,6 +66,7 @@ type WorkflowRun struct {
 	PausedFromProgressStage     *string                   `gorm:"type:varchar(80);check:ck_wrk_run_pause_source_pair,(paused_from_status IS NULL) = (paused_from_progress_stage IS NULL)"`
 	Revision                    int                       `gorm:"not null;check:ck_wrk_run_revision,revision >= 1"`
 	CreatedBy                   uuid.UUID                 `gorm:"type:uuid;not null"`
+	InitiatorTokenVersion       int                       `gorm:"not null;check:ck_wrk_run_initiator_token_version,initiator_token_version >= 1"`
 	CreatedAt                   time.Time                 `gorm:"type:timestamptz;not null"`
 	UpdatedAt                   time.Time                 `gorm:"type:timestamptz;not null;index:ix_wrk_runs_workspace_updated,priority:2,sort:desc;index:ix_wrk_runs_project_updated,priority:2,sort:desc;index:ix_wrk_runs_status_updated,priority:2,sort:desc"`
 	Workspace                   Workspace                 `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`

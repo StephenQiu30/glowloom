@@ -226,7 +226,7 @@ func runRecord(value domain.WorkflowRun) (model.WorkflowRun, error) {
 		Status: value.Status, ProgressStage: value.ProgressStage, NextAction: value.NextAction,
 		Error: datatypes.JSON(value.Error), PausedFromStatus: value.PausedFromStatus,
 		PausedFromProgressStage: value.PausedFromProgressStage,
-		Revision:                value.Revision, CreatedBy: createdBy,
+		Revision:                value.Revision, CreatedBy: createdBy, InitiatorTokenVersion: value.InitiatorTokenVersion,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}, nil
 }
@@ -322,7 +322,8 @@ func runDomain(value model.WorkflowRun) domain.WorkflowRun {
 		NextAction: value.NextAction, Error: append([]byte(nil), value.Error...),
 		PausedFromStatus:        cloneStringPointer(value.PausedFromStatus),
 		PausedFromProgressStage: cloneStringPointer(value.PausedFromProgressStage), Revision: value.Revision,
-		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+		CreatedBy: value.CreatedBy.String(), InitiatorTokenVersion: value.InitiatorTokenVersion,
+		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
 }
 
@@ -407,7 +408,8 @@ func sameRunIdentity(left, right model.WorkflowRun) bool {
 	return left.ID == right.ID && left.WorkspaceID == right.WorkspaceID && left.ProjectID == right.ProjectID &&
 		left.AuthoringRevisionID == right.AuthoringRevisionID &&
 		left.WorkflowDefinitionVersionID == right.WorkflowDefinitionVersionID && left.RunInputSnapshotID == right.RunInputSnapshotID &&
-		left.TemporalWorkflowID == right.TemporalWorkflowID && left.StartInputHash == right.StartInputHash
+		left.TemporalWorkflowID == right.TemporalWorkflowID && left.StartInputHash == right.StartInputHash &&
+		left.CreatedBy == right.CreatedBy && left.InitiatorTokenVersion == right.InitiatorTokenVersion
 }
 
 func sameIntentIdentity(left, right model.WorkflowStartIntent) bool {

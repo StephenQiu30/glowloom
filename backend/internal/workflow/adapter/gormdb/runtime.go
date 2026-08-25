@@ -197,8 +197,10 @@ func (store *Store) ClaimNode(
 			Command: command, ClaimToken: token.String(), Status: node.Status,
 			Attempt: node.Attempt, Revision: node.Revision, Input: resolved.Input, InputHash: resolved.InputHash,
 			OutputPorts: append([]authoring.PortDefinition(nil), resolved.Execution.OutputPorts...),
-			WorkspaceID: run.WorkspaceID.String(), CachePolicy: resolved.Execution.CachePolicy,
-			CacheMaterial: resolved.CacheMaterial, CacheKey: resolved.CacheKey,
+			WorkspaceID: run.WorkspaceID.String(), ProjectID: run.ProjectID.String(), InitiatorUserID: run.CreatedBy.String(),
+			InitiatorTokenVersion: run.InitiatorTokenVersion,
+			CachePolicy:           resolved.Execution.CachePolicy,
+			CacheMaterial:         resolved.CacheMaterial, CacheKey: resolved.CacheKey,
 		}
 		return nil
 	})

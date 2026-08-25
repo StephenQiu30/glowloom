@@ -69,6 +69,10 @@ func TestRuntimeNodeExecutionRetriesWithStableBusinessIdentityAndFencing(t *test
 	}
 	commands := executor.Commands()
 	if len(commands) != 2 || commands[1].InputHash == "" || commands[1].Input.SchemaVersion != workflow.NodeInputSchemaVersion ||
+		commands[1].WorkspaceID != "00000000-0000-0000-0000-000000000999" ||
+		commands[1].ProjectID != "00000000-0000-0000-0000-000000000998" ||
+		commands[1].InitiatorUserID != "00000000-0000-0000-0000-000000000997" ||
+		commands[1].InitiatorTokenVersion != 3 ||
 		len(commands[1].OutputPorts) != 1 || commands[1].OutputPorts[0].Key != "candidate" {
 		t.Fatalf("executor commands lost frozen input/output contract: %#v", commands)
 	}
@@ -212,8 +216,11 @@ func (repo *runtimeNodeRepository) ClaimNode(
 		Command: command, ClaimToken: claimToken, Status: repo.status,
 		Attempt: repo.attempt, Revision: repo.revision, Input: input, InputHash: inputHash,
 		OutputPorts: []authoring.PortDefinition{{Key: "candidate", ValueType: "production_bible_candidate", Required: true}},
-		WorkspaceID: "00000000-0000-0000-0000-000000000999", CachePolicy: cachePolicy,
-		CacheMaterial: material, CacheKey: cacheKey,
+		WorkspaceID: "00000000-0000-0000-0000-000000000999",
+		ProjectID:   "00000000-0000-0000-0000-000000000998", InitiatorUserID: "00000000-0000-0000-0000-000000000997",
+		InitiatorTokenVersion: 3,
+		CachePolicy:           cachePolicy,
+		CacheMaterial:         material, CacheKey: cacheKey,
 	}, nil
 }
 

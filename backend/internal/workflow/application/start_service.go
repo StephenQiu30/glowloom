@@ -56,6 +56,7 @@ func (service *StartService) Start(ctx context.Context, actor Actor, command Sta
 	command.AuthoringRevisionID = strings.TrimSpace(command.AuthoringRevisionID)
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	if command.AuthoringRevisionID == "" || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 ||
+		strings.TrimSpace(actor.UserID) == "" || actor.TokenVersion < 1 ||
 		service.compiler == nil || service.transactions == nil || service.starter == nil ||
 		service.config.Now == nil || service.config.NewID == nil {
 		return domain.WorkflowRun{}, invalid("Invalid workflow start request")
@@ -73,7 +74,7 @@ func (service *StartService) Start(ctx context.Context, actor Actor, command Sta
 		return domain.WorkflowRun{}, err
 	}
 	now := service.config.Now().UTC()
-	desired, request, err := prepareStart(command, commandInputHash, compiled, actor.UserID, now)
+	desired, request, err := prepareStart(command, commandInputHash, compiled, actor.UserID, actor.TokenVersion, now)
 	if err != nil {
 		return domain.WorkflowRun{}, err
 	}
@@ -87,7 +88,8 @@ func (service *StartService) Start(ctx context.Context, actor Actor, command Sta
 		return domain.WorkflowRun{}, normalizeError(err)
 	}
 	if prepared.Intent.CommandInputHash != commandInputHash || prepared.Intent.TemporalInputHash != request.InputHash ||
-		prepared.Run.AuthoringRevisionID != command.AuthoringRevisionID {
+		prepared.Run.AuthoringRevisionID != command.AuthoringRevisionID || prepared.Run.CreatedBy != actor.UserID ||
+		prepared.Run.InitiatorTokenVersion != actor.TokenVersion {
 		return domain.WorkflowRun{}, conflict("Idempotency key was already used with different workflow input")
 	}
 	if prepared.Intent.Status == "completed" || prepared.Intent.Status == "conflict" {
@@ -124,6 +126,7 @@ func prepareStart(
 	commandInputHash string,
 	compiled domain.CompiledFacts,
 	createdBy string,
+	initiatorTokenVersion int,
 	now time.Time,
 ) (domain.StartPreparation, domain.StartRequest, error) {
 	runID := stableID("workflow-run", compiled.Definition.WorkspaceID, command.IdempotencyKey)
@@ -149,7 +152,8 @@ func prepareStart(
 		ID: runID, WorkspaceID: compiled.Definition.WorkspaceID, ProjectID: compiled.Definition.ProjectID,
 		AuthoringRevisionID: compiled.Definition.AuthoringRevisionID, DefinitionVersionID: compiled.DefinitionID,
 		RunInputSnapshotID: compiled.RunInputSnapshotID, TemporalWorkflowID: workflowID, StartInputHash: temporalInputHash,
-		Status: "QUEUED", ProgressStage: "start_pending", Revision: 1, CreatedBy: createdBy, CreatedAt: now, UpdatedAt: now,
+		Status: "QUEUED", ProgressStage: "start_pending", Revision: 1, CreatedBy: createdBy,
+		InitiatorTokenVersion: initiatorTokenVersion, CreatedAt: now, UpdatedAt: now,
 	}
 	nodes := make([]domain.NodeRunProjection, 0, len(compiled.Definition.NodeExecutions))
 	for _, node := range compiled.Definition.NodeExecutions {

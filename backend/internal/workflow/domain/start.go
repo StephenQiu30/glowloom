@@ -39,6 +39,7 @@ type WorkflowRun struct {
 	PausedFromStatus, PausedFromProgressStage       *string
 	Revision                                        int
 	CreatedBy                                       string
+	InitiatorTokenVersion                           int
 	CreatedAt, UpdatedAt                            time.Time
 }
 

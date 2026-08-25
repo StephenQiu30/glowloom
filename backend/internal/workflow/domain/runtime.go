@@ -38,28 +38,31 @@ type NodeExecutorResult struct {
 }
 
 type NodeExecutionClaim struct {
-	Command       NodeActivityCommand
-	ClaimToken    string
-	Status        string
-	Attempt       int
-	Revision      int
-	Input         NodeInputSnapshot
-	InputHash     string
-	OutputPorts   []authoring.PortDefinition
-	WorkspaceID   string
-	CachePolicy   string
-	CacheMaterial NodeCacheKeyMaterial
-	CacheKey      string
-	Result        NodeActivityResult
-	Replay        bool
+	Command                                 NodeActivityCommand
+	ClaimToken                              string
+	Status                                  string
+	Attempt                                 int
+	Revision                                int
+	Input                                   NodeInputSnapshot
+	InputHash                               string
+	OutputPorts                             []authoring.PortDefinition
+	WorkspaceID, ProjectID, InitiatorUserID string
+	InitiatorTokenVersion                   int
+	CachePolicy                             string
+	CacheMaterial                           NodeCacheKeyMaterial
+	CacheKey                                string
+	Result                                  NodeActivityResult
+	Replay                                  bool
 }
 
 type NodeExecutorCommand struct {
 	NodeActivityCommand
-	IdempotencyKey string
-	Input          NodeInputSnapshot
-	InputHash      string
-	OutputPorts    []authoring.PortDefinition
+	WorkspaceID, ProjectID, InitiatorUserID string
+	InitiatorTokenVersion                   int
+	IdempotencyKey                          string
+	Input                                   NodeInputSnapshot
+	InputHash                               string
+	OutputPorts                             []authoring.PortDefinition
 }
 
 type CompleteRunCommand struct {

@@ -158,7 +158,9 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		return claim.Result, nil
 	}
 	normalizedInput, _, inputHash, inputErr := domain.BuildNodeInput(claim.Input)
-	if inputErr != nil || claim.InputHash != inputHash || len(claim.OutputPorts) == 0 {
+	if inputErr != nil || claim.InputHash != inputHash || len(claim.OutputPorts) == 0 ||
+		strings.TrimSpace(claim.WorkspaceID) == "" || strings.TrimSpace(claim.ProjectID) == "" ||
+		strings.TrimSpace(claim.InitiatorUserID) == "" || claim.InitiatorTokenVersion < 1 {
 		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
 		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node resolved an invalid execution contract"), retryErr)
 	}
@@ -184,11 +186,15 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		}
 	}
 	executorResult, executeErr := service.config.Executor.Execute(ctx, domain.NodeExecutorCommand{
-		NodeActivityCommand: command,
-		IdempotencyKey:      "workflow-node:" + command.NodeRunID + ":attempt:" + strconv.Itoa(command.Attempt),
-		Input:               normalizedInput,
-		InputHash:           inputHash,
-		OutputPorts:         append([]authoring.PortDefinition(nil), claim.OutputPorts...),
+		NodeActivityCommand:   command,
+		WorkspaceID:           claim.WorkspaceID,
+		ProjectID:             claim.ProjectID,
+		InitiatorUserID:       claim.InitiatorUserID,
+		InitiatorTokenVersion: claim.InitiatorTokenVersion,
+		IdempotencyKey:        "workflow-node:" + command.NodeRunID + ":attempt:" + strconv.Itoa(command.Attempt),
+		Input:                 normalizedInput,
+		InputHash:             inputHash,
+		OutputPorts:           append([]authoring.PortDefinition(nil), claim.OutputPorts...),
 	})
 	if executeErr != nil {
 		return domain.NodeActivityResult{}, errors.Join(executeErr, repository.RetryNode(ctx, claim, service.config.Now().UTC()))

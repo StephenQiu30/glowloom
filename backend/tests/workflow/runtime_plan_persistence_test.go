@@ -180,6 +180,12 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	if err != nil || result.Status != "SUCCEEDED" {
 		t.Fatalf("retry persisted node execution: result=%#v err=%v", result, err)
 	}
+	executorCommands := executor.Commands()
+	if len(executorCommands) != 2 || executorCommands[1].WorkspaceID != started.run.WorkspaceID ||
+		executorCommands[1].ProjectID != started.run.ProjectID || executorCommands[1].InitiatorUserID != actor.UserID ||
+		executorCommands[1].InitiatorTokenVersion != actor.TokenVersion {
+		t.Fatalf("persisted workflow actor was not propagated to node executor: %#v", executorCommands)
+	}
 	replayedResult, replayErr := runtimeService.ExecuteNode(ctx, command)
 	if replayErr != nil || executor.CallCount() != 2 || replayedResult.OutputHash != result.OutputHash {
 		t.Fatalf("replay persisted node execution: result=%#v calls=%d err=%v", replayedResult, executor.CallCount(), replayErr)

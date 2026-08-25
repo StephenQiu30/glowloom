@@ -139,6 +139,9 @@ func TestWorkflowStartPersistsRunNodeProjectionAndReconcilesUnknownOutcome(t *te
 	}
 	runIDs := make([]uuid.UUID, 0, len(runRecords))
 	for _, run := range runRecords {
+		if run.CreatedBy != fixture.userID || run.InitiatorTokenVersion != actor.TokenVersion {
+			t.Fatalf("workflow run lost its initiating actor: %#v", run)
+		}
 		runIDs = append(runIDs, run.ID)
 	}
 	var nodeCount int64
