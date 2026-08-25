@@ -161,6 +161,27 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		projection.RiskLevel != node.RiskLevel || projection.ActiveClaimToken != nil {
 		t.Fatalf("persisted node projection = %#v", projection)
 	}
+	completion := workflow.CompleteRunCommand{WorkflowRunID: request.WorkflowRunID}
+	if err = runtimeService.CompleteRun(ctx, completion); err == nil {
+		t.Fatal("run completed while queued nodes still existed")
+	}
+	if err = database.Model(&model.NodeRunProjection{}).Where("workflow_run_id = ?", request.WorkflowRunID).
+		Updates(map[string]any{"status": "SUCCEEDED", "active_claim_token": nil}).Error; err != nil {
+		t.Fatalf("prepare completed node projections: %v", err)
+	}
+	if err = runtimeService.CompleteRun(ctx, completion); err != nil {
+		t.Fatalf("complete workflow run: %v", err)
+	}
+	if err = runtimeService.CompleteRun(ctx, completion); err != nil {
+		t.Fatalf("replay workflow completion: %v", err)
+	}
+	var completedRun model.WorkflowRun
+	if err = database.First(&completedRun, "id = ?", request.WorkflowRunID).Error; err != nil {
+		t.Fatalf("load completed workflow run: %v", err)
+	}
+	if completedRun.Status != "SUCCEEDED" || completedRun.ProgressStage != "completed" {
+		t.Fatalf("completed workflow run = %#v", completedRun)
+	}
 }
 
 type blockingWorkflowStarter struct {
