@@ -277,6 +277,35 @@ func (service *Service) Publish(ctx context.Context, actor Actor, command Publis
 	return result, normalizeError(err)
 }
 
+func (service *Service) CompilationSource(ctx context.Context, actor Actor, revisionID string) (domain.Revision, domain.Catalog, error) {
+	if strings.TrimSpace(revisionID) == "" {
+		return domain.Revision{}, domain.Catalog{}, invalid("Invalid authoring revision request")
+	}
+	var revision domain.Revision
+	var catalog domain.Catalog
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		var err error
+		revision, err = repo.GetRevision(ctx, actor, revisionID)
+		if err != nil {
+			return err
+		}
+		catalogID, resolved, err := repo.Catalog(ctx, revision.CatalogKey, revision.CatalogVersion)
+		if err != nil {
+			return err
+		}
+		if catalogID != revision.CatalogID || resolved.ContentHash != revision.CatalogHash ||
+			resolved.ExecutionHash != revision.CatalogExecutionHash {
+			return conflict("Authoring revision catalog binding changed")
+		}
+		if err = repo.VerifyFrozenInputs(ctx, revision.ProjectID, revision.FrozenInputs); err != nil {
+			return err
+		}
+		catalog = resolved
+		return nil
+	})
+	return revision, catalog, normalizeError(err)
+}
+
 func createResourceReceipt(
 	ctx context.Context,
 	repo Repository,
