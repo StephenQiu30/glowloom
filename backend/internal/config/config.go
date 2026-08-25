@@ -23,6 +23,7 @@ const (
 	defaultAgentURL           = "http://127.0.0.1:8787"
 	defaultAgentSecret        = "development-only-agent-execution-secret"
 	defaultAgentPollMillis    = 500
+	defaultAgentLeaseSeconds  = 30 * 60
 )
 
 var numericVerificationCode = regexp.MustCompile(`^\d{6}$`)
@@ -49,6 +50,7 @@ type Config struct {
 	AgentURL                     string
 	AgentExecutionSecret         string
 	AgentPollInterval            time.Duration
+	AgentClaimLease              time.Duration
 }
 
 func Load() (Config, error) {
@@ -92,6 +94,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	agentLeaseSeconds, err := positiveInteger("AGENT_CLAIM_LEASE_SECONDS", defaultAgentLeaseSeconds)
+	if err != nil {
+		return Config{}, err
+	}
 	return Config{
 		ListenAddress:                net.JoinHostPort(host, strconv.Itoa(port)),
 		DatabaseURL:                  databaseURL,
@@ -114,6 +120,7 @@ func Load() (Config, error) {
 		AgentURL:                     environmentValue("AGENT_URL", defaultAgentURL),
 		AgentExecutionSecret:         environmentValue("AGENT_EXECUTION_SECRET", defaultAgentSecret),
 		AgentPollInterval:            time.Duration(agentPollMillis) * time.Millisecond,
+		AgentClaimLease:              time.Duration(agentLeaseSeconds) * time.Second,
 	}, nil
 }
 

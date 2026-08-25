@@ -61,6 +61,8 @@ type Batch struct {
 type Invocation struct {
 	ID, WorkspaceID, RequestID, Kind, InputHash, Status string
 	Payload                                             json.RawMessage
+	Attempts, ClaimVersion                              int
+	LeaseExpiresAt                                      *time.Time
 	CreatedAt                                           time.Time
 }
 

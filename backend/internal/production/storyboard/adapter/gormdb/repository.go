@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sort"
 	"time"
 
@@ -333,19 +332,25 @@ func (repo *repository) GetLatestExport(ctx context.Context, actor application.A
 	return exportDomain(record)
 }
 
-func (store *Store) ClaimNext(ctx context.Context, now time.Time) (storyboarddomain.Invocation, bool, error) {
+func (store *Store) ClaimNext(ctx context.Context, now, leaseExpiresAt time.Time) (storyboarddomain.Invocation, bool, error) {
+	if !leaseExpiresAt.After(now) {
+		return storyboarddomain.Invocation{}, false, errors.New("agent invocation lease must expire after claim time")
+	}
 	var result storyboarddomain.Invocation
 	found := false
 	err := platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
 		var record model.AgentInvocation
-		err := transaction.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("status = ? AND kind = ?", "queued", "storyboard_draft").Order("created_at").First(&record).Error
+		err := transaction.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
+			Where("kind = ?", "storyboard_draft").
+			Where("status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))", "queued", "running", now).
+			Order("created_at").First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		if err = transaction.Model(&record).Updates(map[string]any{"status": "running", "attempts": gorm.Expr("attempts + 1"), "started_at": now, "updated_at": now}).Error; err != nil {
+		if err = transaction.Model(&record).Updates(map[string]any{"status": "running", "attempts": gorm.Expr("attempts + 1"), "claim_version": gorm.Expr("claim_version + 1"), "lease_expires_at": leaseExpiresAt, "started_at": now, "completed_at": nil, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		if err = transaction.Model(&model.StoryboardDraftBatch{}).Where("id = ?", record.RequestID).Updates(map[string]any{"status": "running", "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
@@ -355,6 +360,7 @@ func (store *Store) ClaimNext(ctx context.Context, now time.Time) (storyboarddom
 			return err
 		}
 		record.Status, record.StartedAt, record.Attempts = "running", &now, record.Attempts+1
+		record.ClaimVersion, record.LeaseExpiresAt = record.ClaimVersion+1, &leaseExpiresAt
 		result = invocationDomain(record)
 		found = true
 		return nil
@@ -362,51 +368,61 @@ func (store *Store) ClaimNext(ctx context.Context, now time.Time) (storyboarddom
 	return result, found, err
 }
 
-func (store *Store) CompleteInvocation(ctx context.Context, invocationID string, result contract.Result, candidate storyboarddomain.Candidate, now time.Time) error {
+func (store *Store) CompleteInvocation(ctx context.Context, invocationID string, claimVersion int, result contract.Result, candidate storyboarddomain.Candidate, now time.Time) (bool, error) {
 	id, err := uuid.Parse(invocationID)
 	if err != nil {
-		return application.ErrNotFound
+		return false, application.ErrNotFound
 	}
 	candidateJSON, err := json.Marshal(candidate)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+	applied := false
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
 		var invocation model.AgentInvocation
 		if err := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&invocation, "id = ?", id).Error; err != nil {
 			return normalizeNotFound(err)
 		}
-		if invocation.Status != "running" || invocation.Kind != "storyboard_draft" {
-			return fmt.Errorf("storyboard invocation is not running")
+		if invocation.Status != "running" || invocation.Kind != "storyboard_draft" || invocation.ClaimVersion != claimVersion || invocation.LeaseExpiresAt == nil || !now.Before(*invocation.LeaseExpiresAt) {
+			return nil
 		}
-		if err := transaction.Model(&invocation).Updates(map[string]any{"status": "succeeded", "result_hash": result.ResultHash, "error": nil, "completed_at": now, "updated_at": now}).Error; err != nil {
+		if err := transaction.Model(&invocation).Updates(map[string]any{"status": "succeeded", "result_hash": result.ResultHash, "error": nil, "lease_expires_at": nil, "completed_at": now, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		if err := transaction.Model(&model.StoryboardDraftBatch{}).Where("id = ?", invocation.RequestID).Updates(map[string]any{"status": "needs_review", "result_hash": result.ResultHash, "candidate": datatypes.JSON(candidateJSON), "error": nil, "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
 			return err
 		}
-		return transaction.Model(&model.WorkflowTask{}).Where("request_type = ? AND request_id = ?", invocation.RequestType, invocation.RequestID).Updates(map[string]any{"status": "succeeded", "progress_stage": "candidate_ready", "error": nil, "next_action": nil, "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error
+		if err := transaction.Model(&model.WorkflowTask{}).Where("request_type = ? AND request_id = ?", invocation.RequestType, invocation.RequestID).Updates(map[string]any{"status": "succeeded", "progress_stage": "candidate_ready", "error": nil, "next_action": nil, "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
+			return err
+		}
+		applied = true
+		return nil
 	})
+	return applied, err
 }
 
-func (store *Store) FailInvocation(ctx context.Context, invocationID, outcome, code, summary string, retryable bool, now time.Time) error {
+func (store *Store) FailInvocation(ctx context.Context, invocationID string, claimVersion int, outcome, code, summary string, retryable bool, now time.Time) (bool, error) {
 	if outcome != "failed" && outcome != "unknown" {
 		outcome = "unknown"
 	}
 	id, err := uuid.Parse(invocationID)
 	if err != nil {
-		return application.ErrNotFound
+		return false, application.ErrNotFound
 	}
 	errorJSON, err := json.Marshal(map[string]any{"code": code, "summary": summary, "retryable": retryable})
 	if err != nil {
-		return err
+		return false, err
 	}
-	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+	applied := false
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
 		var invocation model.AgentInvocation
 		if err := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&invocation, "id = ?", id).Error; err != nil {
 			return normalizeNotFound(err)
 		}
-		if err := transaction.Model(&invocation).Updates(map[string]any{"status": outcome, "error": datatypes.JSON(errorJSON), "completed_at": now, "updated_at": now}).Error; err != nil {
+		if invocation.Status != "running" || invocation.ClaimVersion != claimVersion || invocation.LeaseExpiresAt == nil || !now.Before(*invocation.LeaseExpiresAt) {
+			return nil
+		}
+		if err := transaction.Model(&invocation).Updates(map[string]any{"status": outcome, "error": datatypes.JSON(errorJSON), "lease_expires_at": nil, "completed_at": now, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		nextAction := "retry_agent"
@@ -416,8 +432,13 @@ func (store *Store) FailInvocation(ctx context.Context, invocationID, outcome, c
 		if err := transaction.Model(&model.StoryboardDraftBatch{}).Where("id = ?", invocation.RequestID).Updates(map[string]any{"status": outcome, "error": datatypes.JSON(errorJSON), "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
 			return err
 		}
-		return transaction.Model(&model.WorkflowTask{}).Where("request_type = ? AND request_id = ?", invocation.RequestType, invocation.RequestID).Updates(map[string]any{"status": outcome, "progress_stage": "agent_result", "error": datatypes.JSON(errorJSON), "next_action": nextAction, "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error
+		if err := transaction.Model(&model.WorkflowTask{}).Where("request_type = ? AND request_id = ?", invocation.RequestType, invocation.RequestID).Updates(map[string]any{"status": outcome, "progress_stage": "agent_result", "error": datatypes.JSON(errorJSON), "next_action": nextAction, "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
+			return err
+		}
+		applied = true
+		return nil
 	})
+	return applied, err
 }
 
 func authorizeProject(ctx context.Context, database *gorm.DB, actor application.Actor, projectID uuid.UUID, write bool) error {
@@ -625,11 +646,11 @@ func invocationRecord(value storyboarddomain.Invocation) (model.AgentInvocation,
 	if err != nil {
 		return model.AgentInvocation{}, err
 	}
-	return model.AgentInvocation{ID: id, WorkspaceID: workspaceID, RequestType: "storyboard_draft_batch", RequestID: requestID, Kind: value.Kind, InputHash: value.InputHash, Payload: datatypes.JSON(value.Payload), Status: value.Status, Attempts: 0, CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt}, nil
+	return model.AgentInvocation{ID: id, WorkspaceID: workspaceID, RequestType: "storyboard_draft_batch", RequestID: requestID, Kind: value.Kind, InputHash: value.InputHash, Payload: datatypes.JSON(value.Payload), Status: value.Status, Attempts: value.Attempts, ClaimVersion: value.ClaimVersion, LeaseExpiresAt: value.LeaseExpiresAt, CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt}, nil
 }
 
 func invocationDomain(record model.AgentInvocation) storyboarddomain.Invocation {
-	return storyboarddomain.Invocation{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), RequestID: record.RequestID.String(), Kind: record.Kind, InputHash: record.InputHash, Payload: append([]byte(nil), record.Payload...), Status: record.Status, CreatedAt: record.CreatedAt}
+	return storyboarddomain.Invocation{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), RequestID: record.RequestID.String(), Kind: record.Kind, InputHash: record.InputHash, Payload: append([]byte(nil), record.Payload...), Status: record.Status, Attempts: record.Attempts, ClaimVersion: record.ClaimVersion, LeaseExpiresAt: record.LeaseExpiresAt, CreatedAt: record.CreatedAt}
 }
 
 func normalizeNotFound(err error) error {

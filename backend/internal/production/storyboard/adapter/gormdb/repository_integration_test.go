@@ -73,7 +73,7 @@ func TestPostgreSQLStoryboardingJourney(t *testing.T) {
 		t.Fatalf("idempotent create replay failed: batch=%s err=%v", replayed.ID, err)
 	}
 
-	invocation, found, err := store.ClaimNext(ctx, now.Add(time.Second))
+	invocation, found, err := store.ClaimNext(ctx, now.Add(time.Second), now.Add(30*time.Minute))
 	if err != nil || !found {
 		t.Fatalf("claim storyboard invocation: found=%v err=%v", found, err)
 	}
@@ -121,8 +121,9 @@ func TestPostgreSQLStoryboardingJourney(t *testing.T) {
 	if err = result.ValidateFor(contractInvocation); err != nil {
 		t.Fatalf("validate agent result envelope: %v", err)
 	}
-	if err = store.CompleteInvocation(ctx, invocation.ID, result, validated, now.Add(2*time.Second)); err != nil {
-		t.Fatalf("complete invocation: %v", err)
+	completionApplied, err := store.CompleteInvocation(ctx, invocation.ID, invocation.ClaimVersion, result, validated, now.Add(2*time.Second))
+	if err != nil || !completionApplied {
+		t.Fatalf("complete invocation: applied=%v err=%v", completionApplied, err)
 	}
 
 	batch, err = service.GetBatch(ctx, actor, batch.ID)

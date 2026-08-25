@@ -11,9 +11,9 @@ import (
 )
 
 type InvocationRepository interface {
-	ClaimNext(context.Context, time.Time) (domain.Invocation, bool, error)
-	CompleteInvocation(context.Context, string, contract.Result, domain.Candidate, time.Time) error
-	FailInvocation(context.Context, string, string, string, string, bool, time.Time) error
+	ClaimNext(context.Context, time.Time, time.Time) (domain.Invocation, bool, error)
+	CompleteInvocation(context.Context, string, int, contract.Result, domain.Candidate, time.Time) (bool, error)
+	FailInvocation(context.Context, string, int, string, string, string, bool, time.Time) (bool, error)
 }
 
 type AgentClient interface {
@@ -25,11 +25,12 @@ type Worker struct {
 	agent      AgentClient
 	now        func() time.Time
 	interval   time.Duration
+	lease      time.Duration
 	logger     *slog.Logger
 }
 
-func NewWorker(repository InvocationRepository, agent AgentClient, now func() time.Time, interval time.Duration, logger *slog.Logger) *Worker {
-	return &Worker{repository: repository, agent: agent, now: now, interval: interval, logger: logger}
+func NewWorker(repository InvocationRepository, agent AgentClient, now func() time.Time, interval, lease time.Duration, logger *slog.Logger) *Worker {
+	return &Worker{repository: repository, agent: agent, now: now, interval: interval, lease: lease, logger: logger}
 }
 
 func (worker *Worker) Run(ctx context.Context) {
@@ -49,7 +50,8 @@ func (worker *Worker) Run(ctx context.Context) {
 }
 
 func (worker *Worker) runOnce(ctx context.Context) bool {
-	invocation, found, err := worker.repository.ClaimNext(ctx, worker.now().UTC())
+	claimTime := worker.now().UTC()
+	invocation, found, err := worker.repository.ClaimNext(ctx, claimTime, claimTime.Add(worker.lease))
 	if err != nil {
 		if ctx.Err() == nil {
 			worker.logger.Error("claim storyboard invocation failed", "error", err)
@@ -62,23 +64,23 @@ func (worker *Worker) runOnce(ctx context.Context) bool {
 	request := contract.Invocation{InvocationID: invocation.ID, Kind: invocation.Kind, InputHash: invocation.InputHash, SchemaVersion: contract.SchemaVersion, Payload: invocation.Payload}
 	result, invokeErr := worker.agent.Invoke(ctx, request)
 	if invokeErr != nil {
-		if err = worker.repository.FailInvocation(ctx, invocation.ID, "unknown", "agent_outcome_unknown", invokeErr.Error(), true, worker.now().UTC()); err != nil && ctx.Err() == nil {
+		if _, err = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "unknown", "agent_outcome_unknown", invokeErr.Error(), true, worker.now().UTC()); err != nil && ctx.Err() == nil {
 			worker.logger.Error("record unknown storyboard invocation failed", "invocation_id", invocation.ID, "error", err)
 		}
 		return true
 	}
 	if result.Status != "succeeded" {
-		if err = worker.repository.FailInvocation(ctx, invocation.ID, result.Status, result.Error.Code, result.Error.Summary, result.Error.Retryable, worker.now().UTC()); err != nil && ctx.Err() == nil {
+		if _, err = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, result.Status, result.Error.Code, result.Error.Summary, result.Error.Retryable, worker.now().UTC()); err != nil && ctx.Err() == nil {
 			worker.logger.Error("record failed storyboard invocation failed", "invocation_id", invocation.ID, "error", err)
 		}
 		return true
 	}
 	candidate, err := domain.DecodeAndValidateCandidate(json.RawMessage(result.Candidate), invocation.Payload)
 	if err != nil {
-		_ = worker.repository.FailInvocation(ctx, invocation.ID, "failed", "candidate_validation_failed", err.Error(), false, worker.now().UTC())
+		_, _ = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "failed", "candidate_validation_failed", err.Error(), false, worker.now().UTC())
 		return true
 	}
-	if err = worker.repository.CompleteInvocation(ctx, invocation.ID, result, candidate, worker.now().UTC()); err != nil && ctx.Err() == nil {
+	if _, err = worker.repository.CompleteInvocation(ctx, invocation.ID, invocation.ClaimVersion, result, candidate, worker.now().UTC()); err != nil && ctx.Err() == nil {
 		worker.logger.Error("persist storyboard result failed", "invocation_id", invocation.ID, "error", err)
 	}
 	return true

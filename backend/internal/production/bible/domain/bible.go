@@ -86,6 +86,7 @@ type Bible struct {
 type Invocation struct {
 	ID, WorkspaceID, RequestID, Kind, InputHash, Status string
 	Payload                                             json.RawMessage
-	Attempts                                            int
+	Attempts, ClaimVersion                              int
+	LeaseExpiresAt                                      *time.Time
 	CreatedAt                                           time.Time
 }
