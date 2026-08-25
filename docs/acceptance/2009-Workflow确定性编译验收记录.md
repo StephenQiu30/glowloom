@@ -7,6 +7,7 @@
 - Requirement：[平台 V1 需求规格](../requirement/0001-平台V1需求规格.md)、[后端领域服务与生产闭环需求规格](../requirement/2002-后端领域服务与生产闭环需求规格.md)
 - Plan：[后端领域服务与生产闭环实施计划](../plan/2002-后端领域服务与生产闭环实施计划.md)
 - 前置验收：[Workflow 编译输入前置验收记录](2008-Workflow编译输入前置验收记录.md)
+- 后续进展：[Workflow 启动事实与 Temporal 对账验收记录](2010-Workflow启动事实与Temporal对账验收记录.md)
 
 ## 验收范围
 

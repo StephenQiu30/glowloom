@@ -9,6 +9,7 @@ Browser / Next.js
         ↓
 Go lanverse-api ──→ PostgreSQL（唯一 SQL 事实源）
         ├─────────→ MinIO（私有对象字节）
+        ├─────────→ Temporal（Workflow History；Worker 接线开发中）
         └─────────→ Python Candidate Runtime ──→ 本机 Codex CLI
 ```
 
@@ -20,7 +21,7 @@ Go lanverse-api ──→ PostgreSQL（唯一 SQL 事实源）
 - `backend/internal/agent/contract`：Backend ↔ Agent 的版本化调用/结果线协议所有者；`agent/app/candidate_runtime/schemas.py` 以禁止额外字段的 Pydantic 模型校验同一协议。
 - `docs/`：Design → PRD/Requirement → Plan → Acceptance 的事实链路。
 
-MVP 不依赖 Redis、Kafka、Temporal、Elasticsearch、多 Go Binary、第二套 ORM 或 Migration 框架。Backend 只接受一个 PostgreSQL `DATABASE_URL`；仓库不保留手写 SQL Schema/Migration、迁移版本字段或 Python SQLAlchemy Writer。
+当前服务仍不依赖 Redis、Kafka、Elasticsearch、第二套 ORM 或 Migration 框架。Workflow 持久执行演进已引入官方 Temporal Go SDK、本地开发服务和 Start/Describe 适配器；公共 Run API、Worker、Control/Signal 与 Human Gate 尚在开发。Backend 只接受一个 PostgreSQL `DATABASE_URL` 作为业务 SQL 事实源；Temporal 私有 History 存储不向 Backend 业务 Repository 或 Agent 暴露，仓库不保留手写 SQL Schema/Migration、迁移版本字段或 Python SQLAlchemy Writer。
 
 ## 文档入口
 
@@ -30,6 +31,7 @@ MVP 不依赖 Redis、Kafka、Temporal、Elasticsearch、多 Go Binary、第二�
 - [剧本到分镜 MVP 实施计划](docs/plan/0009-剧本到分镜MVP实施计划.md)
 - [剧本到分镜 MVP 验收记录](docs/acceptance/0009-剧本到分镜MVP验收记录.md)
 - [后端服务架构](docs/design/2001-后端服务架构.md)
+- [Workflow 启动事实与 Temporal 对账验收](docs/acceptance/2010-Workflow启动事实与Temporal对账验收记录.md)
 
 ## 本机启动
 
@@ -42,7 +44,7 @@ AGENT_EXECUTION_SECRET=development-only-agent-execution-secret \
   uv run uvicorn app.candidate_runtime.api:app --host 127.0.0.1 --port 8787
 ```
 
-另一个终端启动 Frontend、Backend、PostgreSQL 与 MinIO：
+另一个终端启动 Frontend、Backend、PostgreSQL、MinIO 与 Temporal：
 
 ```bash
 docker compose --env-file .env \
@@ -51,7 +53,7 @@ docker compose --env-file .env \
   up --build -d
 ```
 
-开发 Compose 中 Backend 通过 `host.docker.internal:8787` 调用私有 Agent。生产环境必须把 `AGENT_URL` 指向私有网络端点，并为 Backend/Agent 注入相同的高强度 `AGENT_EXECUTION_SECRET`；Agent 不接收数据库、JWT 或对象存储凭据。
+开发 Compose 中 Backend 通过 `host.docker.internal:8787` 调用私有 Agent，并通过 `temporal:7233` 连接 Temporal；Temporal UI 仅绑定本机 `127.0.0.1:8233`。生产环境必须显式提供私有网络内的 `AGENT_URL` 与 `TEMPORAL_ADDRESS`，并为 Backend/Agent 注入相同的高强度 `AGENT_EXECUTION_SECRET`；Agent 不接收数据库、JWT、Temporal 或对象存储凭据。
 
 需要独立部署 Agent 时，从仓库根目录构建，镜像会固定安装 Codex CLI 并带入本项目所需的 Skill Pack：
 
