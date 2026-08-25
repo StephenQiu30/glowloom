@@ -99,6 +99,21 @@ type NodeRunProjection struct {
 
 func (NodeRunProjection) TableName() string { return "wrk_node_run_projections" }
 
+type NodeCacheEntry struct {
+	ID                  uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	WorkspaceID         uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_node_cache_key,priority:1"`
+	CacheKey            string         `gorm:"type:char(64);not null;uniqueIndex:uq_wrk_node_cache_key,priority:2;check:ck_wrk_node_cache_key,char_length(cache_key) = 64"`
+	KeyMaterial         datatypes.JSON `gorm:"type:jsonb;not null"`
+	Output              datatypes.JSON `gorm:"type:jsonb;not null"`
+	OutputHash          string         `gorm:"type:char(64);not null;check:ck_wrk_node_cache_output_hash,char_length(output_hash) = 64"`
+	SourceWorkflowRunID uuid.UUID      `gorm:"type:uuid;not null;index:ix_wrk_node_cache_source,priority:1"`
+	SourceNodeRunID     uuid.UUID      `gorm:"type:uuid;not null;index:ix_wrk_node_cache_source,priority:2"`
+	CreatedAt           time.Time      `gorm:"type:timestamptz;not null"`
+	Workspace           Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (NodeCacheEntry) TableName() string { return "wrk_node_cache_entries" }
+
 type WorkflowStartIntent struct {
 	ID                uuid.UUID   `gorm:"type:uuid;primaryKey"`
 	WorkspaceID       uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_start_intent_key,priority:1"`

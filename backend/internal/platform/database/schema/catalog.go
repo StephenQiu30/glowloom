@@ -31,6 +31,7 @@ func Catalog() []any {
 		&model.RunInputSnapshot{},
 		&model.WorkflowRun{},
 		&model.NodeRunProjection{},
+		&model.NodeCacheEntry{},
 		&model.WorkflowStartIntent{},
 		&model.WorkflowStartReceipt{},
 		&model.WorkflowControlIntent{},

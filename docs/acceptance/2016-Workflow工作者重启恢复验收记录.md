@@ -44,5 +44,5 @@
 
 - 当前验证证明 Worker 进程可缺席并恢复等待，不以实际等待一整天延长 CI；跨日耐久性来自同一持久 History 机制，仍需生产 Temporal 的 Retention、可用性、备份和告警配置支撑。
 - 当前生产 Composition Root 不能启动 Workflow Worker：正式 `RuntimeService` 需要真实 `NodeExecutor` 与 HumanTask Opener。后续必须先完成这些依赖和启动/关闭/健康检查，再宣称生产 Worker 可用。
-- Shot Workflow 目前只有目标名称，尚无被 Design 正式固定的 Shot 输入快照、NodeRun 绑定和 Episode 父子边界；下一切片先补齐可审阅 Design，再按 Red → Green → Refactor 实现，避免空壳 Workflow。
+- Shot Workflow 目前只有目标名称，且 Generation/Candidate/Artifact 执行事实尚未落地；后续先完成 Node Cache 输出绑定与生产 NodeExecutor，再补齐 Shot 输入快照、NodeRun 绑定和 Episode 父子边界，避免空壳 Workflow。
 - 最终 `agent-browser` 仍只在全部开发与自动化回归完成后执行，本记录不计作浏览器验收。

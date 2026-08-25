@@ -20,6 +20,11 @@ type NodeRuntimeRepository interface {
 	RetryNode(context.Context, domain.NodeExecutionClaim, time.Time) error
 }
 
+type NodeCacheRepository interface {
+	FindNodeCache(context.Context, string, string) (domain.NodeCacheEntry, error)
+	EnsureNodeCache(context.Context, domain.NodeCacheEntry) (domain.NodeCacheEntry, error)
+}
+
 type RunCompletionRepository interface {
 	CompleteRun(context.Context, domain.CompleteRunCommand, time.Time) error
 }
