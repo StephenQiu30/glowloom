@@ -232,5 +232,45 @@ func runtimeNodeIdentities(command domain.NodeActivityCommand, claimToken string
 	return runID, nodeID, token, err
 }
 
+func (store *Store) CompleteRun(ctx context.Context, command domain.CompleteRunCommand, now time.Time) error {
+	runID, err := uuid.Parse(command.WorkflowRunID)
+	if err != nil {
+		return application.ErrNotFound
+	}
+	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var run model.WorkflowRun
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if run.Status == "SUCCEEDED" {
+			return nil
+		}
+		if run.Status != "RUNNING" && run.Status != "RETRYING" {
+			return errors.New("workflow run is not completable")
+		}
+		var nodes []model.NodeRunProjection
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).Where("workflow_run_id = ?", run.ID).Find(&nodes).Error; loadErr != nil {
+			return loadErr
+		}
+		if len(nodes) == 0 {
+			return errors.New("workflow run has no node projections")
+		}
+		for _, node := range nodes {
+			if (node.Status != "SUCCEEDED" && node.Status != "CACHED" && node.Status != "SKIPPED") || node.ActiveClaimToken != nil {
+				return errors.New("workflow run has incomplete node projections")
+			}
+		}
+		run.Status, run.ProgressStage = "SUCCEEDED", "completed"
+		run.NextAction, run.Error = nil, nil
+		run.Revision++
+		run.UpdatedAt = now.UTC()
+		return transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+			"status": run.Status, "progress_stage": run.ProgressStage, "next_action": nil, "error": nil,
+			"revision": run.Revision, "updated_at": run.UpdatedAt,
+		}).Error
+	})
+}
+
 var _ application.RuntimeRepository = (*Store)(nil)
 var _ application.NodeRuntimeRepository = (*Store)(nil)
+var _ application.RunCompletionRepository = (*Store)(nil)

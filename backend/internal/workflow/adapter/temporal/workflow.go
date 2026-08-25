@@ -41,9 +41,7 @@ type ApplyHumanGateCommand struct {
 	Decision        string `json:"decision"`
 }
 
-type CompleteRunCommand struct {
-	WorkflowRunID string `json:"workflow_run_id"`
-}
+type CompleteRunCommand = workflowdomain.CompleteRunCommand
 
 type RunResult struct {
 	WorkflowRunID string `json:"workflow_run_id"`

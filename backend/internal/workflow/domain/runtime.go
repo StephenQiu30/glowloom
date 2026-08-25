@@ -41,3 +41,7 @@ type NodeExecutorCommand struct {
 	NodeActivityCommand
 	IdempotencyKey string
 }
+
+type CompleteRunCommand struct {
+	WorkflowRunID string `json:"workflow_run_id"`
+}

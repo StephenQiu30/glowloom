@@ -20,6 +20,10 @@ type NodeRuntimeRepository interface {
 	RetryNode(context.Context, domain.NodeExecutionClaim, time.Time) error
 }
 
+type RunCompletionRepository interface {
+	CompleteRun(context.Context, domain.CompleteRunCommand, time.Time) error
+}
+
 type NodeExecutor interface {
 	Execute(context.Context, domain.NodeExecutorCommand) (domain.NodeActivityResult, error)
 }
@@ -89,4 +93,15 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		return domain.NodeActivityResult{}, normalizeError(err)
 	}
 	return result, nil
+}
+
+func (service *RuntimeService) CompleteRun(ctx context.Context, command domain.CompleteRunCommand) error {
+	if service == nil || service.config.Now == nil || strings.TrimSpace(command.WorkflowRunID) == "" {
+		return invalid("Invalid workflow completion input")
+	}
+	repository, supported := service.repository.(RunCompletionRepository)
+	if !supported {
+		return errors.New("workflow completion repository is unavailable")
+	}
+	return normalizeError(repository.CompleteRun(ctx, command, service.config.Now().UTC()))
 }
