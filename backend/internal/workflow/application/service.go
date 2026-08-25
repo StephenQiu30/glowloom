@@ -35,6 +35,9 @@ type Repository interface {
 	CreateReceipt(context.Context, platformcommand.Receipt) error
 	EnsureCompilation(context.Context, domain.CompiledFacts) (domain.CompiledFacts, error)
 	GetCompilation(context.Context, string, string) (domain.CompiledFacts, error)
+	PrepareStart(context.Context, domain.StartPreparation) (domain.StartPreparation, error)
+	BeginStartAttempt(context.Context, string, time.Time) (domain.StartPreparation, error)
+	FinalizeStartAttempt(context.Context, domain.WorkflowRun, domain.StartIntent, domain.StartReceipt, int, int) error
 }
 
 type TransactionManager interface {
