@@ -83,8 +83,11 @@ type NodeRunProjection struct {
 	NodeID            string      `gorm:"type:varchar(100);not null;uniqueIndex:uq_wrk_node_run_identity,priority:2"`
 	DefinitionKey     string      `gorm:"type:varchar(100);not null"`
 	DefinitionVersion string      `gorm:"type:varchar(40);not null"`
+	Executor          string      `gorm:"type:varchar(120);not null"`
+	RiskLevel         string      `gorm:"type:varchar(30);not null;check:ck_wrk_node_run_risk,risk_level IN ('low','external_ai','human_gate')"`
 	Status            string      `gorm:"type:varchar(30);not null;index:ix_wrk_node_runs_status_updated,priority:1;check:ck_wrk_node_run_status,status IN ('QUEUED','RUNNING','WAITING_HUMAN','RETRYING','SUCCEEDED','FAILED','CANCELLED','SKIPPED','CACHED')"`
 	Attempt           int         `gorm:"not null;check:ck_wrk_node_run_attempt,attempt >= 0"`
+	ActiveClaimToken  *uuid.UUID  `gorm:"type:uuid"`
 	Revision          int         `gorm:"not null;check:ck_wrk_node_run_revision,revision >= 1"`
 	CreatedAt         time.Time   `gorm:"type:timestamptz;not null"`
 	UpdatedAt         time.Time   `gorm:"type:timestamptz;not null;index:ix_wrk_node_runs_workspace_updated,priority:2,sort:desc;index:ix_wrk_node_runs_status_updated,priority:2,sort:desc"`

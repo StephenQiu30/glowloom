@@ -156,6 +156,7 @@ func prepareStart(
 		nodes = append(nodes, domain.NodeRunProjection{
 			ID: stableID("workflow-node-run", runID, node.NodeID), WorkspaceID: run.WorkspaceID, WorkflowRunID: runID,
 			NodeID: node.NodeID, DefinitionKey: node.DefinitionKey, DefinitionVersion: node.DefinitionVersion,
+			Executor: node.Executor, RiskLevel: node.RiskLevel,
 			Status: "QUEUED", Attempt: 0, Revision: 1, CreatedAt: now, UpdatedAt: now,
 		})
 	}

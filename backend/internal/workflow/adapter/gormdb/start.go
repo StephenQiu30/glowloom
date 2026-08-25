@@ -242,10 +242,19 @@ func nodeRunRecord(value domain.NodeRunProjection) (model.NodeRunProjection, err
 	if err != nil {
 		return model.NodeRunProjection{}, err
 	}
+	var activeClaimToken *uuid.UUID
+	if value.ActiveClaimToken != nil {
+		parsed, parseErr := uuid.Parse(*value.ActiveClaimToken)
+		if parseErr != nil {
+			return model.NodeRunProjection{}, parseErr
+		}
+		activeClaimToken = &parsed
+	}
 	return model.NodeRunProjection{
 		ID: id, WorkspaceID: workspaceID, WorkflowRunID: runID, NodeID: value.NodeID,
 		DefinitionKey: value.DefinitionKey, DefinitionVersion: value.DefinitionVersion,
-		Status: value.Status, Attempt: value.Attempt, Revision: value.Revision,
+		Executor: value.Executor, RiskLevel: value.RiskLevel, Status: value.Status, Attempt: value.Attempt,
+		ActiveClaimToken: activeClaimToken, Revision: value.Revision,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}, nil
 }
@@ -311,10 +320,16 @@ func runDomain(value model.WorkflowRun) domain.WorkflowRun {
 }
 
 func nodeRunDomain(value model.NodeRunProjection) domain.NodeRunProjection {
+	var claimToken *string
+	if value.ActiveClaimToken != nil {
+		token := value.ActiveClaimToken.String()
+		claimToken = &token
+	}
 	return domain.NodeRunProjection{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), WorkflowRunID: value.WorkflowRunID.String(),
 		NodeID: value.NodeID, DefinitionKey: value.DefinitionKey, DefinitionVersion: value.DefinitionVersion,
-		Status: value.Status, Attempt: value.Attempt, Revision: value.Revision,
+		Executor: value.Executor, RiskLevel: value.RiskLevel, Status: value.Status, Attempt: value.Attempt,
+		ActiveClaimToken: claimToken, Revision: value.Revision,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
 }
@@ -352,7 +367,8 @@ func sameNodeIdentities(left, right []domain.NodeRunProjection) bool {
 	for index := range leftCopy {
 		if leftCopy[index].ID != rightCopy[index].ID || leftCopy[index].WorkspaceID != rightCopy[index].WorkspaceID ||
 			leftCopy[index].WorkflowRunID != rightCopy[index].WorkflowRunID || leftCopy[index].NodeID != rightCopy[index].NodeID ||
-			leftCopy[index].DefinitionKey != rightCopy[index].DefinitionKey || leftCopy[index].DefinitionVersion != rightCopy[index].DefinitionVersion {
+			leftCopy[index].DefinitionKey != rightCopy[index].DefinitionKey || leftCopy[index].DefinitionVersion != rightCopy[index].DefinitionVersion ||
+			leftCopy[index].Executor != rightCopy[index].Executor || leftCopy[index].RiskLevel != rightCopy[index].RiskLevel {
 			return false
 		}
 	}

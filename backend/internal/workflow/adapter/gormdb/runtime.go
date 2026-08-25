@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
+	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
@@ -89,14 +93,144 @@ func (store *Store) LoadExecutionPlan(ctx context.Context, request domain.StartR
 		projection, projectionExists := projectionByNode[nodeID]
 		execution, executionExists := executionByNode[nodeID]
 		if !projectionExists || !executionExists || projection.DefinitionKey != execution.DefinitionKey ||
-			projection.DefinitionVersion != execution.DefinitionVersion || projection.WorkflowRunID != run.ID {
+			projection.DefinitionVersion != execution.DefinitionVersion || projection.Executor != execution.Executor ||
+			projection.RiskLevel != execution.RiskLevel || projection.WorkflowRunID != run.ID {
 			return domain.ExecutionPlan{}, fmt.Errorf("workflow runtime node %s has drifted", nodeID)
 		}
 		plan.Nodes = append(plan.Nodes, domain.ExecutionNode{
-			NodeRunID: projection.ID.String(), NodeID: nodeID, Executor: execution.Executor, RiskLevel: execution.RiskLevel,
+			NodeRunID: projection.ID.String(), NodeID: nodeID, Executor: projection.Executor, RiskLevel: projection.RiskLevel,
 		})
 	}
 	return plan, nil
 }
 
+func (store *Store) ClaimNode(
+	ctx context.Context,
+	command domain.NodeActivityCommand,
+	claimToken string,
+	now time.Time,
+) (domain.NodeExecutionClaim, error) {
+	runID, nodeID, token, err := runtimeNodeIdentities(command, claimToken)
+	if err != nil {
+		return domain.NodeExecutionClaim{}, application.ErrNotFound
+	}
+	var claim domain.NodeExecutionClaim
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var run model.WorkflowRun
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var node model.NodeRunProjection
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&node, "id = ?", nodeID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if node.WorkflowRunID != run.ID || node.NodeID != command.NodeID || node.Executor != command.Executor {
+			return errors.New("workflow node execution identity has drifted")
+		}
+		if node.Status == "SUCCEEDED" || node.Status == "CACHED" || node.Status == "SKIPPED" {
+			claim = domain.NodeExecutionClaim{Command: command, Status: node.Status, Attempt: node.Attempt, Revision: node.Revision, Replay: true}
+			return nil
+		}
+		if (run.Status != "RUNNING" && run.Status != "RETRYING") ||
+			(node.Status != "QUEUED" && node.Status != "RUNNING" && node.Status != "RETRYING") {
+			return errors.New("workflow node is not executable")
+		}
+		node.Status = "RUNNING"
+		node.Attempt++
+		node.ActiveClaimToken = &token
+		node.Revision++
+		node.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
+			"status": node.Status, "attempt": node.Attempt, "active_claim_token": token,
+			"revision": node.Revision, "updated_at": node.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		run.Status, run.ProgressStage = "RUNNING", "node:"+node.NodeID
+		run.Revision++
+		run.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+			"status": run.Status, "progress_stage": run.ProgressStage, "revision": run.Revision, "updated_at": run.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		claim = domain.NodeExecutionClaim{
+			Command: command, ClaimToken: token.String(), Status: node.Status,
+			Attempt: node.Attempt, Revision: node.Revision,
+		}
+		return nil
+	})
+	return claim, err
+}
+
+func (store *Store) CompleteNode(
+	ctx context.Context,
+	claim domain.NodeExecutionClaim,
+	status string,
+	now time.Time,
+) error {
+	return store.finishNode(ctx, claim, status, "RUNNING", "node:"+claim.Command.NodeID+":completed", now)
+}
+
+func (store *Store) RetryNode(ctx context.Context, claim domain.NodeExecutionClaim, now time.Time) error {
+	return store.finishNode(ctx, claim, "RETRYING", "RETRYING", "node:"+claim.Command.NodeID+":retrying", now)
+}
+
+func (store *Store) finishNode(
+	ctx context.Context,
+	claim domain.NodeExecutionClaim,
+	nodeStatus string,
+	runStatus string,
+	progressStage string,
+	now time.Time,
+) error {
+	runID, nodeID, token, err := runtimeNodeIdentities(claim.Command, claim.ClaimToken)
+	if err != nil {
+		return application.ErrNotFound
+	}
+	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var run model.WorkflowRun
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var node model.NodeRunProjection
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&node, "id = ?", nodeID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if node.WorkflowRunID != run.ID || node.NodeID != claim.Command.NodeID || node.Executor != claim.Command.Executor ||
+			node.Status != "RUNNING" || node.ActiveClaimToken == nil || *node.ActiveClaimToken != token || node.Revision != claim.Revision {
+			return &application.Error{Code: "resource_conflict", Message: "Workflow node claim is stale", Status: 409}
+		}
+		node.Status = nodeStatus
+		node.ActiveClaimToken = nil
+		node.Revision++
+		node.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
+			"status": node.Status, "active_claim_token": nil, "revision": node.Revision, "updated_at": node.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		run.Status, run.ProgressStage = runStatus, progressStage
+		run.Revision++
+		run.UpdatedAt = now.UTC()
+		return transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+			"status": run.Status, "progress_stage": run.ProgressStage, "revision": run.Revision, "updated_at": run.UpdatedAt,
+		}).Error
+	})
+}
+
+func runtimeNodeIdentities(command domain.NodeActivityCommand, claimToken string) (uuid.UUID, uuid.UUID, uuid.UUID, error) {
+	runID, err := uuid.Parse(command.WorkflowRunID)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, uuid.Nil, err
+	}
+	nodeID, err := uuid.Parse(command.NodeRunID)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, uuid.Nil, err
+	}
+	token, err := uuid.Parse(claimToken)
+	return runID, nodeID, token, err
+}
+
 var _ application.RuntimeRepository = (*Store)(nil)
+var _ application.NodeRuntimeRepository = (*Store)(nil)

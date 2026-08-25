@@ -44,9 +44,11 @@ type WorkflowRun struct {
 type NodeRunProjection struct {
 	ID, WorkspaceID, WorkflowRunID string
 	NodeID, DefinitionKey          string
-	DefinitionVersion              string
+	DefinitionVersion, Executor    string
+	RiskLevel                      string
 	Status                         string
 	Attempt, Revision              int
+	ActiveClaimToken               *string
 	CreatedAt, UpdatedAt           time.Time
 }
 
