@@ -1,1 +1,1 @@
-"""Lanverse backend application."""
+"""Lanverse private candidate runtime."""
