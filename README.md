@@ -22,8 +22,9 @@ Lanverse 是面向 AI 短剧生产的端到端 AI Native Production Platform。�
 - [系统总体架构](docs/design/0003-系统总体架构.md)
 - [前端应用架构](docs/design/1001-前端应用架构.md)
 - [后端服务架构](docs/design/2001-后端服务架构.md)
-- [平台迁移与服务整合计划](docs/plan/0007-平台迁移与服务整合计划.md)
-- [资源写入所有权迁移台账](docs/plan/0008-资源写入所有权迁移台账.md)
+- [平台 0→1 交付计划](docs/plan/0007-平台0到1交付计划.md)
+- [资源所有权与交付台账](docs/plan/0008-资源所有权与交付台账.md)
+- [剧本到分镜 MVP 垂直切片](docs/design/0009-剧本到分镜MVP垂直切片设计.md)
 
 完整设计已作为 [AI 短剧制作平台完整设计基线](docs/design/0001-AI短剧制作平台完整设计基线.md) 持久化。后续架构变化必须先更新对应 Design 及其决策记录，再修改实现。
 
