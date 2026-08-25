@@ -13,7 +13,9 @@ import (
 func TestHumanTaskClaimExpiryAndImmutableDecision(t *testing.T) {
 	now := time.Date(2026, time.August, 26, 0, 0, 0, 0, time.UTC)
 	repository := newHumanTaskRepository()
-	identities := []string{"task-1", "claim-a", "claim-b", "decision-1"}
+	identities := []string{
+		"task-1", "claim-a", "claim-b", "decision-old-token", "decision-1", "decision-replay", "decision-mismatch",
+	}
 	service := reviewapp.NewService(repository, reviewapp.Config{
 		Now: func() time.Time { return now },
 		NewID: func() string {
@@ -103,6 +105,13 @@ func (repo *humanTaskRepository) EnsureTask(_ context.Context, desired review.Hu
 	}
 	if !review.SameTaskBinding(repo.task, desired) {
 		return review.HumanTask{}, errors.New("task binding drift")
+	}
+	return repo.task, nil
+}
+
+func (repo *humanTaskRepository) FindTaskByNode(_ context.Context, workspaceID, nodeRunID string) (review.HumanTask, error) {
+	if repo.task.ID == "" || repo.task.WorkspaceID != workspaceID || repo.task.NodeRunID != nodeRunID {
+		return review.HumanTask{}, reviewapp.ErrNotFound
 	}
 	return repo.task, nil
 }
