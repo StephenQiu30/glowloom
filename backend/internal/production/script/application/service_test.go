@@ -1,0 +1,103 @@
+package application
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"testing"
+	"time"
+
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
+	"github.com/StephenQiu30/lanverse/backend/internal/production/script/domain"
+)
+
+type fakeStore struct {
+	receipts map[string]platformcommand.Receipt
+	analyses map[string]domain.Analysis
+}
+
+func (store *fakeStore) WithinTransaction(_ context.Context, operation func(Repository) error) error {
+	return operation(store)
+}
+func (store *fakeStore) ProjectWorkspace(_ context.Context, _ Actor, _ string, _ bool) (string, error) {
+	return "00000000-0000-0000-0000-000000000002", nil
+}
+func (store *fakeStore) FindReceipt(_ context.Context, _, operation, key string) (platformcommand.Receipt, error) {
+	receipt, ok := store.receipts[operation+":"+key]
+	if !ok {
+		return platformcommand.Receipt{}, platformcommand.ErrReceiptNotFound
+	}
+	return receipt, nil
+}
+func (store *fakeStore) CreateReceipt(_ context.Context, receipt platformcommand.Receipt) error {
+	store.receipts[receipt.Operation+":"+receipt.IdempotencyKey] = receipt
+	return nil
+}
+func (store *fakeStore) CreateAnalysis(_ context.Context, analysis domain.Analysis) error {
+	store.analyses[analysis.Revision.ID] = analysis
+	return nil
+}
+func (store *fakeStore) GetAnalysis(_ context.Context, revisionID string) (domain.Analysis, error) {
+	analysis, ok := store.analyses[revisionID]
+	if !ok {
+		return domain.Analysis{}, ErrNotFound
+	}
+	return analysis, nil
+}
+func (store *fakeStore) ListDocuments(context.Context, string, int, int) ([]domain.Document, int, error) {
+	return nil, 0, nil
+}
+
+type fakeMedia struct{ workspaceID, mimeType, text string }
+
+func (media fakeMedia) Read(context.Context, Actor, string) (MediaContent, []byte, error) {
+	return MediaContent{WorkspaceID: media.workspaceID, MIMEType: media.mimeType}, []byte(media.text), nil
+}
+
+func TestImportReplaysReceiptAndRejectsChangedInput(t *testing.T) {
+	store := &fakeStore{receipts: map[string]platformcommand.Receipt{}, analyses: map[string]domain.Analysis{}}
+	sequence := 0
+	service := NewService(store, fakeMedia{workspaceID: "00000000-0000-0000-0000-000000000002", mimeType: "text/markdown", text: "第一集\n内容\n第二集\n内容\n"}, Config{
+		Now: func() time.Time { return time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC) },
+		NewID: func() string {
+			sequence++
+			return fmt.Sprintf("00000000-0000-0000-0000-%012d", sequence)
+		},
+	})
+	mediaID := "00000000-0000-0000-0000-000000000003"
+	command := ImportCommand{ProjectID: "00000000-0000-0000-0000-000000000001", InputType: "media", Title: "剧本.md", MediaVersionID: &mediaID, Language: "zh-CN", RightsDeclaration: "我确认拥有使用权", IdempotencyKey: "script-import-1"}
+	actor := Actor{UserID: "00000000-0000-0000-0000-000000000004", TokenVersion: 1}
+
+	first, err := service.Import(context.Background(), actor, command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := service.Import(context.Background(), actor, command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Revision.ID != second.Revision.ID || len(store.analyses) != 1 {
+		t.Fatalf("replay created a second revision: first=%q second=%q analyses=%d", first.Revision.ID, second.Revision.ID, len(store.analyses))
+	}
+	if first.Revision.AnalysisStatus != "deterministic" || len(first.Revision.Blocks) != 4 {
+		t.Fatalf("analysis = %#v", first.Revision)
+	}
+
+	command.Title = "另一份剧本.md"
+	_, err = service.Import(context.Background(), actor, command)
+	var apiError *Error
+	if !errors.As(err, &apiError) || apiError.Code != "resource_conflict" || apiError.Status != 409 {
+		t.Fatalf("changed input error = %#v", err)
+	}
+}
+
+func TestPreviewRejectsMediaFromAnotherWorkspace(t *testing.T) {
+	store := &fakeStore{receipts: map[string]platformcommand.Receipt{}, analyses: map[string]domain.Analysis{}}
+	service := NewService(store, fakeMedia{workspaceID: "00000000-0000-0000-0000-000000000099", mimeType: "text/markdown", text: "第一集\n内容"}, Config{})
+
+	_, err := service.Preview(context.Background(), Actor{}, "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000003")
+	var apiError *Error
+	if !errors.As(err, &apiError) || apiError.Code != "not_found" {
+		t.Fatalf("cross-workspace preview error = %#v", err)
+	}
+}
