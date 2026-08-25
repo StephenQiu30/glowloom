@@ -88,7 +88,7 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 	}
 	if err = temporalClient.SignalWorkflow(ctx, run.GetID(), run.GetRunID(), temporaladapter.HumanGateSignalName, temporaladapter.HumanGateSignal{
 		WorkflowRunID: request.WorkflowRunID, NodeRunID: plan.Nodes[1].NodeRunID,
-		SignalReceiptID: uuid.NewString(), Decision: "APPROVED",
+		SignalIntentID: uuid.NewString(), Decision: "APPROVED",
 	}); err != nil {
 		t.Fatalf("signal human gate: %v", err)
 	}

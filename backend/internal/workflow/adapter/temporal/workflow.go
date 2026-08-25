@@ -27,18 +27,18 @@ type NodeActivityCommand = workflowdomain.NodeActivityCommand
 type NodeActivityResult = workflowdomain.NodeActivityResult
 
 type HumanGateSignal struct {
-	WorkflowRunID   string `json:"workflow_run_id"`
-	NodeRunID       string `json:"node_run_id"`
-	SignalReceiptID string `json:"signal_receipt_id"`
-	Decision        string `json:"decision"`
+	WorkflowRunID  string `json:"workflow_run_id"`
+	NodeRunID      string `json:"node_run_id"`
+	SignalIntentID string `json:"signal_intent_id"`
+	Decision       string `json:"decision"`
 }
 
 type ApplyHumanGateCommand struct {
-	WorkflowRunID   string `json:"workflow_run_id"`
-	NodeRunID       string `json:"node_run_id"`
-	NodeID          string `json:"node_id"`
-	SignalReceiptID string `json:"signal_receipt_id"`
-	Decision        string `json:"decision"`
+	WorkflowRunID  string `json:"workflow_run_id"`
+	NodeRunID      string `json:"node_run_id"`
+	NodeID         string `json:"node_id"`
+	SignalIntentID string `json:"signal_intent_id"`
+	Decision       string `json:"decision"`
 }
 
 type CompleteRunCommand = workflowdomain.CompleteRunCommand
@@ -80,7 +80,7 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 			}
 			apply := ApplyHumanGateCommand{
 				WorkflowRunID: request.WorkflowRunID, NodeRunID: node.NodeRunID, NodeID: node.NodeID,
-				SignalReceiptID: signal.SignalReceiptID, Decision: signal.Decision,
+				SignalIntentID: signal.SignalIntentID, Decision: signal.Decision,
 			}
 			applyContext := workflow.WithActivityOptions(ctx, shortActivityOptions("apply-human-gate:"+node.NodeRunID))
 			if err = workflow.ExecuteActivity(applyContext, ApplyHumanGateActivityName, apply).Get(ctx, nil); err != nil {
@@ -173,7 +173,7 @@ func awaitHumanGateSignal(
 }
 
 func validHumanGateSignal(signal HumanGateSignal, workflowRunID, nodeRunID string) bool {
-	if signal.WorkflowRunID != workflowRunID || signal.NodeRunID != nodeRunID || strings.TrimSpace(signal.SignalReceiptID) == "" {
+	if signal.WorkflowRunID != workflowRunID || signal.NodeRunID != nodeRunID || strings.TrimSpace(signal.SignalIntentID) == "" {
 		return false
 	}
 	switch signal.Decision {
