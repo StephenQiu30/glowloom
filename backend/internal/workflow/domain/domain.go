@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"time"
 
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 )
@@ -62,6 +63,13 @@ type RunInputSnapshot struct {
 type Compilation struct {
 	Definition       WorkflowDefinitionVersion `json:"definition"`
 	RunInputSnapshot RunInputSnapshot          `json:"run_input_snapshot"`
+}
+
+type CompiledFacts struct {
+	DefinitionID, RunInputSnapshotID string
+	Compilation
+	CreatedBy string
+	CreatedAt time.Time
 }
 
 func SystemCompilerContract() CompilerContract {
