@@ -37,7 +37,7 @@ import (
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-func TestProductionWorkflowWorkerConfirmsEpisodePlanThroughIndependentHumanGate(t *testing.T) {
+func TestProductionWorkflowWorkerPublishesEpisodeStructuresAfterPlanReview(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	temporalAddress := os.Getenv("LANVERSE_TEST_TEMPORAL_ADDRESS")
 	if databaseURL == "" || temporalAddress == "" {
@@ -78,6 +78,8 @@ func TestProductionWorkflowWorkerConfirmsEpisodePlanThroughIndependentHumanGate(
 				{ID: "bible-review", DefinitionKey: "human.production_bible_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "episodes", DefinitionKey: "production.episode_plan", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{"episode_count":1}`)},
 				{ID: "episodes-review", DefinitionKey: "human.episode_plan_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "structure", DefinitionKey: "production.episode_structure", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "structure-review", DefinitionKey: "human.episode_structure_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-bible", FromNodeID: "script", FromPort: "script", ToNodeID: "bible", ToPort: "script"},
@@ -85,6 +87,8 @@ func TestProductionWorkflowWorkerConfirmsEpisodePlanThroughIndependentHumanGate(
 				{ID: "script-episodes", FromNodeID: "script", FromPort: "script", ToNodeID: "episodes", ToPort: "script"},
 				{ID: "review-episodes", FromNodeID: "bible-review", FromPort: "bible", ToNodeID: "episodes", ToPort: "bible"},
 				{ID: "episodes-review", FromNodeID: "episodes", FromPort: "candidate", ToNodeID: "episodes-review", ToPort: "candidate"},
+				{ID: "episodes-structure", FromNodeID: "episodes-review", FromPort: "episodes", ToNodeID: "structure", ToPort: "episodes"},
+				{ID: "structure-review", FromNodeID: "structure", FromPort: "candidate", ToNodeID: "structure-review", ToPort: "candidate"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":4}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -260,6 +264,14 @@ func TestProductionWorkflowWorkerConfirmsEpisodePlanThroughIndependentHumanGate(
 	if err != nil {
 		t.Fatalf("approve Episode Plan review: %v", err)
 	}
+	preconfirmedPlan, err := planningService.ConfirmPlan(ctx, planningapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, planningapp.ConfirmPlanCommand{
+		PlanID: plan.ID.String(), ExpectedRevision: 1, IdempotencyKey: "workflow-review:" + planDecision.Decision.ID,
+	})
+	if err != nil || preconfirmedPlan.View.Plan.Status != "confirmed" || preconfirmedPlan.View.Plan.Revision != 2 || preconfirmedPlan.Receipt.ID == "" {
+		t.Fatalf("precommit Episode Plan owner confirmation: result=%#v err=%v", preconfirmedPlan, err)
+	}
 	planSignalCommand := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: bibleRun.WorkspaceID.String(), WorkflowRunID: run.ID, NodeRunID: planGateNode.ID.String(),
 		HumanTaskID: planDecision.Task.ID, ReviewDecisionID: planDecision.Decision.ID,
@@ -283,20 +295,7 @@ func TestProductionWorkflowWorkerConfirmsEpisodePlanThroughIndependentHumanGate(
 		t.Fatalf("replay Episode Plan gate signal: intent=%#v err=%v", replayedPlanSignal, err)
 	}
 
-	completionDeadline := time.Now().Add(10 * time.Second)
-	var completedRun model.WorkflowRun
-	for {
-		if err = database.First(&completedRun, "id = ?", run.ID).Error; err != nil {
-			t.Fatalf("load completed Episode Plan Workflow: %v", err)
-		}
-		if completedRun.Status == "SUCCEEDED" {
-			break
-		}
-		if completedRun.Status == "FAILED" || time.Now().After(completionDeadline) {
-			t.Fatalf("Episode Plan Workflow did not complete after review: %#v", completedRun)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	structureRun, structureGateNode, structureTask := waitGate("structure-review", 15*time.Second)
 	if err = database.First(&planGateNode, "id = ?", planGateNode.ID).Error; err != nil {
 		t.Fatalf("reload applied Episode Plan gate: %v", err)
 	}
@@ -319,13 +318,8 @@ func TestProductionWorkflowWorkerConfirmsEpisodePlanThroughIndependentHumanGate(
 	if err = database.Where("operation = ? AND resource_id = ?", "episode_plan.confirm", plan.ID).First(&confirmReceipt).Error; err != nil {
 		t.Fatalf("load Episode Plan owner receipt: %v", err)
 	}
-	replayedConfirmation, err := planningService.ConfirmPlan(ctx, planningapp.Actor{
-		UserID: fixture.userID.String(), TokenVersion: 1,
-	}, planningapp.ConfirmPlanCommand{
-		PlanID: plan.ID.String(), ExpectedRevision: 1, IdempotencyKey: "workflow-review:" + planDecision.Decision.ID,
-	})
-	if err != nil || replayedConfirmation.View.Plan.Revision != 2 || replayedConfirmation.Receipt.ID != confirmReceipt.ID.String() {
-		t.Fatalf("replay Episode Plan owner confirmation: result=%#v receipt=%#v err=%v", replayedConfirmation, confirmReceipt, err)
+	if preconfirmedPlan.Receipt.ID != confirmReceipt.ID.String() {
+		t.Fatalf("Episode Plan signal did not replay precommitted owner receipt: precommitted=%#v receipt=%#v", preconfirmedPlan.Receipt, confirmReceipt)
 	}
 	var confirmReceiptCount int64
 	if err = database.Model(&model.CommandReceipt{}).
@@ -346,12 +340,64 @@ func TestProductionWorkflowWorkerConfirmsEpisodePlanThroughIndependentHumanGate(
 	if err = database.Model(&model.ImportCommit{}).Where("project_id = ?", fixture.projectID).Count(&commitCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if plan.Status != "confirmed" || plan.Revision != 2 || plan.ConfirmedBy == nil || *plan.ConfirmedBy != fixture.userID ||
+	if plan.Status != "materialized" || plan.Revision != 3 || plan.ConfirmedBy == nil || *plan.ConfirmedBy != fixture.userID ||
 		planGateNode.Status != "SUCCEEDED" || confirmedBinding.Port != "episodes" || confirmedBinding.ValueType != "episode_plan" ||
 		confirmedBinding.ReferenceID != plan.ID.String() || confirmedBinding.ReferenceVersion != "2" || confirmedBinding.ContentHash != plan.InputHash ||
 		applyReceipt.OwnerReceiptID == nil || *applyReceipt.OwnerReceiptID != confirmReceipt.ID || applyReceipt.OwnerOperation == nil || *applyReceipt.OwnerOperation != "episode_plan.confirm" ||
-		persistedPlanSignal.Status != "completed" || confirmReceiptCount != 1 || episodeCount != 0 || commitCount != 0 {
+		persistedPlanSignal.Status != "completed" || confirmReceiptCount != 1 || episodeCount != 1 || commitCount != 1 {
 		t.Fatalf("confirmed Episode Plan boundary: plan=%#v node=%#v binding=%#v apply=%#v signal=%#v effects=%d/%d", plan, planGateNode, confirmedBinding, applyReceipt, persistedPlanSignal, episodeCount, commitCount)
+	}
+
+	var structureNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "structure").First(&structureNode).Error; err != nil {
+		t.Fatalf("load Episode Structure node: %v", err)
+	}
+	structureOutput, _, structureOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(structureNode.Output))
+	if err != nil || len(structureOutput.Bindings) != 1 || structureNode.OutputHash == nil || *structureNode.OutputHash != structureOutputHash {
+		t.Fatalf("parse Episode Structure candidate output: output=%#v node=%#v err=%v", structureOutput, structureNode, err)
+	}
+	structureBinding := structureOutput.Bindings[0]
+	var structureCandidates []string
+	if err = json.Unmarshal(structureTask.CandidateIDs, &structureCandidates); err != nil {
+		t.Fatalf("decode Episode Structure review candidates: %v", err)
+	}
+	var commit model.ImportCommit
+	if err = database.First(&commit, "id = ?", structureBinding.ReferenceID).Error; err != nil {
+		t.Fatalf("load published ImportCommit: %v", err)
+	}
+	var episode model.Episode
+	if err = database.Where("project_id = ?", fixture.projectID).First(&episode).Error; err != nil {
+		t.Fatalf("load materialized Episode: %v", err)
+	}
+	var scriptVersion model.EpisodeScriptVersion
+	if err = database.Where("episode_id = ?", episode.ID).First(&scriptVersion).Error; err != nil {
+		t.Fatalf("load published Episode Script Version: %v", err)
+	}
+	var structure model.EpisodeStructure
+	if err = database.Where("episode_id = ?", episode.ID).First(&structure).Error; err != nil {
+		t.Fatalf("load Episode Structure candidate: %v", err)
+	}
+	batch, err := planningService.GetPublishedStructureBatch(ctx, planningapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, plan.ID.String())
+	if err != nil {
+		t.Fatalf("load published Episode Structure batch: %v", err)
+	}
+	var materializeReceiptCount, publishReceiptCount int64
+	if err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", "episode_plan.materialize", commit.ID).Count(&materializeReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", "episode_plan.publish", commit.ID).Count(&publishReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if structureRun.Status != "WAITING_HUMAN" || structureNode.Status != "SUCCEEDED" || structureGateNode.Status != "WAITING_HUMAN" ||
+		structureBinding.Port != "candidate" || structureBinding.ValueType != "episode_structure_candidate" ||
+		structureBinding.ReferenceID != commit.ID.String() || structureBinding.ReferenceVersion != "2" || structureBinding.ContentHash != batch.ContentHash ||
+		len(structureCandidates) != 1 || structureCandidates[0] != commit.ID.String() || commit.Status != "published" || commit.Revision != 2 ||
+		episode.Status != "active" || episode.Revision != 2 || episode.CurrentScriptVersionID == nil || *episode.CurrentScriptVersionID != scriptVersion.ID ||
+		scriptVersion.Status != "published" || structure.Status != "needs_review" || structure.Revision != 1 || len(structure.ResultHash) != 64 ||
+		materializeReceiptCount != 1 || publishReceiptCount != 1 {
+		t.Fatalf("published Episode Structure boundary: run=%#v node=%#v gate=%#v binding=%#v candidates=%v commit=%#v episode=%#v version=%#v structure=%#v receipts=%d/%d", structureRun, structureNode, structureGateNode, structureBinding, structureCandidates, commit, episode, scriptVersion, structure, materializeReceiptCount, publishReceiptCount)
 	}
 }
 

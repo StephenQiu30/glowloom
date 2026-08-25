@@ -10,6 +10,7 @@ import (
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
+	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	projectdomain "github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
@@ -19,9 +20,10 @@ import (
 )
 
 const (
-	scriptRevisionExecutor  = "workflow.input.script_revision"
-	productionBibleExecutor = "activity.production_bible"
-	episodePlanExecutor     = "activity.episode_plan"
+	scriptRevisionExecutor   = "workflow.input.script_revision"
+	productionBibleExecutor  = "activity.production_bible"
+	episodePlanExecutor      = "activity.episode_plan"
+	episodeStructureExecutor = "activity.episode_structure"
 )
 
 type ScriptSource interface {
@@ -39,6 +41,11 @@ type ProjectSource interface {
 
 type EpisodePlanOwner interface {
 	CreatePlan(context.Context, planningapp.Actor, planningapp.CreatePlanCommand) (planningapp.View, error)
+	GetPlan(context.Context, planningapp.Actor, string) (planningapp.View, error)
+	GetImportCommitForPlan(context.Context, planningapp.Actor, string) (planningdomain.ImportCommit, bool, error)
+	Materialize(context.Context, planningapp.Actor, planningapp.MaterializeCommand) (planningdomain.ImportCommit, error)
+	Publish(context.Context, planningapp.Actor, planningapp.PublishCommand) (planningdomain.ImportCommit, error)
+	GetPublishedStructureBatch(context.Context, planningapp.Actor, string) (planningapp.PublishedStructureBatch, error)
 }
 
 type NodeExecutor struct {
@@ -73,9 +80,115 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeProductionBible(ctx, command)
 	case episodePlanExecutor:
 		return executor.executeEpisodePlan(ctx, command)
+	case episodeStructureExecutor:
+		return executor.executeEpisodeStructure(ctx, command)
 	default:
 		return domain.NodeExecutorResult{}, errors.New("unsupported production workflow node execution")
 	}
+}
+
+func (executor *NodeExecutor) executeEpisodeStructure(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.plans == nil {
+		return domain.NodeExecutorResult{}, errors.New("episode structure workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
+		command.OutputPorts[0].ValueType != "episode_structure_candidate" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid episode structure node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid episode structure node config")
+	}
+	binding := input.Bindings[0]
+	expectedPlanRevision, err := strconv.Atoi(binding.ReferenceVersion)
+	if err != nil || expectedPlanRevision < 1 || binding.Port != "episodes" || binding.ValueType != "episode_plan" ||
+		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "episodes" ||
+		strings.TrimSpace(binding.SourceNodeID) == "" || len(binding.ContentHash) != 64 {
+		return domain.NodeExecutorResult{}, errors.New("episode structure plan input has drifted")
+	}
+	actor := planningapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
+	view, err := executor.plans.GetPlan(ctx, actor, binding.ReferenceID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	plan := view.Plan
+	if plan.ID != binding.ReferenceID || plan.WorkspaceID != command.WorkspaceID || plan.ProjectID != command.ProjectID ||
+		plan.InputHash != binding.ContentHash || plan.CreatedBy != command.InitiatorUserID || len(plan.Proposals) == 0 ||
+		!frozenScriptMatchesPlan(input, plan) {
+		return domain.NodeExecutorResult{}, errors.New("episode structure plan does not match workflow input")
+	}
+	commit, found, err := executor.plans.GetImportCommitForPlan(ctx, actor, plan.ID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if !found {
+		if plan.Status != "confirmed" || plan.Revision != expectedPlanRevision || view.Impact.ProjectRevision < 1 ||
+			len(view.Impact.ActiveOrderHash) != 64 || !view.Impact.Allowed || len(view.Impact.Blockers) != 0 {
+			return domain.NodeExecutorResult{}, errors.New("confirmed episode plan is not materializable")
+		}
+		commit, err = executor.plans.Materialize(ctx, actor, planningapp.MaterializeCommand{
+			PlanID: plan.ID, Mode: "append_new", ExpectedPlanRevision: expectedPlanRevision,
+			ExpectedProjectRevision: view.Impact.ProjectRevision, ExpectedActiveOrderHash: view.Impact.ActiveOrderHash,
+			IdempotencyKey: command.IdempotencyKey + ":materialize",
+		})
+	}
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if commit.ID == "" || commit.WorkspaceID != command.WorkspaceID || commit.ProjectID != command.ProjectID ||
+		commit.PlanID != plan.ID || commit.CreatedBy != command.InitiatorUserID || len(commit.InputHash) != 64 ||
+		len(commit.Segments) != len(plan.Proposals) {
+		return domain.NodeExecutorResult{}, errors.New("episode materialization does not match workflow input")
+	}
+	switch commit.Status {
+	case "materialized":
+		if commit.Revision != 1 {
+			return domain.NodeExecutorResult{}, errors.New("episode materialization revision has drifted")
+		}
+		commit, err = executor.plans.Publish(ctx, actor, planningapp.PublishCommand{
+			CommitID: commit.ID, ExpectedRevision: commit.Revision,
+			IdempotencyKey: command.IdempotencyKey + ":publish",
+		})
+		if err != nil {
+			return domain.NodeExecutorResult{}, err
+		}
+	case "published":
+	default:
+		return domain.NodeExecutorResult{}, errors.New("episode materialization is not publishable")
+	}
+	if commit.Status != "published" || commit.Revision != 2 {
+		return domain.NodeExecutorResult{}, errors.New("episode publication did not reach its terminal revision")
+	}
+	batch, err := executor.plans.GetPublishedStructureBatch(ctx, actor, plan.ID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if batch.Commit.ID != commit.ID || batch.Commit.Status != "published" || batch.Commit.Revision != commit.Revision ||
+		len(batch.Structures) != len(commit.Segments) || len(batch.ContentHash) != 64 {
+		return domain.NodeExecutorResult{}, errors.New("published episode structure batch has drifted")
+	}
+	for _, structure := range batch.Structures {
+		if structure.WorkspaceID != command.WorkspaceID || structure.ProjectID != command.ProjectID ||
+			structure.Status != "needs_review" || structure.Revision != 1 || len(structure.ResultHash) != 64 {
+			return domain.NodeExecutorResult{}, errors.New("published episode structure candidate is invalid")
+		}
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "candidate", ValueType: "episode_structure_candidate", ReferenceID: commit.ID,
+			ReferenceVersion: strconv.Itoa(commit.Revision), ContentHash: batch.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
 }
 
 func (executor *NodeExecutor) executeEpisodePlan(
@@ -274,6 +387,11 @@ func frozenScriptMatches(input domain.NodeInputSnapshot, binding domain.NodeInpu
 		}
 	}
 	return false
+}
+
+func frozenScriptMatchesPlan(input domain.NodeInputSnapshot, plan planningdomain.Plan) bool {
+	return len(input.FrozenInputs) == 1 && input.FrozenInputs[0].Kind == "script_revision" &&
+		input.FrozenInputs[0].ID == plan.DocumentRevisionID && input.FrozenInputs[0].Hash == plan.Source.NormalizedHash
 }
 
 var _ workflowapp.NodeExecutor = (*NodeExecutor)(nil)

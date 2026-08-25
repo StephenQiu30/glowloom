@@ -240,6 +240,22 @@ func (repo *repository) GetCommit(ctx context.Context, actor application.Actor, 
 	}
 	return commitDomain(record)
 }
+
+func (repo *repository) GetPlanCommit(ctx context.Context, actor application.Actor, planID string) (domain.ImportCommit, error) {
+	id, err := uuid.Parse(planID)
+	if err != nil {
+		return domain.ImportCommit{}, application.ErrNotFound
+	}
+	var record model.ImportCommit
+	if err = repo.database.WithContext(ctx).Where("plan_id = ?", id).First(&record).Error; err != nil {
+		return domain.ImportCommit{}, normalizeNotFound(err)
+	}
+	if err = authorizeProject(ctx, repo.database, actor, record.ProjectID, false); err != nil {
+		return domain.ImportCommit{}, err
+	}
+	return commitDomain(record)
+}
+
 func (repo *repository) Publish(ctx context.Context, commit domain.ImportCommit, structures []domain.Structure) error {
 	commitRecord, err := commitRecord(commit)
 	if err != nil {

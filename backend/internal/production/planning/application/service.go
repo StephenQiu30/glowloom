@@ -52,6 +52,7 @@ type Repository interface {
 	HasConfirmedBible(context.Context, string, string) (bool, error)
 	Materialize(context.Context, domain.Plan, domain.ImportCommit, []domain.Episode, []Version) error
 	GetCommit(context.Context, Actor, string, bool) (domain.ImportCommit, error)
+	GetPlanCommit(context.Context, Actor, string) (domain.ImportCommit, error)
 	Publish(context.Context, domain.ImportCommit, []domain.Structure) error
 	ListEpisodes(context.Context, Actor, string) ([]domain.Episode, error)
 	GetEpisode(context.Context, Actor, string, bool) (domain.Episode, error)
@@ -94,6 +95,11 @@ type ConfirmPlanCommand struct {
 type ConfirmPlanResult struct {
 	View    View
 	Receipt platformcommand.Receipt
+}
+type PublishedStructureBatch struct {
+	Commit      domain.ImportCommit
+	Structures  []domain.Structure
+	ContentHash string
 }
 type MaterializeCommand struct {
 	PlanID, Mode, ExpectedActiveOrderHash, IdempotencyKey string
@@ -202,6 +208,84 @@ func (service *Service) GetPlan(ctx context.Context, actor Actor, planID string)
 		return err
 	})
 	return view, normalizeError(err)
+}
+
+func (service *Service) GetImportCommitForPlan(ctx context.Context, actor Actor, planID string) (domain.ImportCommit, bool, error) {
+	var commit domain.ImportCommit
+	found := false
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		plan, err := repo.GetPlan(ctx, actor, planID, false)
+		if err != nil {
+			return err
+		}
+		commit, err = repo.GetPlanCommit(ctx, actor, plan.ID)
+		if errors.Is(err, ErrNotFound) {
+			return nil
+		}
+		found = err == nil
+		return err
+	})
+	return commit, found, normalizeError(err)
+}
+
+func (service *Service) GetPublishedStructureBatch(ctx context.Context, actor Actor, planID string) (PublishedStructureBatch, error) {
+	var batch PublishedStructureBatch
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		plan, err := repo.GetPlan(ctx, actor, planID, false)
+		if err != nil {
+			return err
+		}
+		commit, err := repo.GetPlanCommit(ctx, actor, plan.ID)
+		if err != nil {
+			return err
+		}
+		if plan.Status != "materialized" || commit.Status != "published" || commit.PlanID != plan.ID || len(commit.Segments) == 0 {
+			return conflict("Episode structures are not published")
+		}
+		type structureReference struct {
+			StructureID     string `json:"structure_id"`
+			EpisodeID       string `json:"episode_id"`
+			ScriptVersionID string `json:"script_version_id"`
+			ResultHash      string `json:"result_hash"`
+		}
+		structures := make([]domain.Structure, len(commit.Segments))
+		references := make([]structureReference, len(commit.Segments))
+		seenStructures := make(map[string]struct{}, len(commit.Segments))
+		seenEpisodes := make(map[string]struct{}, len(commit.Segments))
+		for index, segment := range commit.Segments {
+			if segment.PublishedVersionID == nil || *segment.PublishedVersionID == "" {
+				return conflict("Episode structure publication is incomplete")
+			}
+			structure, loadErr := repo.GetEpisodeStructure(ctx, actor, segment.EpisodeID)
+			if loadErr != nil {
+				return loadErr
+			}
+			if structure.WorkspaceID != commit.WorkspaceID || structure.ProjectID != commit.ProjectID ||
+				structure.EpisodeID != segment.EpisodeID || structure.ScriptVersionID != *segment.PublishedVersionID ||
+				len(structure.ResultHash) != 64 {
+				return conflict("Episode structure publication has drifted")
+			}
+			if _, exists := seenStructures[structure.ID]; exists {
+				return conflict("Episode structure publication contains duplicates")
+			}
+			if _, exists := seenEpisodes[structure.EpisodeID]; exists {
+				return conflict("Episode structure publication contains duplicates")
+			}
+			seenStructures[structure.ID], seenEpisodes[structure.EpisodeID] = struct{}{}, struct{}{}
+			structures[index] = structure
+			references[index] = structureReference{
+				StructureID: structure.ID, EpisodeID: structure.EpisodeID,
+				ScriptVersionID: structure.ScriptVersionID, ResultHash: structure.ResultHash,
+			}
+		}
+		contentHash, err := platformcommand.InputHash(references)
+		if err != nil {
+			return err
+		}
+		batch = PublishedStructureBatch{Commit: commit, Structures: structures, ContentHash: contentHash}
+		return nil
+	})
+	return batch, normalizeError(err)
 }
 
 func (service *Service) ConfirmPlan(ctx context.Context, actor Actor, command ConfirmPlanCommand) (ConfirmPlanResult, error) {

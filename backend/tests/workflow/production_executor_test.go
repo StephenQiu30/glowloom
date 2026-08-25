@@ -222,7 +222,7 @@ func TestProductionBibleNodeExecutorDurablyWaitsForOneAuthorizedCandidate(t *tes
 	}
 }
 
-func TestProductionEpisodePlanNodeCreatesOneReviewReadyCandidateWithoutPublishing(t *testing.T) {
+func TestProductionEpisodePlanCandidateAndStructurePublishRecovery(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("set LANVERSE_TEST_DATABASE_URL to run the Episode Plan node executor journey")
@@ -267,11 +267,12 @@ func TestProductionEpisodePlanNodeCreatesOneReviewReadyCandidateWithoutPublishin
 		t.Fatalf("seed confirmed Production Bible: %v", err)
 	}
 
+	planningService := planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString})
 	executor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		bibleapp.NewService(biblegorm.New(database), bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
-		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		planningService,
 	)
 	input, _, inputHash, err := workflow.BuildNodeInput(workflow.NodeInputSnapshot{
 		SchemaVersion: workflow.NodeInputSchemaVersion, Config: json.RawMessage(`{"episode_count":1}`),
@@ -322,6 +323,73 @@ func TestProductionEpisodePlanNodeCreatesOneReviewReadyCandidateWithoutPublishin
 	if plan.Status != "review_ready" || plan.TargetDurationMS != 90_000 || plan.RequestedEpisodeCount == nil || *plan.RequestedEpisodeCount != 1 ||
 		binding.ContentHash != plan.InputHash || planCount != 1 || receiptCount != 1 || episodeCount != 0 || commitCount != 0 {
 		t.Fatalf("Episode Plan candidate facts: plan=%#v plans=%d receipts=%d episodes=%d commits=%d", plan, planCount, receiptCount, episodeCount, commitCount)
+	}
+	confirmed, err := planningService.ConfirmPlan(ctx, planningapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, planningapp.ConfirmPlanCommand{
+		PlanID: plan.ID.String(), ExpectedRevision: 1, IdempotencyKey: "structure-recovery-confirm",
+	})
+	if err != nil {
+		t.Fatalf("confirm recovery Episode Plan: %v", err)
+	}
+	materialized, err := planningService.Materialize(ctx, planningapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, planningapp.MaterializeCommand{
+		PlanID: plan.ID.String(), Mode: "append_new", ExpectedPlanRevision: 2,
+		ExpectedProjectRevision: confirmed.View.Impact.ProjectRevision,
+		ExpectedActiveOrderHash: confirmed.View.Impact.ActiveOrderHash,
+		IdempotencyKey:          "structure-recovery-precommitted-materialization",
+	})
+	if err != nil || materialized.Status != "materialized" || materialized.Revision != 1 {
+		t.Fatalf("precommit recovery materialization: commit=%#v err=%v", materialized, err)
+	}
+	structureInput, _, structureInputHash, err := workflow.BuildNodeInput(workflow.NodeInputSnapshot{
+		SchemaVersion: workflow.NodeInputSchemaVersion, Config: json.RawMessage(`{}`),
+		Bindings: []workflow.NodeInputBinding{{
+			Port: "episodes", ValueType: "episode_plan", SourceKind: workflow.NodeInputSourceNodeOutput,
+			SourceNodeID: "episodes-review", SourcePort: "episodes", ReferenceID: plan.ID.String(),
+			ReferenceVersion: "2", ContentHash: plan.InputHash,
+		}},
+		FrozenInputs: []authoring.FrozenReference{{
+			Kind: "script_revision", ID: fixture.scriptRevisionID.String(), Version: "1", Hash: fixture.normalizedHash,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("build Episode Structure recovery input: %v", err)
+	}
+	structureCommand := workflow.NodeExecutorCommand{
+		NodeActivityCommand: workflow.NodeActivityCommand{
+			WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(), NodeID: "structure",
+			Executor: "activity.episode_structure", Attempt: 1,
+		},
+		WorkspaceID: workspaceID.String(), ProjectID: fixture.projectID.String(),
+		InitiatorUserID: fixture.userID.String(), InitiatorTokenVersion: 1,
+		IdempotencyKey: "workflow-episode-structure:" + uuid.NewString(), Input: structureInput, InputHash: structureInputHash,
+		OutputPorts: []authoring.PortDefinition{{Key: "candidate", ValueType: "episode_structure_candidate", Required: true}},
+	}
+	structureResult, err := executor.Execute(ctx, structureCommand)
+	if err != nil || structureResult.Status != "SUCCEEDED" || len(structureResult.Output.Bindings) != 1 {
+		t.Fatalf("resume Episode Structure after materialization: result=%#v err=%v", structureResult, err)
+	}
+	replayedStructure, err := executor.Execute(ctx, structureCommand)
+	if err != nil || replayedStructure.Status != "SUCCEEDED" || replayedStructure.Output.Bindings[0] != structureResult.Output.Bindings[0] {
+		t.Fatalf("replay published Episode Structure: first=%#v replay=%#v err=%v", structureResult, replayedStructure, err)
+	}
+	var materializeReceiptCount, publishReceiptCount, structureCount int64
+	if err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", "episode_plan.materialize", materialized.ID).Count(&materializeReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", "episode_plan.publish", materialized.ID).Count(&publishReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.Episode{}).Where("project_id = ?", fixture.projectID).Count(&episodeCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.EpisodeStructure{}).Where("project_id = ?", fixture.projectID).Count(&structureCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if structureResult.Output.Bindings[0].ReferenceID != materialized.ID || materializeReceiptCount != 1 || publishReceiptCount != 1 || episodeCount != 1 || structureCount != 1 {
+		t.Fatalf("Episode Structure recovery facts: binding=%#v receipts=%d/%d episodes=%d structures=%d", structureResult.Output.Bindings[0], materializeReceiptCount, publishReceiptCount, episodeCount, structureCount)
 	}
 	if err = database.Model(&model.ProductionBible{}).Where("id = ?", bibleID).Update("status", "needs_review").Error; err != nil {
 		t.Fatal(err)
