@@ -1,22 +1,24 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
-from app.modules.skills.harness import structured_diagnostic
 from app.modules.scripts.production_bibles.contracts import ProductionBibleCandidate
+from app.modules.skills.harness import structured_diagnostic
 from app.modules.storyboards.contracts import StoryboardCandidate
 
 
 def _assert_strict_objects(value: Any) -> None:
     if isinstance(value, dict):
-        if value.get("type") == "object":
-            properties = value.get("properties", {})
-            assert value.get("additionalProperties") is False
-            assert set(value.get("required", [])) == set(properties)
-        for child in value.values():
+        mapping = cast(dict[str, Any], value)
+        if mapping.get("type") == "object":
+            properties = cast(dict[str, Any], mapping.get("properties", {}))
+            required = cast(list[str], mapping.get("required", []))
+            assert mapping.get("additionalProperties") is False
+            assert set(required) == set(properties)
+        for child in mapping.values():
             _assert_strict_objects(child)
     elif isinstance(value, list):
-        for child in value:
+        for child in cast(list[Any], value):
             _assert_strict_objects(child)
 
 

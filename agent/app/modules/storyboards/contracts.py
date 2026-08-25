@@ -1,157 +1,96 @@
-from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+from __future__ import annotations
+
+from typing import Any
 from uuid import UUID
 
-
-@dataclass(frozen=True, slots=True)
-class ShotSpecRef:
-    workspace_id: UUID
-    episode_id: UUID
-    shot_id: UUID
-    shot_spec_version_id: UUID
-    schema_version: int
-    content_hash: str
-    input_hash: str
+from pydantic import BaseModel, ConfigDict, Field
 
 
-@dataclass(frozen=True, slots=True)
-class ShotAssetReferenceSnapshot:
-    slot_key: str
-    role: Literal[
-        "location",
-        "character",
-        "prop",
-        "costume",
-        "visual_style",
-        "voice",
-    ]
-    asset_version_id: UUID
-    asset_state_id: UUID
-    asset_id: UUID
-    binding_source: Literal["manual", "ai"]
-    subject_key: str | None
+class NarrativeUnit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-
-@dataclass(frozen=True, slots=True)
-class ShotProductionSnapshot:
-    spec_ref: ShotSpecRef
-    shot_status: Literal["active", "archived"]
-    current_spec_version_id: UUID | None
-    shot_revision: int
-    spec: dict[str, Any]
-    asset_references: tuple[ShotAssetReferenceSnapshot, ...]
-    readiness_status: Literal["ready", "blocked", "unavailable"]
-    ready: bool
-    blocking_codes: tuple[str, ...]
-    warning_codes: tuple[str, ...]
-    evaluation_hash: str
-
-
-@dataclass(frozen=True, slots=True)
-class StoryboardReferenceSummary:
-    shot_count: int
-    spec_version_count: int
-
-
-@dataclass(frozen=True, slots=True)
-class AssetShotUsageSnapshot:
-    shot_id: UUID
-    shot_title: str
-    episode_id: UUID
-    spec_version_id: UUID
-    spec_version_no: int
-    current_spec_version_id: UUID | None
-    shot_status: str
-    slot_keys: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class EpisodeStoryboardSummary:
-    status: Literal["not_started", "blocked", "ready", "unavailable"]
-    total: int
-    ready: int
-    blocked: int
-    unavailable: int
-
-
-@dataclass(frozen=True, slots=True)
-class StoryboardDraftUnit:
     unit_version_id: UUID
-    position: int
-    kind: Literal["scene_heading", "action", "dialogue", "narration"]
-    exact_text: str
+    position: int = Field(gt=0)
+    kind: str
+    exact_text: str = Field(min_length=1)
     required_for_coverage: bool
-    source_scene_id: UUID | None
+    source_scene_id: UUID
     source_dialogue_id: UUID | None
 
 
-@dataclass(frozen=True, slots=True)
-class StoryboardDraftAsset:
-    asset_version_id: UUID
-    position: int
-    kind: str
-    name: str
-    state_label: str
-    unit_version_ids: tuple[UUID, ...] = ()
+class StoryboardDraftInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-
-@dataclass(frozen=True, slots=True)
-class StoryboardDraftWorldEntry:
-    entry_key: str
-    category: str
-    title: str
-    facts: tuple[str, ...]
-    rules: tuple[str, ...]
-    entity_keys: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class StoryboardDraftInput:
     batch_id: UUID
     task_id: UUID
-    input_hash: str
+    input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     script_version_id: UUID
-    target_duration_ms: int
-    aspect_ratio: Literal["9:16", "16:9", "1:1"]
+    target_duration_ms: int = Field(gt=0)
+    aspect_ratio: str = Field(min_length=1)
     visual_style: str | None
-    units: tuple[StoryboardDraftUnit, ...]
-    assets: tuple[StoryboardDraftAsset, ...]
-    production_bible_id: UUID | None = None
-    production_bible_revision: int | None = None
-    production_bible_result_hash: str | None = None
-    world_entries: tuple[StoryboardDraftWorldEntry, ...] = ()
-    run_token: UUID | None = None
+    units: list[NarrativeUnit] = Field(min_length=1)
+    assets: list[dict[str, Any]]
+    production_bible_id: UUID
+    production_bible_revision: int = Field(gt=0)
+    production_bible_result_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    world_entries: list[dict[str, Any]]
+    run_token: UUID
 
 
-class StoryboardDraftInputChanged(RuntimeError):
-    pass
+class ShotVisual(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    shot_size: str | None
+    camera_angle: str | None
+    camera_movement: str | None
+    composition: str | None
+    environment: str | None
+    lighting: str | None
+    subject_placement: str | None
+    facing: str | None
+    gaze: str | None
 
 
-class StoryboardDraftLeaseActive(RuntimeError):
-    pass
+class ShotSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    duration_ms: int = Field(ge=500, le=15000)
+    narrative_role: str
+    action_beats: list[str]
+    first_frame: str
+    last_frame: str
+    keyframe_notes: list[str]
+    continuity_in: str
+    continuity_out: str
+    visual: ShotVisual
+    dialogue: str | None
+    performance: str | None
+    ambience: str | None
+    sound_effects: list[str]
 
 
-class StoryboardDraftLeaseLost(RuntimeError):
-    pass
+class AssetReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: UUID
+    asset_version_id: UUID
+    state_key: str | None
+    usage: str
 
 
-class StoryboardDraftProviderError(RuntimeError):
-    def __init__(
-        self,
-        *,
-        outcome: Literal["failed", "unknown"],
-        code: str,
-        summary: str,
-        retryable: bool,
-        next_action: str,
-    ) -> None:
-        super().__init__(summary)
-        self.outcome = outcome
-        self.code = code
-        self.summary = summary
-        self.retryable = retryable
-        self.next_action = next_action
+class DraftShot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proposal_key: str
+    position: int = Field(gt=0)
+    title: str = Field(min_length=1)
+    narrative_unit_version_ids: list[UUID] = Field(min_length=1)
+    spec: ShotSpec
+    asset_references: list[AssetReference]
+    risk_codes: list[str]
 
 
-class StoryboardDraftProvider(Protocol):
-    async def draft(self, value: StoryboardDraftInput) -> dict[str, object]: ...
+class StoryboardCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    shots: list[DraftShot] = Field(min_length=1, max_length=120)
