@@ -30,6 +30,9 @@ services:
       AGENT_URL: ${AGENT_URL:-http://host.docker.internal:8787}
       AGENT_EXECUTION_SECRET: ${AGENT_EXECUTION_SECRET:-development-only-agent-execution-secret}
       AGENT_POLL_INTERVAL_MS: ${AGENT_POLL_INTERVAL_MS:-500}
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
       MINIO_ENDPOINT: minio:9000
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-127.0.0.1:9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-lanverse}
@@ -50,6 +53,8 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8686/healthz"]
       interval: 5s
@@ -107,6 +112,30 @@ services:
         condition: service_healthy
     restart: "no"
 
+  temporal:
+    image: temporalio/temporal@sha256:cf86707827fac99e4d1c4a47dc11b105382d796199c7bd41fb3213fb0471628e
+    command:
+      - server
+      - start-dev
+      - --ip
+      - 0.0.0.0
+      - --db-filename
+      - /home/temporal/temporal.db
+    ports:
+      - 127.0.0.1:${TEMPORAL_PORT:-7233}:7233
+      - 127.0.0.1:${TEMPORAL_UI_PORT:-8233}:8233
+    networks:
+      - edge
+      - internal
+    volumes:
+      - temporal-data:/home/temporal
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "127.0.0.1:7233"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 5s
+
 networks:
   edge:
     driver: bridge
@@ -117,3 +146,4 @@ networks:
 volumes:
   postgres-data:
   minio-data:
+  temporal-data:
