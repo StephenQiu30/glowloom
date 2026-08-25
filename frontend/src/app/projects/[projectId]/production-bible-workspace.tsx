@@ -25,8 +25,10 @@ import {
   useConfirmProductionBibleMutation,
   useCreateProductionBibleMutation,
   useCurrentProductionBibleQuery,
+  useDecideProductionBibleReviewIssueMutation,
   useProductionBibleQuery,
   useResumeProductionBibleMutation,
+  type ProductionBibleWithDecisions,
 } from "@/lib/server-state";
 
 const statusLabels: Record<API.ProductionBibleResponse["status"], string> = {
@@ -72,6 +74,7 @@ export function ProductionBibleWorkspace({
   });
   const [createBible, createState] = useCreateProductionBibleMutation();
   const [confirmBible, confirmState] = useConfirmProductionBibleMutation();
+  const [decideReviewIssue, decideState] = useDecideProductionBibleReviewIssueMutation();
   const [resumeBible, resumeState] = useResumeProductionBibleMutation();
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -84,9 +87,13 @@ export function ProductionBibleWorkspace({
       : undefined;
   const bible = outdatedBible ? undefined : queriedBible;
   const busy =
-    createState.isLoading || confirmState.isLoading || resumeState.isLoading;
+    createState.isLoading || confirmState.isLoading || resumeState.isLoading || decideState.isLoading;
+  const reviewDecisions = (bible as ProductionBibleWithDecisions | undefined)?.review_decisions ?? {};
   const blockingIssues =
     bible?.review_issues.filter((issue) => issue.severity === "blocking") ?? [];
+  const unresolvedBlockingIssues = blockingIssues.filter(
+    (issue) => reviewDecisions[issue.issue_key] !== "accepted",
+  );
   const unavailableError = (currentQuery.error as { code?: string } | undefined);
   const queryError =
     detailQuery.error ??
@@ -167,6 +174,38 @@ export function ProductionBibleWorkspace({
     if (!resumed) return;
     setActiveBibleId(resumed.id);
     setNotice("已从最近的安全检查点恢复制作圣经任务。");
+  }
+
+  async function decideIssue(
+    issueKey: string,
+    action: "accepted" | "rejected",
+  ): Promise<void> {
+    if (!bible) return;
+    const decided = await runAction(() =>
+      decideReviewIssue({
+        projectId,
+        bibleId: bible.id,
+        body: {
+          issue_key: issueKey,
+          action,
+          expected_revision: bible.revision,
+          idempotency_key: actionKey(
+            "decide-production-bible-issue",
+            bible.id,
+            issueKey,
+            action,
+            bible.revision,
+          ),
+        },
+      }).unwrap(),
+    );
+    if (!decided) return;
+    setActiveBibleId(decided.id);
+    setNotice(
+      action === "accepted"
+        ? "已明确接受该审阅风险；决议会与制作圣经一起保留。"
+        : "该问题继续阻断确认，后续可以重新审阅并更改决议。",
+    );
   }
 
   return (
@@ -278,7 +317,41 @@ export function ProductionBibleWorkspace({
                   <Alert key={issue.issue_key} variant={issue.severity === "blocking" ? "destructive" : "default"}>
                     <AlertCircle aria-hidden="true" />
                     <AlertTitle>{issue.code}</AlertTitle>
-                    <AlertDescription>{issue.summary}</AlertDescription>
+                    <AlertDescription>
+                      <p>{issue.summary}</p>
+                      {issue.severity === "blocking" ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">
+                            {reviewDecisions[issue.issue_key] === "accepted"
+                              ? "已接受风险"
+                              : reviewDecisions[issue.issue_key] === "rejected"
+                                ? "继续阻断"
+                                : "待人工决议"}
+                          </Badge>
+                          {reviewDecisions[issue.issue_key] !== "accepted" ? (
+                            <Button
+                              disabled={!canWrite || busy}
+                              onClick={() => void decideIssue(issue.issue_key, "accepted")}
+                              size="sm"
+                              type="button"
+                            >
+                              接受风险并继续
+                            </Button>
+                          ) : null}
+                          {reviewDecisions[issue.issue_key] !== "rejected" ? (
+                            <Button
+                              disabled={!canWrite || busy}
+                              onClick={() => void decideIssue(issue.issue_key, "rejected")}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              保留阻断
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </AlertDescription>
                   </Alert>
                 ))}
               </section>
@@ -287,12 +360,12 @@ export function ProductionBibleWorkspace({
             {bible.status === "needs_review" ? (
               <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-5">
                 <p className="text-sm text-muted-foreground">
-                  {blockingIssues.length
-                    ? `仍有 ${blockingIssues.length} 个阻断问题，需先修正原稿或审阅事实。`
+                  {unresolvedBlockingIssues.length
+                    ? `仍有 ${unresolvedBlockingIssues.length} 个阻断问题需要明确人工决议。`
                     : "没有阻断问题；确认后会原子物化资产和跨集状态。"}
                 </p>
                 <Button
-                  disabled={!canWrite || busy || blockingIssues.length > 0 || !bible.result_hash}
+                  disabled={!canWrite || busy || unresolvedBlockingIssues.length > 0 || !bible.result_hash}
                   onClick={confirm}
                 >
                   <CheckCircle2 aria-hidden="true" />确认制作圣经

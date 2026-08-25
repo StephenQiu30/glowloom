@@ -42,6 +42,7 @@ export function ProjectCreateDialog({
       language: "zh-CN",
       visual_style: null,
       target_duration_ms: 90_000,
+      idempotency_key: `project-create:${crypto.randomUUID()}`,
     });
     if (completed) formElement.reset();
   }

@@ -1,4 +1,4 @@
-import { ComicProductionStudio } from "@/app/studio/comic-production-studio";
+import { redirect } from "next/navigation";
 
 export default async function ProjectAssetsPage({
   params,
@@ -6,6 +6,5 @@ export default async function ProjectAssetsPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-
-  return <ComicProductionStudio initialProjectId={projectId} />;
+  redirect(`/projects/${projectId}`);
 }
