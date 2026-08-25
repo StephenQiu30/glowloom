@@ -1817,6 +1817,8 @@ export interface components {
             review_decisions: {
                 [key: string]: "accepted" | "rejected";
             };
+            /** Generation Error */
+            generation_error: components["schemas"]["TaskErrorResponse"] | null;
         };
         /** ProductionBibleResumeRequest */
         ProductionBibleResumeRequest: {

@@ -271,8 +271,19 @@ export function ProductionBibleWorkspace({
             <div>
               <p className="font-medium">{statusLabels[bible.status]}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                原任务保持可追溯；从已保存检查点创建一次受控恢复。
+                {bible.generation_error?.summary ??
+                  "原任务保持可追溯；从已保存检查点创建一次受控恢复。"}
               </p>
+              {bible.generation_error ? (
+                <p
+                  aria-label="制作圣经生成错误"
+                  className="mt-2 text-xs text-muted-foreground"
+                  role="alert"
+                >
+                  {bible.generation_error.code} ·{" "}
+                  {bible.generation_error.retryable ? "可恢复" : "不可恢复"}
+                </p>
+              ) : null}
             </div>
             <Button disabled={!canWrite || busy} onClick={resume} variant="outline">
               <RotateCcw aria-hidden="true" />恢复生成

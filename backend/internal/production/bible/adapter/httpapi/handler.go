@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -193,7 +194,18 @@ func presentBible(value domain.Bible) map[string]any {
 	for index, entry := range value.Candidate.WorldEntries {
 		worldEntries[index] = map[string]any{"id": stableID(value.ID, "world", entry.EntryKey), "entry_key": entry.EntryKey, "category": entry.Category, "title": entry.Title, "facts": entry.Facts, "rules": entry.Rules, "entity_keys": entry.EntityKeys, "episode_numbers": entry.EpisodeNumbers, "evidence": entry.Evidence, "created_at": value.CreatedAt, "updated_at": value.UpdatedAt}
 	}
-	return map[string]any{"id": value.ID, "workspace_id": value.WorkspaceID, "project_id": value.ProjectID, "document_revision_id": value.DocumentRevisionID, "task_id": value.TaskID, "status": value.Status, "input_hash": value.InputHash, "result_hash": value.ResultHash, "engine_version": value.EngineVersion, "model_name": value.ModelName, "prompt_version": value.PromptVersion, "schema_version": value.SchemaVersion, "harness_version": value.HarnessVersion, "checkpoint_stage": value.CheckpointStage, "checkpoint_revision": value.CheckpointRevision, "checkpoint_updated_at": value.CheckpointUpdatedAt, "review_issues": value.Candidate.ReviewIssues, "review_decisions": value.ReviewDecisions, "revision": value.Revision, "confirmed_at": value.ConfirmedAt, "confirmed_by": value.ConfirmedBy, "entities": entities, "world_entries": worldEntries, "created_at": value.CreatedAt, "updated_at": value.UpdatedAt}
+	return map[string]any{"id": value.ID, "workspace_id": value.WorkspaceID, "project_id": value.ProjectID, "document_revision_id": value.DocumentRevisionID, "task_id": value.TaskID, "status": value.Status, "input_hash": value.InputHash, "result_hash": value.ResultHash, "engine_version": value.EngineVersion, "model_name": value.ModelName, "prompt_version": value.PromptVersion, "schema_version": value.SchemaVersion, "harness_version": value.HarnessVersion, "checkpoint_stage": value.CheckpointStage, "checkpoint_revision": value.CheckpointRevision, "checkpoint_updated_at": value.CheckpointUpdatedAt, "generation_error": presentGenerationError(value.Error), "review_issues": value.Candidate.ReviewIssues, "review_decisions": value.ReviewDecisions, "revision": value.Revision, "confirmed_at": value.ConfirmedAt, "confirmed_by": value.ConfirmedBy, "entities": entities, "world_entries": worldEntries, "created_at": value.CreatedAt, "updated_at": value.UpdatedAt}
+}
+
+func presentGenerationError(raw json.RawMessage) any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil
+	}
+	return value
 }
 
 func stableID(bibleID, kind, key string) string {

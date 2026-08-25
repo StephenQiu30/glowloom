@@ -60,6 +60,7 @@ function bible(
         updated_at: "2026-08-25T00:00:00Z",
       },
     ],
+    generation_error: null,
     harness_version: "1",
     id: "bible-1",
     input_hash: "b".repeat(64),
