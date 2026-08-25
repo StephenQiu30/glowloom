@@ -179,6 +179,22 @@ describe("ProductionBibleWorkspace", () => {
     });
   });
 
+  it("恢复前展示最近一次生成失败摘要", () => {
+    currentBible = {
+      ...bible("unknown"),
+      generation_error: {
+        code: "codex_unavailable",
+        retryable: true,
+        summary: "model request failed",
+      },
+    };
+
+    renderWorkspace();
+
+    expect(screen.getByText("model request failed")).toBeVisible();
+    expect(screen.getByRole("button", { name: "恢复生成" })).toBeEnabled();
+  });
+
   it("不会把旧原稿的制作圣经误用于当前 Revision", () => {
     currentBible = {
       ...bible("confirmed"),
