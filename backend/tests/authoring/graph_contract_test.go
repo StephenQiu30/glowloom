@@ -155,6 +155,51 @@ func TestGraphValidationRejectsGeneralCycles(t *testing.T) {
 	}
 }
 
+func TestPublishSnapshotExcludesVisualNodesFromExecutionHash(t *testing.T) {
+	emptySchema := json.RawMessage(`{"type":"object","additionalProperties":false}`)
+	commentSchema := json.RawMessage(`{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false}`)
+	catalog, err := authoring.NewCatalog("visual-test", "1.0.0", []authoring.NodeDefinition{
+		{
+			Key: "test.source", Version: "1.0.0", Name: "Source", Category: "input", Executor: "workflow.source",
+			OutputPorts:  []authoring.PortDefinition{{Key: "value", ValueType: "artifact", Required: true}},
+			ConfigSchema: emptySchema, CachePolicy: "never", RiskLevel: "low", Executable: true,
+		},
+		{
+			Key: "visual.comment", Version: "1.0.0", Name: "Comment", Category: "visual", Executor: "visual.none",
+			ConfigSchema: commentSchema, CachePolicy: "never", RiskLevel: "low", Executable: false,
+		},
+	})
+	if err != nil {
+		t.Fatalf("build visual test catalog: %v", err)
+	}
+	draft := authoring.DraftSnapshot{
+		AuthoringMode: "canvas",
+		Graph: authoring.Graph{Nodes: []authoring.Node{
+			{ID: "source", DefinitionKey: "test.source", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "note", DefinitionKey: "visual.comment", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"text":"第一版注释"}`)},
+		}},
+		Layout: json.RawMessage(`{}`),
+		FrozenInputs: []authoring.FrozenReference{{
+			Kind: "artifact", ID: "00000000-0000-0000-0000-000000000201", Version: "1", Hash: strings.Repeat("b", 64),
+		}},
+	}
+	first, err := authoring.PublishSnapshot(draft, catalog)
+	if err != nil {
+		t.Fatalf("publish graph with visual node: %v", err)
+	}
+	draft.Graph.Nodes[1].Config = json.RawMessage(`{"text":"只改变画布说明"}`)
+	second, err := authoring.PublishSnapshot(draft, catalog)
+	if err != nil {
+		t.Fatalf("republish graph with changed visual node: %v", err)
+	}
+	if first.ExecutionHash != second.ExecutionHash {
+		t.Fatalf("visual node changed execution hash: first=%s second=%s", first.ExecutionHash, second.ExecutionHash)
+	}
+	if first.ContentHash == second.ContentHash {
+		t.Fatal("visual node change must remain visible in revision content hash")
+	}
+}
+
 func scriptToStoryboardGraph() authoring.Graph {
 	node := func(id, key string, config string) authoring.Node {
 		return authoring.Node{ID: id, DefinitionKey: key, DefinitionVersion: "1.0.0", Config: json.RawMessage(config)}
