@@ -2,7 +2,7 @@ import json
 
 from app.modules.scripts import ScriptExtractionResult
 
-SCRIPT_STRUCTURE_PROMPT_VERSION = "prompt-v6-production-bible-occurrences"
+SCRIPT_STRUCTURE_PROMPT_VERSION = "prompt-v7-scene-production-tasks-required"
 
 
 def script_structure_system_prompt() -> str:
@@ -22,9 +22,11 @@ def script_structure_system_prompt() -> str:
         "能支持后续生产的内容结构化。输入 episode_number 非空时，它是当前剧集的权威集数，"
         "所有场景、集级连续性和资产出现集数都必须使用它。场景必须尽量填写 episode_number、"
         "scene_number、story_beat、characters、props、environment_details、"
-        "continuity_notes 和 production_tasks；production_tasks 只是待审核的生产建议，"
-        "不能声称已经创建任务，task_type 只能使用 asset_prepare、shot_breakdown、"
-        "continuity_review 或 voice_prepare，每个场景最多给出 4 个不重复任务。"
+        "continuity_notes。每个 scene 必须给出 1 到 4 个不重复且可执行的 production_tasks，"
+        "不允许空数组，并至少包含一个 shot_breakdown；当原文存在资产准备、连续性核对或"
+        "声音准备需求时，再使用 asset_prepare、continuity_review 或 voice_prepare。"
+        "production_tasks 只是基于原文的待审核生产建议，不能声称已经创建或完成任务，"
+        "title 和 objective 必须具体说明该场景需要完成什么。"
         "结构提取阶段禁止生成 shot 候选；分镜拆解专由 storyboard.plan Skill 在结构确认后完成。"
         "对白要保留"
         "speaker、原文和表演信息；连续性问题要说明涉及实体、证据和建议。"

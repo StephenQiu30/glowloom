@@ -31,6 +31,7 @@ from .schemas import (
 from .tools import (
     annotate_storyboard_issues,
     assemble_storyboard,
+    bind_explicit_asset_mentions,
     build_scene_contexts,
     enforce_review_policy,
     validate_review_scope,
@@ -82,6 +83,19 @@ class NullStoryboardCheckpointStore:
 
     async def save(self, checkpoint: StoryboardCheckpoint) -> None:
         del checkpoint
+
+
+def _bind_fixed_asset_mentions(
+    contexts: Sequence[SceneContext],
+    drafts: Sequence[SceneDraft],
+) -> tuple[SceneDraft, ...]:
+    return tuple(
+        SceneDraft(
+            scene_key=draft.scene_key,
+            result=bind_explicit_asset_mentions(context, draft.result),
+        )
+        for context, draft in zip(contexts, drafts, strict=True)
+    )
 
 
 def default_storyboard_agent_skills() -> StoryboardAgentSkills:
@@ -201,9 +215,12 @@ class StoryboardAgentHarness:
                     )
                 )
             )
-            drafts = tuple(
-                SceneDraft(scene_key=context.scene_key, result=result)
-                for context, result in zip(contexts, draft_results, strict=True)
+            drafts = _bind_fixed_asset_mentions(
+                contexts,
+                tuple(
+                    SceneDraft(scene_key=context.scene_key, result=result)
+                    for context, result in zip(contexts, draft_results, strict=True)
+                ),
             )
             await self._checkpoint(
                 value=value,
@@ -219,6 +236,7 @@ class StoryboardAgentHarness:
             "reviewed",
         }
         if not hard_gate_was_saved:
+            drafts = _bind_fixed_asset_mentions(contexts, drafts)
             issues = self._hard_gate(contexts, drafts)
             while self._has_blockers(issues) and repair_round < MAX_REPAIR_ROUNDS:
                 repair_round += 1
@@ -231,6 +249,7 @@ class StoryboardAgentHarness:
                     issues=issues,
                     repair_round=repair_round,
                 )
+                drafts = _bind_fixed_asset_mentions(contexts, drafts)
                 await self._checkpoint(
                     value=value,
                     stage="repaired",
@@ -310,6 +329,7 @@ class StoryboardAgentHarness:
                 issues=issues,
                 repair_round=repair_round,
             )
+            drafts = _bind_fixed_asset_mentions(contexts, drafts)
             await self._checkpoint(
                 value=value,
                 stage="repaired",
@@ -333,6 +353,7 @@ class StoryboardAgentHarness:
                     issues=hard_issues,
                     repair_round=repair_round,
                 )
+                drafts = _bind_fixed_asset_mentions(contexts, drafts)
                 await self._checkpoint(
                     value=value,
                     stage="repaired",
@@ -357,6 +378,7 @@ class StoryboardAgentHarness:
                 )
             assembled = assemble_storyboard(contexts, drafts)
 
+        drafts = _bind_fixed_asset_mentions(contexts, drafts)
         final_issues = tuple(
             (
                 *self._hard_gate(contexts, drafts),

@@ -4,7 +4,11 @@ from typing import Literal
 from uuid import UUID
 
 from app.modules.storyboards.contracts import StoryboardDraftInput
-from app.modules.storyboards.drafts.provider_schema import ProviderShot, StoryboardProviderResult
+from app.modules.storyboards.drafts.provider_schema import (
+    ProviderAssetBinding,
+    ProviderShot,
+    StoryboardProviderResult,
+)
 
 from .schemas import (
     AssembledStoryboard,
@@ -17,6 +21,60 @@ from .schemas import (
 )
 
 DURATION_TOLERANCE = 0.25
+
+
+def bind_explicit_asset_mentions(
+    context: SceneContext,
+    result: StoryboardProviderResult,
+) -> StoryboardProviderResult:
+    """Deterministically bind fixed assets explicitly named by covered source units."""
+    role_by_kind = {
+        "character": "character",
+        "location": "location",
+        "setting": "location",
+        "prop": "prop",
+        "facility": "prop",
+        "equipment": "prop",
+        "costume": "costume",
+        "visual_style": "visual_style",
+        "voice": "voice",
+    }
+    shots = list(result.shots)
+    for asset in context.assets:
+        mentioned_positions = {
+            unit.position
+            for unit in context.units
+            if asset.name.casefold() in unit.exact_text.casefold()
+        }
+        if not mentioned_positions or any(
+            bool(mentioned_positions.intersection(shot.unit_positions))
+            and any(binding.asset_position == asset.position for binding in shot.asset_bindings)
+            for shot in shots
+        ):
+            continue
+        target_index = next(
+            (
+                index
+                for index, shot in enumerate(shots)
+                if mentioned_positions.intersection(shot.unit_positions)
+            ),
+            None,
+        )
+        if target_index is None:
+            continue
+        role = role_by_kind.get(asset.kind, "prop")
+        binding = ProviderAssetBinding.model_validate(
+            {
+                "asset_position": asset.position,
+                "role": role,
+                "subject_key": None,
+            }
+        )
+        target = shots[target_index]
+        shots[target_index] = target.model_copy(
+            update={"asset_bindings": [*target.asset_bindings, binding]}
+        )
+    return result.model_copy(update={"shots": shots})
 
 
 def build_scene_contexts(value: StoryboardDraftInput) -> tuple[SceneContext, ...]:

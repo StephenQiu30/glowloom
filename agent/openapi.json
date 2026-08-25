@@ -13530,6 +13530,7 @@
               "$ref": "#/components/schemas/SceneProductionTask"
             },
             "maxItems": 20,
+            "minItems": 1,
             "title": "Production Tasks",
             "type": "array"
           },
@@ -13584,7 +13585,8 @@
           "heading",
           "location",
           "time_of_day",
-          "summary"
+          "summary",
+          "production_tasks"
         ],
         "title": "SceneCandidateProposal",
         "type": "object"

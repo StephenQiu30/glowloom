@@ -8108,7 +8108,7 @@ export interface components {
             /** Location */
             location: string;
             /** Production Tasks */
-            production_tasks?: components["schemas"]["SceneProductionTask"][];
+            production_tasks: components["schemas"]["SceneProductionTask"][];
             /** Props */
             props?: string[];
             /** Scene Number */

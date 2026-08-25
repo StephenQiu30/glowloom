@@ -74,9 +74,7 @@ class SceneCandidateProposal(CommandModel):
     props: list[str] = Field(default_factory=list, max_length=100)
     environment_details: str | None = Field(default=None, max_length=2000)
     continuity_notes: list[str] = Field(default_factory=list, max_length=50)
-    production_tasks: list[SceneProductionTask] = Field(
-        default_factory=lambda: list[SceneProductionTask](), max_length=20
-    )
+    production_tasks: list[SceneProductionTask] = Field(min_length=1, max_length=20)
 
 
 class DialogueCandidateProposal(CommandModel):

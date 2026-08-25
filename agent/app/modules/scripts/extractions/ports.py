@@ -3,7 +3,7 @@ from typing import Literal, Protocol
 from app.modules.scripts.contracts import ProductionBibleExtractionInput
 from app.modules.scripts.extractions.schemas import ScriptExtractionResult
 
-SCRIPT_STRUCTURE_EXTRACTOR_VERSION = "langgraph-map-reduce-v1:prompt-v6:schema-v4:anchor-v2"
+SCRIPT_STRUCTURE_EXTRACTOR_VERSION = "langgraph-map-reduce-v1:prompt-v7:schema-v5:anchor-v2"
 
 
 class ScriptStructureExtractor(Protocol):

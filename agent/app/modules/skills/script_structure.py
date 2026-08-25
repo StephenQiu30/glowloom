@@ -195,6 +195,14 @@ def _deterministic_scene_candidates(
                     "summary": summary,
                     "episode_number": resolved_episode_number,
                     "scene_number": index,
+                    "production_tasks": [
+                        {
+                            "task_type": "shot_breakdown",
+                            "title": f"拆解场景 {index} 分镜",
+                            "objective": f"将“{heading}”的动作、对白和节奏拆解为可审核镜头。",
+                            "priority": "normal",
+                        }
+                    ],
                 },
                 "confidence_note": (
                     "Deterministic scene heading fallback; semantic enrichment requires review."

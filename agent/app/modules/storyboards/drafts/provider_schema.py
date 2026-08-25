@@ -8,7 +8,7 @@ from app.modules.storyboards.contracts import StoryboardDraftInput
 from app.modules.storyboards.drafts.schemas import DraftProviderResult
 from app.modules.storyboards.schemas import CameraAngle, CameraMovement, ShotSize
 
-STORYBOARD_DRAFT_PROMPT_VERSION = "storyboard-draft-prompt-v5-key-table"
+STORYBOARD_DRAFT_PROMPT_VERSION = "storyboard-draft-prompt-v6-explicit-asset-binding"
 
 
 class ProviderModel(BaseModel):
@@ -298,7 +298,10 @@ def storyboard_draft_system_prompt() -> str:
         "动作 beat、说话主体和可执行表演说明。required_for_coverage=true 的单元必须至少被一个镜头"
         "引用。只能引用输入中的整数 position，禁止生成 UUID。每镜 unit_positions 必须全部"
         "属于同一 source_scene_key，dialogue_unit_positions 只引用该镜内带对白引用的单元。"
-        "资产只按 asset_position 绑定确有拍摄用途的固定资产。镜头数量与时长由来源动作、"
+        "资产只按 asset_position 绑定确有拍摄用途的固定资产。若某个 assets.name 在一个"
+        "narrative_units.exact_text 中逐字出现，覆盖该叙事单元的至少一个镜头必须在"
+        "asset_bindings 中绑定该资产的 position；禁止只在画面描述中提到却不绑定。"
+        "镜头数量与时长由来源动作、"
         "对白、反应和目标总时长决定，不使用固定镜数或统一最小时长；单镜不得超过 15 秒。"
         "first_frame 必须能冻结成一个瞬间，不得提前包含动作结果。risk_codes 只报告需要人工"
         "复核的问题。必须返回符合提供的 JSON Schema 的 JSON 对象。"
