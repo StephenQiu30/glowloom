@@ -3,9 +3,11 @@ package workflow_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -76,22 +78,51 @@ func TestCompilerPersistsOneImmutableDefinitionAndRunInputSnapshot(t *testing.T)
 	}
 
 	workflowStore := workflowgorm.New(database)
+	workflowNow := now.Add(time.Minute)
 	service := workflowapp.NewService(
 		workflowauthoring.New(authoringService), workflowStore, workflow.SystemCompilerContract(),
 		workflowapp.Config{
-			Now: func() time.Time {
-				now = now.Add(time.Second)
-				return now
-			},
+			Now:   func() time.Time { return workflowNow },
 			NewID: uuid.NewString,
 		},
 	)
 	actor := workflowapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
-	first, err := service.Compile(ctx, actor, workflowapp.CompileCommand{
-		AuthoringRevisionID: revision.ID, IdempotencyKey: "workflow-compile-1",
-	})
-	if err != nil {
-		t.Fatalf("compile published revision: %v", err)
+	const concurrentCompilers = 6
+	start := make(chan struct{})
+	results := make(chan workflow.CompiledFacts, concurrentCompilers)
+	errorsFound := make(chan error, concurrentCompilers)
+	var group sync.WaitGroup
+	for index := range concurrentCompilers {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			<-start
+			compiled, compileErr := service.Compile(ctx, actor, workflowapp.CompileCommand{
+				AuthoringRevisionID: revision.ID, IdempotencyKey: fmt.Sprintf("workflow-compile-concurrent-%d", index),
+			})
+			if compileErr != nil {
+				errorsFound <- compileErr
+				return
+			}
+			results <- compiled
+		}()
+	}
+	close(start)
+	group.Wait()
+	close(results)
+	close(errorsFound)
+	for compileErr := range errorsFound {
+		t.Fatalf("concurrent compile published revision: %v", compileErr)
+	}
+	var first workflow.CompiledFacts
+	for compiled := range results {
+		if first.DefinitionID == "" {
+			first = compiled
+			continue
+		}
+		if compiled.DefinitionID != first.DefinitionID || compiled.RunInputSnapshotID != first.RunInputSnapshotID {
+			t.Fatalf("concurrent compilers diverged: first=%#v current=%#v", first, compiled)
+		}
 	}
 	if _, err = uuid.Parse(first.DefinitionID); err != nil {
 		t.Fatalf("invalid definition id: %q", first.DefinitionID)
@@ -104,7 +135,7 @@ func TestCompilerPersistsOneImmutableDefinitionAndRunInputSnapshot(t *testing.T)
 	}
 
 	replayed, err := service.Compile(ctx, actor, workflowapp.CompileCommand{
-		AuthoringRevisionID: revision.ID, IdempotencyKey: "workflow-compile-1",
+		AuthoringRevisionID: revision.ID, IdempotencyKey: "workflow-compile-concurrent-0",
 	})
 	if err != nil || replayed.DefinitionID != first.DefinitionID || replayed.RunInputSnapshotID != first.RunInputSnapshotID {
 		t.Fatalf("compile command replay diverged: first=%#v replayed=%#v err=%v", first, replayed, err)
