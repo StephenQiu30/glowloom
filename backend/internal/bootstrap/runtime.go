@@ -1,6 +1,11 @@
 package bootstrap
 
-import "github.com/StephenQiu30/lanverse/backend/internal/telemetry"
+import (
+	"context"
+	"net/http"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
+)
 
 type BuildInfo struct {
 	Service string `json:"service"`
@@ -10,8 +15,11 @@ type BuildInfo struct {
 }
 
 type RuntimeOptions struct {
-	Build   BuildInfo
-	Metrics *telemetry.HTTPMetrics
+	Build          BuildInfo
+	Metrics        *telemetry.HTTPMetrics
+	Ready          func(context.Context) error
+	RegisterRoutes func(*http.ServeMux)
+	AllowedOrigins []string
 }
 
 func (options RuntimeOptions) normalized() RuntimeOptions {
