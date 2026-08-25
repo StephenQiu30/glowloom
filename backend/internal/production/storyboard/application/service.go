@@ -12,13 +12,14 @@ import (
 )
 
 const (
-	createBatchOperation  = "storyboard.create_batch"
-	createSetOperation    = "storyboard.create_set"
-	applySetOperation     = "storyboard.apply_set"
-	decideDraftOperation  = "storyboard.decide_draft"
-	approveBatchOperation = "storyboard.approve_batch"
-	applyBatchOperation   = "storyboard.apply_batch"
-	createExportOperation = "storyboard.create_export"
+	createBatchOperation     = "storyboard.create_batch"
+	createSetOperation       = "storyboard.create_set"
+	applySetOperation        = "storyboard.apply_set"
+	createExportSetOperation = "storyboard.create_export_set"
+	decideDraftOperation     = "storyboard.decide_draft"
+	approveBatchOperation    = "storyboard.approve_batch"
+	applyBatchOperation      = "storyboard.apply_batch"
+	createExportOperation    = "storyboard.create_export"
 )
 
 var ErrNotFound = errors.New("storyboard resource not found")
@@ -49,6 +50,8 @@ type Repository interface {
 	LockEpisode(context.Context, Actor, string) error
 	CreateShots(context.Context, domain.Batch, []domain.Shot) error
 	ListShots(context.Context, Actor, string) ([]domain.Shot, error)
+	CreateExportSetWorkflow(context.Context, domain.ExportSet, []domain.Export) error
+	GetExportSet(context.Context, Actor, string) (domain.ExportSet, error)
 	CreateExport(context.Context, domain.Export) error
 	GetExport(context.Context, Actor, string) (domain.Export, error)
 	GetLatestExport(context.Context, Actor, string) (domain.Export, error)
@@ -94,6 +97,10 @@ type ApplySetResult struct {
 	Receipt platformcommand.Receipt
 }
 type ExportCommand struct{ EpisodeID, ExpectedOrderHash, IdempotencyKey string }
+type CreateExportSetCommand struct {
+	SetID, ExpectedResultHash, IdempotencyKey string
+	ExpectedRevision                          int
+}
 type ApplyPreflight struct {
 	BatchID               string
 	BatchRevision         int
@@ -723,6 +730,169 @@ func (service *Service) ListShots(ctx context.Context, actor Actor, episodeID st
 	return values, normalizeError(err)
 }
 
+func (service *Service) CreateExportSet(
+	ctx context.Context,
+	actor Actor,
+	command CreateExportSetCommand,
+) (domain.ExportSet, error) {
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if command.SetID == "" || command.ExpectedRevision < 1 || len(command.ExpectedResultHash) != 64 ||
+		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return domain.ExportSet{}, invalid("Invalid Storyboard Export Set request")
+	}
+	var value domain.ExportSet
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		set, err := repo.GetSet(ctx, actor, command.SetID, true)
+		if err != nil {
+			return err
+		}
+		inputHash, err := platformcommand.InputHash(struct {
+			SetID, ResultHash string
+			Revision          int
+		}{command.SetID, command.ExpectedResultHash, command.ExpectedRevision})
+		if err != nil {
+			return err
+		}
+		if found, receiptErr := repo.FindReceipt(ctx, set.WorkspaceID, createExportSetOperation, command.IdempotencyKey); receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[receipt](found, inputHash)
+			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
+				return conflict("Idempotency key was already used with different input")
+			}
+			if replayErr != nil {
+				return replayErr
+			}
+			value, replayErr = repo.GetExportSet(ctx, actor, replayed.ID)
+			if replayErr != nil {
+				return replayErr
+			}
+			if found.ResourceID != value.ID || found.CreatedBy != actor.UserID || value.CreatedBy != actor.UserID ||
+				value.DraftSetID != command.SetID || value.DraftSetRevision != command.ExpectedRevision ||
+				value.InputHash != inputHash || value.Status != "succeeded" || len(value.ContentHash) != 64 ||
+				len(value.Exports) != len(set.Batches) || len(value.Exports) == 0 {
+				return conflict("Storyboard Export Set receipt has drifted")
+			}
+			return nil
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		if set.Status != "applied" || set.Revision != command.ExpectedRevision || set.ResultHash == nil ||
+			*set.ResultHash != command.ExpectedResultHash || len(set.Batches) == 0 {
+			return conflict("Applied Storyboard Draft Set changed before export")
+		}
+		for _, reference := range set.Batches {
+			if err = repo.LockEpisode(ctx, actor, reference.EpisodeID); err != nil {
+				return err
+			}
+		}
+		snapshots := make([]exportEpisodeSnapshot, len(set.Batches))
+		formalReferences := make([]formalShotReference, 0)
+		for index, reference := range set.Batches {
+			batch, batchErr := repo.GetBatch(ctx, actor, reference.BatchID, false)
+			if batchErr != nil {
+				return batchErr
+			}
+			if batch.WorkspaceID != set.WorkspaceID || batch.ProjectID != set.ProjectID || batch.Status != "applied" ||
+				batch.EpisodeID != reference.EpisodeID || batch.StructureID != reference.StructureID ||
+				batch.ScriptVersionID != reference.ScriptVersionID || batch.InputHash != reference.InputHash ||
+				batch.ResultHash == nil || reference.ResultHash == nil || *batch.ResultHash != *reference.ResultHash {
+				return conflict("Applied Storyboard Batch changed before export")
+			}
+			shots, listErr := repo.ListShots(ctx, actor, reference.EpisodeID)
+			if listErr != nil {
+				return listErr
+			}
+			if len(shots) == 0 {
+				return conflict("Formal storyboard Shots are required for every exported Episode")
+			}
+			for _, shot := range shots {
+				if shot.WorkspaceID != set.WorkspaceID || shot.ProjectID != set.ProjectID ||
+					shot.EpisodeID != reference.EpisodeID || shot.BatchID != reference.BatchID || shot.Status != "active" {
+					return conflict("Formal storyboard Shots changed after Draft Set apply")
+				}
+				formalReferences = append(formalReferences, formalShotReference{
+					BatchID: reference.BatchID, EpisodeID: reference.EpisodeID, ShotID: shot.ID,
+					Position: shot.Position, ContentHash: shot.ContentHash,
+				})
+			}
+			orderHash, hashErr := domain.OrderHash(shots)
+			if hashErr != nil {
+				return hashErr
+			}
+			snapshots[index] = exportEpisodeSnapshot{reference: reference, shots: shots, orderHash: orderHash}
+		}
+		formalHash, err := platformcommand.InputHash(formalReferences)
+		if err != nil {
+			return err
+		}
+		if formalHash != command.ExpectedResultHash {
+			return conflict("Formal storyboard Shots changed after Draft Set apply")
+		}
+		now := service.config.Now().UTC()
+		value = domain.ExportSet{
+			ID: service.config.NewID(), WorkspaceID: set.WorkspaceID, ProjectID: set.ProjectID,
+			DraftSetID: set.ID, DraftSetRevision: set.Revision, Status: "succeeded", InputHash: inputHash,
+			Exports: make([]domain.ExportSetReference, len(snapshots)), Revision: 1,
+			CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now,
+		}
+		exports := make([]domain.Export, len(snapshots))
+		contentReferences := make([]exportSetContentReference, len(snapshots))
+		for index, snapshot := range snapshots {
+			episodeInputHash, hashErr := platformcommand.InputHash(struct{ EpisodeID, OrderHash string }{
+				snapshot.reference.EpisodeID, snapshot.orderHash,
+			})
+			if hashErr != nil {
+				return hashErr
+			}
+			built, buildErr := buildPackage(snapshot.reference.EpisodeID, episodeInputHash, snapshot.shots)
+			if buildErr != nil {
+				return buildErr
+			}
+			exports[index] = domain.Export{
+				ID: service.config.NewID(), WorkspaceID: set.WorkspaceID, ProjectID: set.ProjectID,
+				ExportSetID: &value.ID, EpisodeID: snapshot.reference.EpisodeID, Status: "succeeded",
+				InputHash: episodeInputHash, ContentHash: built.ContentHash, Manifest: built.Manifest,
+				Files: built.Files, Package: built.Bytes, Revision: 1, CreatedBy: actor.UserID,
+				CreatedAt: now, UpdatedAt: now,
+			}
+			value.Exports[index] = domain.ExportSetReference{
+				ExportID: exports[index].ID, EpisodeID: exports[index].EpisodeID,
+				OrderHash: snapshot.orderHash, ContentHash: exports[index].ContentHash,
+			}
+			contentReferences[index] = exportSetContentReference{
+				EpisodeID: exports[index].EpisodeID, OrderHash: snapshot.orderHash,
+				ContentHash: exports[index].ContentHash,
+			}
+		}
+		value.ContentHash, err = platformcommand.InputHash(contentReferences)
+		if err != nil {
+			return err
+		}
+		if err = repo.CreateExportSetWorkflow(ctx, value, exports); err != nil {
+			return err
+		}
+		result, err := platformcommand.Result(receipt{ID: value.ID})
+		if err != nil {
+			return err
+		}
+		return repo.CreateReceipt(ctx, platformcommand.Receipt{
+			ID: service.config.NewID(), WorkspaceID: value.WorkspaceID, Operation: createExportSetOperation,
+			IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: value.ID,
+			Result: result, CreatedBy: actor.UserID, CreatedAt: now,
+		})
+	})
+	return value, normalizeError(err)
+}
+
+func (service *Service) GetExportSet(ctx context.Context, actor Actor, exportSetID string) (domain.ExportSet, error) {
+	var value domain.ExportSet
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		var err error
+		value, err = repo.GetExportSet(ctx, actor, exportSetID)
+		return err
+	})
+	return value, normalizeError(err)
+}
+
 func (service *Service) PreflightExport(ctx context.Context, actor Actor, episodeID string) (ExportPreflight, error) {
 	shots, err := service.ListShots(ctx, actor, episodeID)
 	if err != nil {
@@ -817,6 +987,16 @@ func storyboardPayload(input domain.DraftInput, batchID, taskID, runToken, input
 type formalShotReference struct {
 	BatchID, EpisodeID, ShotID, ContentHash string
 	Position                                int
+}
+
+type exportEpisodeSnapshot struct {
+	reference domain.DraftSetBatch
+	shots     []domain.Shot
+	orderHash string
+}
+
+type exportSetContentReference struct {
+	EpisodeID, OrderHash, ContentHash string
 }
 
 func draftSetCandidateHash(batches []domain.DraftSetBatch) (string, error) {

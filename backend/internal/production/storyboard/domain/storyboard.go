@@ -100,8 +100,23 @@ type ExportFile struct {
 	Name, MediaType, SHA256 string
 	Size                    int
 }
+type ExportSetReference struct {
+	ExportID    string `json:"export_id"`
+	EpisodeID   string `json:"episode_id"`
+	OrderHash   string `json:"order_hash"`
+	ContentHash string `json:"content_hash"`
+}
+type ExportSet struct {
+	ID, WorkspaceID, ProjectID, DraftSetID, Status, InputHash, ContentHash string
+	DraftSetRevision                                                       int
+	Exports                                                                []ExportSetReference
+	Revision                                                               int
+	CreatedBy                                                              string
+	CreatedAt, UpdatedAt                                                   time.Time
+}
 type Export struct {
 	ID, WorkspaceID, ProjectID, EpisodeID, Status, InputHash, ContentHash string
+	ExportSetID                                                           *string
 	Manifest                                                              map[string]any
 	Files                                                                 []ExportFile
 	Package                                                               []byte

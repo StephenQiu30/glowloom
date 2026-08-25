@@ -366,6 +366,46 @@ func (repo *repository) ListShots(ctx context.Context, actor application.Actor, 
 	return values, nil
 }
 
+func (repo *repository) CreateExportSetWorkflow(
+	ctx context.Context,
+	value storyboarddomain.ExportSet,
+	exports []storyboarddomain.Export,
+) error {
+	record, err := exportSetRecord(value)
+	if err != nil {
+		return err
+	}
+	records := make([]model.StoryboardExport, len(exports))
+	for index, export := range exports {
+		records[index], err = exportRecord(export)
+		if err != nil {
+			return err
+		}
+	}
+	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error; err != nil {
+		return err
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&records).Error
+}
+
+func (repo *repository) GetExportSet(ctx context.Context, actor application.Actor, exportSetID string) (storyboarddomain.ExportSet, error) {
+	id, err := uuid.Parse(exportSetID)
+	if err != nil {
+		return storyboarddomain.ExportSet{}, application.ErrNotFound
+	}
+	var record model.StoryboardExportSet
+	if err = repo.database.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
+		return storyboarddomain.ExportSet{}, normalizeNotFound(err)
+	}
+	if err = authorizeProject(ctx, repo.database, actor, record.ProjectID, false); err != nil {
+		return storyboarddomain.ExportSet{}, err
+	}
+	return exportSetDomain(record)
+}
+
 func (repo *repository) CreateExport(ctx context.Context, value storyboarddomain.Export) error {
 	record, err := exportRecord(value)
 	if err != nil {
@@ -712,6 +752,53 @@ func shotDomain(record model.StoryboardShot) (storyboarddomain.Shot, error) {
 	return storyboarddomain.Shot{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(), EpisodeID: record.EpisodeID.String(), BatchID: record.BatchID.String(), ProposalKey: record.ProposalKey, Title: record.Title, Position: record.Position, Revision: record.Revision, NarrativeUnitIDs: units, Spec: spec, ContentHash: record.ContentHash, Status: record.Status, CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil
 }
 
+func exportSetRecord(value storyboarddomain.ExportSet) (model.StoryboardExportSet, error) {
+	id, err := uuid.Parse(value.ID)
+	if err != nil {
+		return model.StoryboardExportSet{}, err
+	}
+	workspaceID, err := uuid.Parse(value.WorkspaceID)
+	if err != nil {
+		return model.StoryboardExportSet{}, err
+	}
+	projectID, err := uuid.Parse(value.ProjectID)
+	if err != nil {
+		return model.StoryboardExportSet{}, err
+	}
+	draftSetID, err := uuid.Parse(value.DraftSetID)
+	if err != nil {
+		return model.StoryboardExportSet{}, err
+	}
+	createdBy, err := uuid.Parse(value.CreatedBy)
+	if err != nil {
+		return model.StoryboardExportSet{}, err
+	}
+	exports, err := json.Marshal(value.Exports)
+	if err != nil {
+		return model.StoryboardExportSet{}, err
+	}
+	return model.StoryboardExportSet{
+		ID: id, WorkspaceID: workspaceID, ProjectID: projectID, DraftSetID: draftSetID,
+		DraftSetRevision: value.DraftSetRevision, Status: value.Status, InputHash: value.InputHash,
+		ContentHash: value.ContentHash, Exports: datatypes.JSON(exports), Revision: value.Revision,
+		CreatedBy: createdBy, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}, nil
+}
+
+func exportSetDomain(record model.StoryboardExportSet) (storyboarddomain.ExportSet, error) {
+	var exports []storyboarddomain.ExportSetReference
+	if err := json.Unmarshal(record.Exports, &exports); err != nil {
+		return storyboarddomain.ExportSet{}, err
+	}
+	return storyboarddomain.ExportSet{
+		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(),
+		DraftSetID: record.DraftSetID.String(), DraftSetRevision: record.DraftSetRevision,
+		Status: record.Status, InputHash: record.InputHash, ContentHash: record.ContentHash,
+		Exports: exports, Revision: record.Revision, CreatedBy: record.CreatedBy.String(),
+		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+	}, nil
+}
+
 func exportRecord(value storyboarddomain.Export) (model.StoryboardExport, error) {
 	id, err := uuid.Parse(value.ID)
 	if err != nil {
@@ -741,7 +828,15 @@ func exportRecord(value storyboarddomain.Export) (model.StoryboardExport, error)
 	if err != nil {
 		return model.StoryboardExport{}, err
 	}
-	return model.StoryboardExport{ID: id, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID, Status: value.Status, InputHash: value.InputHash, ContentHash: value.ContentHash, Manifest: datatypes.JSON(manifest), Files: datatypes.JSON(files), Package: append([]byte(nil), value.Package...), Revision: value.Revision, CreatedBy: createdBy, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt}, nil
+	var exportSetID *uuid.UUID
+	if value.ExportSetID != nil {
+		parsed, parseErr := uuid.Parse(*value.ExportSetID)
+		if parseErr != nil {
+			return model.StoryboardExport{}, parseErr
+		}
+		exportSetID = &parsed
+	}
+	return model.StoryboardExport{ID: id, WorkspaceID: workspaceID, ProjectID: projectID, ExportSetID: exportSetID, EpisodeID: episodeID, Status: value.Status, InputHash: value.InputHash, ContentHash: value.ContentHash, Manifest: datatypes.JSON(manifest), Files: datatypes.JSON(files), Package: append([]byte(nil), value.Package...), Revision: value.Revision, CreatedBy: createdBy, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt}, nil
 }
 
 func exportDomain(record model.StoryboardExport) (storyboarddomain.Export, error) {
@@ -753,7 +848,12 @@ func exportDomain(record model.StoryboardExport) (storyboarddomain.Export, error
 	if err := json.Unmarshal(record.Files, &files); err != nil {
 		return storyboarddomain.Export{}, err
 	}
-	return storyboarddomain.Export{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(), EpisodeID: record.EpisodeID.String(), Status: record.Status, InputHash: record.InputHash, ContentHash: record.ContentHash, Manifest: manifest, Files: files, Package: append([]byte(nil), record.Package...), Revision: record.Revision, CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil
+	var exportSetID *string
+	if record.ExportSetID != nil {
+		value := record.ExportSetID.String()
+		exportSetID = &value
+	}
+	return storyboarddomain.Export{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(), ExportSetID: exportSetID, EpisodeID: record.EpisodeID.String(), Status: record.Status, InputHash: record.InputHash, ContentHash: record.ContentHash, Manifest: manifest, Files: files, Package: append([]byte(nil), record.Package...), Revision: record.Revision, CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil
 }
 
 func invocationRecord(value storyboarddomain.Invocation) (model.AgentInvocation, error) {

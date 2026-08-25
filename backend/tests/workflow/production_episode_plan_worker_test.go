@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -86,6 +87,7 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 				{ID: "structure-review", DefinitionKey: "human.episode_structure_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "storyboard", DefinitionKey: "agent.storyboard_draft", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "storyboard-review", DefinitionKey: "human.storyboard_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "export", DefinitionKey: "production.storyboard_export", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-bible", FromNodeID: "script", FromPort: "script", ToNodeID: "bible", ToPort: "script"},
@@ -97,6 +99,7 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 				{ID: "structure-review", FromNodeID: "structure", FromPort: "candidate", ToNodeID: "structure-review", ToPort: "candidate"},
 				{ID: "review-storyboard", FromNodeID: "structure-review", FromPort: "structures", ToNodeID: "storyboard", ToPort: "structures"},
 				{ID: "storyboard-review", FromNodeID: "storyboard", FromPort: "candidate", ToNodeID: "storyboard-review", ToPort: "candidate"},
+				{ID: "storyboard-export", FromNodeID: "storyboard-review", FromPort: "storyboards", ToNodeID: "export", ToPort: "storyboards"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":4}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -721,6 +724,56 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 	if err != nil || preappliedSet.Set.Status != "applied" || preappliedSet.Receipt.ID == "" {
 		t.Fatalf("precommit Storyboard Set apply: result=%#v err=%v", preappliedSet, err)
 	}
+	var exportNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "export").First(&exportNode).Error; err != nil {
+		t.Fatalf("load pending Storyboard Export node: %v", err)
+	}
+	exportActor := storyboardapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
+	var driftedExportShot model.StoryboardShot
+	if err = database.Where("episode_id = ? AND status = ?", setBatches[len(setBatches)-1].EpisodeID, "active").
+		First(&driftedExportShot).Error; err != nil {
+		t.Fatalf("load formal Shot for export drift: %v", err)
+	}
+	originalExportShotHash := driftedExportShot.ContentHash
+	if err = database.Model(&model.StoryboardShot{}).Where("id = ?", driftedExportShot.ID).
+		Update("content_hash", strings.Repeat("9", 64)).Error; err != nil {
+		t.Fatalf("drift formal Shot before export: %v", err)
+	}
+	if _, err = storyboardService.CreateExportSet(ctx, exportActor, storyboardapp.CreateExportSetCommand{
+		SetID: preappliedSet.Set.ID, ExpectedRevision: preappliedSet.Set.Revision,
+		ExpectedResultHash: *preappliedSet.Set.ResultHash, IdempotencyKey: "workflow-export-drift",
+	}); err == nil {
+		t.Fatal("Storyboard Export Set accepted formal Shots that drifted from the applied Set")
+	}
+	var rejectedExportSetCount, rejectedEpisodeExportCount, rejectedExportReceiptCount int64
+	if err = database.Model(&model.StoryboardExportSet{}).Where("draft_set_id = ?", preappliedSet.Set.ID).
+		Count(&rejectedExportSetCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.StoryboardExport{}).Where("project_id = ? AND export_set_id IS NOT NULL", fixture.projectID).
+		Count(&rejectedEpisodeExportCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).
+		Where("operation = ? AND idempotency_key = ?", "storyboard.create_export_set", "workflow-export-drift").
+		Count(&rejectedExportReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if rejectedExportSetCount != 0 || rejectedEpisodeExportCount != 0 || rejectedExportReceiptCount != 0 {
+		t.Fatalf("rejected Storyboard Export left partial facts: sets=%d exports=%d receipts=%d", rejectedExportSetCount, rejectedEpisodeExportCount, rejectedExportReceiptCount)
+	}
+	if err = database.Model(&model.StoryboardShot{}).Where("id = ?", driftedExportShot.ID).
+		Update("content_hash", originalExportShotHash).Error; err != nil {
+		t.Fatalf("restore formal Shot after export drift: %v", err)
+	}
+	precreatedExportSet, err := storyboardService.CreateExportSet(ctx, exportActor, storyboardapp.CreateExportSetCommand{
+		SetID: preappliedSet.Set.ID, ExpectedRevision: preappliedSet.Set.Revision,
+		ExpectedResultHash: *preappliedSet.Set.ResultHash,
+		IdempotencyKey:     "workflow-node:" + exportNode.ID.String() + ":attempt:1",
+	})
+	if err != nil || precreatedExportSet.Status != "succeeded" || len(precreatedExportSet.Exports) != 2 {
+		t.Fatalf("precommit Storyboard Export Set: set=%#v err=%v", precreatedExportSet, err)
+	}
 	storyboardSignalCommand := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: storyboardRun.WorkspaceID.String(), WorkflowRunID: run.ID, NodeRunID: storyboardGateNode.ID.String(),
 		HumanTaskID: storyboardDecision.Task.ID, ReviewDecisionID: storyboardDecision.Decision.ID,
@@ -800,6 +853,70 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 		setApplyReceipt.OwnerOperation == nil || *setApplyReceipt.OwnerOperation != "storyboard.apply_set" ||
 		appliedBatchCount != 2 || activeShotCount != 2 || setReceiptCount != 1 {
 		t.Fatalf("formal Storyboard Set boundary: run=%#v gate=%#v binding=%#v set=%#v preapplied=%#v receipt=%#v apply=%#v counts=%d/%d/%d", completedWorkflow, storyboardGateNode, formalStoryboardBinding, set, preappliedSet, setReceipt, setApplyReceipt, appliedBatchCount, activeShotCount, setReceiptCount)
+	}
+	if err = database.First(&exportNode, "id = ?", exportNode.ID).Error; err != nil {
+		t.Fatalf("reload completed Storyboard Export node: %v", err)
+	}
+	exportOutput, _, exportOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(exportNode.Output))
+	if err != nil || exportNode.Status != "SUCCEEDED" || len(exportOutput.Bindings) != 1 ||
+		exportNode.OutputHash == nil || *exportNode.OutputHash != exportOutputHash {
+		t.Fatalf("parse Storyboard Export output: output=%#v node=%#v err=%v", exportOutput, exportNode, err)
+	}
+	exportBinding := exportOutput.Bindings[0]
+	var exportSet model.StoryboardExportSet
+	if err = database.First(&exportSet, "id = ?", exportBinding.ReferenceID).Error; err != nil {
+		t.Fatalf("load Storyboard Export Set: %v", err)
+	}
+	loadedExportSet, err := storyboardService.GetExportSet(ctx, exportActor, exportBinding.ReferenceID)
+	if err != nil || loadedExportSet.ID != precreatedExportSet.ID || loadedExportSet.ContentHash != precreatedExportSet.ContentHash {
+		t.Fatalf("load Storyboard Export Set through Owner: set=%#v err=%v", loadedExportSet, err)
+	}
+	var exportReferences []struct {
+		ExportID    string `json:"export_id"`
+		EpisodeID   string `json:"episode_id"`
+		OrderHash   string `json:"order_hash"`
+		ContentHash string `json:"content_hash"`
+	}
+	if err = json.Unmarshal(exportSet.Exports, &exportReferences); err != nil {
+		t.Fatalf("decode Storyboard Export Set references: %v", err)
+	}
+	exportIDs := make([]uuid.UUID, len(exportReferences))
+	for index, reference := range exportReferences {
+		exportIDs[index] = uuid.MustParse(reference.ExportID)
+		if reference.EpisodeID != setBatches[index].EpisodeID || len(reference.OrderHash) != 64 || len(reference.ContentHash) != 64 {
+			t.Fatalf("Storyboard Export reference %d = %#v", index, reference)
+		}
+		episodeExport, loadErr := storyboardService.GetExport(ctx, exportActor, reference.ExportID)
+		if loadErr != nil || episodeExport.ExportSetID == nil || *episodeExport.ExportSetID != exportSet.ID.String() ||
+			episodeExport.EpisodeID != reference.EpisodeID || episodeExport.ContentHash != reference.ContentHash ||
+			episodeExport.Status != "succeeded" || len(episodeExport.Files) != 4 || len(episodeExport.Package) == 0 {
+			t.Fatalf("load per-Episode Storyboard Export through Owner: export=%#v err=%v", episodeExport, loadErr)
+		}
+	}
+	var episodeExports []model.StoryboardExport
+	if err = database.Where("id IN ?", exportIDs).Find(&episodeExports).Error; err != nil {
+		t.Fatalf("load per-Episode Storyboard Exports: %v", err)
+	}
+	for _, episodeExport := range episodeExports {
+		if episodeExport.ExportSetID == nil || *episodeExport.ExportSetID != exportSet.ID ||
+			episodeExport.Status != "succeeded" || len(episodeExport.Package) == 0 ||
+			len(episodeExport.ContentHash) != 64 || len(episodeExport.InputHash) != 64 {
+			t.Fatalf("invalid per-Episode Storyboard Export: %#v", episodeExport)
+		}
+	}
+	var exportSetReceiptCount int64
+	if err = database.Model(&model.CommandReceipt{}).
+		Where("operation = ? AND resource_id = ?", "storyboard.create_export_set", exportSet.ID).
+		Count(&exportSetReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if exportBinding.Port != "export" || exportBinding.ValueType != "storyboard_export" ||
+		exportBinding.ReferenceID != precreatedExportSet.ID || exportBinding.ReferenceVersion != "1" ||
+		exportBinding.ContentHash != precreatedExportSet.ContentHash || exportSet.DraftSetID != set.ID ||
+		exportSet.DraftSetRevision != set.Revision || exportSet.Status != "succeeded" ||
+		exportSet.ContentHash != exportBinding.ContentHash || len(exportReferences) != 2 ||
+		len(episodeExports) != 2 || exportSetReceiptCount != 1 {
+		t.Fatalf("Storyboard Export Set boundary: binding=%#v set=%#v precreated=%#v references=%#v exports=%#v receipt_count=%d", exportBinding, exportSet, precreatedExportSet, exportReferences, episodeExports, exportSetReceiptCount)
 	}
 }
 

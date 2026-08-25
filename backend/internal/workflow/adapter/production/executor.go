@@ -27,6 +27,7 @@ const (
 	episodePlanExecutor      = "activity.episode_plan"
 	episodeStructureExecutor = "activity.episode_structure"
 	storyboardDraftExecutor  = "activity.storyboard_draft"
+	storyboardExportExecutor = "activity.storyboard_export"
 )
 
 type ScriptSource interface {
@@ -52,9 +53,10 @@ type EpisodePlanOwner interface {
 	GetConfirmedStructureBatch(context.Context, planningapp.Actor, string) (planningapp.PublishedStructureBatch, error)
 }
 
-type StoryboardCandidateOwner interface {
+type StoryboardWorkflowOwner interface {
 	CreateSet(context.Context, storyboardapp.Actor, storyboardapp.CreateSetCommand) (storyboarddomain.DraftSet, error)
 	RefreshSet(context.Context, storyboardapp.Actor, string) (storyboarddomain.DraftSet, error)
+	CreateExportSet(context.Context, storyboardapp.Actor, storyboardapp.CreateExportSetCommand) (storyboarddomain.ExportSet, error)
 }
 
 type NodeExecutor struct {
@@ -62,7 +64,7 @@ type NodeExecutor struct {
 	bibles      BibleCandidateOwner
 	projects    ProjectSource
 	plans       EpisodePlanOwner
-	storyboards StoryboardCandidateOwner
+	storyboards StoryboardWorkflowOwner
 }
 
 func NewNodeExecutor(
@@ -70,7 +72,7 @@ func NewNodeExecutor(
 	bibles BibleCandidateOwner,
 	projects ProjectSource,
 	plans EpisodePlanOwner,
-	storyboards StoryboardCandidateOwner,
+	storyboards StoryboardWorkflowOwner,
 ) *NodeExecutor {
 	return &NodeExecutor{scripts: scripts, bibles: bibles, projects: projects, plans: plans, storyboards: storyboards}
 }
@@ -95,9 +97,63 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeEpisodeStructure(ctx, command)
 	case storyboardDraftExecutor:
 		return executor.executeStoryboardDraft(ctx, command)
+	case storyboardExportExecutor:
+		return executor.executeStoryboardExport(ctx, command)
 	default:
 		return domain.NodeExecutorResult{}, errors.New("unsupported production workflow node execution")
 	}
+}
+
+func (executor *NodeExecutor) executeStoryboardExport(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.storyboards == nil {
+		return domain.NodeExecutorResult{}, errors.New("storyboard export workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "export" ||
+		command.OutputPorts[0].ValueType != "storyboard_export" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid storyboard export node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid storyboard export node config")
+	}
+	binding := input.Bindings[0]
+	expectedRevision, err := strconv.Atoi(binding.ReferenceVersion)
+	if err != nil || expectedRevision < 1 || binding.Port != "storyboards" || binding.ValueType != "storyboards" ||
+		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "storyboards" ||
+		strings.TrimSpace(binding.SourceNodeID) == "" || len(binding.ContentHash) != 64 {
+		return domain.NodeExecutorResult{}, errors.New("applied storyboard input has drifted")
+	}
+	exportSet, err := executor.storyboards.CreateExportSet(ctx, storyboardapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, storyboardapp.CreateExportSetCommand{
+		SetID: binding.ReferenceID, ExpectedRevision: expectedRevision,
+		ExpectedResultHash: binding.ContentHash, IdempotencyKey: command.IdempotencyKey,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if exportSet.WorkspaceID != command.WorkspaceID || exportSet.ProjectID != command.ProjectID ||
+		exportSet.DraftSetID != binding.ReferenceID || exportSet.DraftSetRevision != expectedRevision ||
+		exportSet.Status != "succeeded" || exportSet.Revision != 1 || len(exportSet.Exports) == 0 ||
+		len(exportSet.ContentHash) != 64 || exportSet.CreatedBy != command.InitiatorUserID {
+		return domain.NodeExecutorResult{}, errors.New("Storyboard Export Set does not match workflow input")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "export", ValueType: "storyboard_export", ReferenceID: exportSet.ID,
+			ReferenceVersion: strconv.Itoa(exportSet.Revision), ContentHash: exportSet.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
 }
 
 func (executor *NodeExecutor) executeStoryboardDraft(

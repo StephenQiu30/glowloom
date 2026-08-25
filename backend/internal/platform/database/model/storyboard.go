@@ -89,25 +89,49 @@ type StoryboardShot struct {
 
 func (StoryboardShot) TableName() string { return "stb_shots" }
 
+type StoryboardExportSet struct {
+	ID               uuid.UUID          `gorm:"type:uuid;primaryKey"`
+	WorkspaceID      uuid.UUID          `gorm:"type:uuid;not null"`
+	ProjectID        uuid.UUID          `gorm:"type:uuid;not null"`
+	DraftSetID       uuid.UUID          `gorm:"type:uuid;not null;index:ix_stb_export_sets_draft_created,priority:1"`
+	DraftSetRevision int                `gorm:"not null;check:ck_stb_export_set_draft_revision,draft_set_revision >= 1"`
+	Status           string             `gorm:"type:varchar(20);not null;check:ck_stb_export_set_status,status IN ('succeeded')"`
+	InputHash        string             `gorm:"type:char(64);not null;check:ck_stb_export_set_input_hash,char_length(input_hash) = 64"`
+	ContentHash      string             `gorm:"type:char(64);not null;check:ck_stb_export_set_content_hash,char_length(content_hash) = 64"`
+	Exports          datatypes.JSON     `gorm:"type:jsonb;not null"`
+	Revision         int                `gorm:"not null;check:ck_stb_export_set_revision,revision >= 1"`
+	CreatedBy        uuid.UUID          `gorm:"type:uuid;not null"`
+	CreatedAt        time.Time          `gorm:"type:timestamptz;not null;index:ix_stb_export_sets_draft_created,priority:2,sort:desc"`
+	UpdatedAt        time.Time          `gorm:"type:timestamptz;not null"`
+	Workspace        Workspace          `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project          Project            `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	DraftSet         StoryboardDraftSet `gorm:"foreignKey:DraftSetID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator          UserAccount        `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (StoryboardExportSet) TableName() string { return "stb_export_sets" }
+
 type StoryboardExport struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	WorkspaceID uuid.UUID      `gorm:"type:uuid;not null"`
-	ProjectID   uuid.UUID      `gorm:"type:uuid;not null"`
-	EpisodeID   uuid.UUID      `gorm:"type:uuid;not null;index:ix_stb_exports_episode_created,priority:1"`
-	Status      string         `gorm:"type:varchar(20);not null;check:ck_stb_export_status,status IN ('succeeded','failed')"`
-	InputHash   string         `gorm:"type:char(64);not null;check:ck_stb_export_input_hash,char_length(input_hash) = 64"`
-	ContentHash string         `gorm:"type:char(64);not null;check:ck_stb_export_content_hash,char_length(content_hash) = 64"`
-	Manifest    datatypes.JSON `gorm:"type:jsonb;not null"`
-	Files       datatypes.JSON `gorm:"type:jsonb;not null"`
-	Package     []byte         `gorm:"type:bytea;not null"`
-	Revision    int            `gorm:"not null;check:ck_stb_export_revision,revision >= 1"`
-	CreatedBy   uuid.UUID      `gorm:"type:uuid;not null"`
-	CreatedAt   time.Time      `gorm:"type:timestamptz;not null;index:ix_stb_exports_episode_created,priority:2,sort:desc"`
-	UpdatedAt   time.Time      `gorm:"type:timestamptz;not null"`
-	Workspace   Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Project     Project        `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Episode     Episode        `gorm:"foreignKey:EpisodeID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	Creator     UserAccount    `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ID          uuid.UUID            `gorm:"type:uuid;primaryKey"`
+	WorkspaceID uuid.UUID            `gorm:"type:uuid;not null"`
+	ProjectID   uuid.UUID            `gorm:"type:uuid;not null"`
+	ExportSetID *uuid.UUID           `gorm:"type:uuid;uniqueIndex:uq_stb_export_set_episode,priority:1"`
+	EpisodeID   uuid.UUID            `gorm:"type:uuid;not null;index:ix_stb_exports_episode_created,priority:1;uniqueIndex:uq_stb_export_set_episode,priority:2"`
+	Status      string               `gorm:"type:varchar(20);not null;check:ck_stb_export_status,status IN ('succeeded','failed')"`
+	InputHash   string               `gorm:"type:char(64);not null;check:ck_stb_export_input_hash,char_length(input_hash) = 64"`
+	ContentHash string               `gorm:"type:char(64);not null;check:ck_stb_export_content_hash,char_length(content_hash) = 64"`
+	Manifest    datatypes.JSON       `gorm:"type:jsonb;not null"`
+	Files       datatypes.JSON       `gorm:"type:jsonb;not null"`
+	Package     []byte               `gorm:"type:bytea;not null"`
+	Revision    int                  `gorm:"not null;check:ck_stb_export_revision,revision >= 1"`
+	CreatedBy   uuid.UUID            `gorm:"type:uuid;not null"`
+	CreatedAt   time.Time            `gorm:"type:timestamptz;not null;index:ix_stb_exports_episode_created,priority:2,sort:desc"`
+	UpdatedAt   time.Time            `gorm:"type:timestamptz;not null"`
+	Workspace   Workspace            `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project     Project              `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ExportSet   *StoryboardExportSet `gorm:"foreignKey:ExportSetID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Episode     Episode              `gorm:"foreignKey:EpisodeID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Creator     UserAccount          `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (StoryboardExport) TableName() string { return "stb_exports" }

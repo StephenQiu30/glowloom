@@ -52,6 +52,7 @@ func Catalog() []any {
 		&model.StoryboardDraftSet{},
 		&model.StoryboardDraftBatch{},
 		&model.StoryboardShot{},
+		&model.StoryboardExportSet{},
 		&model.StoryboardExport{},
 		&model.CommandReceipt{},
 		&model.AuditEvent{},
