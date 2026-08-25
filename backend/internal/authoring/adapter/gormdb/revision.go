@@ -14,6 +14,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
+	platformcommandgorm "github.com/StephenQiu30/lanverse/backend/internal/platform/command/gormdb"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 )
@@ -39,47 +40,11 @@ func (repo *repository) ProjectScope(ctx context.Context, actor application.Acto
 }
 
 func (repo *repository) FindReceipt(ctx context.Context, workspaceID, operation, idempotencyKey string) (platformcommand.Receipt, error) {
-	workspace, err := uuid.Parse(workspaceID)
-	if err != nil {
-		return platformcommand.Receipt{}, platformcommand.ErrReceiptNotFound
-	}
-	var record model.CommandReceipt
-	if err = repo.database.WithContext(ctx).Where("workspace_id = ? AND operation = ? AND idempotency_key = ?", workspace, operation, idempotencyKey).First(&record).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return platformcommand.Receipt{}, platformcommand.ErrReceiptNotFound
-		}
-		return platformcommand.Receipt{}, err
-	}
-	return platformcommand.Receipt{
-		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), Operation: record.Operation,
-		IdempotencyKey: record.IdempotencyKey, InputHash: record.InputHash, ResourceID: record.ResourceID.String(),
-		Result: append([]byte(nil), record.Result...), CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt,
-	}, nil
+	return platformcommandgorm.Find(ctx, repo.database, workspaceID, operation, idempotencyKey)
 }
 
 func (repo *repository) CreateReceipt(ctx context.Context, receipt platformcommand.Receipt) error {
-	id, err := uuid.Parse(receipt.ID)
-	if err != nil {
-		return err
-	}
-	workspaceID, err := uuid.Parse(receipt.WorkspaceID)
-	if err != nil {
-		return err
-	}
-	resourceID, err := uuid.Parse(receipt.ResourceID)
-	if err != nil {
-		return err
-	}
-	createdBy, err := uuid.Parse(receipt.CreatedBy)
-	if err != nil {
-		return err
-	}
-	record := model.CommandReceipt{
-		ID: id, WorkspaceID: workspaceID, Operation: receipt.Operation, IdempotencyKey: receipt.IdempotencyKey,
-		InputHash: receipt.InputHash, ResourceID: resourceID, Result: datatypes.JSON(receipt.Result),
-		CreatedBy: createdBy, CreatedAt: receipt.CreatedAt,
-	}
-	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error; err != nil {
+	if err := platformcommandgorm.Create(ctx, repo.database, receipt); err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			return &application.Error{Code: "resource_conflict", Message: "Idempotency key is already in use", Status: 409}
 		}
