@@ -23,18 +23,8 @@ const (
 
 type ExecutionPlan = workflowdomain.ExecutionPlan
 type ExecutionNode = workflowdomain.ExecutionNode
-
-type NodeActivityCommand struct {
-	WorkflowRunID string `json:"workflow_run_id"`
-	NodeRunID     string `json:"node_run_id"`
-	NodeID        string `json:"node_id"`
-	Executor      string `json:"executor"`
-	Attempt       int    `json:"attempt"`
-}
-
-type NodeActivityResult struct {
-	Status string `json:"status"`
-}
+type NodeActivityCommand = workflowdomain.NodeActivityCommand
+type NodeActivityResult = workflowdomain.NodeActivityResult
 
 type HumanGateSignal struct {
 	WorkflowRunID   string `json:"workflow_run_id"`

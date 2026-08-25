@@ -15,3 +15,29 @@ type ExecutionNode struct {
 	Executor  string `json:"executor"`
 	RiskLevel string `json:"risk_level"`
 }
+
+type NodeActivityCommand struct {
+	WorkflowRunID string `json:"workflow_run_id"`
+	NodeRunID     string `json:"node_run_id"`
+	NodeID        string `json:"node_id"`
+	Executor      string `json:"executor"`
+	Attempt       int    `json:"attempt"`
+}
+
+type NodeActivityResult struct {
+	Status string `json:"status"`
+}
+
+type NodeExecutionClaim struct {
+	Command    NodeActivityCommand
+	ClaimToken string
+	Status     string
+	Attempt    int
+	Revision   int
+	Replay     bool
+}
+
+type NodeExecutorCommand struct {
+	NodeActivityCommand
+	IdempotencyKey string
+}

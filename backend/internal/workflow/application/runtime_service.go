@@ -2,7 +2,10 @@ package application
 
 import (
 	"context"
+	"errors"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -11,12 +14,33 @@ type RuntimeRepository interface {
 	LoadExecutionPlan(context.Context, domain.StartRequest) (domain.ExecutionPlan, error)
 }
 
-type RuntimeService struct {
-	repository RuntimeRepository
+type NodeRuntimeRepository interface {
+	ClaimNode(context.Context, domain.NodeActivityCommand, string, time.Time) (domain.NodeExecutionClaim, error)
+	CompleteNode(context.Context, domain.NodeExecutionClaim, string, time.Time) error
+	RetryNode(context.Context, domain.NodeExecutionClaim, time.Time) error
 }
 
-func NewRuntimeService(repository RuntimeRepository) *RuntimeService {
-	return &RuntimeService{repository: repository}
+type NodeExecutor interface {
+	Execute(context.Context, domain.NodeExecutorCommand) (domain.NodeActivityResult, error)
+}
+
+type RuntimeConfig struct {
+	Now      func() time.Time
+	NewID    func() string
+	Executor NodeExecutor
+}
+
+type RuntimeService struct {
+	repository RuntimeRepository
+	config     RuntimeConfig
+}
+
+func NewRuntimeService(repository RuntimeRepository, configurations ...RuntimeConfig) *RuntimeService {
+	var configuration RuntimeConfig
+	if len(configurations) == 1 {
+		configuration = configurations[0]
+	}
+	return &RuntimeService{repository: repository, config: configuration}
 }
 
 func (service *RuntimeService) LoadExecutionPlan(ctx context.Context, request domain.StartRequest) (domain.ExecutionPlan, error) {
@@ -27,4 +51,42 @@ func (service *RuntimeService) LoadExecutionPlan(ctx context.Context, request do
 	}
 	plan, err := service.repository.LoadExecutionPlan(ctx, request)
 	return plan, normalizeError(err)
+}
+
+func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.NodeActivityCommand) (domain.NodeActivityResult, error) {
+	if service == nil {
+		return domain.NodeActivityResult{}, invalid("Invalid workflow node execution input")
+	}
+	repository, supported := service.repository.(NodeRuntimeRepository)
+	if !supported || service.config.Now == nil || service.config.NewID == nil || service.config.Executor == nil ||
+		strings.TrimSpace(command.WorkflowRunID) == "" || strings.TrimSpace(command.NodeRunID) == "" ||
+		strings.TrimSpace(command.NodeID) == "" || strings.TrimSpace(command.Executor) == "" || command.Attempt < 1 {
+		return domain.NodeActivityResult{}, invalid("Invalid workflow node execution input")
+	}
+	claimToken := strings.TrimSpace(service.config.NewID())
+	if claimToken == "" {
+		return domain.NodeActivityResult{}, errors.New("workflow node claim token is empty")
+	}
+	claim, err := repository.ClaimNode(ctx, command, claimToken, service.config.Now().UTC())
+	if err != nil {
+		return domain.NodeActivityResult{}, normalizeError(err)
+	}
+	if claim.Replay {
+		return domain.NodeActivityResult{Status: claim.Status}, nil
+	}
+	result, executeErr := service.config.Executor.Execute(ctx, domain.NodeExecutorCommand{
+		NodeActivityCommand: command,
+		IdempotencyKey:      "workflow-node:" + command.NodeRunID + ":attempt:" + strconv.Itoa(command.Attempt),
+	})
+	if executeErr != nil {
+		return domain.NodeActivityResult{}, errors.Join(executeErr, repository.RetryNode(ctx, claim, service.config.Now().UTC()))
+	}
+	if result.Status != "SUCCEEDED" && result.Status != "CACHED" && result.Status != "SKIPPED" {
+		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
+		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node executor returned an invalid status"), retryErr)
+	}
+	if err = repository.CompleteNode(ctx, claim, result.Status, service.config.Now().UTC()); err != nil {
+		return domain.NodeActivityResult{}, normalizeError(err)
+	}
+	return result, nil
 }
