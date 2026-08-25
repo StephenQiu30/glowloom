@@ -188,6 +188,70 @@ func (repo *repository) CreateWorkflow(ctx context.Context, batch storyboarddoma
 	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&invocationRecord).Error
 }
 
+func (repo *repository) CreateSetWorkflow(
+	ctx context.Context,
+	set storyboarddomain.DraftSet,
+	batches []storyboarddomain.Batch,
+	invocations []storyboarddomain.Invocation,
+) error {
+	if len(batches) == 0 || len(batches) != len(invocations) || len(set.Batches) != len(batches) {
+		return errors.New("storyboard draft set workflow is incomplete")
+	}
+	record, err := setRecord(set)
+	if err != nil {
+		return err
+	}
+	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error; err != nil {
+		return err
+	}
+	for index := range batches {
+		if batches[index].ID != set.Batches[index].BatchID || invocations[index].RequestID != batches[index].ID {
+			return errors.New("storyboard draft set workflow references have drifted")
+		}
+		if err = repo.CreateWorkflow(ctx, batches[index], invocations[index]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (repo *repository) GetSet(ctx context.Context, actor application.Actor, setID string, forUpdate bool) (storyboarddomain.DraftSet, error) {
+	id, err := uuid.Parse(setID)
+	if err != nil {
+		return storyboarddomain.DraftSet{}, application.ErrNotFound
+	}
+	query := repo.database.WithContext(ctx).Where("id = ?", id)
+	if forUpdate {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var record model.StoryboardDraftSet
+	if err = query.First(&record).Error; err != nil {
+		return storyboarddomain.DraftSet{}, normalizeNotFound(err)
+	}
+	if err = authorizeProject(ctx, repo.database, actor, record.ProjectID, forUpdate); err != nil {
+		return storyboarddomain.DraftSet{}, err
+	}
+	return setDomain(record)
+}
+
+func (repo *repository) SaveSet(ctx context.Context, value storyboarddomain.DraftSet) error {
+	record, err := setRecord(value)
+	if err != nil {
+		return err
+	}
+	result := repo.database.WithContext(ctx).Model(&model.StoryboardDraftSet{}).Where("id = ?", record.ID).Updates(map[string]any{
+		"status": record.Status, "result_hash": record.ResultHash, "batches": record.Batches,
+		"revision": record.Revision, "updated_at": record.UpdatedAt,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return application.ErrNotFound
+	}
+	return nil
+}
+
 func (repo *repository) GetBatch(ctx context.Context, actor application.Actor, batchID string, forUpdate bool) (storyboarddomain.Batch, error) {
 	id, err := uuid.Parse(batchID)
 	if err != nil {
@@ -518,6 +582,53 @@ func batchRecord(value storyboarddomain.Batch) (model.StoryboardDraftBatch, erro
 		return model.StoryboardDraftBatch{}, err
 	}
 	return model.StoryboardDraftBatch{ID: id, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID, StructureID: structureID, ScriptVersionID: versionID, TaskID: taskID, Status: value.Status, InputHash: value.InputHash, ResultHash: value.ResultHash, Candidate: datatypes.JSON(candidate), Decisions: datatypes.JSON(decisions), Error: datatypes.JSON(value.Error), Revision: value.Revision, ApprovedBy: approvedBy, ApprovedAt: value.ApprovedAt, AppliedAt: value.AppliedAt, CreatedBy: createdBy, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt}, nil
+}
+
+func setRecord(value storyboarddomain.DraftSet) (model.StoryboardDraftSet, error) {
+	id, err := uuid.Parse(value.ID)
+	if err != nil {
+		return model.StoryboardDraftSet{}, err
+	}
+	workspaceID, err := uuid.Parse(value.WorkspaceID)
+	if err != nil {
+		return model.StoryboardDraftSet{}, err
+	}
+	projectID, err := uuid.Parse(value.ProjectID)
+	if err != nil {
+		return model.StoryboardDraftSet{}, err
+	}
+	commitID, err := uuid.Parse(value.StructureCommitID)
+	if err != nil {
+		return model.StoryboardDraftSet{}, err
+	}
+	createdBy, err := uuid.Parse(value.CreatedBy)
+	if err != nil {
+		return model.StoryboardDraftSet{}, err
+	}
+	batches, err := json.Marshal(value.Batches)
+	if err != nil {
+		return model.StoryboardDraftSet{}, err
+	}
+	return model.StoryboardDraftSet{
+		ID: id, WorkspaceID: workspaceID, ProjectID: projectID, StructureCommitID: commitID,
+		StructureRevision: value.StructureRevision, StructureContentHash: value.StructureContentHash,
+		Status: value.Status, InputHash: value.InputHash, ResultHash: value.ResultHash, Batches: datatypes.JSON(batches),
+		Revision: value.Revision, CreatedBy: createdBy, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}, nil
+}
+
+func setDomain(record model.StoryboardDraftSet) (storyboarddomain.DraftSet, error) {
+	var batches []storyboarddomain.DraftSetBatch
+	if err := json.Unmarshal(record.Batches, &batches); err != nil {
+		return storyboarddomain.DraftSet{}, err
+	}
+	return storyboarddomain.DraftSet{
+		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(),
+		StructureCommitID: record.StructureCommitID.String(), StructureRevision: record.StructureRevision,
+		StructureContentHash: record.StructureContentHash, Status: record.Status, InputHash: record.InputHash,
+		ResultHash: record.ResultHash, Batches: batches, Revision: record.Revision, CreatedBy: record.CreatedBy.String(),
+		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+	}, nil
 }
 
 func batchDomain(record model.StoryboardDraftBatch) (storyboarddomain.Batch, error) {

@@ -7,6 +7,29 @@ import (
 	"gorm.io/datatypes"
 )
 
+type StoryboardDraftSet struct {
+	ID                   uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	WorkspaceID          uuid.UUID      `gorm:"type:uuid;not null"`
+	ProjectID            uuid.UUID      `gorm:"type:uuid;not null"`
+	StructureCommitID    uuid.UUID      `gorm:"type:uuid;not null;index"`
+	StructureRevision    int            `gorm:"not null;check:ck_stb_draft_set_structure_revision,structure_revision >= 1"`
+	StructureContentHash string         `gorm:"type:char(64);not null;check:ck_stb_draft_set_structure_hash,char_length(structure_content_hash) = 64"`
+	Status               string         `gorm:"type:varchar(20);not null;check:ck_stb_draft_set_status,status IN ('queued','needs_review','failed','unknown','cancelled','applied')"`
+	InputHash            string         `gorm:"type:char(64);not null;check:ck_stb_draft_set_input_hash,char_length(input_hash) = 64"`
+	ResultHash           *string        `gorm:"type:char(64);check:ck_stb_draft_set_result_hash,result_hash IS NULL OR char_length(result_hash) = 64"`
+	Batches              datatypes.JSON `gorm:"type:jsonb;not null"`
+	Revision             int            `gorm:"not null;check:ck_stb_draft_set_revision,revision >= 1"`
+	CreatedBy            uuid.UUID      `gorm:"type:uuid;not null"`
+	CreatedAt            time.Time      `gorm:"type:timestamptz;not null"`
+	UpdatedAt            time.Time      `gorm:"type:timestamptz;not null"`
+	Workspace            Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project              Project        `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	StructureCommit      ImportCommit   `gorm:"foreignKey:StructureCommitID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator              UserAccount    `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (StoryboardDraftSet) TableName() string { return "stb_draft_sets" }
+
 type StoryboardDraftBatch struct {
 	ID              uuid.UUID            `gorm:"type:uuid;primaryKey"`
 	WorkspaceID     uuid.UUID            `gorm:"type:uuid;not null"`

@@ -22,6 +22,8 @@ import (
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
+	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
+	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
@@ -76,11 +78,14 @@ func main() {
 	planningService := planningapp.NewService(
 		planninggorm.New(database), planningapp.Config{Now: now, NewID: uuid.NewString},
 	)
+	storyboardService := storyboardapp.NewService(
+		storyboardgorm.New(database), storyboardapp.Config{Now: now, NewID: uuid.NewString},
+	)
 	reviewService := reviewapp.NewService(
 		reviewgorm.New(database), reviewapp.Config{Now: now, NewID: uuid.NewString},
 	)
 	activities, err := bootstrap.NewWorkflowRuntime(
-		workflowgorm.New(database), scriptService, bibleService, projectService, planningService, reviewService,
+		workflowgorm.New(database), scriptService, bibleService, projectService, planningService, storyboardService, reviewService,
 	)
 	if err != nil {
 		logger.Error("workflow runtime composition failed", "error", err)

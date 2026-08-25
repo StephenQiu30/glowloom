@@ -8,9 +8,11 @@ import (
 	"os"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
@@ -27,6 +29,8 @@ import (
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
+	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
+	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
@@ -37,7 +41,7 @@ import (
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *testing.T) {
+func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpisode(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	temporalAddress := os.Getenv("LANVERSE_TEST_TEMPORAL_ADDRESS")
 	if databaseURL == "" || temporalAddress == "" {
@@ -62,7 +66,7 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 	}
 	fixture := seedCompilerProject(t, func(value any) error { return database.Create(value).Error }, now)
 	if err = database.Model(&model.DocumentRevision{}).Where("id = ?", fixture.scriptRevisionID).
-		Updates(explicitEpisodeRevisionValues(t)).Error; err != nil {
+		Updates(explicitTwoEpisodeRevisionValues(t)).Error; err != nil {
 		t.Fatalf("prepare explicit episode marker fixture: %v", err)
 	}
 	authoringService := authoringapp.NewService(authoringgorm.New(database), authoringapp.Config{
@@ -76,10 +80,12 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 				{ID: "script", DefinitionKey: "input.script_revision", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"document_revision_id":"` + fixture.scriptRevisionID.String() + `"}`)},
 				{ID: "bible", DefinitionKey: "agent.production_bible", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "bible-review", DefinitionKey: "human.production_bible_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
-				{ID: "episodes", DefinitionKey: "production.episode_plan", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{"episode_count":1}`)},
+				{ID: "episodes", DefinitionKey: "production.episode_plan", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{"episode_count":2}`)},
 				{ID: "episodes-review", DefinitionKey: "human.episode_plan_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "structure", DefinitionKey: "production.episode_structure", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "structure-review", DefinitionKey: "human.episode_structure_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "storyboard", DefinitionKey: "agent.storyboard_draft", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "storyboard-review", DefinitionKey: "human.storyboard_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-bible", FromNodeID: "script", FromPort: "script", ToNodeID: "bible", ToPort: "script"},
@@ -89,6 +95,8 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 				{ID: "episodes-review", FromNodeID: "episodes", FromPort: "candidate", ToNodeID: "episodes-review", ToPort: "candidate"},
 				{ID: "episodes-structure", FromNodeID: "episodes-review", FromPort: "episodes", ToNodeID: "structure", ToPort: "episodes"},
 				{ID: "structure-review", FromNodeID: "structure", FromPort: "candidate", ToNodeID: "structure-review", ToPort: "candidate"},
+				{ID: "review-storyboard", FromNodeID: "structure-review", FromPort: "structures", ToNodeID: "storyboard", ToPort: "structures"},
+				{ID: "storyboard-review", FromNodeID: "storyboard", FromPort: "candidate", ToNodeID: "storyboard-review", ToPort: "candidate"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":4}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -121,13 +129,15 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	projectService := projectapp.NewService(projectgorm.New(database), func() time.Time { return time.Now().UTC() }, uuid.NewString)
 	planningService := planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
+	storyboardStore := storyboardgorm.New(database)
+	storyboardService := storyboardapp.NewService(storyboardStore, storyboardapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, ClaimLease: time.Minute,
 	})
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}),
-		bibleService, projectService, planningService, reviewService,
+		bibleService, projectService, planningService, storyboardService, reviewService,
 	)
 	if err != nil {
 		t.Fatalf("compose Episode Plan Workflow Runtime: %v", err)
@@ -143,6 +153,10 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 	agentContext, stopAgent := context.WithCancel(ctx)
 	go bibleapp.NewWorker(
 		bibleStore, successfulProductionBibleAgent{}, func() time.Time { return time.Now().UTC() },
+		time.Millisecond, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)),
+	).Run(agentContext)
+	go storyboardapp.NewWorker(
+		storyboardStore, successfulStoryboardAgent{}, func() time.Time { return time.Now().UTC() },
 		time.Millisecond, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)),
 	).Run(agentContext)
 	t.Cleanup(stopAgent)
@@ -245,7 +259,7 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 		t.Fatal(err)
 	}
 	if binding.Port != "candidate" || binding.ValueType != "episode_plan_candidate" || binding.ReferenceVersion != "1" ||
-		binding.ContentHash != plan.InputHash || plan.Status != "review_ready" || plan.RequestedEpisodeCount == nil || *plan.RequestedEpisodeCount != 1 ||
+		binding.ContentHash != plan.InputHash || plan.Status != "review_ready" || plan.RequestedEpisodeCount == nil || *plan.RequestedEpisodeCount != 2 ||
 		planGateNode.Status != "WAITING_HUMAN" || len(candidateIDs) != 1 || candidateIDs[0] != plan.ID.String() ||
 		planCount != 1 || receiptCount != 1 || episodeCount != 0 || commitCount != 0 {
 		t.Fatalf("Episode Plan review boundary: binding=%#v plan=%#v node=%#v candidates=%v counts=%d/%d/%d/%d", binding, plan, planGateNode, candidateIDs, planCount, receiptCount, episodeCount, commitCount)
@@ -306,7 +320,7 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 	if err = json.Unmarshal(plan.Proposals, &proposals); err != nil {
 		t.Fatalf("decode confirmed Episode Plan proposals: %v", err)
 	}
-	if len(proposals) != 1 || !proposals[0].IsLocked {
+	if len(proposals) != 2 || !proposals[0].IsLocked || !proposals[1].IsLocked {
 		t.Fatalf("confirmed Episode Plan proposals are not locked: %#v", proposals)
 	}
 	gateOutput, _, gateOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(planGateNode.Output))
@@ -344,7 +358,7 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 		planGateNode.Status != "SUCCEEDED" || confirmedBinding.Port != "episodes" || confirmedBinding.ValueType != "episode_plan" ||
 		confirmedBinding.ReferenceID != plan.ID.String() || confirmedBinding.ReferenceVersion != "2" || confirmedBinding.ContentHash != plan.InputHash ||
 		applyReceipt.OwnerReceiptID == nil || *applyReceipt.OwnerReceiptID != confirmReceipt.ID || applyReceipt.OwnerOperation == nil || *applyReceipt.OwnerOperation != "episode_plan.confirm" ||
-		persistedPlanSignal.Status != "completed" || confirmReceiptCount != 1 || episodeCount != 1 || commitCount != 1 {
+		persistedPlanSignal.Status != "completed" || confirmReceiptCount != 1 || episodeCount != 2 || commitCount != 1 {
 		t.Fatalf("confirmed Episode Plan boundary: plan=%#v node=%#v binding=%#v apply=%#v signal=%#v effects=%d/%d", plan, planGateNode, confirmedBinding, applyReceipt, persistedPlanSignal, episodeCount, commitCount)
 	}
 
@@ -427,14 +441,28 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 			}
 		}
 	}
-	claimedStructure, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+	structureReviewerID := uuid.New()
+	if err = database.Create(&model.UserAccount{
+		ID: structureReviewerID, EmailNormalized: structureReviewerID.String() + "@example.test", PasswordHash: "test-only",
+		TokenVersion: 1, DisplayName: "Structure Reviewer", Status: "active", CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("create Structure reviewer: %v", err)
+	}
+	if err = database.Create(&model.Membership{
+		ID: uuid.New(), WorkspaceID: fixture.workspaceID, UserID: structureReviewerID,
+		Role: "editor", Status: "active", JoinedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("create Structure reviewer membership: %v", err)
+	}
+	structureReviewActor := reviewapp.Actor{UserID: structureReviewerID.String(), TokenVersion: 1}
+	claimedStructure, err := reviewService.Claim(ctx, structureReviewActor, reviewapp.ClaimCommand{
 		TaskID: structureTask.ID.String(), ExpectedRevision: structureTask.Revision,
 		IdempotencyKey: "episode-structure-review-claim",
 	})
 	if err != nil {
 		t.Fatalf("claim Episode Structure review: %v", err)
 	}
-	structureDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+	structureDecision, err := reviewService.Decide(ctx, structureReviewActor, reviewapp.DecideCommand{
 		TaskID: structureTask.ID.String(), ClaimToken: claimedStructure.ClaimToken,
 		ExpectedTaskRevision: claimedStructure.Task.Revision, ExpectedSubjectRevision: claimedStructure.Task.SubjectRevision,
 		Decision: "approved", IdempotencyKey: "episode-structure-review-decision",
@@ -442,7 +470,9 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 	if err != nil {
 		t.Fatalf("approve Episode Structure review: %v", err)
 	}
-	preconfirmedStructures, err := planningService.ConfirmPublishedStructureBatch(ctx, planningActor, planningapp.ConfirmStructureBatchCommand{
+	preconfirmedStructures, err := planningService.ConfirmPublishedStructureBatch(ctx, planningapp.Actor{
+		UserID: structureReviewerID.String(), TokenVersion: 1,
+	}, planningapp.ConfirmStructureBatchCommand{
 		CommitID: commit.ID.String(), ExpectedRevision: 2, ExpectedContentHash: batch.ContentHash,
 		IdempotencyKey: "workflow-review:" + structureDecision.Decision.ID,
 	})
@@ -459,7 +489,7 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 	signalDeadline = time.Now().Add(5 * time.Second)
 	for {
 		structureSignal, err = signalService.SignalHumanGate(ctx, workflowapp.Actor{
-			UserID: fixture.userID.String(), TokenVersion: 1,
+			UserID: structureReviewerID.String(), TokenVersion: 1,
 		}, structureSignalCommand)
 		if err == nil && structureSignal.Status == "completed" {
 			break
@@ -470,26 +500,14 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 		time.Sleep(25 * time.Millisecond)
 	}
 	replayedStructureSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
-		UserID: fixture.userID.String(), TokenVersion: 1,
+		UserID: structureReviewerID.String(), TokenVersion: 1,
 	}, structureSignalCommand)
 	if err != nil || replayedStructureSignal.ID != structureSignal.ID || replayedStructureSignal.Status != "completed" {
 		t.Fatalf("replay Episode Structure gate signal: intent=%#v err=%v", replayedStructureSignal, err)
 	}
 
-	completionDeadline := time.Now().Add(10 * time.Second)
-	var completedRun model.WorkflowRun
-	for {
-		if err = database.First(&completedRun, "id = ?", run.ID).Error; err != nil {
-			t.Fatalf("load completed Episode Structure Workflow: %v", err)
-		}
-		if completedRun.Status == "SUCCEEDED" {
-			break
-		}
-		if completedRun.Status == "FAILED" || time.Now().After(completionDeadline) {
-			t.Fatalf("Episode Structure Workflow did not complete after review: %#v", completedRun)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	storyboardRun, storyboardGateNode, storyboardTask := waitGate("storyboard-review", 20*time.Second)
+	completedRun := storyboardRun
 	if err = database.First(&structureGateNode, "id = ?", structureGateNode.ID).Error; err != nil {
 		t.Fatalf("reload applied Episode Structure gate: %v", err)
 	}
@@ -520,7 +538,7 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 		t.Fatalf("load Episode Structure gate apply receipt: %v", err)
 	}
 	for _, confirmed := range confirmedBatch.Structures {
-		if confirmed.Status != "confirmed" || confirmed.ConfirmedBy == nil || *confirmed.ConfirmedBy != fixture.userID.String() {
+		if confirmed.Status != "confirmed" || confirmed.ConfirmedBy == nil || *confirmed.ConfirmedBy != structureReviewerID.String() {
 			t.Fatalf("Episode Structure was not confirmed by batch owner: %#v", confirmed)
 		}
 		for _, scene := range confirmed.Scenes {
@@ -538,6 +556,74 @@ func TestProductionWorkflowWorkerConfirmsEpisodeStructuresThroughBatchGate(t *te
 		structureApply.OwnerOperation == nil || *structureApply.OwnerOperation != "episode_structure.confirm_batch" ||
 		batchReceiptCount != 1 || individualConfirmReceiptCount != 0 {
 		t.Fatalf("confirmed Episode Structure batch boundary: run=%#v gate=%#v binding=%#v batch=%#v preconfirmed=%#v receipt=%#v apply=%#v counts=%d/%d", completedRun, structureGateNode, formalBinding, confirmedBatch, preconfirmedStructures, batchReceipt, structureApply, batchReceiptCount, individualConfirmReceiptCount)
+	}
+
+	var storyboardNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "storyboard").First(&storyboardNode).Error; err != nil {
+		t.Fatalf("load Storyboard Draft Set node: %v", err)
+	}
+	storyboardOutput, _, storyboardOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(storyboardNode.Output))
+	if err != nil || len(storyboardOutput.Bindings) != 1 || storyboardNode.OutputHash == nil || *storyboardNode.OutputHash != storyboardOutputHash {
+		t.Fatalf("parse Storyboard Draft Set output: output=%#v node=%#v err=%v", storyboardOutput, storyboardNode, err)
+	}
+	storyboardBinding := storyboardOutput.Bindings[0]
+	var set model.StoryboardDraftSet
+	if err = database.First(&set, "id = ?", storyboardBinding.ReferenceID).Error; err != nil {
+		t.Fatalf("load Storyboard Draft Set: %v", err)
+	}
+	var setBatches []struct {
+		BatchID         string  `json:"batch_id"`
+		EpisodeID       string  `json:"episode_id"`
+		StructureID     string  `json:"structure_id"`
+		ScriptVersionID string  `json:"script_version_id"`
+		InputHash       string  `json:"input_hash"`
+		ResultHash      *string `json:"result_hash"`
+	}
+	if err = json.Unmarshal(set.Batches, &setBatches); err != nil {
+		t.Fatalf("decode Storyboard Draft Set batches: %v", err)
+	}
+	setBatchIDs := make([]string, len(setBatches))
+	for index, reference := range setBatches {
+		setBatchIDs[index] = reference.BatchID
+	}
+	var storyboardCandidates []string
+	if err = json.Unmarshal(storyboardTask.CandidateIDs, &storyboardCandidates); err != nil {
+		t.Fatalf("decode Storyboard review candidates: %v", err)
+	}
+	var setCount, draftBatchCount, invocationCount, createSetReceiptCount int64
+	if err = database.Model(&model.StoryboardDraftSet{}).Where("structure_commit_id = ?", commit.ID).Count(&setCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.StoryboardDraftBatch{}).Where("project_id = ?", fixture.projectID).Count(&draftBatchCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.AgentInvocation{}).Where(
+		"kind = ? AND status = ? AND request_id IN ?", "storyboard_draft", "succeeded", setBatchIDs,
+	).Count(&invocationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", "storyboard.create_set", set.ID).Count(&createSetReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, reference := range setBatches {
+		var draft model.StoryboardDraftBatch
+		if err = database.First(&draft, "id = ?", reference.BatchID).Error; err != nil {
+			t.Fatalf("load Storyboard Draft Batch %s: %v", reference.BatchID, err)
+		}
+		if draft.EpisodeID.String() != reference.EpisodeID || draft.StructureID.String() != reference.StructureID ||
+			draft.ScriptVersionID.String() != reference.ScriptVersionID || draft.InputHash != reference.InputHash ||
+			draft.ResultHash == nil || reference.ResultHash == nil || *draft.ResultHash != *reference.ResultHash || draft.Status != "needs_review" {
+			t.Fatalf("Storyboard Draft Set batch drifted: set=%#v batch=%#v", reference, draft)
+		}
+	}
+	if storyboardRun.Status != "WAITING_HUMAN" || storyboardNode.Status != "SUCCEEDED" || storyboardGateNode.Status != "WAITING_HUMAN" ||
+		storyboardBinding.Port != "candidate" || storyboardBinding.ValueType != "storyboard_candidate" ||
+		storyboardBinding.ReferenceID != set.ID.String() || storyboardBinding.ReferenceVersion != "2" ||
+		set.ResultHash == nil || storyboardBinding.ContentHash != *set.ResultHash || set.Status != "needs_review" || set.Revision != 2 ||
+		set.StructureCommitID != commit.ID || set.StructureRevision != 2 || set.StructureContentHash != batch.ContentHash ||
+		len(setBatches) != 2 || len(storyboardCandidates) != 1 || storyboardCandidates[0] != set.ID.String() ||
+		setCount != 1 || draftBatchCount != 2 || invocationCount != 2 || createSetReceiptCount != 1 {
+		t.Fatalf("Storyboard Draft Set boundary: run=%#v node=%#v gate=%#v binding=%#v set=%#v batches=%#v candidates=%v counts=%d/%d/%d/%d", storyboardRun, storyboardNode, storyboardGateNode, storyboardBinding, set, setBatches, storyboardCandidates, setCount, draftBatchCount, invocationCount, createSetReceiptCount)
 	}
 }
 
@@ -563,3 +649,69 @@ func waitForWorkflowHumanGate(
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+func explicitTwoEpisodeRevisionValues(t *testing.T) map[string]any {
+	t.Helper()
+	text := ""
+	blocks := make([]planningdomain.Block, 0, 6)
+	appendBlock := func(kind, value string) {
+		if text != "" {
+			text += "\n"
+		}
+		start := utf8.RuneCountInString(text)
+		text += value
+		blocks = append(blocks, planningdomain.Block{
+			ID: uuid.NewString(), Position: len(blocks) + 1, Kind: kind,
+			SourceStart: start, SourceEnd: utf8.RuneCountInString(text),
+		})
+	}
+	appendBlock("episode_marker", "第一集")
+	appendBlock("title", "《雨巷》")
+	appendBlock("scene_heading", "内景·雨巷·夜\n小兰：走吧")
+	appendBlock("episode_marker", "第二集")
+	appendBlock("title", "《车站》")
+	appendBlock("scene_heading", "外景·车站·晨\n阿明：到了")
+	encoded, err := json.Marshal(blocks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return map[string]any{
+		"raw_text": text, "normalized_text": text, "codepoint_count": utf8.RuneCountInString(text), "blocks": string(encoded),
+	}
+}
+
+type successfulStoryboardAgent struct{}
+
+func (successfulStoryboardAgent) Invoke(_ context.Context, invocation contract.Invocation) (contract.Result, error) {
+	var payload struct {
+		Units []struct {
+			ID string `json:"unit_version_id"`
+		} `json:"units"`
+	}
+	if err := json.Unmarshal(invocation.Payload, &payload); err != nil {
+		return contract.Result{}, err
+	}
+	unitIDs := make([]string, len(payload.Units))
+	for index, unit := range payload.Units {
+		unitIDs[index] = unit.ID
+	}
+	candidate, err := json.Marshal(map[string]any{"shots": []map[string]any{{
+		"proposal_key": "shot-1", "position": 1, "title": "全场关键分镜",
+		"narrative_unit_version_ids": unitIDs, "spec": map[string]any{"duration_ms": 1000},
+		"asset_references": []any{}, "risk_codes": []any{},
+	}}})
+	if err != nil {
+		return contract.Result{}, err
+	}
+	resultHash, err := contract.CanonicalHash(candidate)
+	if err != nil {
+		return contract.Result{}, err
+	}
+	return contract.Result{
+		InvocationID: invocation.InvocationID, Kind: invocation.Kind, InputHash: invocation.InputHash,
+		Status: "succeeded", SchemaVersion: contract.SchemaVersion, Candidate: candidate, ResultHash: &resultHash,
+		Executor: contract.Executor{Name: "workflow-test", Version: "1", Model: "deterministic"},
+	}, nil
+}
+
+var _ storyboardapp.AgentClient = successfulStoryboardAgent{}

@@ -49,6 +49,7 @@ func Catalog() []any {
 		&model.EpisodeScriptVersion{},
 		&model.EpisodeStructure{},
 		&model.ImportCommit{},
+		&model.StoryboardDraftSet{},
 		&model.StoryboardDraftBatch{},
 		&model.StoryboardShot{},
 		&model.StoryboardExport{},

@@ -257,6 +257,34 @@ func (service *Service) GetPublishedStructureBatch(ctx context.Context, actor Ac
 	return batch, normalizeError(err)
 }
 
+func (service *Service) GetConfirmedStructureBatch(ctx context.Context, actor Actor, commitID string) (PublishedStructureBatch, error) {
+	var batch PublishedStructureBatch
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		commit, err := repo.GetCommit(ctx, actor, commitID, false)
+		if err != nil {
+			return err
+		}
+		plan, err := repo.GetPlan(ctx, actor, commit.PlanID, false)
+		if err != nil {
+			return err
+		}
+		if plan.Status != "materialized" || commit.Status != "published" || commit.PlanID != plan.ID {
+			return conflict("Episode Structure batch is not confirmed")
+		}
+		batch, err = publishedStructureBatch(ctx, repo, actor, commit, false)
+		if err != nil {
+			return err
+		}
+		for _, structure := range batch.Structures {
+			if structure.Status != "confirmed" {
+				return conflict("Episode Structure batch is not confirmed")
+			}
+		}
+		return nil
+	})
+	return batch, normalizeError(err)
+}
+
 func (service *Service) ConfirmPublishedStructureBatch(
 	ctx context.Context,
 	actor Actor,
