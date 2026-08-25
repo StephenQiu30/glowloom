@@ -350,12 +350,23 @@ func validateHumanGateOwnerEvidence(
 	if err := transaction.First(&receipt, "id = ?", *apply.OwnerReceiptID).Error; err != nil {
 		return normalizeNotFound(err)
 	}
-	if node.Executor != "gate.production_bible_review" || *apply.OwnerOperation != "production_bible.confirm" ||
-		receipt.WorkspaceID != run.WorkspaceID || receipt.Operation != *apply.OwnerOperation ||
+	expectedOperation, supported := humanGateOwnerOperation(node.Executor)
+	if !supported || *apply.OwnerOperation != expectedOperation || receipt.WorkspaceID != run.WorkspaceID || receipt.Operation != *apply.OwnerOperation ||
 		receipt.ResourceID.String() != binding.ReferenceID || receipt.CreatedBy != apply.CreatedBy {
 		return errors.New("workflow human gate owner receipt has drifted")
 	}
 	return nil
+}
+
+func humanGateOwnerOperation(executor string) (string, bool) {
+	switch executor {
+	case "gate.production_bible_review":
+		return "production_bible.confirm", true
+	case "gate.episode_plan_review":
+		return "episode_plan.confirm", true
+	default:
+		return "", false
+	}
 }
 
 func (store *Store) BeginSignalAttempt(ctx context.Context, intentID string, now time.Time) (domain.SignalPreparation, error) {

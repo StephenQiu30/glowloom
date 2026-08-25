@@ -22,6 +22,7 @@ import (
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
+	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
@@ -36,7 +37,7 @@ import (
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-func TestProductionWorkflowWorkerCreatesEpisodePlanCandidateThenWaitsForReview(t *testing.T) {
+func TestProductionWorkflowWorkerConfirmsEpisodePlanThroughIndependentHumanGate(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	temporalAddress := os.Getenv("LANVERSE_TEST_TEMPORAL_ADDRESS")
 	if databaseURL == "" || temporalAddress == "" {
@@ -188,7 +189,7 @@ func TestProductionWorkflowWorkerCreatesEpisodePlanCandidateThenWaitsForReview(t
 		t.Fatalf("approve Production Bible review: %v", err)
 	}
 	signalService := workflowapp.NewSignalService(workflowStore, temporalRuntime, workflowapp.SignalConfig{
-		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, Owner: workflowproduction.New(bibleService),
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, Owner: workflowproduction.New(bibleService, planningService),
 	})
 	signalCommand := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: bibleRun.WorkspaceID.String(), WorkflowRunID: run.ID, NodeRunID: bibleNode.ID.String(),
@@ -244,6 +245,113 @@ func TestProductionWorkflowWorkerCreatesEpisodePlanCandidateThenWaitsForReview(t
 		planGateNode.Status != "WAITING_HUMAN" || len(candidateIDs) != 1 || candidateIDs[0] != plan.ID.String() ||
 		planCount != 1 || receiptCount != 1 || episodeCount != 0 || commitCount != 0 {
 		t.Fatalf("Episode Plan review boundary: binding=%#v plan=%#v node=%#v candidates=%v counts=%d/%d/%d/%d", binding, plan, planGateNode, candidateIDs, planCount, receiptCount, episodeCount, commitCount)
+	}
+
+	claimedPlan, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: planTask.ID.String(), ExpectedRevision: planTask.Revision, IdempotencyKey: "episode-plan-review-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim Episode Plan review: %v", err)
+	}
+	planDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: planTask.ID.String(), ClaimToken: claimedPlan.ClaimToken, ExpectedTaskRevision: claimedPlan.Task.Revision,
+		ExpectedSubjectRevision: claimedPlan.Task.SubjectRevision, Decision: "approved", IdempotencyKey: "episode-plan-review-decision",
+	})
+	if err != nil {
+		t.Fatalf("approve Episode Plan review: %v", err)
+	}
+	planSignalCommand := workflowapp.SignalHumanGateCommand{
+		WorkspaceID: bibleRun.WorkspaceID.String(), WorkflowRunID: run.ID, NodeRunID: planGateNode.ID.String(),
+		HumanTaskID: planDecision.Task.ID, ReviewDecisionID: planDecision.Decision.ID,
+		SubjectRevision: planDecision.Decision.SubjectRevision, Decision: planDecision.Decision.Decision,
+		IdempotencyKey: "episode-plan-review-signal",
+	}
+	var planSignal workflow.SignalIntent
+	signalDeadline = time.Now().Add(5 * time.Second)
+	for {
+		planSignal, err = signalService.SignalHumanGate(ctx, workflowapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}, planSignalCommand)
+		if err == nil && planSignal.Status == "completed" {
+			break
+		}
+		if err != nil || time.Now().After(signalDeadline) {
+			t.Fatalf("signal approved Episode Plan gate: intent=%#v err=%v", planSignal, err)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	replayedPlanSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}, planSignalCommand)
+	if err != nil || replayedPlanSignal.ID != planSignal.ID || replayedPlanSignal.Status != "completed" {
+		t.Fatalf("replay Episode Plan gate signal: intent=%#v err=%v", replayedPlanSignal, err)
+	}
+
+	completionDeadline := time.Now().Add(10 * time.Second)
+	var completedRun model.WorkflowRun
+	for {
+		if err = database.First(&completedRun, "id = ?", run.ID).Error; err != nil {
+			t.Fatalf("load completed Episode Plan Workflow: %v", err)
+		}
+		if completedRun.Status == "SUCCEEDED" {
+			break
+		}
+		if completedRun.Status == "FAILED" || time.Now().After(completionDeadline) {
+			t.Fatalf("Episode Plan Workflow did not complete after review: %#v", completedRun)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err = database.First(&planGateNode, "id = ?", planGateNode.ID).Error; err != nil {
+		t.Fatalf("reload applied Episode Plan gate: %v", err)
+	}
+	if err = database.First(&plan, "id = ?", plan.ID).Error; err != nil {
+		t.Fatalf("reload confirmed Episode Plan: %v", err)
+	}
+	var proposals []planningdomain.Proposal
+	if err = json.Unmarshal(plan.Proposals, &proposals); err != nil {
+		t.Fatalf("decode confirmed Episode Plan proposals: %v", err)
+	}
+	if len(proposals) != 1 || !proposals[0].IsLocked {
+		t.Fatalf("confirmed Episode Plan proposals are not locked: %#v", proposals)
+	}
+	gateOutput, _, gateOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(planGateNode.Output))
+	if err != nil || len(gateOutput.Bindings) != 1 || planGateNode.OutputHash == nil || *planGateNode.OutputHash != gateOutputHash {
+		t.Fatalf("parse confirmed Episode Plan gate output: output=%#v node=%#v err=%v", gateOutput, planGateNode, err)
+	}
+	confirmedBinding := gateOutput.Bindings[0]
+	var confirmReceipt model.CommandReceipt
+	if err = database.Where("operation = ? AND resource_id = ?", "episode_plan.confirm", plan.ID).First(&confirmReceipt).Error; err != nil {
+		t.Fatalf("load Episode Plan owner receipt: %v", err)
+	}
+	replayedConfirmation, err := planningService.ConfirmPlan(ctx, planningapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, planningapp.ConfirmPlanCommand{
+		PlanID: plan.ID.String(), ExpectedRevision: 1, IdempotencyKey: "workflow-review:" + planDecision.Decision.ID,
+	})
+	if err != nil || replayedConfirmation.View.Plan.Revision != 2 || replayedConfirmation.Receipt.ID != confirmReceipt.ID.String() {
+		t.Fatalf("replay Episode Plan owner confirmation: result=%#v receipt=%#v err=%v", replayedConfirmation, confirmReceipt, err)
+	}
+	var confirmReceiptCount int64
+	if err = database.Model(&model.CommandReceipt{}).
+		Where("operation = ? AND resource_id = ?", "episode_plan.confirm", plan.ID).Count(&confirmReceiptCount).Error; err != nil {
+		t.Fatalf("count Episode Plan owner receipts: %v", err)
+	}
+	var applyReceipt model.WorkflowHumanGateApplyReceipt
+	if err = database.Where("node_run_id = ?", planGateNode.ID).First(&applyReceipt).Error; err != nil {
+		t.Fatalf("load Episode Plan gate apply receipt: %v", err)
+	}
+	var persistedPlanSignal model.WorkflowSignalIntent
+	if err = database.First(&persistedPlanSignal, "id = ?", planSignal.ID).Error; err != nil {
+		t.Fatalf("load Episode Plan signal intent: %v", err)
+	}
+	if err = database.Model(&model.Episode{}).Where("project_id = ?", fixture.projectID).Count(&episodeCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.ImportCommit{}).Where("project_id = ?", fixture.projectID).Count(&commitCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if plan.Status != "confirmed" || plan.Revision != 2 || plan.ConfirmedBy == nil || *plan.ConfirmedBy != fixture.userID ||
+		planGateNode.Status != "SUCCEEDED" || confirmedBinding.Port != "episodes" || confirmedBinding.ValueType != "episode_plan" ||
+		confirmedBinding.ReferenceID != plan.ID.String() || confirmedBinding.ReferenceVersion != "2" || confirmedBinding.ContentHash != plan.InputHash ||
+		applyReceipt.OwnerReceiptID == nil || *applyReceipt.OwnerReceiptID != confirmReceipt.ID || applyReceipt.OwnerOperation == nil || *applyReceipt.OwnerOperation != "episode_plan.confirm" ||
+		persistedPlanSignal.Status != "completed" || confirmReceiptCount != 1 || episodeCount != 0 || commitCount != 0 {
+		t.Fatalf("confirmed Episode Plan boundary: plan=%#v node=%#v binding=%#v apply=%#v signal=%#v effects=%d/%d", plan, planGateNode, confirmedBinding, applyReceipt, persistedPlanSignal, episodeCount, commitCount)
 	}
 }
 

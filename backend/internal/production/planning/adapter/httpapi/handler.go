@@ -15,7 +15,7 @@ import (
 type Service interface {
 	CreatePlan(context.Context, application.Actor, application.CreatePlanCommand) (application.View, error)
 	GetPlan(context.Context, application.Actor, string) (application.View, error)
-	ConfirmPlan(context.Context, application.Actor, application.ConfirmPlanCommand) (application.View, error)
+	ConfirmPlan(context.Context, application.Actor, application.ConfirmPlanCommand) (application.ConfirmPlanResult, error)
 	Materialize(context.Context, application.Actor, application.MaterializeCommand) (domain.ImportCommit, error)
 	Publish(context.Context, application.Actor, application.PublishCommand) (domain.ImportCommit, error)
 	ListEpisodes(context.Context, application.Actor, string) ([]domain.Episode, error)
@@ -97,7 +97,7 @@ func (handler *Handler) confirmPlan(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	result, err := handler.service.ConfirmPlan(request.Context(), actor, application.ConfirmPlanCommand{PlanID: request.PathValue("plan_id"), ExpectedRevision: payload.ExpectedRevision, IdempotencyKey: payload.IdempotencyKey})
-	handler.writeView(writer, request, http.StatusOK, result, err)
+	handler.writeView(writer, request, http.StatusOK, result.View, err)
 }
 func (handler *Handler) materialize(writer http.ResponseWriter, request *http.Request) {
 	actor, ok := handler.actor(writer, request)

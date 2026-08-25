@@ -19,6 +19,8 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
+	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
+	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
@@ -367,9 +369,14 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 			return now
 		},
 		NewID: uuid.NewString,
-		Owner: workflowproduction.New(bibleapp.NewService(biblegorm.New(database), bibleapp.Config{
-			Now: func() time.Time { return now }, NewID: uuid.NewString,
-		})),
+		Owner: workflowproduction.New(
+			bibleapp.NewService(biblegorm.New(database), bibleapp.Config{
+				Now: func() time.Time { return now }, NewID: uuid.NewString,
+			}),
+			planningapp.NewService(planninggorm.New(database), planningapp.Config{
+				Now: func() time.Time { return now }, NewID: uuid.NewString,
+			}),
+		),
 	})
 	signalCommand := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: waitingRun.WorkspaceID.String(), WorkflowRunID: waitingRun.ID.String(), NodeRunID: waitingNode.ID.String(),

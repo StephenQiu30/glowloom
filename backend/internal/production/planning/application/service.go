@@ -91,6 +91,10 @@ type ConfirmPlanCommand struct {
 	PlanID, IdempotencyKey string
 	ExpectedRevision       int
 }
+type ConfirmPlanResult struct {
+	View    View
+	Receipt platformcommand.Receipt
+}
 type MaterializeCommand struct {
 	PlanID, Mode, ExpectedActiveOrderHash, IdempotencyKey string
 	ExpectedPlanRevision, ExpectedProjectRevision         int
@@ -200,8 +204,12 @@ func (service *Service) GetPlan(ctx context.Context, actor Actor, planID string)
 	return view, normalizeError(err)
 }
 
-func (service *Service) ConfirmPlan(ctx context.Context, actor Actor, command ConfirmPlanCommand) (View, error) {
-	var view View
+func (service *Service) ConfirmPlan(ctx context.Context, actor Actor, command ConfirmPlanCommand) (ConfirmPlanResult, error) {
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if strings.TrimSpace(command.PlanID) == "" || command.ExpectedRevision < 1 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return ConfirmPlanResult{}, invalid("Invalid episode plan confirmation")
+	}
+	var result ConfirmPlanResult
 	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
 		plan, err := repo.GetPlan(ctx, actor, command.PlanID, true)
 		if err != nil {
@@ -219,12 +227,13 @@ func (service *Service) ConfirmPlan(ctx context.Context, actor Actor, command Co
 			if replayErr != nil {
 				return replayErr
 			}
-			view.Plan, replayErr = repo.GetPlan(ctx, actor, replayed.ID, false)
+			result.View.Plan, replayErr = repo.GetPlan(ctx, actor, replayed.ID, false)
 			if replayErr != nil {
 				return replayErr
 			}
-			view.Impact, replayErr = repo.ProjectImpact(ctx, actor, view.Plan.ProjectID, false)
-			view.Impact.ProjectedEpisodeCount += len(view.Plan.Proposals)
+			result.View.Impact, replayErr = repo.ProjectImpact(ctx, actor, result.View.Plan.ProjectID, false)
+			result.View.Impact.ProjectedEpisodeCount += len(result.View.Plan.Proposals)
+			result.Receipt = receipt
 			return replayErr
 		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
 			return receiptErr
@@ -241,19 +250,21 @@ func (service *Service) ConfirmPlan(ctx context.Context, actor Actor, command Co
 		if err = repo.SavePlan(ctx, plan); err != nil {
 			return err
 		}
-		result, err := platformcommand.Result(resourceReceipt{ID: plan.ID})
+		receiptResult, err := platformcommand.Result(resourceReceipt{ID: plan.ID})
 		if err != nil {
 			return err
 		}
-		if err = repo.CreateReceipt(ctx, platformcommand.Receipt{ID: service.config.NewID(), WorkspaceID: plan.WorkspaceID, Operation: confirmPlanOperation, IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: plan.ID, Result: result, CreatedBy: actor.UserID, CreatedAt: now}); err != nil {
+		receipt := platformcommand.Receipt{ID: service.config.NewID(), WorkspaceID: plan.WorkspaceID, Operation: confirmPlanOperation, IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: plan.ID, Result: receiptResult, CreatedBy: actor.UserID, CreatedAt: now}
+		if err = repo.CreateReceipt(ctx, receipt); err != nil {
 			return err
 		}
-		view.Plan = plan
-		view.Impact, err = repo.ProjectImpact(ctx, actor, plan.ProjectID, false)
-		view.Impact.ProjectedEpisodeCount += len(plan.Proposals)
+		result.View.Plan = plan
+		result.View.Impact, err = repo.ProjectImpact(ctx, actor, plan.ProjectID, false)
+		result.View.Impact.ProjectedEpisodeCount += len(plan.Proposals)
+		result.Receipt = receipt
 		return err
 	})
-	return view, normalizeError(err)
+	return result, normalizeError(err)
 }
 
 func (service *Service) Materialize(ctx context.Context, actor Actor, command MaterializeCommand) (domain.ImportCommit, error) {
