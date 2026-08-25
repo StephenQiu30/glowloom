@@ -305,6 +305,18 @@ func (repo *repository) SaveBatch(ctx context.Context, value storyboarddomain.Ba
 	return nil
 }
 
+func (repo *repository) LockEpisode(ctx context.Context, actor application.Actor, episodeID string) error {
+	id, err := uuid.Parse(episodeID)
+	if err != nil {
+		return application.ErrNotFound
+	}
+	var episode model.Episode
+	if err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).First(&episode, "id = ?", id).Error; err != nil {
+		return normalizeNotFound(err)
+	}
+	return authorizeProject(ctx, repo.database, actor, episode.ProjectID, true)
+}
+
 func (repo *repository) CreateShots(ctx context.Context, batch storyboarddomain.Batch, shots []storyboarddomain.Shot) error {
 	record, err := batchRecord(batch)
 	if err != nil {

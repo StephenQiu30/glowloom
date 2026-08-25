@@ -207,7 +207,7 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 		t.Fatalf("approve Production Bible review: %v", err)
 	}
 	signalService := workflowapp.NewSignalService(workflowStore, temporalRuntime, workflowapp.SignalConfig{
-		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, Owner: workflowproduction.New(bibleService, planningService),
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, Owner: workflowproduction.New(bibleService, planningService, storyboardService),
 	})
 	signalCommand := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: bibleRun.WorkspaceID.String(), WorkflowRunID: run.ID, NodeRunID: bibleNode.ID.String(),
@@ -572,12 +572,13 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 		t.Fatalf("load Storyboard Draft Set: %v", err)
 	}
 	var setBatches []struct {
-		BatchID         string  `json:"batch_id"`
-		EpisodeID       string  `json:"episode_id"`
-		StructureID     string  `json:"structure_id"`
-		ScriptVersionID string  `json:"script_version_id"`
-		InputHash       string  `json:"input_hash"`
-		ResultHash      *string `json:"result_hash"`
+		BatchID           string  `json:"batch_id"`
+		EpisodeID         string  `json:"episode_id"`
+		StructureID       string  `json:"structure_id"`
+		ScriptVersionID   string  `json:"script_version_id"`
+		InputHash         string  `json:"input_hash"`
+		BaselineOrderHash string  `json:"baseline_order_hash"`
+		ResultHash        *string `json:"result_hash"`
 	}
 	if err = json.Unmarshal(set.Batches, &setBatches); err != nil {
 		t.Fatalf("decode Storyboard Draft Set batches: %v", err)
@@ -624,6 +625,181 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 		len(setBatches) != 2 || len(storyboardCandidates) != 1 || storyboardCandidates[0] != set.ID.String() ||
 		setCount != 1 || draftBatchCount != 2 || invocationCount != 2 || createSetReceiptCount != 1 {
 		t.Fatalf("Storyboard Draft Set boundary: run=%#v node=%#v gate=%#v binding=%#v set=%#v batches=%#v candidates=%v counts=%d/%d/%d/%d", storyboardRun, storyboardNode, storyboardGateNode, storyboardBinding, set, setBatches, storyboardCandidates, setCount, draftBatchCount, invocationCount, createSetReceiptCount)
+	}
+
+	storyboardActor := storyboardapp.Actor{UserID: structureReviewerID.String(), TokenVersion: 1}
+	if _, err = storyboardService.ApplySet(ctx, storyboardActor, storyboardapp.ApplySetCommand{
+		SetID: set.ID.String(), ExpectedRevision: 2, ExpectedCandidateHash: *set.ResultHash,
+		IdempotencyKey: "storyboard-set-premature-apply",
+	}); err == nil {
+		t.Fatal("Storyboard Draft Set applied before every Batch was approved")
+	}
+	for _, reference := range setBatches {
+		draft, loadErr := storyboardService.GetBatch(ctx, storyboardActor, reference.BatchID)
+		if loadErr != nil {
+			t.Fatalf("load Storyboard Batch for review %s: %v", reference.BatchID, loadErr)
+		}
+		for _, shot := range draft.Candidate.Shots {
+			draft, err = storyboardService.Decide(ctx, storyboardActor, storyboardapp.DecisionCommand{
+				BatchID: draft.ID, ProposalKey: shot.ProposalKey, Action: "accepted", ExpectedRevision: draft.Revision,
+				IdempotencyKey: "workflow-storyboard-accept:" + draft.ID + ":" + shot.ProposalKey,
+			})
+			if err != nil {
+				t.Fatalf("accept Storyboard candidate %s/%s: %v", draft.ID, shot.ProposalKey, err)
+			}
+		}
+		draft, err = storyboardService.Approve(ctx, storyboardActor, storyboardapp.RevisionCommand{
+			BatchID: draft.ID, ExpectedRevision: draft.Revision, IdempotencyKey: "workflow-storyboard-approve:" + draft.ID,
+		})
+		if err != nil || draft.Status != "approved" {
+			t.Fatalf("approve Storyboard Batch %s: batch=%#v err=%v", draft.ID, draft, err)
+		}
+		preflight, preflightErr := storyboardService.PreflightApply(ctx, storyboardActor, draft.ID, draft.Revision)
+		if preflightErr != nil || preflight.Created != len(draft.Candidate.Shots) {
+			t.Fatalf("preflight Storyboard Batch %s: preflight=%#v err=%v", draft.ID, preflight, preflightErr)
+		}
+	}
+	staleReference := setBatches[len(setBatches)-1]
+	staleShotID := uuid.New()
+	if err = database.Create(&model.StoryboardShot{
+		ID: staleShotID, WorkspaceID: set.WorkspaceID, ProjectID: set.ProjectID,
+		EpisodeID: uuid.MustParse(staleReference.EpisodeID), BatchID: uuid.MustParse(staleReference.BatchID),
+		ProposalKey: "concurrent-shot", Position: 99, Title: "并发正式镜头",
+		NarrativeUnitIDs: []byte(`[]`), Spec: []byte(`{"duration_ms":1000}`),
+		ContentHash: staleReference.InputHash, Status: "active", Revision: 1,
+		CreatedBy: structureReviewerID, CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed concurrent formal Shot: %v", err)
+	}
+	if _, err = storyboardService.ApplySet(ctx, storyboardActor, storyboardapp.ApplySetCommand{
+		SetID: set.ID.String(), ExpectedRevision: 2, ExpectedCandidateHash: *set.ResultHash,
+		IdempotencyKey: "storyboard-set-stale-baseline",
+	}); err == nil {
+		t.Fatal("Storyboard Draft Set accepted a changed formal Shot baseline")
+	}
+	var rolledBackFirstBatch model.StoryboardDraftBatch
+	var rolledBackSet model.StoryboardDraftSet
+	var rolledBackFirstEpisodeShots int64
+	if err = database.First(&rolledBackFirstBatch, "id = ?", setBatches[0].BatchID).Error; err != nil {
+		t.Fatalf("load first Storyboard Batch after rejected Set apply: %v", err)
+	}
+	if err = database.First(&rolledBackSet, "id = ?", set.ID).Error; err != nil {
+		t.Fatalf("load Storyboard Draft Set after rejected apply: %v", err)
+	}
+	if err = database.Model(&model.StoryboardShot{}).
+		Where("batch_id = ? AND status = ?", setBatches[0].BatchID, "active").
+		Count(&rolledBackFirstEpisodeShots).Error; err != nil {
+		t.Fatal(err)
+	}
+	if rolledBackFirstBatch.Status != "approved" || rolledBackSet.Status != "needs_review" ||
+		rolledBackSet.Revision != 2 || rolledBackFirstEpisodeShots != 0 {
+		t.Fatalf("Storyboard Draft Set did not roll back atomically: batch=%#v set=%#v first_episode_shots=%d", rolledBackFirstBatch, rolledBackSet, rolledBackFirstEpisodeShots)
+	}
+	if err = database.Delete(&model.StoryboardShot{}, "id = ?", staleShotID).Error; err != nil {
+		t.Fatalf("remove concurrent formal Shot fixture: %v", err)
+	}
+
+	claimedStoryboard, err := reviewService.Claim(ctx, structureReviewActor, reviewapp.ClaimCommand{
+		TaskID: storyboardTask.ID.String(), ExpectedRevision: storyboardTask.Revision,
+		IdempotencyKey: "storyboard-review-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim Storyboard review: %v", err)
+	}
+	storyboardDecision, err := reviewService.Decide(ctx, structureReviewActor, reviewapp.DecideCommand{
+		TaskID: storyboardTask.ID.String(), ClaimToken: claimedStoryboard.ClaimToken,
+		ExpectedTaskRevision: claimedStoryboard.Task.Revision, ExpectedSubjectRevision: claimedStoryboard.Task.SubjectRevision,
+		Decision: "approved", IdempotencyKey: "storyboard-review-decision",
+	})
+	if err != nil {
+		t.Fatalf("approve Storyboard review: %v", err)
+	}
+	preappliedSet, err := storyboardService.ApplySet(ctx, storyboardActor, storyboardapp.ApplySetCommand{
+		SetID: set.ID.String(), ExpectedRevision: 2, ExpectedCandidateHash: *set.ResultHash,
+		IdempotencyKey: "workflow-review:" + storyboardDecision.Decision.ID,
+	})
+	if err != nil || preappliedSet.Set.Status != "applied" || preappliedSet.Receipt.ID == "" {
+		t.Fatalf("precommit Storyboard Set apply: result=%#v err=%v", preappliedSet, err)
+	}
+	storyboardSignalCommand := workflowapp.SignalHumanGateCommand{
+		WorkspaceID: storyboardRun.WorkspaceID.String(), WorkflowRunID: run.ID, NodeRunID: storyboardGateNode.ID.String(),
+		HumanTaskID: storyboardDecision.Task.ID, ReviewDecisionID: storyboardDecision.Decision.ID,
+		SubjectRevision: storyboardDecision.Decision.SubjectRevision, Decision: storyboardDecision.Decision.Decision,
+		IdempotencyKey: "storyboard-review-signal",
+	}
+	var storyboardSignal workflow.SignalIntent
+	signalDeadline = time.Now().Add(5 * time.Second)
+	for {
+		storyboardSignal, err = signalService.SignalHumanGate(ctx, workflowapp.Actor{
+			UserID: structureReviewerID.String(), TokenVersion: 1,
+		}, storyboardSignalCommand)
+		if err == nil && storyboardSignal.Status == "completed" {
+			break
+		}
+		if err != nil || time.Now().After(signalDeadline) {
+			t.Fatalf("signal approved Storyboard gate: intent=%#v err=%v", storyboardSignal, err)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	replayedStoryboardSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: structureReviewerID.String(), TokenVersion: 1,
+	}, storyboardSignalCommand)
+	if err != nil || replayedStoryboardSignal.ID != storyboardSignal.ID || replayedStoryboardSignal.Status != "completed" {
+		t.Fatalf("replay Storyboard gate signal: intent=%#v err=%v", replayedStoryboardSignal, err)
+	}
+
+	completionDeadline := time.Now().Add(10 * time.Second)
+	var completedWorkflow model.WorkflowRun
+	for {
+		if err = database.First(&completedWorkflow, "id = ?", run.ID).Error; err != nil {
+			t.Fatalf("load completed Storyboard Workflow: %v", err)
+		}
+		if completedWorkflow.Status == "SUCCEEDED" {
+			break
+		}
+		if completedWorkflow.Status == "FAILED" || time.Now().After(completionDeadline) {
+			t.Fatalf("Storyboard Workflow did not complete after review: %#v", completedWorkflow)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err = database.First(&storyboardGateNode, "id = ?", storyboardGateNode.ID).Error; err != nil {
+		t.Fatalf("reload applied Storyboard gate: %v", err)
+	}
+	formalStoryboards, _, formalStoryboardsHash, err := workflow.ParseNodeOutput(json.RawMessage(storyboardGateNode.Output))
+	if err != nil || len(formalStoryboards.Bindings) != 1 || storyboardGateNode.OutputHash == nil || *storyboardGateNode.OutputHash != formalStoryboardsHash {
+		t.Fatalf("parse formal Storyboards output: output=%#v node=%#v err=%v", formalStoryboards, storyboardGateNode, err)
+	}
+	formalStoryboardBinding := formalStoryboards.Bindings[0]
+	if err = database.First(&set, "id = ?", set.ID).Error; err != nil {
+		t.Fatalf("reload applied Storyboard Draft Set: %v", err)
+	}
+	var setReceipt model.CommandReceipt
+	if err = database.Where("operation = ? AND resource_id = ?", "storyboard.apply_set", set.ID).First(&setReceipt).Error; err != nil {
+		t.Fatalf("load Storyboard Set owner receipt: %v", err)
+	}
+	var setApplyReceipt model.WorkflowHumanGateApplyReceipt
+	if err = database.Where("node_run_id = ?", storyboardGateNode.ID).First(&setApplyReceipt).Error; err != nil {
+		t.Fatalf("load Storyboard gate apply receipt: %v", err)
+	}
+	var appliedBatchCount, activeShotCount, setReceiptCount int64
+	if err = database.Model(&model.StoryboardDraftBatch{}).Where("id IN ? AND status = ?", setBatchIDs, "applied").Count(&appliedBatchCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.StoryboardShot{}).Where("batch_id IN ? AND status = ?", setBatchIDs, "active").Count(&activeShotCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", "storyboard.apply_set", set.ID).Count(&setReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if completedWorkflow.Status != "SUCCEEDED" || storyboardGateNode.Status != "SUCCEEDED" ||
+		formalStoryboardBinding.Port != "storyboards" || formalStoryboardBinding.ValueType != "storyboards" ||
+		formalStoryboardBinding.ReferenceID != set.ID.String() || formalStoryboardBinding.ReferenceVersion != "3" ||
+		set.Status != "applied" || set.Revision != 3 || set.ResultHash == nil || formalStoryboardBinding.ContentHash != *set.ResultHash ||
+		formalStoryboardBinding.ContentHash == storyboardBinding.ContentHash || preappliedSet.Receipt.ID != setReceipt.ID.String() ||
+		setApplyReceipt.OwnerReceiptID == nil || *setApplyReceipt.OwnerReceiptID != setReceipt.ID ||
+		setApplyReceipt.OwnerOperation == nil || *setApplyReceipt.OwnerOperation != "storyboard.apply_set" ||
+		appliedBatchCount != 2 || activeShotCount != 2 || setReceiptCount != 1 {
+		t.Fatalf("formal Storyboard Set boundary: run=%#v gate=%#v binding=%#v set=%#v preapplied=%#v receipt=%#v apply=%#v counts=%d/%d/%d", completedWorkflow, storyboardGateNode, formalStoryboardBinding, set, preappliedSet, setReceipt, setApplyReceipt, appliedBatchCount, activeShotCount, setReceiptCount)
 	}
 }
 

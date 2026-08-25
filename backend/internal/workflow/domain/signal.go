@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"strconv"
+	"time"
+)
 
 const (
 	SignalOutcomeSignaled       = "signaled"
@@ -86,4 +89,21 @@ type SignalRequest struct {
 type SignalObservation struct {
 	Outcome           string
 	ObservedInputHash string
+}
+
+func HumanGateOutputMatchesCandidate(
+	executor string,
+	candidate NodeInputBinding,
+	output NodeOutputBinding,
+) bool {
+	if output.ReferenceID != candidate.ReferenceID {
+		return false
+	}
+	if executor != "gate.storyboard_review" {
+		return output.ContentHash == candidate.ContentHash
+	}
+	candidateRevision, err := strconv.Atoi(candidate.ReferenceVersion)
+	return err == nil && candidateRevision >= 1 &&
+		output.ReferenceVersion == strconv.Itoa(candidateRevision+1) &&
+		output.ContentHash != candidate.ContentHash
 }

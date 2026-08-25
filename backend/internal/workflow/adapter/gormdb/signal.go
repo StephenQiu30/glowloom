@@ -343,7 +343,7 @@ func validateHumanGateOwnerEvidence(
 		}
 	}
 	binding := output.Bindings[0]
-	if !candidateFound || binding.ReferenceID != candidate.ReferenceID || binding.ContentHash != candidate.ContentHash {
+	if !candidateFound || !domain.HumanGateOutputMatchesCandidate(node.Executor, candidate, binding) {
 		return errors.New("workflow human gate owner output does not match the frozen candidate")
 	}
 	var receipt model.CommandReceipt
@@ -366,6 +366,8 @@ func humanGateOwnerOperation(executor string) (string, bool) {
 		return "episode_plan.confirm", true
 	case "gate.episode_structure_review":
 		return "episode_structure.confirm_batch", true
+	case "gate.storyboard_review":
+		return "storyboard.apply_set", true
 	default:
 		return "", false
 	}

@@ -59,12 +59,13 @@ type Batch struct {
 }
 
 type DraftSetBatch struct {
-	BatchID         string  `json:"batch_id"`
-	EpisodeID       string  `json:"episode_id"`
-	StructureID     string  `json:"structure_id"`
-	ScriptVersionID string  `json:"script_version_id"`
-	InputHash       string  `json:"input_hash"`
-	ResultHash      *string `json:"result_hash"`
+	BatchID           string  `json:"batch_id"`
+	EpisodeID         string  `json:"episode_id"`
+	StructureID       string  `json:"structure_id"`
+	ScriptVersionID   string  `json:"script_version_id"`
+	InputHash         string  `json:"input_hash"`
+	BaselineOrderHash string  `json:"baseline_order_hash"`
+	ResultHash        *string `json:"result_hash"`
 }
 
 type DraftSet struct {

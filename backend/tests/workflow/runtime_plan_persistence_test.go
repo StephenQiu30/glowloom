@@ -376,6 +376,7 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 			planningapp.NewService(planninggorm.New(database), planningapp.Config{
 				Now: func() time.Time { return now }, NewID: uuid.NewString,
 			}),
+			nil,
 		),
 	})
 	signalCommand := workflowapp.SignalHumanGateCommand{

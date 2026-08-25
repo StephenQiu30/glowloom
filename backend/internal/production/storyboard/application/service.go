@@ -14,6 +14,7 @@ import (
 const (
 	createBatchOperation  = "storyboard.create_batch"
 	createSetOperation    = "storyboard.create_set"
+	applySetOperation     = "storyboard.apply_set"
 	decideDraftOperation  = "storyboard.decide_draft"
 	approveBatchOperation = "storyboard.approve_batch"
 	applyBatchOperation   = "storyboard.apply_batch"
@@ -45,6 +46,7 @@ type Repository interface {
 	GetBatch(context.Context, Actor, string, bool) (domain.Batch, error)
 	GetLatestBatch(context.Context, Actor, string) (domain.Batch, error)
 	SaveBatch(context.Context, domain.Batch) error
+	LockEpisode(context.Context, Actor, string) error
 	CreateShots(context.Context, domain.Batch, []domain.Shot) error
 	ListShots(context.Context, Actor, string) ([]domain.Shot, error)
 	CreateExport(context.Context, domain.Export) error
@@ -83,6 +85,14 @@ type ApplyCommand struct {
 	RevisionCommand
 	ExpectedOrderHash, ImpactHash string
 }
+type ApplySetCommand struct {
+	SetID, ExpectedCandidateHash, IdempotencyKey string
+	ExpectedRevision                             int
+}
+type ApplySetResult struct {
+	Set     domain.DraftSet
+	Receipt platformcommand.Receipt
+}
 type ExportCommand struct{ EpisodeID, ExpectedOrderHash, IdempotencyKey string }
 type ApplyPreflight struct {
 	BatchID               string
@@ -114,9 +124,10 @@ func (service *Service) CreateSet(ctx context.Context, actor Actor, command Crea
 	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
 		inputs := make([]domain.DraftInput, len(command.Structures))
 		inputHashes := make([]string, len(command.Structures))
+		baselineOrderHashes := make([]string, len(command.Structures))
 		seenEpisodes := make(map[string]struct{}, len(command.Structures))
 		seenStructures := make(map[string]struct{}, len(command.Structures))
-		for index, reference := range command.Structures {
+		for _, reference := range command.Structures {
 			if reference.EpisodeID == "" || reference.StructureID == "" || reference.ScriptVersionID == "" {
 				return invalid("Invalid storyboard structure reference")
 			}
@@ -127,7 +138,33 @@ func (service *Service) CreateSet(ctx context.Context, actor Actor, command Crea
 				return conflict("Storyboard draft set contains duplicate Structures")
 			}
 			seenEpisodes[reference.EpisodeID], seenStructures[reference.StructureID] = struct{}{}, struct{}{}
-			input, err := repo.DraftInput(ctx, actor, reference.EpisodeID, true)
+		}
+		firstInput, err := repo.DraftInput(ctx, actor, command.Structures[0].EpisodeID, true)
+		if err != nil {
+			return err
+		}
+		if found, receiptErr := repo.FindReceipt(ctx, firstInput.WorkspaceID, createSetOperation, command.IdempotencyKey); receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[receipt](found, found.InputHash)
+			if replayErr != nil {
+				return replayErr
+			}
+			set, replayErr = repo.GetSet(ctx, actor, replayed.ID, false)
+			if replayErr != nil {
+				return replayErr
+			}
+			if found.ResourceID != set.ID || found.InputHash != set.InputHash || set.CreatedBy != actor.UserID ||
+				set.WorkspaceID != firstInput.WorkspaceID || !draftSetMatchesCreateCommand(set, command) {
+				return conflict("Storyboard draft set receipt has drifted")
+			}
+			return nil
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		for index, reference := range command.Structures {
+			input := firstInput
+			if index > 0 {
+				input, err = repo.DraftInput(ctx, actor, reference.EpisodeID, true)
+			}
 			if err != nil {
 				return err
 			}
@@ -139,7 +176,16 @@ func (service *Service) CreateSet(ctx context.Context, actor Actor, command Crea
 			if err != nil {
 				return err
 			}
+			shots, err := repo.ListShots(ctx, actor, reference.EpisodeID)
+			if err != nil {
+				return err
+			}
+			baselineOrderHash, err := domain.OrderHash(shots)
+			if err != nil {
+				return err
+			}
 			inputs[index], inputHashes[index] = input, inputHash
+			baselineOrderHashes[index] = baselineOrderHash
 		}
 		workspaceID, projectID := inputs[0].WorkspaceID, inputs[0].ProjectID
 		for _, input := range inputs[1:] {
@@ -152,22 +198,10 @@ func (service *Service) CreateSet(ctx context.Context, actor Actor, command Crea
 			StructureRevision    int
 			StructureContentHash string
 			BatchInputHashes     []string
-		}{command.StructureCommitID, command.StructureRevision, command.StructureContentHash, inputHashes})
+			BaselineOrderHashes  []string
+		}{command.StructureCommitID, command.StructureRevision, command.StructureContentHash, inputHashes, baselineOrderHashes})
 		if err != nil {
 			return err
-		}
-		if found, receiptErr := repo.FindReceipt(ctx, workspaceID, createSetOperation, command.IdempotencyKey); receiptErr == nil {
-			replayed, replayErr := platformcommand.Replay[receipt](found, inputHash)
-			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
-				return conflict("Idempotency key was already used with different input")
-			}
-			if replayErr != nil {
-				return replayErr
-			}
-			set, replayErr = repo.GetSet(ctx, actor, replayed.ID, false)
-			return replayErr
-		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
-			return receiptErr
 		}
 		now := service.config.Now().UTC()
 		set = domain.DraftSet{
@@ -198,6 +232,7 @@ func (service *Service) CreateSet(ctx context.Context, actor Actor, command Crea
 			set.Batches[index] = domain.DraftSetBatch{
 				BatchID: batchID, EpisodeID: input.EpisodeID, StructureID: input.StructureID,
 				ScriptVersionID: input.ScriptVersionID, InputHash: inputHashes[index],
+				BaselineOrderHash: baselineOrderHashes[index],
 			}
 		}
 		if err = repo.CreateSetWorkflow(ctx, set, batches, invocations); err != nil {
@@ -263,7 +298,7 @@ func (service *Service) RefreshSet(ctx context.Context, actor Actor, setID strin
 			set.Status = terminal
 			set.ResultHash = nil
 		} else {
-			resultHash, hashErr := platformcommand.InputHash(set.Batches)
+			resultHash, hashErr := draftSetCandidateHash(set.Batches)
 			if hashErr != nil {
 				return hashErr
 			}
@@ -277,6 +312,131 @@ func (service *Service) RefreshSet(ctx context.Context, actor Actor, setID strin
 		return nil
 	})
 	return value, normalizeError(err)
+}
+
+func (service *Service) ApplySet(ctx context.Context, actor Actor, command ApplySetCommand) (ApplySetResult, error) {
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if command.SetID == "" || command.ExpectedRevision < 1 || len(command.ExpectedCandidateHash) != 64 ||
+		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return ApplySetResult{}, invalid("Invalid storyboard draft set apply request")
+	}
+	var result ApplySetResult
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		set, err := repo.GetSet(ctx, actor, command.SetID, true)
+		if err != nil {
+			return err
+		}
+		inputHash, err := platformcommand.InputHash(command)
+		if err != nil {
+			return err
+		}
+		candidateHash, err := draftSetCandidateHash(set.Batches)
+		if err != nil {
+			return err
+		}
+		if found, receiptErr := repo.FindReceipt(ctx, set.WorkspaceID, applySetOperation, command.IdempotencyKey); receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[receipt](found, inputHash)
+			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
+				return conflict("Idempotency key was already used with different input")
+			}
+			if replayErr != nil {
+				return replayErr
+			}
+			if replayed.ID != set.ID || set.Status != "applied" || set.Revision != command.ExpectedRevision+1 ||
+				candidateHash != command.ExpectedCandidateHash || set.ResultHash == nil || len(*set.ResultHash) != 64 {
+				return conflict("Storyboard draft set apply receipt has drifted")
+			}
+			result = ApplySetResult{Set: set, Receipt: found}
+			return nil
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		if set.Status != "needs_review" || set.Revision != command.ExpectedRevision || set.ResultHash == nil ||
+			*set.ResultHash != command.ExpectedCandidateHash || candidateHash != command.ExpectedCandidateHash || len(set.Batches) == 0 {
+			return conflict("Storyboard draft set changed before apply")
+		}
+		for _, reference := range set.Batches {
+			if err = repo.LockEpisode(ctx, actor, reference.EpisodeID); err != nil {
+				return err
+			}
+		}
+		now := service.config.Now().UTC()
+		formalReferences := make([]formalShotReference, 0)
+		for _, reference := range set.Batches {
+			batch, batchErr := repo.GetBatch(ctx, actor, reference.BatchID, true)
+			if batchErr != nil {
+				return batchErr
+			}
+			if batch.WorkspaceID != set.WorkspaceID || batch.ProjectID != set.ProjectID || batch.EpisodeID != reference.EpisodeID ||
+				batch.StructureID != reference.StructureID || batch.ScriptVersionID != reference.ScriptVersionID ||
+				batch.InputHash != reference.InputHash || batch.ResultHash == nil || reference.ResultHash == nil ||
+				*batch.ResultHash != *reference.ResultHash || batch.Status != "approved" || batch.ApprovedBy == nil {
+				return conflict("Every Storyboard Batch must be approved before Set apply")
+			}
+			for _, draft := range batch.Candidate.Shots {
+				if batch.Decisions[draft.ProposalKey] != "accepted" {
+					return conflict("Every storyboard draft must be accepted before Set apply")
+				}
+			}
+			currentShots, listErr := repo.ListShots(ctx, actor, batch.EpisodeID)
+			if listErr != nil {
+				return listErr
+			}
+			baselineOrderHash, hashErr := domain.OrderHash(currentShots)
+			if hashErr != nil {
+				return hashErr
+			}
+			if baselineOrderHash != reference.BaselineOrderHash {
+				return conflict("Formal storyboard Shots changed after Draft Set creation")
+			}
+			shots := make([]domain.Shot, len(batch.Candidate.Shots))
+			for index, draft := range batch.Candidate.Shots {
+				contentHash, contentErr := platformcommand.InputHash(draft)
+				if contentErr != nil {
+					return contentErr
+				}
+				shots[index] = domain.Shot{
+					ID: service.config.NewID(), WorkspaceID: batch.WorkspaceID, ProjectID: batch.ProjectID,
+					EpisodeID: batch.EpisodeID, BatchID: batch.ID, ProposalKey: draft.ProposalKey,
+					Position: draft.Position, Title: draft.Title, NarrativeUnitIDs: draft.NarrativeUnitVersionIDs,
+					Spec: draft.Spec, ContentHash: contentHash, Status: "active", Revision: 1,
+					CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now,
+				}
+				formalReferences = append(formalReferences, formalShotReference{
+					BatchID: batch.ID, EpisodeID: batch.EpisodeID, ShotID: shots[index].ID,
+					Position: shots[index].Position, ContentHash: shots[index].ContentHash,
+				})
+			}
+			batch.Status, batch.AppliedAt, batch.UpdatedAt = "applied", &now, now
+			batch.Revision++
+			if err = repo.CreateShots(ctx, batch, shots); err != nil {
+				return err
+			}
+		}
+		formalHash, err := platformcommand.InputHash(formalReferences)
+		if err != nil {
+			return err
+		}
+		set.Status, set.ResultHash, set.Revision, set.UpdatedAt = "applied", &formalHash, set.Revision+1, now
+		if err = repo.SaveSet(ctx, set); err != nil {
+			return err
+		}
+		receiptResult, err := platformcommand.Result(receipt{ID: set.ID})
+		if err != nil {
+			return err
+		}
+		ownerReceipt := platformcommand.Receipt{
+			ID: service.config.NewID(), WorkspaceID: set.WorkspaceID, Operation: applySetOperation,
+			IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: set.ID,
+			Result: receiptResult, CreatedBy: actor.UserID, CreatedAt: now,
+		}
+		if err = repo.CreateReceipt(ctx, ownerReceipt); err != nil {
+			return err
+		}
+		result = ApplySetResult{Set: set, Receipt: ownerReceipt}
+		return nil
+	})
+	return result, normalizeError(err)
 }
 
 func (service *Service) CreateBatch(ctx context.Context, actor Actor, command CreateBatchCommand) (domain.Batch, error) {
@@ -454,18 +614,31 @@ func (service *Service) Approve(ctx context.Context, actor Actor, command Revisi
 }
 
 func (service *Service) PreflightApply(ctx context.Context, actor Actor, batchID string, expectedRevision int) (ApplyPreflight, error) {
-	batch, err := service.GetBatch(ctx, actor, batchID)
-	if err != nil {
-		return ApplyPreflight{}, err
-	}
-	if batch.Status != "approved" || batch.Revision != expectedRevision {
-		return ApplyPreflight{}, conflict("Storyboard batch is not approved at the expected revision")
-	}
-	orderHash, impactHash, err := candidateImpact(batch)
-	if err != nil {
-		return ApplyPreflight{}, err
-	}
-	return ApplyPreflight{BatchID: batch.ID, BatchRevision: batch.Revision, OrderHash: orderHash, ImpactHash: impactHash, Created: len(batch.Candidate.Shots)}, nil
+	var value ApplyPreflight
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		batch, err := repo.GetBatch(ctx, actor, batchID, false)
+		if err != nil {
+			return err
+		}
+		if batch.Status != "approved" || batch.Revision != expectedRevision {
+			return conflict("Storyboard batch is not approved at the expected revision")
+		}
+		shots, err := repo.ListShots(ctx, actor, batch.EpisodeID)
+		if err != nil {
+			return err
+		}
+		baselineOrderHash, err := domain.OrderHash(shots)
+		if err != nil {
+			return err
+		}
+		orderHash, impactHash, err := candidateImpact(batch, baselineOrderHash)
+		if err != nil {
+			return err
+		}
+		value = ApplyPreflight{BatchID: batch.ID, BatchRevision: batch.Revision, OrderHash: orderHash, ImpactHash: impactHash, Created: len(batch.Candidate.Shots)}
+		return nil
+	})
+	return value, normalizeError(err)
 }
 func (service *Service) Apply(ctx context.Context, actor Actor, command ApplyCommand) (domain.Batch, []domain.Shot, error) {
 	var value domain.Batch
@@ -496,7 +669,18 @@ func (service *Service) Apply(ctx context.Context, actor Actor, command ApplyCom
 		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
 			return receiptErr
 		}
-		orderHash, impactHash, err := candidateImpact(batch)
+		if err = repo.LockEpisode(ctx, actor, batch.EpisodeID); err != nil {
+			return err
+		}
+		currentShots, err := repo.ListShots(ctx, actor, batch.EpisodeID)
+		if err != nil {
+			return err
+		}
+		baselineOrderHash, err := domain.OrderHash(currentShots)
+		if err != nil {
+			return err
+		}
+		orderHash, impactHash, err := candidateImpact(batch, baselineOrderHash)
 		if err != nil {
 			return err
 		}
@@ -629,7 +813,32 @@ func storyboardPayload(input domain.DraftInput, batchID, taskID, runToken, input
 	}
 	return json.Marshal(map[string]any{"batch_id": batchID, "task_id": taskID, "input_hash": inputHash, "script_version_id": input.ScriptVersionID, "target_duration_ms": input.TargetDurationMS, "aspect_ratio": input.AspectRatio, "visual_style": input.VisualStyle, "units": units, "assets": []any{}, "production_bible_id": input.BibleID, "production_bible_revision": input.BibleRevision, "production_bible_result_hash": input.BibleResultHash, "world_entries": input.WorldEntries, "run_token": runToken})
 }
-func candidateImpact(batch domain.Batch) (string, string, error) {
+
+type formalShotReference struct {
+	BatchID, EpisodeID, ShotID, ContentHash string
+	Position                                int
+}
+
+func draftSetCandidateHash(batches []domain.DraftSetBatch) (string, error) {
+	return platformcommand.InputHash(batches)
+}
+
+func draftSetMatchesCreateCommand(set domain.DraftSet, command CreateSetCommand) bool {
+	if set.StructureCommitID != command.StructureCommitID || set.StructureRevision != command.StructureRevision ||
+		set.StructureContentHash != command.StructureContentHash || len(set.Batches) != len(command.Structures) {
+		return false
+	}
+	for index, reference := range command.Structures {
+		batch := set.Batches[index]
+		if batch.EpisodeID != reference.EpisodeID || batch.StructureID != reference.StructureID ||
+			batch.ScriptVersionID != reference.ScriptVersionID {
+			return false
+		}
+	}
+	return true
+}
+
+func candidateImpact(batch domain.Batch, baselineOrderHash string) (string, string, error) {
 	ordered := make([]struct {
 		ProposalKey string
 		Position    int
@@ -645,11 +854,9 @@ func candidateImpact(batch domain.Batch) (string, string, error) {
 		return "", "", err
 	}
 	impactHash, err := platformcommand.InputHash(struct {
-		BatchID   string
-		Revision  int
-		OrderHash string
-		Created   int
-	}{batch.ID, batch.Revision, orderHash, len(ordered)})
+		BatchID, OrderHash, BaselineOrderHash string
+		Revision, Created                     int
+	}{batch.ID, orderHash, baselineOrderHash, batch.Revision, len(ordered)})
 	return orderHash, impactHash, err
 }
 func invalid(message string) error {

@@ -194,7 +194,7 @@ func normalizeHumanGateOwnerResult(
 	}
 	binding := normalized.Bindings[0]
 	if binding.Port != application.OutputPort || binding.ValueType != application.OutputValueType ||
-		binding.ReferenceID != application.Candidate.ReferenceID || binding.ContentHash != application.Candidate.ContentHash {
+		!domain.HumanGateOutputMatchesCandidate(application.Executor, application.Candidate, binding) {
 		return domain.HumanGateOwnerResult{}, errors.New("human gate owner output does not match the frozen candidate")
 	}
 	result.ReceiptID, result.Operation, result.Output = strings.TrimSpace(result.ReceiptID), strings.TrimSpace(result.Operation), normalized

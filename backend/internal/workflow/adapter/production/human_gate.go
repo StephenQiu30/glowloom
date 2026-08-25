@@ -10,6 +10,7 @@ import (
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
+	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -18,6 +19,7 @@ const (
 	productionBibleConfirmOperation       = "production_bible.confirm"
 	episodePlanConfirmOperation           = "episode_plan.confirm"
 	episodeStructureBatchConfirmOperation = "episode_structure.confirm_batch"
+	storyboardApplySetOperation           = "storyboard.apply_set"
 )
 
 type BibleOwner interface {
@@ -29,13 +31,18 @@ type PlanningConfirmationOwner interface {
 	ConfirmPublishedStructureBatch(context.Context, planningapp.Actor, planningapp.ConfirmStructureBatchCommand) (planningapp.ConfirmStructureBatchResult, error)
 }
 
-type Applier struct {
-	bibles BibleOwner
-	plans  PlanningConfirmationOwner
+type StoryboardSetOwner interface {
+	ApplySet(context.Context, storyboardapp.Actor, storyboardapp.ApplySetCommand) (storyboardapp.ApplySetResult, error)
 }
 
-func New(bibles BibleOwner, plans PlanningConfirmationOwner) *Applier {
-	return &Applier{bibles: bibles, plans: plans}
+type Applier struct {
+	bibles      BibleOwner
+	plans       PlanningConfirmationOwner
+	storyboards StoryboardSetOwner
+}
+
+func New(bibles BibleOwner, plans PlanningConfirmationOwner, storyboards StoryboardSetOwner) *Applier {
+	return &Applier{bibles: bibles, plans: plans, storyboards: storyboards}
 }
 
 func (applier *Applier) ApplyHumanGateDecision(
@@ -53,6 +60,9 @@ func (applier *Applier) ApplyHumanGateDecision(
 	}
 	if application.Executor == "gate.episode_structure_review" {
 		return applier.applyEpisodeStructures(ctx, actor, application)
+	}
+	if application.Executor == "gate.storyboard_review" {
+		return applier.applyStoryboardSet(ctx, actor, application)
 	}
 	if applier.bibles == nil || application.Executor != "gate.production_bible_review" ||
 		application.Candidate.ValueType != "production_bible_candidate" ||
@@ -82,6 +92,52 @@ func (applier *Applier) ApplyHumanGateDecision(
 			Port: application.OutputPort, ValueType: application.OutputValueType,
 			ReferenceID: result.Bible.ID, ReferenceVersion: strconv.Itoa(result.Bible.Revision),
 			ContentHash: *result.Bible.ResultHash,
+		}},
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	return domain.HumanGateOwnerResult{
+		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
+	}, nil
+}
+
+func (applier *Applier) applyStoryboardSet(
+	ctx context.Context,
+	actor workflowapp.Actor,
+	application domain.HumanGateOwnerApplication,
+) (domain.HumanGateOwnerResult, error) {
+	if applier.storyboards == nil || application.Candidate.ValueType != "storyboard_candidate" ||
+		application.OutputPort != "storyboards" || application.OutputValueType != "storyboards" {
+		return domain.HumanGateOwnerResult{}, errors.New("unsupported workflow human gate owner application")
+	}
+	expectedRevision, err := strconv.Atoi(application.Candidate.ReferenceVersion)
+	if err != nil || expectedRevision < 1 || len(application.Candidate.ContentHash) != 64 {
+		return domain.HumanGateOwnerResult{}, errors.New("invalid Storyboard Draft Set candidate")
+	}
+	result, err := applier.storyboards.ApplySet(ctx, storyboardapp.Actor{
+		UserID: actor.UserID, TokenVersion: actor.TokenVersion,
+	}, storyboardapp.ApplySetCommand{
+		SetID: application.Candidate.ReferenceID, ExpectedRevision: expectedRevision,
+		ExpectedCandidateHash: application.Candidate.ContentHash,
+		IdempotencyKey:        "workflow-review:" + application.ReviewDecisionID,
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	set := result.Set
+	if set.ID != application.Candidate.ReferenceID || set.WorkspaceID != application.WorkspaceID ||
+		set.ProjectID != application.ProjectID || set.Status != "applied" || set.Revision != expectedRevision+1 ||
+		set.ResultHash == nil || len(*set.ResultHash) != 64 || result.Receipt.Operation != storyboardApplySetOperation ||
+		result.Receipt.ResourceID != set.ID || result.Receipt.WorkspaceID != application.WorkspaceID ||
+		result.Receipt.CreatedBy != actor.UserID {
+		return domain.HumanGateOwnerResult{}, errors.New("Storyboard owner result does not match workflow gate")
+	}
+	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: application.OutputPort, ValueType: application.OutputValueType,
+			ReferenceID: set.ID, ReferenceVersion: strconv.Itoa(set.Revision), ContentHash: *set.ResultHash,
 		}},
 	})
 	if err != nil {
