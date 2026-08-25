@@ -1,6 +1,9 @@
 package domain
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 type PortDefinition struct {
 	Key       string `json:"key"`
@@ -86,4 +89,26 @@ type RevisionSnapshot struct {
 	CatalogExecutionHash string            `json:"catalog_execution_hash"`
 	ExecutionHash        string            `json:"execution_hash"`
 	ContentHash          string            `json:"content_hash"`
+}
+
+type Draft struct {
+	ID, WorkspaceID, ProjectID, CatalogID string
+	AuthoringMode                         string
+	Graph                                 Graph
+	Layout                                json.RawMessage
+	FrozenInputs                          []FrozenReference
+	CatalogKey, CatalogVersion            string
+	Status                                string
+	Revision                              int
+	CurrentPublishedRevisionID            *string
+	CreatedBy                             string
+	CreatedAt, UpdatedAt                  time.Time
+}
+
+type Revision struct {
+	ID, WorkspaceID, ProjectID, DraftID, CatalogID string
+	RevisionNo                                     int
+	RevisionSnapshot
+	CreatedBy string
+	CreatedAt time.Time
 }
