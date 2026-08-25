@@ -259,6 +259,35 @@ func (store *Store) Release(
 	return result, err
 }
 
+func (store *Store) ExpireClaims(ctx context.Context, limit int, now time.Time) (int, error) {
+	expired := 0
+	err := platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var tasks []model.HumanTask
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
+			Where("status = ? AND claim_expires_at IS NOT NULL AND claim_expires_at <= ?", "CLAIMED", now.UTC()).
+			Order("claim_expires_at ASC").Order("id ASC").Limit(limit).Find(&tasks).Error; loadErr != nil {
+			return loadErr
+		}
+		for _, task := range tasks {
+			result := transaction.Model(&model.HumanTask{}).
+				Where("id = ? AND revision = ?", task.ID, task.Revision).
+				Updates(map[string]any{
+					"status": "OPEN", "claimed_by": nil, "claim_token": nil, "claim_expires_at": nil,
+					"revision": task.Revision + 1, "updated_at": now.UTC(),
+				})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return conflict("Human task claim changed during expiry sweep")
+			}
+			expired++
+		}
+		return nil
+	})
+	return expired, err
+}
+
 func (store *Store) Decide(
 	ctx context.Context,
 	actor application.Actor,

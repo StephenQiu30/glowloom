@@ -162,6 +162,49 @@ func TestHumanTaskOwnerRenewsAndReleasesClaimIdempotently(t *testing.T) {
 	}
 }
 
+func TestHumanTaskExpireSweepReopensExpiredClaimOnce(t *testing.T) {
+	now := time.Date(2026, time.August, 26, 4, 0, 0, 0, time.UTC)
+	repository := newHumanTaskRepository()
+	identities := []string{"task-expire", "claim-expire"}
+	service := reviewapp.NewService(repository, reviewapp.Config{
+		Now: func() time.Time { return now },
+		NewID: func() string {
+			value := identities[0]
+			identities = identities[1:]
+			return value
+		},
+		ClaimLease: 5 * time.Minute,
+	})
+	ctx := context.Background()
+	task, err := service.Open(ctx, reviewapp.OpenCommand{
+		WorkspaceID: "workspace-expire", ProjectID: "project-expire", WorkflowRunID: "run-expire", NodeRunID: "node-expire",
+		SubjectType: "workflow_node_output", SubjectID: "subject-expire", SubjectRevision: 2,
+		CandidateIDs: []string{}, RubricVersion: "expire-review-v1",
+	})
+	if err != nil {
+		t.Fatalf("open expiring task: %v", err)
+	}
+	claimed, err := service.Claim(ctx, reviewapp.Actor{UserID: "reviewer-expire"}, reviewapp.ClaimCommand{
+		TaskID: task.ID, ExpectedRevision: task.Revision, IdempotencyKey: "expire-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim expiring task: %v", err)
+	}
+	if count, expireErr := service.ExpireClaims(ctx, 10); expireErr != nil || count != 0 {
+		t.Fatalf("expire active claim: count=%d err=%v", count, expireErr)
+	}
+	now = now.Add(6 * time.Minute)
+	count, err := service.ExpireClaims(ctx, 10)
+	if err != nil || count != 1 || repository.task.Status != "OPEN" || repository.task.ClaimedBy != nil ||
+		repository.task.ClaimToken != nil || repository.task.ClaimExpiresAt != nil ||
+		repository.task.Revision != claimed.Task.Revision+1 {
+		t.Fatalf("expire claim once: count=%d task=%#v err=%v", count, repository.task, err)
+	}
+	if count, err = service.ExpireClaims(ctx, 10); err != nil || count != 0 {
+		t.Fatalf("replay claim expiry sweep: count=%d err=%v", count, err)
+	}
+}
+
 type humanTaskRepository struct {
 	task             review.HumanTask
 	decision         review.ReviewDecision
@@ -280,6 +323,16 @@ func (repo *humanTaskRepository) Release(
 	repo.task.Revision++
 	repo.releaseReceipts[key] = releaseReceipt{command: command, result: repo.task}
 	return repo.task, nil
+}
+
+func (repo *humanTaskRepository) ExpireClaims(_ context.Context, limit int, now time.Time) (int, error) {
+	if limit < 1 || repo.task.Status != "CLAIMED" || repo.task.ClaimExpiresAt == nil || repo.task.ClaimExpiresAt.After(now) {
+		return 0, nil
+	}
+	repo.task.Status, repo.task.ClaimedBy, repo.task.ClaimToken, repo.task.ClaimExpiresAt = "OPEN", nil, nil, nil
+	repo.task.UpdatedAt = now
+	repo.task.Revision++
+	return 1, nil
 }
 
 func (repo *humanTaskRepository) Decide(

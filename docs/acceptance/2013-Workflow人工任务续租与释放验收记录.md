@@ -1,6 +1,6 @@
 # Workflow 人工任务续租与释放验收记录
 
-- 状态：Backend 内部 HumanTask Renew/Release Lease 切片通过；显式 Expire 与公共 API 尚未实现
+- 状态：Backend 内部 HumanTask Renew/Release Lease 切片通过；Expire 由后续独立验收记录证明，公共 API 尚未实现
 - 日期：2026-08-26
 - Design：[后端领域模块功能设计](../design/2002-后端领域模块功能设计.md)
 - PRD：[产品范围与验收基线](../prd/0001-产品范围与验收基线.md)
@@ -38,12 +38,12 @@ HumanTask 继续使用唯一 GORM Model Catalog 中已有的 ClaimedBy、ClaimTo
 
 ## Requirement 状态
 
-- `BE-MOD-006`：HumanTask、Claim/Renew/Release、过期接管、不可变 ReviewDecision 与 Stale 检查已落地；显式 Expire、公共 API 和跨日浏览器旅程尚未完成，因此主需求保持未完成。
+- `BE-MOD-006`：本记录证明 HumanTask、Claim/Renew/Release、过期接管、不可变 ReviewDecision 与 Stale 检查；Expire 见[后续验收](2014-Workflow人工任务过期回收验收记录.md)，公共 API 和跨日浏览器旅程仍未完成，因此主需求保持未完成。
 - `BE-APP-002`：Renew/Release 的 HumanTask 与 Receipt 原子提交已有真实 PostgreSQL 证据；其他模块仍按各自 Acceptance 验收。
 - `BE-APP-007`：Renew/Release 每次重新验证 Reviewer Membership 与 Token Version；完整公共错误等价矩阵仍未完成。
 
 ## 残余风险与下一切片
 
-- Claim 过期目前可由后续 Claim 原子接管，但没有独立 Expire Command 主动把长期无人处理的过期任务恢复成 `OPEN`；下一小任务实现有界 Expire Sweep。
+- 本记录验收时尚无独立 Expire 能力；后续已由[人工任务过期回收验收记录](2014-Workflow人工任务过期回收验收记录.md)补充有界 Expire Sweep 证据。
 - Renew/Release 尚未暴露公共 API；需与 Workflow 查询、授权错误映射和 OpenAPI 同一切片装配，不能由 Handler 直接访问 GORM Store。
 - 最终 `agent-browser` 仍只在全部开发与自动化回归完成后执行，本记录不计作浏览器验收。

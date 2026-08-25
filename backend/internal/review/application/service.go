@@ -30,6 +30,7 @@ type Repository interface {
 	Claim(context.Context, Actor, ClaimCommand, string, time.Time, time.Time) (domain.ClaimResult, error)
 	Renew(context.Context, Actor, RenewCommand, time.Time, time.Time) (domain.ClaimResult, error)
 	Release(context.Context, Actor, ReleaseCommand, time.Time) (domain.HumanTask, error)
+	ExpireClaims(context.Context, int, time.Time) (int, error)
 	Decide(context.Context, Actor, DecideCommand, domain.ReviewDecision, time.Time) (domain.DecisionResult, error)
 }
 
@@ -138,6 +139,13 @@ func (service *Service) Release(ctx context.Context, actor Actor, command Releas
 		return domain.HumanTask{}, invalid("Invalid human task claim release")
 	}
 	return service.repository.Release(ctx, actor, command, service.config.Now().UTC())
+}
+
+func (service *Service) ExpireClaims(ctx context.Context, limit int) (int, error) {
+	if service == nil || service.repository == nil || service.config.Now == nil || limit < 1 || limit > 500 {
+		return 0, invalid("Invalid human task expiry sweep")
+	}
+	return service.repository.ExpireClaims(ctx, limit, service.config.Now().UTC())
 }
 
 func (service *Service) Decide(ctx context.Context, actor Actor, command DecideCommand) (domain.DecisionResult, error) {

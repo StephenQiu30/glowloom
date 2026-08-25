@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -160,5 +161,81 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	}
 	if renewReceiptCount != 1 || releaseReceiptCount != 1 {
 		t.Fatalf("lease receipt counts = renew %d release %d", renewReceiptCount, releaseReceiptCount)
+	}
+	expiringTask, err := service.Open(ctx, reviewapp.OpenCommand{
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
+		SubjectType: "workflow_node_output", SubjectID: uuid.NewString(), SubjectRevision: 4,
+		CandidateIDs: []string{}, RubricVersion: "expire-review-v1",
+	})
+	if err != nil {
+		t.Fatalf("open task for expiry sweep: %v", err)
+	}
+	expiringClaim, err := service.Claim(ctx, reviewapp.Actor{UserID: reviewerA.String(), TokenVersion: 1}, reviewapp.ClaimCommand{
+		TaskID: expiringTask.ID, ExpectedRevision: expiringTask.Revision, IdempotencyKey: "persisted-expiring-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim task for expiry sweep: %v", err)
+	}
+	now = now.Add(6 * time.Minute)
+	activeTask, err := service.Open(ctx, reviewapp.OpenCommand{
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
+		SubjectType: "workflow_node_output", SubjectID: uuid.NewString(), SubjectRevision: 5,
+		CandidateIDs: []string{}, RubricVersion: "active-review-v1",
+	})
+	if err != nil {
+		t.Fatalf("open active task beside expiry sweep: %v", err)
+	}
+	activeClaim, err := service.Claim(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, reviewapp.ClaimCommand{
+		TaskID: activeTask.ID, ExpectedRevision: activeTask.Revision, IdempotencyKey: "persisted-active-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim active task beside expiry sweep: %v", err)
+	}
+	startSweep := make(chan struct{})
+	sweepResults := make(chan struct {
+		count int
+		err   error
+	}, 2)
+	var sweepWorkers sync.WaitGroup
+	for range 2 {
+		sweepWorkers.Add(1)
+		go func() {
+			defer sweepWorkers.Done()
+			<-startSweep
+			count, sweepErr := service.ExpireClaims(ctx, 10)
+			sweepResults <- struct {
+				count int
+				err   error
+			}{count: count, err: sweepErr}
+		}()
+	}
+	close(startSweep)
+	sweepWorkers.Wait()
+	close(sweepResults)
+	expiredCount := 0
+	for result := range sweepResults {
+		if result.err != nil {
+			t.Fatalf("expire persisted claims concurrently: %v", result.err)
+		}
+		expiredCount += result.count
+	}
+	if expiredCount != 1 {
+		t.Fatalf("concurrent expiry sweep total = %d, want 1", expiredCount)
+	}
+	if expiredCount, err = service.ExpireClaims(ctx, 10); err != nil || expiredCount != 0 {
+		t.Fatalf("replay persisted expiry sweep: count=%d err=%v", expiredCount, err)
+	}
+	var expiredRecord, activeRecord model.HumanTask
+	if err = database.First(&expiredRecord, "id = ?", expiringTask.ID).Error; err != nil {
+		t.Fatalf("load expired task: %v", err)
+	}
+	if err = database.First(&activeRecord, "id = ?", activeTask.ID).Error; err != nil {
+		t.Fatalf("load active task: %v", err)
+	}
+	if expiredRecord.Status != "OPEN" || expiredRecord.ClaimedBy != nil || expiredRecord.ClaimToken != nil ||
+		expiredRecord.ClaimExpiresAt != nil || expiredRecord.Revision != expiringClaim.Task.Revision+1 ||
+		activeRecord.Status != "CLAIMED" || activeRecord.ClaimToken == nil ||
+		activeRecord.ClaimToken.String() != activeClaim.ClaimToken || activeRecord.Revision != activeClaim.Task.Revision {
+		t.Fatalf("expiry sweep facts = expired %#v active %#v", expiredRecord, activeRecord)
 	}
 }
