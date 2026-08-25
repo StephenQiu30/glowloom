@@ -199,6 +199,58 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		humanTask.SubjectID.String() != gate.NodeRunID || gateRevision != waitingNode.Revision {
 		t.Fatalf("human gate projection = task %#v run %#v node %#v", humanTask, waitingRun, waitingNode)
 	}
+	reviewActor := reviewapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
+	claimed, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: humanTask.ID.String(), ExpectedRevision: humanTask.Revision, IdempotencyKey: "workflow-gate-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim workflow human task: %v", err)
+	}
+	decision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: humanTask.ID.String(), ClaimToken: claimed.ClaimToken, ExpectedTaskRevision: claimed.Task.Revision,
+		ExpectedSubjectRevision: claimed.Task.SubjectRevision, Decision: "approved", IdempotencyKey: "workflow-gate-decision",
+	})
+	if err != nil {
+		t.Fatalf("decide workflow human task: %v", err)
+	}
+	signaler := &scriptedSignaler{outcomes: []workflow.SignalObservation{
+		{Outcome: workflow.SignalOutcomeUnknown},
+		{Outcome: workflow.SignalOutcomeAlreadyApplied, ObservedInputHash: "match_request"},
+	}}
+	signalService := workflowapp.NewSignalService(workflowStore, signaler, workflowapp.SignalConfig{
+		Now: func() time.Time {
+			now = now.Add(time.Second)
+			return now
+		},
+		NewID: uuid.NewString,
+	})
+	signalCommand := workflowapp.SignalHumanGateCommand{
+		WorkspaceID: waitingRun.WorkspaceID.String(), WorkflowRunID: waitingRun.ID.String(), NodeRunID: waitingNode.ID.String(),
+		HumanTaskID: decision.Task.ID, ReviewDecisionID: decision.Decision.ID,
+		SubjectRevision: decision.Decision.SubjectRevision, Decision: decision.Decision.Decision,
+		IdempotencyKey: "workflow-gate-signal",
+	}
+	unknownSignal, err := signalService.SignalHumanGate(ctx, actor, signalCommand)
+	if err != nil || unknownSignal.Status != "unknown" {
+		t.Fatalf("persist unknown human gate signal: intent=%#v err=%v", unknownSignal, err)
+	}
+	completedSignal, err := signalService.SignalHumanGate(ctx, actor, signalCommand)
+	if err != nil || completedSignal.Status != "completed" || completedSignal.ID != unknownSignal.ID {
+		t.Fatalf("reconcile persisted human gate signal: intent=%#v err=%v", completedSignal, err)
+	}
+	var applyCount, signalIntentCount, signalReceiptCount int64
+	if err = database.Model(&model.WorkflowHumanGateApplyReceipt{}).Count(&applyCount).Error; err != nil {
+		t.Fatalf("count human gate apply receipts: %v", err)
+	}
+	if err = database.Model(&model.WorkflowSignalIntent{}).Count(&signalIntentCount).Error; err != nil {
+		t.Fatalf("count signal intents: %v", err)
+	}
+	if err = database.Model(&model.WorkflowSignalReceipt{}).Count(&signalReceiptCount).Error; err != nil {
+		t.Fatalf("count signal receipts: %v", err)
+	}
+	if applyCount != 1 || signalIntentCount != 1 || signalReceiptCount != 2 {
+		t.Fatalf("signal fact counts = apply %d intents %d receipts %d", applyCount, signalIntentCount, signalReceiptCount)
+	}
 	completion := workflow.CompleteRunCommand{WorkflowRunID: request.WorkflowRunID}
 	if err = runtimeService.CompleteRun(ctx, completion); err == nil {
 		t.Fatal("run completed while queued nodes still existed")
