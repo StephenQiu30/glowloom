@@ -15,6 +15,7 @@ import (
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
@@ -127,6 +128,38 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		plan.RunInputSnapshotID != request.RunInputSnapshotID || plan.DefinitionContentHash != request.DefinitionContentHash ||
 		plan.InputSnapshotHash != request.InputSnapshotHash {
 		t.Fatalf("runtime plan lost frozen start identity: %#v", plan)
+	}
+
+	executor := &scriptedNodeExecutor{failures: 1}
+	runtimeService = workflowapp.NewRuntimeService(workflowStore, workflowapp.RuntimeConfig{
+		Now: func() time.Time {
+			now = now.Add(time.Second)
+			return now
+		},
+		NewID: uuid.NewString, Executor: executor,
+	})
+	node := plan.Nodes[1]
+	command := workflow.NodeActivityCommand{
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: node.NodeRunID, NodeID: node.NodeID,
+		Executor: node.Executor, Attempt: 1,
+	}
+	if _, err = runtimeService.ExecuteNode(ctx, command); err == nil {
+		t.Fatal("real node projection reported the first executor failure as success")
+	}
+	result, err := runtimeService.ExecuteNode(ctx, command)
+	if err != nil || result.Status != "SUCCEEDED" {
+		t.Fatalf("retry persisted node execution: result=%#v err=%v", result, err)
+	}
+	if _, err = runtimeService.ExecuteNode(ctx, command); err != nil || executor.CallCount() != 2 {
+		t.Fatalf("replay persisted node execution: calls=%d err=%v", executor.CallCount(), err)
+	}
+	var projection model.NodeRunProjection
+	if err = database.First(&projection, "id = ?", node.NodeRunID).Error; err != nil {
+		t.Fatalf("load persisted node projection: %v", err)
+	}
+	if projection.Status != "SUCCEEDED" || projection.Attempt != 2 || projection.Executor != node.Executor ||
+		projection.RiskLevel != node.RiskLevel || projection.ActiveClaimToken != nil {
+		t.Fatalf("persisted node projection = %#v", projection)
 	}
 }
 
