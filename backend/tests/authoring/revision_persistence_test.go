@@ -2,8 +2,10 @@ package authoring_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -125,7 +127,7 @@ func TestAuthoringDraftPublishesImmutableRevisionsFromVerifiedInputs(t *testing.
 	if err = database.First(&persistedFirst, "id = ?", firstRevision.ID).Error; err != nil {
 		t.Fatalf("reload first authoring revision: %v", err)
 	}
-	if string(persistedFirst.Layout) != `{"nodes":{"script":{"x":10,"y":20}}}` || persistedFirst.ContentHash != firstRevision.ContentHash {
+	if !sameJSON(persistedFirst.Layout, []byte(`{"nodes":{"script":{"x":10,"y":20}}}`)) || persistedFirst.ContentHash != firstRevision.ContentHash {
 		t.Fatalf("later draft edit changed the first revision: %#v", persistedFirst)
 	}
 	var draftCount, revisionCount int64
@@ -138,6 +140,14 @@ func TestAuthoringDraftPublishesImmutableRevisionsFromVerifiedInputs(t *testing.
 	if draftCount != 1 || revisionCount != 2 {
 		t.Fatalf("unexpected authoring facts: drafts=%d revisions=%d", draftCount, revisionCount)
 	}
+}
+
+func sameJSON(left, right []byte) bool {
+	var leftValue, rightValue any
+	if json.Unmarshal(left, &leftValue) != nil || json.Unmarshal(right, &rightValue) != nil {
+		return false
+	}
+	return reflect.DeepEqual(leftValue, rightValue)
 }
 
 type authoringFixture struct {
