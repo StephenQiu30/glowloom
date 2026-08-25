@@ -160,10 +160,13 @@ func (store *Store) ClaimNode(
 		if resolveErr != nil {
 			return resolveErr
 		}
-		if len(node.Input) != 0 || node.InputHash != nil {
+		if len(node.Input) != 0 || node.InputHash != nil || node.CacheKey != nil {
 			_, persistedHash, inputErr := persistedNodeInput(node)
 			if inputErr != nil || persistedHash != resolved.InputHash {
 				return errors.New("workflow node input projection has drifted")
+			}
+			if nodeCacheKeyValue(node.CacheKey) != resolved.CacheKey {
+				return errors.New("workflow node cache identity has drifted")
 			}
 		}
 		node.Status = "RUNNING"
@@ -171,11 +174,12 @@ func (store *Store) ClaimNode(
 		node.ActiveClaimToken = &token
 		node.Input = datatypes.JSON(resolved.InputJSON)
 		node.InputHash = &resolved.InputHash
+		node.CacheKey = nodeCacheKeyPointer(resolved.CacheKey)
 		node.Revision++
 		node.UpdatedAt = now.UTC()
 		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
 			"status": node.Status, "attempt": node.Attempt, "active_claim_token": token,
-			"input": node.Input, "input_hash": resolved.InputHash,
+			"input": node.Input, "input_hash": resolved.InputHash, "cache_key": node.CacheKey,
 			"revision": node.Revision, "updated_at": node.UpdatedAt,
 		}).Error; updateErr != nil {
 			return updateErr
@@ -192,6 +196,8 @@ func (store *Store) ClaimNode(
 			Command: command, ClaimToken: token.String(), Status: node.Status,
 			Attempt: node.Attempt, Revision: node.Revision, Input: resolved.Input, InputHash: resolved.InputHash,
 			OutputPorts: append([]authoring.PortDefinition(nil), resolved.Execution.OutputPorts...),
+			WorkspaceID: run.WorkspaceID.String(), CachePolicy: resolved.Execution.CachePolicy,
+			CacheMaterial: resolved.CacheMaterial, CacheKey: resolved.CacheKey,
 		}
 		return nil
 	})
@@ -207,6 +213,90 @@ func (store *Store) CompleteNode(
 	return store.finishNode(ctx, claim, result.Status, "RUNNING", "node:"+claim.Command.NodeID+":completed", &result, now)
 }
 
+func (store *Store) CompleteNodeFromCache(
+	ctx context.Context,
+	claim domain.NodeExecutionClaim,
+	now time.Time,
+) (domain.NodeActivityResult, bool, error) {
+	workspaceID, err := validateRuntimeCacheClaim(claim)
+	if err != nil {
+		return domain.NodeActivityResult{}, false, err
+	}
+	var result domain.NodeActivityResult
+	found := false
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var persisted model.NodeCacheEntry
+		loadErr := transaction.Where("workspace_id = ? AND cache_key = ?", workspaceID, claim.CacheKey).
+			First(&persisted).Error
+		if errors.Is(loadErr, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if loadErr != nil {
+			return loadErr
+		}
+		entry, entryErr := nodeCacheDomain(persisted)
+		if entryErr != nil || entry.WorkspaceID != claim.WorkspaceID || entry.CacheKey != claim.CacheKey {
+			return errors.New("workflow node cache fact has drifted")
+		}
+		normalized, _, outputHash, outputErr := domain.ParseNodeOutput(entry.Output)
+		if outputErr != nil || outputHash != entry.OutputHash ||
+			domain.ValidateNodeOutputPorts(normalized, claim.OutputPorts) != nil {
+			return errors.New("workflow node cache output is invalid")
+		}
+		result = domain.NodeActivityResult{Status: "CACHED", Output: normalized, OutputHash: outputHash}
+		if finishErr := finishNodeTransaction(
+			transaction, claim, "CACHED", "RUNNING", "node:"+claim.Command.NodeID+":cached", &result, now,
+		); finishErr != nil {
+			return finishErr
+		}
+		found = true
+		return nil
+	})
+	return result, found, err
+}
+
+func (store *Store) CompleteNodeWithCache(
+	ctx context.Context,
+	claim domain.NodeExecutionClaim,
+	result domain.NodeActivityResult,
+	entry domain.NodeCacheEntry,
+	now time.Time,
+) error {
+	if result.Status != "SUCCEEDED" && result.Status != "SKIPPED" {
+		return errors.New("workflow node cache completion status is invalid")
+	}
+	if _, err := validateRuntimeCacheClaim(claim); err != nil {
+		return err
+	}
+	if entry.WorkspaceID != claim.WorkspaceID || entry.CacheKey != claim.CacheKey ||
+		entry.SourceWorkflowRunID != claim.Command.WorkflowRunID || entry.SourceNodeRunID != claim.Command.NodeRunID {
+		return errors.New("workflow node cache entry identity has drifted")
+	}
+	record, err := nodeCacheRecord(entry)
+	if err != nil {
+		return err
+	}
+	_, _, resultHash, resultErr := domain.BuildNodeOutput(result.Output)
+	if resultErr != nil || result.OutputHash != resultHash || record.OutputHash != resultHash {
+		return errors.New("workflow node cache completion output is invalid")
+	}
+	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		if finishErr := finishNodeTransaction(
+			transaction, claim, result.Status, "RUNNING", "node:"+claim.Command.NodeID+":completed", &result, now,
+		); finishErr != nil {
+			return finishErr
+		}
+		persisted, cacheErr := ensureNodeCacheRecord(transaction, record)
+		if cacheErr != nil {
+			return cacheErr
+		}
+		if persisted.OutputHash != resultHash {
+			return errors.New("workflow node cache output conflicts with its immutable fact")
+		}
+		return nil
+	})
+}
+
 func (store *Store) RetryNode(ctx context.Context, claim domain.NodeExecutionClaim, now time.Time) error {
 	return store.finishNode(ctx, claim, "RETRYING", "RETRYING", "node:"+claim.Command.NodeID+":retrying", nil, now)
 }
@@ -220,59 +310,84 @@ func (store *Store) finishNode(
 	result *domain.NodeActivityResult,
 	now time.Time,
 ) error {
+	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		return finishNodeTransaction(transaction, claim, nodeStatus, runStatus, progressStage, result, now)
+	})
+}
+
+func finishNodeTransaction(
+	transaction *gorm.DB,
+	claim domain.NodeExecutionClaim,
+	nodeStatus string,
+	runStatus string,
+	progressStage string,
+	result *domain.NodeActivityResult,
+	now time.Time,
+) error {
 	runID, nodeID, token, err := runtimeNodeIdentities(claim.Command, claim.ClaimToken)
 	if err != nil {
 		return application.ErrNotFound
 	}
-	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
-		var run model.WorkflowRun
-		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
-			return normalizeNotFound(loadErr)
+	var run model.WorkflowRun
+	if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
+		return normalizeNotFound(loadErr)
+	}
+	var node model.NodeRunProjection
+	if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&node, "id = ?", nodeID).Error; loadErr != nil {
+		return normalizeNotFound(loadErr)
+	}
+	if node.WorkflowRunID != run.ID || node.NodeID != claim.Command.NodeID || node.Executor != claim.Command.Executor ||
+		node.Status != "RUNNING" || node.ActiveClaimToken == nil || *node.ActiveClaimToken != token || node.Revision != claim.Revision ||
+		run.WorkspaceID.String() != claim.WorkspaceID || nodeCacheKeyValue(node.CacheKey) != claim.CacheKey {
+		return &application.Error{Code: "resource_conflict", Message: "Workflow node claim is stale", Status: 409}
+	}
+	stopped, stopErr := stoppingControlExists(transaction, run.ID)
+	if stopErr != nil {
+		return stopErr
+	}
+	updates := map[string]any{
+		"status": nodeStatus, "active_claim_token": nil,
+		"revision": node.Revision + 1, "updated_at": now.UTC(),
+	}
+	if result != nil {
+		normalized, output, outputHash, outputErr := domain.BuildNodeOutput(result.Output)
+		if outputErr != nil || result.Status != nodeStatus || result.OutputHash != outputHash {
+			return errors.New("workflow node completion output is invalid")
 		}
-		var node model.NodeRunProjection
-		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&node, "id = ?", nodeID).Error; loadErr != nil {
-			return normalizeNotFound(loadErr)
-		}
-		if node.WorkflowRunID != run.ID || node.NodeID != claim.Command.NodeID || node.Executor != claim.Command.Executor ||
-			node.Status != "RUNNING" || node.ActiveClaimToken == nil || *node.ActiveClaimToken != token || node.Revision != claim.Revision {
-			return &application.Error{Code: "resource_conflict", Message: "Workflow node claim is stale", Status: 409}
-		}
-		stopped, stopErr := stoppingControlExists(transaction, run.ID)
-		if stopErr != nil {
-			return stopErr
-		}
-		updates := map[string]any{
-			"status": nodeStatus, "active_claim_token": nil,
-			"revision": node.Revision + 1, "updated_at": now.UTC(),
-		}
-		if result != nil {
-			normalized, output, outputHash, outputErr := domain.BuildNodeOutput(result.Output)
-			if outputErr != nil || result.Status != nodeStatus || result.OutputHash != outputHash {
-				return errors.New("workflow node completion output is invalid")
-			}
-			result.Output = normalized
-			node.Output = datatypes.JSON(output)
-			node.OutputHash = &outputHash
-			updates["output"] = node.Output
-			updates["output_hash"] = outputHash
-		}
-		node.Status = nodeStatus
-		node.ActiveClaimToken = nil
-		node.Revision++
-		node.UpdatedAt = now.UTC()
-		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(updates).Error; updateErr != nil {
-			return updateErr
-		}
-		if stopped || run.Status == "PAUSED" || run.Status == "NEEDS_ATTENTION" {
-			return nil
-		}
-		run.Status, run.ProgressStage = runStatus, progressStage
-		run.Revision++
-		run.UpdatedAt = now.UTC()
-		return transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(map[string]any{
-			"status": run.Status, "progress_stage": run.ProgressStage, "revision": run.Revision, "updated_at": run.UpdatedAt,
-		}).Error
-	})
+		result.Output = normalized
+		node.Output = datatypes.JSON(output)
+		node.OutputHash = &outputHash
+		updates["output"] = node.Output
+		updates["output_hash"] = outputHash
+	}
+	node.Status = nodeStatus
+	node.ActiveClaimToken = nil
+	node.Revision++
+	node.UpdatedAt = now.UTC()
+	if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(updates).Error; updateErr != nil {
+		return updateErr
+	}
+	if stopped || run.Status == "PAUSED" || run.Status == "NEEDS_ATTENTION" {
+		return nil
+	}
+	run.Status, run.ProgressStage = runStatus, progressStage
+	run.Revision++
+	run.UpdatedAt = now.UTC()
+	return transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+		"status": run.Status, "progress_stage": run.ProgressStage, "revision": run.Revision, "updated_at": run.UpdatedAt,
+	}).Error
+}
+
+func validateRuntimeCacheClaim(claim domain.NodeExecutionClaim) (uuid.UUID, error) {
+	workspaceID, err := uuid.Parse(claim.WorkspaceID)
+	if err != nil || claim.CachePolicy != "by_inputs" {
+		return uuid.Nil, errors.New("workflow node cache claim is invalid")
+	}
+	_, cacheKey, err := domain.BuildNodeCacheKey(claim.CacheMaterial)
+	if err != nil || cacheKey != claim.CacheKey {
+		return uuid.Nil, errors.New("workflow node cache claim has drifted")
+	}
+	return workspaceID, nil
 }
 
 func runtimeNodeIdentities(command domain.NodeActivityCommand, claimToken string) (uuid.UUID, uuid.UUID, uuid.UUID, error) {

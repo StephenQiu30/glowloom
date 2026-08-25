@@ -101,14 +101,72 @@ func TestRuntimeRejectsExecutorOwnedCacheAndInvalidOutputWithoutCommittingIt(t *
 	}
 }
 
+func TestRuntimeNodeCacheHitSkipsExecutorAndCommitsCachedOutput(t *testing.T) {
+	cachedOutput := successfulExecutorOutput()
+	_, _, cachedHash, err := workflow.BuildNodeOutput(cachedOutput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &runtimeNodeRepository{
+		status: "QUEUED", cachePolicy: "by_inputs",
+		cachedResult: workflow.NodeActivityResult{Status: "CACHED", Output: cachedOutput, OutputHash: cachedHash},
+	}
+	executor := &scriptedNodeExecutor{}
+	service := workflowapp.NewRuntimeService(repository, workflowapp.RuntimeConfig{
+		Now:   func() time.Time { return time.Date(2026, time.August, 26, 4, 30, 0, 0, time.UTC) },
+		NewID: func() string { return "00000000-0000-0000-0000-000000000555" }, Executor: executor,
+	})
+	result, err := service.ExecuteNode(context.Background(), workflow.NodeActivityCommand{
+		WorkflowRunID: "00000000-0000-0000-0000-000000000111",
+		NodeRunID:     "00000000-0000-0000-0000-000000000222",
+		NodeID:        "bible", Executor: "activity.production_bible", Attempt: 1,
+	})
+	if err != nil || result.Status != "CACHED" || result.OutputHash != cachedHash || executor.CallCount() != 0 ||
+		repository.status != "CACHED" || repository.result.OutputHash != cachedHash {
+		t.Fatalf("runtime cache hit = result %#v calls=%d repo=%#v err=%v", result, executor.CallCount(), repository, err)
+	}
+}
+
+func TestRuntimeNodeCacheMissCommitsFactWithNodeOutput(t *testing.T) {
+	repository := &runtimeNodeRepository{status: "QUEUED", cachePolicy: "by_inputs"}
+	executor := &scriptedNodeExecutor{}
+	identities := []string{
+		"00000000-0000-0000-0000-000000000555",
+		"00000000-0000-0000-0000-000000000556",
+	}
+	service := workflowapp.NewRuntimeService(repository, workflowapp.RuntimeConfig{
+		Now: func() time.Time { return time.Date(2026, time.August, 26, 4, 45, 0, 0, time.UTC) },
+		NewID: func() string {
+			identity := identities[0]
+			identities = identities[1:]
+			return identity
+		},
+		Executor: executor,
+	})
+	result, err := service.ExecuteNode(context.Background(), workflow.NodeActivityCommand{
+		WorkflowRunID: "00000000-0000-0000-0000-000000000111",
+		NodeRunID:     "00000000-0000-0000-0000-000000000222",
+		NodeID:        "bible", Executor: "activity.production_bible", Attempt: 1,
+	})
+	if err != nil || result.Status != "SUCCEEDED" || executor.CallCount() != 1 ||
+		repository.cacheEntry.ID != "00000000-0000-0000-0000-000000000556" ||
+		len(repository.cacheEntry.CacheKey) != 64 ||
+		repository.cacheEntry.OutputHash != result.OutputHash || repository.result.OutputHash != result.OutputHash {
+		t.Fatalf("runtime cache miss = result %#v entry=%#v repo=%#v err=%v", result, repository.cacheEntry, repository, err)
+	}
+}
+
 type runtimeNodeRepository struct {
-	mu         sync.Mutex
-	status     string
-	attempt    int
-	revision   int
-	claimToken string
-	claims     []string
-	result     workflow.NodeActivityResult
+	mu           sync.Mutex
+	status       string
+	attempt      int
+	revision     int
+	claimToken   string
+	claims       []string
+	result       workflow.NodeActivityResult
+	cachePolicy  string
+	cachedResult workflow.NodeActivityResult
+	cacheEntry   workflow.NodeCacheEntry
 }
 
 func (repo *runtimeNodeRepository) LoadExecutionPlan(context.Context, workflow.StartRequest) (workflow.ExecutionPlan, error) {
@@ -135,10 +193,27 @@ func (repo *runtimeNodeRepository) ClaimNode(
 	if err != nil {
 		return workflow.NodeExecutionClaim{}, err
 	}
+	cachePolicy := repo.cachePolicy
+	if cachePolicy == "" {
+		cachePolicy = "never"
+	}
+	material := workflow.NodeCacheKeyMaterial{
+		SchemaVersion: workflow.NodeCacheKeySchemaVersion, NodeDefinitionContentHash: strings.Repeat("1", 64),
+		ConfigHash: strings.Repeat("2", 64), NormalizedInputHash: inputHash, RuntimeContractVersion: "1.0.0",
+	}
+	material, cacheKey, err := workflow.BuildNodeCacheKey(material)
+	if err != nil {
+		return workflow.NodeExecutionClaim{}, err
+	}
+	if cachePolicy == "never" {
+		cacheKey = ""
+	}
 	return workflow.NodeExecutionClaim{
 		Command: command, ClaimToken: claimToken, Status: repo.status,
 		Attempt: repo.attempt, Revision: repo.revision, Input: input, InputHash: inputHash,
 		OutputPorts: []authoring.PortDefinition{{Key: "candidate", ValueType: "production_bible_candidate", Required: true}},
+		WorkspaceID: "00000000-0000-0000-0000-000000000999", CachePolicy: cachePolicy,
+		CacheMaterial: material, CacheKey: cacheKey,
 	}, nil
 }
 
@@ -174,6 +249,37 @@ func (repo *runtimeNodeRepository) RetryNode(
 	repo.claimToken = ""
 	repo.revision++
 	return nil
+}
+
+func (repo *runtimeNodeRepository) CompleteNodeFromCache(
+	_ context.Context,
+	claim workflow.NodeExecutionClaim,
+	_ time.Time,
+) (workflow.NodeActivityResult, bool, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if repo.cachedResult.Status == "" {
+		return workflow.NodeActivityResult{}, false, nil
+	}
+	if repo.claimToken != claim.ClaimToken || claim.CachePolicy != "by_inputs" || claim.CacheKey == "" {
+		return workflow.NodeActivityResult{}, false, errors.New("invalid cache claim")
+	}
+	repo.status = "CACHED"
+	repo.result = repo.cachedResult
+	repo.claimToken = ""
+	repo.revision++
+	return repo.cachedResult, true, nil
+}
+
+func (repo *runtimeNodeRepository) CompleteNodeWithCache(
+	ctx context.Context,
+	claim workflow.NodeExecutionClaim,
+	result workflow.NodeActivityResult,
+	entry workflow.NodeCacheEntry,
+	now time.Time,
+) error {
+	repo.cacheEntry = entry
+	return repo.CompleteNode(ctx, claim, result, now)
 }
 
 type scriptedNodeExecutor struct {

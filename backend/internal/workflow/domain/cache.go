@@ -65,6 +65,57 @@ func BuildNodeCacheKey(material NodeCacheKeyMaterial) (NodeCacheKeyMaterial, str
 	return material, sha256Hex(encoded), nil
 }
 
+func BuildNodeCacheMaterial(
+	execution NodeExecution,
+	input NodeInputSnapshot,
+	runtimeContractVersion string,
+) (NodeCacheKeyMaterial, string, error) {
+	if !nodeCacheHashPattern.MatchString(execution.DefinitionContentHash) ||
+		(execution.CachePolicy != "never" && execution.CachePolicy != "by_inputs") {
+		return NodeCacheKeyMaterial{}, "", errors.New("invalid cacheable node execution")
+	}
+	normalizedInput, _, inputHash, err := BuildNodeInput(input)
+	if err != nil {
+		return NodeCacheKeyMaterial{}, "", err
+	}
+	material := NodeCacheKeyMaterial{
+		SchemaVersion: NodeCacheKeySchemaVersion, NodeDefinitionContentHash: execution.DefinitionContentHash,
+		ConfigHash: sha256Hex(normalizedInput.Config), NormalizedInputHash: inputHash,
+		RuntimeContractVersion: runtimeContractVersion,
+	}
+	artifactHashes := make([]string, 0, len(normalizedInput.Bindings)+len(normalizedInput.FrozenInputs))
+	for _, binding := range normalizedInput.Bindings {
+		if binding.SourceKind == NodeInputSourceNodeOutput {
+			artifactHashes = append(artifactHashes, binding.ContentHash)
+		}
+	}
+	frozenByKind := make(map[string][]string)
+	for _, reference := range normalizedInput.FrozenInputs {
+		artifactHashes = append(artifactHashes, reference.Hash)
+		switch reference.Kind {
+		case "policy", "model", "prompt", "skill":
+			frozenByKind[reference.Kind] = append(frozenByKind[reference.Kind], reference.Hash)
+		}
+	}
+	material.InputArtifactHashes = artifactHashes
+	material.FrozenPolicyHash = aggregateFrozenNodeCacheHash(frozenByKind["policy"])
+	material.FrozenModelHash = aggregateFrozenNodeCacheHash(frozenByKind["model"])
+	material.FrozenPromptHash = aggregateFrozenNodeCacheHash(frozenByKind["prompt"])
+	material.FrozenSkillHash = aggregateFrozenNodeCacheHash(frozenByKind["skill"])
+	return BuildNodeCacheKey(material)
+}
+
+func aggregateFrozenNodeCacheHash(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	if len(values) == 1 {
+		return values[0]
+	}
+	encoded, _ := json.Marshal(values)
+	return sha256Hex(encoded)
+}
+
 func validOptionalNodeCacheHash(value string) bool {
 	return value == "" || nodeCacheHashPattern.MatchString(value)
 }

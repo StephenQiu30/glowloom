@@ -38,16 +38,20 @@ type NodeExecutorResult struct {
 }
 
 type NodeExecutionClaim struct {
-	Command     NodeActivityCommand
-	ClaimToken  string
-	Status      string
-	Attempt     int
-	Revision    int
-	Input       NodeInputSnapshot
-	InputHash   string
-	OutputPorts []authoring.PortDefinition
-	Result      NodeActivityResult
-	Replay      bool
+	Command       NodeActivityCommand
+	ClaimToken    string
+	Status        string
+	Attempt       int
+	Revision      int
+	Input         NodeInputSnapshot
+	InputHash     string
+	OutputPorts   []authoring.PortDefinition
+	WorkspaceID   string
+	CachePolicy   string
+	CacheMaterial NodeCacheKeyMaterial
+	CacheKey      string
+	Result        NodeActivityResult
+	Replay        bool
 }
 
 type NodeExecutorCommand struct {

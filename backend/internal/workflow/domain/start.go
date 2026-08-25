@@ -52,6 +52,7 @@ type NodeRunProjection struct {
 	ActiveClaimToken               *string
 	Input                          json.RawMessage
 	InputHash                      string
+	CacheKey                       string
 	Output                         json.RawMessage
 	OutputHash                     string
 	CreatedAt, UpdatedAt           time.Time

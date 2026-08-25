@@ -257,7 +257,7 @@ func nodeRunRecord(value domain.NodeRunProjection) (model.NodeRunProjection, err
 		DefinitionKey: value.DefinitionKey, DefinitionVersion: value.DefinitionVersion,
 		Executor: value.Executor, RiskLevel: value.RiskLevel, Status: value.Status, Attempt: value.Attempt,
 		ActiveClaimToken: activeClaimToken,
-		Input:            datatypes.JSON(value.Input), InputHash: nodeInputHashPointer(value.InputHash),
+		Input:            datatypes.JSON(value.Input), InputHash: nodeInputHashPointer(value.InputHash), CacheKey: nodeCacheKeyPointer(value.CacheKey),
 		Output: datatypes.JSON(value.Output), OutputHash: nodeOutputHashPointer(value.OutputHash),
 		Revision:  value.Revision,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
@@ -345,7 +345,7 @@ func nodeRunDomain(value model.NodeRunProjection) domain.NodeRunProjection {
 		NodeID: value.NodeID, DefinitionKey: value.DefinitionKey, DefinitionVersion: value.DefinitionVersion,
 		Executor: value.Executor, RiskLevel: value.RiskLevel, Status: value.Status, Attempt: value.Attempt,
 		ActiveClaimToken: claimToken,
-		Input:            append([]byte(nil), value.Input...), InputHash: nodeInputHashValue(value.InputHash),
+		Input:            append([]byte(nil), value.Input...), InputHash: nodeInputHashValue(value.InputHash), CacheKey: nodeCacheKeyValue(value.CacheKey),
 		Output: append([]byte(nil), value.Output...), OutputHash: nodeOutputHashValue(value.OutputHash),
 		Revision:  value.Revision,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
@@ -366,6 +366,13 @@ func nodeInputHashPointer(value string) *string {
 	return &value
 }
 
+func nodeCacheKeyPointer(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
 func nodeOutputHashValue(value *string) string {
 	if value == nil {
 		return ""
@@ -374,6 +381,13 @@ func nodeOutputHashValue(value *string) string {
 }
 
 func nodeInputHashValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func nodeCacheKeyValue(value *string) string {
 	if value == nil {
 		return ""
 	}

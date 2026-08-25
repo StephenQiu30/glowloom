@@ -21,6 +21,17 @@ type NodeRuntimeRepository interface {
 	RetryNode(context.Context, domain.NodeExecutionClaim, time.Time) error
 }
 
+type NodeCacheRuntimeRepository interface {
+	CompleteNodeFromCache(context.Context, domain.NodeExecutionClaim, time.Time) (domain.NodeActivityResult, bool, error)
+	CompleteNodeWithCache(
+		context.Context,
+		domain.NodeExecutionClaim,
+		domain.NodeActivityResult,
+		domain.NodeCacheEntry,
+		time.Time,
+	) error
+}
+
 type NodeCacheRepository interface {
 	FindNodeCache(context.Context, string, string) (domain.NodeCacheEntry, error)
 	EnsureNodeCache(context.Context, domain.NodeCacheEntry) (domain.NodeCacheEntry, error)
@@ -142,6 +153,27 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
 		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node resolved an invalid execution contract"), retryErr)
 	}
+	cacheRepository, cacheEnabled, cacheErr := runtimeNodeCacheRepository(service.repository, claim)
+	if cacheErr != nil {
+		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
+		return domain.NodeActivityResult{}, errors.Join(cacheErr, retryErr)
+	}
+	if cacheEnabled {
+		cached, found, findErr := cacheRepository.CompleteNodeFromCache(ctx, claim, service.config.Now().UTC())
+		if findErr != nil {
+			retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
+			return domain.NodeActivityResult{}, errors.Join(findErr, retryErr)
+		}
+		if found {
+			normalized, _, outputHash, outputErr := domain.BuildNodeOutput(cached.Output)
+			if outputErr != nil || cached.Status != "CACHED" || cached.OutputHash != outputHash ||
+				domain.ValidateNodeOutputPorts(normalized, claim.OutputPorts) != nil {
+				return domain.NodeActivityResult{}, errors.New("workflow node cache returned an invalid output")
+			}
+			cached.Output = normalized
+			return cached, nil
+		}
+	}
 	executorResult, executeErr := service.config.Executor.Execute(ctx, domain.NodeExecutorCommand{
 		NodeActivityCommand: command,
 		IdempotencyKey:      "workflow-node:" + command.NodeRunID + ":attempt:" + strconv.Itoa(command.Attempt),
@@ -156,16 +188,57 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
 		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node executor returned an invalid status"), retryErr)
 	}
-	normalizedOutput, _, outputHash, outputErr := domain.BuildNodeOutput(executorResult.Output)
+	normalizedOutput, output, outputHash, outputErr := domain.BuildNodeOutput(executorResult.Output)
 	if outputErr != nil || domain.ValidateNodeOutputPorts(normalizedOutput, claim.OutputPorts) != nil {
 		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
 		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node executor returned an invalid output"), retryErr)
 	}
 	result := domain.NodeActivityResult{Status: executorResult.Status, Output: normalizedOutput, OutputHash: outputHash}
-	if err = repository.CompleteNode(ctx, claim, result, service.config.Now().UTC()); err != nil {
+	if cacheEnabled {
+		cacheID := strings.TrimSpace(service.config.NewID())
+		if cacheID == "" {
+			retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
+			return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node cache identity is empty"), retryErr)
+		}
+		entry := domain.NodeCacheEntry{
+			ID: cacheID, WorkspaceID: claim.WorkspaceID, CacheKey: claim.CacheKey,
+			KeyMaterial: claim.CacheMaterial, Output: output, OutputHash: outputHash,
+			SourceWorkflowRunID: command.WorkflowRunID, SourceNodeRunID: command.NodeRunID,
+			CreatedAt: service.config.Now().UTC(),
+		}
+		err = cacheRepository.CompleteNodeWithCache(ctx, claim, result, entry, entry.CreatedAt)
+	} else {
+		err = repository.CompleteNode(ctx, claim, result, service.config.Now().UTC())
+	}
+	if err != nil {
 		return domain.NodeActivityResult{}, normalizeError(err)
 	}
 	return result, nil
+}
+
+func runtimeNodeCacheRepository(
+	repository RuntimeRepository,
+	claim domain.NodeExecutionClaim,
+) (NodeCacheRuntimeRepository, bool, error) {
+	switch claim.CachePolicy {
+	case "never":
+		if claim.CacheKey != "" {
+			return nil, false, errors.New("non-cacheable workflow node has a cache key")
+		}
+		return nil, false, nil
+	case "by_inputs":
+		_, cacheKey, err := domain.BuildNodeCacheKey(claim.CacheMaterial)
+		if err != nil || cacheKey != claim.CacheKey || strings.TrimSpace(claim.WorkspaceID) == "" {
+			return nil, false, errors.New("workflow node cache contract has drifted")
+		}
+		cacheRepository, supported := repository.(NodeCacheRuntimeRepository)
+		if !supported {
+			return nil, false, errors.New("workflow node cache repository is unavailable")
+		}
+		return cacheRepository, true, nil
+	default:
+		return nil, false, errors.New("workflow node cache policy is invalid")
+	}
 }
 
 func (service *RuntimeService) CompleteRun(ctx context.Context, command domain.CompleteRunCommand) error {

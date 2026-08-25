@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
@@ -94,5 +95,35 @@ func TestNodeCacheContractRejectsIncompleteKeysAndCanonicalizesOutput(t *testing
 	}
 	if _, _, err = workflow.CanonicalNodeOutput(json.RawMessage(`["not","an","object"]`)); err == nil {
 		t.Fatal("node cache accepted a non-object output snapshot")
+	}
+}
+
+func TestNodeCacheMaterialDerivesFromFrozenNodeExecutionFacts(t *testing.T) {
+	input := successfulNodeInput()
+	input.Config = json.RawMessage(`{"temperature":0}`)
+	input.Bindings = []workflow.NodeInputBinding{{
+		Port: "script", ValueType: "script_revision", SourceKind: workflow.NodeInputSourceNodeOutput,
+		SourceNodeID: "script", SourcePort: "script",
+		ReferenceID: "00000000-0000-0000-0000-000000000101", ReferenceVersion: "1",
+		ContentHash: strings.Repeat("c", 64),
+	}}
+	input.FrozenInputs = append(input.FrozenInputs, authoring.FrozenReference{
+		Kind: "policy", ID: "00000000-0000-0000-0000-000000000202", Version: "1.0.0",
+		Hash: strings.Repeat("e", 64),
+	})
+	material, cacheKey, err := workflow.BuildNodeCacheMaterial(workflow.NodeExecution{
+		DefinitionContentHash: strings.Repeat("f", 64), CachePolicy: "by_inputs",
+	}, input, "1.0.0")
+	if err != nil || len(cacheKey) != 64 || material.ConfigHash == "" || material.NormalizedInputHash == "" ||
+		material.FrozenPolicyHash != strings.Repeat("e", 64) || len(material.InputArtifactHashes) != 3 {
+		t.Fatalf("derived node cache material = %#v key=%s err=%v", material, cacheKey, err)
+	}
+	changed := input
+	changed.Config = json.RawMessage(`{"temperature":1}`)
+	_, changedKey, changedErr := workflow.BuildNodeCacheMaterial(workflow.NodeExecution{
+		DefinitionContentHash: strings.Repeat("f", 64), CachePolicy: "by_inputs",
+	}, changed, "1.0.0")
+	if changedErr != nil || changedKey == cacheKey {
+		t.Fatalf("node config change did not invalidate cache: key=%s err=%v", changedKey, changedErr)
 	}
 }

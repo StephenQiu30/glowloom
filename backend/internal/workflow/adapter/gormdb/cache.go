@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
@@ -37,13 +38,17 @@ func (store *Store) EnsureNodeCache(ctx context.Context, desired domain.NodeCach
 	if err != nil {
 		return domain.NodeCacheEntry{}, err
 	}
-	if err = store.database.WithContext(ctx).Clauses(clause.OnConflict{
+	return ensureNodeCacheRecord(store.database.WithContext(ctx), record)
+}
+
+func ensureNodeCacheRecord(database *gorm.DB, record model.NodeCacheEntry) (domain.NodeCacheEntry, error) {
+	if err := database.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "workspace_id"}, {Name: "cache_key"}}, DoNothing: true,
 	}).Omit(clause.Associations).Create(&record).Error; err != nil {
 		return domain.NodeCacheEntry{}, err
 	}
 	var persisted model.NodeCacheEntry
-	if err = store.database.WithContext(ctx).
+	if err := database.
 		Where("workspace_id = ? AND cache_key = ?", record.WorkspaceID, record.CacheKey).
 		First(&persisted).Error; err != nil {
 		return domain.NodeCacheEntry{}, normalizeNotFound(err)
@@ -127,3 +132,4 @@ func sameNodeCacheFact(left, right model.NodeCacheEntry) bool {
 }
 
 var _ application.NodeCacheRepository = (*Store)(nil)
+var _ application.NodeCacheRuntimeRepository = (*Store)(nil)

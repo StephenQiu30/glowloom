@@ -219,6 +219,59 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		bibleInput.Bindings[0].SourceNodeID != "script" || bibleInput.Bindings[0].ContentHash != result.Output.Bindings[0].ContentHash {
 		t.Fatalf("downstream bible input = %#v hash=%s err=%v", bibleInput, bibleInputHash, bibleInputErr)
 	}
+	if bibleProjection.CacheKey == nil || len(*bibleProjection.CacheKey) != 64 {
+		t.Fatalf("cacheable bible projection lost its cache key: %#v", bibleProjection)
+	}
+	var initialCacheCount int64
+	if err = database.Model(&model.NodeCacheEntry{}).
+		Where("workspace_id = ? AND cache_key = ?", started.run.WorkspaceID, *bibleProjection.CacheKey).
+		Count(&initialCacheCount).Error; err != nil || initialCacheCount != 1 {
+		t.Fatalf("committed runtime node cache count = %d err=%v", initialCacheCount, err)
+	}
+
+	secondRun, secondStartErr := startService.Start(ctx, actor, workflowapp.StartCommand{
+		AuthoringRevisionID: revision.ID, IdempotencyKey: "runtime-plan-cache-reuse",
+	})
+	secondRequest := <-starter.requests
+	if secondStartErr != nil || secondRun.Status != "RUNNING" {
+		t.Fatalf("start cache reuse workflow: run=%#v err=%v", secondRun, secondStartErr)
+	}
+	secondPlan, secondPlanErr := runtimeService.LoadExecutionPlan(ctx, secondRequest)
+	if secondPlanErr != nil || len(secondPlan.Nodes) != len(plan.Nodes) {
+		t.Fatalf("load cache reuse plan: plan=%#v err=%v", secondPlan, secondPlanErr)
+	}
+	secondScript := secondPlan.Nodes[0]
+	secondScriptResult, secondScriptErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: secondRequest.WorkflowRunID, NodeRunID: secondScript.NodeRunID, NodeID: secondScript.NodeID,
+		Executor: secondScript.Executor, Attempt: 1,
+	})
+	if secondScriptErr != nil || secondScriptResult.Status != "SUCCEEDED" || executor.CallCount() != 4 {
+		t.Fatalf("execute cache reuse upstream: result=%#v calls=%d err=%v", secondScriptResult, executor.CallCount(), secondScriptErr)
+	}
+	secondBible := secondPlan.Nodes[1]
+	secondBibleResult, secondBibleErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: secondRequest.WorkflowRunID, NodeRunID: secondBible.NodeRunID, NodeID: secondBible.NodeID,
+		Executor: secondBible.Executor, Attempt: 1,
+	})
+	if secondBibleErr != nil || secondBibleResult.Status != "CACHED" ||
+		secondBibleResult.OutputHash != bibleResult.OutputHash || executor.CallCount() != 4 {
+		t.Fatalf("reuse persisted runtime cache: result=%#v calls=%d err=%v", secondBibleResult, executor.CallCount(), secondBibleErr)
+	}
+	var secondBibleProjection model.NodeRunProjection
+	if err = database.First(&secondBibleProjection, "id = ?", secondBible.NodeRunID).Error; err != nil {
+		t.Fatalf("load cached bible projection: %v", err)
+	}
+	var reusedCacheCount int64
+	if err = database.Model(&model.NodeCacheEntry{}).
+		Where("workspace_id = ? AND cache_key = ?", started.run.WorkspaceID, *bibleProjection.CacheKey).
+		Count(&reusedCacheCount).Error; err != nil {
+		t.Fatalf("count reused runtime node cache: %v", err)
+	}
+	if secondBibleProjection.Status != "CACHED" || secondBibleProjection.ActiveClaimToken != nil ||
+		secondBibleProjection.OutputHash == nil || *secondBibleProjection.OutputHash != bibleResult.OutputHash ||
+		secondBibleProjection.CacheKey == nil || *secondBibleProjection.CacheKey != *bibleProjection.CacheKey || reusedCacheCount != 1 {
+		t.Fatalf("cached bible projection = %#v cache count=%d", secondBibleProjection, reusedCacheCount)
+	}
 	gate := plan.Nodes[2]
 	gateCommand := workflow.NodeActivityCommand{
 		WorkflowRunID: request.WorkflowRunID, NodeRunID: gate.NodeRunID, NodeID: gate.NodeID,

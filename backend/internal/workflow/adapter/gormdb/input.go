@@ -13,10 +13,12 @@ import (
 )
 
 type resolvedNodeExecution struct {
-	Input     domain.NodeInputSnapshot
-	InputJSON json.RawMessage
-	InputHash string
-	Execution domain.NodeExecution
+	Input         domain.NodeInputSnapshot
+	InputJSON     json.RawMessage
+	InputHash     string
+	Execution     domain.NodeExecution
+	CacheMaterial domain.NodeCacheKeyMaterial
+	CacheKey      string
 }
 
 func resolveNodeExecution(transaction *gorm.DB, run model.WorkflowRun, node model.NodeRunProjection) (resolvedNodeExecution, error) {
@@ -131,7 +133,17 @@ func resolveNodeExecution(transaction *gorm.DB, run model.WorkflowRun, node mode
 	if err != nil {
 		return resolvedNodeExecution{}, err
 	}
-	return resolvedNodeExecution{Input: input, InputJSON: inputJSON, InputHash: inputHash, Execution: execution}, nil
+	cacheMaterial, cacheKey, err := domain.BuildNodeCacheMaterial(execution, input, compiled.Definition.RuntimeContractVersion)
+	if err != nil {
+		return resolvedNodeExecution{}, err
+	}
+	if execution.CachePolicy == "never" {
+		cacheKey = ""
+	}
+	return resolvedNodeExecution{
+		Input: input, InputJSON: inputJSON, InputHash: inputHash, Execution: execution,
+		CacheMaterial: cacheMaterial, CacheKey: cacheKey,
+	}, nil
 }
 
 func validateResolvedInputPorts(bindings []domain.NodeInputBinding, expected []authoring.PortDefinition) error {
