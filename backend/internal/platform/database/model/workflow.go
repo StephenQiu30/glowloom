@@ -90,6 +90,8 @@ type NodeRunProjection struct {
 	Status            string         `gorm:"type:varchar(30);not null;index:ix_wrk_node_runs_status_updated,priority:1;check:ck_wrk_node_run_status,status IN ('QUEUED','RUNNING','WAITING_HUMAN','RETRYING','SUCCEEDED','FAILED','CANCELLED','SKIPPED','CACHED')"`
 	Attempt           int            `gorm:"not null;check:ck_wrk_node_run_attempt,attempt >= 0"`
 	ActiveClaimToken  *uuid.UUID     `gorm:"type:uuid"`
+	Input             datatypes.JSON `gorm:"type:jsonb"`
+	InputHash         *string        `gorm:"type:char(64);check:ck_wrk_node_run_input_hash,input_hash IS NULL OR char_length(input_hash) = 64"`
 	Output            datatypes.JSON `gorm:"type:jsonb"`
 	OutputHash        *string        `gorm:"type:char(64);check:ck_wrk_node_run_output_hash,output_hash IS NULL OR char_length(output_hash) = 64"`
 	Revision          int            `gorm:"not null;check:ck_wrk_node_run_revision,revision >= 1"`

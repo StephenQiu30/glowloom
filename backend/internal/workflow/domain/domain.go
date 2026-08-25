@@ -20,13 +20,15 @@ type CompilationSource struct {
 }
 
 type NodeExecution struct {
-	NodeID                string `json:"node_id"`
-	DefinitionKey         string `json:"definition_key"`
-	DefinitionVersion     string `json:"definition_version"`
-	DefinitionContentHash string `json:"definition_content_hash"`
-	Executor              string `json:"executor"`
-	CachePolicy           string `json:"cache_policy"`
-	RiskLevel             string `json:"risk_level"`
+	NodeID                string                     `json:"node_id"`
+	DefinitionKey         string                     `json:"definition_key"`
+	DefinitionVersion     string                     `json:"definition_version"`
+	DefinitionContentHash string                     `json:"definition_content_hash"`
+	Executor              string                     `json:"executor"`
+	InputPorts            []authoring.PortDefinition `json:"input_ports"`
+	OutputPorts           []authoring.PortDefinition `json:"output_ports"`
+	CachePolicy           string                     `json:"cache_policy"`
+	RiskLevel             string                     `json:"risk_level"`
 }
 
 type WorkflowDefinitionVersion struct {

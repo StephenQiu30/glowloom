@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -65,6 +66,11 @@ func TestRuntimeNodeExecutionRetriesWithStableBusinessIdentityAndFencing(t *test
 	}
 	if len(repository.claims) != 2 || repository.claims[0] == repository.claims[1] {
 		t.Fatalf("claim fencing tokens = %v", repository.claims)
+	}
+	commands := executor.Commands()
+	if len(commands) != 2 || commands[1].InputHash == "" || commands[1].Input.SchemaVersion != workflow.NodeInputSchemaVersion ||
+		len(commands[1].OutputPorts) != 1 || commands[1].OutputPorts[0].Key != "candidate" {
+		t.Fatalf("executor commands lost frozen input/output contract: %#v", commands)
 	}
 }
 
@@ -125,9 +131,14 @@ func (repo *runtimeNodeRepository) ClaimNode(
 	repo.revision++
 	repo.claimToken = claimToken
 	repo.claims = append(repo.claims, claimToken)
+	input, _, inputHash, err := workflow.BuildNodeInput(successfulNodeInput())
+	if err != nil {
+		return workflow.NodeExecutionClaim{}, err
+	}
 	return workflow.NodeExecutionClaim{
 		Command: command, ClaimToken: claimToken, Status: repo.status,
-		Attempt: repo.attempt, Revision: repo.revision,
+		Attempt: repo.attempt, Revision: repo.revision, Input: input, InputHash: inputHash,
+		OutputPorts: []authoring.PortDefinition{{Key: "candidate", ValueType: "production_bible_candidate", Required: true}},
 	}, nil
 }
 
@@ -171,6 +182,7 @@ type scriptedNodeExecutor struct {
 	status        string
 	invalidOutput bool
 	keys          []string
+	commands      []workflow.NodeExecutorCommand
 }
 
 func (executor *scriptedNodeExecutor) Execute(
@@ -180,6 +192,7 @@ func (executor *scriptedNodeExecutor) Execute(
 	executor.mu.Lock()
 	defer executor.mu.Unlock()
 	executor.keys = append(executor.keys, command.IdempotencyKey)
+	executor.commands = append(executor.commands, command)
 	if executor.failures > 0 {
 		executor.failures--
 		return workflow.NodeExecutorResult{}, errors.New("transient executor failure")
@@ -188,7 +201,7 @@ func (executor *scriptedNodeExecutor) Execute(
 	if status == "" {
 		status = "SUCCEEDED"
 	}
-	output := successfulExecutorOutput()
+	output := successfulExecutorOutputFor(command.OutputPorts)
 	if executor.invalidOutput {
 		output.Bindings[0].ContentHash = "invalid"
 	}
@@ -196,12 +209,35 @@ func (executor *scriptedNodeExecutor) Execute(
 }
 
 func successfulExecutorOutput() workflow.NodeOutputSnapshot {
-	return workflow.NodeOutputSnapshot{
-		SchemaVersion: workflow.NodeOutputSchemaVersion,
-		Bindings: []workflow.NodeOutputBinding{{
-			Port: "candidate", ValueType: "production_bible_candidate",
+	return successfulExecutorOutputFor([]authoring.PortDefinition{{
+		Key: "candidate", ValueType: "production_bible_candidate", Required: true,
+	}})
+}
+
+func successfulExecutorOutputFor(ports []authoring.PortDefinition) workflow.NodeOutputSnapshot {
+	bindings := make([]workflow.NodeOutputBinding, 0, len(ports))
+	for _, port := range ports {
+		if !port.Required {
+			continue
+		}
+		bindings = append(bindings, workflow.NodeOutputBinding{
+			Port: port.Key, ValueType: port.ValueType,
 			ReferenceID: "00000000-0000-0000-0000-000000000333", ReferenceVersion: "1",
 			ContentHash: strings.Repeat("c", 64),
+		})
+	}
+	return workflow.NodeOutputSnapshot{
+		SchemaVersion: workflow.NodeOutputSchemaVersion,
+		Bindings:      bindings,
+	}
+}
+
+func successfulNodeInput() workflow.NodeInputSnapshot {
+	return workflow.NodeInputSnapshot{
+		SchemaVersion: workflow.NodeInputSchemaVersion, Config: []byte(`{}`),
+		FrozenInputs: []authoring.FrozenReference{{
+			Kind: "script_revision", ID: "00000000-0000-0000-0000-000000000444", Version: "1",
+			Hash: strings.Repeat("d", 64),
 		}},
 	}
 }
@@ -216,4 +252,10 @@ func (executor *scriptedNodeExecutor) IdempotencyKeys() []string {
 	executor.mu.Lock()
 	defer executor.mu.Unlock()
 	return append([]string(nil), executor.keys...)
+}
+
+func (executor *scriptedNodeExecutor) Commands() []workflow.NodeExecutorCommand {
+	executor.mu.Lock()
+	defer executor.mu.Unlock()
+	return append([]workflow.NodeExecutorCommand(nil), executor.commands...)
 }

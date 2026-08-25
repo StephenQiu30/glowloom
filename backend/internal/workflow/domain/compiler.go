@@ -129,6 +129,8 @@ func compileGraph(graph authoring.Graph, catalog authoring.Catalog) (authoring.G
 		executions = append(executions, NodeExecution{
 			NodeID: node.ID, DefinitionKey: definition.Key, DefinitionVersion: definition.Version,
 			DefinitionContentHash: definition.ContentHash, Executor: definition.Executor,
+			InputPorts:  append([]authoring.PortDefinition(nil), definition.InputPorts...),
+			OutputPorts: append([]authoring.PortDefinition(nil), definition.OutputPorts...),
 			CachePolicy: definition.CachePolicy, RiskLevel: definition.RiskLevel,
 		})
 	}

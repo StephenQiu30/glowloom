@@ -50,6 +50,8 @@ type NodeRunProjection struct {
 	Status                         string
 	Attempt, Revision              int
 	ActiveClaimToken               *string
+	Input                          json.RawMessage
+	InputHash                      string
 	Output                         json.RawMessage
 	OutputHash                     string
 	CreatedAt, UpdatedAt           time.Time

@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
@@ -131,6 +132,9 @@ func (store *Store) ClaimNode(
 			return errors.New("workflow node execution identity has drifted")
 		}
 		if node.Status == "SUCCEEDED" || node.Status == "CACHED" || node.Status == "SKIPPED" {
+			if _, _, inputErr := persistedNodeInput(node); inputErr != nil {
+				return inputErr
+			}
 			result, resultErr := completedNodeResult(node)
 			if resultErr != nil {
 				return resultErr
@@ -152,13 +156,26 @@ func (store *Store) ClaimNode(
 			(node.Status != "QUEUED" && node.Status != "RUNNING" && node.Status != "RETRYING") {
 			return errors.New("workflow node is not executable")
 		}
+		resolved, resolveErr := resolveNodeExecution(transaction, run, node)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		if len(node.Input) != 0 || node.InputHash != nil {
+			_, persistedHash, inputErr := persistedNodeInput(node)
+			if inputErr != nil || persistedHash != resolved.InputHash {
+				return errors.New("workflow node input projection has drifted")
+			}
+		}
 		node.Status = "RUNNING"
 		node.Attempt++
 		node.ActiveClaimToken = &token
+		node.Input = datatypes.JSON(resolved.InputJSON)
+		node.InputHash = &resolved.InputHash
 		node.Revision++
 		node.UpdatedAt = now.UTC()
 		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
 			"status": node.Status, "attempt": node.Attempt, "active_claim_token": token,
+			"input": node.Input, "input_hash": resolved.InputHash,
 			"revision": node.Revision, "updated_at": node.UpdatedAt,
 		}).Error; updateErr != nil {
 			return updateErr
@@ -173,7 +190,8 @@ func (store *Store) ClaimNode(
 		}
 		claim = domain.NodeExecutionClaim{
 			Command: command, ClaimToken: token.String(), Status: node.Status,
-			Attempt: node.Attempt, Revision: node.Revision,
+			Attempt: node.Attempt, Revision: node.Revision, Input: resolved.Input, InputHash: resolved.InputHash,
+			OutputPorts: append([]authoring.PortDefinition(nil), resolved.Execution.OutputPorts...),
 		}
 		return nil
 	})
@@ -271,7 +289,8 @@ func runtimeNodeIdentities(command domain.NodeActivityCommand, claimToken string
 }
 
 func completedNodeResult(node model.NodeRunProjection) (domain.NodeActivityResult, error) {
-	if len(node.Output) == 0 || node.OutputHash == nil {
+	if (node.Status != "SUCCEEDED" && node.Status != "CACHED" && node.Status != "SKIPPED") ||
+		len(node.Output) == 0 || node.OutputHash == nil {
 		return domain.NodeActivityResult{}, errors.New("completed workflow node has no output projection")
 	}
 	normalized, _, outputHash, err := domain.ParseNodeOutput(json.RawMessage(node.Output))
@@ -279,6 +298,17 @@ func completedNodeResult(node model.NodeRunProjection) (domain.NodeActivityResul
 		return domain.NodeActivityResult{}, errors.New("completed workflow node output projection has drifted")
 	}
 	return domain.NodeActivityResult{Status: node.Status, Output: normalized, OutputHash: outputHash}, nil
+}
+
+func persistedNodeInput(node model.NodeRunProjection) (domain.NodeInputSnapshot, string, error) {
+	if len(node.Input) == 0 || node.InputHash == nil {
+		return domain.NodeInputSnapshot{}, "", errors.New("workflow node has no input projection")
+	}
+	normalized, _, inputHash, err := domain.ParseNodeInput(json.RawMessage(node.Input))
+	if err != nil || inputHash != *node.InputHash {
+		return domain.NodeInputSnapshot{}, "", errors.New("workflow node input projection has drifted")
+	}
+	return normalized, inputHash, nil
 }
 
 func (store *Store) CompleteRun(ctx context.Context, command domain.CompleteRunCommand, now time.Time) error {
@@ -316,6 +346,9 @@ func (store *Store) CompleteRun(ctx context.Context, command domain.CompleteRunC
 				return errors.New("workflow run has incomplete node projections")
 			}
 			if node.RiskLevel != "human_gate" {
+				if _, _, inputErr := persistedNodeInput(node); inputErr != nil {
+					return inputErr
+				}
 				if _, resultErr := completedNodeResult(node); resultErr != nil {
 					return resultErr
 				}

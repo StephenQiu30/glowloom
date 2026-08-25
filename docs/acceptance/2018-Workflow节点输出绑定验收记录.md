@@ -47,6 +47,6 @@
 ## 残余风险与下一切片
 
 - Human Gate 当前只能提交 Review/Signal/Apply 状态，尚无目标 Owner 产物引用；不能用候选或审核状态替代 Production Owner 事实。
-- 下一切片必须按 Graph Edge/Binding 校验上游 Port 与 Value Type，生成规范化 Node Input 和上游 Output Hash，再在 NodeRun Claim fencing 下安全读取/写入 Node Cache。
+- 后续 `node-input-v1` 切片已按 Graph Edge/Binding 校验上游 Port 与 Value Type，并生成规范化 Node Input/Hash；下一步在 NodeRun Claim fencing 下安全读取/写入 Node Cache。
 - 正式 NodeExecutor 与 Worker 生命周期仍需在 Backend Composition Root 接入；Agent 只承担受限候选执行职责，不能直接写 Production/Workflow SQL 事实。
 - 最终 `agent-browser` 仍只在全部开发与自动化回归完成后执行，本记录不计作浏览器验收。

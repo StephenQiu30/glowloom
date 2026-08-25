@@ -1,5 +1,7 @@
 package domain
 
+import authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
+
 type ExecutionPlan struct {
 	WorkflowRunID         string          `json:"workflow_run_id"`
 	DefinitionVersionID   string          `json:"definition_version_id"`
@@ -36,18 +38,24 @@ type NodeExecutorResult struct {
 }
 
 type NodeExecutionClaim struct {
-	Command    NodeActivityCommand
-	ClaimToken string
-	Status     string
-	Attempt    int
-	Revision   int
-	Result     NodeActivityResult
-	Replay     bool
+	Command     NodeActivityCommand
+	ClaimToken  string
+	Status      string
+	Attempt     int
+	Revision    int
+	Input       NodeInputSnapshot
+	InputHash   string
+	OutputPorts []authoring.PortDefinition
+	Result      NodeActivityResult
+	Replay      bool
 }
 
 type NodeExecutorCommand struct {
 	NodeActivityCommand
 	IdempotencyKey string
+	Input          NodeInputSnapshot
+	InputHash      string
+	OutputPorts    []authoring.PortDefinition
 }
 
 type CompleteRunCommand struct {

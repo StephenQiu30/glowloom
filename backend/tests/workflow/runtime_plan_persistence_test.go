@@ -144,13 +144,34 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		},
 		NewID: uuid.NewString, Executor: executor, HumanTasks: workflowreview.New(reviewService),
 	})
-	node := plan.Nodes[1]
+	blockedBible := plan.Nodes[1]
+	if _, blockedErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: blockedBible.NodeRunID, NodeID: blockedBible.NodeID,
+		Executor: blockedBible.Executor, Attempt: 1,
+	}); blockedErr == nil {
+		t.Fatal("downstream node executed before its upstream output existed")
+	}
+	var blockedProjection model.NodeRunProjection
+	if err = database.First(&blockedProjection, "id = ?", blockedBible.NodeRunID).Error; err != nil {
+		t.Fatalf("load blocked downstream node: %v", err)
+	}
+	if blockedProjection.Status != "QUEUED" || blockedProjection.InputHash != nil || executor.CallCount() != 0 {
+		t.Fatalf("blocked downstream projection = %#v executor calls=%d", blockedProjection, executor.CallCount())
+	}
+	node := plan.Nodes[0]
 	command := workflow.NodeActivityCommand{
 		WorkflowRunID: request.WorkflowRunID, NodeRunID: node.NodeRunID, NodeID: node.NodeID,
 		Executor: node.Executor, Attempt: 1,
 	}
 	if _, err = runtimeService.ExecuteNode(ctx, command); err == nil {
 		t.Fatal("real node projection reported the first executor failure as success")
+	}
+	var retryProjection model.NodeRunProjection
+	if err = database.First(&retryProjection, "id = ?", node.NodeRunID).Error; err != nil {
+		t.Fatalf("load retrying node input projection: %v", err)
+	}
+	if retryProjection.Status != "RETRYING" || retryProjection.InputHash == nil || len(retryProjection.Input) == 0 {
+		t.Fatalf("retrying node lost its frozen input: %#v", retryProjection)
 	}
 	result, err := runtimeService.ExecuteNode(ctx, command)
 	if err != nil || result.Status != "SUCCEEDED" {
@@ -166,12 +187,37 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	}
 	if projection.Status != "SUCCEEDED" || projection.Attempt != 2 || projection.Executor != node.Executor ||
 		projection.RiskLevel != node.RiskLevel || projection.ActiveClaimToken != nil || projection.OutputHash == nil ||
-		*projection.OutputHash != result.OutputHash {
+		*projection.OutputHash != result.OutputHash || projection.InputHash == nil ||
+		retryProjection.InputHash == nil || *projection.InputHash != *retryProjection.InputHash {
 		t.Fatalf("persisted node projection = %#v", projection)
 	}
 	persistedOutput, _, persistedOutputHash, outputErr := workflow.ParseNodeOutput(json.RawMessage(projection.Output))
 	if outputErr != nil || persistedOutputHash != result.OutputHash || persistedOutput.Bindings[0] != result.Output.Bindings[0] {
 		t.Fatalf("persisted node output = %#v hash=%s err=%v", persistedOutput, persistedOutputHash, outputErr)
+	}
+	persistedInput, _, persistedInputHash, inputErr := workflow.ParseNodeInput(json.RawMessage(projection.Input))
+	if inputErr != nil || persistedInputHash != *projection.InputHash || len(persistedInput.Bindings) != 0 ||
+		len(persistedInput.FrozenInputs) != 1 || persistedInput.FrozenInputs[0].Hash != fixture.normalizedHash {
+		t.Fatalf("persisted root node input = %#v hash=%s err=%v", persistedInput, persistedInputHash, inputErr)
+	}
+
+	bible := plan.Nodes[1]
+	bibleResult, bibleErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: bible.NodeRunID, NodeID: bible.NodeID,
+		Executor: bible.Executor, Attempt: 1,
+	})
+	if bibleErr != nil || bibleResult.Status != "SUCCEEDED" || executor.CallCount() != 3 {
+		t.Fatalf("execute downstream bible node: result=%#v calls=%d err=%v", bibleResult, executor.CallCount(), bibleErr)
+	}
+	var bibleProjection model.NodeRunProjection
+	if err = database.First(&bibleProjection, "id = ?", bible.NodeRunID).Error; err != nil {
+		t.Fatalf("load bible node projection: %v", err)
+	}
+	bibleInput, _, bibleInputHash, bibleInputErr := workflow.ParseNodeInput(json.RawMessage(bibleProjection.Input))
+	if bibleInputErr != nil || bibleProjection.InputHash == nil || bibleInputHash != *bibleProjection.InputHash ||
+		len(bibleInput.Bindings) != 1 || bibleInput.Bindings[0].Port != "script" ||
+		bibleInput.Bindings[0].SourceNodeID != "script" || bibleInput.Bindings[0].ContentHash != result.Output.Bindings[0].ContentHash {
+		t.Fatalf("downstream bible input = %#v hash=%s err=%v", bibleInput, bibleInputHash, bibleInputErr)
 	}
 	gate := plan.Nodes[2]
 	gateCommand := workflow.NodeActivityCommand{
@@ -296,8 +342,17 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	if outputErr != nil {
 		t.Fatalf("build completed node output fixture: %v", outputErr)
 	}
+	_, completedInput, completedInputHash, completionInputErr := workflow.BuildNodeInput(successfulNodeInput())
+	if completionInputErr != nil {
+		t.Fatalf("build completed node input fixture: %v", completionInputErr)
+	}
 	if err = database.Model(&model.NodeRunProjection{}).
-		Where("workflow_run_id = ? AND risk_level <> ?", request.WorkflowRunID, "human_gate").
+		Where("workflow_run_id = ? AND risk_level <> ? AND input_hash IS NULL", request.WorkflowRunID, "human_gate").
+		Updates(model.NodeRunProjection{Input: []byte(completedInput), InputHash: &completedInputHash}).Error; err != nil {
+		t.Fatalf("prepare completed node inputs: %v", err)
+	}
+	if err = database.Model(&model.NodeRunProjection{}).
+		Where("workflow_run_id = ? AND risk_level <> ? AND output_hash IS NULL", request.WorkflowRunID, "human_gate").
 		Updates(model.NodeRunProjection{Output: []byte(completedOutput), OutputHash: &completedOutputHash}).Error; err != nil {
 		t.Fatalf("prepare completed node outputs: %v", err)
 	}

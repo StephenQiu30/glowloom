@@ -55,7 +55,7 @@ func TestCompilerProducesEquivalentDefinitionForGuidedAndCanvas(t *testing.T) {
 	}
 	humanGates := 0
 	for _, node := range first.Definition.NodeExecutions {
-		if node.Executor == "" || node.DefinitionContentHash == "" || node.CachePolicy == "" {
+		if node.Executor == "" || node.DefinitionContentHash == "" || node.CachePolicy == "" || len(node.OutputPorts) == 0 {
 			t.Fatalf("incomplete node execution descriptor: %#v", node)
 		}
 		if node.RiskLevel == "human_gate" {

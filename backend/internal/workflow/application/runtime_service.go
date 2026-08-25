@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
@@ -136,9 +137,17 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		claim.Result.Output = normalized
 		return claim.Result, nil
 	}
+	normalizedInput, _, inputHash, inputErr := domain.BuildNodeInput(claim.Input)
+	if inputErr != nil || claim.InputHash != inputHash || len(claim.OutputPorts) == 0 {
+		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
+		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node resolved an invalid execution contract"), retryErr)
+	}
 	executorResult, executeErr := service.config.Executor.Execute(ctx, domain.NodeExecutorCommand{
 		NodeActivityCommand: command,
 		IdempotencyKey:      "workflow-node:" + command.NodeRunID + ":attempt:" + strconv.Itoa(command.Attempt),
+		Input:               normalizedInput,
+		InputHash:           inputHash,
+		OutputPorts:         append([]authoring.PortDefinition(nil), claim.OutputPorts...),
 	})
 	if executeErr != nil {
 		return domain.NodeActivityResult{}, errors.Join(executeErr, repository.RetryNode(ctx, claim, service.config.Now().UTC()))
@@ -148,7 +157,7 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node executor returned an invalid status"), retryErr)
 	}
 	normalizedOutput, _, outputHash, outputErr := domain.BuildNodeOutput(executorResult.Output)
-	if outputErr != nil {
+	if outputErr != nil || domain.ValidateNodeOutputPorts(normalizedOutput, claim.OutputPorts) != nil {
 		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
 		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node executor returned an invalid output"), retryErr)
 	}

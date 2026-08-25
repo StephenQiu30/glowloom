@@ -86,7 +86,7 @@ func TestCancelControlPersistsFactsAndFencesLateNodeExecution(t *testing.T) {
 		t.Fatalf("start cancellable workflow: run=%#v err=%v", run, err)
 	}
 	var activeNode model.NodeRunProjection
-	if err = database.Where("workflow_run_id = ?", run.ID).First(&activeNode).Error; err != nil {
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "script").First(&activeNode).Error; err != nil {
 		t.Fatalf("load node to execute during cancellation: %v", err)
 	}
 	blockingExecutor := &blockingControlNodeExecutor{
@@ -249,6 +249,18 @@ func TestPauseResumeControlPersistsRepeatedCyclesAndFencesTheNextNode(t *testing
 		Order("created_at ASC").Find(&nodes).Error; err != nil || len(nodes) < 2 {
 		t.Fatalf("load executable workflow nodes: count=%d err=%v", len(nodes), err)
 	}
+	var activeNode, nextNode model.NodeRunProjection
+	for _, candidate := range nodes {
+		switch candidate.NodeID {
+		case "script":
+			activeNode = candidate
+		case "bible":
+			nextNode = candidate
+		}
+	}
+	if activeNode.ID == uuid.Nil || nextNode.ID == uuid.Nil {
+		t.Fatalf("load dependency-ordered control nodes: active=%#v next=%#v", activeNode, nextNode)
+	}
 	blockingExecutor := &blockingControlNodeExecutor{
 		started: make(chan struct{}, 1), release: make(chan struct{}),
 	}
@@ -261,8 +273,8 @@ func TestPauseResumeControlPersistsRepeatedCyclesAndFencesTheNextNode(t *testing
 	executionResult := make(chan error, 1)
 	go func() {
 		_, executeErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
-			WorkflowRunID: run.ID, NodeRunID: nodes[0].ID.String(), NodeID: nodes[0].NodeID,
-			Executor: nodes[0].Executor, Attempt: 1,
+			WorkflowRunID: run.ID, NodeRunID: activeNode.ID.String(), NodeID: activeNode.NodeID,
+			Executor: activeNode.Executor, Attempt: 1,
 		})
 		executionResult <- executeErr
 	}()
@@ -329,8 +341,8 @@ func TestPauseResumeControlPersistsRepeatedCyclesAndFencesTheNextNode(t *testing
 		Now: func() time.Time { return now.Add(time.Second) }, NewID: uuid.NewString, Executor: nextExecutor,
 	})
 	if _, err = runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
-		WorkflowRunID: run.ID, NodeRunID: nodes[1].ID.String(), NodeID: nodes[1].NodeID,
-		Executor: nodes[1].Executor, Attempt: 1,
+		WorkflowRunID: run.ID, NodeRunID: nextNode.ID.String(), NodeID: nextNode.NodeID,
+		Executor: nextNode.Executor, Attempt: 1,
 	}); err == nil || nextExecutor.CallCount() != 0 {
 		t.Fatalf("paused workflow executed the next node: calls=%d err=%v", nextExecutor.CallCount(), err)
 	}
@@ -377,10 +389,10 @@ type blockingControlNodeExecutor struct {
 }
 
 func (executor *blockingControlNodeExecutor) Execute(
-	context.Context,
-	workflow.NodeExecutorCommand,
+	_ context.Context,
+	command workflow.NodeExecutorCommand,
 ) (workflow.NodeExecutorResult, error) {
 	executor.started <- struct{}{}
 	<-executor.release
-	return workflow.NodeExecutorResult{Status: "SUCCEEDED", Output: successfulExecutorOutput()}, nil
+	return workflow.NodeExecutorResult{Status: "SUCCEEDED", Output: successfulExecutorOutputFor(command.OutputPorts)}, nil
 }

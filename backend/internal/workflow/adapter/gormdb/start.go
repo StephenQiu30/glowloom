@@ -256,7 +256,9 @@ func nodeRunRecord(value domain.NodeRunProjection) (model.NodeRunProjection, err
 		ID: id, WorkspaceID: workspaceID, WorkflowRunID: runID, NodeID: value.NodeID,
 		DefinitionKey: value.DefinitionKey, DefinitionVersion: value.DefinitionVersion,
 		Executor: value.Executor, RiskLevel: value.RiskLevel, Status: value.Status, Attempt: value.Attempt,
-		ActiveClaimToken: activeClaimToken, Output: datatypes.JSON(value.Output), OutputHash: nodeOutputHashPointer(value.OutputHash),
+		ActiveClaimToken: activeClaimToken,
+		Input:            datatypes.JSON(value.Input), InputHash: nodeInputHashPointer(value.InputHash),
+		Output: datatypes.JSON(value.Output), OutputHash: nodeOutputHashPointer(value.OutputHash),
 		Revision:  value.Revision,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}, nil
@@ -342,7 +344,9 @@ func nodeRunDomain(value model.NodeRunProjection) domain.NodeRunProjection {
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), WorkflowRunID: value.WorkflowRunID.String(),
 		NodeID: value.NodeID, DefinitionKey: value.DefinitionKey, DefinitionVersion: value.DefinitionVersion,
 		Executor: value.Executor, RiskLevel: value.RiskLevel, Status: value.Status, Attempt: value.Attempt,
-		ActiveClaimToken: claimToken, Output: append([]byte(nil), value.Output...), OutputHash: nodeOutputHashValue(value.OutputHash),
+		ActiveClaimToken: claimToken,
+		Input:            append([]byte(nil), value.Input...), InputHash: nodeInputHashValue(value.InputHash),
+		Output: append([]byte(nil), value.Output...), OutputHash: nodeOutputHashValue(value.OutputHash),
 		Revision:  value.Revision,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
@@ -355,7 +359,21 @@ func nodeOutputHashPointer(value string) *string {
 	return &value
 }
 
+func nodeInputHashPointer(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
 func nodeOutputHashValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func nodeInputHashValue(value *string) string {
 	if value == nil {
 		return ""
 	}
