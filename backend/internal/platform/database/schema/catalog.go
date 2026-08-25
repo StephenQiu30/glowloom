@@ -33,6 +33,8 @@ func Catalog() []any {
 		&model.NodeRunProjection{},
 		&model.WorkflowStartIntent{},
 		&model.WorkflowStartReceipt{},
+		&model.WorkflowControlIntent{},
+		&model.WorkflowControlReceipt{},
 		&model.HumanTask{},
 		&model.ReviewDecision{},
 		&model.WorkflowHumanGateApplyReceipt{},

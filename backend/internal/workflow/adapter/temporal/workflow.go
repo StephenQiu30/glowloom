@@ -151,7 +151,20 @@ func awaitHumanGateSignal(
 	}
 	for {
 		var signal HumanGateSignal
-		channel.Receive(ctx, &signal)
+		selector := workflow.NewSelector(ctx)
+		received := false
+		selector.AddReceive(channel, func(channel workflow.ReceiveChannel, _ bool) {
+			channel.Receive(ctx, &signal)
+			received = true
+		})
+		selector.AddReceive(ctx.Done(), func(workflow.ReceiveChannel, bool) {})
+		selector.Select(ctx)
+		if ctx.Err() != nil {
+			return HumanGateSignal{}, ctx.Err()
+		}
+		if !received {
+			continue
+		}
 		if signal.WorkflowRunID != workflowRunID {
 			return HumanGateSignal{}, contractViolation("human gate signal targets another workflow run")
 		}
