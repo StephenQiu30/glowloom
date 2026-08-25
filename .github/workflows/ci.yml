@@ -59,7 +59,7 @@ jobs:
         run: |
           test -z "$(gofmt -l .)"
           go vet ./...
-          go test -p 1 ./...
+          go test -count=1 -p 1 ./...
 
   agent:
     name: Agent / Candidate Runtime
@@ -130,9 +130,9 @@ jobs:
         run: git diff --exit-code -- frontend/src/api
 
   deployment:
-    name: Deployment / Backend Image and Compose
+    name: Deployment / Images and Compose
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - name: Validate development and production Compose
@@ -152,12 +152,24 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f docker-compose-env.yml config --quiet
           docker compose -f docker-compose.yml -f docker-compose-env.yml -f docker-compose-prod.yml config --quiet
+      - name: Build Frontend deployment image
+        run: docker build --tag lanverse/frontend:ci frontend
       - name: Build Backend deployment image
         run: docker build --tag lanverse/backend:ci backend
+      - name: Build Agent deployment image
+        run: docker build --file agent/Dockerfile --tag lanverse/agent:ci .
       - name: Require API and Workflow Worker binaries
         run: >-
           docker run --rm --entrypoint /bin/sh lanverse/backend:ci -c
           'test -x /usr/local/bin/lanverse-api && test -x /usr/local/bin/lanverse-workflow-worker'
+      - name: Require Frontend standalone runtime
+        run: >-
+          docker run --rm --entrypoint /bin/sh lanverse/frontend:ci -c
+          'test -f /srv/lanverse/frontend/server.js && test -d /srv/lanverse/frontend/.next/static'
+      - name: Require private Agent candidate runtime
+        run: >-
+          docker run --rm --entrypoint /bin/sh lanverse/agent:ci -c
+          'command -v codex >/dev/null && python -c "from app.candidate_runtime.api import app; assert app.title == '\''Lanverse Candidate Runtime'\''"'
 
   delivery:
     name: Delivery / Hygiene
