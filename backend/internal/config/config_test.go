@@ -32,6 +32,22 @@ func TestLoadBuildsSingleDatabaseAPIConfiguration(t *testing.T) {
 	if configuration.AgentURL != "http://127.0.0.1:8787" || configuration.AgentPollInterval != 500*time.Millisecond {
 		t.Fatalf("unexpected agent configuration: %q, %s", configuration.AgentURL, configuration.AgentPollInterval)
 	}
+	if configuration.TemporalAddress != "127.0.0.1:7233" || configuration.TemporalNamespace != "default" ||
+		configuration.TemporalTaskQueue != "lanverse-production-v1" {
+		t.Fatalf("unexpected Temporal configuration: %#v", configuration)
+	}
+}
+
+func TestLoadRejectsInvalidTemporalAddress(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
+	for _, value := range []string{"temporal", "http://temporal:7233", "temporal:99999"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("TEMPORAL_ADDRESS", value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load accepted TEMPORAL_ADDRESS %q", value)
+			}
+		})
+	}
 }
 
 func TestLoadRejectsInvalidCORSOrigins(t *testing.T) {
