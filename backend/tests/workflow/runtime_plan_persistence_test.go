@@ -17,8 +17,11 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
+	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
+	workflowreview "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/review"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -131,12 +134,15 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	}
 
 	executor := &scriptedNodeExecutor{failures: 1}
+	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
+		Now: func() time.Time { return now }, NewID: uuid.NewString, ClaimLease: 5 * time.Minute,
+	})
 	runtimeService = workflowapp.NewRuntimeService(workflowStore, workflowapp.RuntimeConfig{
 		Now: func() time.Time {
 			now = now.Add(time.Second)
 			return now
 		},
-		NewID: uuid.NewString, Executor: executor,
+		NewID: uuid.NewString, Executor: executor, HumanTasks: workflowreview.New(reviewService),
 	})
 	node := plan.Nodes[1]
 	command := workflow.NodeActivityCommand{
@@ -161,6 +167,38 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		projection.RiskLevel != node.RiskLevel || projection.ActiveClaimToken != nil {
 		t.Fatalf("persisted node projection = %#v", projection)
 	}
+	gate := plan.Nodes[2]
+	gateCommand := workflow.NodeActivityCommand{
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: gate.NodeRunID, NodeID: gate.NodeID,
+		Executor: gate.Executor, Attempt: 1,
+	}
+	if err = runtimeService.OpenHumanGate(ctx, gateCommand); err != nil {
+		t.Fatalf("open persisted human gate: %v", err)
+	}
+	var humanTask model.HumanTask
+	if err = database.Where("node_run_id = ?", gate.NodeRunID).First(&humanTask).Error; err != nil {
+		t.Fatalf("load workflow human task: %v", err)
+	}
+	gateRevision := humanTask.SubjectRevision
+	if err = runtimeService.OpenHumanGate(ctx, gateCommand); err != nil {
+		t.Fatalf("replay persisted human gate: %v", err)
+	}
+	var humanTaskCount int64
+	if err = database.Model(&model.HumanTask{}).Where("node_run_id = ?", gate.NodeRunID).Count(&humanTaskCount).Error; err != nil {
+		t.Fatalf("count workflow human tasks: %v", err)
+	}
+	var waitingRun model.WorkflowRun
+	var waitingNode model.NodeRunProjection
+	if err = database.First(&waitingRun, "id = ?", request.WorkflowRunID).Error; err != nil {
+		t.Fatalf("load waiting workflow run: %v", err)
+	}
+	if err = database.First(&waitingNode, "id = ?", gate.NodeRunID).Error; err != nil {
+		t.Fatalf("load waiting node run: %v", err)
+	}
+	if humanTaskCount != 1 || waitingRun.Status != "WAITING_HUMAN" || waitingNode.Status != "WAITING_HUMAN" ||
+		humanTask.SubjectID.String() != gate.NodeRunID || gateRevision != waitingNode.Revision {
+		t.Fatalf("human gate projection = task %#v run %#v node %#v", humanTask, waitingRun, waitingNode)
+	}
 	completion := workflow.CompleteRunCommand{WorkflowRunID: request.WorkflowRunID}
 	if err = runtimeService.CompleteRun(ctx, completion); err == nil {
 		t.Fatal("run completed while queued nodes still existed")
@@ -168,6 +206,9 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	if err = database.Model(&model.NodeRunProjection{}).Where("workflow_run_id = ?", request.WorkflowRunID).
 		Updates(map[string]any{"status": "SUCCEEDED", "active_claim_token": nil}).Error; err != nil {
 		t.Fatalf("prepare completed node projections: %v", err)
+	}
+	if err = database.Model(&model.WorkflowRun{}).Where("id = ?", request.WorkflowRunID).Update("status", "RUNNING").Error; err != nil {
+		t.Fatalf("prepare completable workflow run: %v", err)
 	}
 	if err = runtimeService.CompleteRun(ctx, completion); err != nil {
 		t.Fatalf("complete workflow run: %v", err)
