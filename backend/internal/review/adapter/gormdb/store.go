@@ -1,0 +1,367 @@
+package gormdb
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"slices"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
+	platformcommandgorm "github.com/StephenQiu30/lanverse/backend/internal/platform/command/adapter/gormdb"
+	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	"github.com/StephenQiu30/lanverse/backend/internal/review/domain"
+)
+
+const (
+	claimOperation  = "review.human_task.claim"
+	decideOperation = "review.human_task.decide"
+)
+
+type Store struct {
+	database *gorm.DB
+}
+
+func New(database *gorm.DB) *Store { return &Store{database: database} }
+
+func (store *Store) FindTaskByNode(ctx context.Context, workspaceID, nodeRunID string) (domain.HumanTask, error) {
+	workspace, node, err := taskScope(workspaceID, nodeRunID)
+	if err != nil {
+		return domain.HumanTask{}, application.ErrNotFound
+	}
+	var record model.HumanTask
+	if err = store.database.WithContext(ctx).Where("workspace_id = ? AND node_run_id = ?", workspace, node).First(&record).Error; err != nil {
+		return domain.HumanTask{}, normalizeNotFound(err)
+	}
+	return taskDomain(record)
+}
+
+func (store *Store) EnsureTask(ctx context.Context, desired domain.HumanTask) (domain.HumanTask, error) {
+	record, err := taskRecord(desired)
+	if err != nil {
+		return domain.HumanTask{}, err
+	}
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		if createErr := transaction.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "workspace_id"}, {Name: "node_run_id"}}, DoNothing: true,
+		}).Omit(clause.Associations).Create(&record).Error; createErr != nil {
+			return createErr
+		}
+		return transaction.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("workspace_id = ? AND node_run_id = ?", record.WorkspaceID, record.NodeRunID).First(&record).Error
+	})
+	if err != nil {
+		return domain.HumanTask{}, err
+	}
+	persisted, err := taskDomain(record)
+	if err != nil {
+		return domain.HumanTask{}, err
+	}
+	if !domain.SameTaskBinding(persisted, desired) {
+		return domain.HumanTask{}, errors.New("persisted human task binding has drifted")
+	}
+	return persisted, nil
+}
+
+func (store *Store) Claim(
+	ctx context.Context,
+	actor application.Actor,
+	command application.ClaimCommand,
+	claimToken string,
+	expiresAt time.Time,
+	now time.Time,
+) (domain.ClaimResult, error) {
+	taskID, token, actorID, err := claimIdentities(command.TaskID, claimToken, actor.UserID)
+	if err != nil {
+		return domain.ClaimResult{}, application.ErrNotFound
+	}
+	var result domain.ClaimResult
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var task model.HumanTask
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, "id = ?", taskID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if authorizeErr := authorizeReviewer(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion); authorizeErr != nil {
+			return authorizeErr
+		}
+		inputHash, hashErr := platformcommand.InputHash(struct {
+			ActorID string
+			Command application.ClaimCommand
+		}{ActorID: actor.UserID, Command: command})
+		if hashErr != nil {
+			return hashErr
+		}
+		if receipt, receiptErr := platformcommandgorm.Find(ctx, transaction, task.WorkspaceID.String(), claimOperation, command.IdempotencyKey); receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[domain.ClaimResult](receipt, inputHash)
+			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
+				return conflict("Idempotency key was already used with different claim input")
+			}
+			result = replayed
+			return replayErr
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		if task.Revision != command.ExpectedRevision || task.Status == "COMPLETED" || task.Status == "CANCELLED" ||
+			(task.Status == "CLAIMED" && task.ClaimExpiresAt != nil && task.ClaimExpiresAt.After(now)) {
+			return conflict("Human task changed before claim")
+		}
+		task.Status, task.ClaimedBy, task.ClaimToken, task.ClaimExpiresAt = "CLAIMED", &actorID, &token, &expiresAt
+		task.Revision++
+		task.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.HumanTask{}).Where("id = ?", task.ID).Updates(map[string]any{
+			"status": task.Status, "claimed_by": actorID, "claim_token": token, "claim_expires_at": expiresAt,
+			"revision": task.Revision, "updated_at": task.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		persisted, mapErr := taskDomain(task)
+		if mapErr != nil {
+			return mapErr
+		}
+		result = domain.ClaimResult{Task: persisted, ClaimToken: claimToken}
+		return storeResultReceipt(ctx, transaction, task.WorkspaceID, claimOperation, command.IdempotencyKey, inputHash, task.ID, actorID, result, now)
+	})
+	return result, err
+}
+
+func (store *Store) Decide(
+	ctx context.Context,
+	actor application.Actor,
+	command application.DecideCommand,
+	desired domain.ReviewDecision,
+	now time.Time,
+) (domain.DecisionResult, error) {
+	taskID, token, actorID, err := claimIdentities(command.TaskID, command.ClaimToken, actor.UserID)
+	if err != nil {
+		return domain.DecisionResult{}, application.ErrNotFound
+	}
+	decisionID, err := uuid.Parse(desired.ID)
+	if err != nil {
+		return domain.DecisionResult{}, err
+	}
+	var result domain.DecisionResult
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var task model.HumanTask
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, "id = ?", taskID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if authorizeErr := authorizeReviewer(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion); authorizeErr != nil {
+			return authorizeErr
+		}
+		inputHash, hashErr := platformcommand.InputHash(struct {
+			ActorID string
+			Command application.DecideCommand
+		}{ActorID: actor.UserID, Command: command})
+		if hashErr != nil {
+			return hashErr
+		}
+		if receipt, receiptErr := platformcommandgorm.Find(ctx, transaction, task.WorkspaceID.String(), decideOperation, command.IdempotencyKey); receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[domain.DecisionResult](receipt, inputHash)
+			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
+				return conflict("Idempotency key was already used with different decision input")
+			}
+			result = replayed
+			return replayErr
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		if task.Revision != command.ExpectedTaskRevision || task.SubjectRevision != command.ExpectedSubjectRevision ||
+			task.Status != "CLAIMED" || task.ClaimedBy == nil || *task.ClaimedBy != actorID ||
+			task.ClaimToken == nil || *task.ClaimToken != token || task.ClaimExpiresAt == nil || !task.ClaimExpiresAt.After(now) {
+			return conflict("Human task changed before decision")
+		}
+		if command.Decision == "selected" && !containsCandidate(task.CandidateIDs, command.SelectedCandidateID) {
+			return conflict("Selected candidate is not bound to the human task")
+		}
+		decision := model.ReviewDecision{
+			ID: decisionID, WorkspaceID: task.WorkspaceID, HumanTaskID: task.ID, Decision: desired.Decision,
+			SubjectRevision: desired.SubjectRevision, CreatedBy: actorID, CreatedAt: now.UTC(),
+		}
+		if command.SelectedCandidateID != "" {
+			selected, parseErr := uuid.Parse(command.SelectedCandidateID)
+			if parseErr != nil {
+				return parseErr
+			}
+			decision.SelectedCandidateID = &selected
+		}
+		if createErr := transaction.Omit(clause.Associations).Create(&decision).Error; createErr != nil {
+			return createErr
+		}
+		task.Status, task.ClaimToken, task.ClaimExpiresAt = "COMPLETED", nil, nil
+		task.Revision++
+		task.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.HumanTask{}).Where("id = ?", task.ID).Updates(map[string]any{
+			"status": task.Status, "claim_token": nil, "claim_expires_at": nil,
+			"revision": task.Revision, "updated_at": task.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		persistedTask, mapErr := taskDomain(task)
+		if mapErr != nil {
+			return mapErr
+		}
+		result = domain.DecisionResult{Task: persistedTask, Decision: decisionDomain(decision)}
+		return storeResultReceipt(ctx, transaction, task.WorkspaceID, decideOperation, command.IdempotencyKey, inputHash, task.ID, actorID, result, now)
+	})
+	return result, err
+}
+
+func taskRecord(value domain.HumanTask) (model.HumanTask, error) {
+	id, err := uuid.Parse(value.ID)
+	if err != nil {
+		return model.HumanTask{}, err
+	}
+	workspaceID, projectID, err := taskScope(value.WorkspaceID, value.ProjectID)
+	if err != nil {
+		return model.HumanTask{}, err
+	}
+	runID, err := uuid.Parse(value.WorkflowRunID)
+	if err != nil {
+		return model.HumanTask{}, err
+	}
+	nodeID, err := uuid.Parse(value.NodeRunID)
+	if err != nil {
+		return model.HumanTask{}, err
+	}
+	subjectID, err := uuid.Parse(value.SubjectID)
+	if err != nil {
+		return model.HumanTask{}, err
+	}
+	candidates, err := json.Marshal(value.CandidateIDs)
+	if err != nil {
+		return model.HumanTask{}, err
+	}
+	return model.HumanTask{
+		ID: id, WorkspaceID: workspaceID, ProjectID: projectID, WorkflowRunID: runID, NodeRunID: nodeID,
+		SubjectType: value.SubjectType, SubjectID: subjectID, SubjectRevision: value.SubjectRevision,
+		CandidateIDs: datatypes.JSON(candidates), RubricVersion: value.RubricVersion, Status: value.Status,
+		Revision: value.Revision, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}, nil
+}
+
+func taskDomain(value model.HumanTask) (domain.HumanTask, error) {
+	var candidates []string
+	if err := json.Unmarshal(value.CandidateIDs, &candidates); err != nil {
+		return domain.HumanTask{}, err
+	}
+	var claimedBy, claimToken *string
+	if value.ClaimedBy != nil {
+		text := value.ClaimedBy.String()
+		claimedBy = &text
+	}
+	if value.ClaimToken != nil {
+		text := value.ClaimToken.String()
+		claimToken = &text
+	}
+	return domain.HumanTask{
+		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
+		WorkflowRunID: value.WorkflowRunID.String(), NodeRunID: value.NodeRunID.String(), SubjectType: value.SubjectType,
+		SubjectID: value.SubjectID.String(), SubjectRevision: value.SubjectRevision, CandidateIDs: candidates,
+		RubricVersion: value.RubricVersion, Status: value.Status, ClaimedBy: claimedBy, ClaimToken: claimToken,
+		ClaimExpiresAt: value.ClaimExpiresAt, Revision: value.Revision, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}, nil
+}
+
+func decisionDomain(value model.ReviewDecision) domain.ReviewDecision {
+	var selected *string
+	if value.SelectedCandidateID != nil {
+		text := value.SelectedCandidateID.String()
+		selected = &text
+	}
+	return domain.ReviewDecision{
+		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), HumanTaskID: value.HumanTaskID.String(),
+		Decision: value.Decision, SubjectRevision: value.SubjectRevision, SelectedCandidateID: selected,
+		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt,
+	}
+}
+
+func taskScope(left, right string) (uuid.UUID, uuid.UUID, error) {
+	leftID, err := uuid.Parse(left)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	rightID, err := uuid.Parse(right)
+	return leftID, rightID, err
+}
+
+func claimIdentities(taskID, claimToken, actorID string) (uuid.UUID, uuid.UUID, uuid.UUID, error) {
+	task, err := uuid.Parse(taskID)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, uuid.Nil, err
+	}
+	token, err := uuid.Parse(claimToken)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, uuid.Nil, err
+	}
+	actor, err := uuid.Parse(actorID)
+	return task, token, actor, err
+}
+
+func authorizeReviewer(ctx context.Context, transaction *gorm.DB, workspaceID, actorID uuid.UUID, tokenVersion int) error {
+	var membership model.Membership
+	if err := transaction.WithContext(ctx).Where(
+		"workspace_id = ? AND user_id = ? AND status = ? AND role IN ?", workspaceID, actorID, "active", []string{"owner", "editor"},
+	).First(&membership).Error; err != nil {
+		return normalizeNotFound(err)
+	}
+	var user model.UserAccount
+	if err := transaction.WithContext(ctx).First(&user, "id = ?", actorID).Error; err != nil {
+		return normalizeNotFound(err)
+	}
+	if user.Status != "active" || user.TokenVersion != tokenVersion {
+		return application.ErrNotFound
+	}
+	return nil
+}
+
+func containsCandidate(raw []byte, candidate string) bool {
+	var candidates []string
+	if json.Unmarshal(raw, &candidates) != nil {
+		return false
+	}
+	return slices.Contains(candidates, candidate)
+}
+
+func storeResultReceipt(
+	ctx context.Context,
+	transaction *gorm.DB,
+	workspaceID uuid.UUID,
+	operation string,
+	idempotencyKey string,
+	inputHash string,
+	resourceID uuid.UUID,
+	actorID uuid.UUID,
+	result any,
+	now time.Time,
+) error {
+	encoded, err := platformcommand.Result(result)
+	if err != nil {
+		return err
+	}
+	receiptID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(workspaceID.String()+":"+operation+":"+idempotencyKey))
+	return platformcommandgorm.Create(ctx, transaction, platformcommand.Receipt{
+		ID: receiptID.String(), WorkspaceID: workspaceID.String(), Operation: operation, IdempotencyKey: idempotencyKey,
+		InputHash: inputHash, ResourceID: resourceID.String(), Result: encoded,
+		CreatedBy: actorID.String(), CreatedAt: now.UTC(),
+	})
+}
+
+func normalizeNotFound(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return application.ErrNotFound
+	}
+	return err
+}
+
+func conflict(message string) error {
+	return &application.Error{Code: "resource_conflict", Message: message, Status: 409}
+}
+
+var _ application.Repository = (*Store)(nil)
