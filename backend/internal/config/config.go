@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -24,6 +25,9 @@ const (
 	defaultAgentSecret        = "development-only-agent-execution-secret"
 	defaultAgentPollMillis    = 500
 	defaultAgentLeaseSeconds  = 30 * 60
+	defaultTemporalAddress    = "127.0.0.1:7233"
+	defaultTemporalNamespace  = "default"
+	defaultTemporalTaskQueue  = "lanverse-production-v1"
 )
 
 var numericVerificationCode = regexp.MustCompile(`^\d{6}$`)
@@ -51,6 +55,9 @@ type Config struct {
 	AgentExecutionSecret         string
 	AgentPollInterval            time.Duration
 	AgentClaimLease              time.Duration
+	TemporalAddress              string
+	TemporalNamespace            string
+	TemporalTaskQueue            string
 }
 
 func Load() (Config, error) {
@@ -98,6 +105,18 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	temporalAddress, err := hostPort("TEMPORAL_ADDRESS", defaultTemporalAddress)
+	if err != nil {
+		return Config{}, err
+	}
+	temporalNamespace, err := boundedName("TEMPORAL_NAMESPACE", defaultTemporalNamespace, 255)
+	if err != nil {
+		return Config{}, err
+	}
+	temporalTaskQueue, err := boundedName("TEMPORAL_TASK_QUEUE", defaultTemporalTaskQueue, 255)
+	if err != nil {
+		return Config{}, err
+	}
 	return Config{
 		ListenAddress:                net.JoinHostPort(host, strconv.Itoa(port)),
 		DatabaseURL:                  databaseURL,
@@ -121,7 +140,31 @@ func Load() (Config, error) {
 		AgentExecutionSecret:         environmentValue("AGENT_EXECUTION_SECRET", defaultAgentSecret),
 		AgentPollInterval:            time.Duration(agentPollMillis) * time.Millisecond,
 		AgentClaimLease:              time.Duration(agentLeaseSeconds) * time.Second,
+		TemporalAddress:              temporalAddress,
+		TemporalNamespace:            temporalNamespace,
+		TemporalTaskQueue:            temporalTaskQueue,
 	}, nil
+}
+
+func hostPort(name, fallback string) (string, error) {
+	rawValue := strings.TrimSpace(environmentValue(name, fallback))
+	host, rawPort, err := net.SplitHostPort(rawValue)
+	if err != nil || strings.TrimSpace(host) == "" {
+		return "", fmt.Errorf("%s must be a host:port address", name)
+	}
+	port, err := strconv.Atoi(rawPort)
+	if err != nil || port < 1 || port > 65535 {
+		return "", fmt.Errorf("%s must use a port between 1 and 65535", name)
+	}
+	return net.JoinHostPort(host, strconv.Itoa(port)), nil
+}
+
+func boundedName(name, fallback string, maximum int) (string, error) {
+	value := strings.TrimSpace(environmentValue(name, fallback))
+	if value == "" || len(value) > maximum {
+		return "", fmt.Errorf("%s must contain between 1 and %d characters", name, maximum)
+	}
+	return value, nil
 }
 
 func boolean(name string, fallback bool) (bool, error) {
