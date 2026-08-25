@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 )
 
 type WorkflowHumanGateApplyReceipt struct {
@@ -15,6 +16,10 @@ type WorkflowHumanGateApplyReceipt struct {
 	ReviewDecisionID uuid.UUID         `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_gate_apply_decision"`
 	SubjectRevision  int               `gorm:"not null;check:ck_wrk_gate_apply_subject_revision,subject_revision >= 1"`
 	Decision         string            `gorm:"type:varchar(30);not null;check:ck_wrk_gate_apply_decision,decision IN ('approved','rejected','changes_requested','selected')"`
+	OwnerReceiptID   *uuid.UUID        `gorm:"type:uuid;uniqueIndex:uq_wrk_gate_apply_owner_receipt;check:ck_wrk_gate_apply_owner_evidence,(decision IN ('approved','selected') AND owner_receipt_id IS NOT NULL AND owner_operation IS NOT NULL AND output IS NOT NULL AND output_hash IS NOT NULL) OR (decision IN ('rejected','changes_requested') AND owner_receipt_id IS NULL AND owner_operation IS NULL AND output IS NULL AND output_hash IS NULL)"`
+	OwnerOperation   *string           `gorm:"type:varchar(120)"`
+	Output           datatypes.JSON    `gorm:"type:jsonb"`
+	OutputHash       *string           `gorm:"type:char(64);check:ck_wrk_gate_apply_output_hash,output_hash IS NULL OR char_length(output_hash) = 64"`
 	CreatedBy        uuid.UUID         `gorm:"type:uuid;not null"`
 	CreatedAt        time.Time         `gorm:"type:timestamptz;not null;index:ix_wrk_gate_apply_workspace_created,priority:2,sort:desc"`
 	Workspace        Workspace         `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`

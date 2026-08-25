@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -15,6 +17,119 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
+
+func (store *Store) FindSignalPreparation(
+	ctx context.Context,
+	workspaceID string,
+	idempotencyKey string,
+) (domain.SignalPreparation, bool, error) {
+	workspace, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return domain.SignalPreparation{}, false, application.ErrNotFound
+	}
+	var prepared domain.SignalPreparation
+	found := false
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var intent model.WorkflowSignalIntent
+		loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("workspace_id = ? AND idempotency_key = ?", workspace, idempotencyKey).First(&intent).Error
+		if errors.Is(loadErr, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if loadErr != nil {
+			return loadErr
+		}
+		var apply model.WorkflowHumanGateApplyReceipt
+		if loadErr = transaction.First(&apply, "id = ?", intent.ApplyReceiptID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		prepared = signalPreparationDomain(apply, intent)
+		found = true
+		return nil
+	})
+	return prepared, found, err
+}
+
+func (store *Store) ResolveHumanGateOwnerApplication(
+	ctx context.Context,
+	request domain.HumanGateDecisionRequest,
+) (domain.HumanGateOwnerApplication, error) {
+	workspaceID, err := uuid.Parse(request.WorkspaceID)
+	if err != nil {
+		return domain.HumanGateOwnerApplication{}, application.ErrNotFound
+	}
+	runID, err := uuid.Parse(request.WorkflowRunID)
+	if err != nil {
+		return domain.HumanGateOwnerApplication{}, application.ErrNotFound
+	}
+	nodeID, err := uuid.Parse(request.NodeRunID)
+	if err != nil {
+		return domain.HumanGateOwnerApplication{}, application.ErrNotFound
+	}
+	taskID, err := uuid.Parse(request.HumanTaskID)
+	if err != nil {
+		return domain.HumanGateOwnerApplication{}, application.ErrNotFound
+	}
+	decisionID, err := uuid.Parse(request.ReviewDecisionID)
+	if err != nil {
+		return domain.HumanGateOwnerApplication{}, application.ErrNotFound
+	}
+	var applicationResult domain.HumanGateOwnerApplication
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var run model.WorkflowRun
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var node model.NodeRunProjection
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&node, "id = ?", nodeID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if run.WorkspaceID != workspaceID || node.WorkflowRunID != run.ID || run.Status != "WAITING_HUMAN" ||
+			node.Status != "WAITING_HUMAN" || node.Revision != request.SubjectRevision {
+			return errors.New("workflow human gate changed before owner application")
+		}
+		task, decision, bindingErr := loadHumanGateDecision(
+			transaction, run, node, taskID, decisionID, request.SubjectRevision, request.Decision,
+		)
+		if bindingErr != nil {
+			return bindingErr
+		}
+		resolved, resolveErr := resolveNodeExecution(transaction, run, node)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		_, persistedHash, inputErr := persistedNodeInput(node)
+		if inputErr != nil || persistedHash != resolved.InputHash || resolved.Execution.RiskLevel != "human_gate" ||
+			resolved.Execution.CachePolicy != "never" || resolved.CacheKey != "" || len(resolved.Execution.OutputPorts) != 1 ||
+			!resolved.Execution.OutputPorts[0].Required {
+			return errors.New("workflow human gate owner contract has drifted")
+		}
+		candidateID, candidateErr := selectedHumanGateCandidate(task, decision)
+		if candidateErr != nil {
+			return candidateErr
+		}
+		var candidate domain.NodeInputBinding
+		candidateFound := false
+		for _, binding := range resolved.Input.Bindings {
+			if binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID == candidateID {
+				candidate, candidateFound = binding, true
+				break
+			}
+		}
+		if !candidateFound {
+			return errors.New("workflow human gate owner candidate is not in frozen input")
+		}
+		output := resolved.Execution.OutputPorts[0]
+		applicationResult = domain.HumanGateOwnerApplication{
+			WorkspaceID: run.WorkspaceID.String(), ProjectID: run.ProjectID.String(), WorkflowRunID: run.ID.String(),
+			NodeRunID: node.ID.String(), HumanTaskID: task.ID.String(), ReviewDecisionID: decision.ID.String(),
+			SubjectRevision: node.Revision, Decision: decision.Decision, Executor: node.Executor,
+			Candidate: candidate, OutputPort: output.Key, OutputValueType: output.ValueType,
+		}
+		return nil
+	})
+	return applicationResult, err
+}
 
 func (store *Store) PrepareSignal(ctx context.Context, desired domain.SignalPreparation) (domain.SignalPreparation, error) {
 	applyRecord, err := signalApplyRecord(desired.ApplyReceipt)
@@ -36,9 +151,7 @@ func (store *Store) PrepareSignal(ctx context.Context, desired domain.SignalPrep
 			if loadErr := transaction.First(&existingApply, "id = ?", existingIntent.ApplyReceiptID).Error; loadErr != nil {
 				return normalizeNotFound(loadErr)
 			}
-			prepared = domain.SignalPreparation{
-				ApplyReceipt: signalApplyDomain(existingApply), Intent: signalIntentDomain(existingIntent),
-			}
+			prepared = signalPreparationDomain(existingApply, existingIntent)
 			return nil
 		}
 		if !errors.Is(existingErr, gorm.ErrRecordNotFound) {
@@ -60,7 +173,7 @@ func (store *Store) PrepareSignal(ctx context.Context, desired domain.SignalPrep
 			return bindingErr
 		}
 		intentRecord.TemporalWorkflowID = run.TemporalWorkflowID
-		temporary := signalIntentDomain(intentRecord)
+		temporary := domain.SignalPreparation{ApplyReceipt: signalApplyDomain(applyRecord), Intent: signalIntentDomain(intentRecord)}
 		request, requestErr := application.NewSignalRequest(temporary)
 		if requestErr != nil {
 			return requestErr
@@ -89,7 +202,7 @@ func (store *Store) PrepareSignal(ctx context.Context, desired domain.SignalPrep
 			First(&intentRecord).Error; loadErr != nil {
 			return normalizeNotFound(loadErr)
 		}
-		prepared = domain.SignalPreparation{ApplyReceipt: signalApplyDomain(applyRecord), Intent: signalIntentDomain(intentRecord)}
+		prepared = signalPreparationDomain(applyRecord, intentRecord)
 		return nil
 	})
 	return prepared, err
@@ -109,31 +222,49 @@ func validateHumanGateDecisionBinding(
 		intent.Decision != apply.Decision {
 		return errors.New("workflow human gate signal binding has drifted")
 	}
+	task, decision, err := loadHumanGateDecision(
+		transaction, run, node, apply.HumanTaskID, apply.ReviewDecisionID, apply.SubjectRevision, apply.Decision,
+	)
+	if err != nil {
+		return err
+	}
+	return validateHumanGateOwnerEvidence(transaction, run, node, task, decision, apply)
+}
+
+func loadHumanGateDecision(
+	transaction *gorm.DB,
+	run model.WorkflowRun,
+	node model.NodeRunProjection,
+	taskID uuid.UUID,
+	decisionID uuid.UUID,
+	subjectRevision int,
+	decisionValue string,
+) (model.HumanTask, model.ReviewDecision, error) {
 	var task model.HumanTask
-	if err := transaction.First(&task, "id = ?", apply.HumanTaskID).Error; err != nil {
-		return normalizeNotFound(err)
+	if err := transaction.First(&task, "id = ?", taskID).Error; err != nil {
+		return model.HumanTask{}, model.ReviewDecision{}, normalizeNotFound(err)
 	}
 	var decision model.ReviewDecision
-	if err := transaction.First(&decision, "id = ?", apply.ReviewDecisionID).Error; err != nil {
-		return normalizeNotFound(err)
+	if err := transaction.First(&decision, "id = ?", decisionID).Error; err != nil {
+		return model.HumanTask{}, model.ReviewDecision{}, normalizeNotFound(err)
 	}
 	if task.WorkspaceID != run.WorkspaceID || task.WorkflowRunID != run.ID || task.NodeRunID != node.ID ||
-		task.SubjectType != "workflow_node_output" || task.SubjectID != node.ID || task.SubjectRevision != node.Revision ||
+		task.SubjectType != "workflow_node_output" || task.SubjectID != node.ID || task.SubjectRevision != node.Revision || task.SubjectRevision != subjectRevision ||
 		task.Status != "COMPLETED" || decision.WorkspaceID != run.WorkspaceID || decision.HumanTaskID != task.ID ||
-		decision.SubjectRevision != task.SubjectRevision || decision.Decision != apply.Decision {
-		return errors.New("workflow human gate review decision has drifted")
+		decision.SubjectRevision != task.SubjectRevision || decision.Decision != decisionValue {
+		return model.HumanTask{}, model.ReviewDecision{}, errors.New("workflow human gate review decision has drifted")
 	}
 	if decision.Decision == "selected" {
 		if decision.SelectedCandidateID == nil || !humanTaskContainsCandidate(task.CandidateIDs, *decision.SelectedCandidateID) {
-			return errors.New("workflow human gate selected candidate has drifted")
+			return model.HumanTask{}, model.ReviewDecision{}, errors.New("workflow human gate selected candidate has drifted")
 		}
 	}
-	return nil
+	return task, decision, nil
 }
 
 func humanTaskContainsCandidate(raw []byte, candidateID uuid.UUID) bool {
-	var candidates []string
-	if json.Unmarshal(raw, &candidates) != nil {
+	candidates, err := humanTaskCandidateIDs(raw)
+	if err != nil {
 		return false
 	}
 	for _, candidate := range candidates {
@@ -142,6 +273,89 @@ func humanTaskContainsCandidate(raw []byte, candidateID uuid.UUID) bool {
 		}
 	}
 	return false
+}
+
+func humanTaskCandidateIDs(raw []byte) ([]string, error) {
+	var candidates []string
+	if err := json.Unmarshal(raw, &candidates); err != nil {
+		return nil, err
+	}
+	return candidates, nil
+}
+
+func selectedHumanGateCandidate(task model.HumanTask, decision model.ReviewDecision) (string, error) {
+	candidates, err := humanTaskCandidateIDs(task.CandidateIDs)
+	if err != nil || len(candidates) == 0 {
+		return "", errors.New("workflow human gate candidate binding has drifted")
+	}
+	if decision.Decision == "selected" {
+		if decision.SelectedCandidateID == nil || !humanTaskContainsCandidate(task.CandidateIDs, *decision.SelectedCandidateID) {
+			return "", errors.New("workflow selected human gate has no valid selected candidate")
+		}
+		return decision.SelectedCandidateID.String(), nil
+	}
+	if decision.Decision == "approved" && len(candidates) != 1 {
+		return "", errors.New("workflow approved human gate requires exactly one candidate")
+	}
+	return candidates[0], nil
+}
+
+func validateHumanGateOwnerEvidence(
+	transaction *gorm.DB,
+	run model.WorkflowRun,
+	node model.NodeRunProjection,
+	task model.HumanTask,
+	decision model.ReviewDecision,
+	apply model.WorkflowHumanGateApplyReceipt,
+) error {
+	if decision.Decision != "approved" && decision.Decision != "selected" {
+		if apply.OwnerReceiptID != nil || apply.OwnerOperation != nil || len(apply.Output) != 0 || apply.OutputHash != nil {
+			return errors.New("workflow rejected human gate has owner evidence")
+		}
+		return nil
+	}
+	if apply.OwnerReceiptID == nil || apply.OwnerOperation == nil || *apply.OwnerOperation == "" || apply.OutputHash == nil {
+		return errors.New("workflow approved human gate has no owner evidence")
+	}
+	output, canonical, outputHash, outputErr := domain.ParseNodeOutput(json.RawMessage(apply.Output))
+	if outputErr != nil || outputHash != *apply.OutputHash || string(canonical) != string(apply.Output) {
+		return errors.New("workflow human gate owner output has drifted")
+	}
+	resolved, resolveErr := resolveNodeExecution(transaction, run, node)
+	if resolveErr != nil {
+		return resolveErr
+	}
+	_, persistedHash, inputErr := persistedNodeInput(node)
+	if inputErr != nil || persistedHash != resolved.InputHash || len(resolved.Execution.OutputPorts) != 1 ||
+		domain.ValidateNodeOutputPorts(output, resolved.Execution.OutputPorts) != nil || len(output.Bindings) != 1 {
+		return errors.New("workflow human gate owner output contract has drifted")
+	}
+	candidateID, candidateErr := selectedHumanGateCandidate(task, decision)
+	if candidateErr != nil {
+		return candidateErr
+	}
+	var candidate domain.NodeInputBinding
+	candidateFound := false
+	for _, binding := range resolved.Input.Bindings {
+		if binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID == candidateID {
+			candidate, candidateFound = binding, true
+			break
+		}
+	}
+	binding := output.Bindings[0]
+	if !candidateFound || binding.ReferenceID != candidate.ReferenceID || binding.ContentHash != candidate.ContentHash {
+		return errors.New("workflow human gate owner output does not match the frozen candidate")
+	}
+	var receipt model.CommandReceipt
+	if err := transaction.First(&receipt, "id = ?", *apply.OwnerReceiptID).Error; err != nil {
+		return normalizeNotFound(err)
+	}
+	if node.Executor != "gate.production_bible_review" || *apply.OwnerOperation != "production_bible.confirm" ||
+		receipt.WorkspaceID != run.WorkspaceID || receipt.Operation != *apply.OwnerOperation ||
+		receipt.ResourceID.String() != binding.ReferenceID || receipt.CreatedBy != apply.CreatedBy {
+		return errors.New("workflow human gate owner receipt has drifted")
+	}
+	return nil
 }
 
 func (store *Store) BeginSignalAttempt(ctx context.Context, intentID string, now time.Time) (domain.SignalPreparation, error) {
@@ -171,7 +385,7 @@ func (store *Store) BeginSignalAttempt(ctx context.Context, intentID string, now
 				return updateErr
 			}
 		}
-		prepared = domain.SignalPreparation{ApplyReceipt: signalApplyDomain(apply), Intent: signalIntentDomain(intent)}
+		prepared = signalPreparationDomain(apply, intent)
 		return nil
 	})
 	return prepared, err
@@ -221,10 +435,28 @@ func signalApplyRecord(value domain.HumanGateApplyReceipt) (model.WorkflowHumanG
 	if err != nil {
 		return model.WorkflowHumanGateApplyReceipt{}, err
 	}
+	var ownerReceiptID *uuid.UUID
+	var ownerOperation *string
+	var output datatypes.JSON
+	var outputHash *string
+	if value.Decision == "approved" || value.Decision == "selected" {
+		parsedReceiptID, parseErr := uuid.Parse(value.OwnerReceiptID)
+		normalized, encoded, canonicalHash, outputErr := domain.BuildNodeOutput(value.Output)
+		if parseErr != nil || outputErr != nil || value.OwnerOperation == "" || value.OutputHash != canonicalHash || len(normalized.Bindings) != 1 {
+			return model.WorkflowHumanGateApplyReceipt{}, errors.New("invalid workflow human gate owner evidence")
+		}
+		operation := value.OwnerOperation
+		hash := value.OutputHash
+		ownerReceiptID, ownerOperation, output, outputHash = &parsedReceiptID, &operation, datatypes.JSON(encoded), &hash
+	} else if value.OwnerReceiptID != "" || value.OwnerOperation != "" || value.OutputHash != "" ||
+		value.Output.SchemaVersion != "" || len(value.Output.Bindings) != 0 {
+		return model.WorkflowHumanGateApplyReceipt{}, errors.New("invalid rejected workflow human gate owner evidence")
+	}
 	return model.WorkflowHumanGateApplyReceipt{
 		ID: id, WorkspaceID: workspaceID, WorkflowRunID: runID, NodeRunID: nodeID,
 		HumanTaskID: taskID, ReviewDecisionID: decisionID, SubjectRevision: value.SubjectRevision,
-		Decision: value.Decision, CreatedBy: createdBy, CreatedAt: value.CreatedAt,
+		Decision: value.Decision, OwnerReceiptID: ownerReceiptID, OwnerOperation: ownerOperation,
+		Output: output, OutputHash: outputHash, CreatedBy: createdBy, CreatedAt: value.CreatedAt,
 	}, nil
 }
 
@@ -271,11 +503,19 @@ func signalReceiptRecord(value domain.SignalReceipt) (model.WorkflowSignalReceip
 }
 
 func signalApplyDomain(value model.WorkflowHumanGateApplyReceipt) domain.HumanGateApplyReceipt {
-	return domain.HumanGateApplyReceipt{
+	result := domain.HumanGateApplyReceipt{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), WorkflowRunID: value.WorkflowRunID.String(),
 		NodeRunID: value.NodeRunID.String(), HumanTaskID: value.HumanTaskID.String(), ReviewDecisionID: value.ReviewDecisionID.String(),
 		SubjectRevision: value.SubjectRevision, Decision: value.Decision, CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt,
 	}
+	if value.OwnerReceiptID != nil && value.OwnerOperation != nil && value.OutputHash != nil {
+		output, _, outputHash, err := domain.ParseNodeOutput(json.RawMessage(value.Output))
+		if err == nil && outputHash == *value.OutputHash {
+			result.OwnerReceiptID, result.OwnerOperation = value.OwnerReceiptID.String(), *value.OwnerOperation
+			result.Output, result.OutputHash = output, outputHash
+		}
+	}
+	return result
 }
 
 func signalIntentDomain(value model.WorkflowSignalIntent) domain.SignalIntent {
@@ -291,11 +531,24 @@ func signalIntentDomain(value model.WorkflowSignalIntent) domain.SignalIntent {
 }
 
 func sameSignalApply(record model.WorkflowHumanGateApplyReceipt, desired domain.HumanGateApplyReceipt) bool {
-	return record.ID.String() == desired.ID && record.WorkspaceID.String() == desired.WorkspaceID &&
-		record.WorkflowRunID.String() == desired.WorkflowRunID && record.NodeRunID.String() == desired.NodeRunID &&
-		record.HumanTaskID.String() == desired.HumanTaskID && record.ReviewDecisionID.String() == desired.ReviewDecisionID &&
-		record.SubjectRevision == desired.SubjectRevision && record.Decision == desired.Decision &&
-		record.CreatedBy.String() == desired.CreatedBy
+	if record.ID.String() != desired.ID || record.WorkspaceID.String() != desired.WorkspaceID ||
+		record.WorkflowRunID.String() != desired.WorkflowRunID || record.NodeRunID.String() != desired.NodeRunID ||
+		record.HumanTaskID.String() != desired.HumanTaskID || record.ReviewDecisionID.String() != desired.ReviewDecisionID ||
+		record.SubjectRevision != desired.SubjectRevision || record.Decision != desired.Decision ||
+		record.CreatedBy.String() != desired.CreatedBy {
+		return false
+	}
+	persisted := signalApplyDomain(record)
+	return persisted.OwnerReceiptID == desired.OwnerReceiptID && persisted.OwnerOperation == desired.OwnerOperation &&
+		persisted.OutputHash == desired.OutputHash && persisted.Output.SchemaVersion == desired.Output.SchemaVersion &&
+		len(persisted.Output.Bindings) == len(desired.Output.Bindings) && slices.Equal(persisted.Output.Bindings, desired.Output.Bindings)
+}
+
+func signalPreparationDomain(
+	apply model.WorkflowHumanGateApplyReceipt,
+	intent model.WorkflowSignalIntent,
+) domain.SignalPreparation {
+	return domain.SignalPreparation{ApplyReceipt: signalApplyDomain(apply), Intent: signalIntentDomain(intent)}
 }
 
 func signalIDs(values ...string) (uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, error) {

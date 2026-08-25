@@ -28,6 +28,7 @@ func (runtime *Client) Signal(ctx context.Context, request domain.SignalRequest)
 	payloads, err := runtime.dataConverter.ToPayloads(HumanGateSignal{
 		WorkflowRunID: request.WorkflowRunID, NodeRunID: request.NodeRunID,
 		SignalID: request.SignalID, SignalIntentID: request.SignalIntentID, Decision: request.Decision,
+		OwnerReceiptID: request.OwnerReceiptID, Output: request.Output, OutputHash: request.OutputHash,
 	})
 	if err != nil {
 		return domain.SignalObservation{}, err
@@ -110,6 +111,7 @@ func (runtime *Client) findSignal(ctx context.Context, request domain.SignalRequ
 			TemporalWorkflowID: request.TemporalWorkflowID, SignalID: signal.SignalID,
 			SignalIntentID: signal.SignalIntentID, WorkflowRunID: signal.WorkflowRunID,
 			NodeRunID: signal.NodeRunID, Decision: signal.Decision,
+			OwnerReceiptID: signal.OwnerReceiptID, Output: signal.Output, OutputHash: signal.OutputHash,
 		}
 		observedHash, hashErr := platformcommand.InputHash(observed)
 		if hashErr != nil {
@@ -135,15 +137,21 @@ func validSignalRequest(request domain.SignalRequest) bool {
 		return false
 	}
 	switch request.Decision {
-	case "APPROVED", "REJECTED", "CHANGES_REQUESTED", "SELECTED":
+	case "APPROVED", "SELECTED":
+		_, _, outputHash, outputErr := domain.BuildNodeOutput(request.Output)
+		if outputErr != nil || strings.TrimSpace(request.OwnerReceiptID) == "" || request.OutputHash != outputHash {
+			return false
+		}
+	case "REJECTED", "CHANGES_REQUESTED":
+		if request.OwnerReceiptID != "" || request.OutputHash != "" || request.Output.SchemaVersion != "" || len(request.Output.Bindings) != 0 {
+			return false
+		}
 	default:
 		return false
 	}
-	expectedHash, err := platformcommand.InputHash(domain.SignalRequest{
-		TemporalWorkflowID: request.TemporalWorkflowID, SignalID: request.SignalID,
-		SignalIntentID: request.SignalIntentID, WorkflowRunID: request.WorkflowRunID,
-		NodeRunID: request.NodeRunID, Decision: request.Decision,
-	})
+	expected := request
+	expected.InputHash = ""
+	expectedHash, err := platformcommand.InputHash(expected)
 	return err == nil && expectedHash == request.InputHash
 }
 

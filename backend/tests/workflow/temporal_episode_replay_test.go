@@ -69,10 +69,12 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 		t.Fatalf("start Episode Workflow: %v", err)
 	}
 	signalIntent := workflowdomain.SignalIntent{
-		ID: uuid.NewString(), TemporalWorkflowID: run.GetID(), SignalID: uuid.NewString(),
-		WorkflowRunID: request.WorkflowRunID, NodeRunID: plan.Nodes[1].NodeRunID, Decision: "approved",
+		ID: uuid.NewString(), WorkspaceID: uuid.NewString(), TemporalWorkflowID: run.GetID(), SignalID: uuid.NewString(),
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: plan.Nodes[1].NodeRunID,
+		HumanTaskID: uuid.NewString(), ReviewDecisionID: uuid.NewString(), SubjectRevision: 1, Decision: "approved",
 	}
-	signalRequest, err := workflowapp.NewSignalRequest(signalIntent)
+	preparation := approvedHumanGateSignalPreparation(signalIntent)
+	signalRequest, err := workflowapp.NewSignalRequest(preparation)
 	if err != nil {
 		t.Fatalf("build human gate signal: %v", err)
 	}
@@ -85,9 +87,10 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 		alreadyApplied.ObservedInputHash != signalRequest.InputHash {
 		t.Fatalf("reconcile repeated human gate signal: observation=%#v err=%v", alreadyApplied, err)
 	}
-	conflictingIntent := signalIntent
-	conflictingIntent.Decision = "rejected"
-	conflictingRequest, err := workflowapp.NewSignalRequest(conflictingIntent)
+	conflicting := preparation
+	conflicting.Intent.Decision = "selected"
+	conflicting.ApplyReceipt.Decision = "selected"
+	conflictingRequest, err := workflowapp.NewSignalRequest(conflicting)
 	if err != nil {
 		t.Fatalf("build conflicting human gate signal: %v", err)
 	}

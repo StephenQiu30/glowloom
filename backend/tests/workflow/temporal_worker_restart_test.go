@@ -76,10 +76,11 @@ func TestTemporalWorkerRecoversHumanWaitAfterCrossProcessRestart(t *testing.T) {
 	stopWorkflowWorkerProcess(t, firstWorker, firstOutput)
 
 	signalIntent := workflowdomain.SignalIntent{
-		ID: uuid.NewString(), TemporalWorkflowID: request.WorkflowID, SignalID: uuid.NewString(),
-		WorkflowRunID: request.WorkflowRunID, NodeRunID: plan.Nodes[1].NodeRunID, Decision: "approved",
+		ID: uuid.NewString(), WorkspaceID: uuid.NewString(), TemporalWorkflowID: request.WorkflowID, SignalID: uuid.NewString(),
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: plan.Nodes[1].NodeRunID,
+		HumanTaskID: uuid.NewString(), ReviewDecisionID: uuid.NewString(), SubjectRevision: 1, Decision: "approved",
 	}
-	signalRequest, err := workflowapp.NewSignalRequest(signalIntent)
+	signalRequest, err := workflowapp.NewSignalRequest(approvedHumanGateSignalPreparation(signalIntent))
 	if err != nil {
 		t.Fatalf("build Human Gate signal: %v", err)
 	}

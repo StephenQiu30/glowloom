@@ -92,6 +92,15 @@ func (service *RuntimeService) ApplyHumanGate(ctx context.Context, command domai
 	default:
 		return invalid("Invalid human gate application input")
 	}
+	if command.Decision == "APPROVED" || command.Decision == "SELECTED" {
+		normalized, _, outputHash, outputErr := domain.BuildNodeOutput(command.Output)
+		if outputErr != nil || strings.TrimSpace(command.OwnerReceiptID) == "" || command.OutputHash != outputHash {
+			return invalid("Invalid human gate application input")
+		}
+		command.OwnerReceiptID, command.Output = strings.TrimSpace(command.OwnerReceiptID), normalized
+	} else if command.OwnerReceiptID != "" || command.OutputHash != "" || command.Output.SchemaVersion != "" || len(command.Output.Bindings) != 0 {
+		return invalid("Invalid human gate application input")
+	}
 	repository, supported := service.repository.(HumanGateApplyRepository)
 	if !supported {
 		return errors.New("human gate apply repository is unavailable")

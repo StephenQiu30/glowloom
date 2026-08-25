@@ -28,11 +28,14 @@ type NodeActivityCommand = workflowdomain.NodeActivityCommand
 type NodeActivityResult = workflowdomain.NodeActivityResult
 
 type HumanGateSignal struct {
-	WorkflowRunID  string `json:"workflow_run_id"`
-	NodeRunID      string `json:"node_run_id"`
-	SignalID       string `json:"signal_id"`
-	SignalIntentID string `json:"signal_intent_id"`
-	Decision       string `json:"decision"`
+	WorkflowRunID  string                            `json:"workflow_run_id"`
+	NodeRunID      string                            `json:"node_run_id"`
+	SignalID       string                            `json:"signal_id"`
+	SignalIntentID string                            `json:"signal_intent_id"`
+	Decision       string                            `json:"decision"`
+	OwnerReceiptID string                            `json:"owner_receipt_id"`
+	Output         workflowdomain.NodeOutputSnapshot `json:"output"`
+	OutputHash     string                            `json:"output_hash"`
 }
 
 type WorkflowControlSignal struct {
@@ -91,6 +94,7 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 			apply := ApplyHumanGateCommand{
 				WorkflowRunID: request.WorkflowRunID, NodeRunID: node.NodeRunID, NodeID: node.NodeID,
 				SignalIntentID: signal.SignalIntentID, Decision: signal.Decision,
+				OwnerReceiptID: signal.OwnerReceiptID, Output: signal.Output, OutputHash: signal.OutputHash,
 			}
 			applyContext := workflow.WithActivityOptions(ctx, shortActivityOptions("apply-human-gate:"+node.NodeRunID))
 			if err = workflow.ExecuteActivity(applyContext, ApplyHumanGateActivityName, apply).Get(ctx, nil); err != nil {
@@ -291,8 +295,12 @@ func validHumanGateSignal(signal HumanGateSignal, workflowRunID, nodeRunID strin
 		return false
 	}
 	switch signal.Decision {
-	case "APPROVED", "REJECTED", "CHANGES_REQUESTED", "SELECTED":
-		return true
+	case "APPROVED", "SELECTED":
+		_, _, outputHash, err := workflowdomain.BuildNodeOutput(signal.Output)
+		return err == nil && strings.TrimSpace(signal.OwnerReceiptID) != "" && signal.OutputHash == outputHash
+	case "REJECTED", "CHANGES_REQUESTED":
+		return signal.OwnerReceiptID == "" && signal.OutputHash == "" &&
+			signal.Output.SchemaVersion == "" && len(signal.Output.Bindings) == 0
 	default:
 		return false
 	}

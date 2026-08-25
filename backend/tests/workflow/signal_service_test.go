@@ -2,6 +2,7 @@ package workflow_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,28 @@ import (
 func TestHumanGateSignalReusesStableIdentityUntilUnknownIsReconciled(t *testing.T) {
 	now := time.Date(2026, time.August, 26, 2, 0, 0, 0, time.UTC)
 	repository := newSignalRepository()
+	ownerOutput, _, ownerOutputHash, ownerOutputErr := workflow.BuildNodeOutput(workflow.NodeOutputSnapshot{
+		SchemaVersion: workflow.NodeOutputSchemaVersion,
+		Bindings: []workflow.NodeOutputBinding{{
+			Port: "bible", ValueType: "production_bible", ReferenceID: "00000000-0000-0000-0000-000000000333",
+			ReferenceVersion: "2", ContentHash: strings.Repeat("c", 64),
+		}},
+	})
+	if ownerOutputErr != nil {
+		t.Fatal(ownerOutputErr)
+	}
+	owner := &scriptedGateOwner{result: workflow.HumanGateOwnerResult{
+		ReceiptID: "00000000-0000-0000-0000-000000000334", Operation: "production_bible.confirm",
+		Output: ownerOutput, OutputHash: ownerOutputHash,
+	}}
+	repository.application = workflow.HumanGateOwnerApplication{
+		ProjectID: "project-1", Executor: "gate.production_bible_review", Decision: "approved",
+		Candidate: workflow.NodeInputBinding{
+			Port: "candidate", ValueType: "production_bible_candidate", SourceKind: workflow.NodeInputSourceNodeOutput,
+			ReferenceID: "00000000-0000-0000-0000-000000000333", ReferenceVersion: "1", ContentHash: strings.Repeat("c", 64),
+		},
+		OutputPort: "bible", OutputValueType: "production_bible",
+	}
 	signaler := &scriptedSignaler{outcomes: []workflow.SignalObservation{
 		{Outcome: workflow.SignalOutcomeUnknown},
 		{Outcome: workflow.SignalOutcomeAlreadyApplied, ObservedInputHash: "match_request"},
@@ -27,6 +50,7 @@ func TestHumanGateSignalReusesStableIdentityUntilUnknownIsReconciled(t *testing.
 			id++
 			return "generated-" + string(rune('0'+id))
 		},
+		Owner: owner,
 	})
 	command := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: "workspace-1", WorkflowRunID: "run-1", NodeRunID: "node-run-1",
@@ -46,18 +70,52 @@ func TestHumanGateSignalReusesStableIdentityUntilUnknownIsReconciled(t *testing.
 	requests := signaler.Requests()
 	if len(requests) != 2 || requests[0].SignalIntentID != requests[1].SignalIntentID ||
 		requests[0].SignalID != requests[1].SignalID || requests[0].InputHash != requests[1].InputHash ||
-		requests[0].InputHash == "" || len(repository.receipts) != 2 {
+		requests[0].InputHash == "" || requests[0].OwnerReceiptID != owner.result.ReceiptID ||
+		requests[0].OutputHash != ownerOutputHash || len(repository.receipts) != 2 || owner.calls != 1 {
 		t.Fatalf("signal retry identities = requests %#v receipts %#v", requests, repository.receipts)
+	}
+	drifted := command
+	drifted.Decision = "selected"
+	if _, err = service.SignalHumanGate(context.Background(), actor, drifted); err == nil {
+		t.Fatal("signal replay accepted the same idempotency key with different input")
+	}
+	if owner.calls != 1 || len(signaler.Requests()) != 2 {
+		t.Fatalf("drifted signal replay produced effects: owner calls=%d signal requests=%d", owner.calls, len(signaler.Requests()))
 	}
 }
 
 type signalRepository struct {
-	mu       sync.Mutex
-	prepared workflow.SignalPreparation
-	receipts []workflow.SignalReceipt
+	mu          sync.Mutex
+	prepared    workflow.SignalPreparation
+	receipts    []workflow.SignalReceipt
+	application workflow.HumanGateOwnerApplication
 }
 
 func newSignalRepository() *signalRepository { return &signalRepository{} }
+
+func (repo *signalRepository) FindSignalPreparation(
+	_ context.Context,
+	workspaceID string,
+	idempotencyKey string,
+) (workflow.SignalPreparation, bool, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	found := repo.prepared.Intent.WorkspaceID == workspaceID && repo.prepared.Intent.IdempotencyKey == idempotencyKey
+	return repo.prepared, found, nil
+}
+
+func (repo *signalRepository) ResolveHumanGateOwnerApplication(
+	_ context.Context,
+	request workflow.HumanGateDecisionRequest,
+) (workflow.HumanGateOwnerApplication, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	resolved := repo.application
+	resolved.WorkspaceID, resolved.WorkflowRunID, resolved.NodeRunID = request.WorkspaceID, request.WorkflowRunID, request.NodeRunID
+	resolved.HumanTaskID, resolved.ReviewDecisionID = request.HumanTaskID, request.ReviewDecisionID
+	resolved.SubjectRevision, resolved.Decision = request.SubjectRevision, request.Decision
+	return resolved, nil
+}
 
 func (repo *signalRepository) PrepareSignal(
 	_ context.Context,
@@ -67,7 +125,7 @@ func (repo *signalRepository) PrepareSignal(
 	defer repo.mu.Unlock()
 	if repo.prepared.Intent.ID == "" {
 		desired.Intent.TemporalWorkflowID = "temporal:" + desired.Intent.WorkflowRunID
-		request, err := workflowapp.NewSignalRequest(desired.Intent)
+		request, err := workflowapp.NewSignalRequest(desired)
 		if err != nil {
 			return workflow.SignalPreparation{}, err
 		}
@@ -75,6 +133,20 @@ func (repo *signalRepository) PrepareSignal(
 		repo.prepared = desired
 	}
 	return repo.prepared, nil
+}
+
+type scriptedGateOwner struct {
+	result workflow.HumanGateOwnerResult
+	calls  int
+}
+
+func (owner *scriptedGateOwner) ApplyHumanGateDecision(
+	_ context.Context,
+	_ workflowapp.Actor,
+	_ workflow.HumanGateOwnerApplication,
+) (workflow.HumanGateOwnerResult, error) {
+	owner.calls++
+	return owner.result, nil
 }
 
 func (repo *signalRepository) BeginSignalAttempt(

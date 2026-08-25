@@ -70,9 +70,11 @@ func TestEpisodeWorkflowExecutesCompiledOrderAndWaitsForHumanSignal(t *testing.T
 		activity.RegisterOptions{Name: temporaladapter.CompleteRunActivityName},
 	)
 	environment.RegisterDelayedCallback(func() {
+		ownerReceiptID, output, outputHash := successfulHumanGateOwnerOutput()
 		environment.SignalWorkflow(temporaladapter.HumanGateSignalName, temporaladapter.HumanGateSignal{
 			WorkflowRunID: request.WorkflowRunID, NodeRunID: "node-run-review",
 			SignalID: "signal-review", SignalIntentID: "signal-intent-review", Decision: "APPROVED",
+			OwnerReceiptID: ownerReceiptID, Output: output, OutputHash: outputHash,
 		})
 	}, time.Minute)
 
@@ -103,6 +105,34 @@ func successfulNodeActivityResult() workflow.NodeActivityResult {
 		panic(err)
 	}
 	return workflow.NodeActivityResult{Status: "SUCCEEDED", Output: output, OutputHash: outputHash}
+}
+
+func successfulHumanGateOwnerOutput() (string, workflow.NodeOutputSnapshot, string) {
+	output, _, outputHash, err := workflow.BuildNodeOutput(workflow.NodeOutputSnapshot{
+		SchemaVersion: workflow.NodeOutputSchemaVersion,
+		Bindings: []workflow.NodeOutputBinding{{
+			Port: "bible", ValueType: "production_bible", ReferenceID: "00000000-0000-0000-0000-000000000333",
+			ReferenceVersion: "2", ContentHash: strings.Repeat("c", 64),
+		}},
+	})
+	if err != nil {
+		panic(err)
+	}
+	return "00000000-0000-0000-0000-000000000334", output, outputHash
+}
+
+func approvedHumanGateSignalPreparation(intent workflow.SignalIntent) workflow.SignalPreparation {
+	ownerReceiptID, output, outputHash := successfulHumanGateOwnerOutput()
+	return workflow.SignalPreparation{
+		ApplyReceipt: workflow.HumanGateApplyReceipt{
+			ID: "00000000-0000-0000-0000-000000000335", WorkspaceID: intent.WorkspaceID,
+			WorkflowRunID: intent.WorkflowRunID, NodeRunID: intent.NodeRunID, HumanTaskID: intent.HumanTaskID,
+			ReviewDecisionID: intent.ReviewDecisionID, SubjectRevision: intent.SubjectRevision,
+			Decision: intent.Decision, OwnerReceiptID: ownerReceiptID, OwnerOperation: "production_bible.confirm",
+			Output: output, OutputHash: outputHash,
+		},
+		Intent: intent,
+	}
 }
 
 func TestEpisodeWorkflowRejectsDriftedExecutionPlan(t *testing.T) {

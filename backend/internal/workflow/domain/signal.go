@@ -14,8 +14,33 @@ type HumanGateApplyReceipt struct {
 	HumanTaskID, ReviewDecisionID             string
 	SubjectRevision                           int
 	Decision                                  string
+	OwnerReceiptID, OwnerOperation            string
+	Output                                    NodeOutputSnapshot
+	OutputHash                                string
 	CreatedBy                                 string
 	CreatedAt                                 time.Time
+}
+
+type HumanGateDecisionRequest struct {
+	WorkspaceID, WorkflowRunID, NodeRunID string
+	HumanTaskID, ReviewDecisionID         string
+	SubjectRevision                       int
+	Decision                              string
+}
+
+type HumanGateOwnerApplication struct {
+	WorkspaceID, ProjectID, WorkflowRunID, NodeRunID string
+	HumanTaskID, ReviewDecisionID                    string
+	SubjectRevision                                  int
+	Decision, Executor                               string
+	Candidate                                        NodeInputBinding
+	OutputPort, OutputValueType                      string
+}
+
+type HumanGateOwnerResult struct {
+	ReceiptID, Operation string
+	Output               NodeOutputSnapshot
+	OutputHash           string
 }
 
 type SignalIntent struct {
@@ -46,13 +71,16 @@ type SignalPreparation struct {
 }
 
 type SignalRequest struct {
-	TemporalWorkflowID string `json:"temporal_workflow_id"`
-	SignalID           string `json:"signal_id"`
-	SignalIntentID     string `json:"signal_intent_id"`
-	WorkflowRunID      string `json:"workflow_run_id"`
-	NodeRunID          string `json:"node_run_id"`
-	Decision           string `json:"decision"`
-	InputHash          string `json:"input_hash"`
+	TemporalWorkflowID string             `json:"temporal_workflow_id"`
+	SignalID           string             `json:"signal_id"`
+	SignalIntentID     string             `json:"signal_intent_id"`
+	WorkflowRunID      string             `json:"workflow_run_id"`
+	NodeRunID          string             `json:"node_run_id"`
+	Decision           string             `json:"decision"`
+	OwnerReceiptID     string             `json:"owner_receipt_id"`
+	Output             NodeOutputSnapshot `json:"output"`
+	OutputHash         string             `json:"output_hash"`
+	InputHash          string             `json:"input_hash"`
 }
 
 type SignalObservation struct {

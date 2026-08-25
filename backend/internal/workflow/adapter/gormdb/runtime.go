@@ -622,6 +622,12 @@ func (store *Store) ApplyHumanGate(
 			node.WorkflowRunID != run.ID || node.NodeID != command.NodeID || node.RiskLevel != "human_gate" {
 			return errors.New("workflow human gate apply identity has drifted")
 		}
+		applyEvidence := signalApplyDomain(apply)
+		if applyEvidence.OwnerReceiptID != command.OwnerReceiptID || applyEvidence.OutputHash != command.OutputHash ||
+			applyEvidence.Output.SchemaVersion != command.Output.SchemaVersion ||
+			!slices.Equal(applyEvidence.Output.Bindings, command.Output.Bindings) {
+			return errors.New("workflow human gate owner output has drifted before application")
+		}
 		stopped, stopErr := stoppingControlExists(transaction, run.ID)
 		if stopErr != nil {
 			return stopErr
@@ -637,33 +643,45 @@ func (store *Store) ApplyHumanGate(
 			progressStage, nextAction = "human_gate:changes_requested", "revise_node_output"
 		}
 		if node.Status == targetNodeStatus && node.Revision == apply.SubjectRevision+1 {
-			return nil
+			if targetNodeStatus != "SUCCEEDED" {
+				return nil
+			}
+			completed, completedErr := completedNodeResult(node)
+			if completedErr == nil && completed.OutputHash == applyEvidence.OutputHash &&
+				slices.Equal(completed.Output.Bindings, applyEvidence.Output.Bindings) {
+				return nil
+			}
+			return errors.New("completed workflow human gate output has drifted")
 		}
 		if node.Status != "WAITING_HUMAN" || node.Revision != apply.SubjectRevision || run.Status != "WAITING_HUMAN" {
 			return &application.Error{Code: "resource_conflict", Message: "Workflow human gate changed before decision application", Status: 409}
 		}
 		node.Status = targetNodeStatus
+		updates := map[string]any{"status": targetNodeStatus}
+		if targetNodeStatus == "SUCCEEDED" {
+			node.Output, node.OutputHash = datatypes.JSON(apply.Output), apply.OutputHash
+			updates["output"], updates["output_hash"] = node.Output, node.OutputHash
+		}
 		node.Revision++
 		node.UpdatedAt = now.UTC()
-		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
-			"status": node.Status, "revision": node.Revision, "updated_at": node.UpdatedAt,
-		}).Error; updateErr != nil {
+		updates["revision"], updates["updated_at"] = node.Revision, node.UpdatedAt
+		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(updates).Error; updateErr != nil {
 			return updateErr
 		}
 		run.Status, run.ProgressStage = targetRunStatus, progressStage
 		run.Revision++
 		run.UpdatedAt = now.UTC()
-		updates := map[string]any{
+		runUpdates := map[string]any{
 			"status": run.Status, "progress_stage": run.ProgressStage,
 			"revision": run.Revision, "updated_at": run.UpdatedAt,
 		}
 		if nextAction == "" {
-			updates["next_action"] = nil
-			updates["error"] = nil
+			runUpdates["next_action"] = nil
+			runUpdates["error"] = nil
 		} else {
-			updates["next_action"] = nextAction
+			runUpdates["next_action"] = nextAction
 		}
-		return transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(updates).Error
+		return transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(runUpdates).Error
 	})
 }
 
