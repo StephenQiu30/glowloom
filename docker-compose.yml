@@ -18,6 +18,12 @@ services:
   backend:
     <<: *backend-service
 
+  workflow-worker:
+    <<: *backend-service
+    entrypoint: ["/usr/local/bin/lanverse-workflow-worker"]
+    healthcheck:
+      disable: true
+
   postgres:
     image: postgres:16.15-alpine
 

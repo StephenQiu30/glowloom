@@ -49,6 +49,27 @@ services:
           cpus: "1.0"
           memory: 256M
 
+  workflow-worker:
+    image: ${LANVERSE_BACKEND_IMAGE:?LANVERSE_BACKEND_IMAGE is required}
+    build: !reset null
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-lanverse}
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:?TEMPORAL_ADDRESS is required}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
   postgres:
     restart: unless-stopped
     ports: !reset []

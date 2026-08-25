@@ -62,6 +62,23 @@ services:
       retries: 24
       start_period: 10s
 
+  workflow-worker:
+    environment:
+      DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-lanverse-development-only}@postgres:5432/${POSTGRES_DB:-lanverse}
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
+    networks:
+      - internal
+    depends_on:
+      backend:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
   postgres:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-lanverse}

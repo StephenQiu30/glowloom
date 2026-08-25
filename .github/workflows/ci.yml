@@ -129,6 +129,36 @@ jobs:
       - name: Ensure generated client is committed
         run: git diff --exit-code -- frontend/src/api
 
+  deployment:
+    name: Deployment / Backend Image and Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate development and production Compose
+        env:
+          LANVERSE_FRONTEND_IMAGE: lanverse/frontend:ci
+          LANVERSE_BACKEND_IMAGE: lanverse/backend:ci
+          POSTGRES_PASSWORD: ci-compose-only
+          JWT_SECRET_KEY: ci-compose-only-jwt
+          AGENT_URL: http://agent.example.test
+          AGENT_EXECUTION_SECRET: ci-compose-only-agent
+          TEMPORAL_ADDRESS: temporal.example.test:7233
+          MINIO_PUBLIC_ENDPOINT: media.example.test
+          MINIO_ACCESS_KEY: ci-compose-only
+          MINIO_SECRET_KEY: ci-compose-only-secret
+          LANVERSE_CORS_ORIGINS: '["https://app.example.test"]'
+          MINIO_CORS_ORIGINS: https://app.example.test
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose-env.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose-env.yml -f docker-compose-prod.yml config --quiet
+      - name: Build Backend deployment image
+        run: docker build --tag lanverse/backend:ci backend
+      - name: Require API and Workflow Worker binaries
+        run: >-
+          docker run --rm --entrypoint /bin/sh lanverse/backend:ci -c
+          'test -x /usr/local/bin/lanverse-api && test -x /usr/local/bin/lanverse-workflow-worker'
+
   delivery:
     name: Delivery / Hygiene
     runs-on: ubuntu-latest
@@ -150,7 +180,7 @@ jobs:
   required:
     name: Required / CI
     if: ${{ always() }}
-    needs: [backend, agent, frontend, openapi, delivery]
+    needs: [backend, agent, frontend, openapi, deployment, delivery]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -160,4 +190,5 @@ jobs:
           test "${{ needs.agent.result }}" = success
           test "${{ needs.frontend.result }}" = success
           test "${{ needs.openapi.result }}" = success
+          test "${{ needs.deployment.result }}" = success
           test "${{ needs.delivery.result }}" = success

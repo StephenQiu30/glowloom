@@ -80,6 +80,8 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `3001` | 项目制作圣经与完整剧本闭环 | [产品需求](prd/3001-项目制作圣经产品需求.md) | [执行框架设计](design/3001-项目制作圣经生成执行框架设计.md) | [需求规格](requirement/3001-项目制作圣经需求规格.md) | [实施计划](plan/3001-项目制作圣经实施计划.md) | [验收 Checklist](acceptance/3001-完整剧本业务闭环验收标准.md) | 派生文档待独立评审，Checklist 全部未开始 |
 | `3002` | 本地 Codex 分镜智能体 | [产品需求](prd/3002-本地-Codex-分镜智能体产品需求.md) | [执行框架设计](design/3002-本地-Codex-分镜智能体执行框架设计.md) | [需求规格](requirement/3002-本地-Codex-分镜智能体执行框架需求规格.md) | [实施计划](plan/3002-本地-Codex-分镜智能体执行框架实施计划.md) | [验收 Checklist](acceptance/3002-本地-Codex-分镜智能体执行框架验收标准.md) | 派生文档待独立评审，Checklist 全部未开始 |
 
+`2002` 的最新增量验收：[Workflow Worker 组合根](acceptance/2025-WorkflowWorker组合根验收记录.md)。
+
 ## 历史实现记录
 
 下列文件只保存旧实现的验证事实，不是有效 Design 的输入，也不能抵扣上表任何 Plan 或 Acceptance：

@@ -12,6 +12,8 @@ ARG BUILD_TIME=unknown
 RUN CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X main.buildVersion=${BUILD_VERSION} -X main.buildCommit=${BUILD_COMMIT} -X main.buildTime=${BUILD_TIME}" \
     -o /out/lanverse-api ./cmd/api
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
+    -o /out/lanverse-workflow-worker ./cmd/workflow-worker
 
 FROM alpine:3.23
 
@@ -20,6 +22,7 @@ RUN apk add --no-cache ca-certificates \
     && adduser -S -G lanverse lanverse
 
 COPY --from=builder /out/lanverse-api /usr/local/bin/lanverse-api
+COPY --from=builder /out/lanverse-workflow-worker /usr/local/bin/lanverse-workflow-worker
 
 USER lanverse
 EXPOSE 8686
