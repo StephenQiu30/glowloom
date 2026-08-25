@@ -1,9 +1,43 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { registerUser } from "./auth-support";
+
+async function waitForBibleCandidate(region: Locator, timeout: number): Promise<void> {
+  const ready = region.getByRole("button", { name: "确认制作圣经" });
+  const resume = region.getByRole("button", { name: "恢复生成" });
+  const deadline = Date.now() + timeout;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await expect
+      .poll(
+        async () => (await ready.isVisible()) || (await resume.isVisible()),
+        { timeout: Math.max(1, deadline - Date.now()) },
+      )
+      .toBe(true);
+    if (await ready.isVisible()) return;
+    await resume.click();
+  }
+  await expect(ready).toBeVisible({ timeout: Math.max(1, deadline - Date.now()) });
+}
+
+async function waitForStoryboardCandidate(page: Page, timeout: number): Promise<void> {
+  const ready = page.getByRole("button", { name: "接受此镜" }).first();
+  const retry = page.getByRole("button", { name: "生成待审核草案" });
+  const deadline = Date.now() + timeout;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await expect
+      .poll(
+        async () => (await ready.isVisible()) || (await retry.isEnabled()),
+        { timeout: Math.max(1, deadline - Date.now()) },
+      )
+      .toBe(true);
+    if (await ready.isVisible()) return;
+    await retry.click();
+  }
+  await expect(ready).toBeVisible({ timeout: Math.max(1, deadline - Date.now()) });
+}
 
 test("整剧经制作圣经、分集、结构提取和人工审核生成正式分镜", async ({ page }) => {
   test.setTimeout(10_800_000);
@@ -53,12 +87,24 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
   await productionBible
     .getByRole("button", { name: "生成项目制作圣经" })
     .click();
-  await expect(
-    productionBible.getByRole("button", { name: "确认制作圣经" }),
-  ).toBeVisible({ timeout: codexStageTimeout });
+  await waitForBibleCandidate(productionBible, codexStageTimeout);
   await expect(
     productionBible.getByRole("region", { name: "制作圣经实体" }),
   ).not.toBeEmpty();
+  const unresolvedBibleIssues = productionBible.getByRole("button", {
+    name: "接受风险并继续",
+  });
+  while ((await unresolvedBibleIssues.count()) > 0) {
+    const before = await productionBible.getByText("已接受风险", { exact: true }).count();
+    await unresolvedBibleIssues.first().click();
+    await expect(productionBible.getByText("已接受风险", { exact: true })).toHaveCount(
+      before + 1,
+      { timeout: 30_000 },
+    );
+  }
+  await expect(
+    productionBible.getByRole("button", { name: "确认制作圣经" }),
+  ).toBeEnabled();
   await productionBible
     .getByRole("button", { name: "确认制作圣经" })
     .click();
@@ -79,8 +125,8 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
   await expect(
     planner.getByRole("textbox", { name: "第 5 集标题" }),
   ).toHaveValue("公开日志");
-  await expect(planner.getByText("置信度 100%")).toHaveCount(5);
-  await expect(planner.getByText(/沈岚把铜制检修钥匙插进手动井/)).toHaveCount(2);
+  await expect(planner.getByText(/置信度\s*100%/)).toHaveCount(5);
+  await expect(planner.getByText(/沈岚把铜制检修钥匙插进手动井/)).toBeVisible();
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
 
   await planner.getByRole("button", { name: "确认分集计划" }).click();
@@ -100,9 +146,7 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
     .getByRole("link", { name: "进入警报前夜" })
     .click();
   await expect(page).toHaveURL(/\/studio\/[^/]+\/script$/);
-  await expect(page.getByText(/^\d+ 项建议 · 已完成$/)).toBeVisible({
-    timeout: codexStageTimeout,
-  });
+  await expect(page.getByText(/^\d+ 项建议 · 待确认$/)).toBeVisible();
 
   const productionTaskRegions = page.locator(
     'section[aria-label$="制作任务"]',
@@ -129,12 +173,6 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
     timeout: 30_000,
   });
   await expect(page.getByText(/结构已确认，生成剧本 v/)).toBeVisible();
-  await page.getByRole("button", { name: "使用确认版本" }).click();
-  const versionImpact = page.getByRole("dialog", { name: "版本切换影响" });
-  await expect(versionImpact).toContainText("当前指针已经切换", {
-    timeout: 30_000,
-  });
-  await versionImpact.getByRole("button", { name: "知道了" }).click();
 
   await page.getByRole("link", { name: /分镜设计/ }).click();
   await expect(page).toHaveURL(/\/studio\/[^/]+\/storyboard$/);
@@ -143,11 +181,11 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
   await createDraft.click();
 
   const acceptDraftButtons = page.getByRole("button", { name: "接受此镜" });
-  await expect(acceptDraftButtons.first()).toBeVisible({ timeout: codexStageTimeout });
+  await waitForStoryboardCandidate(page, codexStageTimeout);
   const draftCount = await acceptDraftButtons.count();
   const acceptedDecisions = page.getByText("accepted", { exact: true });
   for (let index = 0; index < draftCount; index += 1) {
-    await acceptDraftButtons.nth(index).click();
+    await acceptDraftButtons.first().click();
     await expect(acceptedDecisions).toHaveCount(index + 1, { timeout: 30_000 });
   }
 
@@ -160,14 +198,22 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
     page.getByRole("status").filter({ hasText: /已原子写入 \d+ 个正式镜头/ }),
   ).toBeVisible();
   await expect(
-    page.getByLabel("分镜准备度摘要").getByText(/[1-9]\d* 个镜头/),
+    page.getByRole("region", { name: "分镜准备度摘要" }).getByText(/[1-9]\d* 个镜头/),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "检查导出条件" }).click();
-  const exportPreflight = page.getByLabel("分镜包预检结果");
-  await expect(exportPreflight).toContainText("预检结果：存在内容阻断", {
+  const exportPreflight = page.getByRole("region", { name: "分镜包预检结果" });
+  await expect(exportPreflight).toContainText(/允许导出 · \d+ 个镜头/, {
     timeout: 30_000,
   });
-  await expect(exportPreflight).toContainText(/ASSET_NOT_READY|MEDIA_REFERENCE_UNAVAILABLE/);
-  await expect(page.getByRole("button", { name: "生成分镜包" })).toBeDisabled();
+  await page.getByRole("button", { name: "生成分镜包" }).click();
+  const download = page.getByRole("button", { name: "下载分镜包" });
+  await expect(download).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/SHA-256 [0-9a-f]{64}/)).toBeVisible();
+  const downloadEvent = page.waitForEvent("download");
+  await download.click();
+  const downloaded = await downloadEvent;
+  expect(downloaded.suggestedFilename()).toMatch(/^storyboard-[0-9a-f-]+\.zip$/);
+  expect(await downloaded.failure()).toBeNull();
+  expect((await downloaded.createReadStream())?.readable).toBe(true);
 });

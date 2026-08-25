@@ -12,7 +12,6 @@ vi.mock("@/api/identity", async () => ({
 }));
 
 import { AppProviders } from "@/app/providers";
-import { ProtectedRoute } from "@/components/auth/protected-route";
 import { StudioShell } from "@/components/studio/studio-shell";
 import { setAccessToken } from "@/lib/auth-session";
 
@@ -46,7 +45,7 @@ describe("role-aware global navigation", () => {
     vi.clearAllMocks();
   });
 
-  it("keeps governance absent for viewers and renders a forbidden state", async () => {
+  it("keeps the viewer navigation focused on projects", async () => {
     mockMe("viewer");
     const shell = render(
       <AppProviders>
@@ -62,28 +61,16 @@ describe("role-aware global navigation", () => {
       expect(within(navigation).getByRole("link", { name: "项目" })).toBeInTheDocument();
       expect(within(navigation).queryByRole("link", { name: "资产" })).not.toBeInTheDocument();
     });
-    expect(within(navigation).queryByRole("link", { name: "治理" })).not.toBeInTheDocument();
     shell.unmount();
-
-    render(
-      <AppProviders>
-        <ProtectedRoute page="governance">
-          <p>治理内容</p>
-        </ProtectedRoute>
-      </AppProviders>,
-    );
-
-    expect(await screen.findByRole("heading", { name: "无权访问此页面" })).toBeInTheDocument();
-    expect(screen.queryByText("治理内容")).not.toBeInTheDocument();
   });
 
-  it("keeps governance out of primary navigation but reachable from the owner account menu", async () => {
+  it("keeps account and workspace settings reachable from the owner menu", async () => {
     const user = userEvent.setup();
     mockMe("owner");
     render(
       <AppProviders>
-        <StudioShell active="governance">
-          <p>治理内容</p>
+        <StudioShell active="projects">
+          <p>项目内容</p>
         </StudioShell>
       </AppProviders>,
     );
@@ -91,10 +78,9 @@ describe("role-aware global navigation", () => {
     const navigation = await screen.findByRole("navigation", { name: "主导航" });
     await waitFor(() => {
       expect(within(navigation).getByRole("link", { name: "项目" })).toBeInTheDocument();
-      expect(within(navigation).queryByRole("link", { name: "治理" })).not.toBeInTheDocument();
     });
     await user.click(screen.getByRole("button", { name: /owner/ }));
-    expect(await screen.findByRole("menuitem", { name: "治理与审计" })).toHaveAttribute("href", "/governance");
+    expect(await screen.findByRole("menuitem", { name: "账户与空间" })).toHaveAttribute("href", "/workspaces");
     await waitFor(() => expect(apiMocks.me).toHaveBeenCalled());
   });
 
@@ -117,10 +103,10 @@ describe("role-aware global navigation", () => {
     const dialog = await screen.findByRole("dialog", { name: "前往 Lanverse" });
     expect(within(dialog).queryByRole("option", { name: /首页/ })).not.toBeInTheDocument();
     const search = within(dialog).getByRole("combobox", { name: "全局搜索" });
-    await user.type(search, "治理");
+    await user.type(search, "空间");
 
-    const destination = within(dialog).getByRole("option", { name: /治理/ });
-    expect(within(destination).getByRole("link", { name: /治理/ })).toHaveAttribute("href", "/governance");
+    const destination = within(dialog).getByRole("option", { name: /空间/ });
+    expect(within(destination).getByRole("link", { name: /空间/ })).toHaveAttribute("href", "/workspaces");
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "前往 Lanverse" })).not.toBeInTheDocument());
     expect(trigger).toHaveFocus();

@@ -3,8 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createBible = vi.fn();
 const confirmBible = vi.fn();
+const decideReviewIssue = vi.fn();
 const resumeBible = vi.fn();
-let currentBible: API.ProductionBibleResponse | undefined;
+let currentBible:
+  | (API.ProductionBibleResponse & {
+      review_decisions?: Record<string, "accepted" | "rejected">;
+    })
+  | undefined;
 let currentError: { code: string; message: string } | undefined;
 
 vi.mock("@/lib/server-state", () => ({
@@ -12,6 +17,7 @@ vi.mock("@/lib/server-state", () => ({
   useConfirmProductionBibleMutation: () => [confirmBible, { isLoading: false }],
   useCreateProductionBibleMutation: () => [createBible, { isLoading: false }],
   useCurrentProductionBibleQuery: () => ({ data: currentBible, error: currentError }),
+  useDecideProductionBibleReviewIssueMutation: () => [decideReviewIssue, { isLoading: false }],
   useProductionBibleQuery: () => ({ data: undefined, error: undefined }),
   useResumeProductionBibleMutation: () => [resumeBible, { isLoading: false }],
 }));
@@ -62,6 +68,7 @@ function bible(
     prompt_version: "1",
     result_hash: "c".repeat(64),
     review_issues: [],
+    review_decisions: {},
     revision: 3,
     schema_version: "1",
     status,
@@ -88,6 +95,7 @@ describe("ProductionBibleWorkspace", () => {
     currentError = undefined;
     createBible.mockReset();
     confirmBible.mockReset();
+    decideReviewIssue.mockReset();
     resumeBible.mockReset();
   });
 
@@ -128,6 +136,47 @@ describe("ProductionBibleWorkspace", () => {
     renderWorkspace();
     expect(screen.getByRole("status")).toHaveTextContent("制作圣经已确认");
     expect(screen.getByText(/分集发布与后续场景、任务、分镜/)).toBeVisible();
+  });
+
+  it("阻断问题必须逐项记录人工接受决议", async () => {
+    currentBible = {
+      ...bible("needs_review"),
+      review_decisions: {},
+      review_issues: [
+        {
+          code: "episode_mapping_incomplete",
+          evidence: [],
+          issue_key: "issue.mapping",
+          repair_hint: null,
+          scope: "entity",
+          severity: "blocking",
+          subject_key: "character.shen-lan",
+          summary: "集数范围与证据不一致",
+        },
+      ],
+    };
+    decideReviewIssue.mockReturnValue({
+      unwrap: () =>
+        Promise.resolve({
+          ...currentBible,
+          review_decisions: { "issue.mapping": "accepted" },
+          revision: 4,
+        }),
+    });
+
+    renderWorkspace();
+    expect(screen.getByRole("button", { name: "确认制作圣经" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "接受风险并继续" }));
+
+    await waitFor(() => expect(decideReviewIssue).toHaveBeenCalledTimes(1));
+    expect(decideReviewIssue.mock.calls[0][0]).toMatchObject({
+      bibleId: "bible-1",
+      body: {
+        action: "accepted",
+        expected_revision: 3,
+        issue_key: "issue.mapping",
+      },
+    });
   });
 
   it("不会把旧原稿的制作圣经误用于当前 Revision", () => {

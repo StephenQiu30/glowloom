@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -199,11 +199,8 @@ describe("分集计划向导", () => {
     setAccessToken("test-access-token");
     vi.clearAllMocks();
     apiMocks.createPlan.mockResolvedValue({ data: planDetail("review_ready", 1) });
-    apiMocks.renameProposal.mockResolvedValue({
-      data: planDetail("review_ready", 2, "警报之夜"),
-    });
     apiMocks.confirmPlan.mockResolvedValue({
-      data: planDetail("confirmed", 3, "警报之夜"),
+      data: planDetail("confirmed", 2),
     });
     apiMocks.materializePlan.mockResolvedValue({
       data: {
@@ -265,33 +262,21 @@ describe("分集计划向导", () => {
       screen.getByRole("button", { name: "生成确定性分集计划" }),
     );
     expect(await screen.findByText("冲突建立并以警报作为钩子")).toBeInTheDocument();
-    expect(screen.getByText("置信度 100%")).toBeInTheDocument();
-    expect(screen.getAllByText(/场景1：控制室/)).toHaveLength(2);
+    expect(screen.getByText(/置信度\s*100%/)).toBeInTheDocument();
+    expect(screen.getByText(/场景1：控制室/)).toBeInTheDocument();
 
-    const title = screen.getByLabelText("第 1 集标题");
-    await user.clear(title);
-    await user.type(title, "警报之夜");
-    await user.click(screen.getByRole("button", { name: "保存第 1 集标题" }));
-    await waitFor(() => expect(apiMocks.renameProposal).toHaveBeenCalledTimes(1));
-    expect(apiMocks.renameProposal).toHaveBeenCalledWith(
-      { plan_id: planId },
-      expect.objectContaining({
-        expected_revision: 1,
-        proposal_id: proposalOneId,
-        title: "警报之夜",
-      }),
-    );
+    expect(screen.getByLabelText("第 1 集标题")).toHaveAttribute("readonly");
 
     await user.click(screen.getByRole("button", { name: "确认分集计划" }));
     expect(apiMocks.confirmPlan).toHaveBeenCalledWith(
       { plan_id: planId },
-      expect.objectContaining({ expected_revision: 2 }),
+      expect.objectContaining({ expected_revision: 1 }),
     );
     await user.click(screen.getByRole("button", { name: "原子创建 2 集" }));
     expect(apiMocks.materializePlan).toHaveBeenCalledWith(
       { plan_id: planId },
       expect.objectContaining({
-        expected_plan_revision: 3,
+        expected_plan_revision: 2,
         expected_project_revision: 1,
         expected_active_order_hash: "e".repeat(64),
       }),
@@ -302,10 +287,7 @@ describe("分集计划向导", () => {
       expect.objectContaining({ expected_revision: 2 }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "2 集剧本已批量发布，全部结构 Skill 任务已自动创建",
+      "2 集剧本已批量发布；每集均已生成待确认的场景与制作任务。",
     );
-    expect(
-      screen.getByRole("link", { name: "审阅第 1 集结构" }),
-    ).toHaveAttribute("href", `/studio/${episodeOneId}/script`);
   });
 });

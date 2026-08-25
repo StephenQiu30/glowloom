@@ -12,19 +12,18 @@ describe("workspace page access", () => {
     expect(canAccessPage(undefined, "settings")).toBe(false);
   });
 
-  it("keeps viewer navigation read-only and excludes governance", () => {
+  it("keeps viewer navigation read-only", () => {
     expect(visiblePrimaryNavigation("viewer")).toEqual(["projects"]);
     expect(canAccessPage("viewer", "projects")).toBe(true);
     expect(canAccessPage("viewer", "assets")).toBe(true);
-    expect(canAccessPage("viewer", "governance")).toBe(false);
     expect(canAccessPage("viewer", "settings")).toBe(true);
   });
 
   it.each(["editor", "owner"] as const)(
-    "allows %s to enter governance without promoting it to primary navigation",
+    "keeps %s on the focused MVP primary navigation",
     (role) => {
       expect(visiblePrimaryNavigation(role)).toEqual(["projects"]);
-      expect(canAccessPage(role, "governance")).toBe(true);
+      expect(canAccessPage(role, "settings")).toBe(true);
     },
   );
 });

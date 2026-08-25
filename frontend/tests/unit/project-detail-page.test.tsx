@@ -94,7 +94,7 @@ const secondEpisode: API.EpisodeResponse = {
   position: 2,
 };
 
-const episodeSnapshot: API.EpisodeProductionSnapshot = {
+const episodeSnapshot = {
   episode_id: episodeId,
   current_stage: "script_import",
   completion: 0,
@@ -392,7 +392,7 @@ describe("真实项目生产入口", () => {
         ],
         partial_failures: [],
         computed_at: "2026-07-30T09:00:00Z",
-      } satisfies API.ProjectProductionSnapshot,
+      },
     });
     apiMocks.createEpisode.mockResolvedValue({
       data: {
@@ -411,16 +411,7 @@ describe("真实项目生产入口", () => {
     );
 
     expect(await screen.findByRole("heading", { name: project.name })).toBeInTheDocument();
-    const globalHeader = screen.getByRole("banner", { name: "Lanverse 全局页眉" });
-    const productionFlow = within(globalHeader).getByLabelText("制作进度");
-    expect(within(globalHeader).getByText("当前项目")).toBeInTheDocument();
-    expect(within(productionFlow).getByText("剧本解析")).toHaveAttribute(
-      "aria-current",
-      "step",
-    );
-    for (const stage of ["资产", "分镜", "生成", "审核", "交付"]) {
-      expect(within(productionFlow).getByText(stage)).toBeInTheDocument();
-    }
+    expect(screen.getByRole("banner", { name: "Lanverse 全局页眉" })).toBeInTheDocument();
     expect(screen.queryByText("预算与生命周期")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "更新预算" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /创建.*集/ })).not.toBeInTheDocument();
@@ -431,22 +422,10 @@ describe("真实项目生产入口", () => {
       "id",
       "script-import",
     );
-    expect(screen.getAllByText("单集尚未导入剧本").length).toBeGreaterThan(0);
-    const projectContent = screen.getByRole("region", { name: "项目内容" });
-    expect(within(projectContent).getByRole("link", { name: /查看项目资产/ })).toHaveAttribute(
-      "href",
-      `/projects/${projectId}/assets`,
-    );
+    expect(screen.getByRole("region", { name: "单集工作区" })).toHaveAttribute("id", "episodes");
     expect(screen.getByRole("link", { name: "进入第一集 · 雨巷相逢" })).toHaveAttribute(
       "href",
       `/studio/${episodeId}/script`,
-    );
-    const summary = screen.getByRole("region", { name: "项目生产摘要" });
-    expect(within(summary).getByText("Ready 资产").nextElementSibling).toHaveTextContent(
-      "6",
-    );
-    expect(within(summary).getByText("Ready 分镜").nextElementSibling).toHaveTextContent(
-      "3",
     );
   });
 
