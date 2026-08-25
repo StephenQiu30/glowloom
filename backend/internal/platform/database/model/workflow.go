@@ -49,6 +49,89 @@ type RunInputSnapshot struct {
 
 func (RunInputSnapshot) TableName() string { return "wrk_run_input_snapshots" }
 
+type WorkflowRun struct {
+	ID                          uuid.UUID                 `gorm:"type:uuid;primaryKey"`
+	WorkspaceID                 uuid.UUID                 `gorm:"type:uuid;not null;index:ix_wrk_runs_workspace_updated,priority:1"`
+	ProjectID                   uuid.UUID                 `gorm:"type:uuid;not null;index:ix_wrk_runs_project_updated,priority:1"`
+	AuthoringRevisionID         uuid.UUID                 `gorm:"type:uuid;not null;index:ix_wrk_runs_authoring_revision"`
+	WorkflowDefinitionVersionID uuid.UUID                 `gorm:"type:uuid;not null"`
+	RunInputSnapshotID          uuid.UUID                 `gorm:"type:uuid;not null"`
+	TemporalWorkflowID          string                    `gorm:"type:varchar(220);not null;uniqueIndex:uq_wrk_run_temporal_workflow"`
+	StartInputHash              string                    `gorm:"type:char(64);not null;check:ck_wrk_run_start_hash,char_length(start_input_hash) = 64"`
+	Status                      string                    `gorm:"type:varchar(30);not null;index:ix_wrk_runs_status_updated,priority:1;check:ck_wrk_run_status,status IN ('QUEUED','RUNNING','WAITING_HUMAN','RETRYING','PAUSED','SUCCEEDED','FAILED','CANCELLED','NEEDS_ATTENTION')"`
+	ProgressStage               string                    `gorm:"type:varchar(80);not null"`
+	NextAction                  *string                   `gorm:"type:varchar(80)"`
+	Error                       datatypes.JSON            `gorm:"type:jsonb"`
+	Revision                    int                       `gorm:"not null;check:ck_wrk_run_revision,revision >= 1"`
+	CreatedBy                   uuid.UUID                 `gorm:"type:uuid;not null"`
+	CreatedAt                   time.Time                 `gorm:"type:timestamptz;not null"`
+	UpdatedAt                   time.Time                 `gorm:"type:timestamptz;not null;index:ix_wrk_runs_workspace_updated,priority:2,sort:desc;index:ix_wrk_runs_project_updated,priority:2,sort:desc;index:ix_wrk_runs_status_updated,priority:2,sort:desc"`
+	Workspace                   Workspace                 `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project                     Project                   `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	AuthoringRevision           AuthoringRevision         `gorm:"foreignKey:AuthoringRevisionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	WorkflowDefinitionVersion   WorkflowDefinitionVersion `gorm:"foreignKey:WorkflowDefinitionVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	RunInputSnapshot            RunInputSnapshot          `gorm:"foreignKey:RunInputSnapshotID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator                     UserAccount               `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (WorkflowRun) TableName() string { return "wrk_runs" }
+
+type NodeRunProjection struct {
+	ID                uuid.UUID   `gorm:"type:uuid;primaryKey"`
+	WorkspaceID       uuid.UUID   `gorm:"type:uuid;not null;index:ix_wrk_node_runs_workspace_updated,priority:1"`
+	WorkflowRunID     uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_node_run_identity,priority:1"`
+	NodeID            string      `gorm:"type:varchar(100);not null;uniqueIndex:uq_wrk_node_run_identity,priority:2"`
+	DefinitionKey     string      `gorm:"type:varchar(100);not null"`
+	DefinitionVersion string      `gorm:"type:varchar(40);not null"`
+	Status            string      `gorm:"type:varchar(30);not null;index:ix_wrk_node_runs_status_updated,priority:1;check:ck_wrk_node_run_status,status IN ('QUEUED','RUNNING','WAITING_HUMAN','RETRYING','SUCCEEDED','FAILED','CANCELLED','SKIPPED','CACHED')"`
+	Attempt           int         `gorm:"not null;check:ck_wrk_node_run_attempt,attempt >= 0"`
+	Revision          int         `gorm:"not null;check:ck_wrk_node_run_revision,revision >= 1"`
+	CreatedAt         time.Time   `gorm:"type:timestamptz;not null"`
+	UpdatedAt         time.Time   `gorm:"type:timestamptz;not null;index:ix_wrk_node_runs_workspace_updated,priority:2,sort:desc;index:ix_wrk_node_runs_status_updated,priority:2,sort:desc"`
+	Workspace         Workspace   `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	WorkflowRun       WorkflowRun `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (NodeRunProjection) TableName() string { return "wrk_node_run_projections" }
+
+type WorkflowStartIntent struct {
+	ID                uuid.UUID   `gorm:"type:uuid;primaryKey"`
+	WorkspaceID       uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_start_intent_key,priority:1"`
+	WorkflowRunID     uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_start_intent_run"`
+	IdempotencyKey    string      `gorm:"type:varchar(200);not null;uniqueIndex:uq_wrk_start_intent_key,priority:2"`
+	CommandInputHash  string      `gorm:"type:char(64);not null;check:ck_wrk_start_command_hash,char_length(command_input_hash) = 64"`
+	TemporalInputHash string      `gorm:"type:char(64);not null;check:ck_wrk_start_temporal_hash,char_length(temporal_input_hash) = 64"`
+	Status            string      `gorm:"type:varchar(20);not null;check:ck_wrk_start_intent_status,status IN ('pending','completed','unknown','conflict')"`
+	AttemptNo         int         `gorm:"not null;check:ck_wrk_start_attempt,attempt_no >= 0"`
+	Revision          int         `gorm:"not null;check:ck_wrk_start_intent_revision,revision >= 1"`
+	CreatedBy         uuid.UUID   `gorm:"type:uuid;not null"`
+	CreatedAt         time.Time   `gorm:"type:timestamptz;not null"`
+	UpdatedAt         time.Time   `gorm:"type:timestamptz;not null"`
+	Workspace         Workspace   `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	WorkflowRun       WorkflowRun `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator           UserAccount `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (WorkflowStartIntent) TableName() string { return "wrk_start_intents" }
+
+type WorkflowStartReceipt struct {
+	ID                 uuid.UUID           `gorm:"type:uuid;primaryKey"`
+	WorkspaceID        uuid.UUID           `gorm:"type:uuid;not null;index:ix_wrk_start_receipts_workspace_created,priority:1"`
+	StartIntentID      uuid.UUID           `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_start_receipt_attempt,priority:1"`
+	WorkflowRunID      uuid.UUID           `gorm:"type:uuid;not null"`
+	AttemptNo          int                 `gorm:"not null;uniqueIndex:uq_wrk_start_receipt_attempt,priority:2;check:ck_wrk_start_receipt_attempt,attempt_no >= 1"`
+	Outcome            string              `gorm:"type:varchar(30);not null;check:ck_wrk_start_receipt_outcome,outcome IN ('started','already_started','unknown','conflict')"`
+	TemporalWorkflowID string              `gorm:"type:varchar(220);not null"`
+	ExpectedInputHash  string              `gorm:"type:char(64);not null;check:ck_wrk_start_expected_hash,char_length(expected_input_hash) = 64"`
+	ObservedInputHash  *string             `gorm:"type:char(64);check:ck_wrk_start_observed_hash,observed_input_hash IS NULL OR char_length(observed_input_hash) = 64"`
+	CreatedAt          time.Time           `gorm:"type:timestamptz;not null;index:ix_wrk_start_receipts_workspace_created,priority:2,sort:desc"`
+	Workspace          Workspace           `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	StartIntent        WorkflowStartIntent `gorm:"foreignKey:StartIntentID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	WorkflowRun        WorkflowRun         `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (WorkflowStartReceipt) TableName() string { return "wrk_start_receipts" }
+
 type WorkflowTask struct {
 	ID            uuid.UUID      `gorm:"type:uuid;primaryKey"`
 	WorkspaceID   uuid.UUID      `gorm:"type:uuid;not null;index:ix_wrk_tasks_workspace_updated,priority:1"`
