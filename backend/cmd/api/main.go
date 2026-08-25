@@ -19,6 +19,8 @@ import (
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/access/identity/application"
 	agentclient "github.com/StephenQiu30/lanverse/backend/internal/agent/client"
 	agentgrant "github.com/StephenQiu30/lanverse/backend/internal/agent/grant"
+	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
+	authoringdomain "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
 	mediagorm "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gormdb"
@@ -82,8 +84,19 @@ func main() {
 		logger.Error("database schema synchronization failed", "error", err)
 		os.Exit(1)
 	}
+	systemNodeCatalog, err := authoringdomain.SystemCatalog()
+	if err != nil {
+		cancelSync()
+		logger.Error("system node catalog is invalid", "error", err)
+		os.Exit(1)
+	}
+	if _, err = authoringgorm.New(database).EnsureCatalog(syncContext, systemNodeCatalog, time.Now().UTC(), uuid.NewString); err != nil {
+		cancelSync()
+		logger.Error("system node catalog synchronization failed", "error", err)
+		os.Exit(1)
+	}
 	cancelSync()
-	logger.Info("database model catalog synchronized")
+	logger.Info("database model and system node catalogs synchronized")
 	objects, err := objectstore.Open(objectstore.Config{Endpoint: configuration.ObjectStoreEndpoint, PublicEndpoint: configuration.ObjectStorePublicEndpoint, AccessKey: configuration.ObjectStoreAccessKey, SecretKey: configuration.ObjectStoreSecretKey, Bucket: configuration.ObjectStoreBucket, Region: configuration.ObjectStoreRegion, Secure: configuration.ObjectStoreSecure, PublicSecure: configuration.ObjectStorePublicSecure})
 	if err != nil {
 		logger.Error("object storage configuration failed", "error", err)

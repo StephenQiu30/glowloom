@@ -23,6 +23,8 @@ func Catalog() []any {
 		&model.UploadSession{},
 		&model.ScriptDocument{},
 		&model.DocumentRevision{},
+		&model.NodeDefinitionVersion{},
+		&model.NodeCatalogVersion{},
 		&model.WorkflowTask{},
 		&model.ProductionBible{},
 		&model.AgentInvocation{},
