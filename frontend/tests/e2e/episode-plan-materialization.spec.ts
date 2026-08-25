@@ -8,8 +8,9 @@ import { registerUser } from "./auth-support";
 async function waitForBibleCandidate(region: Locator, timeout: number): Promise<void> {
   const ready = region.getByRole("button", { name: "确认制作圣经" });
   const resume = region.getByRole("button", { name: "恢复生成" });
+  const error = region.getByLabel("制作圣经生成错误");
   const deadline = Date.now() + timeout;
-  for (let attempt = 0; attempt <= 3; attempt += 1) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     await expect
       .poll(
         async () => (await ready.isVisible()) || (await resume.isVisible()),
@@ -17,18 +18,26 @@ async function waitForBibleCandidate(region: Locator, timeout: number): Promise<
       )
       .toBe(true);
     if (await ready.isVisible()) return;
-    if (attempt === 3) {
-      throw new Error("Production Bible generation failed after three resume attempts");
-    }
     await resume.click();
+    await expect(resume).toBeHidden({ timeout: 30_000 });
   }
+  await expect
+    .poll(
+      async () => (await ready.isVisible()) || (await resume.isVisible()),
+      { timeout: Math.max(1, deadline - Date.now()) },
+    )
+    .toBe(true);
+  if (await ready.isVisible()) return;
+  throw new Error(
+    `Production Bible generation failed after three resume attempts: ${await error.textContent()}`,
+  );
 }
 
 async function waitForStoryboardCandidate(page: Page, timeout: number): Promise<void> {
   const ready = page.getByRole("button", { name: "接受此镜" }).first();
   const retry = page.getByRole("button", { name: "生成待审核草案" });
   const deadline = Date.now() + timeout;
-  for (let attempt = 0; attempt <= 3; attempt += 1) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     await expect
       .poll(
         async () => (await ready.isVisible()) || (await retry.isEnabled()),
@@ -36,11 +45,17 @@ async function waitForStoryboardCandidate(page: Page, timeout: number): Promise<
       )
       .toBe(true);
     if (await ready.isVisible()) return;
-    if (attempt === 3) {
-      throw new Error("Storyboard generation failed after three retry attempts");
-    }
     await retry.click();
+    await expect(retry).toBeDisabled({ timeout: 30_000 });
   }
+  await expect
+    .poll(
+      async () => (await ready.isVisible()) || (await retry.isEnabled()),
+      { timeout: Math.max(1, deadline - Date.now()) },
+    )
+    .toBe(true);
+  if (await ready.isVisible()) return;
+  throw new Error("Storyboard generation failed after three retry attempts");
 }
 
 test("整剧经制作圣经、分集、结构提取和人工审核生成正式分镜", async ({ page }) => {
