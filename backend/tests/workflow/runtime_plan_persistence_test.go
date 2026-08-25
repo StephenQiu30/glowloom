@@ -300,8 +300,16 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	if err = database.First(&waitingNode, "id = ?", gate.NodeRunID).Error; err != nil {
 		t.Fatalf("load waiting node run: %v", err)
 	}
+	var candidateIDs []string
+	if err = json.Unmarshal(humanTask.CandidateIDs, &candidateIDs); err != nil {
+		t.Fatalf("decode human gate candidates: %v", err)
+	}
+	waitingInput, _, waitingInputHash, waitingInputErr := workflow.ParseNodeInput(json.RawMessage(waitingNode.Input))
 	if humanTaskCount != 1 || waitingRun.Status != "WAITING_HUMAN" || waitingNode.Status != "WAITING_HUMAN" ||
-		humanTask.SubjectID.String() != gate.NodeRunID || gateRevision != waitingNode.Revision {
+		humanTask.SubjectID.String() != gate.NodeRunID || gateRevision != waitingNode.Revision ||
+		len(candidateIDs) != 1 || candidateIDs[0] != bibleResult.Output.Bindings[0].ReferenceID ||
+		waitingInputErr != nil || waitingNode.InputHash == nil || waitingInputHash != *waitingNode.InputHash ||
+		len(waitingInput.Bindings) != 1 || waitingInput.Bindings[0].ReferenceID != candidateIDs[0] {
 		t.Fatalf("human gate projection = task %#v run %#v node %#v", humanTask, waitingRun, waitingNode)
 	}
 	reviewActor := reviewapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
@@ -335,6 +343,22 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		SubjectRevision: decision.Decision.SubjectRevision, Decision: decision.Decision.Decision,
 		IdempotencyKey: "workflow-gate-signal",
 	}
+	driftedSignal := signalCommand
+	driftedSignal.Decision = "rejected"
+	driftedSignal.IdempotencyKey = "workflow-gate-signal-drifted"
+	if _, driftedErr := signalService.SignalHumanGate(ctx, actor, driftedSignal); driftedErr == nil {
+		t.Fatal("human gate signal accepted a decision that drifted from ReviewDecision")
+	}
+	var driftedApplyCount, driftedIntentCount int64
+	if err = database.Model(&model.WorkflowHumanGateApplyReceipt{}).Where("workflow_run_id = ?", waitingRun.ID).Count(&driftedApplyCount).Error; err != nil {
+		t.Fatalf("count drifted gate apply receipts: %v", err)
+	}
+	if err = database.Model(&model.WorkflowSignalIntent{}).Where("workflow_run_id = ?", waitingRun.ID).Count(&driftedIntentCount).Error; err != nil {
+		t.Fatalf("count drifted gate signal intents: %v", err)
+	}
+	if driftedApplyCount != 0 || driftedIntentCount != 0 || len(signaler.Requests()) != 0 {
+		t.Fatalf("drifted gate signal left effects: apply=%d intents=%d requests=%d", driftedApplyCount, driftedIntentCount, len(signaler.Requests()))
+	}
 	unknownSignal, err := signalService.SignalHumanGate(ctx, actor, signalCommand)
 	if err != nil || unknownSignal.Status != "unknown" {
 		t.Fatalf("persist unknown human gate signal: intent=%#v err=%v", unknownSignal, err)
@@ -344,13 +368,13 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		t.Fatalf("reconcile persisted human gate signal: intent=%#v err=%v", completedSignal, err)
 	}
 	var applyCount, signalIntentCount, signalReceiptCount int64
-	if err = database.Model(&model.WorkflowHumanGateApplyReceipt{}).Count(&applyCount).Error; err != nil {
+	if err = database.Model(&model.WorkflowHumanGateApplyReceipt{}).Where("workflow_run_id = ?", waitingRun.ID).Count(&applyCount).Error; err != nil {
 		t.Fatalf("count human gate apply receipts: %v", err)
 	}
-	if err = database.Model(&model.WorkflowSignalIntent{}).Count(&signalIntentCount).Error; err != nil {
+	if err = database.Model(&model.WorkflowSignalIntent{}).Where("workflow_run_id = ?", waitingRun.ID).Count(&signalIntentCount).Error; err != nil {
 		t.Fatalf("count signal intents: %v", err)
 	}
-	if err = database.Model(&model.WorkflowSignalReceipt{}).Count(&signalReceiptCount).Error; err != nil {
+	if err = database.Model(&model.WorkflowSignalReceipt{}).Where("workflow_run_id = ?", waitingRun.ID).Count(&signalReceiptCount).Error; err != nil {
 		t.Fatalf("count signal receipts: %v", err)
 	}
 	if applyCount != 1 || signalIntentCount != 1 || signalReceiptCount != 2 {

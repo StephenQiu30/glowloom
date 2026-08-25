@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -515,15 +516,34 @@ func (store *Store) PrepareHumanGate(
 		if stopped {
 			return errors.New("workflow human gate is fenced by an active control")
 		}
+		resolved, resolveErr := resolveNodeExecution(transaction, run, node)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		if resolved.Execution.RiskLevel != "human_gate" || resolved.Execution.CachePolicy != "never" || resolved.CacheKey != "" {
+			return errors.New("workflow human gate execution contract has drifted")
+		}
+		candidateIDs := humanGateCandidateIDs(resolved.Input)
+		if len(candidateIDs) == 0 {
+			return errors.New("workflow human gate has no candidate input")
+		}
 		if node.Status == "QUEUED" {
 			node.Status = "WAITING_HUMAN"
 			node.Attempt++
+			node.Input = datatypes.JSON(resolved.InputJSON)
+			node.InputHash = &resolved.InputHash
 			node.Revision++
 			node.UpdatedAt = now.UTC()
 			if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
-				"status": node.Status, "attempt": node.Attempt, "revision": node.Revision, "updated_at": node.UpdatedAt,
+				"status": node.Status, "attempt": node.Attempt, "input": node.Input, "input_hash": resolved.InputHash,
+				"revision": node.Revision, "updated_at": node.UpdatedAt,
 			}).Error; updateErr != nil {
 				return updateErr
+			}
+		} else {
+			_, persistedHash, inputErr := persistedNodeInput(node)
+			if inputErr != nil || persistedHash != resolved.InputHash {
+				return errors.New("workflow human gate input projection has drifted")
 			}
 		}
 		if run.Status != "WAITING_HUMAN" || run.ProgressStage != "human_gate:"+node.NodeID {
@@ -542,12 +562,23 @@ func (store *Store) PrepareHumanGate(
 		binding = domain.HumanGateBinding{
 			WorkspaceID: run.WorkspaceID.String(), ProjectID: run.ProjectID.String(), WorkflowRunID: run.ID.String(),
 			NodeRunID: node.ID.String(), SubjectType: "workflow_node_output", SubjectID: node.ID.String(),
-			SubjectRevision: node.Revision, CandidateIDs: []string{},
+			SubjectRevision: node.Revision, CandidateIDs: candidateIDs,
 			RubricVersion: node.Executor + "@" + node.DefinitionVersion,
 		}
 		return nil
 	})
 	return binding, err
+}
+
+func humanGateCandidateIDs(input domain.NodeInputSnapshot) []string {
+	candidates := make([]string, 0, len(input.Bindings))
+	for _, binding := range input.Bindings {
+		if binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID != "" {
+			candidates = append(candidates, binding.ReferenceID)
+		}
+	}
+	slices.Sort(candidates)
+	return slices.Compact(candidates)
 }
 
 func (store *Store) ApplyHumanGate(

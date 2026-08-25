@@ -2,6 +2,7 @@ package gormdb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -55,6 +56,9 @@ func (store *Store) PrepareSignal(ctx context.Context, desired domain.SignalPrep
 			run.Status != "WAITING_HUMAN" || node.Revision != intentRecord.SubjectRevision {
 			return errors.New("workflow human gate changed before signal preparation")
 		}
+		if bindingErr := validateHumanGateDecisionBinding(transaction, run, node, applyRecord, intentRecord); bindingErr != nil {
+			return bindingErr
+		}
 		intentRecord.TemporalWorkflowID = run.TemporalWorkflowID
 		temporary := signalIntentDomain(intentRecord)
 		request, requestErr := application.NewSignalRequest(temporary)
@@ -89,6 +93,55 @@ func (store *Store) PrepareSignal(ctx context.Context, desired domain.SignalPrep
 		return nil
 	})
 	return prepared, err
+}
+
+func validateHumanGateDecisionBinding(
+	transaction *gorm.DB,
+	run model.WorkflowRun,
+	node model.NodeRunProjection,
+	apply model.WorkflowHumanGateApplyReceipt,
+	intent model.WorkflowSignalIntent,
+) error {
+	if apply.WorkspaceID != run.WorkspaceID || apply.WorkflowRunID != run.ID || apply.NodeRunID != node.ID ||
+		intent.WorkspaceID != apply.WorkspaceID || intent.WorkflowRunID != apply.WorkflowRunID ||
+		intent.NodeRunID != apply.NodeRunID || intent.HumanTaskID != apply.HumanTaskID ||
+		intent.ReviewDecisionID != apply.ReviewDecisionID || intent.SubjectRevision != apply.SubjectRevision ||
+		intent.Decision != apply.Decision {
+		return errors.New("workflow human gate signal binding has drifted")
+	}
+	var task model.HumanTask
+	if err := transaction.First(&task, "id = ?", apply.HumanTaskID).Error; err != nil {
+		return normalizeNotFound(err)
+	}
+	var decision model.ReviewDecision
+	if err := transaction.First(&decision, "id = ?", apply.ReviewDecisionID).Error; err != nil {
+		return normalizeNotFound(err)
+	}
+	if task.WorkspaceID != run.WorkspaceID || task.WorkflowRunID != run.ID || task.NodeRunID != node.ID ||
+		task.SubjectType != "workflow_node_output" || task.SubjectID != node.ID || task.SubjectRevision != node.Revision ||
+		task.Status != "COMPLETED" || decision.WorkspaceID != run.WorkspaceID || decision.HumanTaskID != task.ID ||
+		decision.SubjectRevision != task.SubjectRevision || decision.Decision != apply.Decision {
+		return errors.New("workflow human gate review decision has drifted")
+	}
+	if decision.Decision == "selected" {
+		if decision.SelectedCandidateID == nil || !humanTaskContainsCandidate(task.CandidateIDs, *decision.SelectedCandidateID) {
+			return errors.New("workflow human gate selected candidate has drifted")
+		}
+	}
+	return nil
+}
+
+func humanTaskContainsCandidate(raw []byte, candidateID uuid.UUID) bool {
+	var candidates []string
+	if json.Unmarshal(raw, &candidates) != nil {
+		return false
+	}
+	for _, candidate := range candidates {
+		if candidate == candidateID.String() {
+			return true
+		}
+	}
+	return false
 }
 
 func (store *Store) BeginSignalAttempt(ctx context.Context, intentID string, now time.Time) (domain.SignalPreparation, error) {
