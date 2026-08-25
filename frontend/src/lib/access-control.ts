@@ -4,7 +4,6 @@ export type StudioNavigation =
   | "create"
   | "projects"
   | "assets"
-  | "governance"
   | "settings";
 
 const pageRoles: Record<
@@ -14,7 +13,6 @@ const pageRoles: Record<
   create: "public",
   projects: ["owner", "editor", "viewer"],
   assets: ["owner", "editor", "viewer"],
-  governance: ["owner", "editor"],
   settings: ["owner", "editor", "viewer"],
 };
 

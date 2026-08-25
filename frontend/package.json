@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
-    "openapi2ts": "node --env-file-if-exists=../.env scripts/generate-api-client.mjs"
+    "openapi2ts": "node scripts/generate-api-client.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.12.0",
