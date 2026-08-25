@@ -1,25 +1,54 @@
 package config
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"time"
 )
 
 const (
-	defaultAPIHost         = "0.0.0.0"
-	defaultAPIPort         = 8686
-	defaultLegacyAPIURL    = "http://127.0.0.1:8787"
-	defaultUpstreamTimeout = 3 * time.Second
+	defaultAPIHost            = "0.0.0.0"
+	defaultAPIPort            = 8686
+	defaultJWTSecret          = "development-only-jwt-secret-change-before-production"
+	defaultJWTIssuer          = "lanverse-api"
+	defaultJWTAudience        = "lanverse-web"
+	defaultAccessTokenMinutes = 30
+	defaultSessionTTLSeconds  = 30 * 24 * 60 * 60
+	defaultAgentURL           = "http://127.0.0.1:8787"
+	defaultAgentSecret        = "development-only-agent-execution-secret"
+	defaultAgentPollMillis    = 500
 )
 
+var numericVerificationCode = regexp.MustCompile(`^\d{6}$`)
+
 type Config struct {
-	ListenAddress   string
-	LegacyAPIURL    *url.URL
-	UpstreamTimeout time.Duration
+	ListenAddress                string
+	DatabaseURL                  string
+	JWTSecret                    string
+	JWTIssuer                    string
+	JWTAudience                  string
+	AccessTokenTTL               time.Duration
+	SessionTTL                   time.Duration
+	Environment                  string
+	RegistrationVerificationCode string
+	AllowedOrigins               []string
+	ObjectStoreEndpoint          string
+	ObjectStorePublicEndpoint    string
+	ObjectStoreAccessKey         string
+	ObjectStoreSecretKey         string
+	ObjectStoreBucket            string
+	ObjectStoreRegion            string
+	ObjectStoreSecure            bool
+	ObjectStorePublicSecure      bool
+	AgentURL                     string
+	AgentExecutionSecret         string
+	AgentPollInterval            time.Duration
 }
 
 func Load() (Config, error) {
@@ -31,28 +60,105 @@ func Load() (Config, error) {
 	if port > 65535 {
 		return Config{}, fmt.Errorf("API_PORT must not exceed 65535")
 	}
-
-	legacyAPIURL, err := url.Parse(environmentValue("LEGACY_API_URL", defaultLegacyAPIURL))
-	if err != nil {
-		return Config{}, fmt.Errorf("parse LEGACY_API_URL: %w", err)
-	}
-	if legacyAPIURL.Host == "" || (legacyAPIURL.Scheme != "http" && legacyAPIURL.Scheme != "https") {
-		return Config{}, fmt.Errorf("LEGACY_API_URL must be an absolute HTTP(S) URL")
-	}
-
-	upstreamTimeout, err := positiveDurationSeconds(
-		"UPSTREAM_TIMEOUT_SECONDS",
-		defaultUpstreamTimeout,
-	)
+	databaseURL, err := postgresURL(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		return Config{}, err
 	}
-
+	accessMinutes, err := positiveInteger("JWT_ACCESS_TOKEN_MINUTES", defaultAccessTokenMinutes)
+	if err != nil {
+		return Config{}, err
+	}
+	sessionSeconds, err := positiveInteger("AUTH_SESSION_TTL_SECONDS", defaultSessionTTLSeconds)
+	if err != nil {
+		return Config{}, err
+	}
+	verificationCode := os.Getenv("REGISTRATION_VERIFICATION_CODE")
+	if verificationCode != "" && !numericVerificationCode.MatchString(verificationCode) {
+		return Config{}, errors.New("REGISTRATION_VERIFICATION_CODE must contain exactly 6 digits")
+	}
+	allowedOrigins, err := stringList("CORS_ORIGINS", []string{"http://localhost:8123", "http://127.0.0.1:8123"})
+	if err != nil {
+		return Config{}, err
+	}
+	objectStoreSecure, err := boolean("MINIO_SECURE", false)
+	if err != nil {
+		return Config{}, err
+	}
+	objectStorePublicSecure, err := boolean("MINIO_PUBLIC_SECURE", false)
+	if err != nil {
+		return Config{}, err
+	}
+	agentPollMillis, err := positiveInteger("AGENT_POLL_INTERVAL_MS", defaultAgentPollMillis)
+	if err != nil {
+		return Config{}, err
+	}
 	return Config{
-		ListenAddress:   net.JoinHostPort(host, strconv.Itoa(port)),
-		LegacyAPIURL:    legacyAPIURL,
-		UpstreamTimeout: upstreamTimeout,
+		ListenAddress:                net.JoinHostPort(host, strconv.Itoa(port)),
+		DatabaseURL:                  databaseURL,
+		JWTSecret:                    environmentValue("JWT_SECRET_KEY", defaultJWTSecret),
+		JWTIssuer:                    environmentValue("JWT_ISSUER", defaultJWTIssuer),
+		JWTAudience:                  environmentValue("JWT_AUDIENCE", defaultJWTAudience),
+		AccessTokenTTL:               time.Duration(accessMinutes) * time.Minute,
+		SessionTTL:                   time.Duration(sessionSeconds) * time.Second,
+		Environment:                  environmentValue("ENVIRONMENT", "development"),
+		RegistrationVerificationCode: verificationCode,
+		AllowedOrigins:               allowedOrigins,
+		ObjectStoreEndpoint:          environmentValue("MINIO_ENDPOINT", "127.0.0.1:9000"),
+		ObjectStorePublicEndpoint:    environmentValue("MINIO_PUBLIC_ENDPOINT", "127.0.0.1:9000"),
+		ObjectStoreAccessKey:         environmentValue("MINIO_ACCESS_KEY", "lanverse"),
+		ObjectStoreSecretKey:         environmentValue("MINIO_SECRET_KEY", "lanverse-development-only"),
+		ObjectStoreBucket:            environmentValue("MINIO_BUCKET", "lanverse-media"),
+		ObjectStoreRegion:            environmentValue("MINIO_REGION", "us-east-1"),
+		ObjectStoreSecure:            objectStoreSecure,
+		ObjectStorePublicSecure:      objectStorePublicSecure,
+		AgentURL:                     environmentValue("AGENT_URL", defaultAgentURL),
+		AgentExecutionSecret:         environmentValue("AGENT_EXECUTION_SECRET", defaultAgentSecret),
+		AgentPollInterval:            time.Duration(agentPollMillis) * time.Millisecond,
 	}, nil
+}
+
+func boolean(name string, fallback bool) (bool, error) {
+	rawValue := environmentValue(name, strconv.FormatBool(fallback))
+	value, err := strconv.ParseBool(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("%s must be a boolean", name)
+	}
+	return value, nil
+}
+
+func stringList(name string, fallback []string) ([]string, error) {
+	rawValue := os.Getenv(name)
+	if rawValue == "" {
+		return fallback, nil
+	}
+	var values []string
+	if err := json.Unmarshal([]byte(rawValue), &values); err != nil || len(values) == 0 {
+		return nil, fmt.Errorf("%s must be a non-empty JSON string array", name)
+	}
+	for _, value := range values {
+		parsed, err := url.Parse(value)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.Path != "" {
+			return nil, fmt.Errorf("%s contains an invalid origin", name)
+		}
+	}
+	return values, nil
+}
+
+func postgresURL(rawValue string) (string, error) {
+	if rawValue == "" {
+		return "", errors.New("DATABASE_URL is required")
+	}
+	parsed, err := url.Parse(rawValue)
+	if err != nil {
+		return "", fmt.Errorf("parse DATABASE_URL: %w", err)
+	}
+	if parsed.Scheme != "postgres" && parsed.Scheme != "postgresql" {
+		return "", errors.New("DATABASE_URL must use the postgres or postgresql scheme")
+	}
+	if parsed.Host == "" || parsed.Path == "" || parsed.Path == "/" {
+		return "", errors.New("DATABASE_URL must include a host and database name")
+	}
+	return parsed.String(), nil
 }
 
 func environmentValue(name string, fallback string) string {
@@ -70,13 +176,4 @@ func positiveInteger(name string, fallback int) (int, error) {
 		return 0, fmt.Errorf("%s must be a positive integer", name)
 	}
 	return value, nil
-}
-
-func positiveDurationSeconds(name string, fallback time.Duration) (time.Duration, error) {
-	rawValue := environmentValue(name, strconv.FormatFloat(fallback.Seconds(), 'f', -1, 64))
-	seconds, err := strconv.ParseFloat(rawValue, 64)
-	if err != nil || seconds <= 0 {
-		return 0, fmt.Errorf("%s must be a positive number", name)
-	}
-	return time.Duration(seconds * float64(time.Second)), nil
 }
