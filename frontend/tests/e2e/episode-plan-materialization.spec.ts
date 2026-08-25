@@ -5,8 +5,9 @@ import { expect, test } from "@playwright/test";
 
 import { registerUser } from "./auth-support";
 
-test("审阅五集计划后原子创建并批量发布单集剧本", async ({ page }) => {
-  test.setTimeout(120_000);
+test("整剧经制作圣经、分集、结构提取和人工审核生成正式分镜", async ({ page }) => {
+  test.setTimeout(10_800_000);
+  const codexStageTimeout = 5_400_000;
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `MVP-A-分集计划-${unique}`;
   const fixture = JSON.parse(readFileSync(
@@ -46,6 +47,25 @@ test("审阅五集计划后原子创建并批量发布单集剧本", async ({ pa
   );
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
 
+  const productionBible = page.getByRole("region", {
+    name: "项目制作圣经",
+  });
+  await productionBible
+    .getByRole("button", { name: "生成项目制作圣经" })
+    .click();
+  await expect(
+    productionBible.getByRole("button", { name: "确认制作圣经" }),
+  ).toBeVisible({ timeout: codexStageTimeout });
+  await expect(
+    productionBible.getByRole("region", { name: "制作圣经实体" }),
+  ).not.toBeEmpty();
+  await productionBible
+    .getByRole("button", { name: "确认制作圣经" })
+    .click();
+  await expect(productionBible.getByText("制作圣经已确认", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+
   const planner = page.getByRole("region", {
     name: "分集计划与批量创建",
   });
@@ -75,4 +95,79 @@ test("审阅五集计划后原子创建并批量发布单集剧本", async ({ pa
   const reloadedEpisodeWorkspace = page.getByRole("region", { name: "单集工作区" });
   await expect(reloadedEpisodeWorkspace.getByRole("link", { name: "进入警报前夜" })).toBeVisible();
   await expect(reloadedEpisodeWorkspace.getByRole("link", { name: "进入公开日志" })).toBeVisible();
+
+  await reloadedEpisodeWorkspace
+    .getByRole("link", { name: "进入警报前夜" })
+    .click();
+  await expect(page).toHaveURL(/\/studio\/[^/]+\/script$/);
+  await expect(page.getByText(/^\d+ 项建议 · 已完成$/)).toBeVisible({
+    timeout: codexStageTimeout,
+  });
+
+  const productionTaskRegions = page.locator(
+    'section[aria-label$="制作任务"]',
+  );
+  await expect(productionTaskRegions.first()).toBeVisible();
+
+  const pendingRequiredCandidates = page
+    .locator("article")
+    .filter({ hasText: "必需" })
+    .filter({ hasText: "pending" });
+  while ((await pendingRequiredCandidates.count()) > 0) {
+    const before = await pendingRequiredCandidates.count();
+    await pendingRequiredCandidates
+      .first()
+      .getByRole("button", { name: "接受", exact: true })
+      .click();
+    await expect(pendingRequiredCandidates).toHaveCount(before - 1, {
+      timeout: 30_000,
+    });
+  }
+
+  await page.getByRole("button", { name: "确认剧本结构" }).click();
+  await expect(page.getByText("稳定叙事单元", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByText(/结构已确认，生成剧本 v/)).toBeVisible();
+  await page.getByRole("button", { name: "使用确认版本" }).click();
+  const versionImpact = page.getByRole("dialog", { name: "版本切换影响" });
+  await expect(versionImpact).toContainText("当前指针已经切换", {
+    timeout: 30_000,
+  });
+  await versionImpact.getByRole("button", { name: "知道了" }).click();
+
+  await page.getByRole("link", { name: /分镜设计/ }).click();
+  await expect(page).toHaveURL(/\/studio\/[^/]+\/storyboard$/);
+  const createDraft = page.getByRole("button", { name: "生成待审核草案" });
+  await expect(createDraft).toBeEnabled({ timeout: 30_000 });
+  await createDraft.click();
+
+  const acceptDraftButtons = page.getByRole("button", { name: "接受此镜" });
+  await expect(acceptDraftButtons.first()).toBeVisible({ timeout: codexStageTimeout });
+  const draftCount = await acceptDraftButtons.count();
+  const acceptedDecisions = page.getByText("accepted", { exact: true });
+  for (let index = 0; index < draftCount; index += 1) {
+    await acceptDraftButtons.nth(index).click();
+    await expect(acceptedDecisions).toHaveCount(index + 1, { timeout: 30_000 });
+  }
+
+  await page.getByRole("button", { name: "批准整批草案" }).click();
+  await page.getByRole("button", { name: "预检写入影响" }).click();
+  const applyDraft = page.getByRole("button", { name: "原子写入正式分镜" });
+  await expect(applyDraft).toBeEnabled({ timeout: 30_000 });
+  await applyDraft.click();
+  await expect(
+    page.getByRole("status").filter({ hasText: /已原子写入 \d+ 个正式镜头/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("分镜准备度摘要").getByText(/[1-9]\d* 个镜头/),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "检查导出条件" }).click();
+  const exportPreflight = page.getByLabel("分镜包预检结果");
+  await expect(exportPreflight).toContainText("预检结果：存在内容阻断", {
+    timeout: 30_000,
+  });
+  await expect(exportPreflight).toContainText(/ASSET_NOT_READY|MEDIA_REFERENCE_UNAVAILABLE/);
+  await expect(page.getByRole("button", { name: "生成分镜包" })).toBeDisabled();
 });

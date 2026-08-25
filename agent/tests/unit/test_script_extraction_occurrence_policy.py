@@ -33,6 +33,14 @@ def _scene(candidate_key: str, source_start: int) -> dict[str, object]:
             "location": candidate_key,
             "time_of_day": "DAY",
             "summary": candidate_key,
+            "production_tasks": [
+                {
+                    "task_type": "shot_breakdown",
+                    "title": "拆解场景分镜",
+                    "objective": "将场景拆解为可审核镜头。",
+                    "priority": "normal",
+                }
+            ],
         },
     }
 

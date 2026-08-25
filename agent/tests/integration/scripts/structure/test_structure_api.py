@@ -33,6 +33,18 @@ def _candidate(
     end: int,
     proposal: dict[str, Any],
 ) -> dict[str, Any]:
+    if proposal.get("kind") == "scene" and "production_tasks" not in proposal:
+        proposal = {
+            **proposal,
+            "production_tasks": [
+                {
+                    "task_type": "shot_breakdown",
+                    "title": "拆解场景分镜",
+                    "objective": "将场景拆解为可审核镜头。",
+                    "priority": "normal",
+                }
+            ],
+        }
     return {
         "candidate_key": key,
         "source_range": {"start": start, "end": end},

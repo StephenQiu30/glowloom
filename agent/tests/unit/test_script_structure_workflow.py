@@ -4,6 +4,7 @@ from typing import Any, cast
 
 import pytest
 from langchain_core.messages import HumanMessage
+from pydantic import ValidationError
 from uuid6 import uuid7
 
 from app.modules.scripts.contracts import (
@@ -44,6 +45,33 @@ def _context() -> SkillExecutionContext:
         workspace_id="workspace-test",
         task_id="task-test",
     )
+
+
+def _shot_breakdown_task() -> dict[str, str]:
+    return {
+        "task_type": "shot_breakdown",
+        "title": "拆解场景分镜",
+        "objective": "将场景动作、对白和节奏拆解为可审核镜头。",
+        "priority": "normal",
+    }
+
+
+@pytest.mark.parametrize("production_tasks", [None, []])
+def test_scene_candidate_requires_at_least_one_production_task(
+    production_tasks: list[dict[str, str]] | None,
+) -> None:
+    payload: dict[str, object] = {
+        "kind": "scene",
+        "heading": "内景·控制室·夜",
+        "location": "控制室",
+        "time_of_day": "夜",
+        "summary": "主角发现异常。",
+    }
+    if production_tasks is not None:
+        payload["production_tasks"] = production_tasks
+
+    with pytest.raises(ValidationError):
+        SceneCandidateProposal.model_validate(payload)
 
 
 def _production_bible() -> ProductionBibleExtractionInput:
@@ -253,6 +281,7 @@ async def test_workflow_completes_scene_skeleton_when_model_omits_supported_head
                             "time_of_day": "DAY",
                             "summary": "Mara checks the door.",
                             "episode_number": 1,
+                            "production_tasks": [_shot_breakdown_task()],
                         },
                     },
                     {
@@ -265,6 +294,7 @@ async def test_workflow_completes_scene_skeleton_when_model_omits_supported_head
                             "time_of_day": "DAY",
                             "summary": "A time card appears.",
                             "episode_number": 1,
+                            "production_tasks": [_shot_breakdown_task()],
                         },
                     },
                     {
@@ -346,6 +376,7 @@ async def test_bible_bound_workflow_passes_fixed_context_and_emits_occurrences()
                             "time_of_day": "DAY",
                             "summary": "Mara enters.",
                             "episode_number": 2,
+                            "production_tasks": [_shot_breakdown_task()],
                         },
                     },
                     {
@@ -469,6 +500,7 @@ async def test_workflow_bounds_probabilistic_candidate_ranges_to_chunk() -> None
                             "location": "旧车站",
                             "time_of_day": "夜",
                             "summary": "林澈等待。",
+                            "production_tasks": [_shot_breakdown_task()],
                         },
                     }
                 ]
@@ -717,6 +749,7 @@ async def test_workflow_keeps_deep_episode_world_and_character_structure() -> No
                             "location": "HOUSE",
                             "time_of_day": "NIGHT",
                             "summary": "A secret is revealed.",
+                            "production_tasks": [_shot_breakdown_task()],
                         },
                     },
                     {
@@ -824,6 +857,7 @@ async def test_workflow_does_not_limit_whole_script_to_one_skill_input() -> None
                             "location": "未指定",
                             "time_of_day": "未指定",
                             "summary": "场景摘要",
+                            "production_tasks": [_shot_breakdown_task()],
                         },
                     }
                 ]

@@ -7,7 +7,11 @@ from uuid import UUID
 import pytest
 from uuid6 import uuid7
 
-from app.modules.storyboards import StoryboardDraftInput, StoryboardDraftUnit
+from app.modules.storyboards import (
+    StoryboardDraftAsset,
+    StoryboardDraftInput,
+    StoryboardDraftUnit,
+)
 from app.modules.storyboards.agents import (
     STORYBOARD_AGENT_HARNESS_VERSION,
     SceneAnalysis,
@@ -55,8 +59,9 @@ class _MemoryCheckpointStore(StoryboardCheckpointStore):
         self.items.append(checkpoint)
 
 
-def _input() -> StoryboardDraftInput:
+def _input(*, include_mentioned_asset: bool = False) -> StoryboardDraftInput:
     scene_id = uuid7()
+    action_unit_version_id = uuid7()
     return StoryboardDraftInput(
         batch_id=uuid7(),
         task_id=uuid7(),
@@ -76,7 +81,7 @@ def _input() -> StoryboardDraftInput:
                 source_dialogue_id=None,
             ),
             StoryboardDraftUnit(
-                unit_version_id=uuid7(),
+                unit_version_id=action_unit_version_id,
                 position=2,
                 kind="action",
                 exact_text="沈岚拉下总闸。",
@@ -85,7 +90,20 @@ def _input() -> StoryboardDraftInput:
                 source_dialogue_id=None,
             ),
         ),
-        assets=(),
+        assets=(
+            (
+                StoryboardDraftAsset(
+                    asset_version_id=uuid7(),
+                    position=1,
+                    kind="prop",
+                    name="总闸",
+                    state_label="初始抬起",
+                    unit_version_ids=(action_unit_version_id,),
+                ),
+            )
+            if include_mentioned_asset
+            else ()
+        ),
     )
 
 
@@ -286,6 +304,37 @@ async def test_harness_routes_blocking_review_issue_to_targeted_repair() -> None
     assert len(models["repair"].messages) == 1
     assert result.candidate is not None
     assert result.candidate.shots[0].purpose == "确认总闸落下并完成断电"
+
+
+@pytest.mark.asyncio
+async def test_harness_restores_explicit_asset_binding_after_review_repair() -> None:
+    blocker = {
+        "issue_id": "purpose-1",
+        "code": "review.purpose_unclear",
+        "severity": "blocker",
+        "scope": "shot",
+        "scene_key": 1,
+        "shot_positions": [1],
+        "evidence": "镜头目的没有说明动作结果",
+        "repair_hint": "明确总闸落下的叙事作用",
+        "source": "reviewer",
+    }
+    bundle, models = _models(
+        drafts=(_draft(covered_positions=[1, 2]),),
+        reviews=(_review(blocker), _review()),
+        repairs=(_draft(covered_positions=[1, 2], purpose="确认总闸落下并完成断电"),),
+    )
+
+    result = await StoryboardAgentHarness(models=bundle).run(
+        _input(include_mentioned_asset=True)
+    )
+
+    assert result.status == "needs_review"
+    assert result.candidate is not None
+    assert [
+        (binding.asset_position, binding.role)
+        for binding in result.candidate.shots[0].asset_bindings
+    ] == [(1, "prop")]
 
 
 @pytest.mark.asyncio

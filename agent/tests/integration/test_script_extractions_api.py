@@ -288,6 +288,14 @@ def _typed_extraction_result() -> dict[str, Any]:
                     "location": "室内",
                     "time_of_day": "白天",
                     "summary": "两人确认行动",
+                    "production_tasks": [
+                        {
+                            "task_type": "shot_breakdown",
+                            "title": "拆解第一场分镜",
+                            "objective": "将第一场拆解为可审核镜头。",
+                            "priority": "normal",
+                        }
+                    ],
                 },
                 "confidence_note": "场次标题清晰",
             },

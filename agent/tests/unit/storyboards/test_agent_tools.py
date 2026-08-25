@@ -15,6 +15,7 @@ from app.modules.storyboards.agents import (
     build_scene_contexts,
     validate_scene_draft,
 )
+from app.modules.storyboards.agents.tools import bind_explicit_asset_mentions
 from app.modules.storyboards.drafts.provider_schema import StoryboardProviderResult
 
 
@@ -250,6 +251,22 @@ def test_hard_gate_requires_an_explicitly_mentioned_asset_to_be_bound() -> None:
     }
 
     bound = _result(positions=[1, 2], duration_ms=4_000, asset_position=1)
+    assert "asset.mentioned_unbound" not in {
+        issue.code for issue in validate_scene_draft(context, bound)
+    }
+
+
+def test_explicit_asset_mentions_are_bound_deterministically_and_idempotently() -> None:
+    context = build_scene_contexts(_input(include_mentioned_asset=True))[0]
+    unbound = _result(positions=[1, 2], duration_ms=4_000)
+
+    bound = bind_explicit_asset_mentions(context, unbound)
+    rebound = bind_explicit_asset_mentions(context, bound)
+
+    assert [(item.asset_position, item.role) for item in bound.shots[0].asset_bindings] == [
+        (1, "location")
+    ]
+    assert rebound == bound
     assert "asset.mentioned_unbound" not in {
         issue.code for issue in validate_scene_draft(context, bound)
     }

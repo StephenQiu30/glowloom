@@ -94,6 +94,14 @@ def _extraction_result() -> dict[str, Any]:
                     "location": "室内",
                     "time_of_day": "白天",
                     "summary": "角色开始行动",
+                    "production_tasks": [
+                        {
+                            "task_type": "shot_breakdown",
+                            "title": "拆解第一场分镜",
+                            "objective": "将第一场拆解为可审核镜头。",
+                            "priority": "normal",
+                        }
+                    ],
                 },
             }
         ]

@@ -283,13 +283,15 @@ async def test_codex_storyboard_drafter_runs_four_specialized_stages_for_valid_c
 
 
 def test_storyboard_prompt_uses_intent_boundaries_instead_of_fixed_shot_counts() -> None:
-    assert STORYBOARD_DRAFT_PROMPT_VERSION == "storyboard-draft-prompt-v5-key-table"
+    assert STORYBOARD_DRAFT_PROMPT_VERSION == "storyboard-draft-prompt-v6-explicit-asset-binding"
     prompt = storyboard_draft_system_prompt()
     assert "单一主要目的" in prompt
     assert "首帧" in prompt
     assert "尾帧" in prompt
     assert "对白" in prompt
     assert "连续性入口" in prompt
+    assert "逐字出现" in prompt
+    assert "至少一个镜头必须" in prompt
     assert "12–18" not in prompt
     assert "每镜 4" not in prompt
 

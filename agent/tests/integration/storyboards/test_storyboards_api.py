@@ -586,6 +586,14 @@ async def _seed_confirmed_shot_candidate(
                 "location": "旧车站月台",
                 "time_of_day": "夜",
                 "summary": "林澈进入空无一人的月台",
+                "production_tasks": [
+                    {
+                        "task_type": "shot_breakdown",
+                        "title": "拆解雨夜车站分镜",
+                        "objective": "将角色进入月台的动作拆解为可审核镜头。",
+                        "priority": "normal",
+                    }
+                ],
             },
             required=True,
             status="accepted",

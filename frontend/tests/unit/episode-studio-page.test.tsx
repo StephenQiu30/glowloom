@@ -349,7 +349,14 @@ const sceneCandidates: API.ExtractionCandidateResponse[] = [
       props: [],
       environment_details: null,
       continuity_notes: [],
-      production_tasks: [],
+      production_tasks: [
+        {
+          task_type: "continuity_review",
+          title: "核对雨巷动作连续性",
+          objective: "确认人物入画方向和铜钥匙交接动作连续。",
+          priority: "high",
+        },
+      ],
     },
     confidence_note: "场景明确",
     required: true,
@@ -847,6 +854,10 @@ describe("单集统一生产工作台", () => {
         <EpisodeProductionStudio episodeId={episodeId} initialPanel="script" />
       </AppProviders>,
     );
+
+    expect(
+      await screen.findByRole("region", { name: "scene-001 制作任务" }),
+    ).toHaveTextContent("核对雨巷动作连续性");
 
     await user.click(
       await screen.findByRole("button", { name: "修改 scene-001 后接受" }),

@@ -7,10 +7,21 @@ from app.modules.scripts.extractions.schemas import (
 from app.modules.skills.script_structure_prompt import script_structure_system_prompt
 
 
+def _production_tasks() -> list[dict[str, str]]:
+    return [
+        {
+            "task_type": "shot_breakdown",
+            "title": "拆解场景分镜",
+            "objective": "将场景拆解为可审核镜头。",
+            "priority": "normal",
+        }
+    ]
+
+
 def test_script_structure_extractor_snapshot_is_complete_and_bounded() -> None:
     assert (
         SCRIPT_STRUCTURE_EXTRACTOR_VERSION
-        == "langgraph-map-reduce-v1:prompt-v6:schema-v4:anchor-v2"
+        == "langgraph-map-reduce-v1:prompt-v7:schema-v5:anchor-v2"
     )
     assert len(SCRIPT_STRUCTURE_EXTRACTOR_VERSION) <= 80
 
@@ -22,6 +33,9 @@ def test_script_structure_prompt_keeps_storyboards_in_their_own_skill() -> None:
     assert "storyboard.plan" in prompt
     assert "Markdown 标题" in prompt
     assert "逐字复制原文中的场景标题行" in prompt
+    assert "每个 scene 必须给出 1 到 4 个" in prompt
+    assert "不允许空数组" in prompt
+    assert "至少包含一个 shot_breakdown" in prompt
 
 
 def test_script_structure_ranges_are_anchored_to_source() -> None:
@@ -38,6 +52,7 @@ def test_script_structure_ranges_are_anchored_to_source() -> None:
                         "location": "屋内",
                         "time_of_day": "日",
                         "summary": "林澈开始行动。",
+                        "production_tasks": _production_tasks(),
                     },
                 },
                 {
@@ -70,6 +85,7 @@ def test_script_structure_ranges_are_anchored_to_source() -> None:
                         "location": "路口",
                         "time_of_day": "夜",
                         "summary": "周岑阻止行动。",
+                        "production_tasks": _production_tasks(),
                     },
                 },
                 {
@@ -128,6 +144,7 @@ def test_script_structure_anchoring_ignores_colon_metadata_before_first_scene() 
                         "location": "HOUSE",
                         "time_of_day": "DAY",
                         "summary": "Mara checks the door.",
+                        "production_tasks": _production_tasks(),
                     },
                 }
             ]
@@ -170,6 +187,7 @@ def test_script_structure_anchoring_extracts_screenplay_cues_and_drops_technical
                         "location": "HOUSE",
                         "time_of_day": "DAY",
                         "summary": "A family argues before the sky flashes.",
+                        "production_tasks": _production_tasks(),
                     },
                 },
                 {

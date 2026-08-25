@@ -213,6 +213,14 @@ async def seed_confirmed_structure(episode_id: UUID) -> None:
                             "location": "旧车站月台",
                             "time_of_day": "夜",
                             "summary": "林澈进入空无一人的月台",
+                            "production_tasks": [
+                                {
+                                    "task_type": "shot_breakdown",
+                                    "title": "拆解雨夜车站分镜",
+                                    "objective": "将角色进入月台的动作拆解为可审核镜头。",
+                                    "priority": "normal",
+                                }
+                            ],
                         },
                         confidence_note="测试确认结构中的本地候选，不代表模型输出",
                         required=True,
