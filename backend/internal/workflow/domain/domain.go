@@ -36,6 +36,7 @@ type WorkflowDefinitionVersion struct {
 	AuthoringRevisionID            string          `json:"authoring_revision_id"`
 	AuthoringRevisionContentHash   string          `json:"authoring_revision_content_hash"`
 	AuthoringRevisionExecutionHash string          `json:"authoring_revision_execution_hash"`
+	NodeCatalogVersionID           string          `json:"node_catalog_version_id"`
 	NodeCatalogKey                 string          `json:"node_catalog_key"`
 	NodeCatalogVersion             string          `json:"node_catalog_version"`
 	NodeCatalogExecutionHash       string          `json:"node_catalog_execution_hash"`
