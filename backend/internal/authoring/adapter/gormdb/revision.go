@@ -14,7 +14,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
-	platformcommandgorm "github.com/StephenQiu30/lanverse/backend/internal/platform/command/gormdb"
+	platformcommandgorm "github.com/StephenQiu30/lanverse/backend/internal/platform/command/adapter/gormdb"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 )
