@@ -66,6 +66,12 @@ func (repo *signalRepository) PrepareSignal(
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 	if repo.prepared.Intent.ID == "" {
+		desired.Intent.TemporalWorkflowID = "temporal:" + desired.Intent.WorkflowRunID
+		request, err := workflowapp.NewSignalRequest(desired.Intent)
+		if err != nil {
+			return workflow.SignalPreparation{}, err
+		}
+		desired.Intent.InputHash = request.InputHash
 		repo.prepared = desired
 	}
 	return repo.prepared, nil
