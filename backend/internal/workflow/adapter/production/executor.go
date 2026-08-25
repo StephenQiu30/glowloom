@@ -9,6 +9,9 @@ import (
 
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
+	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
+	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
+	projectdomain "github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	scriptdomain "github.com/StephenQiu30/lanverse/backend/internal/production/script/domain"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
@@ -18,6 +21,7 @@ import (
 const (
 	scriptRevisionExecutor  = "workflow.input.script_revision"
 	productionBibleExecutor = "activity.production_bible"
+	episodePlanExecutor     = "activity.episode_plan"
 )
 
 type ScriptSource interface {
@@ -26,15 +30,31 @@ type ScriptSource interface {
 
 type BibleCandidateOwner interface {
 	Create(context.Context, bibleapp.Actor, bibleapp.CreateCommand) (bibledomain.Bible, error)
+	Get(context.Context, bibleapp.Actor, string) (bibledomain.Bible, error)
+}
+
+type ProjectSource interface {
+	Get(context.Context, projectapp.Actor, string) (projectdomain.Project, error)
+}
+
+type EpisodePlanOwner interface {
+	CreatePlan(context.Context, planningapp.Actor, planningapp.CreatePlanCommand) (planningapp.View, error)
 }
 
 type NodeExecutor struct {
-	scripts ScriptSource
-	bibles  BibleCandidateOwner
+	scripts  ScriptSource
+	bibles   BibleCandidateOwner
+	projects ProjectSource
+	plans    EpisodePlanOwner
 }
 
-func NewNodeExecutor(scripts ScriptSource, bibles BibleCandidateOwner) *NodeExecutor {
-	return &NodeExecutor{scripts: scripts, bibles: bibles}
+func NewNodeExecutor(
+	scripts ScriptSource,
+	bibles BibleCandidateOwner,
+	projects ProjectSource,
+	plans EpisodePlanOwner,
+) *NodeExecutor {
+	return &NodeExecutor{scripts: scripts, bibles: bibles, projects: projects, plans: plans}
 }
 
 func (executor *NodeExecutor) Execute(
@@ -51,9 +71,96 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeScriptRevision(ctx, command)
 	case productionBibleExecutor:
 		return executor.executeProductionBible(ctx, command)
+	case episodePlanExecutor:
+		return executor.executeEpisodePlan(ctx, command)
 	default:
 		return domain.NodeExecutorResult{}, errors.New("unsupported production workflow node execution")
 	}
+}
+
+func (executor *NodeExecutor) executeEpisodePlan(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.bibles == nil || executor.projects == nil || executor.plans == nil {
+		return domain.NodeExecutorResult{}, errors.New("episode plan workflow owners are unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 2 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
+		command.OutputPorts[0].ValueType != "episode_plan_candidate" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid episode plan node contract")
+	}
+	var config map[string]json.RawMessage
+	var episodeCount int
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 1 ||
+		json.Unmarshal(config["episode_count"], &episodeCount) != nil || episodeCount < 1 || episodeCount > 100 {
+		return domain.NodeExecutorResult{}, errors.New("invalid episode plan node config")
+	}
+	bindings := make(map[string]domain.NodeInputBinding, len(input.Bindings))
+	for _, binding := range input.Bindings {
+		bindings[binding.Port] = binding
+	}
+	script := bindings["script"]
+	bibleBinding := bindings["bible"]
+	if script.ValueType != "script_revision" || script.SourceKind != domain.NodeInputSourceNodeOutput ||
+		script.SourcePort != "script" || strings.TrimSpace(script.SourceNodeID) == "" || !frozenScriptMatches(input, script) ||
+		bibleBinding.ValueType != "production_bible" || bibleBinding.SourceKind != domain.NodeInputSourceNodeOutput ||
+		bibleBinding.SourcePort != "bible" || strings.TrimSpace(bibleBinding.SourceNodeID) == "" {
+		return domain.NodeExecutorResult{}, errors.New("episode plan inputs have drifted")
+	}
+	actor := projectapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
+	project, err := executor.projects.Get(ctx, actor, command.ProjectID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if project.ID != command.ProjectID || project.WorkspaceID != command.WorkspaceID ||
+		project.Status != projectdomain.StatusActive || project.TargetDurationMS < 15_000 || project.TargetDurationMS > 600_000 {
+		return domain.NodeExecutorResult{}, errors.New("episode plan project does not match workflow input")
+	}
+	bibleRevision, err := strconv.Atoi(bibleBinding.ReferenceVersion)
+	if err != nil || bibleRevision < 1 {
+		return domain.NodeExecutorResult{}, errors.New("invalid confirmed production bible reference")
+	}
+	bible, err := executor.bibles.Get(ctx, bibleapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, bibleBinding.ReferenceID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if bible.ID != bibleBinding.ReferenceID || bible.WorkspaceID != command.WorkspaceID ||
+		bible.ProjectID != command.ProjectID || bible.DocumentRevisionID != script.ReferenceID ||
+		bible.Status != "confirmed" || bible.Revision != bibleRevision || bible.InputHash != script.ContentHash ||
+		bible.ResultHash == nil || *bible.ResultHash != bibleBinding.ContentHash {
+		return domain.NodeExecutorResult{}, errors.New("confirmed production bible does not match episode plan input")
+	}
+	view, err := executor.plans.CreatePlan(ctx, planningapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, planningapp.CreatePlanCommand{
+		RevisionID: script.ReferenceID, Strategy: "explicit_markers", TargetDurationMS: project.TargetDurationMS,
+		RequestedEpisodeCount: &episodeCount, IdempotencyKey: command.IdempotencyKey,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	plan := view.Plan
+	if plan.ID == "" || plan.WorkspaceID != command.WorkspaceID || plan.ProjectID != command.ProjectID ||
+		plan.DocumentRevisionID != script.ReferenceID || plan.Status != "review_ready" || plan.Revision != 1 ||
+		plan.TargetDurationMS != project.TargetDurationMS || plan.RequestedEpisodeCount == nil ||
+		*plan.RequestedEpisodeCount != episodeCount || len(plan.Proposals) != episodeCount || len(plan.InputHash) != 64 {
+		return domain.NodeExecutorResult{}, errors.New("episode plan owner result does not match workflow input")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "candidate", ValueType: "episode_plan_candidate", ReferenceID: plan.ID,
+			ReferenceVersion: strconv.Itoa(plan.Revision), ContentHash: plan.InputHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
 }
 
 func (executor *NodeExecutor) executeScriptRevision(

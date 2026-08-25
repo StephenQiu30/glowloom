@@ -6,8 +6,10 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -18,6 +20,11 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
+	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
+	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
+	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
+	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
+	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
@@ -62,6 +69,8 @@ func TestProductionScriptNodeExecutorReadsAuthorizedImmutableRevision(t *testing
 		bibleapp.NewService(
 			biblegorm.New(database), bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 		),
+		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
+		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 	)
 	command := workflow.NodeExecutorCommand{
 		NodeActivityCommand: workflow.NodeActivityCommand{
@@ -132,6 +141,8 @@ func TestProductionBibleNodeExecutorDurablyWaitsForOneAuthorizedCandidate(t *tes
 			scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 		),
 		bibleService,
+		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
+		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 	)
 	input, _, inputHash, err := workflow.BuildNodeInput(workflow.NodeInputSnapshot{
 		SchemaVersion: workflow.NodeInputSchemaVersion, Config: json.RawMessage(`{}`),
@@ -208,6 +219,139 @@ func TestProductionBibleNodeExecutorDurablyWaitsForOneAuthorizedCandidate(t *tes
 	}
 	if bibleCount != 1 || invocationCount != 1 || receiptCount != 1 {
 		t.Fatalf("durable Production Bible facts: bible=%d invocation=%d receipt=%d", bibleCount, invocationCount, receiptCount)
+	}
+}
+
+func TestProductionEpisodePlanNodeCreatesOneReviewReadyCandidateWithoutPublishing(t *testing.T) {
+	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set LANVERSE_TEST_DATABASE_URL to run the Episode Plan node executor journey")
+	}
+	ctx := context.Background()
+	database, err := platformdatabase.Open(ctx, databaseURL, io.Discard)
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	t.Cleanup(func() { _ = platformdatabase.Close(database) })
+	if err = schema.Sync(ctx, database); err != nil {
+		t.Fatalf("synchronize GORM catalog: %v", err)
+	}
+	now := time.Date(2026, time.August, 26, 9, 0, 0, 0, time.UTC)
+	fixture := seedCompilerProject(t, func(value any) error { return database.Create(value).Error }, now)
+	if err = database.Model(&model.DocumentRevision{}).Where("id = ?", fixture.scriptRevisionID).
+		Updates(explicitEpisodeRevisionValues(t)).Error; err != nil {
+		t.Fatalf("prepare explicit episode marker fixture: %v", err)
+	}
+	bibleID, taskID := uuid.New(), uuid.New()
+	resultHash := strings.Repeat("3", 64)
+	confirmedAt := now
+	confirmedBy := fixture.userID
+	if err = database.Table(model.WorkflowTask{}.TableName()).Create(map[string]any{
+		"id": taskID, "workspace_id": fixture.workspaceID, "task_type": "production_bible",
+		"request_type": "production_bible", "request_id": bibleID, "scope": `{}`, "status": "succeeded",
+		"progress_stage": "completed", "cancel_status": "none", "revision": 1, "created_at": now, "updated_at": now,
+	}).Error; err != nil {
+		t.Fatalf("seed confirmed Bible task: %v", err)
+	}
+	workspaceID := fixture.workspaceID
+	if err = database.Table(model.ProductionBible{}.TableName()).Create(map[string]any{
+		"id": bibleID, "workspace_id": workspaceID, "project_id": fixture.projectID,
+		"document_revision_id": fixture.scriptRevisionID, "task_id": taskID, "status": "confirmed",
+		"input_hash": fixture.normalizedHash, "result_hash": resultHash, "engine_version": "test-v1",
+		"model_name": "deterministic", "prompt_version": "test-v1", "schema_version": "production-bible-v1",
+		"harness_version": "test-v1", "checkpoint_revision": 0,
+		"candidate": `{"entities":[],"world_entries":[],"review_issues":[]}`, "review_decisions": `{}`, "error": `{}`,
+		"revision": 2, "confirmed_at": confirmedAt, "confirmed_by": confirmedBy, "created_by": fixture.userID,
+		"created_at": now, "updated_at": now,
+	}).Error; err != nil {
+		t.Fatalf("seed confirmed Production Bible: %v", err)
+	}
+
+	executor := workflowproduction.NewNodeExecutor(
+		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		bibleapp.NewService(biblegorm.New(database), bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
+		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+	)
+	input, _, inputHash, err := workflow.BuildNodeInput(workflow.NodeInputSnapshot{
+		SchemaVersion: workflow.NodeInputSchemaVersion, Config: json.RawMessage(`{"episode_count":1}`),
+		Bindings: []workflow.NodeInputBinding{
+			{Port: "script", ValueType: "script_revision", SourceKind: workflow.NodeInputSourceNodeOutput, SourceNodeID: "script", SourcePort: "script", ReferenceID: fixture.scriptRevisionID.String(), ReferenceVersion: "1", ContentHash: fixture.normalizedHash},
+			{Port: "bible", ValueType: "production_bible", SourceKind: workflow.NodeInputSourceNodeOutput, SourceNodeID: "bible-review", SourcePort: "bible", ReferenceID: bibleID.String(), ReferenceVersion: "2", ContentHash: resultHash},
+		},
+		FrozenInputs: []authoring.FrozenReference{{Kind: "script_revision", ID: fixture.scriptRevisionID.String(), Version: "1", Hash: fixture.normalizedHash}},
+	})
+	if err != nil {
+		t.Fatalf("build Episode Plan node input: %v", err)
+	}
+	command := workflow.NodeExecutorCommand{
+		NodeActivityCommand: workflow.NodeActivityCommand{WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(), NodeID: "episodes", Executor: "activity.episode_plan", Attempt: 1},
+		WorkspaceID:         workspaceID.String(), ProjectID: fixture.projectID.String(), InitiatorUserID: fixture.userID.String(), InitiatorTokenVersion: 1,
+		IdempotencyKey: "workflow-episode-plan:" + uuid.NewString(), Input: input, InputHash: inputHash,
+		OutputPorts: []authoring.PortDefinition{{Key: "candidate", ValueType: "episode_plan_candidate", Required: true}},
+	}
+	first, err := executor.Execute(ctx, command)
+	if err != nil || first.Status != "SUCCEEDED" || len(first.Output.Bindings) != 1 {
+		t.Fatalf("execute Episode Plan candidate node: result=%#v err=%v", first, err)
+	}
+	second, err := executor.Execute(ctx, command)
+	if err != nil || second.Status != "SUCCEEDED" || second.Output.Bindings[0] != first.Output.Bindings[0] {
+		t.Fatalf("replay Episode Plan candidate node: first=%#v second=%#v err=%v", first, second, err)
+	}
+	binding := first.Output.Bindings[0]
+	if binding.Port != "candidate" || binding.ValueType != "episode_plan_candidate" || binding.ReferenceVersion != "1" || len(binding.ContentHash) != 64 {
+		t.Fatalf("Episode Plan candidate binding = %#v", binding)
+	}
+	var plan model.EpisodePlan
+	if err = database.First(&plan, "id = ?", binding.ReferenceID).Error; err != nil {
+		t.Fatalf("load Episode Plan candidate: %v", err)
+	}
+	var planCount, receiptCount, episodeCount, commitCount int64
+	if err = database.Model(&model.EpisodePlan{}).Where("project_id = ?", fixture.projectID).Count(&planCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND idempotency_key = ?", "episode_plan.create", command.IdempotencyKey).Count(&receiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.Episode{}).Where("project_id = ?", fixture.projectID).Count(&episodeCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.ImportCommit{}).Where("project_id = ?", fixture.projectID).Count(&commitCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if plan.Status != "review_ready" || plan.TargetDurationMS != 90_000 || plan.RequestedEpisodeCount == nil || *plan.RequestedEpisodeCount != 1 ||
+		binding.ContentHash != plan.InputHash || planCount != 1 || receiptCount != 1 || episodeCount != 0 || commitCount != 0 {
+		t.Fatalf("Episode Plan candidate facts: plan=%#v plans=%d receipts=%d episodes=%d commits=%d", plan, planCount, receiptCount, episodeCount, commitCount)
+	}
+	if err = database.Model(&model.ProductionBible{}).Where("id = ?", bibleID).Update("status", "needs_review").Error; err != nil {
+		t.Fatal(err)
+	}
+	command.IdempotencyKey = "workflow-episode-plan:" + uuid.NewString()
+	if _, err = executor.Execute(ctx, command); err == nil {
+		t.Fatal("Episode Plan executor accepted a Production Bible that is no longer confirmed")
+	}
+	if err = database.Model(&model.EpisodePlan{}).Where("project_id = ?", fixture.projectID).Count(&planCount).Error; err != nil || planCount != 1 {
+		t.Fatalf("invalid Bible created another Episode Plan: count=%d err=%v", planCount, err)
+	}
+}
+
+func explicitEpisodeRevisionValues(t *testing.T) map[string]any {
+	t.Helper()
+	text := "第一集\n《雨巷》\n内景·雨巷·夜\n小兰：走吧"
+	markerEnd := utf8.RuneCountInString("第一集")
+	titleStart := markerEnd + 1
+	titleEnd := titleStart + utf8.RuneCountInString("《雨巷》")
+	sceneStart := titleEnd + 1
+	blocks, err := json.Marshal([]planningdomain.Block{
+		{ID: uuid.NewString(), Position: 1, Kind: "episode_marker", SourceStart: 0, SourceEnd: markerEnd},
+		{ID: uuid.NewString(), Position: 2, Kind: "title", SourceStart: titleStart, SourceEnd: titleEnd},
+		{ID: uuid.NewString(), Position: 3, Kind: "scene_heading", SourceStart: sceneStart, SourceEnd: utf8.RuneCountInString(text)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return map[string]any{
+		"raw_text": text, "normalized_text": text, "codepoint_count": utf8.RuneCountInString(text), "blocks": string(blocks),
 	}
 }
 

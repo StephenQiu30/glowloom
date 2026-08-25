@@ -14,13 +14,14 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "1.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "2.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
 	want := []string{
 		"agent.production_bible",
 		"agent.storyboard_draft",
+		"human.episode_plan_review",
 		"human.episode_structure_review",
 		"human.production_bible_review",
 		"human.storyboard_review",
@@ -32,7 +33,11 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	got := make([]string, 0, len(catalog.Definitions))
 	for _, definition := range catalog.Definitions {
 		got = append(got, definition.Key)
-		if definition.Version != "1.0.0" || definition.Executor == "" || len(definition.ContentHash) != 64 {
+		wantVersion := "1.0.0"
+		if definition.Key == "production.episode_plan" {
+			wantVersion = "2.0.0"
+		}
+		if definition.Version != wantVersion || definition.Executor == "" || len(definition.ContentHash) != 64 {
 			t.Fatalf("incomplete node definition: %#v", definition)
 		}
 	}
@@ -202,7 +207,11 @@ func TestPublishSnapshotExcludesVisualNodesFromExecutionHash(t *testing.T) {
 
 func scriptToStoryboardGraph() authoring.Graph {
 	node := func(id, key string, config string) authoring.Node {
-		return authoring.Node{ID: id, DefinitionKey: key, DefinitionVersion: "1.0.0", Config: json.RawMessage(config)}
+		version := "1.0.0"
+		if key == "production.episode_plan" {
+			version = "2.0.0"
+		}
+		return authoring.Node{ID: id, DefinitionKey: key, DefinitionVersion: version, Config: json.RawMessage(config)}
 	}
 	edge := func(id, from, fromPort, to, toPort string) authoring.Edge {
 		return authoring.Edge{ID: id, FromNodeID: from, FromPort: fromPort, ToNodeID: to, ToPort: toPort}
@@ -213,6 +222,7 @@ func scriptToStoryboardGraph() authoring.Graph {
 			node("bible", "agent.production_bible", `{}`),
 			node("bible-review", "human.production_bible_review", `{}`),
 			node("episodes", "production.episode_plan", `{"episode_count":5}`),
+			node("episodes-review", "human.episode_plan_review", `{}`),
 			node("structure", "production.episode_structure", `{}`),
 			node("structure-review", "human.episode_structure_review", `{}`),
 			node("storyboard", "agent.storyboard_draft", `{}`),
@@ -224,7 +234,8 @@ func scriptToStoryboardGraph() authoring.Graph {
 			edge("bible-review", "bible", "candidate", "bible-review", "candidate"),
 			edge("script-episodes", "script", "script", "episodes", "script"),
 			edge("review-episodes", "bible-review", "bible", "episodes", "bible"),
-			edge("episodes-structure", "episodes", "episodes", "structure", "episodes"),
+			edge("episodes-review", "episodes", "candidate", "episodes-review", "candidate"),
+			edge("review-structure", "episodes-review", "episodes", "structure", "episodes"),
 			edge("structure-review", "structure", "candidate", "structure-review", "candidate"),
 			edge("review-storyboard", "structure-review", "structures", "storyboard", "structures"),
 			edge("storyboard-review", "storyboard", "candidate", "storyboard-review", "candidate"),

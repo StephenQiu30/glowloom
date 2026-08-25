@@ -16,6 +16,10 @@ import (
 	platformschema "github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
+	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
+	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
+	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
+	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
@@ -68,10 +72,16 @@ func main() {
 	bibleService := bibleapp.NewService(
 		biblegorm.New(database), bibleapp.Config{Now: now, NewID: uuid.NewString},
 	)
+	projectService := projectapp.NewService(projectgorm.New(database), now, uuid.NewString)
+	planningService := planningapp.NewService(
+		planninggorm.New(database), planningapp.Config{Now: now, NewID: uuid.NewString},
+	)
 	reviewService := reviewapp.NewService(
 		reviewgorm.New(database), reviewapp.Config{Now: now, NewID: uuid.NewString},
 	)
-	activities, err := bootstrap.NewWorkflowRuntime(workflowgorm.New(database), scriptService, bibleService, reviewService)
+	activities, err := bootstrap.NewWorkflowRuntime(
+		workflowgorm.New(database), scriptService, bibleService, projectService, planningService, reviewService,
+	)
 	if err != nil {
 		logger.Error("workflow runtime composition failed", "error", err)
 		os.Exit(1)

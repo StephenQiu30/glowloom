@@ -173,8 +173,8 @@ func TestCompilerPersistsOneImmutableDefinitionAndRunInputSnapshot(t *testing.T)
 }
 
 type compilerProjectFixture struct {
-	userID, projectID, scriptRevisionID uuid.UUID
-	normalizedHash                      string
+	userID, workspaceID, projectID, scriptRevisionID uuid.UUID
+	normalizedHash                                   string
 }
 
 func seedCompilerProject(t *testing.T, create func(any) error, now time.Time) compilerProjectFixture {
@@ -195,5 +195,5 @@ func seedCompilerProject(t *testing.T, create func(any) error, now time.Time) co
 			t.Fatalf("seed %T: %v", record, err)
 		}
 	}
-	return compilerProjectFixture{userID: userID, projectID: projectID, scriptRevisionID: revisionID, normalizedHash: normalizedHash}
+	return compilerProjectFixture{userID: userID, workspaceID: workspaceID, projectID: projectID, scriptRevisionID: revisionID, normalizedHash: normalizedHash}
 }

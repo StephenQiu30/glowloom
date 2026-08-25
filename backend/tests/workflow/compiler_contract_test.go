@@ -45,12 +45,12 @@ func TestCompilerProducesEquivalentDefinitionForGuidedAndCanvas(t *testing.T) {
 		t.Fatal("definition metadata lost the immutable source revision identity")
 	}
 	wantOrder := []string{
-		"script", "bible", "bible-review", "episodes", "structure", "structure-review", "storyboard", "storyboard-review", "export",
+		"script", "bible", "bible-review", "episodes", "episodes-review", "structure", "structure-review", "storyboard", "storyboard-review", "export",
 	}
 	if !slices.Equal(first.Definition.ExecutionOrder, wantOrder) {
 		t.Fatalf("execution order = %v, want %v", first.Definition.ExecutionOrder, wantOrder)
 	}
-	if len(first.Definition.ExecutionGraph.Nodes) != 9 || len(first.Definition.NodeExecutions) != 9 {
+	if len(first.Definition.ExecutionGraph.Nodes) != 10 || len(first.Definition.NodeExecutions) != 10 {
 		t.Fatalf("unexpected compiled graph: %#v", first.Definition)
 	}
 	humanGates := 0
@@ -62,8 +62,8 @@ func TestCompilerProducesEquivalentDefinitionForGuidedAndCanvas(t *testing.T) {
 			humanGates++
 		}
 	}
-	if humanGates != 3 {
-		t.Fatalf("human gate count = %d, want 3", humanGates)
+	if humanGates != 4 {
+		t.Fatalf("human gate count = %d, want 4", humanGates)
 	}
 	if first.Definition.WorkflowType != "lanverse.episode-production" || first.Definition.WorkflowTypeVersion != "1.0.0" {
 		t.Fatalf("unexpected Temporal workflow binding: %#v", first.Definition)
@@ -138,7 +138,11 @@ func compilerRevision(
 
 func compilerJourneyGraph() authoring.Graph {
 	node := func(id, key, config string) authoring.Node {
-		return authoring.Node{ID: id, DefinitionKey: key, DefinitionVersion: "1.0.0", Config: json.RawMessage(config)}
+		version := "1.0.0"
+		if key == "production.episode_plan" {
+			version = "2.0.0"
+		}
+		return authoring.Node{ID: id, DefinitionKey: key, DefinitionVersion: version, Config: json.RawMessage(config)}
 	}
 	edge := func(id, from, fromPort, to, toPort string) authoring.Edge {
 		return authoring.Edge{ID: id, FromNodeID: from, FromPort: fromPort, ToNodeID: to, ToPort: toPort}
@@ -150,6 +154,7 @@ func compilerJourneyGraph() authoring.Graph {
 			node("storyboard", "agent.storyboard_draft", `{}`),
 			node("structure-review", "human.episode_structure_review", `{}`),
 			node("structure", "production.episode_structure", `{}`),
+			node("episodes-review", "human.episode_plan_review", `{}`),
 			node("episodes", "production.episode_plan", `{"episode_count":5}`),
 			node("bible-review", "human.production_bible_review", `{}`),
 			node("bible", "agent.production_bible", `{}`),
@@ -160,7 +165,8 @@ func compilerJourneyGraph() authoring.Graph {
 			edge("storyboard-review", "storyboard", "candidate", "storyboard-review", "candidate"),
 			edge("review-storyboard", "structure-review", "structures", "storyboard", "structures"),
 			edge("structure-review", "structure", "candidate", "structure-review", "candidate"),
-			edge("episodes-structure", "episodes", "episodes", "structure", "episodes"),
+			edge("review-structure", "episodes-review", "episodes", "structure", "episodes"),
+			edge("episodes-review", "episodes", "candidate", "episodes-review", "candidate"),
 			edge("review-episodes", "bible-review", "bible", "episodes", "bible"),
 			edge("script-episodes", "script", "script", "episodes", "script"),
 			edge("bible-review", "bible", "candidate", "bible-review", "candidate"),

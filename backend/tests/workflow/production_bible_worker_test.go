@@ -20,6 +20,10 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
+	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
+	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
+	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
+	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
@@ -104,6 +108,8 @@ func TestProductionWorkflowWorkerDurablyCompletesBibleCandidate(t *testing.T) {
 			scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 		),
 		bibleService,
+		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
+		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 		}),

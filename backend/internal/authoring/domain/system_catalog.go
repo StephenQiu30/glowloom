@@ -14,7 +14,11 @@ func SystemCatalog() (Catalog, error) {
 			CachePolicy: cachePolicy, RiskLevel: riskLevel, Executable: true,
 		}
 	}
-	return NewCatalog("lanverse.production", "1.0.0", []NodeDefinition{
+	versioned := func(version string, value NodeDefinition) NodeDefinition {
+		value.Version = version
+		return value
+	}
+	return NewCatalog("lanverse.production", "2.0.0", []NodeDefinition{
 		definition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{input("script", "script_revision")},
@@ -28,10 +32,14 @@ func SystemCatalog() (Catalog, error) {
 			"human.production_bible_review", "Production Bible Review", "human", "gate.production_bible_review", "never", "human_gate",
 			[]PortDefinition{input("candidate", "production_bible_candidate")}, []PortDefinition{input("bible", "production_bible")}, emptyConfig,
 		),
-		definition(
+		versioned("2.0.0", definition(
 			"production.episode_plan", "Episode Plan", "production", "activity.episode_plan", "by_inputs", "low",
-			[]PortDefinition{input("script", "script_revision"), input("bible", "production_bible")}, []PortDefinition{input("episodes", "episode_plan")},
+			[]PortDefinition{input("script", "script_revision"), input("bible", "production_bible")}, []PortDefinition{input("candidate", "episode_plan_candidate")},
 			json.RawMessage(`{"type":"object","properties":{"episode_count":{"type":"integer","minimum":1,"maximum":100}},"required":["episode_count"],"additionalProperties":false}`),
+		)),
+		definition(
+			"human.episode_plan_review", "Episode Plan Review", "human", "gate.episode_plan_review", "never", "human_gate",
+			[]PortDefinition{input("candidate", "episode_plan_candidate")}, []PortDefinition{input("episodes", "episode_plan")}, emptyConfig,
 		),
 		definition(
 			"production.episode_structure", "Episode Structure Candidate", "production", "activity.episode_structure", "by_inputs", "low",
