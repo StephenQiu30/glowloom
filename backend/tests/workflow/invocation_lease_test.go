@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/datatypes"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
@@ -83,7 +82,7 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 	if err = database.Create(&model.WorkflowTask{
 		ID: taskID, WorkspaceID: workspaceID, TaskType: "storyboard_draft",
 		RequestType: "storyboard_draft_batch", RequestID: requestID,
-		Scope: datatypes.JSON([]byte(`{}`)), Status: "queued", ProgressStage: "queued",
+		Scope: []byte(`{}`), Status: "queued", ProgressStage: "queued",
 		CancelStatus: "none", Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}).Error; err != nil {
 		t.Fatalf("seed workflow task: %v", err)
@@ -91,7 +90,7 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 	if err = database.Create(&model.AgentInvocation{
 		ID: invocationID, WorkspaceID: workspaceID, RequestType: "storyboard_draft_batch",
 		RequestID: requestID, Kind: "storyboard_draft", InputHash: strings.Repeat("a", 64),
-		Payload: datatypes.JSON([]byte(`{}`)), Status: "queued", Attempts: 0,
+		Payload: []byte(`{}`), Status: "queued", Attempts: 0,
 		CreatedAt: now, UpdatedAt: now,
 	}).Error; err != nil {
 		t.Fatalf("seed agent invocation: %v", err)
@@ -148,10 +147,11 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 	if err != nil || !currentApplied {
 		t.Fatalf("current claim completion failed: applied=%v err=%v", currentApplied, err)
 	}
-	if err = database.First(&afterStale, "id = ?", invocationID).Error; err != nil {
+	var completed model.AgentInvocation
+	if err = database.First(&completed, "id = ?", invocationID).Error; err != nil {
 		t.Fatalf("reload completed invocation: %v", err)
 	}
-	if afterStale.Status != "succeeded" || afterStale.LeaseExpiresAt != nil {
-		t.Fatalf("current result did not finalize invocation: %#v", afterStale)
+	if completed.Status != "succeeded" || completed.LeaseExpiresAt != nil {
+		t.Fatalf("current result did not finalize invocation: %#v", completed)
 	}
 }
