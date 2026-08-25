@@ -129,11 +129,31 @@ func (repo *repository) GetAnalysis(ctx context.Context, revisionID string) (dom
 	if err = repo.database.WithContext(ctx).First(&document, "id = ?", revision.DocumentID).Error; err != nil {
 		return domain.Analysis{}, normalizeNotFound(err)
 	}
-	revisionValue, err := revisionDomain(revision)
+	return analysisDomain(document, revision)
+}
+
+func (repo *repository) GetCurrentAnalysis(ctx context.Context, projectID string) (domain.Analysis, error) {
+	parsedProjectID, err := uuid.Parse(projectID)
 	if err != nil {
-		return domain.Analysis{}, err
+		return domain.Analysis{}, application.ErrNotFound
 	}
-	return domain.Analysis{Document: documentDomain(document), Revision: revisionValue}, nil
+	var document model.ScriptDocument
+	if err = repo.database.WithContext(ctx).
+		Where("project_id = ? AND status = ?", parsedProjectID, "active").
+		Order("created_at DESC").
+		Order("id DESC").
+		First(&document).Error; err != nil {
+		return domain.Analysis{}, normalizeNotFound(err)
+	}
+	var revision model.DocumentRevision
+	if err = repo.database.WithContext(ctx).
+		Where("document_id = ?", document.ID).
+		Order("version_no DESC").
+		Order("id DESC").
+		First(&revision).Error; err != nil {
+		return domain.Analysis{}, normalizeNotFound(err)
+	}
+	return analysisDomain(document, revision)
 }
 
 func (repo *repository) ListDocuments(ctx context.Context, projectID string, limit, offset int) ([]domain.Document, int, error) {
@@ -233,6 +253,14 @@ func revisionDomain(value model.DocumentRevision) (domain.Revision, error) {
 		return domain.Revision{}, err
 	}
 	return revision, nil
+}
+
+func analysisDomain(document model.ScriptDocument, revision model.DocumentRevision) (domain.Analysis, error) {
+	revisionValue, err := revisionDomain(revision)
+	if err != nil {
+		return domain.Analysis{}, err
+	}
+	return domain.Analysis{Document: documentDomain(document), Revision: revisionValue}, nil
 }
 
 func receiptDomain(value model.CommandReceipt) platformcommand.Receipt {

@@ -49,6 +49,7 @@ type Repository interface {
 	CreateReceipt(context.Context, platformcommand.Receipt) error
 	CreateAnalysis(context.Context, domain.Analysis) error
 	GetAnalysis(context.Context, string) (domain.Analysis, error)
+	GetCurrentAnalysis(context.Context, string) (domain.Analysis, error)
 	ListDocuments(context.Context, string, int, int) ([]domain.Document, int, error)
 }
 
@@ -220,6 +221,22 @@ func (service *Service) GetRevision(ctx context.Context, actor Actor, revisionID
 			return err
 		}
 		_, err = repo.ProjectWorkspace(ctx, actor, analysis.Document.ProjectID, false)
+		return err
+	})
+	return analysis, err
+}
+
+func (service *Service) GetCurrentAnalysis(ctx context.Context, actor Actor, projectID string) (domain.Analysis, error) {
+	var analysis domain.Analysis
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		if _, err := repo.ProjectWorkspace(ctx, actor, projectID, false); err != nil {
+			return err
+		}
+		var err error
+		analysis, err = repo.GetCurrentAnalysis(ctx, projectID)
+		if errors.Is(err, ErrNotFound) {
+			return notFound("Current script document not found")
+		}
 		return err
 	})
 	return analysis, err

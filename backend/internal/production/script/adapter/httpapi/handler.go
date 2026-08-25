@@ -17,6 +17,7 @@ type Service interface {
 	Preview(context.Context, application.Actor, string, string) (application.Preview, error)
 	Import(context.Context, application.Actor, application.ImportCommand) (domain.Analysis, error)
 	GetRevision(context.Context, application.Actor, string) (domain.Analysis, error)
+	GetCurrentAnalysis(context.Context, application.Actor, string) (domain.Analysis, error)
 	ListDocuments(context.Context, application.Actor, string, int, int) ([]domain.Document, int, error)
 }
 
@@ -37,6 +38,7 @@ func New(service Service, authenticator Authenticator) *Handler {
 func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/projects/{project_id}/script-import-previews", handler.preview)
 	mux.HandleFunc("POST /api/v1/projects/{project_id}/script-imports", handler.importDocument)
+	mux.HandleFunc("GET /api/v1/projects/{project_id}/current-script-document", handler.getCurrentAnalysis)
 	mux.HandleFunc("GET /api/v1/projects/{project_id}/script-documents", handler.listDocuments)
 	mux.HandleFunc("GET /api/v1/document-revisions/{revision_id}", handler.getRevision)
 }
@@ -95,6 +97,19 @@ func (handler *Handler) getRevision(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	result, err := handler.service.GetRevision(request.Context(), actor, request.PathValue("revision_id"))
+	if err != nil {
+		handler.writeError(writer, request, err)
+		return
+	}
+	platformhttp.WriteJSON(writer, http.StatusOK, map[string]any{"data": presentAnalysis(result)})
+}
+
+func (handler *Handler) getCurrentAnalysis(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.actor(writer, request)
+	if !ok {
+		return
+	}
+	result, err := handler.service.GetCurrentAnalysis(request.Context(), actor, request.PathValue("project_id"))
 	if err != nil {
 		handler.writeError(writer, request, err)
 		return
