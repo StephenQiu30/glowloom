@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
@@ -131,7 +130,42 @@ func TestWorkflowStartPersistsRunNodeProjectionAndReconcilesUnknownOutcome(t *te
 		t.Fatal("workflow start accepted a mutable AuthoringDraft identity")
 	}
 
-	assertWorkflowStartCounts(t, database, revision.ID, 4, 36, 4, 5)
+	var runRecords []model.WorkflowRun
+	if err = database.Where("authoring_revision_id = ?", revision.ID).Find(&runRecords).Error; err != nil {
+		t.Fatalf("load workflow runs: %v", err)
+	}
+	if len(runRecords) != 4 {
+		t.Fatalf("workflow run count = %d, want 4", len(runRecords))
+	}
+	runIDs := make([]uuid.UUID, 0, len(runRecords))
+	for _, run := range runRecords {
+		runIDs = append(runIDs, run.ID)
+	}
+	var nodeCount int64
+	if err = database.Model(&model.NodeRunProjection{}).Where("workflow_run_id IN ?", runIDs).Count(&nodeCount).Error; err != nil {
+		t.Fatalf("count node projections: %v", err)
+	}
+	if nodeCount != 36 {
+		t.Fatalf("node projection count = %d, want 36", nodeCount)
+	}
+	var intentRecords []model.WorkflowStartIntent
+	if err = database.Where("workflow_run_id IN ?", runIDs).Find(&intentRecords).Error; err != nil {
+		t.Fatalf("load start intents: %v", err)
+	}
+	if len(intentRecords) != 4 {
+		t.Fatalf("start intent count = %d, want 4", len(intentRecords))
+	}
+	intentIDs := make([]uuid.UUID, 0, len(intentRecords))
+	for _, intent := range intentRecords {
+		intentIDs = append(intentIDs, intent.ID)
+	}
+	var receiptCount int64
+	if err = database.Model(&model.WorkflowStartReceipt{}).Where("start_intent_id IN ?", intentIDs).Count(&receiptCount).Error; err != nil {
+		t.Fatalf("count start receipts: %v", err)
+	}
+	if receiptCount != 5 {
+		t.Fatalf("start receipt count = %d, want 5", receiptCount)
+	}
 }
 
 type scriptedWorkflowStarter struct {
@@ -165,44 +199,4 @@ func (starter *scriptedWorkflowStarter) CallCount() int {
 	starter.mu.Lock()
 	defer starter.mu.Unlock()
 	return len(starter.requests)
-}
-
-func assertWorkflowStartCounts(t *testing.T, database *gorm.DB, revisionID string, runs, nodes, intents, receipts int64) {
-	t.Helper()
-	var runRecords []model.WorkflowRun
-	if err := database.Where("authoring_revision_id = ?", revisionID).Find(&runRecords).Error; err != nil {
-		t.Fatalf("load workflow runs: %v", err)
-	}
-	if int64(len(runRecords)) != runs {
-		t.Fatalf("workflow run count = %d, want %d", len(runRecords), runs)
-	}
-	runIDs := make([]uuid.UUID, 0, len(runRecords))
-	for _, run := range runRecords {
-		runIDs = append(runIDs, run.ID)
-	}
-	var nodeCount int64
-	if err := database.Model(&model.NodeRunProjection{}).Where("workflow_run_id IN ?", runIDs).Count(&nodeCount).Error; err != nil {
-		t.Fatalf("count node projections: %v", err)
-	}
-	if nodeCount != nodes {
-		t.Fatalf("node projection count = %d, want %d", nodeCount, nodes)
-	}
-	var intentRecords []model.WorkflowStartIntent
-	if err := database.Where("workflow_run_id IN ?", runIDs).Find(&intentRecords).Error; err != nil {
-		t.Fatalf("load start intents: %v", err)
-	}
-	if int64(len(intentRecords)) != intents {
-		t.Fatalf("start intent count = %d, want %d", len(intentRecords), intents)
-	}
-	intentIDs := make([]uuid.UUID, 0, len(intentRecords))
-	for _, intent := range intentRecords {
-		intentIDs = append(intentIDs, intent.ID)
-	}
-	var receiptCount int64
-	if err := database.Model(&model.WorkflowStartReceipt{}).Where("start_intent_id IN ?", intentIDs).Count(&receiptCount).Error; err != nil {
-		t.Fatalf("count start receipts: %v", err)
-	}
-	if receiptCount != receipts {
-		t.Fatalf("start receipt count = %d, want %d", receiptCount, receipts)
-	}
 }
