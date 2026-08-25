@@ -25,6 +25,8 @@ func Catalog() []any {
 		&model.DocumentRevision{},
 		&model.NodeDefinitionVersion{},
 		&model.NodeCatalogVersion{},
+		&model.AuthoringDraft{},
+		&model.AuthoringRevision{},
 		&model.WorkflowTask{},
 		&model.ProductionBible{},
 		&model.AgentInvocation{},
