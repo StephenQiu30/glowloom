@@ -251,6 +251,33 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	if applyCount != 1 || signalIntentCount != 1 || signalReceiptCount != 2 {
 		t.Fatalf("signal fact counts = apply %d intents %d receipts %d", applyCount, signalIntentCount, signalReceiptCount)
 	}
+	applyGate := workflow.ApplyHumanGateCommand{
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: gate.NodeRunID, NodeID: gate.NodeID,
+		SignalIntentID: completedSignal.ID, Decision: "APPROVED",
+	}
+	conflictingApply := applyGate
+	conflictingApply.Decision = "REJECTED"
+	if err = runtimeService.ApplyHumanGate(ctx, conflictingApply); err == nil {
+		t.Fatal("human gate accepted a decision that drifted from the completed signal intent")
+	}
+	if err = runtimeService.ApplyHumanGate(ctx, applyGate); err != nil {
+		t.Fatalf("apply approved human gate: %v", err)
+	}
+	if err = runtimeService.ApplyHumanGate(ctx, applyGate); err != nil {
+		t.Fatalf("replay approved human gate: %v", err)
+	}
+	var appliedRun model.WorkflowRun
+	var appliedNode model.NodeRunProjection
+	if err = database.First(&appliedRun, "id = ?", request.WorkflowRunID).Error; err != nil {
+		t.Fatalf("load applied workflow run: %v", err)
+	}
+	if err = database.First(&appliedNode, "id = ?", gate.NodeRunID).Error; err != nil {
+		t.Fatalf("load applied human gate node: %v", err)
+	}
+	if appliedRun.Status != "RUNNING" || appliedRun.NextAction != nil || appliedNode.Status != "SUCCEEDED" ||
+		appliedNode.Revision != waitingNode.Revision+1 {
+		t.Fatalf("applied human gate projection = run %#v node %#v", appliedRun, appliedNode)
+	}
 	completion := workflow.CompleteRunCommand{WorkflowRunID: request.WorkflowRunID}
 	if err = runtimeService.CompleteRun(ctx, completion); err == nil {
 		t.Fatal("run completed while queued nodes still existed")

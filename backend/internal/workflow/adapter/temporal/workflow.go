@@ -34,14 +34,7 @@ type HumanGateSignal struct {
 	Decision       string `json:"decision"`
 }
 
-type ApplyHumanGateCommand struct {
-	WorkflowRunID  string `json:"workflow_run_id"`
-	NodeRunID      string `json:"node_run_id"`
-	NodeID         string `json:"node_id"`
-	SignalIntentID string `json:"signal_intent_id"`
-	Decision       string `json:"decision"`
-}
-
+type ApplyHumanGateCommand = workflowdomain.ApplyHumanGateCommand
 type CompleteRunCommand = workflowdomain.CompleteRunCommand
 
 type RunResult struct {

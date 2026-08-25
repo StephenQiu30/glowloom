@@ -28,6 +28,10 @@ type HumanGateRepository interface {
 	PrepareHumanGate(context.Context, domain.NodeActivityCommand, time.Time) (domain.HumanGateBinding, error)
 }
 
+type HumanGateApplyRepository interface {
+	ApplyHumanGate(context.Context, domain.ApplyHumanGateCommand, time.Time) error
+}
+
 type HumanTaskOpener interface {
 	OpenHumanTask(context.Context, domain.HumanGateBinding) error
 }
@@ -58,6 +62,24 @@ func (service *RuntimeService) OpenHumanGate(ctx context.Context, command domain
 		return normalizeError(err)
 	}
 	return service.config.HumanTasks.OpenHumanTask(ctx, binding)
+}
+
+func (service *RuntimeService) ApplyHumanGate(ctx context.Context, command domain.ApplyHumanGateCommand) error {
+	if service == nil || service.config.Now == nil || strings.TrimSpace(command.WorkflowRunID) == "" ||
+		strings.TrimSpace(command.NodeRunID) == "" || strings.TrimSpace(command.NodeID) == "" ||
+		strings.TrimSpace(command.SignalIntentID) == "" {
+		return invalid("Invalid human gate application input")
+	}
+	switch command.Decision {
+	case "APPROVED", "REJECTED", "CHANGES_REQUESTED", "SELECTED":
+	default:
+		return invalid("Invalid human gate application input")
+	}
+	repository, supported := service.repository.(HumanGateApplyRepository)
+	if !supported {
+		return errors.New("human gate apply repository is unavailable")
+	}
+	return normalizeError(repository.ApplyHumanGate(ctx, command, service.config.Now().UTC()))
 }
 
 type RuntimeService struct {

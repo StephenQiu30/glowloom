@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -334,7 +335,87 @@ func (store *Store) PrepareHumanGate(
 	return binding, err
 }
 
+func (store *Store) ApplyHumanGate(
+	ctx context.Context,
+	command domain.ApplyHumanGateCommand,
+	now time.Time,
+) error {
+	runID, err := uuid.Parse(command.WorkflowRunID)
+	if err != nil {
+		return application.ErrNotFound
+	}
+	nodeID, err := uuid.Parse(command.NodeRunID)
+	if err != nil {
+		return application.ErrNotFound
+	}
+	intentID, err := uuid.Parse(command.SignalIntentID)
+	if err != nil {
+		return application.ErrNotFound
+	}
+	decision := strings.ToLower(command.Decision)
+	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var intent model.WorkflowSignalIntent
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&intent, "id = ?", intentID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var apply model.WorkflowHumanGateApplyReceipt
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&apply, "id = ?", intent.ApplyReceiptID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var run model.WorkflowRun
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var node model.NodeRunProjection
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&node, "id = ?", nodeID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if intent.Status != "completed" || intent.WorkflowRunID != run.ID || intent.NodeRunID != node.ID ||
+			intent.Decision != decision || apply.WorkflowRunID != run.ID || apply.NodeRunID != node.ID ||
+			apply.ReviewDecisionID != intent.ReviewDecisionID || apply.Decision != decision ||
+			node.WorkflowRunID != run.ID || node.NodeID != command.NodeID || node.RiskLevel != "human_gate" {
+			return errors.New("workflow human gate apply identity has drifted")
+		}
+		targetNodeStatus, targetRunStatus, progressStage := "FAILED", "NEEDS_ATTENTION", "human_gate:rejected"
+		nextAction := "review_rejected"
+		if decision == "approved" || decision == "selected" {
+			targetNodeStatus, targetRunStatus, progressStage, nextAction = "SUCCEEDED", "RUNNING", "human_gate:applied", ""
+		} else if decision == "changes_requested" {
+			progressStage, nextAction = "human_gate:changes_requested", "revise_node_output"
+		}
+		if node.Status == targetNodeStatus && node.Revision == apply.SubjectRevision+1 {
+			return nil
+		}
+		if node.Status != "WAITING_HUMAN" || node.Revision != apply.SubjectRevision || run.Status != "WAITING_HUMAN" {
+			return &application.Error{Code: "resource_conflict", Message: "Workflow human gate changed before decision application", Status: 409}
+		}
+		node.Status = targetNodeStatus
+		node.Revision++
+		node.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
+			"status": node.Status, "revision": node.Revision, "updated_at": node.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		run.Status, run.ProgressStage = targetRunStatus, progressStage
+		run.Revision++
+		run.UpdatedAt = now.UTC()
+		updates := map[string]any{
+			"status": run.Status, "progress_stage": run.ProgressStage,
+			"revision": run.Revision, "updated_at": run.UpdatedAt,
+		}
+		if nextAction == "" {
+			updates["next_action"] = nil
+			updates["error"] = nil
+		} else {
+			updates["next_action"] = nextAction
+		}
+		return transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(updates).Error
+	})
+}
+
 var _ application.RuntimeRepository = (*Store)(nil)
 var _ application.NodeRuntimeRepository = (*Store)(nil)
 var _ application.RunCompletionRepository = (*Store)(nil)
 var _ application.HumanGateRepository = (*Store)(nil)
+var _ application.HumanGateApplyRepository = (*Store)(nil)

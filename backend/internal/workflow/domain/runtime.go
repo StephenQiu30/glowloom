@@ -46,6 +46,14 @@ type CompleteRunCommand struct {
 	WorkflowRunID string `json:"workflow_run_id"`
 }
 
+type ApplyHumanGateCommand struct {
+	WorkflowRunID  string `json:"workflow_run_id"`
+	NodeRunID      string `json:"node_run_id"`
+	NodeID         string `json:"node_id"`
+	SignalIntentID string `json:"signal_intent_id"`
+	Decision       string `json:"decision"`
+}
+
 type HumanGateBinding struct {
 	WorkspaceID, ProjectID, WorkflowRunID, NodeRunID string
 	SubjectType, SubjectID                           string
