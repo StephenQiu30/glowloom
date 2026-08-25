@@ -85,16 +85,106 @@ func TestHumanTaskClaimExpiryAndImmutableDecision(t *testing.T) {
 	}
 }
 
+func TestHumanTaskOwnerRenewsAndReleasesClaimIdempotently(t *testing.T) {
+	now := time.Date(2026, time.August, 26, 3, 0, 0, 0, time.UTC)
+	repository := newHumanTaskRepository()
+	identities := []string{"task-lease", "claim-a", "claim-b"}
+	service := reviewapp.NewService(repository, reviewapp.Config{
+		Now: func() time.Time { return now },
+		NewID: func() string {
+			value := identities[0]
+			identities = identities[1:]
+			return value
+		},
+		ClaimLease: 5 * time.Minute,
+	})
+	ctx := context.Background()
+	task, err := service.Open(ctx, reviewapp.OpenCommand{
+		WorkspaceID: "workspace-lease", ProjectID: "project-lease", WorkflowRunID: "run-lease", NodeRunID: "node-lease",
+		SubjectType: "workflow_node_output", SubjectID: "subject-lease", SubjectRevision: 3,
+		CandidateIDs: []string{}, RubricVersion: "lease-review-v1",
+	})
+	if err != nil {
+		t.Fatalf("open lease task: %v", err)
+	}
+	actorA := reviewapp.Actor{UserID: "reviewer-a"}
+	actorB := reviewapp.Actor{UserID: "reviewer-b"}
+	claimed, err := service.Claim(ctx, actorA, reviewapp.ClaimCommand{
+		TaskID: task.ID, ExpectedRevision: task.Revision, IdempotencyKey: "lease-claim-a",
+	})
+	if err != nil {
+		t.Fatalf("claim lease task: %v", err)
+	}
+	now = now.Add(4 * time.Minute)
+	renewCommand := reviewapp.RenewCommand{
+		TaskID: task.ID, ClaimToken: claimed.ClaimToken,
+		ExpectedRevision: claimed.Task.Revision, IdempotencyKey: "lease-renew-a",
+	}
+	renewed, err := service.Renew(ctx, actorA, renewCommand)
+	if err != nil || renewed.ClaimToken != claimed.ClaimToken || renewed.Task.ClaimExpiresAt == nil ||
+		!renewed.Task.ClaimExpiresAt.Equal(now.Add(5*time.Minute)) {
+		t.Fatalf("renew claim lease: result=%#v err=%v", renewed, err)
+	}
+	replayedRenew, err := service.Renew(ctx, actorA, renewCommand)
+	if err != nil || replayedRenew.Task.Revision != renewed.Task.Revision {
+		t.Fatalf("replay claim renewal: result=%#v err=%v", replayedRenew, err)
+	}
+	if _, err = service.Release(ctx, actorB, reviewapp.ReleaseCommand{
+		TaskID: task.ID, ClaimToken: claimed.ClaimToken,
+		ExpectedRevision: renewed.Task.Revision, IdempotencyKey: "lease-release-b",
+	}); err == nil {
+		t.Fatal("another reviewer released an active claim")
+	}
+	releaseCommand := reviewapp.ReleaseCommand{
+		TaskID: task.ID, ClaimToken: claimed.ClaimToken,
+		ExpectedRevision: renewed.Task.Revision, IdempotencyKey: "lease-release-a",
+	}
+	released, err := service.Release(ctx, actorA, releaseCommand)
+	if err != nil || released.Status != "OPEN" || released.ClaimedBy != nil ||
+		released.ClaimToken != nil || released.ClaimExpiresAt != nil {
+		t.Fatalf("release claim lease: task=%#v err=%v", released, err)
+	}
+	replayedRelease, err := service.Release(ctx, actorA, releaseCommand)
+	if err != nil || replayedRelease.Revision != released.Revision {
+		t.Fatalf("replay claim release: task=%#v err=%v", replayedRelease, err)
+	}
+	claimedByB, err := service.Claim(ctx, actorB, reviewapp.ClaimCommand{
+		TaskID: task.ID, ExpectedRevision: released.Revision, IdempotencyKey: "lease-claim-b",
+	})
+	if err != nil || claimedByB.Task.ClaimedBy == nil || *claimedByB.Task.ClaimedBy != actorB.UserID {
+		t.Fatalf("claim released task: result=%#v err=%v", claimedByB, err)
+	}
+	if _, err = service.Renew(ctx, actorA, reviewapp.RenewCommand{
+		TaskID: task.ID, ClaimToken: claimed.ClaimToken,
+		ExpectedRevision: claimedByB.Task.Revision, IdempotencyKey: "lease-renew-old-token",
+	}); err == nil {
+		t.Fatal("released claim token renewed a later reviewer's lease")
+	}
+}
+
 type humanTaskRepository struct {
 	task             review.HumanTask
 	decision         review.ReviewDecision
 	claimReceipts    map[string]review.ClaimResult
+	renewReceipts    map[string]renewReceipt
+	releaseReceipts  map[string]releaseReceipt
 	decisionReceipts map[string]review.DecisionResult
+}
+
+type renewReceipt struct {
+	command reviewapp.RenewCommand
+	result  review.ClaimResult
+}
+
+type releaseReceipt struct {
+	command reviewapp.ReleaseCommand
+	result  review.HumanTask
 }
 
 func newHumanTaskRepository() *humanTaskRepository {
 	return &humanTaskRepository{
-		claimReceipts: make(map[string]review.ClaimResult), decisionReceipts: make(map[string]review.DecisionResult),
+		claimReceipts: make(map[string]review.ClaimResult), renewReceipts: make(map[string]renewReceipt),
+		releaseReceipts: make(map[string]releaseReceipt), decisionReceipts: make(map[string]review.DecisionResult),
 	}
 }
 
@@ -139,6 +229,57 @@ func (repo *humanTaskRepository) Claim(
 	result := review.ClaimResult{Task: repo.task, ClaimToken: claimToken}
 	repo.claimReceipts[actor.UserID+":"+command.IdempotencyKey] = result
 	return result, nil
+}
+
+func (repo *humanTaskRepository) Renew(
+	_ context.Context,
+	actor reviewapp.Actor,
+	command reviewapp.RenewCommand,
+	expiresAt time.Time,
+	now time.Time,
+) (review.ClaimResult, error) {
+	key := actor.UserID + ":" + command.IdempotencyKey
+	if receipt, exists := repo.renewReceipts[key]; exists {
+		if receipt.command != command {
+			return review.ClaimResult{}, errors.New("renew input mismatch")
+		}
+		return receipt.result, nil
+	}
+	if repo.task.ID != command.TaskID || repo.task.Revision != command.ExpectedRevision || repo.task.Status != "CLAIMED" ||
+		repo.task.ClaimedBy == nil || *repo.task.ClaimedBy != actor.UserID || repo.task.ClaimToken == nil ||
+		*repo.task.ClaimToken != command.ClaimToken || repo.task.ClaimExpiresAt == nil || !repo.task.ClaimExpiresAt.After(now) {
+		return review.ClaimResult{}, errors.New("renew conflict")
+	}
+	repo.task.ClaimExpiresAt, repo.task.UpdatedAt = &expiresAt, now
+	repo.task.Revision++
+	result := review.ClaimResult{Task: repo.task, ClaimToken: command.ClaimToken}
+	repo.renewReceipts[key] = renewReceipt{command: command, result: result}
+	return result, nil
+}
+
+func (repo *humanTaskRepository) Release(
+	_ context.Context,
+	actor reviewapp.Actor,
+	command reviewapp.ReleaseCommand,
+	now time.Time,
+) (review.HumanTask, error) {
+	key := actor.UserID + ":" + command.IdempotencyKey
+	if receipt, exists := repo.releaseReceipts[key]; exists {
+		if receipt.command != command {
+			return review.HumanTask{}, errors.New("release input mismatch")
+		}
+		return receipt.result, nil
+	}
+	if repo.task.ID != command.TaskID || repo.task.Revision != command.ExpectedRevision || repo.task.Status != "CLAIMED" ||
+		repo.task.ClaimedBy == nil || *repo.task.ClaimedBy != actor.UserID || repo.task.ClaimToken == nil ||
+		*repo.task.ClaimToken != command.ClaimToken || repo.task.ClaimExpiresAt == nil || !repo.task.ClaimExpiresAt.After(now) {
+		return review.HumanTask{}, errors.New("release conflict")
+	}
+	repo.task.Status, repo.task.ClaimedBy, repo.task.ClaimToken, repo.task.ClaimExpiresAt = "OPEN", nil, nil, nil
+	repo.task.UpdatedAt = now
+	repo.task.Revision++
+	repo.releaseReceipts[key] = releaseReceipt{command: command, result: repo.task}
+	return repo.task, nil
 }
 
 func (repo *humanTaskRepository) Decide(

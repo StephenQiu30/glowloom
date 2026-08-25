@@ -28,6 +28,8 @@ type Repository interface {
 	FindTaskByNode(context.Context, string, string) (domain.HumanTask, error)
 	EnsureTask(context.Context, domain.HumanTask) (domain.HumanTask, error)
 	Claim(context.Context, Actor, ClaimCommand, string, time.Time, time.Time) (domain.ClaimResult, error)
+	Renew(context.Context, Actor, RenewCommand, time.Time, time.Time) (domain.ClaimResult, error)
+	Release(context.Context, Actor, ReleaseCommand, time.Time) (domain.HumanTask, error)
 	Decide(context.Context, Actor, DecideCommand, domain.ReviewDecision, time.Time) (domain.DecisionResult, error)
 }
 
@@ -53,6 +55,16 @@ type OpenCommand struct {
 type ClaimCommand struct {
 	TaskID, IdempotencyKey string
 	ExpectedRevision       int
+}
+
+type RenewCommand struct {
+	TaskID, ClaimToken, IdempotencyKey string
+	ExpectedRevision                   int
+}
+
+type ReleaseCommand struct {
+	TaskID, ClaimToken, IdempotencyKey string
+	ExpectedRevision                   int
 }
 
 type DecideCommand struct {
@@ -99,6 +111,33 @@ func (service *Service) Claim(ctx context.Context, actor Actor, command ClaimCom
 		return domain.ClaimResult{}, errors.New("human task claim token is empty")
 	}
 	return service.repository.Claim(ctx, actor, command, claimToken, now.Add(service.config.ClaimLease), now)
+}
+
+func (service *Service) Renew(ctx context.Context, actor Actor, command RenewCommand) (domain.ClaimResult, error) {
+	actor.UserID = strings.TrimSpace(actor.UserID)
+	command.TaskID = strings.TrimSpace(command.TaskID)
+	command.ClaimToken = strings.TrimSpace(command.ClaimToken)
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if service == nil || service.repository == nil || service.config.Now == nil || service.config.ClaimLease <= 0 ||
+		actor.UserID == "" || command.TaskID == "" || command.ClaimToken == "" || command.ExpectedRevision < 1 ||
+		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return domain.ClaimResult{}, invalid("Invalid human task claim renewal")
+	}
+	now := service.config.Now().UTC()
+	return service.repository.Renew(ctx, actor, command, now.Add(service.config.ClaimLease), now)
+}
+
+func (service *Service) Release(ctx context.Context, actor Actor, command ReleaseCommand) (domain.HumanTask, error) {
+	actor.UserID = strings.TrimSpace(actor.UserID)
+	command.TaskID = strings.TrimSpace(command.TaskID)
+	command.ClaimToken = strings.TrimSpace(command.ClaimToken)
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if service == nil || service.repository == nil || service.config.Now == nil || actor.UserID == "" ||
+		command.TaskID == "" || command.ClaimToken == "" || command.ExpectedRevision < 1 ||
+		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return domain.HumanTask{}, invalid("Invalid human task claim release")
+	}
+	return service.repository.Release(ctx, actor, command, service.config.Now().UTC())
 }
 
 func (service *Service) Decide(ctx context.Context, actor Actor, command DecideCommand) (domain.DecisionResult, error) {

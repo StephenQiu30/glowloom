@@ -21,8 +21,10 @@ import (
 )
 
 const (
-	claimOperation  = "review.human_task.claim"
-	decideOperation = "review.human_task.decide"
+	claimOperation   = "review.human_task.claim"
+	renewOperation   = "review.human_task.renew"
+	releaseOperation = "review.human_task.release"
+	decideOperation  = "review.human_task.decide"
 )
 
 type Store struct {
@@ -127,6 +129,132 @@ func (store *Store) Claim(
 		}
 		result = domain.ClaimResult{Task: persisted, ClaimToken: claimToken}
 		return storeResultReceipt(ctx, transaction, task.WorkspaceID, claimOperation, command.IdempotencyKey, inputHash, task.ID, actorID, result, now)
+	})
+	return result, err
+}
+
+func (store *Store) Renew(
+	ctx context.Context,
+	actor application.Actor,
+	command application.RenewCommand,
+	expiresAt time.Time,
+	now time.Time,
+) (domain.ClaimResult, error) {
+	taskID, token, actorID, err := claimIdentities(command.TaskID, command.ClaimToken, actor.UserID)
+	if err != nil {
+		return domain.ClaimResult{}, application.ErrNotFound
+	}
+	var result domain.ClaimResult
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var task model.HumanTask
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, "id = ?", taskID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if authorizeErr := authorizeReviewer(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion); authorizeErr != nil {
+			return authorizeErr
+		}
+		inputHash, hashErr := platformcommand.InputHash(struct {
+			ActorID string
+			Command application.RenewCommand
+		}{ActorID: actor.UserID, Command: command})
+		if hashErr != nil {
+			return hashErr
+		}
+		if receipt, receiptErr := platformcommandgorm.Find(ctx, transaction, task.WorkspaceID.String(), renewOperation, command.IdempotencyKey); receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[domain.ClaimResult](receipt, inputHash)
+			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
+				return conflict("Idempotency key was already used with different renewal input")
+			}
+			result = replayed
+			return replayErr
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		if task.Revision != command.ExpectedRevision || task.Status != "CLAIMED" || task.ClaimedBy == nil ||
+			*task.ClaimedBy != actorID || task.ClaimToken == nil || *task.ClaimToken != token ||
+			task.ClaimExpiresAt == nil || !task.ClaimExpiresAt.After(now) {
+			return conflict("Human task claim changed before renewal")
+		}
+		task.ClaimExpiresAt = &expiresAt
+		task.Revision++
+		task.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.HumanTask{}).Where("id = ?", task.ID).Updates(map[string]any{
+			"claim_expires_at": expiresAt, "revision": task.Revision, "updated_at": task.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		persisted, mapErr := taskDomain(task)
+		if mapErr != nil {
+			return mapErr
+		}
+		result = domain.ClaimResult{Task: persisted, ClaimToken: command.ClaimToken}
+		return storeResultReceipt(
+			ctx, transaction, task.WorkspaceID, renewOperation, command.IdempotencyKey,
+			inputHash, task.ID, actorID, result, now,
+		)
+	})
+	return result, err
+}
+
+func (store *Store) Release(
+	ctx context.Context,
+	actor application.Actor,
+	command application.ReleaseCommand,
+	now time.Time,
+) (domain.HumanTask, error) {
+	taskID, token, actorID, err := claimIdentities(command.TaskID, command.ClaimToken, actor.UserID)
+	if err != nil {
+		return domain.HumanTask{}, application.ErrNotFound
+	}
+	var result domain.HumanTask
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var task model.HumanTask
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, "id = ?", taskID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if authorizeErr := authorizeReviewer(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion); authorizeErr != nil {
+			return authorizeErr
+		}
+		inputHash, hashErr := platformcommand.InputHash(struct {
+			ActorID string
+			Command application.ReleaseCommand
+		}{ActorID: actor.UserID, Command: command})
+		if hashErr != nil {
+			return hashErr
+		}
+		if receipt, receiptErr := platformcommandgorm.Find(ctx, transaction, task.WorkspaceID.String(), releaseOperation, command.IdempotencyKey); receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[domain.HumanTask](receipt, inputHash)
+			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
+				return conflict("Idempotency key was already used with different release input")
+			}
+			result = replayed
+			return replayErr
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		if task.Revision != command.ExpectedRevision || task.Status != "CLAIMED" || task.ClaimedBy == nil ||
+			*task.ClaimedBy != actorID || task.ClaimToken == nil || *task.ClaimToken != token ||
+			task.ClaimExpiresAt == nil || !task.ClaimExpiresAt.After(now) {
+			return conflict("Human task claim changed before release")
+		}
+		task.Status, task.ClaimedBy, task.ClaimToken, task.ClaimExpiresAt = "OPEN", nil, nil, nil
+		task.Revision++
+		task.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.HumanTask{}).Where("id = ?", task.ID).Updates(map[string]any{
+			"status": task.Status, "claimed_by": nil, "claim_token": nil, "claim_expires_at": nil,
+			"revision": task.Revision, "updated_at": task.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		persisted, mapErr := taskDomain(task)
+		if mapErr != nil {
+			return mapErr
+		}
+		result = persisted
+		return storeResultReceipt(
+			ctx, transaction, task.WorkspaceID, releaseOperation, command.IdempotencyKey,
+			inputHash, task.ID, actorID, result, now,
+		)
 	})
 	return result, err
 }

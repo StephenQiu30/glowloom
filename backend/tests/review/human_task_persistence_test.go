@@ -76,28 +76,61 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("claim persisted human task: %v", err)
 	}
+	now = now.Add(time.Minute)
+	renewCommand := reviewapp.RenewCommand{
+		TaskID: task.ID, ClaimToken: first.ClaimToken,
+		ExpectedRevision: first.Task.Revision, IdempotencyKey: "persisted-renew-a",
+	}
+	renewed, err := service.Renew(ctx, reviewapp.Actor{UserID: reviewerA.String(), TokenVersion: 1}, renewCommand)
+	if err != nil || renewed.ClaimToken != first.ClaimToken || renewed.Task.ClaimExpiresAt == nil ||
+		!renewed.Task.ClaimExpiresAt.Equal(now.Add(5*time.Minute)) {
+		t.Fatalf("renew persisted human task claim: result=%#v err=%v", renewed, err)
+	}
+	replayedRenew, err := service.Renew(ctx, reviewapp.Actor{UserID: reviewerA.String(), TokenVersion: 1}, renewCommand)
+	if err != nil || replayedRenew.Task.Revision != renewed.Task.Revision {
+		t.Fatalf("replay persisted claim renewal: result=%#v err=%v", replayedRenew, err)
+	}
 	now = now.Add(6 * time.Minute)
 	second, err := service.Claim(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, reviewapp.ClaimCommand{
-		TaskID: task.ID, ExpectedRevision: first.Task.Revision, IdempotencyKey: "persisted-claim-b",
+		TaskID: task.ID, ExpectedRevision: renewed.Task.Revision, IdempotencyKey: "persisted-claim-b",
 	})
 	if err != nil {
 		t.Fatalf("take over expired persisted claim: %v", err)
 	}
+	releaseCommand := reviewapp.ReleaseCommand{
+		TaskID: task.ID, ClaimToken: second.ClaimToken,
+		ExpectedRevision: second.Task.Revision, IdempotencyKey: "persisted-release-b",
+	}
+	released, err := service.Release(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, releaseCommand)
+	if err != nil || released.Status != "OPEN" || released.ClaimedBy != nil || released.ClaimToken != nil ||
+		released.ClaimExpiresAt != nil {
+		t.Fatalf("release persisted claim: task=%#v err=%v", released, err)
+	}
+	replayedRelease, err := service.Release(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, releaseCommand)
+	if err != nil || replayedRelease.Revision != released.Revision {
+		t.Fatalf("replay persisted claim release: task=%#v err=%v", replayedRelease, err)
+	}
+	third, err := service.Claim(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, reviewapp.ClaimCommand{
+		TaskID: task.ID, ExpectedRevision: released.Revision, IdempotencyKey: "persisted-claim-b-after-release",
+	})
+	if err != nil {
+		t.Fatalf("claim released persisted human task: %v", err)
+	}
 	if _, err = service.Decide(ctx, reviewapp.Actor{UserID: reviewerA.String(), TokenVersion: 1}, reviewapp.DecideCommand{
-		TaskID: task.ID, ClaimToken: first.ClaimToken, ExpectedTaskRevision: second.Task.Revision,
+		TaskID: task.ID, ClaimToken: first.ClaimToken, ExpectedTaskRevision: third.Task.Revision,
 		ExpectedSubjectRevision: task.SubjectRevision, Decision: "approved", IdempotencyKey: "persisted-old-token",
 	}); err == nil {
 		t.Fatal("persisted expired claim token submitted a decision")
 	}
 	decided, err := service.Decide(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, reviewapp.DecideCommand{
-		TaskID: task.ID, ClaimToken: second.ClaimToken, ExpectedTaskRevision: second.Task.Revision,
+		TaskID: task.ID, ClaimToken: third.ClaimToken, ExpectedTaskRevision: third.Task.Revision,
 		ExpectedSubjectRevision: task.SubjectRevision, Decision: "approved", IdempotencyKey: "persisted-decision",
 	})
 	if err != nil {
 		t.Fatalf("persist review decision: %v", err)
 	}
 	replayed, err := service.Decide(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, reviewapp.DecideCommand{
-		TaskID: task.ID, ClaimToken: second.ClaimToken, ExpectedTaskRevision: second.Task.Revision,
+		TaskID: task.ID, ClaimToken: third.ClaimToken, ExpectedTaskRevision: third.Task.Revision,
 		ExpectedSubjectRevision: task.SubjectRevision, Decision: "approved", IdempotencyKey: "persisted-decision",
 	})
 	if err != nil || replayed.Decision.ID != decided.Decision.ID {
@@ -113,5 +146,19 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	}
 	if taskCount != 1 || decisionCount != 1 {
 		t.Fatalf("persisted review counts = tasks %d decisions %d", taskCount, decisionCount)
+	}
+	var renewReceiptCount, releaseReceiptCount int64
+	if err = database.Model(&model.CommandReceipt{}).
+		Where("workspace_id = ? AND operation = ?", workspaceID, "review.human_task.renew").
+		Count(&renewReceiptCount).Error; err != nil {
+		t.Fatalf("count claim renewal receipts: %v", err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).
+		Where("workspace_id = ? AND operation = ?", workspaceID, "review.human_task.release").
+		Count(&releaseReceiptCount).Error; err != nil {
+		t.Fatalf("count claim release receipts: %v", err)
+	}
+	if renewReceiptCount != 1 || releaseReceiptCount != 1 {
+		t.Fatalf("lease receipt counts = renew %d release %d", renewReceiptCount, releaseReceiptCount)
 	}
 }
