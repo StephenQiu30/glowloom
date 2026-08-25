@@ -112,12 +112,14 @@ function sleep(milliseconds: number): Promise<void> {
 
 export function ScriptDocumentImportCard({
   canWrite,
+  currentAnalysis,
   language,
   projectId,
   targetDurationMs,
   workspaceId,
 }: {
   canWrite: boolean;
+  currentAnalysis?: API.ScriptDocumentAnalysisResponse;
   language: string;
   projectId: string;
   targetDurationMs: number;
@@ -133,7 +135,7 @@ export function ScriptDocumentImportCard({
   const [mediaVersionId, setMediaVersionId] = useState<string | null>(null);
   const [preview, setPreview] =
     useState<API.ScriptDocumentPreviewResponse | null>(null);
-  const [analysis, setAnalysis] =
+  const [importedAnalysis, setImportedAnalysis] =
     useState<API.ScriptDocumentAnalysisResponse | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -142,6 +144,7 @@ export function ScriptDocumentImportCard({
     completeState.isLoading ||
     previewState.isLoading;
   const busy = uploadBusy || importState.isLoading;
+  const analysis = importedAnalysis ?? (file ? null : currentAnalysis ?? null);
   const episodeMarkerCount = useMemo(
     () =>
       analysis?.blocks.filter((block) => block.kind === "episode_marker").length ??
@@ -205,7 +208,7 @@ export function ScriptDocumentImportCard({
     setFile(selected);
     setMediaVersionId(null);
     setPreview(null);
-    setAnalysis(null);
+    setImportedAnalysis(null);
     setActionError(null);
     setNotice(null);
   }
@@ -272,7 +275,7 @@ export function ScriptDocumentImportCard({
           idempotency_key: `script-document:${idempotencyHash}`,
         },
       }).unwrap();
-      setAnalysis(result);
+      setImportedAnalysis(result);
       setNotice("剧本已固定为不可变修订，格式解析结果已生成。");
     } catch (error: unknown) {
       const apiError = error as { code?: string };
@@ -333,6 +336,28 @@ export function ScriptDocumentImportCard({
                 </ItemContent>
                 <Badge variant="outline">{preview ? "已读取" : "等待预览"}</Badge>
               </Item>
+            ) : null}
+
+            {analysis && !file && !preview ? (
+              <>
+                <Item variant="outline">
+                  <ItemMedia variant="icon">
+                    <FileText className="size-5" aria-hidden="true" />
+                  </ItemMedia>
+                  <ItemContent>
+                    <ItemTitle>{analysis.document.title}</ItemTitle>
+                    <ItemDescription>
+                      不可变版本 v{analysis.revision.version_no} · {analysis.revision.codepoint_count.toLocaleString()} 个字符
+                    </ItemDescription>
+                  </ItemContent>
+                  <Badge variant="outline">已固定</Badge>
+                </Item>
+                <Alert className="border-0 bg-muted/50" role="status">
+                  <CheckCircle2 aria-hidden="true" />
+                  <AlertTitle>剧本解析已完成</AlertTitle>
+                  <AlertDescription>已从服务端恢复当前不可变原稿，可以继续制作圣经与分集。</AlertDescription>
+                </Alert>
+              </>
             ) : null}
 
             {actionError ? (

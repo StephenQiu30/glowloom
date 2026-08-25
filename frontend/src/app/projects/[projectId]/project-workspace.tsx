@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import {
   appApiErrorMessage,
+  useCurrentScriptDocumentQuery,
   useEpisodesQuery,
   useMeQuery,
   useProjectQuery,
@@ -25,10 +26,18 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const me = useMeQuery(undefined, { skip: !authenticated });
   const projectQuery = useProjectQuery(projectId, { skip: !authenticated });
   const episodesQuery = useEpisodesQuery(projectId, { skip: !authenticated });
+  const currentScriptQuery = useCurrentScriptDocumentQuery(projectId, {
+    skip: !authenticated,
+  });
   const project = projectQuery.data;
   const episodes = episodesQuery.data ?? [];
   const canWrite = project?.status === "active" && me.data?.workspace.role !== "viewer";
-  const error = me.error ?? projectQuery.error ?? episodesQuery.error;
+  const currentScriptError = currentScriptQuery.error as { code?: string } | undefined;
+  const error = me.error ?? projectQuery.error ?? episodesQuery.error ?? (
+    currentScriptError?.code && currentScriptError.code !== "not_found"
+      ? currentScriptQuery.error
+      : undefined
+  );
 
   if (sessionState === "checking") {
     return <StudioShell active="projects"><div className="grid min-h-[70dvh] place-items-center"><LoaderCircle aria-label="正在读取登录状态" className="animate-spin" /></div></StudioShell>;
@@ -63,6 +72,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
 
             <ScriptDocumentImportCard
               canWrite={canWrite}
+              currentAnalysis={currentScriptQuery.data}
               language={project.language}
               projectId={project.id}
               targetDurationMs={project.target_duration_ms}

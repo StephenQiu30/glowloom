@@ -2,6 +2,16 @@ import request, { type RequestOptions } from "@/lib/request";
 
 type Envelope<T> = { data: T };
 
+export function getCurrentDocumentApiV1ProjectsProjectIdCurrentScriptDocumentGet(
+  params: { project_id: string },
+  options?: RequestOptions,
+) {
+  return request<Envelope<API.ScriptDocumentAnalysisResponse>>(
+    `/api/v1/projects/${params.project_id}/current-script-document`,
+    { method: "GET", ...(options ?? {}) },
+  );
+}
+
 export function previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost(
   params: { project_id: string },
   body: API.ScriptDocumentPreviewRequest,

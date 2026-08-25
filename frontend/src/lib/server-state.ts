@@ -42,6 +42,7 @@ import {
   listProjectsApiV1ProjectsGet,
 } from "@/api/projects";
 import {
+  getCurrentDocumentApiV1ProjectsProjectIdCurrentScriptDocumentGet,
   importDocumentApiV1ProjectsProjectIdScriptImportsPost,
   previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost,
 } from "@/api/scriptDocuments";
@@ -106,6 +107,7 @@ export const appApi = createApi({
     "Project",
     "Episodes",
     "Media",
+    "ScriptDocuments",
     "ProductionBible",
     "EpisodePlans",
   ],
@@ -280,6 +282,20 @@ export const appApi = createApi({
           ),
         ),
     }),
+    currentScriptDocument: builder.query<
+      API.ScriptDocumentAnalysisResponse,
+      string
+    >({
+      queryFn: (projectId) =>
+        runRequest(() =>
+          getCurrentDocumentApiV1ProjectsProjectIdCurrentScriptDocumentGet({
+            project_id: projectId,
+          }),
+        ),
+      providesTags: (_result, _error, projectId) => [
+        { type: "ScriptDocuments", id: projectId },
+      ],
+    }),
     importScriptDocument: builder.mutation<
       API.ScriptDocumentAnalysisResponse,
       { projectId: string; body: API.ScriptDocumentImportRequest }
@@ -293,6 +309,7 @@ export const appApi = createApi({
         ),
       invalidatesTags: (_result, _error, { projectId }) => [
         { type: "Project", id: projectId },
+        { type: "ScriptDocuments", id: projectId },
       ],
     }),
     currentProductionBible: builder.query<ProductionBibleWithDecisions, string>({
@@ -465,6 +482,7 @@ export const {
   useCreateProductionBibleMutation,
   useCreateProjectMutation,
   useCreateWorkspaceMutation,
+  useCurrentScriptDocumentQuery,
   useCurrentProductionBibleQuery,
   useDeactivateAccountMutation,
   useDecideProductionBibleReviewIssueMutation,
