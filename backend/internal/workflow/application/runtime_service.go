@@ -199,6 +199,16 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 	if executeErr != nil {
 		return domain.NodeActivityResult{}, errors.Join(executeErr, repository.RetryNode(ctx, claim, service.config.Now().UTC()))
 	}
+	if executorResult.Status == "RETRYING" {
+		if executorResult.Output.SchemaVersion != "" || len(executorResult.Output.Bindings) != 0 {
+			retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
+			return domain.NodeActivityResult{}, errors.Join(errors.New("waiting workflow node executor returned an output"), retryErr)
+		}
+		if retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC()); retryErr != nil {
+			return domain.NodeActivityResult{}, normalizeError(retryErr)
+		}
+		return domain.NodeActivityResult{Status: "RETRYING"}, nil
+	}
 	if executorResult.Status != "SUCCEEDED" && executorResult.Status != "SKIPPED" {
 		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
 		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node executor returned an invalid status"), retryErr)

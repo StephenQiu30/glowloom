@@ -14,6 +14,8 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	platformschema "github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
+	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
@@ -63,10 +65,13 @@ func main() {
 	scriptService := scriptapp.NewService(
 		scriptgorm.New(database), nil, scriptapp.Config{Now: now, NewID: uuid.NewString},
 	)
+	bibleService := bibleapp.NewService(
+		biblegorm.New(database), bibleapp.Config{Now: now, NewID: uuid.NewString},
+	)
 	reviewService := reviewapp.NewService(
 		reviewgorm.New(database), reviewapp.Config{Now: now, NewID: uuid.NewString},
 	)
-	activities, err := bootstrap.NewWorkflowRuntime(workflowgorm.New(database), scriptService, reviewService)
+	activities, err := bootstrap.NewWorkflowRuntime(workflowgorm.New(database), scriptService, bibleService, reviewService)
 	if err != nil {
 		logger.Error("workflow runtime composition failed", "error", err)
 		os.Exit(1)

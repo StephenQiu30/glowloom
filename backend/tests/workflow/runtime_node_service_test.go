@@ -84,6 +84,7 @@ func TestRuntimeRejectsExecutorOwnedCacheAndInvalidOutputWithoutCommittingIt(t *
 		executor *scriptedNodeExecutor
 	}{
 		{name: "executor cannot declare cache hit", executor: &scriptedNodeExecutor{status: "CACHED"}},
+		{name: "waiting executor cannot declare output", executor: &scriptedNodeExecutor{status: "RETRYING", retryingOutput: true}},
 		{name: "output binding must be valid", executor: &scriptedNodeExecutor{invalidOutput: true}},
 	}
 	for _, test := range tests {
@@ -102,6 +103,29 @@ func TestRuntimeRejectsExecutorOwnedCacheAndInvalidOutputWithoutCommittingIt(t *
 				t.Fatalf("invalid executor result was committed: status=%s result=%#v err=%v", repository.status, repository.result, err)
 			}
 		})
+	}
+}
+
+func TestRuntimeProjectsExternalExecutorWaitWithoutOutputOrCache(t *testing.T) {
+	repository := &runtimeNodeRepository{status: "QUEUED", cachePolicy: "by_inputs"}
+	executor := &scriptedNodeExecutor{status: "RETRYING"}
+	service := workflowapp.NewRuntimeService(repository, workflowapp.RuntimeConfig{
+		Now:   func() time.Time { return time.Date(2026, time.August, 26, 6, 30, 0, 0, time.UTC) },
+		NewID: func() string { return "00000000-0000-0000-0000-000000000555" }, Executor: executor,
+	})
+
+	result, err := service.ExecuteNode(context.Background(), workflow.NodeActivityCommand{
+		WorkflowRunID: "00000000-0000-0000-0000-000000000111",
+		NodeRunID:     "00000000-0000-0000-0000-000000000222",
+		NodeID:        "bible", Executor: "activity.production_bible", Attempt: 1,
+	})
+	if err != nil || result.Status != "RETRYING" || result.OutputHash != "" ||
+		result.Output.SchemaVersion != "" || len(result.Output.Bindings) != 0 {
+		t.Fatalf("external wait result = %#v err=%v", result, err)
+	}
+	if repository.status != "RETRYING" || repository.claimToken != "" ||
+		repository.result.OutputHash != "" || repository.cacheEntry.ID != "" {
+		t.Fatalf("external wait projection = %#v", repository)
 	}
 }
 
@@ -290,12 +314,13 @@ func (repo *runtimeNodeRepository) CompleteNodeWithCache(
 }
 
 type scriptedNodeExecutor struct {
-	mu            sync.Mutex
-	failures      int
-	status        string
-	invalidOutput bool
-	keys          []string
-	commands      []workflow.NodeExecutorCommand
+	mu             sync.Mutex
+	failures       int
+	status         string
+	invalidOutput  bool
+	retryingOutput bool
+	keys           []string
+	commands       []workflow.NodeExecutorCommand
 }
 
 func (executor *scriptedNodeExecutor) Execute(
@@ -313,6 +338,9 @@ func (executor *scriptedNodeExecutor) Execute(
 	status := executor.status
 	if status == "" {
 		status = "SUCCEEDED"
+	}
+	if status == "RETRYING" && !executor.retryingOutput {
+		return workflow.NodeExecutorResult{Status: status}, nil
 	}
 	output := successfulExecutorOutputFor(command.OutputPorts)
 	if executor.invalidOutput {

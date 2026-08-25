@@ -158,6 +158,107 @@ func TestEpisodeWorkflowRejectsDriftedExecutionPlan(t *testing.T) {
 	}
 }
 
+func TestEpisodeWorkflowDurablyWaitsForExternalNodeWithStableBusinessAttempt(t *testing.T) {
+	request := episodeWorkflowStartRequest()
+	plan := temporaladapter.ExecutionPlan{
+		WorkflowRunID: request.WorkflowRunID, DefinitionVersionID: request.DefinitionVersionID,
+		RunInputSnapshotID: request.RunInputSnapshotID, DefinitionContentHash: request.DefinitionContentHash,
+		InputSnapshotHash: request.InputSnapshotHash,
+		Nodes: []temporaladapter.ExecutionNode{{
+			NodeRunID: "node-run-bible", NodeID: "bible", Executor: "activity.production_bible", RiskLevel: "external_ai",
+		}},
+	}
+
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	activityCalls := 0
+	environment.RegisterActivityWithOptions(
+		func(context.Context, workflow.StartRequest) (temporaladapter.ExecutionPlan, error) { return plan, nil },
+		activity.RegisterOptions{Name: temporaladapter.LoadExecutionPlanActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(_ context.Context, command temporaladapter.NodeActivityCommand) (temporaladapter.NodeActivityResult, error) {
+			activityCalls++
+			if command.Attempt != 1 {
+				t.Fatalf("external node business attempt = %d, want stable attempt 1", command.Attempt)
+			}
+			if activityCalls < 3 {
+				return temporaladapter.NodeActivityResult{Status: "RETRYING"}, nil
+			}
+			return successfulNodeActivityResult(), nil
+		},
+		activity.RegisterOptions{Name: temporaladapter.ExecuteNodeActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(context.Context, temporaladapter.CompleteRunCommand) error { return nil },
+		activity.RegisterOptions{Name: temporaladapter.CompleteRunActivityName},
+	)
+
+	environment.ExecuteWorkflow(temporaladapter.EpisodeProductionWorkflow, request)
+	if err := environment.GetWorkflowError(); err != nil {
+		t.Fatalf("wait for external node: %v", err)
+	}
+	if activityCalls != 3 {
+		t.Fatalf("external node activity calls = %d, want 3", activityCalls)
+	}
+}
+
+func TestEpisodeWorkflowPausesExternalNodePollingUntilResume(t *testing.T) {
+	request := episodeWorkflowStartRequest()
+	plan := temporaladapter.ExecutionPlan{
+		WorkflowRunID: request.WorkflowRunID, DefinitionVersionID: request.DefinitionVersionID,
+		RunInputSnapshotID: request.RunInputSnapshotID, DefinitionContentHash: request.DefinitionContentHash,
+		InputSnapshotHash: request.InputSnapshotHash,
+		Nodes: []temporaladapter.ExecutionNode{{
+			NodeRunID: "node-run-bible", NodeID: "bible", Executor: "activity.production_bible", RiskLevel: "external_ai",
+		}},
+	}
+
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	activityCalls := 0
+	polledWhilePaused := false
+	environment.RegisterActivityWithOptions(
+		func(context.Context, workflow.StartRequest) (temporaladapter.ExecutionPlan, error) { return plan, nil },
+		activity.RegisterOptions{Name: temporaladapter.LoadExecutionPlanActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(context.Context, temporaladapter.NodeActivityCommand) (temporaladapter.NodeActivityResult, error) {
+			activityCalls++
+			if activityCalls == 1 {
+				return temporaladapter.NodeActivityResult{Status: "RETRYING"}, nil
+			}
+			return successfulNodeActivityResult(), nil
+		},
+		activity.RegisterOptions{Name: temporaladapter.ExecuteNodeActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(context.Context, temporaladapter.CompleteRunCommand) error { return nil },
+		activity.RegisterOptions{Name: temporaladapter.CompleteRunActivityName},
+	)
+	environment.RegisterDelayedCallback(func() {
+		environment.SignalWorkflow(temporaladapter.WorkflowControlSignalName, temporaladapter.WorkflowControlSignal{
+			WorkflowRunID: request.WorkflowRunID, ControlID: "pause-external-node", Action: workflow.ControlActionPause,
+			InputHash: strings.Repeat("d", 64),
+		})
+	}, time.Second)
+	environment.RegisterDelayedCallback(func() {
+		polledWhilePaused = activityCalls > 1
+		environment.SignalWorkflow(temporaladapter.WorkflowControlSignalName, temporaladapter.WorkflowControlSignal{
+			WorkflowRunID: request.WorkflowRunID, ControlID: "resume-external-node", Action: workflow.ControlActionResume,
+			InputHash: strings.Repeat("e", 64),
+		})
+	}, 10*time.Second)
+
+	environment.ExecuteWorkflow(temporaladapter.EpisodeProductionWorkflow, request)
+	if err := environment.GetWorkflowError(); err != nil {
+		t.Fatalf("pause external node polling: %v", err)
+	}
+	if polledWhilePaused || activityCalls != 2 {
+		t.Fatalf("external node calls while paused=%t total=%d", polledWhilePaused, activityCalls)
+	}
+}
+
 func TestEpisodeWorkflowRejectsNodeActivityWithoutCanonicalOutput(t *testing.T) {
 	request := episodeWorkflowStartRequest()
 	plan := temporaladapter.ExecutionPlan{

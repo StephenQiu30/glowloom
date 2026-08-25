@@ -1,6 +1,7 @@
 package temporal
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ const (
 	HumanGateSignalName            = "lanverse.workflow.human-gate-decision"
 	WorkflowControlSignalName      = "lanverse.workflow.control"
 	workflowContractViolationError = "workflow_contract_violation"
+	externalNodePollInterval       = 5 * time.Second
 )
 
 type ExecutionPlan = workflowdomain.ExecutionPlan
@@ -106,13 +108,10 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 			continue
 		}
 
-		activityContext := workflow.WithActivityOptions(ctx, nodeActivityOptions("execute-node:"+node.NodeRunID))
-		var result NodeActivityResult
-		if err := workflow.ExecuteActivity(activityContext, ExecuteNodeActivityName, command).Get(ctx, &result); err != nil {
+		if _, err := executeNodeUntilTerminal(
+			ctx, command, controlChannel, &controlState, request.WorkflowRunID,
+		); err != nil {
 			return RunResult{}, err
-		}
-		if !validNodeActivityResult(result) {
-			return RunResult{}, contractViolation("node activity returned an invalid terminal output")
 		}
 	}
 
@@ -126,6 +125,42 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 		return RunResult{}, err
 	}
 	return RunResult{WorkflowRunID: request.WorkflowRunID, Status: "SUCCEEDED"}, nil
+}
+
+func executeNodeUntilTerminal(
+	ctx workflow.Context,
+	command NodeActivityCommand,
+	controlChannel workflow.ReceiveChannel,
+	controlState *workflowControlState,
+	workflowRunID string,
+) (NodeActivityResult, error) {
+	for poll := 0; ; poll++ {
+		activityID := "execute-node:" + command.NodeRunID
+		if poll > 0 {
+			activityID += ":poll:" + strconv.Itoa(poll)
+		}
+		activityContext := workflow.WithActivityOptions(ctx, nodeActivityOptions(activityID))
+		var result NodeActivityResult
+		if err := workflow.ExecuteActivity(activityContext, ExecuteNodeActivityName, command).Get(ctx, &result); err != nil {
+			return NodeActivityResult{}, err
+		}
+		if result.Status == "RETRYING" {
+			if result.OutputHash != "" || result.Output.SchemaVersion != "" || len(result.Output.Bindings) != 0 {
+				return NodeActivityResult{}, contractViolation("waiting node activity returned an output")
+			}
+			if err := workflow.Sleep(ctx, externalNodePollInterval); err != nil {
+				return NodeActivityResult{}, err
+			}
+			if err := awaitWorkflowRunnable(ctx, controlChannel, controlState, workflowRunID); err != nil {
+				return NodeActivityResult{}, err
+			}
+			continue
+		}
+		if !validNodeActivityResult(result) {
+			return NodeActivityResult{}, contractViolation("node activity returned an invalid terminal output")
+		}
+		return result, nil
+	}
 }
 
 func validNodeActivityResult(result NodeActivityResult) bool {

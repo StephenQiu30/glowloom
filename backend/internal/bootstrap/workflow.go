@@ -24,15 +24,16 @@ type WorkflowRuntimeRepository interface {
 func NewWorkflowRuntime(
 	repository WorkflowRuntimeRepository,
 	scripts workflowproduction.ScriptSource,
+	bibles workflowproduction.BibleCandidateOwner,
 	reviews *reviewapp.Service,
 ) (*workflowapp.RuntimeService, error) {
-	if repository == nil || scripts == nil || reviews == nil {
+	if repository == nil || scripts == nil || bibles == nil || reviews == nil {
 		return nil, errors.New("workflow runtime dependencies are required")
 	}
 	now := func() time.Time { return time.Now().UTC() }
 	return workflowapp.NewRuntimeService(repository, workflowapp.RuntimeConfig{
 		Now: now, NewID: uuid.NewString,
-		Executor:   workflowproduction.NewNodeExecutor(scripts),
+		Executor:   workflowproduction.NewNodeExecutor(scripts, bibles),
 		HumanTasks: workflowreview.New(reviews),
 	}), nil
 }

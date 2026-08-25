@@ -17,6 +17,8 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
+	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
@@ -91,10 +93,13 @@ func TestProductionWorkflowWorkerExecutesAuthorizedScriptWorkflow(t *testing.T) 
 	scriptService := scriptapp.NewService(
 		scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 	)
+	bibleService := bibleapp.NewService(biblegorm.New(database), bibleapp.Config{
+		Now: func() time.Time { return now }, NewID: uuid.NewString,
+	})
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 	})
-	activities, err := bootstrap.NewWorkflowRuntime(workflowStore, scriptService, reviewService)
+	activities, err := bootstrap.NewWorkflowRuntime(workflowStore, scriptService, bibleService, reviewService)
 	if err != nil {
 		t.Fatalf("compose production Workflow Runtime: %v", err)
 	}
