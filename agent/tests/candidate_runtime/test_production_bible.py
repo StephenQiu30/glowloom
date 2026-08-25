@@ -78,7 +78,7 @@ def test_candidate_normalization_adds_evidence_backed_base_state() -> None:
         {
             "state_key": "base",
             "label": "基础状态",
-                "state_spec": {"kind": "character"},
+            "state_spec": {"kind": "character"},
             "episode_numbers": [1],
             "evidence": [evidence],
             "ambiguities": [],

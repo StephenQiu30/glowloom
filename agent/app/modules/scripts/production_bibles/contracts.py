@@ -70,9 +70,7 @@ class AssetSpec(BaseModel):
     palette: str | None
     lighting_language: str | None
     negative_constraints: list[str]
-    source_kind: Literal[
-        "synthetic_recording", "human_recording", "voice_clone"
-    ] | None
+    source_kind: Literal["synthetic_recording", "human_recording", "voice_clone"] | None
     language: str | None
     performance_traits: list[str]
     allowed_usage: list[str]

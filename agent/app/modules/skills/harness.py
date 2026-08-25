@@ -39,9 +39,7 @@ def structured_diagnostic(stdout: bytes, stderr: bytes) -> str:
             if isinstance(message, str) and message.strip():
                 messages.append(message.strip())
         elif (
-            event_type.endswith(".failed")
-            and isinstance(error_value, str)
-            and error_value.strip()
+            event_type.endswith(".failed") and isinstance(error_value, str) and error_value.strip()
         ):
             messages.append(error_value.strip())
     if messages:
