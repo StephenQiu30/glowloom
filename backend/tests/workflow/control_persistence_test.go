@@ -379,8 +379,8 @@ type blockingControlNodeExecutor struct {
 func (executor *blockingControlNodeExecutor) Execute(
 	context.Context,
 	workflow.NodeExecutorCommand,
-) (workflow.NodeActivityResult, error) {
+) (workflow.NodeExecutorResult, error) {
 	executor.started <- struct{}{}
 	<-executor.release
-	return workflow.NodeActivityResult{Status: "SUCCEEDED"}, nil
+	return workflow.NodeExecutorResult{Status: "SUCCEEDED", Output: successfulExecutorOutput()}, nil
 }

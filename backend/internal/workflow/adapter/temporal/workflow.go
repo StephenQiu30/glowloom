@@ -107,8 +107,8 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 		if err := workflow.ExecuteActivity(activityContext, ExecuteNodeActivityName, command).Get(ctx, &result); err != nil {
 			return RunResult{}, err
 		}
-		if result.Status != "SUCCEEDED" && result.Status != "CACHED" && result.Status != "SKIPPED" {
-			return RunResult{}, contractViolation("node activity returned a non-terminal success status")
+		if !validNodeActivityResult(result) {
+			return RunResult{}, contractViolation("node activity returned an invalid terminal output")
 		}
 	}
 
@@ -122,6 +122,14 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 		return RunResult{}, err
 	}
 	return RunResult{WorkflowRunID: request.WorkflowRunID, Status: "SUCCEEDED"}, nil
+}
+
+func validNodeActivityResult(result NodeActivityResult) bool {
+	if result.Status != "SUCCEEDED" && result.Status != "CACHED" && result.Status != "SKIPPED" {
+		return false
+	}
+	_, _, outputHash, err := workflowdomain.BuildNodeOutput(result.Output)
+	return err == nil && result.OutputHash == outputHash
 }
 
 type workflowControlState struct {

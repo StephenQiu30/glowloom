@@ -16,7 +16,7 @@ type RuntimeRepository interface {
 
 type NodeRuntimeRepository interface {
 	ClaimNode(context.Context, domain.NodeActivityCommand, string, time.Time) (domain.NodeExecutionClaim, error)
-	CompleteNode(context.Context, domain.NodeExecutionClaim, string, time.Time) error
+	CompleteNode(context.Context, domain.NodeExecutionClaim, domain.NodeActivityResult, time.Time) error
 	RetryNode(context.Context, domain.NodeExecutionClaim, time.Time) error
 }
 
@@ -42,7 +42,7 @@ type HumanTaskOpener interface {
 }
 
 type NodeExecutor interface {
-	Execute(context.Context, domain.NodeExecutorCommand) (domain.NodeActivityResult, error)
+	Execute(context.Context, domain.NodeExecutorCommand) (domain.NodeExecutorResult, error)
 }
 
 type RuntimeConfig struct {
@@ -129,20 +129,31 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		return domain.NodeActivityResult{}, normalizeError(err)
 	}
 	if claim.Replay {
-		return domain.NodeActivityResult{Status: claim.Status}, nil
+		normalized, _, outputHash, outputErr := domain.BuildNodeOutput(claim.Result.Output)
+		if outputErr != nil || claim.Result.Status != claim.Status || claim.Result.OutputHash != outputHash {
+			return domain.NodeActivityResult{}, errors.New("completed workflow node output has drifted")
+		}
+		claim.Result.Output = normalized
+		return claim.Result, nil
 	}
-	result, executeErr := service.config.Executor.Execute(ctx, domain.NodeExecutorCommand{
+	executorResult, executeErr := service.config.Executor.Execute(ctx, domain.NodeExecutorCommand{
 		NodeActivityCommand: command,
 		IdempotencyKey:      "workflow-node:" + command.NodeRunID + ":attempt:" + strconv.Itoa(command.Attempt),
 	})
 	if executeErr != nil {
 		return domain.NodeActivityResult{}, errors.Join(executeErr, repository.RetryNode(ctx, claim, service.config.Now().UTC()))
 	}
-	if result.Status != "SUCCEEDED" && result.Status != "CACHED" && result.Status != "SKIPPED" {
+	if executorResult.Status != "SUCCEEDED" && executorResult.Status != "SKIPPED" {
 		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
 		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node executor returned an invalid status"), retryErr)
 	}
-	if err = repository.CompleteNode(ctx, claim, result.Status, service.config.Now().UTC()); err != nil {
+	normalizedOutput, _, outputHash, outputErr := domain.BuildNodeOutput(executorResult.Output)
+	if outputErr != nil {
+		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
+		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node executor returned an invalid output"), retryErr)
+	}
+	result := domain.NodeActivityResult{Status: executorResult.Status, Output: normalizedOutput, OutputHash: outputHash}
+	if err = repository.CompleteNode(ctx, claim, result, service.config.Now().UTC()); err != nil {
 		return domain.NodeActivityResult{}, normalizeError(err)
 	}
 	return result, nil

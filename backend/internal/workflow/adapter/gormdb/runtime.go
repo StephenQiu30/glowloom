@@ -2,12 +2,14 @@ package gormdb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -129,7 +131,14 @@ func (store *Store) ClaimNode(
 			return errors.New("workflow node execution identity has drifted")
 		}
 		if node.Status == "SUCCEEDED" || node.Status == "CACHED" || node.Status == "SKIPPED" {
-			claim = domain.NodeExecutionClaim{Command: command, Status: node.Status, Attempt: node.Attempt, Revision: node.Revision, Replay: true}
+			result, resultErr := completedNodeResult(node)
+			if resultErr != nil {
+				return resultErr
+			}
+			claim = domain.NodeExecutionClaim{
+				Command: command, Status: node.Status, Attempt: node.Attempt, Revision: node.Revision,
+				Result: result, Replay: true,
+			}
 			return nil
 		}
 		stopped, stopErr := stoppingControlExists(transaction, run.ID)
@@ -174,14 +183,14 @@ func (store *Store) ClaimNode(
 func (store *Store) CompleteNode(
 	ctx context.Context,
 	claim domain.NodeExecutionClaim,
-	status string,
+	result domain.NodeActivityResult,
 	now time.Time,
 ) error {
-	return store.finishNode(ctx, claim, status, "RUNNING", "node:"+claim.Command.NodeID+":completed", now)
+	return store.finishNode(ctx, claim, result.Status, "RUNNING", "node:"+claim.Command.NodeID+":completed", &result, now)
 }
 
 func (store *Store) RetryNode(ctx context.Context, claim domain.NodeExecutionClaim, now time.Time) error {
-	return store.finishNode(ctx, claim, "RETRYING", "RETRYING", "node:"+claim.Command.NodeID+":retrying", now)
+	return store.finishNode(ctx, claim, "RETRYING", "RETRYING", "node:"+claim.Command.NodeID+":retrying", nil, now)
 }
 
 func (store *Store) finishNode(
@@ -190,6 +199,7 @@ func (store *Store) finishNode(
 	nodeStatus string,
 	runStatus string,
 	progressStage string,
+	result *domain.NodeActivityResult,
 	now time.Time,
 ) error {
 	runID, nodeID, token, err := runtimeNodeIdentities(claim.Command, claim.ClaimToken)
@@ -213,13 +223,26 @@ func (store *Store) finishNode(
 		if stopErr != nil {
 			return stopErr
 		}
+		updates := map[string]any{
+			"status": nodeStatus, "active_claim_token": nil,
+			"revision": node.Revision + 1, "updated_at": now.UTC(),
+		}
+		if result != nil {
+			normalized, output, outputHash, outputErr := domain.BuildNodeOutput(result.Output)
+			if outputErr != nil || result.Status != nodeStatus || result.OutputHash != outputHash {
+				return errors.New("workflow node completion output is invalid")
+			}
+			result.Output = normalized
+			node.Output = datatypes.JSON(output)
+			node.OutputHash = &outputHash
+			updates["output"] = node.Output
+			updates["output_hash"] = outputHash
+		}
 		node.Status = nodeStatus
 		node.ActiveClaimToken = nil
 		node.Revision++
 		node.UpdatedAt = now.UTC()
-		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
-			"status": node.Status, "active_claim_token": nil, "revision": node.Revision, "updated_at": node.UpdatedAt,
-		}).Error; updateErr != nil {
+		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(updates).Error; updateErr != nil {
 			return updateErr
 		}
 		if stopped || run.Status == "PAUSED" || run.Status == "NEEDS_ATTENTION" {
@@ -245,6 +268,17 @@ func runtimeNodeIdentities(command domain.NodeActivityCommand, claimToken string
 	}
 	token, err := uuid.Parse(claimToken)
 	return runID, nodeID, token, err
+}
+
+func completedNodeResult(node model.NodeRunProjection) (domain.NodeActivityResult, error) {
+	if len(node.Output) == 0 || node.OutputHash == nil {
+		return domain.NodeActivityResult{}, errors.New("completed workflow node has no output projection")
+	}
+	normalized, _, outputHash, err := domain.ParseNodeOutput(json.RawMessage(node.Output))
+	if err != nil || outputHash != *node.OutputHash {
+		return domain.NodeActivityResult{}, errors.New("completed workflow node output projection has drifted")
+	}
+	return domain.NodeActivityResult{Status: node.Status, Output: normalized, OutputHash: outputHash}, nil
 }
 
 func (store *Store) CompleteRun(ctx context.Context, command domain.CompleteRunCommand, now time.Time) error {
@@ -280,6 +314,11 @@ func (store *Store) CompleteRun(ctx context.Context, command domain.CompleteRunC
 		for _, node := range nodes {
 			if (node.Status != "SUCCEEDED" && node.Status != "CACHED" && node.Status != "SKIPPED") || node.ActiveClaimToken != nil {
 				return errors.New("workflow run has incomplete node projections")
+			}
+			if node.RiskLevel != "human_gate" {
+				if _, resultErr := completedNodeResult(node); resultErr != nil {
+					return resultErr
+				}
 			}
 		}
 		run.Status, run.ProgressStage = "SUCCEEDED", "completed"

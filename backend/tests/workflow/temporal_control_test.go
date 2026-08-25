@@ -307,7 +307,7 @@ func (activities *pauseResumeRuntimeActivities) ExecuteNode(
 	case "second":
 		activities.secondStarted <- struct{}{}
 	}
-	return workflowdomain.NodeActivityResult{Status: "SUCCEEDED"}, nil
+	return successfulNodeActivityResult(), nil
 }
 
 func (activities *controlRuntimeActivities) OpenHumanGate(

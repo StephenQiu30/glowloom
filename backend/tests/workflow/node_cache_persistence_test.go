@@ -2,7 +2,6 @@ package workflow_test
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"os"
 	"strings"
@@ -49,7 +48,13 @@ func TestNodeCachePersistsOneImmutableWorkspaceScopedFactUnderConcurrency(t *tes
 	if err != nil {
 		t.Fatalf("build cache key: %v", err)
 	}
-	output, outputHash, err := workflow.CanonicalNodeOutput(json.RawMessage(`{"artifact_ids":["artifact-1"],"binding":"production_bible"}`))
+	_, output, outputHash, err := workflow.BuildNodeOutput(workflow.NodeOutputSnapshot{
+		SchemaVersion: workflow.NodeOutputSchemaVersion,
+		Bindings: []workflow.NodeOutputBinding{{
+			Port: "bible", ValueType: "production_bible", ReferenceID: uuid.NewString(), ReferenceVersion: "1",
+			ContentHash: strings.Repeat("5", 64),
+		}},
+	})
 	if err != nil {
 		t.Fatalf("build cache output: %v", err)
 	}
@@ -111,7 +116,13 @@ func TestNodeCachePersistsOneImmutableWorkspaceScopedFactUnderConcurrency(t *tes
 
 	drifted := base
 	drifted.ID = uuid.NewString()
-	drifted.Output, drifted.OutputHash, err = workflow.CanonicalNodeOutput(json.RawMessage(`{"artifact_ids":["artifact-2"]}`))
+	_, drifted.Output, drifted.OutputHash, err = workflow.BuildNodeOutput(workflow.NodeOutputSnapshot{
+		SchemaVersion: workflow.NodeOutputSchemaVersion,
+		Bindings: []workflow.NodeOutputBinding{{
+			Port: "bible", ValueType: "production_bible", ReferenceID: uuid.NewString(), ReferenceVersion: "2",
+			ContentHash: strings.Repeat("6", 64),
+		}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

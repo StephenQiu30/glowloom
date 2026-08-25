@@ -3,6 +3,7 @@ package workflow_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -40,15 +41,20 @@ func TestRuntimeNodeExecutionRetriesWithStableBusinessIdentityAndFencing(t *test
 		t.Fatalf("failed activity projection = status %s attempt %d token %q", repository.status, repository.attempt, repository.claimToken)
 	}
 	result, err := service.ExecuteNode(context.Background(), command)
-	if err != nil || result.Status != "SUCCEEDED" {
+	if err != nil || result.Status != "SUCCEEDED" || result.OutputHash == "" ||
+		len(result.Output.Bindings) != 1 || result.Output.Bindings[0].Port != "candidate" {
 		t.Fatalf("retry node execution: result=%#v err=%v", result, err)
 	}
 	if repository.status != "SUCCEEDED" || repository.attempt != 2 || repository.claimToken != "" {
 		t.Fatalf("completed activity projection = status %s attempt %d token %q", repository.status, repository.attempt, repository.claimToken)
 	}
 	replayed, err := service.ExecuteNode(context.Background(), command)
-	if err != nil || replayed.Status != "SUCCEEDED" {
+	if err != nil || replayed.Status != "SUCCEEDED" || replayed.OutputHash != result.OutputHash ||
+		replayed.Output.Bindings[0] != result.Output.Bindings[0] {
 		t.Fatalf("replay completed node: result=%#v err=%v", replayed, err)
+	}
+	if repository.result.OutputHash != result.OutputHash || repository.result.Output.Bindings[0] != result.Output.Bindings[0] {
+		t.Fatalf("repository output projection = %#v", repository.result)
 	}
 	if executor.CallCount() != 2 {
 		t.Fatalf("executor call count = %d, want 2", executor.CallCount())
@@ -62,6 +68,33 @@ func TestRuntimeNodeExecutionRetriesWithStableBusinessIdentityAndFencing(t *test
 	}
 }
 
+func TestRuntimeRejectsExecutorOwnedCacheAndInvalidOutputWithoutCommittingIt(t *testing.T) {
+	tests := []struct {
+		name     string
+		executor *scriptedNodeExecutor
+	}{
+		{name: "executor cannot declare cache hit", executor: &scriptedNodeExecutor{status: "CACHED"}},
+		{name: "output binding must be valid", executor: &scriptedNodeExecutor{invalidOutput: true}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &runtimeNodeRepository{status: "QUEUED"}
+			service := workflowapp.NewRuntimeService(repository, workflowapp.RuntimeConfig{
+				Now:   func() time.Time { return time.Date(2026, time.August, 26, 4, 0, 0, 0, time.UTC) },
+				NewID: func() string { return "claim-token" }, Executor: test.executor,
+			})
+			_, err := service.ExecuteNode(context.Background(), workflow.NodeActivityCommand{
+				WorkflowRunID: "00000000-0000-0000-0000-000000000111",
+				NodeRunID:     "00000000-0000-0000-0000-000000000222",
+				NodeID:        "bible", Executor: "activity.production_bible", Attempt: 1,
+			})
+			if err == nil || repository.status != "RETRYING" || repository.result.OutputHash != "" {
+				t.Fatalf("invalid executor result was committed: status=%s result=%#v err=%v", repository.status, repository.result, err)
+			}
+		})
+	}
+}
+
 type runtimeNodeRepository struct {
 	mu         sync.Mutex
 	status     string
@@ -69,6 +102,7 @@ type runtimeNodeRepository struct {
 	revision   int
 	claimToken string
 	claims     []string
+	result     workflow.NodeActivityResult
 }
 
 func (repo *runtimeNodeRepository) LoadExecutionPlan(context.Context, workflow.StartRequest) (workflow.ExecutionPlan, error) {
@@ -84,7 +118,7 @@ func (repo *runtimeNodeRepository) ClaimNode(
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 	if repo.status == "SUCCEEDED" {
-		return workflow.NodeExecutionClaim{Command: command, Status: repo.status, Replay: true}, nil
+		return workflow.NodeExecutionClaim{Command: command, Status: repo.status, Result: repo.result, Replay: true}, nil
 	}
 	repo.status = "RUNNING"
 	repo.attempt++
@@ -100,7 +134,7 @@ func (repo *runtimeNodeRepository) ClaimNode(
 func (repo *runtimeNodeRepository) CompleteNode(
 	_ context.Context,
 	claim workflow.NodeExecutionClaim,
-	status string,
+	result workflow.NodeActivityResult,
 	_ time.Time,
 ) error {
 	repo.mu.Lock()
@@ -108,7 +142,8 @@ func (repo *runtimeNodeRepository) CompleteNode(
 	if repo.claimToken != claim.ClaimToken {
 		return errors.New("stale claim")
 	}
-	repo.status = status
+	repo.status = result.Status
+	repo.result = result
 	repo.claimToken = ""
 	repo.revision++
 	return nil
@@ -131,23 +166,44 @@ func (repo *runtimeNodeRepository) RetryNode(
 }
 
 type scriptedNodeExecutor struct {
-	mu       sync.Mutex
-	failures int
-	keys     []string
+	mu            sync.Mutex
+	failures      int
+	status        string
+	invalidOutput bool
+	keys          []string
 }
 
 func (executor *scriptedNodeExecutor) Execute(
 	_ context.Context,
 	command workflow.NodeExecutorCommand,
-) (workflow.NodeActivityResult, error) {
+) (workflow.NodeExecutorResult, error) {
 	executor.mu.Lock()
 	defer executor.mu.Unlock()
 	executor.keys = append(executor.keys, command.IdempotencyKey)
 	if executor.failures > 0 {
 		executor.failures--
-		return workflow.NodeActivityResult{}, errors.New("transient executor failure")
+		return workflow.NodeExecutorResult{}, errors.New("transient executor failure")
 	}
-	return workflow.NodeActivityResult{Status: "SUCCEEDED"}, nil
+	status := executor.status
+	if status == "" {
+		status = "SUCCEEDED"
+	}
+	output := successfulExecutorOutput()
+	if executor.invalidOutput {
+		output.Bindings[0].ContentHash = "invalid"
+	}
+	return workflow.NodeExecutorResult{Status: status, Output: output}, nil
+}
+
+func successfulExecutorOutput() workflow.NodeOutputSnapshot {
+	return workflow.NodeOutputSnapshot{
+		SchemaVersion: workflow.NodeOutputSchemaVersion,
+		Bindings: []workflow.NodeOutputBinding{{
+			Port: "candidate", ValueType: "production_bible_candidate",
+			ReferenceID: "00000000-0000-0000-0000-000000000333", ReferenceVersion: "1",
+			ContentHash: strings.Repeat("c", 64),
+		}},
+	}
 }
 
 func (executor *scriptedNodeExecutor) CallCount() int {

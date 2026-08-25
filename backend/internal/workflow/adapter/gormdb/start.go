@@ -256,7 +256,8 @@ func nodeRunRecord(value domain.NodeRunProjection) (model.NodeRunProjection, err
 		ID: id, WorkspaceID: workspaceID, WorkflowRunID: runID, NodeID: value.NodeID,
 		DefinitionKey: value.DefinitionKey, DefinitionVersion: value.DefinitionVersion,
 		Executor: value.Executor, RiskLevel: value.RiskLevel, Status: value.Status, Attempt: value.Attempt,
-		ActiveClaimToken: activeClaimToken, Revision: value.Revision,
+		ActiveClaimToken: activeClaimToken, Output: datatypes.JSON(value.Output), OutputHash: nodeOutputHashPointer(value.OutputHash),
+		Revision:  value.Revision,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}, nil
 }
@@ -341,9 +342,24 @@ func nodeRunDomain(value model.NodeRunProjection) domain.NodeRunProjection {
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), WorkflowRunID: value.WorkflowRunID.String(),
 		NodeID: value.NodeID, DefinitionKey: value.DefinitionKey, DefinitionVersion: value.DefinitionVersion,
 		Executor: value.Executor, RiskLevel: value.RiskLevel, Status: value.Status, Attempt: value.Attempt,
-		ActiveClaimToken: claimToken, Revision: value.Revision,
+		ActiveClaimToken: claimToken, Output: append([]byte(nil), value.Output...), OutputHash: nodeOutputHashValue(value.OutputHash),
+		Revision:  value.Revision,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
+}
+
+func nodeOutputHashPointer(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func nodeOutputHashValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func startIntentDomain(value model.WorkflowStartIntent) domain.StartIntent {

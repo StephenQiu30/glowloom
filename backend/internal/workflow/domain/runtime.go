@@ -25,7 +25,14 @@ type NodeActivityCommand struct {
 }
 
 type NodeActivityResult struct {
-	Status string `json:"status"`
+	Status     string             `json:"status"`
+	Output     NodeOutputSnapshot `json:"output"`
+	OutputHash string             `json:"output_hash"`
+}
+
+type NodeExecutorResult struct {
+	Status string             `json:"status"`
+	Output NodeOutputSnapshot `json:"output"`
 }
 
 type NodeExecutionClaim struct {
@@ -34,6 +41,7 @@ type NodeExecutionClaim struct {
 	Status     string
 	Attempt    int
 	Revision   int
+	Result     NodeActivityResult
 	Replay     bool
 }
 

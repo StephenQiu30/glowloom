@@ -1,10 +1,8 @@
 package domain
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"regexp"
 	"slices"
 	"time"
@@ -65,27 +63,6 @@ func BuildNodeCacheKey(material NodeCacheKeyMaterial) (NodeCacheKeyMaterial, str
 		return NodeCacheKeyMaterial{}, "", err
 	}
 	return material, sha256Hex(encoded), nil
-}
-
-func CanonicalNodeOutput(raw json.RawMessage) (json.RawMessage, string, error) {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, "", errors.New("invalid node output snapshot")
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return nil, "", errors.New("invalid node output snapshot")
-	}
-	if _, object := value.(map[string]any); !object {
-		return nil, "", errors.New("node output snapshot must be an object")
-	}
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return nil, "", err
-	}
-	return encoded, sha256Hex(encoded), nil
 }
 
 func validOptionalNodeCacheHash(value string) bool {

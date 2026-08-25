@@ -149,7 +149,7 @@ func (*replayRuntimeActivities) ExecuteNode(
 	context.Context,
 	workflowdomain.NodeActivityCommand,
 ) (workflowdomain.NodeActivityResult, error) {
-	return workflowdomain.NodeActivityResult{Status: "SUCCEEDED"}, nil
+	return successfulNodeActivityResult(), nil
 }
 
 func (*replayRuntimeActivities) OpenHumanGate(context.Context, workflowdomain.NodeActivityCommand) error {

@@ -156,16 +156,22 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	if err != nil || result.Status != "SUCCEEDED" {
 		t.Fatalf("retry persisted node execution: result=%#v err=%v", result, err)
 	}
-	if _, err = runtimeService.ExecuteNode(ctx, command); err != nil || executor.CallCount() != 2 {
-		t.Fatalf("replay persisted node execution: calls=%d err=%v", executor.CallCount(), err)
+	replayedResult, replayErr := runtimeService.ExecuteNode(ctx, command)
+	if replayErr != nil || executor.CallCount() != 2 || replayedResult.OutputHash != result.OutputHash {
+		t.Fatalf("replay persisted node execution: result=%#v calls=%d err=%v", replayedResult, executor.CallCount(), replayErr)
 	}
 	var projection model.NodeRunProjection
 	if err = database.First(&projection, "id = ?", node.NodeRunID).Error; err != nil {
 		t.Fatalf("load persisted node projection: %v", err)
 	}
 	if projection.Status != "SUCCEEDED" || projection.Attempt != 2 || projection.Executor != node.Executor ||
-		projection.RiskLevel != node.RiskLevel || projection.ActiveClaimToken != nil {
+		projection.RiskLevel != node.RiskLevel || projection.ActiveClaimToken != nil || projection.OutputHash == nil ||
+		*projection.OutputHash != result.OutputHash {
 		t.Fatalf("persisted node projection = %#v", projection)
+	}
+	persistedOutput, _, persistedOutputHash, outputErr := workflow.ParseNodeOutput(json.RawMessage(projection.Output))
+	if outputErr != nil || persistedOutputHash != result.OutputHash || persistedOutput.Bindings[0] != result.Output.Bindings[0] {
+		t.Fatalf("persisted node output = %#v hash=%s err=%v", persistedOutput, persistedOutputHash, outputErr)
 	}
 	gate := plan.Nodes[2]
 	gateCommand := workflow.NodeActivityCommand{
@@ -285,6 +291,15 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	if err = database.Model(&model.NodeRunProjection{}).Where("workflow_run_id = ?", request.WorkflowRunID).
 		Updates(map[string]any{"status": "SUCCEEDED", "active_claim_token": nil}).Error; err != nil {
 		t.Fatalf("prepare completed node projections: %v", err)
+	}
+	_, completedOutput, completedOutputHash, outputErr := workflow.BuildNodeOutput(successfulExecutorOutput())
+	if outputErr != nil {
+		t.Fatalf("build completed node output fixture: %v", outputErr)
+	}
+	if err = database.Model(&model.NodeRunProjection{}).
+		Where("workflow_run_id = ? AND risk_level <> ?", request.WorkflowRunID, "human_gate").
+		Updates(model.NodeRunProjection{Output: []byte(completedOutput), OutputHash: &completedOutputHash}).Error; err != nil {
+		t.Fatalf("prepare completed node outputs: %v", err)
 	}
 	if err = database.Model(&model.WorkflowRun{}).Where("id = ?", request.WorkflowRunID).Update("status", "RUNNING").Error; err != nil {
 		t.Fatalf("prepare completable workflow run: %v", err)

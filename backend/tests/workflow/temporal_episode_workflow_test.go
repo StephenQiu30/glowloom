@@ -44,7 +44,7 @@ func TestEpisodeWorkflowExecutesCompiledOrderAndWaitsForHumanSignal(t *testing.T
 	environment.RegisterActivityWithOptions(
 		func(_ context.Context, command temporaladapter.NodeActivityCommand) (temporaladapter.NodeActivityResult, error) {
 			record("execute:" + command.NodeID)
-			return temporaladapter.NodeActivityResult{Status: "SUCCEEDED"}, nil
+			return successfulNodeActivityResult(), nil
 		},
 		activity.RegisterOptions{Name: temporaladapter.ExecuteNodeActivityName},
 	)
@@ -97,6 +97,14 @@ func TestEpisodeWorkflowExecutesCompiledOrderAndWaitsForHumanSignal(t *testing.T
 	}
 }
 
+func successfulNodeActivityResult() workflow.NodeActivityResult {
+	output, _, outputHash, err := workflow.BuildNodeOutput(successfulExecutorOutput())
+	if err != nil {
+		panic(err)
+	}
+	return workflow.NodeActivityResult{Status: "SUCCEEDED", Output: output, OutputHash: outputHash}
+}
+
 func TestEpisodeWorkflowRejectsDriftedExecutionPlan(t *testing.T) {
 	request := episodeWorkflowStartRequest()
 	plan := temporaladapter.ExecutionPlan{
@@ -117,6 +125,34 @@ func TestEpisodeWorkflowRejectsDriftedExecutionPlan(t *testing.T) {
 	environment.ExecuteWorkflow(temporaladapter.EpisodeProductionWorkflow, request)
 	if err := environment.GetWorkflowError(); err == nil || !strings.Contains(err.Error(), "execution plan does not match start input") {
 		t.Fatalf("drifted plan error = %v", err)
+	}
+}
+
+func TestEpisodeWorkflowRejectsNodeActivityWithoutCanonicalOutput(t *testing.T) {
+	request := episodeWorkflowStartRequest()
+	plan := temporaladapter.ExecutionPlan{
+		WorkflowRunID: request.WorkflowRunID, DefinitionVersionID: request.DefinitionVersionID,
+		RunInputSnapshotID: request.RunInputSnapshotID, DefinitionContentHash: request.DefinitionContentHash,
+		InputSnapshotHash: request.InputSnapshotHash,
+		Nodes: []temporaladapter.ExecutionNode{{
+			NodeRunID: "node-run-script", NodeID: "script", Executor: "workflow.input.script_revision", RiskLevel: "low",
+		}},
+	}
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	environment.RegisterActivityWithOptions(
+		func(context.Context, workflow.StartRequest) (temporaladapter.ExecutionPlan, error) { return plan, nil },
+		activity.RegisterOptions{Name: temporaladapter.LoadExecutionPlanActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(context.Context, temporaladapter.NodeActivityCommand) (temporaladapter.NodeActivityResult, error) {
+			return temporaladapter.NodeActivityResult{Status: "SUCCEEDED"}, nil
+		},
+		activity.RegisterOptions{Name: temporaladapter.ExecuteNodeActivityName},
+	)
+	environment.ExecuteWorkflow(temporaladapter.EpisodeProductionWorkflow, request)
+	if err := environment.GetWorkflowError(); err == nil || !strings.Contains(err.Error(), "invalid terminal output") {
+		t.Fatalf("invalid node activity output error = %v", err)
 	}
 }
 
