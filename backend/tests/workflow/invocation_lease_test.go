@@ -13,12 +13,34 @@ import (
 	"gorm.io/datatypes"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	"github.com/StephenQiu30/lanverse/backend/internal/config"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboarddomain "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/domain"
 )
+
+func TestAgentClaimLeaseHasBoundedConfiguration(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
+
+	configuration, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configuration.AgentClaimLease != 30*time.Minute {
+		t.Fatalf("default AgentClaimLease = %s", configuration.AgentClaimLease)
+	}
+
+	t.Setenv("AGENT_CLAIM_LEASE_SECONDS", "900")
+	configuration, err = config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configuration.AgentClaimLease != 15*time.Minute {
+		t.Fatalf("configured AgentClaimLease = %s", configuration.AgentClaimLease)
+	}
+}
 
 func TestAgentInvocationCatalogDeclaresLeaseAndFencing(t *testing.T) {
 	t.Parallel()
