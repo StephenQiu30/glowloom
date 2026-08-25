@@ -8,14 +8,6 @@ x-backend-service: &backend-service
   build: *backend-build
   image: lanverse/backend:development
 
-x-agent-build: &agent-build
-  context: ./agent
-  dockerfile: Dockerfile
-
-x-agent-service: &agent-service
-  build: *agent-build
-  image: lanverse/agent:development
-
 services:
   frontend:
     build:
@@ -23,38 +15,11 @@ services:
       dockerfile: Dockerfile
     image: lanverse/frontend:development
 
-  agent-init:
-    <<: *agent-service
-    command: ["python", "-m", "app.runtime.commands.database", "check"]
-
-  agent-api:
-    <<: *agent-service
-    command: ["python", "-m", "app.runtime.api"]
-
   backend:
     <<: *backend-service
 
-  schedule-dispatcher:
-    <<: *agent-service
-    command: ["python", "-m", "app.runtime.workers.scheduler", "schedule"]
-
-  outbox-publisher:
-    <<: *agent-service
-    command: ["python", "-m", "app.runtime.workers.scheduler", "outbox"]
-
-  io-worker:
-    <<: *agent-service
-    command: ["python", "-m", "app.runtime.workers.io"]
-
-  media-worker:
-    <<: *agent-service
-    command: ["python", "-m", "app.runtime.workers.media"]
-
   postgres:
     image: postgres:16.15-alpine
-
-  redis:
-    image: redis:8.10.0-alpine
 
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
@@ -68,18 +33,3 @@ services:
         until mc alias set local http://minio:9000 "$${MINIO_ACCESS_KEY}"
         "$${MINIO_SECRET_KEY}"; do sleep 1; done;
         mc mb --ignore-existing "local/$${MINIO_BUCKET}"
-
-  kafka:
-    image: apache/kafka:4.3.1
-
-  kafka-init:
-    image: apache/kafka:4.3.1
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092
-        --create --if-not-exists --topic lanverse.io.v1 --partitions 3
-        --replication-factor 1 &&
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092
-        --create --if-not-exists --topic lanverse.media.v1 --partitions 3
-        --replication-factor 1
