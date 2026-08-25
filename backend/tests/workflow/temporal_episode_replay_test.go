@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
 	historypb "go.temporal.io/api/history/v1"
-	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 	temporalworkflow "go.temporal.io/sdk/workflow"
@@ -47,46 +46,21 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 		},
 	}
 
-	runtimeWorker := worker.New(temporalClient, taskQueue, worker.Options{})
-	runtimeWorker.RegisterWorkflowWithOptions(
-		temporaladapter.EpisodeProductionWorkflow,
-		temporalworkflow.RegisterOptions{Name: temporaladapter.EpisodeProductionWorkflowName},
-	)
-	runtimeWorker.RegisterActivityWithOptions(
-		func(context.Context, workflowdomain.StartRequest) (temporaladapter.ExecutionPlan, error) {
-			return plan, nil
-		},
-		activity.RegisterOptions{Name: temporaladapter.LoadExecutionPlanActivityName},
-	)
-	runtimeWorker.RegisterActivityWithOptions(
-		func(context.Context, temporaladapter.NodeActivityCommand) (temporaladapter.NodeActivityResult, error) {
-			return temporaladapter.NodeActivityResult{Status: "SUCCEEDED"}, nil
-		},
-		activity.RegisterOptions{Name: temporaladapter.ExecuteNodeActivityName},
-	)
-	runtimeWorker.RegisterActivityWithOptions(
-		func(context.Context, temporaladapter.NodeActivityCommand) error { return nil },
-		activity.RegisterOptions{Name: temporaladapter.OpenHumanGateActivityName},
-	)
-	runtimeWorker.RegisterActivityWithOptions(
-		func(context.Context, temporaladapter.ApplyHumanGateCommand) error { return nil },
-		activity.RegisterOptions{Name: temporaladapter.ApplyHumanGateActivityName},
-	)
-	runtimeWorker.RegisterActivityWithOptions(
-		func(context.Context, temporaladapter.CompleteRunCommand) error { return nil },
-		activity.RegisterOptions{Name: temporaladapter.CompleteRunActivityName},
-	)
+	runtime, err := temporaladapter.New(temporaladapter.Config{
+		Address: address, Namespace: "default", TaskQueue: taskQueue,
+	})
+	if err != nil {
+		t.Fatalf("connect Temporal runtime: %v", err)
+	}
+	t.Cleanup(runtime.Close)
+	runtimeWorker, err := runtime.NewWorker(&replayRuntimeActivities{plan: plan})
+	if err != nil {
+		t.Fatalf("register Temporal worker: %v", err)
+	}
 	if err = runtimeWorker.Start(); err != nil {
 		t.Fatalf("start Temporal worker: %v", err)
 	}
 	t.Cleanup(runtimeWorker.Stop)
-	signaler, err := temporaladapter.New(temporaladapter.Config{
-		Address: address, Namespace: "default", TaskQueue: taskQueue,
-	})
-	if err != nil {
-		t.Fatalf("connect Temporal signaler: %v", err)
-	}
-	t.Cleanup(signaler.Close)
 
 	run, err := temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID: request.WorkflowID, TaskQueue: taskQueue,
@@ -102,11 +76,11 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build human gate signal: %v", err)
 	}
-	signaled, err := signaler.Signal(ctx, signalRequest)
+	signaled, err := runtime.Signal(ctx, signalRequest)
 	if err != nil || signaled.Outcome != workflowdomain.SignalOutcomeSignaled || signaled.ObservedInputHash != signalRequest.InputHash {
 		t.Fatalf("signal human gate: observation=%#v err=%v", signaled, err)
 	}
-	alreadyApplied, err := signaler.Signal(ctx, signalRequest)
+	alreadyApplied, err := runtime.Signal(ctx, signalRequest)
 	if err != nil || alreadyApplied.Outcome != workflowdomain.SignalOutcomeAlreadyApplied ||
 		alreadyApplied.ObservedInputHash != signalRequest.InputHash {
 		t.Fatalf("reconcile repeated human gate signal: observation=%#v err=%v", alreadyApplied, err)
@@ -117,7 +91,7 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build conflicting human gate signal: %v", err)
 	}
-	conflict, err := signaler.Signal(ctx, conflictingRequest)
+	conflict, err := runtime.Signal(ctx, conflictingRequest)
 	if err != nil || conflict.Outcome != workflowdomain.SignalOutcomeConflict ||
 		conflict.ObservedInputHash != signalRequest.InputHash {
 		t.Fatalf("reject drifted repeated human gate signal: observation=%#v err=%v", conflict, err)
@@ -158,4 +132,34 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 	if err = replayer.ReplayWorkflowHistory(nil, history); err != nil {
 		t.Fatalf("replay Episode Workflow history: %v", err)
 	}
+}
+
+type replayRuntimeActivities struct {
+	plan temporaladapter.ExecutionPlan
+}
+
+func (activities *replayRuntimeActivities) LoadExecutionPlan(
+	context.Context,
+	workflowdomain.StartRequest,
+) (workflowdomain.ExecutionPlan, error) {
+	return activities.plan, nil
+}
+
+func (*replayRuntimeActivities) ExecuteNode(
+	context.Context,
+	workflowdomain.NodeActivityCommand,
+) (workflowdomain.NodeActivityResult, error) {
+	return workflowdomain.NodeActivityResult{Status: "SUCCEEDED"}, nil
+}
+
+func (*replayRuntimeActivities) OpenHumanGate(context.Context, workflowdomain.NodeActivityCommand) error {
+	return nil
+}
+
+func (*replayRuntimeActivities) ApplyHumanGate(context.Context, workflowdomain.ApplyHumanGateCommand) error {
+	return nil
+}
+
+func (*replayRuntimeActivities) CompleteRun(context.Context, workflowdomain.CompleteRunCommand) error {
+	return nil
 }

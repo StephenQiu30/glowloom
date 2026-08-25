@@ -26,16 +26,18 @@ PostgreSQL 业务事实仍只有 Backend 的 GORM Model Catalog 一个来源；�
 | 结果未知 | 外部调用失败且 History 无法确认时写 `unknown` Receipt；后续使用原 Intent、SignalID 与输入 Hash 重试 |
 | 投影生效 | Apply Activity 只接受已完成且身份、Decision、Subject Revision 全匹配的 Signal Intent；批准后 Node 进入 `SUCCEEDED`、Run 恢复 `RUNNING`，重复 Apply 不再修改 Revision |
 | 运行契约 | Episode Workflow 只接受带 SignalID/SignalIntentID 的合法 Human Gate Signal，并在 Apply Activity 成功后决定继续或终止 |
+| Worker 注册 | 同一个 Temporal Client 显式注册 Episode Workflow 和 Load/Execute/Open/Apply/Complete 五个 Runtime Activity；注册入口只接受完整 RuntimeActivities 契约 |
 | 依赖边界 | Application 只依赖 WorkflowSignaler Port；Temporal SDK 与 History 解码全部位于 `adapter/temporal` |
 
 ## 真实验证
 
 1. 固定摘要 Temporal 服务运行 `LANVERSE_TEST_TEMPORAL_ADDRESS=127.0.0.1:57244 go test ./tests/workflow -run 'Test(TemporalStarter|EpisodeWorkflowCompletes)' -count=1 -v`：通过。首次发送返回 `signaled`，同一输入重放返回 `already_applied`，相同 SignalID 的漂移输入返回 `conflict`；Episode Workflow 完成后 History Replay 通过。
-2. 全新 PostgreSQL 16.15 与固定摘要 Temporal 服务同时运行 `go vet ./...`、`go test -p 1 ./...`：通过；`backend/tests/workflow` 包含真实 GORM Signal、Apply 投影、真实 Temporal Start/Signal 与 Replay，最新复验用时 10.054 秒。
+2. 全新 PostgreSQL 16.15 与固定摘要 Temporal 服务同时运行 `go vet ./...`、`go test -p 1 ./...`：通过；`backend/tests/workflow` 包含真实 GORM Signal、Apply 投影、正式 Worker 注册、真实 Temporal Start/Signal 与 Replay，最新复验用时 10.065 秒。
 3. Agent 执行 Ruff Check/Format、Pyright 与全量 Pytest：通过，`12 passed`；Agent 继续只运行 Candidate Runtime。
 4. Frontend 从 `backend/api/openapi/lanverse-v1.json` 重新生成 Client 后执行 ESLint、TypeScript、Vitest 与生产构建：通过，`16` 个测试文件、`45` 项测试全部成功。
 5. OpenAPI 生成目录无 Diff，仓库 Secret/Data/Report 与语言边界卫生检查通过。
 6. 全新 PostgreSQL 16.15 运行 `LANVERSE_TEST_DATABASE_URL=... go test ./tests/workflow -run TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder -count=1 -v`：通过；漂移 Decision 被拒绝，批准投影落库，重复 Apply 保持同一终态。
+7. 固定摘要 Temporal 服务运行 `LANVERSE_TEST_TEMPORAL_ADDRESS=127.0.0.1:57245 go test ./tests/workflow -run TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory -count=1 -v`：通过；正式 Worker 注册入口消费五类 Activity，Workflow 完成并 Replay 成功。
 
 ## Requirement 状态
 
@@ -46,7 +48,7 @@ PostgreSQL 业务事实仍只有 Backend 的 GORM Model Catalog 一个来源；�
 
 ## 残余风险与下一切片
 
-- `cmd/api` 尚未注册 Temporal Worker、Runtime Activities、Start/Review/Signal Handler；当前能力只能由内部用例调用，不能报告为产品服务可用。
+- `cmd/api` 尚未调用 Worker 注册入口，也未装配真实 Node Executor、Start/Review/Signal Handler；当前能力只能由内部用例调用，不能报告为产品服务可用。
 - 拒绝/修改请求后的真实 Run 恢复旅程和崩溃重放仍需随 Worker 装配实现；当前已验证批准终态与漂移 Decision 拒绝。
 - 下一任务先实现单一 Temporal Client 驱动的 Worker Composition 与真实 Activity 注册，再开放 Workflow/Review HTTP API；不得先暴露会进入无人消费 Task Queue 的 Start 接口。
 - 最终 `agent-browser` 仍只在全部开发与自动化回归完成后执行，本记录不计作浏览器验收。
