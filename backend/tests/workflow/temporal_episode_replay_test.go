@@ -15,6 +15,7 @@ import (
 	temporalworkflow "go.temporal.io/sdk/workflow"
 
 	temporaladapter "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
+	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	workflowdomain "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
@@ -79,6 +80,13 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 		t.Fatalf("start Temporal worker: %v", err)
 	}
 	t.Cleanup(runtimeWorker.Stop)
+	signaler, err := temporaladapter.New(temporaladapter.Config{
+		Address: address, Namespace: "default", TaskQueue: taskQueue,
+	})
+	if err != nil {
+		t.Fatalf("connect Temporal signaler: %v", err)
+	}
+	t.Cleanup(signaler.Close)
 
 	run, err := temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID: request.WorkflowID, TaskQueue: taskQueue,
@@ -86,11 +94,33 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start Episode Workflow: %v", err)
 	}
-	if err = temporalClient.SignalWorkflow(ctx, run.GetID(), run.GetRunID(), temporaladapter.HumanGateSignalName, temporaladapter.HumanGateSignal{
-		WorkflowRunID: request.WorkflowRunID, NodeRunID: plan.Nodes[1].NodeRunID,
-		SignalIntentID: uuid.NewString(), Decision: "APPROVED",
-	}); err != nil {
-		t.Fatalf("signal human gate: %v", err)
+	signalIntent := workflowdomain.SignalIntent{
+		ID: uuid.NewString(), TemporalWorkflowID: run.GetID(), SignalID: uuid.NewString(),
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: plan.Nodes[1].NodeRunID, Decision: "approved",
+	}
+	signalRequest, err := workflowapp.NewSignalRequest(signalIntent)
+	if err != nil {
+		t.Fatalf("build human gate signal: %v", err)
+	}
+	signaled, err := signaler.Signal(ctx, signalRequest)
+	if err != nil || signaled.Outcome != workflowdomain.SignalOutcomeSignaled || signaled.ObservedInputHash != signalRequest.InputHash {
+		t.Fatalf("signal human gate: observation=%#v err=%v", signaled, err)
+	}
+	alreadyApplied, err := signaler.Signal(ctx, signalRequest)
+	if err != nil || alreadyApplied.Outcome != workflowdomain.SignalOutcomeAlreadyApplied ||
+		alreadyApplied.ObservedInputHash != signalRequest.InputHash {
+		t.Fatalf("reconcile repeated human gate signal: observation=%#v err=%v", alreadyApplied, err)
+	}
+	conflictingIntent := signalIntent
+	conflictingIntent.Decision = "rejected"
+	conflictingRequest, err := workflowapp.NewSignalRequest(conflictingIntent)
+	if err != nil {
+		t.Fatalf("build conflicting human gate signal: %v", err)
+	}
+	conflict, err := signaler.Signal(ctx, conflictingRequest)
+	if err != nil || conflict.Outcome != workflowdomain.SignalOutcomeConflict ||
+		conflict.ObservedInputHash != signalRequest.InputHash {
+		t.Fatalf("reject drifted repeated human gate signal: observation=%#v err=%v", conflict, err)
 	}
 	var result temporaladapter.RunResult
 	if err = run.Get(ctx, &result); err != nil {
@@ -102,15 +132,23 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 
 	iterator := temporalClient.GetWorkflowHistory(ctx, run.GetID(), run.GetRunID(), false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
 	history := &historypb.History{}
+	humanGateSignalEvents := 0
 	for iterator.HasNext() {
 		event, nextErr := iterator.Next()
 		if nextErr != nil {
 			t.Fatalf("read workflow history: %v", nextErr)
 		}
 		history.Events = append(history.Events, event)
+		if attributes := event.GetWorkflowExecutionSignaledEventAttributes(); attributes != nil &&
+			attributes.GetSignalName() == temporaladapter.HumanGateSignalName {
+			humanGateSignalEvents++
+		}
 	}
 	if len(history.Events) == 0 {
 		t.Fatal("Temporal returned an empty workflow history")
+	}
+	if humanGateSignalEvents != 1 {
+		t.Fatalf("Temporal human gate signal events = %d, want 1", humanGateSignalEvents)
 	}
 	replayer := worker.NewWorkflowReplayer()
 	replayer.RegisterWorkflowWithOptions(

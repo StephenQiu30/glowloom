@@ -72,7 +72,7 @@ func TestEpisodeWorkflowExecutesCompiledOrderAndWaitsForHumanSignal(t *testing.T
 	environment.RegisterDelayedCallback(func() {
 		environment.SignalWorkflow(temporaladapter.HumanGateSignalName, temporaladapter.HumanGateSignal{
 			WorkflowRunID: request.WorkflowRunID, NodeRunID: "node-run-review",
-			SignalIntentID: "signal-intent-review", Decision: "APPROVED",
+			SignalID: "signal-review", SignalIntentID: "signal-intent-review", Decision: "APPROVED",
 		})
 	}, time.Minute)
 

@@ -29,6 +29,7 @@ type NodeActivityResult = workflowdomain.NodeActivityResult
 type HumanGateSignal struct {
 	WorkflowRunID  string `json:"workflow_run_id"`
 	NodeRunID      string `json:"node_run_id"`
+	SignalID       string `json:"signal_id"`
 	SignalIntentID string `json:"signal_intent_id"`
 	Decision       string `json:"decision"`
 }
@@ -173,7 +174,8 @@ func awaitHumanGateSignal(
 }
 
 func validHumanGateSignal(signal HumanGateSignal, workflowRunID, nodeRunID string) bool {
-	if signal.WorkflowRunID != workflowRunID || signal.NodeRunID != nodeRunID || strings.TrimSpace(signal.SignalIntentID) == "" {
+	if signal.WorkflowRunID != workflowRunID || signal.NodeRunID != nodeRunID || strings.TrimSpace(signal.SignalID) == "" ||
+		strings.TrimSpace(signal.SignalIntentID) == "" {
 		return false
 	}
 	switch signal.Decision {

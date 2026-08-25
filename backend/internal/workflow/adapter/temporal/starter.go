@@ -8,7 +8,7 @@ import (
 
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
-	"go.temporal.io/sdk/client"
+	temporalclient "go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/converter"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
@@ -20,38 +20,42 @@ type Config struct {
 	Address, Namespace, TaskQueue string
 }
 
-type Starter struct {
-	client        client.Client
+type Client struct {
+	client        temporalclient.Client
+	namespace     string
 	taskQueue     string
 	dataConverter converter.DataConverter
 }
 
-func NewStarter(config Config) (*Starter, error) {
+func New(config Config) (*Client, error) {
 	config.Address = strings.TrimSpace(config.Address)
 	config.Namespace = strings.TrimSpace(config.Namespace)
 	config.TaskQueue = strings.TrimSpace(config.TaskQueue)
 	if config.Address == "" || config.Namespace == "" || config.TaskQueue == "" || len(config.TaskQueue) > 255 {
-		return nil, errors.New("invalid Temporal starter configuration")
+		return nil, errors.New("invalid Temporal client configuration")
 	}
-	temporalClient, err := client.Dial(client.Options{HostPort: config.Address, Namespace: config.Namespace})
+	temporalClient, err := temporalclient.Dial(temporalclient.Options{HostPort: config.Address, Namespace: config.Namespace})
 	if err != nil {
 		return nil, fmt.Errorf("connect Temporal service: %w", err)
 	}
-	return &Starter{client: temporalClient, taskQueue: config.TaskQueue, dataConverter: converter.GetDefaultDataConverter()}, nil
+	return &Client{
+		client: temporalClient, namespace: config.Namespace, taskQueue: config.TaskQueue,
+		dataConverter: converter.GetDefaultDataConverter(),
+	}, nil
 }
 
-func (starter *Starter) Close() {
-	if starter != nil && starter.client != nil {
-		starter.client.Close()
+func (runtime *Client) Close() {
+	if runtime != nil && runtime.client != nil {
+		runtime.client.Close()
 	}
 }
 
-func (starter *Starter) Start(ctx context.Context, request domain.StartRequest) (domain.StartObservation, error) {
-	if starter == nil || starter.client == nil || !validRequest(request) {
+func (runtime *Client) Start(ctx context.Context, request domain.StartRequest) (domain.StartObservation, error) {
+	if runtime == nil || runtime.client == nil || !validRequest(request) {
 		return domain.StartObservation{}, errors.New("invalid Temporal workflow start request")
 	}
-	_, err := starter.client.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID: request.WorkflowID, TaskQueue: starter.taskQueue,
+	_, err := runtime.client.ExecuteWorkflow(ctx, temporalclient.StartWorkflowOptions{
+		ID: request.WorkflowID, TaskQueue: runtime.taskQueue,
 		WorkflowIDConflictPolicy:                 enumspb.WORKFLOW_ID_CONFLICT_POLICY_FAIL,
 		WorkflowIDReusePolicy:                    enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 		WorkflowExecutionErrorWhenAlreadyStarted: true,
@@ -62,9 +66,9 @@ func (starter *Starter) Start(ctx context.Context, request domain.StartRequest) 
 	}
 	var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
 	if errors.As(err, &alreadyStarted) {
-		return starter.describeInputHash(ctx, request.WorkflowID)
+		return runtime.describeInputHash(ctx, request.WorkflowID)
 	}
-	observation, describeErr := starter.describeInputHash(ctx, request.WorkflowID)
+	observation, describeErr := runtime.describeInputHash(ctx, request.WorkflowID)
 	if describeErr == nil {
 		return observation, nil
 	}
@@ -75,8 +79,8 @@ func (starter *Starter) Start(ctx context.Context, request domain.StartRequest) 
 	return domain.StartObservation{Outcome: domain.StartOutcomeUnknown}, errors.Join(err, describeErr)
 }
 
-func (starter *Starter) describeInputHash(ctx context.Context, workflowID string) (domain.StartObservation, error) {
-	description, err := starter.client.DescribeWorkflowExecution(ctx, workflowID, "")
+func (runtime *Client) describeInputHash(ctx context.Context, workflowID string) (domain.StartObservation, error) {
+	description, err := runtime.client.DescribeWorkflowExecution(ctx, workflowID, "")
 	if err != nil {
 		return domain.StartObservation{}, err
 	}
@@ -88,7 +92,7 @@ func (starter *Starter) describeInputHash(ctx context.Context, workflowID string
 		return domain.StartObservation{}, errors.New("Temporal workflow input hash memo is missing")
 	}
 	var inputHash string
-	if err = starter.dataConverter.FromPayload(payload, &inputHash); err != nil {
+	if err = runtime.dataConverter.FromPayload(payload, &inputHash); err != nil {
 		return domain.StartObservation{}, fmt.Errorf("decode Temporal workflow input hash memo: %w", err)
 	}
 	if len(inputHash) != 64 {

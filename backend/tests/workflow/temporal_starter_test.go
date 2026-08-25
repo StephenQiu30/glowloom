@@ -18,7 +18,7 @@ func TestTemporalStarterPersistsStableWorkflowIdentityAndInputHash(t *testing.T)
 	if address == "" {
 		t.Skip("set LANVERSE_TEST_TEMPORAL_ADDRESS to run the real Temporal starter journey")
 	}
-	starter, err := temporaladapter.NewStarter(temporaladapter.Config{
+	starter, err := temporaladapter.New(temporaladapter.Config{
 		Address: address, Namespace: "default", TaskQueue: "lanverse-workflow-test",
 	})
 	if err != nil {
