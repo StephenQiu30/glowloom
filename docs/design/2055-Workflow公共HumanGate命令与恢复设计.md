@@ -1,6 +1,6 @@
 # Workflow 公共 Human Gate 命令与恢复设计
 
-- 状态：待用户接受；接受前不派生 Requirement、Plan 或编码
+- 状态：StoryGraph 执行队列中已冻结；仅在 `SG-D16` 激活后同步并单独评审
 - 日期：2026-08-26
 - 基线 Design：[后端领域模块功能设计](2002-后端领域模块功能设计.md) · [前端功能模块设计](1002-前端功能模块设计.md)
 - 基线 PRD：[产品范围与验收基线](../prd/0001-产品范围与验收基线.md)
@@ -160,9 +160,10 @@ PostgreSQL/GORM 仍是唯一业务 SQL 事实源；Temporal History 仍是 Signa
 7. 全新 PostgreSQL、真实 Temporal、API 重启与 Worker 重启完成 `Claim → Decision → Owner Receipt → Signal UNKNOWN → Resume → Gate SUCCEEDED → 下游继续`。
 8. Backend、Agent、Frontend、Compose、镜像与仓库卫生完整 CI 通过后记录 Acceptance；全部项目开发完成前不运行 `agent-browser`。
 
-## 9. 接受后的实施顺序
+## 9. 评审与实施门禁
 
-1. PRD/Requirement/Plan 只补充本设计新增的公共边界和恢复语义。
-2. Backend 先交付 Query/Claim/Renew/Release HTTP，再交付 Decision Coordinator、显式 Owner Composite 与 resume。
-3. Frontend 接入项目 Task 队列和 Human Gate 状态，不在 Backend API 未完成时模拟本地成功。
-4. 每个可独立验收的纵向任务完整通过 CI 后提交一次 Git；最终浏览器验收仍等待全部开发完成。
+1. 本文件当前只作为已写明的方案输入；必须先按 [文档总览](../README.md) 完成 `SG-D01`–`SG-D15`，仅在 `SG-D16` 激活后同步并单独提交评审。
+2. `SG-D16` 接受后仍不得从本文件单独派生并行 Plan；跨主题 PRD、Requirement、唯一总 Plan 和全新 Acceptance 分别等待 `SG-D17`–`SG-D21`。
+3. 统一 Plan 激活该切片后，Backend 先交付 Query/Claim/Renew/Release HTTP，再交付 Decision Coordinator、显式 Owner Composite 与 resume。
+4. Frontend 接入项目 Task 队列和 Human Gate 状态，不在 Backend API 未完成时模拟本地成功。
+5. 每个可独立验收的纵向任务完整通过 CI 后提交一次 Git；最终浏览器验收仍等待全部开发完成。

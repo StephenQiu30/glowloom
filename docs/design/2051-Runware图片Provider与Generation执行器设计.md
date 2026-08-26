@@ -1,6 +1,6 @@
 # Runware 图片 Provider 与 Generation 执行器设计
 
-- 状态：待评审
+- 状态：StoryGraph 执行队列中已冻结；仅在 `SG-D13` 激活后同步并单独评审
 - 日期：2026-08-26
 - 产品依据：[产品范围与验收基线](../prd/0001-产品范围与验收基线.md)
 - 架构依据：[后端服务架构](2001-后端服务架构.md) · [后端领域模块功能设计](2002-后端领域模块功能设计.md) · [本地 Codex 分镜智能体执行框架](3002-本地-Codex-分镜智能体执行框架设计.md)
@@ -219,13 +219,15 @@ Intent、Request、Job、Artifact、CandidateSet 已存在时，Activity 重放�
 
 ## 11. 评审与实施前置
 
-本设计待用户接受。接受后才按以下顺序继续：
+本文件当前只作为已写明的方案输入，不是可直接启动的实施入口。必须先按 [文档总览](../README.md) 完成 `SG-D01`–`SG-D12`；只有轮到 `SG-D13` 时，才能依据已经接受的 StoryGraph、Agent Harness、Backend 和 Frontend 边界同步本设计并单独提交评审。
+
+即使 `SG-D13` 已接受，也不得从本文件自行派生一套并行实施计划。跨主题 PRD、Requirement 和唯一总 Plan 必须分别等待 `SG-D17`–`SG-D20`，全新全未勾选 Acceptance 必须在 `SG-D21` 建立。编码只能从该统一 Plan 的当前任务开始：
 
 ```text
-Design 接受
-  → 派生 PRD
-  → 派生可测试 Requirement
-  → 派生实施 Plan
+SG-D13 Design 接受
+  → SG-D17–SG-D19 派生统一 PRD / Requirement
+  → SG-D20 派生唯一实施 Plan
+  → SG-D21 建立全新 Acceptance
   → Red / Green / Refactor
   → 真实 Provider Acceptance
   → 独立 Git 提交

@@ -57,7 +57,7 @@
 
 ## 残余风险与下一步
 
-- [Runware 图片 Provider 与 Generation 执行器 Design](../design/2051-Runware图片Provider与Generation执行器设计.md)仍待用户接受；接受前不得开始其 PRD、Requirement、Plan 或编码。
+- [Runware 图片 Provider 与 Generation 执行器 Design](../design/2051-Runware图片Provider与Generation执行器设计.md)是历史缺口输入，当前冻结至 `SG-D13`；不得绕过 [StoryGraph 唯一文档队列](../README.md#当前-storygraph-设计文件推进顺序)单独派生 PRD、Requirement、Plan 或编码。
 - `Agent 超预算、越权 Tool、无效 Schema 和 Runtime 不可用`这一阶段 5 完成门仍未完成，也不能由本记录推导为通过。
 - 当前本地分支比 `origin/main` 更新，最新远端 GitHub Actions 是成功状态，但本任务和最近本地提交尚未获准推送；本记录不声称这些本地提交已有远端 CI 结果。
 - `agent-browser` 按约定只在所有开发完成后执行，本切片不提前调用。

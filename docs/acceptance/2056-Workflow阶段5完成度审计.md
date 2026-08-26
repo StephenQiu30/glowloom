@@ -39,20 +39,14 @@
 
 ## 当前阻塞链路
 
+下列内容只记录审计时识别出的能力缺口，不再构成可直接执行的两条链。当前唯一顺序由 [StoryGraph 文档队列](../README.md#当前-storygraph-设计文件推进顺序) 的 `SG-D01`–`SG-D21` 维护：`2051/2055` 分别冻结至 `SG-D13/SG-D16`，统一 PRD、Requirement、Plan 和 Acceptance 只能在 `SG-D17`–`SG-D21` 建立。
+
 ```text
-2051 Runware Design 待接受
-  → PRD / Requirement / Plan
-  → 真实 Runware Adapter + Generation Executor
-  → Episode 动态启动 ShotWorkflow × N
-
-2055 公共 Human Gate Design 待接受
-  → Requirement / Plan
-  → Backend Task/Claim/Decision/Resume API
-  → Frontend 跨刷新、跨重启审核恢复
-
-上述两条链路 + 后续 Media/Render/Export
-  → 全自动回归
-  → 最终 agent-browser 剧本到剧集/场景/分镜全流程验收
+SG-D01 当前设计评审
+  → SG-D02–SG-D16 逐份接受/同步 Design
+  → SG-D17–SG-D21 统一 PRD / Requirement / Plan / Acceptance
+  → SG-Ixx 每个任务真实 CI、证据与独立提交
+  → 全部开发完成后最终 agent-browser 验收
 ```
 
 - [Runware 图片 Provider 与 Generation 执行器 Design](../design/2051-Runware图片Provider与Generation执行器设计.md)尚待用户接受；在此之前不得派生或编码真实图片切片。
