@@ -141,6 +141,26 @@ func (repo *repository) GetCandidate(ctx context.Context, candidateID string) (d
 	return bundleDomain(candidate, report)
 }
 
+func (repo *repository) GetCandidateByProviderOutput(
+	ctx context.Context,
+	providerJobID, outputKey string,
+) (domain.CandidateWithReport, error) {
+	jobID, err := uuid.Parse(providerJobID)
+	if err != nil {
+		return domain.CandidateWithReport{}, application.ErrNotFound
+	}
+	var candidate model.GenerationCandidate
+	if err = repo.database.WithContext(ctx).
+		Where("provider_job_id = ? AND output_key = ?", jobID, outputKey).First(&candidate).Error; err != nil {
+		return domain.CandidateWithReport{}, normalizeNotFound(err)
+	}
+	var report model.GenerationQCReport
+	if err = repo.database.WithContext(ctx).Where("candidate_id = ?", candidate.ID).First(&report).Error; err != nil {
+		return domain.CandidateWithReport{}, normalizeNotFound(err)
+	}
+	return bundleDomain(candidate, report)
+}
+
 func candidateRecord(value domain.Candidate) (model.GenerationCandidate, error) {
 	id, err := uuid.Parse(value.ID)
 	if err != nil {

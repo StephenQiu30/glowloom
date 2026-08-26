@@ -268,11 +268,15 @@ func (service *SelectionService) selectionProof(
 	if selected.ID == "" {
 		return SelectionDecision{}, nil, "", domain.CandidateReference{}, conflict("Selected generation candidate is not frozen by review")
 	}
-	candidateSetHash, err := platformcommand.InputHash(candidateSetHashInput{Candidates: references})
+	candidateSetHash, err := candidateReferencesHash(references)
 	if err != nil {
 		return SelectionDecision{}, nil, "", domain.CandidateReference{}, err
 	}
 	return decision, references, candidateSetHash, selected, nil
+}
+
+func candidateReferencesHash(references []domain.CandidateReference) (string, error) {
+	return platformcommand.InputHash(candidateSetHashInput{Candidates: references})
 }
 
 func validateSelectionDecision(value SelectionDecision, expectedID string) error {

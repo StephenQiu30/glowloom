@@ -33,14 +33,19 @@ func NewWorkflowRuntime(
 	plans *planningapp.Service,
 	storyboards *storyboardapp.Service,
 	reviews *reviewapp.Service,
+	candidateSets workflowreview.CandidateSetSource,
 ) (*workflowapp.RuntimeService, error) {
 	if repository == nil || scripts == nil || bibles == nil || projects == nil || plans == nil || storyboards == nil || reviews == nil {
 		return nil, errors.New("workflow runtime dependencies are required")
 	}
 	now := func() time.Time { return time.Now().UTC() }
+	humanTasks := workflowapp.HumanTaskOpener(workflowreview.New(reviews))
+	if candidateSets != nil {
+		humanTasks = workflowreview.NewWithGeneration(reviews, candidateSets)
+	}
 	return workflowapp.NewRuntimeService(repository, workflowapp.RuntimeConfig{
 		Now: now, NewID: uuid.NewString,
 		Executor:   workflowproduction.NewNodeExecutor(scripts, bibles, projects, plans, storyboards),
-		HumanTasks: workflowreview.New(reviews),
+		HumanTasks: humanTasks,
 	}), nil
 }

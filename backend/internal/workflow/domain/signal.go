@@ -96,6 +96,11 @@ func HumanGateOutputMatchesCandidate(
 	candidate NodeInputBinding,
 	output NodeOutputBinding,
 ) bool {
+	if executor == "gate.generation_image_review" {
+		return candidate.ValueType == "generation_candidate_set" && candidate.ReferenceVersion == "1" &&
+			output.ValueType == "generation_candidate_selection" && output.ReferenceVersion == "1" &&
+			output.ReferenceID != candidate.ReferenceID
+	}
 	if output.ReferenceID != candidate.ReferenceID {
 		return false
 	}

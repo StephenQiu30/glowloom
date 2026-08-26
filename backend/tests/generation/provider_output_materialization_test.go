@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -116,6 +117,14 @@ func (owner *failOnceCandidateOwner) RegisterReadyCandidate(
 	}
 	owner.mu.Unlock()
 	return owner.delegate.RegisterReadyCandidate(ctx, actor, command)
+}
+
+func (owner *failOnceCandidateOwner) RequireEvaluatedProviderOutput(
+	ctx context.Context,
+	actor generationapp.Actor,
+	providerJobID, outputKey string,
+) (generationdomain.CandidateWithReport, error) {
+	return owner.delegate.RequireEvaluatedProviderOutput(ctx, actor, providerJobID, outputKey)
 }
 
 func TestSucceededProviderOutputsMaterializeThroughAssetReadinessAndCandidateQC(t *testing.T) {
@@ -290,6 +299,28 @@ func TestSucceededProviderOutputsMaterializeThroughAssetReadinessAndCandidateQC(
 		}
 	}
 	assertMaterializedFactCounts(t, countRecords, fixture.workspaceID.String(), 2, 2)
+	if canonical.CandidateSet.ID != success.Job.ID || canonical.CandidateSet.ProviderReceiptID != success.ProviderReceipt.ID ||
+		canonical.CandidateSet.WorkspaceID != fixture.workspaceID.String() ||
+		canonical.CandidateSet.ProjectID != fixture.projectID.String() || canonical.CandidateSet.Revision != 1 ||
+		len(canonical.CandidateSet.Candidates) != 2 || len(canonical.CandidateSet.ContentHash) != 64 {
+		t.Fatalf("materialized Provider outputs did not expose a canonical CandidateSet: %#v", canonical.CandidateSet)
+	}
+	requiredSet, err := materializer.RequireCandidateSet(ctx, fixture.editor, success.Job.ID)
+	if err != nil || requiredSet.ContentHash != canonical.CandidateSet.ContentHash ||
+		!slices.Equal(requiredSet.Candidates, canonical.CandidateSet.Candidates) {
+		t.Fatalf("rebuild materialized Provider CandidateSet: set=%#v err=%v", requiredSet, err)
+	}
+	if err = database.Model(&model.GenerationCandidate{}).Where("id = ?", canonical.Outputs[0].Candidate.ID).
+		Update("artifact_sha256", strings.Repeat("9", 64)).Error; err != nil {
+		t.Fatalf("inject CandidateSet Candidate drift: %v", err)
+	}
+	if _, err = materializer.RequireCandidateSet(ctx, fixture.editor, success.Job.ID); err == nil {
+		t.Fatal("CandidateSet rebuild accepted a Candidate/QC/Artifact drift")
+	}
+	if err = database.Model(&model.GenerationCandidate{}).Where("id = ?", canonical.Outputs[0].Candidate.ID).
+		Update("artifact_sha256", canonical.Outputs[0].Candidate.ArtifactSHA256).Error; err != nil {
+		t.Fatalf("restore CandidateSet Candidate after drift test: %v", err)
+	}
 
 	replayed, err := materializer.MaterializeSucceededOutputs(ctx, fixture.editor, generationapp.MaterializeProviderOutputsCommand{
 		ProviderJobID: success.Job.ID,

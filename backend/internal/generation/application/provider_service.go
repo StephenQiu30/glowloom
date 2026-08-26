@@ -349,7 +349,7 @@ func (service *ProviderService) RequireSucceededProviderResult(
 	providerJobID string,
 ) (ProviderExecutionResult, error) {
 	providerJobID = strings.TrimSpace(providerJobID)
-	if !service.valid() || !validUUID(providerJobID) || !validUUID(actor.UserID) || actor.TokenVersion < 1 {
+	if !service.readValid() || !validUUID(providerJobID) || !validUUID(actor.UserID) || actor.TokenVersion < 1 {
 		return ProviderExecutionResult{}, invalid("Invalid Generation Provider result request")
 	}
 	var result ProviderExecutionResult
@@ -1174,8 +1174,11 @@ func providerResultReceiptContentHash(value domain.ProviderResultReceipt) (strin
 }
 
 func (service *ProviderService) valid() bool {
-	return service != nil && service.transactions != nil && service.gateway != nil &&
-		service.config.Now != nil && service.config.NewID != nil
+	return service.readValid() && service.gateway != nil
+}
+
+func (service *ProviderService) readValid() bool {
+	return service != nil && service.transactions != nil && service.config.Now != nil && service.config.NewID != nil
 }
 
 func normalizeProviderError(err error) error {

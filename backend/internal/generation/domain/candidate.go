@@ -51,6 +51,13 @@ type CandidateReference struct {
 	QCReportHash     string `json:"qc_report_hash"`
 }
 
+type CandidateSet struct {
+	ID, WorkspaceID, ProjectID, ProviderReceiptID string
+	Candidates                                    []CandidateReference
+	ContentHash                                   string
+	Revision                                      int
+}
+
 type CandidateSelection struct {
 	ID, WorkspaceID, ProjectID, WorkflowRunID, NodeRunID string
 	HumanTaskID, ReviewDecisionID                        string

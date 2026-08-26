@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -26,6 +27,7 @@ type ProviderOutputAssetOwner interface {
 
 type ReadyCandidateOwner interface {
 	RegisterReadyCandidate(context.Context, Actor, RegisterReadyCandidateCommand) (RegisterCandidateResult, error)
+	RequireEvaluatedProviderOutput(context.Context, Actor, string, string) (domain.CandidateWithReport, error)
 }
 
 type OutputMaterializationService struct {
@@ -48,6 +50,7 @@ type MaterializedProviderOutput struct {
 type OutputMaterializationResult struct {
 	ProviderReceiptID string
 	Outputs           []MaterializedProviderOutput
+	CandidateSet      domain.CandidateSet
 }
 
 func NewOutputMaterializationService(
@@ -106,7 +109,87 @@ func (service *OutputMaterializationService) MaterializeSucceededOutputs(
 			Output: output, Artifact: artifact, Candidate: candidate.Candidate, Report: candidate.Report,
 		})
 	}
+	result.CandidateSet, err = buildCandidateSet(execution, candidateBundles(result.Outputs))
+	if err != nil {
+		return OutputMaterializationResult{}, err
+	}
 	return result, nil
+}
+
+func (service *OutputMaterializationService) RequireCandidateSet(
+	ctx context.Context,
+	actor Actor,
+	providerJobID string,
+) (domain.CandidateSet, error) {
+	providerJobID = strings.TrimSpace(providerJobID)
+	if service == nil || service.providers == nil || service.candidates == nil ||
+		!validUUID(providerJobID) || !validUUID(actor.UserID) || actor.TokenVersion < 1 {
+		return domain.CandidateSet{}, invalid("Invalid generation CandidateSet request")
+	}
+	execution, err := service.providers.RequireSucceededProviderResult(ctx, actor, providerJobID)
+	if err != nil {
+		return domain.CandidateSet{}, err
+	}
+	if err = validateMaterializationSource(execution); err != nil {
+		return domain.CandidateSet{}, err
+	}
+	bundles := make([]domain.CandidateWithReport, 0, len(execution.ProviderReceipt.Outputs))
+	for _, output := range execution.ProviderReceipt.Outputs {
+		bundle, loadErr := service.candidates.RequireEvaluatedProviderOutput(ctx, actor, execution.Job.ID, output.OutputKey)
+		if loadErr != nil {
+			return domain.CandidateSet{}, loadErr
+		}
+		if bundle.Candidate.ProviderJobID != execution.Job.ID || bundle.Candidate.OutputKey != output.OutputKey ||
+			bundle.Candidate.ArtifactSHA256 != output.SHA256 || bundle.Candidate.MediaType != output.MediaType ||
+			bundle.Candidate.Width != output.Width || bundle.Candidate.Height != output.Height {
+			return domain.CandidateSet{}, conflict("Generation CandidateSet Provider output has drifted")
+		}
+		bundles = append(bundles, bundle)
+	}
+	return buildCandidateSet(execution, bundles)
+}
+
+func candidateBundles(outputs []MaterializedProviderOutput) []domain.CandidateWithReport {
+	bundles := make([]domain.CandidateWithReport, len(outputs))
+	for index := range outputs {
+		bundles[index] = domain.CandidateWithReport{Candidate: outputs[index].Candidate, Report: outputs[index].Report}
+	}
+	return bundles
+}
+
+func buildCandidateSet(
+	execution ProviderExecutionResult,
+	bundles []domain.CandidateWithReport,
+) (domain.CandidateSet, error) {
+	if len(bundles) != len(execution.ProviderReceipt.Outputs) {
+		return domain.CandidateSet{}, conflict("Generation CandidateSet is not fully materialized")
+	}
+	references := make([]domain.CandidateReference, 0, len(bundles))
+	for _, bundle := range bundles {
+		if bundle.Candidate.Status != domain.CandidateQCPassed || bundle.Report.Status != domain.QCPassed {
+			continue
+		}
+		references = append(references, domain.CandidateReference{
+			ID: bundle.Candidate.ID, Revision: bundle.Candidate.Revision,
+			ArtifactID: bundle.Candidate.ArtifactID, ArtifactRevision: bundle.Candidate.ArtifactRevision,
+			ArtifactSHA256: bundle.Candidate.ArtifactSHA256,
+			QCReportID:     bundle.Report.ID, QCReportHash: bundle.Report.ReportHash,
+		})
+	}
+	slices.SortFunc(references, func(left, right domain.CandidateReference) int {
+		return strings.Compare(left.ID, right.ID)
+	})
+	if len(references) == 0 {
+		return domain.CandidateSet{}, conflict("Generation CandidateSet has no QC-passed candidate")
+	}
+	contentHash, err := candidateReferencesHash(references)
+	if err != nil {
+		return domain.CandidateSet{}, err
+	}
+	return domain.CandidateSet{
+		ID: execution.Job.ID, WorkspaceID: execution.Intent.WorkspaceID, ProjectID: execution.Intent.ProjectID,
+		ProviderReceiptID: execution.ProviderReceipt.ID, Candidates: references, ContentHash: contentHash, Revision: 1,
+	}, nil
 }
 
 func validateMaterializationSource(value ProviderExecutionResult) error {

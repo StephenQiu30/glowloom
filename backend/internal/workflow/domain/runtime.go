@@ -89,8 +89,11 @@ type ApplyHumanGateCommand struct {
 
 type HumanGateBinding struct {
 	WorkspaceID, ProjectID, WorkflowRunID, NodeRunID string
+	Executor, InitiatorUserID                        string
+	InitiatorTokenVersion                            int
 	SubjectType, SubjectID                           string
 	SubjectRevision                                  int
 	CandidateIDs                                     []string
+	CandidateSet                                     NodeInputBinding
 	RubricVersion                                    string
 }

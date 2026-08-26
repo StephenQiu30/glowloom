@@ -10,10 +10,17 @@ import (
 
 	"github.com/google/uuid"
 
+	assetgorm "github.com/StephenQiu30/lanverse/backend/internal/asset/adapter/gormdb"
+	assetapp "github.com/StephenQiu30/lanverse/backend/internal/asset/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
+	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
+	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
+	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
+	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	platformschema "github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstore"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
@@ -24,6 +31,7 @@ import (
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
+	quotaapp "github.com/StephenQiu30/lanverse/backend/internal/quota/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
@@ -68,6 +76,23 @@ func main() {
 	}
 	defer temporalRuntime.Close()
 	now := func() time.Time { return time.Now().UTC() }
+	objects, err := objectstore.Open(objectstore.Config{
+		Endpoint: configuration.ObjectStoreEndpoint, PublicEndpoint: configuration.ObjectStorePublicEndpoint,
+		AccessKey: configuration.ObjectStoreAccessKey, SecretKey: configuration.ObjectStoreSecretKey,
+		Bucket: configuration.ObjectStoreBucket, Region: configuration.ObjectStoreRegion,
+		Secure: configuration.ObjectStoreSecure, PublicSecure: configuration.ObjectStorePublicSecure,
+	})
+	if err != nil {
+		logger.Error("workflow worker object storage configuration failed", "error", err)
+		os.Exit(1)
+	}
+	objectContext, cancelObjects := context.WithTimeout(context.Background(), 15*time.Second)
+	if err = objects.EnsureBucket(objectContext); err != nil {
+		cancelObjects()
+		logger.Error("workflow worker object storage initialization failed", "error", err)
+		os.Exit(1)
+	}
+	cancelObjects()
 	scriptService := scriptapp.NewService(
 		scriptgorm.New(database), nil, scriptapp.Config{Now: now, NewID: uuid.NewString},
 	)
@@ -84,8 +109,25 @@ func main() {
 	reviewService := reviewapp.NewService(
 		reviewgorm.New(database), reviewapp.Config{Now: now, NewID: uuid.NewString},
 	)
+	costConfig := costapp.Config{Now: now, NewID: uuid.NewString}
+	quotaConfig := quotaapp.Config{Now: now, NewID: uuid.NewString}
+	assetService := assetapp.NewService(assetgorm.New(database), objects, assetapp.Config{
+		Now: now, NewID: uuid.NewString, Bucket: configuration.ObjectStoreBucket,
+		StorageProfile: "private-primary", Region: configuration.ObjectStoreRegion, MaxImageBytes: 20 << 20,
+	})
+	candidateService := generationapp.NewService(
+		generationgorm.New(database), generationasset.NewReadiness(assetService), generationapp.Config{},
+	)
+	providerService := generationapp.NewProviderService(
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig), nil,
+		generationapp.ProviderConfig{Now: now, NewID: uuid.NewString},
+	)
+	candidateSets := generationapp.NewOutputMaterializationService(
+		providerService, generationasset.NewProviderOutputReadiness(assetService), candidateService,
+	)
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowgorm.New(database), scriptService, bibleService, projectService, planningService, storyboardService, reviewService,
+		candidateSets,
 	)
 	if err != nil {
 		logger.Error("workflow runtime composition failed", "error", err)

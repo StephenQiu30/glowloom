@@ -111,7 +111,13 @@ func (store *Store) ResolveHumanGateOwnerApplication(
 		var candidate domain.NodeInputBinding
 		candidateFound := false
 		for _, binding := range resolved.Input.Bindings {
-			if binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID == candidateID {
+			if node.Executor == "gate.generation_image_review" && binding.SourceKind == domain.NodeInputSourceNodeOutput &&
+				binding.Port == "candidates" && binding.ValueType == "generation_candidate_set" {
+				candidate, candidateFound = binding, true
+				break
+			}
+			if node.Executor != "gate.generation_image_review" &&
+				binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID == candidateID {
 				candidate, candidateFound = binding, true
 				break
 			}
@@ -249,7 +255,7 @@ func loadHumanGateDecision(
 		return model.HumanTask{}, model.ReviewDecision{}, normalizeNotFound(err)
 	}
 	if task.WorkspaceID != run.WorkspaceID || task.WorkflowRunID != run.ID || task.NodeRunID != node.ID ||
-		task.SubjectType != "workflow_node_output" || task.SubjectID != node.ID || task.SubjectRevision != node.Revision || task.SubjectRevision != subjectRevision ||
+		task.SubjectType != humanGateSubjectType(node.Executor) || task.SubjectID != node.ID || task.SubjectRevision != node.Revision || task.SubjectRevision != subjectRevision ||
 		task.Status != "COMPLETED" || decision.WorkspaceID != run.WorkspaceID || decision.HumanTaskID != task.ID ||
 		decision.SubjectRevision != task.SubjectRevision || decision.Decision != decisionValue {
 		return model.HumanTask{}, model.ReviewDecision{}, errors.New("workflow human gate review decision has drifted")
@@ -337,7 +343,13 @@ func validateHumanGateOwnerEvidence(
 	var candidate domain.NodeInputBinding
 	candidateFound := false
 	for _, binding := range resolved.Input.Bindings {
-		if binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID == candidateID {
+		if node.Executor == "gate.generation_image_review" && binding.SourceKind == domain.NodeInputSourceNodeOutput &&
+			binding.Port == "candidates" && binding.ValueType == "generation_candidate_set" {
+			candidate, candidateFound = binding, true
+			break
+		}
+		if node.Executor != "gate.generation_image_review" &&
+			binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID == candidateID {
 			candidate, candidateFound = binding, true
 			break
 		}
@@ -368,9 +380,18 @@ func humanGateOwnerOperation(executor string) (string, bool) {
 		return "episode_structure.confirm_batch", true
 	case "gate.storyboard_review":
 		return "storyboard.apply_set", true
+	case "gate.generation_image_review":
+		return "generation.candidate.select", true
 	default:
 		return "", false
 	}
+}
+
+func humanGateSubjectType(executor string) string {
+	if executor == "gate.generation_image_review" {
+		return "generation_candidate_selection"
+	}
+	return "workflow_node_output"
 }
 
 func (store *Store) BeginSignalAttempt(ctx context.Context, intentID string, now time.Time) (domain.SignalPreparation, error) {

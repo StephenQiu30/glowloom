@@ -686,7 +686,15 @@ func (store *Store) PrepareHumanGate(
 			return errors.New("workflow human gate execution contract has drifted")
 		}
 		candidateIDs := humanGateCandidateIDs(resolved.Input)
-		if len(candidateIDs) == 0 {
+		var candidateSet domain.NodeInputBinding
+		if node.Executor == "gate.generation_image_review" {
+			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidates" ||
+				resolved.Input.Bindings[0].ValueType != "generation_candidate_set" ||
+				resolved.Input.Bindings[0].SourceKind != domain.NodeInputSourceNodeOutput {
+				return errors.New("workflow Generation Human Gate has no CandidateSet input")
+			}
+			candidateSet, candidateIDs = resolved.Input.Bindings[0], nil
+		} else if len(candidateIDs) == 0 {
 			return errors.New("workflow human gate has no candidate input")
 		}
 		if node.Status == "QUEUED" {
@@ -723,8 +731,11 @@ func (store *Store) PrepareHumanGate(
 		}
 		binding = domain.HumanGateBinding{
 			WorkspaceID: run.WorkspaceID.String(), ProjectID: run.ProjectID.String(), WorkflowRunID: run.ID.String(),
-			NodeRunID: node.ID.String(), SubjectType: "workflow_node_output", SubjectID: node.ID.String(),
+			NodeRunID: node.ID.String(), Executor: node.Executor, InitiatorUserID: run.CreatedBy.String(),
+			InitiatorTokenVersion: run.InitiatorTokenVersion,
+			SubjectType:           "workflow_node_output", SubjectID: node.ID.String(),
 			SubjectRevision: node.Revision, CandidateIDs: candidateIDs,
+			CandidateSet:  candidateSet,
 			RubricVersion: node.Executor + "@" + node.DefinitionVersion,
 		}
 		return nil

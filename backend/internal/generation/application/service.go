@@ -48,6 +48,7 @@ type Repository interface {
 	EnsureReceipt(context.Context, platformcommand.Receipt) (platformcommand.Receipt, error)
 	EnsureCandidate(context.Context, domain.CandidateWithReport) (domain.CandidateWithReport, error)
 	GetCandidate(context.Context, string) (domain.CandidateWithReport, error)
+	GetCandidateByProviderOutput(context.Context, string, string) (domain.CandidateWithReport, error)
 }
 
 type TransactionManager interface {
@@ -217,6 +218,44 @@ func (service *Service) RequireQCPassed(ctx context.Context, actor Actor, candid
 		}
 		if bundle.Candidate.Status != domain.CandidateQCPassed {
 			return conflict("Generation candidate did not pass deterministic QC")
+		}
+		result = bundle
+		return nil
+	})
+	if err != nil {
+		return domain.CandidateWithReport{}, normalizeError(err)
+	}
+	artifact, err := service.assets.RequireReady(ctx, actor, result.Candidate.ArtifactID)
+	if err != nil {
+		return domain.CandidateWithReport{}, normalizeError(err)
+	}
+	if !sameArtifactSnapshot(result.Candidate, artifact) {
+		return domain.CandidateWithReport{}, conflict("Generation candidate artifact binding has drifted")
+	}
+	return result, nil
+}
+
+func (service *Service) RequireEvaluatedProviderOutput(
+	ctx context.Context,
+	actor Actor,
+	providerJobID, outputKey string,
+) (domain.CandidateWithReport, error) {
+	providerJobID, outputKey = strings.TrimSpace(providerJobID), strings.TrimSpace(outputKey)
+	if service == nil || service.transactions == nil || service.assets == nil ||
+		!validUUID(providerJobID) || !providerOutputKeyPattern.MatchString(outputKey) {
+		return domain.CandidateWithReport{}, notFound("Generation candidate not found")
+	}
+	var result domain.CandidateWithReport
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		bundle, loadErr := repo.GetCandidateByProviderOutput(ctx, providerJobID, outputKey)
+		if loadErr != nil {
+			return loadErr
+		}
+		if loadErr = repo.AuthorizeProject(ctx, actor, bundle.Candidate.WorkspaceID, bundle.Candidate.ProjectID, false); loadErr != nil {
+			return loadErr
+		}
+		if loadErr = validateQCBundle(bundle); loadErr != nil {
+			return loadErr
 		}
 		result = bundle
 		return nil
