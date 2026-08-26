@@ -29,7 +29,7 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 COPY agent/requirements.txt ./requirements.txt
 RUN python -m pip install --requirement requirements.txt
 
-COPY --chown=lanverse:lanverse .agents /srv/lanverse/.agents
+COPY --chown=lanverse:lanverse agent/skills ./skills
 COPY --chown=lanverse:lanverse agent/app ./app
 
 USER lanverse

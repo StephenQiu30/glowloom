@@ -64,7 +64,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D20` | [0010 唯一总 Plan](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | **已完成（2026-08-27）**：固定 `SG-I01`–`SG-I28`、工具链/导入边界、Event/Search/ELK 首个消费者与原子提交门 | 仅解锁 `SG-D21`；不从旧 Plan 领取重叠任务 |
 | `SG-D21` | [0010 Acceptance Criteria](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | **已完成（2026-08-27）**：逐项映射 91 条跨服务、69 条 Agent Requirement 与 28 个 `SG-Ixx`，188 项初始全为 `[ ]` | 仅解锁 `SG-I01`；无当次真实证据不得勾选 |
 
-`SG-D01`–`SG-D21` 已于 2026-08-27 依次接受并完成；`SG-I01` 已通过真实 CI 并回填 Evidence，当前唯一激活任务是 `SG-I02`。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过唯一队列进入编码。只按 `0010` 的 `SG-Ixx` 顺序实施，`3003` 只做 Agent 子任务映射；任一任务完成、回填 Evidence、通过当时全量 CI 并独立提交后才解锁下一项。
+`SG-D01`–`SG-D21` 已于 2026-08-27 依次接受并完成；`SG-I01`–`SG-I02` 已通过真实 CI 并分别回填 Evidence，当前唯一激活任务是 `SG-I03`。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过唯一队列进入编码。只按 `0010` 的 `SG-Ixx` 顺序实施，`3003` 只做 Agent 子任务映射；任一任务完成、回填 Evidence、通过当时全量 CI 并独立提交后才解锁下一项。
 
 ## 编号与命名
 

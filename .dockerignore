@@ -1,8 +1,6 @@
 *
 !agent
 !agent/**
-!.agents
-!.agents/**
 
 agent/.venv
 agent/.venv/**

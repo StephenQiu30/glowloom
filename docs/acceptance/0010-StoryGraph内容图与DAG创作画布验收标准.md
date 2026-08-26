@@ -133,9 +133,9 @@
 - [ ] `SGA-BND-003`（`SG-I08` 起）：Stage/Shard 挂既有 Run/NodeRun，无动态 Workflow Node/Agent Checkpoint。
 - [ ] `SGA-BND-004`（全部 Agent Stage）：Agent success 零 Confirm/Apply/正式 UUID/Owner/Event/Resume。
 - [ ] `SGA-BND-005`（`SG-I05`）：普通显式 Registry，无 LangGraph 运行路径且无消费者时删除依赖/lock。
-- [ ] `SGA-MOV-001`（`SG-I02`）：八 Skill 原名、原 UTF-8 字节、相对路径 SHA-256 等价迁移。
-- [ ] `SGA-MOV-002`（`SG-I02`）：Loader/Docker/tests 原子切换，根旧路径删除且无双读/fallback。
-- [ ] `SGA-MOV-003`（`SG-I02`）：只迁移不改行为，Agent/Backend/Frontend 全量 CI 通过。
+- [x] `SGA-MOV-001`（`SG-I02`）：八 Skill 原名、原 UTF-8 字节、相对路径 SHA-256 等价迁移。
+- [x] `SGA-MOV-002`（`SG-I02`）：Loader/Docker/tests 原子切换，根旧路径删除且无双读/fallback。
+- [x] `SGA-MOV-003`（`SG-I02`）：只迁移不改行为，Agent/Backend/Frontend 全量 CI 通过。
 - [ ] `SGA-BDL-001`（`SG-I05`）：最终唯一 `agent/skills/build-storygraph/SKILL.md`，旧名/旧 Loader/无消费者 metadata 删除。
 - [ ] `SGA-BDL-002`（`SG-I05`）：SKILL 全局规则 + 显式 references，Python 无 Guidance 复制。
 - [ ] `SGA-BDL-003`（`SG-I05`）：Stage→Schema/Reference 显式 Registry、loaded-file golden、未知 Stage 拒绝。
@@ -212,7 +212,7 @@
 以下 28 项必须与 Plan 同序；每项只有在其映射 Requirement、定向验证、当时全量真实 CI、Acceptance Evidence 和独立 Git 提交均完成后才能勾选。
 
 - [x] `SG-I01`：Schema/Key/Hash/Wire fixture、工具链/导入边界、失败测试与当前真实 CI 基线完成。
-- [ ] `SG-I02`：八 Skill 字节保持迁移至 `agent/skills`，单路径、无 fallback、全量 CI、独立提交完成。
+- [x] `SG-I02`：八 Skill 字节保持迁移至 `agent/skills`，单路径、无 fallback、全量 CI、独立提交完成。
 - [ ] `SG-I03`：StoryGraph Version/Head/Compiler/Owner Set/Outbox 单事务发布完成。
 - [ ] `SG-I04`：Graph Query + Kafka Event + Elasticsearch Search + ELK 日志真实消费者、故障 CI 完成。
 - [ ] `SG-I05`：`build-storygraph` 唯一 Bundle、Stage Wire/Policy/Candidate Revision、旧入口原子删除完成。
@@ -255,4 +255,16 @@
 - 尚未完成：StoryGraphVersion/Head/GORM Record/Outbox 属于 `SG-I03`，最终单 Bundle/旧 Invocation 删除与真实 Codex 路由属于 `SG-I05`，Kafka/Search/ELK 属于 `SG-I04`；因此对应 Requirement 未提前勾选。按门禁未运行 `agent-browser`。
 - Git：本 Evidence 与实现由当前 `SG-I01` 独立提交承载；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 5 条 Requirement 与 `SG-I01`，其余保持未通过。下一步只允许实施 `SG-I02`。
+### `SG-I02` — 八 Skill 字节保持迁移（2026-08-27）
+
+- Red：先增加目标目录、SHA-256 manifest、单路径、Docker 和旧路径拒绝测试；`cd agent && uv run --all-extras pytest -q tests/architecture/test_skill_location.py tests/candidate_runtime/test_codex_runner.py` 得到 `8 failed, 3 passed`，明确证明目标目录不存在、Loader/Docker 仍使用旧路径且旧路径会被读取。
+- 迁移：八个过渡 Skill 共 19 个文件按原名和相对路径从根 `.agents/skills` 移至 `agent/skills`；`agent/tests/fixtures/skills/legacy-skill-manifest-v1.json` 固定每个文件的迁移前 SHA-256，迁移后测试逐文件重算并完全相等。未修改 Guidance、Reference 或 metadata 字节。
+- 单路径：`CodexSchemaRunner` 只解析 `<repository>/agent/skills/<name>`；旧目录被删除，`.gitignore` 不再为它开放追踪白名单，负向用例确认仅提供旧目录时 fail closed。Agent Docker 只执行 `COPY agent/skills ./skills`，源码和镜像均无旧路径 fallback。
+- Agent：`ruff check app tests`、`ruff format --check app tests`、`pyright`、`pytest -q` 全通过，`30 passed`；定向迁移与 Loader 用例 `11 passed`。
+- Backend 真实依赖：任务专用 PostgreSQL `16.15`、Temporal 指定 digest、MinIO `RELEASE.2025-09-07T16-13-09Z` 在独立端口运行；带真实服务地址的 `go test -count=1 -p 1 ./...` 全通过，Workflow 包 `92.191s`，不是无环境的快速路径。数据库断言确认 Migration/Schema 账本表计数为零；三个任务容器已精确删除。
+- Frontend：`npm run openapi2ts && npm run lint && npm run typecheck && npm run test && npm run build` 全通过，16 个测试文件、45 项测试、Next.js production build 与生成 Client 无漂移。
+- 交付：开发/生产 Compose `config --quiet` 通过；Backend、Agent、Frontend 三镜像均从当前工作区构建。Agent 镜像以非 root 用户运行，Codex CLI、Candidate Runtime、19 个 Skill 文件和真实 Harness 加载均通过，`/srv/lanverse/.agents` 不存在；Backend API/Worker 与 Frontend standalone 检查通过。
+- 尚未完成：本任务只做行为保持迁移；单一 `build-storygraph` Bundle、启动 Hash Policy、旧 Skill 名和无消费者 metadata 删除属于 `SG-I05`，因此 `SGA-BDL-*` 与复合条款 `SGA-OPS-003` 保持未通过。按门禁未运行 `agent-browser`。
+- Git：本 Evidence 与实现由当前 `SG-I02` 独立提交承载；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 8 条 Requirement 与 `SG-I01`–`SG-I02`，其余保持未通过。下一步只允许实施 `SG-I03`。

@@ -205,7 +205,7 @@ class CodexSchemaRunner:
             character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in skill_name
         ):
             raise CodexRuntimeUnavailable("Agent skill name is invalid")
-        skills_root = (self._repository_root / ".agents" / "skills").resolve()
+        skills_root = (self._repository_root / "agent" / "skills").resolve()
         skill_root = (skills_root / skill_name).resolve()
         if not skill_root.is_relative_to(skills_root) or not (skill_root / "SKILL.md").is_file():
             raise CodexRuntimeUnavailable("Agent skill bundle is unavailable")

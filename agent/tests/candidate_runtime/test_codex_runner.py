@@ -56,7 +56,7 @@ class FakeProcess:
 
 def _repository(tmp_path: Path) -> Path:
     root = tmp_path / "repository"
-    skill = root / ".agents" / "skills" / "draft-shots"
+    skill = root / "agent" / "skills" / "draft-shots"
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("# Draft Shots\nReturn schema-valid JSON.", encoding="utf-8")
     return root
@@ -223,5 +223,20 @@ async def test_runner_distinguishes_schema_and_runtime_failures(
         repository_root=repository,
         execution_policy=execution_policy_for("storyboard_draft"),
     )
+    with pytest.raises(CodexRuntimeUnavailable):
+        await runner.run("Draft one shot", ProbeResult, skill_name="draft-shots")
+
+
+@pytest.mark.asyncio
+async def test_runner_does_not_fall_back_to_legacy_skill_path(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    legacy_skill = repository / ".agents" / "skills" / "draft-shots"
+    legacy_skill.mkdir(parents=True)
+    (legacy_skill / "SKILL.md").write_text("# Legacy", encoding="utf-8")
+    runner = CodexSchemaRunner(
+        repository_root=repository,
+        execution_policy=execution_policy_for("storyboard_draft"),
+    )
+
     with pytest.raises(CodexRuntimeUnavailable):
         await runner.run("Draft one shot", ProbeResult, skill_name="draft-shots")

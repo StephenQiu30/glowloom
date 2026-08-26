@@ -82,7 +82,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 ### 基础契约与公共能力
 
 - [x] `SG-I01`：固定 StoryGraph Schema、稳定 Key、Node/Edge/Claim Owner、Evidence Ref、Canonical Hash、四图边界和跨语言 contract fixture；在首个真实消费者中固定 GORM/PostgreSQL、Temporal、Pydantic/Codex CLI 与 React Flow/Dagre 选型。完成门：Requirement/Acceptance 映射完整，失败 contract 测试先落位，无空工具层、Migration、Raw SQL 或第二 ORM。**完成（2026-08-27）**：Go Domain 与 Go/Python Wire golden、依赖首消费者门、空库/Temporal/MinIO、全量 CI/Compose/三镜像证据见 Acceptance。
-- [ ] `SG-I02`：把现有 8 个 Skill 按原名、原字节迁入 `agent/skills`，原子切换 Loader/Docker/独立测试，同一提交删除根目录旧路径。完成门：Guidance 字节等价、单路径、无 fallback，Agent 和全量 CI 通过。
+- [x] `SG-I02`：把现有 8 个 Skill 按原名、原字节迁入 `agent/skills`，原子切换 Loader/Docker/独立测试，同一提交删除根目录旧路径。完成门：Guidance 字节等价、单路径、无 fallback，Agent 和全量 CI 通过。**完成（2026-08-27）**：19 个文件的路径与 SHA-256 golden 等价，Loader/Docker/测试已原子切换，旧路径负向与三镜像真实 CI 证据见 Acceptance。
 - [ ] `SG-I03`：实现 StoryGraphVersion/Head、Owner Set 冻结、GORM Record、线性 Compiler/发布；首版只编译已有 Owner 事实。完成门：独立 PostgreSQL、并发/CAS、无环、Hash、重放和 stale 标记通过。
 - [ ] `SG-I04`：在 `SG-I03` 发布契约上实现 Current/Version/Lens Query、Version Diff、上下游追踪和影响闭包。完成门：Query 仅读、大图有界、相同版本结果确定，全量 CI 通过并已提交。
 - [ ] `SG-I05`：只在 `SG-I04` 完成后建立 Backend-owned Stage Envelope/Policy/Candidate Revision，将 8 个过渡 Skill 收口为 `agent/skills/build-storygraph` Bundle、Stage Reference 和 Bundle Hash，原子删除旧 Skill 名。完成门：跨语言 fixture、golden、Bundle 完整性、旧 Invocation 精确路由和全量 CI 通过。
