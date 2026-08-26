@@ -1,0 +1,78 @@
+{
+  "schema_version": "storygraph-v1",
+  "graph_boundaries": [
+    {
+      "kind": "storygraph",
+      "owner": "production/storygraph",
+      "identity_field": "story_node_key",
+      "storage": "postgresql/gorm",
+      "executable": false
+    },
+    {
+      "kind": "authoring_graph",
+      "owner": "authoring",
+      "identity_field": "authoring_node_id",
+      "storage": "postgresql/gorm",
+      "executable": false
+    },
+    {
+      "kind": "workflow_definition",
+      "owner": "workflow",
+      "identity_field": "workflow_node_id",
+      "storage": "postgresql/gorm",
+      "executable": true
+    },
+    {
+      "kind": "temporal_history",
+      "owner": "temporal",
+      "identity_field": "node_run_id",
+      "storage": "temporal",
+      "executable": true
+    }
+  ],
+  "node_key_case": {
+    "node_type": "asset_identity",
+    "owner_ref": {
+      "owner_kind": "asset",
+      "owner_logical_id": "character-lin-yi",
+      "fragment_key": "identity",
+      "owner_version_id": "10000000-0000-0000-0000-000000000001",
+      "owner_revision": 3,
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "expected_key": "sgn_95d37507f8df854ede70af6c2ce19bd469bb68c8138494694c73ec5b658cccd4"
+  },
+  "edge_key_case": {
+    "edge_type": "claim_participant",
+    "from_node_key": "sgn_1111111111111111111111111111111111111111111111111111111111111111",
+    "to_node_key": "sgn_2222222222222222222222222222222222222222222222222222222222222222",
+    "qualifier": {
+      "participant_role": "subject"
+    },
+    "expected_key": "sge_2598426ca57c5a30b2d098600d610a0dee7c7259f332dbc1899749cd56e5c8c8"
+  },
+  "expected_topology_hash": "fa288d7e606af252a772c721d102840c291d346a89eaa5c62cd24005a712717a",
+  "expected_content_hash": "8b2c558e98fc821c63ba7c32ff242b9389478cb95b1a569fb89ae1dbf834a2e9",
+  "claim": {
+    "predicate": "protects",
+    "participants": [
+      {
+        "role": "subject",
+        "story_node_key": "sgn_1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      {
+        "role": "object",
+        "story_node_key": "sgn_3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    ],
+    "anchors": [
+      "sgn_4444444444444444444444444444444444444444444444444444444444444444"
+    ],
+    "valid_scope": {
+      "kind": "scene",
+      "owner_logical_id": "scene-1-3"
+    },
+    "polarity": "positive",
+    "status": "asserted"
+  }
+}

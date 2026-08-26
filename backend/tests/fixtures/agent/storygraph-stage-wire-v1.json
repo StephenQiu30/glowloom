@@ -1,0 +1,121 @@
+{
+  "wire_schema_version": "storygraph-stage-wire-v1",
+  "valid_invocation": {
+    "invocation_id": "20000000-0000-0000-0000-000000000001",
+    "kind": "storygraph_stage",
+    "wire_schema_version": "storygraph-stage-wire-v1",
+    "input_hash": "80b6bfc4d43de071e122d443963b6aafd1375d5802fb989398cf5162a1abf844",
+    "execution_policy": {
+      "definition_key": "storygraph_stage",
+      "definition_version": "storygraph-harness-v1",
+      "prompt_version": "storygraph-prompt-v1",
+      "skill_bundle_version": "storygraph-skills-v1",
+      "skill_bundle_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "output_schema_version": "storygraph-candidate-v1",
+      "model_capability": "structured_text",
+      "codex_runtime_contract": "codex-cli-ephemeral-read-only-v1",
+      "allowed_tools": [],
+      "max_model_calls": 2,
+      "max_execution_seconds": 300
+    },
+    "payload": {
+      "stage": "extract_source_evidence",
+      "shard_key": "slice-0001",
+      "workspace_id": "30000000-0000-0000-0000-000000000001",
+      "project_id": "40000000-0000-0000-0000-000000000001",
+      "source_refs": [
+        {
+          "owner_kind": "production/script",
+          "owner_logical_id": "script-main",
+          "owner_version_id": "50000000-0000-0000-0000-000000000002",
+          "revision": 2,
+          "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "owner_kind": "production/script",
+          "owner_logical_id": "script-main",
+          "owner_version_id": "50000000-0000-0000-0000-000000000001",
+          "revision": 1,
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "upstream_candidates": [],
+      "shard_manifest_ref": {
+        "manifest_id": "60000000-0000-0000-0000-000000000001",
+        "version": 1,
+        "hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "shard": {
+        "kind": "source_slice",
+        "key": "slice-0001",
+        "tree_path": "0001",
+        "absolute_start": 0,
+        "absolute_end": 12
+      },
+      "stage_input": {
+        "normalized_text": "林一说：开始。"
+      }
+    }
+  },
+  "expected_input_hash": "80b6bfc4d43de071e122d443963b6aafd1375d5802fb989398cf5162a1abf844",
+  "expected_stage_instance_key": "d2a1fad068e7314b941c018f1f59b4b9fa7cea153da210d0cbe9ad0810686efe",
+  "valid_success_result": {
+    "invocation_id": "20000000-0000-0000-0000-000000000001",
+    "kind": "storygraph_stage",
+    "wire_schema_version": "storygraph-stage-wire-v1",
+    "stage": "extract_source_evidence",
+    "shard_key": "slice-0001",
+    "status": "succeeded",
+    "candidate_type": "source_evidence_candidate",
+    "candidate": {
+      "observations": [
+        {
+          "absolute_start": 0,
+          "absolute_end": 2,
+          "text": "林一"
+        }
+      ]
+    },
+    "input_hash": "80b6bfc4d43de071e122d443963b6aafd1375d5802fb989398cf5162a1abf844",
+    "result_hash": "cd5611a7a24bf2b181af33e33115894b7a3ffc6a69cf39dccca547690e33b8d9",
+    "issues": [],
+    "executor": {
+      "name": "codex-cli",
+      "version": "0.147.0",
+      "model": "policy-default"
+    },
+    "error": null
+  },
+  "expected_result_hash": "cd5611a7a24bf2b181af33e33115894b7a3ffc6a69cf39dccca547690e33b8d9",
+  "valid_unknown_result": {
+    "invocation_id": "20000000-0000-0000-0000-000000000001",
+    "kind": "storygraph_stage",
+    "wire_schema_version": "storygraph-stage-wire-v1",
+    "stage": "extract_source_evidence",
+    "shard_key": "slice-0001",
+    "status": "unknown",
+    "candidate_type": "source_evidence_candidate",
+    "candidate": null,
+    "input_hash": "80b6bfc4d43de071e122d443963b6aafd1375d5802fb989398cf5162a1abf844",
+    "result_hash": null,
+    "issues": [],
+    "executor": {
+      "name": "codex-cli",
+      "version": "0.147.0",
+      "model": "policy-default"
+    },
+    "error": {
+      "code": "agent_execution_unknown",
+      "summary": "transport outcome is unknown",
+      "retryable": true
+    }
+  },
+  "execution_grant_claims": {
+    "invocation_id": "20000000-0000-0000-0000-000000000001",
+    "input_hash": "80b6bfc4d43de071e122d443963b6aafd1375d5802fb989398cf5162a1abf844",
+    "execution_policy_hash": "3239da2507401cc137106a56f045445b6e9936790395b69b7e7b3437d8ec5486",
+    "expires_at": 1800000000,
+    "attempt": 1,
+    "fencing_token": 7
+  }
+}

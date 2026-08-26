@@ -24,7 +24,16 @@ def test_agent_entrypoint_only_mounts_candidate_runtime() -> None:
 
 def test_agent_runtime_has_no_business_storage_dependencies() -> None:
     project = (AGENT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    for dependency in ("sqlalchemy", "asyncpg", "redis", "aiokafka", "minio"):
+    for dependency in (
+        "sqlalchemy",
+        "asyncpg",
+        "redis",
+        "aiokafka",
+        "minio",
+        "elasticsearch",
+        "temporalio",
+        "runware",
+    ):
         assert dependency not in project.casefold()
     probe = subprocess.run(
         [

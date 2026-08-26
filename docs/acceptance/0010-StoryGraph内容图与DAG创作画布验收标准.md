@@ -22,14 +22,14 @@
 
 - [ ] `SG-ARC-001`（`SG-I01`、`SG-I03`–`028` 回归）：Backend 唯一业务 Writer，Agent/Frontend/event-worker 零 Owner 直写证据。
 - [ ] `SG-ARC-002`（`SG-I01`、`SG-I03` 起）：空 PostgreSQL 的唯一 GORM Catalog、无 Migration 元数据/Raw SQL/第二 ORM/第二 Writer 证据。
-- [ ] `SG-ARC-003`（`SG-I01` 起）：Domain/Application 与 GORM/Temporal/Kafka/Elastic/Provider 的 import/AST 负向证据。
+- [x] `SG-ARC-003`（`SG-I01` 起）：Domain/Application 与 GORM/Temporal/Kafka/Elastic/Provider 的 import/AST 负向证据。
 - [ ] `SG-ARC-004`（`SG-I01`、`SG-I06`–`024`）：真实 Temporal wait/signal/replay/restart 与无 Kafka/DB 第二 Workflow 证据。
 - [ ] `SG-ARC-005`（`SG-I01`、`SG-I03`、`SG-I25`）：四图 Schema/ID/DTO 不可互换证据。
 - [ ] `SG-ARC-006`（`SG-I01`、`SG-I05`、全部 Agent 切片）：Agent Candidate-only 环境、依赖、网络和零业务写入证据。
 - [ ] `SG-ARC-007`（`SG-I07`、`SG-I25`–`026`、`SG-I28`）：Browser 仅访问 Backend `/api/v1` 的 bundle/import/网络证据。
 - [ ] `SG-ARC-008`（`SG-I03`–`024`）：外部边界稳定身份、known failure/unknown 与同 ID 对账故障矩阵。
 - [ ] `SG-ARC-009`（`SG-I03`–`026`）：Workspace/Project Token Version/Membership 与防枚举权限矩阵。
-- [ ] `SG-ARC-010`（所有首次消费者任务）：新增结构均有真实消费者、测试和装配，无未来空层/Binary/Topic/Index/兼容层证据。
+- [x] `SG-ARC-010`（所有首次消费者任务）：新增结构均有真实消费者、测试和装配，无未来空层/Binary/Topic/Index/兼容层证据。
 
 ### 2.2 StoryGraph 与 Query
 
@@ -37,7 +37,7 @@
 - [ ] `SG-GRF-002`（`SG-I03`）：每项目唯一 Head、expected CAS、并发单胜与失败零半成品证据。
 - [ ] `SG-GRF-003`（`SG-I01`、`SG-I03`、`SG-I17`）：Node/Owner Ref/Evidence strict schema 正反 fixture。
 - [ ] `SG-GRF-004`（`SG-I01`、`SG-I03`、`SG-I17`）：Edge 类型/端点矩阵与未知组合拒绝 fixture。
-- [ ] `SG-GRF-005`（`SG-I01`、`SG-I03`、`SG-I04`）：Node/Edge 稳定 Key 与跨版本 change 证据。
+- [x] `SG-GRF-005`（`SG-I01`、`SG-I03`、`SG-I04`）：Node/Edge 稳定 Key 与跨版本 change 证据。
 - [ ] `SG-GRF-006`（`SG-I01`、`SG-I03`）：Canonical Hash 跨语言、随机顺序和 Canvas 无关证据。
 - [ ] `SG-GRF-007`（`SG-I01`、`SG-I03`、`SG-I17`）：DAG、最小环路径与 Claim 表达证据。
 - [ ] `SG-GRF-008`（`SG-I03`、`SG-I17`、`SG-I23`）：Compiler 只读已确认精确 Owner、污染源拒绝证据。
@@ -112,7 +112,7 @@
 - [ ] `SG-OPS-001`（`SG-I01` 起）：严格输入/事件/Provider/HTTP 解码、大小/深度/数字/UUID/Hash 负向证据。
 - [ ] `SG-OPS-002`（`SG-I20`、`SG-I24`）：Runware SSRF/allowlist/Credential Ref 与 secret 零泄漏。
 - [ ] `SG-OPS-003`（各 Binary 首次消费者，`SG-I04` event-worker）：healthz/readyz 与真实必要依赖故障。
-- [ ] `SG-OPS-004`（`SG-I01` 起）：所有测试只在三应用 `tests/`，业务源码零测试文件。
+- [x] `SG-OPS-004`（`SG-I01` 起）：所有测试只在三应用 `tests/`，业务源码零测试文件。
 - [ ] `SG-OPS-005`（每个 `SG-Ixx`）：Red→Green→Refactor、定向门与当时全量真实 CI 证据。
 - [ ] `SG-OPS-006`（`SG-I01`、`SG-I04` 起）：空 PostgreSQL、真实 Temporal/MinIO/Kafka/Elastic/日志链 CI。
 - [ ] `SG-OPS-007`（`SG-I01` 起）：Go/Agent/Frontend/OpenAPI/Compose/Image/Hygiene 与 Required 聚合真实执行。
@@ -196,7 +196,7 @@
 - [ ] `SGA-ERR-002`（同上）：failed/unknown 可重试分类与同 identity 对账事实计数。
 - [ ] `SGA-ERR-003`（`SG-I04`、全部 Agent 切片）：允许日志字段与剧本/Candidate/Prompt/Grant/Secret 零命中。
 - [ ] `SGA-ERR-004`（同上）：Backend→Agent→Codex trace 关联且 Candidate Hash 不变。
-- [ ] `SGA-OPS-001`（`SG-I01` 起）：Agent 测试只在 `agent/tests` 独立分类。
+- [x] `SGA-OPS-001`（`SG-I01` 起）：Agent 测试只在 `agent/tests` 独立分类。
 - [ ] `SGA-OPS-002`（每个 Agent 任务）：Ruff check/format、Pyright、Pytest 与 Go/Python fixture 同时通过。
 - [ ] `SGA-OPS-003`（`SG-I02`、`SG-I05`）：非 root 镜像含唯一 Bundle/Codex，旧路径不存在且启动 Hash 验证。
 - [ ] `SGA-OPS-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I22`、`SG-I27`）：各类至少一次真实 Codex，完整原稿无模型桩。
@@ -211,7 +211,7 @@
 
 以下 28 项必须与 Plan 同序；每项只有在其映射 Requirement、定向验证、当时全量真实 CI、Acceptance Evidence 和独立 Git 提交均完成后才能勾选。
 
-- [ ] `SG-I01`：Schema/Key/Hash/Wire fixture、工具链/导入边界、失败测试与当前真实 CI 基线完成。
+- [x] `SG-I01`：Schema/Key/Hash/Wire fixture、工具链/导入边界、失败测试与当前真实 CI 基线完成。
 - [ ] `SG-I02`：八 Skill 字节保持迁移至 `agent/skills`，单路径、无 fallback、全量 CI、独立提交完成。
 - [ ] `SG-I03`：StoryGraph Version/Head/Compiler/Owner Set/Outbox 单事务发布完成。
 - [ ] `SG-I04`：Graph Query + Kafka Event + Elasticsearch Search + ELK 日志真实消费者、故障 CI 完成。
@@ -242,6 +242,17 @@
 
 ## 5. Evidence Log
 
-当前为空。每个 `SG-Ixx` 完成时在此追加一节，不覆盖历史条目；失败或缺失条件同样如实记录。
+### `SG-I01` — StoryGraph 与 Stage Wire 基础契约（2026-08-27）
 
-`SG-D21` 到此完成，所有 188 个 Checklist（91 条跨服务 Requirement、69 条 Agent Requirement、28 个实施任务）均保持未勾选。下一步只允许从 `SG-I01` 开始实施。
+- Red：`cd backend && go test ./tests/storygraph ./tests/agent` 真实失败，缺少 `internal/storygraph/domain` 以及新 Stage Invocation/Result/Grant；`cd agent && uv run --all-extras pytest -q tests/contract/test_storygraph_wire.py` 因缺少 `StoryGraphStageInvocation/Result` 收集失败。
+- Green：新增 StoryGraph 四图边界、规范 Node Type→Owner、稳定 Node/Edge Key、Evidence Ref、严格 Claim、Canonical Snapshot、拓扑/内容 Hash、稳定 Kahn 排序与最短确定性环路径；Canvas viewport 不进入 Schema/Hash，精确 Owner 版本变化保持 Key/Topology、改变 Content。
+- 跨语言：Go 与 Python 共同读取 `backend/tests/fixtures/agent/storygraph-stage-wire-v1.json`，对 strict Invocation/Result、排序 source/upstream refs、Input/Result/Policy Hash、Stage Instance Key、空 Tool、attempt/fencing 建立 golden；旧 Invocation 尚未删除，相关最终条款保持未通过至 `SG-I05`。
+- 架构：新增 AST/import 门禁止 Domain/Application 导入 GORM、Temporal、franz-go、go-elasticsearch、MinIO；可选 Kafka/Elastic/React Flow/Dagre 依赖只有在对应首个消费者目录与 Binary 同时存在时才允许加入。未创建数据库 Model、Migration、Kafka/Elastic/Canvas 空目录或第二 ORM。
+- 定向验证：`cd backend && go test ./tests/storygraph ./tests/agent ./tests/architecture` 通过；`cd agent && uv run --all-extras ruff check app tests && uv run --all-extras ruff format --check app tests && uv run --all-extras pyright app tests && uv run --all-extras pytest -q` 通过，`27 passed`。
+- Backend 真实依赖：任务专用空 PostgreSQL `16.15`、Temporal 指定 digest、MinIO `RELEASE.2025-09-07T16-13-09Z` 在独立端口运行；`gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Workflow 包 `99.168s`。数据库 `ON_ERROR_STOP` 断言确认 Migration/Schema 账本表计数为零；三个测试容器已精确删除。
+- Frontend：`npm run openapi2ts && npm run lint && npm run typecheck && npm test && npm run build` 通过，16 个测试文件、45 项测试和 Next.js production build 通过，生成 Client 无漂移。
+- 交付：开发/生产 Compose `config --quiet` 通过；Backend、Agent、Frontend 三镜像构建及 API/Worker、Codex/Candidate Runtime、Frontend standalone 文件检查通过。`git diff --check` 与测试目录门通过。
+- 尚未完成：StoryGraphVersion/Head/GORM Record/Outbox 属于 `SG-I03`，最终单 Bundle/旧 Invocation 删除与真实 Codex 路由属于 `SG-I05`，Kafka/Search/ELK 属于 `SG-I04`；因此对应 Requirement 未提前勾选。按门禁未运行 `agent-browser`。
+- Git：本 Evidence 与实现由当前 `SG-I01` 独立提交承载；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 5 条 Requirement 与 `SG-I01`，其余保持未通过。下一步只允许实施 `SG-I02`。
