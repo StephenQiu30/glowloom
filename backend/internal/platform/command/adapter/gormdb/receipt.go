@@ -30,11 +30,22 @@ func Find(ctx context.Context, database *gorm.DB, workspaceID, operation, idempo
 		}
 		return platformcommand.Receipt{}, err
 	}
-	return platformcommand.Receipt{
-		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), Operation: record.Operation,
-		IdempotencyKey: record.IdempotencyKey, InputHash: record.InputHash, ResourceID: record.ResourceID.String(),
-		Result: append([]byte(nil), record.Result...), CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt,
-	}, nil
+	return receiptDomain(record), nil
+}
+
+func FindByID(ctx context.Context, database *gorm.DB, receiptID string) (platformcommand.Receipt, error) {
+	id, err := uuid.Parse(receiptID)
+	if err != nil {
+		return platformcommand.Receipt{}, platformcommand.ErrReceiptNotFound
+	}
+	var record model.CommandReceipt
+	if err = database.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return platformcommand.Receipt{}, platformcommand.ErrReceiptNotFound
+		}
+		return platformcommand.Receipt{}, err
+	}
+	return receiptDomain(record), nil
 }
 
 func Create(ctx context.Context, database *gorm.DB, receipt platformcommand.Receipt) error {
@@ -75,6 +86,14 @@ func equalJSON(left, right []byte) bool {
 		return false
 	}
 	return reflect.DeepEqual(leftValue, rightValue)
+}
+
+func receiptDomain(record model.CommandReceipt) platformcommand.Receipt {
+	return platformcommand.Receipt{
+		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), Operation: record.Operation,
+		IdempotencyKey: record.IdempotencyKey, InputHash: record.InputHash, ResourceID: record.ResourceID.String(),
+		Result: append([]byte(nil), record.Result...), CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt.UTC(),
+	}
 }
 
 func receiptRecord(receipt platformcommand.Receipt) (model.CommandReceipt, error) {

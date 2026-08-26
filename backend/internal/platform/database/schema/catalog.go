@@ -51,6 +51,7 @@ func Catalog() []any {
 		&model.QuotaPolicy{},
 		&model.QuotaCounter{},
 		&model.QuotaReservation{},
+		&model.GenerationIntent{},
 		&model.WorkflowHumanGateApplyReceipt{},
 		&model.WorkflowSignalIntent{},
 		&model.WorkflowSignalReceipt{},

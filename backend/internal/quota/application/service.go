@@ -365,6 +365,47 @@ func (service *Service) Release(ctx context.Context, actor Actor, command Transi
 	return service.transition(ctx, actor, command, domain.ReservationReleased, releaseOperation)
 }
 
+func (service *Service) GetReservation(ctx context.Context, actor Actor, reservationID string) (domain.Reservation, error) {
+	actor.UserID, reservationID = strings.TrimSpace(actor.UserID), strings.TrimSpace(reservationID)
+	if service == nil || service.transactions == nil || !validActor(actor) || !validUUID(reservationID) {
+		return domain.Reservation{}, invalid("Invalid quota reservation query")
+	}
+	var result domain.Reservation
+	err := service.transactions.WithinQuotaTransaction(ctx, func(repo Repository) error {
+		reservation, loadErr := repo.GetReservationForUpdate(ctx, reservationID)
+		if loadErr != nil {
+			return loadErr
+		}
+		if authorizeErr := repo.AuthorizeProject(
+			ctx, actor, reservation.WorkspaceID, reservation.ProjectID, "read",
+		); authorizeErr != nil {
+			return authorizeErr
+		}
+		policy, loadErr := repo.FindPolicy(ctx, reservation.ProjectID, reservation.Metric)
+		if loadErr != nil {
+			return loadErr
+		}
+		counter, loadErr := repo.GetCounterForUpdate(ctx, reservation.PolicyID, reservation.WindowStart)
+		if loadErr != nil {
+			return loadErr
+		}
+		reservations, loadErr := repo.ListReservations(ctx, counter.ID)
+		if loadErr != nil {
+			return loadErr
+		}
+		if _, loadErr = reconcileUsage(policy, counter, reservations); loadErr != nil {
+			return loadErr
+		}
+		if validationReservation(reservation) != nil || reservation.PolicyID != policy.ID ||
+			reservation.CounterID != counter.ID {
+			return conflict("Quota reservation facts have drifted")
+		}
+		result = reservation
+		return nil
+	})
+	return result, normalizeError(err)
+}
+
 func (service *Service) transition(
 	ctx context.Context,
 	actor Actor,
