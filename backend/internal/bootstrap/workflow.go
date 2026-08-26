@@ -20,6 +20,7 @@ type WorkflowRuntimeRepository interface {
 	workflowapp.NodeRuntimeRepository
 	workflowapp.NodeCacheRuntimeRepository
 	workflowapp.RunCompletionRepository
+	workflowapp.RunFailureRepository
 	workflowapp.HumanGateRepository
 	workflowapp.HumanGateApplyRepository
 }
