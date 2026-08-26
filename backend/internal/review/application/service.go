@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/StephenQiu30/lanverse/backend/internal/review/domain"
 )
 
@@ -26,6 +28,7 @@ type Actor struct {
 
 type Repository interface {
 	FindTaskByNode(context.Context, string, string) (domain.HumanTask, error)
+	GetDecision(context.Context, Actor, string) (domain.DecisionResult, error)
 	EnsureTask(context.Context, domain.HumanTask) (domain.HumanTask, error)
 	Claim(context.Context, Actor, ClaimCommand, string, time.Time, time.Time) (domain.ClaimResult, error)
 	Renew(context.Context, Actor, RenewCommand, time.Time, time.Time) (domain.ClaimResult, error)
@@ -170,6 +173,21 @@ func (service *Service) Decide(ctx context.Context, actor Actor, command DecideC
 		decision.SelectedCandidateID = &command.SelectedCandidateID
 	}
 	return service.repository.Decide(ctx, actor, command, decision, now)
+}
+
+func (service *Service) GetDecision(ctx context.Context, actor Actor, decisionID string) (domain.DecisionResult, error) {
+	actor.UserID = strings.TrimSpace(actor.UserID)
+	decisionID = strings.TrimSpace(decisionID)
+	if service == nil || service.repository == nil || actor.UserID == "" || actor.TokenVersion < 1 {
+		return domain.DecisionResult{}, invalid("Invalid review decision query")
+	}
+	if _, err := uuid.Parse(actor.UserID); err != nil {
+		return domain.DecisionResult{}, invalid("Invalid review decision query")
+	}
+	if _, err := uuid.Parse(decisionID); err != nil {
+		return domain.DecisionResult{}, ErrNotFound
+	}
+	return service.repository.GetDecision(ctx, actor, decisionID)
 }
 
 func normalizeOpen(command OpenCommand) OpenCommand {

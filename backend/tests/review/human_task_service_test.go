@@ -249,6 +249,13 @@ func (repo *humanTaskRepository) FindTaskByNode(_ context.Context, workspaceID, 
 	return repo.task, nil
 }
 
+func (repo *humanTaskRepository) GetDecision(_ context.Context, _ reviewapp.Actor, decisionID string) (review.DecisionResult, error) {
+	if repo.decision.ID != decisionID || repo.task.ID == "" {
+		return review.DecisionResult{}, reviewapp.ErrNotFound
+	}
+	return review.DecisionResult{Task: repo.task, Decision: repo.decision}, nil
+}
+
 func (repo *humanTaskRepository) Claim(
 	_ context.Context,
 	actor reviewapp.Actor,

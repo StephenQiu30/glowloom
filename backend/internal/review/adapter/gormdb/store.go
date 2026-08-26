@@ -33,6 +33,42 @@ type Store struct {
 
 func New(database *gorm.DB) *Store { return &Store{database: database} }
 
+func (store *Store) GetDecision(ctx context.Context, actor application.Actor, decisionID string) (domain.DecisionResult, error) {
+	decisionUUID, err := uuid.Parse(decisionID)
+	if err != nil {
+		return domain.DecisionResult{}, application.ErrNotFound
+	}
+	actorID, err := uuid.Parse(actor.UserID)
+	if err != nil {
+		return domain.DecisionResult{}, application.ErrNotFound
+	}
+	var result domain.DecisionResult
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var decision model.ReviewDecision
+		if loadErr := transaction.WithContext(ctx).First(&decision, "id = ?", decisionUUID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var task model.HumanTask
+		if loadErr := transaction.WithContext(ctx).First(&task, "id = ?", decision.HumanTaskID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if authorizeErr := authorizeReviewer(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion); authorizeErr != nil {
+			return authorizeErr
+		}
+		persistedTask, mapErr := taskDomain(task)
+		if mapErr != nil {
+			return mapErr
+		}
+		persistedDecision := decisionDomain(decision)
+		if validationErr := validateDecisionResult(persistedTask, persistedDecision); validationErr != nil {
+			return validationErr
+		}
+		result = domain.DecisionResult{Task: persistedTask, Decision: persistedDecision}
+		return nil
+	})
+	return result, err
+}
+
 func (store *Store) FindTaskByNode(ctx context.Context, workspaceID, nodeRunID string) (domain.HumanTask, error) {
 	workspace, node, err := taskScope(workspaceID, nodeRunID)
 	if err != nil {
@@ -437,6 +473,34 @@ func decisionDomain(value model.ReviewDecision) domain.ReviewDecision {
 		Decision: value.Decision, SubjectRevision: value.SubjectRevision, SelectedCandidateID: selected,
 		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt,
 	}
+}
+
+func validateDecisionResult(task domain.HumanTask, decision domain.ReviewDecision) error {
+	if task.Status != "COMPLETED" || decision.WorkspaceID != task.WorkspaceID ||
+		decision.HumanTaskID != task.ID || decision.SubjectRevision != task.SubjectRevision ||
+		task.ClaimedBy == nil || *task.ClaimedBy != decision.CreatedBy {
+		return errors.New("review task and decision facts have drifted")
+	}
+	candidates := append([]string(nil), task.CandidateIDs...)
+	for _, candidateID := range candidates {
+		if _, err := uuid.Parse(candidateID); err != nil {
+			return errors.New("review task candidate binding has drifted")
+		}
+	}
+	slices.Sort(candidates)
+	if !slices.Equal(candidates, task.CandidateIDs) || len(slices.Compact(candidates)) != len(task.CandidateIDs) {
+		return errors.New("review task candidate binding has drifted")
+	}
+	if decision.Decision == "selected" {
+		if decision.SelectedCandidateID == nil || !slices.Contains(task.CandidateIDs, *decision.SelectedCandidateID) {
+			return errors.New("review selected candidate binding has drifted")
+		}
+		return nil
+	}
+	if decision.SelectedCandidateID != nil || !slices.Contains([]string{"approved", "rejected", "changes_requested"}, decision.Decision) {
+		return errors.New("review decision value has drifted")
+	}
+	return nil
 }
 
 func taskScope(left, right string) (uuid.UUID, uuid.UUID, error) {

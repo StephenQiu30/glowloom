@@ -41,6 +41,42 @@ type CandidateWithReport struct {
 	Report    QCReport
 }
 
+type CandidateReference struct {
+	ID               string `json:"id"`
+	Revision         int    `json:"revision"`
+	ArtifactID       string `json:"artifact_id"`
+	ArtifactRevision int    `json:"artifact_revision"`
+	ArtifactSHA256   string `json:"artifact_sha256"`
+	QCReportID       string `json:"qc_report_id"`
+	QCReportHash     string `json:"qc_report_hash"`
+}
+
+type CandidateSelection struct {
+	ID, WorkspaceID, ProjectID, WorkflowRunID, NodeRunID string
+	HumanTaskID, ReviewDecisionID                        string
+	SubjectType, SubjectID                               string
+	SubjectRevision                                      int
+	Candidates                                           []CandidateReference
+	CandidateSetHash, SelectedCandidateID                string
+	SelectedArtifactID, SelectedArtifactSHA256           string
+	ReviewerID, ContentHash                              string
+	Revision                                             int
+	CreatedBy                                            string
+	CreatedAt                                            time.Time
+}
+
+func SameSelectionBinding(left, right CandidateSelection) bool {
+	return left.WorkspaceID == right.WorkspaceID && left.ProjectID == right.ProjectID &&
+		left.WorkflowRunID == right.WorkflowRunID && left.NodeRunID == right.NodeRunID &&
+		left.HumanTaskID == right.HumanTaskID && left.ReviewDecisionID == right.ReviewDecisionID &&
+		left.SubjectType == right.SubjectType && left.SubjectID == right.SubjectID &&
+		left.SubjectRevision == right.SubjectRevision && slices.Equal(left.Candidates, right.Candidates) &&
+		left.CandidateSetHash == right.CandidateSetHash && left.SelectedCandidateID == right.SelectedCandidateID &&
+		left.SelectedArtifactID == right.SelectedArtifactID &&
+		left.SelectedArtifactSHA256 == right.SelectedArtifactSHA256 && left.ReviewerID == right.ReviewerID &&
+		left.ContentHash == right.ContentHash && left.Revision == 1 && right.Revision == 1
+}
+
 func EvaluateImage(mediaType string, width, height int, policy ImageQCPolicy) []string {
 	failures := make([]string, 0, 4)
 	if !slices.Contains(policy.AllowedMediaTypes, mediaType) {

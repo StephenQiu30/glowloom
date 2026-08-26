@@ -48,3 +48,36 @@ type GenerationQCReport struct {
 }
 
 func (GenerationQCReport) TableName() string { return "gen_qc_reports" }
+
+type GenerationCandidateSelection struct {
+	ID                     uuid.UUID           `gorm:"type:uuid;primaryKey"`
+	WorkspaceID            uuid.UUID           `gorm:"type:uuid;not null;index:ix_gen_selections_workspace_created,priority:1"`
+	ProjectID              uuid.UUID           `gorm:"type:uuid;not null;index"`
+	WorkflowRunID          uuid.UUID           `gorm:"type:uuid;not null;index"`
+	NodeRunID              uuid.UUID           `gorm:"type:uuid;not null;index"`
+	HumanTaskID            uuid.UUID           `gorm:"type:uuid;not null;uniqueIndex:uq_gen_selection_task"`
+	ReviewDecisionID       uuid.UUID           `gorm:"type:uuid;not null;uniqueIndex:uq_gen_selection_decision"`
+	SubjectType            string              `gorm:"type:varchar(80);not null"`
+	SubjectID              uuid.UUID           `gorm:"type:uuid;not null"`
+	SubjectRevision        int                 `gorm:"not null;check:ck_gen_selection_subject_revision,subject_revision >= 1"`
+	Candidates             datatypes.JSON      `gorm:"type:jsonb;not null"`
+	CandidateSetHash       string              `gorm:"type:char(64);not null;check:ck_gen_selection_candidate_set_hash,char_length(candidate_set_hash) = 64"`
+	SelectedCandidateID    uuid.UUID           `gorm:"type:uuid;not null;index"`
+	SelectedArtifactID     uuid.UUID           `gorm:"type:uuid;not null"`
+	SelectedArtifactSHA256 string              `gorm:"type:char(64);not null;check:ck_gen_selection_artifact_sha256,char_length(selected_artifact_sha256) = 64"`
+	ReviewerID             uuid.UUID           `gorm:"type:uuid;not null"`
+	ContentHash            string              `gorm:"type:char(64);not null;check:ck_gen_selection_content_hash,char_length(content_hash) = 64"`
+	Revision               int                 `gorm:"not null;check:ck_gen_selection_revision,revision = 1"`
+	CreatedBy              uuid.UUID           `gorm:"type:uuid;not null"`
+	CreatedAt              time.Time           `gorm:"type:timestamptz;not null;index:ix_gen_selections_workspace_created,priority:2,sort:desc"`
+	Workspace              Workspace           `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project                Project             `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	HumanTask              HumanTask           `gorm:"foreignKey:HumanTaskID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ReviewDecision         ReviewDecision      `gorm:"foreignKey:ReviewDecisionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	SelectedCandidate      GenerationCandidate `gorm:"foreignKey:SelectedCandidateID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	SelectedArtifact       Artifact            `gorm:"foreignKey:SelectedArtifactID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Reviewer               UserAccount         `gorm:"foreignKey:ReviewerID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator                UserAccount         `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (GenerationCandidateSelection) TableName() string { return "gen_candidate_selections" }

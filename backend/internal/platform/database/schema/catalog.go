@@ -42,6 +42,7 @@ func Catalog() []any {
 		&model.WorkflowControlReceipt{},
 		&model.HumanTask{},
 		&model.ReviewDecision{},
+		&model.GenerationCandidateSelection{},
 		&model.WorkflowHumanGateApplyReceipt{},
 		&model.WorkflowSignalIntent{},
 		&model.WorkflowSignalReceipt{},

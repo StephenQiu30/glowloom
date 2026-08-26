@@ -139,10 +139,10 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	}
 
 	var taskCount, decisionCount int64
-	if err = database.Model(&model.HumanTask{}).Count(&taskCount).Error; err != nil {
+	if err = database.Model(&model.HumanTask{}).Where("workspace_id = ?", workspaceID).Count(&taskCount).Error; err != nil {
 		t.Fatalf("count human tasks: %v", err)
 	}
-	if err = database.Model(&model.ReviewDecision{}).Count(&decisionCount).Error; err != nil {
+	if err = database.Model(&model.ReviewDecision{}).Where("workspace_id = ?", workspaceID).Count(&decisionCount).Error; err != nil {
 		t.Fatalf("count review decisions: %v", err)
 	}
 	if taskCount != 1 || decisionCount != 1 {
