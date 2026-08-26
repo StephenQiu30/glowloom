@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from app.candidate_runtime.schemas import ExecutionPolicy
 from app.modules.scripts.production_bibles.contracts import (
     Evidence,
     EvidenceResult,
@@ -53,8 +54,15 @@ _SPEC_FIELDS = {
 
 
 class CodexLocalProductionBibleGenerator:
-    def __init__(self, *, repository_root: Path | None = None) -> None:
-        self._runner = CodexSchemaRunner(repository_root=repository_root)
+    def __init__(
+        self,
+        *,
+        execution_policy: ExecutionPolicy,
+        repository_root: Path | None = None,
+    ) -> None:
+        self._runner = CodexSchemaRunner(
+            repository_root=repository_root, execution_policy=execution_policy
+        )
 
     @property
     def model_name(self) -> str:
@@ -68,6 +76,7 @@ class CodexLocalProductionBibleGenerator:
             "Extract source-grounded entities, time-varying entity states, and world entries; "
             "do not persist or confirm anything. Input:\n" + _json({"evidence_catalog": catalog}),
             EvidenceResult,
+            skill_name="extract-bible-evidence",
         )
         candidate = await self._runner.run(
             "Use $reconcile-bible. Return only schema-valid JSON. Reconcile the supplied "
@@ -85,6 +94,7 @@ class CodexLocalProductionBibleGenerator:
                 }
             ),
             ProductionBibleCandidate,
+            skill_name="reconcile-bible",
         )
         normalized = normalize_candidate(candidate, value.normalized_text)
         review = await self._runner.run(
@@ -93,6 +103,7 @@ class CodexLocalProductionBibleGenerator:
             "do not edit, confirm, persist, or materialize the candidate. Input:\n"
             + _json({"evidence_catalog": catalog, "candidate": normalized}),
             ReviewResult,
+            skill_name="review-bible",
         )
         normalized["review_issues"] = _valid_issues(
             review.model_dump(mode="json")["review_issues"], value.normalized_text

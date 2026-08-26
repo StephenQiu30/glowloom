@@ -48,6 +48,7 @@ def verify_execution_grant(value: str, secret: str, invocation: Invocation) -> N
         claims.get("invocation_id") != str(invocation.invocation_id)
         or claims.get("kind") != invocation.kind
         or claims.get("input_hash") != invocation.input_hash
+        or claims.get("execution_policy_hash") != invocation.execution_policy.canonical_hash()
         or expires_at <= now
         or expires_at > now + MAX_TTL_SECONDS
     ):

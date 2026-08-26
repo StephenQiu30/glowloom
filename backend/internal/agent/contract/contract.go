@@ -16,11 +16,60 @@ const SchemaVersion = "agent-candidate-v1"
 var hashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type Invocation struct {
-	InvocationID  string          `json:"invocation_id"`
-	Kind          string          `json:"kind"`
-	InputHash     string          `json:"input_hash"`
-	SchemaVersion string          `json:"schema_version"`
-	Payload       json.RawMessage `json:"payload"`
+	InvocationID    string          `json:"invocation_id"`
+	Kind            string          `json:"kind"`
+	InputHash       string          `json:"input_hash"`
+	SchemaVersion   string          `json:"schema_version"`
+	ExecutionPolicy ExecutionPolicy `json:"execution_policy"`
+	Payload         json.RawMessage `json:"payload"`
+}
+
+type ExecutionPolicy struct {
+	DefinitionKey       string   `json:"definition_key"`
+	DefinitionVersion   string   `json:"definition_version"`
+	PromptVersion       string   `json:"prompt_version"`
+	SkillBundleVersion  string   `json:"skill_bundle_version"`
+	OutputSchemaVersion string   `json:"output_schema_version"`
+	ModelCapability     string   `json:"model_capability"`
+	AllowedTools        []string `json:"allowed_tools"`
+	MaxModelCalls       int      `json:"max_model_calls"`
+}
+
+func ExecutionPolicyFor(kind string) (ExecutionPolicy, error) {
+	switch kind {
+	case "production_bible":
+		return ExecutionPolicy{
+			DefinitionKey: kind, DefinitionVersion: "production-bible-harness-v1",
+			PromptVersion: "production-bible-prompt-v1", SkillBundleVersion: "production-bible-skills-v1",
+			OutputSchemaVersion: "production-bible-schema-v1", ModelCapability: "structured_text",
+			AllowedTools: []string{}, MaxModelCalls: 3,
+		}, nil
+	case "storyboard_draft":
+		return ExecutionPolicy{
+			DefinitionKey: kind, DefinitionVersion: "storyboard-harness-v1",
+			PromptVersion: "storyboard-prompt-v1", SkillBundleVersion: "storyboard-skills-v1",
+			OutputSchemaVersion: "storyboard-draft-schema-v1", ModelCapability: "structured_text",
+			AllowedTools: []string{}, MaxModelCalls: 1,
+		}, nil
+	default:
+		return ExecutionPolicy{}, errors.New("unsupported agent definition")
+	}
+}
+
+func (value ExecutionPolicy) ValidateFor(kind string) error {
+	manifest, err := ExecutionPolicyFor(kind)
+	if err != nil || value.DefinitionKey != manifest.DefinitionKey || value.DefinitionVersion != manifest.DefinitionVersion || value.PromptVersion != manifest.PromptVersion || value.SkillBundleVersion != manifest.SkillBundleVersion || value.OutputSchemaVersion != manifest.OutputSchemaVersion || value.ModelCapability != manifest.ModelCapability || value.AllowedTools == nil || len(value.AllowedTools) != 0 || value.MaxModelCalls < 1 || value.MaxModelCalls > manifest.MaxModelCalls {
+		return errors.New("agent execution policy is outside the definition manifest")
+	}
+	return nil
+}
+
+func (value ExecutionPolicy) Hash() (string, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return CanonicalHash(encoded)
 }
 
 type Executor struct {
@@ -51,10 +100,10 @@ func (value Invocation) Validate() error {
 	if _, err := uuid.Parse(value.InvocationID); err != nil {
 		return errors.New("invalid agent invocation")
 	}
-	if !oneOf(value.Kind, "production_bible", "script_structure", "storyboard_draft") || !hashPattern.MatchString(value.InputHash) || value.SchemaVersion != SchemaVersion || !jsonObject(value.Payload) {
+	if !oneOf(value.Kind, "production_bible", "storyboard_draft") || !hashPattern.MatchString(value.InputHash) || value.SchemaVersion != SchemaVersion || !jsonObject(value.Payload) {
 		return errors.New("invalid agent invocation")
 	}
-	return nil
+	return value.ExecutionPolicy.ValidateFor(value.Kind)
 }
 
 func (value Result) ValidateFor(invocation Invocation) error {
@@ -74,7 +123,21 @@ func (value Result) ValidateFor(invocation Invocation) error {
 	if !bytes.Equal(bytes.TrimSpace(value.Candidate), []byte("null")) || value.ResultHash != nil || value.Error == nil || value.Error.Code == "" || value.Error.Summary == "" {
 		return errors.New("failed or unknown agent result is incomplete")
 	}
+	if !validErrorSemantics(value.Status, *value.Error) {
+		return errors.New("agent result error semantics are invalid")
+	}
 	return nil
+}
+
+func validErrorSemantics(status string, resultError ResultError) bool {
+	switch resultError.Code {
+	case "candidate_validation_failed", "execution_budget_exceeded", "tool_not_allowed", "candidate_schema_invalid":
+		return status == "failed" && !resultError.Retryable
+	case "runtime_unavailable", "agent_execution_unknown":
+		return status == "unknown" && resultError.Retryable
+	default:
+		return false
+	}
 }
 
 func CanonicalHash(raw json.RawMessage) (string, error) {

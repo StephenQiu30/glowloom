@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from app.candidate_runtime import api
-from app.candidate_runtime.schemas import Invocation
+from app.candidate_runtime.schemas import Invocation, execution_policy_for
 from app.modules.storyboards.contracts import StoryboardDraftInput
 
 
@@ -52,6 +52,7 @@ async def test_storyboard_invocation_maps_backend_payload_to_candidate_input(
         kind="storyboard_draft",
         input_hash=input_hash,
         schema_version="agent-candidate-v1",
+        execution_policy=execution_policy_for("storyboard_draft"),
         payload={
             "batch_id": str(uuid4()),
             "task_id": str(uuid4()),

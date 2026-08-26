@@ -2,6 +2,7 @@ package workflow_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"reflect"
@@ -45,7 +46,7 @@ func TestAgentInvocationCatalogDeclaresLeaseAndFencing(t *testing.T) {
 	t.Parallel()
 
 	record := reflect.TypeOf(model.AgentInvocation{})
-	for _, fieldName := range []string{"ClaimVersion", "LeaseExpiresAt"} {
+	for _, fieldName := range []string{"ExecutionPolicy", "ClaimVersion", "LeaseExpiresAt"} {
 		if _, found := record.FieldByName(fieldName); !found {
 			t.Errorf("AgentInvocation must declare %s", fieldName)
 		}
@@ -90,7 +91,7 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 	if err = database.Create(&model.AgentInvocation{
 		ID: invocationID, WorkspaceID: workspaceID, RequestType: "storyboard_draft_batch",
 		RequestID: requestID, Kind: "storyboard_draft", InputHash: strings.Repeat("a", 64),
-		Payload: []byte(`{}`), Status: "queued", Attempts: 0,
+		ExecutionPolicy: mustExecutionPolicy(t, "storyboard_draft"), Payload: []byte(`{}`), Status: "queued", Attempts: 0,
 		CreatedAt: now, UpdatedAt: now,
 	}).Error; err != nil {
 		t.Fatalf("seed agent invocation: %v", err)
@@ -154,4 +155,17 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 	if completed.Status != "succeeded" || completed.LeaseExpiresAt != nil {
 		t.Fatalf("current result did not finalize invocation: %#v", completed)
 	}
+}
+
+func mustExecutionPolicy(t *testing.T, kind string) []byte {
+	t.Helper()
+	policy, err := contract.ExecutionPolicyFor(kind)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
 }

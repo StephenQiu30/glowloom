@@ -116,7 +116,11 @@ func TestPostgreSQLStoryboardingJourney(t *testing.T) {
 		Status: "succeeded", SchemaVersion: contract.SchemaVersion, Candidate: candidateJSON,
 		ResultHash: &resultHash, Executor: contract.Executor{Name: "integration", Version: "1", Model: "deterministic"},
 	}
-	contractInvocation := contract.Invocation{InvocationID: invocation.ID, Kind: invocation.Kind, InputHash: invocation.InputHash, SchemaVersion: contract.SchemaVersion, Payload: invocation.Payload}
+	var executionPolicy contract.ExecutionPolicy
+	if err = json.Unmarshal(invocation.ExecutionPolicy, &executionPolicy); err != nil {
+		t.Fatalf("decode execution policy: %v", err)
+	}
+	contractInvocation := contract.Invocation{InvocationID: invocation.ID, Kind: invocation.Kind, InputHash: invocation.InputHash, SchemaVersion: contract.SchemaVersion, ExecutionPolicy: executionPolicy, Payload: invocation.Payload}
 	if err = result.ValidateFor(contractInvocation); err != nil {
 		t.Fatalf("validate agent result envelope: %v", err)
 	}

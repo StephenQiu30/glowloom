@@ -435,11 +435,11 @@ func invocationRecord(value domain.Invocation) (model.AgentInvocation, error) {
 	if err != nil {
 		return model.AgentInvocation{}, err
 	}
-	return model.AgentInvocation{ID: id, WorkspaceID: workspaceID, RequestType: "production_bible", RequestID: requestID, Kind: value.Kind, InputHash: value.InputHash, Payload: datatypes.JSON(value.Payload), Status: value.Status, Attempts: value.Attempts, ClaimVersion: value.ClaimVersion, LeaseExpiresAt: value.LeaseExpiresAt, CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt}, nil
+	return model.AgentInvocation{ID: id, WorkspaceID: workspaceID, RequestType: "production_bible", RequestID: requestID, Kind: value.Kind, InputHash: value.InputHash, ExecutionPolicy: datatypes.JSON(value.ExecutionPolicy), Payload: datatypes.JSON(value.Payload), Status: value.Status, Attempts: value.Attempts, ClaimVersion: value.ClaimVersion, LeaseExpiresAt: value.LeaseExpiresAt, CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt}, nil
 }
 
 func invocationDomain(record model.AgentInvocation) domain.Invocation {
-	return domain.Invocation{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), RequestID: record.RequestID.String(), Kind: record.Kind, InputHash: record.InputHash, Payload: append([]byte(nil), record.Payload...), Status: record.Status, Attempts: record.Attempts, ClaimVersion: record.ClaimVersion, LeaseExpiresAt: record.LeaseExpiresAt, CreatedAt: record.CreatedAt}
+	return domain.Invocation{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), RequestID: record.RequestID.String(), Kind: record.Kind, InputHash: record.InputHash, ExecutionPolicy: append([]byte(nil), record.ExecutionPolicy...), Payload: append([]byte(nil), record.Payload...), Status: record.Status, Attempts: record.Attempts, ClaimVersion: record.ClaimVersion, LeaseExpiresAt: record.LeaseExpiresAt, CreatedAt: record.CreatedAt}
 }
 func normalizeNotFound(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/domain"
 )
@@ -220,6 +221,14 @@ func (service *Service) CreateSet(ctx context.Context, actor Actor, command Crea
 		}
 		batches := make([]domain.Batch, len(inputs))
 		invocations := make([]domain.Invocation, len(inputs))
+		executionPolicy, err := agentcontract.ExecutionPolicyFor("storyboard_draft")
+		if err != nil {
+			return err
+		}
+		encodedPolicy, err := json.Marshal(executionPolicy)
+		if err != nil {
+			return err
+		}
 		for index, input := range inputs {
 			batchID, taskID, invocationID := service.config.NewID(), service.config.NewID(), service.config.NewID()
 			payload, err := storyboardPayload(input, batchID, taskID, invocationID, inputHashes[index])
@@ -234,7 +243,8 @@ func (service *Service) CreateSet(ctx context.Context, actor Actor, command Crea
 			}
 			invocations[index] = domain.Invocation{
 				ID: invocationID, WorkspaceID: input.WorkspaceID, RequestID: batchID, Kind: "storyboard_draft",
-				InputHash: inputHashes[index], Payload: payload, Status: "queued", CreatedAt: now,
+				InputHash: inputHashes[index], ExecutionPolicy: append(json.RawMessage(nil), encodedPolicy...),
+				Payload: payload, Status: "queued", CreatedAt: now,
 			}
 			set.Batches[index] = domain.DraftSetBatch{
 				BatchID: batchID, EpisodeID: input.EpisodeID, StructureID: input.StructureID,
@@ -480,7 +490,15 @@ func (service *Service) CreateBatch(ctx context.Context, actor Actor, command Cr
 			return err
 		}
 		batch = domain.Batch{ID: batchID, WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID, EpisodeID: input.EpisodeID, StructureID: input.StructureID, ScriptVersionID: input.ScriptVersionID, TaskID: taskID, Status: "queued", InputHash: inputHash, Candidate: domain.Candidate{Shots: []domain.DraftShot{}}, Decisions: map[string]string{}, Revision: 1, CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now}
-		invocation := domain.Invocation{ID: invocationID, WorkspaceID: input.WorkspaceID, RequestID: batchID, Kind: "storyboard_draft", InputHash: inputHash, Payload: payload, Status: "queued", CreatedAt: now}
+		executionPolicy, err := agentcontract.ExecutionPolicyFor("storyboard_draft")
+		if err != nil {
+			return err
+		}
+		encodedPolicy, err := json.Marshal(executionPolicy)
+		if err != nil {
+			return err
+		}
+		invocation := domain.Invocation{ID: invocationID, WorkspaceID: input.WorkspaceID, RequestID: batchID, Kind: "storyboard_draft", InputHash: inputHash, ExecutionPolicy: encodedPolicy, Payload: payload, Status: "queued", CreatedAt: now}
 		if err = repo.CreateWorkflow(ctx, batch, invocation); err != nil {
 			return err
 		}

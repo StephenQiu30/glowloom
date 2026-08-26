@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 )
@@ -137,7 +138,15 @@ func (service *Service) Create(ctx context.Context, actor Actor, command CreateC
 		if err != nil {
 			return err
 		}
-		invocation := domain.Invocation{ID: invocationID, WorkspaceID: revision.WorkspaceID, RequestID: bibleID, Kind: "production_bible", InputHash: revision.NormalizedHash, Payload: payload, Status: "queued", CreatedAt: now}
+		executionPolicy, err := agentcontract.ExecutionPolicyFor("production_bible")
+		if err != nil {
+			return err
+		}
+		encodedPolicy, err := json.Marshal(executionPolicy)
+		if err != nil {
+			return err
+		}
+		invocation := domain.Invocation{ID: invocationID, WorkspaceID: revision.WorkspaceID, RequestID: bibleID, Kind: "production_bible", InputHash: revision.NormalizedHash, ExecutionPolicy: encodedPolicy, Payload: payload, Status: "queued", CreatedAt: now}
 		if err = repo.CreateWorkflow(ctx, result, invocation); err != nil {
 			return err
 		}

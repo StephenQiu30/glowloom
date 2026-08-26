@@ -11,7 +11,13 @@ from app.candidate_runtime.grants import InvalidExecutionGrant, verify_execution
 from app.candidate_runtime.schemas import Executor, Invocation, Result, ResultError
 from app.modules.scripts.production_bibles import CodexLocalProductionBibleGenerator
 from app.modules.scripts.production_bibles.contracts import ProductionBibleInput
-from app.modules.skills.harness import CodexExecutionError
+from app.modules.skills.harness import (
+    CodexBudgetExceeded,
+    CodexExecutionError,
+    CodexRuntimeUnavailable,
+    CodexSchemaInvalid,
+    CodexToolPolicyViolation,
+)
 from app.modules.storyboards import CodexLocalStoryboardDrafter
 from app.modules.storyboards.contracts import StoryboardDraftInput
 
@@ -52,8 +58,16 @@ async def invoke(
         )
     except (ValidationError, ValueError) as error:
         return _failure(invocation, "failed", "candidate_validation_failed", str(error), False)
+    except CodexBudgetExceeded as error:
+        return _failure(invocation, "failed", "execution_budget_exceeded", str(error), False)
+    except CodexToolPolicyViolation as error:
+        return _failure(invocation, "failed", "tool_not_allowed", str(error), False)
+    except CodexSchemaInvalid as error:
+        return _failure(invocation, "failed", "candidate_schema_invalid", str(error), False)
+    except CodexRuntimeUnavailable as error:
+        return _failure(invocation, "unknown", "runtime_unavailable", str(error), True)
     except CodexExecutionError as error:
-        return _failure(invocation, "unknown", "codex_unavailable", str(error), True)
+        return _failure(invocation, "unknown", "agent_execution_unknown", str(error), True)
     except Exception:
         return _failure(
             invocation,
@@ -66,7 +80,7 @@ async def invoke(
 
 async def _candidate(invocation: Invocation) -> tuple[dict[str, Any], Executor]:
     if invocation.kind == "production_bible":
-        generator = CodexLocalProductionBibleGenerator()
+        generator = CodexLocalProductionBibleGenerator(execution_policy=invocation.execution_policy)
         try:
             candidate = await generator.generate(
                 ProductionBibleInput.model_validate(invocation.payload)
@@ -78,7 +92,7 @@ async def _candidate(invocation: Invocation) -> tuple[dict[str, Any], Executor]:
             name="codex-cli", version="production-bible-harness-v1", model=model
         )
     if invocation.kind == "storyboard_draft":
-        generator = CodexLocalStoryboardDrafter()
+        generator = CodexLocalStoryboardDrafter(execution_policy=invocation.execution_policy)
         try:
             candidate = await generator.draft(
                 StoryboardDraftInput.model_validate(invocation.payload)

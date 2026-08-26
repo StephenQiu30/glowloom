@@ -606,6 +606,16 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 	).Count(&invocationCount).Error; err != nil {
 		t.Fatal(err)
 	}
+	var storyboardInvocations []model.AgentInvocation
+	if err = database.Where("request_id IN ?", setBatchIDs).Find(&storyboardInvocations).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, invocation := range storyboardInvocations {
+		var executionPolicy contract.ExecutionPolicy
+		if err = json.Unmarshal(invocation.ExecutionPolicy, &executionPolicy); err != nil || executionPolicy.ValidateFor("storyboard_draft") != nil || executionPolicy.MaxModelCalls != 1 {
+			t.Fatalf("Storyboard execution policy = %#v err=%v", executionPolicy, err)
+		}
+	}
 	if err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", "storyboard.create_set", set.ID).Count(&createSetReceiptCount).Error; err != nil {
 		t.Fatal(err)
 	}

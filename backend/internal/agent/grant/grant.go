@@ -15,10 +15,11 @@ import (
 const TTL = 5 * time.Minute
 
 type Claims struct {
-	InvocationID string `json:"invocation_id"`
-	Kind         string `json:"kind"`
-	InputHash    string `json:"input_hash"`
-	ExpiresAt    int64  `json:"expires_at"`
+	InvocationID        string `json:"invocation_id"`
+	Kind                string `json:"kind"`
+	InputHash           string `json:"input_hash"`
+	ExecutionPolicyHash string `json:"execution_policy_hash"`
+	ExpiresAt           int64  `json:"expires_at"`
 }
 
 type Signer struct {
@@ -37,7 +38,11 @@ func (signer *Signer) Issue(invocation contract.Invocation) (string, error) {
 	if err := invocation.Validate(); err != nil {
 		return "", err
 	}
-	claims := Claims{InvocationID: invocation.InvocationID, Kind: invocation.Kind, InputHash: invocation.InputHash, ExpiresAt: signer.now().UTC().Add(TTL).Unix()}
+	policyHash, err := invocation.ExecutionPolicy.Hash()
+	if err != nil {
+		return "", err
+	}
+	claims := Claims{InvocationID: invocation.InvocationID, Kind: invocation.Kind, InputHash: invocation.InputHash, ExecutionPolicyHash: policyHash, ExpiresAt: signer.now().UTC().Add(TTL).Unix()}
 	payload, err := json.Marshal(claims)
 	if err != nil {
 		return "", err
@@ -47,6 +52,9 @@ func (signer *Signer) Issue(invocation contract.Invocation) (string, error) {
 }
 
 func (signer *Signer) Verify(value string, invocation contract.Invocation) error {
+	if err := invocation.Validate(); err != nil {
+		return err
+	}
 	parts := strings.Split(value, ".")
 	if len(parts) != 2 || !hmac.Equal([]byte(parts[1]), []byte(signer.signature(parts[0]))) {
 		return errors.New("invalid agent execution grant signature")
@@ -56,7 +64,8 @@ func (signer *Signer) Verify(value string, invocation contract.Invocation) error
 		return errors.New("invalid agent execution grant payload")
 	}
 	var claims Claims
-	if err = json.Unmarshal(payload, &claims); err != nil || claims.InvocationID != invocation.InvocationID || claims.Kind != invocation.Kind || claims.InputHash != invocation.InputHash || claims.ExpiresAt <= signer.now().UTC().Unix() {
+	policyHash, hashErr := invocation.ExecutionPolicy.Hash()
+	if err = json.Unmarshal(payload, &claims); err != nil || hashErr != nil || claims.InvocationID != invocation.InvocationID || claims.Kind != invocation.Kind || claims.InputHash != invocation.InputHash || claims.ExecutionPolicyHash != policyHash || claims.ExpiresAt <= signer.now().UTC().Unix() {
 		return errors.New("agent execution grant does not authorize invocation")
 	}
 	return nil

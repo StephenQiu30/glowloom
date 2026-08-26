@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
@@ -185,6 +186,14 @@ func TestProductionWorkflowWorkerDurablyCompletesBibleCandidate(t *testing.T) {
 	var invocationCount, receiptCount int64
 	if err = database.Model(&model.AgentInvocation{}).Where("request_id = ?", bible.ID).Count(&invocationCount).Error; err != nil {
 		t.Fatal(err)
+	}
+	var invocation model.AgentInvocation
+	if err = database.First(&invocation, "request_id = ?", bible.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	var executionPolicy contract.ExecutionPolicy
+	if err = json.Unmarshal(invocation.ExecutionPolicy, &executionPolicy); err != nil || executionPolicy.ValidateFor("production_bible") != nil || executionPolicy.MaxModelCalls != 3 {
+		t.Fatalf("Production Bible execution policy = %#v err=%v", executionPolicy, err)
 	}
 	if err = database.Model(&model.CommandReceipt{}).
 		Where("operation = ? AND resource_id = ?", "production_bible.create", bible.ID).

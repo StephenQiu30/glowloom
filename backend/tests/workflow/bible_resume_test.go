@@ -221,7 +221,7 @@ func seedFailedBible(t *testing.T, create func(any) error) failedBibleFixture {
 		},
 		&model.AgentInvocation{
 			ID: invocationID, WorkspaceID: workspaceID, RequestType: "production_bible", RequestID: bibleID,
-			Kind: "production_bible", InputHash: strings.Repeat("2", 64), Payload: []byte(`{}`), Status: "failed",
+			Kind: "production_bible", InputHash: strings.Repeat("2", 64), ExecutionPolicy: mustExecutionPolicy(t, "production_bible"), Payload: []byte(`{}`), Status: "failed",
 			Error: []byte(`{"code":"agent_failed"}`), Attempts: claimVersion, ClaimVersion: claimVersion,
 			CompletedAt: &completedAt, CreatedAt: now, UpdatedAt: now,
 		},

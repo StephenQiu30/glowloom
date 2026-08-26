@@ -4,13 +4,21 @@ import json
 from pathlib import Path
 from typing import Any
 
+from app.candidate_runtime.schemas import ExecutionPolicy
 from app.modules.skills.harness import CodexSchemaRunner
 from app.modules.storyboards.contracts import StoryboardCandidate, StoryboardDraftInput
 
 
 class CodexLocalStoryboardDrafter:
-    def __init__(self, *, repository_root: Path | None = None) -> None:
-        self._runner = CodexSchemaRunner(repository_root=repository_root)
+    def __init__(
+        self,
+        *,
+        execution_policy: ExecutionPolicy,
+        repository_root: Path | None = None,
+    ) -> None:
+        self._runner = CodexSchemaRunner(
+            repository_root=repository_root, execution_policy=execution_policy
+        )
 
     @property
     def model_name(self) -> str:
@@ -25,6 +33,7 @@ class CodexLocalStoryboardDrafter:
             "15000. Do not persist, approve, or apply anything. Input:\n"
             + json.dumps(value.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")),
             StoryboardCandidate,
+            skill_name="draft-shots",
         )
         return _normalize(candidate, value)
 

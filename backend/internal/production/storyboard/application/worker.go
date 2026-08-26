@@ -61,7 +61,12 @@ func (worker *Worker) runOnce(ctx context.Context) bool {
 	if !found {
 		return false
 	}
-	request := contract.Invocation{InvocationID: invocation.ID, Kind: invocation.Kind, InputHash: invocation.InputHash, SchemaVersion: contract.SchemaVersion, Payload: invocation.Payload}
+	var executionPolicy contract.ExecutionPolicy
+	if err = json.Unmarshal(invocation.ExecutionPolicy, &executionPolicy); err != nil || executionPolicy.ValidateFor(invocation.Kind) != nil {
+		_, _ = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "failed", "invalid_execution_policy", "Agent execution policy is invalid", false, worker.now().UTC())
+		return true
+	}
+	request := contract.Invocation{InvocationID: invocation.ID, Kind: invocation.Kind, InputHash: invocation.InputHash, SchemaVersion: contract.SchemaVersion, ExecutionPolicy: executionPolicy, Payload: invocation.Payload}
 	result, invokeErr := worker.agent.Invoke(ctx, request)
 	if invokeErr != nil {
 		if _, err = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "unknown", "agent_outcome_unknown", invokeErr.Error(), true, worker.now().UTC()); err != nil && ctx.Err() == nil {
