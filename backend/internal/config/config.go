@@ -28,9 +28,17 @@ const (
 	defaultTemporalAddress    = "127.0.0.1:7233"
 	defaultTemporalNamespace  = "default"
 	defaultTemporalTaskQueue  = "lanverse-production-v1"
+	defaultEventWorkerHost    = "0.0.0.0"
+	defaultEventWorkerPort    = 8687
+	defaultKafkaBroker        = "127.0.0.1:9092"
+	defaultKafkaClientID      = "lanverse-event-worker"
+	defaultKafkaConsumerGroup = "lanverse.search-projector.v1"
+	defaultStoryGraphTopic    = "lanverse.business.storygraph-version.v1"
+	defaultStoryGraphDLQTopic = "lanverse.business.storygraph-version.dlq.v1"
 )
 
 var numericVerificationCode = regexp.MustCompile(`^\d{6}$`)
+var kafkaNamePattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 type Config struct {
 	ListenAddress                string
@@ -58,6 +66,12 @@ type Config struct {
 	TemporalAddress              string
 	TemporalNamespace            string
 	TemporalTaskQueue            string
+	EventWorkerListenAddress     string
+	KafkaBrokers                 []string
+	KafkaClientID                string
+	KafkaConsumerGroup           string
+	KafkaStoryGraphTopic         string
+	KafkaStoryGraphDLQTopic      string
 }
 
 func Load() (Config, error) {
@@ -117,6 +131,34 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	eventWorkerHost := environmentValue("EVENT_WORKER_HOST", defaultEventWorkerHost)
+	eventWorkerPort, err := positiveInteger("EVENT_WORKER_PORT", defaultEventWorkerPort)
+	if err != nil || eventWorkerPort > 65535 {
+		return Config{}, errors.New("EVENT_WORKER_PORT must use a port between 1 and 65535")
+	}
+	kafkaBrokers, err := hostPorts("KAFKA_BROKERS", []string{defaultKafkaBroker})
+	if err != nil {
+		return Config{}, err
+	}
+	kafkaClientID, err := kafkaName("KAFKA_CLIENT_ID", defaultKafkaClientID)
+	if err != nil {
+		return Config{}, err
+	}
+	kafkaConsumerGroup, err := kafkaName("KAFKA_CONSUMER_GROUP", defaultKafkaConsumerGroup)
+	if err != nil {
+		return Config{}, err
+	}
+	storyGraphTopic, err := kafkaName("KAFKA_STORYGRAPH_TOPIC", defaultStoryGraphTopic)
+	if err != nil {
+		return Config{}, err
+	}
+	storyGraphDLQTopic, err := kafkaName("KAFKA_STORYGRAPH_DLQ_TOPIC", defaultStoryGraphDLQTopic)
+	if err != nil {
+		return Config{}, err
+	}
+	if storyGraphTopic == storyGraphDLQTopic {
+		return Config{}, errors.New("KAFKA_STORYGRAPH_DLQ_TOPIC must be isolated from the business topic")
+	}
 	return Config{
 		ListenAddress:                net.JoinHostPort(host, strconv.Itoa(port)),
 		DatabaseURL:                  databaseURL,
@@ -143,6 +185,12 @@ func Load() (Config, error) {
 		TemporalAddress:              temporalAddress,
 		TemporalNamespace:            temporalNamespace,
 		TemporalTaskQueue:            temporalTaskQueue,
+		EventWorkerListenAddress:     net.JoinHostPort(eventWorkerHost, strconv.Itoa(eventWorkerPort)),
+		KafkaBrokers:                 kafkaBrokers,
+		KafkaClientID:                kafkaClientID,
+		KafkaConsumerGroup:           kafkaConsumerGroup,
+		KafkaStoryGraphTopic:         storyGraphTopic,
+		KafkaStoryGraphDLQTopic:      storyGraphDLQTopic,
 	}, nil
 }
 
@@ -165,6 +213,45 @@ func boundedName(name, fallback string, maximum int) (string, error) {
 		return "", fmt.Errorf("%s must contain between 1 and %d characters", name, maximum)
 	}
 	return value, nil
+}
+
+func kafkaName(name, fallback string) (string, error) {
+	value := strings.TrimSpace(environmentValue(name, fallback))
+	if len(value) > 249 || !kafkaNamePattern.MatchString(value) {
+		return "", fmt.Errorf("%s must be a valid Kafka name", name)
+	}
+	return value, nil
+}
+
+func hostPorts(name string, fallback []string) ([]string, error) {
+	rawValue := strings.TrimSpace(os.Getenv(name))
+	values := fallback
+	if rawValue != "" {
+		values = strings.Split(rawValue, ",")
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		host, rawPort, err := net.SplitHostPort(value)
+		if err != nil || strings.TrimSpace(host) == "" {
+			return nil, fmt.Errorf("%s must contain only host:port addresses", name)
+		}
+		port, err := strconv.Atoi(rawPort)
+		if err != nil || port < 1 || port > 65535 {
+			return nil, fmt.Errorf("%s must use ports between 1 and 65535", name)
+		}
+		normalized := net.JoinHostPort(host, strconv.Itoa(port))
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		result = append(result, normalized)
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("%s must contain at least one broker", name)
+	}
+	return result, nil
 }
 
 func boolean(name string, fallback bool) (bool, error) {

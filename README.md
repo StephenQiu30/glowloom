@@ -9,7 +9,8 @@ Browser / Next.js
         ↓
 Go lanverse-api ──→ PostgreSQL（唯一 SQL 事实源）
         ├─────────→ MinIO（私有对象字节）
-        ├─────────→ Temporal（Workflow History；Worker 接线开发中）
+        ├─────────→ Temporal（唯一持久 Workflow History）
+        ├─────────→ Kafka（已提交业务事件）← lanverse-event-worker
         └─────────→ Python Candidate Runtime ──→ 本机 Codex CLI
 ```
 
@@ -21,7 +22,7 @@ Go lanverse-api ──→ PostgreSQL（唯一 SQL 事实源）
 - `backend/internal/agent/contract`：Backend ↔ Agent 的版本化调用/结果线协议所有者；`agent/app/candidate_runtime/schemas.py` 以禁止额外字段的 Pydantic 模型校验同一协议。
 - `docs/`：Design → PRD/Requirement → Plan → Acceptance 的事实链路。
 
-当前服务仍不依赖 Redis、Kafka、Elasticsearch、第二套 ORM 或 Migration 框架。Workflow 持久执行演进已引入官方 Temporal Go SDK、本地开发服务和 Start/Describe 适配器；公共 Run API、Worker、Control/Signal 与 Human Gate 尚在开发。Backend 只接受一个 PostgreSQL `DATABASE_URL` 作为业务 SQL 事实源；Temporal 私有 History 存储不向 Backend 业务 Repository 或 Agent 暴露，仓库不保留手写 SQL Schema/Migration、迁移版本字段或 Python SQLAlchemy Writer。
+当前已接入 Apache Kafka KRaft 与 `lanverse-event-worker`：Backend Owner 事务只写 PostgreSQL Outbox，Worker 在事务外发布 `StoryGraphVersionPublished`，并以 Inbox/Revision Checkpoint、隔离 DLQ 和有界 Replay 收敛至少一次投递；Kafka 不承载 Command 或 Workflow。Elasticsearch 业务检索与 ELK 日志链仍未实现，Redis 仍未引入。Backend 只接受一个 PostgreSQL `DATABASE_URL` 作为业务 SQL 事实源；Temporal 只拥有 Workflow History，仓库不保留手写 SQL Schema/Migration、迁移版本字段、第二套 ORM/连接模型或 Python SQLAlchemy Writer。
 
 ## 文档入口
 

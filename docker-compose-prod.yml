@@ -70,6 +70,29 @@ services:
           cpus: "1.0"
           memory: 256M
 
+  event-worker:
+    image: ${LANVERSE_BACKEND_IMAGE:?LANVERSE_BACKEND_IMAGE is required}
+    build: !reset null
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-lanverse}
+      EVENT_WORKER_HOST: 0.0.0.0
+      EVENT_WORKER_PORT: 8687
+      KAFKA_BROKERS: kafka:19092
+      KAFKA_CLIENT_ID: lanverse-event-worker
+      KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1
+      KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
+      KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
   postgres:
     restart: unless-stopped
     ports: !reset []
@@ -91,4 +114,16 @@ services:
           memory: 2G
 
   minio-init:
+    restart: "no"
+
+  kafka:
+    restart: unless-stopped
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  kafka-init:
     restart: "no"

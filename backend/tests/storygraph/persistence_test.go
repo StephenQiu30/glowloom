@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	eventing "github.com/StephenQiu30/lanverse/backend/internal/eventing/domain"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
@@ -140,9 +141,19 @@ func TestStoryGraphPublishesImmutableLinearVersionsWithRealPostgreSQL(t *testing
 	if err = database.Where("project_id = ?", fixture.projectID).Order("occurred_at").First(&event).Error; err != nil {
 		t.Fatal(err)
 	}
-	if event.EventType != "StoryGraphVersionPublished" || event.AggregateID != first.Version.ID ||
+	if event.EventType != "StoryGraphVersionPublished" || event.AggregateKind != "storygraph" ||
+		event.AggregateID != fixture.projectID.String() || event.AggregateRevision != first.Version.VersionNo ||
 		strings.Contains(string(event.Payload), fixture.text) || len(event.PayloadHash) != 64 {
 		t.Fatalf("unsafe or incomplete outbox event: %#v", event)
+	}
+	if _, envelopeErr := eventing.NewEnvelope(eventing.OutboxEvent{
+		ID: event.ID.String(), EventType: event.EventType, EventVersion: event.EventVersion,
+		WorkspaceID: event.WorkspaceID.String(), ProjectID: event.ProjectID.String(),
+		AggregateKind: event.AggregateKind, AggregateID: event.AggregateID,
+		AggregateRevision: event.AggregateRevision, SourceReceiptID: event.SourceReceiptID.String(),
+		Payload: json.RawMessage(event.Payload), PayloadHash: event.PayloadHash, OccurredAt: event.OccurredAt,
+	}, eventing.TraceContext{RequestID: event.SourceReceiptID.String()}); envelopeErr != nil {
+		t.Fatalf("StoryGraph outbox cannot become the strict Kafka envelope: %v", envelopeErr)
 	}
 }
 

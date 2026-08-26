@@ -77,6 +77,9 @@ func Catalog() []any {
 		&model.StoryboardExport{},
 		&model.CommandReceipt{},
 		&model.OutboxEvent{},
+		&model.InboxEvent{},
+		&model.EventCheckpoint{},
+		&model.DeadLetter{},
 		&model.AuditEvent{},
 	}
 }

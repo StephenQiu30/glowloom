@@ -180,7 +180,7 @@ func (service *Service) Compile(ctx context.Context, actor Actor, command Compil
 		event := storygraph.OutboxEvent{
 			ID: service.config.NewID(), EventType: "StoryGraphVersionPublished", EventVersion: 1,
 			WorkspaceID: state.WorkspaceID, ProjectID: state.ProjectID,
-			AggregateKind: "storygraph_version", AggregateID: version.ID, AggregateRevision: version.VersionNo,
+			AggregateKind: "storygraph", AggregateID: state.ProjectID, AggregateRevision: version.VersionNo,
 			SourceReceiptID: receipt.ID, Payload: encodedPayload, PayloadHash: payloadHash,
 			Status: "pending", Attempts: 0, OccurredAt: now, CreatedAt: now,
 		}

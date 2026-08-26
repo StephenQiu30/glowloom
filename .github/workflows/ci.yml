@@ -65,6 +65,22 @@ jobs:
           done
           docker logs lanverse-ci-minio
           exit 1
+      - name: Start real Kafka KRaft service and isolated topics
+        env:
+          KAFKA_PORT: 19092
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --wait --wait-timeout 180 kafka kafka-init
+          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
+            /opt/kafka/bin/kafka-configs.sh --bootstrap-server 127.0.0.1:9092 \
+            --entity-type topics --entity-name lanverse.business.storygraph-version.v1 --describe \
+            | grep -q 'retention.ms=604800000'
+          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
+            /opt/kafka/bin/kafka-configs.sh --bootstrap-server 127.0.0.1:9092 \
+            --entity-type topics --entity-name lanverse.business.storygraph-version.dlq.v1 --describe \
+            | grep -q 'retention.ms=2592000000'
+          ! docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
+            /opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list \
+            | grep -qi command
       - name: Check and test Go backend
         working-directory: backend
         env:
@@ -74,6 +90,9 @@ jobs:
           LANVERSE_TEST_MINIO_ACCESS_KEY: lanverse_ci
           LANVERSE_TEST_MINIO_SECRET_KEY: lanverse_ci_minio_secret
           LANVERSE_TEST_MINIO_BUCKET: lanverse-asset-ci
+          LANVERSE_TEST_KAFKA_BROKERS: 127.0.0.1:19092
+          LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
+          LANVERSE_TEST_KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
         run: |
           test -z "$(gofmt -l .)"
           go vet ./...
@@ -176,10 +195,11 @@ jobs:
         run: docker build --tag lanverse/backend:ci backend
       - name: Build Agent deployment image
         run: docker build --file agent/Dockerfile --tag lanverse/agent:ci .
-      - name: Require API and Workflow Worker binaries
+      - name: Require Backend binaries
         run: >-
           docker run --rm --entrypoint /bin/sh lanverse/backend:ci -c
-          'test -x /usr/local/bin/lanverse-api && test -x /usr/local/bin/lanverse-workflow-worker'
+          'test -x /usr/local/bin/lanverse-api && test -x /usr/local/bin/lanverse-workflow-worker &&
+          test -x /usr/local/bin/lanverse-event-worker'
       - name: Require Frontend standalone runtime
         run: >-
           docker run --rm --entrypoint /bin/sh lanverse/frontend:ci -c
@@ -194,12 +214,44 @@ jobs:
           docker tag lanverse/backend:ci lanverse/backend:development
           docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --no-build --wait --wait-timeout 180
           docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx workflow-worker
+          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx event-worker
           for attempt in $(seq 1 30); do
             if docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color workflow-worker | grep -q "lanverse workflow worker started"; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
               docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color workflow-worker
+              exit 1
+            fi
+            sleep 1
+          done
+          for attempt in $(seq 1 30); do
+            if docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color event-worker | grep -q "lanverse event worker started"; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color event-worker
+              exit 1
+            fi
+            sleep 1
+          done
+          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
+            wget --quiet --spider http://127.0.0.1:8687/readyz
+          docker compose -f docker-compose.yml -f docker-compose-env.yml stop kafka
+          if docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
+            wget --quiet --spider http://127.0.0.1:8687/readyz; then
+            echo 'event-worker stayed ready while Kafka was unavailable' >&2
+            exit 1
+          fi
+          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx event-worker
+          docker compose -f docker-compose.yml -f docker-compose-env.yml start kafka
+          for attempt in $(seq 1 60); do
+            if docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
+              wget --quiet --spider http://127.0.0.1:8687/readyz; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color event-worker kafka
               exit 1
             fi
             sleep 1

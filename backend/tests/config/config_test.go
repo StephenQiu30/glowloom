@@ -38,6 +38,11 @@ func TestLoadBuildsSingleDatabaseAPIConfiguration(t *testing.T) {
 		configuration.TemporalTaskQueue != "lanverse-production-v1" {
 		t.Fatalf("unexpected Temporal configuration: %#v", configuration)
 	}
+	if configuration.EventWorkerListenAddress != "0.0.0.0:8687" || len(configuration.KafkaBrokers) != 1 ||
+		configuration.KafkaBrokers[0] != "127.0.0.1:9092" ||
+		configuration.KafkaStoryGraphTopic == configuration.KafkaStoryGraphDLQTopic {
+		t.Fatalf("unexpected Kafka eventing configuration: %#v", configuration)
+	}
 }
 
 func TestLoadRejectsInvalidTemporalAddress(t *testing.T) {
@@ -74,6 +79,27 @@ func TestLoadRequiresStandardPostgreSQLDatabaseURL(t *testing.T) {
 			t.Setenv("DATABASE_URL", value)
 			if _, err := config.Load(); err == nil {
 				t.Fatalf("Load accepted DATABASE_URL %q", value)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsInvalidOrSharedKafkaDestinations(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
+	for name, values := range map[string]map[string]string{
+		"invalid broker": {"KAFKA_BROKERS": "http://kafka:9092"},
+		"shared dlq": {
+			"KAFKA_STORYGRAPH_TOPIC":     "lanverse.business.storygraph.v1",
+			"KAFKA_STORYGRAPH_DLQ_TOPIC": "lanverse.business.storygraph.v1",
+		},
+		"invalid topic": {"KAFKA_STORYGRAPH_TOPIC": "storygraph command topic"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for key, value := range values {
+				t.Setenv(key, value)
+			}
+			if _, err := config.Load(); err == nil {
+				t.Fatal("Load accepted invalid Kafka configuration")
 			}
 		})
 	}

@@ -85,11 +85,11 @@
 
 ### 2.4 Kafka、Search 与 ELK
 
-- [ ] `SG-EVT-001`（`SG-I03`、`SG-I04`）：Owner/Receipt/Outbox 同 GORM 事务且网络 Publisher 不入事务。
-- [ ] `SG-EVT-002`（`SG-I04`）：Kafka Envelope 完整字段、payload hash 与剧本/Prompt/Secret/URL 排除。
-- [ ] `SG-EVT-003`（`SG-I04`）：真实 Kafka 至少一次、ACK unknown 同 ID、Inbox/revision fencing、DLQ/Replay。
+- [x] `SG-EVT-001`（`SG-I03`、`SG-I04`）：Owner/Receipt/Outbox 同 GORM 事务且网络 Publisher 不入事务。
+- [x] `SG-EVT-002`（`SG-I04`）：Kafka Envelope 完整字段、payload hash 与剧本/Prompt/Secret/URL 排除。
+- [x] `SG-EVT-003`（`SG-I04`）：真实 Kafka 至少一次、ACK unknown 同 ID、Inbox/revision fencing、DLQ/Replay。
 - [ ] `SG-EVT-004`（`SG-I04`）：Script/StoryGraph Topic 与日志 Topic 的 Schema/Group/Retention/DLQ 隔离，无 Command Topic。
-- [ ] `SG-EVT-005`（`SG-I04`）：首个真实 Consumer 同任务创建 event-worker，复用唯一 Catalog/连接模型。
+- [x] `SG-EVT-005`（`SG-I04`）：首个真实 Consumer 同任务创建 event-worker，复用唯一 Catalog/连接模型。
 - [ ] `SG-SRCH-001`（`SG-I04`）：Script/StoryGraph 两类 index/alias、租户/Owner/Evidence/Node 可追溯文档。
 - [ ] `SG-SRCH-002`（`SG-I04`）：重复/乱序 revision fencing、tombstone/snapshot、PostgreSQL 全量 Reindex 原子 Alias。
 - [ ] `SG-SRCH-003`（`SG-I04`）：授权 Search API、snippet/score/深链/新鲜度且无 DSL 透传/Owner 回写。
@@ -111,7 +111,7 @@
 - [ ] `SG-FE-009`（`SG-I26`）：类型化 Domain Intent + base/expected/idempotency，Owner Command 重编译且无 Graph JSON 直写。
 - [ ] `SG-OPS-001`（`SG-I01` 起）：严格输入/事件/Provider/HTTP 解码、大小/深度/数字/UUID/Hash 负向证据。
 - [ ] `SG-OPS-002`（`SG-I20`、`SG-I24`）：Runware SSRF/allowlist/Credential Ref 与 secret 零泄漏。
-- [ ] `SG-OPS-003`（各 Binary 首次消费者，`SG-I04` event-worker）：healthz/readyz 与真实必要依赖故障。
+- [x] `SG-OPS-003`（各 Binary 首次消费者，`SG-I04` event-worker）：healthz/readyz 与真实必要依赖故障。
 - [x] `SG-OPS-004`（`SG-I01` 起）：所有测试只在三应用 `tests/`，业务源码零测试文件。
 - [ ] `SG-OPS-005`（每个 `SG-Ixx`）：Red→Green→Refactor、定向门与当时全量真实 CI 证据。
 - [ ] `SG-OPS-006`（`SG-I01`、`SG-I04` 起）：空 PostgreSQL、真实 Temporal/MinIO/Kafka/Elastic/日志链 CI。
@@ -295,4 +295,17 @@
 - 尚未完成：`SG-QRY-002/003` 还需要 `SG-I25` 的真实 Frontend 有界加载证据，`SG-QRY-005` 的 Search 故障部分要随 Elasticsearch 消费者验证；Kafka Publisher/Inbox/DLQ/Replay、Elasticsearch Script/StoryGraph Search 和 ELK 日志链均仍属于 `SG-I04` 后续交付单元，因此 `SG-I04` 本身保持未勾选。按门禁未运行 `agent-browser`。
 - Git：本 Evidence 与实现由当前 `SG-I04` 查询交付单元独立提交承载；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 22 条 Requirement 与 `SG-I01`–`SG-I03`，其余保持未通过。下一步继续且只允许实施 `SG-I04` 的 Kafka Event 交付单元。
+### `SG-I04` — Kafka Event 交付单元（2026-08-27）
+
+- Red：严格 Envelope、Publisher、Consumer、Replay、PostgreSQL 与真实 Kafka 测试先落位；部署故障验收进一步发现 Kafka 停机时 Consumer 会终止 Event Worker。新增 `TestRealKafkaRunRetriesTheSameUnacknowledgedRecord` 后先真实失败于 10 秒超时，再实现同一 partition/offset 的节流重试并转绿，没有依赖容器重启掩盖问题。
+- Event 契约：`lanverse.event.v1` 固定 Event/Workspace/Project、稳定 `aggregate_kind=storygraph`、`aggregate_id=project_id`、单调 Graph revision、Source Receipt、Trace Context 与 Canonical SHA-256 payload hash。`StoryGraphVersionPublished` payload 只允许 Version/Parent/Version No/Owner Set/Topology/Content Hash；未知字段、超过 64 KiB、超过 16 层及剧本、Prompt、Secret、Token、Credential、URL 等敏感键全部 fail closed。
+- 事务与持久化：沿用唯一 PostgreSQL/GORM Catalog，扩展 Outbox Lease，并增加 Inbox、Aggregate Checkpoint、Dead Letter；所有 Claim/Fencing/Replay 使用 GORM 与 `clause`，无 Migration、Raw SQL、第二 ORM 或第二连接模型。Owner 事务仍只写 Version/Head/Receipt/Outbox，Kafka 网络调用始终在事务外；ACK 未知或 Broker 失败保持同 Event ID 重试。
+- Kafka：锁定官方 `apache/kafka:4.3.1` 单节点 KRaft 与 `franz-go v1.21.6`。Compose/CI 只创建 `lanverse.business.storygraph-version.v1`（7 天）和隔离 DLQ（30 天），关闭自动建 Topic 且断言无 Command Topic。Publisher 使用 All ISR ACK；Consumer 只在 Projection/Inbox 完成后手动提交，重复与旧 revision 不再进入 Projector，Poison Message 进入可审计 DLQ。
+- 安全与恢复：无效消息只把原始字节 SHA-256 和固定错误码送入不可重放 DLQ，不保存原始敏感正文；合法 Poison Message 保存已通过严格校验的原 Envelope。Replay CLI 必须同时给出 Project、Event Type、失败时间窗与上限，按原 Topic、Envelope 和 Event ID 重放；实测空范围返回 `replayed=0`。
+- 定向真实依赖：在全新 PostgreSQL `16.15` 和真实 Kafka `4.3.1` 上，Eventing 套件 `12.834s` 通过，覆盖精确 Envelope、规范 UUID/事件版本、同 ID 断线发布恢复、Inbox 去重、Project StoryGraph revision fencing、DLQ、范围 Replay，以及未 ACK 消息同 partition/offset 重试；同套件另以空库执行 `go test -race -count=1 -p 1` 通过（`12.423s`）。业务/DLQ `retention.ms` 分别验证为 `604800000` 与 `2592000000`。
+- 全量真实 CI：全新隔离 PostgreSQL、Temporal 指定 digest、MinIO `RELEASE.2025-09-07T16-13-09Z` 与 Kafka `4.3.1` 下，`gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，StoryGraph `17.947s`、Workflow `111.842s`；Agent Ruff/format/Pyright/Pytest 全通过，`31 passed`；Frontend OpenAPI/lint/typecheck、16 文件 45 tests、production build 与 Client drift 全通过。
+- 部署与故障：开发/生产 Compose 校验、Backend/Agent/Frontend 三镜像构建及三个 Backend Binary 检查通过；完整 Compose 中 API、Frontend、PostgreSQL、MinIO、Temporal、Kafka、Workflow Worker、Event Worker 全部运行并通过真实端点。停止 Kafka 后 Event Worker 保持运行且 `/readyz` 返回 503；Kafka 重启后同一 Worker 无需重启恢复 ready，该停机/恢复剧本已进入 Deployment CI。
+- 尚未完成：当前 Kafka 只创建已有真实消费者的 StoryGraph Business/DLQ Topic；Script Topic、Elasticsearch Projection/Reindex/Search API 以及独立 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 日志链尚未实现。因此 `SG-EVT-004`、`SG-SRCH-*`、`SG-LOG-*`、`SG-OPS-006` 与完整 `SG-I04` 保持未通过；按门禁未运行 `agent-browser`。
+- Git：本 Evidence 与实现由当前 `SG-I04` Kafka Event 交付单元独立提交承载；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 27 条 Requirement 与 `SG-I01`–`SG-I03`，其余保持未通过。下一步继续且只允许实施 `SG-I04` 的 Elasticsearch Search 交付单元。
