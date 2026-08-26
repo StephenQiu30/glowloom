@@ -43,10 +43,10 @@
 - [x] `SG-GRF-008`（`SG-I03`、`SG-I17`、`SG-I23`）：Compiler 只读已确认精确 Owner、污染源拒绝证据。
 - [x] `SG-GRF-009`（`SG-I03`、`SG-I17`、`SG-I23`）：Owner Set/Version/Head/Receipt/Outbox 单 GORM 事务故障注入。
 - [x] `SG-GRF-010`（`SG-I03`）：JSONB Version + Head 且无图数据库/EAV/递归 Raw SQL/第二 Graph Writer 证据。
-- [ ] `SG-QRY-001`（`SG-I04`）：Current/Exact/Lens/Diff/Trace/Impact Application 与 HTTP Query 证据。
+- [x] `SG-QRY-001`（`SG-I04`）：Current/Exact/Lens/Diff/Trace/Impact Application 与 HTTP Query 证据。
 - [ ] `SG-QRY-002`（`SG-I04`、`SG-I25`）：版本、lens、scope、depth/cursor、truncated/继续条件 contract。
 - [ ] `SG-QRY-003`（`SG-I04`、`SG-I25`）：五类有界 Lens、大图分层和确定性结果 Hash。
-- [ ] `SG-QRY-004`（`SG-I04`、`SG-I17`）：稳定 Key 的 add/remove/change 跨版本 golden。
+- [x] `SG-QRY-004`（`SG-I04`、`SG-I17`）：稳定 Key 的 add/remove/change 跨版本 golden。
 - [ ] `SG-QRY-005`（`SG-I04`）：Query 零写入与 Elasticsearch 故障不影响 PostgreSQL Query 的证据。
 
 ### 2.3 Review、Production 与视觉资产
@@ -282,4 +282,17 @@
 - 尚未完成：Current/Version/Lens/Diff/Trace/Impact Query、Kafka Publisher/Inbox/DLQ/Replay、Elasticsearch Script/StoryGraph Search 与 ELK 日志链属于 `SG-I04`，因此 `SG-QRY-*`、`SG-EVT-*`、`SG-SRCH-*`、`SG-LOG-*` 及完整权限/API 复合条款保持未通过。按门禁未运行 `agent-browser`。
 - Git：CI 运行态修复已独立提交；本 Evidence 与 StoryGraph 实现由当前 `SG-I03` 独立提交承载。均未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 20 条 Requirement 与 `SG-I01`–`SG-I03`，其余保持未通过。下一步只允许实施 `SG-I04`。
+### `SG-I04` — StoryGraph 只读查询交付单元（2026-08-27）
+
+- Red：新增 Application、HTTP 与 PostgreSQL 测试后，`go test -count=1 ./tests/storygraph` 先后真实失败于缺少 `NewQueryService/LensQuery/TraceQuery/DiffQuery` 和 `adapter/httpapi`；实现前没有用内存结果或旧 Storyboard 路径返回成功。
+- Query：Backend Application 提供 Current/Exact、`outline/narrative/entity/production/impact` 五 Lens、Upstream/Downstream Trace、Impact Closure 和 Version Diff；API Composition Root 已注册五个只读路由。请求显式携带 project/version/lens/scope/depth/limit/cursor，单页硬上限为 200、depth 上限为 8，响应返回实际 Version/Hash、稳定排序、`truncated/next_cursor/result_hash`。
+- Current/stale：游标冻结首次读取的精确 Version ID；Current Head 在分页间切换仍继续原快照，参数或精确版本漂移返回 `stale_storygraph_cursor`。Current 元数据返回完整排序 `compiled_from=owner_head_refs`，并由 GORM 重读当前 Owner Set 计算实时 `stale`；真实 Episode revision 改变且未重编译时保持同一 Head 并返回 `stale=true`，当前 Owner 集不完整时旧已发布 Graph 也保持可读并显式 stale。
+- Diff/Lens：250 节点/249 边 fixture 按“排序节点 + 排序边”统一流分页，三页依次返回 `200 nodes`、`50 nodes + 150 edges`、`99 edges`，每页总元素不超过 200 且无跨页边遗漏；相同参数得到相同 Hash/游标，limit 201 被拒绝。五类 Lens 均有有界结果；稳定 Node/Edge Key golden 分别证明 `added/removed/changed`，Owner 内容变更保持 Key 且只报告 change。
+- PostgreSQL/权限：隔离 PostgreSQL `16.15` 中 Viewer 可读取 Current/Exact/Lens/Diff/Trace，Token Version 漂移返回 401、非成员返回 404；HTTP + 真实 GORM Lens 返回当前 Version/Hash。查询前后 Version/Head/Receipt/Outbox 计数完全相同，Head ID/Hash/revision/time 不变；Application 与 GORM Query 无 Search Port/Client/索引写入。
+- API 契约：Backend OpenAPI 新增 Current/Exact/Lens/Trace/Diff 路径和版本、子图、Diff DTO，元数据不下载完整 Nodes/Edges；Frontend `openapi-typescript` 生成 Client 已同步。缺少显式 depth/limit 返回 422，未认证返回 401；生成 Client drift 测试通过。
+- 全量真实 CI：最终在重新创建的空 PostgreSQL、Temporal 指定 digest 和 MinIO `RELEASE.2025-09-07T16-13-09Z` 下，`gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，StoryGraph `15.898s`、Workflow `105.285s`；Agent Ruff/format/Pyright/Pytest 全通过，`31 passed`；Frontend OpenAPI/lint/typecheck、16 文件 45 tests 与 production build 全通过。
+- 部署：开发/生产 Compose 合同、Backend/Agent/Frontend 三镜像和镜像内 API/Worker/Codex/Candidate Runtime/standalone 文件检查通过；全新 Compose PostgreSQL/MinIO/Temporal/API/Worker/Frontend 均健康，Worker 启动日志、API/Frontend/Agent HTTP、运行镜像中的 StoryGraph OpenAPI 与未认证 401 均真实验证。本机默认 `9000` 被仓库外进程占用时首次运行真实失败，随后使用任务专属端口重建同一拓扑通过，未修改代码或降低检查。
+- 尚未完成：`SG-QRY-002/003` 还需要 `SG-I25` 的真实 Frontend 有界加载证据，`SG-QRY-005` 的 Search 故障部分要随 Elasticsearch 消费者验证；Kafka Publisher/Inbox/DLQ/Replay、Elasticsearch Script/StoryGraph Search 和 ELK 日志链均仍属于 `SG-I04` 后续交付单元，因此 `SG-I04` 本身保持未勾选。按门禁未运行 `agent-browser`。
+- Git：本 Evidence 与实现由当前 `SG-I04` 查询交付单元独立提交承载；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 22 条 Requirement 与 `SG-I01`–`SG-I03`，其余保持未通过。下一步继续且只允许实施 `SG-I04` 的 Kafka Event 交付单元。

@@ -49,6 +49,9 @@ import (
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboardhttp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/httpapi"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
+	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
+	storygraphhttp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/httpapi"
+	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
@@ -193,6 +196,9 @@ func main() {
 	storyboardService := storyboardapp.NewService(storyboardStore, storyboardapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	storyboardHandler := storyboardhttp.New(storyboardService, tokenVerifier)
 	storyboardWorker := storyboardapp.NewWorker(storyboardStore, agentRuntime, func() time.Time { return time.Now().UTC() }, configuration.AgentPollInterval, configuration.AgentClaimLease, logger)
+	storyGraphStore := storygraphgorm.New(database)
+	storyGraphQueryService := storygraphapp.NewQueryService(storyGraphStore)
+	storyGraphHandler := storygraphhttp.New(storyGraphQueryService, tokenVerifier)
 	projectHandler := projecthttp.New(projectService, tokenVerifier)
 	costHandler := costhttp.New(costService, tokenVerifier)
 	authoringService := authoringapp.NewService(authoringStore, authoringapp.Config{
@@ -237,6 +243,7 @@ func main() {
 				bibleHandler.Register(mux)
 				planningHandler.Register(mux)
 				storyboardHandler.Register(mux)
+				storyGraphHandler.Register(mux)
 				workflowHandler.Register(mux)
 			},
 		}),

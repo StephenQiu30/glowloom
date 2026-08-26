@@ -34,51 +34,9 @@ func (store *Store) WithinSerializableTransaction(ctx context.Context, operation
 }
 
 func (repo *repository) LockPublication(ctx context.Context, actor storygraphapp.Actor, projectID string) (storygraph.PublicationState, error) {
-	id, err := uuid.Parse(projectID)
-	if err != nil {
-		return storygraph.PublicationState{}, storygraphapp.ErrNotFound
-	}
-	userID, err := uuid.Parse(actor.UserID)
-	if err != nil {
-		return storygraph.PublicationState{}, unauthenticated()
-	}
-	var user model.UserAccount
-	err = repo.database.WithContext(ctx).First(&user, "id = ?", userID).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return storygraph.PublicationState{}, unauthenticated()
-	}
+	project, err := repo.authorizeProject(ctx, actor, projectID, true, true)
 	if err != nil {
 		return storygraph.PublicationState{}, err
-	}
-	if user.Status != "active" || user.TokenVersion != actor.TokenVersion {
-		return storygraph.PublicationState{}, unauthenticated()
-	}
-	var project model.Project
-	err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).First(&project, "id = ?", id).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return storygraph.PublicationState{}, storygraphapp.ErrNotFound
-	}
-	if err != nil {
-		return storygraph.PublicationState{}, err
-	}
-	var workspace model.Workspace
-	err = repo.database.WithContext(ctx).First(&workspace, "id = ?", project.WorkspaceID).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return storygraph.PublicationState{}, storygraphapp.ErrNotFound
-	}
-	if err != nil {
-		return storygraph.PublicationState{}, err
-	}
-	var membership model.Membership
-	err = repo.database.WithContext(ctx).Where("workspace_id = ? AND user_id = ? AND status = ?", project.WorkspaceID, userID, "active").First(&membership).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return storygraph.PublicationState{}, storygraphapp.ErrNotFound
-	}
-	if err != nil {
-		return storygraph.PublicationState{}, err
-	}
-	if membership.Role == "viewer" || workspace.Status != "active" || project.Status != "active" {
-		return storygraph.PublicationState{}, forbidden()
 	}
 	state := storygraph.PublicationState{WorkspaceID: project.WorkspaceID.String(), ProjectID: project.ID.String()}
 	var head model.StoryGraphHead
@@ -96,6 +54,60 @@ func (repo *repository) LockPublication(ctx context.Context, actor storygraphapp
 	state.CurrentContentHash = head.CurrentContentHash
 	state.HeadRevision = head.Revision
 	return state, nil
+}
+
+func (repo *repository) authorizeProject(ctx context.Context, actor storygraphapp.Actor, projectID string, lock, requireWrite bool) (model.Project, error) {
+	id, err := uuid.Parse(projectID)
+	if err != nil {
+		return model.Project{}, storygraphapp.ErrNotFound
+	}
+	userID, err := uuid.Parse(actor.UserID)
+	if err != nil {
+		return model.Project{}, unauthenticated()
+	}
+	var user model.UserAccount
+	err = repo.database.WithContext(ctx).First(&user, "id = ?", userID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.Project{}, unauthenticated()
+	}
+	if err != nil {
+		return model.Project{}, err
+	}
+	if user.Status != "active" || user.TokenVersion != actor.TokenVersion {
+		return model.Project{}, unauthenticated()
+	}
+	var project model.Project
+	query := repo.database.WithContext(ctx)
+	if lock {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	err = query.First(&project, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.Project{}, storygraphapp.ErrNotFound
+	}
+	if err != nil {
+		return model.Project{}, err
+	}
+	var workspace model.Workspace
+	err = repo.database.WithContext(ctx).First(&workspace, "id = ?", project.WorkspaceID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.Project{}, storygraphapp.ErrNotFound
+	}
+	if err != nil {
+		return model.Project{}, err
+	}
+	var membership model.Membership
+	err = repo.database.WithContext(ctx).Where("workspace_id = ? AND user_id = ? AND status = ?", project.WorkspaceID, userID, "active").First(&membership).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.Project{}, storygraphapp.ErrNotFound
+	}
+	if err != nil {
+		return model.Project{}, err
+	}
+	if (requireWrite && membership.Role == "viewer") || workspace.Status != "active" || project.Status != "active" {
+		return model.Project{}, forbidden()
+	}
+	return project, nil
 }
 
 func (repo *repository) LoadOwnerSnapshot(ctx context.Context, state storygraph.PublicationState) (storygraph.OwnerSnapshot, error) {

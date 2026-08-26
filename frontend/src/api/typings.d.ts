@@ -54,6 +54,17 @@ declare global {
     type ScriptDocumentPreviewRequest = components["schemas"]["ScriptDocumentPreviewRequest"];
     type ScriptDocumentPreviewResponse = components["schemas"]["ScriptDocumentPreviewResponse"];
     type ScriptDocumentResponse = components["schemas"]["ScriptDocumentResponse"];
+    type StoryGraphDiffEnvelope = components["schemas"]["StoryGraphDiffEnvelope"];
+    type StoryGraphDiffResponse = components["schemas"]["StoryGraphDiffResponse"];
+    type StoryGraphEdge = components["schemas"]["StoryGraphEdge"];
+    type StoryGraphEdgeChange = components["schemas"]["StoryGraphEdgeChange"];
+    type StoryGraphNode = components["schemas"]["StoryGraphNode"];
+    type StoryGraphNodeChange = components["schemas"]["StoryGraphNodeChange"];
+    type StoryGraphOwnerRef = components["schemas"]["StoryGraphOwnerRef"];
+    type StoryGraphSubgraphEnvelope = components["schemas"]["StoryGraphSubgraphEnvelope"];
+    type StoryGraphSubgraphResponse = components["schemas"]["StoryGraphSubgraphResponse"];
+    type StoryGraphVersionEnvelope = components["schemas"]["StoryGraphVersionEnvelope"];
+    type StoryGraphVersionResponse = components["schemas"]["StoryGraphVersionResponse"];
     type TaskErrorResponse = components["schemas"]["TaskErrorResponse"];
     type TaskResponse = components["schemas"]["TaskResponse"];
     type TaskScopeResponse = components["schemas"]["TaskScopeResponse"];

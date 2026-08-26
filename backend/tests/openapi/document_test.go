@@ -31,6 +31,11 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 		"/api/v1/episodes/{episode_id}/storyboard-drafts",
 		"/api/v1/storyboard-draft-batches/{batch_id}/apply",
 		"/api/v1/storyboard-exports/{export_id}/download",
+		"/api/v1/projects/{project_id}/storygraph/current",
+		"/api/v1/projects/{project_id}/storygraph/versions/{version_id}",
+		"/api/v1/projects/{project_id}/storygraph/versions/{version_ref}/lens",
+		"/api/v1/projects/{project_id}/storygraph/versions/{version_ref}/nodes/{story_node_key}/trace",
+		"/api/v1/projects/{project_id}/storygraph/diff",
 	} {
 		if _, exists := document.Paths[path]; !exists {
 			t.Errorf("public contract is missing %s", path)
@@ -63,5 +68,10 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 	}
 	if _, exists := document.Components.Schemas["CostPriceQuoteResponse"]; !exists {
 		t.Error("public contract is missing CostPriceQuoteResponse")
+	}
+	for _, schema := range []string{"StoryGraphVersionResponse", "StoryGraphSubgraphResponse", "StoryGraphDiffResponse"} {
+		if _, exists := document.Components.Schemas[schema]; !exists {
+			t.Errorf("public contract is missing %s", schema)
+		}
 	}
 }

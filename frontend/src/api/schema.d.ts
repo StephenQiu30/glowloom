@@ -1048,10 +1048,214 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/storygraph/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCurrentStoryGraphVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/storygraph/versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getStoryGraphVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/storygraph/versions/{version_ref}/lens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["queryStoryGraphLens"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/storygraph/versions/{version_ref}/nodes/{story_node_key}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["traceStoryGraphNode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/storygraph/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["diffStoryGraphVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        StoryGraphVersionEnvelope: {
+            data: components["schemas"]["StoryGraphVersionResponse"];
+        };
+        StoryGraphVersionResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            version_no: number;
+            /** Format: uuid */
+            parent_version_id: string | null;
+            parent_content_hash: string | null;
+            /** Format: uuid */
+            source_revision_id: string;
+            source_revision_hash: string;
+            owner_set_hash: string;
+            /** @constant */
+            schema_version: "storygraph-v1";
+            topology_hash: string;
+            content_hash: string;
+            /** @constant */
+            status: "published";
+            /** Format: date-time */
+            published_at: string;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            node_count: number;
+            edge_count: number;
+            compiled_from: components["schemas"]["StoryGraphOwnerRef"][];
+            stale: boolean;
+        };
+        StoryGraphOwnerRef: {
+            owner_kind: string;
+            owner_logical_id: string;
+            fragment_key?: string;
+            /** Format: uuid */
+            owner_version_id: string;
+            owner_revision: number;
+            content_hash: string;
+        };
+        StoryGraphNode: {
+            story_node_key: string;
+            node_type: string;
+            owner_ref: components["schemas"]["StoryGraphOwnerRef"];
+            label?: string;
+            business_position?: {
+                [key: string]: unknown;
+            };
+            evidence_refs: {
+                [key: string]: unknown;
+            }[];
+            payload: {
+                [key: string]: unknown;
+            };
+            content_hash: string;
+        };
+        StoryGraphEdge: {
+            edge_key: string;
+            edge_type: string;
+            from_node_key: string;
+            to_node_key: string;
+            qualifier: {
+                [key: string]: unknown;
+            };
+            content_hash: string;
+        };
+        StoryGraphSubgraphEnvelope: {
+            data: components["schemas"]["StoryGraphSubgraphResponse"];
+        };
+        StoryGraphSubgraphResponse: {
+            /** Format: uuid */
+            version_id: string;
+            version_no: number;
+            content_hash: string;
+            /** @enum {string|null} */
+            lens: "outline" | "narrative" | "entity" | "production" | "impact" | null;
+            scope: {
+                /** @enum {string} */
+                kind: "project" | "story_node";
+                id: string;
+            };
+            /** @enum {string|null} */
+            direction: "upstream" | "downstream" | null;
+            depth: number;
+            nodes: components["schemas"]["StoryGraphNode"][];
+            edges: components["schemas"]["StoryGraphEdge"][];
+            truncated: boolean;
+            next_cursor: string | null;
+            result_hash: string;
+        };
+        StoryGraphNodeChange: {
+            story_node_key: string;
+            /** @enum {string} */
+            change_type: "added" | "removed" | "changed";
+            before_content_hash: string | null;
+            after_content_hash: string | null;
+        };
+        StoryGraphEdgeChange: {
+            edge_key: string;
+            /** @enum {string} */
+            change_type: "added" | "removed" | "changed";
+            before_content_hash: string | null;
+            after_content_hash: string | null;
+        };
+        StoryGraphDiffEnvelope: {
+            data: components["schemas"]["StoryGraphDiffResponse"];
+        };
+        StoryGraphDiffResponse: {
+            /** Format: uuid */
+            base_version_id: string;
+            base_content_hash: string;
+            /** Format: uuid */
+            target_version_id: string;
+            target_content_hash: string;
+            node_changes: components["schemas"]["StoryGraphNodeChange"][];
+            edge_changes: components["schemas"]["StoryGraphEdgeChange"][];
+            truncated: boolean;
+            next_cursor: string | null;
+            result_hash: string;
+        };
         CostBudgetSetRequest: {
             limit_amount: string;
             currency: string;
@@ -2599,6 +2803,11 @@ export interface components {
         batch_id: string;
         export_id: string;
         workflow_run_id: string;
+        storygraph_version_ref: string | "current";
+        story_node_key: string;
+        storygraph_depth: number;
+        storygraph_limit: number;
+        storygraph_cursor: string;
     };
     requestBodies: never;
     headers: never;
@@ -4102,6 +4311,153 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowControlEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCurrentStoryGraphVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前已发布 StoryGraph 版本元数据 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryGraphVersionEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getStoryGraphVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                version_id: components["parameters"]["version_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 指定 StoryGraph 版本元数据 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryGraphVersionEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    queryStoryGraphLens: {
+        parameters: {
+            query: {
+                lens: "outline" | "narrative" | "entity" | "production" | "impact";
+                scope_kind: "project" | "story_node";
+                scope_id: string;
+                depth: components["parameters"]["storygraph_depth"];
+                limit: components["parameters"]["storygraph_limit"];
+                cursor?: components["parameters"]["storygraph_cursor"];
+            };
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                version_ref: components["parameters"]["storygraph_version_ref"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 有界且确定性的 StoryGraph Lens 子图 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryGraphSubgraphEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    traceStoryGraphNode: {
+        parameters: {
+            query: {
+                direction: "upstream" | "downstream";
+                depth: components["parameters"]["storygraph_depth"];
+                limit: components["parameters"]["storygraph_limit"];
+                cursor?: components["parameters"]["storygraph_cursor"];
+            };
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                version_ref: components["parameters"]["storygraph_version_ref"];
+                story_node_key: components["parameters"]["story_node_key"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description StoryGraph 节点上游或下游追踪结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryGraphSubgraphEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    diffStoryGraphVersions: {
+        parameters: {
+            query: {
+                base_version_id: string;
+                target_version_id: string;
+                limit: components["parameters"]["storygraph_limit"];
+                cursor?: components["parameters"]["storygraph_cursor"];
+            };
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 按稳定键计算的 StoryGraph 版本差异 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryGraphDiffEnvelope"];
                 };
             };
             401: components["responses"]["Problem"];
