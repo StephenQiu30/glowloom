@@ -46,7 +46,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D02` | [3003 Agent/Harness 子设计](design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) | **已完成（2026-08-27）**：用户已接受 Bundle、Stage、Shard、Candidate Revision 和 Codex 边界 | 仅解锁 `SG-D03`；不以 Agent 子设计反向改写 `0010` |
 | `SG-D03` | [0006 领域语言](design/0006-领域语言与模块命名规范.md) | **已完成（2026-08-27）**：已固定 StoryGraph、Asset/State/Version、Claim、Occurrence 和 Binding 规范名 | 仅解锁 `SG-D04`；下游 Design 不得自创同义词 |
 | `SG-D04` | [0001 完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | **已完成（2026-08-27）**：平台主干收口为 StoryGraph 与四图边界，并固定 Kafka 异步解耦、剧本/StoryGraph 检索和 ELK + Kafka 日志链路 | 仅解锁 `SG-D05`；不先改其他子模块 |
-| `SG-D05` | [2003 语言与运行边界](design/2003-后端语言与运行边界策略.md) | 复核 Backend/Agent 职责和 `agent/skills` 运行目录；边界未变则不强行改文 | 不在 Agent 增加业务 Writer |
+| `SG-D05` | [2003 语言与运行边界](design/2003-后端语言与运行边界策略.md) | **已完成（2026-08-27）**：固定 Backend 唯一 Writer、GORM Catalog、`agent/skills/build-storygraph`、受控 Codex CLI 与按真实消费者创建 Binary | 仅解锁 `SG-D06`；不在 Agent 增加业务 Writer |
 | `SG-D06` | [0003 系统总体架构](design/0003-系统总体架构.md) | 在 `0001/0006/2003` 同步后更新系统图、编译链和事实源 | 不把 StoryGraph 与 WorkflowDefinition 合并 |
 | `SG-D07` | [0004 分层与依赖](design/0004-架构分层与依赖规则.md) | 复核 Compiler、Harness、Owner Apply 的依赖方向；无新语义则不强行改文 | 不新建通用空层 |
 | `SG-D08` | [0009 已验收 MVP 纵向切片](design/0009-剧本到分镜MVP垂直切片设计.md) | 只增加向 StoryGraph 演进的说明；不反向改写已通过的历史范围和证据 | 历史 `0009` Plan/Acceptance 不得抵扣新验收 |
@@ -64,7 +64,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D20` | `0010` 唯一总 Plan | 引用 `SG-Ixx` 任务与 `3003` Agent 子项，Checklist 全为 `[ ]` | 不继续从旧 `3001/3002/0007` Plan 领取 StoryGraph 任务 |
 | `SG-D21` | 新 Acceptance Criteria | 逐项映射 Requirement/`SG-Ixx`，初始全为 `[ ]` | 无当次真实证据不得勾选 |
 
-`SG-D01`–`SG-D04` 已于 2026-08-27 依次接受并完成，`SG-D05` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；`SG-D11/SG-D12` 只同步两份 Design，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
+`SG-D01`–`SG-D05` 已于 2026-08-27 依次接受并完成，`SG-D06` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；`SG-D11/SG-D12` 只同步两份 Design，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
 
 ## 编号与命名
 
@@ -118,7 +118,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `1002` | 前端创作工作台与功能模块 | [创作工作台产品需求](prd/1002-前端创作工作台产品需求.md) | [模块设计](design/1002-前端功能模块设计.md) | [功能需求规格](requirement/1002-前端功能模块需求规格.md) | [合并至 1001 计划](plan/1001-前端应用与功能交付实施计划.md) | — | `SG-D15` 只同步 Design；旧派生文档的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
 | `2001` | 后端服务与运行架构 | — | [服务架构](design/2001-后端服务架构.md) | [运行架构需求规格](requirement/2001-后端运行架构需求规格.md) | [运行架构实施计划](plan/2001-后端运行架构实施计划.md) | [MVP 全链验收](acceptance/0009-剧本到分镜MVP验收记录.md) | MVP 运行边界已有验收证据，Workflow 持久执行按增量 Acceptance 演进 |
 | `2002` | 后端领域服务与生产闭环 | — | [模块设计](design/2002-后端领域模块功能设计.md) | [领域服务需求规格](requirement/2002-后端领域服务与生产闭环需求规格.md) | [生产闭环实施计划](plan/2002-后端领域服务与生产闭环实施计划.md) | [持久任务恢复](acceptance/2007-Workflow持久任务恢复验收记录.md) · [编译输入前置](acceptance/2008-Workflow编译输入前置验收记录.md) · [确定性编译](acceptance/2009-Workflow确定性编译验收记录.md) · [启动与对账](acceptance/2010-Workflow启动事实与Temporal对账验收记录.md) · [人工信号协调](acceptance/2011-Workflow人工信号协调验收记录.md) · [取消控制协调](acceptance/2012-Workflow取消控制协调验收记录.md) · [人工任务续租与释放](acceptance/2013-Workflow人工任务续租与释放验收记录.md) · [人工任务过期回收](acceptance/2014-Workflow人工任务过期回收验收记录.md) · [暂停与恢复控制](acceptance/2015-Workflow暂停与恢复控制协调验收记录.md) · [Worker 重启恢复](acceptance/2016-Workflow工作者重启恢复验收记录.md) · [Node Cache 确定性事实](acceptance/2017-Workflow节点缓存确定性事实验收记录.md) · [Node 输出绑定](acceptance/2018-Workflow节点输出绑定验收记录.md) · [Node 输入冻结](acceptance/2019-Workflow节点输入冻结验收记录.md) · [Node Runtime Cache](acceptance/2020-Workflow节点运行缓存验收记录.md) · [Human Gate 输入与决议绑定](acceptance/2021-Workflow人工栅栏输入与决议绑定验收记录.md) · [Production Bible Owner Receipt](acceptance/2022-ProductionBible确认回执验收记录.md) · [Workflow Owner Receipt 与 Gate 输出](acceptance/2023-Workflow生产回执与人工栅栏输出验收记录.md) · [Workflow 执行身份与 Script Executor](acceptance/2024-Workflow执行身份与剧本输入节点验收记录.md) · [重复投递收敛](acceptance/2052-Workflow重复投递收敛验收记录.md) · [Agent 执行策略与独立失败](acceptance/2053-Agent执行策略与独立失败验收记录.md) · [Agent 执行总时限](acceptance/2054-Agent执行总时限验收记录.md) · [阶段 5 完成度审计](acceptance/2056-Workflow阶段5完成度审计.md) | 阶段 5 切片验收中，完整 Checklist 未完成 |
-| `2003` | 后端语言与运行边界 | — | [运行边界策略](design/2003-后端语言与运行边界策略.md) | — | — | — | 已接受目标 |
+| `2003` | 后端语言与运行边界 | — | [运行边界策略](design/2003-后端语言与运行边界策略.md) | — | — | — | 已接受目标；`SG-D05` StoryGraph/Agent 运行边界复核完成 |
 | `2051` | Runware 图片 Provider 与 Generation 执行器 | — | [图片 Provider 与执行器设计](design/2051-Runware图片Provider与Generation执行器设计.md) | — | — | — | 已冻结；仅在 `SG-D13` 激活后同步并单独评审 |
 | `2055` | Workflow 公共 Human Gate 命令与恢复 | — | [公共 Human Gate 设计](design/2055-Workflow公共HumanGate命令与恢复设计.md) | — | — | — | 已冻结；仅在 `SG-D16` 激活后同步并单独评审 |
 | `2056` | Workflow 阶段 5 完成度审计 | — | — | — | — | [完成度审计](acceptance/2056-Workflow阶段5完成度审计.md) | 静态证据审计完成，未改变阶段完成状态 |
