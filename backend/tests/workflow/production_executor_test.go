@@ -72,6 +72,7 @@ func TestProductionScriptNodeExecutorReadsAuthorizedImmutableRevision(t *testing
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		nil,
+		nil,
 	)
 	command := workflow.NodeExecutorCommand{
 		NodeActivityCommand: workflow.NodeActivityCommand{
@@ -144,6 +145,7 @@ func TestProductionBibleNodeExecutorDurablyWaitsForOneAuthorizedCandidate(t *tes
 		bibleService,
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		nil,
 		nil,
 	)
 	input, _, inputHash, err := workflow.BuildNodeInput(workflow.NodeInputSnapshot{
@@ -275,6 +277,7 @@ func TestProductionEpisodePlanCandidateAndStructurePublishRecovery(t *testing.T)
 		bibleapp.NewService(biblegorm.New(database), bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningService,
+		nil,
 		nil,
 	)
 	input, _, inputHash, err := workflow.BuildNodeInput(workflow.NodeInputSnapshot{

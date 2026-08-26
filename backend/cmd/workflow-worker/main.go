@@ -17,6 +17,7 @@ import (
 	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
 	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
 	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
+	generationreview "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/review"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	platformschema "github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
@@ -29,6 +30,7 @@ import (
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
+	storyboardgeneration "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/generation"
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	quotaapp "github.com/StephenQiu30/lanverse/backend/internal/quota/application"
@@ -125,9 +127,17 @@ func main() {
 	candidateSets := generationapp.NewOutputMaterializationService(
 		providerService, generationasset.NewProviderOutputReadiness(assetService), candidateService,
 	)
+	selectionService := generationapp.NewSelectionService(
+		generationgorm.New(database), candidateService, generationreview.NewDecisionReader(reviewService),
+		generationapp.SelectionConfig{Now: now, NewID: uuid.NewString},
+	)
+	imageBindings := storyboardapp.NewShotImageBindingService(
+		storyboardgorm.New(database), storyboardgeneration.NewSelectedImageSource(selectionService),
+		storyboardapp.Config{Now: now, NewID: uuid.NewString},
+	)
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowgorm.New(database), scriptService, bibleService, projectService, planningService, storyboardService, reviewService,
-		candidateSets,
+		imageBindings, candidateSets,
 	)
 	if err != nil {
 		logger.Error("workflow runtime composition failed", "error", err)

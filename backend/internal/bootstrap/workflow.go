@@ -33,6 +33,7 @@ func NewWorkflowRuntime(
 	plans *planningapp.Service,
 	storyboards *storyboardapp.Service,
 	reviews *reviewapp.Service,
+	bindings workflowproduction.ShotImageBindingOwner,
 	candidateSets workflowreview.CandidateSetSource,
 ) (*workflowapp.RuntimeService, error) {
 	if repository == nil || scripts == nil || bibles == nil || projects == nil || plans == nil || storyboards == nil || reviews == nil {
@@ -45,7 +46,7 @@ func NewWorkflowRuntime(
 	}
 	return workflowapp.NewRuntimeService(repository, workflowapp.RuntimeConfig{
 		Now: now, NewID: uuid.NewString,
-		Executor:   workflowproduction.NewNodeExecutor(scripts, bibles, projects, plans, storyboards),
+		Executor:   workflowproduction.NewNodeExecutor(scripts, bibles, projects, plans, storyboards, bindings),
 		HumanTasks: humanTasks,
 	}), nil
 }

@@ -70,6 +70,7 @@ func Catalog() []any {
 		&model.StoryboardDraftSet{},
 		&model.StoryboardDraftBatch{},
 		&model.StoryboardShot{},
+		&model.StoryboardShotImageBindingVersion{},
 		&model.StoryboardExportSet{},
 		&model.StoryboardExport{},
 		&model.CommandReceipt{},

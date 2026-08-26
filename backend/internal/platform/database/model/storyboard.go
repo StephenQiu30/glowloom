@@ -89,6 +89,37 @@ type StoryboardShot struct {
 
 func (StoryboardShot) TableName() string { return "stb_shots" }
 
+type StoryboardShotImageBindingVersion struct {
+	ID                            uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	WorkspaceID                   uuid.UUID      `gorm:"type:uuid;not null"`
+	ProjectID                     uuid.UUID      `gorm:"type:uuid;not null"`
+	EpisodeID                     uuid.UUID      `gorm:"type:uuid;not null"`
+	ShotID                        uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:uq_stb_shot_image_binding_revision,priority:1;index:ix_stb_shot_image_bindings_current,priority:1"`
+	ShotRevision                  int            `gorm:"not null;check:ck_stb_shot_image_binding_shot_revision,shot_revision >= 1"`
+	ShotContentHash               string         `gorm:"type:char(64);not null;check:ck_stb_shot_image_binding_shot_hash,char_length(shot_content_hash) = 64"`
+	CandidateSelectionID          uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:uq_stb_shot_image_binding_selection"`
+	CandidateSelectionRevision    int            `gorm:"not null;check:ck_stb_shot_image_binding_selection_revision,candidate_selection_revision >= 1"`
+	CandidateSelectionContentHash string         `gorm:"type:char(64);not null;check:ck_stb_shot_image_binding_selection_hash,char_length(candidate_selection_content_hash) = 64"`
+	CandidateID                   uuid.UUID      `gorm:"type:uuid;not null"`
+	CandidateRevision             int            `gorm:"not null;check:ck_stb_shot_image_binding_candidate_revision,candidate_revision >= 1"`
+	ArtifactID                    uuid.UUID      `gorm:"type:uuid;not null"`
+	ArtifactRevision              int            `gorm:"not null;check:ck_stb_shot_image_binding_artifact_revision,artifact_revision >= 1"`
+	ArtifactSHA256                string         `gorm:"type:char(64);not null;check:ck_stb_shot_image_binding_artifact_sha256,char_length(artifact_sha256) = 64"`
+	BindingRevision               int            `gorm:"not null;uniqueIndex:uq_stb_shot_image_binding_revision,priority:2;index:ix_stb_shot_image_bindings_current,priority:2,sort:desc;check:ck_stb_shot_image_binding_revision,binding_revision >= 1"`
+	ContentHash                   string         `gorm:"type:char(64);not null;check:ck_stb_shot_image_binding_hash,char_length(content_hash) = 64"`
+	CreatedBy                     uuid.UUID      `gorm:"type:uuid;not null"`
+	CreatedAt                     time.Time      `gorm:"type:timestamptz;not null"`
+	Workspace                     Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project                       Project        `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Episode                       Episode        `gorm:"foreignKey:EpisodeID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Shot                          StoryboardShot `gorm:"foreignKey:ShotID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator                       UserAccount    `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (StoryboardShotImageBindingVersion) TableName() string {
+	return "stb_shot_image_binding_versions"
+}
+
 type StoryboardExportSet struct {
 	ID               uuid.UUID          `gorm:"type:uuid;primaryKey"`
 	WorkspaceID      uuid.UUID          `gorm:"type:uuid;not null"`

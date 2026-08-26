@@ -141,7 +141,7 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}),
 		bibleService, projectService, planningService, storyboardService, reviewService,
-		nil,
+		nil, nil,
 	)
 	if err != nil {
 		t.Fatalf("compose Episode Plan Workflow Runtime: %v", err)

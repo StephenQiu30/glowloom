@@ -28,6 +28,7 @@ const (
 	episodeStructureExecutor = "activity.episode_structure"
 	storyboardDraftExecutor  = "activity.storyboard_draft"
 	storyboardExportExecutor = "activity.storyboard_export"
+	shotImageBindingExecutor = "activity.production_shot_image_binding"
 )
 
 type ScriptSource interface {
@@ -59,12 +60,17 @@ type StoryboardWorkflowOwner interface {
 	CreateExportSet(context.Context, storyboardapp.Actor, storyboardapp.CreateExportSetCommand) (storyboarddomain.ExportSet, error)
 }
 
+type ShotImageBindingOwner interface {
+	BindSelectedImage(context.Context, storyboardapp.Actor, storyboardapp.BindSelectedImageCommand) (storyboardapp.BindSelectedImageResult, error)
+}
+
 type NodeExecutor struct {
 	scripts     ScriptSource
 	bibles      BibleCandidateOwner
 	projects    ProjectSource
 	plans       EpisodePlanOwner
 	storyboards StoryboardWorkflowOwner
+	bindings    ShotImageBindingOwner
 }
 
 func NewNodeExecutor(
@@ -73,8 +79,12 @@ func NewNodeExecutor(
 	projects ProjectSource,
 	plans EpisodePlanOwner,
 	storyboards StoryboardWorkflowOwner,
+	bindings ShotImageBindingOwner,
 ) *NodeExecutor {
-	return &NodeExecutor{scripts: scripts, bibles: bibles, projects: projects, plans: plans, storyboards: storyboards}
+	return &NodeExecutor{
+		scripts: scripts, bibles: bibles, projects: projects, plans: plans,
+		storyboards: storyboards, bindings: bindings,
+	}
 }
 
 func (executor *NodeExecutor) Execute(
@@ -99,9 +109,78 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeStoryboardDraft(ctx, command)
 	case storyboardExportExecutor:
 		return executor.executeStoryboardExport(ctx, command)
+	case shotImageBindingExecutor:
+		return executor.executeShotImageBinding(ctx, command)
 	default:
 		return domain.NodeExecutorResult{}, errors.New("unsupported production workflow node execution")
 	}
+}
+
+func (executor *NodeExecutor) executeShotImageBinding(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.bindings == nil {
+		return domain.NodeExecutorResult{}, errors.New("Shot image binding workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 2 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "binding" ||
+		command.OutputPorts[0].ValueType != "production_shot_image_binding" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Shot image binding node contract")
+	}
+	var config map[string]json.RawMessage
+	var expectedCurrentRevision int
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 1 ||
+		json.Unmarshal(config["expected_current_revision"], &expectedCurrentRevision) != nil || expectedCurrentRevision < 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Shot image binding node config")
+	}
+	bindings := make(map[string]domain.NodeInputBinding, len(input.Bindings))
+	for _, binding := range input.Bindings {
+		bindings[binding.Port] = binding
+	}
+	shot, selection := bindings["shot"], bindings["selection"]
+	shotRevision, shotRevisionErr := strconv.Atoi(shot.ReferenceVersion)
+	selectionRevision, selectionRevisionErr := strconv.Atoi(selection.ReferenceVersion)
+	if shotRevisionErr != nil || shotRevision < 1 || selectionRevisionErr != nil || selectionRevision != 1 ||
+		shot.ValueType != "production_shot" || selection.ValueType != "generation_candidate_selection" ||
+		shot.SourceKind != domain.NodeInputSourceNodeOutput || selection.SourceKind != domain.NodeInputSourceNodeOutput ||
+		shot.SourceNodeID == "" || shot.SourcePort == "" || selection.SourceNodeID == "" || selection.SourcePort == "" ||
+		len(shot.ContentHash) != 64 || len(selection.ContentHash) != 64 {
+		return domain.NodeExecutorResult{}, errors.New("Shot image binding inputs have drifted")
+	}
+	result, err := executor.bindings.BindSelectedImage(ctx, storyboardapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, storyboardapp.BindSelectedImageCommand{
+		ShotID: shot.ReferenceID, ExpectedShotRevision: shotRevision, ExpectedShotContentHash: shot.ContentHash,
+		CandidateSelectionID: selection.ReferenceID, ExpectedCurrentRevision: expectedCurrentRevision,
+		IdempotencyKey: command.IdempotencyKey,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	binding := result.Binding
+	if binding.WorkspaceID != command.WorkspaceID || binding.ProjectID != command.ProjectID ||
+		binding.ShotID != shot.ReferenceID || binding.ShotRevision != shotRevision ||
+		binding.ShotContentHash != shot.ContentHash || binding.CandidateSelectionID != selection.ReferenceID ||
+		binding.CandidateSelectionRevision != selectionRevision ||
+		binding.CandidateSelectionContentHash != selection.ContentHash || binding.Revision != expectedCurrentRevision+1 ||
+		len(binding.ContentHash) != 64 || binding.CreatedBy != command.InitiatorUserID ||
+		result.Receipt.Operation != "storyboard.shot.bind_selected_image" ||
+		result.Receipt.ResourceID != binding.ID || result.Receipt.CreatedBy != command.InitiatorUserID {
+		return domain.NodeExecutorResult{}, errors.New("Shot image binding does not match workflow input")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "binding", ValueType: "production_shot_image_binding", ReferenceID: binding.ID,
+			ReferenceVersion: strconv.Itoa(binding.Revision), ContentHash: binding.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
 }
 
 func (executor *NodeExecutor) executeStoryboardExport(
