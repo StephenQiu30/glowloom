@@ -66,6 +66,8 @@ func Catalog() []any {
 		&model.Episode{},
 		&model.EpisodeScriptVersion{},
 		&model.EpisodeStructure{},
+		&model.StoryGraphVersion{},
+		&model.StoryGraphHead{},
 		&model.ImportCommit{},
 		&model.StoryboardDraftSet{},
 		&model.StoryboardDraftBatch{},
@@ -74,6 +76,7 @@ func Catalog() []any {
 		&model.StoryboardExportSet{},
 		&model.StoryboardExport{},
 		&model.CommandReceipt{},
+		&model.OutboxEvent{},
 		&model.AuditEvent{},
 	}
 }

@@ -20,11 +20,11 @@
 
 ### 2.1 架构与事实源
 
-- [ ] `SG-ARC-001`（`SG-I01`、`SG-I03`–`028` 回归）：Backend 唯一业务 Writer，Agent/Frontend/event-worker 零 Owner 直写证据。
-- [ ] `SG-ARC-002`（`SG-I01`、`SG-I03` 起）：空 PostgreSQL 的唯一 GORM Catalog、无 Migration 元数据/Raw SQL/第二 ORM/第二 Writer 证据。
+- [x] `SG-ARC-001`（`SG-I01`、`SG-I03`–`028` 回归）：Backend 唯一业务 Writer，Agent/Frontend/event-worker 零 Owner 直写证据。
+- [x] `SG-ARC-002`（`SG-I01`、`SG-I03` 起）：空 PostgreSQL 的唯一 GORM Catalog、无 Migration 元数据/Raw SQL/第二 ORM/第二 Writer 证据。
 - [x] `SG-ARC-003`（`SG-I01` 起）：Domain/Application 与 GORM/Temporal/Kafka/Elastic/Provider 的 import/AST 负向证据。
 - [ ] `SG-ARC-004`（`SG-I01`、`SG-I06`–`024`）：真实 Temporal wait/signal/replay/restart 与无 Kafka/DB 第二 Workflow 证据。
-- [ ] `SG-ARC-005`（`SG-I01`、`SG-I03`、`SG-I25`）：四图 Schema/ID/DTO 不可互换证据。
+- [x] `SG-ARC-005`（`SG-I01`、`SG-I03`、`SG-I25`）：四图 Schema/ID/DTO 不可互换证据。
 - [ ] `SG-ARC-006`（`SG-I01`、`SG-I05`、全部 Agent 切片）：Agent Candidate-only 环境、依赖、网络和零业务写入证据。
 - [ ] `SG-ARC-007`（`SG-I07`、`SG-I25`–`026`、`SG-I28`）：Browser 仅访问 Backend `/api/v1` 的 bundle/import/网络证据。
 - [ ] `SG-ARC-008`（`SG-I03`–`024`）：外部边界稳定身份、known failure/unknown 与同 ID 对账故障矩阵。
@@ -33,16 +33,16 @@
 
 ### 2.2 StoryGraph 与 Query
 
-- [ ] `SG-GRF-001`（`SG-I01`、`SG-I03`）：StoryGraphVersion 字段、不可变约束和历史读取证据。
-- [ ] `SG-GRF-002`（`SG-I03`）：每项目唯一 Head、expected CAS、并发单胜与失败零半成品证据。
-- [ ] `SG-GRF-003`（`SG-I01`、`SG-I03`、`SG-I17`）：Node/Owner Ref/Evidence strict schema 正反 fixture。
-- [ ] `SG-GRF-004`（`SG-I01`、`SG-I03`、`SG-I17`）：Edge 类型/端点矩阵与未知组合拒绝 fixture。
+- [x] `SG-GRF-001`（`SG-I01`、`SG-I03`）：StoryGraphVersion 字段、不可变约束和历史读取证据。
+- [x] `SG-GRF-002`（`SG-I03`）：每项目唯一 Head、expected CAS、并发单胜与失败零半成品证据。
+- [x] `SG-GRF-003`（`SG-I01`、`SG-I03`、`SG-I17`）：Node/Owner Ref/Evidence strict schema 正反 fixture。
+- [x] `SG-GRF-004`（`SG-I01`、`SG-I03`、`SG-I17`）：Edge 类型/端点矩阵与未知组合拒绝 fixture。
 - [x] `SG-GRF-005`（`SG-I01`、`SG-I03`、`SG-I04`）：Node/Edge 稳定 Key 与跨版本 change 证据。
-- [ ] `SG-GRF-006`（`SG-I01`、`SG-I03`）：Canonical Hash 跨语言、随机顺序和 Canvas 无关证据。
-- [ ] `SG-GRF-007`（`SG-I01`、`SG-I03`、`SG-I17`）：DAG、最小环路径与 Claim 表达证据。
-- [ ] `SG-GRF-008`（`SG-I03`、`SG-I17`、`SG-I23`）：Compiler 只读已确认精确 Owner、污染源拒绝证据。
-- [ ] `SG-GRF-009`（`SG-I03`、`SG-I17`、`SG-I23`）：Owner Set/Version/Head/Receipt/Outbox 单 GORM 事务故障注入。
-- [ ] `SG-GRF-010`（`SG-I03`）：JSONB Version + Head 且无图数据库/EAV/递归 Raw SQL/第二 Graph Writer 证据。
+- [x] `SG-GRF-006`（`SG-I01`、`SG-I03`）：Canonical Hash 跨语言、随机顺序和 Canvas 无关证据。
+- [x] `SG-GRF-007`（`SG-I01`、`SG-I03`、`SG-I17`）：DAG、最小环路径与 Claim 表达证据。
+- [x] `SG-GRF-008`（`SG-I03`、`SG-I17`、`SG-I23`）：Compiler 只读已确认精确 Owner、污染源拒绝证据。
+- [x] `SG-GRF-009`（`SG-I03`、`SG-I17`、`SG-I23`）：Owner Set/Version/Head/Receipt/Outbox 单 GORM 事务故障注入。
+- [x] `SG-GRF-010`（`SG-I03`）：JSONB Version + Head 且无图数据库/EAV/递归 Raw SQL/第二 Graph Writer 证据。
 - [ ] `SG-QRY-001`（`SG-I04`）：Current/Exact/Lens/Diff/Trace/Impact Application 与 HTTP Query 证据。
 - [ ] `SG-QRY-002`（`SG-I04`、`SG-I25`）：版本、lens、scope、depth/cursor、truncated/继续条件 contract。
 - [ ] `SG-QRY-003`（`SG-I04`、`SG-I25`）：五类有界 Lens、大图分层和确定性结果 Hash。
@@ -213,7 +213,7 @@
 
 - [x] `SG-I01`：Schema/Key/Hash/Wire fixture、工具链/导入边界、失败测试与当前真实 CI 基线完成。
 - [x] `SG-I02`：八 Skill 字节保持迁移至 `agent/skills`，单路径、无 fallback、全量 CI、独立提交完成。
-- [ ] `SG-I03`：StoryGraph Version/Head/Compiler/Owner Set/Outbox 单事务发布完成。
+- [x] `SG-I03`：StoryGraph Version/Head/Compiler/Owner Set/Outbox 单事务发布完成。
 - [ ] `SG-I04`：Graph Query + Kafka Event + Elasticsearch Search + ELK 日志真实消费者、故障 CI 完成。
 - [ ] `SG-I05`：`build-storygraph` 唯一 Bundle、Stage Wire/Policy/Candidate Revision、旧入口原子删除完成。
 - [ ] `SG-I06`：公共 HumanTask/Lease/Decision/Resume Backend API 与恢复完成。
@@ -267,4 +267,19 @@
 - 尚未完成：本任务只做行为保持迁移；单一 `build-storygraph` Bundle、启动 Hash Policy、旧 Skill 名和无消费者 metadata 删除属于 `SG-I05`，因此 `SGA-BDL-*` 与复合条款 `SGA-OPS-003` 保持未通过。按门禁未运行 `agent-browser`。
 - Git：本 Evidence 与实现由当前 `SG-I02` 独立提交承载；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 8 条 Requirement 与 `SG-I01`–`SG-I02`，其余保持未通过。下一步只允许实施 `SG-I03`。
+### `SG-I03` — StoryGraph 线性发布与原子 Outbox（2026-08-27）
+
+- Red：`cd backend && go test ./tests/storygraph` 首次真实失败，明确缺少 `internal/storygraph/adapter/gormdb`；持久化测试最初直接导入 GORM 时又被架构门拒绝，随后改为只通过应用闭包建 fixture/计数，没有放宽门禁。
+- 事实模型：唯一 GORM Catalog 新增不可变 `sg_storygraph_versions`、每 Project 单行 `sg_storygraph_heads` 与通用 `evt_outbox_events`；Version 冻结父链、Source Revision、排序 Owner Head Set、Schema、Nodes/Edges JSONB、Topology/Content Hash 与发布身份。GORM Hook 同时拒绝 Update/Delete，父版本、Head、Source、Workspace/Project 和 Creator 均由约束连接。
+- Compiler：首版只投影当前正式 `DocumentRevision → active Episode/current published EpisodeScriptVersion → confirmed EpisodeStructure`，生成 Source/Episode/Scene/Dialogue/Narrative Beat；Agent Candidate、HumanTask、Review、Storyboard Draft、Kafka/Search/Canvas 均不参与 Owner Snapshot。Unicode Evidence 使用绝对 codepoint 半开区间并重算精确文本 Hash。
+- 原子发布：Application 在单个 GORM `SERIALIZABLE` 事务中锁定 Project/Head，校验 expected revision/hash，冻结规范 Owner Set，写 Version、CAS Head、Command Receipt 和 `StoryGraphVersionPublished` Outbox；网络 Publisher 未创建且不在 Owner 事务中。Outbox payload 只有 Version/Hash 元数据，不含完整剧本。
+- 定向 PostgreSQL：`LANVERSE_TEST_DATABASE_URL=... go test -count=1 ./tests/storygraph ./tests/architecture` 全通过，StoryGraph `9.937s`。首版固定 5 Nodes/4 Edges；两次线性发布得到 2 Versions/1 Head/2 Receipts/2 Events，Episode 稳定 Node Key 保持且内容 Hash 改变。首命令在第二版发布后回放仍精确返回第一版 Version/Head/Receipt。
+- 并发与故障：两个 expected-zero 发布只有一个成功且最终仅 1 Version/1 Head/1 Receipt/1 Event；旧 expected Head 返回 `stale_storygraph_head`。预占重复 Outbox ID 使 Version/Head/Receipt 全回滚；Token Version 漂移、跨租户和 Viewer 分别得到 401/404/403，均为零 Version。
+- Schema/架构：空 PostgreSQL `16.15` 中 Migration/Schema-Version 元数据表计数为 0，事实表精确为 `evt_outbox_events,sg_storygraph_heads,sg_storygraph_versions`，`owner_head_refs/nodes/edges` 均为 JSONB。生产 Go 扫描拒绝 Raw/Exec、直接 pgx、sqlx/Bun/Ent、Migration 目录和第二 Writer；Domain/Application 无 GORM/Kafka/Elastic 依赖。
+- Hash/Edge：Go 对随机 Owner/Node/Edge 遍历顺序得到相同 Owner Set/Topology/Content Hash；Python 标准库合同测试独立重算同一 Go golden，Canvas 状态不进入 Schema/Hash。18 个规范 Edge Type 均有正反端点 fixture，未知组合和 qualifier/type 不匹配被拒绝；既有 DAG/最小环/Claim payload-edge 测试继续通过。
+- 全量真实 CI：全新隔离 PostgreSQL、Temporal 指定 digest 与 MinIO `RELEASE.2025-09-07T16-13-09Z` 下，`go vet ./...` 与 `go test -count=1 -p 1 ./...` 全通过，StoryGraph `12.572s`、Workflow `103.474s`；Agent Ruff/format/Pyright/Pytest 全通过，`31 passed`；Frontend OpenAPI/lint/typecheck、16 文件 45 tests、production build 与 Client drift 全通过。
+- 部署：开发/生产 Compose 校验和三镜像构建通过；当前 Backend 镜像以非 root 运行，API 健康且 Workflow Worker 真实连接 PostgreSQL/MinIO/Temporal 并保持运行。验收时发现 Worker Compose 缺 MinIO 会真实退出，已先以独立提交 `3e0349b` 修复，并把全栈镜像启动、HTTP 200 与 Worker 启动日志纳入 CI；所有任务容器和专属数据卷已精确删除。
+- 尚未完成：Current/Version/Lens/Diff/Trace/Impact Query、Kafka Publisher/Inbox/DLQ/Replay、Elasticsearch Script/StoryGraph Search 与 ELK 日志链属于 `SG-I04`，因此 `SG-QRY-*`、`SG-EVT-*`、`SG-SRCH-*`、`SG-LOG-*` 及完整权限/API 复合条款保持未通过。按门禁未运行 `agent-browser`。
+- Git：CI 运行态修复已独立提交；本 Evidence 与 StoryGraph 实现由当前 `SG-I03` 独立提交承载。均未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 20 条 Requirement 与 `SG-I01`–`SG-I03`，其余保持未通过。下一步只允许实施 `SG-I04`。

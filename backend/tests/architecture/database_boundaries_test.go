@@ -50,6 +50,11 @@ func TestDatabaseArchitectureBoundaries(t *testing.T) {
 			if strings.HasPrefix(importPath, "github.com/jackc/pgx") {
 				t.Errorf("%s imports PostgreSQL driver directly; use GORM through the database adapter", relativePath)
 			}
+			for _, secondORM := range []string{"github.com/jmoiron/sqlx", "github.com/uptrace/bun", "entgo.io/ent"} {
+				if strings.HasPrefix(importPath, secondORM) {
+					t.Errorf("%s imports second ORM/query framework %s; GORM is the only catalog", relativePath, importPath)
+				}
+			}
 			if strings.HasPrefix(importPath, "gorm.io/") && !gormImportAllowed(relativePath) {
 				t.Errorf("%s imports GORM outside the database platform or gormdb adapter", relativePath)
 			}
@@ -60,6 +65,11 @@ func TestDatabaseArchitectureBoundaries(t *testing.T) {
 		contents, err := os.ReadFile(path)
 		if err != nil {
 			return err
+		}
+		for _, rawDatabaseCall := range []string{".Raw(", ".Exec("} {
+			if strings.Contains(string(contents), rawDatabaseCall) {
+				t.Errorf("%s uses raw database call %s; use GORM models and clauses", relativePath, rawDatabaseCall)
+			}
 		}
 		for _, obsoleteIdentifier := range []string{
 			"MigrationDatabaseURL",

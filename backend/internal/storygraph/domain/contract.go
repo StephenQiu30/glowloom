@@ -345,6 +345,9 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		edges[index] = edge
 	}
 	sort.Slice(edges, func(i, j int) bool { return edges[i].EdgeKey < edges[j].EdgeKey })
+	if err := validateEdgeEndpoints(nodes, edges); err != nil {
+		return CanonicalSnapshot{}, err
+	}
 
 	keys := make([]string, 0, len(nodes))
 	for _, node := range nodes {
@@ -400,6 +403,101 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		return CanonicalSnapshot{}, err
 	}
 	return CanonicalSnapshot{SchemaVersion: SchemaVersion, Nodes: nodes, Edges: edges, TopologyHash: topologyHash, ContentHash: contentHash}, nil
+}
+
+func validateEdgeEndpoints(nodes []Node, edges []Edge) error {
+	types := make(map[string]NodeType, len(nodes))
+	for _, node := range nodes {
+		types[node.StoryNodeKey] = node.NodeType
+	}
+	for _, edge := range edges {
+		from, fromExists := types[edge.FromNodeKey]
+		to, toExists := types[edge.ToNodeKey]
+		if !fromExists || !toExists {
+			return errors.New("StoryGraph edge has a dangling endpoint")
+		}
+		if err := ValidateEdgeEndpoint(edge.EdgeType, from, to, edge.Qualifier); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ValidateEdgeEndpoint(edgeType EdgeType, from, to NodeType, qualifier EdgeQualifier) error {
+	if err := qualifier.validate(edgeType); err != nil {
+		return err
+	}
+	if !edgeEndpointAllowed(edgeType, from, to, qualifier) {
+		return fmt.Errorf("StoryGraph edge type %s does not allow %s -> %s", edgeType, from, to)
+	}
+	return nil
+}
+
+func edgeEndpointAllowed(edgeType EdgeType, from, to NodeType, qualifier EdgeQualifier) bool {
+	switch edgeType {
+	case EdgeTypeContains:
+		return from == NodeTypeEpisode && to == NodeTypeScene ||
+			from == NodeTypeScene && (to == NodeTypeDialogue || to == NodeTypeNarrativeBeat)
+	case EdgeTypeDerivedFrom:
+		return from == NodeTypeSourceRevision && (to == NodeTypeSourceEvidence || to == NodeTypeEpisode) ||
+			from == NodeTypeSourceEvidence && derivedFactNode(to)
+	case EdgeTypeDescribesIdentity:
+		return from == NodeTypeAssetIdentity && oneOfNode(to, NodeTypeCharacterSpecification, NodeTypeLocationSpecification, NodeTypePropSpecification)
+	case EdgeTypeHasState:
+		return from == NodeTypeAssetIdentity && to == NodeTypeAssetState
+	case EdgeTypePrecedes:
+		return from == to && oneOfNode(from, NodeTypeScene, NodeTypeShot)
+	case EdgeTypeAnchorsOccurrence:
+		return oneOfNode(from, NodeTypeScene, NodeTypeNarrativeBeat) && to == NodeTypeOccurrence
+	case EdgeTypeInstantiatesOccurrence:
+		return from == NodeTypeAssetState && to == NodeTypeOccurrence
+	case EdgeTypeRealizes:
+		return from == NodeTypeNarrativeBeat && to == NodeTypeShot
+	case EdgeTypeInforms:
+		return from == NodeTypeOccurrence && to == NodeTypeShot
+	case EdgeTypeConstrains:
+		return oneOfNode(from, NodeTypeWorldRule, NodeTypeEffectiveStyleSnapshot, NodeTypePolicySnapshot) && oneOfNode(to, NodeTypeShot, NodeTypeGenerationTarget)
+	case EdgeTypeMaterializes:
+		if to != NodeTypeProductionBinding {
+			return false
+		}
+		expected := map[string][]NodeType{
+			"specification": {NodeTypeCharacterSpecification, NodeTypeLocationSpecification, NodeTypePropSpecification},
+			"state":         {NodeTypeAssetState}, "asset": {NodeTypeAssetIdentity}, "asset_version": {NodeTypeAssetVersion},
+		}
+		return slices.Contains(expected[qualifier.BindingRole], from)
+	case EdgeTypeBindsInput:
+		return oneOfNode(from, NodeTypeShot, NodeTypeOccurrence, NodeTypeAssetVersion) && to == NodeTypeShotProductionBindingVersion
+	case EdgeTypeFeedsGeneration:
+		return from == NodeTypeShotProductionBindingVersion && to == NodeTypeGenerationTarget ||
+			from == NodeTypeGenerationTarget && to == NodeTypeArtifact
+	case EdgeTypeBindsOutput:
+		return oneOfNode(from, NodeTypeShot, NodeTypeArtifact) && to == NodeTypeShotImageBindingVersion
+	case EdgeTypeSupports:
+		return oneOfNode(from, NodeTypeSourceRevision, NodeTypeSourceEvidence) && isClaimNode(to)
+	case EdgeTypeClaimParticipant:
+		return oneOfNode(from, NodeTypeAssetIdentity, NodeTypeWorldRule) && isClaimNode(to)
+	case EdgeTypeClaimAnchor:
+		return oneOfNode(from, NodeTypeEpisode, NodeTypeScene, NodeTypeNarrativeBeat, NodeTypeOccurrence) && isClaimNode(to)
+	case EdgeTypeSupersedes:
+		return isClaimNode(from) && isClaimNode(to)
+	default:
+		return false
+	}
+}
+
+func derivedFactNode(value NodeType) bool {
+	return oneOfNode(value,
+		NodeTypeCharacterSpecification, NodeTypeLocationSpecification, NodeTypePropSpecification,
+		NodeTypeWorldRule, NodeTypeStoryArc, NodeTypePlotThread,
+		NodeTypeRelationshipClaim, NodeTypeForeshadowingClaim, NodeTypePayoffClaim,
+		NodeTypeEpisode, NodeTypeScene, NodeTypeDialogue, NodeTypeNarrativeBeat,
+		NodeTypeOccurrence, NodeTypeContinuityClaim, NodeTypeCausalClaim, NodeTypeShot,
+	)
+}
+
+func oneOfNode(value NodeType, candidates ...NodeType) bool {
+	return slices.Contains(candidates, value)
 }
 
 func canonicalizeNode(node Node) (Node, error) {
