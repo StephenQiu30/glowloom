@@ -21,6 +21,8 @@ func Catalog() []any {
 		&model.MediaObject{},
 		&model.MediaVersion{},
 		&model.UploadSession{},
+		&model.Artifact{},
+		&model.ArtifactLocation{},
 		&model.ScriptDocument{},
 		&model.DocumentRevision{},
 		&model.NodeDefinitionVersion{},

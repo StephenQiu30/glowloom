@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -11,6 +12,12 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+)
+
+var (
+	ErrInvalidObjectDeclaration = errors.New("invalid object declaration")
+	ErrObjectSizeMismatch       = errors.New("object size mismatch")
+	ErrObjectChecksumMismatch   = errors.New("object checksum mismatch")
 )
 
 type Config struct {
@@ -67,7 +74,7 @@ func (client *Client) PresignPut(ctx context.Context, objectKey string, expires 
 
 func (client *Client) ReadVerified(ctx context.Context, objectKey string, expectedSize int64, expectedSHA256 string, maxBytes int64) ([]byte, error) {
 	if expectedSize < 1 || expectedSize > maxBytes {
-		return nil, fmt.Errorf("object size %d is outside the allowed range", expectedSize)
+		return nil, fmt.Errorf("%w: object size %d is outside the allowed range", ErrInvalidObjectDeclaration, expectedSize)
 	}
 	object, err := client.internal.GetObject(ctx, client.bucket, objectKey, minio.GetObjectOptions{})
 	if err != nil {
@@ -79,11 +86,11 @@ func (client *Client) ReadVerified(ctx context.Context, objectKey string, expect
 		return nil, fmt.Errorf("read object: %w", err)
 	}
 	if int64(len(contents)) != expectedSize {
-		return nil, fmt.Errorf("object size mismatch: got %d, expected %d", len(contents), expectedSize)
+		return nil, fmt.Errorf("%w: got %d, expected %d", ErrObjectSizeMismatch, len(contents), expectedSize)
 	}
 	hash := sha256.Sum256(contents)
 	if hex.EncodeToString(hash[:]) != expectedSHA256 {
-		return nil, fmt.Errorf("object checksum mismatch")
+		return nil, ErrObjectChecksumMismatch
 	}
 	return contents, nil
 }

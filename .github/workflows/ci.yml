@@ -51,11 +51,29 @@ jobs:
           done
           docker logs lanverse-ci-temporal
           exit 1
+      - name: Start private MinIO service
+        run: |
+          docker run --detach --name lanverse-ci-minio --publish 9000:9000 \
+            --env MINIO_ROOT_USER=lanverse_ci --env MINIO_ROOT_PASSWORD=lanverse_ci_minio_secret \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z \
+            server /data --address :9000 --console-address :9001
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs lanverse-ci-minio
+          exit 1
       - name: Check and test Go backend
         working-directory: backend
         env:
           LANVERSE_TEST_DATABASE_URL: postgresql://lanverse_ci:lanverse_ci@127.0.0.1:5432/lanverse_ci?sslmode=disable
           LANVERSE_TEST_TEMPORAL_ADDRESS: 127.0.0.1:7233
+          LANVERSE_TEST_MINIO_ENDPOINT: 127.0.0.1:9000
+          LANVERSE_TEST_MINIO_ACCESS_KEY: lanverse_ci
+          LANVERSE_TEST_MINIO_SECRET_KEY: lanverse_ci_minio_secret
+          LANVERSE_TEST_MINIO_BUCKET: lanverse-asset-ci
         run: |
           test -z "$(gofmt -l .)"
           go vet ./...
