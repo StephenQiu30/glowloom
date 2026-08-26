@@ -61,6 +61,20 @@ type BindSelectedImageResult struct {
 	Receipt platformcommand.Receipt
 }
 
+type ShotImageBindingTarget struct {
+	Shot                      domain.Shot
+	ExpectedCurrentRevision   int
+	CurrentBindingID          string
+	CurrentBindingContentHash string
+	ContentHash               string
+}
+
+type BindSelectedImageAtTargetCommand struct {
+	ShotID, CandidateSelectionID, IdempotencyKey       string
+	ExpectedShotContentHash, ExpectedBindingTargetHash string
+	ExpectedShotRevision, ExpectedCurrentRevision      int
+}
+
 type shotImageBindingReceipt struct {
 	BindingID string `json:"binding_id"`
 }
@@ -107,10 +121,76 @@ func (service *ShotImageBindingService) RequireActiveShot(
 	return shot, normalizeError(err)
 }
 
+func (service *ShotImageBindingService) RequireShotImageBindingTarget(
+	ctx context.Context,
+	actor Actor,
+	shotID string,
+) (ShotImageBindingTarget, error) {
+	actor.UserID, shotID = strings.TrimSpace(actor.UserID), strings.TrimSpace(shotID)
+	if service == nil || service.transactions == nil || actor.TokenVersion < 1 ||
+		!validBindingUUID(actor.UserID) || !validBindingUUID(shotID) {
+		return ShotImageBindingTarget{}, ErrNotFound
+	}
+	var target ShotImageBindingTarget
+	err := service.transactions.WithinShotImageBindingTransaction(ctx, func(repo ShotImageBindingRepository) error {
+		shot, loadErr := repo.LockShotImageTarget(ctx, actor, shotID, true)
+		if loadErr != nil {
+			return loadErr
+		}
+		if err := validateActiveShotImageTarget(shot, shotID); err != nil {
+			return err
+		}
+		current, currentErr := repo.FindCurrentShotImageBinding(ctx, shot.ID)
+		switch {
+		case errors.Is(currentErr, ErrNotFound):
+			target, loadErr = buildShotImageBindingTarget(shot, domain.ShotImageBindingVersion{})
+		case currentErr != nil:
+			return currentErr
+		default:
+			if current.WorkspaceID != shot.WorkspaceID || current.ProjectID != shot.ProjectID ||
+				current.EpisodeID != shot.EpisodeID || current.ShotID != shot.ID ||
+				current.ShotRevision != shot.Revision || current.ShotContentHash != shot.ContentHash ||
+				validateShotImageBinding(current) != nil {
+				return errors.New("current Shot image binding has drifted")
+			}
+			target, loadErr = buildShotImageBindingTarget(shot, current)
+		}
+		return loadErr
+	})
+	return target, normalizeShotImageBindingError(err)
+}
+
 func (service *ShotImageBindingService) BindSelectedImage(
 	ctx context.Context,
 	actor Actor,
 	command BindSelectedImageCommand,
+) (BindSelectedImageResult, error) {
+	return service.bindSelectedImage(ctx, actor, command, "")
+}
+
+func (service *ShotImageBindingService) BindSelectedImageAtTarget(
+	ctx context.Context,
+	actor Actor,
+	command BindSelectedImageAtTargetCommand,
+) (BindSelectedImageResult, error) {
+	command.ExpectedBindingTargetHash = strings.TrimSpace(command.ExpectedBindingTargetHash)
+	if !validBindingHash(command.ExpectedBindingTargetHash) {
+		return BindSelectedImageResult{}, invalid("Invalid Shot image binding target request")
+	}
+	return service.bindSelectedImage(ctx, actor, BindSelectedImageCommand{
+		ShotID: command.ShotID, CandidateSelectionID: command.CandidateSelectionID,
+		ExpectedShotContentHash: command.ExpectedShotContentHash,
+		ExpectedShotRevision:    command.ExpectedShotRevision,
+		ExpectedCurrentRevision: command.ExpectedCurrentRevision,
+		IdempotencyKey:          command.IdempotencyKey,
+	}, command.ExpectedBindingTargetHash)
+}
+
+func (service *ShotImageBindingService) bindSelectedImage(
+	ctx context.Context,
+	actor Actor,
+	command BindSelectedImageCommand,
+	expectedBindingTargetHash string,
 ) (BindSelectedImageResult, error) {
 	actor.UserID = strings.TrimSpace(actor.UserID)
 	command.ShotID = strings.TrimSpace(command.ShotID)
@@ -144,14 +224,9 @@ func (service *ShotImageBindingService) BindSelectedImage(
 			shot.Revision < 1 || !validBindingHash(shot.ContentHash) {
 			return conflict("Shot and selected image do not share an active production boundary")
 		}
-		inputHash, hashErr := platformcommand.InputHash(struct {
-			ActorID                 string
-			ShotID                  string
-			ShotRevision            int
-			ShotContentHash         string
-			Selection               SelectedImageSnapshot
-			ExpectedCurrentRevision int
-		}{actor.UserID, shot.ID, shot.Revision, shot.ContentHash, selection, command.ExpectedCurrentRevision})
+		inputHash, hashErr := shotImageBindingInputHash(
+			actor.UserID, shot, selection, command.ExpectedCurrentRevision, expectedBindingTargetHash,
+		)
 		if hashErr != nil {
 			return hashErr
 		}
@@ -171,6 +246,22 @@ func (service *ShotImageBindingService) BindSelectedImage(
 			return currentErr
 		case currentErr == nil && current.Revision != command.ExpectedCurrentRevision:
 			return conflict("Shot image binding revision has changed")
+		}
+		if currentErr == nil && (current.WorkspaceID != shot.WorkspaceID || current.ProjectID != shot.ProjectID ||
+			current.EpisodeID != shot.EpisodeID || current.ShotID != shot.ID ||
+			current.ShotRevision != shot.Revision || current.ShotContentHash != shot.ContentHash ||
+			validateShotImageBinding(current) != nil) {
+			return errors.New("current Shot image binding has drifted")
+		}
+		if expectedBindingTargetHash != "" {
+			target, targetErr := buildShotImageBindingTarget(shot, current)
+			if targetErr != nil {
+				return targetErr
+			}
+			if target.ExpectedCurrentRevision != command.ExpectedCurrentRevision ||
+				target.ContentHash != expectedBindingTargetHash {
+				return conflict("Shot image binding target has changed")
+			}
 		}
 		revision := command.ExpectedCurrentRevision + 1
 		contentHash, hashErr := shotImageBindingContentHash(shot, selection, revision)
@@ -212,6 +303,92 @@ func (service *ShotImageBindingService) BindSelectedImage(
 		return nil
 	})
 	return result, normalizeShotImageBindingError(err)
+}
+
+func shotImageBindingInputHash(
+	actorID string,
+	shot domain.Shot,
+	selection SelectedImageSnapshot,
+	expectedCurrentRevision int,
+	expectedBindingTargetHash string,
+) (string, error) {
+	if expectedBindingTargetHash == "" {
+		return platformcommand.InputHash(struct {
+			ActorID                 string
+			ShotID                  string
+			ShotRevision            int
+			ShotContentHash         string
+			Selection               SelectedImageSnapshot
+			ExpectedCurrentRevision int
+		}{actorID, shot.ID, shot.Revision, shot.ContentHash, selection, expectedCurrentRevision})
+	}
+	return platformcommand.InputHash(struct {
+		SchemaVersion             string
+		ActorID                   string
+		ShotID                    string
+		ShotRevision              int
+		ShotContentHash           string
+		Selection                 SelectedImageSnapshot
+		ExpectedCurrentRevision   int
+		ExpectedBindingTargetHash string
+	}{
+		"shot-image-binding-command-v2", actorID, shot.ID, shot.Revision, shot.ContentHash, selection,
+		expectedCurrentRevision, expectedBindingTargetHash,
+	})
+}
+
+func buildShotImageBindingTarget(
+	shot domain.Shot,
+	current domain.ShotImageBindingVersion,
+) (ShotImageBindingTarget, error) {
+	target := ShotImageBindingTarget{Shot: shot}
+	if current.ID != "" {
+		target.ExpectedCurrentRevision = current.Revision
+		target.CurrentBindingID = current.ID
+		target.CurrentBindingContentHash = current.ContentHash
+	}
+	contentHash, err := platformcommand.InputHash(struct {
+		SchemaVersion string
+		Shot          struct {
+			ID, ContentHash string
+			Revision        int
+		}
+		CurrentBinding struct {
+			ID, ContentHash string
+			Revision        int
+		}
+	}{
+		SchemaVersion: "shot-image-binding-target-v1",
+		Shot: struct {
+			ID, ContentHash string
+			Revision        int
+		}{shot.ID, shot.ContentHash, shot.Revision},
+		CurrentBinding: struct {
+			ID, ContentHash string
+			Revision        int
+		}{target.CurrentBindingID, target.CurrentBindingContentHash, target.ExpectedCurrentRevision},
+	})
+	if err != nil {
+		return ShotImageBindingTarget{}, err
+	}
+	target.ContentHash = contentHash
+	return target, nil
+}
+
+func validateActiveShotImageTarget(shot domain.Shot, expectedID string) error {
+	for _, identifier := range []string{
+		shot.ID, shot.WorkspaceID, shot.ProjectID, shot.EpisodeID, shot.BatchID, shot.CreatedBy,
+	} {
+		if !validBindingUUID(identifier) {
+			return errors.New("active Shot contains an invalid identifier")
+		}
+	}
+	if shot.ID != expectedID || shot.Status != "active" || shot.Position < 1 || shot.Revision < 1 ||
+		strings.TrimSpace(shot.ProposalKey) == "" || strings.TrimSpace(shot.Title) == "" ||
+		!validBindingHash(shot.ContentHash) || shot.CreatedAt.IsZero() {
+		return errors.New("active Shot snapshot has drifted")
+	}
+	return nil
 }
 
 func (service *ShotImageBindingService) RequireCurrentShotImage(

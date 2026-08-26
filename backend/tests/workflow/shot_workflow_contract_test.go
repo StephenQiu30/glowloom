@@ -20,14 +20,14 @@ func TestSystemShotCatalogCompilesOnlyToDedicatedTemporalWorkflow(t *testing.T) 
 	if err != nil {
 		t.Fatalf("build system Shot catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.shot" || catalog.Version != "1.0.0" || len(catalog.Definitions) != 4 {
+	if catalog.Key != "lanverse.shot" || catalog.Version != "2.0.0" || len(catalog.Definitions) != 4 {
 		t.Fatalf("unexpected system Shot catalog identity: %#v", catalog)
 	}
 	wantDefinitions := []string{
 		"human.generation_image_review@1.0.0",
 		"input.generation_candidate_set@1.0.0",
-		"input.production_shot@1.0.0",
-		"production.shot_image_binding@1.0.0",
+		"input.production_shot@2.0.0",
+		"production.shot_image_binding@2.0.0",
 	}
 	observedDefinitions := make([]string, len(catalog.Definitions))
 	for index, definition := range catalog.Definitions {
@@ -43,16 +43,17 @@ func TestSystemShotCatalogCompilesOnlyToDedicatedTemporalWorkflow(t *testing.T) 
 	shotID, providerJobID := uuid.NewString(), uuid.NewString()
 	graph := authoring.Graph{
 		Nodes: []authoring.Node{
-			{ID: "shot", DefinitionKey: "input.production_shot", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"shot_id":"` + shotID + `"}`)},
+			{ID: "shot", DefinitionKey: "input.production_shot", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{"shot_id":"` + shotID + `"}`)},
 			{ID: "candidates", DefinitionKey: "input.generation_candidate_set", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"provider_job_id":"` + providerJobID + `"}`)},
 			{ID: "image-review", DefinitionKey: "human.generation_image_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
-			{ID: "bind-image", DefinitionKey: "production.shot_image_binding", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"expected_current_revision":0}`)},
+			{ID: "bind-image", DefinitionKey: "production.shot_image_binding", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "shot-candidates", FromNodeID: "shot", FromPort: "shot", ToNodeID: "candidates", ToPort: "shot"},
 			{ID: "candidate-review", FromNodeID: "candidates", FromPort: "candidates", ToNodeID: "image-review", ToPort: "candidates"},
 			{ID: "review-binding", FromNodeID: "image-review", FromPort: "selection", ToNodeID: "bind-image", ToPort: "selection"},
 			{ID: "shot-binding", FromNodeID: "shot", FromPort: "shot", ToNodeID: "bind-image", ToPort: "shot"},
+			{ID: "target-binding", FromNodeID: "shot", FromPort: "binding_target", ToNodeID: "bind-image", ToPort: "binding_target"},
 		},
 	}
 	revision := compilerRevision(t, catalog, "GUIDED", graph, json.RawMessage(`{"guided":{"step":"shot-image"}}`), authoring.FrozenReference{

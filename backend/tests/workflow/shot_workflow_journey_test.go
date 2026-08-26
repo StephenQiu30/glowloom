@@ -93,15 +93,16 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 		ProjectID: fixture.projectID.String(), AuthoringMode: "GUIDED",
 		Graph: authoring.Graph{
 			Nodes: []authoring.Node{
-				{ID: "shot", DefinitionKey: "input.production_shot", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"shot_id":"` + shotID.String() + `"}`)},
+				{ID: "shot", DefinitionKey: "input.production_shot", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{"shot_id":"` + shotID.String() + `"}`)},
 				{ID: "candidates", DefinitionKey: "input.generation_candidate_set", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"provider_job_id":"` + set.ID + `"}`)},
 				{ID: "image-review", DefinitionKey: "human.generation_image_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
-				{ID: "bind-image", DefinitionKey: "production.shot_image_binding", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"expected_current_revision":0}`)},
+				{ID: "bind-image", DefinitionKey: "production.shot_image_binding", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "shot-candidates", FromNodeID: "shot", FromPort: "shot", ToNodeID: "candidates", ToPort: "shot"},
 				{ID: "candidate-review", FromNodeID: "candidates", FromPort: "candidates", ToNodeID: "image-review", ToPort: "candidates"},
 				{ID: "shot-binding", FromNodeID: "shot", FromPort: "shot", ToNodeID: "bind-image", ToPort: "shot"},
+				{ID: "target-binding", FromNodeID: "shot", FromPort: "binding_target", ToNodeID: "bind-image", ToPort: "binding_target"},
 				{ID: "review-binding", FromNodeID: "image-review", FromPort: "selection", ToNodeID: "bind-image", ToPort: "selection"},
 			},
 		},
@@ -257,6 +258,72 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 	}, countRecords, fixture, started.ID, shotID, binding.ID)
 	replayFormalShotWorkflowHistory(t, ctx, temporalAddress, started.TemporalWorkflowID)
 
+	rerunCommand := workflowapp.RerunCommand{
+		SourceWorkflowRunID: started.ID, RootNodeID: "shot", IdempotencyKey: "formal-shot-rerun",
+	}
+	rerun, err := startService.Rerun(ctx, workflowActor, rerunCommand)
+	if err != nil || rerun.Status != "RUNNING" || rerun.SourceWorkflowRunID == nil ||
+		*rerun.SourceWorkflowRunID != started.ID || rerun.RerunRootNodeID == nil || *rerun.RerunRootNodeID != "shot" ||
+		rerun.DefinitionVersionID != started.DefinitionVersionID || rerun.RunInputSnapshotID != started.RunInputSnapshotID {
+		t.Fatalf("start formal single Shot rerun: run=%#v err=%v", rerun, err)
+	}
+	replayedRerun, err := startService.Rerun(ctx, workflowActor, rerunCommand)
+	if err != nil || replayedRerun.ID != rerun.ID || replayedRerun.TemporalWorkflowID != rerun.TemporalWorkflowID {
+		t.Fatalf("replay formal single Shot rerun command: run=%#v err=%v", replayedRerun, err)
+	}
+	rerunTask := waitForShotWorkflowTask(t, ctx, func(value *model.HumanTask) error {
+		return database.WithContext(ctx).Where("workflow_run_id = ?", rerun.ID).First(value).Error
+	})
+	rerunClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: rerunTask.ID.String(), ExpectedRevision: rerunTask.Revision, IdempotencyKey: "formal-shot-rerun-review-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim formal single Shot rerun review: %v", err)
+	}
+	rerunDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: rerunTask.ID.String(), ClaimToken: rerunClaim.ClaimToken, ExpectedTaskRevision: rerunClaim.Task.Revision,
+		ExpectedSubjectRevision: rerunClaim.Task.SubjectRevision, Decision: "selected",
+		SelectedCandidateID: set.Candidates[0].ID, IdempotencyKey: "formal-shot-rerun-review-select",
+	})
+	if err != nil {
+		t.Fatalf("select replacement image for formal single Shot rerun: %v", err)
+	}
+	rerunSignal, err := signals.SignalHumanGate(ctx, workflowActor, workflowapp.SignalHumanGateCommand{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: rerun.ID, NodeRunID: rerunTask.NodeRunID.String(),
+		HumanTaskID: rerunTask.ID.String(), ReviewDecisionID: rerunDecision.Decision.ID,
+		SubjectRevision: rerunDecision.Decision.SubjectRevision, Decision: "selected",
+		IdempotencyKey: "formal-shot-rerun-signal",
+	})
+	if err != nil || rerunSignal.Status != "completed" {
+		t.Fatalf("signal formal single Shot rerun selection: signal=%#v err=%v", rerunSignal, err)
+	}
+	waitForShotWorkflowStatus(t, ctx, func(value *model.WorkflowRun) error {
+		return database.WithContext(ctx).First(value, "id = ?", rerun.ID).Error
+	}, "SUCCEEDED")
+	var replacementBinding model.StoryboardShotImageBindingVersion
+	if err = database.Where("shot_id = ?", shotID).Order("binding_revision DESC").First(&replacementBinding).Error; err != nil ||
+		replacementBinding.BindingRevision != 2 || replacementBinding.CandidateID.String() != set.Candidates[0].ID {
+		t.Fatalf("formal single Shot rerun replacement binding drifted: binding=%#v err=%v", replacementBinding, err)
+	}
+	current, err = imageBindings.RequireCurrentShotImage(ctx, storyboardapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, shotID.String())
+	if err != nil || current.ID != replacementBinding.ID.String() || current.Revision != 2 {
+		t.Fatalf("read formal single Shot rerun current binding: current=%#v err=%v", current, err)
+	}
+	assertFormalShotRerunFacts(
+		t,
+		func(value *model.WorkflowRun) error { return database.First(value, "id = ?", started.ID).Error },
+		func(value *[]model.NodeRunProjection) error {
+			return database.Where("workflow_run_id = ?", rerun.ID).Find(value).Error
+		},
+		countRecords,
+		started,
+		rerun,
+		replacementBinding.ID,
+	)
+	replayFormalShotWorkflowHistory(t, ctx, temporalAddress, rerun.TemporalWorkflowID)
+
 	if err = database.Model(&model.StoryboardShot{}).Where("id = ?", shotID).Update("status", "archived").Error; err != nil {
 		t.Fatalf("archive formal Shot before failure journey: %v", err)
 	}
@@ -276,7 +343,7 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 	if err = database.Model(&model.StoryboardShotImageBindingVersion{}).Where("shot_id = ?", shotID).Count(&bindingCount).Error; err != nil {
 		t.Fatalf("count formal Shot image bindings after failure: %v", err)
 	}
-	if failedTaskCount != 0 || bindingCount != 1 {
+	if failedTaskCount != 0 || bindingCount != 2 {
 		t.Fatalf("archived Shot crossed source boundary: tasks=%d bindings=%d", failedTaskCount, bindingCount)
 	}
 	if err = database.Model(&model.StoryboardShot{}).Where("id = ?", shotID).Update("status", "active").Error; err != nil {
@@ -289,6 +356,77 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 		UserID: fixture.userID.String(), TokenVersion: 1,
 	}, shotID.String()); err == nil {
 		t.Fatal("revoked actor reloaded formal active Shot")
+	}
+}
+
+func assertFormalShotRerunFacts(
+	t *testing.T,
+	loadSource func(*model.WorkflowRun) error,
+	loadNodes func(*[]model.NodeRunProjection) error,
+	countRecords func(any, string, ...any) (int64, error),
+	source, rerun workflow.WorkflowRun,
+	bindingID uuid.UUID,
+) {
+	t.Helper()
+	var sourceRecord model.WorkflowRun
+	if err := loadSource(&sourceRecord); err != nil || sourceRecord.Status != "SUCCEEDED" ||
+		sourceRecord.SourceWorkflowRunID != nil || sourceRecord.RerunRootNodeID != nil {
+		t.Fatalf("formal single Shot rerun changed source run: run=%#v err=%v", sourceRecord, err)
+	}
+	var nodes []model.NodeRunProjection
+	if err := loadNodes(&nodes); err != nil {
+		t.Fatalf("load formal single Shot rerun projections: %v", err)
+	}
+	statuses := make(map[string]string, len(nodes))
+	var shotNode, bindingNode model.NodeRunProjection
+	for _, node := range nodes {
+		statuses[node.NodeID] = node.Status
+		if node.ReusedFromNodeRunID != nil {
+			t.Fatalf("single Shot root rerun unexpectedly reused node %s from %s", node.NodeID, node.ReusedFromNodeRunID)
+		}
+		switch node.NodeID {
+		case "shot":
+			shotNode = node
+		case "bind-image":
+			bindingNode = node
+		}
+	}
+	if len(nodes) != 4 || statuses["shot"] != "SUCCEEDED" || statuses["candidates"] != "SUCCEEDED" ||
+		statuses["image-review"] != "SUCCEEDED" || statuses["bind-image"] != "SUCCEEDED" {
+		t.Fatalf("formal single Shot rerun projections drifted: %v", statuses)
+	}
+	shotOutput, _, shotOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(shotNode.Output))
+	if err != nil || shotNode.OutputHash == nil || *shotNode.OutputHash != shotOutputHash {
+		t.Fatalf("parse formal single Shot rerun source output: output=%#v node=%#v err=%v", shotOutput, shotNode, err)
+	}
+	shotBindings := make(map[string]workflow.NodeOutputBinding, len(shotOutput.Bindings))
+	for _, binding := range shotOutput.Bindings {
+		shotBindings[binding.Port] = binding
+	}
+	if len(shotBindings) != 2 || shotBindings["binding_target"].ReferenceVersion != "2" ||
+		shotBindings["binding_target"].ReferenceID != shotBindings["shot"].ReferenceID {
+		t.Fatalf("formal single Shot rerun did not freeze replacement target: %#v", shotBindings)
+	}
+	bindingOutput, _, bindingOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(bindingNode.Output))
+	if err != nil || bindingNode.OutputHash == nil || *bindingNode.OutputHash != bindingOutputHash ||
+		len(bindingOutput.Bindings) != 1 || bindingOutput.Bindings[0].ReferenceID != bindingID.String() ||
+		bindingOutput.Bindings[0].ReferenceVersion != "2" {
+		t.Fatalf("formal single Shot rerun binding output drifted: output=%#v node=%#v err=%v", bindingOutput, bindingNode, err)
+	}
+	checks := []struct {
+		name  string
+		value any
+	}{
+		{"HumanTask", &model.HumanTask{}},
+		{"CandidateSelection", &model.GenerationCandidateSelection{}},
+		{"SignalIntent", &model.WorkflowSignalIntent{}},
+		{"SignalReceipt", &model.WorkflowSignalReceipt{}},
+	}
+	for _, check := range checks {
+		count, countErr := countRecords(check.value, "workflow_run_id = ?", rerun.ID)
+		if countErr != nil || count != 1 {
+			t.Fatalf("formal single Shot rerun %s facts=%d err=%v", check.name, count, countErr)
+		}
 	}
 }
 

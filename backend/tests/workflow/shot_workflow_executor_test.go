@@ -37,10 +37,29 @@ func (owner *shotWorkflowOwner) RequireActiveShot(
 	return owner.shot, owner.loadErr
 }
 
+func (owner *shotWorkflowOwner) RequireShotImageBindingTarget(
+	_ context.Context,
+	actor storyboardapp.Actor,
+	shotID string,
+) (storyboardapp.ShotImageBindingTarget, error) {
+	owner.actor, owner.shotID = actor, shotID
+	return storyboardapp.ShotImageBindingTarget{
+		Shot: owner.shot, ExpectedCurrentRevision: 0, ContentHash: strings.Repeat("f", 64),
+	}, owner.loadErr
+}
+
 func (*shotWorkflowOwner) BindSelectedImage(
 	context.Context,
 	storyboardapp.Actor,
 	storyboardapp.BindSelectedImageCommand,
+) (storyboardapp.BindSelectedImageResult, error) {
+	return storyboardapp.BindSelectedImageResult{}, errors.New("not used")
+}
+
+func (*shotWorkflowOwner) BindSelectedImageAtTarget(
+	context.Context,
+	storyboardapp.Actor,
+	storyboardapp.BindSelectedImageAtTargetCommand,
 ) (storyboardapp.BindSelectedImageResult, error) {
 	return storyboardapp.BindSelectedImageResult{}, errors.New("not used")
 }
@@ -88,13 +107,23 @@ func TestShotWorkflowSourceExecutorsRouteOnlyToOwningApplications(t *testing.T) 
 
 	shotResult := executeShotSource(t, executor, workflow.NodeExecutorCommand{
 		NodeActivityCommand: workflow.NodeActivityCommand{
-			WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(), NodeID: "shot", Executor: "workflow.input.production_shot", Attempt: 1,
+			WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(), NodeID: "shot", Executor: "workflow.input.production_shot_binding_target", Attempt: 1,
 		},
 		WorkspaceID: workspaceID, ProjectID: projectID, InitiatorUserID: userID, InitiatorTokenVersion: 3,
-		IdempotencyKey: "shot-source", OutputPorts: []authoring.PortDefinition{{Key: "shot", ValueType: "production_shot", Required: true}},
+		IdempotencyKey: "shot-source", OutputPorts: []authoring.PortDefinition{
+			{Key: "shot", ValueType: "production_shot", Required: true},
+			{Key: "binding_target", ValueType: "production_shot_image_binding_target", Required: true},
+		},
 	}, json.RawMessage(`{"shot_id":"`+shotID+`"}`))
-	if len(shotResult.Output.Bindings) != 1 || shotResult.Output.Bindings[0].ReferenceID != shotID ||
-		shotResult.Output.Bindings[0].ReferenceVersion != "2" || shotResult.Output.Bindings[0].ContentHash != shotHash {
+	shotOutputs := make(map[string]workflow.NodeOutputBinding, len(shotResult.Output.Bindings))
+	for _, binding := range shotResult.Output.Bindings {
+		shotOutputs[binding.Port] = binding
+	}
+	if len(shotOutputs) != 2 || shotOutputs["shot"].ReferenceID != shotID ||
+		shotOutputs["shot"].ReferenceVersion != "2" || shotOutputs["shot"].ContentHash != shotHash ||
+		shotOutputs["binding_target"].ReferenceID != shotID ||
+		shotOutputs["binding_target"].ReferenceVersion != "1" ||
+		shotOutputs["binding_target"].ContentHash != strings.Repeat("f", 64) {
 		t.Fatalf("Production Shot source output drifted: %#v", shotResult)
 	}
 	if owner.actor.UserID != userID || owner.actor.TokenVersion != 3 || owner.shotID != shotID {
@@ -119,10 +148,13 @@ func TestShotWorkflowSourceExecutorsRouteOnlyToOwningApplications(t *testing.T) 
 	owner.shot.ProjectID = uuid.NewString()
 	if _, err = executeShotSourceError(executor, workflow.NodeExecutorCommand{
 		NodeActivityCommand: workflow.NodeActivityCommand{
-			WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(), NodeID: "shot", Executor: "workflow.input.production_shot", Attempt: 1,
+			WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(), NodeID: "shot", Executor: "workflow.input.production_shot_binding_target", Attempt: 1,
 		},
 		WorkspaceID: workspaceID, ProjectID: projectID, InitiatorUserID: userID, InitiatorTokenVersion: 3,
-		IdempotencyKey: "shot-source-drift", OutputPorts: []authoring.PortDefinition{{Key: "shot", ValueType: "production_shot", Required: true}},
+		IdempotencyKey: "shot-source-drift", OutputPorts: []authoring.PortDefinition{
+			{Key: "shot", ValueType: "production_shot", Required: true},
+			{Key: "binding_target", ValueType: "production_shot_image_binding_target", Required: true},
+		},
 	}, json.RawMessage(`{"shot_id":"`+shotID+`"}`)); err == nil {
 		t.Fatal("Production Shot source accepted an Owner snapshot from another project")
 	}

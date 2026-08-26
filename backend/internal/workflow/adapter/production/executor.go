@@ -25,14 +25,16 @@ import (
 )
 
 const (
-	scriptRevisionExecutor      = "workflow.input.script_revision"
-	productionBibleExecutor     = "activity.production_bible"
-	episodePlanExecutor         = "activity.episode_plan"
-	episodeStructureExecutor    = "activity.episode_structure"
-	storyboardDraftExecutor     = "activity.storyboard_draft"
-	storyboardExportExecutor    = "activity.storyboard_export"
-	productionShotInputExecutor = "workflow.input.production_shot"
-	shotImageBindingExecutor    = "activity.production_shot_image_binding"
+	scriptRevisionExecutor         = "workflow.input.script_revision"
+	productionBibleExecutor        = "activity.production_bible"
+	episodePlanExecutor            = "activity.episode_plan"
+	episodeStructureExecutor       = "activity.episode_structure"
+	storyboardDraftExecutor        = "activity.storyboard_draft"
+	storyboardExportExecutor       = "activity.storyboard_export"
+	productionShotInputExecutor    = "workflow.input.production_shot"
+	shotImageBindingExecutor       = "activity.production_shot_image_binding"
+	productionShotTargetExecutor   = "workflow.input.production_shot_binding_target"
+	shotImageBindingTargetExecutor = "activity.production_shot_image_binding_at_target"
 )
 
 var workflowContentHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -68,7 +70,9 @@ type StoryboardWorkflowOwner interface {
 
 type ShotImageWorkflowOwner interface {
 	RequireActiveShot(context.Context, storyboardapp.Actor, string) (storyboarddomain.Shot, error)
+	RequireShotImageBindingTarget(context.Context, storyboardapp.Actor, string) (storyboardapp.ShotImageBindingTarget, error)
 	BindSelectedImage(context.Context, storyboardapp.Actor, storyboardapp.BindSelectedImageCommand) (storyboardapp.BindSelectedImageResult, error)
+	BindSelectedImageAtTarget(context.Context, storyboardapp.Actor, storyboardapp.BindSelectedImageAtTargetCommand) (storyboardapp.BindSelectedImageResult, error)
 }
 
 type NodeExecutor struct {
@@ -120,6 +124,10 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeProductionShotInput(ctx, command)
 	case shotImageBindingExecutor:
 		return executor.executeShotImageBinding(ctx, command)
+	case productionShotTargetExecutor:
+		return executor.executeProductionShotBindingTarget(ctx, command)
+	case shotImageBindingTargetExecutor:
+		return executor.executeShotImageBindingAtTarget(ctx, command)
 	default:
 		return domain.NodeExecutorResult{}, errors.New("unsupported production workflow node execution")
 	}
@@ -180,6 +188,89 @@ func (executor *NodeExecutor) executeProductionShotInput(
 	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
 }
 
+func (executor *NodeExecutor) executeProductionShotBindingTarget(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.bindings == nil {
+		return domain.NodeExecutorResult{}, errors.New("Production Shot workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 0 || len(command.OutputPorts) != 2 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production Shot binding target source contract")
+	}
+	var hasShotPort, hasTargetPort bool
+	for _, port := range command.OutputPorts {
+		switch {
+		case port.Key == "shot" && port.ValueType == "production_shot" && port.Required:
+			hasShotPort = true
+		case port.Key == "binding_target" && port.ValueType == "production_shot_image_binding_target" && port.Required:
+			hasTargetPort = true
+		default:
+			return domain.NodeExecutorResult{}, errors.New("invalid Production Shot binding target source contract")
+		}
+	}
+	if !hasShotPort || !hasTargetPort {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production Shot binding target source contract")
+	}
+	var config map[string]json.RawMessage
+	var shotID string
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 1 ||
+		json.Unmarshal(config["shot_id"], &shotID) != nil {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production Shot binding target source config")
+	}
+	shotID = strings.TrimSpace(shotID)
+	if _, parseErr := uuid.Parse(shotID); parseErr != nil {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production Shot binding target source config")
+	}
+	target, err := executor.bindings.RequireShotImageBindingTarget(ctx, storyboardapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, shotID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	shot := target.Shot
+	for _, identifier := range []string{
+		shot.ID, shot.WorkspaceID, shot.ProjectID, shot.EpisodeID, shot.BatchID, shot.CreatedBy,
+	} {
+		if _, parseErr := uuid.Parse(identifier); parseErr != nil {
+			return domain.NodeExecutorResult{}, errors.New("Production Shot binding target source returned an invalid identifier")
+		}
+	}
+	if shot.ID != shotID || shot.WorkspaceID != command.WorkspaceID || shot.ProjectID != command.ProjectID ||
+		shot.Status != "active" || shot.Position < 1 || shot.Revision < 1 ||
+		strings.TrimSpace(shot.ProposalKey) == "" || strings.TrimSpace(shot.Title) == "" ||
+		!workflowContentHashPattern.MatchString(shot.ContentHash) || shot.CreatedAt.IsZero() ||
+		target.ExpectedCurrentRevision < 0 || !workflowContentHashPattern.MatchString(target.ContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Production Shot binding target source has drifted")
+	}
+	if target.ExpectedCurrentRevision == 0 {
+		if target.CurrentBindingID != "" || target.CurrentBindingContentHash != "" {
+			return domain.NodeExecutorResult{}, errors.New("Production Shot binding target source has drifted")
+		}
+	} else if _, parseErr := uuid.Parse(target.CurrentBindingID); parseErr != nil ||
+		!workflowContentHashPattern.MatchString(target.CurrentBindingContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Production Shot binding target source has drifted")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{
+			{
+				Port: "shot", ValueType: "production_shot", ReferenceID: shot.ID,
+				ReferenceVersion: strconv.Itoa(shot.Revision), ContentHash: shot.ContentHash,
+			},
+			{
+				Port: "binding_target", ValueType: "production_shot_image_binding_target", ReferenceID: shot.ID,
+				ReferenceVersion: strconv.Itoa(target.ExpectedCurrentRevision + 1), ContentHash: target.ContentHash,
+			},
+		},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
 func (executor *NodeExecutor) executeShotImageBinding(
 	ctx context.Context,
 	command domain.NodeExecutorCommand,
@@ -233,6 +324,79 @@ func (executor *NodeExecutor) executeShotImageBinding(
 		result.Receipt.Operation != "storyboard.shot.bind_selected_image" ||
 		result.Receipt.ResourceID != binding.ID || result.Receipt.CreatedBy != command.InitiatorUserID {
 		return domain.NodeExecutorResult{}, errors.New("Shot image binding does not match workflow input")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "binding", ValueType: "production_shot_image_binding", ReferenceID: binding.ID,
+			ReferenceVersion: strconv.Itoa(binding.Revision), ContentHash: binding.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeShotImageBindingAtTarget(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.bindings == nil {
+		return domain.NodeExecutorResult{}, errors.New("Shot image binding workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 3 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "binding" ||
+		command.OutputPorts[0].ValueType != "production_shot_image_binding" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Shot image binding target node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Shot image binding target node config")
+	}
+	bindings := make(map[string]domain.NodeInputBinding, len(input.Bindings))
+	for _, binding := range input.Bindings {
+		bindings[binding.Port] = binding
+	}
+	shot, selection, target := bindings["shot"], bindings["selection"], bindings["binding_target"]
+	shotRevision, shotRevisionErr := strconv.Atoi(shot.ReferenceVersion)
+	selectionRevision, selectionRevisionErr := strconv.Atoi(selection.ReferenceVersion)
+	targetRevision, targetRevisionErr := strconv.Atoi(target.ReferenceVersion)
+	if shotRevisionErr != nil || shotRevision < 1 || selectionRevisionErr != nil || selectionRevision != 1 ||
+		targetRevisionErr != nil || targetRevision < 1 ||
+		shot.ValueType != "production_shot" || selection.ValueType != "generation_candidate_selection" ||
+		target.ValueType != "production_shot_image_binding_target" || target.ReferenceID != shot.ReferenceID ||
+		shot.SourceKind != domain.NodeInputSourceNodeOutput || selection.SourceKind != domain.NodeInputSourceNodeOutput ||
+		target.SourceKind != domain.NodeInputSourceNodeOutput || shot.SourceNodeID == "" || selection.SourceNodeID == "" ||
+		target.SourceNodeID == "" || target.SourceNodeID != shot.SourceNodeID || shot.SourcePort != "shot" ||
+		target.SourcePort != "binding_target" || selection.SourcePort == "" ||
+		!workflowContentHashPattern.MatchString(shot.ContentHash) ||
+		!workflowContentHashPattern.MatchString(selection.ContentHash) ||
+		!workflowContentHashPattern.MatchString(target.ContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Shot image binding target inputs have drifted")
+	}
+	result, err := executor.bindings.BindSelectedImageAtTarget(ctx, storyboardapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, storyboardapp.BindSelectedImageAtTargetCommand{
+		ShotID: shot.ReferenceID, ExpectedShotRevision: shotRevision,
+		ExpectedShotContentHash: shot.ContentHash, CandidateSelectionID: selection.ReferenceID,
+		ExpectedCurrentRevision: targetRevision - 1, ExpectedBindingTargetHash: target.ContentHash,
+		IdempotencyKey: command.IdempotencyKey,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	binding := result.Binding
+	if binding.WorkspaceID != command.WorkspaceID || binding.ProjectID != command.ProjectID ||
+		binding.ShotID != shot.ReferenceID || binding.ShotRevision != shotRevision ||
+		binding.ShotContentHash != shot.ContentHash || binding.CandidateSelectionID != selection.ReferenceID ||
+		binding.CandidateSelectionRevision != selectionRevision ||
+		binding.CandidateSelectionContentHash != selection.ContentHash || binding.Revision != targetRevision ||
+		!workflowContentHashPattern.MatchString(binding.ContentHash) || binding.CreatedBy != command.InitiatorUserID ||
+		result.Receipt.Operation != "storyboard.shot.bind_selected_image" ||
+		result.Receipt.ResourceID != binding.ID || result.Receipt.CreatedBy != command.InitiatorUserID {
+		return domain.NodeExecutorResult{}, errors.New("Shot image binding does not match frozen target input")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,

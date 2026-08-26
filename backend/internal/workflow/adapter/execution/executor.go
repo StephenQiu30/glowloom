@@ -37,7 +37,9 @@ func (executor *NodeExecutor) Execute(
 		"activity.storyboard_draft",
 		"activity.storyboard_export",
 		"workflow.input.production_shot",
-		"activity.production_shot_image_binding":
+		"activity.production_shot_image_binding",
+		"workflow.input.production_shot_binding_target",
+		"activity.production_shot_image_binding_at_target":
 		return executor.production.Execute(ctx, command)
 	default:
 		return domain.NodeExecutorResult{}, errors.New("unsupported Workflow node owner")

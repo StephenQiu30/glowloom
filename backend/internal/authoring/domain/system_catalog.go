@@ -50,12 +50,15 @@ func SystemCatalog() (Catalog, error) {
 }
 
 func SystemShotCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.shot", "1.0.0", []NodeDefinition{
-		systemNodeDefinition(
-			"input.production_shot", "Production Shot", "input", "workflow.input.production_shot", "never", "low",
-			nil, []PortDefinition{requiredPort("shot", "production_shot")},
+	return NewCatalog("lanverse.shot", "2.0.0", []NodeDefinition{
+		versionedSystemNode("2.0.0", systemNodeDefinition(
+			"input.production_shot", "Production Shot", "input", "workflow.input.production_shot_binding_target", "never", "low",
+			nil, []PortDefinition{
+				requiredPort("shot", "production_shot"),
+				requiredPort("binding_target", "production_shot_image_binding_target"),
+			},
 			json.RawMessage(`{"type":"object","properties":{"shot_id":{"type":"string","format":"uuid"}},"required":["shot_id"],"additionalProperties":false}`),
-		),
+		)),
 		systemNodeDefinition(
 			"input.generation_candidate_set", "Generation Candidate Set", "input", "workflow.input.generation_candidate_set", "never", "low",
 			[]PortDefinition{requiredPort("shot", "production_shot")}, []PortDefinition{requiredPort("candidates", "generation_candidate_set")},
@@ -66,12 +69,16 @@ func SystemShotCatalog() (Catalog, error) {
 			[]PortDefinition{requiredPort("candidates", "generation_candidate_set")},
 			[]PortDefinition{requiredPort("selection", "generation_candidate_selection")}, emptyNodeConfig(),
 		),
-		systemNodeDefinition(
-			"production.shot_image_binding", "Shot Image Binding", "production", "activity.production_shot_image_binding", "never", "low",
-			[]PortDefinition{requiredPort("shot", "production_shot"), requiredPort("selection", "generation_candidate_selection")},
+		versionedSystemNode("2.0.0", systemNodeDefinition(
+			"production.shot_image_binding", "Shot Image Binding", "production", "activity.production_shot_image_binding_at_target", "never", "low",
+			[]PortDefinition{
+				requiredPort("shot", "production_shot"),
+				requiredPort("selection", "generation_candidate_selection"),
+				requiredPort("binding_target", "production_shot_image_binding_target"),
+			},
 			[]PortDefinition{requiredPort("binding", "production_shot_image_binding")},
-			json.RawMessage(`{"type":"object","properties":{"expected_current_revision":{"type":"integer","minimum":0}},"required":["expected_current_revision"],"additionalProperties":false}`),
-		),
+			emptyNodeConfig(),
+		)),
 	})
 }
 
