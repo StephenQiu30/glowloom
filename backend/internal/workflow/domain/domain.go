@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
@@ -75,11 +76,20 @@ type CompiledFacts struct {
 	CreatedAt time.Time
 }
 
-func SystemCompilerContract() CompilerContract {
-	return CompilerContract{
-		CompilerVersion: "1.0.0", WorkflowType: "lanverse.episode-production",
-		WorkflowTypeVersion: "1.0.0", RuntimeContractVersion: "1.0.0",
+func SystemCompilerContract(catalogKey string) (CompilerContract, error) {
+	workflowType := ""
+	switch catalogKey {
+	case "lanverse.production":
+		workflowType = "lanverse.episode-production"
+	case "lanverse.shot":
+		workflowType = "lanverse.shot-production"
+	default:
+		return CompilerContract{}, errors.New("node catalog is not bound to a system Workflow type")
 	}
+	return CompilerContract{
+		CompilerVersion: "1.0.0", WorkflowType: workflowType,
+		WorkflowTypeVersion: "1.0.0", RuntimeContractVersion: "1.0.0",
+	}, nil
 }
 
 type definitionHashInput struct {

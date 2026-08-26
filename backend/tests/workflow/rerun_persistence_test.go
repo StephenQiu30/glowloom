@@ -70,8 +70,7 @@ func TestWorkflowRerunDerivesDirtyClosureAndReusesCanonicalUpstreamProjection(t 
 
 	workflowStore := workflowgorm.New(database)
 	compiler := workflowapp.NewService(
-		workflowauthoring.New(authoringService), workflowStore, workflow.SystemCompilerContract(),
-		workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
+		workflowauthoring.New(authoringService), workflowStore, workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 	)
 	starter := &scriptedWorkflowStarter{outcomes: []string{"started", "started"}}
 	startService := workflowapp.NewStartService(compiler, workflowStore, starter, workflowapp.StartConfig{

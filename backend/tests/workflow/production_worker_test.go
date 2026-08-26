@@ -86,8 +86,7 @@ func TestProductionWorkflowWorkerExecutesAuthorizedScriptWorkflow(t *testing.T) 
 
 	workflowStore := workflowgorm.New(database)
 	compiler := workflowapp.NewService(
-		workflowauthoring.New(authoringService), workflowStore, workflow.SystemCompilerContract(),
-		workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
+		workflowauthoring.New(authoringService), workflowStore, workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 	)
 	temporalRuntime, err := workflowtemporal.New(workflowtemporal.Config{
 		Address: temporalAddress, Namespace: "default", TaskQueue: "lanverse-production-worker-test-" + uuid.NewString(),

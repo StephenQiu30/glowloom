@@ -10,6 +10,8 @@ import (
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	workflowexecution "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/execution"
+	workflowgeneration "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/generation"
 	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
 	workflowreview "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/review"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
@@ -33,7 +35,7 @@ func NewWorkflowRuntime(
 	plans *planningapp.Service,
 	storyboards *storyboardapp.Service,
 	reviews *reviewapp.Service,
-	bindings workflowproduction.ShotImageBindingOwner,
+	bindings workflowproduction.ShotImageWorkflowOwner,
 	candidateSets workflowreview.CandidateSetSource,
 ) (*workflowapp.RuntimeService, error) {
 	if repository == nil || scripts == nil || bibles == nil || projects == nil || plans == nil || storyboards == nil || reviews == nil {
@@ -44,9 +46,19 @@ func NewWorkflowRuntime(
 	if candidateSets != nil {
 		humanTasks = workflowreview.NewWithGeneration(reviews, candidateSets)
 	}
+	executor := workflowapp.NodeExecutor(
+		workflowproduction.NewNodeExecutor(scripts, bibles, projects, plans, storyboards, bindings),
+	)
+	if candidateSets != nil {
+		var err error
+		executor, err = workflowexecution.NewNodeExecutor(executor, workflowgeneration.NewNodeExecutor(candidateSets))
+		if err != nil {
+			return nil, err
+		}
+	}
 	return workflowapp.NewRuntimeService(repository, workflowapp.RuntimeConfig{
 		Now: now, NewID: uuid.NewString,
-		Executor:   workflowproduction.NewNodeExecutor(scripts, bibles, projects, plans, storyboards, bindings),
+		Executor:   executor,
 		HumanTasks: humanTasks,
 	}), nil
 }

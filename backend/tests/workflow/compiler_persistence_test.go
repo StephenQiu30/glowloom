@@ -79,8 +79,7 @@ func TestCompilerPersistsOneImmutableDefinitionAndRunInputSnapshot(t *testing.T)
 	workflowStore := workflowgorm.New(database)
 	workflowNow := now.Add(time.Minute)
 	service := workflowapp.NewService(
-		workflowauthoring.New(authoringService), workflowStore, workflow.SystemCompilerContract(),
-		workflowapp.Config{
+		workflowauthoring.New(authoringService), workflowStore, workflowapp.Config{
 			Now:   func() time.Time { return workflowNow },
 			NewID: uuid.NewString,
 		},

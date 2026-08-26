@@ -56,7 +56,6 @@ type Config struct {
 type Service struct {
 	source       RevisionSource
 	transactions TransactionManager
-	contract     domain.CompilerContract
 	config       Config
 }
 
@@ -70,8 +69,8 @@ type compilationReceipt struct {
 	RunInputSnapshotID string `json:"run_input_snapshot_id"`
 }
 
-func NewService(source RevisionSource, transactions TransactionManager, contract domain.CompilerContract, config Config) *Service {
-	return &Service{source: source, transactions: transactions, contract: contract, config: config}
+func NewService(source RevisionSource, transactions TransactionManager, config Config) *Service {
+	return &Service{source: source, transactions: transactions, config: config}
 }
 
 func (service *Service) Compile(ctx context.Context, actor Actor, command CompileCommand) (domain.CompiledFacts, error) {
@@ -85,7 +84,11 @@ func (service *Service) Compile(ctx context.Context, actor Actor, command Compil
 	if err != nil {
 		return domain.CompiledFacts{}, normalizeError(err)
 	}
-	compilation, err := domain.Compile(source, service.contract)
+	contract, err := domain.SystemCompilerContract(source.Catalog.Key)
+	if err != nil {
+		return domain.CompiledFacts{}, invalid(err.Error())
+	}
+	compilation, err := domain.Compile(source, contract)
 	if err != nil {
 		return domain.CompiledFacts{}, invalid(err.Error())
 	}

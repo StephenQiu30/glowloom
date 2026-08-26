@@ -73,6 +73,40 @@ func NewShotImageBindingService(
 	return &ShotImageBindingService{transactions: transactions, selections: selections, config: config}
 }
 
+func (service *ShotImageBindingService) RequireActiveShot(
+	ctx context.Context,
+	actor Actor,
+	shotID string,
+) (domain.Shot, error) {
+	actor.UserID, shotID = strings.TrimSpace(actor.UserID), strings.TrimSpace(shotID)
+	if service == nil || service.transactions == nil || actor.TokenVersion < 1 ||
+		!validBindingUUID(actor.UserID) || !validBindingUUID(shotID) {
+		return domain.Shot{}, ErrNotFound
+	}
+	var shot domain.Shot
+	err := service.transactions.WithinShotImageBindingTransaction(ctx, func(repo ShotImageBindingRepository) error {
+		var loadErr error
+		shot, loadErr = repo.LockShotImageTarget(ctx, actor, shotID, false)
+		if loadErr != nil {
+			return loadErr
+		}
+		for _, identifier := range []string{
+			shot.ID, shot.WorkspaceID, shot.ProjectID, shot.EpisodeID, shot.BatchID, shot.CreatedBy,
+		} {
+			if !validBindingUUID(identifier) {
+				return errors.New("active Shot contains an invalid identifier")
+			}
+		}
+		if shot.ID != shotID || shot.Status != "active" || shot.Position < 1 || shot.Revision < 1 ||
+			strings.TrimSpace(shot.ProposalKey) == "" || strings.TrimSpace(shot.Title) == "" ||
+			!validBindingHash(shot.ContentHash) || shot.CreatedAt.IsZero() {
+			return errors.New("active Shot snapshot has drifted")
+		}
+		return nil
+	})
+	return shot, normalizeError(err)
+}
+
 func (service *ShotImageBindingService) BindSelectedImage(
 	ctx context.Context,
 	actor Actor,

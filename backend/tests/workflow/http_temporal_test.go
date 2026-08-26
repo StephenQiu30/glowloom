@@ -29,7 +29,6 @@ import (
 	workflowhttp "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/httpapi"
 	temporaladapter "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
-	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
 func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.T) {
@@ -64,7 +63,7 @@ func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.
 		ProjectID: fixture.projectID.String(), AuthoringMode: "GUIDED", Graph: rerunTemporalGraph(),
 		Layout: json.RawMessage(`{"guided":{"step":1}}`), FrozenInputs: []authoring.FrozenReference{{
 			Kind: "script_revision", ID: fixture.scriptRevisionID.String(), Version: "1", Hash: fixture.normalizedHash,
-		}}, CatalogKey: "lanverse.rerun-test", CatalogVersion: "1.0.0", IdempotencyKey: "http-authoring-create",
+		}}, CatalogKey: "lanverse.production", CatalogVersion: "98.0.0", IdempotencyKey: "http-authoring-create",
 	})
 	if err != nil {
 		t.Fatalf("create HTTP journey draft: %v", err)
@@ -107,8 +106,7 @@ func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.
 	}
 	t.Cleanup(runtimeWorker.Stop)
 	compiler := workflowapp.NewService(
-		workflowauthoring.New(authoringService), workflowStore, workflow.SystemCompilerContract(),
-		workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
+		workflowauthoring.New(authoringService), workflowStore, workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 	)
 	startService := workflowapp.NewStartService(
 		compiler, workflowStore, temporalRuntime,

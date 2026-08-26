@@ -78,8 +78,7 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 
 	workflowStore := workflowgorm.New(database)
 	compiler := workflowapp.NewService(
-		workflowauthoring.New(authoringService), workflowStore, workflow.SystemCompilerContract(),
-		workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
+		workflowauthoring.New(authoringService), workflowStore, workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 	)
 	starter := newBlockingWorkflowStarter()
 	startService := workflowapp.NewStartService(compiler, workflowStore, starter, workflowapp.StartConfig{

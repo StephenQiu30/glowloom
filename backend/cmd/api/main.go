@@ -55,7 +55,6 @@ import (
 	workflowhttp "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/httpapi"
 	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
-	workflowdomain "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
 const (
@@ -94,17 +93,25 @@ func main() {
 		logger.Error("database schema synchronization failed", "error", err)
 		os.Exit(1)
 	}
-	systemNodeCatalog, err := authoringdomain.SystemCatalog()
+	episodeNodeCatalog, err := authoringdomain.SystemCatalog()
 	if err != nil {
 		cancelSync()
-		logger.Error("system node catalog is invalid", "error", err)
+		logger.Error("system Episode node catalog is invalid", "error", err)
+		os.Exit(1)
+	}
+	shotNodeCatalog, err := authoringdomain.SystemShotCatalog()
+	if err != nil {
+		cancelSync()
+		logger.Error("system Shot node catalog is invalid", "error", err)
 		os.Exit(1)
 	}
 	authoringStore := authoringgorm.New(database)
-	if _, err = authoringStore.EnsureCatalog(syncContext, systemNodeCatalog, time.Now().UTC(), uuid.NewString); err != nil {
-		cancelSync()
-		logger.Error("system node catalog synchronization failed", "error", err)
-		os.Exit(1)
+	for _, catalog := range []authoringdomain.Catalog{episodeNodeCatalog, shotNodeCatalog} {
+		if _, err = authoringStore.EnsureCatalog(syncContext, catalog, time.Now().UTC(), uuid.NewString); err != nil {
+			cancelSync()
+			logger.Error("system node catalog synchronization failed", "catalog", catalog.Key, "error", err)
+			os.Exit(1)
+		}
 	}
 	cancelSync()
 	logger.Info("database model and system node catalogs synchronized")
@@ -193,8 +200,7 @@ func main() {
 	})
 	workflowStore := workflowgorm.New(database)
 	workflowCompiler := workflowapp.NewService(
-		workflowauthoring.New(authoringService), workflowStore, workflowdomain.SystemCompilerContract(),
-		workflowapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+		workflowauthoring.New(authoringService), workflowStore, workflowapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
 	)
 	workflowStartService := workflowapp.NewStartService(
 		workflowCompiler, workflowStore, temporalRuntime,

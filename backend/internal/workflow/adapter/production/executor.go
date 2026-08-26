@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
@@ -22,14 +25,17 @@ import (
 )
 
 const (
-	scriptRevisionExecutor   = "workflow.input.script_revision"
-	productionBibleExecutor  = "activity.production_bible"
-	episodePlanExecutor      = "activity.episode_plan"
-	episodeStructureExecutor = "activity.episode_structure"
-	storyboardDraftExecutor  = "activity.storyboard_draft"
-	storyboardExportExecutor = "activity.storyboard_export"
-	shotImageBindingExecutor = "activity.production_shot_image_binding"
+	scriptRevisionExecutor      = "workflow.input.script_revision"
+	productionBibleExecutor     = "activity.production_bible"
+	episodePlanExecutor         = "activity.episode_plan"
+	episodeStructureExecutor    = "activity.episode_structure"
+	storyboardDraftExecutor     = "activity.storyboard_draft"
+	storyboardExportExecutor    = "activity.storyboard_export"
+	productionShotInputExecutor = "workflow.input.production_shot"
+	shotImageBindingExecutor    = "activity.production_shot_image_binding"
 )
+
+var workflowContentHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type ScriptSource interface {
 	GetRevision(context.Context, scriptapp.Actor, string) (scriptdomain.Analysis, error)
@@ -60,7 +66,8 @@ type StoryboardWorkflowOwner interface {
 	CreateExportSet(context.Context, storyboardapp.Actor, storyboardapp.CreateExportSetCommand) (storyboarddomain.ExportSet, error)
 }
 
-type ShotImageBindingOwner interface {
+type ShotImageWorkflowOwner interface {
+	RequireActiveShot(context.Context, storyboardapp.Actor, string) (storyboarddomain.Shot, error)
 	BindSelectedImage(context.Context, storyboardapp.Actor, storyboardapp.BindSelectedImageCommand) (storyboardapp.BindSelectedImageResult, error)
 }
 
@@ -70,7 +77,7 @@ type NodeExecutor struct {
 	projects    ProjectSource
 	plans       EpisodePlanOwner
 	storyboards StoryboardWorkflowOwner
-	bindings    ShotImageBindingOwner
+	bindings    ShotImageWorkflowOwner
 }
 
 func NewNodeExecutor(
@@ -79,7 +86,7 @@ func NewNodeExecutor(
 	projects ProjectSource,
 	plans EpisodePlanOwner,
 	storyboards StoryboardWorkflowOwner,
-	bindings ShotImageBindingOwner,
+	bindings ShotImageWorkflowOwner,
 ) *NodeExecutor {
 	return &NodeExecutor{
 		scripts: scripts, bibles: bibles, projects: projects, plans: plans,
@@ -109,11 +116,68 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeStoryboardDraft(ctx, command)
 	case storyboardExportExecutor:
 		return executor.executeStoryboardExport(ctx, command)
+	case productionShotInputExecutor:
+		return executor.executeProductionShotInput(ctx, command)
 	case shotImageBindingExecutor:
 		return executor.executeShotImageBinding(ctx, command)
 	default:
 		return domain.NodeExecutorResult{}, errors.New("unsupported production workflow node execution")
 	}
+}
+
+func (executor *NodeExecutor) executeProductionShotInput(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.bindings == nil {
+		return domain.NodeExecutorResult{}, errors.New("Production Shot workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 0 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "shot" ||
+		command.OutputPorts[0].ValueType != "production_shot" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production Shot source contract")
+	}
+	var config map[string]json.RawMessage
+	var shotID string
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 1 ||
+		json.Unmarshal(config["shot_id"], &shotID) != nil {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production Shot source config")
+	}
+	shotID = strings.TrimSpace(shotID)
+	if _, parseErr := uuid.Parse(shotID); parseErr != nil {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production Shot source config")
+	}
+	shot, err := executor.bindings.RequireActiveShot(ctx, storyboardapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, shotID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	for _, identifier := range []string{
+		shot.ID, shot.WorkspaceID, shot.ProjectID, shot.EpisodeID, shot.BatchID, shot.CreatedBy,
+	} {
+		if _, parseErr := uuid.Parse(identifier); parseErr != nil {
+			return domain.NodeExecutorResult{}, errors.New("Production Shot source returned an invalid identifier")
+		}
+	}
+	if shot.ID != shotID || shot.WorkspaceID != command.WorkspaceID || shot.ProjectID != command.ProjectID ||
+		shot.Status != "active" || shot.Position < 1 || shot.Revision < 1 ||
+		strings.TrimSpace(shot.ProposalKey) == "" || strings.TrimSpace(shot.Title) == "" ||
+		!workflowContentHashPattern.MatchString(shot.ContentHash) || shot.CreatedAt.IsZero() {
+		return domain.NodeExecutorResult{}, errors.New("Production Shot source has drifted")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "shot", ValueType: "production_shot", ReferenceID: shot.ID,
+			ReferenceVersion: strconv.Itoa(shot.Revision), ContentHash: shot.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
 }
 
 func (executor *NodeExecutor) executeShotImageBinding(

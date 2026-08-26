@@ -13,6 +13,7 @@ import (
 
 const (
 	EpisodeProductionWorkflowName  = "lanverse.episode-production"
+	ShotProductionWorkflowName     = "lanverse.shot-production"
 	LoadExecutionPlanActivityName  = "lanverse.workflow.load-execution-plan"
 	ExecuteNodeActivityName        = "lanverse.workflow.execute-node"
 	OpenHumanGateActivityName      = "lanverse.workflow.open-human-gate"
@@ -58,8 +59,21 @@ type RunResult struct {
 }
 
 func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.StartRequest) (RunResult, error) {
-	if !validEpisodeStart(request) {
-		return RunResult{}, contractViolation("invalid episode workflow start input")
+	return productionWorkflow(ctx, request, EpisodeProductionWorkflowName, "invalid episode workflow start input")
+}
+
+func ShotProductionWorkflow(ctx workflow.Context, request workflowdomain.StartRequest) (RunResult, error) {
+	return productionWorkflow(ctx, request, ShotProductionWorkflowName, "invalid Shot workflow start input")
+}
+
+func productionWorkflow(
+	ctx workflow.Context,
+	request workflowdomain.StartRequest,
+	expectedWorkflowType string,
+	invalidStartMessage string,
+) (RunResult, error) {
+	if !validProductionStart(request, expectedWorkflowType) {
+		return RunResult{}, contractViolation(invalidStartMessage)
 	}
 
 	var plan ExecutionPlan
@@ -259,8 +273,8 @@ func validWorkflowControlSignal(signal WorkflowControlSignal, workflowRunID stri
 		(signal.Action == workflowdomain.ControlActionPause || signal.Action == workflowdomain.ControlActionResume)
 }
 
-func validEpisodeStart(request workflowdomain.StartRequest) bool {
-	return validRequest(request) && request.WorkflowType == EpisodeProductionWorkflowName &&
+func validProductionStart(request workflowdomain.StartRequest, expectedWorkflowType string) bool {
+	return validRequest(request) && request.WorkflowType == expectedWorkflowType &&
 		request.WorkflowTypeVersion == "1.0.0"
 }
 

@@ -26,7 +26,10 @@ func TestCompilerProducesEquivalentDefinitionForGuidedAndCanvas(t *testing.T) {
 	canvas := compilerRevision(t, catalog, "CANVAS", graph, json.RawMessage(`{"viewport":{"x":90,"y":80,"zoom":2}}`), input)
 	canvas.ID = "00000000-0000-0000-0000-000000000902"
 
-	contract := workflow.SystemCompilerContract()
+	contract, err := workflow.SystemCompilerContract(catalog.Key)
+	if err != nil {
+		t.Fatalf("resolve system compiler contract: %v", err)
+	}
 	first, err := workflow.Compile(workflow.CompilationSource{Revision: guided, Catalog: catalog}, contract)
 	if err != nil {
 		t.Fatalf("compile guided revision: %v", err)
@@ -94,7 +97,11 @@ func TestCompilerExcludesVisualNodesAndRejectsRevisionDrift(t *testing.T) {
 		{ID: "note", DefinitionKey: "visual.comment", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"text":"仅画布说明"}`)},
 	}}, json.RawMessage(`{"nodes":{}}`), input)
 
-	compiled, err := workflow.Compile(workflow.CompilationSource{Revision: revision, Catalog: catalog}, workflow.SystemCompilerContract())
+	contract := workflow.CompilerContract{
+		CompilerVersion: "1.0.0", WorkflowType: "lanverse.compiler-test",
+		WorkflowTypeVersion: "1.0.0", RuntimeContractVersion: "1.0.0",
+	}
+	compiled, err := workflow.Compile(workflow.CompilationSource{Revision: revision, Catalog: catalog}, contract)
 	if err != nil {
 		t.Fatalf("compile revision with visual node: %v", err)
 	}
@@ -104,12 +111,12 @@ func TestCompilerExcludesVisualNodesAndRejectsRevisionDrift(t *testing.T) {
 
 	drifted := revision
 	drifted.ExecutionHash = strings.Repeat("f", 64)
-	if _, err = workflow.Compile(workflow.CompilationSource{Revision: drifted, Catalog: catalog}, workflow.SystemCompilerContract()); err == nil {
+	if _, err = workflow.Compile(workflow.CompilationSource{Revision: drifted, Catalog: catalog}, contract); err == nil {
 		t.Fatal("compiler accepted an authoring revision whose execution hash drifted")
 	}
 	drifted = revision
 	drifted.CatalogExecutionHash = strings.Repeat("e", 64)
-	if _, err = workflow.Compile(workflow.CompilationSource{Revision: drifted, Catalog: catalog}, workflow.SystemCompilerContract()); err == nil {
+	if _, err = workflow.Compile(workflow.CompilationSource{Revision: drifted, Catalog: catalog}, contract); err == nil {
 		t.Fatal("compiler accepted a node catalog binding whose hash drifted")
 	}
 }

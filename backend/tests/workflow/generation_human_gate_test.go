@@ -348,7 +348,7 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 	port := func(key, valueType string) authoring.PortDefinition {
 		return authoring.PortDefinition{Key: key, ValueType: valueType, Required: true}
 	}
-	catalog, err := authoring.NewCatalog("lanverse.generation-review", "1.0.0", []authoring.NodeDefinition{
+	catalog, err := authoring.NewCatalog("lanverse.production", "99.0.0", []authoring.NodeDefinition{
 		{
 			Key: "test.generation_candidate_set", Version: "1.0.0", Name: "Generation CandidateSet",
 			Category: "test", Executor: "test.generation_candidate_set", OutputPorts: []authoring.PortDefinition{port("candidates", "generation_candidate_set")},
@@ -400,8 +400,7 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 
 	workflowStore := workflowgorm.New(database)
 	compiler := workflowapp.NewService(
-		workflowauthoring.New(authoringService), workflowStore, workflow.SystemCompilerContract(),
-		workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
+		workflowauthoring.New(authoringService), workflowStore, workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 	)
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 		Now: func() time.Time { now = now.Add(time.Second); return now }, NewID: uuid.NewString, ClaimLease: time.Minute,

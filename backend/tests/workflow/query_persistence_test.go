@@ -68,8 +68,7 @@ func TestWorkflowQueryAuthorizesCurrentMembershipAndReturnsNodeProjection(t *tes
 	}
 	store := workflowgorm.New(database)
 	compiler := workflowapp.NewService(
-		workflowauthoring.New(authoringService), store, workflow.SystemCompilerContract(),
-		workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
+		workflowauthoring.New(authoringService), store, workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 	)
 	starter := &scriptedWorkflowStarter{outcomes: []string{"started"}}
 	startService := workflowapp.NewStartService(compiler, store, starter, workflowapp.StartConfig{

@@ -30,6 +30,10 @@ func (runtime *Client) NewWorker(activities RuntimeActivities) (worker.Worker, e
 		EpisodeProductionWorkflow,
 		workflow.RegisterOptions{Name: EpisodeProductionWorkflowName},
 	)
+	runtimeWorker.RegisterWorkflowWithOptions(
+		ShotProductionWorkflow,
+		workflow.RegisterOptions{Name: ShotProductionWorkflowName},
+	)
 	runtimeWorker.RegisterActivityWithOptions(
 		activities.LoadExecutionPlan,
 		activity.RegisterOptions{Name: LoadExecutionPlanActivityName},

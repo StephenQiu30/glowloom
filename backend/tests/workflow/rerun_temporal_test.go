@@ -74,8 +74,7 @@ func TestWorkflowRerunExecutesOnlyDirtyClosureOnRealTemporalAndReplays(t *testin
 	}
 	workflowStore := workflowgorm.New(database)
 	compiler := workflowapp.NewService(
-		workflowauthoring.New(authoringService), workflowStore, workflow.SystemCompilerContract(),
-		workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
+		workflowauthoring.New(authoringService), workflowStore, workflowapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 	)
 	actor := workflowapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
 	fakeStarter := &scriptedWorkflowStarter{outcomes: []string{"started"}}
@@ -239,7 +238,7 @@ func rerunTemporalCatalog(t *testing.T) authoring.Catalog {
 			CachePolicy:  "never", RiskLevel: "low", Executable: true,
 		}
 	}
-	catalog, err := authoring.NewCatalog("lanverse.rerun-test", "1.0.0", []authoring.NodeDefinition{
+	catalog, err := authoring.NewCatalog("lanverse.production", "98.0.0", []authoring.NodeDefinition{
 		definition("test.source", "activity.test.source", nil, []authoring.PortDefinition{port("fact")}),
 		definition("test.transform", "activity.test.transform", []authoring.PortDefinition{port("fact")}, []authoring.PortDefinition{port("fact")}),
 		definition("test.export", "activity.test.export", []authoring.PortDefinition{port("fact")}, []authoring.PortDefinition{port("result")}),
