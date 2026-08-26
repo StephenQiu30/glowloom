@@ -7,6 +7,8 @@ declare global {
     type BibleReviewIssue = components["schemas"]["BibleReviewIssue"];
     type ChangePasswordRequest = components["schemas"]["ChangePasswordRequest"];
     type ConfirmEpisodePlanRequest = components["schemas"]["ConfirmEpisodePlanRequest"];
+    type CostBudgetResponse = components["schemas"]["CostBudgetResponse"];
+    type CostBudgetSetRequest = components["schemas"]["CostBudgetSetRequest"];
     type DeactivateAccountRequest = components["schemas"]["DeactivateAccountRequest"];
     type DocumentRevisionResponse = components["schemas"]["DocumentRevisionResponse"];
     type EpisodePlanCreateRequest = components["schemas"]["EpisodePlanCreateRequest"];

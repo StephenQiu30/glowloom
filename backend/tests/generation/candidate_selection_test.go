@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 
 	assetgorm "github.com/StephenQiu30/lanverse/backend/internal/asset/adapter/gormdb"
 	assetapp "github.com/StephenQiu30/lanverse/backend/internal/asset/application"
@@ -69,7 +68,7 @@ func TestSelectedReviewDecisionCreatesOneGenerationSelection(t *testing.T) {
 	if err = database.Create(&model.Membership{ID: uuid.New(), WorkspaceID: workspaceID, UserID: userID, Role: "editor", Status: "active", JoinedAt: now}).Error; err != nil {
 		t.Fatalf("seed selection membership: %v", err)
 	}
-	if err = database.Create(&model.Project{ID: projectID, WorkspaceID: workspaceID, Name: "Selection Project", AspectRatio: "9:16", Language: "zh-CN", TargetDurationMS: 60000, BudgetLimit: decimal.Zero, Currency: "CNY", Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+	if err = database.Create(&model.Project{ID: projectID, WorkspaceID: workspaceID, Name: "Selection Project", AspectRatio: "9:16", Language: "zh-CN", TargetDurationMS: 60000, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 		t.Fatalf("seed selection project: %v", err)
 	}
 

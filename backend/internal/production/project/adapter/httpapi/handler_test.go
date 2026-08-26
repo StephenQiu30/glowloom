@@ -25,7 +25,7 @@ func TestCreateProjectPreservesPublicContract(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
 	}
-	if !strings.Contains(response.Body.String(), `"name":"Harbor"`) || !strings.Contains(response.Body.String(), `"budget_limit":"0.000000"`) {
+	if !strings.Contains(response.Body.String(), `"name":"Harbor"`) || strings.Contains(response.Body.String(), `"budget_limit"`) || strings.Contains(response.Body.String(), `"currency"`) {
 		t.Fatalf("body = %s", response.Body.String())
 	}
 	if service.created.WorkspaceID != "workspace-1" || service.actor.UserID != "user-1" {
@@ -59,6 +59,17 @@ func TestProjectRouteRejectsMissingBearerToken(t *testing.T) {
 	}
 }
 
+func TestProjectHandlerDoesNotExposeLegacyBudgetRoute(t *testing.T) {
+	handler := New(&stubService{}, stubAuthenticator{})
+	mux := http.NewServeMux()
+	handler.Register(mux)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/projects/project-1/budget-limit", strings.NewReader(`{}`)))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("legacy budget route status = %d body=%s", response.Code, response.Body.String())
+	}
+}
+
 type stubAuthenticator struct{ err error }
 
 func (auth stubAuthenticator) Authenticate(*http.Request) (authentication.Claims, error) {
@@ -76,7 +87,7 @@ type stubService struct {
 func (service *stubService) Create(_ context.Context, actor application.Actor, command application.CreateCommand) (domain.Project, error) {
 	service.actor = actor
 	service.created = command
-	return domain.Project{ID: "project-1", WorkspaceID: command.WorkspaceID, Name: command.Name, AspectRatio: "9:16", Language: "zh-CN", TargetDurationMS: 90000, BudgetLimit: "0.000000", Currency: "CNY", Status: domain.StatusActive, Revision: 1}, nil
+	return domain.Project{ID: "project-1", WorkspaceID: command.WorkspaceID, Name: command.Name, AspectRatio: "9:16", Language: "zh-CN", TargetDurationMS: 90000, Status: domain.StatusActive, Revision: 1}, nil
 }
 func (*stubService) List(context.Context, application.Actor, application.ListQuery) ([]domain.Project, int, error) {
 	return nil, 0, errors.New("not implemented")
@@ -85,9 +96,6 @@ func (*stubService) Get(context.Context, application.Actor, string) (domain.Proj
 	return domain.Project{}, errors.New("not implemented")
 }
 func (*stubService) Update(context.Context, application.Actor, string, application.UpdateCommand) (domain.Project, error) {
-	return domain.Project{}, errors.New("not implemented")
-}
-func (*stubService) UpdateBudget(context.Context, application.Actor, string, application.BudgetCommand) (domain.Project, error) {
 	return domain.Project{}, errors.New("not implemented")
 }
 func (*stubService) SetArchived(context.Context, application.Actor, string, application.StateCommand, bool) (domain.Project, error) {

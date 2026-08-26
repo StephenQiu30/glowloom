@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -119,7 +118,7 @@ func (repo *repository) Save(ctx context.Context, project domain.Project) error 
 	result := repo.database.WithContext(ctx).
 		Model(&model.Project{}).
 		Where("id = ?", record.ID).
-		Select("name", "description", "aspect_ratio", "language", "visual_style", "target_duration_ms", "budget_limit", "currency", "status", "revision", "archived_at", "archived_by", "updated_at").
+		Select("name", "description", "aspect_ratio", "language", "visual_style", "target_duration_ms", "status", "revision", "archived_at", "archived_by", "updated_at").
 		Updates(&record)
 	if result.Error != nil {
 		return result.Error
@@ -188,6 +187,11 @@ func (repo *repository) Dependencies(ctx context.Context, projectID string) (app
 		}
 		result.Assets = int(count)
 	}
+	var costBudgetCount int64
+	if err = repo.database.WithContext(ctx).Table("cst_budget_policies").Where("project_id = ?", id).Count(&costBudgetCount).Error; err != nil {
+		return application.DependencySummary{}, err
+	}
+	result.CostBudgets = int(costBudgetCount)
 	return result, nil
 }
 
@@ -297,10 +301,6 @@ func projectRecord(project domain.Project) (model.Project, error) {
 	if err != nil {
 		return model.Project{}, fmt.Errorf("parse workspace id: %w", err)
 	}
-	budget, err := decimal.NewFromString(project.BudgetLimit)
-	if err != nil {
-		return model.Project{}, fmt.Errorf("parse project budget: %w", err)
-	}
 	var archivedBy *uuid.UUID
 	if project.ArchivedBy != nil {
 		parsed, parseErr := uuid.Parse(*project.ArchivedBy)
@@ -309,7 +309,7 @@ func projectRecord(project domain.Project) (model.Project, error) {
 		}
 		archivedBy = &parsed
 	}
-	return model.Project{ID: id, WorkspaceID: workspaceID, Name: project.Name, Description: project.Description, AspectRatio: project.AspectRatio, Language: project.Language, VisualStyle: project.VisualStyle, TargetDurationMS: project.TargetDurationMS, BudgetLimit: budget, Currency: project.Currency, Status: string(project.Status), Revision: project.Revision, ArchivedAt: project.ArchivedAt, ArchivedBy: archivedBy, CreatedAt: project.CreatedAt, UpdatedAt: project.UpdatedAt}, nil
+	return model.Project{ID: id, WorkspaceID: workspaceID, Name: project.Name, Description: project.Description, AspectRatio: project.AspectRatio, Language: project.Language, VisualStyle: project.VisualStyle, TargetDurationMS: project.TargetDurationMS, Status: string(project.Status), Revision: project.Revision, ArchivedAt: project.ArchivedAt, ArchivedBy: archivedBy, CreatedAt: project.CreatedAt, UpdatedAt: project.UpdatedAt}, nil
 }
 
 func projectDomain(record model.Project) domain.Project {
@@ -318,7 +318,7 @@ func projectDomain(record model.Project) domain.Project {
 		value := record.ArchivedBy.String()
 		archivedBy = &value
 	}
-	return domain.Project{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), Name: record.Name, Description: record.Description, AspectRatio: record.AspectRatio, Language: record.Language, VisualStyle: record.VisualStyle, TargetDurationMS: record.TargetDurationMS, BudgetLimit: record.BudgetLimit.StringFixed(6), Currency: record.Currency, Status: domain.Status(record.Status), Revision: record.Revision, ArchivedAt: record.ArchivedAt, ArchivedBy: archivedBy, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
+	return domain.Project{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), Name: record.Name, Description: record.Description, AspectRatio: record.AspectRatio, Language: record.Language, VisualStyle: record.VisualStyle, TargetDurationMS: record.TargetDurationMS, Status: domain.Status(record.Status), Revision: record.Revision, ArchivedAt: record.ArchivedAt, ArchivedBy: archivedBy, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
 }
 
 func unauthenticated() error {

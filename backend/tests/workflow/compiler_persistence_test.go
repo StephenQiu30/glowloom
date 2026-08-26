@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
@@ -186,7 +185,7 @@ func seedCompilerProject(t *testing.T, create func(any) error, now time.Time) co
 		&model.UserAccount{ID: userID, EmailNormalized: userID.String() + "@example.test", PasswordHash: "not-used", TokenVersion: 1, DisplayName: "Compiler Test", Status: "active", CreatedAt: now, UpdatedAt: now},
 		&model.Workspace{ID: workspaceID, Name: "Compiler Test", Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now},
 		&model.Membership{ID: uuid.New(), WorkspaceID: workspaceID, UserID: userID, Role: "owner", Status: "active", JoinedAt: now},
-		&model.Project{ID: projectID, WorkspaceID: workspaceID, Name: "Compiler Project", AspectRatio: "9:16", Language: "zh-CN", TargetDurationMS: 90_000, BudgetLimit: decimal.Zero, Currency: "CNY", Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now},
+		&model.Project{ID: projectID, WorkspaceID: workspaceID, Name: "Compiler Project", AspectRatio: "9:16", Language: "zh-CN", TargetDurationMS: 90_000, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now},
 		&model.ScriptDocument{ID: documentID, WorkspaceID: workspaceID, ProjectID: projectID, Title: "Compiler Script", SourceType: "text", Language: "zh-CN", RightsDeclaration: "原创测试文本", Status: "active", Revision: 1, CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
 		&model.DocumentRevision{ID: revisionID, WorkspaceID: workspaceID, DocumentID: documentID, VersionNo: 1, SourceType: "text", RawText: "雨巷，夜", RawHash: strings.Repeat("1", 64), NormalizedText: "雨巷，夜", NormalizedHash: normalizedHash, NormalizerVersion: "test-v1", NormalizationMap: []byte(`{}`), CodepointCount: 4, AnalysisStatus: "deterministic", AnalyzerVersion: "test-v1", Blocks: []byte(`[]`), Issues: []byte(`[]`), CreatedBy: userID, CreatedAt: now},
 	}

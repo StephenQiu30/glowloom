@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -240,7 +239,7 @@ func seedStoryboardFixture(t *testing.T, database *gorm.DB) storyboardFixture {
 		&model.UserAccount{ID: userID, EmailNormalized: userID.String() + "@example.test", PasswordHash: "not-used", TokenVersion: 1, DisplayName: "集成测试", Status: "active", CreatedAt: now, UpdatedAt: now},
 		&model.Workspace{ID: workspaceID, Name: "集成测试空间", Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now},
 		&model.Membership{ID: uuid.New(), WorkspaceID: workspaceID, UserID: userID, Role: "owner", Status: "active", JoinedAt: now},
-		&model.Project{ID: projectID, WorkspaceID: workspaceID, Name: "镜中长安", Description: &description, AspectRatio: "9:16", Language: "zh-CN", VisualStyle: &visualStyle, TargetDurationMS: 90_000, BudgetLimit: decimal.NewFromInt(1000), Currency: "CNY", Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now},
+		&model.Project{ID: projectID, WorkspaceID: workspaceID, Name: "镜中长安", Description: &description, AspectRatio: "9:16", Language: "zh-CN", VisualStyle: &visualStyle, TargetDurationMS: 90_000, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now},
 		&model.ScriptDocument{ID: documentID, WorkspaceID: workspaceID, ProjectID: projectID, Title: "镜中长安", SourceType: "text", Language: "zh-CN", RightsDeclaration: "原创测试文本", Status: "active", Revision: 1, CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
 		&model.DocumentRevision{ID: revisionID, WorkspaceID: workspaceID, DocumentID: documentID, VersionNo: 1, SourceType: "text", RawText: "第一集\n雨巷，夜\n顾清禾：你终于来了。", RawHash: strings.Repeat("1", 64), NormalizedText: "第一集\n雨巷，夜\n顾清禾：你终于来了。", NormalizedHash: strings.Repeat("2", 64), NormalizerVersion: "test-v1", NormalizationMap: datatypes.JSON([]byte(`{}`)), CodepointCount: 24, AnalysisStatus: "deterministic", AnalyzerVersion: "test-v1", Blocks: datatypes.JSON([]byte(`[]`)), Issues: datatypes.JSON([]byte(`[]`)), CreatedBy: userID, CreatedAt: now},
 		&model.Episode{ID: episodeID, WorkspaceID: workspaceID, ProjectID: projectID, Name: "雨巷相逢", Position: 1, TargetDurationMS: 90_000, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now},

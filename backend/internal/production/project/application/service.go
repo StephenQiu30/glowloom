@@ -16,7 +16,6 @@ type Capability string
 const (
 	ContentRead     Capability = "content:read"
 	ContentWrite    Capability = "content:write"
-	BudgetManage    Capability = "budget:manage"
 	WorkspaceManage Capability = "workspace:manage"
 )
 
@@ -84,11 +83,6 @@ type UpdateCommand struct {
 	ExpectedRevision                                      int
 	IdempotencyKey                                        string
 }
-type BudgetCommand struct {
-	Amount, Currency string
-	ExpectedRevision int
-	IdempotencyKey   string
-}
 type StateCommand struct {
 	ExpectedRevision int
 	IdempotencyKey   string
@@ -105,7 +99,10 @@ type AuditEvent struct {
 	OccurredAt                             time.Time
 	Metadata                               map[string]any
 }
-type DependencySummary struct{ Episodes, ScriptVersions, StoryboardShots, StoryboardSpecVersions, Assets, AssetVersions, Tasks int }
+type DependencySummary struct {
+	Episodes, ScriptVersions, StoryboardShots, StoryboardSpecVersions int
+	Assets, AssetVersions, Tasks, CostBudgets                         int
+}
 type DeleteBlocker struct {
 	Code         string `json:"code"`
 	ResourceType string `json:"resource_type"`
@@ -168,7 +165,7 @@ func (service *Service) Create(ctx context.Context, actor Actor, command CreateC
 		if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
 			return receiptErr
 		}
-		project = domain.Project{ID: service.newID(), WorkspaceID: command.WorkspaceID, Name: command.Name, Description: command.Description, AspectRatio: command.AspectRatio, Language: command.Language, VisualStyle: command.VisualStyle, TargetDurationMS: command.TargetDurationMS, BudgetLimit: "0.000000", Currency: "CNY", Status: domain.StatusActive, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		project = domain.Project{ID: service.newID(), WorkspaceID: command.WorkspaceID, Name: command.Name, Description: command.Description, AspectRatio: command.AspectRatio, Language: command.Language, VisualStyle: command.VisualStyle, TargetDurationMS: command.TargetDurationMS, Status: domain.StatusActive, Revision: 1, CreatedAt: now, UpdatedAt: now}
 		if err := repository.Create(ctx, project); err != nil {
 			return err
 		}
@@ -291,59 +288,6 @@ func (service *Service) Update(ctx context.Context, actor Actor, id string, comm
 		}
 		result = project
 		return service.saveReceipt(ctx, repository, actor, project, "project.update", command.IdempotencyKey, inputHash, project, project.UpdatedAt)
-	})
-	return result, err
-}
-
-func (service *Service) UpdateBudget(ctx context.Context, actor Actor, id string, command BudgetCommand) (domain.Project, error) {
-	if command.ExpectedRevision < 1 || command.Amount == "" || len(command.Currency) != 3 {
-		return domain.Project{}, invalid("Invalid budget")
-	}
-	if err := validateIdempotencyKey(command.IdempotencyKey); err != nil {
-		return domain.Project{}, err
-	}
-	inputHash, err := platformcommand.InputHash(struct {
-		ID      string
-		Command BudgetCommand
-	}{id, command})
-	if err != nil {
-		return domain.Project{}, err
-	}
-	var result domain.Project
-	err = service.transactions.WithinTransaction(ctx, func(repository Repository) error {
-		project, err := repository.Get(ctx, id, true)
-		if err != nil {
-			return normalizeNotFound(err)
-		}
-		if err = repository.Authorize(ctx, actor, project.WorkspaceID, BudgetManage); err != nil {
-			return err
-		}
-		receipt, receiptErr := repository.FindReceipt(ctx, project.WorkspaceID, "project.budget.update", command.IdempotencyKey)
-		if receiptErr == nil {
-			result, receiptErr = replayProject(receipt, inputHash)
-			return receiptErr
-		}
-		if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
-			return receiptErr
-		}
-		if project.Status == domain.StatusArchived {
-			return state("Project is archived", "restore_project")
-		}
-		if err = revision(project, command.ExpectedRevision); err != nil {
-			return err
-		}
-		project.BudgetLimit = command.Amount
-		project.Currency = command.Currency
-		project.Revision++
-		project.UpdatedAt = service.now()
-		if err = repository.Save(ctx, project); err != nil {
-			return err
-		}
-		if err = repository.AppendAudit(ctx, audit(project, actor, "project.budget_updated", project.UpdatedAt)); err != nil {
-			return err
-		}
-		result = project
-		return service.saveReceipt(ctx, repository, actor, project, "project.budget.update", command.IdempotencyKey, inputHash, project, project.UpdatedAt)
 	})
 	return result, err
 }
@@ -504,7 +448,7 @@ func dependencyBlockers(project domain.Project, d DependencySummary) []DeleteBlo
 	pairs := []struct {
 		n             int
 		code, summary string
-	}{{d.Episodes, "HAS_EPISODES", "项目包含 %d 个单集"}, {d.ScriptVersions, "HAS_SCRIPT_VERSIONS", "项目关联 %d 个剧本版本"}, {d.StoryboardShots, "HAS_STORYBOARD_SHOTS", "项目关联 %d 个分镜镜头"}, {d.Assets, "HAS_ASSETS", "项目已有 %d 个资产"}, {d.Tasks, "HAS_TASKS", "项目关联 %d 个任务"}}
+	}{{d.Episodes, "HAS_EPISODES", "项目包含 %d 个单集"}, {d.ScriptVersions, "HAS_SCRIPT_VERSIONS", "项目关联 %d 个剧本版本"}, {d.StoryboardShots, "HAS_STORYBOARD_SHOTS", "项目关联 %d 个分镜镜头"}, {d.Assets, "HAS_ASSETS", "项目已有 %d 个资产"}, {d.Tasks, "HAS_TASKS", "项目关联 %d 个任务"}, {d.CostBudgets, "HAS_COST_BUDGET", "项目关联 %d 个 Cost 预算"}}
 	result := make([]DeleteBlocker, 0, len(pairs))
 	for _, pair := range pairs {
 		if pair.n > 0 {

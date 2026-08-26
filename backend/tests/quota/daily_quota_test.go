@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
@@ -59,7 +58,7 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 	}
 	if err = database.Create(&model.Project{
 		ID: projectID, WorkspaceID: workspaceID, Name: "Quota Project", AspectRatio: "9:16", Language: "zh-CN",
-		TargetDurationMS: 60000, BudgetLimit: decimal.Zero, Currency: "CNY", Status: "active", Revision: 1,
+		TargetDurationMS: 60000, Status: "active", Revision: 1,
 		CreatedAt: now, UpdatedAt: now,
 	}).Error; err != nil {
 		t.Fatalf("seed quota project: %v", err)

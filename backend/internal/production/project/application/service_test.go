@@ -24,7 +24,7 @@ func TestCreateProjectAuthorizesAndPersistsDefaults(t *testing.T) {
 	if project.ID != "project-1" || project.Name != "Harbor" || project.Revision != 1 {
 		t.Fatalf("project = %#v", project)
 	}
-	if project.AspectRatio != "9:16" || project.Language != "zh-CN" || project.Currency != "CNY" {
+	if project.AspectRatio != "9:16" || project.Language != "zh-CN" {
 		t.Fatalf("defaults = %#v", project)
 	}
 	if store.authorizedCapability != ContentWrite {

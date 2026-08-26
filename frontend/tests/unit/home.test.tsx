@@ -35,8 +35,6 @@ const project: API.ProjectResponse = {
   language: "zh-CN",
   visual_style: "水墨幻想",
   target_duration_ms: 90_000,
-  budget_limit: "1000.000000",
-  currency: "CNY",
   status: "active",
   revision: 2,
 };

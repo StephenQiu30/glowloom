@@ -344,16 +344,16 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/budget-limit": {
+    "/api/v1/projects/{project_id}/cost-budget": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["getCostBudget"];
         put?: never;
-        post: operations["setProjectBudget"];
+        post: operations["setCostBudget"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1036,6 +1036,31 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CostBudgetSetRequest: {
+            limit_amount: string;
+            currency: string;
+            expected_revision: number;
+            idempotency_key: string;
+        };
+        CostBudgetResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            limit_amount: string;
+            currency: string;
+            revision: number;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: uuid */
+            updated_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         WorkflowStartRequest: {
             /** Format: uuid */
             authoring_revision_id: string;
@@ -2089,10 +2114,6 @@ export interface components {
              * @enum {string}
              */
             aspect_ratio: "9:16" | "16:9" | "1:1";
-            /** Budget Limit */
-            budget_limit: string;
-            /** Currency */
-            currency: string;
             /** Description */
             description: string | null;
             /**
@@ -3056,7 +3077,7 @@ export interface operations {
             };
         };
     };
-    setProjectBudget: {
+    getCostBudget: {
         parameters: {
             query?: never;
             header?: never;
@@ -3067,13 +3088,48 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 预算已更新 */
+            /** @description Cost 拥有的项目预算 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CostBudgetResponse"];
+                    };
+                };
             };
+            404: components["responses"]["Problem"];
+        };
+    };
+    setCostBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CostBudgetSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Cost 项目预算已设置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CostBudgetResponse"];
+                    };
+                };
+            };
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     projectDeletePreflight: {

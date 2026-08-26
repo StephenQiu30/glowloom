@@ -19,7 +19,6 @@ type Service interface {
 	List(context.Context, application.Actor, application.ListQuery) ([]domain.Project, int, error)
 	Get(context.Context, application.Actor, string) (domain.Project, error)
 	Update(context.Context, application.Actor, string, application.UpdateCommand) (domain.Project, error)
-	UpdateBudget(context.Context, application.Actor, string, application.BudgetCommand) (domain.Project, error)
 	SetArchived(context.Context, application.Actor, string, application.StateCommand, bool) (domain.Project, error)
 	DeletePreflight(context.Context, application.Actor, string) (application.DeletePreflight, error)
 	Delete(context.Context, application.Actor, string, int, string) error
@@ -42,7 +41,6 @@ func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects/{project_id}", handler.get)
 	mux.HandleFunc("PATCH /api/v1/projects/{project_id}", handler.update)
 	mux.HandleFunc("DELETE /api/v1/projects/{project_id}", handler.delete)
-	mux.HandleFunc("POST /api/v1/projects/{project_id}/budget-limit", handler.budget)
 	mux.HandleFunc("POST /api/v1/projects/{project_id}/archive", handler.archive)
 	mux.HandleFunc("POST /api/v1/projects/{project_id}/restore", handler.restore)
 	mux.HandleFunc("POST /api/v1/projects/{project_id}/delete-preflight", handler.preflight)
@@ -87,12 +85,6 @@ type updateRequest struct {
 	ExpectedRevision int            `json:"expected_revision" validate:"gte=1"`
 	IdempotencyKey   string         `json:"idempotency_key" validate:"required,max=200"`
 }
-type budgetRequest struct {
-	Amount           json.Number `json:"amount" validate:"required"`
-	Currency         string      `json:"currency" validate:"len=3,uppercase"`
-	ExpectedRevision int         `json:"expected_revision" validate:"gte=1"`
-	IdempotencyKey   string      `json:"idempotency_key" validate:"required,max=200"`
-}
 type stateRequest struct {
 	ExpectedRevision int    `json:"expected_revision" validate:"gte=1"`
 	IdempotencyKey   string `json:"idempotency_key" validate:"required,max=200"`
@@ -106,8 +98,6 @@ type projectResponse struct {
 	Language         string        `json:"language"`
 	VisualStyle      *string       `json:"visual_style"`
 	TargetDurationMS int           `json:"target_duration_ms"`
-	BudgetLimit      string        `json:"budget_limit"`
-	Currency         string        `json:"currency"`
 	Status           domain.Status `json:"status"`
 	Revision         int           `json:"revision"`
 }
@@ -188,18 +178,6 @@ func (handler *Handler) update(writer http.ResponseWriter, request *http.Request
 	project, err := handler.service.Update(request.Context(), actor, request.PathValue("project_id"), application.UpdateCommand{Name: payload.Name, Description: payload.Description.Value, DescriptionSet: payload.Description.Set, AspectRatio: payload.AspectRatio, Language: payload.Language, VisualStyle: payload.VisualStyle.Value, VisualStyleSet: payload.VisualStyle.Set, TargetDurationMS: payload.TargetDurationMS, ExpectedRevision: payload.ExpectedRevision, IdempotencyKey: payload.IdempotencyKey})
 	respondProject(writer, request, project, err)
 }
-func (handler *Handler) budget(writer http.ResponseWriter, request *http.Request) {
-	actor, ok := handler.actor(writer, request)
-	if !ok {
-		return
-	}
-	var payload budgetRequest
-	if !handler.decode(writer, request, &payload) {
-		return
-	}
-	project, err := handler.service.UpdateBudget(request.Context(), actor, request.PathValue("project_id"), application.BudgetCommand{Amount: string(payload.Amount), Currency: payload.Currency, ExpectedRevision: payload.ExpectedRevision, IdempotencyKey: payload.IdempotencyKey})
-	respondProject(writer, request, project, err)
-}
 func (handler *Handler) archive(writer http.ResponseWriter, request *http.Request) {
 	handler.state(writer, request, true)
 }
@@ -259,7 +237,7 @@ func respondProject(writer http.ResponseWriter, request *http.Request, project d
 	writeJSON(writer, 200, map[string]any{"data": present(project)})
 }
 func present(project domain.Project) projectResponse {
-	return projectResponse{ID: project.ID, WorkspaceID: project.WorkspaceID, Name: project.Name, Description: project.Description, AspectRatio: project.AspectRatio, Language: project.Language, VisualStyle: project.VisualStyle, TargetDurationMS: project.TargetDurationMS, BudgetLimit: project.BudgetLimit, Currency: project.Currency, Status: project.Status, Revision: project.Revision}
+	return projectResponse{ID: project.ID, WorkspaceID: project.WorkspaceID, Name: project.Name, Description: project.Description, AspectRatio: project.AspectRatio, Language: project.Language, VisualStyle: project.VisualStyle, TargetDurationMS: project.TargetDurationMS, Status: project.Status, Revision: project.Revision}
 }
 func decode(writer http.ResponseWriter, request *http.Request, target any) bool {
 	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, 1<<20))

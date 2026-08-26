@@ -18,8 +18,6 @@ type Project struct {
 	Language         string
 	VisualStyle      *string
 	TargetDurationMS int
-	BudgetLimit      string
-	Currency         string
 	Status           Status
 	Revision         int
 	ArchivedAt       *time.Time

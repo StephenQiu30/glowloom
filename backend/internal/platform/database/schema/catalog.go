@@ -43,6 +43,7 @@ func Catalog() []any {
 		&model.HumanTask{},
 		&model.ReviewDecision{},
 		&model.GenerationCandidateSelection{},
+		&model.CostBudgetPolicy{},
 		&model.QuotaPolicy{},
 		&model.QuotaCounter{},
 		&model.QuotaReservation{},

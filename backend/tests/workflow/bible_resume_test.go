@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
@@ -191,7 +190,7 @@ func seedFailedBible(t *testing.T, create func(any) error) failedBibleFixture {
 		},
 		&model.Project{
 			ID: projectID, WorkspaceID: workspaceID, Name: "Workflow Resume Project", AspectRatio: "9:16",
-			Language: "zh-CN", TargetDurationMS: 90_000, BudgetLimit: decimal.Zero, Currency: "CNY",
+			Language: "zh-CN", TargetDurationMS: 90_000,
 			Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now,
 		},
 		&model.ScriptDocument{

@@ -24,6 +24,9 @@ import (
 	authoringdomain "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
+	costgorm "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/gormdb"
+	costhttp "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/httpapi"
+	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
 	mediagorm "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gormdb"
 	mediahttp "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/httpapi"
 	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
@@ -131,6 +134,8 @@ func main() {
 
 	projectStore := projectgorm.New(database)
 	projectService := projectapp.NewService(projectStore, func() time.Time { return time.Now().UTC() }, uuid.NewString)
+	costStore := costgorm.New(database)
+	costService := costapp.NewService(costStore, costapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	tokenVerifier := authentication.NewVerifier(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, func() time.Time { return time.Now().UTC() })
 	tokenIssuer := authentication.NewIssuer(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, configuration.AccessTokenTTL, func() time.Time { return time.Now().UTC() }, uuid.NewString)
 	verificationCode := authentication.RandomNumericCode
@@ -182,6 +187,7 @@ func main() {
 	storyboardHandler := storyboardhttp.New(storyboardService, tokenVerifier)
 	storyboardWorker := storyboardapp.NewWorker(storyboardStore, agentRuntime, func() time.Time { return time.Now().UTC() }, configuration.AgentPollInterval, configuration.AgentClaimLease, logger)
 	projectHandler := projecthttp.New(projectService, tokenVerifier)
+	costHandler := costhttp.New(costService, tokenVerifier)
 	authoringService := authoringapp.NewService(authoringStore, authoringapp.Config{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 	})
@@ -220,6 +226,7 @@ func main() {
 				identityHandler.Register(mux)
 				mediaHandler.Register(mux)
 				projectHandler.Register(mux)
+				costHandler.Register(mux)
 				scriptHandler.Register(mux)
 				bibleHandler.Register(mux)
 				planningHandler.Register(mux)
