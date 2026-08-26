@@ -49,7 +49,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D05` | [2003 语言与运行边界](design/2003-后端语言与运行边界策略.md) | **已完成（2026-08-27）**：固定 Backend 唯一 Writer、GORM Catalog、`agent/skills/build-storygraph`、受控 Codex CLI 与按真实消费者创建 Binary | 仅解锁 `SG-D06`；不在 Agent 增加业务 Writer |
 | `SG-D06` | [0003 系统总体架构](design/0003-系统总体架构.md) | **已完成（2026-08-27）**：重建 StoryGraph/四图系统图、两条 Compiler 链、单 Writer、Kafka 检索与 ELK 日志事实边界 | 仅解锁 `SG-D07`；不把 StoryGraph 与 WorkflowDefinition 合并 |
 | `SG-D07` | [0004 分层与依赖](design/0004-架构分层与依赖规则.md) | **已完成（2026-08-27）**：固定 Compiler、Harness、Owner Apply、Kafka Consumer/Projection 的单向依赖与独立测试目录 | 仅解锁 `SG-D08`；不新建通用空层 |
-| `SG-D08` | [0009 已验收 MVP 纵向切片](design/0009-剧本到分镜MVP垂直切片设计.md) | 只增加向 StoryGraph 演进的说明；不反向改写已通过的历史范围和证据 | 历史 `0009` Plan/Acceptance 不得抵扣新验收 |
+| `SG-D08` | [0009 已验收 MVP 纵向切片](design/0009-剧本到分镜MVP垂直切片设计.md) | **已完成（2026-08-27）**：只增加 StoryGraph/视觉资产/Harness/Kafka-ELK 演进与新旧证据隔离说明 | 仅解锁 `SG-D09`；历史 `0009` Plan/Acceptance 不得抵扣新验收 |
 | `SG-D09` | [2001 Backend 服务架构](design/2001-后端服务架构.md) | 复核单 Backend、单 PostgreSQL/GORM Catalog 和 Agent 私有运行边界 | 不引入 Migration、Raw SQL、第二 ORM 或第二 Writer |
 | `SG-D10` | [2002 Backend 领域设计](design/2002-后端领域模块功能设计.md) | 固定 StoryGraph Compiler、Candidate/Owner、Asset/Specification/State 和 Shot Binding 的唯一 Owner | 不开始 Harness 或 Canvas |
 | `SG-D11` | [3001 Production Bible](design/3001-项目制作圣经生成执行框架设计.md) | 改为 Evidence/Claim/Specification/State 的 StoryGraph 上游，保留 Backend Owner | 旧 `3001` Plan 继续冻结 |
@@ -64,7 +64,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D20` | `0010` 唯一总 Plan | 引用 `SG-Ixx` 任务与 `3003` Agent 子项，Checklist 全为 `[ ]` | 不继续从旧 `3001/3002/0007` Plan 领取 StoryGraph 任务 |
 | `SG-D21` | 新 Acceptance Criteria | 逐项映射 Requirement/`SG-Ixx`，初始全为 `[ ]` | 无当次真实证据不得勾选 |
 
-`SG-D01`–`SG-D07` 已于 2026-08-27 依次接受并完成，`SG-D08` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；`SG-D11/SG-D12` 只同步两份 Design，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
+`SG-D01`–`SG-D08` 已于 2026-08-27 依次接受并完成，`SG-D09` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；`SG-D11/SG-D12` 只同步两份 Design，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
 
 ## 编号与命名
 
@@ -112,7 +112,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `0006` | 领域语言与模块命名 | — | [命名规范](design/0006-领域语言与模块命名规范.md) | — | — | — | 已接受目标；`SG-D03` StoryGraph 术语同步完成 |
 | `0007` | 平台 0→1 交付 | — | — | — | [交付计划](plan/0007-平台0到1交付计划.md) | — | 未来 Platform Complete 目标；当前不是 StoryGraph 执行入口 |
 | `0008` | 资源所有权与交付 | — | — | — | [所有权台账](plan/0008-资源所有权与交付台账.md) | — | 未来 Platform Complete 资源目标；当前不是 StoryGraph 执行入口 |
-| `0009` | 剧本到分镜 MVP 垂直切片 | [产品需求](prd/0009-剧本到分镜MVP产品需求.md) | [垂直切片设计](design/0009-剧本到分镜MVP垂直切片设计.md) | [需求规格](requirement/0009-剧本到分镜MVP需求规格.md) | [实施计划](plan/0009-剧本到分镜MVP实施计划.md) | [验收记录](acceptance/0009-剧本到分镜MVP验收记录.md) | 历史 MVP 已验收；StoryGraph 演进不回写旧证据 |
+| `0009` | 剧本到分镜 MVP 垂直切片 | [产品需求](prd/0009-剧本到分镜MVP产品需求.md) | [垂直切片设计](design/0009-剧本到分镜MVP垂直切片设计.md) | [需求规格](requirement/0009-剧本到分镜MVP需求规格.md) | [实施计划](plan/0009-剧本到分镜MVP实施计划.md) | [验收记录](acceptance/0009-剧本到分镜MVP验收记录.md) | 历史 MVP 已验收；`SG-D08` 演进说明已加入，不回写旧证据 |
 | `0010` | StoryGraph 内容图、DAG 与视觉资产 | — | [内容图与 DAG 创作画布设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | — | — | — | Design 已接受（`SG-D01`）；尚未派生或实施 |
 | `1001` | 前端应用架构与交付 | — | [应用架构](design/1001-前端应用架构.md) | [架构需求规格](requirement/1001-前端应用架构需求规格.md) | [应用与功能交付计划](plan/1001-前端应用与功能交付实施计划.md) | — | `SG-D14` 只同步 Design；旧派生文档的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
 | `1002` | 前端创作工作台与功能模块 | [创作工作台产品需求](prd/1002-前端创作工作台产品需求.md) | [模块设计](design/1002-前端功能模块设计.md) | [功能需求规格](requirement/1002-前端功能模块需求规格.md) | [合并至 1001 计划](plan/1001-前端应用与功能交付实施计划.md) | — | `SG-D15` 只同步 Design；旧派生文档的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
