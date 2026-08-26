@@ -132,7 +132,10 @@ type intentHashInput struct {
 	CostEstimateID, CostReservationID, QuotaReservationID string
 	CostEstimateReceiptID, CostReservationReceiptID       string
 	QuotaReservationReceiptID, CostReleaseReceiptID       string
-	QuotaReleaseReceiptID, Status, Claimant, ClaimToken   string
+	QuotaReleaseReceiptID, CostSettlementReceiptID        string
+	QuotaConsumptionReceiptID                             string
+	GenerationRequestID, ProviderJobID, ProviderReceiptID string
+	Status, Claimant, ClaimToken                          string
 	ClaimExpiresAt, CancelledAt                           string
 	ClaimFencingVersion, Revision                         int64
 	CreatedBy                                             string
@@ -585,15 +588,21 @@ func validateIntentView(view IntentView) error {
 		return conflict("Generation intent Owner bindings have drifted")
 	}
 	switch intent.Status {
-	case domain.IntentPrepared, domain.IntentClaimed:
+	case domain.IntentPrepared, domain.IntentClaimed, domain.IntentDispatching,
+		domain.IntentSubmitted, domain.IntentOutcomeUnknown:
 		if view.CostReservation.Status != costdomain.ReservationReserved ||
 			view.QuotaReservation.Status != quotadomain.ReservationReserved {
 			return conflict("Generation intent reservations are no longer executable")
 		}
-	case domain.IntentCancelled:
+	case domain.IntentCancelled, domain.IntentFailed:
 		if view.CostReservation.Status != costdomain.ReservationReleased ||
 			view.QuotaReservation.Status != quotadomain.ReservationReleased {
 			return conflict("Generation cancellation reservations have drifted")
+		}
+	case domain.IntentSucceeded:
+		if view.CostReservation.Status != costdomain.ReservationSettled ||
+			view.QuotaReservation.Status != quotadomain.ReservationConsumed {
+			return conflict("Generation terminal reservations have drifted")
 		}
 	default:
 		return conflict("Generation intent state is not readable")
@@ -613,10 +622,16 @@ func (service *PreparationService) validateOwnerReceipts(
 		{intent.CostReservationReceiptID, "cost.reservation.reserve", preparationOwnerKey(intent.ID, "cost-reserve"), intent.CostReservationID},
 		{intent.QuotaReservationReceiptID, "quota.reservation.reserve", preparationOwnerKey(intent.ID, "quota-reserve"), intent.QuotaReservationID},
 	}
-	if intent.Status == domain.IntentCancelled {
+	if intent.Status == domain.IntentCancelled || intent.Status == domain.IntentFailed {
 		checks = append(checks,
 			struct{ id, operation, key, resource string }{intent.CostReleaseReceiptID, "cost.reservation.release", preparationOwnerKey(intent.ID, "cost-release"), intent.CostReservationID},
 			struct{ id, operation, key, resource string }{intent.QuotaReleaseReceiptID, "quota.reservation.release", preparationOwnerKey(intent.ID, "quota-release"), intent.QuotaReservationID},
+		)
+	}
+	if intent.Status == domain.IntentSucceeded {
+		checks = append(checks,
+			struct{ id, operation, key, resource string }{intent.CostSettlementReceiptID, "cost.reservation.settle", preparationOwnerKey(intent.ID, "cost-settle"), intent.CostReservationID},
+			struct{ id, operation, key, resource string }{intent.QuotaConsumptionReceiptID, "quota.reservation.consume", preparationOwnerKey(intent.ID, "quota-consume"), intent.QuotaReservationID},
 		)
 	}
 	for _, check := range checks {
@@ -641,32 +656,70 @@ func validateIntent(value domain.Intent) error {
 	ownerRefsValid := validUUID(value.CostEstimateID) && validUUID(value.CostReservationID) &&
 		validUUID(value.QuotaReservationID) && validUUID(value.CostEstimateReceiptID) &&
 		validUUID(value.CostReservationReceiptID) && validUUID(value.QuotaReservationReceiptID)
+	providerRefsValid := validUUID(value.GenerationRequestID) && validUUID(value.ProviderJobID)
+	terminalProviderRefsValid := providerRefsValid && validUUID(value.ProviderReceiptID)
 	switch value.Status {
 	case domain.IntentPreparing:
 		if value.Revision != 1 || ownerRefsValid || value.CostEstimateID != "" || value.CostReservationID != "" ||
 			value.QuotaReservationID != "" || value.CostEstimateReceiptID != "" ||
 			value.CostReservationReceiptID != "" || value.QuotaReservationReceiptID != "" ||
 			value.CostReleaseReceiptID != "" || value.QuotaReleaseReceiptID != "" ||
+			value.CostSettlementReceiptID != "" || value.QuotaConsumptionReceiptID != "" ||
+			value.GenerationRequestID != "" || value.ProviderJobID != "" || value.ProviderReceiptID != "" ||
 			value.Claimant != nil || value.ClaimToken != nil || value.ClaimExpiresAt != nil ||
 			value.ClaimFencingVersion != 0 || value.CancelledAt != nil || !value.UpdatedAt.Equal(value.CreatedAt) {
 			return conflict("Generation intent facts have drifted")
 		}
 	case domain.IntentPrepared:
 		if value.Revision != 2 || !ownerRefsValid || value.CostReleaseReceiptID != "" || value.QuotaReleaseReceiptID != "" ||
+			value.CostSettlementReceiptID != "" || value.QuotaConsumptionReceiptID != "" ||
+			value.GenerationRequestID != "" || value.ProviderJobID != "" || value.ProviderReceiptID != "" ||
 			value.Claimant != nil || value.ClaimToken != nil || value.ClaimExpiresAt != nil ||
 			value.ClaimFencingVersion != 0 || value.CancelledAt != nil {
 			return conflict("Generation intent facts have drifted")
 		}
 	case domain.IntentClaimed:
 		if value.Revision != 3 || !ownerRefsValid || value.CostReleaseReceiptID != "" || value.QuotaReleaseReceiptID != "" ||
+			value.CostSettlementReceiptID != "" || value.QuotaConsumptionReceiptID != "" ||
+			value.GenerationRequestID != "" || value.ProviderJobID != "" || value.ProviderReceiptID != "" ||
 			value.Claimant == nil || !claimantPattern.MatchString(*value.Claimant) ||
 			value.ClaimToken == nil || !validUUID(*value.ClaimToken) || value.ClaimExpiresAt == nil ||
 			!value.ClaimExpiresAt.After(value.UpdatedAt) || value.ClaimFencingVersion != 1 || value.CancelledAt != nil {
 			return conflict("Generation intent facts have drifted")
 		}
+	case domain.IntentDispatching, domain.IntentSubmitted, domain.IntentOutcomeUnknown:
+		if value.Revision < 4 || !ownerRefsValid || !providerRefsValid || value.ProviderReceiptID != "" ||
+			value.CostReleaseReceiptID != "" || value.QuotaReleaseReceiptID != "" ||
+			value.CostSettlementReceiptID != "" || value.QuotaConsumptionReceiptID != "" ||
+			value.Claimant == nil || !claimantPattern.MatchString(*value.Claimant) ||
+			value.ClaimToken == nil || !validUUID(*value.ClaimToken) || value.ClaimExpiresAt == nil ||
+			value.ClaimFencingVersion != 1 || value.CancelledAt != nil {
+			return conflict("Generation intent facts have drifted")
+		}
+	case domain.IntentSucceeded:
+		if value.Revision < 5 || !ownerRefsValid || !terminalProviderRefsValid ||
+			!validUUID(value.CostSettlementReceiptID) || !validUUID(value.QuotaConsumptionReceiptID) ||
+			value.CostReleaseReceiptID != "" || value.QuotaReleaseReceiptID != "" ||
+			value.Claimant == nil || !claimantPattern.MatchString(*value.Claimant) ||
+			value.ClaimToken == nil || !validUUID(*value.ClaimToken) || value.ClaimExpiresAt == nil ||
+			value.ClaimFencingVersion != 1 || value.CancelledAt != nil {
+			return conflict("Generation intent facts have drifted")
+		}
+	case domain.IntentFailed:
+		if value.Revision < 5 || !ownerRefsValid || !terminalProviderRefsValid ||
+			!validUUID(value.CostReleaseReceiptID) || !validUUID(value.QuotaReleaseReceiptID) ||
+			value.CostSettlementReceiptID != "" || value.QuotaConsumptionReceiptID != "" ||
+			value.Claimant == nil || !claimantPattern.MatchString(*value.Claimant) ||
+			value.ClaimToken == nil || !validUUID(*value.ClaimToken) || value.ClaimExpiresAt == nil ||
+			value.ClaimFencingVersion != 1 || value.CancelledAt != nil {
+			return conflict("Generation intent facts have drifted")
+		}
 	case domain.IntentCancelled:
 		if value.Revision != 3 || !ownerRefsValid || !validUUID(value.CostReleaseReceiptID) ||
-			!validUUID(value.QuotaReleaseReceiptID) || value.Claimant != nil || value.ClaimToken != nil ||
+			!validUUID(value.QuotaReleaseReceiptID) || value.CostSettlementReceiptID != "" ||
+			value.QuotaConsumptionReceiptID != "" || value.GenerationRequestID != "" ||
+			value.ProviderJobID != "" || value.ProviderReceiptID != "" ||
+			value.Claimant != nil || value.ClaimToken != nil ||
 			value.ClaimExpiresAt != nil || value.ClaimFencingVersion != 0 || value.CancelledAt == nil ||
 			!value.CancelledAt.Equal(value.UpdatedAt) {
 			return conflict("Generation intent facts have drifted")
@@ -692,7 +745,11 @@ func intentContentHash(value domain.Intent) (string, error) {
 		CostReservationReceiptID:  value.CostReservationReceiptID,
 		QuotaReservationReceiptID: value.QuotaReservationReceiptID,
 		CostReleaseReceiptID:      value.CostReleaseReceiptID, QuotaReleaseReceiptID: value.QuotaReleaseReceiptID,
-		Status: value.Status, Claimant: optionalString(value.Claimant), ClaimToken: optionalString(value.ClaimToken),
+		CostSettlementReceiptID:   value.CostSettlementReceiptID,
+		QuotaConsumptionReceiptID: value.QuotaConsumptionReceiptID,
+		GenerationRequestID:       value.GenerationRequestID, ProviderJobID: value.ProviderJobID,
+		ProviderReceiptID: value.ProviderReceiptID,
+		Status:            value.Status, Claimant: optionalString(value.Claimant), ClaimToken: optionalString(value.ClaimToken),
 		ClaimExpiresAt: optionalTime(value.ClaimExpiresAt), CancelledAt: optionalTime(value.CancelledAt),
 		ClaimFencingVersion: value.ClaimFencingVersion, Revision: value.Revision,
 		CreatedBy: value.CreatedBy, InitiatorTokenVersion: value.InitiatorTokenVersion,

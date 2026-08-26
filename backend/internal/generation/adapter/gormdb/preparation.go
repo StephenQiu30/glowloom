@@ -188,6 +188,11 @@ func (repo *preparationRepository) UpdateIntent(
 			"quota_reservation_receipt_id": record.QuotaReservationReceiptID,
 			"cost_release_receipt_id":      record.CostReleaseReceiptID,
 			"quota_release_receipt_id":     record.QuotaReleaseReceiptID,
+			"cost_settlement_receipt_id":   record.CostSettlementReceiptID,
+			"quota_consumption_receipt_id": record.QuotaConsumptionReceiptID,
+			"generation_request_id":        record.GenerationRequestID,
+			"provider_job_id":              record.ProviderJobID,
+			"provider_receipt_id":          record.ProviderReceiptID,
 			"status":                       record.Status, "claimant": record.Claimant, "claim_token": record.ClaimToken,
 			"claim_expires_at": record.ClaimExpiresAt, "claim_fencing_version": record.ClaimFencingVersion,
 			"cancelled_at": record.CancelledAt, "revision": record.Revision,
@@ -246,6 +251,26 @@ func intentRecord(value domain.Intent) (model.GenerationIntent, error) {
 	if err != nil {
 		return model.GenerationIntent{}, err
 	}
+	costSettlementReceiptID, err := optionalPreparationUUID(value.CostSettlementReceiptID)
+	if err != nil {
+		return model.GenerationIntent{}, err
+	}
+	quotaConsumptionReceiptID, err := optionalPreparationUUID(value.QuotaConsumptionReceiptID)
+	if err != nil {
+		return model.GenerationIntent{}, err
+	}
+	generationRequestID, err := optionalPreparationUUID(value.GenerationRequestID)
+	if err != nil {
+		return model.GenerationIntent{}, err
+	}
+	providerJobID, err := optionalPreparationUUID(value.ProviderJobID)
+	if err != nil {
+		return model.GenerationIntent{}, err
+	}
+	providerReceiptID, err := optionalPreparationUUID(value.ProviderReceiptID)
+	if err != nil {
+		return model.GenerationIntent{}, err
+	}
 	claimToken, err := optionalPreparationUUID(optionalPreparationString(value.ClaimToken))
 	if err != nil {
 		return model.GenerationIntent{}, err
@@ -256,7 +281,10 @@ func intentRecord(value domain.Intent) (model.GenerationIntent, error) {
 		CostEstimateID: costEstimateID, CostReservationID: costReservationID, QuotaReservationID: quotaReservationID,
 		CostEstimateReceiptID: costEstimateReceiptID, CostReservationReceiptID: costReservationReceiptID,
 		QuotaReservationReceiptID: quotaReservationReceiptID, CostReleaseReceiptID: costReleaseReceiptID,
-		QuotaReleaseReceiptID: quotaReleaseReceiptID, Status: value.Status, Claimant: clonePreparationString(value.Claimant),
+		QuotaReleaseReceiptID: quotaReleaseReceiptID, CostSettlementReceiptID: costSettlementReceiptID,
+		QuotaConsumptionReceiptID: quotaConsumptionReceiptID, GenerationRequestID: generationRequestID,
+		ProviderJobID: providerJobID, ProviderReceiptID: providerReceiptID,
+		Status: value.Status, Claimant: clonePreparationString(value.Claimant),
 		ClaimToken: claimToken, ClaimExpiresAt: clonePreparationTime(value.ClaimExpiresAt),
 		ClaimFencingVersion: value.ClaimFencingVersion, CancelledAt: clonePreparationTime(value.CancelledAt),
 		Revision: value.Revision, ContentHash: value.ContentHash, CreatedBy: parsed[5],
@@ -276,6 +304,11 @@ func intentDomain(value model.GenerationIntent) domain.Intent {
 		QuotaReservationReceiptID: optionalPreparationUUIDString(value.QuotaReservationReceiptID),
 		CostReleaseReceiptID:      optionalPreparationUUIDString(value.CostReleaseReceiptID),
 		QuotaReleaseReceiptID:     optionalPreparationUUIDString(value.QuotaReleaseReceiptID),
+		CostSettlementReceiptID:   optionalPreparationUUIDString(value.CostSettlementReceiptID),
+		QuotaConsumptionReceiptID: optionalPreparationUUIDString(value.QuotaConsumptionReceiptID),
+		GenerationRequestID:       optionalPreparationUUIDString(value.GenerationRequestID),
+		ProviderJobID:             optionalPreparationUUIDString(value.ProviderJobID),
+		ProviderReceiptID:         optionalPreparationUUIDString(value.ProviderReceiptID),
 		Status:                    value.Status, Claimant: clonePreparationString(value.Claimant),
 		ClaimToken: optionalPreparationUUIDPointerString(value.ClaimToken), ClaimExpiresAt: clonePreparationTime(value.ClaimExpiresAt),
 		ClaimFencingVersion: value.ClaimFencingVersion, CancelledAt: clonePreparationTime(value.CancelledAt),

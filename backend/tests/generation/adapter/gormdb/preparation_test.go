@@ -29,3 +29,20 @@ func TestPreparationStoreRejectsDisabledNestedTransactions(t *testing.T) {
 		t.Fatalf("disabled nested transactions were accepted: %T %v", err, err)
 	}
 }
+
+func TestProviderStoreRejectsDisabledNestedTransactions(t *testing.T) {
+	store := generationgorm.NewProviderStore(
+		&gorm.DB{Config: &gorm.Config{DisableNestedTransaction: true}}, costapp.Config{}, quotaapp.Config{},
+	)
+	err := store.WithinProviderTransaction(context.Background(), func(
+		application.ProviderRepository,
+		application.CostProviderOwner,
+		application.QuotaProviderOwner,
+	) error {
+		t.Fatal("Provider operation ran without nested transaction savepoints")
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires GORM nested transaction savepoints") {
+		t.Fatalf("disabled nested transactions were accepted: %T %v", err, err)
+	}
+}

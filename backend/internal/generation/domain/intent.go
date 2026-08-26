@@ -3,10 +3,15 @@ package domain
 import "time"
 
 const (
-	IntentPreparing = "PREPARING"
-	IntentPrepared  = "PREPARED"
-	IntentClaimed   = "CLAIMED"
-	IntentCancelled = "CANCELLED"
+	IntentPreparing      = "PREPARING"
+	IntentPrepared       = "PREPARED"
+	IntentClaimed        = "CLAIMED"
+	IntentDispatching    = "DISPATCHING"
+	IntentSubmitted      = "SUBMITTED"
+	IntentOutcomeUnknown = "OUTCOME_UNKNOWN"
+	IntentSucceeded      = "SUCCEEDED"
+	IntentFailed         = "FAILED"
+	IntentCancelled      = "CANCELLED"
 )
 
 type Intent struct {
@@ -16,7 +21,9 @@ type Intent struct {
 	CostEstimateID, CostReservationID, QuotaReservationID string
 	CostEstimateReceiptID, CostReservationReceiptID       string
 	QuotaReservationReceiptID, CostReleaseReceiptID       string
-	QuotaReleaseReceiptID                                 string
+	QuotaReleaseReceiptID, CostSettlementReceiptID        string
+	QuotaConsumptionReceiptID                             string
+	GenerationRequestID, ProviderJobID, ProviderReceiptID string
 	Status, ContentHash, CreatedBy                        string
 	InitiatorTokenVersion                                 int
 	Claimant, ClaimToken                                  *string
@@ -48,6 +55,10 @@ func SameIntentState(left, right Intent) bool {
 		left.QuotaReservationReceiptID == right.QuotaReservationReceiptID &&
 		left.CostReleaseReceiptID == right.CostReleaseReceiptID &&
 		left.QuotaReleaseReceiptID == right.QuotaReleaseReceiptID &&
+		left.CostSettlementReceiptID == right.CostSettlementReceiptID &&
+		left.QuotaConsumptionReceiptID == right.QuotaConsumptionReceiptID &&
+		left.GenerationRequestID == right.GenerationRequestID && left.ProviderJobID == right.ProviderJobID &&
+		left.ProviderReceiptID == right.ProviderReceiptID &&
 		left.Status == right.Status && optionalIntentStringEqual(left.Claimant, right.Claimant) &&
 		optionalIntentStringEqual(left.ClaimToken, right.ClaimToken) &&
 		optionalIntentTimeEqual(left.ClaimExpiresAt, right.ClaimExpiresAt) &&
