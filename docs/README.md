@@ -52,7 +52,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D08` | [0009 已验收 MVP 纵向切片](design/0009-剧本到分镜MVP垂直切片设计.md) | **已完成（2026-08-27）**：只增加 StoryGraph/视觉资产/Harness/Kafka-ELK 演进与新旧证据隔离说明 | 仅解锁 `SG-D09`；历史 `0009` Plan/Acceptance 不得抵扣新验收 |
 | `SG-D09` | [2001 Backend 服务架构](design/2001-后端服务架构.md) | **已完成（2026-08-27）**：固定单 Backend/GORM Catalog、Temporal、私有 Agent、Kafka/Search/ELK 目标与当前缺口 | 仅解锁 `SG-D10`；不引入 Migration、Raw SQL、第二 ORM 或第二 Writer |
 | `SG-D10` | [2002 Backend 领域设计](design/2002-后端领域模块功能设计.md) | **已完成（2026-08-27）**：固定 StoryGraph Compiler、Candidate→Owner Apply、Asset/Specification/State、三类 Binding 与 Kafka/Search 领域边界 | 仅解锁 `SG-D11`；不开始 Harness 或 Canvas |
-| `SG-D11` | [3001 Production Bible](design/3001-项目制作圣经生成执行框架设计.md) | 改为 Evidence/Claim/Specification/State 的 StoryGraph 上游，保留 Backend Owner | 旧 `3001` Plan 继续冻结 |
+| `SG-D11` | [3001 Production Bible](design/3001-项目制作圣经生成执行框架设计.md) | **已完成（2026-08-27）**：改为 Evidence/Claim/Specification/State 的 StoryGraph 上游，拆开 Bible Confirm 与资产物化 | 仅解锁 `SG-D12`；旧 `3001` 派生文档继续冻结 |
 | `SG-D12` | [3002 本地 Codex 分镜 Harness](design/3002-本地-Codex-分镜智能体执行框架设计.md) | 收口到 `3003` 唯一 Bundle，固定 Draft `needs_asset` 与 Detail 分阶段 | 旧 5-Skill Plan 继续冻结 |
 | `SG-D13` | [2051 图片 Provider](design/2051-Runware图片Provider与Generation执行器设计.md) | 对齐 `reference_asset`/`shot_frame`、composite reference sheet 和精确 AssetVersion 绑定，并单独接受 | 未对齐前不用 shot-only Provider 冒充角色/地点参考资产 |
 | `SG-D14` | [1001 前端应用架构](design/1001-前端应用架构.md) | 先固定只读 Story Lens/Workflow Lens 和 Query 边界 | 不预建协作或可写 Canvas |
@@ -64,7 +64,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D20` | `0010` 唯一总 Plan | 引用 `SG-Ixx` 任务与 `3003` Agent 子项，Checklist 全为 `[ ]` | 不继续从旧 `3001/3002/0007` Plan 领取 StoryGraph 任务 |
 | `SG-D21` | 新 Acceptance Criteria | 逐项映射 Requirement/`SG-Ixx`，初始全为 `[ ]` | 无当次真实证据不得勾选 |
 
-`SG-D01`–`SG-D10` 已于 2026-08-27 依次接受并完成，`SG-D11` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；`SG-D11/SG-D12` 只同步两份 Design，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
+`SG-D01`–`SG-D11` 已于 2026-08-27 依次接受并完成，`SG-D12` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；`SG-D12` 只同步一份 Design，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
 
 ## 编号与命名
 
@@ -122,7 +122,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `2051` | Runware 图片 Provider 与 Generation 执行器 | — | [图片 Provider 与执行器设计](design/2051-Runware图片Provider与Generation执行器设计.md) | — | — | — | 已冻结；仅在 `SG-D13` 激活后同步并单独评审 |
 | `2055` | Workflow 公共 Human Gate 命令与恢复 | — | [公共 Human Gate 设计](design/2055-Workflow公共HumanGate命令与恢复设计.md) | — | — | — | 已冻结；仅在 `SG-D16` 激活后同步并单独评审 |
 | `2056` | Workflow 阶段 5 完成度审计 | — | — | — | — | [完成度审计](acceptance/2056-Workflow阶段5完成度审计.md) | 静态证据审计完成，未改变阶段完成状态 |
-| `3001` | 项目制作圣经与完整剧本闭环 | [产品需求](prd/3001-项目制作圣经产品需求.md) | [执行框架设计](design/3001-项目制作圣经生成执行框架设计.md) | [需求规格](requirement/3001-项目制作圣经需求规格.md) | [实施计划](plan/3001-项目制作圣经实施计划.md) | [验收 Checklist](acceptance/3001-完整剧本业务闭环验收标准.md) | `SG-D11` 只同步 Design；旧派生文档持续冻结，由 `SG-D17`–`SG-D21` 取代 |
+| `3001` | 项目制作圣经与完整剧本闭环 | [产品需求](prd/3001-项目制作圣经产品需求.md) | [执行框架设计](design/3001-项目制作圣经生成执行框架设计.md) | [需求规格](requirement/3001-项目制作圣经需求规格.md) | [实施计划](plan/3001-项目制作圣经实施计划.md) | [验收 Checklist](acceptance/3001-完整剧本业务闭环验收标准.md) | `SG-D11` Design 已完成 StoryGraph 上游同步；旧派生文档持续冻结，由 `SG-D17`–`SG-D21` 取代 |
 | `3002` | 本地 Codex 分镜智能体 | [产品需求](prd/3002-本地-Codex-分镜智能体产品需求.md) | [执行框架设计](design/3002-本地-Codex-分镜智能体执行框架设计.md) | [需求规格](requirement/3002-本地-Codex-分镜智能体执行框架需求规格.md) | [实施计划](plan/3002-本地-Codex-分镜智能体执行框架实施计划.md) | [验收 Checklist](acceptance/3002-本地-Codex-分镜智能体执行框架验收标准.md) | `SG-D12` 只同步 Design；旧派生文档持续冻结，由 `SG-D17`–`SG-D21` 取代 |
 | `3003` | StoryGraph 剧本解析 Harness 与内置 Skill | — | [Harness 与内置 Skill 设计](design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) | — | — | — | Design 已接受（`SG-D02`）；尚未派生或实施 |
 
