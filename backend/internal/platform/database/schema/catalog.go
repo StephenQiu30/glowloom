@@ -23,6 +23,8 @@ func Catalog() []any {
 		&model.UploadSession{},
 		&model.Artifact{},
 		&model.ArtifactLocation{},
+		&model.GenerationCandidate{},
+		&model.GenerationQCReport{},
 		&model.ScriptDocument{},
 		&model.DocumentRevision{},
 		&model.NodeDefinitionVersion{},
