@@ -17,10 +17,12 @@ import (
 const setBudgetOperation = "cost.budget.set"
 
 var (
-	ErrBudgetNotFound = errors.New("cost budget policy not found")
-	amountPattern     = regexp.MustCompile(`^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$`)
-	currencyPattern   = regexp.MustCompile(`^[A-Z]{3}$`)
-	maximumAmount     = decimal.RequireFromString("99999999999999.999999")
+	ErrBudgetNotFound     = errors.New("cost budget policy not found")
+	ErrPriceQuoteNotFound = errors.New("cost price quote not found")
+	ErrEstimateNotFound   = errors.New("cost estimate not found")
+	amountPattern         = regexp.MustCompile(`^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$`)
+	currencyPattern       = regexp.MustCompile(`^[A-Z]{3}$`)
+	maximumAmount         = decimal.RequireFromString("99999999999999.999999")
 )
 
 type Error struct {
@@ -52,6 +54,13 @@ type Repository interface {
 	GetBudgetForUpdate(context.Context, string) (domain.BudgetPolicy, error)
 	EnsureBudget(context.Context, domain.BudgetPolicy) (domain.BudgetPolicy, error)
 	UpdateBudget(context.Context, domain.BudgetPolicy, int64) (domain.BudgetPolicy, error)
+	FindPriceQuote(context.Context, string) (domain.PriceQuote, error)
+	FindCurrentPriceQuote(context.Context, string, string) (domain.PriceQuote, error)
+	GetCurrentPriceQuoteForUpdate(context.Context, string, string) (domain.PriceQuote, error)
+	EnsurePriceQuote(context.Context, domain.PriceQuote) (domain.PriceQuote, error)
+	FindEstimate(context.Context, string) (domain.Estimate, error)
+	FindEstimateBySource(context.Context, string, string, string) (domain.Estimate, error)
+	EnsureEstimate(context.Context, domain.Estimate) (domain.Estimate, error)
 }
 
 type TransactionManager interface {
@@ -166,6 +175,18 @@ func (service *Service) SetBudget(ctx context.Context, actor Actor, command SetB
 					return retryErr
 				}
 				return conflict("Project budget revision has changed")
+			}
+			if current.Currency != command.Currency {
+				quote, quoteErr := repo.FindCurrentPriceQuote(ctx, scope.ProjectID, domain.MetricGenerationImage)
+				if quoteErr == nil {
+					if validateErr := validatePriceQuote(quote); validateErr != nil {
+						return validateErr
+					}
+					return conflict("Project budget currency is frozen by existing price quotes")
+				}
+				if !errors.Is(quoteErr, ErrPriceQuoteNotFound) {
+					return quoteErr
+				}
 			}
 			if !current.LimitAmount.Equal(amount) || current.Currency != command.Currency {
 				desired := current
@@ -305,10 +326,16 @@ func normalizeError(err error) error {
 		return nil
 	}
 	if errors.Is(err, platformcommand.ErrInputMismatch) {
-		return conflict("Cost budget command or facts have drifted")
+		return conflict("Cost command or facts have drifted")
 	}
 	if errors.Is(err, ErrBudgetNotFound) {
 		return notFound("Project budget is not set")
+	}
+	if errors.Is(err, ErrPriceQuoteNotFound) {
+		return notFound("Project price quote is not set")
+	}
+	if errors.Is(err, ErrEstimateNotFound) {
+		return notFound("Cost estimate not found")
 	}
 	return err
 }

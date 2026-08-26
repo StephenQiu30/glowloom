@@ -65,7 +65,16 @@ func (repo *repository) AuthorizeProject(
 	if access == "read" {
 		return application.ProjectScope{WorkspaceID: projectRecord.WorkspaceID.String(), ProjectID: projectRecord.ID.String()}, nil
 	}
-	if access != "owner" || workspace.Status != "active" || projectRecord.Status != "active" || membership.Role != "owner" {
+	if workspace.Status != "active" || projectRecord.Status != "active" {
+		return application.ProjectScope{}, forbidden()
+	}
+	if access == "owner" && membership.Role != "owner" {
+		return application.ProjectScope{}, forbidden()
+	}
+	if access == "write" && membership.Role != "owner" && membership.Role != "editor" {
+		return application.ProjectScope{}, forbidden()
+	}
+	if access != "owner" && access != "write" {
 		return application.ProjectScope{}, forbidden()
 	}
 	return application.ProjectScope{WorkspaceID: projectRecord.WorkspaceID.String(), ProjectID: projectRecord.ID.String()}, nil

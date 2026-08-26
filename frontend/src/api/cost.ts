@@ -22,3 +22,24 @@ export function setCostBudgetApiV1ProjectsProjectIdCostBudgetPost(
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
+
+export function getCurrentCostPriceQuoteApiV1ProjectsProjectIdCostPricesMetricGet(
+  params: { project_id: string; metric: "generation.image" },
+  options?: RequestOptions,
+) {
+  return request<Envelope<API.CostPriceQuoteResponse>>(
+    `/api/v1/projects/${params.project_id}/cost-prices/${params.metric}`,
+    { method: "GET", ...(options ?? {}) },
+  );
+}
+
+export function setCostPriceQuoteApiV1ProjectsProjectIdCostPricesMetricPost(
+  params: { project_id: string; metric: "generation.image" },
+  body: API.CostPriceQuoteSetRequest,
+  options?: RequestOptions,
+) {
+  return request<Envelope<API.CostPriceQuoteResponse>>(
+    `/api/v1/projects/${params.project_id}/cost-prices/${params.metric}`,
+    { method: "POST", data: body, ...(options ?? {}) },
+  );
+}

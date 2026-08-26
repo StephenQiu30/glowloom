@@ -360,6 +360,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/cost-prices/{metric}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCurrentCostPriceQuote"];
+        put?: never;
+        post: operations["setCostPriceQuote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/delete-preflight": {
         parameters: {
             query?: never;
@@ -1060,6 +1076,29 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        CostPriceQuoteSetRequest: {
+            unit_amount: string;
+            currency: string;
+            expected_revision: number;
+            idempotency_key: string;
+        };
+        CostPriceQuoteResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @constant */
+            metric: "generation.image";
+            unit_amount: string;
+            currency: string;
+            revision: number;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
         };
         WorkflowStartRequest: {
             /** Format: uuid */
@@ -2547,6 +2586,7 @@ export interface components {
     parameters: {
         workspace_id: string;
         project_id: string;
+        cost_metric: "generation.image";
         upload_session_id: string;
         version_id: string;
         revision_id: string;
@@ -3128,6 +3168,69 @@ export interface operations {
                     };
                 };
             };
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCurrentCostPriceQuote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                metric: components["parameters"]["cost_metric"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cost 当前不可变价格报价 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CostPriceQuoteResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    setCostPriceQuote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                metric: components["parameters"]["cost_metric"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CostPriceQuoteSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Cost 价格 Revision 已冻结 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CostPriceQuoteResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };

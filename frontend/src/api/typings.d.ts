@@ -9,6 +9,8 @@ declare global {
     type ConfirmEpisodePlanRequest = components["schemas"]["ConfirmEpisodePlanRequest"];
     type CostBudgetResponse = components["schemas"]["CostBudgetResponse"];
     type CostBudgetSetRequest = components["schemas"]["CostBudgetSetRequest"];
+    type CostPriceQuoteResponse = components["schemas"]["CostPriceQuoteResponse"];
+    type CostPriceQuoteSetRequest = components["schemas"]["CostPriceQuoteSetRequest"];
     type DeactivateAccountRequest = components["schemas"]["DeactivateAccountRequest"];
     type DocumentRevisionResponse = components["schemas"]["DocumentRevisionResponse"];
     type EpisodePlanCreateRequest = components["schemas"]["EpisodePlanCreateRequest"];

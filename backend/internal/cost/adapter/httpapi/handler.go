@@ -17,6 +17,8 @@ import (
 type Service interface {
 	SetBudget(context.Context, application.Actor, application.SetBudgetCommand) (application.BudgetResult, error)
 	GetBudget(context.Context, application.Actor, string) (domain.BudgetPolicy, error)
+	SetPriceQuote(context.Context, application.Actor, application.SetPriceQuoteCommand) (application.PriceQuoteResult, error)
+	GetCurrentPriceQuote(context.Context, application.Actor, string, string) (domain.PriceQuote, error)
 }
 
 type Authenticator interface {
@@ -56,6 +58,8 @@ func New(service Service, authenticator Authenticator) *Handler {
 func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects/{project_id}/cost-budget", handler.get)
 	mux.HandleFunc("POST /api/v1/projects/{project_id}/cost-budget", handler.set)
+	mux.HandleFunc("GET /api/v1/projects/{project_id}/cost-prices/{metric}", handler.getPriceQuote)
+	mux.HandleFunc("POST /api/v1/projects/{project_id}/cost-prices/{metric}", handler.setPriceQuote)
 }
 
 func (handler *Handler) get(writer http.ResponseWriter, request *http.Request) {

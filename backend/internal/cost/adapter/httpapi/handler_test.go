@@ -88,8 +88,9 @@ func (auth stubAuthenticator) Authenticate(*http.Request) (authentication.Claims
 }
 
 type stubService struct {
-	actor   application.Actor
-	command application.SetBudgetCommand
+	actor        application.Actor
+	command      application.SetBudgetCommand
+	priceCommand application.SetPriceQuoteCommand
 }
 
 func (service *stubService) SetBudget(
@@ -109,4 +110,65 @@ func (service *stubService) SetBudget(
 
 func (*stubService) GetBudget(context.Context, application.Actor, string) (domain.BudgetPolicy, error) {
 	return domain.BudgetPolicy{}, errors.New("not implemented")
+}
+
+func (service *stubService) SetPriceQuote(
+	_ context.Context,
+	actor application.Actor,
+	command application.SetPriceQuoteCommand,
+) (application.PriceQuoteResult, error) {
+	service.actor, service.priceCommand = actor, command
+	value := domain.PriceQuote{
+		ID: "019fb2e0-a000-7000-8000-000000000005", WorkspaceID: "019fb2e0-a000-7000-8000-000000000004",
+		ProjectID: command.ProjectID, Metric: command.Metric, UnitAmount: decimal.RequireFromString(command.UnitAmount),
+		Currency: command.Currency, Revision: 1, CreatedBy: actor.UserID, CreatedAt: time.Unix(10, 0).UTC(),
+	}
+	return application.PriceQuoteResult{Quote: value}, nil
+}
+
+func (*stubService) GetCurrentPriceQuote(
+	context.Context,
+	application.Actor,
+	string,
+	string,
+) (domain.PriceQuote, error) {
+	return domain.PriceQuote{}, errors.New("not implemented")
+}
+
+func TestSetPriceQuotePreservesDecimalStringContract(t *testing.T) {
+	service := &stubService{}
+	handler := New(service, stubAuthenticator{})
+	mux := http.NewServeMux()
+	handler.Register(mux)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-prices/generation.image",
+		strings.NewReader(`{"unit_amount":"0.125","currency":"USD","expected_revision":0,"idempotency_key":"price-1"}`),
+	)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"unit_amount":"0.125000"`) ||
+		!strings.Contains(response.Body.String(), `"metric":"generation.image"`) {
+		t.Fatalf("price response = %d %s", response.Code, response.Body.String())
+	}
+	if service.priceCommand.UnitAmount != "0.125" || service.priceCommand.Metric != "generation.image" {
+		t.Fatalf("price command = %#v", service.priceCommand)
+	}
+}
+
+func TestSetPriceQuoteRejectsNumericAmount(t *testing.T) {
+	service := &stubService{}
+	handler := New(service, stubAuthenticator{})
+	mux := http.NewServeMux()
+	handler.Register(mux)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-prices/generation.image",
+		strings.NewReader(`{"unit_amount":0.125,"currency":"USD","expected_revision":0,"idempotency_key":"price-1"}`),
+	)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusUnprocessableEntity || service.priceCommand.ProjectID != "" {
+		t.Fatalf("numeric price response = %d %s command=%#v", response.Code, response.Body.String(), service.priceCommand)
+	}
 }

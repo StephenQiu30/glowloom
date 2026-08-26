@@ -23,6 +23,7 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 		"/api/v1/auth/register",
 		"/api/v1/projects",
 		"/api/v1/projects/{project_id}/cost-budget",
+		"/api/v1/projects/{project_id}/cost-prices/{metric}",
 		"/api/v1/projects/{project_id}/current-script-document",
 		"/api/v1/document-revisions/{revision_id}/production-bibles",
 		"/api/v1/episodes/{episode_id}/storyboard-drafts",
@@ -39,6 +40,9 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 	if _, exists := document.Paths["/api/v1/projects/{project_id}/budget-limit"]; exists {
 		t.Error("public contract still exposes the Production-owned legacy budget route")
 	}
+	if _, exists := document.Paths["/api/v1/projects/{project_id}/cost-estimates"]; exists {
+		t.Error("public contract exposes internal estimates before GenerationIntent coordination")
+	}
 	var projectSchema struct {
 		Required   []string                   `json:"required"`
 		Properties map[string]json.RawMessage `json:"properties"`
@@ -54,5 +58,8 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 	}
 	if _, exists := document.Components.Schemas["CostBudgetResponse"]; !exists {
 		t.Error("public contract is missing CostBudgetResponse")
+	}
+	if _, exists := document.Components.Schemas["CostPriceQuoteResponse"]; !exists {
+		t.Error("public contract is missing CostPriceQuoteResponse")
 	}
 }
