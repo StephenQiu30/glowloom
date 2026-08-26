@@ -17,6 +17,7 @@ import (
 
 func (store *Store) PrepareControl(
 	ctx context.Context,
+	actor application.Actor,
 	desired domain.ControlPreparation,
 ) (domain.ControlPreparation, error) {
 	intentRecord, err := controlIntentRecord(desired.Intent)
@@ -30,15 +31,17 @@ func (store *Store) PrepareControl(
 			Where("workspace_id = ? AND idempotency_key = ?", intentRecord.WorkspaceID, intentRecord.IdempotencyKey).
 			First(&existing).Error
 		if existingErr == nil {
+			if _, authorizeErr := authorizeWorkflowRun(ctx, transaction, actor, existing.WorkflowRunID, true, true); authorizeErr != nil {
+				return authorizeErr
+			}
 			return loadControlPreparation(transaction, existing, &prepared)
 		}
 		if !errors.Is(existingErr, gorm.ErrRecordNotFound) {
 			return existingErr
 		}
-		var run model.WorkflowRun
-		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).
-			First(&run, "id = ?", intentRecord.WorkflowRunID).Error; loadErr != nil {
-			return normalizeNotFound(loadErr)
+		run, authorizeErr := authorizeWorkflowRun(ctx, transaction, actor, intentRecord.WorkflowRunID, true, true)
+		if authorizeErr != nil {
+			return authorizeErr
 		}
 		if run.WorkspaceID != intentRecord.WorkspaceID || run.Revision != intentRecord.ExpectedRunRevision ||
 			!controllableRunStatus(run, intentRecord.Action) {

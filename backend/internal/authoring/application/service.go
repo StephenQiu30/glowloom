@@ -42,6 +42,7 @@ type Repository interface {
 	UpdateDraft(context.Context, domain.Draft, int) error
 	CreateRevision(context.Context, domain.Draft, domain.Revision) error
 	GetRevision(context.Context, Actor, string) (domain.Revision, error)
+	AuthorizeRevisionExecution(context.Context, Actor, string) error
 }
 
 type TransactionManager interface {
@@ -285,6 +286,9 @@ func (service *Service) CompilationSource(ctx context.Context, actor Actor, revi
 	var catalog domain.Catalog
 	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
 		var err error
+		if err = repo.AuthorizeRevisionExecution(ctx, actor, revisionID); err != nil {
+			return err
+		}
 		revision, err = repo.GetRevision(ctx, actor, revisionID)
 		if err != nil {
 			return err

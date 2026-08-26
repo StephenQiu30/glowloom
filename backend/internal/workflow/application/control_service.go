@@ -11,7 +11,8 @@ import (
 )
 
 type ControlRepository interface {
-	PrepareControl(context.Context, domain.ControlPreparation) (domain.ControlPreparation, error)
+	ResolveRunAccess(context.Context, Actor, string, bool) (domain.WorkflowRun, error)
+	PrepareControl(context.Context, Actor, domain.ControlPreparation) (domain.ControlPreparation, error)
 	BeginControlAttempt(context.Context, string, time.Time) (domain.ControlPreparation, error)
 	FinalizeControlAttempt(context.Context, domain.ControlFinalization) error
 }
@@ -80,10 +81,18 @@ func (service *ControlService) control(
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	actor.UserID = strings.TrimSpace(actor.UserID)
 	if service == nil || service.repository == nil || service.controller == nil || service.config.Now == nil ||
-		service.config.NewID == nil || actor.UserID == "" || command.WorkspaceID == "" || command.WorkflowRunID == "" ||
+		service.config.NewID == nil || actor.UserID == "" || actor.TokenVersion < 1 || command.WorkflowRunID == "" ||
 		command.ExpectedRevision < 1 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 || !validControlAction(action) {
 		return domain.ControlIntent{}, invalid("Invalid workflow control input")
 	}
+	authorizedRun, err := service.repository.ResolveRunAccess(ctx, actor, command.WorkflowRunID, true)
+	if err != nil {
+		return domain.ControlIntent{}, normalizeError(err)
+	}
+	if command.WorkspaceID != "" && command.WorkspaceID != authorizedRun.WorkspaceID {
+		return domain.ControlIntent{}, normalizeError(ErrNotFound)
+	}
+	command.WorkspaceID = authorizedRun.WorkspaceID
 	commandInputHash, err := platformcommand.InputHash(struct {
 		WorkspaceID, WorkflowRunID string
 		ExpectedRevision           int
@@ -107,7 +116,7 @@ func (service *ControlService) control(
 		ExpectedRunRevision: command.ExpectedRevision, Status: "pending", Revision: 1,
 		CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now,
 	}}
-	prepared, err := service.repository.PrepareControl(ctx, desired)
+	prepared, err := service.repository.PrepareControl(ctx, actor, desired)
 	if err != nil {
 		return domain.ControlIntent{}, normalizeError(err)
 	}

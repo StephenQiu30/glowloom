@@ -968,10 +968,177 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["startWorkflowRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow-runs/{workflow_run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getWorkflowRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow-runs/{workflow_run_id}/reruns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rerunWorkflowFromNode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow-runs/{workflow_run_id}/controls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["controlWorkflowRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        WorkflowStartRequest: {
+            /** Format: uuid */
+            authoring_revision_id: string;
+            idempotency_key: string;
+        };
+        WorkflowRerunRequest: {
+            root_node_id: string;
+            idempotency_key: string;
+        };
+        WorkflowControlRequest: {
+            /** @enum {string} */
+            action: "pause" | "resume" | "cancel";
+            expected_revision: number;
+            idempotency_key: string;
+        };
+        WorkflowRunResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            authoring_revision_id: string;
+            /** Format: uuid */
+            definition_version_id: string;
+            /** Format: uuid */
+            run_input_snapshot_id: string;
+            temporal_workflow_id: string;
+            start_input_hash: string;
+            /** Format: uuid */
+            source_workflow_run_id: string | null;
+            rerun_root_node_id: string | null;
+            /** @enum {string} */
+            status: "RUNNING" | "RETRYING" | "WAITING_HUMAN" | "PAUSED" | "NEEDS_ATTENTION" | "SUCCEEDED" | "FAILED" | "CANCELLED";
+            progress_stage: string;
+            next_action: string | null;
+            error: Record<string, never> | null;
+            paused_from_status: string | null;
+            paused_from_progress_stage: string | null;
+            revision: number;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        WorkflowNodeRunResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            workflow_run_id: string;
+            node_id: string;
+            definition_key: string;
+            definition_version: string;
+            executor: string;
+            risk_level: string;
+            /** @enum {string} */
+            status: "QUEUED" | "RUNNING" | "WAITING_HUMAN" | "RETRYING" | "SKIPPED" | "SUCCEEDED" | "FAILED" | "CANCELLED";
+            attempt: number;
+            /** Format: uuid */
+            reused_from_node_run_id: string | null;
+            input_hash: string;
+            cache_key: string;
+            output_hash: string;
+            revision: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        WorkflowRunViewResponse: {
+            run: components["schemas"]["WorkflowRunResponse"];
+            nodes: components["schemas"]["WorkflowNodeRunResponse"][];
+        };
+        WorkflowControlIntentResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workflow_run_id: string;
+            /** @enum {string} */
+            action: "pause" | "resume" | "cancel";
+            expected_run_revision: number;
+            /** @enum {string} */
+            status: "pending" | "completed" | "unknown" | "conflict";
+            attempt_no: number;
+            revision: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        WorkflowRunEnvelope: {
+            data: components["schemas"]["WorkflowRunViewResponse"];
+        };
+        WorkflowControlEnvelope: {
+            data: components["schemas"]["WorkflowRunViewResponse"] & {
+                control: components["schemas"]["WorkflowControlIntentResponse"];
+            };
+        };
         /** AuthResponse */
         AuthResponse: {
             /** Access Token */
@@ -2370,6 +2537,7 @@ export interface components {
         task_id: string;
         batch_id: string;
         export_id: string;
+        workflow_run_id: string;
     };
     requestBodies: never;
     headers: never;
@@ -3669,6 +3837,118 @@ export interface operations {
                     "application/zip": string;
                 };
             };
+        };
+    };
+    startWorkflowRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Workflow 已启动 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getWorkflowRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_run_id: components["parameters"]["workflow_run_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workflow Run 与节点投影 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    rerunWorkflowFromNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_run_id: components["parameters"]["workflow_run_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowRerunRequest"];
+            };
+        };
+        responses: {
+            /** @description 派生 Workflow Run 已启动 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    controlWorkflowRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_run_id: components["parameters"]["workflow_run_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowControlRequest"];
+            };
+        };
+        responses: {
+            /** @description Workflow 控制意图已记录并对账 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowControlEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }

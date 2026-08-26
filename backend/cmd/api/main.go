@@ -20,6 +20,7 @@ import (
 	agentclient "github.com/StephenQiu30/lanverse/backend/internal/agent/client"
 	agentgrant "github.com/StephenQiu30/lanverse/backend/internal/agent/grant"
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
+	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoringdomain "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
@@ -46,6 +47,12 @@ import (
 	storyboardhttp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/httpapi"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
+	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
+	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
+	workflowhttp "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/httpapi"
+	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
+	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
+	workflowdomain "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
 const (
@@ -90,7 +97,8 @@ func main() {
 		logger.Error("system node catalog is invalid", "error", err)
 		os.Exit(1)
 	}
-	if _, err = authoringgorm.New(database).EnsureCatalog(syncContext, systemNodeCatalog, time.Now().UTC(), uuid.NewString); err != nil {
+	authoringStore := authoringgorm.New(database)
+	if _, err = authoringStore.EnsureCatalog(syncContext, systemNodeCatalog, time.Now().UTC(), uuid.NewString); err != nil {
 		cancelSync()
 		logger.Error("system node catalog synchronization failed", "error", err)
 		os.Exit(1)
@@ -110,6 +118,16 @@ func main() {
 	}
 	cancelObjects()
 	logger.Info("object storage bucket ready")
+	temporalRuntime, err := workflowtemporal.New(workflowtemporal.Config{
+		Address: configuration.TemporalAddress, Namespace: configuration.TemporalNamespace,
+		TaskQueue: configuration.TemporalTaskQueue,
+	})
+	if err != nil {
+		logger.Error("workflow Temporal connection failed", "error", err)
+		os.Exit(1)
+	}
+	defer temporalRuntime.Close()
+	logger.Info("workflow Temporal client ready", "namespace", configuration.TemporalNamespace)
 
 	projectStore := projectgorm.New(database)
 	projectService := projectapp.NewService(projectStore, func() time.Time { return time.Now().UTC() }, uuid.NewString)
@@ -164,6 +182,24 @@ func main() {
 	storyboardHandler := storyboardhttp.New(storyboardService, tokenVerifier)
 	storyboardWorker := storyboardapp.NewWorker(storyboardStore, agentRuntime, func() time.Time { return time.Now().UTC() }, configuration.AgentPollInterval, configuration.AgentClaimLease, logger)
 	projectHandler := projecthttp.New(projectService, tokenVerifier)
+	authoringService := authoringapp.NewService(authoringStore, authoringapp.Config{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+	})
+	workflowStore := workflowgorm.New(database)
+	workflowCompiler := workflowapp.NewService(
+		workflowauthoring.New(authoringService), workflowStore, workflowdomain.SystemCompilerContract(),
+		workflowapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+	)
+	workflowStartService := workflowapp.NewStartService(
+		workflowCompiler, workflowStore, temporalRuntime,
+		workflowapp.StartConfig{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+	)
+	workflowQueryService := workflowapp.NewQueryService(workflowStore)
+	workflowControlService := workflowapp.NewControlService(
+		workflowStore, temporalRuntime,
+		workflowapp.ControlConfig{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+	)
+	workflowHandler := workflowhttp.New(workflowStartService, workflowQueryService, workflowControlService, tokenVerifier)
 	httpMetrics := telemetry.NewHTTPMetrics()
 	server := &http.Server{
 		Addr: configuration.ListenAddress,
@@ -174,7 +210,10 @@ func main() {
 				if readyErr := platformdatabase.Ping(ctx, database); readyErr != nil {
 					return readyErr
 				}
-				return objects.Ping(ctx)
+				if readyErr := objects.Ping(ctx); readyErr != nil {
+					return readyErr
+				}
+				return temporalRuntime.Ping(ctx)
 			},
 			AllowedOrigins: configuration.AllowedOrigins,
 			RegisterRoutes: func(mux *http.ServeMux) {
@@ -185,6 +224,7 @@ func main() {
 				bibleHandler.Register(mux)
 				planningHandler.Register(mux)
 				storyboardHandler.Register(mux)
+				workflowHandler.Register(mux)
 			},
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

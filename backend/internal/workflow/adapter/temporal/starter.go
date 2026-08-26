@@ -50,6 +50,14 @@ func (runtime *Client) Close() {
 	}
 }
 
+func (runtime *Client) Ping(ctx context.Context) error {
+	if runtime == nil || runtime.client == nil {
+		return errors.New("Temporal client is unavailable")
+	}
+	_, err := runtime.client.CheckHealth(ctx, &temporalclient.CheckHealthRequest{})
+	return err
+}
+
 func (runtime *Client) Start(ctx context.Context, request domain.StartRequest) (domain.StartObservation, error) {
 	if runtime == nil || runtime.client == nil || !validRequest(request) {
 		return domain.StartObservation{}, errors.New("invalid Temporal workflow start request")

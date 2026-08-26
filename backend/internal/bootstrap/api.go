@@ -51,7 +51,7 @@ func readinessHandler(runtime RuntimeOptions) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if runtime.Ready != nil {
 			if err := runtime.Ready(request.Context()); err != nil {
-				writeNotReady(writer, "database_unavailable")
+				writeNotReady(writer, "dependency_unavailable")
 				return
 			}
 		}

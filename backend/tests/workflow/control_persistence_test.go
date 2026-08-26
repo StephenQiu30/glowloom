@@ -134,6 +134,19 @@ func TestCancelControlPersistsFactsAndFencesLateNodeExecution(t *testing.T) {
 	if err != nil || unknown.Status != "unknown" {
 		t.Fatalf("persist unknown cancellation: intent=%#v err=%v", unknown, err)
 	}
+	if err = database.Model(&model.Membership{}).
+		Where("workspace_id = ? AND user_id = ?", fixture.workspaceID, fixture.userID).
+		Update("status", "removed").Error; err != nil {
+		t.Fatalf("revoke workflow controller membership: %v", err)
+	}
+	if _, err = workflowStore.PrepareControl(ctx, actor, workflow.ControlPreparation{Intent: unknown}); err == nil {
+		t.Fatal("existing control intent replay skipped transactional authorization")
+	}
+	if err = database.Model(&model.Membership{}).
+		Where("workspace_id = ? AND user_id = ?", fixture.workspaceID, fixture.userID).
+		Update("status", "active").Error; err != nil {
+		t.Fatalf("restore workflow controller membership: %v", err)
+	}
 	completed, err := controlService.Cancel(ctx, actor, command)
 	if err != nil || completed.Status != "completed" || completed.ID != unknown.ID {
 		t.Fatalf("reconcile persisted cancellation: intent=%#v err=%v", completed, err)

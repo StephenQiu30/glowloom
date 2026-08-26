@@ -50,11 +50,11 @@ func TestRegisteredBusinessRouteIsOwnedByGo(t *testing.T) {
 	}
 }
 
-func TestReadinessReflectsDatabase(t *testing.T) {
-	handler := newTestHandler(func(context.Context) error { return errors.New("database down") })
+func TestReadinessReflectsAnyRequiredDependency(t *testing.T) {
+	handler := newTestHandler(func(context.Context) error { return errors.New("required dependency down") })
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
-	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), `"reason":"database_unavailable"`) {
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), `"reason":"dependency_unavailable"`) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
 }

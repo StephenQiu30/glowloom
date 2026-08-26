@@ -186,6 +186,7 @@ func newControlCycleRepository(now time.Time) *controlCycleRepository {
 
 func (repo *controlCycleRepository) PrepareControl(
 	_ context.Context,
+	_ workflowapp.Actor,
 	desired workflow.ControlPreparation,
 ) (workflow.ControlPreparation, error) {
 	repo.mu.Lock()
@@ -219,6 +220,18 @@ func (repo *controlCycleRepository) PrepareControl(
 	repo.byKey[desired.Intent.IdempotencyKey] = desired
 	repo.keyByIntent[desired.Intent.ID] = desired.Intent.IdempotencyKey
 	return desired, nil
+}
+
+func (repo *controlCycleRepository) ResolveRunAccess(
+	_ context.Context,
+	_ workflowapp.Actor,
+	runID string,
+	write bool,
+) (workflow.WorkflowRun, error) {
+	if runID != repo.run.ID || !write {
+		return workflow.WorkflowRun{}, workflowapp.ErrNotFound
+	}
+	return repo.run, nil
 }
 
 func (repo *controlCycleRepository) BeginControlAttempt(
@@ -273,6 +286,7 @@ func newControlRepository(now time.Time) *controlRepository {
 
 func (repo *controlRepository) PrepareControl(
 	_ context.Context,
+	_ workflowapp.Actor,
 	desired workflow.ControlPreparation,
 ) (workflow.ControlPreparation, error) {
 	repo.mu.Lock()
@@ -289,6 +303,18 @@ func (repo *controlRepository) PrepareControl(
 	}
 	repo.prepared.Run = repo.run
 	return repo.prepared, nil
+}
+
+func (repo *controlRepository) ResolveRunAccess(
+	_ context.Context,
+	_ workflowapp.Actor,
+	runID string,
+	write bool,
+) (workflow.WorkflowRun, error) {
+	if runID != repo.run.ID || !write {
+		return workflow.WorkflowRun{}, workflowapp.ErrNotFound
+	}
+	return repo.run, nil
 }
 
 func (repo *controlRepository) BeginControlAttempt(

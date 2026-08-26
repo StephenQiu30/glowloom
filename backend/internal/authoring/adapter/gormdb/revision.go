@@ -223,6 +223,23 @@ func (repo *repository) GetRevision(ctx context.Context, actor application.Actor
 	return revisionDomain(record, catalog)
 }
 
+func (repo *repository) AuthorizeRevisionExecution(
+	ctx context.Context,
+	actor application.Actor,
+	revisionID string,
+) error {
+	id, err := uuid.Parse(revisionID)
+	if err != nil {
+		return application.ErrNotFound
+	}
+	var record model.AuthoringRevision
+	if err = repo.database.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
+		return normalizeNotFound(err)
+	}
+	_, err = authorizeProject(ctx, repo.database, actor, record.ProjectID, true)
+	return err
+}
+
 func authorizeProject(ctx context.Context, database *gorm.DB, actor application.Actor, projectID uuid.UUID, write bool) (model.Project, error) {
 	userID, err := uuid.Parse(actor.UserID)
 	if err != nil {

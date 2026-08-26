@@ -59,6 +59,15 @@ declare global {
     type UploadInitializationResponse = components["schemas"]["UploadInitializationResponse"];
     type UploadSessionResponse = components["schemas"]["UploadSessionResponse"];
     type UserResponse = components["schemas"]["UserResponse"];
+    type WorkflowControlEnvelope = components["schemas"]["WorkflowControlEnvelope"];
+    type WorkflowControlIntentResponse = components["schemas"]["WorkflowControlIntentResponse"];
+    type WorkflowControlRequest = components["schemas"]["WorkflowControlRequest"];
+    type WorkflowNodeRunResponse = components["schemas"]["WorkflowNodeRunResponse"];
+    type WorkflowRerunRequest = components["schemas"]["WorkflowRerunRequest"];
+    type WorkflowRunEnvelope = components["schemas"]["WorkflowRunEnvelope"];
+    type WorkflowRunResponse = components["schemas"]["WorkflowRunResponse"];
+    type WorkflowRunViewResponse = components["schemas"]["WorkflowRunViewResponse"];
+    type WorkflowStartRequest = components["schemas"]["WorkflowStartRequest"];
     type WorkspaceCreateRequest = components["schemas"]["WorkspaceCreateRequest"];
     type WorkspaceResponse = components["schemas"]["WorkspaceResponse"];
     type WorkspaceStateRequest = components["schemas"]["WorkspaceStateRequest"];
