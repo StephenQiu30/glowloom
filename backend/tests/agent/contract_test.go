@@ -1,8 +1,10 @@
-package contract
+package agent_test
 
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 )
 
 func TestExecutionPolicyForFreezesCurrentCandidateDefinitions(t *testing.T) {
@@ -21,7 +23,7 @@ func TestExecutionPolicyForFreezesCurrentCandidateDefinitions(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.kind, func(t *testing.T) {
-			policy, err := ExecutionPolicyFor(test.kind)
+			policy, err := contract.ExecutionPolicyFor(test.kind)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -34,20 +36,20 @@ func TestExecutionPolicyForFreezesCurrentCandidateDefinitions(t *testing.T) {
 			}
 		})
 	}
-	if _, err := ExecutionPolicyFor("script_structure"); err == nil {
+	if _, err := contract.ExecutionPolicyFor("script_structure"); err == nil {
 		t.Fatal("unsupported compatibility definition remained callable")
 	}
 }
 
 func TestInvocationRejectsPolicyOutsideDefinitionManifest(t *testing.T) {
-	policy, err := ExecutionPolicyFor("storyboard_draft")
+	policy, err := contract.ExecutionPolicyFor("storyboard_draft")
 	if err != nil {
 		t.Fatal(err)
 	}
-	invocation := Invocation{
+	invocation := contract.Invocation{
 		InvocationID: "00000000-0000-0000-0000-000000000001",
 		Kind:         "storyboard_draft", InputHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		SchemaVersion: SchemaVersion, ExecutionPolicy: policy, Payload: json.RawMessage(`{}`),
+		SchemaVersion: contract.SchemaVersion, ExecutionPolicy: policy, Payload: json.RawMessage(`{}`),
 	}
 	if err = invocation.Validate(); err != nil {
 		t.Fatal(err)
@@ -69,14 +71,14 @@ func TestInvocationRejectsPolicyOutsideDefinitionManifest(t *testing.T) {
 }
 
 func TestAgentFailureCodesHaveFrozenStatusAndRetrySemantics(t *testing.T) {
-	policy, err := ExecutionPolicyFor("storyboard_draft")
+	policy, err := contract.ExecutionPolicyFor("storyboard_draft")
 	if err != nil {
 		t.Fatal(err)
 	}
-	invocation := Invocation{
+	invocation := contract.Invocation{
 		InvocationID: "00000000-0000-0000-0000-000000000001",
 		Kind:         "storyboard_draft", InputHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		SchemaVersion: SchemaVersion, ExecutionPolicy: policy, Payload: json.RawMessage(`{}`),
+		SchemaVersion: contract.SchemaVersion, ExecutionPolicy: policy, Payload: json.RawMessage(`{}`),
 	}
 	tests := []struct {
 		code      string
@@ -91,11 +93,11 @@ func TestAgentFailureCodesHaveFrozenStatusAndRetrySemantics(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.code, func(t *testing.T) {
-			result := Result{
+			result := contract.Result{
 				InvocationID: invocation.InvocationID, Kind: invocation.Kind, InputHash: invocation.InputHash,
-				Status: test.status, SchemaVersion: SchemaVersion, Candidate: json.RawMessage(`null`),
-				Executor: Executor{Name: "codex-cli", Version: "test", Model: "test"},
-				Error:    &ResultError{Code: test.code, Summary: "test failure", Retryable: test.retryable},
+				Status: test.status, SchemaVersion: contract.SchemaVersion, Candidate: json.RawMessage(`null`),
+				Executor: contract.Executor{Name: "codex-cli", Version: "test", Model: "test"},
+				Error:    &contract.ResultError{Code: test.code, Summary: "test failure", Retryable: test.retryable},
 			}
 			if err := result.ValidateFor(invocation); err != nil {
 				t.Fatal(err)

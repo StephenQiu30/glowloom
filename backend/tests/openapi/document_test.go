@@ -1,8 +1,10 @@
-package openapi
+package openapi_test
 
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/StephenQiu30/lanverse/backend/api/openapi"
 )
 
 func TestDocumentIsThePublicAPIContract(t *testing.T) {
@@ -13,7 +15,7 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 			Schemas map[string]json.RawMessage `json:"schemas"`
 		} `json:"components"`
 	}
-	if err := json.Unmarshal(Document(), &document); err != nil {
+	if err := json.Unmarshal(openapi.Document(), &document); err != nil {
 		t.Fatalf("decode OpenAPI document: %v", err)
 	}
 	if document.OpenAPI != "3.1.0" {

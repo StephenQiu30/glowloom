@@ -1,4 +1,4 @@
-package httpapi
+package workflow_test
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/access/authentication"
+	workflowhttp "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/httpapi"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -32,7 +33,7 @@ func TestWorkflowHandlerStartsAndReturnsAuthorizedRunProjection(t *testing.T) {
 		}},
 	}}
 	controls := &workflowControlStub{}
-	handler := New(mutations, queries, controls, workflowAuthenticator{})
+	handler := workflowhttp.New(mutations, queries, controls, workflowAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 
@@ -58,7 +59,7 @@ func TestWorkflowHandlerControlsAndRerunsWithoutTrustingWorkspaceInput(t *testin
 		ID: "run-1", WorkspaceID: "workspace-1", Status: "PAUSED", Revision: 8,
 	}}}
 	controls := &workflowControlStub{intent: domain.ControlIntent{ID: "control-1", Action: domain.ControlActionPause, Status: "completed"}}
-	handler := New(mutations, queries, controls, workflowAuthenticator{})
+	handler := workflowhttp.New(mutations, queries, controls, workflowAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 
@@ -89,7 +90,7 @@ func TestWorkflowHandlerRejectsInvalidControlAndAuthentication(t *testing.T) {
 	queries := &workflowQueryStub{}
 	controls := &workflowControlStub{}
 	mux := http.NewServeMux()
-	New(mutations, queries, controls, workflowAuthenticator{}).Register(mux)
+	workflowhttp.New(mutations, queries, controls, workflowAuthenticator{}).Register(mux)
 	invalid := httptest.NewRecorder()
 	mux.ServeHTTP(invalid, httptest.NewRequest(
 		http.MethodPost, "/api/v1/workflow-runs/run-1/controls",
@@ -100,7 +101,7 @@ func TestWorkflowHandlerRejectsInvalidControlAndAuthentication(t *testing.T) {
 	}
 
 	unauthorized := http.NewServeMux()
-	New(mutations, queries, controls, workflowAuthenticator{err: errors.New("invalid token")}).Register(unauthorized)
+	workflowhttp.New(mutations, queries, controls, workflowAuthenticator{err: errors.New("invalid token")}).Register(unauthorized)
 	response := httptest.NewRecorder()
 	unauthorized.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workflow-runs/run-1", nil))
 	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"code":"unauthenticated"`) {

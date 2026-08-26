@@ -1,8 +1,10 @@
-package config
+package config_test
 
 import (
 	"testing"
 	"time"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/config"
 )
 
 func TestLoadBuildsSingleDatabaseAPIConfiguration(t *testing.T) {
@@ -10,7 +12,7 @@ func TestLoadBuildsSingleDatabaseAPIConfiguration(t *testing.T) {
 	t.Setenv("API_PORT", "8765")
 	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
 
-	configuration, err := Load()
+	configuration, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +45,7 @@ func TestLoadRejectsInvalidTemporalAddress(t *testing.T) {
 	for _, value := range []string{"temporal", "http://temporal:7233", "temporal:99999"} {
 		t.Run(value, func(t *testing.T) {
 			t.Setenv("TEMPORAL_ADDRESS", value)
-			if _, err := Load(); err == nil {
+			if _, err := config.Load(); err == nil {
 				t.Fatalf("Load accepted TEMPORAL_ADDRESS %q", value)
 			}
 		})
@@ -53,7 +55,7 @@ func TestLoadRejectsInvalidTemporalAddress(t *testing.T) {
 func TestLoadRejectsInvalidCORSOrigins(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
 	t.Setenv("CORS_ORIGINS", `["not-an-origin"]`)
-	if _, err := Load(); err == nil {
+	if _, err := config.Load(); err == nil {
 		t.Fatal("Load accepted an invalid CORS origin")
 	}
 }
@@ -61,7 +63,7 @@ func TestLoadRejectsInvalidCORSOrigins(t *testing.T) {
 func TestLoadRejectsInvalidConfiguredRegistrationCode(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
 	t.Setenv("REGISTRATION_VERIFICATION_CODE", "12345")
-	if _, err := Load(); err == nil {
+	if _, err := config.Load(); err == nil {
 		t.Fatal("Load accepted an invalid registration verification code")
 	}
 }
@@ -70,7 +72,7 @@ func TestLoadRequiresStandardPostgreSQLDatabaseURL(t *testing.T) {
 	for _, value := range []string{"", "postgresql+asyncpg://database/lanverse", "http://database/lanverse"} {
 		t.Run(value, func(t *testing.T) {
 			t.Setenv("DATABASE_URL", value)
-			if _, err := Load(); err == nil {
+			if _, err := config.Load(); err == nil {
 				t.Fatalf("Load accepted DATABASE_URL %q", value)
 			}
 		})

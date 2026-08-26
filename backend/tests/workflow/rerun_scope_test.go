@@ -1,4 +1,4 @@
-package domain
+package workflow_test
 
 import (
 	"encoding/json"
@@ -10,13 +10,14 @@ import (
 	"github.com/google/uuid"
 
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
+	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
 func TestBuildRerunScopeDirtiesOnlyDownstreamClosureAndRequiresSideInputs(t *testing.T) {
 	definition := rerunDefinitionFixture()
 	source := rerunProjectionFixtures(t, definition)
 
-	scope, err := BuildRerunScope(definition, source, "b")
+	scope, err := workflow.BuildRerunScope(definition, source, "b")
 	if err != nil {
 		t.Fatalf("build rerun scope: %v", err)
 	}
@@ -34,17 +35,17 @@ func TestBuildRerunScopeDirtiesOnlyDownstreamClosureAndRequiresSideInputs(t *tes
 			source[index].OutputHash = ""
 		}
 	}
-	if _, err = BuildRerunScope(definition, source, "b"); err == nil || !strings.Contains(err.Error(), "required upstream") {
+	if _, err = workflow.BuildRerunScope(definition, source, "b"); err == nil || !strings.Contains(err.Error(), "required upstream") {
 		t.Fatalf("rerun accepted missing side input: %v", err)
 	}
 }
 
-func rerunDefinitionFixture() WorkflowDefinitionVersion {
+func rerunDefinitionFixture() workflow.WorkflowDefinitionVersion {
 	port := func(key string) authoring.PortDefinition {
 		return authoring.PortDefinition{Key: key, ValueType: "fact", Required: true}
 	}
-	node := func(id string, inputs, outputs []authoring.PortDefinition) NodeExecution {
-		return NodeExecution{
+	node := func(id string, inputs, outputs []authoring.PortDefinition) workflow.NodeExecution {
+		return workflow.NodeExecution{
 			NodeID: id, DefinitionKey: "test." + id, DefinitionVersion: "1.0.0",
 			DefinitionContentHash: strings.Repeat(id, 64), Executor: "activity." + id,
 			InputPorts: inputs, OutputPorts: outputs, CachePolicy: "never", RiskLevel: "low",
@@ -53,13 +54,13 @@ func rerunDefinitionFixture() WorkflowDefinitionVersion {
 	edge := func(id, from, fromPort, to, toPort string) authoring.Edge {
 		return authoring.Edge{ID: id, FromNodeID: from, FromPort: fromPort, ToNodeID: to, ToPort: toPort}
 	}
-	return WorkflowDefinitionVersion{
+	return workflow.WorkflowDefinitionVersion{
 		ExecutionOrder: []string{"a", "b", "d", "c"},
 		ExecutionGraph: authoring.Graph{Edges: []authoring.Edge{
 			edge("a-b", "a", "a", "b", "a"), edge("b-c", "b", "b", "c", "b"),
 			edge("d-c", "d", "d", "c", "d"),
 		}},
-		NodeExecutions: []NodeExecution{
+		NodeExecutions: []workflow.NodeExecution{
 			node("a", nil, []authoring.PortDefinition{port("a")}),
 			node("b", []authoring.PortDefinition{port("a")}, []authoring.PortDefinition{port("b")}),
 			node("d", nil, []authoring.PortDefinition{port("d")}),
@@ -68,24 +69,24 @@ func rerunDefinitionFixture() WorkflowDefinitionVersion {
 	}
 }
 
-func rerunProjectionFixtures(t *testing.T, definition WorkflowDefinitionVersion) []NodeRunProjection {
+func rerunProjectionFixtures(t *testing.T, definition workflow.WorkflowDefinitionVersion) []workflow.NodeRunProjection {
 	t.Helper()
 	frozen := []authoring.FrozenReference{{
 		Kind: "script_revision", ID: uuid.NewString(), Version: "1", Hash: strings.Repeat("f", 64),
 	}}
 	now := time.Date(2026, time.August, 26, 9, 0, 0, 0, time.UTC)
 	workspaceID, runID := uuid.NewString(), uuid.NewString()
-	result := make([]NodeRunProjection, 0, len(definition.NodeExecutions))
+	result := make([]workflow.NodeRunProjection, 0, len(definition.NodeExecutions))
 	for _, execution := range definition.NodeExecutions {
-		_, input, inputHash, err := BuildNodeInput(NodeInputSnapshot{
-			SchemaVersion: NodeInputSchemaVersion, Config: json.RawMessage(`{}`), FrozenInputs: frozen,
+		_, input, inputHash, err := workflow.BuildNodeInput(workflow.NodeInputSnapshot{
+			SchemaVersion: workflow.NodeInputSchemaVersion, Config: json.RawMessage(`{}`), FrozenInputs: frozen,
 		})
 		if err != nil {
 			t.Fatalf("build %s input: %v", execution.NodeID, err)
 		}
-		_, output, outputHash, err := BuildNodeOutput(NodeOutputSnapshot{
-			SchemaVersion: NodeOutputSchemaVersion,
-			Bindings: []NodeOutputBinding{{
+		_, output, outputHash, err := workflow.BuildNodeOutput(workflow.NodeOutputSnapshot{
+			SchemaVersion: workflow.NodeOutputSchemaVersion,
+			Bindings: []workflow.NodeOutputBinding{{
 				Port: execution.OutputPorts[0].Key, ValueType: "fact", ReferenceID: uuid.NewString(),
 				ReferenceVersion: "1", ContentHash: strings.Repeat(execution.NodeID, 64),
 			}},
@@ -93,7 +94,7 @@ func rerunProjectionFixtures(t *testing.T, definition WorkflowDefinitionVersion)
 		if err != nil {
 			t.Fatalf("build %s output: %v", execution.NodeID, err)
 		}
-		result = append(result, NodeRunProjection{
+		result = append(result, workflow.NodeRunProjection{
 			ID: uuid.NewString(), WorkspaceID: workspaceID, WorkflowRunID: runID,
 			NodeID: execution.NodeID, DefinitionKey: execution.DefinitionKey,
 			DefinitionVersion: execution.DefinitionVersion, Executor: execution.Executor,

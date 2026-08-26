@@ -1,6 +1,8 @@
-package gormdb_test
+package storyboard_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -185,6 +187,27 @@ func TestPostgreSQLStoryboardingJourney(t *testing.T) {
 	})
 	if err != nil || exportReplay.ID != exported.ID || string(exportReplay.Package) != string(exported.Package) {
 		t.Fatalf("idempotent export replay failed: export=%s err=%v", exportReplay.ID, err)
+	}
+	deterministicCopy, err := service.CreateExport(ctx, actor, application.ExportCommand{
+		EpisodeID: fixture.episodeID.String(), ExpectedOrderHash: exportPreflight.OrderHash,
+		IdempotencyKey: "storyboard-export-2",
+	})
+	if err != nil || deterministicCopy.ContentHash != exported.ContentHash ||
+		!bytes.Equal(deterministicCopy.Package, exported.Package) {
+		t.Fatalf("fixed storyboard input produced different packages: first=%s second=%s err=%v", exported.ContentHash, deterministicCopy.ContentHash, err)
+	}
+	reader, err := zip.NewReader(bytes.NewReader(exported.Package), int64(len(exported.Package)))
+	if err != nil {
+		t.Fatalf("open storyboard export package: %v", err)
+	}
+	names := make(map[string]bool, len(reader.File))
+	for _, file := range reader.File {
+		names[file.Name] = true
+	}
+	for _, name := range []string{"manifest.json", "storyboard.json", "storyboard.csv", "storyboard.html"} {
+		if !names[name] {
+			t.Fatalf("storyboard export package is missing %s", name)
+		}
 	}
 }
 

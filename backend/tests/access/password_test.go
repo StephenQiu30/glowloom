@@ -1,10 +1,14 @@
-package authentication
+package access_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/access/authentication"
+)
 
 func TestPasswordHasherRoundTrip(t *testing.T) {
 	t.Parallel()
-	hasher := NewPasswordHasher()
+	hasher := authentication.NewPasswordHasher()
 	hash, err := hasher.Hash("a-secure-password")
 	if err != nil {
 		t.Fatal(err)

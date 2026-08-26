@@ -425,6 +425,11 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 		t.Fatal("Episode Structure batch confirmation succeeded before required tasks were accepted")
 	}
 	for _, candidate := range batch.Structures {
+		if len(candidate.Scenes) != 1 || len(candidate.Scenes[0].Dialogues) != 1 ||
+			candidate.Scenes[0].Dialogues[0].Speaker == "" || len(candidate.Scenes[0].Tasks) != 1 ||
+			candidate.Scenes[0].Tasks[0].Kind != "shot_breakdown" || !candidate.Scenes[0].Tasks[0].Required {
+			t.Fatalf("published Episode Structure lost scene/dialogue/task contract: %#v", candidate.Scenes)
+		}
 		current := candidate
 		for _, scene := range candidate.Scenes {
 			for _, task := range scene.Tasks {

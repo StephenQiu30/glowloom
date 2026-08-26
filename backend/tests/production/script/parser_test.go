@@ -1,13 +1,15 @@
-package parser
+package script_test
 
 import (
 	"archive/zip"
 	"bytes"
 	"testing"
+
+	scriptparser "github.com/StephenQiu30/lanverse/backend/internal/production/script/parser"
 )
 
 func TestAnalyzeRecognizesContinuousEpisodeMarkers(t *testing.T) {
-	result := Analyze("第一集\n《警报前夜》\n内景·控制中心·夜\n沈岚：谁签的完成？\n\n第二集\n《公开日志》\n外景·堤岸·黎明\n潮水退去。\n")
+	result := scriptparser.Analyze("第一集\n《警报前夜》\n内景·控制中心·夜\n沈岚：谁签的完成？\n\n第二集\n《公开日志》\n外景·堤岸·黎明\n潮水退去。\n")
 
 	if result.Status != "deterministic" {
 		t.Fatalf("status = %q", result.Status)
@@ -30,7 +32,7 @@ func TestAnalyzeRecognizesContinuousEpisodeMarkers(t *testing.T) {
 }
 
 func TestAnalyzeRejectsBOMAndEpisodeNumberGap(t *testing.T) {
-	result := Analyze("\ufeff第一集\n内容\n第三集\n内容\n")
+	result := scriptparser.Analyze("\ufeff第一集\n内容\n第三集\n内容\n")
 
 	if result.Status != "rejected" {
 		t.Fatalf("status = %q", result.Status)
@@ -59,7 +61,7 @@ func TestDecodeDOCXReadsParagraphText(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	text, err := DecodeDocument("application/vnd.openxmlformats-officedocument.wordprocessingml.document", document.Bytes())
+	text, err := scriptparser.DecodeDocument("application/vnd.openxmlformats-officedocument.wordprocessingml.document", document.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +71,7 @@ func TestDecodeDOCXReadsParagraphText(t *testing.T) {
 }
 
 func TestDecodeDocumentRejectsInvalidUTF8Markdown(t *testing.T) {
-	if _, err := DecodeDocument("text/markdown", []byte{0xff}); err == nil {
+	if _, err := scriptparser.DecodeDocument("text/markdown", []byte{0xff}); err == nil {
 		t.Fatal("DecodeDocument accepted invalid UTF-8")
 	}
 }

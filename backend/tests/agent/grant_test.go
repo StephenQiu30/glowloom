@@ -1,4 +1,4 @@
-package grant
+package agent_test
 
 import (
 	"encoding/json"
@@ -6,11 +6,13 @@ import (
 	"time"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	"github.com/StephenQiu30/lanverse/backend/internal/agent/grant"
 )
 
 func TestGrantBindsInvocationAndExpires(t *testing.T) {
 	now := time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC)
-	signer, err := NewSigner("lanverse-agent-grant-test-secret-32-bytes", func() time.Time { return now })
+	clock := now
+	signer, err := grant.NewSigner("lanverse-agent-grant-test-secret-32-bytes", func() time.Time { return clock })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +39,7 @@ func TestGrantBindsInvocationAndExpires(t *testing.T) {
 	if err = signer.Verify(value, changed); err == nil {
 		t.Fatal("grant authorized a changed execution budget")
 	}
-	signer.now = func() time.Time { return now.Add(TTL) }
+	clock = now.Add(grant.TTL)
 	if err = signer.Verify(value, invocation); err == nil {
 		t.Fatal("grant remained valid at its expiry")
 	}

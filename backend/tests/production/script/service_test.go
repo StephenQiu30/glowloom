@@ -1,4 +1,4 @@
-package application
+package script_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
+	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/script/domain"
 )
 
@@ -19,10 +20,10 @@ type fakeStore struct {
 	lastProjectWrite  bool
 }
 
-func (store *fakeStore) WithinTransaction(_ context.Context, operation func(Repository) error) error {
+func (store *fakeStore) WithinTransaction(_ context.Context, operation func(scriptapp.Repository) error) error {
 	return operation(store)
 }
-func (store *fakeStore) ProjectWorkspace(_ context.Context, _ Actor, projectID string, write bool) (string, error) {
+func (store *fakeStore) ProjectWorkspace(_ context.Context, _ scriptapp.Actor, projectID string, write bool) (string, error) {
 	store.lastProjectID = projectID
 	store.lastProjectWrite = write
 	return "00000000-0000-0000-0000-000000000002", nil
@@ -45,7 +46,7 @@ func (store *fakeStore) CreateAnalysis(_ context.Context, analysis domain.Analys
 func (store *fakeStore) GetAnalysis(_ context.Context, revisionID string) (domain.Analysis, error) {
 	analysis, ok := store.analyses[revisionID]
 	if !ok {
-		return domain.Analysis{}, ErrNotFound
+		return domain.Analysis{}, scriptapp.ErrNotFound
 	}
 	return analysis, nil
 }
@@ -58,14 +59,14 @@ func (store *fakeStore) ListDocuments(context.Context, string, int, int) ([]doma
 
 type fakeMedia struct{ workspaceID, mimeType, text string }
 
-func (media fakeMedia) Read(context.Context, Actor, string) (MediaContent, []byte, error) {
-	return MediaContent{WorkspaceID: media.workspaceID, MIMEType: media.mimeType}, []byte(media.text), nil
+func (media fakeMedia) Read(context.Context, scriptapp.Actor, string) (scriptapp.MediaContent, []byte, error) {
+	return scriptapp.MediaContent{WorkspaceID: media.workspaceID, MIMEType: media.mimeType}, []byte(media.text), nil
 }
 
 func TestImportReplaysReceiptAndRejectsChangedInput(t *testing.T) {
 	store := &fakeStore{receipts: map[string]platformcommand.Receipt{}, analyses: map[string]domain.Analysis{}}
 	sequence := 0
-	service := NewService(store, fakeMedia{workspaceID: "00000000-0000-0000-0000-000000000002", mimeType: "text/markdown", text: "第一集\n内容\n第二集\n内容\n"}, Config{
+	service := scriptapp.NewService(store, fakeMedia{workspaceID: "00000000-0000-0000-0000-000000000002", mimeType: "text/markdown", text: "第一集\n内容\n第二集\n内容\n"}, scriptapp.Config{
 		Now: func() time.Time { return time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC) },
 		NewID: func() string {
 			sequence++
@@ -73,8 +74,8 @@ func TestImportReplaysReceiptAndRejectsChangedInput(t *testing.T) {
 		},
 	})
 	mediaID := "00000000-0000-0000-0000-000000000003"
-	command := ImportCommand{ProjectID: "00000000-0000-0000-0000-000000000001", InputType: "media", Title: "剧本.md", MediaVersionID: &mediaID, Language: "zh-CN", RightsDeclaration: "我确认拥有使用权", IdempotencyKey: "script-import-1"}
-	actor := Actor{UserID: "00000000-0000-0000-0000-000000000004", TokenVersion: 1}
+	command := scriptapp.ImportCommand{ProjectID: "00000000-0000-0000-0000-000000000001", InputType: "media", Title: "剧本.md", MediaVersionID: &mediaID, Language: "zh-CN", RightsDeclaration: "我确认拥有使用权", IdempotencyKey: "script-import-1"}
+	actor := scriptapp.Actor{UserID: "00000000-0000-0000-0000-000000000004", TokenVersion: 1}
 
 	first, err := service.Import(context.Background(), actor, command)
 	if err != nil {
@@ -93,7 +94,7 @@ func TestImportReplaysReceiptAndRejectsChangedInput(t *testing.T) {
 
 	command.Title = "另一份剧本.md"
 	_, err = service.Import(context.Background(), actor, command)
-	var apiError *Error
+	var apiError *scriptapp.Error
 	if !errors.As(err, &apiError) || apiError.Code != "resource_conflict" || apiError.Status != 409 {
 		t.Fatalf("changed input error = %#v", err)
 	}
@@ -101,10 +102,10 @@ func TestImportReplaysReceiptAndRejectsChangedInput(t *testing.T) {
 
 func TestPreviewRejectsMediaFromAnotherWorkspace(t *testing.T) {
 	store := &fakeStore{receipts: map[string]platformcommand.Receipt{}, analyses: map[string]domain.Analysis{}}
-	service := NewService(store, fakeMedia{workspaceID: "00000000-0000-0000-0000-000000000099", mimeType: "text/markdown", text: "第一集\n内容"}, Config{})
+	service := scriptapp.NewService(store, fakeMedia{workspaceID: "00000000-0000-0000-0000-000000000099", mimeType: "text/markdown", text: "第一集\n内容"}, scriptapp.Config{})
 
-	_, err := service.Preview(context.Background(), Actor{}, "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000003")
-	var apiError *Error
+	_, err := service.Preview(context.Background(), scriptapp.Actor{}, "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000003")
+	var apiError *scriptapp.Error
 	if !errors.As(err, &apiError) || apiError.Code != "not_found" {
 		t.Fatalf("cross-workspace preview error = %#v", err)
 	}
@@ -122,11 +123,11 @@ func TestGetCurrentAnalysisRestoresLatestProjectScript(t *testing.T) {
 		analyses:          map[string]domain.Analysis{revisionID: analysis},
 		currentRevisionID: revisionID,
 	}
-	service := NewService(store, fakeMedia{}, Config{})
+	service := scriptapp.NewService(store, fakeMedia{}, scriptapp.Config{})
 
 	current, err := service.GetCurrentAnalysis(
 		context.Background(),
-		Actor{UserID: "00000000-0000-0000-0000-000000000004", TokenVersion: 1},
+		scriptapp.Actor{UserID: "00000000-0000-0000-0000-000000000004", TokenVersion: 1},
 		projectID,
 	)
 	if err != nil {

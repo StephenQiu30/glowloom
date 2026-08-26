@@ -1,4 +1,4 @@
-package database_test
+package architecture_test
 
 import (
 	"go/ast"
@@ -117,7 +117,7 @@ func backendDirectory(t *testing.T) string {
 	if !ok {
 		t.Fatal("resolve architecture test path")
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", ".."))
+	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
 }
 
 func gormImportAllowed(relativePath string) bool {

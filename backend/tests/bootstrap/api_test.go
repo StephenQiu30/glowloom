@@ -1,4 +1,4 @@
-package bootstrap
+package bootstrap_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
 	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 )
 
@@ -35,11 +36,13 @@ func TestUnknownBusinessRouteIsNotProxied(t *testing.T) {
 }
 
 func TestRegisteredBusinessRouteIsOwnedByGo(t *testing.T) {
-	handler := NewAPIHandler(RuntimeOptions{
+	handler := bootstrap.NewAPIHandler(bootstrap.RuntimeOptions{
 		Metrics: telemetry.NewHTTPMetrics(),
 		RegisterRoutes: func(mux *http.ServeMux) {
 			mux.HandleFunc("POST /api/v1/projects", func(writer http.ResponseWriter, _ *http.Request) {
-				writeJSON(writer, http.StatusCreated, map[string]string{"owner": "go"})
+				writer.Header().Set("Content-Type", "application/json")
+				writer.WriteHeader(http.StatusCreated)
+				_, _ = writer.Write([]byte(`{"owner":"go"}`))
 			})
 		},
 	})
@@ -95,7 +98,7 @@ func TestMetricsUseBoundedRouteLabels(t *testing.T) {
 }
 
 func TestCORSAllowsOnlyConfiguredBrowserOrigin(t *testing.T) {
-	handler := NewAPIHandler(RuntimeOptions{Metrics: telemetry.NewHTTPMetrics(), AllowedOrigins: []string{"http://127.0.0.1:8123"}})
+	handler := bootstrap.NewAPIHandler(bootstrap.RuntimeOptions{Metrics: telemetry.NewHTTPMetrics(), AllowedOrigins: []string{"http://127.0.0.1:8123"}})
 	allowed := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodOptions, "/api/v1/projects", nil)
 	request.Header.Set("Origin", "http://127.0.0.1:8123")
@@ -116,8 +119,8 @@ func TestCORSAllowsOnlyConfiguredBrowserOrigin(t *testing.T) {
 }
 
 func newTestHandler(ready func(context.Context) error) http.Handler {
-	return NewAPIHandler(RuntimeOptions{
-		Build:   BuildInfo{Service: "lanverse-api", Version: "test-version", Commit: "test-commit", BuiltAt: "2026-08-24T00:00:00Z"},
+	return bootstrap.NewAPIHandler(bootstrap.RuntimeOptions{
+		Build:   bootstrap.BuildInfo{Service: "lanverse-api", Version: "test-version", Commit: "test-commit", BuiltAt: "2026-08-24T00:00:00Z"},
 		Metrics: telemetry.NewHTTPMetrics(),
 		Ready:   ready,
 	})

@@ -1,4 +1,4 @@
-package authentication
+package access_test
 
 import (
 	"crypto/hmac"
@@ -8,11 +8,13 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/access/authentication"
 )
 
 func TestVerifierAcceptsCompatiblePythonHS256Claims(t *testing.T) {
 	now := time.Unix(1000, 0).UTC()
-	verifier := NewVerifier("secret", "lanverse-api", "lanverse-web", func() time.Time { return now })
+	verifier := authentication.NewVerifier("secret", "lanverse-api", "lanverse-web", func() time.Time { return now })
 	token := signedToken(t, "secret", map[string]any{"sub": "019ff900-a000-7000-8000-000000000001", "ver": 2, "type": "access", "jti": "token-1", "iss": "lanverse-api", "aud": "lanverse-web", "iat": 900, "exp": 1100})
 	claims, err := verifier.Verify(token)
 	if err != nil {
@@ -24,20 +26,20 @@ func TestVerifierAcceptsCompatiblePythonHS256Claims(t *testing.T) {
 }
 func TestVerifierRejectsExpiredOrTamperedToken(t *testing.T) {
 	now := time.Unix(1000, 0).UTC()
-	verifier := NewVerifier("secret", "lanverse-api", "lanverse-web", func() time.Time { return now })
+	verifier := authentication.NewVerifier("secret", "lanverse-api", "lanverse-web", func() time.Time { return now })
 	expired := signedToken(t, "secret", map[string]any{"sub": "019ff900-a000-7000-8000-000000000001", "ver": 1, "type": "access", "jti": "token-1", "iss": "lanverse-api", "aud": "lanverse-web", "iat": 800, "exp": 999})
-	if _, err := verifier.Verify(expired); !errors.Is(err, ErrUnauthenticated) {
+	if _, err := verifier.Verify(expired); !errors.Is(err, authentication.ErrUnauthenticated) {
 		t.Fatalf("expired error = %v", err)
 	}
-	if _, err := verifier.Verify(expired + "x"); !errors.Is(err, ErrUnauthenticated) {
+	if _, err := verifier.Verify(expired + "x"); !errors.Is(err, authentication.ErrUnauthenticated) {
 		t.Fatalf("tampered error = %v", err)
 	}
 }
 
 func TestIssuerCreatesTokenAcceptedByVerifier(t *testing.T) {
 	now := time.Unix(1000, 0).UTC()
-	issuer := NewIssuer("secret", "lanverse-api", "lanverse-web", 30*time.Minute, func() time.Time { return now }, func() string { return "token-1" })
-	verifier := NewVerifier("secret", "lanverse-api", "lanverse-web", func() time.Time { return now })
+	issuer := authentication.NewIssuer("secret", "lanverse-api", "lanverse-web", 30*time.Minute, func() time.Time { return now }, func() string { return "token-1" })
+	verifier := authentication.NewVerifier("secret", "lanverse-api", "lanverse-web", func() time.Time { return now })
 
 	token, err := issuer.Issue("019ff900-a000-7000-8000-000000000001", 3)
 	if err != nil {

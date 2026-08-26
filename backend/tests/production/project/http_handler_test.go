@@ -1,4 +1,4 @@
-package httpapi
+package project_test
 
 import (
 	"context"
@@ -9,13 +9,14 @@ import (
 	"testing"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/access/authentication"
+	projecthttp "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/httpapi"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
 )
 
 func TestCreateProjectPreservesPublicContract(t *testing.T) {
 	service := &stubService{}
-	handler := New(service, stubAuthenticator{})
+	handler := projecthttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects", strings.NewReader(`{"workspace_id":"workspace-1","name":"Harbor","idempotency_key":"create-project-1"}`))
@@ -34,7 +35,7 @@ func TestCreateProjectPreservesPublicContract(t *testing.T) {
 }
 func TestCreateProjectRejectsUnknownFieldsBeforeApplication(t *testing.T) {
 	service := &stubService{}
-	handler := New(service, stubAuthenticator{})
+	handler := projecthttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects", strings.NewReader(`{"workspace_id":"workspace-1","name":"Harbor","idempotency_key":"create-project-1","owner":"browser"}`))
@@ -49,7 +50,7 @@ func TestCreateProjectRejectsUnknownFieldsBeforeApplication(t *testing.T) {
 	}
 }
 func TestProjectRouteRejectsMissingBearerToken(t *testing.T) {
-	handler := New(&stubService{}, stubAuthenticator{err: authentication.ErrUnauthenticated})
+	handler := projecthttp.New(&stubService{}, stubAuthenticator{err: authentication.ErrUnauthenticated})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	response := httptest.NewRecorder()
@@ -60,7 +61,7 @@ func TestProjectRouteRejectsMissingBearerToken(t *testing.T) {
 }
 
 func TestProjectHandlerDoesNotExposeLegacyBudgetRoute(t *testing.T) {
-	handler := New(&stubService{}, stubAuthenticator{})
+	handler := projecthttp.New(&stubService{}, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	response := httptest.NewRecorder()

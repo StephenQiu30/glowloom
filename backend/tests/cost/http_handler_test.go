@@ -1,4 +1,4 @@
-package httpapi
+package cost_test
 
 import (
 	"context"
@@ -12,13 +12,14 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/access/authentication"
+	costhttp "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/httpapi"
 	"github.com/StephenQiu30/lanverse/backend/internal/cost/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/cost/domain"
 )
 
 func TestSetBudgetPreservesCostContract(t *testing.T) {
 	service := &stubService{}
-	handler := New(service, stubAuthenticator{})
+	handler := costhttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", strings.NewReader(`{"limit_amount":"100.125","currency":"USD","expected_revision":0,"idempotency_key":"set-budget-1"}`))
@@ -37,7 +38,7 @@ func TestSetBudgetPreservesCostContract(t *testing.T) {
 
 func TestSetBudgetRejectsUnknownFieldsBeforeApplication(t *testing.T) {
 	service := &stubService{}
-	handler := New(service, stubAuthenticator{})
+	handler := costhttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", strings.NewReader(`{"limit_amount":"100","currency":"USD","expected_revision":0,"idempotency_key":"set-budget-1","budget_limit":"100"}`))
@@ -53,7 +54,7 @@ func TestSetBudgetRejectsUnknownFieldsBeforeApplication(t *testing.T) {
 
 func TestSetBudgetRequiresDecimalString(t *testing.T) {
 	service := &stubService{}
-	handler := New(service, stubAuthenticator{})
+	handler := costhttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", strings.NewReader(`{"limit_amount":100.125,"currency":"USD","expected_revision":0,"idempotency_key":"set-budget-1"}`))
@@ -68,7 +69,7 @@ func TestSetBudgetRequiresDecimalString(t *testing.T) {
 }
 
 func TestBudgetRouteRejectsMissingBearerToken(t *testing.T) {
-	handler := New(&stubService{}, stubAuthenticator{err: authentication.ErrUnauthenticated})
+	handler := costhttp.New(&stubService{}, stubAuthenticator{err: authentication.ErrUnauthenticated})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	response := httptest.NewRecorder()
@@ -137,7 +138,7 @@ func (*stubService) GetCurrentPriceQuote(
 
 func TestSetPriceQuotePreservesDecimalStringContract(t *testing.T) {
 	service := &stubService{}
-	handler := New(service, stubAuthenticator{})
+	handler := costhttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(
@@ -158,7 +159,7 @@ func TestSetPriceQuotePreservesDecimalStringContract(t *testing.T) {
 
 func TestSetPriceQuoteRejectsNumericAmount(t *testing.T) {
 	service := &stubService{}
-	handler := New(service, stubAuthenticator{})
+	handler := costhttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(

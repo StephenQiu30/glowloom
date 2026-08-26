@@ -1,10 +1,12 @@
-package domain
+package bible_test
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"testing"
+
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 )
 
 func TestDecodeAndValidateCandidateBindsEvidenceToSource(t *testing.T) {
@@ -22,11 +24,11 @@ func TestDecodeAndValidateCandidateBindsEvidenceToSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = DecodeAndValidateCandidate(raw, "小兰走进房间"); err != nil {
+	if _, err = bibledomain.DecodeAndValidateCandidate(raw, "小兰走进房间"); err != nil {
 		t.Fatalf("expected candidate to pass: %v", err)
 	}
 
-	if _, err = DecodeAndValidateCandidate(raw, "小明走进房间"); err == nil {
+	if _, err = bibledomain.DecodeAndValidateCandidate(raw, "小明走进房间"); err == nil {
 		t.Fatal("expected mismatched exact source anchor to fail")
 	}
 }
@@ -46,7 +48,7 @@ func TestDecodeAndValidateCandidateRejectsUnknownWorldReference(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = DecodeAndValidateCandidate(raw, anchor); err == nil {
+	if _, err = bibledomain.DecodeAndValidateCandidate(raw, anchor); err == nil {
 		t.Fatal("expected unknown entity reference to fail")
 	}
 }
