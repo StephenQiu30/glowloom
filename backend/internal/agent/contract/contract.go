@@ -33,6 +33,7 @@ type ExecutionPolicy struct {
 	ModelCapability     string   `json:"model_capability"`
 	AllowedTools        []string `json:"allowed_tools"`
 	MaxModelCalls       int      `json:"max_model_calls"`
+	MaxExecutionSeconds int      `json:"max_execution_seconds"`
 }
 
 func ExecutionPolicyFor(kind string) (ExecutionPolicy, error) {
@@ -42,14 +43,14 @@ func ExecutionPolicyFor(kind string) (ExecutionPolicy, error) {
 			DefinitionKey: kind, DefinitionVersion: "production-bible-harness-v1",
 			PromptVersion: "production-bible-prompt-v1", SkillBundleVersion: "production-bible-skills-v1",
 			OutputSchemaVersion: "production-bible-schema-v1", ModelCapability: "structured_text",
-			AllowedTools: []string{}, MaxModelCalls: 3,
+			AllowedTools: []string{}, MaxModelCalls: 3, MaxExecutionSeconds: 900,
 		}, nil
 	case "storyboard_draft":
 		return ExecutionPolicy{
 			DefinitionKey: kind, DefinitionVersion: "storyboard-harness-v1",
 			PromptVersion: "storyboard-prompt-v1", SkillBundleVersion: "storyboard-skills-v1",
 			OutputSchemaVersion: "storyboard-draft-schema-v1", ModelCapability: "structured_text",
-			AllowedTools: []string{}, MaxModelCalls: 1,
+			AllowedTools: []string{}, MaxModelCalls: 1, MaxExecutionSeconds: 600,
 		}, nil
 	default:
 		return ExecutionPolicy{}, errors.New("unsupported agent definition")
@@ -58,7 +59,7 @@ func ExecutionPolicyFor(kind string) (ExecutionPolicy, error) {
 
 func (value ExecutionPolicy) ValidateFor(kind string) error {
 	manifest, err := ExecutionPolicyFor(kind)
-	if err != nil || value.DefinitionKey != manifest.DefinitionKey || value.DefinitionVersion != manifest.DefinitionVersion || value.PromptVersion != manifest.PromptVersion || value.SkillBundleVersion != manifest.SkillBundleVersion || value.OutputSchemaVersion != manifest.OutputSchemaVersion || value.ModelCapability != manifest.ModelCapability || value.AllowedTools == nil || len(value.AllowedTools) != 0 || value.MaxModelCalls < 1 || value.MaxModelCalls > manifest.MaxModelCalls {
+	if err != nil || value.DefinitionKey != manifest.DefinitionKey || value.DefinitionVersion != manifest.DefinitionVersion || value.PromptVersion != manifest.PromptVersion || value.SkillBundleVersion != manifest.SkillBundleVersion || value.OutputSchemaVersion != manifest.OutputSchemaVersion || value.ModelCapability != manifest.ModelCapability || value.AllowedTools == nil || len(value.AllowedTools) != 0 || value.MaxModelCalls < 1 || value.MaxModelCalls > manifest.MaxModelCalls || value.MaxExecutionSeconds < 1 || value.MaxExecutionSeconds > manifest.MaxExecutionSeconds {
 		return errors.New("agent execution policy is outside the definition manifest")
 	}
 	return nil
@@ -131,7 +132,7 @@ func (value Result) ValidateFor(invocation Invocation) error {
 
 func validErrorSemantics(status string, resultError ResultError) bool {
 	switch resultError.Code {
-	case "candidate_validation_failed", "execution_budget_exceeded", "tool_not_allowed", "candidate_schema_invalid":
+	case "candidate_validation_failed", "execution_budget_exceeded", "execution_deadline_exceeded", "tool_not_allowed", "candidate_schema_invalid":
 		return status == "failed" && !resultError.Retryable
 	case "runtime_unavailable", "agent_execution_unknown":
 		return status == "unknown" && resultError.Retryable

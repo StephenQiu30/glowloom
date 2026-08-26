@@ -21,6 +21,7 @@ class ExecutionPolicy(BaseModel):
     model_capability: str
     allowed_tools: list[str]
     max_model_calls: int = Field(ge=1)
+    max_execution_seconds: int = Field(ge=1)
 
     def canonical_hash(self) -> str:
         return canonical_hash(self.model_dump(mode="json"))
@@ -37,6 +38,7 @@ def execution_policy_for(kind: str) -> ExecutionPolicy:
             model_capability="structured_text",
             allowed_tools=[],
             max_model_calls=3,
+            max_execution_seconds=900,
         )
     if kind == "storyboard_draft":
         return ExecutionPolicy(
@@ -48,6 +50,7 @@ def execution_policy_for(kind: str) -> ExecutionPolicy:
             model_capability="structured_text",
             allowed_tools=[],
             max_model_calls=1,
+            max_execution_seconds=600,
         )
     raise ValueError("unsupported agent definition")
 
@@ -78,6 +81,7 @@ class Invocation(BaseModel):
             any(getattr(policy, field) != getattr(manifest, field) for field in frozen_fields)
             or policy.allowed_tools
             or policy.max_model_calls > manifest.max_model_calls
+            or policy.max_execution_seconds > manifest.max_execution_seconds
         ):
             raise ValueError("agent execution policy is outside the definition manifest")
         return self

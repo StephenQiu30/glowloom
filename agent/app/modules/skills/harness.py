@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
@@ -20,6 +21,10 @@ class CodexExecutionError(RuntimeError):
 
 
 class CodexBudgetExceeded(CodexExecutionError):
+    pass
+
+
+class CodexDeadlineExceeded(CodexExecutionError):
     pass
 
 
@@ -105,6 +110,7 @@ class CodexSchemaRunner:
         self._repository_root = repository_root or Path(__file__).resolve().parents[4]
         self._execution_policy = execution_policy
         self._model_calls = 0
+        self._deadline_at = time.monotonic() + execution_policy.max_execution_seconds
         configured = os.getenv("CODEX_BIN", "").strip()
         self._codex_bin = configured or shutil.which("codex") or "codex"
         self.model_name = os.getenv("CODEX_MODEL", "").strip() or "inherited-local-config"
@@ -117,6 +123,9 @@ class CodexSchemaRunner:
         skill_name: str,
     ) -> OutputModel:
         guidance = self._skill_guidance(skill_name)
+        remaining_seconds = self._deadline_at - time.monotonic()
+        if remaining_seconds <= 0:
+            raise CodexDeadlineExceeded("Agent execution deadline is exhausted")
         if self._model_calls >= self._execution_policy.max_model_calls:
             raise CodexBudgetExceeded("Agent model-call budget is exhausted")
         self._model_calls += 1
@@ -161,9 +170,18 @@ class CodexSchemaRunner:
                 )
             except OSError as error:
                 raise CodexRuntimeUnavailable("Codex CLI could not be started") from error
-            stdout, stderr = await process.communicate(
-                _prompt_with_guidance(guidance, prompt).encode("utf-8")
-            )
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(_prompt_with_guidance(guidance, prompt).encode("utf-8")),
+                    timeout=remaining_seconds,
+                )
+            except TimeoutError as error:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+                await process.wait()
+                raise CodexDeadlineExceeded("Agent execution deadline is exhausted") from error
             if process.returncode != 0 or not response_path.is_file():
                 raise CodexRuntimeUnavailable(
                     f"Codex CLI exited {process.returncode}: "

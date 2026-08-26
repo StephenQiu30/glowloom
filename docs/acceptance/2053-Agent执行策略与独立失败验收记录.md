@@ -45,7 +45,7 @@ Go Result Contract 对上述 Code、Status 与 Retryable 组合再次 fail close
 ## Requirement 状态与残余风险
 
 - `BE-MOD-008` 仅完成当前两种固定 Definition 的 Invocation 策略快照、Grant 调用次数预算、空 Tool Allowlist、结构化返回与独立失败；Requirement 总项保持未完成。
-- 尚未实现 Workflow Run/Node 级 Grant 作用域、独立防重放 Nonce/Receipt、步数/Token/费用/deadline 全维预算、AgentRun/Usage Receipt、Cost/Quota 协调、生产 Model Gateway、Backend Tool Allowlist API、ToolLoop 或 LangGraph Executor。当前不能把模型调用次数预算解释为完整费用预算。
+- 本记录验收时尚未实现 Workflow Run/Node 级 Grant 作用域、独立防重放 Nonce/Receipt、步数/Token/费用/deadline 全维预算、AgentRun/Usage Receipt、Cost/Quota 协调、生产 Model Gateway、Backend Tool Allowlist API、ToolLoop 或 LangGraph Executor；其中 Invocation 总执行时限后来由[独立验收](2054-Agent执行总时限验收记录.md)补齐，但仍不能把调用次数与时限解释为完整 Token/费用预算或绝对排队 deadline。
 - Codex CLI 是用户已允许的本地开发文本/结构化调用方式；它不作为图片 Provider、Generation Source、Backend 业务事实 Writer 或生产 Model Gateway 的兼容替身。
 - [Runware 图片 Provider 与 Generation 执行器 Design](../design/2051-Runware图片Provider与Generation执行器设计.md)仍待用户接受；本切片没有跨越该 Design 开始图片生成编码。
 - 当前本地提交尚未获准推送，因此不声明远端 GitHub Actions 已覆盖本切片。

@@ -13,6 +13,7 @@ from app.modules.scripts.production_bibles import CodexLocalProductionBibleGener
 from app.modules.scripts.production_bibles.contracts import ProductionBibleInput
 from app.modules.skills.harness import (
     CodexBudgetExceeded,
+    CodexDeadlineExceeded,
     CodexExecutionError,
     CodexRuntimeUnavailable,
     CodexSchemaInvalid,
@@ -60,6 +61,8 @@ async def invoke(
         return _failure(invocation, "failed", "candidate_validation_failed", str(error), False)
     except CodexBudgetExceeded as error:
         return _failure(invocation, "failed", "execution_budget_exceeded", str(error), False)
+    except CodexDeadlineExceeded as error:
+        return _failure(invocation, "failed", "execution_deadline_exceeded", str(error), False)
     except CodexToolPolicyViolation as error:
         return _failure(invocation, "failed", "tool_not_allowed", str(error), False)
     except CodexSchemaInvalid as error:

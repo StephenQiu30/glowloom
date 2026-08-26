@@ -18,11 +18,11 @@ from app.candidate_runtime.schemas import Invocation, execution_policy_for
     [
         (
             "production_bible",
-            "66f9586bc95df6f1714735b115e09d9122658bf720fb712a5ef36d2b9ba78b99",
+            "6f2a808344083bdcdc0d542d94861bb25511f8373a48958c3e0c02f46c3f15a2",
         ),
         (
             "storyboard_draft",
-            "bc6030d16816445388853a7ae4dd0f65dea8de4e57a4c969e611afd67f3ed5b8",
+            "a36be6c82351d8628536721d842316817495c8c43ff5f34662cef2516aa09a0b",
         ),
     ],
 )
@@ -71,6 +71,13 @@ def test_execution_grant_binds_invocation_kind_and_hash() -> None:
         verify_execution_grant(value, secret, changed)
 
     changed_policy = invocation.execution_policy.model_copy(update={"max_model_calls": 2})
+    changed = invocation.model_copy(update={"execution_policy": changed_policy})
+    with pytest.raises(InvalidExecutionGrant):
+        verify_execution_grant(value, secret, changed)
+
+    changed_policy = invocation.execution_policy.model_copy(
+        update={"max_execution_seconds": invocation.execution_policy.max_execution_seconds - 1}
+    )
     changed = invocation.model_copy(update={"execution_policy": changed_policy})
     with pytest.raises(InvalidExecutionGrant):
         verify_execution_grant(value, secret, changed)

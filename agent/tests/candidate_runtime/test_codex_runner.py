@@ -11,6 +11,7 @@ from app.candidate_runtime.schemas import execution_policy_for
 from app.modules.scripts.production_bibles.contracts import ProductionBibleCandidate
 from app.modules.skills.harness import (
     CodexBudgetExceeded,
+    CodexDeadlineExceeded,
     CodexRuntimeUnavailable,
     CodexSchemaInvalid,
     CodexSchemaRunner,
@@ -39,11 +40,18 @@ class FakeProcess:
         self.stdout = stdout
         self.response = response
         self.returncode = returncode
+        self.killed = False
 
     async def communicate(self, _: bytes) -> tuple[bytes, bytes]:
         output_path = Path(self.command[self.command.index("--output-last-message") + 1])
         await asyncio.to_thread(output_path.write_text, self.response, encoding="utf-8")
         return self.stdout, b""
+
+    def kill(self) -> None:
+        self.killed = True
+
+    async def wait(self) -> int:
+        return self.returncode
 
 
 def _repository(tmp_path: Path) -> Path:
@@ -136,6 +144,39 @@ async def test_runner_rejects_any_codex_tool_event(
 
     with pytest.raises(CodexToolPolicyViolation):
         await runner.run("Draft one shot", ProbeResult, skill_name="draft-shots")
+
+
+@pytest.mark.asyncio
+async def test_runner_kills_codex_when_invocation_deadline_is_exhausted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    process: FakeProcess | None = None
+
+    async def create_process(*command: str, **_: object) -> FakeProcess:
+        nonlocal process
+        process = FakeProcess(command)
+
+        async def hang(_: bytes) -> tuple[bytes, bytes]:
+            await asyncio.Event().wait()
+            return b"", b""
+
+        process.communicate = hang  # type: ignore[method-assign]
+        return process
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", create_process)
+    policy = execution_policy_for("storyboard_draft").model_copy(
+        update={"max_execution_seconds": 1}
+    )
+    runner = CodexSchemaRunner(
+        repository_root=_repository(tmp_path),
+        execution_policy=policy,
+    )
+
+    with pytest.raises(CodexDeadlineExceeded):
+        await runner.run("Draft one shot", ProbeResult, skill_name="draft-shots")
+
+    assert process is not None
+    assert process.killed is True
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,7 @@ from app.candidate_runtime import api
 from app.candidate_runtime.schemas import Invocation, execution_policy_for
 from app.modules.skills.harness import (
     CodexBudgetExceeded,
+    CodexDeadlineExceeded,
     CodexRuntimeUnavailable,
     CodexSchemaInvalid,
     CodexToolPolicyViolation,
@@ -19,6 +20,12 @@ from app.modules.skills.harness import (
     ("error", "status", "code", "retryable"),
     [
         (CodexBudgetExceeded("budget exhausted"), "failed", "execution_budget_exceeded", False),
+        (
+            CodexDeadlineExceeded("deadline exhausted"),
+            "failed",
+            "execution_deadline_exceeded",
+            False,
+        ),
         (CodexToolPolicyViolation("shell is not allowed"), "failed", "tool_not_allowed", False),
         (CodexSchemaInvalid("invalid output"), "failed", "candidate_schema_invalid", False),
         (CodexRuntimeUnavailable("runtime unavailable"), "unknown", "runtime_unavailable", True),

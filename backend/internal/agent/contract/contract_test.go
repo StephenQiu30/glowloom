@@ -13,10 +13,11 @@ func TestExecutionPolicyForFreezesCurrentCandidateDefinitions(t *testing.T) {
 		skillBundle   string
 		outputSchema  string
 		maxModelCalls int
+		maxSeconds    int
 		policyHash    string
 	}{
-		{"production_bible", "production-bible-harness-v1", "production-bible-prompt-v1", "production-bible-skills-v1", "production-bible-schema-v1", 3, "66f9586bc95df6f1714735b115e09d9122658bf720fb712a5ef36d2b9ba78b99"},
-		{"storyboard_draft", "storyboard-harness-v1", "storyboard-prompt-v1", "storyboard-skills-v1", "storyboard-draft-schema-v1", 1, "bc6030d16816445388853a7ae4dd0f65dea8de4e57a4c969e611afd67f3ed5b8"},
+		{"production_bible", "production-bible-harness-v1", "production-bible-prompt-v1", "production-bible-skills-v1", "production-bible-schema-v1", 3, 900, "6f2a808344083bdcdc0d542d94861bb25511f8373a48958c3e0c02f46c3f15a2"},
+		{"storyboard_draft", "storyboard-harness-v1", "storyboard-prompt-v1", "storyboard-skills-v1", "storyboard-draft-schema-v1", 1, 600, "a36be6c82351d8628536721d842316817495c8c43ff5f34662cef2516aa09a0b"},
 	}
 	for _, test := range tests {
 		t.Run(test.kind, func(t *testing.T) {
@@ -24,7 +25,7 @@ func TestExecutionPolicyForFreezesCurrentCandidateDefinitions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if policy.DefinitionKey != test.kind || policy.DefinitionVersion != test.definition || policy.PromptVersion != test.prompt || policy.SkillBundleVersion != test.skillBundle || policy.OutputSchemaVersion != test.outputSchema || policy.ModelCapability != "structured_text" || policy.MaxModelCalls != test.maxModelCalls || len(policy.AllowedTools) != 0 {
+			if policy.DefinitionKey != test.kind || policy.DefinitionVersion != test.definition || policy.PromptVersion != test.prompt || policy.SkillBundleVersion != test.skillBundle || policy.OutputSchemaVersion != test.outputSchema || policy.ModelCapability != "structured_text" || policy.MaxModelCalls != test.maxModelCalls || policy.MaxExecutionSeconds != test.maxSeconds || len(policy.AllowedTools) != 0 {
 				t.Fatalf("unexpected policy: %#v", policy)
 			}
 			policyHash, err := policy.Hash()
@@ -60,6 +61,11 @@ func TestInvocationRejectsPolicyOutsideDefinitionManifest(t *testing.T) {
 	if err = invocation.Validate(); err == nil {
 		t.Fatal("invocation accepted a model-call budget above the definition manifest")
 	}
+	invocation.ExecutionPolicy = policy
+	invocation.ExecutionPolicy.MaxExecutionSeconds = policy.MaxExecutionSeconds + 1
+	if err = invocation.Validate(); err == nil {
+		t.Fatal("invocation accepted an execution deadline above the definition manifest")
+	}
 }
 
 func TestAgentFailureCodesHaveFrozenStatusAndRetrySemantics(t *testing.T) {
@@ -80,6 +86,7 @@ func TestAgentFailureCodesHaveFrozenStatusAndRetrySemantics(t *testing.T) {
 		{"execution_budget_exceeded", "failed", false},
 		{"tool_not_allowed", "failed", false},
 		{"candidate_schema_invalid", "failed", false},
+		{"execution_deadline_exceeded", "failed", false},
 		{"runtime_unavailable", "unknown", true},
 	}
 	for _, test := range tests {
