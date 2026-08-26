@@ -47,7 +47,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D03` | [0006 领域语言](design/0006-领域语言与模块命名规范.md) | **已完成（2026-08-27）**：已固定 StoryGraph、Asset/State/Version、Claim、Occurrence 和 Binding 规范名 | 仅解锁 `SG-D04`；下游 Design 不得自创同义词 |
 | `SG-D04` | [0001 完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | **已完成（2026-08-27）**：平台主干收口为 StoryGraph 与四图边界，并固定 Kafka 异步解耦、剧本/StoryGraph 检索和 ELK + Kafka 日志链路 | 仅解锁 `SG-D05`；不先改其他子模块 |
 | `SG-D05` | [2003 语言与运行边界](design/2003-后端语言与运行边界策略.md) | **已完成（2026-08-27）**：固定 Backend 唯一 Writer、GORM Catalog、`agent/skills/build-storygraph`、受控 Codex CLI 与按真实消费者创建 Binary | 仅解锁 `SG-D06`；不在 Agent 增加业务 Writer |
-| `SG-D06` | [0003 系统总体架构](design/0003-系统总体架构.md) | 在 `0001/0006/2003` 同步后更新系统图、编译链和事实源 | 不把 StoryGraph 与 WorkflowDefinition 合并 |
+| `SG-D06` | [0003 系统总体架构](design/0003-系统总体架构.md) | **已完成（2026-08-27）**：重建 StoryGraph/四图系统图、两条 Compiler 链、单 Writer、Kafka 检索与 ELK 日志事实边界 | 仅解锁 `SG-D07`；不把 StoryGraph 与 WorkflowDefinition 合并 |
 | `SG-D07` | [0004 分层与依赖](design/0004-架构分层与依赖规则.md) | 复核 Compiler、Harness、Owner Apply 的依赖方向；无新语义则不强行改文 | 不新建通用空层 |
 | `SG-D08` | [0009 已验收 MVP 纵向切片](design/0009-剧本到分镜MVP垂直切片设计.md) | 只增加向 StoryGraph 演进的说明；不反向改写已通过的历史范围和证据 | 历史 `0009` Plan/Acceptance 不得抵扣新验收 |
 | `SG-D09` | [2001 Backend 服务架构](design/2001-后端服务架构.md) | 复核单 Backend、单 PostgreSQL/GORM Catalog 和 Agent 私有运行边界 | 不引入 Migration、Raw SQL、第二 ORM 或第二 Writer |
@@ -64,7 +64,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D20` | `0010` 唯一总 Plan | 引用 `SG-Ixx` 任务与 `3003` Agent 子项，Checklist 全为 `[ ]` | 不继续从旧 `3001/3002/0007` Plan 领取 StoryGraph 任务 |
 | `SG-D21` | 新 Acceptance Criteria | 逐项映射 Requirement/`SG-Ixx`，初始全为 `[ ]` | 无当次真实证据不得勾选 |
 
-`SG-D01`–`SG-D05` 已于 2026-08-27 依次接受并完成，`SG-D06` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；`SG-D11/SG-D12` 只同步两份 Design，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
+`SG-D01`–`SG-D06` 已于 2026-08-27 依次接受并完成，`SG-D07` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；`SG-D11/SG-D12` 只同步两份 Design，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
 
 ## 编号与命名
 
@@ -106,7 +106,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 |---|---|---|---|---|---|---|---|
 | `0001` | 平台产品与完整设计基线 | [产品范围与验收基线](prd/0001-产品范围与验收基线.md) | [完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | [平台 V1 需求规格](requirement/0001-平台V1需求规格.md) | [见 0007 交付计划](plan/0007-平台0到1交付计划.md) | — | `SG-D04` 平台 StoryGraph/Kafka/ELK 主干同步完成；旧 Requirement/Plan 的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
 | `0002` | 采用目标平台架构 | — | [架构决策](design/0002-采用目标平台架构决策.md) | — | — | — | 已接受目标 |
-| `0003` | 系统总体架构 | — | [总体架构](design/0003-系统总体架构.md) | — | — | — | 已接受目标 |
+| `0003` | 系统总体架构 | — | [总体架构](design/0003-系统总体架构.md) | — | — | — | 已接受目标；`SG-D06` StoryGraph/四图架构同步完成 |
 | `0004` | 架构分层与依赖 | — | [分层规则](design/0004-架构分层与依赖规则.md) | — | — | — | 已接受目标 |
 | `0005` | 中文语义化文档与模块命名 | — | [命名决策](design/0005-采用中文语义化文档与模块命名决策.md) | — | — | — | 已接受目标 |
 | `0006` | 领域语言与模块命名 | — | [命名规范](design/0006-领域语言与模块命名规范.md) | — | — | — | 已接受目标；`SG-D03` StoryGraph 术语同步完成 |
