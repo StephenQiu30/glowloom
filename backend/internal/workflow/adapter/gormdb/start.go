@@ -219,10 +219,21 @@ func runRecord(value domain.WorkflowRun) (model.WorkflowRun, error) {
 	if err != nil {
 		return model.WorkflowRun{}, err
 	}
+	var sourceWorkflowRunID *uuid.UUID
+	if value.SourceWorkflowRunID != nil {
+		parsed, parseErr := uuid.Parse(*value.SourceWorkflowRunID)
+		if parseErr != nil || value.RerunRootNodeID == nil || strings.TrimSpace(*value.RerunRootNodeID) == "" {
+			return model.WorkflowRun{}, errors.New("invalid workflow rerun source identity")
+		}
+		sourceWorkflowRunID = &parsed
+	} else if value.RerunRootNodeID != nil {
+		return model.WorkflowRun{}, errors.New("invalid workflow rerun root identity")
+	}
 	return model.WorkflowRun{
 		ID: id, WorkspaceID: workspaceID, ProjectID: projectID, AuthoringRevisionID: revisionID,
 		WorkflowDefinitionVersionID: definitionID, RunInputSnapshotID: snapshotID,
 		TemporalWorkflowID: value.TemporalWorkflowID, StartInputHash: value.StartInputHash,
+		SourceWorkflowRunID: sourceWorkflowRunID, RerunRootNodeID: cloneStringPointer(value.RerunRootNodeID),
 		Status: value.Status, ProgressStage: value.ProgressStage, NextAction: value.NextAction,
 		Error: datatypes.JSON(value.Error), PausedFromStatus: value.PausedFromStatus,
 		PausedFromProgressStage: value.PausedFromProgressStage,
@@ -252,12 +263,20 @@ func nodeRunRecord(value domain.NodeRunProjection) (model.NodeRunProjection, err
 		}
 		activeClaimToken = &parsed
 	}
+	var reusedFromNodeRunID *uuid.UUID
+	if value.ReusedFromNodeRunID != nil {
+		parsed, parseErr := uuid.Parse(*value.ReusedFromNodeRunID)
+		if parseErr != nil {
+			return model.NodeRunProjection{}, parseErr
+		}
+		reusedFromNodeRunID = &parsed
+	}
 	return model.NodeRunProjection{
 		ID: id, WorkspaceID: workspaceID, WorkflowRunID: runID, NodeID: value.NodeID,
 		DefinitionKey: value.DefinitionKey, DefinitionVersion: value.DefinitionVersion,
 		Executor: value.Executor, RiskLevel: value.RiskLevel, Status: value.Status, Attempt: value.Attempt,
-		ActiveClaimToken: activeClaimToken,
-		Input:            datatypes.JSON(value.Input), InputHash: nodeInputHashPointer(value.InputHash), CacheKey: nodeCacheKeyPointer(value.CacheKey),
+		ActiveClaimToken: activeClaimToken, ReusedFromNodeRunID: reusedFromNodeRunID,
+		Input: datatypes.JSON(value.Input), InputHash: nodeInputHashPointer(value.InputHash), CacheKey: nodeCacheKeyPointer(value.CacheKey),
 		Output: datatypes.JSON(value.Output), OutputHash: nodeOutputHashPointer(value.OutputHash),
 		Revision:  value.Revision,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
@@ -314,11 +333,17 @@ func startReceiptRecord(value domain.StartReceipt) (model.WorkflowStartReceipt, 
 }
 
 func runDomain(value model.WorkflowRun) domain.WorkflowRun {
+	var sourceWorkflowRunID *string
+	if value.SourceWorkflowRunID != nil {
+		parsed := value.SourceWorkflowRunID.String()
+		sourceWorkflowRunID = &parsed
+	}
 	return domain.WorkflowRun{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
 		AuthoringRevisionID: value.AuthoringRevisionID.String(), DefinitionVersionID: value.WorkflowDefinitionVersionID.String(),
 		RunInputSnapshotID: value.RunInputSnapshotID.String(), TemporalWorkflowID: value.TemporalWorkflowID,
 		StartInputHash: value.StartInputHash, Status: value.Status, ProgressStage: value.ProgressStage,
+		SourceWorkflowRunID: sourceWorkflowRunID, RerunRootNodeID: cloneStringPointer(value.RerunRootNodeID),
 		NextAction: value.NextAction, Error: append([]byte(nil), value.Error...),
 		PausedFromStatus:        cloneStringPointer(value.PausedFromStatus),
 		PausedFromProgressStage: cloneStringPointer(value.PausedFromProgressStage), Revision: value.Revision,
@@ -341,12 +366,17 @@ func nodeRunDomain(value model.NodeRunProjection) domain.NodeRunProjection {
 		token := value.ActiveClaimToken.String()
 		claimToken = &token
 	}
+	var reusedFromNodeRunID *string
+	if value.ReusedFromNodeRunID != nil {
+		reused := value.ReusedFromNodeRunID.String()
+		reusedFromNodeRunID = &reused
+	}
 	return domain.NodeRunProjection{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), WorkflowRunID: value.WorkflowRunID.String(),
 		NodeID: value.NodeID, DefinitionKey: value.DefinitionKey, DefinitionVersion: value.DefinitionVersion,
 		Executor: value.Executor, RiskLevel: value.RiskLevel, Status: value.Status, Attempt: value.Attempt,
-		ActiveClaimToken: claimToken,
-		Input:            append([]byte(nil), value.Input...), InputHash: nodeInputHashValue(value.InputHash), CacheKey: nodeCacheKeyValue(value.CacheKey),
+		ActiveClaimToken: claimToken, ReusedFromNodeRunID: reusedFromNodeRunID,
+		Input: append([]byte(nil), value.Input...), InputHash: nodeInputHashValue(value.InputHash), CacheKey: nodeCacheKeyValue(value.CacheKey),
 		Output: append([]byte(nil), value.Output...), OutputHash: nodeOutputHashValue(value.OutputHash),
 		Revision:  value.Revision,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
@@ -409,7 +439,17 @@ func sameRunIdentity(left, right model.WorkflowRun) bool {
 		left.AuthoringRevisionID == right.AuthoringRevisionID &&
 		left.WorkflowDefinitionVersionID == right.WorkflowDefinitionVersionID && left.RunInputSnapshotID == right.RunInputSnapshotID &&
 		left.TemporalWorkflowID == right.TemporalWorkflowID && left.StartInputHash == right.StartInputHash &&
+		equalOptionalUUID(left.SourceWorkflowRunID, right.SourceWorkflowRunID) &&
+		equalOptionalString(left.RerunRootNodeID, right.RerunRootNodeID) &&
 		left.CreatedBy == right.CreatedBy && left.InitiatorTokenVersion == right.InitiatorTokenVersion
+}
+
+func equalOptionalUUID(left, right *uuid.UUID) bool {
+	return (left == nil && right == nil) || (left != nil && right != nil && *left == *right)
+}
+
+func equalOptionalString(left, right *string) bool {
+	return (left == nil && right == nil) || (left != nil && right != nil && *left == *right)
 }
 
 func sameIntentIdentity(left, right model.WorkflowStartIntent) bool {
@@ -430,7 +470,8 @@ func sameNodeIdentities(left, right []domain.NodeRunProjection) bool {
 		if leftCopy[index].ID != rightCopy[index].ID || leftCopy[index].WorkspaceID != rightCopy[index].WorkspaceID ||
 			leftCopy[index].WorkflowRunID != rightCopy[index].WorkflowRunID || leftCopy[index].NodeID != rightCopy[index].NodeID ||
 			leftCopy[index].DefinitionKey != rightCopy[index].DefinitionKey || leftCopy[index].DefinitionVersion != rightCopy[index].DefinitionVersion ||
-			leftCopy[index].Executor != rightCopy[index].Executor || leftCopy[index].RiskLevel != rightCopy[index].RiskLevel {
+			leftCopy[index].Executor != rightCopy[index].Executor || leftCopy[index].RiskLevel != rightCopy[index].RiskLevel ||
+			!equalOptionalString(leftCopy[index].ReusedFromNodeRunID, rightCopy[index].ReusedFromNodeRunID) {
 			return false
 		}
 	}

@@ -58,6 +58,8 @@ type WorkflowRun struct {
 	RunInputSnapshotID          uuid.UUID                 `gorm:"type:uuid;not null"`
 	TemporalWorkflowID          string                    `gorm:"type:varchar(220);not null;uniqueIndex:uq_wrk_run_temporal_workflow"`
 	StartInputHash              string                    `gorm:"type:char(64);not null;check:ck_wrk_run_start_hash,char_length(start_input_hash) = 64"`
+	SourceWorkflowRunID         *uuid.UUID                `gorm:"type:uuid;index:ix_wrk_runs_source;check:ck_wrk_run_rerun_pair,(source_workflow_run_id IS NULL) = (rerun_root_node_id IS NULL);check:ck_wrk_run_rerun_source,source_workflow_run_id IS NULL OR source_workflow_run_id <> id"`
+	RerunRootNodeID             *string                   `gorm:"type:varchar(100)"`
 	Status                      string                    `gorm:"type:varchar(30);not null;index:ix_wrk_runs_status_updated,priority:1;check:ck_wrk_run_status,status IN ('QUEUED','RUNNING','WAITING_HUMAN','RETRYING','PAUSED','SUCCEEDED','FAILED','CANCELLED','NEEDS_ATTENTION')"`
 	ProgressStage               string                    `gorm:"type:varchar(80);not null"`
 	NextAction                  *string                   `gorm:"type:varchar(80)"`
@@ -75,32 +77,35 @@ type WorkflowRun struct {
 	WorkflowDefinitionVersion   WorkflowDefinitionVersion `gorm:"foreignKey:WorkflowDefinitionVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	RunInputSnapshot            RunInputSnapshot          `gorm:"foreignKey:RunInputSnapshotID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	Creator                     UserAccount               `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	SourceWorkflowRun           *WorkflowRun              `gorm:"foreignKey:SourceWorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (WorkflowRun) TableName() string { return "wrk_runs" }
 
 type NodeRunProjection struct {
-	ID                uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	WorkspaceID       uuid.UUID      `gorm:"type:uuid;not null;index:ix_wrk_node_runs_workspace_updated,priority:1"`
-	WorkflowRunID     uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_node_run_identity,priority:1"`
-	NodeID            string         `gorm:"type:varchar(100);not null;uniqueIndex:uq_wrk_node_run_identity,priority:2"`
-	DefinitionKey     string         `gorm:"type:varchar(100);not null"`
-	DefinitionVersion string         `gorm:"type:varchar(40);not null"`
-	Executor          string         `gorm:"type:varchar(120);not null"`
-	RiskLevel         string         `gorm:"type:varchar(30);not null;check:ck_wrk_node_run_risk,risk_level IN ('low','external_ai','human_gate')"`
-	Status            string         `gorm:"type:varchar(30);not null;index:ix_wrk_node_runs_status_updated,priority:1;check:ck_wrk_node_run_status,status IN ('QUEUED','RUNNING','WAITING_HUMAN','RETRYING','SUCCEEDED','FAILED','CANCELLED','SKIPPED','CACHED')"`
-	Attempt           int            `gorm:"not null;check:ck_wrk_node_run_attempt,attempt >= 0"`
-	ActiveClaimToken  *uuid.UUID     `gorm:"type:uuid"`
-	Input             datatypes.JSON `gorm:"type:jsonb"`
-	InputHash         *string        `gorm:"type:char(64);check:ck_wrk_node_run_input_hash,input_hash IS NULL OR char_length(input_hash) = 64"`
-	CacheKey          *string        `gorm:"type:char(64);check:ck_wrk_node_run_cache_key,cache_key IS NULL OR char_length(cache_key) = 64"`
-	Output            datatypes.JSON `gorm:"type:jsonb"`
-	OutputHash        *string        `gorm:"type:char(64);check:ck_wrk_node_run_output_hash,output_hash IS NULL OR char_length(output_hash) = 64"`
-	Revision          int            `gorm:"not null;check:ck_wrk_node_run_revision,revision >= 1"`
-	CreatedAt         time.Time      `gorm:"type:timestamptz;not null"`
-	UpdatedAt         time.Time      `gorm:"type:timestamptz;not null;index:ix_wrk_node_runs_workspace_updated,priority:2,sort:desc;index:ix_wrk_node_runs_status_updated,priority:2,sort:desc"`
-	Workspace         Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	WorkflowRun       WorkflowRun    `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ID                  uuid.UUID          `gorm:"type:uuid;primaryKey"`
+	WorkspaceID         uuid.UUID          `gorm:"type:uuid;not null;index:ix_wrk_node_runs_workspace_updated,priority:1"`
+	WorkflowRunID       uuid.UUID          `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_node_run_identity,priority:1"`
+	NodeID              string             `gorm:"type:varchar(100);not null;uniqueIndex:uq_wrk_node_run_identity,priority:2"`
+	DefinitionKey       string             `gorm:"type:varchar(100);not null"`
+	DefinitionVersion   string             `gorm:"type:varchar(40);not null"`
+	Executor            string             `gorm:"type:varchar(120);not null"`
+	RiskLevel           string             `gorm:"type:varchar(30);not null;check:ck_wrk_node_run_risk,risk_level IN ('low','external_ai','human_gate')"`
+	Status              string             `gorm:"type:varchar(30);not null;index:ix_wrk_node_runs_status_updated,priority:1;check:ck_wrk_node_run_status,status IN ('QUEUED','RUNNING','WAITING_HUMAN','RETRYING','SUCCEEDED','FAILED','CANCELLED','SKIPPED','CACHED')"`
+	Attempt             int                `gorm:"not null;check:ck_wrk_node_run_attempt,attempt >= 0"`
+	ActiveClaimToken    *uuid.UUID         `gorm:"type:uuid"`
+	ReusedFromNodeRunID *uuid.UUID         `gorm:"type:uuid;index:ix_wrk_node_runs_reused_from;check:ck_wrk_node_run_reused_from,reused_from_node_run_id IS NULL OR reused_from_node_run_id <> id"`
+	Input               datatypes.JSON     `gorm:"type:jsonb"`
+	InputHash           *string            `gorm:"type:char(64);check:ck_wrk_node_run_input_hash,input_hash IS NULL OR char_length(input_hash) = 64"`
+	CacheKey            *string            `gorm:"type:char(64);check:ck_wrk_node_run_cache_key,cache_key IS NULL OR char_length(cache_key) = 64"`
+	Output              datatypes.JSON     `gorm:"type:jsonb"`
+	OutputHash          *string            `gorm:"type:char(64);check:ck_wrk_node_run_output_hash,output_hash IS NULL OR char_length(output_hash) = 64"`
+	Revision            int                `gorm:"not null;check:ck_wrk_node_run_revision,revision >= 1"`
+	CreatedAt           time.Time          `gorm:"type:timestamptz;not null"`
+	UpdatedAt           time.Time          `gorm:"type:timestamptz;not null;index:ix_wrk_node_runs_workspace_updated,priority:2,sort:desc;index:ix_wrk_node_runs_status_updated,priority:2,sort:desc"`
+	Workspace           Workspace          `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	WorkflowRun         WorkflowRun        `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ReusedFromNodeRun   *NodeRunProjection `gorm:"foreignKey:ReusedFromNodeRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (NodeRunProjection) TableName() string { return "wrk_node_run_projections" }

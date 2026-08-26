@@ -17,6 +17,7 @@ const (
 	ExecuteNodeActivityName        = "lanverse.workflow.execute-node"
 	OpenHumanGateActivityName      = "lanverse.workflow.open-human-gate"
 	ApplyHumanGateActivityName     = "lanverse.workflow.apply-human-gate"
+	FailRunActivityName            = "lanverse.workflow.fail-run"
 	CompleteRunActivityName        = "lanverse.workflow.complete-run"
 	HumanGateSignalName            = "lanverse.workflow.human-gate-decision"
 	WorkflowControlSignalName      = "lanverse.workflow.control"
@@ -49,6 +50,7 @@ type WorkflowControlSignal struct {
 
 type ApplyHumanGateCommand = workflowdomain.ApplyHumanGateCommand
 type CompleteRunCommand = workflowdomain.CompleteRunCommand
+type FailRunCommand = workflowdomain.FailRunCommand
 
 type RunResult struct {
 	WorkflowRunID string `json:"workflow_run_id"`
@@ -111,6 +113,13 @@ func EpisodeProductionWorkflow(ctx workflow.Context, request workflowdomain.Star
 		if _, err := executeNodeUntilTerminal(
 			ctx, command, controlChannel, &controlState, request.WorkflowRunID,
 		); err != nil {
+			failureContext := workflow.WithActivityOptions(ctx, shortActivityOptions("fail-run:"+node.NodeRunID))
+			if failureErr := workflow.ExecuteActivity(failureContext, FailRunActivityName, FailRunCommand{
+				WorkflowRunID: request.WorkflowRunID, NodeRunID: node.NodeRunID, NodeID: node.NodeID,
+				FailureCode: "node_activity_failed",
+			}).Get(ctx, nil); failureErr != nil {
+				return RunResult{}, failureErr
+			}
 			return RunResult{}, err
 		}
 	}

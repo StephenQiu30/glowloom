@@ -69,6 +69,13 @@ type CompleteRunCommand struct {
 	WorkflowRunID string `json:"workflow_run_id"`
 }
 
+type FailRunCommand struct {
+	WorkflowRunID string `json:"workflow_run_id"`
+	NodeRunID     string `json:"node_run_id"`
+	NodeID        string `json:"node_id"`
+	FailureCode   string `json:"failure_code"`
+}
+
 type ApplyHumanGateCommand struct {
 	WorkflowRunID  string             `json:"workflow_run_id"`
 	NodeRunID      string             `json:"node_run_id"`

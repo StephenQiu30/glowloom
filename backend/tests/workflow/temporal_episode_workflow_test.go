@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/testsuite"
 
 	temporaladapter "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
@@ -281,9 +282,53 @@ func TestEpisodeWorkflowRejectsNodeActivityWithoutCanonicalOutput(t *testing.T) 
 		},
 		activity.RegisterOptions{Name: temporaladapter.ExecuteNodeActivityName},
 	)
+	environment.RegisterActivityWithOptions(
+		func(context.Context, workflow.FailRunCommand) error { return nil },
+		activity.RegisterOptions{Name: temporaladapter.FailRunActivityName},
+	)
 	environment.ExecuteWorkflow(temporaladapter.EpisodeProductionWorkflow, request)
 	if err := environment.GetWorkflowError(); err == nil || !strings.Contains(err.Error(), "invalid terminal output") {
 		t.Fatalf("invalid node activity output error = %v", err)
+	}
+}
+
+func TestEpisodeWorkflowProjectsFailedNodeBeforeReturningActivityFailure(t *testing.T) {
+	request := episodeWorkflowStartRequest()
+	plan := temporaladapter.ExecutionPlan{
+		WorkflowRunID: request.WorkflowRunID, DefinitionVersionID: request.DefinitionVersionID,
+		RunInputSnapshotID: request.RunInputSnapshotID, DefinitionContentHash: request.DefinitionContentHash,
+		InputSnapshotHash: request.InputSnapshotHash,
+		Nodes: []temporaladapter.ExecutionNode{{
+			NodeRunID: "node-run-failed", NodeID: "failed", Executor: "activity.failed", RiskLevel: "low",
+		}},
+	}
+	var failure workflow.FailRunCommand
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	environment.RegisterActivityWithOptions(
+		func(context.Context, workflow.StartRequest) (temporaladapter.ExecutionPlan, error) { return plan, nil },
+		activity.RegisterOptions{Name: temporaladapter.LoadExecutionPlanActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(context.Context, workflow.NodeActivityCommand) (temporaladapter.NodeActivityResult, error) {
+			return temporaladapter.NodeActivityResult{}, temporal.NewNonRetryableApplicationError("provider failed", "provider_failed", nil)
+		},
+		activity.RegisterOptions{Name: temporaladapter.ExecuteNodeActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(_ context.Context, command workflow.FailRunCommand) error {
+			failure = command
+			return nil
+		},
+		activity.RegisterOptions{Name: temporaladapter.FailRunActivityName},
+	)
+	environment.ExecuteWorkflow(temporaladapter.EpisodeProductionWorkflow, request)
+	if err := environment.GetWorkflowError(); err == nil || !strings.Contains(err.Error(), "provider failed") {
+		t.Fatalf("node activity failure = %v", err)
+	}
+	if failure.WorkflowRunID != request.WorkflowRunID || failure.NodeRunID != "node-run-failed" ||
+		failure.NodeID != "failed" || failure.FailureCode != "node_activity_failed" {
+		t.Fatalf("failure projection command = %#v", failure)
 	}
 }
 

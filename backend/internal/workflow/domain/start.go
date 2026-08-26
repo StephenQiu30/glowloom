@@ -22,6 +22,8 @@ type StartRequest struct {
 	DefinitionContentHash string `json:"definition_content_hash"`
 	InputSnapshotHash     string `json:"input_snapshot_hash"`
 	InputHash             string `json:"input_hash"`
+	SourceWorkflowRunID   string `json:"source_workflow_run_id,omitempty"`
+	RerunRootNodeID       string `json:"rerun_root_node_id,omitempty"`
 }
 
 type StartObservation struct {
@@ -33,6 +35,7 @@ type WorkflowRun struct {
 	ID, WorkspaceID, ProjectID, AuthoringRevisionID string
 	DefinitionVersionID, RunInputSnapshotID         string
 	TemporalWorkflowID, StartInputHash              string
+	SourceWorkflowRunID, RerunRootNodeID            *string
 	Status, ProgressStage                           string
 	NextAction                                      *string
 	Error                                           json.RawMessage
@@ -51,6 +54,7 @@ type NodeRunProjection struct {
 	Status                         string
 	Attempt, Revision              int
 	ActiveClaimToken               *string
+	ReusedFromNodeRunID            *string
 	Input                          json.RawMessage
 	InputHash                      string
 	CacheKey                       string
@@ -83,4 +87,9 @@ type StartPreparation struct {
 	Run    WorkflowRun
 	Nodes  []NodeRunProjection
 	Intent StartIntent
+}
+
+type RerunSource struct {
+	Run   WorkflowRun
+	Nodes []NodeRunProjection
 }

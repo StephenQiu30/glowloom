@@ -41,6 +41,10 @@ type RunCompletionRepository interface {
 	CompleteRun(context.Context, domain.CompleteRunCommand, time.Time) error
 }
 
+type RunFailureRepository interface {
+	FailRun(context.Context, domain.FailRunCommand, time.Time) error
+}
+
 type HumanGateRepository interface {
 	PrepareHumanGate(context.Context, domain.NodeActivityCommand, time.Time) (domain.HumanGateBinding, error)
 }
@@ -275,4 +279,17 @@ func (service *RuntimeService) CompleteRun(ctx context.Context, command domain.C
 		return errors.New("workflow completion repository is unavailable")
 	}
 	return normalizeError(repository.CompleteRun(ctx, command, service.config.Now().UTC()))
+}
+
+func (service *RuntimeService) FailRun(ctx context.Context, command domain.FailRunCommand) error {
+	if service == nil || service.config.Now == nil || strings.TrimSpace(command.WorkflowRunID) == "" ||
+		strings.TrimSpace(command.NodeRunID) == "" || strings.TrimSpace(command.NodeID) == "" ||
+		command.FailureCode != "node_activity_failed" {
+		return invalid("Invalid workflow failure input")
+	}
+	repository, supported := service.repository.(RunFailureRepository)
+	if !supported {
+		return errors.New("workflow failure repository is unavailable")
+	}
+	return normalizeError(repository.FailRun(ctx, command, service.config.Now().UTC()))
 }

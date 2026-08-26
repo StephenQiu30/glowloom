@@ -17,6 +17,7 @@ type RuntimeActivities interface {
 	ExecuteNode(context.Context, domain.NodeActivityCommand) (domain.NodeActivityResult, error)
 	OpenHumanGate(context.Context, domain.NodeActivityCommand) error
 	ApplyHumanGate(context.Context, domain.ApplyHumanGateCommand) error
+	FailRun(context.Context, domain.FailRunCommand) error
 	CompleteRun(context.Context, domain.CompleteRunCommand) error
 }
 
@@ -44,6 +45,10 @@ func (runtime *Client) NewWorker(activities RuntimeActivities) (worker.Worker, e
 	runtimeWorker.RegisterActivityWithOptions(
 		activities.ApplyHumanGate,
 		activity.RegisterOptions{Name: ApplyHumanGateActivityName},
+	)
+	runtimeWorker.RegisterActivityWithOptions(
+		activities.FailRun,
+		activity.RegisterOptions{Name: FailRunActivityName},
 	)
 	runtimeWorker.RegisterActivityWithOptions(
 		activities.CompleteRun,

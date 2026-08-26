@@ -163,6 +163,10 @@ func (*replayRuntimeActivities) ApplyHumanGate(context.Context, workflowdomain.A
 	return nil
 }
 
+func (*replayRuntimeActivities) FailRun(context.Context, workflowdomain.FailRunCommand) error {
+	return nil
+}
+
 func (*replayRuntimeActivities) CompleteRun(context.Context, workflowdomain.CompleteRunCommand) error {
 	return nil
 }

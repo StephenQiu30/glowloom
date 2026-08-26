@@ -102,7 +102,8 @@ func (runtime *Client) describeInputHash(ctx context.Context, workflowID string)
 }
 
 func validRequest(request domain.StartRequest) bool {
-	return request.WorkflowID != "" && request.WorkflowType != "" && request.WorkflowRunID != "" &&
+	rerunIdentityValid := (request.SourceWorkflowRunID == "") == (request.RerunRootNodeID == "")
+	return request.WorkflowID != "" && request.WorkflowType != "" && request.WorkflowRunID != "" && rerunIdentityValid &&
 		request.DefinitionVersionID != "" && request.RunInputSnapshotID != "" &&
 		len(request.DefinitionContentHash) == 64 && len(request.InputSnapshotHash) == 64 && len(request.InputHash) == 64
 }

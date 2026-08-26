@@ -40,6 +40,10 @@ type Repository interface {
 	FinalizeStartAttempt(context.Context, domain.WorkflowRun, domain.StartIntent, domain.StartReceipt, int, int) error
 }
 
+type RerunRepository interface {
+	LoadRerunSource(context.Context, string) (domain.RerunSource, error)
+}
+
 type TransactionManager interface {
 	WithinTransaction(context.Context, func(Repository) error) error
 }

@@ -48,7 +48,7 @@ func (store *Store) LoadExecutionPlan(ctx context.Context, request domain.StartR
 	}
 	if run.WorkflowDefinitionVersionID != definitionID || run.RunInputSnapshotID != snapshotID ||
 		run.TemporalWorkflowID != request.WorkflowID || run.StartInputHash != request.InputHash ||
-		intent.TemporalInputHash != request.InputHash {
+		intent.TemporalInputHash != request.InputHash || !runtimeRerunIdentityMatches(run, request) {
 		return domain.ExecutionPlan{}, errors.New("workflow runtime start identity has drifted")
 	}
 
@@ -85,7 +85,35 @@ func (store *Store) LoadExecutionPlan(ctx context.Context, request domain.StartR
 	for _, execution := range compiled.Definition.NodeExecutions {
 		executionByNode[execution.NodeID] = execution
 	}
-	if len(compiled.Definition.ExecutionOrder) != len(projections) || len(executionByNode) != len(projections) {
+	executionNodeIDs := append([]string(nil), compiled.Definition.ExecutionOrder...)
+	expectedProjectionIDs := make(map[string]struct{}, len(executionNodeIDs))
+	if run.SourceWorkflowRunID != nil {
+		domainProjections := make([]domain.NodeRunProjection, 0, len(projections))
+		for _, projection := range projections {
+			domainProjections = append(domainProjections, nodeRunDomain(projection))
+		}
+		scope, scopeErr := domain.BuildRerunScope(compiled.Definition, domainProjections, *run.RerunRootNodeID)
+		if scopeErr != nil {
+			return domain.ExecutionPlan{}, fmt.Errorf("workflow rerun projection scope has drifted: %w", scopeErr)
+		}
+		if scopeErr = validateRerunProjectionSources(ctx, store.database, run, projections, scope); scopeErr != nil {
+			return domain.ExecutionPlan{}, scopeErr
+		}
+		executionNodeIDs = scope.DirtyNodeIDs
+		for _, nodeID := range scope.ReusedNodeIDs {
+			expectedProjectionIDs[nodeID] = struct{}{}
+		}
+	} else {
+		for _, projection := range projections {
+			if projection.ReusedFromNodeRunID != nil {
+				return domain.ExecutionPlan{}, errors.New("full workflow run contains a reused node projection")
+			}
+		}
+	}
+	for _, nodeID := range executionNodeIDs {
+		expectedProjectionIDs[nodeID] = struct{}{}
+	}
+	if len(expectedProjectionIDs) != len(projections) {
 		return domain.ExecutionPlan{}, errors.New("workflow runtime node projection set has drifted")
 	}
 
@@ -94,7 +122,7 @@ func (store *Store) LoadExecutionPlan(ctx context.Context, request domain.StartR
 		RunInputSnapshotID: snapshot.ID.String(), DefinitionContentHash: definition.ContentHash,
 		InputSnapshotHash: snapshot.ContentHash, Nodes: make([]domain.ExecutionNode, 0, len(projections)),
 	}
-	for _, nodeID := range compiled.Definition.ExecutionOrder {
+	for _, nodeID := range executionNodeIDs {
 		projection, projectionExists := projectionByNode[nodeID]
 		execution, executionExists := executionByNode[nodeID]
 		if !projectionExists || !executionExists || projection.DefinitionKey != execution.DefinitionKey ||
@@ -483,6 +511,138 @@ func (store *Store) CompleteRun(ctx context.Context, command domain.CompleteRunC
 	})
 }
 
+func (store *Store) FailRun(ctx context.Context, command domain.FailRunCommand, now time.Time) error {
+	runID, err := uuid.Parse(command.WorkflowRunID)
+	if err != nil {
+		return application.ErrNotFound
+	}
+	nodeRunID, err := uuid.Parse(command.NodeRunID)
+	if err != nil {
+		return application.ErrNotFound
+	}
+	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var run model.WorkflowRun
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var node model.NodeRunProjection
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&node, "id = ?", nodeRunID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if node.WorkflowRunID != run.ID || node.NodeID != command.NodeID {
+			return errors.New("workflow failed node identity has drifted")
+		}
+		if run.Status == "FAILED" && node.Status == "FAILED" {
+			return nil
+		}
+		if (run.Status != "RUNNING" && run.Status != "RETRYING") ||
+			(node.Status != "QUEUED" && node.Status != "RUNNING" && node.Status != "RETRYING") {
+			return &application.Error{Code: "resource_conflict", Message: "Workflow run changed before failure projection", Status: 409}
+		}
+		stopped, stopErr := stoppingControlExists(transaction, run.ID)
+		if stopErr != nil {
+			return stopErr
+		}
+		if stopped {
+			return errors.New("workflow failure projection is fenced by an active control")
+		}
+		if len(node.Output) != 0 || node.OutputHash != nil {
+			return errors.New("failed workflow node already has an output projection")
+		}
+		node.Status = "FAILED"
+		node.ActiveClaimToken = nil
+		node.Revision++
+		node.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
+			"status": node.Status, "active_claim_token": nil, "revision": node.Revision, "updated_at": node.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		failure, encodeErr := json.Marshal(map[string]string{
+			"code": command.FailureCode, "node_id": command.NodeID,
+		})
+		if encodeErr != nil {
+			return encodeErr
+		}
+		nextAction := "rerun_failed_node"
+		run.Status, run.ProgressStage = "FAILED", "node:"+node.NodeID+":failed"
+		run.NextAction, run.Error = &nextAction, datatypes.JSON(failure)
+		run.Revision++
+		run.UpdatedAt = now.UTC()
+		return transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+			"status": run.Status, "progress_stage": run.ProgressStage, "next_action": nextAction,
+			"error": run.Error, "revision": run.Revision, "updated_at": run.UpdatedAt,
+		}).Error
+	})
+}
+
+func runtimeRerunIdentityMatches(run model.WorkflowRun, request domain.StartRequest) bool {
+	if run.SourceWorkflowRunID == nil || run.RerunRootNodeID == nil {
+		return request.SourceWorkflowRunID == "" && request.RerunRootNodeID == ""
+	}
+	return run.SourceWorkflowRunID.String() == request.SourceWorkflowRunID &&
+		*run.RerunRootNodeID == request.RerunRootNodeID
+}
+
+func validateRerunProjectionSources(
+	ctx context.Context,
+	database *gorm.DB,
+	run model.WorkflowRun,
+	projections []model.NodeRunProjection,
+	scope domain.RerunScope,
+) error {
+	if run.SourceWorkflowRunID == nil {
+		return errors.New("workflow rerun source identity is missing")
+	}
+	dirty := make(map[string]struct{}, len(scope.DirtyNodeIDs))
+	for _, nodeID := range scope.DirtyNodeIDs {
+		dirty[nodeID] = struct{}{}
+	}
+	reused := make(map[string]struct{}, len(scope.ReusedNodeIDs))
+	for _, nodeID := range scope.ReusedNodeIDs {
+		reused[nodeID] = struct{}{}
+	}
+	sourceIDs := make([]uuid.UUID, 0, len(reused))
+	projectionBySource := make(map[uuid.UUID]model.NodeRunProjection, len(reused))
+	for _, projection := range projections {
+		if _, exists := dirty[projection.NodeID]; exists {
+			if projection.ReusedFromNodeRunID != nil {
+				return errors.New("dirty workflow node has a reuse source")
+			}
+			continue
+		}
+		if _, exists := reused[projection.NodeID]; !exists || projection.Status != "SKIPPED" ||
+			projection.ReusedFromNodeRunID == nil || projection.Attempt != 0 || projection.ActiveClaimToken != nil ||
+			projection.CacheKey != nil {
+			return errors.New("workflow reused node projection identity has drifted")
+		}
+		sourceIDs = append(sourceIDs, *projection.ReusedFromNodeRunID)
+		projectionBySource[*projection.ReusedFromNodeRunID] = projection
+	}
+	if len(sourceIDs) != len(reused) || len(projectionBySource) != len(reused) {
+		return errors.New("workflow reused node projection set has drifted")
+	}
+	var sourceNodes []model.NodeRunProjection
+	if err := database.WithContext(ctx).Where("id IN ?", sourceIDs).Find(&sourceNodes).Error; err != nil {
+		return err
+	}
+	if len(sourceNodes) != len(sourceIDs) {
+		return errors.New("workflow reused source node is missing")
+	}
+	for _, source := range sourceNodes {
+		projection, exists := projectionBySource[source.ID]
+		if !exists || source.WorkflowRunID != *run.SourceWorkflowRunID || source.WorkspaceID != run.WorkspaceID ||
+			source.NodeID != projection.NodeID || source.DefinitionKey != projection.DefinitionKey ||
+			source.DefinitionVersion != projection.DefinitionVersion || source.Executor != projection.Executor ||
+			source.RiskLevel != projection.RiskLevel || nodeInputHashValue(source.InputHash) != nodeInputHashValue(projection.InputHash) ||
+			nodeOutputHashValue(source.OutputHash) != nodeOutputHashValue(projection.OutputHash) ||
+			!equalJSON(source.Input, projection.Input) || !equalJSON(source.Output, projection.Output) {
+			return errors.New("workflow reused source node projection has drifted")
+		}
+	}
+	return nil
+}
+
 func (store *Store) PrepareHumanGate(
 	ctx context.Context,
 	command domain.NodeActivityCommand,
@@ -701,5 +861,6 @@ func stoppingControlExists(transaction *gorm.DB, workflowRunID uuid.UUID) (bool,
 var _ application.RuntimeRepository = (*Store)(nil)
 var _ application.NodeRuntimeRepository = (*Store)(nil)
 var _ application.RunCompletionRepository = (*Store)(nil)
+var _ application.RunFailureRepository = (*Store)(nil)
 var _ application.HumanGateRepository = (*Store)(nil)
 var _ application.HumanGateApplyRepository = (*Store)(nil)
