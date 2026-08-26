@@ -6,6 +6,7 @@
 - PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
 - Cross-service Requirement：[0010 StoryGraph 内容图与 DAG 创作画布需求规格](../requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md)
 - Agent Requirement：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 需求规格](../requirement/3003-StoryGraph剧本解析Harness与内置Skill需求规格.md)
+- Acceptance：[0010 StoryGraph 内容图与 DAG 创作画布验收标准](../acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md)
 
 ## 1. 计划边界
 
@@ -156,4 +157,4 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 - Provider ACK/结果未知、配额/费用/资产版本不一致：按同一 Job/Receipt 对账，禁止重新计费式盲重试。
 - 完整原稿或真实 CI 未通过：`SG-I27` 保持未完成；不得运行、引用或提前准备最终 `agent-browser` 通过声明。
 
-本文完成 `SG-D20`。下一步只能建立 `SG-D21` 初始全未勾选 Acceptance Criteria；其接受并独立提交前不得开始 `SG-I01` 编码。
+本文完成 `SG-D20`。`SG-D21` 已建立初始全未勾选 Acceptance Criteria；其独立提交后只能从 `SG-I01` 开始编码。

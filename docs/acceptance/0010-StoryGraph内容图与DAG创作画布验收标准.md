@@ -1,0 +1,247 @@
+# StoryGraph 内容图与 DAG 创作画布验收标准
+
+- 状态：验收标准已接受（`SG-D21`，2026-08-27）；全部标准初始未通过
+- Design：[0010 StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
+- Agent Design：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
+- PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
+- Cross-service Requirement：[0010 StoryGraph 内容图与 DAG 创作画布需求规格](../requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md)
+- Agent Requirement：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 需求规格](../requirement/3003-StoryGraph剧本解析Harness与内置Skill需求规格.md)
+- Plan：[0010 StoryGraph 内容图与 DAG 创作画布实施计划](../plan/0010-StoryGraph内容图与DAG创作画布实施计划.md)
+
+## 1. 证据口径
+
+本文件只承认 `SG-D21` 接受后、由对应 `SG-Ixx` 在当前源码重新执行的证据。历史实现、旧 Acceptance、mock、内存替身、跳过项、被禁用的 CI、兼容回退、静态推断或“理论可行”均不能勾选。
+
+每次勾选必须在本文件追加：实施任务与提交、真实命令、fixture/完整原稿、依赖版本与隔离方式、关键计数/Hash/Receipt、成功或失败结果、残余风险。涉及外部依赖时必须记录真实 PostgreSQL/GORM、Temporal、Kafka、Elasticsearch、ELK、MinIO、Codex CLI 或 Runware Staging；缺失条件保持 `[ ]`。
+
+统一验收顺序为定向 Red→Green→Refactor → 架构/安全门禁 → 当时全量真实 CI → 独立提交。`agent-browser` 只能由 `SG-I28` 在 `SG-I27` 完成并提交后执行，不能提前替代任何非浏览器证据。
+
+## 2. Cross-service Requirement Checklist
+
+### 2.1 架构与事实源
+
+- [ ] `SG-ARC-001`（`SG-I01`、`SG-I03`–`028` 回归）：Backend 唯一业务 Writer，Agent/Frontend/event-worker 零 Owner 直写证据。
+- [ ] `SG-ARC-002`（`SG-I01`、`SG-I03` 起）：空 PostgreSQL 的唯一 GORM Catalog、无 Migration 元数据/Raw SQL/第二 ORM/第二 Writer 证据。
+- [ ] `SG-ARC-003`（`SG-I01` 起）：Domain/Application 与 GORM/Temporal/Kafka/Elastic/Provider 的 import/AST 负向证据。
+- [ ] `SG-ARC-004`（`SG-I01`、`SG-I06`–`024`）：真实 Temporal wait/signal/replay/restart 与无 Kafka/DB 第二 Workflow 证据。
+- [ ] `SG-ARC-005`（`SG-I01`、`SG-I03`、`SG-I25`）：四图 Schema/ID/DTO 不可互换证据。
+- [ ] `SG-ARC-006`（`SG-I01`、`SG-I05`、全部 Agent 切片）：Agent Candidate-only 环境、依赖、网络和零业务写入证据。
+- [ ] `SG-ARC-007`（`SG-I07`、`SG-I25`–`026`、`SG-I28`）：Browser 仅访问 Backend `/api/v1` 的 bundle/import/网络证据。
+- [ ] `SG-ARC-008`（`SG-I03`–`024`）：外部边界稳定身份、known failure/unknown 与同 ID 对账故障矩阵。
+- [ ] `SG-ARC-009`（`SG-I03`–`026`）：Workspace/Project Token Version/Membership 与防枚举权限矩阵。
+- [ ] `SG-ARC-010`（所有首次消费者任务）：新增结构均有真实消费者、测试和装配，无未来空层/Binary/Topic/Index/兼容层证据。
+
+### 2.2 StoryGraph 与 Query
+
+- [ ] `SG-GRF-001`（`SG-I01`、`SG-I03`）：StoryGraphVersion 字段、不可变约束和历史读取证据。
+- [ ] `SG-GRF-002`（`SG-I03`）：每项目唯一 Head、expected CAS、并发单胜与失败零半成品证据。
+- [ ] `SG-GRF-003`（`SG-I01`、`SG-I03`、`SG-I17`）：Node/Owner Ref/Evidence strict schema 正反 fixture。
+- [ ] `SG-GRF-004`（`SG-I01`、`SG-I03`、`SG-I17`）：Edge 类型/端点矩阵与未知组合拒绝 fixture。
+- [ ] `SG-GRF-005`（`SG-I01`、`SG-I03`、`SG-I04`）：Node/Edge 稳定 Key 与跨版本 change 证据。
+- [ ] `SG-GRF-006`（`SG-I01`、`SG-I03`）：Canonical Hash 跨语言、随机顺序和 Canvas 无关证据。
+- [ ] `SG-GRF-007`（`SG-I01`、`SG-I03`、`SG-I17`）：DAG、最小环路径与 Claim 表达证据。
+- [ ] `SG-GRF-008`（`SG-I03`、`SG-I17`、`SG-I23`）：Compiler 只读已确认精确 Owner、污染源拒绝证据。
+- [ ] `SG-GRF-009`（`SG-I03`、`SG-I17`、`SG-I23`）：Owner Set/Version/Head/Receipt/Outbox 单 GORM 事务故障注入。
+- [ ] `SG-GRF-010`（`SG-I03`）：JSONB Version + Head 且无图数据库/EAV/递归 Raw SQL/第二 Graph Writer 证据。
+- [ ] `SG-QRY-001`（`SG-I04`）：Current/Exact/Lens/Diff/Trace/Impact Application 与 HTTP Query 证据。
+- [ ] `SG-QRY-002`（`SG-I04`、`SG-I25`）：版本、lens、scope、depth/cursor、truncated/继续条件 contract。
+- [ ] `SG-QRY-003`（`SG-I04`、`SG-I25`）：五类有界 Lens、大图分层和确定性结果 Hash。
+- [ ] `SG-QRY-004`（`SG-I04`、`SG-I17`）：稳定 Key 的 add/remove/change 跨版本 golden。
+- [ ] `SG-QRY-005`（`SG-I04`）：Query 零写入与 Elasticsearch 故障不影响 PostgreSQL Query 的证据。
+
+### 2.3 Review、Production 与视觉资产
+
+- [ ] `SG-REV-001`（`SG-I06`）：Gate input 建立冻结 HumanTask 且客户端不能自报 Candidate。
+- [ ] `SG-REV-002`（`SG-I06`、`SG-I07`）：列表/详情/Lease/Decision/Resume OpenAPI 与生成 Client 无漂移。
+- [ ] `SG-REV-003`（`SG-I06`、`SG-I07`）：Claim/Renew/Release Actor/revision/token/expiry/幂等与零泄漏矩阵。
+- [ ] `SG-REV-004`（`SG-I06`）：不可变 Decision、允许集合与 selected 单候选并发证据。
+- [ ] `SG-REV-005`（`SG-I06`、`SG-I07`）：Decision/Owner Apply/Workflow Resume 三状态 API/UI 分离证据。
+- [ ] `SG-REV-006`（`SG-I11`、`SG-I14`、`SG-I16`、`SG-I19`、`SG-I21`、`SG-I23`、`SG-I24`）：七类 Gate 的显式 Owner Apply 与负向零写入证据。
+- [ ] `SG-REV-007`（同上）：按 Decision ID 幂等 Resume、并发/重启/UNKNOWN 收敛证据。
+- [ ] `SG-REV-008`（同上）：Decision 前 stale 与 Decision 后 baseline 冲突不误套用证据。
+- [ ] `SG-PRD-001`（`SG-I08`）：DocumentRevision、Unicode 绝对 Evidence 与两集 coverage。
+- [ ] `SG-PRD-002`（`SG-I11`）：Bible Confirm 只产 Version/Receipt 的数据库事实计数。
+- [ ] `SG-PRD-003`（`SG-I12`）：MaterializeConfirmedBible 单事务、唯一身份、幂等/回滚/反查。
+- [ ] `SG-PRD-004`（`SG-I09`、`SG-I12`、`SG-I15`）：同名/别名不得自动合并的负向证据。
+- [ ] `SG-PRD-005`（`SG-I13`、`SG-I14`）：分集边界与 Episode/Published ScriptVersion 全批原子证据。
+- [ ] `SG-PRD-006`（`SG-I15`、`SG-I16`）：Scene/Dialogue/Beat/Occurrence/Claim 全批应用与未知事实拒绝。
+- [ ] `SG-PRD-007`（`SG-I18`）：Storyboard Draft 精确正式输入、`needs_asset` 与零 Shot 证据。
+- [ ] `SG-PRD-008`（`SG-I19`）：FreezeIntentSet 输出与零 Shot/Cost/Quota/Provider/Graph 副作用证据。
+- [ ] `SG-PRD-009`（`SG-I22`）：detail_shots 精确 READY AssetVersion/Artifact/Lineage/Style/view-role 门禁。
+- [ ] `SG-PRD-010`（`SG-I23`）：Shot + ShotProductionBindingVersion + Receipt 全批 GORM 原子应用。
+- [ ] `SG-PRD-011`（`SG-I12`、`SG-I23`、`SG-I24`）：三类 Binding Owner/Record/API/Graph 不混用证据。
+- [ ] `SG-PRD-012`（`SG-I17`、`SG-I23`）：Owner Apply 后 expected graph hash 编译与 unknown 同 Receipt 对账。
+- [ ] `SG-VIS-001`（`SG-I20`、`SG-I24`）：`reference_asset|shot_frame` strict union 与旧入口拒绝。
+- [ ] `SG-VIS-002`（`SG-I20`）：reference_asset 冻结身份/Specification/State/Style/view roles 与先行顺序。
+- [ ] `SG-VIS-003`（`SG-I20`、`SG-I24`）：Runware 稳定 Task UUID 与同 Job unknown 查询对账。
+- [ ] `SG-VIS-004`（`SG-I20`、`SG-I24`）：Provider 前 Intent/Cost/Quota/Authorization/Job 全部已提交。
+- [ ] `SG-VIS-005`（`SG-I20`、`SG-I24`）：私有 Staging、Backend 字节/Hash/媒体重验与 READY/QUARANTINED。
+- [ ] `SG-VIS-006`（`SG-I21`）：composite 三视图 role/输入 Hash/READY/lineage QC 门禁。
+- [ ] `SG-VIS-007`（`SG-I21`）：确定性 QC 与人工视觉一致性判断边界。
+- [ ] `SG-VIS-008`（`SG-I21`、`SG-I24`）：冻结 CandidateSet 的单一不可变 Selection 并发收敛。
+- [ ] `SG-VIS-009`（`SG-I21`）：AssetVersion 精确绑定、不可变与历史版本引用。
+- [ ] `SG-VIS-010`（`SG-I24`）：shot_frame 冻结正式 Shot/ProductionBinding/Occurrence/AssetVersion 完整性。
+- [ ] `SG-VIS-011`（`SG-I24`）：只发布 ShotImageBindingVersion、单 Shot 局部重跑不改旧事实。
+
+### 2.4 Kafka、Search 与 ELK
+
+- [ ] `SG-EVT-001`（`SG-I03`、`SG-I04`）：Owner/Receipt/Outbox 同 GORM 事务且网络 Publisher 不入事务。
+- [ ] `SG-EVT-002`（`SG-I04`）：Kafka Envelope 完整字段、payload hash 与剧本/Prompt/Secret/URL 排除。
+- [ ] `SG-EVT-003`（`SG-I04`）：真实 Kafka 至少一次、ACK unknown 同 ID、Inbox/revision fencing、DLQ/Replay。
+- [ ] `SG-EVT-004`（`SG-I04`）：Script/StoryGraph Topic 与日志 Topic 的 Schema/Group/Retention/DLQ 隔离，无 Command Topic。
+- [ ] `SG-EVT-005`（`SG-I04`）：首个真实 Consumer 同任务创建 event-worker，复用唯一 Catalog/连接模型。
+- [ ] `SG-SRCH-001`（`SG-I04`）：Script/StoryGraph 两类 index/alias、租户/Owner/Evidence/Node 可追溯文档。
+- [ ] `SG-SRCH-002`（`SG-I04`）：重复/乱序 revision fencing、tombstone/snapshot、PostgreSQL 全量 Reindex 原子 Alias。
+- [ ] `SG-SRCH-003`（`SG-I04`）：授权 Search API、snippet/score/深链/新鲜度且无 DSL 透传/Owner 回写。
+- [ ] `SG-SRCH-004`（`SG-I04`）：Elastic unavailable/lag 的 degraded/stale 与 Owner/PostgreSQL Query 正确性。
+- [ ] `SG-LOG-001`（`SG-I04`）：真实 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 独立日志链。
+- [ ] `SG-LOG-002`（`SG-I04`、`SG-I27`）：全链关联 ID/错误码查询与敏感字段零命中扫描。
+- [ ] `SG-LOG-003`（`SG-I04`、`SG-I27`）：Kafka/Logstash/Elastic/Kibana 逐组件故障不改变业务/Search 投影证据。
+
+### 2.5 Frontend、运行质量与旅程
+
+- [ ] `SG-FE-001`（`SG-I07`、`SG-I25`–`026`）：单 Next.js/npm + RTK Query + 生成 Client，无第二 Query/monorepo。
+- [ ] `SG-FE-002`（`SG-I12`、`SG-I16`、`SG-I21`、`SG-I25`）：角色/地点卡派生 Owner 事实、State/Style 不重复身份与 Scene 区分。
+- [ ] `SG-FE-003`（`SG-I07`）：真实 Review Workbench，错误/unknown 无 mock/local success。
+- [ ] `SG-FE-004`（`SG-I25`）：StoryGraph 路由、五 Lens、scope/version/focus 深链刷新。
+- [ ] `SG-FE-005`（`SG-I25`）：React Flow/Dagre 随真实消费者引入，只读且布局/viewport 零回写。
+- [ ] `SG-FE-006`（`SG-I25`）：Story Lens 与 Workflow Lens Query/DTO/ID/Adapter/renderer 分离。
+- [ ] `SG-FE-007`（`SG-I25`）：Server fact/URL/local 状态边界，View Model 不复制到 Redux/Context/localStorage。
+- [ ] `SG-FE-008`（`SG-I07`、`SG-I25`–`026`）：完整状态、键盘、焦点、列表替代与 reduced-motion。
+- [ ] `SG-FE-009`（`SG-I26`）：类型化 Domain Intent + base/expected/idempotency，Owner Command 重编译且无 Graph JSON 直写。
+- [ ] `SG-OPS-001`（`SG-I01` 起）：严格输入/事件/Provider/HTTP 解码、大小/深度/数字/UUID/Hash 负向证据。
+- [ ] `SG-OPS-002`（`SG-I20`、`SG-I24`）：Runware SSRF/allowlist/Credential Ref 与 secret 零泄漏。
+- [ ] `SG-OPS-003`（各 Binary 首次消费者，`SG-I04` event-worker）：healthz/readyz 与真实必要依赖故障。
+- [ ] `SG-OPS-004`（`SG-I01` 起）：所有测试只在三应用 `tests/`，业务源码零测试文件。
+- [ ] `SG-OPS-005`（每个 `SG-Ixx`）：Red→Green→Refactor、定向门与当时全量真实 CI 证据。
+- [ ] `SG-OPS-006`（`SG-I01`、`SG-I04` 起）：空 PostgreSQL、真实 Temporal/MinIO/Kafka/Elastic/日志链 CI。
+- [ ] `SG-OPS-007`（`SG-I01` 起）：Go/Agent/Frontend/OpenAPI/Compose/Image/Hygiene 与 Required 聚合真实执行。
+- [ ] `SG-OPS-008`（每个 `SG-Ixx`）：完整任务独立提交且无兼容回退/禁用检查/降断言/旧入口。
+- [ ] `SG-OPS-009`（`SG-I27`、`SG-I28`）：完整实现与 CI 提交后才运行最终 agent-browser 的 Git 顺序。
+- [ ] `SG-JRN-001`（`SG-I08`–`017`、`SG-I27`）：至少两集 Document→Evidence→Bible→Episode/Scene/Beat/Occurrence/Claim→Core Graph 可反查。
+- [ ] `SG-JRN-002`（`SG-I12`、`SG-I18`–`024`、`SG-I27`）：跨集单 Asset、多 State、reference/detail/Shot/frame/Binding/Graph 全链。
+- [ ] `SG-JRN-003`（`SG-I03`–`004`、`SG-I27`）：Outbox→Kafka→Elastic→Search 深链与重复/乱序/重启/Reindex 收敛。
+- [ ] `SG-JRN-004`（`SG-I27`）：完整原稿统计、人工抽查与全故障矩阵零重复事实/费用/配额。
+- [ ] `SG-JRN-005`（`SG-I28`）：最终 agent-browser 旅程与 API/PostgreSQL/Temporal/Kafka/Search/Artifact 对账。
+
+## 3. Agent Requirement Checklist
+
+### 3.1 边界、迁移与 Bundle
+
+- [ ] `SGA-BND-001`（`SG-I01`、`SG-I05` 起）：Backend 拥有 Stage/Policy/Invocation/Shard/Candidate 与全部写入。
+- [ ] `SGA-BND-002`（`SG-I01`、`SG-I05` 起）：Agent 无 ORM/DB/Object/Kafka/Elastic/Temporal/Provider/Public API。
+- [ ] `SGA-BND-003`（`SG-I08` 起）：Stage/Shard 挂既有 Run/NodeRun，无动态 Workflow Node/Agent Checkpoint。
+- [ ] `SGA-BND-004`（全部 Agent Stage）：Agent success 零 Confirm/Apply/正式 UUID/Owner/Event/Resume。
+- [ ] `SGA-BND-005`（`SG-I05`）：普通显式 Registry，无 LangGraph 运行路径且无消费者时删除依赖/lock。
+- [ ] `SGA-MOV-001`（`SG-I02`）：八 Skill 原名、原 UTF-8 字节、相对路径 SHA-256 等价迁移。
+- [ ] `SGA-MOV-002`（`SG-I02`）：Loader/Docker/tests 原子切换，根旧路径删除且无双读/fallback。
+- [ ] `SGA-MOV-003`（`SG-I02`）：只迁移不改行为，Agent/Backend/Frontend 全量 CI 通过。
+- [ ] `SGA-BDL-001`（`SG-I05`）：最终唯一 `agent/skills/build-storygraph/SKILL.md`，旧名/旧 Loader/无消费者 metadata 删除。
+- [ ] `SGA-BDL-002`（`SG-I05`）：SKILL 全局规则 + 显式 references，Python 无 Guidance 复制。
+- [ ] `SGA-BDL-003`（`SG-I05`）：Stage→Schema/Reference 显式 Registry、loaded-file golden、未知 Stage 拒绝。
+- [ ] `SGA-BDL-004`（`SG-I05`）：Bundle Canonical Hash 跨语言、路径/长度/字节与逃逸 fail closed。
+- [ ] `SGA-BDL-005`（`SG-I05`）：Manifest 冻结版本/Hash/模型/空 Tool/budget/deadline，任一漂移拒绝。
+- [ ] `SGA-BDL-006`（`SG-I05`）：未终态 Invocation 按 Bundle Hash 精确镜像路由，缺失无相近版本回退。
+
+### 3.2 Wire、Stage 与 Shard
+
+- [ ] `SGA-WIR-001`（`SG-I01` fixture、`SG-I05` 最终）：只允许 `storygraph_stage`，旧 kind 原子移除。
+- [ ] `SGA-WIR-002`（`SG-I01`、`SG-I05`）：Invocation 全字段 strict fixture。
+- [ ] `SGA-WIR-003`（`SG-I01`、`SG-I05`）：source/upstream exact ref 完整且无 current/latest 补全。
+- [ ] `SGA-WIR-004`（`SG-I01`、`SG-I05`）：Input Hash 跨语言与每字段突变 golden。
+- [ ] `SGA-WIR-005`（`SG-I01`、`SG-I05`）：stage instance identity 并发/重放/结果冲突。
+- [ ] `SGA-WIR-006`（`SG-I01`、`SG-I05`）：succeeded/failed/unknown strict union 与 `extra=forbid`。
+- [ ] `SGA-WIR-007`（`SG-I01`、`SG-I05`）：Result Hash、Backend 不可变接受与全身份重验。
+- [ ] `SGA-WIR-008`（`SG-I01`、`SG-I05`）：Grant expiry/attempt/fencing/恒时验签与伪造拒绝。
+- [ ] `SGA-STG-001`（`SG-I05`）：十 Stage/Reference/Candidate 一一对应与跨语言 count=10。
+- [ ] `SGA-STG-002`（`SG-I05`）：Pydantic 唯一 Schema 事实、临时生成 JSON Schema、无 tracked 第二份。
+- [ ] `SGA-STG-003`（`SG-I05` 起）：Candidate 只用给定 Ref/临时 Key，无 Command/SQL/Graph overwrite。
+- [ ] `SGA-STG-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I22`）：无证据不补写事实的对抗/人工证据。
+- [ ] `SGA-STG-005`（`SG-I09`、`SG-I15`）：关系/因果/连续性/伏笔使用 Claim Candidate，无持久环边。
+- [ ] `SGA-STG-006`（`SG-I18`）：draft_storyboard 非空 Spec/State、缺资产只产 needs_asset。
+- [ ] `SGA-STG-007`（`SG-I22`）：detail_shots 精确 READY 资产并禁止改变已接受意图/身份/状态。
+- [ ] `SGA-STG-008`（`SG-I18`、`SG-I22`、`SG-I23`）：Backend 生成序号/timecode/UUID/Owner/Binding，Agent 只给 Candidate。
+- [ ] `SGA-SHR-001`（`SG-I08`）：不可变 versioned ShardManifest 字段/Hash/约束。
+- [ ] `SGA-SHR-002`（`SG-I08`、`SG-I09`、`SG-I15`）：确定性分片/排序/fan-in/tree，Agent 不决定边界。
+- [ ] `SGA-SHR-003`（`SG-I08` 起）：超预算发布新 Manifest 完整覆盖，无截断/临时扩预算。
+- [ ] `SGA-SHR-004`（`SG-I08` 起）：旧结果只审计，current active leaf + gate 才聚合。
+- [ ] `SGA-SHR-005`（`SG-I09`、`SG-I15`）：有界 reduce 只传必要 Ref/Hash/冲突，超预算再分片。
+- [ ] `SGA-SHR-006`（全部分片 Stage）：单 shard 失败不毁成功事实，Workflow 无固定业务墙钟终止。
+
+### 3.3 Evidence、Candidate 与 Repair
+
+- [ ] `SGA-EVD-001`（`SG-I08`）：Unicode code-point `[start,end)` 跨语言与逐字回读。
+- [ ] `SGA-EVD-002`（`SG-I08`）：语义边界、显式 overlap、coverage 与 range+hash 去重。
+- [ ] `SGA-EVD-003`（`SG-I08`、`SG-I13`）：中阿拉伯 Episode marker 与 AI 仅提议歧义边界。
+- [ ] `SGA-EVD-004`（`SG-I08`）：chunk-local offset 经 Backend 校正重验后才成正式 Evidence。
+- [ ] `SGA-EVD-005`（`SG-I08` fixture、`SG-I27` final）：两集开发 + 完整原稿统计和代表集人工细查。
+- [ ] `SGA-CAN-001`（`SG-I09`）：不可变 StageCandidateRevision/Head CAS/并发。
+- [ ] `SGA-CAN-002`（`SG-I09`）：invocation/aggregate/repair strict origin union。
+- [ ] `SGA-CAN-003`（`SG-I09`）：content hash 与 revision hash 分层单字段突变。
+- [ ] `SGA-CAN-004`（`SG-I09`、`SG-I10`）：exact revision 下游与 Head 变更 stale closure，不覆盖历史。
+- [ ] `SGA-REP-001`（`SG-I10`、`SG-I22`）：模型 Review Issue 不冒充确定性 Gate/blocker。
+- [ ] `SGA-REP-002`（`SG-I10`、`SG-I22`）：Repair Patch 冻结 target/allowlist/base/邻接且不能改已发布 Graph。
+- [ ] `SGA-REP-003`（`SG-I10`、`SG-I22`）：expected Head 应用 N+1、幂等 Receipt 与并发单胜。
+- [ ] `SGA-REP-004`（`SG-I10`、`SG-I22`）：每轮重跑影响闭包 Gate/Review，有界预算耗尽不半成功。
+
+### 3.4 Codex、错误、CI 与旅程
+
+- [ ] `SGA-COD-001`（`SG-I05` 起、`SG-I27`）：真实本地 Codex ephemeral/read-only/ignore config/临时空目录与 Policy 模型。
+- [ ] `SGA-COD-002`（同上）：Tool allowlist 为空，任何 Tool event 丢弃 Candidate 并报错。
+- [ ] `SGA-COD-003`（同上）：Harness 显式注入 Guidance，工作目录与用户 Skill/项目配置隔离。
+- [ ] `SGA-COD-004`（同上）：模型调用/技术 deadline、进程回收与脱敏有界诊断。
+- [ ] `SGA-COD-005`（同上）：Schema 修正固定次数计入预算，事实 blocker 不被改写。
+- [ ] `SGA-COD-006`（同上）：runtime unavailable/transport unknown 不空 Candidate 成功、不换 Provider。
+- [ ] `SGA-ERR-001`（`SG-I05` 起）：稳定错误码 Go/Python fixture 完整。
+- [ ] `SGA-ERR-002`（同上）：failed/unknown 可重试分类与同 identity 对账事实计数。
+- [ ] `SGA-ERR-003`（`SG-I04`、全部 Agent 切片）：允许日志字段与剧本/Candidate/Prompt/Grant/Secret 零命中。
+- [ ] `SGA-ERR-004`（同上）：Backend→Agent→Codex trace 关联且 Candidate Hash 不变。
+- [ ] `SGA-OPS-001`（`SG-I01` 起）：Agent 测试只在 `agent/tests` 独立分类。
+- [ ] `SGA-OPS-002`（每个 Agent 任务）：Ruff check/format、Pyright、Pytest 与 Go/Python fixture 同时通过。
+- [ ] `SGA-OPS-003`（`SG-I02`、`SG-I05`）：非 root 镜像含唯一 Bundle/Codex，旧路径不存在且启动 Hash 验证。
+- [ ] `SGA-OPS-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I22`、`SG-I27`）：各类至少一次真实 Codex，完整原稿无模型桩。
+- [ ] `SGA-OPS-005`（每个 `SG-Ixx`）：完整任务 Red→Green→Refactor、全量 CI、Evidence 与独立提交。
+- [ ] `SGA-OPS-006`（`SG-I28`）：仅在 `SG-I27` 提交后运行最终 agent-browser，无新 Agent 实现。
+- [ ] `SGA-JRN-001`（`SG-I08`–`011`、`SG-I27`）：完整原稿 Evidence→Story analyze/reconcile→review/repair→Bible Gate 可恢复。
+- [ ] `SGA-JRN-002`（`SG-I12`–`017`、`SG-I27`）：confirmed Bible→episode analyze/reconcile→Owner Apply→Core Graph。
+- [ ] `SGA-JRN-003`（`SG-I18`–`023`、`SG-I27`）：draft→needs_asset→READY AssetVersion→detail/review/repair，Agent 零 Shot/Binding。
+- [ ] `SGA-JRN-004`（`SG-I27`）：Bundle 滚动、deadline、runtime unavailable、迟到、Head/Repair 竞争恢复收敛。
+
+## 4. 实施任务完成 Checklist
+
+以下 28 项必须与 Plan 同序；每项只有在其映射 Requirement、定向验证、当时全量真实 CI、Acceptance Evidence 和独立 Git 提交均完成后才能勾选。
+
+- [ ] `SG-I01`：Schema/Key/Hash/Wire fixture、工具链/导入边界、失败测试与当前真实 CI 基线完成。
+- [ ] `SG-I02`：八 Skill 字节保持迁移至 `agent/skills`，单路径、无 fallback、全量 CI、独立提交完成。
+- [ ] `SG-I03`：StoryGraph Version/Head/Compiler/Owner Set/Outbox 单事务发布完成。
+- [ ] `SG-I04`：Graph Query + Kafka Event + Elasticsearch Search + ELK 日志真实消费者、故障 CI 完成。
+- [ ] `SG-I05`：`build-storygraph` 唯一 Bundle、Stage Wire/Policy/Candidate Revision、旧入口原子删除完成。
+- [ ] `SG-I06`：公共 HumanTask/Lease/Decision/Resume Backend API 与恢复完成。
+- [ ] `SG-I07`：真实 Review Workbench 与错误/unknown/a11y 完成。
+- [ ] `SG-I08`：Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate 完成。
+- [ ] `SG-I09`：Story analyze/reconcile map-tree 与 Candidate Revision 完成。
+- [ ] `SG-I10`：StoryGraph review 与有界 Repair/Gate 完成。
+- [ ] `SG-I11`：Bible Human Gate/Confirm Receipt 且零资产物化完成。
+- [ ] `SG-I12`：Confirmed Bible 资产/Specification/State/ProductionBinding 原子物化完成。
+- [ ] `SG-I13`：Episode segmentation Candidate 与 coverage 完成。
+- [ ] `SG-I14`：Episode Plan Gate 与 Episode/Published ScriptVersion 全批物化完成。
+- [ ] `SG-I15`：Episode analyze/reconcile 与 Scene/Beat/Occurrence/Claim Candidate 完成。
+- [ ] `SG-I16`：Planning Review/Gate/Owner 全批 Apply 完成。
+- [ ] `SG-I17`：Core StoryGraph 多集编译、Diff/Impact 全链完成。
+- [ ] `SG-I18`：Storyboard Draft/Shot Intent/needs_asset 且零正式 Shot 完成。
+- [ ] `SG-I19`：Intent Gate/FreezeIntentSet 与付费前零副作用完成。
+- [ ] `SG-I20`：reference_asset Cost/Quota/Runware Job/Artifact unknown 对账完成。
+- [ ] `SG-I21`：composite 三视图 QC/Selection/AssetVersion 完成。
+- [ ] `SG-I22`：精确 READY AssetVersion 的 detail_shots/Review/Repair 完成。
+- [ ] `SG-I23`：Storyboard Gate/Shot/ProductionBinding/Graph 原子 Apply 完成。
+- [ ] `SG-I24`：shot_frame/Selection/ShotImageBinding 与单 Shot 局部重跑完成。
+- [ ] `SG-I25`：只读 Story Lens、React Flow/Dagre、有界查询与无写入完成。
+- [ ] `SG-I26`：类型化 Domain Intent/Owner Command/重编译/Patch Diff 完成。
+- [ ] `SG-I27`：完整原稿、代表集人工细查、故障矩阵与全量真实 CI 证据已提交。
+- [ ] `SG-I28`：最终 agent-browser Web Journey 与 Backend/Owner/Temporal/Kafka/Search/Artifact 对账已提交。
+
+## 5. Evidence Log
+
+当前为空。每个 `SG-Ixx` 完成时在此追加一节，不覆盖历史条目；失败或缺失条件同样如实记录。
+
+`SG-D21` 到此完成，所有 188 个 Checklist（91 条跨服务 Requirement、69 条 Agent Requirement、28 个实施任务）均保持未勾选。下一步只允许从 `SG-I01` 开始实施。
