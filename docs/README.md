@@ -53,7 +53,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D09` | [2001 Backend 服务架构](design/2001-后端服务架构.md) | **已完成（2026-08-27）**：固定单 Backend/GORM Catalog、Temporal、私有 Agent、Kafka/Search/ELK 目标与当前缺口 | 仅解锁 `SG-D10`；不引入 Migration、Raw SQL、第二 ORM 或第二 Writer |
 | `SG-D10` | [2002 Backend 领域设计](design/2002-后端领域模块功能设计.md) | **已完成（2026-08-27）**：固定 StoryGraph Compiler、Candidate→Owner Apply、Asset/Specification/State、三类 Binding 与 Kafka/Search 领域边界 | 仅解锁 `SG-D11`；不开始 Harness 或 Canvas |
 | `SG-D11` | [3001 Production Bible](design/3001-项目制作圣经生成执行框架设计.md) | **已完成（2026-08-27）**：改为 Evidence/Claim/Specification/State 的 StoryGraph 上游，拆开 Bible Confirm 与资产物化 | 仅解锁 `SG-D12`；旧 `3001` 派生文档继续冻结 |
-| `SG-D12` | [3002 本地 Codex 分镜 Harness](design/3002-本地-Codex-分镜智能体执行框架设计.md) | 收口到 `3003` 唯一 Bundle，固定 Draft `needs_asset` 与 Detail 分阶段 | 旧 5-Skill Plan 继续冻结 |
+| `SG-D12` | [3002 本地 Codex 分镜 Harness](design/3002-本地-Codex-分镜智能体执行框架设计.md) | **已完成（2026-08-27）**：收口到 `3003` 唯一 Bundle，固定 Draft `needs_asset`、付费前 Gate 与 Detail 精确资产边界 | 仅解锁 `SG-D13`；旧 `3002` 派生文档继续冻结 |
 | `SG-D13` | [2051 图片 Provider](design/2051-Runware图片Provider与Generation执行器设计.md) | 对齐 `reference_asset`/`shot_frame`、composite reference sheet 和精确 AssetVersion 绑定，并单独接受 | 未对齐前不用 shot-only Provider 冒充角色/地点参考资产 |
 | `SG-D14` | [1001 前端应用架构](design/1001-前端应用架构.md) | 先固定只读 Story Lens/Workflow Lens 和 Query 边界 | 不预建协作或可写 Canvas |
 | `SG-D15` | [1002 前端功能模块](design/1002-前端功能模块设计.md) | 在 `1001/2002` 之后对齐角色卡、地点卡、审核与 Canvas 任务流 | 不模拟 Backend 成功 |
@@ -64,7 +64,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D20` | `0010` 唯一总 Plan | 引用 `SG-Ixx` 任务与 `3003` Agent 子项，Checklist 全为 `[ ]` | 不继续从旧 `3001/3002/0007` Plan 领取 StoryGraph 任务 |
 | `SG-D21` | 新 Acceptance Criteria | 逐项映射 Requirement/`SG-Ixx`，初始全为 `[ ]` | 无当次真实证据不得勾选 |
 
-`SG-D01`–`SG-D11` 已于 2026-08-27 依次接受并完成，`SG-D12` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；`SG-D12` 只同步一份 Design，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
+`SG-D01`–`SG-D12` 已于 2026-08-27 依次接受并完成，`SG-D13` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
 
 ## 编号与命名
 
@@ -123,7 +123,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `2055` | Workflow 公共 Human Gate 命令与恢复 | — | [公共 Human Gate 设计](design/2055-Workflow公共HumanGate命令与恢复设计.md) | — | — | — | 已冻结；仅在 `SG-D16` 激活后同步并单独评审 |
 | `2056` | Workflow 阶段 5 完成度审计 | — | — | — | — | [完成度审计](acceptance/2056-Workflow阶段5完成度审计.md) | 静态证据审计完成，未改变阶段完成状态 |
 | `3001` | 项目制作圣经与完整剧本闭环 | [产品需求](prd/3001-项目制作圣经产品需求.md) | [执行框架设计](design/3001-项目制作圣经生成执行框架设计.md) | [需求规格](requirement/3001-项目制作圣经需求规格.md) | [实施计划](plan/3001-项目制作圣经实施计划.md) | [验收 Checklist](acceptance/3001-完整剧本业务闭环验收标准.md) | `SG-D11` Design 已完成 StoryGraph 上游同步；旧派生文档持续冻结，由 `SG-D17`–`SG-D21` 取代 |
-| `3002` | 本地 Codex 分镜智能体 | [产品需求](prd/3002-本地-Codex-分镜智能体产品需求.md) | [执行框架设计](design/3002-本地-Codex-分镜智能体执行框架设计.md) | [需求规格](requirement/3002-本地-Codex-分镜智能体执行框架需求规格.md) | [实施计划](plan/3002-本地-Codex-分镜智能体执行框架实施计划.md) | [验收 Checklist](acceptance/3002-本地-Codex-分镜智能体执行框架验收标准.md) | `SG-D12` 只同步 Design；旧派生文档持续冻结，由 `SG-D17`–`SG-D21` 取代 |
+| `3002` | 本地 Codex 分镜智能体 | [产品需求](prd/3002-本地-Codex-分镜智能体产品需求.md) | [执行框架设计](design/3002-本地-Codex-分镜智能体执行框架设计.md) | [需求规格](requirement/3002-本地-Codex-分镜智能体执行框架需求规格.md) | [实施计划](plan/3002-本地-Codex-分镜智能体执行框架实施计划.md) | [验收 Checklist](acceptance/3002-本地-Codex-分镜智能体执行框架验收标准.md) | `SG-D12` Design 已完成唯一 Bundle 与 Draft/Detail 同步；旧派生文档持续冻结，由 `SG-D17`–`SG-D21` 取代 |
 | `3003` | StoryGraph 剧本解析 Harness 与内置 Skill | — | [Harness 与内置 Skill 设计](design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) | — | — | — | Design 已接受（`SG-D02`）；尚未派生或实施 |
 
 `2002` 的最新边界审计：[Workflow 阶段 5 完成度审计](acceptance/2056-Workflow阶段5完成度审计.md)；最新运行增量验收为 [Agent 执行总时限](acceptance/2054-Agent执行总时限验收记录.md)，前置边界见 [Workflow 重复投递收敛](acceptance/2052-Workflow重复投递收敛验收记录.md)、[Shot 绑定目标与单 Shot 局部重跑](acceptance/2050-Shot绑定目标与单Shot局部重跑验收记录.md)、[正式 Shot Workflow 后半程](acceptance/2049-正式ShotWorkflow后半程验收记录.md)、[Production Shot 图片绑定](acceptance/2048-ProductionShot图片绑定验收记录.md)、[Generation CandidateSet 与 Workflow 人工选择](acceptance/2047-GenerationCandidateSet与Workflow人工选择验收记录.md)、[Generation Provider 成功输出物化](acceptance/2046-GenerationProvider成功输出物化验收记录.md)、[Generation Provider 提交与结果对账](acceptance/2045-GenerationProvider提交与结果对账验收记录.md)、[Generation 高成本准备与执行授权](acceptance/2044-Generation高成本准备与执行授权验收记录.md)、[Cost 费用预留与追加式账本](acceptance/2043-Cost费用预留与追加式账本验收记录.md)、[Cost 图片价格与不可变估算](acceptance/2042-Cost图片价格与不可变估算验收记录.md)、[Cost Project Budget 唯一事实](acceptance/2041-Cost项目预算唯一事实验收记录.md)、[Quota 图片生成日配额](acceptance/2040-Quota图片生成日配额验收记录.md)、[Generation 人工候选选择](acceptance/2039-Generation人工候选选择验收记录.md)、[Generation 图片候选与确定性 QC](acceptance/2038-Generation图片候选与确定性QC验收记录.md) 与 [Asset 图片产物就绪](acceptance/2037-Asset图片产物就绪验收记录.md)。
