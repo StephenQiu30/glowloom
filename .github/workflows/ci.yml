@@ -188,6 +188,31 @@ jobs:
         run: >-
           docker run --rm --entrypoint /bin/sh lanverse/agent:ci -c
           'command -v codex >/dev/null && python -c "from app.candidate_runtime.api import app; assert app.title == '\''Lanverse Candidate Runtime'\''"'
+      - name: Run deployment images against real dependencies
+        run: |
+          docker tag lanverse/frontend:ci lanverse/frontend:development
+          docker tag lanverse/backend:ci lanverse/backend:development
+          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --no-build --wait --wait-timeout 180
+          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx workflow-worker
+          for attempt in $(seq 1 30); do
+            if docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color workflow-worker | grep -q "lanverse workflow worker started"; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color workflow-worker
+              exit 1
+            fi
+            sleep 1
+          done
+          docker run --detach --name lanverse-ci-agent-runtime --publish 127.0.0.1:18787:8787 --env AGENT_EXECUTION_SECRET=ci-agent-runtime-secret-at-least-32-bytes lanverse/agent:ci
+          curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 --output /dev/null http://127.0.0.1:8686/healthz
+          curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 --output /dev/null http://127.0.0.1:8123/
+          curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 --output /dev/null http://127.0.0.1:18787/healthz
+      - name: Clean deployment runtime
+        if: always()
+        run: |
+          docker rm --force lanverse-ci-agent-runtime 2>/dev/null || true
+          docker compose -f docker-compose.yml -f docker-compose-env.yml down --volumes --remove-orphans
 
   delivery:
     name: Delivery / Hygiene
