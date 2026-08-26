@@ -17,12 +17,14 @@ import (
 const setBudgetOperation = "cost.budget.set"
 
 var (
-	ErrBudgetNotFound     = errors.New("cost budget policy not found")
-	ErrPriceQuoteNotFound = errors.New("cost price quote not found")
-	ErrEstimateNotFound   = errors.New("cost estimate not found")
-	amountPattern         = regexp.MustCompile(`^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$`)
-	currencyPattern       = regexp.MustCompile(`^[A-Z]{3}$`)
-	maximumAmount         = decimal.RequireFromString("99999999999999.999999")
+	ErrBudgetNotFound      = errors.New("cost budget policy not found")
+	ErrPriceQuoteNotFound  = errors.New("cost price quote not found")
+	ErrEstimateNotFound    = errors.New("cost estimate not found")
+	ErrReservationNotFound = errors.New("cost reservation not found")
+	ErrLedgerEntryNotFound = errors.New("cost ledger entry not found")
+	amountPattern          = regexp.MustCompile(`^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$`)
+	currencyPattern        = regexp.MustCompile(`^[A-Z]{3}$`)
+	maximumAmount          = decimal.RequireFromString("99999999999999.999999")
 )
 
 type Error struct {
@@ -61,6 +63,15 @@ type Repository interface {
 	FindEstimate(context.Context, string) (domain.Estimate, error)
 	FindEstimateBySource(context.Context, string, string, string) (domain.Estimate, error)
 	EnsureEstimate(context.Context, domain.Estimate) (domain.Estimate, error)
+	FindReservation(context.Context, string) (domain.Reservation, error)
+	GetReservationForUpdate(context.Context, string) (domain.Reservation, error)
+	FindReservationByEstimate(context.Context, string) (domain.Reservation, error)
+	EnsureReservation(context.Context, domain.Reservation) (domain.Reservation, error)
+	UpdateReservation(context.Context, domain.Reservation, int64) (domain.Reservation, error)
+	ListReservations(context.Context, string) ([]domain.Reservation, error)
+	FindLedgerEntry(context.Context, string, string) (domain.LedgerEntry, error)
+	EnsureLedgerEntry(context.Context, domain.LedgerEntry) (domain.LedgerEntry, error)
+	ListLedgerEntries(context.Context, string) ([]domain.LedgerEntry, error)
 }
 
 type TransactionManager interface {
@@ -186,6 +197,19 @@ func (service *Service) SetBudget(ctx context.Context, actor Actor, command SetB
 				}
 				if !errors.Is(quoteErr, ErrPriceQuoteNotFound) {
 					return quoteErr
+				}
+			}
+			if !current.LimitAmount.Equal(amount) {
+				reservations, listErr := repo.ListReservations(ctx, scope.ProjectID)
+				if listErr != nil {
+					return listErr
+				}
+				reserved, settled, reconcileErr := reconcileBudgetUsage(current, reservations)
+				if reconcileErr != nil {
+					return reconcileErr
+				}
+				if reserved.Add(settled).GreaterThan(amount) {
+					return conflict("Project budget limit is below reserved and settled cost")
 				}
 			}
 			if !current.LimitAmount.Equal(amount) || current.Currency != command.Currency {
@@ -336,6 +360,9 @@ func normalizeError(err error) error {
 	}
 	if errors.Is(err, ErrEstimateNotFound) {
 		return notFound("Cost estimate not found")
+	}
+	if errors.Is(err, ErrReservationNotFound) || errors.Is(err, ErrLedgerEntryNotFound) {
+		return notFound("Cost reservation not found")
 	}
 	return err
 }
