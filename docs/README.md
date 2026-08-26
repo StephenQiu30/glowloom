@@ -58,13 +58,13 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D14` | [1001 前端应用架构](design/1001-前端应用架构.md) | **已完成（2026-08-27）**：固定单 npm/Next.js 应用、RTK Query 单一 Owner、只读 Story/Workflow Lens 与 React Flow/Dagre 边界 | 仅解锁 `SG-D15`；不预建协作或可写 Canvas |
 | `SG-D15` | [1002 前端功能模块](design/1002-前端功能模块设计.md) | **已完成（2026-08-27）**：对齐角色/地点只读卡、公共审核、Guided 步骤、Story Lens 与独立 Workflow 诊断任务流 | 仅解锁 `SG-D16`；不模拟 Backend 成功 |
 | `SG-D16` | [2055 公共 Human Gate](design/2055-Workflow公共HumanGate命令与恢复设计.md) | **已完成（2026-08-27）**：固定 Decision → Owner Apply → Workflow Resume 三阶段、七类显式 Gate 与同 ID 恢复 | 仅解锁 `SG-D17`；不从旧 Decision 套用漂移 Subject |
-| `SG-D17` | `0010` PRD | 所有受影响 Design 已同步和接受后，单独固定用户价值、MVP 范围与非目标 | 不创建第二份 Agent 产品愿景 |
+| `SG-D17` | [0010 StoryGraph PRD](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | **已完成（2026-08-27）**：固定完整原稿、Core Graph、视觉一致性、Canvas/Search/ELK 的用户价值、MVP 与非目标 | 仅解锁 `SG-D18`；不创建第二份 Agent 产品愿景 |
 | `SG-D18` | `0010` 跨服务 Requirement | 固定 Backend/Frontend/Workflow/Asset 可测契约 | 不编码 |
 | `SG-D19` | `3003` Agent Contract Requirement | 仅补 Bundle/Stage/Shard/Candidate/Codex 专项契约 | 不重复 `0010` 产品范围 |
 | `SG-D20` | `0010` 唯一总 Plan | 引用 `SG-Ixx` 任务与 `3003` Agent 子项，Checklist 全为 `[ ]` | 不继续从旧 `3001/3002/0007` Plan 领取 StoryGraph 任务 |
 | `SG-D21` | 新 Acceptance Criteria | 逐项映射 Requirement/`SG-Ixx`，初始全为 `[ ]` | 无当次真实证据不得勾选 |
 
-`SG-D01`–`SG-D16` 已于 2026-08-27 依次接受并完成，`SG-D17` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
+`SG-D01`–`SG-D17` 已于 2026-08-27 依次接受并完成，`SG-D18` 是当前唯一激活步骤。`plan/0007`、`plan/0008` 只表达未来 Platform Complete 目标，不是当前 StoryGraph 执行入口；旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结，由 `SG-D17`–`SG-D21` 统一文档链取代。在 `SG-D20/SG-D21` 通过前，`0007/0008/1001/2002/3001/3002` 旧 Plan 中与 StoryGraph、Canvas、新 Human Gate、Agent Bundle 或视觉资产重叠的 Checklist 一律冻结，`2051/2055` 也不得绕过 `SG-D13/SG-D16` 进入编码。唯一代码实施顺序由 `0010` 的 `SG-Ixx` 维护，`3003` 只做 Agent 子任务映射。
 
 ## 编号与命名
 
@@ -113,7 +113,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `0007` | 平台 0→1 交付 | — | — | — | [交付计划](plan/0007-平台0到1交付计划.md) | — | 未来 Platform Complete 目标；当前不是 StoryGraph 执行入口 |
 | `0008` | 资源所有权与交付 | — | — | — | [所有权台账](plan/0008-资源所有权与交付台账.md) | — | 未来 Platform Complete 资源目标；当前不是 StoryGraph 执行入口 |
 | `0009` | 剧本到分镜 MVP 垂直切片 | [产品需求](prd/0009-剧本到分镜MVP产品需求.md) | [垂直切片设计](design/0009-剧本到分镜MVP垂直切片设计.md) | [需求规格](requirement/0009-剧本到分镜MVP需求规格.md) | [实施计划](plan/0009-剧本到分镜MVP实施计划.md) | [验收记录](acceptance/0009-剧本到分镜MVP验收记录.md) | 历史 MVP 已验收；`SG-D08` 演进说明已加入，不回写旧证据 |
-| `0010` | StoryGraph 内容图、DAG 与视觉资产 | — | [内容图与 DAG 创作画布设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | — | — | — | Design 已接受（`SG-D01`）；尚未派生或实施 |
+| `0010` | StoryGraph 内容图、DAG 与视觉资产 | [产品需求](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | [内容图与 DAG 创作画布设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | — | — | — | PRD 已接受（`SG-D17`）；跨服务 Requirement 尚未建立 |
 | `1001` | 前端应用架构与交付 | — | [应用架构](design/1001-前端应用架构.md) | [架构需求规格](requirement/1001-前端应用架构需求规格.md) | [应用与功能交付计划](plan/1001-前端应用与功能交付实施计划.md) | — | `SG-D14` 已完成单应用、只读双 Lens 与 Query Owner 同步；旧派生文档的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
 | `1002` | 前端创作工作台与功能模块 | [创作工作台产品需求](prd/1002-前端创作工作台产品需求.md) | [模块设计](design/1002-前端功能模块设计.md) | [功能需求规格](requirement/1002-前端功能模块需求规格.md) | [合并至 1001 计划](plan/1001-前端应用与功能交付实施计划.md) | — | `SG-D15` 已完成角色/地点卡、公共审核、Guided 与只读 Lens 任务同步；旧派生文档的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
 | `2001` | 后端服务与运行架构 | — | [服务架构](design/2001-后端服务架构.md) | [运行架构需求规格](requirement/2001-后端运行架构需求规格.md) | [运行架构实施计划](plan/2001-后端运行架构实施计划.md) | [MVP 全链验收](acceptance/0009-剧本到分镜MVP验收记录.md) | `SG-D09` 服务架构复核完成；旧 Requirement/Plan 的 StoryGraph 重叠项冻结 |
