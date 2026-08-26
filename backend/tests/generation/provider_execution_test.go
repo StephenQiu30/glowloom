@@ -40,7 +40,7 @@ type controlledProviderGateway struct {
 
 func (gateway *controlledProviderGateway) Submit(
 	_ context.Context,
-	_ generationapp.ProviderSubmission,
+	submission generationapp.ProviderSubmission,
 ) (generationapp.ProviderOutcome, error) {
 	gateway.mu.Lock()
 	gateway.submitCalls++
@@ -56,17 +56,29 @@ func (gateway *controlledProviderGateway) Submit(
 	if release != nil {
 		<-release
 	}
-	return outcome, err
+	return controlledProviderOutcome(submission, outcome), err
 }
 
 func (gateway *controlledProviderGateway) Query(
 	_ context.Context,
-	_ generationapp.ProviderSubmission,
+	submission generationapp.ProviderSubmission,
 ) (generationapp.ProviderOutcome, error) {
 	gateway.mu.Lock()
 	defer gateway.mu.Unlock()
 	gateway.queryCalls++
-	return gateway.queryOutcome, gateway.queryError
+	return controlledProviderOutcome(submission, gateway.queryOutcome), gateway.queryError
+}
+
+func controlledProviderOutcome(
+	submission generationapp.ProviderSubmission,
+	outcome generationapp.ProviderOutcome,
+) generationapp.ProviderOutcome {
+	outcome.Outputs = append([]generationapp.ProviderOutput(nil), outcome.Outputs...)
+	for index := range outcome.Outputs {
+		outcome.Outputs[index].StagingObjectKey = "staging/" + submission.WorkspaceID + "/" +
+			submission.ProviderJobID + "/" + outcome.Outputs[index].OutputKey + ".png"
+	}
+	return outcome
 }
 
 func (gateway *controlledProviderGateway) setSubmit(outcome generationapp.ProviderOutcome, err error) {
@@ -182,6 +194,7 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	reconciled, err := providers.ReconcileProviderJob(ctx, generationapp.ReconcileProviderJobCommand{
 		ProviderJobID: unknown.Job.ID, IdempotencyKey: "generation-provider-reconcile-success",
 	})
+	output.StagingObjectKey = "staging/" + fixture.workspaceID.String() + "/" + unknown.Job.ID + "/image-1.png"
 	if err != nil || reconciled.Job.Status != generationdomain.ProviderJobSucceeded ||
 		reconciled.Intent.Status != generationdomain.IntentSucceeded || reconciled.ProviderReceipt.ID == "" ||
 		reconciled.ProviderReceipt.ProviderEventID != "provider-event-success" ||

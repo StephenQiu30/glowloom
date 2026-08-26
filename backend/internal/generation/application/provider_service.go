@@ -34,15 +34,17 @@ var (
 	providerIdentifierPattern        = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{2,119}$`)
 	credentialReferencePattern       = regexp.MustCompile(`^[a-z0-9][a-z0-9/_-]{2,159}$`)
 	providerFailurePattern           = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{2,119}$`)
+	providerOutputKeyPattern         = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$`)
 )
 
 type ProviderOutput = domain.ProviderOutput
 
 type ProviderSubmission struct {
-	RequestID, RequestKey, IntentID      string
-	ProviderKey, ModelKey, CredentialRef string
-	InputHash                            string
-	Units                                int64
+	WorkspaceID, ProjectID, ProviderJobID string
+	RequestID, RequestKey, IntentID       string
+	ProviderKey, ModelKey, CredentialRef  string
+	InputHash                             string
+	Units                                 int64
 }
 
 type ProviderOutcome struct {
@@ -297,7 +299,7 @@ func (service *ProviderService) SubmitImageRequest(
 	if err != nil || !invocation.callRemote {
 		return invocation.result, normalizeProviderError(err)
 	}
-	submission := providerSubmission(invocation.request)
+	submission := providerSubmission(invocation.request, invocation.job)
 	var outcome ProviderOutcome
 	if invocation.submit {
 		outcome, err = service.gateway.Submit(ctx, submission)
@@ -331,7 +333,7 @@ func (service *ProviderService) ReconcileProviderJob(
 	if err != nil || !invocation.callRemote {
 		return invocation.result, normalizeProviderError(err)
 	}
-	outcome, queryErr := service.gateway.Query(ctx, providerSubmission(invocation.request))
+	outcome, queryErr := service.gateway.Query(ctx, providerSubmission(invocation.request, invocation.job))
 	if queryErr != nil {
 		outcome = ProviderOutcome{Status: ProviderOutcomeUnknown, ProviderJobKey: invocation.job.ProviderJobKey}
 	}
@@ -339,6 +341,52 @@ func (service *ProviderService) ReconcileProviderJob(
 		ctx, invocation.job.ID, reconcileProviderOperation, command.IdempotencyKey, inputHash, outcome,
 	)
 	return result, normalizeProviderError(applyErr)
+}
+
+func (service *ProviderService) RequireSucceededProviderResult(
+	ctx context.Context,
+	actor Actor,
+	providerJobID string,
+) (ProviderExecutionResult, error) {
+	providerJobID = strings.TrimSpace(providerJobID)
+	if !service.valid() || !validUUID(providerJobID) || !validUUID(actor.UserID) || actor.TokenVersion < 1 {
+		return ProviderExecutionResult{}, invalid("Invalid Generation Provider result request")
+	}
+	var result ProviderExecutionResult
+	err := service.transactions.WithinProviderTransaction(ctx, func(
+		repo ProviderRepository,
+		costs CostProviderOwner,
+		quotas QuotaProviderOwner,
+	) error {
+		job, loadErr := repo.GetProviderJobForUpdate(ctx, providerJobID)
+		if loadErr != nil {
+			return loadErr
+		}
+		request, loadErr := repo.FindGenerationRequest(ctx, job.RequestID)
+		if loadErr != nil {
+			return loadErr
+		}
+		intent, loadErr := repo.GetIntentForUpdate(ctx, job.IntentID)
+		if loadErr != nil {
+			return loadErr
+		}
+		if loadErr = repo.AuthorizeProject(ctx, actor, intent.WorkspaceID, intent.ProjectID, true); loadErr != nil {
+			return loadErr
+		}
+		if actor.UserID != intent.CreatedBy || actor.TokenVersion != intent.InitiatorTokenVersion {
+			return conflict("Generation Provider result actor has drifted")
+		}
+		result, loadErr = service.loadProviderExecutionResult(ctx, repo, costs, quotas, intent, request, job)
+		if loadErr != nil {
+			return loadErr
+		}
+		if result.Job.Status != domain.ProviderJobSucceeded ||
+			result.ProviderReceipt.Status != domain.ProviderResultSucceeded {
+			return conflict("Generation Provider result is not successful")
+		}
+		return nil
+	})
+	return result, normalizeProviderError(err)
 }
 
 func (service *ProviderService) prepareProviderSubmission(
@@ -578,6 +626,12 @@ func (service *ProviderService) applyProviderOutcome(
 			job.ProviderJobKey = outcome.ProviderJobKey
 		}
 		outcome.ProviderJobKey = job.ProviderJobKey
+		if outcome.Status == ProviderOutcomeSucceeded &&
+			!providerOutputsUseJobStaging(outcome.Outputs, request.WorkspaceID, job.ID) {
+			outcome = ProviderOutcome{
+				Status: ProviderOutcomeUnknown, ProviderJobKey: job.ProviderJobKey, OccurredAt: outcome.OccurredAt,
+			}
+		}
 		switch outcome.Status {
 		case ProviderOutcomeAccepted:
 			job.Status = domain.ProviderJobRunning
@@ -987,7 +1041,8 @@ func validateProviderResultReceipt(
 	}
 	if value.Status == domain.ProviderResultSucceeded {
 		if value.ActualUnits < 1 || value.ActualUnits > request.Units || len(value.Outputs) != int(value.ActualUnits) ||
-			value.FailureCode != "" || !validProviderOutputs(value.Outputs) {
+			value.FailureCode != "" || !validProviderOutputs(value.Outputs) ||
+			!providerOutputsUseJobStaging(value.Outputs, request.WorkspaceID, job.ID) {
 			return conflict("Generation Provider result receipt has drifted")
 		}
 	} else if value.Status == domain.ProviderResultFailed {
@@ -1046,7 +1101,7 @@ func normalizedProviderOutcome(value ProviderOutcome, now time.Time) ProviderOut
 func validProviderOutputs(outputs []ProviderOutput) bool {
 	seen := make(map[string]struct{}, len(outputs))
 	for _, output := range outputs {
-		if output.OutputKey == "" || len(output.OutputKey) > 120 || output.StagingObjectKey == "" ||
+		if !providerOutputKeyPattern.MatchString(output.OutputKey) || output.StagingObjectKey == "" ||
 			len(output.StagingObjectKey) > 512 || !intentHashPattern.MatchString(output.SHA256) || output.Bytes < 1 ||
 			(output.MediaType != "image/png" && output.MediaType != "image/jpeg") || output.Width < 1 || output.Height < 1 {
 			return false
@@ -1059,12 +1114,24 @@ func validProviderOutputs(outputs []ProviderOutput) bool {
 	return len(outputs) > 0
 }
 
+func providerOutputsUseJobStaging(outputs []ProviderOutput, workspaceID, providerJobID string) bool {
+	prefix := "staging/" + workspaceID + "/" + providerJobID + "/"
+	for _, output := range outputs {
+		if !strings.HasPrefix(output.StagingObjectKey, prefix) || strings.Contains(output.StagingObjectKey, "..") ||
+			strings.HasSuffix(output.StagingObjectKey, "/") {
+			return false
+		}
+	}
+	return len(outputs) > 0
+}
+
 func providerJobTerminal(status string) bool {
 	return status == domain.ProviderJobSucceeded || status == domain.ProviderJobFailed
 }
 
-func providerSubmission(request domain.GenerationRequest) ProviderSubmission {
+func providerSubmission(request domain.GenerationRequest, job domain.ProviderJob) ProviderSubmission {
 	return ProviderSubmission{
+		WorkspaceID: request.WorkspaceID, ProjectID: request.ProjectID, ProviderJobID: job.ID,
 		RequestID: request.ID, RequestKey: request.RequestKey, IntentID: request.IntentID,
 		ProviderKey: request.ProviderKey, ModelKey: request.ModelKey, CredentialRef: request.CredentialRef,
 		InputHash: request.InputHash, Units: request.Units,

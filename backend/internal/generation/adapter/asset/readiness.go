@@ -32,7 +32,7 @@ func (readiness *Readiness) RequireReady(ctx context.Context, actor generationap
 	return generationapp.ReadyArtifact{
 		ID: artifact.ID, WorkspaceID: artifact.WorkspaceID, ProjectID: artifact.ProjectID,
 		SourceType: artifact.SourceType, SourceID: artifact.SourceID, OutputKey: artifact.OutputKey,
-		MediaType: artifact.MediaType, SHA256: artifact.SHA256, Width: artifact.Width,
+		MediaType: artifact.MediaType, SHA256: artifact.SHA256, SizeBytes: artifact.SizeBytes, Width: artifact.Width,
 		Height: artifact.Height, Revision: artifact.Revision,
 	}, nil
 }

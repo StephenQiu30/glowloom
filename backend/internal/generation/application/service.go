@@ -34,6 +34,7 @@ type ReadyArtifact struct {
 	ID, WorkspaceID, ProjectID      string
 	SourceType, SourceID, OutputKey string
 	MediaType, SHA256               string
+	SizeBytes                       int64
 	Width, Height, Revision         int
 }
 
@@ -267,7 +268,7 @@ func validateArtifact(value ReadyArtifact) error {
 		}
 	}
 	if value.SourceType != "generation_provider_job" || value.OutputKey == "" || value.MediaType == "" ||
-		len(value.SHA256) != 64 || value.Width < 1 || value.Height < 1 || value.Revision < 1 {
+		len(value.SHA256) != 64 || value.SizeBytes < 1 || value.Width < 1 || value.Height < 1 || value.Revision < 1 {
 		return invalid("Ready artifact is not a provider image output")
 	}
 	return nil
