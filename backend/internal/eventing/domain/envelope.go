@@ -17,6 +17,7 @@ import (
 
 const (
 	EnvelopeSchemaV1           = "lanverse.event.v1"
+	ScriptVersionPublished     = "ScriptVersionPublished"
 	StoryGraphVersionPublished = "StoryGraphVersionPublished"
 	maximumEnvelopeBytes       = 64 << 10
 	maximumPayloadNestingDepth = 16
@@ -144,6 +145,31 @@ func (value Envelope) Validate() error {
 
 func validateEventPayload(envelope Envelope) error {
 	switch envelope.EventType {
+	case ScriptVersionPublished:
+		var value struct {
+			ScriptVersionID    string `json:"script_version_id"`
+			EpisodeID          string `json:"episode_id"`
+			VersionNo          int64  `json:"version_no"`
+			DocumentRevisionID string `json:"document_revision_id"`
+			ContentHash        string `json:"content_hash"`
+			SourceStart        int    `json:"source_start"`
+			SourceEnd          int    `json:"source_end"`
+		}
+		decoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&value); err != nil {
+			return fmt.Errorf("decode Script event payload: %w", err)
+		}
+		if err := requireJSONEnd(decoder); err != nil {
+			return err
+		}
+		if envelope.EventVersion != 1 || envelope.AggregateKind != "episode_script" || envelope.AggregateID != value.EpisodeID ||
+			!canonicalUUID(value.ScriptVersionID) || !canonicalUUID(value.EpisodeID) ||
+			!canonicalUUID(value.DocumentRevisionID) || value.VersionNo != envelope.AggregateRevision ||
+			!lowercaseHexHash.MatchString(value.ContentHash) || value.SourceStart < 0 || value.SourceEnd <= value.SourceStart {
+			return errors.New("Script event payload is incomplete")
+		}
+		return nil
 	case StoryGraphVersionPublished:
 		var value struct {
 			VersionID       string  `json:"version_id"`

@@ -47,7 +47,7 @@
 - [ ] `SG-QRY-002`（`SG-I04`、`SG-I25`）：版本、lens、scope、depth/cursor、truncated/继续条件 contract。
 - [ ] `SG-QRY-003`（`SG-I04`、`SG-I25`）：五类有界 Lens、大图分层和确定性结果 Hash。
 - [x] `SG-QRY-004`（`SG-I04`、`SG-I17`）：稳定 Key 的 add/remove/change 跨版本 golden。
-- [ ] `SG-QRY-005`（`SG-I04`）：Query 零写入与 Elasticsearch 故障不影响 PostgreSQL Query 的证据。
+- [x] `SG-QRY-005`（`SG-I04`）：Query 零写入与 Elasticsearch 故障不影响 PostgreSQL Query 的证据。
 
 ### 2.3 Review、Production 与视觉资产
 
@@ -90,10 +90,10 @@
 - [x] `SG-EVT-003`（`SG-I04`）：真实 Kafka 至少一次、ACK unknown 同 ID、Inbox/revision fencing、DLQ/Replay。
 - [ ] `SG-EVT-004`（`SG-I04`）：Script/StoryGraph Topic 与日志 Topic 的 Schema/Group/Retention/DLQ 隔离，无 Command Topic。
 - [x] `SG-EVT-005`（`SG-I04`）：首个真实 Consumer 同任务创建 event-worker，复用唯一 Catalog/连接模型。
-- [ ] `SG-SRCH-001`（`SG-I04`）：Script/StoryGraph 两类 index/alias、租户/Owner/Evidence/Node 可追溯文档。
-- [ ] `SG-SRCH-002`（`SG-I04`）：重复/乱序 revision fencing、tombstone/snapshot、PostgreSQL 全量 Reindex 原子 Alias。
-- [ ] `SG-SRCH-003`（`SG-I04`）：授权 Search API、snippet/score/深链/新鲜度且无 DSL 透传/Owner 回写。
-- [ ] `SG-SRCH-004`（`SG-I04`）：Elastic unavailable/lag 的 degraded/stale 与 Owner/PostgreSQL Query 正确性。
+- [x] `SG-SRCH-001`（`SG-I04`）：Script/StoryGraph 两类 index/alias、租户/Owner/Evidence/Node 可追溯文档。
+- [x] `SG-SRCH-002`（`SG-I04`）：重复/乱序 revision fencing、tombstone/snapshot、PostgreSQL 全量 Reindex 原子 Alias。
+- [x] `SG-SRCH-003`（`SG-I04`）：授权 Search API、snippet/score/深链/新鲜度且无 DSL 透传/Owner 回写。
+- [x] `SG-SRCH-004`（`SG-I04`）：Elastic unavailable/lag 的 degraded/stale 与 Owner/PostgreSQL Query 正确性。
 - [ ] `SG-LOG-001`（`SG-I04`）：真实 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 独立日志链。
 - [ ] `SG-LOG-002`（`SG-I04`、`SG-I27`）：全链关联 ID/错误码查询与敏感字段零命中扫描。
 - [ ] `SG-LOG-003`（`SG-I04`、`SG-I27`）：Kafka/Logstash/Elastic/Kibana 逐组件故障不改变业务/Search 投影证据。
@@ -308,4 +308,16 @@
 - 尚未完成：当前 Kafka 只创建已有真实消费者的 StoryGraph Business/DLQ Topic；Script Topic、Elasticsearch Projection/Reindex/Search API 以及独立 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 日志链尚未实现。因此 `SG-EVT-004`、`SG-SRCH-*`、`SG-LOG-*`、`SG-OPS-006` 与完整 `SG-I04` 保持未通过；按门禁未运行 `agent-browser`。
 - Git：本 Evidence 与实现由当前 `SG-I04` Kafka Event 交付单元独立提交承载；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 27 条 Requirement 与 `SG-I01`–`SG-I03`，其余保持未通过。下一步继续且只允许实施 `SG-I04` 的 Elasticsearch Search 交付单元。
+### `SG-I04` — Elasticsearch Search 交付单元（2026-08-27）
+
+- Red 与边界：先增加独立 `tests/search` 的 Domain/Application/HTTP/Projector/真实 Elastic 契约，测试真实失败于缺少 Search 模块；实现只新增 Backend `search` 业务模块及 Adapter。Domain/Application 不导入 GORM/Elastic，唯一 GORM Snapshot Adapter 无 Raw SQL；浏览器契约只暴露通用 `event|reindex` 来源，不泄漏 Kafka/Elastic 客户端或 DSL。
+- 发布与投影：Episode Plan Publish 在原 Owner/Receipt 事务中为每个正式 EpisodeScriptVersion 写入严格引用型 `ScriptVersionPublished` Outbox；真实 Workflow PostgreSQL Journey 验证两集 Owner、同一 Publish Receipt 和两个 pending Event 原子提交。`event-worker` 同时消费 Script/StoryGraph Topic，每条 Event 都重新读取当前 PostgreSQL Owner Snapshot，不信任消息正文作为索引内容；Inbox/Checkpoint 继续承担重复与乱序栅栏。
+- 索引与查询：官方 `go-elasticsearch/v9 v9.4.3` 对接 Elasticsearch `9.4.4`，维护两个独立 Alias/Backing。严格 Mapping 保存 Workspace/Project、Owner Logical/Version/Revision/Hash、Projection Version、Evidence 与 Story Node；Marker 最后写入并按 Snapshot Hash 过滤，部分批写不能暴露半快照。Backend 提供两个授权 Search API，只接受 1–200 字文本和 1–50 limit，返回 score/snippet、Owner/Version/Evidence 深链及 fresh/stale/degraded；高亮正文由 Elastic HTML encoder 转义。
+- 重建与恢复：`event-worker reindex --kind script|storygraph` 从当前 PostgreSQL Owner 全量构建新 Backing，原子切换 Alias，再重读 Owner 做切换后 catch-up；真实命令分别完成并输出新 Index Version。真实 Elastic 测试覆盖旧 StoryGraph revision 不覆盖新 Marker、Workspace 隔离、两个 Alias 和原子切换；Kafka→PostgreSQL Owner→Elastic→Backend Search Journey 同时返回 Script/StoryGraph fresh、Source Event 和深链。
+- 故障：Search 请求 3 秒内返回 degraded，Event Projection 30 秒内失败进入既有重试/DLQ。完整 Compose 停止 Elasticsearch 后，真实注册和 Project Owner Command 仍返回成功，Script Search 返回 `degraded/search_unavailable`，PostgreSQL StoryGraph Query 按 Owner 事实返回业务 404；Event Worker 保持运行但 readiness=503，Elastic 恢复后同一进程自动 ready。Kafka 停止/恢复剧本也再次通过。
+- 真实 CI：全新 PostgreSQL、Temporal、隔离 MinIO、Kafka `4.3.1` 与 Elasticsearch `9.4.4` 下，`gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过；Eventing `12.320s`、Search `5.480s + 14.357s`、StoryGraph `17.226s`、Workflow `110.743s`。Search 在三真实依赖下 `go test -race -count=1 -p 1 ./tests/search/...` 通过。Agent Ruff/format/Pyright/Pytest `31 passed`；Frontend OpenAPI/lint/typecheck、16 文件 45 tests 与 production build 全通过。
+- 部署：开发/生产 Compose 合同、Backend/Agent/Frontend 三镜像及镜像内 Binary/standalone/Codex Runtime 检查通过。任务专属完整 Compose 中 PostgreSQL/MinIO/Temporal/Kafka/Elasticsearch/API/Frontend/Workflow Worker/Event Worker 全部健康，Script/StoryGraph Alias、两个 Reindex CLI、API/Frontend/Agent HTTP 及 Kafka/Elastic 逐项停机恢复均真实验证。
+- 尚未完成：日志 Topic 及独立 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 链尚未实施，因此 `SG-EVT-004`、`SG-LOG-*`、`SG-OPS-006`、完整 `SG-JRN-003` 与 `SG-I04` 保持未通过；按门禁未运行 `agent-browser`。
+- Git：本 Evidence 与实现由当前 `SG-I04` Elasticsearch Search 交付单元独立提交承载；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 32 条 Requirement 与 `SG-I01`–`SG-I03`，其余保持未通过。下一步继续且只允许实施 `SG-I04` 的独立 ELK 日志交付单元。

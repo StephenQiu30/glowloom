@@ -256,7 +256,7 @@ func (repo *repository) GetPlanCommit(ctx context.Context, actor application.Act
 	return commitDomain(record)
 }
 
-func (repo *repository) Publish(ctx context.Context, commit domain.ImportCommit, structures []domain.Structure) error {
+func (repo *repository) Publish(ctx context.Context, commit domain.ImportCommit, structures []domain.Structure, events []domain.OutboxEvent) error {
 	commitRecord, err := commitRecord(commit)
 	if err != nil {
 		return err
@@ -286,6 +286,18 @@ func (repo *repository) Publish(ctx context.Context, commit domain.ImportCommit,
 	}
 	if len(structureRecords) > 0 {
 		if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&structureRecords).Error; err != nil {
+			return err
+		}
+	}
+	eventRecords := make([]model.OutboxEvent, len(events))
+	for index, value := range events {
+		eventRecords[index], err = outboxRecord(value)
+		if err != nil {
+			return err
+		}
+	}
+	if len(eventRecords) > 0 {
+		if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&eventRecords).Error; err != nil {
 			return err
 		}
 	}
@@ -515,6 +527,32 @@ func versionRecord(value application.Version) (model.EpisodeScriptVersion, error
 		return model.EpisodeScriptVersion{}, err
 	}
 	return model.EpisodeScriptVersion{ID: id, WorkspaceID: workspace, ProjectID: project, EpisodeID: episode, VersionNo: value.VersionNo, DocumentRevisionID: revision, SourceStart: value.SourceStart, SourceEnd: value.SourceEnd, Content: value.Content, ContentHash: value.ContentHash, Status: value.Status, CreatedBy: creator, CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt}, nil
+}
+
+func outboxRecord(value domain.OutboxEvent) (model.OutboxEvent, error) {
+	id, err := uuid.Parse(value.ID)
+	if err != nil {
+		return model.OutboxEvent{}, err
+	}
+	workspaceID, err := uuid.Parse(value.WorkspaceID)
+	if err != nil {
+		return model.OutboxEvent{}, err
+	}
+	projectID, err := uuid.Parse(value.ProjectID)
+	if err != nil {
+		return model.OutboxEvent{}, err
+	}
+	receiptID, err := uuid.Parse(value.SourceReceiptID)
+	if err != nil {
+		return model.OutboxEvent{}, err
+	}
+	return model.OutboxEvent{
+		ID: id, EventType: value.EventType, EventVersion: value.EventVersion,
+		WorkspaceID: workspaceID, ProjectID: projectID,
+		AggregateKind: value.AggregateKind, AggregateID: value.AggregateID, AggregateRevision: value.AggregateRevision,
+		SourceReceiptID: receiptID, Payload: datatypes.JSON(value.Payload), PayloadHash: value.PayloadHash,
+		Status: value.Status, Attempts: value.Attempts, OccurredAt: value.OccurredAt, CreatedAt: value.CreatedAt,
+	}, nil
 }
 func commitRecord(value domain.ImportCommit) (model.ImportCommit, error) {
 	id, err := uuid.Parse(value.ID)

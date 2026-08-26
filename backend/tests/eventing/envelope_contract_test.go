@@ -97,6 +97,52 @@ func TestEnvelopeRejectsNonCanonicalIdentityAndUnknownEventVersion(t *testing.T)
 	}
 }
 
+func TestScriptVersionPublishedHasAReferenceOnlyStrictContract(t *testing.T) {
+	t.Parallel()
+	payload := json.RawMessage(`{"script_version_id":"00000000-0000-0000-0000-000000000301","episode_id":"00000000-0000-0000-0000-000000000302","version_no":2,"document_revision_id":"00000000-0000-0000-0000-000000000303","content_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","source_start":10,"source_end":30}`)
+	envelope, err := eventing.NewEnvelope(eventing.OutboxEvent{
+		ID: "00000000-0000-0000-0000-000000000304", EventType: eventing.ScriptVersionPublished,
+		EventVersion: 1, WorkspaceID: "00000000-0000-0000-0000-000000000305",
+		ProjectID: "00000000-0000-0000-0000-000000000306", AggregateKind: "episode_script",
+		AggregateID: "00000000-0000-0000-0000-000000000302", AggregateRevision: 2,
+		SourceReceiptID: "00000000-0000-0000-0000-000000000307", Payload: payload,
+		OccurredAt: time.Date(2026, time.August, 27, 9, 0, 0, 0, time.UTC),
+	}, eventing.TraceContext{RequestID: "request-script-2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = eventing.DecodeEnvelope(mustEncodeEnvelope(t, envelope)); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, invalid := range map[string]string{
+		"aggregate episode drift": strings.Replace(string(payload), "00000000-0000-0000-0000-000000000302", "00000000-0000-0000-0000-000000000399", 1),
+		"revision drift":          strings.Replace(string(payload), `"version_no":2`, `"version_no":1`, 1),
+		"unknown content":         strings.Replace(string(payload), `"source_end":30`, `"source_end":30,"content":"full script"`, 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := eventing.OutboxEvent{
+				ID: envelope.EventID, EventType: envelope.EventType, EventVersion: envelope.EventVersion,
+				WorkspaceID: envelope.WorkspaceID, ProjectID: envelope.ProjectID, AggregateKind: envelope.AggregateKind,
+				AggregateID: envelope.AggregateID, AggregateRevision: envelope.AggregateRevision,
+				SourceReceiptID: envelope.SourceReceiptID, Payload: json.RawMessage(invalid), OccurredAt: envelope.OccurredAt,
+			}
+			if _, createErr := eventing.NewEnvelope(value, envelope.TraceContext); createErr == nil {
+				t.Fatal("invalid Script publication contract was accepted")
+			}
+		})
+	}
+}
+
+func mustEncodeEnvelope(t *testing.T, envelope eventing.Envelope) []byte {
+	t.Helper()
+	encoded, err := eventing.EncodeEnvelope(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
+
 func eventingFixture(t *testing.T) eventing.Envelope {
 	t.Helper()
 	value, err := eventing.NewEnvelope(eventing.OutboxEvent{

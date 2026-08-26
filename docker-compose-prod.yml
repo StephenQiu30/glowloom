@@ -43,6 +43,9 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
       MINIO_SECURE: "false"
       MINIO_PUBLIC_SECURE: ${MINIO_PUBLIC_SECURE:-true}
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
+      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
     deploy:
       resources:
         limits:
@@ -85,8 +88,13 @@ services:
       KAFKA_BROKERS: kafka:19092
       KAFKA_CLIENT_ID: lanverse-event-worker
       KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1
+      KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.v1
+      KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dlq.v1
       KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
       KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
+      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
     deploy:
       resources:
         limits:
@@ -127,3 +135,12 @@ services:
 
   kafka-init:
     restart: "no"
+
+  elasticsearch:
+    restart: unless-stopped
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G

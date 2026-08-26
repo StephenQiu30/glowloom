@@ -1128,6 +1128,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/search/scripts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchScripts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/search/storygraph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchStoryGraph"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1255,6 +1287,54 @@ export interface components {
             truncated: boolean;
             next_cursor: string | null;
             result_hash: string;
+        };
+        SearchEnvelope: {
+            data: components["schemas"]["SearchResult"];
+        };
+        SearchResult: {
+            /** @enum {string} */
+            kind: "script" | "storygraph";
+            /** @enum {string} */
+            status: "fresh" | "stale" | "degraded";
+            stale: boolean;
+            /** @enum {string} */
+            error_code?: "search_unavailable";
+            expected_snapshot_hash: string;
+            indexed_snapshot_hash: string;
+            index_version: string;
+            source?: components["schemas"]["SearchProjectionSource"];
+            /** Format: date-time */
+            indexed_at?: string;
+            hits: components["schemas"]["SearchHit"][];
+        };
+        SearchProjectionSource: {
+            /** @enum {string} */
+            kind: "event" | "reindex";
+            /** Format: uuid */
+            id: string;
+        };
+        SearchEvidence: {
+            /** Format: uuid */
+            document_revision_id: string;
+            start: number;
+            end: number;
+            text_hash: string;
+            href: string;
+        };
+        SearchHit: {
+            score: number;
+            snippet: string;
+            owner_kind: string;
+            owner_logical_id: string;
+            /** Format: uuid */
+            owner_version_id: string;
+            owner_revision: number;
+            owner_content_hash: string;
+            story_node_key?: string;
+            node_type?: string;
+            owner_href: string;
+            version_href: string;
+            evidence: components["schemas"]["SearchEvidence"][];
         };
         CostBudgetSetRequest: {
             limit_amount: string;
@@ -2808,6 +2888,8 @@ export interface components {
         storygraph_depth: number;
         storygraph_limit: number;
         storygraph_cursor: string;
+        search_query: string;
+        search_limit: number;
     };
     requestBodies: never;
     headers: never;
@@ -4463,6 +4545,62 @@ export interface operations {
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    searchScripts: {
+        parameters: {
+            query: {
+                q: components["parameters"]["search_query"];
+                limit: components["parameters"]["search_limit"];
+            };
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 授权后的剧集剧本检索；依赖故障时 data.status=degraded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    searchStoryGraph: {
+        parameters: {
+            query: {
+                q: components["parameters"]["search_query"];
+                limit: components["parameters"]["search_limit"];
+            };
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 授权后的 StoryGraph 检索；依赖故障时 data.status=degraded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

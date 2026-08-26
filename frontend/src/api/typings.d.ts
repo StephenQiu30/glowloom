@@ -54,6 +54,11 @@ declare global {
     type ScriptDocumentPreviewRequest = components["schemas"]["ScriptDocumentPreviewRequest"];
     type ScriptDocumentPreviewResponse = components["schemas"]["ScriptDocumentPreviewResponse"];
     type ScriptDocumentResponse = components["schemas"]["ScriptDocumentResponse"];
+    type SearchEnvelope = components["schemas"]["SearchEnvelope"];
+    type SearchEvidence = components["schemas"]["SearchEvidence"];
+    type SearchHit = components["schemas"]["SearchHit"];
+    type SearchProjectionSource = components["schemas"]["SearchProjectionSource"];
+    type SearchResult = components["schemas"]["SearchResult"];
     type StoryGraphDiffEnvelope = components["schemas"]["StoryGraphDiffEnvelope"];
     type StoryGraphDiffResponse = components["schemas"]["StoryGraphDiffResponse"];
     type StoryGraphEdge = components["schemas"]["StoryGraphEdge"];

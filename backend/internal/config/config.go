@@ -33,8 +33,13 @@ const (
 	defaultKafkaBroker        = "127.0.0.1:9092"
 	defaultKafkaClientID      = "lanverse-event-worker"
 	defaultKafkaConsumerGroup = "lanverse.search-projector.v1"
+	defaultScriptTopic        = "lanverse.business.script-version.v1"
+	defaultScriptDLQTopic     = "lanverse.business.script-version.dlq.v1"
 	defaultStoryGraphTopic    = "lanverse.business.storygraph-version.v1"
 	defaultStoryGraphDLQTopic = "lanverse.business.storygraph-version.dlq.v1"
+	defaultElasticsearchURL   = "http://127.0.0.1:9200"
+	defaultScriptSearchAlias  = "lanverse-script-search-v1"
+	defaultStorySearchAlias   = "lanverse-storygraph-search-v1"
 )
 
 var numericVerificationCode = regexp.MustCompile(`^\d{6}$`)
@@ -70,8 +75,15 @@ type Config struct {
 	KafkaBrokers                 []string
 	KafkaClientID                string
 	KafkaConsumerGroup           string
+	KafkaScriptTopic             string
+	KafkaScriptDLQTopic          string
 	KafkaStoryGraphTopic         string
 	KafkaStoryGraphDLQTopic      string
+	ElasticsearchURL             string
+	ElasticsearchUsername        string
+	ElasticsearchPassword        string
+	ElasticsearchScriptAlias     string
+	ElasticsearchStoryGraphAlias string
 }
 
 func Load() (Config, error) {
@@ -148,6 +160,14 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	scriptTopic, err := kafkaName("KAFKA_SCRIPT_TOPIC", defaultScriptTopic)
+	if err != nil {
+		return Config{}, err
+	}
+	scriptDLQTopic, err := kafkaName("KAFKA_SCRIPT_DLQ_TOPIC", defaultScriptDLQTopic)
+	if err != nil {
+		return Config{}, err
+	}
 	storyGraphTopic, err := kafkaName("KAFKA_STORYGRAPH_TOPIC", defaultStoryGraphTopic)
 	if err != nil {
 		return Config{}, err
@@ -156,8 +176,28 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	if storyGraphTopic == storyGraphDLQTopic {
-		return Config{}, errors.New("KAFKA_STORYGRAPH_DLQ_TOPIC must be isolated from the business topic")
+	topics := []string{scriptTopic, scriptDLQTopic, storyGraphTopic, storyGraphDLQTopic}
+	seenTopics := make(map[string]struct{}, len(topics))
+	for _, topic := range topics {
+		if _, exists := seenTopics[topic]; exists {
+			return Config{}, errors.New("Kafka business and DLQ topics must be isolated")
+		}
+		seenTopics[topic] = struct{}{}
+	}
+	elasticsearchURL, err := serviceURL("ELASTICSEARCH_URL", defaultElasticsearchURL)
+	if err != nil {
+		return Config{}, err
+	}
+	scriptAlias, err := kafkaName("ELASTICSEARCH_SCRIPT_ALIAS", defaultScriptSearchAlias)
+	if err != nil {
+		return Config{}, err
+	}
+	storyGraphAlias, err := kafkaName("ELASTICSEARCH_STORYGRAPH_ALIAS", defaultStorySearchAlias)
+	if err != nil {
+		return Config{}, err
+	}
+	if scriptAlias == storyGraphAlias {
+		return Config{}, errors.New("Elasticsearch Script and StoryGraph aliases must be isolated")
 	}
 	return Config{
 		ListenAddress:                net.JoinHostPort(host, strconv.Itoa(port)),
@@ -189,9 +229,26 @@ func Load() (Config, error) {
 		KafkaBrokers:                 kafkaBrokers,
 		KafkaClientID:                kafkaClientID,
 		KafkaConsumerGroup:           kafkaConsumerGroup,
+		KafkaScriptTopic:             scriptTopic,
+		KafkaScriptDLQTopic:          scriptDLQTopic,
 		KafkaStoryGraphTopic:         storyGraphTopic,
 		KafkaStoryGraphDLQTopic:      storyGraphDLQTopic,
+		ElasticsearchURL:             elasticsearchURL,
+		ElasticsearchUsername:        strings.TrimSpace(os.Getenv("ELASTICSEARCH_USERNAME")),
+		ElasticsearchPassword:        os.Getenv("ELASTICSEARCH_PASSWORD"),
+		ElasticsearchScriptAlias:     scriptAlias,
+		ElasticsearchStoryGraphAlias: storyGraphAlias,
 	}, nil
+}
+
+func serviceURL(name, fallback string) (string, error) {
+	value := strings.TrimSpace(environmentValue(name, fallback))
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" ||
+		parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
+		return "", fmt.Errorf("%s must be an HTTP(S) service origin", name)
+	}
+	return parsed.String(), nil
 }
 
 func hostPort(name, fallback string) (string, error) {

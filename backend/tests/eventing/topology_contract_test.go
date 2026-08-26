@@ -25,7 +25,8 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 	}
 	baseText, environmentText := string(base), string(environment)
 	for _, required := range []string{
-		"apache/kafka:4.3.1", "lanverse.business.storygraph-version.v1",
+		"apache/kafka:4.3.1", "lanverse.business.script-version.v1",
+		"lanverse.business.script-version.dlq.v1", "lanverse.business.storygraph-version.v1",
 		"lanverse.business.storygraph-version.dlq.v1", "retention.ms=604800000",
 		"retention.ms=2592000000",
 	} {
@@ -35,7 +36,7 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 	}
 	for _, required := range []string{
 		"KAFKA_PROCESS_ROLES: broker,controller", `KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"`,
-		"KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1",
+		"CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw", "KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1",
 	} {
 		if !strings.Contains(environmentText, required) {
 			t.Errorf("Kafka runtime topology is missing %q", required)

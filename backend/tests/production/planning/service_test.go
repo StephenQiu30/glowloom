@@ -60,9 +60,12 @@ func TestCreatePlanPreservesEverySourceRune(t *testing.T) {
 }
 
 type planningStore struct {
-	source   domain.Source
-	plan     domain.Plan
-	receipts []platformcommand.Receipt
+	source    domain.Source
+	plan      domain.Plan
+	commit    domain.ImportCommit
+	receipts  []platformcommand.Receipt
+	events    []domain.OutboxEvent
+	published bool
 }
 
 func (store *planningStore) WithinTransaction(_ context.Context, operation func(planningapp.Repository) error) error {
@@ -92,20 +95,58 @@ func (store *planningStore) SavePlan(_ context.Context, plan domain.Plan) error 
 func (store *planningStore) ProjectImpact(context.Context, planningapp.Actor, string, bool) (domain.Impact, error) {
 	return domain.Impact{}, nil
 }
-func (*planningStore) HasConfirmedBible(context.Context, string, string) (bool, error) {
-	return false, errors.New("not implemented")
+func (store *planningStore) HasConfirmedBible(context.Context, string, string) (bool, error) {
+	return store.published, nil
 }
 func (*planningStore) Materialize(context.Context, domain.Plan, domain.ImportCommit, []domain.Episode, []planningapp.Version) error {
 	return errors.New("not implemented")
 }
-func (*planningStore) GetCommit(context.Context, planningapp.Actor, string, bool) (domain.ImportCommit, error) {
-	return domain.ImportCommit{}, errors.New("not implemented")
+func (store *planningStore) GetCommit(context.Context, planningapp.Actor, string, bool) (domain.ImportCommit, error) {
+	return store.commit, nil
 }
 func (*planningStore) GetPlanCommit(context.Context, planningapp.Actor, string) (domain.ImportCommit, error) {
 	return domain.ImportCommit{}, errors.New("not implemented")
 }
-func (*planningStore) Publish(context.Context, domain.ImportCommit, []domain.Structure) error {
-	return errors.New("not implemented")
+func (store *planningStore) Publish(_ context.Context, commit domain.ImportCommit, _ []domain.Structure, events []domain.OutboxEvent) error {
+	store.commit, store.events = commit, append([]domain.OutboxEvent(nil), events...)
+	return nil
+}
+
+func TestPublishCreatesOneScriptEventPerPublishedVersionInTheOwnerTransaction(t *testing.T) {
+	now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
+	workspaceID := "63000000-0000-0000-0000-000000000001"
+	projectID := "63000000-0000-0000-0000-000000000002"
+	revisionID := "63000000-0000-0000-0000-000000000003"
+	episodeID := "63000000-0000-0000-0000-000000000004"
+	versionID := "63000000-0000-0000-0000-000000000005"
+	commitID := "63000000-0000-0000-0000-000000000006"
+	planID := "63000000-0000-0000-0000-000000000007"
+	store := &planningStore{
+		published: true,
+		plan:      domain.Plan{ID: planID, WorkspaceID: workspaceID, ProjectID: projectID, DocumentRevisionID: revisionID},
+		commit: domain.ImportCommit{
+			ID: commitID, WorkspaceID: workspaceID, ProjectID: projectID, PlanID: planID,
+			Status: "materialized", Revision: 1, Segments: []domain.Segment{{
+				EpisodeID: episodeID, DraftVersionID: versionID, DocumentRevisionID: revisionID,
+				SourceStart: 4, SourceEnd: 12, SourceHash: strings.Repeat("a", 64), Content: "内景·房间·夜",
+			}},
+		},
+	}
+	service := planningapp.NewService(store, planningapp.Config{Now: func() time.Time { return now }, NewID: sequenceIDs()})
+	result, err := service.Publish(context.Background(), planningapp.Actor{UserID: workspaceID, TokenVersion: 1}, planningapp.PublishCommand{
+		CommitID: commitID, ExpectedRevision: 1, IdempotencyKey: "publish-with-script-event",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "published" || len(store.events) != 1 || len(store.receipts) != 1 {
+		t.Fatalf("script publication did not atomically stage receipt and event: result=%#v events=%#v receipts=%#v", result, store.events, store.receipts)
+	}
+	event := store.events[0]
+	if event.EventType != "ScriptVersionPublished" || event.AggregateKind != "episode_script" || event.AggregateID != episodeID ||
+		event.AggregateRevision != 1 || event.SourceReceiptID != store.receipts[0].ID || event.PayloadHash == "" {
+		t.Fatalf("script event identity is incomplete: %#v", event)
+	}
 }
 func (*planningStore) ListEpisodes(context.Context, planningapp.Actor, string) ([]domain.Episode, error) {
 	return nil, errors.New("not implemented")

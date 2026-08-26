@@ -40,7 +40,10 @@ func TestLoadBuildsSingleDatabaseAPIConfiguration(t *testing.T) {
 	}
 	if configuration.EventWorkerListenAddress != "0.0.0.0:8687" || len(configuration.KafkaBrokers) != 1 ||
 		configuration.KafkaBrokers[0] != "127.0.0.1:9092" ||
-		configuration.KafkaStoryGraphTopic == configuration.KafkaStoryGraphDLQTopic {
+		configuration.KafkaScriptTopic == configuration.KafkaScriptDLQTopic ||
+		configuration.KafkaStoryGraphTopic == configuration.KafkaStoryGraphDLQTopic ||
+		configuration.ElasticsearchURL != "http://127.0.0.1:9200" ||
+		configuration.ElasticsearchScriptAlias == configuration.ElasticsearchStoryGraphAlias {
 		t.Fatalf("unexpected Kafka eventing configuration: %#v", configuration)
 	}
 }
@@ -92,6 +95,10 @@ func TestLoadRejectsInvalidOrSharedKafkaDestinations(t *testing.T) {
 			"KAFKA_STORYGRAPH_TOPIC":     "lanverse.business.storygraph.v1",
 			"KAFKA_STORYGRAPH_DLQ_TOPIC": "lanverse.business.storygraph.v1",
 		},
+		"shared business topics": {
+			"KAFKA_SCRIPT_TOPIC":     "lanverse.business.shared.v1",
+			"KAFKA_STORYGRAPH_TOPIC": "lanverse.business.shared.v1",
+		},
 		"invalid topic": {"KAFKA_STORYGRAPH_TOPIC": "storygraph command topic"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -100,6 +107,27 @@ func TestLoadRejectsInvalidOrSharedKafkaDestinations(t *testing.T) {
 			}
 			if _, err := config.Load(); err == nil {
 				t.Fatal("Load accepted invalid Kafka configuration")
+			}
+		})
+	}
+}
+
+func TestLoadRejectsInvalidOrSharedElasticsearchDestinations(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
+	for name, values := range map[string]map[string]string{
+		"invalid URL": {"ELASTICSEARCH_URL": "elasticsearch:9200"},
+		"URL path":    {"ELASTICSEARCH_URL": "http://elasticsearch:9200/index"},
+		"shared alias": {
+			"ELASTICSEARCH_SCRIPT_ALIAS":     "lanverse-search-v1",
+			"ELASTICSEARCH_STORYGRAPH_ALIAS": "lanverse-search-v1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for key, value := range values {
+				t.Setenv(key, value)
+			}
+			if _, err := config.Load(); err == nil {
+				t.Fatal("Load accepted invalid Elasticsearch configuration")
 			}
 		})
 	}

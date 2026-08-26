@@ -49,6 +49,11 @@ import (
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboardhttp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/httpapi"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
+	searches "github.com/StephenQiu30/lanverse/backend/internal/search/adapter/elasticsearch"
+	searchgorm "github.com/StephenQiu30/lanverse/backend/internal/search/adapter/gormdb"
+	searchhttp "github.com/StephenQiu30/lanverse/backend/internal/search/adapter/httpapi"
+	searchproject "github.com/StephenQiu30/lanverse/backend/internal/search/adapter/projectaccess"
+	searchapp "github.com/StephenQiu30/lanverse/backend/internal/search/application"
 	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
 	storygraphhttp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/httpapi"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
@@ -199,6 +204,17 @@ func main() {
 	storyGraphStore := storygraphgorm.New(database)
 	storyGraphQueryService := storygraphapp.NewQueryService(storyGraphStore)
 	storyGraphHandler := storygraphhttp.New(storyGraphQueryService, tokenVerifier)
+	searchIndex, err := searches.New(searches.Config{
+		Addresses: []string{configuration.ElasticsearchURL}, Username: configuration.ElasticsearchUsername,
+		Password: configuration.ElasticsearchPassword, ScriptAlias: configuration.ElasticsearchScriptAlias,
+		StoryGraphAlias: configuration.ElasticsearchStoryGraphAlias,
+	})
+	if err != nil {
+		logger.Error("search Elasticsearch configuration failed", "error", err)
+		os.Exit(1)
+	}
+	searchService := searchapp.NewService(searchproject.New(projectService), searchgorm.New(database), searchIndex)
+	searchHandler := searchhttp.New(searchService, tokenVerifier)
 	projectHandler := projecthttp.New(projectService, tokenVerifier)
 	costHandler := costhttp.New(costService, tokenVerifier)
 	authoringService := authoringapp.NewService(authoringStore, authoringapp.Config{
@@ -244,6 +260,7 @@ func main() {
 				planningHandler.Register(mux)
 				storyboardHandler.Register(mux)
 				storyGraphHandler.Register(mux)
+				searchHandler.Register(mux)
 				workflowHandler.Register(mux)
 			},
 		}),

@@ -4,12 +4,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	eventing "github.com/StephenQiu30/lanverse/backend/internal/eventing/domain"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 )
@@ -54,7 +56,7 @@ type Repository interface {
 	Materialize(context.Context, domain.Plan, domain.ImportCommit, []domain.Episode, []Version) error
 	GetCommit(context.Context, Actor, string, bool) (domain.ImportCommit, error)
 	GetPlanCommit(context.Context, Actor, string) (domain.ImportCommit, error)
-	Publish(context.Context, domain.ImportCommit, []domain.Structure) error
+	Publish(context.Context, domain.ImportCommit, []domain.Structure, []domain.OutboxEvent) error
 	ListEpisodes(context.Context, Actor, string) ([]domain.Episode, error)
 	GetEpisode(context.Context, Actor, string, bool) (domain.Episode, error)
 	GetStructure(context.Context, Actor, string, bool) (domain.Structure, error)
@@ -626,14 +628,42 @@ func (service *Service) Publish(ctx context.Context, actor Actor, command Publis
 			structures[index] = domain.Structure{ID: service.config.NewID(), WorkspaceID: commit.WorkspaceID, ProjectID: commit.ProjectID, EpisodeID: segment.EpisodeID, ScriptVersionID: segment.DraftVersionID, Status: "needs_review", ResultHash: hash, Revision: 1, CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now, Scenes: scenes}
 		}
 		commit.Status, commit.Revision, commit.UpdatedAt = "published", commit.Revision+1, now
-		if err = repo.Publish(ctx, commit, structures); err != nil {
-			return err
-		}
 		result, err := platformcommand.Result(resourceReceipt{ID: commit.ID})
 		if err != nil {
 			return err
 		}
-		return repo.CreateReceipt(ctx, platformcommand.Receipt{ID: service.config.NewID(), WorkspaceID: commit.WorkspaceID, Operation: publishCommitOperation, IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: commit.ID, Result: result, CreatedBy: actor.UserID, CreatedAt: now})
+		receipt := platformcommand.Receipt{ID: service.config.NewID(), WorkspaceID: commit.WorkspaceID, Operation: publishCommitOperation, IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: commit.ID, Result: result, CreatedBy: actor.UserID, CreatedAt: now}
+		events := make([]domain.OutboxEvent, len(commit.Segments))
+		for index, segment := range commit.Segments {
+			payload := struct {
+				ScriptVersionID    string `json:"script_version_id"`
+				EpisodeID          string `json:"episode_id"`
+				VersionNo          int64  `json:"version_no"`
+				DocumentRevisionID string `json:"document_revision_id"`
+				ContentHash        string `json:"content_hash"`
+				SourceStart        int    `json:"source_start"`
+				SourceEnd          int    `json:"source_end"`
+			}{segment.DraftVersionID, segment.EpisodeID, 1, segment.DocumentRevisionID, segment.SourceHash, segment.SourceStart, segment.SourceEnd}
+			encoded, encodeErr := json.Marshal(payload)
+			if encodeErr != nil {
+				return encodeErr
+			}
+			payloadHash, hashErr := eventing.HashPayload(encoded)
+			if hashErr != nil {
+				return hashErr
+			}
+			events[index] = domain.OutboxEvent{
+				ID: service.config.NewID(), EventType: eventing.ScriptVersionPublished, EventVersion: 1,
+				WorkspaceID: commit.WorkspaceID, ProjectID: commit.ProjectID,
+				AggregateKind: "episode_script", AggregateID: segment.EpisodeID, AggregateRevision: 1,
+				SourceReceiptID: receipt.ID, Payload: encoded, PayloadHash: payloadHash,
+				Status: "pending", Attempts: 0, OccurredAt: now, CreatedAt: now,
+			}
+		}
+		if err = repo.Publish(ctx, commit, structures, events); err != nil {
+			return err
+		}
+		return repo.CreateReceipt(ctx, receipt)
 	})
 	return commit, normalizeError(err)
 }

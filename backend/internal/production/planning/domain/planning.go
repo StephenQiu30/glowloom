@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Block struct {
 	ID, DocumentRevisionID, Kind, TextHash string
@@ -114,4 +117,13 @@ type Structure struct {
 	ConfirmedAt                                            *time.Time
 	CreatedAt, UpdatedAt                                   time.Time
 	Scenes                                                 []Scene
+}
+
+type OutboxEvent struct {
+	ID, EventType, WorkspaceID, ProjectID, AggregateKind, AggregateID string
+	EventVersion, Attempts                                            int
+	AggregateRevision                                                 int64
+	SourceReceiptID, PayloadHash, Status                              string
+	Payload                                                           json.RawMessage
+	OccurredAt, CreatedAt                                             time.Time
 }

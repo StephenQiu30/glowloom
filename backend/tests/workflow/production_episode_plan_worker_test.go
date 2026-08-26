@@ -18,6 +18,7 @@ import (
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
+	eventing "github.com/StephenQiu30/lanverse/backend/internal/eventing/domain"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
@@ -407,13 +408,28 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 	if err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", "episode_plan.publish", commit.ID).Count(&publishReceiptCount).Error; err != nil {
 		t.Fatal(err)
 	}
+	var publishReceipt model.CommandReceipt
+	if err = database.Where("operation = ? AND resource_id = ?", "episode_plan.publish", commit.ID).First(&publishReceipt).Error; err != nil {
+		t.Fatal(err)
+	}
+	var scriptEvents []model.OutboxEvent
+	if err = database.Where("project_id = ? AND event_type = ?", fixture.projectID, eventing.ScriptVersionPublished).
+		Order("created_at").Order("id").Find(&scriptEvents).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, scriptEvent := range scriptEvents {
+		if scriptEvent.Status != "pending" || scriptEvent.SourceReceiptID != publishReceipt.ID ||
+			scriptEvent.AggregateKind != "episode_script" || scriptEvent.AggregateRevision != 1 || len(scriptEvent.PayloadHash) != 64 {
+			t.Fatalf("published Script Owner and Outbox event did not commit together: %#v receipt=%s", scriptEvent, publishReceipt.ID)
+		}
+	}
 	if structureRun.Status != "WAITING_HUMAN" || structureNode.Status != "SUCCEEDED" || structureGateNode.Status != "WAITING_HUMAN" ||
 		structureBinding.Port != "candidate" || structureBinding.ValueType != "episode_structure_candidate" ||
 		structureBinding.ReferenceID != commit.ID.String() || structureBinding.ReferenceVersion != "2" || structureBinding.ContentHash != batch.ContentHash ||
 		len(structureCandidates) != 1 || structureCandidates[0] != commit.ID.String() || commit.Status != "published" || commit.Revision != 2 ||
 		episode.Status != "active" || episode.Revision != 2 || episode.CurrentScriptVersionID == nil || *episode.CurrentScriptVersionID != scriptVersion.ID ||
 		scriptVersion.Status != "published" || structure.Status != "needs_review" || structure.Revision != 1 || len(structure.ResultHash) != 64 ||
-		materializeReceiptCount != 1 || publishReceiptCount != 1 {
+		materializeReceiptCount != 1 || publishReceiptCount != 1 || len(scriptEvents) != 2 {
 		t.Fatalf("published Episode Structure boundary: run=%#v node=%#v gate=%#v binding=%#v candidates=%v commit=%#v episode=%#v version=%#v structure=%#v receipts=%d/%d", structureRun, structureNode, structureGateNode, structureBinding, structureCandidates, commit, episode, scriptVersion, structure, materializeReceiptCount, publishReceiptCount)
 	}
 

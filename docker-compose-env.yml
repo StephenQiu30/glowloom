@@ -41,6 +41,9 @@ services:
       MINIO_REGION: ${MINIO_REGION:-us-east-1}
       MINIO_SECURE: "false"
       MINIO_PUBLIC_SECURE: ${MINIO_PUBLIC_SECURE:-false}
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
+      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
     ports:
       - 127.0.0.1:${API_PORT:-8686}:8686
     networks:
@@ -96,8 +99,13 @@ services:
       KAFKA_BROKERS: kafka:19092
       KAFKA_CLIENT_ID: lanverse-event-worker
       KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1
+      KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.v1
+      KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dlq.v1
       KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
       KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
+      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
     networks:
       - internal
     depends_on:
@@ -105,6 +113,8 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+      elasticsearch:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8687/readyz"]
       interval: 5s
@@ -188,6 +198,7 @@ services:
 
   kafka:
     environment:
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_HOST://localhost:${KAFKA_PORT:-9092},PLAINTEXT://kafka:19092
@@ -226,6 +237,26 @@ services:
         condition: service_healthy
     restart: "no"
 
+  elasticsearch:
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.license.self_generated.type: basic
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - 127.0.0.1:${ELASTICSEARCH_PORT:-9200}:9200
+    networks:
+      - edge
+      - internal
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:9200/_cluster/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
 networks:
   edge:
     driver: bridge
@@ -238,3 +269,4 @@ volumes:
   minio-data:
   temporal-data:
   kafka-data:
+  elasticsearch-data:

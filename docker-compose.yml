@@ -54,6 +54,14 @@ services:
     command:
       - >-
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092
+        --create --if-not-exists --topic lanverse.business.script-version.v1
+        --partitions 1 --replication-factor 1
+        --config cleanup.policy=delete --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092
+        --create --if-not-exists --topic lanverse.business.script-version.dlq.v1
+        --partitions 1 --replication-factor 1
+        --config cleanup.policy=delete --config retention.ms=2592000000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092
         --create --if-not-exists --topic lanverse.business.storygraph-version.v1
         --partitions 1 --replication-factor 1
         --config cleanup.policy=delete --config retention.ms=604800000 &&
@@ -61,3 +69,6 @@ services:
         --create --if-not-exists --topic lanverse.business.storygraph-version.dlq.v1
         --partitions 1 --replication-factor 1
         --config cleanup.policy=delete --config retention.ms=2592000000
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.4
