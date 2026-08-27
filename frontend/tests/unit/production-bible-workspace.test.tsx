@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createBible = vi.fn();
-const confirmBible = vi.fn();
 const decideReviewIssue = vi.fn();
 const resumeBible = vi.fn();
 let currentBible:
@@ -14,7 +13,6 @@ let currentError: { code: string; message: string } | undefined;
 
 vi.mock("@/lib/server-state", () => ({
   appApiErrorMessage: (error: { message?: string }) => error?.message ?? "请求失败",
-  useConfirmProductionBibleMutation: () => [confirmBible, { isLoading: false }],
   useCreateProductionBibleMutation: () => [createBible, { isLoading: false }],
   useCurrentProductionBibleQuery: () => ({ data: currentBible, error: currentError }),
   useDecideProductionBibleReviewIssueMutation: () => [decideReviewIssue, { isLoading: false }],
@@ -95,7 +93,6 @@ describe("ProductionBibleWorkspace", () => {
     currentBible = undefined;
     currentError = undefined;
     createBible.mockReset();
-    confirmBible.mockReset();
     decideReviewIssue.mockReset();
     resumeBible.mockReset();
   });
@@ -114,22 +111,13 @@ describe("ProductionBibleWorkspace", () => {
     });
   });
 
-  it("展示待审实体并使用版本与结果哈希确认", async () => {
+  it("展示待审实体并引导到 Workflow HumanTask 审核", () => {
     currentBible = bible("needs_review");
-    confirmBible.mockReturnValue({ unwrap: () => Promise.resolve(bible("confirmed")) });
 
     renderWorkspace();
     expect(screen.getByRole("region", { name: "制作圣经实体" })).toHaveTextContent("沈岚");
-    fireEvent.click(screen.getByRole("button", { name: "确认制作圣经" }));
-
-    await waitFor(() => expect(confirmBible).toHaveBeenCalledTimes(1));
-    expect(confirmBible.mock.calls[0][0]).toMatchObject({
-      bibleId: "bible-1",
-      body: {
-        expected_result_hash: "c".repeat(64),
-        expected_revision: 3,
-      },
-    });
+    expect(screen.getByText(/项目 HumanTask 审核队列/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "确认制作圣经" })).not.toBeInTheDocument();
   });
 
   it("确认后明确允许后续分集发布", () => {
@@ -166,7 +154,7 @@ describe("ProductionBibleWorkspace", () => {
     });
 
     renderWorkspace();
-    expect(screen.getByRole("button", { name: "确认制作圣经" })).toBeDisabled();
+    expect(screen.getByText(/仍有 1 个阻断问题/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "接受风险并继续" }));
 
     await waitFor(() => expect(decideReviewIssue).toHaveBeenCalledTimes(1));

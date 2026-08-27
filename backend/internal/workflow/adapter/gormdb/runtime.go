@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -687,6 +688,8 @@ func (store *Store) PrepareHumanGate(
 		}
 		candidateIDs := humanGateCandidateIDs(resolved.Input)
 		var candidateSet domain.NodeInputBinding
+		candidateRevision := 0
+		productionBibleV2 := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
 		if node.Executor == "gate.generation_image_review" {
 			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidates" ||
 				resolved.Input.Bindings[0].ValueType != "generation_candidate_set" ||
@@ -694,6 +697,17 @@ func (store *Store) PrepareHumanGate(
 				return errors.New("workflow Generation Human Gate has no CandidateSet input")
 			}
 			candidateSet, candidateIDs = resolved.Input.Bindings[0], nil
+		} else if productionBibleV2 {
+			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidate" ||
+				resolved.Input.Bindings[0].ValueType != "story_reconciliation_candidate" ||
+				resolved.Input.Bindings[0].SourceKind != domain.NodeInputSourceNodeOutput || len(candidateIDs) != 1 {
+				return errors.New("workflow Production Bible Human Gate has no reviewed Story Candidate input")
+			}
+			parsedCandidateRevision, parseErr := strconv.Atoi(resolved.Input.Bindings[0].ReferenceVersion)
+			if parseErr != nil || parsedCandidateRevision < 1 || len(resolved.Input.Bindings[0].ContentHash) != 64 {
+				return errors.New("workflow Production Bible Human Gate Candidate Revision is invalid")
+			}
+			candidateRevision = parsedCandidateRevision
 		} else if len(candidateIDs) == 0 {
 			return errors.New("workflow human gate has no candidate input")
 		}
@@ -733,12 +747,19 @@ func (store *Store) PrepareHumanGate(
 				return updateErr
 			}
 		}
+		subjectType, subjectID, subjectHash := "workflow_node_output", node.ID.String(), resolved.InputHash
+		subjectRevision := node.Revision
+		if productionBibleV2 {
+			candidate := resolved.Input.Bindings[0]
+			subjectType, subjectID, subjectHash = "story_reconciliation_candidate", candidate.ReferenceID, candidate.ContentHash
+			subjectRevision = candidateRevision
+		}
 		binding = domain.HumanGateBinding{
 			WorkspaceID: run.WorkspaceID.String(), ProjectID: run.ProjectID.String(), WorkflowRunID: run.ID.String(),
 			NodeRunID: node.ID.String(), Executor: node.Executor, InitiatorUserID: run.CreatedBy.String(),
 			InitiatorTokenVersion: run.InitiatorTokenVersion,
-			SubjectType:           "workflow_node_output", SubjectID: node.ID.String(),
-			SubjectRevision: node.Revision, SubjectHash: resolved.InputHash, CandidateIDs: candidateIDs,
+			SubjectType:           subjectType, SubjectID: subjectID,
+			SubjectRevision: subjectRevision, SubjectHash: subjectHash, CandidateIDs: candidateIDs,
 			CandidateSet:     candidateSet,
 			RubricVersion:    node.Executor + "@" + node.DefinitionVersion,
 			AllowedDecisions: allowedDecisions,

@@ -265,7 +265,7 @@ func TestPauseResumeControlPersistsRepeatedCyclesAndFencesTheNextNode(t *testing
 		switch candidate.NodeID {
 		case "script":
 			activeNode = candidate
-		case "bible":
+		case "evidence":
 			nextNode = candidate
 		}
 	}

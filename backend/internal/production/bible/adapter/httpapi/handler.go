@@ -19,7 +19,6 @@ type Service interface {
 	Create(context.Context, application.Actor, application.CreateCommand) (domain.Bible, error)
 	Get(context.Context, application.Actor, string) (domain.Bible, error)
 	GetCurrent(context.Context, application.Actor, string) (domain.Bible, error)
-	Confirm(context.Context, application.Actor, application.ConfirmCommand) (application.ConfirmResult, error)
 	DecideReviewIssue(context.Context, application.Actor, application.DecideReviewIssueCommand) (domain.Bible, error)
 	Resume(context.Context, application.Actor, application.ResumeCommand) (domain.Bible, error)
 }
@@ -42,18 +41,12 @@ func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/document-revisions/{revision_id}/production-bibles", handler.create)
 	mux.HandleFunc("GET /api/v1/production-bibles/{bible_id}", handler.get)
 	mux.HandleFunc("GET /api/v1/projects/{project_id}/production-bible", handler.getCurrent)
-	mux.HandleFunc("POST /api/v1/production-bibles/{bible_id}/confirm", handler.confirm)
 	mux.HandleFunc("POST /api/v1/production-bibles/{bible_id}/review-decisions", handler.decideReviewIssue)
 	mux.HandleFunc("POST /api/v1/production-bibles/{bible_id}/resume", handler.resume)
 }
 
 type createRequest struct {
 	IdempotencyKey string `json:"idempotency_key" validate:"required,max=200"`
-}
-type confirmRequest struct {
-	ExpectedRevision   int    `json:"expected_revision" validate:"required,min=1"`
-	ExpectedResultHash string `json:"expected_result_hash" validate:"required,len=64,hexadecimal"`
-	IdempotencyKey     string `json:"idempotency_key" validate:"required,max=200"`
 }
 type resumeRequest struct {
 	ExpectedRevision int    `json:"expected_revision" validate:"required,min=1"`
@@ -107,23 +100,6 @@ func (handler *Handler) getCurrent(writer http.ResponseWriter, request *http.Req
 		return
 	}
 	platformhttp.WriteJSON(writer, http.StatusOK, map[string]any{"data": presentBible(result)})
-}
-
-func (handler *Handler) confirm(writer http.ResponseWriter, request *http.Request) {
-	actor, ok := handler.actor(writer, request)
-	if !ok {
-		return
-	}
-	var payload confirmRequest
-	if !platformhttp.DecodeStrict(writer, request, handler.validator, &payload) {
-		return
-	}
-	result, err := handler.service.Confirm(request.Context(), actor, application.ConfirmCommand{BibleID: request.PathValue("bible_id"), ExpectedRevision: payload.ExpectedRevision, ExpectedResultHash: payload.ExpectedResultHash, IdempotencyKey: payload.IdempotencyKey})
-	if err != nil {
-		handler.writeError(writer, request, err)
-		return
-	}
-	platformhttp.WriteJSON(writer, http.StatusOK, map[string]any{"data": presentBible(result.Bible)})
 }
 
 func (handler *Handler) resume(writer http.ResponseWriter, request *http.Request) {

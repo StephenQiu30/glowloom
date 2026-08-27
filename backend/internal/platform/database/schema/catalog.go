@@ -65,6 +65,7 @@ func Catalog() []any {
 		&model.AgentInvocation{},
 		&model.StageCandidateRevision{},
 		&model.StageCandidateHead{},
+		&model.ProductionBibleVersion{},
 		&model.StageInstanceStaleness{},
 		&model.EpisodePlan{},
 		&model.Episode{},

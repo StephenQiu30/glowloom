@@ -1,11 +1,47 @@
 package model
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
+
+var ErrImmutableProductionBibleVersion = errors.New("ProductionBibleVersion is immutable")
+
+type ProductionBibleVersion struct {
+	ID                    uuid.UUID              `gorm:"type:uuid;primaryKey"`
+	WorkspaceID           uuid.UUID              `gorm:"type:uuid;not null"`
+	ProjectID             uuid.UUID              `gorm:"type:uuid;not null;uniqueIndex:uq_scr_bible_version_project,priority:1"`
+	DocumentRevisionID    uuid.UUID              `gorm:"type:uuid;not null"`
+	DocumentRevisionHash  string                 `gorm:"type:char(64);not null;check:ck_scr_bible_version_document_hash,char_length(document_revision_hash) = 64"`
+	CandidateRevisionID   uuid.UUID              `gorm:"type:uuid;not null;uniqueIndex"`
+	CandidateRevisionNo   int64                  `gorm:"not null;check:ck_scr_bible_version_candidate_revision,candidate_revision_no >= 1"`
+	CandidateRevisionHash string                 `gorm:"type:char(64);not null;check:ck_scr_bible_version_candidate_revision_hash,char_length(candidate_revision_hash) = 64"`
+	CandidateContentHash  string                 `gorm:"type:char(64);not null;check:ck_scr_bible_version_candidate_content_hash,char_length(candidate_content_hash) = 64"`
+	Version               int                    `gorm:"not null;uniqueIndex:uq_scr_bible_version_project,priority:2;check:ck_scr_bible_version,version >= 1"`
+	ReviewDecisionID      uuid.UUID              `gorm:"type:uuid;not null;uniqueIndex"`
+	Snapshot              datatypes.JSON         `gorm:"type:jsonb;not null;check:ck_scr_bible_version_snapshot,jsonb_typeof(snapshot) = 'object'"`
+	ContentHash           string                 `gorm:"type:char(64);not null;uniqueIndex;check:ck_scr_bible_version_content_hash,char_length(content_hash) = 64"`
+	CreatedBy             uuid.UUID              `gorm:"type:uuid;not null"`
+	CreatedAt             time.Time              `gorm:"type:timestamptz;not null"`
+	Workspace             Workspace              `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project               Project                `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	DocumentRevision      DocumentRevision       `gorm:"foreignKey:DocumentRevisionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	CandidateRevision     StageCandidateRevision `gorm:"foreignKey:CandidateRevisionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ReviewDecision        ReviewDecision         `gorm:"foreignKey:ReviewDecisionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator               UserAccount            `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (ProductionBibleVersion) TableName() string { return "scr_production_bible_versions" }
+func (*ProductionBibleVersion) BeforeUpdate(*gorm.DB) error {
+	return ErrImmutableProductionBibleVersion
+}
+func (*ProductionBibleVersion) BeforeDelete(*gorm.DB) error {
+	return ErrImmutableProductionBibleVersion
+}
 
 // ProductionBible is the durable Backend-owned record for one immutable script
 // revision. Agent output remains a candidate JSON document until a user confirms it.

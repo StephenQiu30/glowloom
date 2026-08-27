@@ -58,7 +58,7 @@ func TestAuthoringDraftPublishesImmutableRevisionsFromVerifiedInputs(t *testing.
 	}
 
 	draft, err := service.Create(ctx, actor, authoringapp.CreateCommand{
-		ProjectID: fixture.projectID.String(), AuthoringMode: "guided", Graph: scriptToStoryboardGraph(),
+		ProjectID: fixture.projectID.String(), AuthoringMode: "guided", Graph: storyToBibleGraph(),
 		Layout: []byte(`{"nodes":{"script":{"x":10,"y":20}}}`), FrozenInputs: []authoring.FrozenReference{input},
 		CatalogKey: catalog.Key, CatalogVersion: catalog.Version, IdempotencyKey: "authoring-create-1",
 	})
@@ -69,7 +69,7 @@ func TestAuthoringDraftPublishesImmutableRevisionsFromVerifiedInputs(t *testing.
 		t.Fatalf("unexpected draft: %#v", draft)
 	}
 	replayedDraft, err := service.Create(ctx, actor, authoringapp.CreateCommand{
-		ProjectID: fixture.projectID.String(), AuthoringMode: "guided", Graph: scriptToStoryboardGraph(),
+		ProjectID: fixture.projectID.String(), AuthoringMode: "guided", Graph: storyToBibleGraph(),
 		Layout: []byte(`{"nodes":{"script":{"x":10,"y":20}}}`), FrozenInputs: []authoring.FrozenReference{input},
 		CatalogKey: catalog.Key, CatalogVersion: catalog.Version, IdempotencyKey: "authoring-create-1",
 	})

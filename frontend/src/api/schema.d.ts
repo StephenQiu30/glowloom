@@ -568,22 +568,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production-bibles/{bible_id}/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["confirmProductionBible"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/production-bibles/{bible_id}/review-decisions": {
         parameters: {
             query?: never;
@@ -4044,26 +4028,6 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description 当前制作圣经 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    confirmProductionBible: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                bible_id: components["parameters"]["bible_id"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 制作圣经已确认为项目事实 */
             200: {
                 headers: {
                     [name: string]: unknown;

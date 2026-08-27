@@ -40,6 +40,7 @@ import (
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
+	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
 	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
@@ -92,11 +93,13 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "evidence", DefinitionKey: "agent.source_evidence", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "story", DefinitionKey: "agent.story_analysis", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "story-review", DefinitionKey: "agent.story_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"max_repair_rounds":2}`)},
+				{ID: "bible-review", DefinitionKey: "human.production_bible_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{"expected_bible_version":1}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
 				{ID: "evidence-to-story", FromNodeID: "evidence", FromPort: "evidence", ToNodeID: "story", ToPort: "evidence"},
 				{ID: "story-to-review", FromNodeID: "story", FromPort: "candidate", ToNodeID: "story-review", ToPort: "candidate"},
+				{ID: "review-to-bible", FromNodeID: "story-review", FromPort: "candidate", ToNodeID: "bible-review", ToPort: "candidate"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -141,17 +144,21 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		bibleapp.NewStoryCandidateRepairService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}),
 		bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
 	)
+	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, ClaimLease: time.Minute,
+	})
+	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		evidenceService,
 		storyAnalysisService,
 		storyReviewService,
-		bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		bibleService,
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
-		reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		reviewService,
 		nil, nil,
 	)
 	if err != nil {
@@ -324,17 +331,268 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 
 	deadline := time.Now().Add(50 * time.Second)
 	var persistedRun model.WorkflowRun
+	var bibleGateNode model.NodeRunProjection
+	var bibleTask model.HumanTask
 	for {
 		if err = database.First(&persistedRun, "id = ?", run.ID).Error; err != nil {
 			t.Fatalf("load Source Evidence Workflow Run: %v", err)
+		}
+		if persistedRun.Status == "WAITING_HUMAN" {
+			if queryErr := database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "bible-review").First(&bibleGateNode).Error; queryErr == nil &&
+				bibleGateNode.Status == "WAITING_HUMAN" {
+				if queryErr = database.Where("node_run_id = ?", bibleGateNode.ID).First(&bibleTask).Error; queryErr == nil {
+					break
+				}
+			}
+		}
+		if persistedRun.Status == "FAILED" || persistedRun.Status == "CANCELLED" || time.Now().After(deadline) {
+			t.Fatalf("Source Evidence Workflow did not reach the Production Bible Human Gate: %#v", persistedRun)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	var storyReviewNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "story-review").First(&storyReviewNode).Error; err != nil {
+		t.Fatalf("load reviewed Story Candidate NodeRun: %v", err)
+	}
+	reviewedCandidateOutput, _, _, err := workflow.ParseNodeOutput(json.RawMessage(storyReviewNode.Output))
+	if err != nil || len(reviewedCandidateOutput.Bindings) != 1 {
+		t.Fatalf("parse reviewed Story Candidate output: output=%#v err=%v", reviewedCandidateOutput, err)
+	}
+	reviewedCandidate := reviewedCandidateOutput.Bindings[0]
+	var taskCandidates []string
+	if err = json.Unmarshal(bibleTask.CandidateIDs, &taskCandidates); err != nil || len(taskCandidates) != 1 ||
+		bibleTask.SubjectType != "story_reconciliation_candidate" || bibleTask.SubjectID.String() != reviewedCandidate.ReferenceID ||
+		bibleTask.SubjectHash != reviewedCandidate.ContentHash || taskCandidates[0] != reviewedCandidate.ReferenceID {
+		t.Fatalf("Production Bible HumanTask did not freeze the reviewed Candidate: task=%#v candidates=%v err=%v", bibleTask, taskCandidates, err)
+	}
+	reviewActor := reviewapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
+	claimed, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: bibleTask.ID.String(), ExpectedRevision: bibleTask.Revision, IdempotencyKey: "story-bible-review-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim Production Bible HumanTask: %v", err)
+	}
+	decision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: claimed.Task.ID, ClaimToken: claimed.ClaimToken, ExpectedTaskRevision: claimed.Task.Revision,
+		ExpectedSubjectRevision: claimed.Task.SubjectRevision, ExpectedSubjectHash: claimed.Task.SubjectHash,
+		Decision: "approved", IdempotencyKey: "story-bible-review-decision",
+	})
+	if err != nil {
+		t.Fatalf("approve Production Bible HumanTask: %v", err)
+	}
+	unknownSignaler := &unknownOnceWorkflowSignaler{delegate: temporalRuntime}
+	signalService := workflowapp.NewSignalService(workflowStore, unknownSignaler, workflowapp.SignalConfig{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+		Owner: workflowproduction.New(bibleService, planningapp.NewService(planninggorm.New(database), planningapp.Config{
+			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+		}), storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
+			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+		})),
+	})
+	signalCommand := workflowapp.SignalHumanGateCommand{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: run.ID, NodeRunID: bibleGateNode.ID.String(),
+		HumanTaskID: decision.Task.ID, ReviewDecisionID: decision.Decision.ID,
+		SubjectRevision: decision.Decision.SubjectRevision, Decision: decision.Decision.Decision,
+		IdempotencyKey: "story-bible-review-signal",
+	}
+	unknownIntent, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, signalCommand)
+	if err != nil || unknownIntent.Status != "unknown" || unknownIntent.AttemptNo != 1 {
+		t.Fatalf("persist unknown Production Bible Signal: intent=%#v err=%v", unknownIntent, err)
+	}
+	var version model.ProductionBibleVersion
+	if err = database.Where("review_decision_id = ?", decision.Decision.ID).First(&version).Error; err != nil {
+		t.Fatalf("load confirmed Production Bible Version after unknown Signal: %v", err)
+	}
+	var versionCount, receiptCount, legacyBibleCount, artifactCount, episodeCount, shotCount, storyGraphCount int64
+	for target, destination := range map[any]*int64{
+		&model.ProductionBibleVersion{}: &versionCount,
+		&model.ProductionBible{}:        &legacyBibleCount,
+		&model.Artifact{}:               &artifactCount,
+		&model.Episode{}:                &episodeCount,
+		&model.StoryboardShot{}:         &shotCount,
+		&model.StoryGraphVersion{}:      &storyGraphCount,
+	} {
+		if err = database.Model(target).Where("workspace_id = ?", fixture.workspaceID).Count(destination).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, "production_bible.confirm", version.ID,
+	).Count(&receiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if versionCount != 1 || receiptCount != 1 || legacyBibleCount != 0 || artifactCount != 0 || episodeCount != 0 || shotCount != 0 || storyGraphCount != 0 {
+		t.Fatalf("Production Bible confirm boundary counts: version=%d receipt=%d legacy=%d artifact=%d episode=%d shot=%d storygraph=%d",
+			versionCount, receiptCount, legacyBibleCount, artifactCount, episodeCount, shotCount, storyGraphCount)
+	}
+	completedIntent, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, signalCommand)
+	if err != nil || completedIntent.ID != unknownIntent.ID || completedIntent.Status != "completed" || completedIntent.AttemptNo != 2 {
+		t.Fatalf("recover unknown Production Bible Signal: intent=%#v err=%v", completedIntent, err)
+	}
+	replayedIntent, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, signalCommand)
+	if err != nil || replayedIntent.ID != completedIntent.ID || replayedIntent.Status != "completed" {
+		t.Fatalf("replay completed Production Bible Signal: intent=%#v err=%v", replayedIntent, err)
+	}
+	for {
+		if err = database.First(&persistedRun, "id = ?", run.ID).Error; err != nil {
+			t.Fatalf("reload Source Evidence Workflow Run: %v", err)
 		}
 		if persistedRun.Status == "SUCCEEDED" {
 			break
 		}
 		if persistedRun.Status == "FAILED" || persistedRun.Status == "CANCELLED" || time.Now().After(deadline) {
-			t.Fatalf("Source Evidence Workflow did not complete: %#v", persistedRun)
+			t.Fatalf("Source Evidence Workflow did not complete after Bible confirmation: %#v", persistedRun)
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
+	}
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "bible-review").First(&bibleGateNode).Error; err != nil {
+		t.Fatal(err)
+	}
+	bibleOutput, _, bibleOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(bibleGateNode.Output))
+	if err != nil || bibleGateNode.Status != "SUCCEEDED" || bibleGateNode.OutputHash == nil ||
+		*bibleGateNode.OutputHash != bibleOutputHash || len(bibleOutput.Bindings) != 1 ||
+		bibleOutput.Bindings[0].ValueType != "production_bible_version" ||
+		bibleOutput.Bindings[0].ReferenceID != version.ID.String() ||
+		bibleOutput.Bindings[0].ReferenceVersion != "1" || bibleOutput.Bindings[0].ContentHash != version.ContentHash {
+		t.Fatalf("Production Bible Gate output=%#v node=%#v err=%v", bibleOutput, bibleGateNode, err)
+	}
+	var confirmedCandidate, parentCandidate model.StageCandidateRevision
+	if err = database.First(&confirmedCandidate, "id = ?", version.CandidateRevisionID).Error; err != nil {
+		t.Fatalf("load confirmed Production Bible Candidate: %v", err)
+	}
+	if confirmedCandidate.ParentCandidateRevisionID == nil {
+		t.Fatal("confirmed Production Bible Candidate has no repair parent for Head drift verification")
+	}
+	if err = database.First(&parentCandidate, "id = ?", *confirmedCandidate.ParentCandidateRevisionID).Error; err != nil {
+		t.Fatalf("load Production Bible Candidate parent: %v", err)
+	}
+	moveCandidateHead := func(target model.StageCandidateRevision) {
+		t.Helper()
+		updated := database.Model(&model.StageCandidateHead{}).Where(
+			"workspace_id = ? AND stage_instance_key = ?", fixture.workspaceID, confirmedCandidate.StageInstanceKey,
+		).Updates(map[string]any{
+			"current_revision_id": target.ID, "current_candidate_revision_hash": target.CandidateRevisionHash,
+			"revision": target.RevisionNo, "updated_at": time.Now().UTC(),
+		})
+		if updated.Error != nil || updated.RowsAffected != 1 {
+			t.Fatalf("move Production Bible Candidate Head to revision %d: rows=%d err=%v", target.RevisionNo, updated.RowsAffected, updated.Error)
+		}
+	}
+	openCandidateTask := func(nodeRunID string) reviewapp.OpenCommand {
+		t.Helper()
+		return reviewapp.OpenCommand{
+			WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+			WorkflowRunID: run.ID, NodeRunID: nodeRunID,
+			SubjectType: "story_reconciliation_candidate", SubjectID: confirmedCandidate.ID.String(),
+			SubjectRevision: int(confirmedCandidate.RevisionNo), SubjectHash: confirmedCandidate.CandidateRevisionHash,
+			CandidateIDs: []string{confirmedCandidate.ID.String()}, RubricVersion: "production-bible-v1",
+			AllowedDecisions: []string{"approved", "rejected", "changes_requested"},
+		}
+	}
+
+	staleTask, err := reviewService.Open(ctx, openCandidateTask(uuid.NewString()))
+	if err != nil {
+		t.Fatalf("open pre-decision stale Production Bible task: %v", err)
+	}
+	staleClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: staleTask.ID, ExpectedRevision: staleTask.Revision, IdempotencyKey: "story-bible-stale-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim pre-decision stale Production Bible task: %v", err)
+	}
+	moveCandidateHead(parentCandidate)
+	_, err = reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: staleClaim.Task.ID, ClaimToken: staleClaim.ClaimToken,
+		ExpectedTaskRevision: staleClaim.Task.Revision, ExpectedSubjectRevision: staleClaim.Task.SubjectRevision,
+		ExpectedSubjectHash: staleClaim.Task.SubjectHash, Decision: "approved",
+		IdempotencyKey: "story-bible-stale-decision",
+	})
+	var reviewConflict *reviewapp.Error
+	if !errors.As(err, &reviewConflict) || reviewConflict.Code != "resource_conflict" {
+		t.Fatalf("pre-decision Candidate Head drift error=%#v", err)
+	}
+	var persistedStaleTask model.HumanTask
+	if err = database.First(&persistedStaleTask, "id = ?", staleTask.ID).Error; err != nil ||
+		persistedStaleTask.Status != "STALE" || persistedStaleTask.ClaimedBy != nil ||
+		persistedStaleTask.ClaimToken != nil || persistedStaleTask.ClaimExpiresAt != nil {
+		t.Fatalf("pre-decision Candidate Head drift did not stale task: task=%#v err=%v", persistedStaleTask, err)
+	}
+	var staleDecisionCount, staleDecisionReceiptCount int64
+	if err = database.Model(&model.ReviewDecision{}).Where("human_task_id = ?", staleTask.ID).Count(&staleDecisionCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND idempotency_key = ?",
+		fixture.workspaceID, "review.human_task.decide", "story-bible-stale-decision",
+	).Count(&staleDecisionReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if staleDecisionCount != 0 || staleDecisionReceiptCount != 0 {
+		t.Fatalf("stale Production Bible decision leaked facts: decisions=%d receipts=%d", staleDecisionCount, staleDecisionReceiptCount)
+	}
+
+	moveCandidateHead(confirmedCandidate)
+	ownerConflictTask, err := reviewService.Open(ctx, openCandidateTask(uuid.NewString()))
+	if err != nil {
+		t.Fatalf("open post-decision conflict Production Bible task: %v", err)
+	}
+	ownerConflictClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: ownerConflictTask.ID, ExpectedRevision: ownerConflictTask.Revision,
+		IdempotencyKey: "story-bible-owner-conflict-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim post-decision conflict Production Bible task: %v", err)
+	}
+	ownerConflictDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: ownerConflictClaim.Task.ID, ClaimToken: ownerConflictClaim.ClaimToken,
+		ExpectedTaskRevision:    ownerConflictClaim.Task.Revision,
+		ExpectedSubjectRevision: ownerConflictClaim.Task.SubjectRevision,
+		ExpectedSubjectHash:     ownerConflictClaim.Task.SubjectHash, Decision: "approved",
+		IdempotencyKey: "story-bible-owner-conflict-decision",
+	})
+	if err != nil {
+		t.Fatalf("approve post-decision conflict Production Bible task: %v", err)
+	}
+	moveCandidateHead(parentCandidate)
+	_, err = bibleService.Confirm(ctx, bibleapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, bibleapp.ConfirmCommand{
+		CandidateRevisionID: confirmedCandidate.ID.String(), CandidateRevisionHash: confirmedCandidate.CandidateRevisionHash,
+		ExpectedCandidateRevision: confirmedCandidate.RevisionNo,
+		DocumentRevisionID:        fixture.scriptRevisionID.String(), DocumentRevisionHash: fixture.normalizedHash,
+		ExpectedVersion: 2, ReviewDecisionID: ownerConflictDecision.Decision.ID,
+		IdempotencyKey: "story-bible-owner-head-conflict",
+	})
+	var bibleConflict *bibleapp.Error
+	if !errors.As(err, &bibleConflict) || bibleConflict.Code != "resource_conflict" {
+		t.Fatalf("post-decision Candidate Head drift error=%#v", err)
+	}
+	var ownerConflictVersionCount, ownerConflictReceiptCount int64
+	if err = database.Model(&model.ProductionBibleVersion{}).Where("workspace_id = ?", fixture.workspaceID).
+		Count(&ownerConflictVersionCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND idempotency_key = ?",
+		fixture.workspaceID, "production_bible.confirm", "story-bible-owner-head-conflict",
+	).Count(&ownerConflictReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ownerConflictVersionCount != 1 || ownerConflictReceiptCount != 0 {
+		t.Fatalf("post-decision Candidate Head drift leaked facts: versions=%d receipts=%d", ownerConflictVersionCount, ownerConflictReceiptCount)
+	}
+	moveCandidateHead(confirmedCandidate)
+	if err = database.Model(&version).Update("content_hash", strings.Repeat("f", 64)).Error; !errors.Is(err, model.ErrImmutableProductionBibleVersion) {
+		t.Fatalf("Production Bible Version update error=%v", err)
+	}
+	if err = database.Delete(&version).Error; !errors.Is(err, model.ErrImmutableProductionBibleVersion) {
+		t.Fatalf("Production Bible Version delete error=%v", err)
 	}
 	stopAgent()
 
@@ -672,6 +930,26 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	if err = bibleStore.ValidateStoryAnalysisInvocation(ctx, analyzeInvocation.ID.String(), claimVersion, time.Now().UTC()); !errors.Is(err, bibleapp.ErrStoryAnalysisUpstreamStale) {
 		t.Fatalf("Story analysis did not reject a stale upstream Head: %v", err)
 	}
+}
+
+type unknownOnceWorkflowSignaler struct {
+	mutex    sync.Mutex
+	delegate workflowapp.WorkflowSignaler
+	attempts int
+}
+
+func (signaler *unknownOnceWorkflowSignaler) Signal(
+	ctx context.Context,
+	request workflow.SignalRequest,
+) (workflow.SignalObservation, error) {
+	signaler.mutex.Lock()
+	signaler.attempts++
+	attempt := signaler.attempts
+	signaler.mutex.Unlock()
+	if attempt == 1 {
+		return workflow.SignalObservation{Outcome: workflow.SignalOutcomeUnknown}, nil
+	}
+	return signaler.delegate.Signal(ctx, request)
 }
 
 type recoveringSourceEvidenceAgent struct {

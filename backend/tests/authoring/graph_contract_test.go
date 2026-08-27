@@ -14,33 +14,30 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "5.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "6.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
 	want := []string{
-		"agent.production_bible",
-		"agent.source_evidence",
-		"agent.story_analysis",
-		"agent.story_review",
-		"agent.storyboard_draft",
-		"human.episode_plan_review",
-		"human.episode_structure_review",
-		"human.production_bible_review",
-		"human.storyboard_review",
-		"input.script_revision",
-		"production.episode_plan",
-		"production.episode_structure",
-		"production.storyboard_export",
+		"agent.production_bible@1.0.0",
+		"agent.source_evidence@1.0.0",
+		"agent.story_analysis@1.0.0",
+		"agent.story_review@1.0.0",
+		"agent.storyboard_draft@1.0.0",
+		"human.episode_plan_review@1.0.0",
+		"human.episode_structure_review@1.0.0",
+		"human.production_bible_review@1.0.0",
+		"human.production_bible_review@2.0.0",
+		"human.storyboard_review@1.0.0",
+		"input.script_revision@1.0.0",
+		"production.episode_plan@2.0.0",
+		"production.episode_structure@1.0.0",
+		"production.storyboard_export@1.0.0",
 	}
 	got := make([]string, 0, len(catalog.Definitions))
 	for _, definition := range catalog.Definitions {
-		got = append(got, definition.Key)
-		wantVersion := "1.0.0"
-		if definition.Key == "production.episode_plan" {
-			wantVersion = "2.0.0"
-		}
-		if definition.Version != wantVersion || definition.Executor == "" || len(definition.ContentHash) != 64 {
+		got = append(got, definition.Key+"@"+definition.Version)
+		if definition.Executor == "" || len(definition.ContentHash) != 64 {
 			t.Fatalf("incomplete node definition: %#v", definition)
 		}
 	}
@@ -48,6 +45,25 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
 	}
+}
+
+func TestProductionBibleHumanGateConsumesReviewedStoryCandidateAndPublishesVersion(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.Key != "human.production_bible_review" || definition.Version != "2.0.0" {
+			continue
+		}
+		if definition.Version != "2.0.0" || len(definition.InputPorts) != 1 || len(definition.OutputPorts) != 1 ||
+			definition.InputPorts[0].Key != "candidate" || definition.InputPorts[0].ValueType != "story_reconciliation_candidate" ||
+			definition.OutputPorts[0].Key != "bible" || definition.OutputPorts[0].ValueType != "production_bible_version" {
+			t.Fatalf("Production Bible Human Gate contract = %#v", definition)
+		}
+		return
+	}
+	t.Fatal("Production Bible Human Gate is absent from the system catalog")
 }
 
 func TestStoryReviewNodeFreezesBoundedRepairRounds(t *testing.T) {
@@ -84,7 +100,7 @@ func TestPublishSnapshotNormalizesGraphAndExcludesLayoutFromExecutionHash(t *tes
 	}
 	draft := authoring.DraftSnapshot{
 		AuthoringMode: "guided",
-		Graph:         scriptToStoryboardGraph(),
+		Graph:         storyToBibleGraph(),
 		Layout:        json.RawMessage(`{"nodes":{"script":{"x":10,"y":20}}}`),
 		FrozenInputs: []authoring.FrozenReference{{
 			Kind: "script_revision", ID: "00000000-0000-0000-0000-000000000101", Version: "1",
@@ -138,8 +154,8 @@ func TestGraphValidationRejectsUnknownVersionInvalidConfigAndPortMismatch(t *tes
 			name: "invalid config",
 			mutate: func(graph *authoring.Graph) {
 				for index := range graph.Nodes {
-					if graph.Nodes[index].DefinitionKey == "production.episode_plan" {
-						graph.Nodes[index].Config = json.RawMessage(`{"episode_count":0}`)
+					if graph.Nodes[index].DefinitionKey == "human.production_bible_review" {
+						graph.Nodes[index].Config = json.RawMessage(`{"expected_bible_version":0}`)
 					}
 				}
 			},
@@ -153,7 +169,7 @@ func TestGraphValidationRejectsUnknownVersionInvalidConfigAndPortMismatch(t *tes
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			graph := scriptToStoryboardGraph()
+			graph := storyToBibleGraph()
 			test.mutate(&graph)
 			if _, err := authoring.ValidateGraph(graph, catalog); err == nil {
 				t.Fatal("invalid graph was accepted")
@@ -235,10 +251,10 @@ func TestPublishSnapshotExcludesVisualNodesFromExecutionHash(t *testing.T) {
 	}
 }
 
-func scriptToStoryboardGraph() authoring.Graph {
+func storyToBibleGraph() authoring.Graph {
 	node := func(id, key string, config string) authoring.Node {
 		version := "1.0.0"
-		if key == "production.episode_plan" {
+		if key == "human.production_bible_review" {
 			version = "2.0.0"
 		}
 		return authoring.Node{ID: id, DefinitionKey: key, DefinitionVersion: version, Config: json.RawMessage(config)}
@@ -249,27 +265,16 @@ func scriptToStoryboardGraph() authoring.Graph {
 	return authoring.Graph{
 		Nodes: []authoring.Node{
 			node("script", "input.script_revision", `{"document_revision_id":"00000000-0000-0000-0000-000000000101"}`),
-			node("bible", "agent.production_bible", `{}`),
-			node("bible-review", "human.production_bible_review", `{}`),
-			node("episodes", "production.episode_plan", `{"episode_count":5}`),
-			node("episodes-review", "human.episode_plan_review", `{}`),
-			node("structure", "production.episode_structure", `{}`),
-			node("structure-review", "human.episode_structure_review", `{}`),
-			node("storyboard", "agent.storyboard_draft", `{}`),
-			node("storyboard-review", "human.storyboard_review", `{}`),
-			node("export", "production.storyboard_export", `{}`),
+			node("evidence", "agent.source_evidence", `{}`),
+			node("story", "agent.story_analysis", `{}`),
+			node("story-review", "agent.story_review", `{"max_repair_rounds":2}`),
+			node("bible-review", "human.production_bible_review", `{"expected_bible_version":1}`),
 		},
 		Edges: []authoring.Edge{
-			edge("script-bible", "script", "script", "bible", "script"),
-			edge("bible-review", "bible", "candidate", "bible-review", "candidate"),
-			edge("script-episodes", "script", "script", "episodes", "script"),
-			edge("review-episodes", "bible-review", "bible", "episodes", "bible"),
-			edge("episodes-review", "episodes", "candidate", "episodes-review", "candidate"),
-			edge("review-structure", "episodes-review", "episodes", "structure", "episodes"),
-			edge("structure-review", "structure", "candidate", "structure-review", "candidate"),
-			edge("review-storyboard", "structure-review", "structures", "storyboard", "structures"),
-			edge("storyboard-review", "storyboard", "candidate", "storyboard-review", "candidate"),
-			edge("review-export", "storyboard-review", "storyboards", "export", "storyboards"),
+			edge("script-evidence", "script", "script", "evidence", "script"),
+			edge("evidence-story", "evidence", "evidence", "story", "evidence"),
+			edge("story-review", "story", "candidate", "story-review", "candidate"),
+			edge("review-bible", "story-review", "candidate", "bible-review", "candidate"),
 		},
 	}
 }

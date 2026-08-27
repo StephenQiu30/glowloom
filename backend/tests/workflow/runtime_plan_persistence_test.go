@@ -17,15 +17,10 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
-	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
-	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
-	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
-	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
-	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
 	workflowreview "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/review"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
@@ -119,7 +114,7 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		t.Fatalf("load committed runtime plan: %v", err)
 	}
 	wantOrder := []string{
-		"script", "bible", "bible-review", "episodes", "episodes-review", "structure", "structure-review", "storyboard", "storyboard-review", "export",
+		"script", "evidence", "story", "story-review", "bible-review",
 	}
 	actualOrder := make([]string, 0, len(plan.Nodes))
 	for _, node := range plan.Nodes {
@@ -211,52 +206,30 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		t.Fatalf("persisted root node input = %#v hash=%s err=%v", persistedInput, persistedInputHash, inputErr)
 	}
 
-	bible := plan.Nodes[1]
-	bibleResult, bibleErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
-		WorkflowRunID: request.WorkflowRunID, NodeRunID: bible.NodeRunID, NodeID: bible.NodeID,
-		Executor: bible.Executor, Attempt: 1,
+	evidence := plan.Nodes[1]
+	evidenceResult, evidenceErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: evidence.NodeRunID, NodeID: evidence.NodeID,
+		Executor: evidence.Executor, Attempt: 1,
 	})
-	if bibleErr != nil || bibleResult.Status != "SUCCEEDED" || executor.CallCount() != 3 {
-		t.Fatalf("execute downstream bible node: result=%#v calls=%d err=%v", bibleResult, executor.CallCount(), bibleErr)
+	if evidenceErr != nil || evidenceResult.Status != "SUCCEEDED" || executor.CallCount() != 3 {
+		t.Fatalf("execute source evidence node: result=%#v calls=%d err=%v", evidenceResult, executor.CallCount(), evidenceErr)
 	}
-	var bibleProjection model.NodeRunProjection
-	if err = database.First(&bibleProjection, "id = ?", bible.NodeRunID).Error; err != nil {
-		t.Fatalf("load bible node projection: %v", err)
+	var evidenceProjection model.NodeRunProjection
+	if err = database.First(&evidenceProjection, "id = ?", evidence.NodeRunID).Error; err != nil {
+		t.Fatalf("load source evidence projection: %v", err)
 	}
-	bibleInput, _, bibleInputHash, bibleInputErr := workflow.ParseNodeInput(json.RawMessage(bibleProjection.Input))
-	if bibleInputErr != nil || bibleProjection.InputHash == nil || bibleInputHash != *bibleProjection.InputHash ||
-		len(bibleInput.Bindings) != 1 || bibleInput.Bindings[0].Port != "script" ||
-		bibleInput.Bindings[0].SourceNodeID != "script" || bibleInput.Bindings[0].ContentHash != result.Output.Bindings[0].ContentHash {
-		t.Fatalf("downstream bible input = %#v hash=%s err=%v", bibleInput, bibleInputHash, bibleInputErr)
+	evidenceInput, _, evidenceInputHash, evidenceInputErr := workflow.ParseNodeInput(json.RawMessage(evidenceProjection.Input))
+	if evidenceInputErr != nil || evidenceProjection.InputHash == nil || evidenceInputHash != *evidenceProjection.InputHash ||
+		len(evidenceInput.Bindings) != 1 || evidenceInput.Bindings[0].Port != "script" ||
+		evidenceInput.Bindings[0].SourceNodeID != "script" || evidenceInput.Bindings[0].ContentHash != result.Output.Bindings[0].ContentHash {
+		t.Fatalf("source evidence input = %#v hash=%s err=%v", evidenceInput, evidenceInputHash, evidenceInputErr)
 	}
-	if bibleProjection.CacheKey == nil || len(*bibleProjection.CacheKey) != 64 {
-		t.Fatalf("cacheable bible projection lost its cache key: %#v", bibleProjection)
-	}
-	bibleReference := bibleResult.Output.Bindings[0]
-	bibleID := uuid.MustParse(bibleReference.ReferenceID)
-	workflowWorkspaceID := uuid.MustParse(started.run.WorkspaceID)
-	bibleTaskID := uuid.New()
-	resultHash := bibleReference.ContentHash
-	if err = database.Create(&model.WorkflowTask{
-		ID: bibleTaskID, WorkspaceID: workflowWorkspaceID, TaskType: "production_bible", RequestType: "production_bible",
-		RequestID: bibleID, Scope: []byte(`{}`), Status: "succeeded", ProgressStage: "agent_result",
-		CancelStatus: "none", Revision: 1, CreatedAt: now, UpdatedAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed production bible task for human gate: %v", err)
-	}
-	if err = database.Create(&model.ProductionBible{
-		ID: bibleID, WorkspaceID: workflowWorkspaceID, ProjectID: fixture.projectID,
-		DocumentRevisionID: fixture.scriptRevisionID, TaskID: bibleTaskID, Status: "needs_review",
-		InputHash: fixture.normalizedHash, ResultHash: &resultHash, EngineVersion: "test-v1", ModelName: "deterministic",
-		PromptVersion: "test-v1", SchemaVersion: "production-bible-schema-v1", HarnessVersion: "test-v1",
-		CheckpointRevision: 1, Candidate: []byte(`{"entities":[],"world_entries":[],"review_issues":[]}`),
-		ReviewDecisions: []byte(`{}`), Revision: 1, CreatedBy: fixture.userID, CreatedAt: now, UpdatedAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed reviewable production bible for human gate: %v", err)
+	if evidenceProjection.CacheKey == nil || len(*evidenceProjection.CacheKey) != 64 {
+		t.Fatalf("cacheable source evidence projection lost its cache key: %#v", evidenceProjection)
 	}
 	var initialCacheCount int64
 	if err = database.Model(&model.NodeCacheEntry{}).
-		Where("workspace_id = ? AND cache_key = ?", started.run.WorkspaceID, *bibleProjection.CacheKey).
+		Where("workspace_id = ? AND cache_key = ?", started.run.WorkspaceID, *evidenceProjection.CacheKey).
 		Count(&initialCacheCount).Error; err != nil || initialCacheCount != 1 {
 		t.Fatalf("committed runtime node cache count = %d err=%v", initialCacheCount, err)
 	}
@@ -280,31 +253,47 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	if secondScriptErr != nil || secondScriptResult.Status != "SUCCEEDED" || executor.CallCount() != 4 {
 		t.Fatalf("execute cache reuse upstream: result=%#v calls=%d err=%v", secondScriptResult, executor.CallCount(), secondScriptErr)
 	}
-	secondBible := secondPlan.Nodes[1]
-	secondBibleResult, secondBibleErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
-		WorkflowRunID: secondRequest.WorkflowRunID, NodeRunID: secondBible.NodeRunID, NodeID: secondBible.NodeID,
-		Executor: secondBible.Executor, Attempt: 1,
+	secondEvidence := secondPlan.Nodes[1]
+	secondEvidenceResult, secondEvidenceErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: secondRequest.WorkflowRunID, NodeRunID: secondEvidence.NodeRunID, NodeID: secondEvidence.NodeID,
+		Executor: secondEvidence.Executor, Attempt: 1,
 	})
-	if secondBibleErr != nil || secondBibleResult.Status != "CACHED" ||
-		secondBibleResult.OutputHash != bibleResult.OutputHash || executor.CallCount() != 4 {
-		t.Fatalf("reuse persisted runtime cache: result=%#v calls=%d err=%v", secondBibleResult, executor.CallCount(), secondBibleErr)
+	if secondEvidenceErr != nil || secondEvidenceResult.Status != "CACHED" ||
+		secondEvidenceResult.OutputHash != evidenceResult.OutputHash || executor.CallCount() != 4 {
+		t.Fatalf("reuse persisted runtime cache: result=%#v calls=%d err=%v", secondEvidenceResult, executor.CallCount(), secondEvidenceErr)
 	}
-	var secondBibleProjection model.NodeRunProjection
-	if err = database.First(&secondBibleProjection, "id = ?", secondBible.NodeRunID).Error; err != nil {
-		t.Fatalf("load cached bible projection: %v", err)
+	var secondEvidenceProjection model.NodeRunProjection
+	if err = database.First(&secondEvidenceProjection, "id = ?", secondEvidence.NodeRunID).Error; err != nil {
+		t.Fatalf("load cached source evidence projection: %v", err)
 	}
 	var reusedCacheCount int64
 	if err = database.Model(&model.NodeCacheEntry{}).
-		Where("workspace_id = ? AND cache_key = ?", started.run.WorkspaceID, *bibleProjection.CacheKey).
+		Where("workspace_id = ? AND cache_key = ?", started.run.WorkspaceID, *evidenceProjection.CacheKey).
 		Count(&reusedCacheCount).Error; err != nil {
 		t.Fatalf("count reused runtime node cache: %v", err)
 	}
-	if secondBibleProjection.Status != "CACHED" || secondBibleProjection.ActiveClaimToken != nil ||
-		secondBibleProjection.OutputHash == nil || *secondBibleProjection.OutputHash != bibleResult.OutputHash ||
-		secondBibleProjection.CacheKey == nil || *secondBibleProjection.CacheKey != *bibleProjection.CacheKey || reusedCacheCount != 1 {
-		t.Fatalf("cached bible projection = %#v cache count=%d", secondBibleProjection, reusedCacheCount)
+	if secondEvidenceProjection.Status != "CACHED" || secondEvidenceProjection.ActiveClaimToken != nil ||
+		secondEvidenceProjection.OutputHash == nil || *secondEvidenceProjection.OutputHash != evidenceResult.OutputHash ||
+		secondEvidenceProjection.CacheKey == nil || *secondEvidenceProjection.CacheKey != *evidenceProjection.CacheKey || reusedCacheCount != 1 {
+		t.Fatalf("cached source evidence projection = %#v cache count=%d", secondEvidenceProjection, reusedCacheCount)
 	}
-	gate := plan.Nodes[2]
+	story := plan.Nodes[2]
+	storyResult, storyErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: story.NodeRunID, NodeID: story.NodeID,
+		Executor: story.Executor, Attempt: 1,
+	})
+	if storyErr != nil || storyResult.Status != "SUCCEEDED" || executor.CallCount() != 5 {
+		t.Fatalf("execute story analysis node: result=%#v calls=%d err=%v", storyResult, executor.CallCount(), storyErr)
+	}
+	storyReview := plan.Nodes[3]
+	storyReviewResult, storyReviewErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: request.WorkflowRunID, NodeRunID: storyReview.NodeRunID, NodeID: storyReview.NodeID,
+		Executor: storyReview.Executor, Attempt: 1,
+	})
+	if storyReviewErr != nil || storyReviewResult.Status != "SUCCEEDED" || executor.CallCount() != 6 {
+		t.Fatalf("execute story review node: result=%#v calls=%d err=%v", storyReviewResult, executor.CallCount(), storyReviewErr)
+	}
+	gate := plan.Nodes[4]
 	gateCommand := workflow.NodeActivityCommand{
 		WorkflowRunID: request.WorkflowRunID, NodeRunID: gate.NodeRunID, NodeID: gate.NodeID,
 		Executor: gate.Executor, Attempt: 1,
@@ -316,7 +305,6 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	if err = database.Where("node_run_id = ?", gate.NodeRunID).First(&humanTask).Error; err != nil {
 		t.Fatalf("load workflow human task: %v", err)
 	}
-	gateRevision := humanTask.SubjectRevision
 	if err = runtimeService.OpenHumanGate(ctx, gateCommand); err != nil {
 		t.Fatalf("replay persisted human gate: %v", err)
 	}
@@ -338,200 +326,18 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	}
 	waitingInput, _, waitingInputHash, waitingInputErr := workflow.ParseNodeInput(json.RawMessage(waitingNode.Input))
 	if humanTaskCount != 1 || waitingRun.Status != "WAITING_HUMAN" || waitingNode.Status != "WAITING_HUMAN" ||
-		humanTask.SubjectID.String() != gate.NodeRunID || gateRevision != waitingNode.Revision ||
-		len(candidateIDs) != 1 || candidateIDs[0] != bibleResult.Output.Bindings[0].ReferenceID ||
+		humanTask.SubjectType != "story_reconciliation_candidate" ||
+		humanTask.SubjectID.String() != storyReviewResult.Output.Bindings[0].ReferenceID ||
+		humanTask.SubjectRevision != 1 || humanTask.SubjectRevision == waitingNode.Revision ||
+		humanTask.SubjectHash != storyReviewResult.Output.Bindings[0].ContentHash ||
+		len(candidateIDs) != 1 || candidateIDs[0] != storyReviewResult.Output.Bindings[0].ReferenceID ||
 		waitingInputErr != nil || waitingNode.InputHash == nil || waitingInputHash != *waitingNode.InputHash ||
 		len(waitingInput.Bindings) != 1 || waitingInput.Bindings[0].ReferenceID != candidateIDs[0] {
 		t.Fatalf("human gate projection = task %#v run %#v node %#v", humanTask, waitingRun, waitingNode)
 	}
-	reviewActor := reviewapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
-	claimed, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
-		TaskID: humanTask.ID.String(), ExpectedRevision: humanTask.Revision, IdempotencyKey: "workflow-gate-claim",
-	})
-	if err != nil {
-		t.Fatalf("claim workflow human task: %v", err)
-	}
-	decision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
-		TaskID: humanTask.ID.String(), ClaimToken: claimed.ClaimToken, ExpectedTaskRevision: claimed.Task.Revision,
-		ExpectedSubjectRevision: claimed.Task.SubjectRevision, ExpectedSubjectHash: claimed.Task.SubjectHash,
-		Decision: "approved", IdempotencyKey: "workflow-gate-decision",
-	})
-	if err != nil {
-		t.Fatalf("decide workflow human task: %v", err)
-	}
-	signaler := &scriptedSignaler{outcomes: []workflow.SignalObservation{
-		{Outcome: workflow.SignalOutcomeUnknown},
-		{Outcome: workflow.SignalOutcomeAlreadyApplied, ObservedInputHash: "match_request"},
-	}}
-	signalService := workflowapp.NewSignalService(workflowStore, signaler, workflowapp.SignalConfig{
-		Now: func() time.Time {
-			now = now.Add(time.Second)
-			return now
-		},
-		NewID: uuid.NewString,
-		Owner: workflowproduction.New(
-			bibleapp.NewService(biblegorm.New(database), bibleapp.Config{
-				Now: func() time.Time { return now }, NewID: uuid.NewString,
-			}),
-			planningapp.NewService(planninggorm.New(database), planningapp.Config{
-				Now: func() time.Time { return now }, NewID: uuid.NewString,
-			}),
-			nil,
-		),
-	})
-	signalCommand := workflowapp.SignalHumanGateCommand{
-		WorkspaceID: waitingRun.WorkspaceID.String(), WorkflowRunID: waitingRun.ID.String(), NodeRunID: waitingNode.ID.String(),
-		HumanTaskID: decision.Task.ID, ReviewDecisionID: decision.Decision.ID,
-		SubjectRevision: decision.Decision.SubjectRevision, Decision: decision.Decision.Decision,
-		IdempotencyKey: "workflow-gate-signal",
-	}
-	driftedSignal := signalCommand
-	driftedSignal.Decision = "rejected"
-	driftedSignal.IdempotencyKey = "workflow-gate-signal-drifted"
-	if _, driftedErr := signalService.SignalHumanGate(ctx, actor, driftedSignal); driftedErr == nil {
-		t.Fatal("human gate signal accepted a decision that drifted from ReviewDecision")
-	}
-	var driftedApplyCount, driftedIntentCount int64
-	if err = database.Model(&model.WorkflowHumanGateApplyReceipt{}).Where("workflow_run_id = ?", waitingRun.ID).Count(&driftedApplyCount).Error; err != nil {
-		t.Fatalf("count drifted gate apply receipts: %v", err)
-	}
-	if err = database.Model(&model.WorkflowSignalIntent{}).Where("workflow_run_id = ?", waitingRun.ID).Count(&driftedIntentCount).Error; err != nil {
-		t.Fatalf("count drifted gate signal intents: %v", err)
-	}
-	if driftedApplyCount != 0 || driftedIntentCount != 0 || len(signaler.Requests()) != 0 {
-		t.Fatalf("drifted gate signal left effects: apply=%d intents=%d requests=%d", driftedApplyCount, driftedIntentCount, len(signaler.Requests()))
-	}
-	unknownSignal, err := signalService.SignalHumanGate(ctx, actor, signalCommand)
-	if err != nil || unknownSignal.Status != "unknown" {
-		t.Fatalf("persist unknown human gate signal: intent=%#v err=%v", unknownSignal, err)
-	}
-	completedSignal, err := signalService.SignalHumanGate(ctx, actor, signalCommand)
-	if err != nil || completedSignal.Status != "completed" || completedSignal.ID != unknownSignal.ID {
-		t.Fatalf("reconcile persisted human gate signal: intent=%#v err=%v", completedSignal, err)
-	}
-	var applyCount, signalIntentCount, signalReceiptCount int64
-	if err = database.Model(&model.WorkflowHumanGateApplyReceipt{}).Where("workflow_run_id = ?", waitingRun.ID).Count(&applyCount).Error; err != nil {
-		t.Fatalf("count human gate apply receipts: %v", err)
-	}
-	if err = database.Model(&model.WorkflowSignalIntent{}).Where("workflow_run_id = ?", waitingRun.ID).Count(&signalIntentCount).Error; err != nil {
-		t.Fatalf("count signal intents: %v", err)
-	}
-	if err = database.Model(&model.WorkflowSignalReceipt{}).Where("workflow_run_id = ?", waitingRun.ID).Count(&signalReceiptCount).Error; err != nil {
-		t.Fatalf("count signal receipts: %v", err)
-	}
-	if applyCount != 1 || signalIntentCount != 1 || signalReceiptCount != 2 {
-		t.Fatalf("signal fact counts = apply %d intents %d receipts %d", applyCount, signalIntentCount, signalReceiptCount)
-	}
-	var ownerReceiptCount int64
-	if err = database.Model(&model.CommandReceipt{}).
-		Where("workspace_id = ? AND operation = ? AND resource_id = ?", waitingRun.WorkspaceID, "production_bible.confirm", bibleID).
-		Count(&ownerReceiptCount).Error; err != nil || ownerReceiptCount != 1 {
-		t.Fatalf("production owner receipt count = %d err=%v", ownerReceiptCount, err)
-	}
-	requests := signaler.Requests()
-	if len(requests) != 2 || requests[0].OwnerReceiptID == "" || requests[0].OutputHash == "" ||
-		requests[0].OutputHash != requests[1].OutputHash {
-		t.Fatalf("human gate owner signal evidence = %#v", requests)
-	}
-	applyGate := workflow.ApplyHumanGateCommand{
-		WorkflowRunID: request.WorkflowRunID, NodeRunID: gate.NodeRunID, NodeID: gate.NodeID,
-		SignalIntentID: completedSignal.ID, Decision: "APPROVED", OwnerReceiptID: requests[0].OwnerReceiptID,
-		Output: requests[0].Output, OutputHash: requests[0].OutputHash,
-	}
-	conflictingApply := applyGate
-	conflictingApply.Decision = "REJECTED"
-	if err = runtimeService.ApplyHumanGate(ctx, conflictingApply); err == nil {
-		t.Fatal("human gate accepted a decision that drifted from the completed signal intent")
-	}
-	if err = runtimeService.ApplyHumanGate(ctx, applyGate); err != nil {
-		t.Fatalf("apply approved human gate: %v", err)
-	}
-	if err = runtimeService.ApplyHumanGate(ctx, applyGate); err != nil {
-		t.Fatalf("replay approved human gate: %v", err)
-	}
-	var appliedRun model.WorkflowRun
-	var appliedNode model.NodeRunProjection
-	if err = database.First(&appliedRun, "id = ?", request.WorkflowRunID).Error; err != nil {
-		t.Fatalf("load applied workflow run: %v", err)
-	}
-	if err = database.First(&appliedNode, "id = ?", gate.NodeRunID).Error; err != nil {
-		t.Fatalf("load applied human gate node: %v", err)
-	}
-	appliedOutput, _, appliedOutputHash, appliedOutputErr := workflow.ParseNodeOutput(json.RawMessage(appliedNode.Output))
-	if appliedRun.Status != "RUNNING" || appliedRun.NextAction != nil || appliedNode.Status != "SUCCEEDED" ||
-		appliedNode.Revision != waitingNode.Revision+1 || appliedNode.OutputHash == nil ||
-		appliedOutputErr != nil || appliedOutputHash != *appliedNode.OutputHash ||
-		len(appliedOutput.Bindings) != 1 || appliedOutput.Bindings[0].ReferenceID != bibleID.String() ||
-		appliedOutput.Bindings[0].ReferenceVersion != "2" || appliedOutput.Bindings[0].ValueType != "production_bible" {
-		t.Fatalf("applied human gate projection = run %#v node %#v", appliedRun, appliedNode)
-	}
-	episodes := plan.Nodes[3]
-	episodesResult, episodesErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
-		WorkflowRunID: request.WorkflowRunID, NodeRunID: episodes.NodeRunID, NodeID: episodes.NodeID,
-		Executor: episodes.Executor, Attempt: 1,
-	})
-	if episodesErr != nil || episodesResult.Status != "SUCCEEDED" || executor.CallCount() != 5 {
-		t.Fatalf("execute node downstream of human gate: result=%#v calls=%d err=%v", episodesResult, executor.CallCount(), episodesErr)
-	}
-	var episodesProjection model.NodeRunProjection
-	if err = database.First(&episodesProjection, "id = ?", episodes.NodeRunID).Error; err != nil {
-		t.Fatalf("load downstream episode projection: %v", err)
-	}
-	episodesInput, _, episodesInputHash, episodesInputErr := workflow.ParseNodeInput(json.RawMessage(episodesProjection.Input))
-	var confirmedBibleInput *workflow.NodeInputBinding
-	for index := range episodesInput.Bindings {
-		if episodesInput.Bindings[index].Port == "bible" {
-			confirmedBibleInput = &episodesInput.Bindings[index]
-			break
-		}
-	}
-	if episodesInputErr != nil || episodesProjection.InputHash == nil || episodesInputHash != *episodesProjection.InputHash ||
-		confirmedBibleInput == nil || confirmedBibleInput.SourceNodeID != gate.NodeID ||
-		confirmedBibleInput.ReferenceID != bibleID.String() || confirmedBibleInput.ReferenceVersion != "2" ||
-		confirmedBibleInput.ValueType != "production_bible" || confirmedBibleInput.ContentHash != bibleReference.ContentHash {
-		t.Fatalf("downstream episode input did not consume confirmed gate output: %#v err=%v", episodesInput, episodesInputErr)
-	}
 	completion := workflow.CompleteRunCommand{WorkflowRunID: request.WorkflowRunID}
 	if err = runtimeService.CompleteRun(ctx, completion); err == nil {
-		t.Fatal("run completed while queued nodes still existed")
-	}
-	if err = database.Model(&model.NodeRunProjection{}).Where("workflow_run_id = ?", request.WorkflowRunID).
-		Updates(map[string]any{"status": "SUCCEEDED", "active_claim_token": nil}).Error; err != nil {
-		t.Fatalf("prepare completed node projections: %v", err)
-	}
-	_, completedOutput, completedOutputHash, outputErr := workflow.BuildNodeOutput(successfulExecutorOutput())
-	if outputErr != nil {
-		t.Fatalf("build completed node output fixture: %v", outputErr)
-	}
-	_, completedInput, completedInputHash, completionInputErr := workflow.BuildNodeInput(successfulNodeInput())
-	if completionInputErr != nil {
-		t.Fatalf("build completed node input fixture: %v", completionInputErr)
-	}
-	if err = database.Model(&model.NodeRunProjection{}).
-		Where("workflow_run_id = ? AND risk_level <> ? AND input_hash IS NULL", request.WorkflowRunID, "human_gate").
-		Updates(model.NodeRunProjection{Input: []byte(completedInput), InputHash: &completedInputHash}).Error; err != nil {
-		t.Fatalf("prepare completed node inputs: %v", err)
-	}
-	if err = database.Model(&model.NodeRunProjection{}).
-		Where("workflow_run_id = ? AND risk_level <> ? AND output_hash IS NULL", request.WorkflowRunID, "human_gate").
-		Updates(model.NodeRunProjection{Output: []byte(completedOutput), OutputHash: &completedOutputHash}).Error; err != nil {
-		t.Fatalf("prepare completed node outputs: %v", err)
-	}
-	if err = database.Model(&model.WorkflowRun{}).Where("id = ?", request.WorkflowRunID).Update("status", "RUNNING").Error; err != nil {
-		t.Fatalf("prepare completable workflow run: %v", err)
-	}
-	if err = runtimeService.CompleteRun(ctx, completion); err != nil {
-		t.Fatalf("complete workflow run: %v", err)
-	}
-	if err = runtimeService.CompleteRun(ctx, completion); err != nil {
-		t.Fatalf("replay workflow completion: %v", err)
-	}
-	var completedRun model.WorkflowRun
-	if err = database.First(&completedRun, "id = ?", request.WorkflowRunID).Error; err != nil {
-		t.Fatalf("load completed workflow run: %v", err)
-	}
-	if completedRun.Status != "SUCCEEDED" || completedRun.ProgressStage != "completed" {
-		t.Fatalf("completed workflow run = %#v", completedRun)
+		t.Fatal("run completed while its human gate was still waiting")
 	}
 }
 

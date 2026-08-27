@@ -3,7 +3,7 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "5.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "6.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
@@ -30,6 +30,11 @@ func SystemCatalog() (Catalog, error) {
 			"human.production_bible_review", "Production Bible Review", "human", "gate.production_bible_review", "never", "human_gate",
 			[]PortDefinition{requiredPort("candidate", "production_bible_candidate")}, []PortDefinition{requiredPort("bible", "production_bible")}, emptyNodeConfig(),
 		),
+		versionedSystemNode("2.0.0", systemNodeDefinition(
+			"human.production_bible_review", "Production Bible Review", "human", "gate.production_bible_review", "never", "human_gate",
+			[]PortDefinition{requiredPort("candidate", "story_reconciliation_candidate")}, []PortDefinition{requiredPort("bible", "production_bible_version")},
+			json.RawMessage(`{"type":"object","properties":{"expected_bible_version":{"type":"integer","minimum":1}},"required":["expected_bible_version"],"additionalProperties":false}`),
+		)),
 		versionedSystemNode("2.0.0", systemNodeDefinition(
 			"production.episode_plan", "Episode Plan", "production", "activity.episode_plan", "by_inputs", "low",
 			[]PortDefinition{requiredPort("script", "script_revision"), requiredPort("bible", "production_bible")}, []PortDefinition{requiredPort("candidate", "episode_plan_candidate")},

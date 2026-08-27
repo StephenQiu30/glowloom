@@ -38,7 +38,6 @@ import {
   resumeHumanGateApiV1ReviewDecisionsReviewDecisionIdResumePost,
 } from "@/api/humanReviews";
 import {
-  confirmBibleApiV1ProductionBiblesBibleIdConfirmPost,
   createBibleApiV1DocumentRevisionsRevisionIdProductionBiblesPost,
   getBibleApiV1ProductionBiblesBibleIdGet,
   getCurrentBibleApiV1ProjectsProjectIdProductionBibleGet,
@@ -364,22 +363,6 @@ export const appApi = createApi({
         { type: "ProductionBible", id: projectId },
       ],
     }),
-    confirmProductionBible: builder.mutation<
-      ProductionBibleWithDecisions,
-      { projectId: string; bibleId: string; body: API.ProductionBibleConfirmRequest }
-    >({
-      queryFn: ({ bibleId, body }) =>
-        runRequest(() =>
-          confirmBibleApiV1ProductionBiblesBibleIdConfirmPost(
-            { bible_id: bibleId },
-            body,
-          ) as Promise<{ data: ProductionBibleWithDecisions }>,
-        ),
-      invalidatesTags: (_result, _error, { projectId, bibleId }) => [
-        { type: "ProductionBible", id: projectId },
-        { type: "ProductionBible", id: bibleId },
-      ],
-    }),
     decideProductionBibleReviewIssue: builder.mutation<
       ProductionBibleWithDecisions,
       {
@@ -630,7 +613,6 @@ export const {
   useClaimHumanTaskMutation,
   useCompleteMediaUploadMutation,
   useConfirmEpisodePlanMutation,
-  useConfirmProductionBibleMutation,
   useConfirmRegistrationVerificationMutation,
   useCreateEpisodePlanMutation,
   useCreateProductionBibleMutation,

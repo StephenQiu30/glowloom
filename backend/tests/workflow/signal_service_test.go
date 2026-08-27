@@ -17,8 +17,8 @@ func TestHumanGateSignalReusesStableIdentityUntilUnknownIsReconciled(t *testing.
 	ownerOutput, _, ownerOutputHash, ownerOutputErr := workflow.BuildNodeOutput(workflow.NodeOutputSnapshot{
 		SchemaVersion: workflow.NodeOutputSchemaVersion,
 		Bindings: []workflow.NodeOutputBinding{{
-			Port: "bible", ValueType: "production_bible", ReferenceID: "00000000-0000-0000-0000-000000000333",
-			ReferenceVersion: "2", ContentHash: strings.Repeat("c", 64),
+			Port: "bible", ValueType: "production_bible_version", ReferenceID: "00000000-0000-0000-0000-000000000335",
+			ReferenceVersion: "1", ContentHash: strings.Repeat("d", 64),
 		}},
 	})
 	if ownerOutputErr != nil {
@@ -31,10 +31,10 @@ func TestHumanGateSignalReusesStableIdentityUntilUnknownIsReconciled(t *testing.
 	repository.application = workflow.HumanGateOwnerApplication{
 		ProjectID: "project-1", Executor: "gate.production_bible_review", Decision: "approved",
 		Candidate: workflow.NodeInputBinding{
-			Port: "candidate", ValueType: "production_bible_candidate", SourceKind: workflow.NodeInputSourceNodeOutput,
+			Port: "candidate", ValueType: "story_reconciliation_candidate", SourceKind: workflow.NodeInputSourceNodeOutput,
 			ReferenceID: "00000000-0000-0000-0000-000000000333", ReferenceVersion: "1", ContentHash: strings.Repeat("c", 64),
 		},
-		OutputPort: "bible", OutputValueType: "production_bible",
+		OutputPort: "bible", OutputValueType: "production_bible_version",
 	}
 	signaler := &scriptedSignaler{outcomes: []workflow.SignalObservation{
 		{Outcome: workflow.SignalOutcomeUnknown},

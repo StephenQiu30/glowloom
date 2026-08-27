@@ -1,6 +1,7 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
@@ -52,7 +55,9 @@ type Repository interface {
 	CreateWorkflow(context.Context, domain.Bible, domain.Invocation) error
 	GetBible(context.Context, Actor, string, bool) (domain.Bible, error)
 	GetCurrentBible(context.Context, Actor, string) (domain.Bible, error)
-	ConfirmBible(context.Context, domain.Bible) error
+	CandidateConfirmation(context.Context, Actor, ConfirmCommand, bool) (CandidateConfirmation, error)
+	GetBibleVersion(context.Context, Actor, string) (domain.ProductionBibleVersion, error)
+	CreateBibleVersion(context.Context, domain.ProductionBibleVersion) error
 	UpdateReviewDecisions(context.Context, domain.Bible) error
 	ResumeBible(context.Context, domain.Bible) error
 }
@@ -73,12 +78,25 @@ type Service struct {
 
 type CreateCommand struct{ RevisionID, IdempotencyKey string }
 type ConfirmCommand struct {
-	BibleID, ExpectedResultHash, IdempotencyKey string
-	ExpectedRevision                            int
+	CandidateRevisionID, CandidateRevisionHash string
+	DocumentRevisionID, DocumentRevisionHash   string
+	ReviewDecisionID, IdempotencyKey           string
+	ExpectedCandidateRevision                  int64
+	ExpectedVersion                            int
 }
 type ConfirmResult struct {
-	Bible   domain.Bible
+	Version domain.ProductionBibleVersion
 	Receipt platformcommand.Receipt
+}
+
+type CandidateConfirmation struct {
+	WorkspaceID, ProjectID                     string
+	DocumentRevisionID, DocumentRevisionHash   string
+	CandidateRevisionID, CandidateRevisionHash string
+	CandidateContentHash                       string
+	CandidateRevisionNo                        int64
+	Snapshot                                   json.RawMessage
+	NextVersion                                int
 }
 type ResumeCommand struct {
 	BibleID, IdempotencyKey string
@@ -91,6 +109,10 @@ type DecideReviewIssueCommand struct {
 
 type bibleReceipt struct {
 	BibleID string `json:"bible_id"`
+}
+
+type bibleVersionReceipt struct {
+	VersionID string `json:"version_id"`
 }
 
 func NewService(transactions TransactionManager, config Config) *Service {
@@ -225,13 +247,29 @@ func (service *Service) GetCurrent(ctx context.Context, actor Actor, projectID s
 }
 
 func (service *Service) Confirm(ctx context.Context, actor Actor, command ConfirmCommand) (ConfirmResult, error) {
+	actor.UserID = strings.TrimSpace(actor.UserID)
+	command.CandidateRevisionID = strings.TrimSpace(command.CandidateRevisionID)
+	command.CandidateRevisionHash = strings.ToLower(strings.TrimSpace(command.CandidateRevisionHash))
+	command.DocumentRevisionID = strings.TrimSpace(command.DocumentRevisionID)
+	command.DocumentRevisionHash = strings.ToLower(strings.TrimSpace(command.DocumentRevisionHash))
+	command.ReviewDecisionID = strings.TrimSpace(command.ReviewDecisionID)
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
-	if command.ExpectedRevision < 1 || len(command.ExpectedResultHash) != 64 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil ||
+		actor.UserID == "" || actor.TokenVersion < 1 || command.ExpectedCandidateRevision < 1 ||
+		command.ExpectedVersion < 1 || len(command.CandidateRevisionHash) != 64 ||
+		len(command.DocumentRevisionHash) != 64 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return ConfirmResult{}, invalid("Invalid production bible confirmation")
+	}
+	for _, identifier := range []string{
+		actor.UserID, command.CandidateRevisionID, command.DocumentRevisionID, command.ReviewDecisionID,
+	} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return ConfirmResult{}, invalid("Invalid production bible confirmation")
+		}
 	}
 	var result ConfirmResult
 	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
-		bible, err := repo.GetBible(ctx, actor, command.BibleID, true)
+		scope, err := repo.CandidateConfirmation(ctx, actor, command, false)
 		if err != nil {
 			return err
 		}
@@ -239,46 +277,62 @@ func (service *Service) Confirm(ctx context.Context, actor Actor, command Confir
 		if err != nil {
 			return err
 		}
-		if receipt, receiptErr := repo.FindReceipt(ctx, bible.WorkspaceID, confirmOperation, command.IdempotencyKey); receiptErr == nil {
-			replayed, replayErr := platformcommand.Replay[bibleReceipt](receipt, inputHash)
+		if receipt, receiptErr := repo.FindReceipt(ctx, scope.WorkspaceID, confirmOperation, command.IdempotencyKey); receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[bibleVersionReceipt](receipt, inputHash)
 			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
 				return conflict("Idempotency key was already used with different input")
 			}
 			if replayErr != nil {
 				return replayErr
 			}
-			result.Bible, replayErr = repo.GetBible(ctx, actor, replayed.BibleID, false)
+			result.Version, replayErr = repo.GetBibleVersion(ctx, actor, replayed.VersionID)
 			result.Receipt = receipt
 			return replayErr
 		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
 			return receiptErr
 		}
-		if bible.Status != "needs_review" || bible.ResultHash == nil || *bible.ResultHash != command.ExpectedResultHash || bible.Revision != command.ExpectedRevision {
-			return conflict("Production bible changed before confirmation")
-		}
-		for _, issue := range bible.Candidate.ReviewIssues {
-			if issue.Severity == "blocking" && bible.ReviewDecisions[issue.IssueKey] != "accepted" {
-				return conflict("Blocking review issues must be resolved before confirmation")
-			}
-		}
-		now := service.config.Now().UTC()
-		bible.Status, bible.ConfirmedAt, bible.ConfirmedBy, bible.UpdatedAt = "confirmed", &now, &actor.UserID, now
-		bible.Revision++
-		if err = repo.ConfirmBible(ctx, bible); err != nil {
-			return err
-		}
-		receiptResult, err := platformcommand.Result(bibleReceipt{BibleID: bible.ID})
+		locked, err := repo.CandidateConfirmation(ctx, actor, command, true)
 		if err != nil {
 			return err
 		}
-		receipt := platformcommand.Receipt{ID: service.config.NewID(), WorkspaceID: bible.WorkspaceID, Operation: confirmOperation, IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: bible.ID, Result: receiptResult, CreatedBy: actor.UserID, CreatedAt: now}
+		if !sameCandidateConfirmation(locked, scope) || locked.NextVersion != command.ExpectedVersion {
+			return conflict("Production bible changed before confirmation")
+		}
+		now := service.config.Now().UTC()
+		version, err := domain.NewProductionBibleVersion(domain.ProductionBibleVersionInput{
+			ID: service.config.NewID(), WorkspaceID: locked.WorkspaceID, ProjectID: locked.ProjectID,
+			DocumentRevisionID: locked.DocumentRevisionID, DocumentRevisionHash: locked.DocumentRevisionHash,
+			CandidateRevisionID: locked.CandidateRevisionID, CandidateRevisionNo: locked.CandidateRevisionNo,
+			CandidateRevisionHash: locked.CandidateRevisionHash, CandidateContentHash: locked.CandidateContentHash,
+			Version: locked.NextVersion, ReviewDecisionID: command.ReviewDecisionID,
+			Snapshot: locked.Snapshot, CreatedBy: actor.UserID, CreatedAt: now,
+		})
+		if err != nil {
+			return err
+		}
+		if err = repo.CreateBibleVersion(ctx, version); err != nil {
+			return err
+		}
+		receiptResult, err := platformcommand.Result(bibleVersionReceipt{VersionID: version.ID})
+		if err != nil {
+			return err
+		}
+		receipt := platformcommand.Receipt{ID: service.config.NewID(), WorkspaceID: version.WorkspaceID, Operation: confirmOperation, IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: version.ID, Result: receiptResult, CreatedBy: actor.UserID, CreatedAt: now}
 		if err = repo.CreateReceipt(ctx, receipt); err != nil {
 			return err
 		}
-		result = ConfirmResult{Bible: bible, Receipt: receipt}
+		result = ConfirmResult{Version: version, Receipt: receipt}
 		return nil
 	})
 	return result, normalizeError(err)
+}
+
+func sameCandidateConfirmation(left, right CandidateConfirmation) bool {
+	return left.WorkspaceID == right.WorkspaceID && left.ProjectID == right.ProjectID &&
+		left.DocumentRevisionID == right.DocumentRevisionID && left.DocumentRevisionHash == right.DocumentRevisionHash &&
+		left.CandidateRevisionID == right.CandidateRevisionID && left.CandidateRevisionHash == right.CandidateRevisionHash &&
+		left.CandidateContentHash == right.CandidateContentHash && left.CandidateRevisionNo == right.CandidateRevisionNo &&
+		bytes.Equal(left.Snapshot, right.Snapshot)
 }
 
 func (service *Service) DecideReviewIssue(ctx context.Context, actor Actor, command DecideReviewIssueCommand) (domain.Bible, error) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
@@ -85,7 +87,7 @@ func (store *Store) ResolveHumanGateOwnerApplication(
 			return normalizeNotFound(loadErr)
 		}
 		if run.WorkspaceID != workspaceID || node.WorkflowRunID != run.ID || run.Status != "WAITING_HUMAN" ||
-			node.Status != "WAITING_HUMAN" || node.Revision != request.SubjectRevision {
+			node.Status != "WAITING_HUMAN" {
 			return errors.New("workflow human gate changed before owner application")
 		}
 		task, decision, bindingErr := loadHumanGateDecision(
@@ -129,8 +131,10 @@ func (store *Store) ResolveHumanGateOwnerApplication(
 		applicationResult = domain.HumanGateOwnerApplication{
 			WorkspaceID: run.WorkspaceID.String(), ProjectID: run.ProjectID.String(), WorkflowRunID: run.ID.String(),
 			NodeRunID: node.ID.String(), HumanTaskID: task.ID.String(), ReviewDecisionID: decision.ID.String(),
-			SubjectRevision: node.Revision, Decision: decision.Decision, Executor: node.Executor,
+			SubjectRevision: task.SubjectRevision, Decision: decision.Decision, Executor: node.Executor,
 			Candidate: candidate, OutputPort: output.Key, OutputValueType: output.ValueType,
+			NodeConfig:   append(json.RawMessage(nil), resolved.Input.Config...),
+			FrozenInputs: append([]authoring.FrozenReference(nil), resolved.Input.FrozenInputs...),
 		}
 		return nil
 	})
@@ -223,7 +227,7 @@ func (store *Store) RecordHumanGateOwnerConflict(
 			return normalizeNotFound(loadErr)
 		}
 		if run.WorkspaceID != record.WorkspaceID || node.WorkflowRunID != run.ID || run.Status != "WAITING_HUMAN" ||
-			node.Status != "WAITING_HUMAN" || node.Revision != record.SubjectRevision {
+			node.Status != "WAITING_HUMAN" {
 			return errors.New("workflow human gate changed before owner conflict recording")
 		}
 		if _, _, loadErr := loadHumanGateDecision(
@@ -283,7 +287,7 @@ func (store *Store) PrepareSignal(ctx context.Context, desired domain.SignalPrep
 			return normalizeNotFound(loadErr)
 		}
 		if run.WorkspaceID != intentRecord.WorkspaceID || node.WorkflowRunID != run.ID || node.Status != "WAITING_HUMAN" ||
-			run.Status != "WAITING_HUMAN" || node.Revision != intentRecord.SubjectRevision {
+			run.Status != "WAITING_HUMAN" {
 			return errors.New("workflow human gate changed before signal preparation")
 		}
 		if bindingErr := validateHumanGateDecisionBinding(transaction, run, node, applyRecord, intentRecord); bindingErr != nil {
@@ -365,8 +369,13 @@ func loadHumanGateDecision(
 	if err := transaction.First(&decision, "id = ?", decisionID).Error; err != nil {
 		return model.HumanTask{}, model.ReviewDecision{}, normalizeNotFound(err)
 	}
+	expectedSubjectType, expectedSubjectID, expectedSubjectRevision, expectedSubjectHash, err := expectedHumanGateSubject(transaction, run, node)
+	if err != nil {
+		return model.HumanTask{}, model.ReviewDecision{}, err
+	}
 	if task.WorkspaceID != run.WorkspaceID || task.WorkflowRunID != run.ID || task.NodeRunID != node.ID ||
-		task.SubjectType != humanGateSubjectType(node.Executor) || task.SubjectID != node.ID || task.SubjectRevision != node.Revision || task.SubjectRevision != subjectRevision ||
+		task.SubjectType != expectedSubjectType || task.SubjectID != expectedSubjectID || task.SubjectHash != expectedSubjectHash ||
+		task.SubjectRevision != expectedSubjectRevision || task.SubjectRevision != subjectRevision ||
 		task.Status != "COMPLETED" || decision.WorkspaceID != run.WorkspaceID || decision.HumanTaskID != task.ID ||
 		decision.SubjectRevision != task.SubjectRevision || decision.SubjectHash != task.SubjectHash ||
 		decision.Decision != decisionValue || !humanTaskContainsDecision(task.AllowedDecisions, decision.Decision) {
@@ -378,6 +387,37 @@ func loadHumanGateDecision(
 		}
 	}
 	return task, decision, nil
+}
+
+func expectedHumanGateSubject(
+	transaction *gorm.DB,
+	run model.WorkflowRun,
+	node model.NodeRunProjection,
+) (string, uuid.UUID, int, string, error) {
+	resolved, err := resolveNodeExecution(transaction, run, node)
+	if err != nil {
+		return "", uuid.Nil, 0, "", err
+	}
+	if node.Executor != "gate.production_bible_review" || node.DefinitionVersion != "2.0.0" {
+		return humanGateSubjectType(node.Executor), node.ID, node.Revision, resolved.InputHash, nil
+	}
+	if len(resolved.Input.Bindings) != 1 {
+		return "", uuid.Nil, 0, "", errors.New("Production Bible Human Gate input has drifted")
+	}
+	candidate := resolved.Input.Bindings[0]
+	if candidate.Port != "candidate" || candidate.ValueType != "story_reconciliation_candidate" ||
+		candidate.SourceKind != domain.NodeInputSourceNodeOutput || len(candidate.ContentHash) != 64 {
+		return "", uuid.Nil, 0, "", errors.New("Production Bible Human Gate Candidate has drifted")
+	}
+	candidateID, err := uuid.Parse(candidate.ReferenceID)
+	if err != nil {
+		return "", uuid.Nil, 0, "", errors.New("Production Bible Human Gate Candidate identity is invalid")
+	}
+	candidateRevision, err := strconv.Atoi(candidate.ReferenceVersion)
+	if err != nil || candidateRevision < 1 {
+		return "", uuid.Nil, 0, "", errors.New("Production Bible Human Gate Candidate revision is invalid")
+	}
+	return "story_reconciliation_candidate", candidateID, candidateRevision, candidate.ContentHash, nil
 }
 
 func humanTaskContainsDecision(raw []byte, decision string) bool {
@@ -485,6 +525,24 @@ func validateHumanGateOwnerEvidence(
 	if !supported || *apply.OwnerOperation != expectedOperation || receipt.WorkspaceID != run.WorkspaceID || receipt.Operation != *apply.OwnerOperation ||
 		receipt.ResourceID.String() != binding.ReferenceID || receipt.CreatedBy != apply.CreatedBy {
 		return errors.New("workflow human gate owner receipt has drifted")
+	}
+	if node.Executor == "gate.production_bible_review" {
+		versionID, parseErr := uuid.Parse(binding.ReferenceID)
+		referenceVersion, versionErr := strconv.Atoi(binding.ReferenceVersion)
+		if parseErr != nil || versionErr != nil {
+			return errors.New("Production Bible Version output identity is invalid")
+		}
+		var version model.ProductionBibleVersion
+		if err := transaction.First(&version, "id = ?", versionID).Error; err != nil {
+			return normalizeNotFound(err)
+		}
+		if version.WorkspaceID != run.WorkspaceID || version.ProjectID != run.ProjectID ||
+			version.CandidateRevisionID.String() != candidate.ReferenceID ||
+			version.CandidateRevisionHash != candidate.ContentHash || version.Version != referenceVersion ||
+			version.ContentHash != binding.ContentHash || version.ReviewDecisionID != decision.ID ||
+			receipt.ResourceID != version.ID {
+			return errors.New("Production Bible Version does not match the frozen Candidate and ReviewDecision")
+		}
 	}
 	return nil
 }

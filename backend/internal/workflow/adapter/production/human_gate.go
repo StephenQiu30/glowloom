@@ -2,6 +2,7 @@ package production
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -65,24 +66,47 @@ func (applier *Applier) ApplyHumanGateDecision(
 		return applier.applyStoryboardSet(ctx, actor, application)
 	}
 	if applier.bibles == nil || application.Executor != "gate.production_bible_review" ||
-		application.Candidate.ValueType != "production_bible_candidate" ||
-		application.OutputPort != "bible" || application.OutputValueType != "production_bible" {
+		application.Candidate.ValueType != "story_reconciliation_candidate" ||
+		application.OutputPort != "bible" || application.OutputValueType != "production_bible_version" {
 		return domain.HumanGateOwnerResult{}, errors.New("unsupported workflow human gate owner application")
 	}
-	expectedRevision, err := strconv.Atoi(application.Candidate.ReferenceVersion)
-	if err != nil || expectedRevision < 1 {
+	expectedCandidateRevision, err := strconv.ParseInt(application.Candidate.ReferenceVersion, 10, 64)
+	if err != nil || expectedCandidateRevision < 1 {
 		return domain.HumanGateOwnerResult{}, errors.New("invalid production bible candidate revision")
+	}
+	var config struct {
+		ExpectedVersion int `json:"expected_bible_version"`
+	}
+	if json.Unmarshal(application.NodeConfig, &config) != nil || config.ExpectedVersion < 1 {
+		return domain.HumanGateOwnerResult{}, errors.New("invalid Production Bible Human Gate config")
+	}
+	var documentID, documentHash string
+	for _, reference := range application.FrozenInputs {
+		if reference.Kind != "script_revision" {
+			continue
+		}
+		if documentID != "" {
+			return domain.HumanGateOwnerResult{}, errors.New("Production Bible Human Gate has multiple script revisions")
+		}
+		documentID, documentHash = reference.ID, reference.Hash
+	}
+	if documentID == "" || len(documentHash) != 64 {
+		return domain.HumanGateOwnerResult{}, errors.New("Production Bible Human Gate has no frozen script revision")
 	}
 	result, err := applier.bibles.Confirm(ctx, bibleapp.Actor{
 		UserID: actor.UserID, TokenVersion: actor.TokenVersion,
 	}, bibleapp.ConfirmCommand{
-		BibleID: application.Candidate.ReferenceID, ExpectedResultHash: application.Candidate.ContentHash,
-		ExpectedRevision: expectedRevision, IdempotencyKey: "workflow-review:" + application.ReviewDecisionID,
+		CandidateRevisionID:       application.Candidate.ReferenceID,
+		CandidateRevisionHash:     application.Candidate.ContentHash,
+		ExpectedCandidateRevision: expectedCandidateRevision,
+		DocumentRevisionID:        documentID, DocumentRevisionHash: documentHash,
+		ExpectedVersion: config.ExpectedVersion, ReviewDecisionID: application.ReviewDecisionID,
+		IdempotencyKey: "workflow-review:" + application.ReviewDecisionID,
 	})
 	if err != nil {
 		return domain.HumanGateOwnerResult{}, err
 	}
-	if err = validateConfirmedBible(application, actor, result.Bible, result.Receipt.Operation, result.Receipt.ResourceID,
+	if err = validateConfirmedBible(application, actor, result.Version, result.Receipt.Operation, result.Receipt.ResourceID,
 		result.Receipt.WorkspaceID, result.Receipt.CreatedBy); err != nil {
 		return domain.HumanGateOwnerResult{}, err
 	}
@@ -90,8 +114,8 @@ func (applier *Applier) ApplyHumanGateDecision(
 		SchemaVersion: domain.NodeOutputSchemaVersion,
 		Bindings: []domain.NodeOutputBinding{{
 			Port: application.OutputPort, ValueType: application.OutputValueType,
-			ReferenceID: result.Bible.ID, ReferenceVersion: strconv.Itoa(result.Bible.Revision),
-			ContentHash: *result.Bible.ResultHash,
+			ReferenceID: result.Version.ID, ReferenceVersion: strconv.Itoa(result.Version.Version),
+			ContentHash: result.Version.ContentHash,
 		}},
 	})
 	if err != nil {
@@ -247,15 +271,15 @@ func (applier *Applier) applyEpisodePlan(
 func validateConfirmedBible(
 	application domain.HumanGateOwnerApplication,
 	actor workflowapp.Actor,
-	bible bibledomain.Bible,
+	bible bibledomain.ProductionBibleVersion,
 	operation string,
 	resourceID string,
 	workspaceID string,
 	createdBy string,
 ) error {
-	if bible.Status != "confirmed" || bible.ID != application.Candidate.ReferenceID ||
-		bible.WorkspaceID != application.WorkspaceID || bible.ProjectID != application.ProjectID ||
-		bible.ResultHash == nil || *bible.ResultHash != application.Candidate.ContentHash ||
+	if bible.ID == application.Candidate.ReferenceID || bible.CandidateRevisionID != application.Candidate.ReferenceID ||
+		bible.CandidateRevisionHash != application.Candidate.ContentHash || bible.WorkspaceID != application.WorkspaceID ||
+		bible.ProjectID != application.ProjectID || bible.ReviewDecisionID != application.ReviewDecisionID ||
 		operation != productionBibleConfirmOperation || resourceID != bible.ID ||
 		workspaceID != application.WorkspaceID || createdBy != actor.UserID {
 		return errors.New("production bible owner result does not match workflow gate")

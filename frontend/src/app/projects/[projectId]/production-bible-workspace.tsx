@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/card";
 import {
   appApiErrorMessage,
-  useConfirmProductionBibleMutation,
   useCreateProductionBibleMutation,
   useCurrentProductionBibleQuery,
   useDecideProductionBibleReviewIssueMutation,
@@ -73,7 +72,6 @@ export function ProductionBibleWorkspace({
     skip: !activeBibleId,
   });
   const [createBible, createState] = useCreateProductionBibleMutation();
-  const [confirmBible, confirmState] = useConfirmProductionBibleMutation();
   const [decideReviewIssue, decideState] = useDecideProductionBibleReviewIssueMutation();
   const [resumeBible, resumeState] = useResumeProductionBibleMutation();
   const [actionError, setActionError] = useState<string | null>(null);
@@ -86,8 +84,7 @@ export function ProductionBibleWorkspace({
       ? queriedBible
       : undefined;
   const bible = outdatedBible ? undefined : queriedBible;
-  const busy =
-    createState.isLoading || confirmState.isLoading || resumeState.isLoading || decideState.isLoading;
+  const busy = createState.isLoading || resumeState.isLoading || decideState.isLoading;
   const reviewDecisions = (bible as ProductionBibleWithDecisions | undefined)?.review_decisions ?? {};
   const blockingIssues =
     bible?.review_issues.filter((issue) => issue.severity === "blocking") ?? [];
@@ -129,30 +126,6 @@ export function ProductionBibleWorkspace({
     if (!created) return;
     setActiveBibleId(created.id);
     setNotice("制作圣经任务已创建；页面会从服务端恢复生成进度。");
-  }
-
-  async function confirm(): Promise<void> {
-    if (!bible?.result_hash) return;
-    const resultHash = bible.result_hash;
-    const confirmed = await runAction(() =>
-      confirmBible({
-        projectId,
-        bibleId: bible.id,
-        body: {
-          expected_result_hash: resultHash,
-          expected_revision: bible.revision,
-          idempotency_key: actionKey(
-            "confirm-production-bible",
-            bible.id,
-            bible.revision,
-            resultHash,
-          ),
-        },
-      }).unwrap(),
-    );
-    if (!confirmed) return;
-    setActiveBibleId(confirmed.id);
-    setNotice("制作圣经已确认并物化为项目资产事实，可以发布分集剧本。");
   }
 
   async function resume(): Promise<void> {
@@ -217,7 +190,7 @@ export function ProductionBibleWorkspace({
               <BookOpenCheck className="size-5" aria-hidden="true" />项目制作圣经
             </CardTitle>
             <CardDescription className="mt-1">
-              本地 Codex 从不可变整剧原稿提取统一角色、场景、道具和世界观；人工确认后才写入项目资产。
+              本地 Codex 从不可变整剧原稿提取统一角色、场景、道具和世界观；Workflow 审核通过后冻结为不可变版本。
             </CardDescription>
           </div>
           {bible ? <Badge variant="outline">{statusLabels[bible.status]}</Badge> : null}
@@ -369,18 +342,12 @@ export function ProductionBibleWorkspace({
             ) : null}
 
             {bible.status === "needs_review" ? (
-              <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-5">
+              <div className="border-t pt-5">
                 <p className="text-sm text-muted-foreground">
                   {unresolvedBlockingIssues.length
                     ? `仍有 ${unresolvedBlockingIssues.length} 个阻断问题需要明确人工决议。`
-                    : "没有阻断问题；确认后会原子物化资产和跨集状态。"}
+                    : "候选已具备审核条件；请在项目 HumanTask 审核队列中批准，系统会冻结精确 Candidate Revision 并恢复 Workflow。"}
                 </p>
-                <Button
-                  disabled={!canWrite || busy || unresolvedBlockingIssues.length > 0 || !bible.result_hash}
-                  onClick={confirm}
-                >
-                  <CheckCircle2 aria-hidden="true" />确认制作圣经
-                </Button>
               </div>
             ) : (
               <Alert className="border-emerald-200 bg-emerald-50" role="status">

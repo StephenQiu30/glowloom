@@ -31,22 +31,24 @@ func TestHumanGateOutputMatchesStoryboardCandidateWithAppliedRevision(t *testing
 	}
 }
 
-func TestHumanGateOutputMatchesImmutableCandidateForOtherGates(t *testing.T) {
+func TestProductionBibleHumanGateOutputCreatesAnImmutableVersionIdentity(t *testing.T) {
 	candidate := workflow.NodeInputBinding{
+		ValueType:        "story_reconciliation_candidate",
 		ReferenceID:      "47fb8568-bbb9-4071-898a-01bcf812356c",
 		ReferenceVersion: "2",
 		ContentHash:      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
 	output := workflow.NodeOutputBinding{
-		ReferenceID:      candidate.ReferenceID,
-		ReferenceVersion: "3",
-		ContentHash:      candidate.ContentHash,
+		ValueType:        "production_bible_version",
+		ReferenceID:      "77bb2559-b058-4309-957b-6f656e096945",
+		ReferenceVersion: "1",
+		ContentHash:      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 	}
 	if !workflow.HumanGateOutputMatchesCandidate("gate.production_bible_review", candidate, output) {
-		t.Fatal("existing human gates must keep matching the frozen candidate hash")
+		t.Fatal("Production Bible gate must accept a distinct immutable Version bound by owner evidence")
 	}
-	output.ContentHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	output.ReferenceID = candidate.ReferenceID
 	if workflow.HumanGateOutputMatchesCandidate("gate.production_bible_review", candidate, output) {
-		t.Fatal("existing human gate accepted a different content hash")
+		t.Fatal("Production Bible gate accepted the Candidate identity as a formal Version identity")
 	}
 }

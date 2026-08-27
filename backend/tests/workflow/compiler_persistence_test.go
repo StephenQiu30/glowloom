@@ -151,10 +151,12 @@ func TestCompilerPersistsOneImmutableDefinitionAndRunInputSnapshot(t *testing.T)
 	}
 
 	var definitionCount, snapshotCount int64
-	if err = database.Model(&model.WorkflowDefinitionVersion{}).Count(&definitionCount).Error; err != nil {
+	if err = database.Model(&model.WorkflowDefinitionVersion{}).
+		Where("authoring_revision_id = ?", revision.ID).Count(&definitionCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err = database.Model(&model.RunInputSnapshot{}).Count(&snapshotCount).Error; err != nil {
+	if err = database.Model(&model.RunInputSnapshot{}).
+		Where("workflow_definition_version_id = ?", first.DefinitionID).Count(&snapshotCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if definitionCount != 1 || snapshotCount != 1 {

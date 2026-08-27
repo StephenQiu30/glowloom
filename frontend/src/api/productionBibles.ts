@@ -23,17 +23,6 @@ export function getBibleApiV1ProductionBiblesBibleIdGet(
   );
 }
 
-export function confirmBibleApiV1ProductionBiblesBibleIdConfirmPost(
-  params: { bible_id: string },
-  body: API.ProductionBibleConfirmRequest,
-  options?: RequestOptions,
-) {
-  return request<Envelope<API.ProductionBibleResponse>>(
-    `/api/v1/production-bibles/${params.bible_id}/confirm`,
-    { method: "POST", data: body, ...(options ?? {}) },
-  );
-}
-
 export function resumeBibleApiV1ProductionBiblesBibleIdResumePost(
   params: { bible_id: string },
   body: API.ProductionBibleResumeRequest,

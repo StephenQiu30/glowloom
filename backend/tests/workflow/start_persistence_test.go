@@ -147,8 +147,9 @@ func TestWorkflowStartPersistsRunNodeProjectionAndReconcilesUnknownOutcome(t *te
 	if err = database.Model(&model.NodeRunProjection{}).Where("workflow_run_id IN ?", runIDs).Count(&nodeCount).Error; err != nil {
 		t.Fatalf("count node projections: %v", err)
 	}
-	if nodeCount != 40 {
-		t.Fatalf("node projection count = %d, want 40", nodeCount)
+	wantNodeCount := int64(len(compilerJourneyGraph().Nodes) * len(runRecords))
+	if nodeCount != wantNodeCount {
+		t.Fatalf("node projection count = %d, want %d", nodeCount, wantNodeCount)
 	}
 	var intentRecords []model.WorkflowStartIntent
 	if err = database.Where("workflow_run_id IN ?", runIDs).Find(&intentRecords).Error; err != nil {

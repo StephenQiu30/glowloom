@@ -7,14 +7,17 @@ import (
 	"testing"
 	"time"
 
+	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 )
 
 type fakeBibleStore struct {
-	bible    domain.Bible
-	receipts map[string]platformcommand.Receipt
+	bible        domain.Bible
+	confirmation bibleapp.CandidateConfirmation
+	versions     map[string]domain.ProductionBibleVersion
+	receipts     map[string]platformcommand.Receipt
 }
 
 func (store *fakeBibleStore) WithinTransaction(_ context.Context, operation func(bibleapp.Repository) error) error {
@@ -58,8 +61,29 @@ func (store *fakeBibleStore) GetCurrentBible(context.Context, bibleapp.Actor, st
 	return store.bible, nil
 }
 
-func (store *fakeBibleStore) ConfirmBible(_ context.Context, bible domain.Bible) error {
-	store.bible = bible
+func (store *fakeBibleStore) CandidateConfirmation(
+	context.Context,
+	bibleapp.Actor,
+	bibleapp.ConfirmCommand,
+	bool,
+) (bibleapp.CandidateConfirmation, error) {
+	return store.confirmation, nil
+}
+
+func (store *fakeBibleStore) GetBibleVersion(
+	_ context.Context,
+	_ bibleapp.Actor,
+	versionID string,
+) (domain.ProductionBibleVersion, error) {
+	version, ok := store.versions[versionID]
+	if !ok {
+		return domain.ProductionBibleVersion{}, bibleapp.ErrNotFound
+	}
+	return version, nil
+}
+
+func (store *fakeBibleStore) CreateBibleVersion(_ context.Context, version domain.ProductionBibleVersion) error {
+	store.versions[version.ID] = version
 	return nil
 }
 
@@ -73,17 +97,24 @@ func (store *fakeBibleStore) ResumeBible(_ context.Context, bible domain.Bible) 
 	return nil
 }
 
-func TestBlockingBibleIssuesRequireExplicitAcceptedDecisions(t *testing.T) {
-	resultHash := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+func TestProductionBibleConfirmationCreatesOneImmutableVersionAndReceipt(t *testing.T) {
+	snapshot := []byte(`{"canonical_entities":[],"canonical_world_entries":[],"merged_claims":[],"merged_arcs":[],"conflicts":[],"review_issues":[]}`)
+	candidateContentHash, err := agentcontract.CanonicalHash(snapshot)
+	if err != nil {
+		t.Fatalf("hash candidate snapshot: %v", err)
+	}
 	store := &fakeBibleStore{
-		bible: domain.Bible{
-			ID: "00000000-0000-0000-0000-000000000001", WorkspaceID: "00000000-0000-0000-0000-000000000002",
-			Status: "needs_review", ResultHash: &resultHash, Revision: 1, ReviewDecisions: map[string]string{},
-			Candidate: domain.Candidate{ReviewIssues: []domain.ReviewIssue{
-				{IssueKey: "issue.one", Severity: "blocking"},
-				{IssueKey: "issue.two", Severity: "blocking"},
-			}},
+		confirmation: bibleapp.CandidateConfirmation{
+			WorkspaceID:           "00000000-0000-0000-0000-000000000002",
+			ProjectID:             "00000000-0000-0000-0000-000000000004",
+			DocumentRevisionID:    "00000000-0000-0000-0000-000000000005",
+			DocumentRevisionHash:  "1111111111111111111111111111111111111111111111111111111111111111",
+			CandidateRevisionID:   "00000000-0000-0000-0000-000000000006",
+			CandidateRevisionHash: "2222222222222222222222222222222222222222222222222222222222222222",
+			CandidateContentHash:  candidateContentHash,
+			CandidateRevisionNo:   2, Snapshot: snapshot, NextVersion: 1,
 		},
+		versions: map[string]domain.ProductionBibleVersion{},
 		receipts: map[string]platformcommand.Receipt{},
 	}
 	sequence := 10
@@ -96,40 +127,32 @@ func TestBlockingBibleIssuesRequireExplicitAcceptedDecisions(t *testing.T) {
 	})
 	actor := bibleapp.Actor{UserID: "00000000-0000-0000-0000-000000000003", TokenVersion: 1}
 
-	assertConflict := func(err error) {
-		t.Helper()
-		var apiError *bibleapp.Error
-		if !errors.As(err, &apiError) || apiError.Code != "resource_conflict" {
-			t.Fatalf("error = %#v, want resource_conflict", err)
-		}
+	command := bibleapp.ConfirmCommand{
+		CandidateRevisionID:       store.confirmation.CandidateRevisionID,
+		CandidateRevisionHash:     store.confirmation.CandidateRevisionHash,
+		ExpectedCandidateRevision: store.confirmation.CandidateRevisionNo,
+		DocumentRevisionID:        store.confirmation.DocumentRevisionID,
+		DocumentRevisionHash:      store.confirmation.DocumentRevisionHash,
+		ExpectedVersion:           1, ReviewDecisionID: "00000000-0000-0000-0000-000000000007",
+		IdempotencyKey: "confirm-1",
 	}
-
-	_, err := service.Confirm(context.Background(), actor, bibleapp.ConfirmCommand{BibleID: store.bible.ID, ExpectedResultHash: resultHash, ExpectedRevision: 1, IdempotencyKey: "confirm-1"})
-	assertConflict(err)
-
-	first, err := service.DecideReviewIssue(context.Background(), actor, bibleapp.DecideReviewIssueCommand{BibleID: store.bible.ID, IssueKey: "issue.one", Action: "accepted", ExpectedRevision: 1, IdempotencyKey: "issue-one"})
-	if err != nil || first.Revision != 2 || first.ReviewDecisions["issue.one"] != "accepted" {
-		t.Fatalf("first decision = %#v, error = %v", first, err)
-	}
-	second, err := service.DecideReviewIssue(context.Background(), actor, bibleapp.DecideReviewIssueCommand{BibleID: store.bible.ID, IssueKey: "issue.two", Action: "rejected", ExpectedRevision: 2, IdempotencyKey: "issue-two-reject"})
-	if err != nil || second.ReviewDecisions["issue.two"] != "rejected" {
-		t.Fatalf("rejected decision = %#v, error = %v", second, err)
-	}
-	_, err = service.Confirm(context.Background(), actor, bibleapp.ConfirmCommand{BibleID: store.bible.ID, ExpectedResultHash: resultHash, ExpectedRevision: 3, IdempotencyKey: "confirm-2"})
-	assertConflict(err)
-
-	accepted, err := service.DecideReviewIssue(context.Background(), actor, bibleapp.DecideReviewIssueCommand{BibleID: store.bible.ID, IssueKey: "issue.two", Action: "accepted", ExpectedRevision: 3, IdempotencyKey: "issue-two-accept"})
-	if err != nil || accepted.Revision != 4 {
-		t.Fatalf("accepted decision = %#v, error = %v", accepted, err)
-	}
-	confirmed, err := service.Confirm(context.Background(), actor, bibleapp.ConfirmCommand{BibleID: store.bible.ID, ExpectedResultHash: resultHash, ExpectedRevision: 4, IdempotencyKey: "confirm-3"})
-	if err != nil || confirmed.Bible.Status != "confirmed" || confirmed.Bible.Revision != 5 ||
+	confirmed, err := service.Confirm(context.Background(), actor, command)
+	if err != nil || confirmed.Version.Version != 1 ||
+		confirmed.Version.CandidateRevisionID != store.confirmation.CandidateRevisionID ||
 		confirmed.Receipt.ID == "" || confirmed.Receipt.Operation != "production_bible.confirm" ||
-		confirmed.Receipt.ResourceID != store.bible.ID {
+		confirmed.Receipt.ResourceID != confirmed.Version.ID {
 		t.Fatalf("confirmed bible = %#v, error = %v", confirmed, err)
 	}
-	replayed, err := service.Confirm(context.Background(), actor, bibleapp.ConfirmCommand{BibleID: store.bible.ID, ExpectedResultHash: resultHash, ExpectedRevision: 4, IdempotencyKey: "confirm-3"})
-	if err != nil || replayed.Bible.ID != confirmed.Bible.ID || replayed.Receipt.ID != confirmed.Receipt.ID {
+	replayed, err := service.Confirm(context.Background(), actor, command)
+	if err != nil || replayed.Version.ID != confirmed.Version.ID || replayed.Receipt.ID != confirmed.Receipt.ID ||
+		len(store.versions) != 1 {
 		t.Fatalf("replayed bible confirmation = %#v, error = %v", replayed, err)
+	}
+	drifted := command
+	drifted.ExpectedVersion = 2
+	_, err = service.Confirm(context.Background(), actor, drifted)
+	var apiError *bibleapp.Error
+	if !errors.As(err, &apiError) || apiError.Code != "resource_conflict" {
+		t.Fatalf("drifted replay error = %#v, want resource_conflict", err)
 	}
 }

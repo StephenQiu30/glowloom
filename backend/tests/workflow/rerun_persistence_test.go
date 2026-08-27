@@ -125,21 +125,21 @@ func TestWorkflowRerunDerivesDirtyClosureAndReusesCanonicalUpstreamProjection(t 
 	if err = database.First(&sourceRecord, "id = ?", sourceRun.ID).Error; err != nil {
 		t.Fatalf("load source run: %v", err)
 	}
-	if sourceRecord.Status != "FAILED" || sourceRecord.ProgressStage != "node:bible:failed" ||
+	if sourceRecord.Status != "FAILED" || sourceRecord.ProgressStage != "node:evidence:failed" ||
 		sourceRecord.NextAction == nil || *sourceRecord.NextAction != "rerun_failed_node" ||
 		!strings.Contains(string(sourceRecord.Error), "node_activity_failed") {
 		t.Fatalf("source failure projection = %#v", sourceRecord)
 	}
 
 	rerun, err := startService.Rerun(ctx, actor, workflowapp.RerunCommand{
-		SourceWorkflowRunID: sourceRun.ID, RootNodeID: "bible", IdempotencyKey: "rerun-bible",
+		SourceWorkflowRunID: sourceRun.ID, RootNodeID: "evidence", IdempotencyKey: "rerun-evidence",
 	})
 	if err != nil || rerun.Status != "RUNNING" || rerun.SourceWorkflowRunID == nil || *rerun.SourceWorkflowRunID != sourceRun.ID ||
-		rerun.RerunRootNodeID == nil || *rerun.RerunRootNodeID != "bible" || rerun.ID == sourceRun.ID {
+		rerun.RerunRootNodeID == nil || *rerun.RerunRootNodeID != "evidence" || rerun.ID == sourceRun.ID {
 		t.Fatalf("derive workflow rerun: run=%#v err=%v", rerun, err)
 	}
 	rerunRequest := workflowStarterRequests(starter)[1]
-	if rerunRequest.SourceWorkflowRunID != sourceRun.ID || rerunRequest.RerunRootNodeID != "bible" {
+	if rerunRequest.SourceWorkflowRunID != sourceRun.ID || rerunRequest.RerunRootNodeID != "evidence" {
 		t.Fatalf("rerun Temporal input lost source scope: %#v", rerunRequest)
 	}
 	rerunPlan, err := runtimeService.LoadExecutionPlan(ctx, rerunRequest)
@@ -147,8 +147,7 @@ func TestWorkflowRerunDerivesDirtyClosureAndReusesCanonicalUpstreamProjection(t 
 		t.Fatalf("load rerun execution plan: %v", err)
 	}
 	wantDirtyOrder := []string{
-		"bible", "bible-review", "episodes", "episodes-review", "structure", "structure-review",
-		"storyboard", "storyboard-review", "export",
+		"evidence", "story", "story-review", "bible-review",
 	}
 	actualDirtyOrder := make([]string, 0, len(rerunPlan.Nodes))
 	for _, node := range rerunPlan.Nodes {
@@ -209,18 +208,18 @@ func TestWorkflowRerunDerivesDirtyClosureAndReusesCanonicalUpstreamProjection(t 
 	}
 
 	replayed, err := startService.Rerun(ctx, actor, workflowapp.RerunCommand{
-		SourceWorkflowRunID: sourceRun.ID, RootNodeID: "bible", IdempotencyKey: "rerun-bible",
+		SourceWorkflowRunID: sourceRun.ID, RootNodeID: "evidence", IdempotencyKey: "rerun-evidence",
 	})
 	if err != nil || replayed.ID != rerun.ID || starter.CallCount() != 2 {
 		t.Fatalf("rerun replay created another Temporal start: run=%#v calls=%d err=%v", replayed, starter.CallCount(), err)
 	}
 	if _, err = startService.Rerun(ctx, actor, workflowapp.RerunCommand{
-		SourceWorkflowRunID: sourceRun.ID, RootNodeID: "script", IdempotencyKey: "rerun-bible",
+		SourceWorkflowRunID: sourceRun.ID, RootNodeID: "script", IdempotencyKey: "rerun-evidence",
 	}); err == nil || starter.CallCount() != 2 {
 		t.Fatalf("rerun idempotency key accepted a different root: calls=%d err=%v", starter.CallCount(), err)
 	}
 	if _, err = startService.Rerun(ctx, actor, workflowapp.RerunCommand{
-		SourceWorkflowRunID: sourceRun.ID, RootNodeID: "storyboard", IdempotencyKey: "rerun-invalid-upstream",
+		SourceWorkflowRunID: sourceRun.ID, RootNodeID: "story", IdempotencyKey: "rerun-invalid-upstream",
 	}); err == nil {
 		t.Fatal("rerun accepted a root whose required source upstream was incomplete")
 	}

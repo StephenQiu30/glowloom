@@ -1,8 +1,11 @@
 package domain
 
 import (
+	"encoding/json"
 	"strconv"
 	"time"
+
+	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 )
 
 const (
@@ -38,6 +41,8 @@ type HumanGateOwnerApplication struct {
 	Decision, Executor                               string
 	Candidate                                        NodeInputBinding
 	OutputPort, OutputValueType                      string
+	NodeConfig                                       json.RawMessage
+	FrozenInputs                                     []authoring.FrozenReference
 }
 
 type HumanGateOwnerResult struct {
@@ -96,6 +101,13 @@ func HumanGateOutputMatchesCandidate(
 	candidate NodeInputBinding,
 	output NodeOutputBinding,
 ) bool {
+	if executor == "gate.production_bible_review" {
+		candidateRevision, candidateErr := strconv.ParseInt(candidate.ReferenceVersion, 10, 64)
+		version, versionErr := strconv.Atoi(output.ReferenceVersion)
+		return candidate.ValueType == "story_reconciliation_candidate" && candidateErr == nil && candidateRevision >= 1 &&
+			output.ValueType == "production_bible_version" && versionErr == nil && version >= 1 &&
+			output.ReferenceID != candidate.ReferenceID && len(candidate.ContentHash) == 64 && len(output.ContentHash) == 64
+	}
 	if executor == "gate.generation_image_review" {
 		return candidate.ValueType == "generation_candidate_set" && candidate.ReferenceVersion == "1" &&
 			output.ValueType == "generation_candidate_selection" && output.ReferenceVersion == "1" &&

@@ -48,12 +48,12 @@ func TestCompilerProducesEquivalentDefinitionForGuidedAndCanvas(t *testing.T) {
 		t.Fatal("definition metadata lost the immutable source revision identity")
 	}
 	wantOrder := []string{
-		"script", "bible", "bible-review", "episodes", "episodes-review", "structure", "structure-review", "storyboard", "storyboard-review", "export",
+		"script", "evidence", "story", "story-review", "bible-review",
 	}
 	if !slices.Equal(first.Definition.ExecutionOrder, wantOrder) {
 		t.Fatalf("execution order = %v, want %v", first.Definition.ExecutionOrder, wantOrder)
 	}
-	if len(first.Definition.ExecutionGraph.Nodes) != 10 || len(first.Definition.NodeExecutions) != 10 {
+	if len(first.Definition.ExecutionGraph.Nodes) != 5 || len(first.Definition.NodeExecutions) != 5 {
 		t.Fatalf("unexpected compiled graph: %#v", first.Definition)
 	}
 	humanGates := 0
@@ -65,8 +65,8 @@ func TestCompilerProducesEquivalentDefinitionForGuidedAndCanvas(t *testing.T) {
 			humanGates++
 		}
 	}
-	if humanGates != 4 {
-		t.Fatalf("human gate count = %d, want 4", humanGates)
+	if humanGates != 1 {
+		t.Fatalf("human gate count = %d, want 1", humanGates)
 	}
 	if first.Definition.WorkflowType != "lanverse.episode-production" || first.Definition.WorkflowTypeVersion != "1.0.0" {
 		t.Fatalf("unexpected Temporal workflow binding: %#v", first.Definition)
@@ -146,7 +146,7 @@ func compilerRevision(
 func compilerJourneyGraph() authoring.Graph {
 	node := func(id, key, config string) authoring.Node {
 		version := "1.0.0"
-		if key == "production.episode_plan" {
+		if key == "human.production_bible_review" {
 			version = "2.0.0"
 		}
 		return authoring.Node{ID: id, DefinitionKey: key, DefinitionVersion: version, Config: json.RawMessage(config)}
@@ -156,28 +156,17 @@ func compilerJourneyGraph() authoring.Graph {
 	}
 	return authoring.Graph{
 		Nodes: []authoring.Node{
-			node("export", "production.storyboard_export", `{}`),
-			node("storyboard-review", "human.storyboard_review", `{}`),
-			node("storyboard", "agent.storyboard_draft", `{}`),
-			node("structure-review", "human.episode_structure_review", `{}`),
-			node("structure", "production.episode_structure", `{}`),
-			node("episodes-review", "human.episode_plan_review", `{}`),
-			node("episodes", "production.episode_plan", `{"episode_count":5}`),
-			node("bible-review", "human.production_bible_review", `{}`),
-			node("bible", "agent.production_bible", `{}`),
+			node("bible-review", "human.production_bible_review", `{"expected_bible_version":1}`),
+			node("story-review", "agent.story_review", `{"max_repair_rounds":2}`),
+			node("story", "agent.story_analysis", `{}`),
+			node("evidence", "agent.source_evidence", `{}`),
 			node("script", "input.script_revision", `{"document_revision_id":"00000000-0000-0000-0000-000000000101"}`),
 		},
 		Edges: []authoring.Edge{
-			edge("review-export", "storyboard-review", "storyboards", "export", "storyboards"),
-			edge("storyboard-review", "storyboard", "candidate", "storyboard-review", "candidate"),
-			edge("review-storyboard", "structure-review", "structures", "storyboard", "structures"),
-			edge("structure-review", "structure", "candidate", "structure-review", "candidate"),
-			edge("review-structure", "episodes-review", "episodes", "structure", "episodes"),
-			edge("episodes-review", "episodes", "candidate", "episodes-review", "candidate"),
-			edge("review-episodes", "bible-review", "bible", "episodes", "bible"),
-			edge("script-episodes", "script", "script", "episodes", "script"),
-			edge("bible-review", "bible", "candidate", "bible-review", "candidate"),
-			edge("script-bible", "script", "script", "bible", "script"),
+			edge("review-bible", "story-review", "candidate", "bible-review", "candidate"),
+			edge("story-review", "story", "candidate", "story-review", "candidate"),
+			edge("evidence-story", "evidence", "evidence", "story", "evidence"),
+			edge("script-evidence", "script", "script", "evidence", "script"),
 		},
 	}
 }

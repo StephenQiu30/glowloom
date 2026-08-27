@@ -60,7 +60,7 @@
 - [ ] `SG-REV-007`（同上）：按 Decision ID 幂等 Resume、并发/重启/UNKNOWN 收敛证据。
 - [ ] `SG-REV-008`（同上）：Decision 前 stale 与 Decision 后 baseline 冲突不误套用证据。
 - [x] `SG-PRD-001`（`SG-I08`）：DocumentRevision、Unicode 绝对 Evidence 与两集 coverage。
-- [ ] `SG-PRD-002`（`SG-I11`）：Bible Confirm 只产 Version/Receipt 的数据库事实计数。
+- [x] `SG-PRD-002`（`SG-I11`）：Bible Confirm 只产 Version/Receipt 的数据库事实计数。
 - [ ] `SG-PRD-003`（`SG-I12`）：MaterializeConfirmedBible 单事务、唯一身份、幂等/回滚/反查。
 - [x] `SG-PRD-004`（`SG-I09`、`SG-I12`、`SG-I15`）：同名/别名不得自动合并的负向证据。
 - [ ] `SG-PRD-005`（`SG-I13`、`SG-I14`）：分集边界与 Episode/Published ScriptVersion 全批原子证据。
@@ -221,7 +221,7 @@
 - [x] `SG-I08`：Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate 完成。
 - [x] `SG-I09`：Story analyze/reconcile map-tree 与 Candidate Revision 完成。
 - [x] `SG-I10`：StoryGraph review 与有界 Repair/Gate 完成。
-- [ ] `SG-I11`：Bible Human Gate/Confirm Receipt 且零资产物化完成。
+- [x] `SG-I11`：Bible Human Gate/Confirm Receipt 且零资产物化完成。
 - [ ] `SG-I12`：Confirmed Bible 资产/Specification/State/ProductionBinding 原子物化完成。
 - [ ] `SG-I13`：Episode segmentation Candidate 与 coverage 完成。
 - [ ] `SG-I14`：Episode Plan Gate 与 Episode/Published ScriptVersion 全批物化完成。
@@ -466,4 +466,16 @@
 - 通过范围：以上证据完成 `SGA-REP-004` 与 `SG-I10`。Bible Human Gate、Production Bible Confirm/资产物化、Episode/Shot/Canvas、完整原稿和最终浏览器验收仍未实现；因此 `SG-I11` 以后与 `SGA-JRN-001` 保持未通过，`agent-browser` 按既定顺序未执行。
 - Git：本 Evidence 与实现由描述有界候选审核和自动修复的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 91 条 Requirement 与 `SG-I01`–`SG-I10`，其余保持未通过。下一步继续且只允许完成 Bible Human Gate 与 Production Bible Confirm Receipt，blocker 未清零、Decision/Receipt/Node output 不精确绑定或恢复失败时不得进入资产物化。
+### Production Bible 候选审批与不可变确认（2026-08-28）
+
+- Red 与公共 Gate：独立 Backend/Frontend 测试先证明旧公共 Workflow 只有 Story Review、可变 `ProductionBible` 直确认 API/UI，且 HumanTask 没有精确绑定 current Story Candidate revision。Green 后生产 Definition 增加 `human.production_bible_review@2.0.0`，公共 HumanTask 的 subject 固定为 `story_reconciliation_candidate` 并冻结 candidate id/hash/revision；只有 deterministic gate 与模型 blocker 均清零的 current Candidate 才能进入审批。旧 v1 Definition 仅作为不可变历史 catalog 保留，不再有当前公共入口。
+- 单一事实源与不可变 Owner：唯一 GORM Catalog 新增不可变 `scr_production_bible_versions`，Version 冻结 Project、Story Candidate、Document Revision、Decision、规范内容 Hash 与线性 version number；批准后的 Owner Apply 在同一 PostgreSQL/GORM 事务中重验 exact Candidate/Document/Decision，写入一个 Version 和一个 `production_bible.confirm` Command Receipt。无 Migration、Raw SQL、第二 ORM、第二 SQL 事实源、Agent Writer 或 Kafka Command Topic。
+- 精确绑定与负向零写入：Workflow Node output 只发布 `production_bible_version` exact ref，证据读取并重验已持久化 Version/Receipt。真实数据库事实计数证明成功路径恰好 1 Version + 1 Receipt，旧可变 `ProductionBible`、Artifact、Character/Location Asset、Specification、Episode、Shot 与 StoryGraph 均为 0；Version 的 update/delete 均被拒绝。由此完成 `SG-PRD-002`，而覆盖七类 Gate 的复合 `SG-REV-006`–`008` 只完成 Bible 部分，仍保持未勾选。
+- 恢复、stale 与冲突：同一 Decision/Intent 幂等重放返回同一 Version/Receipt。Temporal Signal 第一次返回 UNKNOWN 时不伪造成功，重试后按既有 Intent/Receipt 收敛且仍只有一份 Owner 事实；Decision 前 Candidate Head 漂移会把任务标记为 stale，Decision 后 Candidate Head 漂移返回 Owner conflict，二者都不误套用、不创建额外 Version/Receipt/Node output。
+- 删除兼容路径：公共 OpenAPI、Backend Handler/Application 以及 Frontend RTK mutation/按钮中的旧可变直确认入口已删除，Workspace 统一引导到 HumanTask Workbench；对应旧 `production_episode_plan_worker_test.go` 依赖已删除的可变 v1 路径，未通过 skip、兼容分支或假实现保留。Episode/Asset 物化将在 confirmed Version 之上由下一独立 Owner Command 实现。
+- 真实 Workflow 与完整 CI：真实 PostgreSQL `16.15`、Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Filebeat/Logstash/Kibana `9.4.4` 下，`gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Workflow 包 `135.756s`；Agent Ruff check/format、Pyright、Pytest 为 `32 passed, 1 skipped`，唯一 skip 仍是已单独验证且需显式 `LANVERSE_TEST_REAL_CODEX=1` 的真实 Codex 集成；Frontend OpenAPI 生成、lint、typecheck、18 个 Vitest 文件 54 项测试与 Next.js `16.2.12` production build 全通过。
+- 镜像与故障部署：开发/生产 Compose 配置、Backend/Frontend/Agent 三镜像和镜像内 Backend 三 Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Bundle 均通过。全新空卷部署中 API、Frontend、Workflow/Event Worker、PostgreSQL/Temporal/MinIO/Kafka/ELK 全部健康；日志 request/trace 可检索且敏感查询值未落库，Filebeat/Logstash/Kibana 停机不影响 Owner/Workflow，Kafka/Elasticsearch 停机时 Event Worker 正确 not-ready 而 Backend/Workflow 保持可用，恢复后日志与检索重新收敛。专属部署已清理并还原原镜像标签，未触碰仓库外服务。
+- 通过范围：Bible Gate 已完成，但 Character/Location Asset、SpecificationVersion、AssetState、ProductionBinding、Episode/Shot/Canvas、完整原稿旅程与最终浏览器验收均未实现；因此 `SG-I12` 以后、`SGA-JRN-001` 和跨七类 Gate 的剩余复合条款保持未通过。`agent-browser` 按约定只在全部开发完成后执行，本次未运行。
+- Git：本 Evidence 与实现由描述候选审批与不可变确认的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 92 条 Requirement 与 `SG-I01`–`SG-I11`，其余保持未通过。下一步继续且只允许消费 confirmed Bible Version，在独立 Backend Owner Command 中原子物化 Character/Location Asset、SpecificationVersion、AssetState 与 ProductionBinding；任何身份歧义、幂等/回滚/反向追踪失败都不得进入 Episode 分段。

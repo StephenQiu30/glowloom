@@ -459,6 +459,7 @@ func (store *Store) Decide(
 		return domain.DecisionResult{}, err
 	}
 	var result domain.DecisionResult
+	stale := false
 	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
 		var task model.HumanTask
 		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, "id = ?", taskID).Error; loadErr != nil {
@@ -489,6 +490,10 @@ func (store *Store) Decide(
 			task.Status != "CLAIMED" || task.ClaimedBy == nil || *task.ClaimedBy != actorID ||
 			task.ClaimToken == nil || *task.ClaimToken != token || task.ClaimExpiresAt == nil || !task.ClaimExpiresAt.After(now) {
 			return conflict("Human task changed before decision")
+		}
+		stale, err = staleProductionBibleCandidateTask(transaction, &task, now)
+		if err != nil || stale {
+			return err
 		}
 		if command.Decision == "selected" && !containsCandidate(task.CandidateIDs, command.SelectedCandidateID) {
 			return conflict("Selected candidate is not bound to the human task")
@@ -527,7 +532,50 @@ func (store *Store) Decide(
 		result = domain.DecisionResult{Task: persistedTask, Decision: decisionDomain(decision)}
 		return storeResultReceipt(ctx, transaction, task.WorkspaceID, decideOperation, command.IdempotencyKey, inputHash, task.ID, actorID, result, now)
 	})
+	if err == nil && stale {
+		return domain.DecisionResult{}, conflict("Production Bible Candidate changed before decision")
+	}
 	return result, err
+}
+
+func staleProductionBibleCandidateTask(transaction *gorm.DB, task *model.HumanTask, now time.Time) (bool, error) {
+	if task.SubjectType != "story_reconciliation_candidate" {
+		return false, nil
+	}
+	var revision model.StageCandidateRevision
+	revisionErr := transaction.First(&revision, "id = ?", task.SubjectID).Error
+	stale := errors.Is(revisionErr, gorm.ErrRecordNotFound)
+	if revisionErr != nil && !stale {
+		return false, revisionErr
+	}
+	if !stale {
+		var head model.StageCandidateHead
+		headErr := transaction.First(&head, "stage_instance_key = ?", revision.StageInstanceKey).Error
+		stale = errors.Is(headErr, gorm.ErrRecordNotFound)
+		if headErr != nil && !stale {
+			return false, headErr
+		}
+		stale = stale || revision.WorkspaceID != task.WorkspaceID || revision.CandidateRevisionHash != task.SubjectHash ||
+			head.CurrentRevisionID != revision.ID || head.CurrentCandidateRevisionHash != revision.CandidateRevisionHash ||
+			head.Revision != revision.RevisionNo
+	}
+	if !stale {
+		return false, nil
+	}
+	result := transaction.Model(&model.HumanTask{}).Where("id = ? AND revision = ?", task.ID, task.Revision).Updates(map[string]any{
+		"status": "STALE", "claimed_by": nil, "claim_token": nil, "claim_expires_at": nil,
+		"revision": task.Revision + 1, "updated_at": now.UTC(),
+	})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if result.RowsAffected != 1 {
+		return false, conflict("Human task changed during Candidate staleness check")
+	}
+	task.Status, task.ClaimedBy, task.ClaimToken, task.ClaimExpiresAt = "STALE", nil, nil, nil
+	task.Revision++
+	task.UpdatedAt = now.UTC()
+	return true, nil
 }
 
 func taskRecord(value domain.HumanTask) (model.HumanTask, error) {
