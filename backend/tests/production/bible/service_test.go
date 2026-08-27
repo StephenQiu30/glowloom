@@ -87,6 +87,27 @@ func (store *fakeBibleStore) CreateBibleVersion(_ context.Context, version domai
 	return nil
 }
 
+func (store *fakeBibleStore) PrepareMaterialization(
+	context.Context,
+	bibleapp.Actor,
+	string,
+	bool,
+) (bibleapp.MaterializationScope, error) {
+	return bibleapp.MaterializationScope{}, bibleapp.ErrNotFound
+}
+
+func (store *fakeBibleStore) CreateMaterialization(context.Context, bibleapp.MaterializationWrite) error {
+	return bibleapp.ErrNotFound
+}
+
+func (store *fakeBibleStore) VerifyMaterialization(
+	context.Context,
+	bibleapp.Actor,
+	domain.Materialization,
+) error {
+	return bibleapp.ErrNotFound
+}
+
 func (store *fakeBibleStore) UpdateReviewDecisions(_ context.Context, bible domain.Bible) error {
 	store.bible = bible
 	return nil

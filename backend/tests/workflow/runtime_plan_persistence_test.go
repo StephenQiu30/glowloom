@@ -114,7 +114,7 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		t.Fatalf("load committed runtime plan: %v", err)
 	}
 	wantOrder := []string{
-		"script", "evidence", "story", "story-review", "bible-review",
+		"script", "evidence", "story", "story-review", "bible-review", "bible-materialization",
 	}
 	actualOrder := make([]string, 0, len(plan.Nodes))
 	for _, node := range plan.Nodes {

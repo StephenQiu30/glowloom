@@ -116,7 +116,7 @@ func TestWorkflowQueryAuthorizesCurrentMembershipAndReturnsNodeProjection(t *tes
 		actualOrder[index] = node.NodeID
 	}
 	wantOrder := []string{
-		"script", "evidence", "story", "story-review", "bible-review",
+		"script", "evidence", "story", "story-review", "bible-review", "bible-materialization",
 	}
 	if view.Run.ID != run.ID || !slices.Equal(actualOrder, wantOrder) {
 		t.Fatalf("workflow query projection: run=%#v nodes=%v", view.Run, actualOrder)

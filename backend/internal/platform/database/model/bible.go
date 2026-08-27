@@ -9,7 +9,12 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrImmutableProductionBibleVersion = errors.New("ProductionBibleVersion is immutable")
+var (
+	ErrImmutableProductionBibleVersion    = errors.New("ProductionBibleVersion is immutable")
+	ErrImmutableBibleSpecificationVersion = errors.New("ProductionBibleSpecificationVersion is immutable")
+	ErrImmutableProductionBinding         = errors.New("ProductionBinding is immutable")
+	ErrImmutableProductionBindingState    = errors.New("ProductionBindingState is immutable")
+)
 
 type ProductionBibleVersion struct {
 	ID                    uuid.UUID              `gorm:"type:uuid;primaryKey"`
@@ -41,6 +46,77 @@ func (*ProductionBibleVersion) BeforeUpdate(*gorm.DB) error {
 }
 func (*ProductionBibleVersion) BeforeDelete(*gorm.DB) error {
 	return ErrImmutableProductionBibleVersion
+}
+
+type ProductionBibleSpecificationVersion struct {
+	ID                   uuid.UUID              `gorm:"type:uuid;primaryKey"`
+	WorkspaceID          uuid.UUID              `gorm:"type:uuid;not null"`
+	ProjectID            uuid.UUID              `gorm:"type:uuid;not null"`
+	AssetID              uuid.UUID              `gorm:"type:uuid;not null;uniqueIndex:uq_scr_bible_spec_version,priority:1;uniqueIndex:uq_scr_bible_spec_content,priority:1"`
+	Kind                 string                 `gorm:"type:varchar(20);not null;check:ck_scr_bible_spec_kind,kind IN ('character','location','prop')"`
+	EntityKey            string                 `gorm:"type:varchar(100);not null"`
+	Version              int                    `gorm:"not null;uniqueIndex:uq_scr_bible_spec_version,priority:2;check:ck_scr_bible_spec_version,version >= 1"`
+	SourceBibleVersionID uuid.UUID              `gorm:"type:uuid;not null"`
+	Snapshot             datatypes.JSON         `gorm:"type:jsonb;not null;check:ck_scr_bible_spec_snapshot,jsonb_typeof(snapshot) = 'object'"`
+	ContentHash          string                 `gorm:"type:char(64);not null;uniqueIndex:uq_scr_bible_spec_content,priority:2;check:ck_scr_bible_spec_hash,char_length(content_hash) = 64"`
+	CreatedBy            uuid.UUID              `gorm:"type:uuid;not null"`
+	CreatedAt            time.Time              `gorm:"type:timestamptz;not null"`
+	Workspace            Workspace              `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project              Project                `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Asset                Asset                  `gorm:"foreignKey:AssetID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	SourceBibleVersion   ProductionBibleVersion `gorm:"foreignKey:SourceBibleVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator              UserAccount            `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (ProductionBibleSpecificationVersion) TableName() string {
+	return "scr_production_bible_specification_versions"
+}
+func (*ProductionBibleSpecificationVersion) BeforeUpdate(*gorm.DB) error {
+	return ErrImmutableBibleSpecificationVersion
+}
+func (*ProductionBibleSpecificationVersion) BeforeDelete(*gorm.DB) error {
+	return ErrImmutableBibleSpecificationVersion
+}
+
+type ProductionBinding struct {
+	ID                     uuid.UUID                           `gorm:"type:uuid;primaryKey"`
+	WorkspaceID            uuid.UUID                           `gorm:"type:uuid;not null"`
+	ProjectID              uuid.UUID                           `gorm:"type:uuid;not null"`
+	BibleVersionID         uuid.UUID                           `gorm:"type:uuid;not null;uniqueIndex:uq_scr_production_binding_entity,priority:1;uniqueIndex:uq_scr_production_binding_asset,priority:1"`
+	BibleVersionHash       string                              `gorm:"type:char(64);not null;check:ck_scr_production_binding_bible_hash,char_length(bible_version_hash) = 64"`
+	EntityKey              string                              `gorm:"type:varchar(100);not null;uniqueIndex:uq_scr_production_binding_entity,priority:2"`
+	AssetID                uuid.UUID                           `gorm:"type:uuid;not null;uniqueIndex:uq_scr_production_binding_asset,priority:2"`
+	SpecificationVersionID uuid.UUID                           `gorm:"type:uuid;not null;index"`
+	Revision               int                                 `gorm:"not null;check:ck_scr_production_binding_revision,revision = 1"`
+	ContentHash            string                              `gorm:"type:char(64);not null;uniqueIndex;check:ck_scr_production_binding_hash,char_length(content_hash) = 64"`
+	CreatedBy              uuid.UUID                           `gorm:"type:uuid;not null"`
+	CreatedAt              time.Time                           `gorm:"type:timestamptz;not null"`
+	Workspace              Workspace                           `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project                Project                             `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	BibleVersion           ProductionBibleVersion              `gorm:"foreignKey:BibleVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Asset                  Asset                               `gorm:"foreignKey:AssetID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	SpecificationVersion   ProductionBibleSpecificationVersion `gorm:"foreignKey:SpecificationVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator                UserAccount                         `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (ProductionBinding) TableName() string            { return "scr_production_bindings" }
+func (*ProductionBinding) BeforeUpdate(*gorm.DB) error { return ErrImmutableProductionBinding }
+func (*ProductionBinding) BeforeDelete(*gorm.DB) error { return ErrImmutableProductionBinding }
+
+type ProductionBindingState struct {
+	ProductionBindingID uuid.UUID         `gorm:"type:uuid;primaryKey;uniqueIndex:uq_scr_production_binding_state_position,priority:1"`
+	AssetStateID        uuid.UUID         `gorm:"type:uuid;primaryKey"`
+	Position            int               `gorm:"not null;uniqueIndex:uq_scr_production_binding_state_position,priority:2;check:ck_scr_production_binding_state_position,position >= 1"`
+	ProductionBinding   ProductionBinding `gorm:"foreignKey:ProductionBindingID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	AssetState          AssetState        `gorm:"foreignKey:AssetStateID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (ProductionBindingState) TableName() string { return "scr_production_binding_states" }
+func (*ProductionBindingState) BeforeUpdate(*gorm.DB) error {
+	return ErrImmutableProductionBindingState
+}
+func (*ProductionBindingState) BeforeDelete(*gorm.DB) error {
+	return ErrImmutableProductionBindingState
 }
 
 // ProductionBible is the durable Backend-owned record for one immutable script

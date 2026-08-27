@@ -94,12 +94,14 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "story", DefinitionKey: "agent.story_analysis", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "story-review", DefinitionKey: "agent.story_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"max_repair_rounds":2}`)},
 				{ID: "bible-review", DefinitionKey: "human.production_bible_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{"expected_bible_version":1}`)},
+				{ID: "bible-materialization", DefinitionKey: "production.bible_materialization", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
 				{ID: "evidence-to-story", FromNodeID: "evidence", FromPort: "evidence", ToNodeID: "story", ToPort: "evidence"},
 				{ID: "story-to-review", FromNodeID: "story", FromPort: "candidate", ToNodeID: "story-review", ToPort: "candidate"},
 				{ID: "review-to-bible", FromNodeID: "story-review", FromPort: "candidate", ToNodeID: "bible-review", ToPort: "candidate"},
+				{ID: "bible-to-materialization", FromNodeID: "bible-review", FromPort: "bible", ToNodeID: "bible-materialization", ToPort: "bible"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -405,6 +407,96 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	if err = database.Where("review_decision_id = ?", decision.Decision.ID).First(&version).Error; err != nil {
 		t.Fatalf("load confirmed Production Bible Version after unknown Signal: %v", err)
 	}
+	var confirmReceipt model.CommandReceipt
+	if err = database.Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?",
+		fixture.workspaceID, "production_bible.confirm", version.ID,
+	).First(&confirmReceipt).Error; err != nil {
+		t.Fatalf("load Production Bible confirmation Receipt: %v", err)
+	}
+	var confirmedSnapshot bibledomain.StoryReconciliationCandidate
+	if err = json.Unmarshal(version.Snapshot, &confirmedSnapshot); err != nil {
+		t.Fatalf("decode confirmed Production Bible Version: %v", err)
+	}
+	expectedAssetCount, expectedStateCount, generatedBeforeReceipt := 0, 0, 0
+	for _, entity := range confirmedSnapshot.CanonicalEntities {
+		if entity.Kind != "character" && entity.Kind != "location" && entity.Kind != "prop" {
+			continue
+		}
+		expectedAssetCount++
+		stateCount, hasBase := len(entity.States), false
+		for _, state := range entity.States {
+			hasBase = hasBase || state.StateKey == "base"
+		}
+		if !hasBase {
+			stateCount++
+		}
+		expectedStateCount += stateCount
+		generatedBeforeReceipt += 3 + stateCount
+	}
+	if expectedAssetCount == 0 || expectedStateCount < expectedAssetCount {
+		t.Fatalf("confirmed Production Bible has no materializable identities: %#v", confirmedSnapshot)
+	}
+	generatedIDs := 0
+	generatedFactIDs := make([]string, 0, generatedBeforeReceipt)
+	failingMaterializer := bibleapp.NewService(bibleStore, bibleapp.Config{
+		Now: func() time.Time { return time.Now().UTC() },
+		NewID: func() string {
+			generatedIDs++
+			if generatedIDs == generatedBeforeReceipt+1 {
+				return confirmReceipt.ID.String()
+			}
+			id := uuid.NewString()
+			generatedFactIDs = append(generatedFactIDs, id)
+			return id
+		},
+	})
+	_, err = failingMaterializer.MaterializeConfirmedBible(ctx, bibleapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, bibleapp.MaterializeCommand{
+		BibleVersionID: version.ID.String(), ExpectedVersion: version.Version,
+		ExpectedContentHash: version.ContentHash, IdempotencyKey: "story-bible-materialization-rollback",
+	})
+	var materializationConflict *bibleapp.Error
+	if !errors.As(err, &materializationConflict) || materializationConflict.Code != "resource_conflict" {
+		t.Fatalf("forced materialization Receipt collision error=%#v", err)
+	}
+	var rolledBackAssetCount, rolledBackStateCount, rolledBackSpecificationCount int64
+	var rolledBackBindingCount, rolledBackBindingStateCount, rolledBackReceiptCount int64
+	if err = database.Model(&model.Asset{}).Where("project_id = ?", fixture.projectID).
+		Count(&rolledBackAssetCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.AssetState{}).Where("project_id = ?", fixture.projectID).
+		Count(&rolledBackStateCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.ProductionBibleSpecificationVersion{}).Where("project_id = ?", fixture.projectID).
+		Count(&rolledBackSpecificationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.ProductionBinding{}).Where("bible_version_id = ?", version.ID).
+		Count(&rolledBackBindingCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.ProductionBindingState{}).Where("production_binding_id IN ?", generatedFactIDs).
+		Count(&rolledBackBindingStateCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND idempotency_key = ?",
+		fixture.workspaceID, "production_bible.materialize_confirmed", "story-bible-materialization-rollback",
+	).Count(&rolledBackReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if rolledBackAssetCount != 0 || rolledBackStateCount != 0 || rolledBackSpecificationCount != 0 ||
+		rolledBackBindingCount != 0 || rolledBackBindingStateCount != 0 || rolledBackReceiptCount != 0 {
+		t.Fatalf(
+			"failed Production Bible materialization leaked facts: assets=%d states=%d specifications=%d bindings=%d binding_states=%d receipts=%d",
+			rolledBackAssetCount, rolledBackStateCount, rolledBackSpecificationCount,
+			rolledBackBindingCount, rolledBackBindingStateCount, rolledBackReceiptCount,
+		)
+	}
 	var versionCount, receiptCount, legacyBibleCount, artifactCount, episodeCount, shotCount, storyGraphCount int64
 	for target, destination := range map[any]*int64{
 		&model.ProductionBibleVersion{}: &versionCount,
@@ -461,6 +553,86 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		bibleOutput.Bindings[0].ReferenceID != version.ID.String() ||
 		bibleOutput.Bindings[0].ReferenceVersion != "1" || bibleOutput.Bindings[0].ContentHash != version.ContentHash {
 		t.Fatalf("Production Bible Gate output=%#v node=%#v err=%v", bibleOutput, bibleGateNode, err)
+	}
+	var materializationNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "bible-materialization").
+		First(&materializationNode).Error; err != nil {
+		t.Fatalf("load Production Bible materialization NodeRun: %v", err)
+	}
+	materializationOutput, _, materializationOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(materializationNode.Output))
+	if err != nil || materializationNode.Status != "SUCCEEDED" || materializationNode.OutputHash == nil ||
+		*materializationNode.OutputHash != materializationOutputHash || len(materializationOutput.Bindings) != 1 ||
+		materializationOutput.Bindings[0].Port != "materialization" ||
+		materializationOutput.Bindings[0].ValueType != "production_bible_materialization" ||
+		materializationOutput.Bindings[0].ReferenceID != version.ID.String() ||
+		materializationOutput.Bindings[0].ReferenceVersion != "1" {
+		t.Fatalf("Production Bible materialization output=%#v node=%#v err=%v", materializationOutput, materializationNode, err)
+	}
+	var assets []model.Asset
+	if err = database.Where("project_id = ?", fixture.projectID).Order("identity_key").Find(&assets).Error; err != nil {
+		t.Fatal(err)
+	}
+	assetIDs := make([]uuid.UUID, 0, len(assets))
+	for _, asset := range assets {
+		assetIDs = append(assetIDs, asset.ID)
+	}
+	var states []model.AssetState
+	if err = database.Where("asset_id IN ?", assetIDs).Order("asset_id, state_key, revision").Find(&states).Error; err != nil {
+		t.Fatal(err)
+	}
+	var specifications []model.ProductionBibleSpecificationVersion
+	if err = database.Where("source_bible_version_id = ?", version.ID).Order("asset_id, version").Find(&specifications).Error; err != nil {
+		t.Fatal(err)
+	}
+	var bindings []model.ProductionBinding
+	if err = database.Where("bible_version_id = ?", version.ID).Order("entity_key").Find(&bindings).Error; err != nil {
+		t.Fatal(err)
+	}
+	bindingIDs := make([]uuid.UUID, 0, len(bindings))
+	for _, binding := range bindings {
+		bindingIDs = append(bindingIDs, binding.ID)
+	}
+	var bindingStateCount, materializationReceiptCount int64
+	if err = database.Model(&model.ProductionBindingState{}).Where("production_binding_id IN ?", bindingIDs).
+		Count(&bindingStateCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?",
+		fixture.workspaceID, "production_bible.materialize_confirmed", version.ID,
+	).Count(&materializationReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(assets) != expectedAssetCount || len(states) != expectedStateCount ||
+		len(specifications) != expectedAssetCount || len(bindings) != expectedAssetCount ||
+		bindingStateCount != int64(expectedStateCount) || materializationReceiptCount != 1 ||
+		materializationOutput.Bindings[0].ContentHash == version.ContentHash {
+		t.Fatalf(
+			"Production Bible materialization facts: assets=%d states=%d specifications=%d bindings=%d binding_states=%d receipts=%d output=%#v",
+			len(assets), len(states), len(specifications), len(bindings), bindingStateCount,
+			materializationReceiptCount, materializationOutput,
+		)
+	}
+	var bindingState model.ProductionBindingState
+	if err = database.Where("production_binding_id IN ?", bindingIDs).Order("production_binding_id, position").
+		First(&bindingState).Error; err != nil {
+		t.Fatalf("load Production Binding State: %v", err)
+	}
+	immutableWrites := []struct {
+		name string
+		err  error
+		want error
+	}{
+		{"Asset update", database.Model(&assets[0]).Update("identity_key", "character:drift").Error, model.ErrImmutableAsset},
+		{"AssetState delete", database.Delete(&states[0]).Error, model.ErrImmutableAssetState},
+		{"SpecificationVersion update", database.Model(&specifications[0]).Update("version", 2).Error, model.ErrImmutableBibleSpecificationVersion},
+		{"ProductionBinding delete", database.Delete(&bindings[0]).Error, model.ErrImmutableProductionBinding},
+		{"ProductionBindingState delete", database.Delete(&bindingState).Error, model.ErrImmutableProductionBindingState},
+	}
+	for _, write := range immutableWrites {
+		if !errors.Is(write.err, write.want) {
+			t.Fatalf("%s error=%v", write.name, write.err)
+		}
 	}
 	var confirmedCandidate, parentCandidate model.StageCandidateRevision
 	if err = database.First(&confirmedCandidate, "id = ?", version.CandidateRevisionID).Error; err != nil {

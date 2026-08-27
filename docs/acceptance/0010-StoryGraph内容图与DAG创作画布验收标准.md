@@ -61,7 +61,7 @@
 - [ ] `SG-REV-008`（同上）：Decision 前 stale 与 Decision 后 baseline 冲突不误套用证据。
 - [x] `SG-PRD-001`（`SG-I08`）：DocumentRevision、Unicode 绝对 Evidence 与两集 coverage。
 - [x] `SG-PRD-002`（`SG-I11`）：Bible Confirm 只产 Version/Receipt 的数据库事实计数。
-- [ ] `SG-PRD-003`（`SG-I12`）：MaterializeConfirmedBible 单事务、唯一身份、幂等/回滚/反查。
+- [x] `SG-PRD-003`（`SG-I12`）：MaterializeConfirmedBible 单事务、唯一身份、幂等/回滚/反查。
 - [x] `SG-PRD-004`（`SG-I09`、`SG-I12`、`SG-I15`）：同名/别名不得自动合并的负向证据。
 - [ ] `SG-PRD-005`（`SG-I13`、`SG-I14`）：分集边界与 Episode/Published ScriptVersion 全批原子证据。
 - [ ] `SG-PRD-006`（`SG-I15`、`SG-I16`）：Scene/Dialogue/Beat/Occurrence/Claim 全批应用与未知事实拒绝。
@@ -222,7 +222,7 @@
 - [x] `SG-I09`：Story analyze/reconcile map-tree 与 Candidate Revision 完成。
 - [x] `SG-I10`：StoryGraph review 与有界 Repair/Gate 完成。
 - [x] `SG-I11`：Bible Human Gate/Confirm Receipt 且零资产物化完成。
-- [ ] `SG-I12`：Confirmed Bible 资产/Specification/State/ProductionBinding 原子物化完成。
+- [x] `SG-I12`：Confirmed Bible 资产/Specification/State/ProductionBinding 原子物化完成。
 - [ ] `SG-I13`：Episode segmentation Candidate 与 coverage 完成。
 - [ ] `SG-I14`：Episode Plan Gate 与 Episode/Published ScriptVersion 全批物化完成。
 - [ ] `SG-I15`：Episode analyze/reconcile 与 Scene/Beat/Occurrence/Claim Candidate 完成。
@@ -478,4 +478,16 @@
 - 通过范围：Bible Gate 已完成，但 Character/Location Asset、SpecificationVersion、AssetState、ProductionBinding、Episode/Shot/Canvas、完整原稿旅程与最终浏览器验收均未实现；因此 `SG-I12` 以后、`SGA-JRN-001` 和跨七类 Gate 的剩余复合条款保持未通过。`agent-browser` 按约定只在全部开发完成后执行，本次未运行。
 - Git：本 Evidence 与实现由描述候选审批与不可变确认的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 92 条 Requirement 与 `SG-I01`–`SG-I11`，其余保持未通过。下一步继续且只允许消费 confirmed Bible Version，在独立 Backend Owner Command 中原子物化 Character/Location Asset、SpecificationVersion、AssetState 与 ProductionBinding；任何身份歧义、幂等/回滚/反向追踪失败都不得进入 Episode 分段。
+### Confirmed Bible 资产与生产绑定原子物化（2026-08-28）
+
+- Red 与输入边界：独立 `backend/tests/production/bible/materialization_service_test.go` 先固定 exact Bible Version id/version/content hash、同名不同 Entity Key、Character/Location/Prop、确定性 `base` State、幂等 Receipt、跨版本事实复用和 drift conflict；Workflow 旅程先要求 Bible Gate 后存在第六个物化节点。Green 后该节点只接受 `production_bible_version` exact ref，配置必须为空，输出为 `production_bible_materialization`，不读取 current/latest 或 Candidate 临时结果。
+- 单一 SQL 事实源与职责：唯一 GORM Model Catalog 增加不可变 Asset、AssetState、ProductionBibleSpecificationVersion、ProductionBinding 与 Binding-State 事实；Backend Application 负责身份、版本、Hash、复用和冲突策略，`adapter/gormdb` 只负责锁、事务和持久化。没有 Migration 文件/表、Raw SQL、第二 ORM、第二数据库、Agent Writer、Kafka Command Topic 或第二 Workflow 引擎；Agent 仍只产生 Candidate。
+- 身份、状态与复用：物化只按稳定 `EntityKey` 识别 Asset，同名 Character 的两个不同 Key 保持两个 Asset；Character、Location、Prop 都产生独立 Specification 和 Binding。没有显式 `base` 的 Asset 从 stable spec 确定性生成一份 `base` State，显式 state 继续保留；下一 Bible Version 的完全相同 Asset/Specification/State 复用既有不可变事实，只创建指向新 Bible Version 的 Binding，不复制身份或规范版本。
+- 原子事务、幂等与反查：Backend 在同一共享 GORM 事务中锁定并重验 confirmed Version 与项目权限，创建或复用全部事实，最后写 `production_bible.materialize_confirmed` Receipt。相同 Intent 重放返回同一 Materialization/Receipt；相同幂等键但输入漂移返回 conflict。真实旅程让最终 Receipt ID 与既有 Confirm Receipt 冲突后，Asset、Specification、State、Binding、Binding-State 和 Materialization Receipt 计数全部回到零；恢复同一 Temporal Signal 后只生成一组事实，可从 Binding 精确反查 Bible Version、Asset、Specification 与 State。
+- 不可变与真实 Workflow：Asset、AssetState、SpecificationVersion、ProductionBinding 和 Binding-State 的 update/delete 均由数据库回调拒绝。真实 PostgreSQL `16.15` 与 Temporal 中，`Script → Source Evidence → Story Analysis → Story Review/Repair → Production Bible Gate → Bible Materialization` 连续完成，物化节点只在 confirmed Gate 后运行；定向旅程最终通过，耗时 `35.379s`，且成功前仍保持旧可变 ProductionBible、Artifact、Episode、Shot、StoryGraph 为零。
+- 当前完整 CI：最终 Backend 在全新数据库及真实 Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Filebeat/Logstash/Kibana `9.4.4` 下通过 `test -z "$(gofmt -l .)"`、`go vet ./...`、`go test -count=1 -p 1 ./...`，Workflow 包 `141.706s`。Agent 使用隔离 Python `3.11` 执行 Ruff check/format、Pyright、Pytest，结果 `32 passed, 1 skipped`；唯一 skip 是需显式本地 Codex 登录的 opt-in 集成。Frontend `npm ci`、OpenAPI 生成/零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试和 Next.js `16.2.12` production build 均通过，仓库 hygiene 通过。
+- 镜像与故障部署：开发/生产 Compose 配置、Backend/Frontend/Agent 三镜像重建，Backend 三 Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Bundle 探针均通过。最终隔离部署使用真实 PostgreSQL/Temporal/MinIO/Kafka/ELK，验证 API/Frontend/Workflow/Event Worker、日志脱敏与检索；Filebeat/Logstash/Kibana 停机不影响 Owner/Workflow，Kafka/Elasticsearch 停机时 Event Worker 正确返回 503 且 Backend/Workflow 保持可用，恢复后重新 ready 并继续摄取。此前三次本地尝试分别在宿主 MinIO/PostgreSQL 端口占用和一次错误宿主端口替换处于验证前或自检阶段失败，修正验收环境后原 CI 剧本完整通过；专属部署容器、网络和 Volume 已精确清理。
+- 通过范围：以上证据完成 `SG-PRD-003` 与 `SG-I12`。Episode segmentation/Owner Apply、跨集多 State 全链、Shot/Canvas、完整原稿复合旅程与最终浏览器验收仍未完成，对应复合条款保持未勾选。`agent-browser` 按约定只在全部开发完成后执行，本次未运行。
+- Git：本 Evidence 与实现由描述确认版本原子资产物化的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 93 条 Requirement 与 `SG-I01`–`SG-I12`，其余保持未通过。下一步只允许在当前 confirmed Bible Materialization 上接入 Episode segmentation Candidate，先证明全文 coverage、无重叠/缺口、稳定顺序与恢复；该步仍不得创建 Episode Owner 事实。

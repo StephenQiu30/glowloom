@@ -48,12 +48,12 @@ func TestCompilerProducesEquivalentDefinitionForGuidedAndCanvas(t *testing.T) {
 		t.Fatal("definition metadata lost the immutable source revision identity")
 	}
 	wantOrder := []string{
-		"script", "evidence", "story", "story-review", "bible-review",
+		"script", "evidence", "story", "story-review", "bible-review", "bible-materialization",
 	}
 	if !slices.Equal(first.Definition.ExecutionOrder, wantOrder) {
 		t.Fatalf("execution order = %v, want %v", first.Definition.ExecutionOrder, wantOrder)
 	}
-	if len(first.Definition.ExecutionGraph.Nodes) != 5 || len(first.Definition.NodeExecutions) != 5 {
+	if len(first.Definition.ExecutionGraph.Nodes) != 6 || len(first.Definition.NodeExecutions) != 6 {
 		t.Fatalf("unexpected compiled graph: %#v", first.Definition)
 	}
 	humanGates := 0
@@ -156,6 +156,7 @@ func compilerJourneyGraph() authoring.Graph {
 	}
 	return authoring.Graph{
 		Nodes: []authoring.Node{
+			node("bible-materialization", "production.bible_materialization", `{}`),
 			node("bible-review", "human.production_bible_review", `{"expected_bible_version":1}`),
 			node("story-review", "agent.story_review", `{"max_repair_rounds":2}`),
 			node("story", "agent.story_analysis", `{}`),
@@ -163,6 +164,7 @@ func compilerJourneyGraph() authoring.Graph {
 			node("script", "input.script_revision", `{"document_revision_id":"00000000-0000-0000-0000-000000000101"}`),
 		},
 		Edges: []authoring.Edge{
+			edge("bible-materialization", "bible-review", "bible", "bible-materialization", "bible"),
 			edge("review-bible", "story-review", "candidate", "bible-review", "candidate"),
 			edge("story-review", "story", "candidate", "story-review", "candidate"),
 			edge("evidence-story", "evidence", "evidence", "story", "evidence"),

@@ -30,6 +30,7 @@ const (
 	storyAnalysisExecutor          = "activity.story_analysis"
 	storyReviewExecutor            = "activity.story_review"
 	productionBibleExecutor        = "activity.production_bible"
+	bibleMaterializationExecutor   = "activity.production_bible_materialization"
 	episodePlanExecutor            = "activity.episode_plan"
 	episodeStructureExecutor       = "activity.episode_structure"
 	storyboardDraftExecutor        = "activity.storyboard_draft"
@@ -49,6 +50,7 @@ type ScriptSource interface {
 type BibleCandidateOwner interface {
 	Create(context.Context, bibleapp.Actor, bibleapp.CreateCommand) (bibledomain.Bible, error)
 	Get(context.Context, bibleapp.Actor, string) (bibledomain.Bible, error)
+	MaterializeConfirmedBible(context.Context, bibleapp.Actor, bibleapp.MaterializeCommand) (bibleapp.MaterializeResult, error)
 }
 
 type SourceEvidenceOwner interface {
@@ -139,6 +141,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeStoryReview(ctx, command)
 	case productionBibleExecutor:
 		return executor.executeProductionBible(ctx, command)
+	case bibleMaterializationExecutor:
+		return executor.executeBibleMaterialization(ctx, command)
 	case episodePlanExecutor:
 		return executor.executeEpisodePlan(ctx, command)
 	case episodeStructureExecutor:
@@ -1060,6 +1064,59 @@ func (executor *NodeExecutor) executeProductionBible(
 		Bindings: []domain.NodeOutputBinding{{
 			Port: "candidate", ValueType: "production_bible_candidate", ReferenceID: bible.ID,
 			ReferenceVersion: strconv.Itoa(bible.Revision), ContentHash: *bible.ResultHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeBibleMaterialization(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.bibles == nil {
+		return domain.NodeExecutorResult{}, errors.New("Production Bible materialization owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "materialization" ||
+		command.OutputPorts[0].ValueType != "production_bible_materialization" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production Bible materialization node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production Bible materialization node config")
+	}
+	binding := input.Bindings[0]
+	version, parseErr := strconv.Atoi(binding.ReferenceVersion)
+	if parseErr != nil || version < 1 || binding.Port != "bible" || binding.ValueType != "production_bible_version" ||
+		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "bible" ||
+		strings.TrimSpace(binding.SourceNodeID) == "" || !workflowContentHashPattern.MatchString(binding.ContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Production Bible Version input has drifted")
+	}
+	result, err := executor.bibles.MaterializeConfirmedBible(ctx, bibleapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, bibleapp.MaterializeCommand{
+		BibleVersionID: binding.ReferenceID, ExpectedVersion: version,
+		ExpectedContentHash: binding.ContentHash, IdempotencyKey: command.IdempotencyKey,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if result.Materialization.BibleVersionID != binding.ReferenceID ||
+		result.Materialization.BibleVersionHash != binding.ContentHash ||
+		!workflowContentHashPattern.MatchString(result.Materialization.ContentHash) ||
+		result.Receipt.ResourceID != binding.ReferenceID || result.Receipt.Operation != "production_bible.materialize_confirmed" {
+		return domain.NodeExecutorResult{}, errors.New("Production Bible materialization result does not match workflow input")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "materialization", ValueType: "production_bible_materialization",
+			ReferenceID: binding.ReferenceID, ReferenceVersion: binding.ReferenceVersion,
+			ContentHash: result.Materialization.ContentHash,
 		}},
 	})
 	if err != nil {

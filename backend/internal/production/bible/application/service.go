@@ -58,6 +58,9 @@ type Repository interface {
 	CandidateConfirmation(context.Context, Actor, ConfirmCommand, bool) (CandidateConfirmation, error)
 	GetBibleVersion(context.Context, Actor, string) (domain.ProductionBibleVersion, error)
 	CreateBibleVersion(context.Context, domain.ProductionBibleVersion) error
+	PrepareMaterialization(context.Context, Actor, string, bool) (MaterializationScope, error)
+	CreateMaterialization(context.Context, MaterializationWrite) error
+	VerifyMaterialization(context.Context, Actor, domain.Materialization) error
 	UpdateReviewDecisions(context.Context, domain.Bible) error
 	ResumeBible(context.Context, domain.Bible) error
 }

@@ -1,10 +1,59 @@
 package model
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
+
+var (
+	ErrImmutableAsset      = errors.New("Asset is immutable")
+	ErrImmutableAssetState = errors.New("AssetState is immutable")
+)
+
+type Asset struct {
+	ID          uuid.UUID   `gorm:"type:uuid;primaryKey"`
+	WorkspaceID uuid.UUID   `gorm:"type:uuid;not null"`
+	ProjectID   uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_ast_asset_identity,priority:1"`
+	Kind        string      `gorm:"type:varchar(20);not null;check:ck_ast_asset_kind,kind IN ('character','location','prop')"`
+	IdentityKey string      `gorm:"type:varchar(100);not null;uniqueIndex:uq_ast_asset_identity,priority:2"`
+	Revision    int         `gorm:"not null;check:ck_ast_asset_revision,revision = 1"`
+	ContentHash string      `gorm:"type:char(64);not null;check:ck_ast_asset_hash,char_length(content_hash) = 64"`
+	CreatedBy   uuid.UUID   `gorm:"type:uuid;not null"`
+	CreatedAt   time.Time   `gorm:"type:timestamptz;not null"`
+	Workspace   Workspace   `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project     Project     `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator     UserAccount `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (Asset) TableName() string            { return "ast_assets" }
+func (*Asset) BeforeUpdate(*gorm.DB) error { return ErrImmutableAsset }
+func (*Asset) BeforeDelete(*gorm.DB) error { return ErrImmutableAsset }
+
+type AssetState struct {
+	ID          uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	WorkspaceID uuid.UUID      `gorm:"type:uuid;not null"`
+	ProjectID   uuid.UUID      `gorm:"type:uuid;not null"`
+	AssetID     uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:uq_ast_asset_state_revision,priority:1;uniqueIndex:uq_ast_asset_state_content,priority:1"`
+	StateKey    string         `gorm:"type:varchar(80);not null;uniqueIndex:uq_ast_asset_state_revision,priority:2;uniqueIndex:uq_ast_asset_state_content,priority:2"`
+	Label       string         `gorm:"type:varchar(160);not null"`
+	Revision    int            `gorm:"not null;uniqueIndex:uq_ast_asset_state_revision,priority:3;check:ck_ast_asset_state_revision,revision >= 1"`
+	Snapshot    datatypes.JSON `gorm:"type:jsonb;not null;check:ck_ast_asset_state_snapshot,jsonb_typeof(snapshot) = 'object'"`
+	ContentHash string         `gorm:"type:char(64);not null;uniqueIndex:uq_ast_asset_state_content,priority:3;check:ck_ast_asset_state_hash,char_length(content_hash) = 64"`
+	CreatedBy   uuid.UUID      `gorm:"type:uuid;not null"`
+	CreatedAt   time.Time      `gorm:"type:timestamptz;not null"`
+	Workspace   Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project     Project        `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Asset       Asset          `gorm:"foreignKey:AssetID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator     UserAccount    `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (AssetState) TableName() string            { return "ast_asset_states" }
+func (*AssetState) BeforeUpdate(*gorm.DB) error { return ErrImmutableAssetState }
+func (*AssetState) BeforeDelete(*gorm.DB) error { return ErrImmutableAssetState }
 
 type Artifact struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey"`

@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "6.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "7.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -30,6 +30,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"human.production_bible_review@2.0.0",
 		"human.storyboard_review@1.0.0",
 		"input.script_revision@1.0.0",
+		"production.bible_materialization@1.0.0",
 		"production.episode_plan@2.0.0",
 		"production.episode_structure@1.0.0",
 		"production.storyboard_export@1.0.0",
@@ -45,6 +46,27 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
 	}
+}
+
+func TestProductionBibleMaterializationConsumesConfirmedVersionAndPublishesBindingSnapshot(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.Key != "production.bible_materialization" {
+			continue
+		}
+		if definition.Executor != "activity.production_bible_materialization" || definition.CachePolicy != "never" ||
+			definition.RiskLevel != "low" || len(definition.InputPorts) != 1 || len(definition.OutputPorts) != 1 ||
+			definition.InputPorts[0].Key != "bible" || definition.InputPorts[0].ValueType != "production_bible_version" ||
+			definition.OutputPorts[0].Key != "materialization" ||
+			definition.OutputPorts[0].ValueType != "production_bible_materialization" {
+			t.Fatalf("Production Bible materialization contract = %#v", definition)
+		}
+		return
+	}
+	t.Fatal("Production Bible materialization is absent from the system catalog")
 }
 
 func TestProductionBibleHumanGateConsumesReviewedStoryCandidateAndPublishesVersion(t *testing.T) {
@@ -269,12 +291,14 @@ func storyToBibleGraph() authoring.Graph {
 			node("story", "agent.story_analysis", `{}`),
 			node("story-review", "agent.story_review", `{"max_repair_rounds":2}`),
 			node("bible-review", "human.production_bible_review", `{"expected_bible_version":1}`),
+			node("bible-materialization", "production.bible_materialization", `{}`),
 		},
 		Edges: []authoring.Edge{
 			edge("script-evidence", "script", "script", "evidence", "script"),
 			edge("evidence-story", "evidence", "evidence", "story", "evidence"),
 			edge("story-review", "story", "candidate", "story-review", "candidate"),
 			edge("review-bible", "story-review", "candidate", "bible-review", "candidate"),
+			edge("bible-materialization", "bible-review", "bible", "bible-materialization", "bible"),
 		},
 	}
 }

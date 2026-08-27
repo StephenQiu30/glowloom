@@ -147,7 +147,7 @@ func TestWorkflowRerunDerivesDirtyClosureAndReusesCanonicalUpstreamProjection(t 
 		t.Fatalf("load rerun execution plan: %v", err)
 	}
 	wantDirtyOrder := []string{
-		"evidence", "story", "story-review", "bible-review",
+		"evidence", "story", "story-review", "bible-review", "bible-materialization",
 	}
 	actualDirtyOrder := make([]string, 0, len(rerunPlan.Nodes))
 	for _, node := range rerunPlan.Nodes {
