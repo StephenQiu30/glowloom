@@ -101,3 +101,56 @@ func TestStoryCandidatesRejectEvidenceOutsideExactUpstreamSet(t *testing.T) {
 		t.Fatal("story analysis accepted evidence absent from its exact upstream Candidate Revision")
 	}
 }
+
+func TestStoryReconciliationRejectsNameBasedIdentityMerge(t *testing.T) {
+	firstEvidence := domain.Evidence{
+		SourceStart: 3, SourceEnd: 5, TextHash: domain.SourceTextHash("林一"), ExactAnchor: "林一",
+	}
+	secondEvidence := domain.Evidence{
+		SourceStart: 30, SourceEnd: 32, TextHash: domain.SourceTextHash("林一"), ExactAnchor: "林一",
+	}
+	first := storyAnalysisCandidateWithEntity("character:lin-yi-a", "林一", []string{"小林"}, firstEvidence)
+	second := storyAnalysisCandidateWithEntity("character:lin-yi-b", "林一", []string{"小林"}, secondEvidence)
+	second.Entities[0].EpisodeNumbers = []int{2}
+
+	merged := domain.StoryReconciliationCandidate{
+		CanonicalEntities:     []domain.StoryEntityCandidate{first.Entities[0]},
+		CanonicalWorldEntries: []domain.StoryWorldEntryCandidate{}, MergedClaims: []domain.StoryClaimCandidate{},
+		MergedArcs: []domain.StoryArcCandidate{}, Conflicts: []domain.ReviewIssue{}, ReviewIssues: []domain.ReviewIssue{},
+	}
+	if err := domain.ValidateStoryReconciliationConservation(
+		merged, []domain.StoryAnalysisCandidate{first, second}, nil,
+	); err == nil {
+		t.Fatal("story reconciliation merged distinct identity keys solely because names and aliases matched")
+	}
+
+	preserved := merged
+	preserved.CanonicalEntities = []domain.StoryEntityCandidate{first.Entities[0], second.Entities[0]}
+	if err := domain.ValidateStoryReconciliationConservation(
+		preserved, []domain.StoryAnalysisCandidate{first, second}, nil,
+	); err != nil {
+		t.Fatalf("story reconciliation rejected distinct identity keys: %v", err)
+	}
+}
+
+func storyAnalysisCandidateWithEntity(
+	key string,
+	name string,
+	aliases []string,
+	evidence domain.Evidence,
+) domain.StoryAnalysisCandidate {
+	return domain.StoryAnalysisCandidate{
+		Entities: []domain.StoryEntityCandidate{{
+			EntityKey: key, Kind: "character", CanonicalName: name, NormalizedName: name,
+			Aliases: aliases, StableSpec: domain.AssetSpecCandidate{
+				Temperament: []string{}, Goals: []string{}, Relationships: []string{},
+				VisualElements: []string{}, NegativeConstraints: []string{},
+				PerformanceTraits: []string{}, AllowedUsage: []string{},
+			},
+			EpisodeNumbers: []int{1}, Evidence: []domain.Evidence{evidence},
+			States: []domain.StoryEntityStateCandidate{}, Ambiguities: []string{},
+		}},
+		WorldEntries: []domain.StoryWorldEntryCandidate{}, Claims: []domain.StoryClaimCandidate{},
+		Arcs: []domain.StoryArcCandidate{}, ReviewIssues: []domain.ReviewIssue{},
+	}
+}

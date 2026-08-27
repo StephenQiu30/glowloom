@@ -336,15 +336,21 @@ func (store *Store) CompleteStoryAnalysisInvocation(
 			}
 			return err
 		}
-		allowed, err := storyInvocationEvidence(request)
+		material, err := loadStoryInvocationMaterial(request)
 		if err != nil {
 			return err
 		}
 		switch invocation.Stage {
 		case domain.AnalyzeStoryStage:
-			_, err = domain.DecodeStoryAnalysisCandidate(result.Candidate, allowed)
+			_, err = domain.DecodeStoryAnalysisCandidate(result.Candidate, material.Evidence)
 		case domain.ReconcileStoryStage:
-			_, err = domain.DecodeStoryReconciliationCandidate(result.Candidate, allowed)
+			var candidate domain.StoryReconciliationCandidate
+			candidate, err = domain.DecodeStoryReconciliationCandidate(result.Candidate, material.Evidence)
+			if err == nil {
+				err = domain.ValidateStoryReconciliationConservation(
+					candidate, material.AnalysisCandidates, material.ReconciliationCandidates,
+				)
+			}
 		default:
 			err = errors.New("unsupported Story analysis stage")
 		}
@@ -452,53 +458,64 @@ func validateStoryUpstreams(database *gorm.DB, request agentcontract.StageInvoca
 	return nil
 }
 
-func storyInvocationEvidence(request agentcontract.StageInvocation) ([]domain.Evidence, error) {
+type storyInvocationMaterial struct {
+	Evidence                 []domain.Evidence
+	AnalysisCandidates       []domain.StoryAnalysisCandidate
+	ReconciliationCandidates []domain.StoryReconciliationCandidate
+}
+
+func loadStoryInvocationMaterial(request agentcontract.StageInvocation) (storyInvocationMaterial, error) {
 	switch request.Payload.Stage {
 	case domain.AnalyzeStoryStage:
 		var input agentcontract.StoryAnalysisStageInput
 		if err := json.Unmarshal(request.Payload.StageInput, &input); err != nil {
-			return nil, err
+			return storyInvocationMaterial{}, err
 		}
 		candidate, err := strictSourceEvidenceCandidate(input.EvidenceCandidate)
 		if err != nil {
-			return nil, err
+			return storyInvocationMaterial{}, err
 		}
-		return domain.SourceEvidenceCandidateEvidence(candidate), nil
+		return storyInvocationMaterial{Evidence: domain.SourceEvidenceCandidateEvidence(candidate)}, nil
 	case domain.ReconcileStoryStage:
 		var input agentcontract.StoryReconciliationStageInput
 		if err := json.Unmarshal(request.Payload.StageInput, &input); err != nil {
-			return nil, err
+			return storyInvocationMaterial{}, err
 		}
-		result := []domain.Evidence{}
+		result := storyInvocationMaterial{
+			Evidence: []domain.Evidence{}, AnalysisCandidates: []domain.StoryAnalysisCandidate{},
+			ReconciliationCandidates: []domain.StoryReconciliationCandidate{},
+		}
 		for _, child := range input.Candidates {
 			switch input.CandidateType {
 			case "story_analysis_candidate":
 				var candidate domain.StoryAnalysisCandidate
 				if err := json.Unmarshal(child.Candidate, &candidate); err != nil {
-					return nil, err
+					return storyInvocationMaterial{}, err
 				}
 				validated, err := domain.DecodeStoryAnalysisCandidate(child.Candidate, domain.StoryAnalysisCandidateEvidence(candidate))
 				if err != nil {
-					return nil, err
+					return storyInvocationMaterial{}, err
 				}
-				result = append(result, domain.StoryAnalysisCandidateEvidence(validated)...)
+				result.AnalysisCandidates = append(result.AnalysisCandidates, validated)
+				result.Evidence = append(result.Evidence, domain.StoryAnalysisCandidateEvidence(validated)...)
 			case "story_reconciliation_candidate":
 				var candidate domain.StoryReconciliationCandidate
 				if err := json.Unmarshal(child.Candidate, &candidate); err != nil {
-					return nil, err
+					return storyInvocationMaterial{}, err
 				}
 				validated, err := domain.DecodeStoryReconciliationCandidate(child.Candidate, domain.StoryReconciliationCandidateEvidence(candidate))
 				if err != nil {
-					return nil, err
+					return storyInvocationMaterial{}, err
 				}
-				result = append(result, domain.StoryReconciliationCandidateEvidence(validated)...)
+				result.ReconciliationCandidates = append(result.ReconciliationCandidates, validated)
+				result.Evidence = append(result.Evidence, domain.StoryReconciliationCandidateEvidence(validated)...)
 			default:
-				return nil, errors.New("invalid Story reconcile candidate type")
+				return storyInvocationMaterial{}, errors.New("invalid Story reconcile candidate type")
 			}
 		}
 		return result, nil
 	default:
-		return nil, errors.New("unsupported Story analysis stage")
+		return storyInvocationMaterial{}, errors.New("unsupported Story analysis stage")
 	}
 }
 
@@ -562,11 +579,40 @@ func scheduleStoryReconcile(database *gorm.DB, manifest domain.StoryReconcileMan
 		if err != nil {
 			return err
 		}
-		if err = database.Omit(clause.Associations).Create(&record).Error; err != nil {
+		created := database.Omit(clause.Associations).Clauses(clause.OnConflict{DoNothing: true}).Create(&record)
+		if err = created.Error; err != nil {
 			return err
+		}
+		if created.RowsAffected == 0 {
+			var concurrent model.AgentInvocation
+			if err = database.First(&concurrent, "id = ?", record.ID).Error; err != nil {
+				return err
+			}
+			if !sameStoryReconcileInvocationIdentity(concurrent, record) {
+				return errors.New("concurrent Story reconcile invocation identity conflicts with deterministic schedule")
+			}
 		}
 	}
 	return nil
+}
+
+func sameStoryReconcileInvocationIdentity(left, right model.AgentInvocation) bool {
+	return left.ID == right.ID && left.WorkspaceID == right.WorkspaceID &&
+		sameUUIDPointer(left.WorkflowRunID, right.WorkflowRunID) && sameUUIDPointer(left.NodeRunID, right.NodeRunID) &&
+		sameUUIDPointer(left.ShardManifestID, right.ShardManifestID) &&
+		sameInt64Pointer(left.ShardManifestVersion, right.ShardManifestVersion) &&
+		left.RequestType == right.RequestType && left.RequestID == right.RequestID && left.Kind == right.Kind &&
+		left.WireSchemaVersion == right.WireSchemaVersion && left.Stage == right.Stage && left.ShardKey == right.ShardKey &&
+		left.StageInstanceKey == right.StageInstanceKey && left.ShardManifestHash == right.ShardManifestHash &&
+		left.InputHash == right.InputHash
+}
+
+func sameUUIDPointer(left, right *uuid.UUID) bool {
+	return left != nil && right != nil && *left == *right
+}
+
+func sameInt64Pointer(left, right *int64) bool {
+	return left != nil && right != nil && *left == *right
 }
 
 type storyReconcileReadyChild struct {

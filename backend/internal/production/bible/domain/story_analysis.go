@@ -507,6 +507,127 @@ func ValidateStoryReconciliationCandidate(value StoryReconciliationCandidate, al
 	return validateStoryCandidate(value.CanonicalEntities, value.CanonicalWorldEntries, value.MergedClaims, value.MergedArcs, value.ReviewIssues, value.Conflicts, allowed)
 }
 
+func ValidateStoryReconciliationConservation(
+	value StoryReconciliationCandidate,
+	analysisSources []StoryAnalysisCandidate,
+	reconciliationSources []StoryReconciliationCandidate,
+) error {
+	if (len(analysisSources) == 0) == (len(reconciliationSources) == 0) {
+		return errors.New("Story reconciliation requires one exact upstream candidate type")
+	}
+	expected := newStoryCandidateKeys()
+	for _, source := range analysisSources {
+		expected.add(source.Entities, source.WorldEntries, source.Claims, source.Arcs)
+	}
+	for _, source := range reconciliationSources {
+		expected.add(source.CanonicalEntities, source.CanonicalWorldEntries, source.MergedClaims, source.MergedArcs)
+	}
+	actual := newStoryCandidateKeys()
+	if !actual.addUnique(value.CanonicalEntities, value.CanonicalWorldEntries, value.MergedClaims, value.MergedArcs) {
+		return errors.New("Story reconciliation contains duplicate candidate keys")
+	}
+	if !sameStoryCandidateKeys(expected, actual) {
+		return errors.New("Story reconciliation changed exact candidate keys without an explicit reviewed identity link")
+	}
+	return nil
+}
+
+type storyCandidateKeys struct {
+	entities map[string]struct{}
+	states   map[string]struct{}
+	world    map[string]struct{}
+	claims   map[string]struct{}
+	arcs     map[string]struct{}
+}
+
+func newStoryCandidateKeys() storyCandidateKeys {
+	return storyCandidateKeys{
+		entities: map[string]struct{}{}, states: map[string]struct{}{}, world: map[string]struct{}{},
+		claims: map[string]struct{}{}, arcs: map[string]struct{}{},
+	}
+}
+
+func (keys storyCandidateKeys) add(
+	entities []StoryEntityCandidate,
+	world []StoryWorldEntryCandidate,
+	claims []StoryClaimCandidate,
+	arcs []StoryArcCandidate,
+) {
+	for _, entity := range entities {
+		keys.entities[entity.EntityKey] = struct{}{}
+		for _, state := range entity.States {
+			keys.states[entity.EntityKey+"\x00"+state.StateKey] = struct{}{}
+		}
+	}
+	for _, entry := range world {
+		keys.world[entry.EntryKey] = struct{}{}
+	}
+	for _, claim := range claims {
+		keys.claims[claim.ClaimKey] = struct{}{}
+	}
+	for _, arc := range arcs {
+		keys.arcs[arc.ArcKey] = struct{}{}
+	}
+}
+
+func (keys storyCandidateKeys) addUnique(
+	entities []StoryEntityCandidate,
+	world []StoryWorldEntryCandidate,
+	claims []StoryClaimCandidate,
+	arcs []StoryArcCandidate,
+) bool {
+	for _, entity := range entities {
+		if _, exists := keys.entities[entity.EntityKey]; exists {
+			return false
+		}
+		keys.entities[entity.EntityKey] = struct{}{}
+		for _, state := range entity.States {
+			key := entity.EntityKey + "\x00" + state.StateKey
+			if _, exists := keys.states[key]; exists {
+				return false
+			}
+			keys.states[key] = struct{}{}
+		}
+	}
+	for _, entry := range world {
+		if _, exists := keys.world[entry.EntryKey]; exists {
+			return false
+		}
+		keys.world[entry.EntryKey] = struct{}{}
+	}
+	for _, claim := range claims {
+		if _, exists := keys.claims[claim.ClaimKey]; exists {
+			return false
+		}
+		keys.claims[claim.ClaimKey] = struct{}{}
+	}
+	for _, arc := range arcs {
+		if _, exists := keys.arcs[arc.ArcKey]; exists {
+			return false
+		}
+		keys.arcs[arc.ArcKey] = struct{}{}
+	}
+	return true
+}
+
+func sameStoryCandidateKeys(left, right storyCandidateKeys) bool {
+	return sameStoryKeySet(left.entities, right.entities) && sameStoryKeySet(left.states, right.states) &&
+		sameStoryKeySet(left.world, right.world) && sameStoryKeySet(left.claims, right.claims) &&
+		sameStoryKeySet(left.arcs, right.arcs)
+}
+
+func sameStoryKeySet(left, right map[string]struct{}) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key := range left {
+		if _, exists := right[key]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
 func validateStoryCandidate(
 	entities []StoryEntityCandidate,
 	world []StoryWorldEntryCandidate,

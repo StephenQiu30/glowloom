@@ -1,6 +1,6 @@
 # StoryGraph 内容图与 DAG 创作画布实施计划
 
-- 状态：实施中；`SG-I01`–`SG-I08` 已完成，`SG-I09` 已完成有界 Story map/tree 首个交付单元（2026-08-27）
+- 状态：实施中；`SG-I01`–`SG-I08` 已完成，`SG-I09` 已完成有界 Story map/tree 与身份守恒交付单元（2026-08-27）
 - Design：[0010 StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
 - Agent Design：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 - PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
@@ -94,7 +94,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 ### Harness 与剧本解析
 
 - [x] `SG-I08`：Definition-first 打通 `extract_source_evidence`：先发布 WorkflowDefinitionVersion 并创建 Run/NodeRun，再在该 NodeRun 下创建 ShardManifest/Invocation/Candidate Revision。完成门：Unicode 绝对区间、coverage、重分片、恢复和证据守恒通过。**完成（2026-08-27）**：不可变 versioned ShardManifest、Unicode 语义分片/overlap/marker hint、严格跨语言 Stage Input、Invocation Candidate 与确定性 aggregate 已挂入既有 Run/NodeRun；预算超限发布完整覆盖的新 Manifest，旧版本迟到结果仅留审计，同 identity unknown 重试、真实 Codex 与完整部署 CI 证据见 Acceptance。
-- [ ] `SG-I09`：Definition-first 接入有界 `analyze_story` map 和确定性 `reconcile_story` tree，产出带证据的 Bible/Claim Candidate Revision。完成门：Manifest/leaf 谱系、fan-in、重放、冲突和上游 stale 测试通过。**首个交付单元完成（2026-08-27）**：有界 map、固定 fan-in=2 的确定性 reduce tree、精确 Candidate/Evidence 谱系、上游 Head stale 拒绝、真实 Codex 与完整部署 CI 已通过；本项仍需完成超预算再分片、单 shard 失败恢复和同名/别名不得自动合并的冲突门，未提前进入 `SG-I10`。
+- [ ] `SG-I09`：Definition-first 接入有界 `analyze_story` map 和确定性 `reconcile_story` tree，产出带证据的 Bible/Claim Candidate Revision。完成门：Manifest/leaf 谱系、fan-in、重放、冲突和上游 stale 测试通过。**两个交付单元完成（2026-08-27）**：有界 map、固定 fan-in=2 的确定性 reduce tree、精确 Candidate/Evidence 谱系、上游 Head stale 拒绝、同名/同别名跨集不同 Key 身份守恒，以及并发 reduce 调度幂等均已通过真实依赖 CI；本项仍需完成超预算再分片和单 shard 失败恢复，未提前进入 `SG-I10`。
 - [ ] `SG-I10`：接入 Bible `review_storygraph` 与有界 Candidate Repair，每轮重跑确定性 Gate。完成门：Candidate Revision/Head CAS、冻结允许集、修复预算和旧下游 stale 通过。
 - [ ] `SG-I11`：用公共 Human Gate 审批 Bible/identity/state/claim Candidate；正向决议只调用既有 Production Bible `Confirm` Owner Command，固化 confirmed Bible Gate output 与 `production_bible.confirm` Receipt。完成门：blocker 未清零不得通过；Confirm 不物化 Asset，Decision/Receipt/Node output 精确绑定并可恢复。
 - [ ] `SG-I12`：只消费 `SG-I11` 的 confirmed Bible 输出，由 Backend Coordinator 在独立命令中原子物化 Character/Location Asset、SpecificationVersion、AssetState 和 ProductionBinding。完成门：幂等 Materialization Receipt、唯一 Owner、单 GORM 事务、失败回滚和反向追踪通过。
