@@ -129,7 +129,7 @@ func TestProductionWorkflowWorkerDurablyCompletesBibleCandidate(t *testing.T) {
 		reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 		}),
-		nil, nil,
+		nil, nil, nil,
 	)
 	if err != nil {
 		t.Fatalf("compose Production Bible Workflow Runtime: %v", err)

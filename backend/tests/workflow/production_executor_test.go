@@ -76,6 +76,7 @@ func TestProductionScriptNodeExecutorReadsAuthorizedImmutableRevision(t *testing
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		nil,
 		nil,
+		nil,
 	)
 	command := workflow.NodeExecutorCommand{
 		NodeActivityCommand: workflow.NodeActivityCommand{
@@ -151,6 +152,7 @@ func TestProductionBibleNodeExecutorDurablyWaitsForOneAuthorizedCandidate(t *tes
 		bibleService,
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		nil,
 		nil,
 		nil,
 	)
@@ -286,6 +288,7 @@ func TestProductionEpisodePlanCandidateAndStructurePublishRecovery(t *testing.T)
 		bibleapp.NewService(biblegorm.New(database), bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningService,
+		nil,
 		nil,
 		nil,
 	)

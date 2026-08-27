@@ -238,7 +238,7 @@ func TestStoryCandidateRepairPersistsOneReceiptAndExactStaleClosure(t *testing.T
 	}
 
 	segmentRequest := newRepairJourneyInvocation(
-		t, workspace.ID, project.ID, "segment_episodes", "segment:0000", "episode_segmentation",
+		t, workspace.ID, project.ID, "analyze_episode", "episode:0000", "episode_analysis",
 		sourceRef,
 		[]agentcontract.StageUpstreamCandidateRef{{
 			Stage: "review_storygraph", ShardKey: "review:aggregate",
@@ -248,7 +248,7 @@ func TestStoryCandidateRepairPersistsOneReceiptAndExactStaleClosure(t *testing.T
 		json.RawMessage(`{}`),
 	)
 	segmentInvocation, segmentRevision, segmentHead := persistedInvocationCandidate(
-		t, segmentRequest, workspace.ID, "episode_plan_candidate", json.RawMessage(`{"episodes":[]}`), now,
+		t, segmentRequest, workspace.ID, "episode_analysis_candidate", json.RawMessage(`{"fragments":[]}`), now,
 	)
 	for _, record := range []any{&segmentInvocation, &segmentRevision, &segmentHead} {
 		if err = database.Create(record).Error; err != nil {
@@ -256,10 +256,10 @@ func TestStoryCandidateRepairPersistsOneReceiptAndExactStaleClosure(t *testing.T
 		}
 	}
 	detailRequest := newRepairJourneyInvocation(
-		t, workspace.ID, project.ID, "analyze_episode", "episode:0001", "episode_analysis",
+		t, workspace.ID, project.ID, "reconcile_episode", "episode-reduce:0000", "episode_reconciliation",
 		sourceRef,
 		[]agentcontract.StageUpstreamCandidateRef{{
-			Stage: "segment_episodes", ShardKey: "segment:0000",
+			Stage: "analyze_episode", ShardKey: "episode:0000",
 			CandidateRevisionID: segmentRevision.ID.String(), CandidateRevisionHash: segmentRevision.CandidateRevisionHash,
 			SourceInvocationID: segmentInvocation.ID.String(), SourceResultHash: *segmentInvocation.ResultHash,
 		}},

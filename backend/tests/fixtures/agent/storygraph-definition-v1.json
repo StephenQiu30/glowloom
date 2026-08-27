@@ -3,7 +3,7 @@
   "definition_version": "storygraph-stage-harness-v1",
   "prompt_version": "build-storygraph-prompt-v1",
   "skill_bundle_version": "build-storygraph-v1",
-  "skill_bundle_hash": "4cf64c94b7d181945da678721db36c4bc45921a9c833164bdea46cb7af149c42",
+  "skill_bundle_hash": "d19485c0d8ac19c90afa06741c2626b1db55ace1f6c8f9a442231ba05637d95b",
   "output_schema_version": "storygraph-candidate-schema-v1",
   "model_capability": "structured_text",
   "codex_runtime_contract": "codex-cli-ephemeral-read-only-v1",

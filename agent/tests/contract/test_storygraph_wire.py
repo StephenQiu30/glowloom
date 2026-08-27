@@ -9,12 +9,14 @@ import pytest
 from pydantic import ValidationError
 
 from app.candidate_runtime.schemas import (
+    EpisodeSegmentationStageInput,
     StoryAnalysisStageInput,
     StoryGraphExecutionGrantClaims,
     StoryGraphStageInvocation,
     StoryGraphStageResult,
     StoryReconciliationStageInput,
 )
+from app.modules.storygraph.candidate_schemas import EpisodeSegmentationCandidate
 
 FIXTURE = (
     Path(__file__).resolve().parents[3]
@@ -143,6 +145,89 @@ def test_story_reconciliation_input_is_bounded_and_exact() -> None:
     too_many["candidates"] = too_many["candidates"] * 2
     with pytest.raises(ValidationError):
         StoryReconciliationStageInput.model_validate(too_many)
+
+
+def test_episode_segmentation_input_and_candidate_are_strict_and_contiguous() -> None:
+    marker = {
+        "source_start": 0,
+        "source_end": 3,
+        "text_hash": "a" * 64,
+        "exact_anchor": "第一集",
+        "episode_number": 1,
+    }
+    leaf = {
+        "shard_key": "source:00000000:00000012",
+        "candidate_revision_id": "10000000-0000-0000-0000-000000000001",
+        "candidate_revision_hash": "b" * 64,
+    }
+    value = EpisodeSegmentationStageInput.model_validate(
+        {
+            "document_revision_id": "20000000-0000-0000-0000-000000000001",
+            "normalized_hash": "c" * 64,
+            "source_code_points": 24,
+            "target_duration_ms": 90_000,
+            "bible_version_id": "30000000-0000-0000-0000-000000000001",
+            "bible_version": 1,
+            "bible_content_hash": "d" * 64,
+            "materialization_hash": "e" * 64,
+            "evidence_aggregate_revision_id": "40000000-0000-0000-0000-000000000001",
+            "evidence_aggregate_revision_hash": "f" * 64,
+            "evidence_leaves": [leaf],
+            "marker_hints": [{"episode_number": 1, "label": "第一集", "evidence": marker}],
+            "evidence_index": [
+                {
+                    "index_key": "marker:0000",
+                    "kind": "marker",
+                    "label": "第一集",
+                    "shard_key": leaf["shard_key"],
+                    "candidate_revision_id": leaf["candidate_revision_id"],
+                    "candidate_revision_hash": leaf["candidate_revision_hash"],
+                    "evidence": marker,
+                }
+            ],
+        }
+    )
+    assert value.source_code_points == 24
+    with pytest.raises(ValidationError):
+        EpisodeSegmentationStageInput.model_validate(
+            {**value.model_dump(mode="json"), "unexpected": True}
+        )
+
+    candidate = EpisodeSegmentationCandidate.model_validate(
+        {
+            "boundaries": [
+                {
+                    "boundary_key": "episode:0001",
+                    "episode_order": 1,
+                    "title": "第一集",
+                    "absolute_start": 0,
+                    "absolute_end": 12,
+                    "evidence": [marker],
+                },
+                {
+                    "boundary_key": "episode:0002",
+                    "episode_order": 2,
+                    "title": "第二集",
+                    "absolute_start": 12,
+                    "absolute_end": 24,
+                    "evidence": [
+                        {
+                            **marker,
+                            "source_start": 12,
+                            "source_end": 15,
+                            "exact_anchor": "第二集",
+                        }
+                    ],
+                },
+            ],
+            "review_issues": [],
+        }
+    )
+    assert len(candidate.boundaries) == 2
+    drifted = candidate.model_dump(mode="json")
+    drifted["boundaries"][1]["absolute_start"] = 13
+    with pytest.raises(ValidationError):
+        EpisodeSegmentationCandidate.model_validate(drifted)
 
 
 def test_storygraph_stage_result_is_strict_and_hashes_candidate() -> None:

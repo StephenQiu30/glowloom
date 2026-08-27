@@ -215,8 +215,30 @@ class EpisodeBoundary(StrictModel):
 
 
 class EpisodeSegmentationCandidate(StrictModel):
-    boundaries: list[EpisodeBoundary]
+    boundaries: list[EpisodeBoundary] = Field(min_length=1, max_length=1000)
     review_issues: list[CandidateIssue]
+
+    @model_validator(mode="after")
+    def validate_coverage_order(self) -> EpisodeSegmentationCandidate:
+        keys: set[str] = set()
+        previous_end = 0
+        for index, boundary in enumerate(self.boundaries, start=1):
+            if (
+                boundary.boundary_key in keys
+                or boundary.episode_order != index
+                or boundary.absolute_start != previous_end
+                or any(
+                    evidence.source_start < boundary.absolute_start
+                    or evidence.source_end > boundary.absolute_end
+                    for evidence in boundary.evidence
+                )
+            ):
+                raise ValueError(
+                    "episode boundaries must be unique, ordered, contiguous, and evidenced"
+                )
+            keys.add(boundary.boundary_key)
+            previous_end = boundary.absolute_end
+        return self
 
 
 class StructureAttributes(StrictModel):

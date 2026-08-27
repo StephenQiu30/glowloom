@@ -12,12 +12,14 @@ from pydantic import BaseModel
 
 from app.candidate_runtime.canonical import canonical_hash
 from app.candidate_runtime.schemas import (
+    EpisodeSegmentationStageInput,
     SourceEvidenceStageInput,
     StoryGraphStageInvocation,
     StoryGraphStagePayload,
 )
 from app.modules.storygraph.candidate_schemas import (
     CandidateRepairPatch,
+    EpisodeSegmentationCandidate,
     SourceEvidenceCandidate,
     StoryAnalysisCandidate,
     StoryGraphReviewCandidate,
@@ -79,6 +81,117 @@ def evidence_identities(candidate: BaseModel) -> set[tuple[int, int, str, str, i
 
     visit(candidate.model_dump(mode="json"))
     return identities
+
+
+@pytest.mark.skipif(
+    os.getenv("LANVERSE_TEST_REAL_CODEX") != "1",
+    reason="set LANVERSE_TEST_REAL_CODEX=1 to exercise the locally authenticated Codex CLI",
+)
+@pytest.mark.asyncio
+async def test_real_codex_segments_full_source_without_overriding_markers() -> None:
+    fixture = cast(dict[str, Any], json.loads(WIRE_FIXTURE.read_text(encoding="utf-8")))
+    source = StoryGraphStageInvocation.model_validate(fixture["valid_invocation"])
+    text = "第一集\n甲出发。\n第二集\n乙抵达。"
+    second_start = text.index("第二集")
+    markers: list[dict[str, Any]] = []
+    for episode_number, start, label in (
+        (1, 0, "第一集"),
+        (2, second_start, "第二集"),
+    ):
+        markers.append(
+            {
+                "episode_number": episode_number,
+                "label": label,
+                "evidence": {
+                    "source_start": start,
+                    "source_end": start + len(label),
+                    "text_hash": hashlib.sha256(label.encode("utf-8")).hexdigest(),
+                    "exact_anchor": label,
+                    "episode_number": episode_number,
+                },
+            }
+        )
+    leaf: dict[str, Any] = {
+        "shard_key": "source:00000000:00000018",
+        "candidate_revision_id": "70000000-0000-0000-0000-000000000010",
+        "candidate_revision_hash": "a" * 64,
+    }
+    stage_input = EpisodeSegmentationStageInput.model_validate(
+        {
+            "document_revision_id": source.payload.source_refs[0].owner_version_id,
+            "normalized_hash": source.payload.source_refs[0].content_hash,
+            "source_code_points": len(text),
+            "target_duration_ms": 90_000,
+            "bible_version_id": "70000000-0000-0000-0000-000000000020",
+            "bible_version": 1,
+            "bible_content_hash": "b" * 64,
+            "materialization_hash": "c" * 64,
+            "evidence_aggregate_revision_id": "70000000-0000-0000-0000-000000000030",
+            "evidence_aggregate_revision_hash": "d" * 64,
+            "evidence_leaves": [leaf],
+            "marker_hints": markers,
+            "evidence_index": [
+                {
+                    "index_key": f"marker:{index:04d}",
+                    "kind": "marker",
+                    "label": marker["label"],
+                    **leaf,
+                    "evidence": marker["evidence"],
+                }
+                for index, marker in enumerate(markers)
+            ],
+        }
+    )
+    invocation = stage_invocation(
+        source,
+        invocation_id="20000000-0000-0000-0000-000000000010",
+        payload={
+            "stage": "segment_episodes",
+            "shard_key": "episode-segmentation:global",
+            "workspace_id": source.payload.workspace_id,
+            "project_id": source.payload.project_id,
+            "source_refs": [
+                source.payload.source_refs[0].model_dump(mode="json"),
+                {
+                    "owner_kind": "production/bible-materialization",
+                    "owner_logical_id": str(stage_input.bible_version_id),
+                    "owner_version_id": str(stage_input.bible_version_id),
+                    "revision": stage_input.bible_version,
+                    "content_hash": stage_input.materialization_hash,
+                },
+            ],
+            "upstream_candidates": [
+                {
+                    "stage": "extract_source_evidence",
+                    **leaf,
+                    "source_invocation_id": source.invocation_id,
+                    "source_result_hash": "e" * 64,
+                }
+            ],
+            "shard_manifest_ref": {
+                "manifest_id": "60000000-0000-0000-0000-000000000010",
+                "version": 1,
+                "hash": "f" * 64,
+            },
+            "shard": {
+                "kind": "episode_segmentation",
+                "key": "episode-segmentation:global",
+                "tree_path": "global",
+                "absolute_start": 0,
+                "absolute_end": len(text),
+            },
+            "stage_input": stage_input.model_dump(mode="json"),
+        },
+    )
+    candidate = await StoryGraphHarness(invocation, repository_root=REPOSITORY_ROOT).execute()
+    assert isinstance(candidate, EpisodeSegmentationCandidate)
+    assert candidate.boundaries[0].absolute_start == 0
+    assert candidate.boundaries[-1].absolute_end == len(text)
+    assert [value.absolute_start for value in candidate.boundaries] == [0, second_start]
+    assert all(
+        marker.evidence in candidate.boundaries[index].evidence
+        for index, marker in enumerate(stage_input.marker_hints)
+    )
 
 
 @pytest.mark.skipif(

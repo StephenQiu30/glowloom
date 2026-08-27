@@ -4,13 +4,13 @@
     "invocation_id": "20000000-0000-0000-0000-000000000001",
     "kind": "storygraph_stage",
     "wire_schema_version": "storygraph-stage-wire-v1",
-    "input_hash": "020a3878f55afd59d9d49c015239c909a79caa9f388ff8340fffe4e8694f0142",
+    "input_hash": "bc7faabe587bd3272a4bcdcba5d2adbebea0a9bc38e30d183a6a95ce1f9104e3",
     "execution_policy": {
       "definition_key": "storygraph_stage",
       "definition_version": "storygraph-stage-harness-v1",
       "prompt_version": "build-storygraph-prompt-v1",
       "skill_bundle_version": "build-storygraph-v1",
-      "skill_bundle_hash": "4cf64c94b7d181945da678721db36c4bc45921a9c833164bdea46cb7af149c42",
+      "skill_bundle_hash": "d19485c0d8ac19c90afa06741c2626b1db55ace1f6c8f9a442231ba05637d95b",
       "output_schema_version": "storygraph-candidate-schema-v1",
       "model_capability": "structured_text",
       "codex_runtime_contract": "codex-cli-ephemeral-read-only-v1",
@@ -65,8 +65,8 @@
       }
     }
   },
-  "expected_input_hash": "020a3878f55afd59d9d49c015239c909a79caa9f388ff8340fffe4e8694f0142",
-  "expected_stage_instance_key": "785ed68771002433023c40cabd647f9f8d0b6dbb23df0be6c7dc5840c7345aac",
+  "expected_input_hash": "bc7faabe587bd3272a4bcdcba5d2adbebea0a9bc38e30d183a6a95ce1f9104e3",
+  "expected_stage_instance_key": "51b45d711d7c9f07823f453931bf5619d116e66525e6e866b6e0a9a6a5f5af46",
   "valid_success_result": {
     "invocation_id": "20000000-0000-0000-0000-000000000001",
     "kind": "storygraph_stage",
@@ -84,7 +84,7 @@
         }
       ]
     },
-    "input_hash": "020a3878f55afd59d9d49c015239c909a79caa9f388ff8340fffe4e8694f0142",
+    "input_hash": "bc7faabe587bd3272a4bcdcba5d2adbebea0a9bc38e30d183a6a95ce1f9104e3",
     "result_hash": "cd5611a7a24bf2b181af33e33115894b7a3ffc6a69cf39dccca547690e33b8d9",
     "issues": [],
     "executor": {
@@ -104,7 +104,7 @@
     "status": "unknown",
     "candidate_type": "source_evidence_candidate",
     "candidate": null,
-    "input_hash": "020a3878f55afd59d9d49c015239c909a79caa9f388ff8340fffe4e8694f0142",
+    "input_hash": "bc7faabe587bd3272a4bcdcba5d2adbebea0a9bc38e30d183a6a95ce1f9104e3",
     "result_hash": null,
     "issues": [],
     "executor": {
@@ -120,8 +120,8 @@
   },
   "execution_grant_claims": {
     "invocation_id": "20000000-0000-0000-0000-000000000001",
-    "input_hash": "020a3878f55afd59d9d49c015239c909a79caa9f388ff8340fffe4e8694f0142",
-    "execution_policy_hash": "f8ecc9968290567f6e8fbb98e884bdcecc5f67aa761d658102de65f648e0c5aa",
+    "input_hash": "bc7faabe587bd3272a4bcdcba5d2adbebea0a9bc38e30d183a6a95ce1f9104e3",
+    "execution_policy_hash": "322263a039fcc8d15417213eb50d18cc530772271d422b0ae1c60ea252c34c24",
     "expires_at": 1800000000,
     "attempt": 1,
     "fencing_token": 7

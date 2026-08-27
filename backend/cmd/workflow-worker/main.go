@@ -106,6 +106,9 @@ func main() {
 	storyAnalysisService := bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
 		Now: now, NewID: uuid.NewString, FanIn: 2,
 	})
+	episodeSegmentationService := bibleapp.NewEpisodeSegmentationService(bibleStore, bibleapp.EpisodeSegmentationConfig{
+		Now: now, NewID: uuid.NewString,
+	})
 	storyReviewService := bibleapp.NewStoryReviewService(
 		bibleStore,
 		bibleapp.NewStoryCandidateRepairService(bibleStore, bibleapp.Config{Now: now, NewID: uuid.NewString}),
@@ -147,7 +150,7 @@ func main() {
 	)
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowgorm.New(database), scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, storyboardService, reviewService,
-		imageBindings, candidateSets,
+		imageBindings, candidateSets, episodeSegmentationService,
 	)
 	if err != nil {
 		logger.Error("workflow runtime composition failed", "error", err)

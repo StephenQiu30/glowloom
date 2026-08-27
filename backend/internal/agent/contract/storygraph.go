@@ -111,6 +111,52 @@ type StoryAnalysisStageInput struct {
 	EvidenceCandidate             json.RawMessage `json:"evidence_candidate"`
 }
 
+type EpisodeSegmentationEvidence struct {
+	SourceStart   int    `json:"source_start"`
+	SourceEnd     int    `json:"source_end"`
+	TextHash      string `json:"text_hash"`
+	ExactAnchor   string `json:"exact_anchor"`
+	EpisodeNumber *int   `json:"episode_number"`
+}
+
+type EpisodeSegmentationEvidenceLeaf struct {
+	ShardKey              string `json:"shard_key"`
+	CandidateRevisionID   string `json:"candidate_revision_id"`
+	CandidateRevisionHash string `json:"candidate_revision_hash"`
+}
+
+type EpisodeSegmentationMarkerHint struct {
+	EpisodeNumber int                         `json:"episode_number"`
+	Label         string                      `json:"label"`
+	Evidence      EpisodeSegmentationEvidence `json:"evidence"`
+}
+
+type EpisodeSegmentationEvidenceIndexItem struct {
+	IndexKey              string                      `json:"index_key"`
+	Kind                  string                      `json:"kind"`
+	Label                 string                      `json:"label"`
+	ShardKey              string                      `json:"shard_key"`
+	CandidateRevisionID   string                      `json:"candidate_revision_id"`
+	CandidateRevisionHash string                      `json:"candidate_revision_hash"`
+	Evidence              EpisodeSegmentationEvidence `json:"evidence"`
+}
+
+type EpisodeSegmentationStageInput struct {
+	DocumentRevisionID            string                                 `json:"document_revision_id"`
+	NormalizedHash                string                                 `json:"normalized_hash"`
+	SourceCodePoints              int                                    `json:"source_code_points"`
+	TargetDurationMS              int                                    `json:"target_duration_ms"`
+	BibleVersionID                string                                 `json:"bible_version_id"`
+	BibleVersion                  int                                    `json:"bible_version"`
+	BibleContentHash              string                                 `json:"bible_content_hash"`
+	MaterializationHash           string                                 `json:"materialization_hash"`
+	EvidenceAggregateRevisionID   string                                 `json:"evidence_aggregate_revision_id"`
+	EvidenceAggregateRevisionHash string                                 `json:"evidence_aggregate_revision_hash"`
+	EvidenceLeaves                []EpisodeSegmentationEvidenceLeaf      `json:"evidence_leaves"`
+	MarkerHints                   []EpisodeSegmentationMarkerHint        `json:"marker_hints"`
+	EvidenceIndex                 []EpisodeSegmentationEvidenceIndexItem `json:"evidence_index"`
+}
+
 type StoryReconciliationInputCandidate struct {
 	ShardKey              string          `json:"shard_key"`
 	CandidateRevisionID   string          `json:"candidate_revision_id"`
@@ -212,12 +258,143 @@ func validateStageInput(payload StageInvocationPayload) error {
 	switch payload.Stage {
 	case "extract_source_evidence":
 		return validateSourceEvidenceStageInput(payload)
+	case "segment_episodes":
+		return validateEpisodeSegmentationStageInput(payload)
 	case "review_storygraph":
 		return validateStoryGraphReviewStageInput(payload)
 	case "repair_candidate":
 		return validateStoryGraphRepairStageInput(payload)
 	}
 	return nil
+}
+
+func ValidateEpisodeSegmentationInvocation(value StageInvocation) error {
+	if err := value.Validate(); err != nil {
+		return err
+	}
+	if value.Payload.Stage != "segment_episodes" {
+		return errors.New("invalid Episode segmentation invocation stage")
+	}
+	return validateEpisodeSegmentationStageInput(value.Payload)
+}
+
+func validateEpisodeSegmentationStageInput(payload StageInvocationPayload) error {
+	var input EpisodeSegmentationStageInput
+	if err := decodeStrict(payload.StageInput, &input); err != nil {
+		return errors.New("invalid Episode segmentation stage input")
+	}
+	if len(payload.SourceRefs) != 2 || len(input.EvidenceLeaves) == 0 || len(input.EvidenceIndex) == 0 ||
+		len(input.EvidenceIndex) > 512 || len(payload.UpstreamCandidates) != len(input.EvidenceLeaves) ||
+		payload.BaseStoryGraphVersionID != "" || payload.BaseStoryGraphHash != "" ||
+		payload.Shard.Kind != "episode_segmentation" || payload.Shard.AbsoluteStart == nil ||
+		payload.Shard.AbsoluteEnd == nil || *payload.Shard.AbsoluteStart != 0 ||
+		*payload.Shard.AbsoluteEnd != input.SourceCodePoints || input.SourceCodePoints < 1 ||
+		input.TargetDurationMS < 1000 || input.TargetDurationMS > 7_200_000 || input.BibleVersion < 1 ||
+		!hashPattern.MatchString(input.NormalizedHash) || !hashPattern.MatchString(input.BibleContentHash) ||
+		!hashPattern.MatchString(input.MaterializationHash) || !hashPattern.MatchString(input.EvidenceAggregateRevisionHash) {
+		return errors.New("invalid Episode segmentation stage dependencies")
+	}
+	for _, identifier := range []string{input.DocumentRevisionID, input.BibleVersionID, input.EvidenceAggregateRevisionID} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return errors.New("invalid Episode segmentation exact revision")
+		}
+	}
+	scriptMatches, materializationMatches := false, false
+	for _, ref := range payload.SourceRefs {
+		switch {
+		case ref.OwnerKind == "production/script" && ref.OwnerVersionID == input.DocumentRevisionID && ref.ContentHash == input.NormalizedHash:
+			scriptMatches = true
+		case ref.OwnerKind == "production/bible-materialization" && ref.OwnerLogicalID == input.BibleVersionID &&
+			ref.OwnerVersionID == input.BibleVersionID && ref.Revision == int64(input.BibleVersion) && ref.ContentHash == input.MaterializationHash:
+			materializationMatches = true
+		default:
+			return errors.New("Episode segmentation source reference has drifted")
+		}
+	}
+	if !scriptMatches || !materializationMatches {
+		return errors.New("Episode segmentation exact sources are incomplete")
+	}
+	leaves := make(map[string]EpisodeSegmentationEvidenceLeaf, len(input.EvidenceLeaves))
+	previousShard := ""
+	for _, leaf := range input.EvidenceLeaves {
+		if strings.TrimSpace(leaf.ShardKey) == "" || previousShard >= leaf.ShardKey ||
+			!hashPattern.MatchString(leaf.CandidateRevisionHash) {
+			return errors.New("invalid Episode segmentation Evidence leaf")
+		}
+		if _, err := uuid.Parse(leaf.CandidateRevisionID); err != nil {
+			return errors.New("invalid Episode segmentation Evidence leaf revision")
+		}
+		key := episodeSegmentationLeafKey(leaf.ShardKey, leaf.CandidateRevisionID, leaf.CandidateRevisionHash)
+		leaves[key] = leaf
+		previousShard = leaf.ShardKey
+	}
+	upstreams := make(map[string]struct{}, len(payload.UpstreamCandidates))
+	for _, upstream := range payload.UpstreamCandidates {
+		if upstream.Stage != "extract_source_evidence" {
+			return errors.New("Episode segmentation has a non-Evidence upstream candidate")
+		}
+		key := episodeSegmentationLeafKey(upstream.ShardKey, upstream.CandidateRevisionID, upstream.CandidateRevisionHash)
+		if _, exists := leaves[key]; !exists {
+			return errors.New("Episode segmentation upstream revision has drifted")
+		}
+		upstreams[key] = struct{}{}
+	}
+	if len(upstreams) != len(leaves) {
+		return errors.New("Episode segmentation exact Evidence leaves are incomplete")
+	}
+	indexKeys := make(map[string]struct{}, len(input.EvidenceIndex))
+	markerEvidence := make(map[string]struct{}, len(input.MarkerHints))
+	for _, item := range input.EvidenceIndex {
+		leafKey := episodeSegmentationLeafKey(item.ShardKey, item.CandidateRevisionID, item.CandidateRevisionHash)
+		if strings.TrimSpace(item.IndexKey) == "" || strings.TrimSpace(item.Label) == "" ||
+			(item.Kind != "marker" && item.Kind != "event" && item.Kind != "evidence") || !validEpisodeSegmentationEvidence(item.Evidence, input.SourceCodePoints) {
+			return errors.New("invalid Episode segmentation Evidence index item")
+		}
+		if _, exists := leaves[leafKey]; !exists {
+			return errors.New("Episode segmentation Evidence index has no exact leaf")
+		}
+		if _, exists := indexKeys[item.IndexKey]; exists {
+			return errors.New("Episode segmentation Evidence index keys must be unique")
+		}
+		indexKeys[item.IndexKey] = struct{}{}
+		if item.Kind == "marker" {
+			markerEvidence[episodeSegmentationEvidenceKey(item.Evidence)] = struct{}{}
+		}
+	}
+	markerStarts := make(map[int]struct{}, len(input.MarkerHints))
+	for _, marker := range input.MarkerHints {
+		if marker.EpisodeNumber < 1 || strings.TrimSpace(marker.Label) == "" ||
+			!validEpisodeSegmentationEvidence(marker.Evidence, input.SourceCodePoints) ||
+			marker.Evidence.EpisodeNumber == nil || *marker.Evidence.EpisodeNumber != marker.EpisodeNumber {
+			return errors.New("invalid Episode segmentation marker hint")
+		}
+		if _, exists := markerStarts[marker.Evidence.SourceStart]; exists {
+			return errors.New("Episode segmentation marker starts must be unique")
+		}
+		if _, exists := markerEvidence[episodeSegmentationEvidenceKey(marker.Evidence)]; !exists {
+			return errors.New("Episode segmentation marker is absent from its bounded Evidence index")
+		}
+		markerStarts[marker.Evidence.SourceStart] = struct{}{}
+	}
+	return nil
+}
+
+func episodeSegmentationLeafKey(shardKey, revisionID, revisionHash string) string {
+	return strings.Join([]string{shardKey, revisionID, revisionHash}, "\x00")
+}
+
+func episodeSegmentationEvidenceKey(value EpisodeSegmentationEvidence) string {
+	episode := ""
+	if value.EpisodeNumber != nil {
+		episode = fmt.Sprint(*value.EpisodeNumber)
+	}
+	return fmt.Sprintf("%d:%d:%s:%s:%s", value.SourceStart, value.SourceEnd, value.TextHash, value.ExactAnchor, episode)
+}
+
+func validEpisodeSegmentationEvidence(value EpisodeSegmentationEvidence, sourceCodePoints int) bool {
+	return value.SourceStart >= 0 && value.SourceEnd > value.SourceStart && value.SourceEnd <= sourceCodePoints &&
+		hashPattern.MatchString(value.TextHash) && strings.TrimSpace(value.ExactAnchor) != "" &&
+		(value.EpisodeNumber == nil || *value.EpisodeNumber >= 1)
 }
 
 func validateStoryGraphReviewStageInput(payload StageInvocationPayload) error {

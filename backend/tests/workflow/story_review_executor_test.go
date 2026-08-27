@@ -33,7 +33,7 @@ func TestStoryReviewNodeWaitsForBoundedClosureAndNeverReturnsBudgetExhaustionAsS
 	repairedID := uuid.NewString()
 	repairedHash := strings.Repeat("b", 64)
 	owner := &storyReviewOwnerStub{state: bibleapp.StoryReviewState{Status: "pending"}}
-	executor := workflowproduction.NewNodeExecutor(nil, nil, nil, owner, nil, nil, nil, nil, nil)
+	executor := workflowproduction.NewNodeExecutor(nil, nil, nil, owner, nil, nil, nil, nil, nil, nil)
 	input, _, inputHash, err := workflow.BuildNodeInput(workflow.NodeInputSnapshot{
 		SchemaVersion: workflow.NodeInputSchemaVersion,
 		Config:        json.RawMessage(`{"max_repair_rounds":2}`),

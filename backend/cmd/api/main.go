@@ -232,6 +232,10 @@ func main() {
 		bibleStore, storyAnalysisService, agentRuntime, func() time.Time { return time.Now().UTC() },
 		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
 	)
+	episodeSegmentationWorker := bibleapp.NewEpisodeSegmentationWorker(
+		bibleStore, agentRuntime, func() time.Time { return time.Now().UTC() },
+		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
+	)
 	storyReviewWorker := bibleapp.NewStoryReviewWorker(
 		bibleStore, agentRuntime, func() time.Time { return time.Now().UTC() },
 		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
@@ -353,6 +357,7 @@ func main() {
 	go bibleWorker.Run(shutdownSignal)
 	go sourceEvidenceWorker.Run(shutdownSignal)
 	go storyAnalysisWorker.Run(shutdownSignal)
+	go episodeSegmentationWorker.Run(shutdownSignal)
 	go storyReviewWorker.Run(shutdownSignal)
 	go storyboardWorker.Run(shutdownSignal)
 	serverErrors := make(chan error, 1)

@@ -1,6 +1,6 @@
 # StoryGraph 内容图与 DAG 创作画布实施计划
 
-- 状态：实施中；`SG-I01`–`SG-I12` 已完成（2026-08-28）
+- 状态：实施中；`SG-I01`–`SG-I13` 已完成（2026-08-28）
 - Design：[0010 StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
 - Agent Design：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 - PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
@@ -98,7 +98,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 - [x] `SG-I10`：接入 Bible `review_storygraph` 与有界 Candidate Repair，每轮重跑确定性 Gate。完成门：Candidate Revision/Head CAS、冻结允许集、修复预算和旧下游 stale 通过。**完成（2026-08-28）**：invocation/aggregate/repair 三类不可变 Revision origin、content/revision hash、expected Head CAS、冻结 Review/Repair target/allowlist/base fragment/read-only adjacency、幂等 Repair Receipt 与 exact revision stale closure 均已落地。`agent.story_review` 现在由 Temporal 持久轮询驱动 current Head 的 Review→Repair→N+1→replacement Review；每轮重新执行 Backend deterministic gate，Manifest 使用同一 identity 的父 Hash 版本链，持久 Repair Invocation 计数限制 1–3 轮。Gate blocker、模型失败、不可修边界或预算耗尽均不发布 Node Output；真实 PostgreSQL/Temporal 剧本完成两次 Review、一次 Repair 并只发布干净的 Revision 2，完整真实依赖 CI、三镜像和部署故障门禁通过。
 - [x] `SG-I11`：用公共 Human Gate 审批 Bible/identity/state/claim Candidate；正向决议只调用 Production Bible `Confirm` Owner Command，固化 confirmed Bible Gate output 与 `production_bible.confirm` Receipt。完成门：blocker 未清零不得通过；Confirm 不物化 Asset，Decision/Receipt/Node output 精确绑定并可恢复。**完成（2026-08-28）**：公共 HumanTask 精确冻结 Story Candidate id/hash/revision；批准后 Backend 在同一 GORM 事务中创建不可变 `ProductionBibleVersion` 与 Confirm Receipt，Node output 只引用该 Version。Decision 前 Head 漂移、Decision 后基线冲突、Temporal Signal UNKNOWN 恢复、幂等重放与零 Asset/Episode/Shot/StoryGraph 物化均由真实 PostgreSQL/Temporal 全链和完整 CI 证明；旧可变直确认 API/UI 已删除且未保留兼容层。
 - [x] `SG-I12`：只消费 `SG-I11` 的 confirmed Bible 输出，由 Backend Coordinator 在独立命令中原子物化 Character/Location Asset、SpecificationVersion、AssetState 和 ProductionBinding。完成门：幂等 Materialization Receipt、唯一 Owner、单 GORM 事务、失败回滚和反向追踪通过。**完成（2026-08-28）**：第六个生产 Workflow 节点只读取精确 confirmed `ProductionBibleVersion`，Backend 在一个 GORM 事务中按稳定 Entity Key 创建或复用 Character/Location/Prop Asset、不可变 SpecificationVersion、每 Asset 的确定性 `base` AssetState、显式状态、ProductionBinding 与 Materialization Receipt；同名不同 Key 不合并，相同规范跨 Bible Version 复用，冲突、注入 Receipt 失败与更新/删除均由真实 PostgreSQL/Temporal 全链证明原子回滚、幂等重放和反向追踪，完整 CI 与三镜像故障部署通过。
-- [ ] `SG-I13`：Definition-first 接入 `segment_episodes` Candidate，仅产出有证据的边界/顺序/标题提案。完成门：全文 coverage、无重叠/缺口、稳定顺序和恢复通过，不创建 Episode。
+- [x] `SG-I13`：Definition-first 接入 `segment_episodes` Candidate，仅产出有证据的边界/顺序/标题提案。完成门：全文 coverage、无重叠/缺口、稳定顺序和恢复通过，不创建 Episode。**完成（2026-08-28）**：Catalog/Temporal 正式节点、全局不可变 Manifest、精确 Script/Evidence/Bible Materialization 输入、显式 marker 优先和有界 Evidence Index 已落地；Backend 重验全文连续 coverage、边界顺序、证据与 marker，结果未知按同一 Invocation 恢复且只发布一个 Candidate Revision/Head。真实 Codex、PostgreSQL/Temporal 全链、完整基础设施 CI、三镜像与故障部署均通过，Episode 保持为零。
 - [ ] `SG-I14`：完成 Episode Plan Human Gate 与 Backend Owner 原子物化 Episode/Published ScriptVersion。完成门：边界冲突、幂等、全批回滚和 Receipt 验收通过。
 - [ ] `SG-I15`：Definition-first 按 Episode Slice 接入 `analyze_episode` 与 `reconcile_episode`，产出 Scene/Dialogue/Beat/Occurrence/Claim Candidate。完成门：只消费已确认 Bible Snapshot，分片、相邻边界、恢复和引用门禁通过。
 - [ ] `SG-I16`：完成 Scene/Beat/Occurrence/Claim Review、Human Gate 和 Planning Owner 全批应用。完成门：未知身份/状态不得自动创建，整批 Receipt、回滚和反查通过。

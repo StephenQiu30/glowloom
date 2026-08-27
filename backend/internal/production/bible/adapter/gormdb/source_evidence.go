@@ -453,7 +453,8 @@ func aggregateSourceEvidence(
 	now time.Time,
 ) error {
 	var latest model.ShardManifest
-	if err := database.WithContext(ctx).Where("node_run_id = ? AND stage = ?", manifest.NodeRunID, domain.SourceEvidenceStage).
+	if err := database.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("node_run_id = ? AND stage = ?", manifest.NodeRunID, domain.SourceEvidenceStage).
 		Order("version DESC").First(&latest).Error; err != nil {
 		return err
 	}

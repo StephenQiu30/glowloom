@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.modules.storygraph.skill_registry import RegistryError, stage_spec
 
-SKILL_BUNDLE_HASH = "4cf64c94b7d181945da678721db36c4bc45921a9c833164bdea46cb7af149c42"
+SKILL_BUNDLE_HASH = "d19485c0d8ac19c90afa06741c2626b1db55ace1f6c8f9a442231ba05637d95b"
 
 
 class BundleInvalid(ValueError):

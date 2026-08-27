@@ -12,6 +12,7 @@ from app.modules.storygraph.candidate_schemas import (
     BIBLE_DETERMINISTIC_GATE_CODES,
     BIBLE_REPAIR_FIELD_TYPES,
     CandidateIssue,
+    Evidence,
     SourceEvidenceCandidate,
     StoryAnalysisCandidate,
     StoryReconciliationCandidate,
@@ -180,6 +181,108 @@ class StoryAnalysisStageInput(BaseModel):
         ):
             raise ValueError("Story analysis ranges do not match the exact candidate partition")
         return self
+
+
+class EpisodeSegmentationEvidenceLeaf(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    shard_key: str = Field(min_length=1)
+    candidate_revision_id: UUID
+    candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class EpisodeSegmentationMarkerHint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    episode_number: int = Field(ge=1)
+    label: str = Field(min_length=1)
+    evidence: Evidence
+
+    @model_validator(mode="after")
+    def validate_episode_number(self) -> EpisodeSegmentationMarkerHint:
+        if self.evidence.episode_number != self.episode_number:
+            raise ValueError("Episode marker number does not match its Evidence")
+        return self
+
+
+class EpisodeSegmentationEvidenceIndexItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    index_key: str = Field(min_length=1)
+    kind: Literal["marker", "event", "evidence"]
+    label: str = Field(min_length=1)
+    shard_key: str = Field(min_length=1)
+    candidate_revision_id: UUID
+    candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence: Evidence
+
+
+class EpisodeSegmentationStageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_revision_id: UUID
+    normalized_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_code_points: int = Field(ge=1)
+    target_duration_ms: int = Field(ge=1000, le=7_200_000)
+    bible_version_id: UUID
+    bible_version: int = Field(ge=1)
+    bible_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    materialization_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence_aggregate_revision_id: UUID
+    evidence_aggregate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence_leaves: list[EpisodeSegmentationEvidenceLeaf] = Field(min_length=1)
+    marker_hints: list[EpisodeSegmentationMarkerHint]
+    evidence_index: list[EpisodeSegmentationEvidenceIndexItem] = Field(min_length=1, max_length=512)
+
+    @model_validator(mode="after")
+    def validate_bounded_evidence(self) -> EpisodeSegmentationStageInput:
+        shard_keys = [value.shard_key for value in self.evidence_leaves]
+        leaf_keys = [
+            (value.shard_key, value.candidate_revision_id, value.candidate_revision_hash)
+            for value in self.evidence_leaves
+        ]
+        if shard_keys != sorted(set(shard_keys)) or len(leaf_keys) != len(set(leaf_keys)):
+            raise ValueError("Episode segmentation Evidence leaves must be unique and sorted")
+        allowed_leaves = set(leaf_keys)
+        index_keys: set[str] = set()
+        marker_evidence: set[tuple[int, int, str, str, int | None]] = set()
+        for item in self.evidence_index:
+            leaf_key = (
+                item.shard_key,
+                item.candidate_revision_id,
+                item.candidate_revision_hash,
+            )
+            if (
+                leaf_key not in allowed_leaves
+                or item.index_key in index_keys
+                or item.evidence.source_end > self.source_code_points
+            ):
+                raise ValueError("Episode segmentation Evidence index is invalid")
+            index_keys.add(item.index_key)
+            if item.kind == "marker":
+                marker_evidence.add(_episode_segmentation_evidence_key(item.evidence))
+        marker_starts: set[int] = set()
+        for marker in self.marker_hints:
+            if (
+                marker.evidence.source_start in marker_starts
+                or marker.evidence.source_end > self.source_code_points
+                or _episode_segmentation_evidence_key(marker.evidence) not in marker_evidence
+            ):
+                raise ValueError("Episode segmentation marker is not in its bounded index")
+            marker_starts.add(marker.evidence.source_start)
+        return self
+
+
+def _episode_segmentation_evidence_key(
+    value: Evidence,
+) -> tuple[int, int, str, str, int | None]:
+    return (
+        value.source_start,
+        value.source_end,
+        value.text_hash,
+        value.exact_anchor,
+        value.episode_number,
+    )
 
 
 class StoryReconciliationInputCandidate(BaseModel):
@@ -463,6 +566,47 @@ class StoryGraphStagePayload(BaseModel):
                 or self.shard.absolute_end is not None
             ):
                 raise ValueError("Story reconcile input does not match its exact child revisions")
+        elif self.stage == "segment_episodes":
+            stage_input = EpisodeSegmentationStageInput.model_validate(self.stage_input)
+            script_sources = [
+                value
+                for value in self.source_refs
+                if value.owner_kind == "production/script"
+                and value.owner_version_id == stage_input.document_revision_id
+                and value.content_hash == stage_input.normalized_hash
+            ]
+            materialization_sources = [
+                value
+                for value in self.source_refs
+                if value.owner_kind == "production/bible-materialization"
+                and value.owner_logical_id == str(stage_input.bible_version_id)
+                and value.owner_version_id == stage_input.bible_version_id
+                and value.revision == stage_input.bible_version
+                and value.content_hash == stage_input.materialization_hash
+            ]
+            supplied_leaves = {
+                (value.shard_key, value.candidate_revision_id, value.candidate_revision_hash)
+                for value in stage_input.evidence_leaves
+            }
+            upstream_leaves = {
+                (value.shard_key, value.candidate_revision_id, value.candidate_revision_hash)
+                for value in self.upstream_candidates
+                if value.stage == "extract_source_evidence"
+            }
+            if (
+                len(self.source_refs) != 2
+                or len(script_sources) != 1
+                or len(materialization_sources) != 1
+                or len(self.upstream_candidates) != len(stage_input.evidence_leaves)
+                or supplied_leaves != upstream_leaves
+                or self.base_storygraph_version_id is not None
+                or self.shard.kind != "episode_segmentation"
+                or self.shard.absolute_start != 0
+                or self.shard.absolute_end != stage_input.source_code_points
+            ):
+                raise ValueError(
+                    "Episode segmentation input does not match its exact immutable sources"
+                )
         elif self.stage == "review_storygraph":
             stage_input = StoryGraphReviewStageInput.model_validate(self.stage_input)
             if (

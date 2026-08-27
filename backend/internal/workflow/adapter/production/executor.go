@@ -31,6 +31,7 @@ const (
 	storyReviewExecutor            = "activity.story_review"
 	productionBibleExecutor        = "activity.production_bible"
 	bibleMaterializationExecutor   = "activity.production_bible_materialization"
+	episodeSegmentationExecutor    = "activity.episode_segmentation"
 	episodePlanExecutor            = "activity.episode_plan"
 	episodeStructureExecutor       = "activity.episode_structure"
 	storyboardDraftExecutor        = "activity.storyboard_draft"
@@ -63,6 +64,10 @@ type StoryAnalysisOwner interface {
 
 type StoryReviewOwner interface {
 	EnsureStoryReview(context.Context, bibleapp.StoryReviewCommand) (bibleapp.StoryReviewState, error)
+}
+
+type EpisodeSegmentationOwner interface {
+	Ensure(context.Context, bibleapp.EpisodeSegmentationCommand) (bibleapp.EpisodeSegmentationState, error)
 }
 
 type ProjectSource interface {
@@ -102,6 +107,7 @@ type NodeExecutor struct {
 	plans        EpisodePlanOwner
 	storyboards  StoryboardWorkflowOwner
 	bindings     ShotImageWorkflowOwner
+	segments     EpisodeSegmentationOwner
 }
 
 func NewNodeExecutor(
@@ -114,10 +120,11 @@ func NewNodeExecutor(
 	plans EpisodePlanOwner,
 	storyboards StoryboardWorkflowOwner,
 	bindings ShotImageWorkflowOwner,
+	segments EpisodeSegmentationOwner,
 ) *NodeExecutor {
 	return &NodeExecutor{
 		scripts: scripts, evidence: evidence, stories: stories, storyReviews: storyReviews, bibles: bibles, projects: projects, plans: plans,
-		storyboards: storyboards, bindings: bindings,
+		storyboards: storyboards, bindings: bindings, segments: segments,
 	}
 }
 
@@ -143,6 +150,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeProductionBible(ctx, command)
 	case bibleMaterializationExecutor:
 		return executor.executeBibleMaterialization(ctx, command)
+	case episodeSegmentationExecutor:
+		return executor.executeEpisodeSegmentation(ctx, command)
 	case episodePlanExecutor:
 		return executor.executeEpisodePlan(ctx, command)
 	case episodeStructureExecutor:
@@ -1117,6 +1126,91 @@ func (executor *NodeExecutor) executeBibleMaterialization(
 			Port: "materialization", ValueType: "production_bible_materialization",
 			ReferenceID: binding.ReferenceID, ReferenceVersion: binding.ReferenceVersion,
 			ContentHash: result.Materialization.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeEpisodeSegmentation(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.segments == nil {
+		return domain.NodeExecutorResult{}, errors.New("Episode segmentation workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 2 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
+		command.OutputPorts[0].ValueType != "episode_segmentation_candidate" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Episode segmentation node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Episode segmentation node config")
+	}
+	bindings := make(map[string]domain.NodeInputBinding, len(input.Bindings))
+	for _, binding := range input.Bindings {
+		bindings[binding.Port] = binding
+	}
+	evidence, materialization := bindings["evidence"], bindings["materialization"]
+	bibleVersion, versionErr := strconv.Atoi(materialization.ReferenceVersion)
+	if versionErr != nil || bibleVersion < 1 ||
+		evidence.ValueType != "source_evidence_candidate" || evidence.SourceKind != domain.NodeInputSourceNodeOutput ||
+		evidence.SourcePort != "evidence" || strings.TrimSpace(evidence.SourceNodeID) == "" ||
+		materialization.ValueType != "production_bible_materialization" ||
+		materialization.SourceKind != domain.NodeInputSourceNodeOutput ||
+		materialization.SourcePort != "materialization" || strings.TrimSpace(materialization.SourceNodeID) == "" ||
+		!workflowContentHashPattern.MatchString(evidence.ContentHash) ||
+		!workflowContentHashPattern.MatchString(materialization.ContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Episode segmentation exact inputs have drifted")
+	}
+	var scriptID, scriptHash string
+	foundScript := false
+	for _, reference := range input.FrozenInputs {
+		if reference.Kind == "script_revision" {
+			if foundScript {
+				return domain.NodeExecutorResult{}, errors.New("Episode segmentation has multiple frozen scripts")
+			}
+			scriptID, scriptHash, foundScript = reference.ID, reference.Hash, true
+		}
+	}
+	if !foundScript || !workflowContentHashPattern.MatchString(scriptHash) {
+		return domain.NodeExecutorResult{}, errors.New("Episode segmentation frozen script is missing")
+	}
+	state, err := executor.segments.Ensure(ctx, bibleapp.EpisodeSegmentationCommand{
+		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
+		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
+		DocumentRevisionID: scriptID, DocumentRevisionHash: scriptHash,
+		EvidenceCandidateRevisionID:   evidence.ReferenceID,
+		EvidenceCandidateRevisionHash: evidence.ContentHash,
+		BibleVersionID:                materialization.ReferenceID, BibleVersion: bibleVersion,
+		MaterializationHash: materialization.ContentHash,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	switch state.Status {
+	case "pending":
+		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+	case "failed":
+		return domain.NodeExecutorResult{}, errors.New("Episode segmentation candidate generation failed")
+	case "ready":
+		if _, parseErr := uuid.Parse(state.CandidateRevisionID); parseErr != nil ||
+			state.CandidateRevisionNo < 1 || !workflowContentHashPattern.MatchString(state.CandidateRevisionHash) {
+			return domain.NodeExecutorResult{}, errors.New("Episode segmentation candidate is incomplete")
+		}
+	default:
+		return domain.NodeExecutorResult{}, errors.New("Episode segmentation returned an invalid status")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "candidate", ValueType: "episode_segmentation_candidate",
+			ReferenceID: state.CandidateRevisionID, ReferenceVersion: strconv.FormatInt(state.CandidateRevisionNo, 10),
+			ContentHash: state.CandidateRevisionHash,
 		}},
 	})
 	if err != nil {

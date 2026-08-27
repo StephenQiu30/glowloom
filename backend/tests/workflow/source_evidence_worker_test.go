@@ -9,6 +9,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -95,6 +97,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "story-review", DefinitionKey: "agent.story_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"max_repair_rounds":2}`)},
 				{ID: "bible-review", DefinitionKey: "human.production_bible_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{"expected_bible_version":1}`)},
 				{ID: "bible-materialization", DefinitionKey: "production.bible_materialization", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "episode-segmentation", DefinitionKey: "agent.episode_segmentation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
@@ -102,6 +105,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "story-to-review", FromNodeID: "story", FromPort: "candidate", ToNodeID: "story-review", ToPort: "candidate"},
 				{ID: "review-to-bible", FromNodeID: "story-review", FromPort: "candidate", ToNodeID: "bible-review", ToPort: "candidate"},
 				{ID: "bible-to-materialization", FromNodeID: "bible-review", FromPort: "bible", ToNodeID: "bible-materialization", ToPort: "bible"},
+				{ID: "evidence-to-segmentation", FromNodeID: "evidence", FromPort: "evidence", ToNodeID: "episode-segmentation", ToPort: "evidence"},
+				{ID: "materialization-to-segmentation", FromNodeID: "bible-materialization", FromPort: "materialization", ToNodeID: "episode-segmentation", ToPort: "materialization"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -141,6 +146,9 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	storyAnalysisService := bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, FanIn: 2,
 	})
+	episodeSegmentationService := bibleapp.NewEpisodeSegmentationService(bibleStore, bibleapp.EpisodeSegmentationConfig{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+	})
 	storyReviewService := bibleapp.NewStoryReviewService(
 		bibleStore,
 		bibleapp.NewStoryCandidateRepairService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}),
@@ -161,7 +169,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		reviewService,
-		nil, nil,
+		nil, nil, episodeSegmentationService,
 	)
 	if err != nil {
 		t.Fatalf("compose Source Evidence Workflow Runtime: %v", err)
@@ -200,6 +208,10 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		bibleStore, agent, func() time.Time { return time.Now().UTC() },
 		time.Millisecond, time.Minute, agentLogger,
 	)
+	episodeSegmentationWorker := bibleapp.NewEpisodeSegmentationWorker(
+		bibleStore, agent, func() time.Time { return time.Now().UTC() },
+		time.Millisecond, time.Minute, agentLogger,
+	)
 	bibleWorker := bibleapp.NewWorker(
 		bibleStore, agent, func() time.Time { return time.Now().UTC() },
 		time.Millisecond, time.Minute, agentLogger,
@@ -210,6 +222,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	go storyWorker.Run(agentContext)
 	go storyReviewWorker.Run(agentContext)
 	go storyReviewWorker.Run(agentContext)
+	go episodeSegmentationWorker.Run(agentContext)
+	go episodeSegmentationWorker.Run(agentContext)
 	go bibleWorker.Run(agentContext)
 	t.Cleanup(stopAgent)
 
@@ -567,6 +581,52 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		materializationOutput.Bindings[0].ReferenceID != version.ID.String() ||
 		materializationOutput.Bindings[0].ReferenceVersion != "1" {
 		t.Fatalf("Production Bible materialization output=%#v node=%#v err=%v", materializationOutput, materializationNode, err)
+	}
+	var segmentationNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "episode-segmentation").
+		First(&segmentationNode).Error; err != nil {
+		t.Fatalf("load Episode segmentation NodeRun: %v", err)
+	}
+	segmentationOutput, _, segmentationOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(segmentationNode.Output))
+	if err != nil || segmentationNode.Status != "SUCCEEDED" || segmentationNode.OutputHash == nil ||
+		*segmentationNode.OutputHash != segmentationOutputHash || len(segmentationOutput.Bindings) != 1 ||
+		segmentationOutput.Bindings[0].Port != "candidate" ||
+		segmentationOutput.Bindings[0].ValueType != "episode_segmentation_candidate" {
+		t.Fatalf("Episode segmentation output=%#v node=%#v err=%v", segmentationOutput, segmentationNode, err)
+	}
+	var segmentationInvocation model.AgentInvocation
+	if err = database.Where("node_run_id = ? AND request_type = ?", segmentationNode.ID, "episode_segmentation").
+		First(&segmentationInvocation).Error; err != nil {
+		t.Fatalf("load Episode segmentation invocation: %v", err)
+	}
+	var segmentationRevisionCount, segmentationHeadCount, postSegmentationEpisodeCount int64
+	if err = database.Model(&model.StageCandidateRevision{}).
+		Where("source_invocation_id = ?", segmentationInvocation.ID).Count(&segmentationRevisionCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.StageCandidateHead{}).
+		Where("stage_instance_key = ?", segmentationInvocation.StageInstanceKey).Count(&segmentationHeadCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.Episode{}).Where("project_id = ?", fixture.projectID).
+		Count(&postSegmentationEpisodeCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	var segmentationCandidate bibledomain.EpisodeSegmentationCandidate
+	agent.mutex.Lock()
+	segmentInvocationID := agent.segmentInvocationID
+	agent.mutex.Unlock()
+	if err = json.Unmarshal(segmentationInvocation.Candidate, &segmentationCandidate); err != nil ||
+		segmentationInvocation.Status != "succeeded" || segmentationInvocation.Attempts < 2 ||
+		segmentationInvocation.ID.String() != segmentInvocationID ||
+		len(segmentationCandidate.Boundaries) != 3 || segmentationCandidate.Boundaries[0].AbsoluteStart != 0 ||
+		segmentationCandidate.Boundaries[len(segmentationCandidate.Boundaries)-1].AbsoluteEnd != len([]rune(text)) ||
+		segmentationRevisionCount != 1 || segmentationHeadCount != 1 || postSegmentationEpisodeCount != 0 {
+		t.Fatalf(
+			"Episode segmentation facts: invocation=%#v candidate=%#v revisions=%d heads=%d episodes=%d err=%v",
+			segmentationInvocation, segmentationCandidate, segmentationRevisionCount, segmentationHeadCount,
+			postSegmentationEpisodeCount, err,
+		)
 	}
 	var assets []model.Asset
 	if err = database.Where("project_id = ?", fixture.projectID).Order("identity_key").Find(&assets).Error; err != nil {
@@ -1132,6 +1192,8 @@ type recoveringSourceEvidenceAgent struct {
 	storyReduceBudget       bool
 	storyDeadline           bool
 	storyDeadlineID         string
+	segmentUnknown          bool
+	segmentInvocationID     string
 	originalCalls           int
 	lateRelease             <-chan struct{}
 	deadlineRecoveryRelease <-chan struct{}
@@ -1143,6 +1205,21 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 	_ int,
 	_ int64,
 ) (agentcontract.StageResult, error) {
+	if invocation.Payload.Stage == bibledomain.EpisodeSegmentationStage {
+		agent.mutex.Lock()
+		if !agent.segmentUnknown {
+			agent.segmentUnknown = true
+			agent.segmentInvocationID = invocation.InvocationID
+			agent.mutex.Unlock()
+			return agentcontract.StageResult{}, errors.New("injected Episode segmentation transport outcome unknown")
+		}
+		if agent.segmentInvocationID != invocation.InvocationID {
+			agent.mutex.Unlock()
+			return agentcontract.StageResult{}, errors.New("Episode segmentation retry changed invocation identity")
+		}
+		agent.mutex.Unlock()
+		return episodeSegmentationFixtureResult(invocation)
+	}
 	if invocation.Payload.Stage == bibledomain.ReviewStoryGraphStage || invocation.Payload.Stage == "repair_candidate" {
 		return storyReviewFixtureResult(invocation)
 	}
@@ -1267,6 +1344,54 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 		Candidate: candidate, InputHash: invocation.InputHash, ResultHash: &resultHash,
 		Issues:   []agentcontract.StageIssue{},
 		Executor: agentcontract.Executor{Name: "test-agent", Version: "source-evidence-v1", Model: "deterministic-fixture"},
+	}, nil
+}
+
+func episodeSegmentationFixtureResult(invocation agentcontract.StageInvocation) (agentcontract.StageResult, error) {
+	var input agentcontract.EpisodeSegmentationStageInput
+	if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	if len(input.MarkerHints) == 0 {
+		return agentcontract.StageResult{}, errors.New("fixture Episode segmentation received no explicit marker")
+	}
+	slices.SortFunc(input.MarkerHints, func(left, right agentcontract.EpisodeSegmentationMarkerHint) int {
+		return left.Evidence.SourceStart - right.Evidence.SourceStart
+	})
+	boundaries := make([]bibledomain.EpisodeBoundary, 0, len(input.MarkerHints))
+	for index, marker := range input.MarkerHints {
+		end := input.SourceCodePoints
+		if index+1 < len(input.MarkerHints) {
+			end = input.MarkerHints[index+1].Evidence.SourceStart
+		}
+		boundaries = append(boundaries, bibledomain.EpisodeBoundary{
+			BoundaryKey: "episode:" + strconv.Itoa(index+1), EpisodeOrder: index + 1,
+			Title: marker.Label, AbsoluteStart: marker.Evidence.SourceStart, AbsoluteEnd: end,
+			Evidence: []bibledomain.Evidence{{
+				SourceStart: marker.Evidence.SourceStart, SourceEnd: marker.Evidence.SourceEnd,
+				TextHash: marker.Evidence.TextHash, ExactAnchor: marker.Evidence.ExactAnchor,
+				EpisodeNumber: marker.Evidence.EpisodeNumber,
+			}},
+		})
+	}
+	candidate, err := json.Marshal(bibledomain.EpisodeSegmentationCandidate{
+		Boundaries: boundaries, ReviewIssues: []bibledomain.ReviewIssue{},
+	})
+	if err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	resultHash, err := agentcontract.CanonicalHash(candidate)
+	if err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	return agentcontract.StageResult{
+		InvocationID: invocation.InvocationID, Kind: "storygraph_stage",
+		WireSchemaVersion: agentcontract.StoryGraphWireSchemaVersion,
+		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
+		Status: "succeeded", CandidateType: "episode_segmentation_candidate",
+		Candidate: candidate, InputHash: invocation.InputHash, ResultHash: &resultHash,
+		Issues:   []agentcontract.StageIssue{},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "episode-segmentation-v1", Model: "deterministic-fixture"},
 	}, nil
 }
 

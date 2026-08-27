@@ -14,11 +14,12 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "7.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "8.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
 	want := []string{
+		"agent.episode_segmentation@1.0.0",
 		"agent.production_bible@1.0.0",
 		"agent.source_evidence@1.0.0",
 		"agent.story_analysis@1.0.0",
