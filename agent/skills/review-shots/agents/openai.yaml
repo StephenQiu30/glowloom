@@ -1,6 +1,0 @@
-interface:
-  display_name: "Review Shots"
-  short_description: "Return evidence-scoped director issues without editing shots"
-  default_prompt: "Use $review-shots to independently review the supplied candidate storyboard and return schema-valid evidence-scoped issues."
-policy:
-  allow_implicit_invocation: false

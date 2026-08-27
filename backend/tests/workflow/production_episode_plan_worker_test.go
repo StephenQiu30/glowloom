@@ -623,7 +623,7 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 		t.Fatal(err)
 	}
 	if err = database.Model(&model.AgentInvocation{}).Where(
-		"kind = ? AND status = ? AND request_id IN ?", "storyboard_draft", "succeeded", setBatchIDs,
+		"kind = ? AND stage = ? AND status = ? AND request_id IN ?", "storygraph_stage", "draft_storyboard", "succeeded", setBatchIDs,
 	).Count(&invocationCount).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -632,8 +632,8 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 		t.Fatal(err)
 	}
 	for _, invocation := range storyboardInvocations {
-		var executionPolicy contract.ExecutionPolicy
-		if err = json.Unmarshal(invocation.ExecutionPolicy, &executionPolicy); err != nil || executionPolicy.ValidateFor("storyboard_draft") != nil || executionPolicy.MaxModelCalls != 1 {
+		var executionPolicy contract.StageExecutionPolicy
+		if err = json.Unmarshal(invocation.ExecutionPolicy, &executionPolicy); err != nil || executionPolicy.Validate() != nil || executionPolicy.MaxModelCalls != 1 || invocation.Kind != "storygraph_stage" || invocation.Stage != "draft_storyboard" {
 			t.Fatalf("Storyboard execution policy = %#v err=%v", executionPolicy, err)
 		}
 	}
@@ -1006,14 +1006,14 @@ func explicitTwoEpisodeRevisionValues(t *testing.T) map[string]any {
 
 type successfulStoryboardAgent struct{}
 
-func (successfulStoryboardAgent) Invoke(_ context.Context, invocation contract.Invocation) (contract.Result, error) {
+func (successfulStoryboardAgent) Invoke(_ context.Context, invocation contract.StageInvocation, _ int, _ int64) (contract.StageResult, error) {
 	var payload struct {
 		Units []struct {
 			ID string `json:"unit_version_id"`
 		} `json:"units"`
 	}
-	if err := json.Unmarshal(invocation.Payload, &payload); err != nil {
-		return contract.Result{}, err
+	if err := json.Unmarshal(invocation.Payload.StageInput, &payload); err != nil {
+		return contract.StageResult{}, err
 	}
 	unitIDs := make([]string, len(payload.Units))
 	for index, unit := range payload.Units {
@@ -1025,15 +1025,17 @@ func (successfulStoryboardAgent) Invoke(_ context.Context, invocation contract.I
 		"asset_references": []any{}, "risk_codes": []any{},
 	}}})
 	if err != nil {
-		return contract.Result{}, err
+		return contract.StageResult{}, err
 	}
 	resultHash, err := contract.CanonicalHash(candidate)
 	if err != nil {
-		return contract.Result{}, err
+		return contract.StageResult{}, err
 	}
-	return contract.Result{
-		InvocationID: invocation.InvocationID, Kind: invocation.Kind, InputHash: invocation.InputHash,
-		Status: "succeeded", SchemaVersion: contract.SchemaVersion, Candidate: candidate, ResultHash: &resultHash,
+	return contract.StageResult{
+		InvocationID: invocation.InvocationID, Kind: invocation.Kind, WireSchemaVersion: invocation.WireSchemaVersion,
+		Stage: invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey, Status: "succeeded",
+		CandidateType: "storyboard_row_candidate", Candidate: candidate, InputHash: invocation.InputHash,
+		ResultHash: &resultHash, Issues: []contract.StageIssue{},
 		Executor: contract.Executor{Name: "workflow-test", Version: "1", Model: "deterministic"},
 	}, nil
 }

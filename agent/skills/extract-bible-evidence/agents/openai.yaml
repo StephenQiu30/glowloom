@@ -1,6 +1,0 @@
-interface:
-  display_name: "Extract Bible Evidence"
-  short_description: "Extract exact full-script evidence for Bible candidates"
-  default_prompt: "Use $extract-bible-evidence to extract schema-valid evidence candidates with document-absolute source spans from the supplied immutable script chunk."
-policy:
-  allow_implicit_invocation: false

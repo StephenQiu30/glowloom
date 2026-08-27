@@ -7,112 +7,34 @@ annotated-types==0.8.0
 anyio==4.14.2
     # via
     #   lanverse-agent-runtime (pyproject.toml)
-    #   httpx
-    #   langsmith
     #   starlette
     #   watchfiles
-certifi==2026.7.22
-    # via
-    #   httpcore
-    #   httpx
-    #   requests
-charset-normalizer==3.4.9
-    # via requests
 click==8.4.2
     # via uvicorn
-distro==1.9.0
-    # via langsmith
 fastapi==0.140.12
     # via lanverse-agent-runtime (pyproject.toml)
 h11==0.16.0
-    # via
-    #   httpcore
-    #   uvicorn
-httpcore==1.0.9
-    # via httpx
+    # via uvicorn
 httptools==0.8.0
     # via uvicorn
-httpx==0.28.1
-    # via
-    #   langchain-core
-    #   langgraph-sdk
-    #   langsmith
 idna==3.18
-    # via
-    #   anyio
-    #   httpx
-    #   requests
-jsonpatch==1.33
-    # via langchain-core
-jsonpointer==3.1.1
-    # via jsonpatch
-langchain-core==1.6.0
-    # via
-    #   lanverse-agent-runtime (pyproject.toml)
-    #   langgraph
-    #   langgraph-checkpoint
-    #   langgraph-prebuilt
-    #   langgraph-sdk
-langchain-protocol==0.0.18
-    # via
-    #   langchain-core
-    #   langgraph-sdk
-langgraph==1.2.9
-    # via lanverse-agent-runtime (pyproject.toml)
-langgraph-checkpoint==4.2.0
-    # via
-    #   langgraph
-    #   langgraph-prebuilt
-langgraph-prebuilt==1.1.0
-    # via langgraph
-langgraph-sdk==0.4.2
-    # via langgraph
-langsmith==0.10.12
-    # via langchain-core
-orjson==3.11.9
-    # via
-    #   langgraph-sdk
-    #   langsmith
-ormsgpack==1.12.2
-    # via langgraph-checkpoint
-packaging==26.2
-    # via
-    #   langchain-core
-    #   langsmith
+    # via anyio
 pydantic==2.13.4
     # via
     #   lanverse-agent-runtime (pyproject.toml)
     #   fastapi
-    #   langchain-core
-    #   langgraph
-    #   langsmith
 pydantic-core==2.46.4
     # via pydantic
 python-dotenv==1.2.2
     # via uvicorn
 pyyaml==6.0.3
-    # via
-    #   langchain-core
-    #   uvicorn
-requests==2.34.2
-    # via
-    #   langsmith
-    #   requests-toolbelt
-requests-toolbelt==1.0.0
-    # via langsmith
-sniffio==1.3.1
-    # via langsmith
+    # via uvicorn
 starlette==1.3.1
     # via fastapi
-tenacity==9.1.4
-    # via langchain-core
 typing-extensions==4.16.0
     # via
     #   anyio
     #   fastapi
-    #   langchain-core
-    #   langchain-protocol
-    #   langsmith
     #   pydantic
     #   pydantic-core
     #   starlette
@@ -121,12 +43,6 @@ typing-inspection==0.4.2
     # via
     #   fastapi
     #   pydantic
-urllib3==2.7.0
-    # via requests
-uuid-utils==0.17.0
-    # via
-    #   langchain-core
-    #   langsmith
 uvicorn==0.51.0
     # via lanverse-agent-runtime (pyproject.toml)
 uvloop==0.22.1
@@ -134,13 +50,4 @@ uvloop==0.22.1
 watchfiles==1.2.0
     # via uvicorn
 websockets==15.0.1
-    # via
-    #   langgraph-sdk
-    #   langsmith
-    #   uvicorn
-xxhash==3.8.1
-    # via
-    #   langgraph
-    #   langsmith
-zstandard==0.25.0
-    # via langsmith
+    # via uvicorn

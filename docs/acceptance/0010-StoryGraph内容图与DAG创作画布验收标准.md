@@ -128,34 +128,34 @@
 
 ### 3.1 边界、迁移与 Bundle
 
-- [ ] `SGA-BND-001`（`SG-I01`、`SG-I05` 起）：Backend 拥有 Stage/Policy/Invocation/Shard/Candidate 与全部写入。
-- [ ] `SGA-BND-002`（`SG-I01`、`SG-I05` 起）：Agent 无 ORM/DB/Object/Kafka/Elastic/Temporal/Provider/Public API。
+- [x] `SGA-BND-001`（`SG-I01`、`SG-I05` 起）：Backend 拥有 Stage/Policy/Invocation/Shard/Candidate 与全部写入。
+- [x] `SGA-BND-002`（`SG-I01`、`SG-I05` 起）：Agent 无 ORM/DB/Object/Kafka/Elastic/Temporal/Provider/Public API。
 - [ ] `SGA-BND-003`（`SG-I08` 起）：Stage/Shard 挂既有 Run/NodeRun，无动态 Workflow Node/Agent Checkpoint。
 - [ ] `SGA-BND-004`（全部 Agent Stage）：Agent success 零 Confirm/Apply/正式 UUID/Owner/Event/Resume。
-- [ ] `SGA-BND-005`（`SG-I05`）：普通显式 Registry，无 LangGraph 运行路径且无消费者时删除依赖/lock。
+- [x] `SGA-BND-005`（`SG-I05`）：普通显式 Registry，无 LangGraph 运行路径且无消费者时删除依赖/lock。
 - [x] `SGA-MOV-001`（`SG-I02`）：八 Skill 原名、原 UTF-8 字节、相对路径 SHA-256 等价迁移。
 - [x] `SGA-MOV-002`（`SG-I02`）：Loader/Docker/tests 原子切换，根旧路径删除且无双读/fallback。
 - [x] `SGA-MOV-003`（`SG-I02`）：只迁移不改行为，Agent/Backend/Frontend 全量 CI 通过。
-- [ ] `SGA-BDL-001`（`SG-I05`）：最终唯一 `agent/skills/build-storygraph/SKILL.md`，旧名/旧 Loader/无消费者 metadata 删除。
-- [ ] `SGA-BDL-002`（`SG-I05`）：SKILL 全局规则 + 显式 references，Python 无 Guidance 复制。
-- [ ] `SGA-BDL-003`（`SG-I05`）：Stage→Schema/Reference 显式 Registry、loaded-file golden、未知 Stage 拒绝。
-- [ ] `SGA-BDL-004`（`SG-I05`）：Bundle Canonical Hash 跨语言、路径/长度/字节与逃逸 fail closed。
-- [ ] `SGA-BDL-005`（`SG-I05`）：Manifest 冻结版本/Hash/模型/空 Tool/budget/deadline，任一漂移拒绝。
-- [ ] `SGA-BDL-006`（`SG-I05`）：未终态 Invocation 按 Bundle Hash 精确镜像路由，缺失无相近版本回退。
+- [x] `SGA-BDL-001`（`SG-I05`）：最终唯一 `agent/skills/build-storygraph/SKILL.md`，旧名/旧 Loader/无消费者 metadata 删除。
+- [x] `SGA-BDL-002`（`SG-I05`）：SKILL 全局规则 + 显式 references，Python 无 Guidance 复制。
+- [x] `SGA-BDL-003`（`SG-I05`）：Stage→Schema/Reference 显式 Registry、loaded-file golden、未知 Stage 拒绝。
+- [x] `SGA-BDL-004`（`SG-I05`）：Bundle Canonical Hash 跨语言、路径/长度/字节与逃逸 fail closed。
+- [x] `SGA-BDL-005`（`SG-I05`）：Manifest 冻结版本/Hash/模型/空 Tool/budget/deadline，任一漂移拒绝。
+- [x] `SGA-BDL-006`（`SG-I05`）：未终态 Invocation 按 Bundle Hash 精确镜像路由，缺失无相近版本回退。
 
 ### 3.2 Wire、Stage 与 Shard
 
-- [ ] `SGA-WIR-001`（`SG-I01` fixture、`SG-I05` 最终）：只允许 `storygraph_stage`，旧 kind 原子移除。
-- [ ] `SGA-WIR-002`（`SG-I01`、`SG-I05`）：Invocation 全字段 strict fixture。
-- [ ] `SGA-WIR-003`（`SG-I01`、`SG-I05`）：source/upstream exact ref 完整且无 current/latest 补全。
-- [ ] `SGA-WIR-004`（`SG-I01`、`SG-I05`）：Input Hash 跨语言与每字段突变 golden。
-- [ ] `SGA-WIR-005`（`SG-I01`、`SG-I05`）：stage instance identity 并发/重放/结果冲突。
-- [ ] `SGA-WIR-006`（`SG-I01`、`SG-I05`）：succeeded/failed/unknown strict union 与 `extra=forbid`。
-- [ ] `SGA-WIR-007`（`SG-I01`、`SG-I05`）：Result Hash、Backend 不可变接受与全身份重验。
-- [ ] `SGA-WIR-008`（`SG-I01`、`SG-I05`）：Grant expiry/attempt/fencing/恒时验签与伪造拒绝。
-- [ ] `SGA-STG-001`（`SG-I05`）：十 Stage/Reference/Candidate 一一对应与跨语言 count=10。
-- [ ] `SGA-STG-002`（`SG-I05`）：Pydantic 唯一 Schema 事实、临时生成 JSON Schema、无 tracked 第二份。
-- [ ] `SGA-STG-003`（`SG-I05` 起）：Candidate 只用给定 Ref/临时 Key，无 Command/SQL/Graph overwrite。
+- [x] `SGA-WIR-001`（`SG-I01` fixture、`SG-I05` 最终）：只允许 `storygraph_stage`，旧 kind 原子移除。
+- [x] `SGA-WIR-002`（`SG-I01`、`SG-I05`）：Invocation 全字段 strict fixture。
+- [x] `SGA-WIR-003`（`SG-I01`、`SG-I05`）：source/upstream exact ref 完整且无 current/latest 补全。
+- [x] `SGA-WIR-004`（`SG-I01`、`SG-I05`）：Input Hash 跨语言与每字段突变 golden。
+- [x] `SGA-WIR-005`（`SG-I01`、`SG-I05`）：stage instance identity 并发/重放/结果冲突。
+- [x] `SGA-WIR-006`（`SG-I01`、`SG-I05`）：succeeded/failed/unknown strict union 与 `extra=forbid`。
+- [x] `SGA-WIR-007`（`SG-I01`、`SG-I05`）：Result Hash、Backend 不可变接受与全身份重验。
+- [x] `SGA-WIR-008`（`SG-I01`、`SG-I05`）：Grant expiry/attempt/fencing/恒时验签与伪造拒绝。
+- [x] `SGA-STG-001`（`SG-I05`）：十 Stage/Reference/Candidate 一一对应与跨语言 count=10。
+- [x] `SGA-STG-002`（`SG-I05`）：Pydantic 唯一 Schema 事实、临时生成 JSON Schema、无 tracked 第二份。
+- [x] `SGA-STG-003`（`SG-I05` 起）：Candidate 只用给定 Ref/临时 Key，无 Command/SQL/Graph overwrite。
 - [ ] `SGA-STG-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I22`）：无证据不补写事实的对抗/人工证据。
 - [ ] `SGA-STG-005`（`SG-I09`、`SG-I15`）：关系/因果/连续性/伏笔使用 Claim Candidate，无持久环边。
 - [ ] `SGA-STG-006`（`SG-I18`）：draft_storyboard 非空 Spec/State、缺资产只产 needs_asset。
@@ -192,15 +192,15 @@
 - [ ] `SGA-COD-004`（同上）：模型调用/技术 deadline、进程回收与脱敏有界诊断。
 - [ ] `SGA-COD-005`（同上）：Schema 修正固定次数计入预算，事实 blocker 不被改写。
 - [ ] `SGA-COD-006`（同上）：runtime unavailable/transport unknown 不空 Candidate 成功、不换 Provider。
-- [ ] `SGA-ERR-001`（`SG-I05` 起）：稳定错误码 Go/Python fixture 完整。
-- [ ] `SGA-ERR-002`（同上）：failed/unknown 可重试分类与同 identity 对账事实计数。
+- [x] `SGA-ERR-001`（`SG-I05` 起）：稳定错误码 Go/Python fixture 完整。
+- [x] `SGA-ERR-002`（同上）：failed/unknown 可重试分类与同 identity 对账事实计数。
 - [ ] `SGA-ERR-003`（`SG-I04`、全部 Agent 切片）：允许日志字段与剧本/Candidate/Prompt/Grant/Secret 零命中。
 - [ ] `SGA-ERR-004`（同上）：Backend→Agent→Codex trace 关联且 Candidate Hash 不变。
 - [x] `SGA-OPS-001`（`SG-I01` 起）：Agent 测试只在 `agent/tests` 独立分类。
-- [ ] `SGA-OPS-002`（每个 Agent 任务）：Ruff check/format、Pyright、Pytest 与 Go/Python fixture 同时通过。
-- [ ] `SGA-OPS-003`（`SG-I02`、`SG-I05`）：非 root 镜像含唯一 Bundle/Codex，旧路径不存在且启动 Hash 验证。
+- [x] `SGA-OPS-002`（每个 Agent 任务）：Ruff check/format、Pyright、Pytest 与 Go/Python fixture 同时通过。
+- [x] `SGA-OPS-003`（`SG-I02`、`SG-I05`）：非 root 镜像含唯一 Bundle/Codex，旧路径不存在且启动 Hash 验证。
 - [ ] `SGA-OPS-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I22`、`SG-I27`）：各类至少一次真实 Codex，完整原稿无模型桩。
-- [ ] `SGA-OPS-005`（每个 `SG-Ixx`）：完整任务 Red→Green→Refactor、全量 CI、Evidence 与独立提交。
+- [x] `SGA-OPS-005`（每个 `SG-Ixx`）：完整任务 Red→Green→Refactor、全量 CI、Evidence 与独立提交。
 - [ ] `SGA-OPS-006`（`SG-I28`）：仅在 `SG-I27` 提交后运行最终 agent-browser，无新 Agent 实现。
 - [ ] `SGA-JRN-001`（`SG-I08`–`011`、`SG-I27`）：完整原稿 Evidence→Story analyze/reconcile→review/repair→Bible Gate 可恢复。
 - [ ] `SGA-JRN-002`（`SG-I12`–`017`、`SG-I27`）：confirmed Bible→episode analyze/reconcile→Owner Apply→Core Graph。
@@ -215,7 +215,7 @@
 - [x] `SG-I02`：八 Skill 字节保持迁移至 `agent/skills`，单路径、无 fallback、全量 CI、独立提交完成。
 - [x] `SG-I03`：StoryGraph Version/Head/Compiler/Owner Set/Outbox 单事务发布完成。
 - [x] `SG-I04`：Graph Query + Kafka Event + Elasticsearch Search + ELK 日志真实消费者、故障 CI 完成。
-- [ ] `SG-I05`：`build-storygraph` 唯一 Bundle、Stage Wire/Policy/Candidate Revision、旧入口原子删除完成。
+- [x] `SG-I05`：`build-storygraph` 唯一 Bundle、Stage Wire/Policy/Candidate Revision、旧入口原子删除完成。
 - [ ] `SG-I06`：公共 HumanTask/Lease/Decision/Resume Backend API 与恢复完成。
 - [ ] `SG-I07`：真实 Review Workbench 与错误/unknown/a11y 完成。
 - [ ] `SG-I08`：Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate 完成。
@@ -332,4 +332,18 @@
 - 尚未完成：`SG-QRY-002/003` 仍需 `SG-I25` 的真实 Frontend 有界加载证据，`SG-LOG-002/003` 在 `SG-I27` 还需完整原稿与全局故障矩阵复验；这些复合条款的当前 `SG-I04` 部分已通过，不提前勾选其余任务。按门禁未运行 `agent-browser`。
 - Git：本 Evidence 与实现由当前 `SG-I04` Kafka + ELK 日志交付单元独立提交承载；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 38 条 Requirement 与 `SG-I01`–`SG-I04`，其余保持未通过。下一步继续且只允许实施 `SG-I05` 的 Backend-owned Stage Envelope/Policy/Candidate Revision 与单一 `agent/skills/build-storygraph` Bundle。
+### `SG-I05` — StoryGraph Stage Harness 与唯一 Bundle（2026-08-27）
+
+- Red 与收口：先建立唯一 Bundle、严格候选 Schema、Registry/Hash/Grant/Runtime Route/Revision 的 Go/Python 测试；旧 8 Skill、旧 Loader、`production_bible|storyboard_draft` Invocation 和无消费者 `LangGraph/LangChain` 路径均在同一任务原子删除，没有保留兼容读取或相近版本回退。
+- Bundle：`agent/skills/build-storygraph` 只含一个 `SKILL.md` 和 9 个显式 Stage Reference；十个固定 Stage 由普通 Registry 一一映射到 Reference、Pydantic Candidate 和 Policy。Bundle 对排序路径、字节长度和原始字节做 Canonical SHA-256，Go/Python 固定 Hash 均为 `4cf64c94b7d181945da678721db36c4bc45921a9c833164bdea46cb7af149c42`；路径逃逸、缺文件、多文件和任一字节漂移均拒绝。`quick_validate.py` 返回 `Skill is valid!`。
+- Backend Wire 与事实：Backend 拥有唯一 `storygraph_stage` Envelope、十 Stage Manifest、Execution Policy、Shard/Source/Upstream exact ref、Input/Result/Stage Instance Hash、Execution Grant 和 Runtime Catalog。未终态 Invocation 按 Bundle Hash 精确解析 `base_url + image_digest`，缺失即失败；首次成功结果在同一 GORM 事务中写不可变 `StageCandidateRevision`，Agent 仍无数据库或 Owner 写入。Candidate Head/CAS、aggregate/repair 来源和 stale closure 继续留给 `SG-I09/I10`，未提前勾选 `SGA-CAN/REP-*`。
+- Agent Harness：FastAPI 仅保留 `/healthz` 与私有 `/internal/v1/invocations`；Harness 在临时空目录以 ephemeral/read-only/ignore-user-config、空 Tool Allowlist、临时 JSON Schema、模型调用上限和技术 deadline 启动 Codex。任何 Tool Event、Schema 漂移、预算/超时、Runtime unavailable 和 transport unknown 都不会产生空 Candidate 成功；日志不写 Prompt、Candidate、Grant 或剧本文本。
+- 真实 Codex：本机已登录 `codex-cli 0.149.1` 对 `extract_source_evidence` fixture 执行一次真实调用，无 Tool Event，约 29 秒返回可审计 Candidate；由于 fixture 的来源引用歧义和 shard `[0,12)` 与 7 个 Unicode code point 不一致，结果保留 2 个事实阻塞项而未臆造 Evidence，Result Hash 为 `30e7f1d5d5240b30015a9b6c140799b1927e469a5e44d71a23443ec72aedcd0d`。交付镜像继续使用已接受且可复现的 Codex CLI `0.147.0`，没有为本机较新版本增加兼容分支。完整原稿/全部 Stage 的真实模型证据仍属于 `SG-I08`–`I27`，所以 `SGA-COD-*` 与旅程条款保持未通过。
+- 定向与全量质量：Agent `ruff check`、`ruff format --check`、`pyright`、`pytest -q` 全通过，`24 passed`；Go/Python 跨语言 fixture、递归 strict JSON Schema、Grant 伪造、未知 Stage、Bundle 漂移、Runtime Route、Candidate 接受和 stale lease fencing 全通过。后端在空 PostgreSQL `16.15`、真实 Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/ELK `9.4.4` 上通过 `gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...`，Workflow `124.525s`；数据库实查 Migration 表为 0，测试仅位于三个应用 `tests/`。
+- Frontend 与交付：Frontend OpenAPI 生成、lint、typecheck、16 文件 45 tests、production build 与 Client drift 全通过。开发/生产 Compose、Backend/Agent/Frontend 三镜像及镜像内 Backend 三 Binary、Frontend standalone、Agent 非 root/Codex/唯一 Bundle/启动 Hash 均通过；Agent `/healthz` 返回上述唯一 Bundle Hash。
+- Kafka/Search/ELK 回归：本任务没有让 Agent 连接 Kafka、Elasticsearch 或日志设施。空卷完整部署中，真实 Backend JSON 日志仍经 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 可检索；逐个停止日志组件时 Owner/Workflow/Search Alias 不变，Kafka/Elasticsearch 停机时 Event Worker 正确 not-ready 而 Backend/Workflow 继续工作，恢复后日志与检索链重新收敛。这证明 Script/StoryGraph 检索仍是 PostgreSQL Owner Snapshot 的可重建读模型，而非第二事实源。
+- 失败披露：首轮后端整套测试暴露旧测试从外层 Envelope 读取 Stage Input，以及共享测试库中旧 queued Invocation 抢占 Lease；前者改为严格读取 `stage_input`，后者仅用 GORM 隔离同类型旧测试任务，单独与全量均转绿。首次部署故障剧本复用了不一致的旧 Kafka/PostgreSQL 测试卷且本地脚本额外启用 `pipefail`，该次不计通过；精确删除任务专属卷后从空拓扑按 CI 语义重跑通过，未改业务代码或降低断言。
+- 尚未完成：`SG-I06` 才实现公共 HumanTask/Lease/Decision/Resume；`SG-I08` 起才创建 Definition-first ShardManifest 和真实业务 Candidate 聚合；`SG-I09/I10` 才完成 Candidate Head CAS 与 Repair。按顺序未运行 `agent-browser`。
+- Git：本 Evidence 与实现由当前 `SG-I05` 独立提交承载；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 63 条 Requirement 与 `SG-I01`–`SG-I05`，其余保持未通过。下一步继续且只允许实施 `SG-I06` 的公共 HumanTask/Lease/Decision/Resume Backend API。

@@ -1,1 +1,0 @@
-"""Script-derived candidate generators."""

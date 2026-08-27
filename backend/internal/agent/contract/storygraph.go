@@ -37,10 +37,7 @@ type StageExecutionPolicy struct {
 }
 
 func (value StageExecutionPolicy) Validate() error {
-	if value.DefinitionKey != "storygraph_stage" || strings.TrimSpace(value.DefinitionVersion) == "" || strings.TrimSpace(value.PromptVersion) == "" || strings.TrimSpace(value.SkillBundleVersion) == "" || !hashPattern.MatchString(value.SkillBundleHash) || strings.TrimSpace(value.OutputSchemaVersion) == "" || value.ModelCapability != "structured_text" || value.CodexRuntimeContract != "codex-cli-ephemeral-read-only-v1" || value.AllowedTools == nil || len(value.AllowedTools) != 0 || value.MaxModelCalls < 1 || value.MaxExecutionSeconds < 1 {
-		return errors.New("invalid StoryGraph execution policy")
-	}
-	return nil
+	return StoryGraphDefinition().ValidatePolicy(value)
 }
 
 func (value StageExecutionPolicy) Hash() (string, error) {
@@ -104,6 +101,22 @@ type StageInvocation struct {
 	InputHash         string                 `json:"input_hash"`
 	ExecutionPolicy   StageExecutionPolicy   `json:"execution_policy"`
 	Payload           StageInvocationPayload `json:"payload"`
+}
+
+func NewStageInvocation(invocationID string, policy StageExecutionPolicy, payload StageInvocationPayload) (StageInvocation, error) {
+	value := StageInvocation{
+		InvocationID: invocationID, Kind: "storygraph_stage",
+		WireSchemaVersion: StoryGraphWireSchemaVersion, ExecutionPolicy: policy, Payload: payload,
+	}
+	inputHash, err := value.ComputeInputHash()
+	if err != nil {
+		return StageInvocation{}, err
+	}
+	value.InputHash = inputHash
+	if err = value.Validate(); err != nil {
+		return StageInvocation{}, err
+	}
+	return value, nil
 }
 
 func DecodeStageInvocation(raw []byte) (StageInvocation, error) {
@@ -287,7 +300,8 @@ func (value StageResult) ComputeResultHash() (string, error) {
 }
 
 func (value StageResult) ValidateFor(invocation StageInvocation) error {
-	if value.InvocationID != invocation.InvocationID || value.Kind != "storygraph_stage" || value.WireSchemaVersion != StoryGraphWireSchemaVersion || value.Stage != invocation.Payload.Stage || value.ShardKey != invocation.Payload.ShardKey || value.InputHash != invocation.InputHash || strings.TrimSpace(value.CandidateType) == "" || value.Issues == nil || value.Executor.Name == "" || value.Executor.Version == "" || value.Executor.Model == "" {
+	expectedCandidateType, ok := CandidateTypeForStage(invocation.Payload.Stage)
+	if value.InvocationID != invocation.InvocationID || value.Kind != "storygraph_stage" || value.WireSchemaVersion != StoryGraphWireSchemaVersion || value.Stage != invocation.Payload.Stage || value.ShardKey != invocation.Payload.ShardKey || value.InputHash != invocation.InputHash || !ok || value.CandidateType != expectedCandidateType || value.Issues == nil || value.Executor.Name == "" || value.Executor.Version == "" || value.Executor.Model == "" {
 		return errors.New("StoryGraph result identity does not match invocation")
 	}
 	if value.Status == "succeeded" {

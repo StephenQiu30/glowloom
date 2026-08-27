@@ -183,7 +183,7 @@ func TestProductionWorkflowWorkerDurablyCompletesBibleCandidate(t *testing.T) {
 	if err = database.First(&bible, "id = ?", binding.ReferenceID).Error; err != nil {
 		t.Fatalf("load Production Bible candidate: %v", err)
 	}
-	var invocationCount, receiptCount int64
+	var invocationCount, receiptCount, candidateRevisionCount, candidateHeadCount int64
 	if err = database.Model(&model.AgentInvocation{}).Where("request_id = ?", bible.ID).Count(&invocationCount).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -191,17 +191,27 @@ func TestProductionWorkflowWorkerDurablyCompletesBibleCandidate(t *testing.T) {
 	if err = database.First(&invocation, "request_id = ?", bible.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	var executionPolicy contract.ExecutionPolicy
-	if err = json.Unmarshal(invocation.ExecutionPolicy, &executionPolicy); err != nil || executionPolicy.ValidateFor("production_bible") != nil || executionPolicy.MaxModelCalls != 3 {
+	var executionPolicy contract.StageExecutionPolicy
+	if err = json.Unmarshal(invocation.ExecutionPolicy, &executionPolicy); err != nil || executionPolicy.Validate() != nil || executionPolicy.MaxModelCalls != 2 || invocation.Kind != "storygraph_stage" || invocation.Stage != "analyze_story" {
 		t.Fatalf("Production Bible execution policy = %#v err=%v", executionPolicy, err)
+	}
+	var executor contract.Executor
+	if err = json.Unmarshal(invocation.Executor, &executor); err != nil || executor.Name == "" || executor.Version == "" || executor.Model == "" {
+		t.Fatalf("Production Bible executor identity = %#v err=%v", executor, err)
 	}
 	if err = database.Model(&model.CommandReceipt{}).
 		Where("operation = ? AND resource_id = ?", "production_bible.create", bible.ID).
 		Count(&receiptCount).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err = database.Model(&model.StageCandidateRevision{}).Where("source_invocation_id = ?", invocation.ID).Count(&candidateRevisionCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.StageCandidateHead{}).Where("stage_instance_key = ?", invocation.StageInstanceKey).Count(&candidateHeadCount).Error; err != nil {
+		t.Fatal(err)
+	}
 	if bible.Status != "needs_review" || bible.ResultHash == nil || *bible.ResultHash != binding.ContentHash ||
-		invocationCount != 1 || receiptCount != 1 {
-		t.Fatalf("Production Bible facts: bible=%#v invocations=%d receipts=%d", bible, invocationCount, receiptCount)
+		invocationCount != 1 || receiptCount != 1 || candidateRevisionCount != 1 || candidateHeadCount != 1 {
+		t.Fatalf("Production Bible facts: bible=%#v invocations=%d receipts=%d revisions=%d heads=%d", bible, invocationCount, receiptCount, candidateRevisionCount, candidateHeadCount)
 	}
 }

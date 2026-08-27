@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	agentgorm "github.com/StephenQiu30/lanverse/backend/internal/agent/adapter/gormdb"
 	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
@@ -46,7 +47,7 @@ func (repo *repository) RevisionInput(ctx context.Context, actor application.Act
 	if err = authorizeProject(ctx, repo.database, actor, document.ProjectID, write); err != nil {
 		return application.RevisionInput{}, err
 	}
-	return application.RevisionInput{ID: revision.ID.String(), WorkspaceID: revision.WorkspaceID.String(), ProjectID: document.ProjectID.String(), NormalizedText: revision.NormalizedText, NormalizedHash: revision.NormalizedHash}, nil
+	return application.RevisionInput{ID: revision.ID.String(), WorkspaceID: revision.WorkspaceID.String(), ProjectID: document.ProjectID.String(), NormalizedText: revision.NormalizedText, NormalizedHash: revision.NormalizedHash, VersionNo: revision.VersionNo}, nil
 }
 
 func (repo *repository) FindReceipt(ctx context.Context, workspaceID, operation, key string) (platformcommand.Receipt, error) {
@@ -213,7 +214,7 @@ func (store *Store) ClaimNext(ctx context.Context, now, leaseExpiresAt time.Time
 	err := platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
 		var record model.AgentInvocation
 		err := transaction.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
-			Where("kind = ?", "production_bible").
+			Where("kind = ? AND stage = ?", "storygraph_stage", "analyze_story").
 			Where("status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))", "queued", "running", now).
 			Order("created_at").First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -260,10 +261,14 @@ func (store *Store) InvocationSource(ctx context.Context, invocationID string) (
 	return revision.NormalizedText, nil
 }
 
-func (store *Store) CompleteInvocation(ctx context.Context, invocationID string, claimVersion int, result contract.Result, now time.Time) (bool, error) {
+func (store *Store) CompleteInvocation(ctx context.Context, invocationID string, claimVersion int, result contract.StageResult, now time.Time) (bool, error) {
 	id, err := uuid.Parse(invocationID)
 	if err != nil {
 		return false, application.ErrNotFound
+	}
+	executorJSON, err := json.Marshal(result.Executor)
+	if err != nil {
+		return false, err
 	}
 	applied := false
 	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
@@ -274,7 +279,14 @@ func (store *Store) CompleteInvocation(ctx context.Context, invocationID string,
 		if invocation.Status != "running" || invocation.ClaimVersion != claimVersion || invocation.LeaseExpiresAt == nil || !now.Before(*invocation.LeaseExpiresAt) {
 			return nil
 		}
-		if err := transaction.Model(&invocation).Updates(map[string]any{"status": "succeeded", "result_hash": result.ResultHash, "error": nil, "lease_expires_at": nil, "completed_at": now, "updated_at": now}).Error; err != nil {
+		request, err := agentgorm.StageInvocation(invocation)
+		if err != nil {
+			return err
+		}
+		if _, err = agentgorm.AcceptInvocationCandidate(transaction, invocation, request, result, now); err != nil {
+			return err
+		}
+		if err = transaction.Model(&invocation).Updates(map[string]any{"status": "succeeded", "result_hash": result.ResultHash, "candidate_type": result.CandidateType, "candidate": datatypes.JSON(result.Candidate), "executor": datatypes.JSON(executorJSON), "error": nil, "lease_expires_at": nil, "completed_at": now, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		stage := "candidate_ready"
@@ -435,11 +447,25 @@ func invocationRecord(value domain.Invocation) (model.AgentInvocation, error) {
 	if err != nil {
 		return model.AgentInvocation{}, err
 	}
-	return model.AgentInvocation{ID: id, WorkspaceID: workspaceID, RequestType: "production_bible", RequestID: requestID, Kind: value.Kind, InputHash: value.InputHash, ExecutionPolicy: datatypes.JSON(value.ExecutionPolicy), Payload: datatypes.JSON(value.Payload), Status: value.Status, Attempts: value.Attempts, ClaimVersion: value.ClaimVersion, LeaseExpiresAt: value.LeaseExpiresAt, CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt}, nil
+	return model.AgentInvocation{
+		ID: id, WorkspaceID: workspaceID, RequestType: "production_bible", RequestID: requestID,
+		Kind: value.Kind, WireSchemaVersion: contract.StoryGraphWireSchemaVersion, Stage: value.Stage,
+		ShardKey: value.ShardKey, StageInstanceKey: value.StageInstanceKey, ShardManifestHash: value.ManifestHash,
+		InputHash: value.InputHash, ExecutionPolicy: datatypes.JSON(value.ExecutionPolicy), Payload: datatypes.JSON(value.Payload),
+		Status: value.Status, Attempts: value.Attempts, ClaimVersion: value.ClaimVersion,
+		LeaseExpiresAt: value.LeaseExpiresAt, CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt,
+	}, nil
 }
 
 func invocationDomain(record model.AgentInvocation) domain.Invocation {
-	return domain.Invocation{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), RequestID: record.RequestID.String(), Kind: record.Kind, InputHash: record.InputHash, ExecutionPolicy: append([]byte(nil), record.ExecutionPolicy...), Payload: append([]byte(nil), record.Payload...), Status: record.Status, Attempts: record.Attempts, ClaimVersion: record.ClaimVersion, LeaseExpiresAt: record.LeaseExpiresAt, CreatedAt: record.CreatedAt}
+	return domain.Invocation{
+		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), RequestID: record.RequestID.String(),
+		Kind: record.Kind, Stage: record.Stage, ShardKey: record.ShardKey, InputHash: record.InputHash,
+		StageInstanceKey: record.StageInstanceKey, ManifestHash: record.ShardManifestHash,
+		ExecutionPolicy: append([]byte(nil), record.ExecutionPolicy...), Payload: append([]byte(nil), record.Payload...),
+		Status: record.Status, Attempts: record.Attempts, ClaimVersion: record.ClaimVersion,
+		LeaseExpiresAt: record.LeaseExpiresAt, CreatedAt: record.CreatedAt,
+	}
 }
 func normalizeNotFound(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {

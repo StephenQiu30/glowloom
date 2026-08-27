@@ -78,14 +78,18 @@ func TestPostgreSQLStoryboardingJourney(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("claim storyboard invocation: found=%v err=%v", found, err)
 	}
+	var stagePayload contract.StageInvocationPayload
+	if err = json.Unmarshal(invocation.Payload, &stagePayload); err != nil {
+		t.Fatalf("decode Stage payload: %v", err)
+	}
 	var payload struct {
 		Units []struct {
 			ID       string `json:"unit_version_id"`
 			Required bool   `json:"required_for_coverage"`
 		} `json:"units"`
 	}
-	if err = json.Unmarshal(invocation.Payload, &payload); err != nil {
-		t.Fatalf("decode invocation payload: %v", err)
+	if err = json.Unmarshal(stagePayload.StageInput, &payload); err != nil {
+		t.Fatalf("decode invocation stage input: %v", err)
 	}
 	unitIDs := make([]string, 0, len(payload.Units))
 	for _, unit := range payload.Units {
@@ -105,7 +109,7 @@ func TestPostgreSQLStoryboardingJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode candidate: %v", err)
 	}
-	validated, err := storyboarddomain.DecodeAndValidateCandidate(candidateJSON, invocation.Payload)
+	validated, err := storyboarddomain.DecodeAndValidateCandidate(candidateJSON, stagePayload.StageInput)
 	if err != nil {
 		t.Fatalf("validate candidate against invocation: %v", err)
 	}
@@ -113,16 +117,18 @@ func TestPostgreSQLStoryboardingJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hash candidate: %v", err)
 	}
-	result := contract.Result{
-		InvocationID: invocation.ID, Kind: invocation.Kind, InputHash: invocation.InputHash,
-		Status: "succeeded", SchemaVersion: contract.SchemaVersion, Candidate: candidateJSON,
-		ResultHash: &resultHash, Executor: contract.Executor{Name: "integration", Version: "1", Model: "deterministic"},
+	result := contract.StageResult{
+		InvocationID: invocation.ID, Kind: invocation.Kind, WireSchemaVersion: contract.StoryGraphWireSchemaVersion,
+		Stage: stagePayload.Stage, ShardKey: stagePayload.ShardKey, Status: "succeeded",
+		CandidateType: "storyboard_row_candidate", Candidate: candidateJSON, InputHash: invocation.InputHash,
+		ResultHash: &resultHash, Issues: []contract.StageIssue{},
+		Executor: contract.Executor{Name: "integration", Version: "1", Model: "deterministic"},
 	}
-	var executionPolicy contract.ExecutionPolicy
+	var executionPolicy contract.StageExecutionPolicy
 	if err = json.Unmarshal(invocation.ExecutionPolicy, &executionPolicy); err != nil {
 		t.Fatalf("decode execution policy: %v", err)
 	}
-	contractInvocation := contract.Invocation{InvocationID: invocation.ID, Kind: invocation.Kind, InputHash: invocation.InputHash, SchemaVersion: contract.SchemaVersion, ExecutionPolicy: executionPolicy, Payload: invocation.Payload}
+	contractInvocation := contract.StageInvocation{InvocationID: invocation.ID, Kind: invocation.Kind, InputHash: invocation.InputHash, WireSchemaVersion: contract.StoryGraphWireSchemaVersion, ExecutionPolicy: executionPolicy, Payload: stagePayload}
 	if err = result.ValidateFor(contractInvocation); err != nil {
 		t.Fatalf("validate agent result envelope: %v", err)
 	}
@@ -273,7 +279,7 @@ func seedStoryboardFixture(t *testing.T, database *gorm.DB) storyboardFixture {
 		&model.EpisodeScriptVersion{ID: versionID, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID, VersionNo: 1, DocumentRevisionID: revisionID, SourceStart: 0, SourceEnd: 24, Content: "雨巷，夜\n顾清禾：你终于来了。", ContentHash: strings.Repeat("3", 64), Status: "published", CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
 		&model.EpisodeStructure{ID: structureID, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID, ScriptVersionID: versionID, Status: "confirmed", Scenes: datatypes.JSON(scenes), ResultHash: strings.Repeat("4", 64), Revision: 2, ConfirmedBy: &userID, ConfirmedAt: &confirmedAt, CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
 		&model.WorkflowTask{ID: bibleTaskID, WorkspaceID: workspaceID, TaskType: "production_bible", RequestType: "production_bible", RequestID: bibleID, Scope: datatypes.JSON([]byte(`{}`)), Status: "succeeded", ProgressStage: "confirmed", CancelStatus: "none", Revision: 2, CreatedAt: now, UpdatedAt: now},
-		&model.ProductionBible{ID: bibleID, WorkspaceID: workspaceID, ProjectID: projectID, DocumentRevisionID: revisionID, TaskID: bibleTaskID, Status: "confirmed", InputHash: strings.Repeat("5", 64), ResultHash: &resultHash, EngineVersion: "test-v1", ModelName: "deterministic", PromptVersion: "test-v1", SchemaVersion: contract.SchemaVersion, HarnessVersion: "test-v1", CheckpointRevision: 0, Candidate: bibleCandidate, Revision: 3, ConfirmedAt: &confirmedAt, ConfirmedBy: &userID, CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
+		&model.ProductionBible{ID: bibleID, WorkspaceID: workspaceID, ProjectID: projectID, DocumentRevisionID: revisionID, TaskID: bibleTaskID, Status: "confirmed", InputHash: strings.Repeat("5", 64), ResultHash: &resultHash, EngineVersion: "test-v1", ModelName: "deterministic", PromptVersion: "test-v1", SchemaVersion: "storygraph-candidate-schema-v1", HarnessVersion: "test-v1", CheckpointRevision: 0, Candidate: bibleCandidate, Revision: 3, ConfirmedAt: &confirmedAt, ConfirmedBy: &userID, CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
 	}
 	for _, record := range records {
 		if err = database.Omit(clause.Associations).Create(record).Error; err != nil {

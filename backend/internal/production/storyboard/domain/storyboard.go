@@ -21,6 +21,8 @@ type Unit struct {
 
 type DraftInput struct {
 	WorkspaceID, ProjectID, EpisodeID, StructureID, ScriptVersionID string
+	StructureResultHash                                             string
+	StructureRevision                                               int
 	BibleID, BibleResultHash                                        string
 	BibleRevision                                                   int
 	TargetDurationMS                                                int
@@ -80,11 +82,12 @@ type DraftSet struct {
 }
 
 type Invocation struct {
-	ID, WorkspaceID, RequestID, Kind, InputHash, Status string
-	ExecutionPolicy, Payload                            json.RawMessage
-	Attempts, ClaimVersion                              int
-	LeaseExpiresAt                                      *time.Time
-	CreatedAt                                           time.Time
+	ID, WorkspaceID, RequestID, Kind, Stage, ShardKey string
+	InputHash, StageInstanceKey, ManifestHash, Status string
+	ExecutionPolicy, Payload                          json.RawMessage
+	Attempts, ClaimVersion                            int
+	LeaseExpiresAt                                    *time.Time
+	CreatedAt                                         time.Time
 }
 
 type Shot struct {

@@ -431,15 +431,17 @@ func explicitEpisodeRevisionValues(t *testing.T) map[string]any {
 
 type successfulProductionBibleAgent struct{}
 
-func (successfulProductionBibleAgent) Invoke(_ context.Context, invocation contract.Invocation) (contract.Result, error) {
-	candidate := json.RawMessage(`{"entities":[],"world_entries":[],"review_issues":[]}`)
+func (successfulProductionBibleAgent) Invoke(_ context.Context, invocation contract.StageInvocation, _ int, _ int64) (contract.StageResult, error) {
+	candidate := json.RawMessage(`{"entities":[],"world_entries":[],"claims":[],"arcs":[],"review_issues":[]}`)
 	resultHash, err := contract.CanonicalHash(candidate)
 	if err != nil {
-		return contract.Result{}, err
+		return contract.StageResult{}, err
 	}
-	return contract.Result{
-		InvocationID: invocation.InvocationID, Kind: invocation.Kind, InputHash: invocation.InputHash,
-		Status: "succeeded", SchemaVersion: contract.SchemaVersion, Candidate: candidate, ResultHash: &resultHash,
+	return contract.StageResult{
+		InvocationID: invocation.InvocationID, Kind: invocation.Kind, WireSchemaVersion: invocation.WireSchemaVersion,
+		Stage: invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey, Status: "succeeded",
+		CandidateType: "story_analysis_candidate", Candidate: candidate, InputHash: invocation.InputHash,
+		ResultHash: &resultHash, Issues: []contract.StageIssue{},
 		Executor: contract.Executor{Name: "workflow-test", Version: "1", Model: "deterministic"},
 	}, nil
 }

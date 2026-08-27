@@ -1,6 +1,0 @@
-interface:
-  display_name: "Reconcile Bible"
-  short_description: "Resolve global identities, states, aliases, and lore"
-  default_prompt: "Use $reconcile-bible to reconcile the supplied validated whole-script evidence into a schema-valid candidate Production Bible."
-policy:
-  allow_implicit_invocation: false

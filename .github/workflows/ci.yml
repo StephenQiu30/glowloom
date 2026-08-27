@@ -227,6 +227,7 @@ jobs:
           JWT_SECRET_KEY: ci-compose-only-jwt
           AGENT_URL: http://agent.example.test
           AGENT_EXECUTION_SECRET: ci-compose-only-agent
+          AGENT_RUNTIME_IMAGE_DIGEST: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           TEMPORAL_ADDRESS: temporal.example.test:7233
           MINIO_PUBLIC_ENDPOINT: media.example.test
           MINIO_ACCESS_KEY: ci-compose-only
@@ -256,11 +257,21 @@ jobs:
           docker run --rm --entrypoint /bin/sh lanverse/frontend:ci -c
           'test -f /srv/lanverse/frontend/server.js && test -d /srv/lanverse/frontend/.next/static'
       - name: Require private Agent candidate runtime
-        run: >-
-          docker run --rm --entrypoint /bin/sh lanverse/agent:ci -c
-          'command -v codex >/dev/null && python -c "from app.candidate_runtime.api import app; assert app.title == '\''Lanverse Candidate Runtime'\''"'
+        run: |
+          docker run --rm --entrypoint /bin/sh lanverse/agent:ci -c '
+            test "$(id -u)" -ne 0
+            command -v codex >/dev/null
+            codex --version | grep -q "0.147.0"
+            test -d skills/build-storygraph
+            test "$(find skills -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
+            test ! -e /srv/lanverse/.agents
+            test -z "$(find skills -name openai.yaml -print -quit)"
+            python -c "from app.candidate_runtime.api import app; from app.modules.storygraph.bundle import StoryGraphBundle; assert app.title == '\''Lanverse Candidate Runtime'\''; StoryGraphBundle().verify_installed_bundle()"
+          '
       - name: Run deployment images against real dependencies
         run: |
+          export AGENT_RUNTIME_IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' lanverse/agent:ci)"
+          test -n "$AGENT_RUNTIME_IMAGE_DIGEST"
           docker tag lanverse/frontend:ci lanverse/frontend:development
           docker tag lanverse/backend:ci lanverse/backend:development
           docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --no-build --wait --wait-timeout 240 \
@@ -419,7 +430,8 @@ jobs:
           docker run --detach --name lanverse-ci-agent-runtime --publish 127.0.0.1:18787:8787 --env AGENT_EXECUTION_SECRET=ci-agent-runtime-secret-at-least-32-bytes lanverse/agent:ci
           curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 --output /dev/null http://127.0.0.1:8686/healthz
           curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 --output /dev/null http://127.0.0.1:8123/
-          curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 --output /dev/null http://127.0.0.1:18787/healthz
+          agent_health=$(curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 http://127.0.0.1:18787/healthz)
+          python3 -c 'import json,sys; value=json.load(sys.stdin); assert value["status"] == "ok"; assert value["skill_bundle_hash"] == "4cf64c94b7d181945da678721db36c4bc45921a9c833164bdea46cb7af149c42"' <<<"$agent_health"
       - name: Clean deployment runtime
         if: always()
         run: |

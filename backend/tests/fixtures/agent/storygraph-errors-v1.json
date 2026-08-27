@@ -1,0 +1,13 @@
+[
+  {"code":"skill_bundle_invalid","status":"failed","retryable":false},
+  {"code":"invocation_policy_invalid","status":"failed","retryable":false},
+  {"code":"candidate_schema_invalid","status":"failed","retryable":false},
+  {"code":"evidence_invalid","status":"failed","retryable":false},
+  {"code":"upstream_candidate_stale","status":"failed","retryable":false},
+  {"code":"execution_budget_exceeded","status":"failed","retryable":false},
+  {"code":"execution_deadline_exceeded","status":"failed","retryable":false},
+  {"code":"tool_not_allowed","status":"failed","retryable":false},
+  {"code":"skill_bundle_unavailable","status":"unknown","retryable":true},
+  {"code":"runtime_unavailable","status":"unknown","retryable":true},
+  {"code":"agent_execution_unknown","status":"unknown","retryable":true}
+]

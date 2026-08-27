@@ -149,3 +149,36 @@ func TestLoadRejectsInvalidOrSharedElasticsearchDestinations(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadAcceptsStrictAdditionalAgentRuntimeRevisions(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
+	t.Setenv("AGENT_RUNTIME_ADDITIONAL_REVISIONS", `[{"bundle_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","base_url":"https://agent-old.example.test","image_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]`)
+	configuration, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configuration.AgentRuntimeAdditionalRevisions) != 1 ||
+		configuration.AgentRuntimeAdditionalRevisions[0].BaseURL != "https://agent-old.example.test" {
+		t.Fatalf("additional Agent runtime revisions = %#v", configuration.AgentRuntimeAdditionalRevisions)
+	}
+}
+
+func TestLoadRejectsInvalidAgentRuntimeRevisions(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
+	validHash := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	validDigest := "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	for name, value := range map[string]string{
+		"unknown field":  `[{"bundle_hash":"` + validHash + `","base_url":"https://agent.example.test","image_digest":"` + validDigest + `","fallback":true}]`,
+		"URL path":       `[{"bundle_hash":"` + validHash + `","base_url":"https://agent.example.test/path","image_digest":"` + validDigest + `"}]`,
+		"invalid digest": `[{"bundle_hash":"` + validHash + `","base_url":"https://agent.example.test","image_digest":"latest"}]`,
+		"duplicate hash": `[{"bundle_hash":"` + validHash + `","base_url":"https://agent-one.example.test","image_digest":"` + validDigest + `"},{"bundle_hash":"` + validHash + `","base_url":"https://agent-two.example.test","image_digest":"` + validDigest + `"}]`,
+		"trailing value": `[] []`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("AGENT_RUNTIME_ADDITIONAL_REVISIONS", value)
+			if _, err := config.Load(); err == nil {
+				t.Fatalf("Load accepted Agent runtime revisions %s", value)
+			}
+		})
+	}
+}

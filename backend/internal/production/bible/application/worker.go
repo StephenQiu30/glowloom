@@ -13,12 +13,12 @@ import (
 type InvocationRepository interface {
 	ClaimNext(context.Context, time.Time, time.Time) (domain.Invocation, bool, error)
 	InvocationSource(context.Context, string) (string, error)
-	CompleteInvocation(context.Context, string, int, contract.Result, time.Time) (bool, error)
+	CompleteInvocation(context.Context, string, int, contract.StageResult, time.Time) (bool, error)
 	FailInvocation(context.Context, string, int, string, string, string, bool, time.Time) (bool, error)
 }
 
 type AgentClient interface {
-	Invoke(context.Context, contract.Invocation) (contract.Result, error)
+	Invoke(context.Context, contract.StageInvocation, int, int64) (contract.StageResult, error)
 }
 
 type Worker struct {
@@ -62,20 +62,23 @@ func (worker *Worker) runOnce(ctx context.Context) bool {
 	if !found {
 		return false
 	}
-	var executionPolicy contract.ExecutionPolicy
-	if err = json.Unmarshal(invocation.ExecutionPolicy, &executionPolicy); err != nil || executionPolicy.ValidateFor(invocation.Kind) != nil {
-		_, _ = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "failed", "invalid_execution_policy", "Agent execution policy is invalid", false, worker.now().UTC())
+	request, err := stageRequest(invocation)
+	if err != nil {
+		_, _ = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "failed", "invocation_policy_invalid", "Agent stage invocation is invalid", false, worker.now().UTC())
 		return true
 	}
-	request := contract.Invocation{InvocationID: invocation.ID, Kind: invocation.Kind, InputHash: invocation.InputHash, SchemaVersion: contract.SchemaVersion, ExecutionPolicy: executionPolicy, Payload: invocation.Payload}
-	result, invokeErr := worker.agent.Invoke(ctx, request)
+	result, invokeErr := worker.agent.Invoke(ctx, request, invocation.Attempts, int64(invocation.ClaimVersion))
 	if invokeErr != nil {
-		if _, err = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "unknown", "agent_outcome_unknown", invokeErr.Error(), true, worker.now().UTC()); err != nil && ctx.Err() == nil {
+		if _, err = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "unknown", "agent_execution_unknown", invokeErr.Error(), true, worker.now().UTC()); err != nil && ctx.Err() == nil {
 			worker.logger.Error("record unknown agent invocation failed", "invocation_id", invocation.ID, "error", err)
 		}
 		return true
 	}
 	if result.Status != "succeeded" {
+		if result.Error == nil {
+			_, _ = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "unknown", "agent_execution_unknown", "Agent returned an incomplete result", true, worker.now().UTC())
+			return true
+		}
 		if _, err = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, result.Status, result.Error.Code, result.Error.Summary, result.Error.Retryable, worker.now().UTC()); err != nil && ctx.Err() == nil {
 			worker.logger.Error("record failed agent invocation failed", "invocation_id", invocation.ID, "error", err)
 		}
@@ -83,16 +86,32 @@ func (worker *Worker) runOnce(ctx context.Context) bool {
 	}
 	normalizedText, err := worker.repository.InvocationSource(ctx, invocation.ID)
 	if err != nil {
-		_, _ = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "failed", "source_unavailable", err.Error(), false, worker.now().UTC())
+		_, _ = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "failed", "evidence_invalid", err.Error(), false, worker.now().UTC())
 		return true
 	}
-	_, err = domain.DecodeAndValidateCandidate(json.RawMessage(result.Candidate), normalizedText)
-	if err != nil {
-		_, _ = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "failed", "candidate_validation_failed", err.Error(), false, worker.now().UTC())
+	if _, err = domain.DecodeAndValidateCandidate(result.Candidate, normalizedText); err != nil {
+		_, _ = worker.repository.FailInvocation(ctx, invocation.ID, invocation.ClaimVersion, "failed", "evidence_invalid", err.Error(), false, worker.now().UTC())
 		return true
 	}
 	if _, err = worker.repository.CompleteInvocation(ctx, invocation.ID, invocation.ClaimVersion, result, worker.now().UTC()); err != nil && ctx.Err() == nil {
 		worker.logger.Error("persist agent result failed", "invocation_id", invocation.ID, "error", err)
 	}
 	return true
+}
+
+func stageRequest(invocation domain.Invocation) (contract.StageInvocation, error) {
+	var policy contract.StageExecutionPolicy
+	if err := json.Unmarshal(invocation.ExecutionPolicy, &policy); err != nil {
+		return contract.StageInvocation{}, err
+	}
+	var payload contract.StageInvocationPayload
+	if err := json.Unmarshal(invocation.Payload, &payload); err != nil {
+		return contract.StageInvocation{}, err
+	}
+	request := contract.StageInvocation{
+		InvocationID: invocation.ID, Kind: invocation.Kind,
+		WireSchemaVersion: contract.StoryGraphWireSchemaVersion, InputHash: invocation.InputHash,
+		ExecutionPolicy: policy, Payload: payload,
+	}
+	return request, request.Validate()
 }

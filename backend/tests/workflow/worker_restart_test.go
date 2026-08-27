@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -72,7 +73,7 @@ func TestBibleWorkerReclaimsInvocationAfterProcessRestart(t *testing.T) {
 		return record
 	}
 
-	requests := make(chan contract.Invocation, 2)
+	requests := make(chan contract.StageInvocation, 2)
 	serverErrors := make(chan error, 2)
 	var requestCount atomic.Int32
 	grantVerifier, err := grant.NewSigner(workerProcessSecret, func() time.Time { return time.Now().UTC() })
@@ -80,13 +81,14 @@ func TestBibleWorkerReclaimsInvocationAfterProcessRestart(t *testing.T) {
 		t.Fatalf("create grant verifier: %v", err)
 	}
 	agentServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		var invocation contract.Invocation
+		var invocation contract.StageInvocation
 		if decodeErr := json.NewDecoder(request.Body).Decode(&invocation); decodeErr != nil {
 			serverErrors <- decodeErr
 			http.Error(response, "invalid invocation", http.StatusBadRequest)
 			return
 		}
-		if verifyErr := grantVerifier.Verify(request.Header.Get("X-Lanverse-Execution-Grant"), invocation); verifyErr != nil {
+		claimed := loadInvocation()
+		if verifyErr := grantVerifier.Verify(request.Header.Get("X-Lanverse-Execution-Grant"), invocation, claimed.Attempts, int64(claimed.ClaimVersion)); verifyErr != nil {
 			serverErrors <- verifyErr
 			http.Error(response, "invalid grant", http.StatusUnauthorized)
 			return
@@ -98,7 +100,7 @@ func TestBibleWorkerReclaimsInvocationAfterProcessRestart(t *testing.T) {
 			return
 		}
 
-		candidate := json.RawMessage(`{"entities":[],"world_entries":[],"review_issues":[]}`)
+		candidate := json.RawMessage(`{"entities":[],"world_entries":[],"claims":[],"arcs":[],"review_issues":[]}`)
 		resultHash, hashErr := contract.CanonicalHash(candidate)
 		if hashErr != nil {
 			serverErrors <- hashErr
@@ -106,9 +108,11 @@ func TestBibleWorkerReclaimsInvocationAfterProcessRestart(t *testing.T) {
 			return
 		}
 		response.Header().Set("Content-Type", "application/json")
-		if encodeErr := json.NewEncoder(response).Encode(contract.Result{
-			InvocationID: invocation.InvocationID, Kind: invocation.Kind, InputHash: invocation.InputHash,
-			Status: "succeeded", SchemaVersion: contract.SchemaVersion, Candidate: candidate, ResultHash: &resultHash,
+		if encodeErr := json.NewEncoder(response).Encode(contract.StageResult{
+			InvocationID: invocation.InvocationID, Kind: invocation.Kind, WireSchemaVersion: invocation.WireSchemaVersion,
+			Stage: invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey, Status: "succeeded",
+			CandidateType: "story_analysis_candidate", Candidate: candidate, InputHash: invocation.InputHash,
+			ResultHash: &resultHash, Issues: []contract.StageIssue{},
 			Executor: contract.Executor{Name: "process-restart-test", Version: "1", Model: "deterministic"},
 		}); encodeErr != nil {
 			serverErrors <- encodeErr
@@ -173,10 +177,14 @@ func TestWorkflowWorkerProcessHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	agentRuntime, err := client.New(agentURL, signer, nil)
+	runtimes, err := contract.NewRuntimeCatalog([]contract.RuntimeRevision{{
+		BundleHash: contract.StoryGraphSkillBundleHash, BaseURL: agentURL,
+		ImageDigest: "sha256:" + strings.Repeat("a", 64),
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	agentRuntime := client.New(runtimes, signer, nil)
 	worker := bibleapp.NewWorker(
 		biblegorm.New(database), agentRuntime, func() time.Time { return time.Now().UTC() },
 		20*time.Millisecond, 500*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -219,11 +227,11 @@ func stopWorkflowWorkerProcess(t *testing.T, command *exec.Cmd, output *bytes.Bu
 
 func awaitInvocation(
 	t *testing.T,
-	requests <-chan contract.Invocation,
+	requests <-chan contract.StageInvocation,
 	serverErrors <-chan error,
 	command *exec.Cmd,
 	output *bytes.Buffer,
-) contract.Invocation {
+) contract.StageInvocation {
 	t.Helper()
 	select {
 	case invocation := <-requests:
@@ -235,7 +243,7 @@ func awaitInvocation(
 		_, _ = command.Process.Wait()
 		t.Fatalf("workflow worker process did not invoke Agent\n%s", output.String())
 	}
-	return contract.Invocation{}
+	return contract.StageInvocation{}
 }
 
 func waitForInvocationStatus(

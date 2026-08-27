@@ -1,72 +1,108 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import ValidationError
 
 from app.candidate_runtime.canonical import canonical_hash
 from app.candidate_runtime.grants import InvalidExecutionGrant, verify_execution_grant
-from app.candidate_runtime.schemas import Executor, Invocation, Result, ResultError
-from app.modules.scripts.production_bibles import CodexLocalProductionBibleGenerator
-from app.modules.scripts.production_bibles.contracts import ProductionBibleInput
-from app.modules.skills.harness import (
+from app.candidate_runtime.schemas import (
+    Executor,
+    ResultError,
+    StoryGraphStageInvocation,
+    StoryGraphStageResult,
+)
+from app.modules.storygraph.bundle import BundleInvalid, StoryGraphBundle
+from app.modules.storygraph.harness import (
     CodexBudgetExceeded,
     CodexDeadlineExceeded,
     CodexExecutionError,
     CodexRuntimeUnavailable,
     CodexSchemaInvalid,
     CodexToolPolicyViolation,
+    InvocationPolicyInvalid,
+    SkillBundleUnavailable,
+    StoryGraphHarness,
 )
-from app.modules.storyboards import CodexLocalStoryboardDrafter
-from app.modules.storyboards.contracts import StoryboardDraftInput
+from app.modules.storygraph.skill_registry import stage_spec
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
+    StoryGraphBundle().verify_installed_bundle()
+    yield
+
 
 app = FastAPI(
     title="Lanverse Candidate Runtime",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    lifespan=lifespan,
 )
 
 
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
-    return {"status": "ok", "service": "lanverse-agent-runtime"}
+    bundle_hash = StoryGraphBundle().verify_installed_bundle()
+    return {
+        "status": "ok",
+        "service": "lanverse-agent-runtime",
+        "skill_bundle_hash": bundle_hash,
+    }
 
 
-@app.post("/internal/v1/invocations", response_model=Result)
+@app.post("/internal/v1/invocations", response_model=StoryGraphStageResult)
 async def invoke(
-    invocation: Invocation,
+    invocation: StoryGraphStageInvocation,
     execution_grant: str = Header(alias="X-Lanverse-Execution-Grant"),
-) -> Result:
+) -> StoryGraphStageResult:
     secret = os.getenv("AGENT_EXECUTION_SECRET", "")
     try:
         verify_execution_grant(execution_grant, secret, invocation)
     except InvalidExecutionGrant as error:
         raise HTTPException(status_code=401, detail="invalid execution grant") from error
     try:
-        candidate, executor = await _candidate(invocation)
-        return Result(
+        harness = StoryGraphHarness(invocation)
+        try:
+            value = await harness.execute()
+            model = harness.model_name
+        finally:
+            await harness.aclose()
+        candidate = value.model_dump(mode="json")
+        return StoryGraphStageResult(
             invocation_id=invocation.invocation_id,
-            kind=invocation.kind,
-            input_hash=invocation.input_hash,
+            kind="storygraph_stage",
+            wire_schema_version=invocation.wire_schema_version,
+            stage=invocation.payload.stage,
+            shard_key=invocation.payload.shard_key,
             status="succeeded",
+            candidate_type=stage_spec(invocation.payload.stage).candidate_type,
             candidate=candidate,
+            input_hash=invocation.input_hash,
             result_hash=canonical_hash(candidate),
-            executor=executor,
+            issues=[],
+            executor=Executor(name="codex-cli", version="storygraph-stage-harness-v1", model=model),
             error=None,
         )
-    except (ValidationError, ValueError) as error:
-        return _failure(invocation, "failed", "candidate_validation_failed", str(error), False)
+    except SkillBundleUnavailable as error:
+        return _failure(invocation, "unknown", "skill_bundle_unavailable", str(error), True)
+    except BundleInvalid as error:
+        return _failure(invocation, "failed", "skill_bundle_invalid", str(error), False)
+    except InvocationPolicyInvalid as error:
+        return _failure(invocation, "failed", "invocation_policy_invalid", str(error), False)
+    except (ValidationError, CodexSchemaInvalid) as error:
+        return _failure(invocation, "failed", "candidate_schema_invalid", str(error), False)
     except CodexBudgetExceeded as error:
         return _failure(invocation, "failed", "execution_budget_exceeded", str(error), False)
     except CodexDeadlineExceeded as error:
         return _failure(invocation, "failed", "execution_deadline_exceeded", str(error), False)
     except CodexToolPolicyViolation as error:
         return _failure(invocation, "failed", "tool_not_allowed", str(error), False)
-    except CodexSchemaInvalid as error:
-        return _failure(invocation, "failed", "candidate_schema_invalid", str(error), False)
     except CodexRuntimeUnavailable as error:
         return _failure(invocation, "unknown", "runtime_unavailable", str(error), True)
     except CodexExecutionError as error:
@@ -81,46 +117,25 @@ async def invoke(
         )
 
 
-async def _candidate(invocation: Invocation) -> tuple[dict[str, Any], Executor]:
-    if invocation.kind == "production_bible":
-        generator = CodexLocalProductionBibleGenerator(execution_policy=invocation.execution_policy)
-        try:
-            candidate = await generator.generate(
-                ProductionBibleInput.model_validate(invocation.payload)
-            )
-            model = str(getattr(generator, "model_name", "inherited-local-config"))
-        finally:
-            await generator.aclose()
-        return candidate, Executor(
-            name="codex-cli", version="production-bible-harness-v1", model=model
-        )
-    if invocation.kind == "storyboard_draft":
-        generator = CodexLocalStoryboardDrafter(execution_policy=invocation.execution_policy)
-        try:
-            candidate = await generator.draft(
-                StoryboardDraftInput.model_validate(invocation.payload)
-            )
-            model = str(getattr(generator, "model_name", "inherited-local-config"))
-        finally:
-            await generator.aclose()
-        return candidate, Executor(name="codex-cli", version="storyboard-harness-v1", model=model)
-    raise ValueError("script structure is owned by the deterministic Go Backend")
-
-
 def _failure(
-    invocation: Invocation,
-    status: str,
+    invocation: StoryGraphStageInvocation,
+    status: Literal["failed", "unknown"],
     code: str,
     summary: str,
     retryable: bool,
-) -> Result:
-    return Result(
+) -> StoryGraphStageResult:
+    return StoryGraphStageResult(
         invocation_id=invocation.invocation_id,
-        kind=invocation.kind,
-        input_hash=invocation.input_hash,
-        status=status,  # type: ignore[arg-type]
+        kind="storygraph_stage",
+        wire_schema_version=invocation.wire_schema_version,
+        stage=invocation.payload.stage,
+        shard_key=invocation.payload.shard_key,
+        status=status,
+        candidate_type=stage_spec(invocation.payload.stage).candidate_type,
         candidate=None,
+        input_hash=invocation.input_hash,
         result_hash=None,
-        executor=Executor(name="codex-cli", version="candidate-runtime-v1", model="unknown"),
+        issues=[],
+        executor=Executor(name="codex-cli", version="storygraph-stage-harness-v1", model="unknown"),
         error=ResultError(code=code, summary=summary[:800], retryable=retryable),
     )

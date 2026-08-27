@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	agentgorm "github.com/StephenQiu30/lanverse/backend/internal/agent/adapter/gormdb"
 	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
@@ -88,6 +89,7 @@ func (repo *repository) DraftInput(ctx context.Context, actor application.Actor,
 	return storyboarddomain.DraftInput{
 		WorkspaceID: bible.WorkspaceID.String(), ProjectID: episode.ProjectID.String(), EpisodeID: episode.ID.String(),
 		StructureID: structure.ID.String(), ScriptVersionID: episode.CurrentScriptVersionID.String(),
+		StructureResultHash: structure.ResultHash, StructureRevision: structure.Revision,
 		BibleID: bible.ID.String(), BibleRevision: bible.Revision, BibleResultHash: resultHash,
 		TargetDurationMS: episode.TargetDurationMS, AspectRatio: project.AspectRatio, VisualStyle: project.VisualStyle,
 		Units: units, WorldEntries: candidate.WorldEntries,
@@ -457,7 +459,7 @@ func (store *Store) ClaimNext(ctx context.Context, now, leaseExpiresAt time.Time
 	err := platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
 		var record model.AgentInvocation
 		err := transaction.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
-			Where("kind = ?", "storyboard_draft").
+			Where("kind = ? AND stage = ?", "storygraph_stage", "draft_storyboard").
 			Where("status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))", "queued", "running", now).
 			Order("created_at").First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -484,10 +486,14 @@ func (store *Store) ClaimNext(ctx context.Context, now, leaseExpiresAt time.Time
 	return result, found, err
 }
 
-func (store *Store) CompleteInvocation(ctx context.Context, invocationID string, claimVersion int, result contract.Result, candidate storyboarddomain.Candidate, now time.Time) (bool, error) {
+func (store *Store) CompleteInvocation(ctx context.Context, invocationID string, claimVersion int, result contract.StageResult, candidate storyboarddomain.Candidate, now time.Time) (bool, error) {
 	id, err := uuid.Parse(invocationID)
 	if err != nil {
 		return false, application.ErrNotFound
+	}
+	executorJSON, err := json.Marshal(result.Executor)
+	if err != nil {
+		return false, err
 	}
 	candidateJSON, err := json.Marshal(candidate)
 	if err != nil {
@@ -499,10 +505,17 @@ func (store *Store) CompleteInvocation(ctx context.Context, invocationID string,
 		if err := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&invocation, "id = ?", id).Error; err != nil {
 			return normalizeNotFound(err)
 		}
-		if invocation.Status != "running" || invocation.Kind != "storyboard_draft" || invocation.ClaimVersion != claimVersion || invocation.LeaseExpiresAt == nil || !now.Before(*invocation.LeaseExpiresAt) {
+		if invocation.Status != "running" || invocation.Kind != "storygraph_stage" || invocation.Stage != "draft_storyboard" || invocation.ClaimVersion != claimVersion || invocation.LeaseExpiresAt == nil || !now.Before(*invocation.LeaseExpiresAt) {
 			return nil
 		}
-		if err := transaction.Model(&invocation).Updates(map[string]any{"status": "succeeded", "result_hash": result.ResultHash, "error": nil, "lease_expires_at": nil, "completed_at": now, "updated_at": now}).Error; err != nil {
+		request, err := agentgorm.StageInvocation(invocation)
+		if err != nil {
+			return err
+		}
+		if _, err = agentgorm.AcceptInvocationCandidate(transaction, invocation, request, result, now); err != nil {
+			return err
+		}
+		if err = transaction.Model(&invocation).Updates(map[string]any{"status": "succeeded", "result_hash": result.ResultHash, "candidate_type": result.CandidateType, "candidate": datatypes.JSON(result.Candidate), "executor": datatypes.JSON(executorJSON), "error": nil, "lease_expires_at": nil, "completed_at": now, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		if err := transaction.Model(&model.StoryboardDraftBatch{}).Where("id = ?", invocation.RequestID).Updates(map[string]any{"status": "needs_review", "result_hash": result.ResultHash, "candidate": datatypes.JSON(candidateJSON), "error": nil, "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
@@ -869,11 +882,25 @@ func invocationRecord(value storyboarddomain.Invocation) (model.AgentInvocation,
 	if err != nil {
 		return model.AgentInvocation{}, err
 	}
-	return model.AgentInvocation{ID: id, WorkspaceID: workspaceID, RequestType: "storyboard_draft_batch", RequestID: requestID, Kind: value.Kind, InputHash: value.InputHash, ExecutionPolicy: datatypes.JSON(value.ExecutionPolicy), Payload: datatypes.JSON(value.Payload), Status: value.Status, Attempts: value.Attempts, ClaimVersion: value.ClaimVersion, LeaseExpiresAt: value.LeaseExpiresAt, CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt}, nil
+	return model.AgentInvocation{
+		ID: id, WorkspaceID: workspaceID, RequestType: "storyboard_draft_batch", RequestID: requestID,
+		Kind: value.Kind, WireSchemaVersion: contract.StoryGraphWireSchemaVersion, Stage: value.Stage,
+		ShardKey: value.ShardKey, StageInstanceKey: value.StageInstanceKey, ShardManifestHash: value.ManifestHash,
+		InputHash: value.InputHash, ExecutionPolicy: datatypes.JSON(value.ExecutionPolicy), Payload: datatypes.JSON(value.Payload),
+		Status: value.Status, Attempts: value.Attempts, ClaimVersion: value.ClaimVersion,
+		LeaseExpiresAt: value.LeaseExpiresAt, CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt,
+	}, nil
 }
 
 func invocationDomain(record model.AgentInvocation) storyboarddomain.Invocation {
-	return storyboarddomain.Invocation{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), RequestID: record.RequestID.String(), Kind: record.Kind, InputHash: record.InputHash, ExecutionPolicy: append([]byte(nil), record.ExecutionPolicy...), Payload: append([]byte(nil), record.Payload...), Status: record.Status, Attempts: record.Attempts, ClaimVersion: record.ClaimVersion, LeaseExpiresAt: record.LeaseExpiresAt, CreatedAt: record.CreatedAt}
+	return storyboarddomain.Invocation{
+		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), RequestID: record.RequestID.String(),
+		Kind: record.Kind, Stage: record.Stage, ShardKey: record.ShardKey, InputHash: record.InputHash,
+		StageInstanceKey: record.StageInstanceKey, ManifestHash: record.ShardManifestHash,
+		ExecutionPolicy: append([]byte(nil), record.ExecutionPolicy...), Payload: append([]byte(nil), record.Payload...),
+		Status: record.Status, Attempts: record.Attempts, ClaimVersion: record.ClaimVersion,
+		LeaseExpiresAt: record.LeaseExpiresAt, CreatedAt: record.CreatedAt,
+	}
 }
 
 func normalizeNotFound(err error) error {

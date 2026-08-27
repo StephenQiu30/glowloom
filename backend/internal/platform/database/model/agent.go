@@ -1,0 +1,55 @@
+package model
+
+import (
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
+)
+
+var ErrImmutableStageCandidateRevision = errors.New("StageCandidateRevision is immutable")
+
+type StageCandidateRevision struct {
+	ID                          uuid.UUID               `gorm:"type:uuid;primaryKey"`
+	WorkspaceID                 uuid.UUID               `gorm:"type:uuid;not null"`
+	StageInstanceKey            string                  `gorm:"type:char(64);not null;uniqueIndex:uq_agt_candidate_stage_revision,priority:1;check:ck_agt_candidate_stage_key,char_length(stage_instance_key) = 64"`
+	RevisionNo                  int64                   `gorm:"not null;uniqueIndex:uq_agt_candidate_stage_revision,priority:2;check:ck_agt_candidate_revision_no,revision_no >= 1"`
+	ParentCandidateRevisionID   *uuid.UUID              `gorm:"type:uuid"`
+	ParentCandidateRevisionHash *string                 `gorm:"type:char(64);check:ck_agt_candidate_parent_hash,parent_candidate_revision_hash IS NULL OR char_length(parent_candidate_revision_hash) = 64"`
+	OriginKind                  string                  `gorm:"type:varchar(20);not null;check:ck_agt_candidate_origin_kind,origin_kind IN ('invocation','aggregate','repair');check:ck_agt_candidate_origin_union,(origin_kind = 'invocation' AND invocation_origin IS NOT NULL AND aggregate_origin IS NULL AND repair_origin IS NULL AND source_invocation_id IS NOT NULL AND source_result_hash IS NOT NULL) OR (origin_kind = 'aggregate' AND invocation_origin IS NULL AND aggregate_origin IS NOT NULL AND repair_origin IS NULL AND source_invocation_id IS NULL AND source_result_hash IS NULL) OR (origin_kind = 'repair' AND invocation_origin IS NULL AND aggregate_origin IS NULL AND repair_origin IS NOT NULL AND source_invocation_id IS NULL AND source_result_hash IS NULL)"`
+	InvocationOrigin            datatypes.JSON          `gorm:"type:jsonb"`
+	AggregateOrigin             datatypes.JSON          `gorm:"type:jsonb"`
+	RepairOrigin                datatypes.JSON          `gorm:"type:jsonb"`
+	SourceInvocationID          *uuid.UUID              `gorm:"type:uuid;uniqueIndex"`
+	SourceResultHash            *string                 `gorm:"type:char(64);check:ck_agt_candidate_source_hash,source_result_hash IS NULL OR char_length(source_result_hash) = 64"`
+	Candidate                   datatypes.JSON          `gorm:"type:jsonb;not null;check:ck_agt_candidate_json,jsonb_typeof(candidate) = 'object'"`
+	CandidateContentHash        string                  `gorm:"type:char(64);not null;check:ck_agt_candidate_content_hash,char_length(candidate_content_hash) = 64"`
+	CandidateRevisionHash       string                  `gorm:"type:char(64);not null;uniqueIndex;check:ck_agt_candidate_revision_hash,char_length(candidate_revision_hash) = 64"`
+	CreatedAt                   time.Time               `gorm:"type:timestamptz;not null"`
+	Workspace                   Workspace               `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ParentCandidateRevision     *StageCandidateRevision `gorm:"foreignKey:ParentCandidateRevisionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	SourceInvocation            *AgentInvocation        `gorm:"foreignKey:SourceInvocationID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (StageCandidateRevision) TableName() string { return "agt_stage_candidate_revisions" }
+func (*StageCandidateRevision) BeforeUpdate(*gorm.DB) error {
+	return ErrImmutableStageCandidateRevision
+}
+func (*StageCandidateRevision) BeforeDelete(*gorm.DB) error {
+	return ErrImmutableStageCandidateRevision
+}
+
+type StageCandidateHead struct {
+	WorkspaceID                  uuid.UUID              `gorm:"type:uuid;not null"`
+	StageInstanceKey             string                 `gorm:"type:char(64);primaryKey;check:ck_agt_candidate_head_key,char_length(stage_instance_key) = 64"`
+	CurrentRevisionID            uuid.UUID              `gorm:"type:uuid;not null;uniqueIndex"`
+	CurrentCandidateRevisionHash string                 `gorm:"type:char(64);not null;check:ck_agt_candidate_head_hash,char_length(current_candidate_revision_hash) = 64"`
+	Revision                     int64                  `gorm:"not null;check:ck_agt_candidate_head_revision,revision >= 1"`
+	UpdatedAt                    time.Time              `gorm:"type:timestamptz;not null"`
+	Workspace                    Workspace              `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	CurrentRevision              StageCandidateRevision `gorm:"foreignKey:CurrentRevisionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (StageCandidateHead) TableName() string { return "agt_stage_candidate_heads" }

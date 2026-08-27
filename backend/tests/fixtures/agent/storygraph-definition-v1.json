@@ -1,0 +1,37 @@
+{
+  "definition_key": "storygraph_stage",
+  "definition_version": "storygraph-stage-harness-v1",
+  "prompt_version": "build-storygraph-prompt-v1",
+  "skill_bundle_version": "build-storygraph-v1",
+  "skill_bundle_hash": "4cf64c94b7d181945da678721db36c4bc45921a9c833164bdea46cb7af149c42",
+  "output_schema_version": "storygraph-candidate-schema-v1",
+  "model_capability": "structured_text",
+  "codex_runtime_contract": "codex-cli-ephemeral-read-only-v1",
+  "allowed_tools": [],
+  "max_model_calls": 2,
+  "max_execution_seconds": 600,
+  "bundle_paths": [
+    "SKILL.md",
+    "references/continuity-review.md",
+    "references/entity-reconciliation.md",
+    "references/episode-segmentation.md",
+    "references/scene-structure.md",
+    "references/shot-detail.md",
+    "references/source-evidence.md",
+    "references/story-analysis.md",
+    "references/storyboard-table.md",
+    "references/visual-identity.md"
+  ],
+  "stages": [
+    {"stage":"extract_source_evidence","candidate_type":"source_evidence_candidate","references":["source-evidence.md"]},
+    {"stage":"analyze_story","candidate_type":"story_analysis_candidate","references":["story-analysis.md","entity-reconciliation.md"]},
+    {"stage":"reconcile_story","candidate_type":"story_reconciliation_candidate","references":["entity-reconciliation.md","story-analysis.md"]},
+    {"stage":"segment_episodes","candidate_type":"episode_segmentation_candidate","references":["episode-segmentation.md"]},
+    {"stage":"analyze_episode","candidate_type":"episode_analysis_candidate","references":["scene-structure.md","visual-identity.md"]},
+    {"stage":"reconcile_episode","candidate_type":"episode_reconciliation_candidate","references":["scene-structure.md","continuity-review.md"]},
+    {"stage":"draft_storyboard","candidate_type":"storyboard_row_candidate","references":["storyboard-table.md","visual-identity.md"]},
+    {"stage":"detail_shots","candidate_type":"shot_detail_candidate","references":["shot-detail.md","visual-identity.md"]},
+    {"stage":"review_storygraph","candidate_type":"storygraph_review_candidate","references":["continuity-review.md"]},
+    {"stage":"repair_candidate","candidate_type":"candidate_repair_patch","references":["continuity-review.md"]}
+  ]
+}

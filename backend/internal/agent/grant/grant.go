@@ -14,27 +14,19 @@ import (
 
 const TTL = 5 * time.Minute
 
-type Claims struct {
-	InvocationID        string `json:"invocation_id"`
-	Kind                string `json:"kind"`
-	InputHash           string `json:"input_hash"`
-	ExecutionPolicyHash string `json:"execution_policy_hash"`
-	ExpiresAt           int64  `json:"expires_at"`
-}
-
 type Signer struct {
 	secret []byte
 	now    func() time.Time
 }
 
 func NewSigner(secret string, now func() time.Time) (*Signer, error) {
-	if len(secret) < 32 {
+	if len([]byte(secret)) < 32 {
 		return nil, errors.New("agent execution secret must contain at least 32 bytes")
 	}
 	return &Signer{secret: []byte(secret), now: now}, nil
 }
 
-func (signer *Signer) Issue(invocation contract.Invocation) (string, error) {
+func (signer *Signer) Issue(invocation contract.StageInvocation, attempt int, fencingToken int64) (string, error) {
 	if err := invocation.Validate(); err != nil {
 		return "", err
 	}
@@ -42,7 +34,14 @@ func (signer *Signer) Issue(invocation contract.Invocation) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	claims := Claims{InvocationID: invocation.InvocationID, Kind: invocation.Kind, InputHash: invocation.InputHash, ExecutionPolicyHash: policyHash, ExpiresAt: signer.now().UTC().Add(TTL).Unix()}
+	claims := contract.StageExecutionGrantClaims{
+		InvocationID: invocation.InvocationID, InputHash: invocation.InputHash,
+		ExecutionPolicyHash: policyHash, ExpiresAt: signer.now().UTC().Add(TTL).Unix(),
+		Attempt: attempt, FencingToken: fencingToken,
+	}
+	if err = claims.ValidateFor(invocation, signer.now().UTC().Unix()); err != nil {
+		return "", err
+	}
 	payload, err := json.Marshal(claims)
 	if err != nil {
 		return "", err
@@ -51,7 +50,7 @@ func (signer *Signer) Issue(invocation contract.Invocation) (string, error) {
 	return encoded + "." + signer.signature(encoded), nil
 }
 
-func (signer *Signer) Verify(value string, invocation contract.Invocation) error {
+func (signer *Signer) Verify(value string, invocation contract.StageInvocation, attempt int, fencingToken int64) error {
 	if err := invocation.Validate(); err != nil {
 		return err
 	}
@@ -63,9 +62,11 @@ func (signer *Signer) Verify(value string, invocation contract.Invocation) error
 	if err != nil {
 		return errors.New("invalid agent execution grant payload")
 	}
-	var claims Claims
-	policyHash, hashErr := invocation.ExecutionPolicy.Hash()
-	if err = json.Unmarshal(payload, &claims); err != nil || hashErr != nil || claims.InvocationID != invocation.InvocationID || claims.Kind != invocation.Kind || claims.InputHash != invocation.InputHash || claims.ExecutionPolicyHash != policyHash || claims.ExpiresAt <= signer.now().UTC().Unix() {
+	var claims contract.StageExecutionGrantClaims
+	if err = json.Unmarshal(payload, &claims); err != nil {
+		return errors.New("invalid agent execution grant payload")
+	}
+	if err = claims.ValidateFor(invocation, signer.now().UTC().Unix()); err != nil || claims.Attempt != attempt || claims.FencingToken != fencingToken {
 		return errors.New("agent execution grant does not authorize invocation")
 	}
 	return nil

@@ -17,6 +17,7 @@ import (
 	identityverification "github.com/StephenQiu30/lanverse/backend/internal/access/identity/adapter/verification"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/access/identity/application"
 	agentclient "github.com/StephenQiu30/lanverse/backend/internal/agent/client"
+	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	agentgrant "github.com/StephenQiu30/lanverse/backend/internal/agent/grant"
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
@@ -184,11 +185,21 @@ func main() {
 		logger.Error("agent execution grant configuration failed", "error", err)
 		os.Exit(1)
 	}
-	agentRuntime, err := agentclient.New(configuration.AgentURL, agentSigner, nil)
+	agentRuntimeRevisions := []agentcontract.RuntimeRevision{{
+		BundleHash: agentcontract.StoryGraphSkillBundleHash, BaseURL: configuration.AgentURL,
+		ImageDigest: configuration.AgentRuntimeImageDigest,
+	}}
+	for _, revision := range configuration.AgentRuntimeAdditionalRevisions {
+		agentRuntimeRevisions = append(agentRuntimeRevisions, agentcontract.RuntimeRevision{
+			BundleHash: revision.BundleHash, BaseURL: revision.BaseURL, ImageDigest: revision.ImageDigest,
+		})
+	}
+	agentRuntimeCatalog, err := agentcontract.NewRuntimeCatalog(agentRuntimeRevisions)
 	if err != nil {
 		logger.Error("agent runtime configuration failed", "error", err)
 		os.Exit(1)
 	}
+	agentRuntime := agentclient.New(agentRuntimeCatalog, agentSigner, nil)
 	bibleStore := biblegorm.New(database)
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	bibleHandler := biblehttp.New(bibleService, tokenVerifier)

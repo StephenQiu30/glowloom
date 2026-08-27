@@ -1,55 +1,63 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
+
+from app.modules.storygraph.bundle import StoryGraphBundle
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 AGENT_ROOT = REPOSITORY_ROOT / "agent"
 SKILLS_ROOT = AGENT_ROOT / "skills"
 LEGACY_SKILLS_ROOT = REPOSITORY_ROOT / ".agents" / "skills"
-MANIFEST_PATH = AGENT_ROOT / "tests/fixtures/skills/legacy-skill-manifest-v1.json"
-
-EXPECTED_SKILLS = {
-    "analyze-scene",
-    "draft-shots",
-    "extract-bible-evidence",
-    "plan-scene",
-    "reconcile-bible",
-    "repair-shots",
-    "review-bible",
-    "review-shots",
-}
 
 
-def _expected_manifest() -> dict[str, str]:
-    manifest = cast(dict[str, object], json.loads(MANIFEST_PATH.read_text(encoding="utf-8")))
-    assert manifest["version"] == 1
-    return cast(dict[str, str], manifest["files"])
-
-
-def _actual_manifest() -> dict[str, str]:
-    return {
-        path.relative_to(SKILLS_ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in sorted(SKILLS_ROOT.rglob("*"))
-        if path.is_file()
-    }
-
-
-def test_eight_skills_keep_the_accepted_paths_and_bytes() -> None:
-    assert {path.name for path in SKILLS_ROOT.iterdir() if path.is_dir()} == EXPECTED_SKILLS
-    assert _actual_manifest() == _expected_manifest()
-
-
-def test_runtime_has_one_agent_owned_skill_path_without_legacy_fallback() -> None:
+def test_build_storygraph_is_the_only_agent_owned_skill_bundle() -> None:
+    assert {path.name for path in SKILLS_ROOT.iterdir() if path.is_dir()} == {"build-storygraph"}
     assert not LEGACY_SKILLS_ROOT.exists()
 
-    harness = (AGENT_ROOT / "app/modules/skills/harness.py").read_text(encoding="utf-8")
+    fixture = cast(
+        dict[str, Any],
+        json.loads(
+            (
+                REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-definition-v1.json"
+            ).read_text(encoding="utf-8")
+        ),
+    )
+    bundle = StoryGraphBundle(REPOSITORY_ROOT)
+    assert list(bundle.allowed_paths()) == fixture["bundle_paths"]
+    assert bundle.compute_hash() == fixture["skill_bundle_hash"]
+    assert not list(SKILLS_ROOT.rglob("openai.yaml"))
+
+
+def test_runtime_and_image_have_no_old_skill_loader_or_fallback() -> None:
+    source = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted((AGENT_ROOT / "app").rglob("*.py"))
+    )
     dockerfile = (AGENT_ROOT / "Dockerfile").read_text(encoding="utf-8")
     dockerignore = (REPOSITORY_ROOT / ".dockerignore").read_text(encoding="utf-8")
-    assert 'self._repository_root / "agent" / "skills"' in harness
-    assert ".agents" not in harness
+    assert 'rglob("*.md")' not in source
+    assert ".agents" not in source
     assert "COPY --chown=lanverse:lanverse agent/skills ./skills" in dockerfile
     assert ".agents" not in dockerfile
     assert ".agents" not in dockerignore
+
+    dependency_files = (
+        (AGENT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        + (AGENT_ROOT / "requirements.txt").read_text(encoding="utf-8")
+    ).casefold()
+    assert "langgraph" not in dependency_files
+    assert "langchain" not in dependency_files
+
+    tracked_python = {
+        path.relative_to(AGENT_ROOT).as_posix() for path in (AGENT_ROOT / "app").rglob("*.py")
+    }
+    assert not any(
+        path.startswith(prefix)
+        for path in tracked_python
+        for prefix in (
+            "app/modules/scripts/",
+            "app/modules/skills/",
+            "app/modules/storyboards/",
+        )
+    )

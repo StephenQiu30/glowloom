@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -70,6 +69,11 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 	}
 
 	now := time.Date(2026, time.August, 25, 12, 0, 0, 0, time.UTC)
+	if err = database.Model(&model.AgentInvocation{}).
+		Where("kind = ? AND stage = ? AND status IN ?", "storygraph_stage", "draft_storyboard", []string{"queued", "running"}).
+		Updates(map[string]any{"status": "failed", "lease_expires_at": nil, "completed_at": now, "updated_at": now}).Error; err != nil {
+		t.Fatalf("quiesce prior draft storyboard invocations: %v", err)
+	}
 	workspaceID := uuid.New()
 	requestID := uuid.New()
 	taskID := uuid.New()
@@ -88,12 +92,8 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seed workflow task: %v", err)
 	}
-	if err = database.Create(&model.AgentInvocation{
-		ID: invocationID, WorkspaceID: workspaceID, RequestType: "storyboard_draft_batch",
-		RequestID: requestID, Kind: "storyboard_draft", InputHash: strings.Repeat("a", 64),
-		ExecutionPolicy: mustExecutionPolicy(t, "storyboard_draft"), Payload: []byte(`{}`), Status: "queued", Attempts: 0,
-		CreatedAt: now, UpdatedAt: now,
-	}).Error; err != nil {
+	invocationRecord := mustStageInvocationRecord(t, invocationID, workspaceID, requestID, "storyboard_draft_batch", "draft_storyboard", "queued", now)
+	if err = database.Create(&invocationRecord).Error; err != nil {
 		t.Fatalf("seed agent invocation: %v", err)
 	}
 
@@ -120,11 +120,16 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 		t.Fatalf("unexpected reclaimed invocation: %#v", second)
 	}
 
-	resultHash := strings.Repeat("b", 64)
-	result := contract.Result{
-		InvocationID: second.ID, Kind: second.Kind, InputHash: second.InputHash,
-		Status: "succeeded", SchemaVersion: contract.SchemaVersion,
-		Candidate: []byte(`{"shots":[]}`), ResultHash: &resultHash,
+	candidateJSON := json.RawMessage(`{"shots":[]}`)
+	resultHash, err := contract.CanonicalHash(candidateJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := contract.StageResult{
+		InvocationID: second.ID, Kind: second.Kind, WireSchemaVersion: contract.StoryGraphWireSchemaVersion,
+		Stage: second.Stage, ShardKey: second.ShardKey, Status: "succeeded",
+		CandidateType: "storyboard_row_candidate", Candidate: candidateJSON, InputHash: second.InputHash,
+		ResultHash: &resultHash, Issues: []contract.StageIssue{},
 		Executor: contract.Executor{Name: "lease-test", Version: "1", Model: "deterministic"},
 	}
 	staleApplied, err := store.CompleteInvocation(
@@ -155,17 +160,4 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 	if completed.Status != "succeeded" || completed.LeaseExpiresAt != nil {
 		t.Fatalf("current result did not finalize invocation: %#v", completed)
 	}
-}
-
-func mustExecutionPolicy(t *testing.T, kind string) []byte {
-	t.Helper()
-	policy, err := contract.ExecutionPolicyFor(kind)
-	if err != nil {
-		t.Fatal(err)
-	}
-	encoded, err := json.Marshal(policy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return encoded
 }

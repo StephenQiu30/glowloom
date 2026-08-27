@@ -1,1 +1,0 @@
-"""Codex skill harness support."""

@@ -3,11 +3,14 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import json
 import time
-from typing import Any
 
-from app.candidate_runtime.schemas import Invocation
+from pydantic import ValidationError
+
+from app.candidate_runtime.schemas import (
+    StoryGraphExecutionGrantClaims,
+    StoryGraphStageInvocation,
+)
 
 MAX_TTL_SECONDS = 300
 
@@ -23,7 +26,11 @@ def _decode(value: str) -> bytes:
         raise InvalidExecutionGrant("invalid execution grant encoding") from error
 
 
-def verify_execution_grant(value: str, secret: str, invocation: Invocation) -> None:
+def verify_execution_grant(
+    value: str,
+    secret: str,
+    invocation: StoryGraphStageInvocation,
+) -> None:
     if len(secret.encode("utf-8")) < 32:
         raise InvalidExecutionGrant("agent execution secret must contain at least 32 bytes")
     parts = value.split(".")
@@ -39,17 +46,13 @@ def verify_execution_grant(value: str, secret: str, invocation: Invocation) -> N
     if not hmac.compare_digest(parts[1], expected):
         raise InvalidExecutionGrant("invalid execution grant signature")
     try:
-        claims: dict[str, Any] = json.loads(_decode(parts[0]))
-        expires_at = int(claims["expires_at"])
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        claims = StoryGraphExecutionGrantClaims.model_validate_json(_decode(parts[0]))
+    except ValidationError as error:
         raise InvalidExecutionGrant("invalid execution grant payload") from error
     now = int(time.time())
-    if (
-        claims.get("invocation_id") != str(invocation.invocation_id)
-        or claims.get("kind") != invocation.kind
-        or claims.get("input_hash") != invocation.input_hash
-        or claims.get("execution_policy_hash") != invocation.execution_policy.canonical_hash()
-        or expires_at <= now
-        or expires_at > now + MAX_TTL_SECONDS
-    ):
-        raise InvalidExecutionGrant("execution grant does not authorize invocation")
+    try:
+        claims.validate_for(invocation, now_unix=now)
+    except ValueError as error:
+        raise InvalidExecutionGrant("execution grant does not authorize invocation") from error
+    if claims.expires_at > now + MAX_TTL_SECONDS:
+        raise InvalidExecutionGrant("execution grant expiry exceeds the maximum TTL")

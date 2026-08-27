@@ -1,0 +1,273 @@
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import shutil
+import tempfile
+import time
+from pathlib import Path
+from typing import Any, cast
+
+from pydantic import BaseModel
+
+from app.candidate_runtime.schemas import StoryGraphExecutionPolicy, StoryGraphStageInvocation
+from app.modules.storygraph.bundle import BundleInvalid, BundleManifest, StoryGraphBundle
+from app.modules.storygraph.skill_registry import stage_spec
+
+
+class CodexExecutionError(RuntimeError):
+    pass
+
+
+class CodexBudgetExceeded(CodexExecutionError):
+    pass
+
+
+class CodexDeadlineExceeded(CodexExecutionError):
+    pass
+
+
+class CodexToolPolicyViolation(CodexExecutionError):
+    pass
+
+
+class CodexSchemaInvalid(CodexExecutionError):
+    pass
+
+
+class CodexRuntimeUnavailable(CodexExecutionError):
+    pass
+
+
+class InvocationPolicyInvalid(CodexExecutionError):
+    pass
+
+
+class SkillBundleUnavailable(CodexExecutionError):
+    pass
+
+
+_DISABLED_FEATURES = (
+    "apps",
+    "browser_use",
+    "browser_use_external",
+    "browser_use_full_cdp_access",
+    "computer_use",
+    "image_generation",
+    "in_app_browser",
+    "multi_agent",
+    "multi_agent_v2",
+    "plugins",
+    "shell_tool",
+    "skill_search",
+    "standalone_web_search",
+    "unified_exec",
+    "view_image",
+    "web_search_cached",
+    "web_search_request",
+    "workspace_dependencies",
+)
+
+_SAFE_ITEM_TYPES = {"agent_message", "error", "reasoning"}
+
+
+def structured_diagnostic(stdout: bytes, stderr: bytes) -> str:
+    messages: list[str] = []
+    for line in stdout.decode("utf-8", errors="replace").splitlines():
+        try:
+            decoded: Any = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(decoded, dict):
+            continue
+        event = cast(dict[str, Any], decoded)
+        event_type = str(event.get("type", ""))
+        if event_type == "error":
+            message = event.get("message")
+            if isinstance(message, str) and message.strip():
+                messages.append(message.strip())
+        error_value = event.get("error")
+        if isinstance(error_value, dict):
+            error = cast(dict[str, Any], error_value)
+            message = error.get("message")
+            if isinstance(message, str) and message.strip():
+                messages.append(message.strip())
+        elif event_type.endswith(".failed") and isinstance(error_value, str):
+            if error_value.strip():
+                messages.append(error_value.strip())
+    if messages:
+        return messages[-1][:400]
+    fallback = [
+        line.strip()
+        for line in stderr.decode("utf-8", errors="replace").splitlines()
+        if line.strip() not in {"", "{", "}", "[", "]"}
+    ]
+    return fallback[-1][:400] if fallback else "no diagnostic output"
+
+
+class StoryGraphHarness:
+    def __init__(
+        self,
+        invocation: StoryGraphStageInvocation,
+        *,
+        repository_root: Path | None = None,
+    ) -> None:
+        self.invocation = invocation
+        self.bundle = StoryGraphBundle(repository_root)
+        self._validate_runtime_policy(invocation.execution_policy)
+        try:
+            self.bundle.verify_installed_bundle()
+        except BundleInvalid:
+            raise
+        self._model_calls = 0
+        self._deadline_at = time.monotonic() + invocation.execution_policy.max_execution_seconds
+        configured = os.getenv("CODEX_BIN", "").strip()
+        self._codex_bin = configured or shutil.which("codex") or "codex"
+        self.model_name = "codex-cli-default"
+
+    async def execute(self) -> BaseModel:
+        spec = stage_spec(self.invocation.payload.stage)
+        guidance = self.bundle.guidance(
+            self.invocation.payload.stage, self.invocation.payload.stage_input
+        )
+        prompt = json.dumps(
+            self.invocation.payload.model_dump(mode="json", exclude_none=True),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        return await self._run_codex(guidance, prompt, spec.candidate_model)
+
+    def _validate_runtime_policy(self, policy: StoryGraphExecutionPolicy) -> None:
+        manifest = BundleManifest()
+        if policy.skill_bundle_hash != manifest.skill_bundle_hash:
+            raise SkillBundleUnavailable("exact StoryGraph skill bundle runtime is unavailable")
+        frozen = (
+            (policy.definition_key, manifest.definition_key),
+            (policy.definition_version, manifest.definition_version),
+            (policy.prompt_version, manifest.prompt_version),
+            (policy.skill_bundle_version, manifest.skill_bundle_version),
+            (policy.output_schema_version, manifest.output_schema_version),
+            (policy.model_capability, manifest.model_capability),
+            (policy.codex_runtime_contract, manifest.codex_runtime_contract),
+        )
+        if (
+            any(actual != expected for actual, expected in frozen)
+            or policy.allowed_tools
+            or policy.max_model_calls > manifest.max_model_calls
+            or policy.max_execution_seconds > manifest.max_execution_seconds
+        ):
+            raise InvocationPolicyInvalid(
+                "StoryGraph execution policy is outside the definition manifest"
+            )
+
+    async def _run_codex(
+        self,
+        guidance: str,
+        prompt: str,
+        output_model: type[BaseModel],
+    ) -> BaseModel:
+        remaining_seconds = self._deadline_at - time.monotonic()
+        if remaining_seconds <= 0:
+            raise CodexDeadlineExceeded("Agent execution deadline is exhausted")
+        if self._model_calls >= self.invocation.execution_policy.max_model_calls:
+            raise CodexBudgetExceeded("Agent model-call budget is exhausted")
+        self._model_calls += 1
+        with tempfile.TemporaryDirectory(prefix="lanverse-codex-") as temporary:
+            root = Path(temporary)
+            schema_path = root / "output-schema.json"
+            response_path = root / "response.json"
+            schema_path.write_text(
+                json.dumps(output_model.model_json_schema(), ensure_ascii=False), encoding="utf-8"
+            )
+            command = [
+                self._codex_bin,
+                "exec",
+                "--ephemeral",
+                "--sandbox",
+                "read-only",
+                "--cd",
+                str(root),
+                "--skip-git-repo-check",
+                "--ignore-user-config",
+                "--output-schema",
+                str(schema_path),
+                "--output-last-message",
+                str(response_path),
+                "--json",
+                "--color",
+                "never",
+            ]
+            for feature in _DISABLED_FEATURES:
+                command.extend(["--disable", feature])
+            command.append("-")
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *command,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+            except OSError as error:
+                raise CodexRuntimeUnavailable("Codex CLI could not be started") from error
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(_prompt_with_guidance(guidance, prompt).encode("utf-8")),
+                    timeout=remaining_seconds,
+                )
+            except TimeoutError as error:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+                await process.wait()
+                raise CodexDeadlineExceeded("Agent execution deadline is exhausted") from error
+            unauthorized_item = unauthorized_item_type(stdout)
+            if unauthorized_item is not None:
+                raise CodexToolPolicyViolation(
+                    f"Codex CLI attempted disallowed item type: {unauthorized_item}"
+                )
+            if process.returncode != 0 or not response_path.is_file():
+                raise CodexRuntimeUnavailable(
+                    f"Codex CLI exited {process.returncode}: "
+                    f"{structured_diagnostic(stdout, stderr)}"
+                )
+            try:
+                value: Any = json.loads(response_path.read_text(encoding="utf-8"))
+                return output_model.model_validate(value)
+            except (OSError, json.JSONDecodeError, ValueError) as error:
+                raise CodexSchemaInvalid(
+                    "Codex CLI returned an invalid structured result"
+                ) from error
+
+    async def aclose(self) -> None:
+        return None
+
+
+def _prompt_with_guidance(guidance: str, prompt: str) -> str:
+    return (
+        "You are a restricted structured-text executor. No tools are authorized or available. "
+        "Use only the immutable task input, explicit project guidance, and output schema supplied "
+        "by the harness. Never read files, run commands, call networks, or perform side effects."
+        f"\n\n# Project guidance\n{guidance}\n\n# Frozen stage input\n{prompt}"
+    )
+
+
+def unauthorized_item_type(stdout: bytes) -> str | None:
+    for line in stdout.decode("utf-8", errors="replace").splitlines():
+        try:
+            decoded: Any = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(decoded, dict):
+            continue
+        event = cast(dict[str, Any], decoded)
+        item_value = event.get("item")
+        if not isinstance(item_value, dict):
+            continue
+        item = cast(dict[str, Any], item_value)
+        item_type = item.get("type")
+        if isinstance(item_type, str) and item_type not in _SAFE_ITEM_TYPES:
+            return item_type[:80]
+    return None

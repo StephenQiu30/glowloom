@@ -175,6 +175,11 @@ func seedFailedBible(t *testing.T, create func(any) error) failedBibleFixture {
 	bibleRevision, claimVersion := 5, 7
 	resultHash := strings.Repeat("b", 64)
 	completedAt := now
+	invocationRecord := mustStageInvocationRecord(t, invocationID, workspaceID, bibleID, "production_bible", "analyze_story", "failed", now)
+	invocationRecord.Error = []byte(`{"code":"agent_failed"}`)
+	invocationRecord.Attempts = claimVersion
+	invocationRecord.ClaimVersion = claimVersion
+	invocationRecord.CompletedAt = &completedAt
 
 	records := []any{
 		&model.UserAccount{
@@ -219,12 +224,7 @@ func seedFailedBible(t *testing.T, create func(any) error) failedBibleFixture {
 			ReviewDecisions: []byte(`{}`), Error: []byte(`{"code":"agent_failed"}`), Revision: bibleRevision,
 			CreatedBy: userID, CreatedAt: now, UpdatedAt: now,
 		},
-		&model.AgentInvocation{
-			ID: invocationID, WorkspaceID: workspaceID, RequestType: "production_bible", RequestID: bibleID,
-			Kind: "production_bible", InputHash: strings.Repeat("2", 64), ExecutionPolicy: mustExecutionPolicy(t, "production_bible"), Payload: []byte(`{}`), Status: "failed",
-			Error: []byte(`{"code":"agent_failed"}`), Attempts: claimVersion, ClaimVersion: claimVersion,
-			CompletedAt: &completedAt, CreatedAt: now, UpdatedAt: now,
-		},
+		&invocationRecord,
 	}
 	for _, record := range records {
 		if err := create(record); err != nil {

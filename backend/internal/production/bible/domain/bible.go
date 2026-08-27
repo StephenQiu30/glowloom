@@ -59,9 +59,11 @@ type WorldEntry struct {
 }
 
 type Candidate struct {
-	Entities     []Entity      `json:"entities"`
-	WorldEntries []WorldEntry  `json:"world_entries"`
-	ReviewIssues []ReviewIssue `json:"review_issues"`
+	Entities     []Entity         `json:"entities"`
+	WorldEntries []WorldEntry     `json:"world_entries"`
+	Claims       []map[string]any `json:"claims"`
+	Arcs         []map[string]any `json:"arcs"`
+	ReviewIssues []ReviewIssue    `json:"review_issues"`
 }
 
 type Bible struct {
@@ -84,9 +86,10 @@ type Bible struct {
 }
 
 type Invocation struct {
-	ID, WorkspaceID, RequestID, Kind, InputHash, Status string
-	ExecutionPolicy, Payload                            json.RawMessage
-	Attempts, ClaimVersion                              int
-	LeaseExpiresAt                                      *time.Time
-	CreatedAt                                           time.Time
+	ID, WorkspaceID, RequestID, Kind, Stage, ShardKey string
+	InputHash, StageInstanceKey, ManifestHash, Status string
+	ExecutionPolicy, Payload                          json.RawMessage
+	Attempts, ClaimVersion                            int
+	LeaseExpiresAt                                    *time.Time
+	CreatedAt                                         time.Time
 }

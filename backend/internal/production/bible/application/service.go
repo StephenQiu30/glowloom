@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
@@ -17,10 +19,10 @@ const (
 	confirmOperation = "production_bible.confirm"
 	resumeOperation  = "production_bible.resume"
 	decideOperation  = "production_bible.review_issue.decide"
-	engineVersion    = "production-bible-agent-v1"
-	promptVersion    = "production-bible-prompt-v1"
-	schemaVersion    = "production-bible-schema-v1"
-	harnessVersion   = "production-bible-harness-v1"
+	engineVersion    = "storygraph-stage-agent-v1"
+	promptVersion    = "build-storygraph-prompt-v1"
+	schemaVersion    = "storygraph-candidate-schema-v1"
+	harnessVersion   = "storygraph-stage-harness-v1"
 )
 
 var ErrNotFound = errors.New("production bible not found")
@@ -40,6 +42,7 @@ type Actor struct {
 
 type RevisionInput struct {
 	ID, WorkspaceID, ProjectID, NormalizedText, NormalizedHash string
+	VersionNo                                                  int
 }
 
 type Repository interface {
@@ -131,22 +134,64 @@ func (service *Service) Create(ctx context.Context, actor Actor, command CreateC
 			Status: "queued", InputHash: revision.NormalizedHash, EngineVersion: engineVersion, ModelName: "pending", PromptVersion: promptVersion,
 			SchemaVersion: schemaVersion, HarnessVersion: harnessVersion, Candidate: candidate, ReviewDecisions: map[string]string{}, Revision: 1, CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now,
 		}
-		payload, err := json.Marshal(map[string]any{
+		stageInput, err := json.Marshal(map[string]any{
 			"bible_id": bibleID, "task_id": taskID, "workspace_id": revision.WorkspaceID, "project_id": revision.ProjectID,
 			"document_revision_id": revision.ID, "normalized_text": revision.NormalizedText, "run_token": invocationID,
 		})
 		if err != nil {
 			return err
 		}
-		executionPolicy, err := agentcontract.ExecutionPolicyFor("production_bible")
+		shardEnd := utf8.RuneCountInString(revision.NormalizedText)
+		shardKey := fmt.Sprintf("script:%d:%d", 0, shardEnd)
+		manifestMaterial, err := json.Marshal(struct {
+			Stage, ShardKey, SourceHash string
+			AbsoluteStart, AbsoluteEnd  int
+		}{"analyze_story", shardKey, revision.NormalizedHash, 0, shardEnd})
 		if err != nil {
 			return err
 		}
-		encodedPolicy, err := json.Marshal(executionPolicy)
+		manifestHash, err := agentcontract.CanonicalHash(manifestMaterial)
 		if err != nil {
 			return err
 		}
-		invocation := domain.Invocation{ID: invocationID, WorkspaceID: revision.WorkspaceID, RequestID: bibleID, Kind: "production_bible", InputHash: revision.NormalizedHash, ExecutionPolicy: encodedPolicy, Payload: payload, Status: "queued", CreatedAt: now}
+		start := 0
+		stageInvocation, err := agentcontract.NewStageInvocation(
+			invocationID,
+			agentcontract.StoryGraphDefinition().ExecutionPolicy(),
+			agentcontract.StageInvocationPayload{
+				Stage: "analyze_story", ShardKey: shardKey, WorkspaceID: revision.WorkspaceID,
+				ProjectID: revision.ProjectID,
+				SourceRefs: []agentcontract.StageSourceRef{{
+					OwnerKind: "script_revision", OwnerLogicalID: revision.ID,
+					OwnerVersionID: revision.ID, Revision: int64(revision.VersionNo), ContentHash: revision.NormalizedHash,
+				}},
+				UpstreamCandidates: []agentcontract.StageUpstreamCandidateRef{},
+				ShardManifestRef:   agentcontract.ShardManifestRef{ManifestID: taskID, Version: 1, Hash: manifestHash},
+				Shard:              agentcontract.InvocationShard{Kind: "script_slice", Key: shardKey, TreePath: "0", AbsoluteStart: &start, AbsoluteEnd: &shardEnd},
+				StageInput:         stageInput,
+			},
+		)
+		if err != nil {
+			return err
+		}
+		encodedPolicy, err := json.Marshal(stageInvocation.ExecutionPolicy)
+		if err != nil {
+			return err
+		}
+		payload, err := json.Marshal(stageInvocation.Payload)
+		if err != nil {
+			return err
+		}
+		stageInstanceKey, err := stageInvocation.StageInstanceKey()
+		if err != nil {
+			return err
+		}
+		invocation := domain.Invocation{
+			ID: invocationID, WorkspaceID: revision.WorkspaceID, RequestID: bibleID,
+			Kind: "storygraph_stage", Stage: stageInvocation.Payload.Stage, ShardKey: shardKey,
+			InputHash: stageInvocation.InputHash, StageInstanceKey: stageInstanceKey, ManifestHash: manifestHash,
+			ExecutionPolicy: encodedPolicy, Payload: payload, Status: "queued", CreatedAt: now,
+		}
 		if err = repo.CreateWorkflow(ctx, result, invocation); err != nil {
 			return err
 		}

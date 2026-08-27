@@ -1,6 +1,0 @@
-interface:
-  display_name: "Review Bible"
-  short_description: "Audit Bible identity and evidence conflicts independently"
-  default_prompt: "Use $review-bible to independently audit the supplied candidate Production Bible and return schema-valid evidence-scoped issues."
-policy:
-  allow_implicit_invocation: false

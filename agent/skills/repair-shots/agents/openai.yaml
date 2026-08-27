@@ -1,6 +1,0 @@
-interface:
-  display_name: "Repair Shots"
-  short_description: "Repair only failed storyboard fields and boundaries"
-  default_prompt: "Use $repair-shots to produce the smallest schema-valid repair for the supplied failed issues and adjacent context."
-policy:
-  allow_implicit_invocation: false

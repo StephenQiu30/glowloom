@@ -1,9 +1,11 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -23,6 +25,7 @@ const (
 	defaultSessionTTLSeconds  = 30 * 24 * 60 * 60
 	defaultAgentURL           = "http://127.0.0.1:8787"
 	defaultAgentSecret        = "development-only-agent-execution-secret"
+	defaultAgentImageDigest   = "sha256:4cf64c94b7d181945da678721db36c4bc45921a9c833164bdea46cb7af149c42"
 	defaultAgentPollMillis    = 500
 	defaultAgentLeaseSeconds  = 30 * 60
 	defaultTemporalAddress    = "127.0.0.1:7233"
@@ -44,48 +47,58 @@ const (
 
 var numericVerificationCode = regexp.MustCompile(`^\d{6}$`)
 var kafkaNamePattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+var sha256HashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var sha256DigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+type AgentRuntimeRevision struct {
+	BundleHash  string `json:"bundle_hash"`
+	BaseURL     string `json:"base_url"`
+	ImageDigest string `json:"image_digest"`
+}
 
 type Config struct {
-	ListenAddress                string
-	DatabaseURL                  string
-	JWTSecret                    string
-	JWTIssuer                    string
-	JWTAudience                  string
-	AccessTokenTTL               time.Duration
-	SessionTTL                   time.Duration
-	Environment                  string
-	RegistrationVerificationCode string
-	AllowedOrigins               []string
-	ObjectStoreEndpoint          string
-	ObjectStorePublicEndpoint    string
-	ObjectStoreAccessKey         string
-	ObjectStoreSecretKey         string
-	ObjectStoreBucket            string
-	ObjectStoreRegion            string
-	ObjectStoreSecure            bool
-	ObjectStorePublicSecure      bool
-	AgentURL                     string
-	AgentExecutionSecret         string
-	AgentPollInterval            time.Duration
-	AgentClaimLease              time.Duration
-	TemporalAddress              string
-	TemporalNamespace            string
-	TemporalTaskQueue            string
-	EventWorkerListenAddress     string
-	KafkaBrokers                 []string
-	KafkaClientID                string
-	KafkaConsumerGroup           string
-	KafkaUsername                string
-	KafkaPassword                string
-	KafkaScriptTopic             string
-	KafkaScriptDLQTopic          string
-	KafkaStoryGraphTopic         string
-	KafkaStoryGraphDLQTopic      string
-	ElasticsearchURL             string
-	ElasticsearchUsername        string
-	ElasticsearchPassword        string
-	ElasticsearchScriptAlias     string
-	ElasticsearchStoryGraphAlias string
+	ListenAddress                   string
+	DatabaseURL                     string
+	JWTSecret                       string
+	JWTIssuer                       string
+	JWTAudience                     string
+	AccessTokenTTL                  time.Duration
+	SessionTTL                      time.Duration
+	Environment                     string
+	RegistrationVerificationCode    string
+	AllowedOrigins                  []string
+	ObjectStoreEndpoint             string
+	ObjectStorePublicEndpoint       string
+	ObjectStoreAccessKey            string
+	ObjectStoreSecretKey            string
+	ObjectStoreBucket               string
+	ObjectStoreRegion               string
+	ObjectStoreSecure               bool
+	ObjectStorePublicSecure         bool
+	AgentURL                        string
+	AgentExecutionSecret            string
+	AgentRuntimeImageDigest         string
+	AgentRuntimeAdditionalRevisions []AgentRuntimeRevision
+	AgentPollInterval               time.Duration
+	AgentClaimLease                 time.Duration
+	TemporalAddress                 string
+	TemporalNamespace               string
+	TemporalTaskQueue               string
+	EventWorkerListenAddress        string
+	KafkaBrokers                    []string
+	KafkaClientID                   string
+	KafkaConsumerGroup              string
+	KafkaUsername                   string
+	KafkaPassword                   string
+	KafkaScriptTopic                string
+	KafkaScriptDLQTopic             string
+	KafkaStoryGraphTopic            string
+	KafkaStoryGraphDLQTopic         string
+	ElasticsearchURL                string
+	ElasticsearchUsername           string
+	ElasticsearchPassword           string
+	ElasticsearchScriptAlias        string
+	ElasticsearchStoryGraphAlias    string
 }
 
 func Load() (Config, error) {
@@ -122,6 +135,18 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	objectStorePublicSecure, err := boolean("MINIO_PUBLIC_SECURE", false)
+	if err != nil {
+		return Config{}, err
+	}
+	agentURL, err := serviceURL("AGENT_URL", defaultAgentURL)
+	if err != nil {
+		return Config{}, err
+	}
+	agentImageDigest := strings.TrimSpace(environmentValue("AGENT_RUNTIME_IMAGE_DIGEST", defaultAgentImageDigest))
+	if !sha256DigestPattern.MatchString(agentImageDigest) {
+		return Config{}, errors.New("AGENT_RUNTIME_IMAGE_DIGEST must be a sha256 image digest")
+	}
+	agentAdditionalRevisions, err := agentRuntimeRevisions("AGENT_RUNTIME_ADDITIONAL_REVISIONS")
 	if err != nil {
 		return Config{}, err
 	}
@@ -210,57 +235,97 @@ func Load() (Config, error) {
 		return Config{}, errors.New("Elasticsearch Script and StoryGraph aliases must be isolated")
 	}
 	return Config{
-		ListenAddress:                net.JoinHostPort(host, strconv.Itoa(port)),
-		DatabaseURL:                  databaseURL,
-		JWTSecret:                    environmentValue("JWT_SECRET_KEY", defaultJWTSecret),
-		JWTIssuer:                    environmentValue("JWT_ISSUER", defaultJWTIssuer),
-		JWTAudience:                  environmentValue("JWT_AUDIENCE", defaultJWTAudience),
-		AccessTokenTTL:               time.Duration(accessMinutes) * time.Minute,
-		SessionTTL:                   time.Duration(sessionSeconds) * time.Second,
-		Environment:                  environmentValue("ENVIRONMENT", "development"),
-		RegistrationVerificationCode: verificationCode,
-		AllowedOrigins:               allowedOrigins,
-		ObjectStoreEndpoint:          environmentValue("MINIO_ENDPOINT", "127.0.0.1:9000"),
-		ObjectStorePublicEndpoint:    environmentValue("MINIO_PUBLIC_ENDPOINT", "127.0.0.1:9000"),
-		ObjectStoreAccessKey:         environmentValue("MINIO_ACCESS_KEY", "lanverse"),
-		ObjectStoreSecretKey:         environmentValue("MINIO_SECRET_KEY", "lanverse-development-only"),
-		ObjectStoreBucket:            environmentValue("MINIO_BUCKET", "lanverse-media"),
-		ObjectStoreRegion:            environmentValue("MINIO_REGION", "us-east-1"),
-		ObjectStoreSecure:            objectStoreSecure,
-		ObjectStorePublicSecure:      objectStorePublicSecure,
-		AgentURL:                     environmentValue("AGENT_URL", defaultAgentURL),
-		AgentExecutionSecret:         environmentValue("AGENT_EXECUTION_SECRET", defaultAgentSecret),
-		AgentPollInterval:            time.Duration(agentPollMillis) * time.Millisecond,
-		AgentClaimLease:              time.Duration(agentLeaseSeconds) * time.Second,
-		TemporalAddress:              temporalAddress,
-		TemporalNamespace:            temporalNamespace,
-		TemporalTaskQueue:            temporalTaskQueue,
-		EventWorkerListenAddress:     net.JoinHostPort(eventWorkerHost, strconv.Itoa(eventWorkerPort)),
-		KafkaBrokers:                 kafkaBrokers,
-		KafkaClientID:                kafkaClientID,
-		KafkaConsumerGroup:           kafkaConsumerGroup,
-		KafkaUsername:                kafkaUsername,
-		KafkaPassword:                kafkaPassword,
-		KafkaScriptTopic:             scriptTopic,
-		KafkaScriptDLQTopic:          scriptDLQTopic,
-		KafkaStoryGraphTopic:         storyGraphTopic,
-		KafkaStoryGraphDLQTopic:      storyGraphDLQTopic,
-		ElasticsearchURL:             elasticsearchURL,
-		ElasticsearchUsername:        strings.TrimSpace(os.Getenv("ELASTICSEARCH_USERNAME")),
-		ElasticsearchPassword:        os.Getenv("ELASTICSEARCH_PASSWORD"),
-		ElasticsearchScriptAlias:     scriptAlias,
-		ElasticsearchStoryGraphAlias: storyGraphAlias,
+		ListenAddress:                   net.JoinHostPort(host, strconv.Itoa(port)),
+		DatabaseURL:                     databaseURL,
+		JWTSecret:                       environmentValue("JWT_SECRET_KEY", defaultJWTSecret),
+		JWTIssuer:                       environmentValue("JWT_ISSUER", defaultJWTIssuer),
+		JWTAudience:                     environmentValue("JWT_AUDIENCE", defaultJWTAudience),
+		AccessTokenTTL:                  time.Duration(accessMinutes) * time.Minute,
+		SessionTTL:                      time.Duration(sessionSeconds) * time.Second,
+		Environment:                     environmentValue("ENVIRONMENT", "development"),
+		RegistrationVerificationCode:    verificationCode,
+		AllowedOrigins:                  allowedOrigins,
+		ObjectStoreEndpoint:             environmentValue("MINIO_ENDPOINT", "127.0.0.1:9000"),
+		ObjectStorePublicEndpoint:       environmentValue("MINIO_PUBLIC_ENDPOINT", "127.0.0.1:9000"),
+		ObjectStoreAccessKey:            environmentValue("MINIO_ACCESS_KEY", "lanverse"),
+		ObjectStoreSecretKey:            environmentValue("MINIO_SECRET_KEY", "lanverse-development-only"),
+		ObjectStoreBucket:               environmentValue("MINIO_BUCKET", "lanverse-media"),
+		ObjectStoreRegion:               environmentValue("MINIO_REGION", "us-east-1"),
+		ObjectStoreSecure:               objectStoreSecure,
+		ObjectStorePublicSecure:         objectStorePublicSecure,
+		AgentURL:                        agentURL,
+		AgentExecutionSecret:            environmentValue("AGENT_EXECUTION_SECRET", defaultAgentSecret),
+		AgentRuntimeImageDigest:         agentImageDigest,
+		AgentRuntimeAdditionalRevisions: agentAdditionalRevisions,
+		AgentPollInterval:               time.Duration(agentPollMillis) * time.Millisecond,
+		AgentClaimLease:                 time.Duration(agentLeaseSeconds) * time.Second,
+		TemporalAddress:                 temporalAddress,
+		TemporalNamespace:               temporalNamespace,
+		TemporalTaskQueue:               temporalTaskQueue,
+		EventWorkerListenAddress:        net.JoinHostPort(eventWorkerHost, strconv.Itoa(eventWorkerPort)),
+		KafkaBrokers:                    kafkaBrokers,
+		KafkaClientID:                   kafkaClientID,
+		KafkaConsumerGroup:              kafkaConsumerGroup,
+		KafkaUsername:                   kafkaUsername,
+		KafkaPassword:                   kafkaPassword,
+		KafkaScriptTopic:                scriptTopic,
+		KafkaScriptDLQTopic:             scriptDLQTopic,
+		KafkaStoryGraphTopic:            storyGraphTopic,
+		KafkaStoryGraphDLQTopic:         storyGraphDLQTopic,
+		ElasticsearchURL:                elasticsearchURL,
+		ElasticsearchUsername:           strings.TrimSpace(os.Getenv("ELASTICSEARCH_USERNAME")),
+		ElasticsearchPassword:           os.Getenv("ELASTICSEARCH_PASSWORD"),
+		ElasticsearchScriptAlias:        scriptAlias,
+		ElasticsearchStoryGraphAlias:    storyGraphAlias,
 	}, nil
 }
 
 func serviceURL(name, fallback string) (string, error) {
 	value := strings.TrimSpace(environmentValue(name, fallback))
+	if err := validateServiceOrigin(value); err != nil {
+		return "", fmt.Errorf("%s must be an HTTP(S) service origin", name)
+	}
+	parsed, _ := url.Parse(value)
+	return parsed.String(), nil
+}
+
+func validateServiceOrigin(value string) error {
 	parsed, err := url.Parse(value)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" ||
 		parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
-		return "", fmt.Errorf("%s must be an HTTP(S) service origin", name)
+		return errors.New("invalid HTTP(S) service origin")
 	}
-	return parsed.String(), nil
+	return nil
+}
+
+func agentRuntimeRevisions(name string) ([]AgentRuntimeRevision, error) {
+	rawValue := strings.TrimSpace(os.Getenv(name))
+	if rawValue == "" {
+		return []AgentRuntimeRevision{}, nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader([]byte(rawValue)))
+	decoder.DisallowUnknownFields()
+	var revisions []AgentRuntimeRevision
+	if err := decoder.Decode(&revisions); err != nil {
+		return nil, fmt.Errorf("%s must be a strict JSON runtime revision array", name)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return nil, fmt.Errorf("%s must contain exactly one JSON value", name)
+	}
+	seen := make(map[string]struct{}, len(revisions))
+	for _, revision := range revisions {
+		if !sha256HashPattern.MatchString(revision.BundleHash) ||
+			!sha256DigestPattern.MatchString(revision.ImageDigest) ||
+			validateServiceOrigin(strings.TrimSpace(revision.BaseURL)) != nil {
+			return nil, fmt.Errorf("%s contains an invalid runtime revision", name)
+		}
+		if _, exists := seen[revision.BundleHash]; exists {
+			return nil, fmt.Errorf("%s contains a duplicate bundle hash", name)
+		}
+		seen[revision.BundleHash] = struct{}{}
+	}
+	return revisions, nil
 }
 
 func hostPort(name, fallback string) (string, error) {

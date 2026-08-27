@@ -221,17 +221,9 @@ func (service *Service) CreateSet(ctx context.Context, actor Actor, command Crea
 		}
 		batches := make([]domain.Batch, len(inputs))
 		invocations := make([]domain.Invocation, len(inputs))
-		executionPolicy, err := agentcontract.ExecutionPolicyFor("storyboard_draft")
-		if err != nil {
-			return err
-		}
-		encodedPolicy, err := json.Marshal(executionPolicy)
-		if err != nil {
-			return err
-		}
 		for index, input := range inputs {
 			batchID, taskID, invocationID := service.config.NewID(), service.config.NewID(), service.config.NewID()
-			payload, err := storyboardPayload(input, batchID, taskID, invocationID, inputHashes[index])
+			invocation, err := storyGraphInvocation(input, batchID, taskID, invocationID, inputHashes[index], now)
 			if err != nil {
 				return err
 			}
@@ -241,11 +233,7 @@ func (service *Service) CreateSet(ctx context.Context, actor Actor, command Crea
 				Status: "queued", InputHash: inputHashes[index], Candidate: domain.Candidate{Shots: []domain.DraftShot{}},
 				Decisions: map[string]string{}, Revision: 1, CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now,
 			}
-			invocations[index] = domain.Invocation{
-				ID: invocationID, WorkspaceID: input.WorkspaceID, RequestID: batchID, Kind: "storyboard_draft",
-				InputHash: inputHashes[index], ExecutionPolicy: append(json.RawMessage(nil), encodedPolicy...),
-				Payload: payload, Status: "queued", CreatedAt: now,
-			}
+			invocations[index] = invocation
 			set.Batches[index] = domain.DraftSetBatch{
 				BatchID: batchID, EpisodeID: input.EpisodeID, StructureID: input.StructureID,
 				ScriptVersionID: input.ScriptVersionID, InputHash: inputHashes[index],
@@ -485,20 +473,11 @@ func (service *Service) CreateBatch(ctx context.Context, actor Actor, command Cr
 			return receiptErr
 		}
 		now, batchID, taskID, invocationID := service.config.Now().UTC(), service.config.NewID(), service.config.NewID(), service.config.NewID()
-		payload, err := storyboardPayload(input, batchID, taskID, invocationID, inputHash)
+		invocation, err := storyGraphInvocation(input, batchID, taskID, invocationID, inputHash, now)
 		if err != nil {
 			return err
 		}
 		batch = domain.Batch{ID: batchID, WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID, EpisodeID: input.EpisodeID, StructureID: input.StructureID, ScriptVersionID: input.ScriptVersionID, TaskID: taskID, Status: "queued", InputHash: inputHash, Candidate: domain.Candidate{Shots: []domain.DraftShot{}}, Decisions: map[string]string{}, Revision: 1, CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now}
-		executionPolicy, err := agentcontract.ExecutionPolicyFor("storyboard_draft")
-		if err != nil {
-			return err
-		}
-		encodedPolicy, err := json.Marshal(executionPolicy)
-		if err != nil {
-			return err
-		}
-		invocation := domain.Invocation{ID: invocationID, WorkspaceID: input.WorkspaceID, RequestID: batchID, Kind: "storyboard_draft", InputHash: inputHash, ExecutionPolicy: encodedPolicy, Payload: payload, Status: "queued", CreatedAt: now}
 		if err = repo.CreateWorkflow(ctx, batch, invocation); err != nil {
 			return err
 		}
@@ -1000,6 +979,63 @@ func storyboardPayload(input domain.DraftInput, batchID, taskID, runToken, input
 		units[index] = map[string]any{"unit_version_id": unit.ID, "position": unit.Position, "kind": unit.Kind, "exact_text": unit.Text, "required_for_coverage": unit.Required, "source_scene_id": unit.SceneID, "source_dialogue_id": unit.DialogueID}
 	}
 	return json.Marshal(map[string]any{"batch_id": batchID, "task_id": taskID, "input_hash": inputHash, "script_version_id": input.ScriptVersionID, "target_duration_ms": input.TargetDurationMS, "aspect_ratio": input.AspectRatio, "visual_style": input.VisualStyle, "units": units, "assets": []any{}, "production_bible_id": input.BibleID, "production_bible_revision": input.BibleRevision, "production_bible_result_hash": input.BibleResultHash, "world_entries": input.WorldEntries, "run_token": runToken})
+}
+
+func storyGraphInvocation(input domain.DraftInput, batchID, taskID, invocationID, inputHash string, now time.Time) (domain.Invocation, error) {
+	stageInput, err := storyboardPayload(input, batchID, taskID, invocationID, inputHash)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	shardKey := "scene-batch:" + batchID
+	manifestMaterial, err := json.Marshal(struct {
+		Stage, ShardKey, InputHash string
+	}{"draft_storyboard", shardKey, inputHash})
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	manifestHash, err := agentcontract.CanonicalHash(manifestMaterial)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	policy := agentcontract.StoryGraphDefinition().ExecutionPolicy()
+	policy.MaxModelCalls = 1
+	stageInvocation, err := agentcontract.NewStageInvocation(
+		invocationID,
+		policy,
+		agentcontract.StageInvocationPayload{
+			Stage: "draft_storyboard", ShardKey: shardKey, WorkspaceID: input.WorkspaceID,
+			ProjectID: input.ProjectID,
+			SourceRefs: []agentcontract.StageSourceRef{
+				{OwnerKind: "episode_structure", OwnerLogicalID: input.StructureID, OwnerVersionID: input.StructureID, Revision: int64(input.StructureRevision), ContentHash: input.StructureResultHash},
+				{OwnerKind: "production_bible", OwnerLogicalID: input.BibleID, OwnerVersionID: input.BibleID, Revision: int64(input.BibleRevision), ContentHash: input.BibleResultHash},
+			},
+			UpstreamCandidates: []agentcontract.StageUpstreamCandidateRef{},
+			ShardManifestRef:   agentcontract.ShardManifestRef{ManifestID: taskID, Version: 1, Hash: manifestHash},
+			Shard:              agentcontract.InvocationShard{Kind: "scene_batch", Key: shardKey, TreePath: "0"},
+			StageInput:         stageInput,
+		},
+	)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	stageInstanceKey, err := stageInvocation.StageInstanceKey()
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	encodedPolicy, err := json.Marshal(stageInvocation.ExecutionPolicy)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	payload, err := json.Marshal(stageInvocation.Payload)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	return domain.Invocation{
+		ID: invocationID, WorkspaceID: input.WorkspaceID, RequestID: batchID,
+		Kind: "storygraph_stage", Stage: stageInvocation.Payload.Stage, ShardKey: shardKey,
+		InputHash: stageInvocation.InputHash, StageInstanceKey: stageInstanceKey, ManifestHash: manifestHash,
+		ExecutionPolicy: encodedPolicy, Payload: payload, Status: "queued", CreatedAt: now,
+	}, nil
 }
 
 type formalShotReference struct {
