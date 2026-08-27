@@ -76,6 +76,8 @@ def test_story_analysis_input_binds_one_exact_evidence_revision() -> None:
             "evidence_candidate_revision_hash": "a" * 64,
             "logical_start": 0,
             "logical_end": 12,
+            "candidate_item_start": 0,
+            "candidate_item_end": 0,
             "evidence_candidate": {"observations": [], "review_issues": []},
         }
     )
@@ -83,6 +85,10 @@ def test_story_analysis_input_binds_one_exact_evidence_revision() -> None:
     with pytest.raises(ValidationError):
         StoryAnalysisStageInput.model_validate(
             {**value.model_dump(mode="json"), "unexpected": True}
+        )
+    with pytest.raises(ValidationError):
+        StoryAnalysisStageInput.model_validate(
+            {**value.model_dump(mode="json"), "candidate_item_start": 1}
         )
 
 
@@ -92,7 +98,18 @@ def test_story_reconciliation_input_is_bounded_and_exact() -> None:
         "world_entries": [],
         "claims": [],
         "arcs": [],
-        "review_issues": [],
+        "review_issues": [
+            {
+                "issue_key": "issue:partition",
+                "code": "partition_fixture",
+                "severity": "warning",
+                "scope": "story",
+                "subject_key": None,
+                "summary": "partition fixture",
+                "repair_hint": None,
+                "evidence": [],
+            }
+        ],
     }
     value = StoryReconciliationStageInput.model_validate(
         {
@@ -103,6 +120,8 @@ def test_story_reconciliation_input_is_bounded_and_exact() -> None:
                     "shard_key": "story-map:0000",
                     "candidate_revision_id": "10000000-0000-0000-0000-000000000001",
                     "candidate_revision_hash": "a" * 64,
+                    "candidate_item_start": 0,
+                    "candidate_item_end": 1,
                     "candidate": candidate,
                 },
                 {
@@ -115,6 +134,11 @@ def test_story_reconciliation_input_is_bounded_and_exact() -> None:
         }
     )
     assert len(value.candidates) == 2
+    incomplete_range = value.model_dump(mode="json")
+    incomplete_range["candidates"] = [incomplete_range["candidates"][0]]
+    incomplete_range["candidates"][0]["candidate_item_end"] = None
+    with pytest.raises(ValidationError):
+        StoryReconciliationStageInput.model_validate(incomplete_range)
     too_many = value.model_dump(mode="json")
     too_many["candidates"] = too_many["candidates"] * 2
     with pytest.raises(ValidationError):

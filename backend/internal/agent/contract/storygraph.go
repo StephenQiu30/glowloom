@@ -106,6 +106,8 @@ type StoryAnalysisStageInput struct {
 	EvidenceCandidateRevisionHash string          `json:"evidence_candidate_revision_hash"`
 	LogicalStart                  int             `json:"logical_start"`
 	LogicalEnd                    int             `json:"logical_end"`
+	CandidateItemStart            int             `json:"candidate_item_start"`
+	CandidateItemEnd              int             `json:"candidate_item_end"`
 	EvidenceCandidate             json.RawMessage `json:"evidence_candidate"`
 }
 
@@ -113,6 +115,8 @@ type StoryReconciliationInputCandidate struct {
 	ShardKey              string          `json:"shard_key"`
 	CandidateRevisionID   string          `json:"candidate_revision_id"`
 	CandidateRevisionHash string          `json:"candidate_revision_hash"`
+	CandidateItemStart    *int            `json:"candidate_item_start,omitempty"`
+	CandidateItemEnd      *int            `json:"candidate_item_end,omitempty"`
 	Candidate             json.RawMessage `json:"candidate"`
 }
 
@@ -281,6 +285,7 @@ func validateStoryAnalysisStageInput(payload StageInvocationPayload) error {
 		payload.BaseStoryGraphVersionID != "" || payload.BaseStoryGraphHash != "" ||
 		payload.Shard.Kind != "story_map" || payload.Shard.AbsoluteStart == nil ||
 		payload.Shard.AbsoluteEnd == nil || input.LogicalStart < 0 || input.LogicalEnd <= input.LogicalStart ||
+		input.CandidateItemStart < 0 || input.CandidateItemEnd < input.CandidateItemStart ||
 		*payload.Shard.AbsoluteStart != input.LogicalStart || *payload.Shard.AbsoluteEnd != input.LogicalEnd ||
 		strings.TrimSpace(input.EvidenceShardKey) == "" || !jsonObject(input.EvidenceCandidate) ||
 		!hashPattern.MatchString(input.EvidenceCandidateRevisionHash) {
@@ -323,6 +328,11 @@ func validateStoryReconciliationStageInput(payload StageInvocationPayload) error
 		if strings.TrimSpace(candidate.ShardKey) == "" || !jsonObject(candidate.Candidate) ||
 			!hashPattern.MatchString(candidate.CandidateRevisionHash) {
 			return errors.New("invalid Story reconciliation child candidate")
+		}
+		if (candidate.CandidateItemStart == nil) != (candidate.CandidateItemEnd == nil) ||
+			candidate.CandidateItemStart != nil && (*candidate.CandidateItemStart < 0 ||
+				*candidate.CandidateItemEnd <= *candidate.CandidateItemStart) {
+			return errors.New("invalid Story reconciliation child candidate range")
 		}
 		if _, err := uuid.Parse(candidate.CandidateRevisionID); err != nil {
 			return errors.New("invalid Story reconciliation child revision")

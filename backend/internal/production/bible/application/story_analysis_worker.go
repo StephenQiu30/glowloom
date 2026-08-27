@@ -19,6 +19,7 @@ type StoryAnalysisInvocationRepository interface {
 
 type StoryAnalysisWorker struct {
 	repository StoryAnalysisInvocationRepository
+	resharder  *StoryAnalysisService
 	agent      AgentClient
 	now        func() time.Time
 	interval   time.Duration
@@ -28,6 +29,7 @@ type StoryAnalysisWorker struct {
 
 func NewStoryAnalysisWorker(
 	repository StoryAnalysisInvocationRepository,
+	resharder *StoryAnalysisService,
 	agent AgentClient,
 	now func() time.Time,
 	interval time.Duration,
@@ -35,7 +37,7 @@ func NewStoryAnalysisWorker(
 	logger *slog.Logger,
 ) *StoryAnalysisWorker {
 	return &StoryAnalysisWorker{
-		repository: repository, agent: agent, now: now, interval: interval, lease: lease, logger: logger,
+		repository: repository, resharder: resharder, agent: agent, now: now, interval: interval, lease: lease, logger: logger,
 	}
 }
 
@@ -80,6 +82,8 @@ func (worker *StoryAnalysisWorker) runOnce(ctx context.Context) bool {
 		code := "invocation_policy_invalid"
 		if errors.Is(err, ErrStoryAnalysisUpstreamStale) {
 			code = "upstream_candidate_stale"
+		} else if errors.Is(err, ErrStoryAnalysisManifestStale) {
+			code = "manifest_superseded"
 		}
 		_, _ = worker.repository.FailStoryAnalysisInvocation(
 			ctx, invocation.ID, invocation.ClaimVersion, "failed", code, err.Error(), false, worker.now().UTC(),
@@ -108,6 +112,18 @@ func (worker *StoryAnalysisWorker) runOnce(ctx context.Context) bool {
 				"Agent returned an incomplete Story analysis result", true, worker.now().UTC(),
 			)
 			return true
+		}
+		if result.Error.Code == "execution_budget_exceeded" && worker.resharder != nil {
+			if _, err = worker.resharder.ReshardBudgetExceeded(
+				ctx, invocation.ID, invocation.ClaimVersion, result.Error.Summary,
+			); err == nil {
+				return true
+			} else if !errors.Is(err, domain.ErrStoryCandidateCannotSplit) {
+				if ctx.Err() == nil {
+					worker.logger.Error("reshard Story analysis invocation failed", "invocation_id", invocation.ID, "error", err)
+				}
+				return true
+			}
 		}
 		_, _ = worker.repository.FailStoryAnalysisInvocation(
 			ctx, invocation.ID, invocation.ClaimVersion, result.Status, result.Error.Code,

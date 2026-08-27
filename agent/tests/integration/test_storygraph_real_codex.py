@@ -145,6 +145,9 @@ async def test_real_codex_preserves_evidence_through_story_analysis_and_reconcil
                 "evidence_candidate_revision_hash": source_candidate_hash,
                 "logical_start": source_input.logical_start,
                 "logical_end": source_input.logical_end,
+                "candidate_item_start": 0,
+                "candidate_item_end": len(source_candidate["observations"])
+                + len(source_candidate["review_issues"]),
                 "evidence_candidate": source_candidate,
             },
         },

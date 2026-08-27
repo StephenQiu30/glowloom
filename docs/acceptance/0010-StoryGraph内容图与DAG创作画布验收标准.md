@@ -165,7 +165,7 @@
 - [x] `SGA-SHR-002`（`SG-I08`、`SG-I09`、`SG-I15`）：确定性分片/排序/fan-in/tree，Agent 不决定边界。
 - [x] `SGA-SHR-003`（`SG-I08` 起）：超预算发布新 Manifest 完整覆盖，无截断/临时扩预算。
 - [x] `SGA-SHR-004`（`SG-I08` 起）：旧结果只审计，current active leaf + gate 才聚合。
-- [ ] `SGA-SHR-005`（`SG-I09`、`SG-I15`）：有界 reduce 只传必要 Ref/Hash/冲突，超预算再分片。
+- [x] `SGA-SHR-005`（`SG-I09`、`SG-I15`）：有界 reduce 只传必要 Ref/Hash/冲突，超预算再分片。
 - [ ] `SGA-SHR-006`（全部分片 Stage）：单 shard 失败不毁成功事实，Workflow 无固定业务墙钟终止。
 
 ### 3.3 Evidence、Candidate 与 Repair
@@ -392,7 +392,20 @@
 - 真实 Workflow 与 Codex：真实 PostgreSQL `16.15`、Temporal、MinIO 下，`Script → Source Evidence → Story Analysis` 旅程并发运行旧 Bible worker 与两个 Story worker，验证两个 Manifest、全部 map/reduce Invocation 成功、fan-in≤2、最终 Node output 精确绑定 root Candidate Revision，以及服务重放零新增 Invocation。本机已登录 Codex CLI 对 Source Evidence、Story Analysis、Story Reconciliation 连续执行，结果 `1 passed in 53.06s`；每级 Candidate 非空且所有 Evidence identity 都严格属于上游集合。
 - 当前完整 CI：Backend `gofmt`、`go vet ./...`、无外部依赖全量测试及全新空 PostgreSQL/Temporal/MinIO/Kafka/Elasticsearch/Kibana 状态下的 `go test -count=1 -p 1 ./...` 全通过，Kafka `4.3.1`、Elasticsearch/Logstash/Kibana `9.4.4` 均为真实服务，Workflow 包 `221.674s`；Agent Ruff check/format、Pyright、Pytest 为 `29 passed, 1 skipped`，跳过项仅为上述已单独通过的 opt-in 真实 Codex；Frontend OpenAPI 生成零漂移、lint/typecheck、18 个 Vitest 文件 54 项测试与 Next.js `16.2.12` production build 全通过。
 - 镜像与故障部署：开发/生产 Compose 校验、Backend/Agent/Frontend 三镜像重建及镜像内 Backend 三 Binary、Frontend standalone、Agent 非 root/Codex/唯一 Bundle 边界全部通过。隔离 Compose Project 中 API、Frontend、Workflow/Event Worker、Kafka/ELK 与私有 Agent 运行态健康；Filebeat/Logstash/Kibana、Kafka、Elasticsearch 逐项停机时，业务写入和 Workflow 保持可用，Event Worker readiness 按依赖正确降级并在恢复后重新 ready，日志恢复摄取。
-- 未提前通过：当前交付单元没有实现 map/reduce 输入超预算后的新 Manifest 再分片，也没有完成单 shard 失败恢复，因此 `SGA-SHR-005/006` 与整个 `SG-I09` 仍保持未通过。Candidate Repair、Head expected CAS 与旧下游 stale closure 属于后续 `SG-I10`，所以 `SGA-CAN-*`、`SGA-REP-*` 不提前勾选；完整原稿、Human Gate 与最终 `agent-browser` 同样未执行。
+- 当时未提前通过：该交付单元没有实现 map/reduce 输入超预算后的新 Manifest 再分片，也没有完成单 shard 失败恢复；后续“候选输入的版本化重分片”证据只补齐 `SGA-SHR-005`，`SGA-SHR-006` 与整个 `SG-I09` 仍保持未通过。Candidate Repair、Head expected CAS 与旧下游 stale closure 属于后续 `SG-I10`，所以 `SGA-CAN-*`、`SGA-REP-*` 不提前勾选；完整原稿、Human Gate 与最终 `agent-browser` 同样未执行。
 - Git：本 Evidence 与实现由描述身份守恒和稳定并发归并的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 81 条 Requirement 与 `SG-I01`–`SG-I08`，其余保持未通过。下一步继续且只允许补齐当前故事分析归并的超预算再分片与单 shard 失败恢复，完成 `SG-I09` 后才能进入 `SG-I10`。
+### 候选输入的版本化重分片（2026-08-27）
+
+- Red 与精确覆盖：`backend/tests/production/bible/story_analysis_test.go` 新增 map 与 reduce 两类超预算 Red，固定 Candidate Item 的类型顺序、半开区间、确定性二分、父子谱系、active/superseded 状态、DAG 可达性和无缺口/重复 coverage。`analyze_story` 只收到对应 Source Evidence Candidate 子区间；`reconcile_story` 只收到对应 Story Candidate 子区间，禁止把父 Candidate 或全部 Evidence 重新塞入子 Invocation。
+- 版本与路径替换：Backend Domain 从失败 shard 生成同 Manifest ID 的下一不可变 Version。map 超预算将失败 leaf 二分并重建 reconcile tree；reduce 超预算只替换失败节点及其到 root 的祖先路径，未受影响 Key 和成功 Candidate Revision 保持可复用。每个新 Manifest 冻结 Parent Manifest Hash、Coverage Hash 与 Manifest Hash，旧 Version 及旧 Result 继续保留审计。
+- 单一事实源与执行所有权：重分片由 Backend Story Analysis Service 计算，由既有 Story Worker 在 `execution_budget_exceeded` 后调用，并在一个 GORM/PostgreSQL 事务中锁定 current Manifest、发布新 Version、标记旧 pending Invocation superseded、创建必要 map Invocation 并调度 reduce；Agent 只返回严格结果，不写数据库、不决定边界。实现没有 Migration、Raw SQL、第二 ORM、第二 Workflow 引擎或兼容回退。
+- 并发与迟到结果：完成事务在接受 Candidate 前锁定对应 Stage 的 latest Manifest，发布事务同时锁定 map/reduce latest Manifest，避免旧 Version 在发布后成为 current 输入。调度器固定优先使用当前 Manifest Version 的 Invocation；仅当当前 Version 根本没有该分片 Invocation 时，才按最高旧 Version 复用发布前已成功的不可变结果。这样旧版本迟到成功只留审计，不会与当前版本结果争夺同一确定性 reduce identity。
+- 真实 Workflow 剧本：独立 PostgreSQL `16.15` 与真实 Temporal 下，`Script → Source Evidence → Story Analysis` 旅程分别注入一次 map 和一次 reduce `execution_budget_exceeded`，最终持久化 analyze V2、reconcile V3 共 5 个 Manifest、恰好 2 个预算失败、所有当前 Invocation 收敛且 NodeRun 绑定新 root Candidate。修复并发选择后在两次全新数据库中连续通过，耗时 `11.28s` 与 `12.01s`，没有遗留 `running`、确定性身份冲突或延长超时掩盖。
+- 跨语言 Harness：Go Wire 与 Agent Pydantic 同步冻结 `candidate_item_start/end`；Agent 复核分区长度等于实际 Candidate Item 数，缺单边界、逆序、越界或额外字段均 fail closed。更新后的本地登录 Codex CLI 连续执行 Source Evidence、Story Analysis 与 Story Reconciliation，结果 `1 passed in 118.07s`，证明严格模型能够真实接收子区间输入并完成三段候选生成。
+- 当前完整 CI：Backend `gofmt`、`go vet ./...`、无外部依赖全量测试，以及全新 PostgreSQL/Temporal/MinIO/Kafka/Elasticsearch/Kibana 下的 `go test -count=1 -p 1 ./...` 全通过，最终 Workflow 包 `146.457s`；Agent Ruff check/format、Pyright、Pytest 为 `29 passed, 1 skipped`，跳过项仍仅为已另行通过的显式真实 Codex CLI 集成测试；Frontend OpenAPI 零漂移、lint/typecheck、18 个 Vitest 文件 54 项测试及 Next.js `16.2.12` production build 全通过。
+- 镜像与故障部署：开发/生产 Compose 校验、Backend/Agent/Frontend 三镜像和镜像内 Binary/standalone/非 root Bundle 契约均通过。隔离 Compose Project 中注册、项目写入、日志脱敏/检索、私有 Agent health 通过；Filebeat/Logstash/Kibana、Kafka、Elasticsearch 逐项停机时业务与 Workflow 边界符合设计，依赖恢复后 readiness 与日志摄取重新收敛。
+- 通过范围：以上证据完成 `SGA-SHR-005`。当前没有实现通用单 shard deadline/失败后的同 Stage Instance 恢复，因此 `SGA-SHR-006` 与整个 `SG-I09` 仍保持未通过；Candidate Repair、完整原稿、Human Gate 和最终 `agent-browser` 也未提前执行。
+- Git：本 Evidence 与实现由描述候选输入版本化重分片的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 82 条 Requirement 与 `SG-I01`–`SG-I08`，其余保持未通过。下一步继续且只允许补齐当前故事分析归并的单 shard deadline/失败恢复，完成 `SG-I09` 后才能进入 `SG-I10`。

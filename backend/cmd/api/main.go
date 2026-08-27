@@ -224,8 +224,11 @@ func main() {
 		bibleStore, sourceEvidenceService, agentRuntime, func() time.Time { return time.Now().UTC() },
 		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
 	)
+	storyAnalysisService := bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+	})
 	storyAnalysisWorker := bibleapp.NewStoryAnalysisWorker(
-		bibleStore, agentRuntime, func() time.Time { return time.Now().UTC() },
+		bibleStore, storyAnalysisService, agentRuntime, func() time.Time { return time.Now().UTC() },
 		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
 	)
 	planningStore := planninggorm.New(database)

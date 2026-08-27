@@ -234,6 +234,10 @@ coverage_hash
 
 初始分片和 reduce tree 的排序、fan-in 与 `tree_path` 都由 Backend 确定性生成。某个 shard 超预算时不能原地改边界：Backend 创建下一 Manifest Version，新增覆盖父 shard 完整逻辑范围的有序子 shard，并在新 Manifest 中把父 shard 标为 superseded；除显式只读 overlap 外，子 shard 必须无缺口、无重复覆盖。旧 Invocation/Result 保留审计但不再进入聚合，子 shard 因新 Manifest Hash 获得新的 stage instance identity。
 
+Story Analysis 的候选输入另外冻结 `candidate_item_range=[start,end)`。Backend 按 Schema 中的稳定字段顺序展开候选条目：Source Evidence 使用 `observations -> review_issues`，Story Analysis 使用 `entities -> world_entries -> claims -> arcs -> review_issues`，Story Reconciliation 使用 `canonical_entities -> canonical_world_entries -> merged_claims -> merged_arcs -> conflicts -> review_issues`。超预算时只允许在该有序条目序列上把父区间确定性二分；两个子区间必须首尾相接且完整覆盖父区间，Stage Input 只携带各自区间对应的合法候选子集，不能携带完整父候选后仅在提示词中要求忽略一部分。单个条目已经不可再分时返回稳定的不可分错误，不进行同输入重试、截断或扩大预算。
+
+重分片只替换失败 leaf/reduce shard 及其到 root 的祖先路径，未受影响的子树 Key、Candidate Revision 与成功回执不变。发布下一版本时，Backend 可以把发布前已经 `succeeded`、Candidate Head 仍为 current 且来源校验通过的未受影响子树作为新树的显式不可变引用；发布后才返回的旧版本结果一律只保留审计。新路径的每个 Invocation 必须引用新 Manifest Hash，聚合仍以新版本的 active tree、精确 Candidate Revision 和 Head 为准。
+
 只有当前 Manifest 的全部 active leaf shard 均有 current Candidate Revision、其来源 Invocation Result 唯一且成功、上游仍为 current，且 coverage/tree gate 通过时，Backend 才能以 expected manifest hash 与 expected Candidate Head Hash CAS 发布一个聚合 Candidate Revision。Manifest 漂移、旧 shard 迟到或任一 leaf 失败/unknown 时不得产出 `node-output-v1`；重复聚合只能重放同一 Aggregate Candidate Revision Hash。
 
 ### 公共输出包络

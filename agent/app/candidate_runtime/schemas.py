@@ -160,12 +160,21 @@ class StoryAnalysisStageInput(BaseModel):
     evidence_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     logical_start: int = Field(ge=0)
     logical_end: int = Field(ge=1)
+    candidate_item_start: int = Field(ge=0)
+    candidate_item_end: int = Field(ge=0)
     evidence_candidate: SourceEvidenceCandidate
 
     @model_validator(mode="after")
     def validate_range(self) -> StoryAnalysisStageInput:
-        if self.logical_end <= self.logical_start:
-            raise ValueError("Story analysis range must be increasing")
+        item_count = len(self.evidence_candidate.observations) + len(
+            self.evidence_candidate.review_issues
+        )
+        if (
+            self.logical_end <= self.logical_start
+            or self.candidate_item_end < self.candidate_item_start
+            or self.candidate_item_end - self.candidate_item_start != item_count
+        ):
+            raise ValueError("Story analysis ranges do not match the exact candidate partition")
         return self
 
 
@@ -175,7 +184,21 @@ class StoryReconciliationInputCandidate(BaseModel):
     shard_key: str = Field(min_length=1)
     candidate_revision_id: UUID
     candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    candidate_item_start: int | None = Field(default=None, ge=0)
+    candidate_item_end: int | None = Field(default=None, ge=0)
     candidate: dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_candidate_range(self) -> StoryReconciliationInputCandidate:
+        if (self.candidate_item_start is None) != (self.candidate_item_end is None):
+            raise ValueError("Story reconcile candidate range must be complete")
+        if (
+            self.candidate_item_start is not None
+            and self.candidate_item_end is not None
+            and self.candidate_item_end <= self.candidate_item_start
+        ):
+            raise ValueError("Story reconcile candidate range must be increasing")
+        return self
 
 
 class StoryReconciliationStageInput(BaseModel):
@@ -194,7 +217,32 @@ class StoryReconciliationStageInput(BaseModel):
         )
         identities: set[tuple[UUID, str]] = set()
         for value in self.candidates:
-            model.model_validate(value.candidate)
+            candidate = model.model_validate(value.candidate)
+            if isinstance(candidate, StoryAnalysisCandidate):
+                item_count = (
+                    len(candidate.entities)
+                    + len(candidate.world_entries)
+                    + len(candidate.claims)
+                    + len(candidate.arcs)
+                    + len(candidate.review_issues)
+                )
+            else:
+                item_count = (
+                    len(candidate.canonical_entities)
+                    + len(candidate.canonical_world_entries)
+                    + len(candidate.merged_claims)
+                    + len(candidate.merged_arcs)
+                    + len(candidate.conflicts)
+                    + len(candidate.review_issues)
+                )
+            if (
+                value.candidate_item_start is not None
+                and value.candidate_item_end is not None
+                and value.candidate_item_end - value.candidate_item_start != item_count
+            ):
+                raise ValueError(
+                    "Story reconcile candidate range does not match its exact partition"
+                )
             identity = (value.candidate_revision_id, value.candidate_revision_hash)
             if identity in identities:
                 raise ValueError("Story reconcile candidates must be unique")

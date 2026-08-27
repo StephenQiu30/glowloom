@@ -17,12 +17,15 @@ const (
 	ReconcileStoryStage = "reconcile_story"
 )
 
+var ErrStoryCandidateCannotSplit = errors.New("Story candidate shard cannot be split further")
+
 type StoryAnalysisEvidenceFragment struct {
 	ShardKey              string `json:"evidence_shard_key"`
 	LogicalStart          int    `json:"logical_start"`
 	LogicalEnd            int    `json:"logical_end"`
 	CandidateRevisionID   string `json:"candidate_revision_id"`
 	CandidateRevisionHash string `json:"candidate_revision_hash"`
+	CandidateItemCount    int    `json:"candidate_item_count"`
 }
 
 type StoryAnalysisShard struct {
@@ -35,14 +38,18 @@ type StoryAnalysisShard struct {
 	LogicalEnd                int      `json:"logical_end"`
 	UpstreamCandidateRevision string   `json:"upstream_candidate_revision_id"`
 	UpstreamCandidateHash     string   `json:"upstream_candidate_revision_hash"`
+	CandidateItemStart        int      `json:"candidate_item_start"`
+	CandidateItemEnd          int      `json:"candidate_item_end"`
 	SourceHashes              []string `json:"source_hashes"`
 	Status                    string   `json:"status"`
 }
 
 type StoryReconcileChild struct {
-	Stage      string `json:"stage"`
-	ShardKey   string `json:"shard_key"`
-	SourceHash string `json:"source_hash"`
+	Stage              string `json:"stage"`
+	ShardKey           string `json:"shard_key"`
+	SourceHash         string `json:"source_hash"`
+	CandidateItemStart *int   `json:"candidate_item_start,omitempty"`
+	CandidateItemEnd   *int   `json:"candidate_item_end,omitempty"`
 }
 
 type StoryReconcileShard struct {
@@ -58,31 +65,33 @@ type StoryReconcileShard struct {
 }
 
 type StoryAnalysisManifest struct {
-	ManifestID    string               `json:"manifest_id"`
-	Version       int64                `json:"version"`
-	WorkspaceID   string               `json:"workspace_id"`
-	WorkflowRunID string               `json:"workflow_run_id"`
-	NodeRunID     string               `json:"node_run_id"`
-	Stage         string               `json:"stage"`
-	RootInputHash string               `json:"root_input_hash"`
-	Shards        []StoryAnalysisShard `json:"shards"`
-	CoverageHash  string               `json:"coverage_hash"`
-	ManifestHash  string               `json:"manifest_hash"`
+	ManifestID         string               `json:"manifest_id"`
+	Version            int64                `json:"version"`
+	ParentManifestHash *string              `json:"parent_manifest_hash"`
+	WorkspaceID        string               `json:"workspace_id"`
+	WorkflowRunID      string               `json:"workflow_run_id"`
+	NodeRunID          string               `json:"node_run_id"`
+	Stage              string               `json:"stage"`
+	RootInputHash      string               `json:"root_input_hash"`
+	Shards             []StoryAnalysisShard `json:"shards"`
+	CoverageHash       string               `json:"coverage_hash"`
+	ManifestHash       string               `json:"manifest_hash"`
 }
 
 type StoryReconcileManifest struct {
-	ManifestID    string                `json:"manifest_id"`
-	Version       int64                 `json:"version"`
-	WorkspaceID   string                `json:"workspace_id"`
-	WorkflowRunID string                `json:"workflow_run_id"`
-	NodeRunID     string                `json:"node_run_id"`
-	Stage         string                `json:"stage"`
-	RootInputHash string                `json:"root_input_hash"`
-	FanIn         int                   `json:"fan_in"`
-	RootShardKey  string                `json:"root_shard_key"`
-	Shards        []StoryReconcileShard `json:"shards"`
-	CoverageHash  string                `json:"coverage_hash"`
-	ManifestHash  string                `json:"manifest_hash"`
+	ManifestID         string                `json:"manifest_id"`
+	Version            int64                 `json:"version"`
+	ParentManifestHash *string               `json:"parent_manifest_hash"`
+	WorkspaceID        string                `json:"workspace_id"`
+	WorkflowRunID      string                `json:"workflow_run_id"`
+	NodeRunID          string                `json:"node_run_id"`
+	Stage              string                `json:"stage"`
+	RootInputHash      string                `json:"root_input_hash"`
+	FanIn              int                   `json:"fan_in"`
+	RootShardKey       string                `json:"root_shard_key"`
+	Shards             []StoryReconcileShard `json:"shards"`
+	CoverageHash       string                `json:"coverage_hash"`
+	ManifestHash       string                `json:"manifest_hash"`
 }
 
 type StoryAnalysisManifestInput struct {
@@ -117,7 +126,8 @@ func BuildStoryAnalysisManifests(input StoryAnalysisManifestInput) (StoryAnalysi
 	seen := make(map[string]struct{}, len(fragments))
 	for index, fragment := range fragments {
 		if strings.TrimSpace(fragment.ShardKey) == "" || fragment.LogicalStart != position ||
-			fragment.LogicalEnd <= fragment.LogicalStart || !hashPattern.MatchString(fragment.CandidateRevisionHash) {
+			fragment.LogicalEnd <= fragment.LogicalStart || fragment.CandidateItemCount < 0 ||
+			!hashPattern.MatchString(fragment.CandidateRevisionHash) {
 			return StoryAnalysisManifest{}, StoryReconcileManifest{}, errors.New("invalid Story analysis Evidence coverage")
 		}
 		if _, err := uuid.Parse(fragment.CandidateRevisionID); err != nil {
@@ -133,7 +143,8 @@ func BuildStoryAnalysisManifests(input StoryAnalysisManifestInput) (StoryAnalysi
 			EvidenceShardKey: fragment.ShardKey, LogicalStart: fragment.LogicalStart,
 			LogicalEnd: fragment.LogicalEnd, UpstreamCandidateRevision: fragment.CandidateRevisionID,
 			UpstreamCandidateHash: fragment.CandidateRevisionHash,
-			SourceHashes:          []string{fragment.CandidateRevisionHash}, Status: "active",
+			CandidateItemStart:    0, CandidateItemEnd: fragment.CandidateItemCount,
+			SourceHashes: []string{fragment.CandidateRevisionHash}, Status: "active",
 		}
 		current[index] = StoryReconcileChild{
 			Stage: AnalyzeStoryStage, ShardKey: key, SourceHash: fragment.CandidateRevisionHash,
@@ -179,9 +190,6 @@ func BuildStoryAnalysisManifests(input StoryAnalysisManifestInput) (StoryAnalysi
 			parents[child.Stage+"\x00"+child.ShardKey] = shard.Key
 		}
 	}
-	for index := range analyzeShards {
-		analyzeShards[index].ParentKey = parents[AnalyzeStoryStage+"\x00"+analyzeShards[index].Key]
-	}
 	for index := range reconcileShards {
 		if reconcileShards[index].Key != rootKey {
 			reconcileShards[index].ParentKey = parents[ReconcileStoryStage+"\x00"+reconcileShards[index].Key]
@@ -225,6 +233,411 @@ func BuildStoryAnalysisManifests(input StoryAnalysisManifestInput) (StoryAnalysi
 	return analyze, reconcile, nil
 }
 
+type StoryReconcileCandidateSize struct {
+	Stage, ShardKey string
+	ItemCount       int
+}
+
+func ReshardStoryAnalysisMap(
+	currentAnalyze StoryAnalysisManifest,
+	currentReconcile StoryReconcileManifest,
+	parentKey string,
+) (StoryAnalysisManifest, StoryReconcileManifest, error) {
+	if err := ValidateStoryAnalysisManifests(currentAnalyze, currentReconcile); err != nil {
+		return StoryAnalysisManifest{}, StoryReconcileManifest{}, err
+	}
+	parentIndex := -1
+	for index, shard := range currentAnalyze.Shards {
+		if shard.Key == parentKey && shard.Status == "active" {
+			parentIndex = index
+			break
+		}
+	}
+	if parentIndex < 0 {
+		return StoryAnalysisManifest{}, StoryReconcileManifest{}, errors.New("active Story analysis parent shard not found")
+	}
+	parent := currentAnalyze.Shards[parentIndex]
+	if parent.CandidateItemEnd-parent.CandidateItemStart < 2 {
+		return StoryAnalysisManifest{}, StoryReconcileManifest{}, ErrStoryCandidateCannotSplit
+	}
+	middle := parent.CandidateItemStart + (parent.CandidateItemEnd-parent.CandidateItemStart)/2
+	ranges := [][2]int{{parent.CandidateItemStart, middle}, {middle, parent.CandidateItemEnd}}
+	shards := append([]StoryAnalysisShard(nil), currentAnalyze.Shards...)
+	shards[parentIndex].Status = "superseded"
+	replacements := make([]StoryReconcileChild, 0, len(ranges))
+	for index, itemRange := range ranges {
+		child := parent
+		child.Key = fmt.Sprintf("%s.%04d", parent.Key, index)
+		child.TreePath = fmt.Sprintf("%s.%04d", parent.TreePath, index)
+		child.ParentKey = parent.Key
+		child.CandidateItemStart = itemRange[0]
+		child.CandidateItemEnd = itemRange[1]
+		child.Status = "active"
+		partitionHash, err := storyCandidatePartitionHash(
+			AnalyzeStoryStage, parent.Key, parent.UpstreamCandidateHash, itemRange[0], itemRange[1],
+		)
+		if err != nil {
+			return StoryAnalysisManifest{}, StoryReconcileManifest{}, err
+		}
+		child.SourceHashes = []string{partitionHash}
+		shards = append(shards, child)
+		replacements = append(replacements, StoryReconcileChild{
+			Stage: AnalyzeStoryStage, ShardKey: child.Key, SourceHash: partitionHash,
+		})
+	}
+	parentHash := currentAnalyze.ManifestHash
+	nextAnalyze := currentAnalyze
+	nextAnalyze.Version++
+	nextAnalyze.ParentManifestHash = &parentHash
+	nextAnalyze.Shards = shards
+	nextAnalyze.ManifestHash = ""
+	manifestHash, err := storyAnalysisManifestHash(nextAnalyze)
+	if err != nil {
+		return StoryAnalysisManifest{}, StoryReconcileManifest{}, err
+	}
+	nextAnalyze.ManifestHash = manifestHash
+
+	target := StoryReconcileChild{
+		Stage: AnalyzeStoryStage, ShardKey: parent.Key, SourceHash: parent.SourceHashes[0],
+	}
+	nextReconcile, err := replaceStoryReconcileReference(
+		currentReconcile, target, replacements, nextAnalyze.ManifestHash, "map",
+	)
+	if err != nil {
+		return StoryAnalysisManifest{}, StoryReconcileManifest{}, err
+	}
+	if err = ValidateStoryAnalysisManifests(nextAnalyze, nextReconcile); err != nil {
+		return StoryAnalysisManifest{}, StoryReconcileManifest{}, err
+	}
+	return nextAnalyze, nextReconcile, nil
+}
+
+func ReshardStoryReconcile(
+	current StoryReconcileManifest,
+	targetKey string,
+	sizes []StoryReconcileCandidateSize,
+) (StoryReconcileManifest, error) {
+	targetIndex := -1
+	for index, shard := range current.Shards {
+		if shard.Key == targetKey && shard.Status == "active" {
+			targetIndex = index
+			break
+		}
+	}
+	if targetIndex < 0 {
+		return StoryReconcileManifest{}, errors.New("active Story reconcile shard not found")
+	}
+	target := current.Shards[targetIndex]
+	counts := make(map[string]int, len(sizes))
+	for _, size := range sizes {
+		if (size.Stage != AnalyzeStoryStage && size.Stage != ReconcileStoryStage) ||
+			strings.TrimSpace(size.ShardKey) == "" || size.ItemCount < 0 {
+			return StoryReconcileManifest{}, errors.New("invalid Story reconcile candidate size")
+		}
+		key := size.Stage + "\x00" + size.ShardKey
+		if _, exists := counts[key]; exists {
+			return StoryReconcileManifest{}, errors.New("duplicate Story reconcile candidate size")
+		}
+		counts[key] = size.ItemCount
+	}
+	type rangedChild struct {
+		child      StoryReconcileChild
+		start, end int
+	}
+	ranged := make([]rangedChild, len(target.Children))
+	total := 0
+	for index, child := range target.Children {
+		count, exists := counts[child.Stage+"\x00"+child.ShardKey]
+		if !exists {
+			return StoryReconcileManifest{}, errors.New("Story reconcile candidate size is incomplete")
+		}
+		start, end := 0, count
+		if child.CandidateItemStart != nil || child.CandidateItemEnd != nil {
+			if child.CandidateItemStart == nil || child.CandidateItemEnd == nil {
+				return StoryReconcileManifest{}, errors.New("Story reconcile candidate range is incomplete")
+			}
+			start, end = *child.CandidateItemStart, *child.CandidateItemEnd
+		}
+		if start < 0 || end <= start || end > count {
+			return StoryReconcileManifest{}, errors.New("Story reconcile candidate range has drifted")
+		}
+		ranged[index] = rangedChild{child: child, start: start, end: end}
+		total += end - start
+	}
+	if len(counts) != len(target.Children) || total < 2 {
+		return StoryReconcileManifest{}, ErrStoryCandidateCannotSplit
+	}
+	cut := total / 2
+	groups := make([][]StoryReconcileChild, 2)
+	position := 0
+	for _, value := range ranged {
+		for position < total && value.start < value.end {
+			group := 0
+			boundary := cut
+			if position >= cut {
+				group, boundary = 1, total
+			}
+			take := min(value.end-value.start, boundary-position)
+			if take == 0 {
+				position = boundary
+				continue
+			}
+			start, end := value.start, value.start+take
+			child := value.child
+			child.CandidateItemStart = intPointer(start)
+			child.CandidateItemEnd = intPointer(end)
+			groups[group] = append(groups[group], child)
+			value.start, position = end, position+take
+		}
+	}
+	if len(groups[0]) == 0 || len(groups[1]) == 0 {
+		return StoryReconcileManifest{}, errors.New("Story reconcile reshard did not produce two candidate partitions")
+	}
+	shards := append([]StoryReconcileShard(nil), current.Shards...)
+	shards[targetIndex].Status = "superseded"
+	newShards := make([]StoryReconcileShard, 0, 4)
+	partitionRefs := make([]StoryReconcileChild, 0, 2)
+	for index, children := range groups {
+		key := fmt.Sprintf("%s.partition.v%04d.%04d", target.Key, current.Version+1, index)
+		shard, err := buildStoryReconcileShard(key, target.TreePath+fmt.Sprintf(".partition.%04d", index), target.Level, children)
+		if err != nil {
+			return StoryReconcileManifest{}, err
+		}
+		newShards = append(newShards, shard)
+		partitionRefs = append(partitionRefs, StoryReconcileChild{
+			Stage: ReconcileStoryStage, ShardKey: shard.Key, SourceHash: shard.SubtreeHash,
+		})
+	}
+	combined, err := buildStoryReconcileShard(
+		fmt.Sprintf("%s.combine.v%04d", target.Key, current.Version+1),
+		target.TreePath+".combine", target.Level+1, partitionRefs,
+	)
+	if err != nil {
+		return StoryReconcileManifest{}, err
+	}
+	newShards = append(newShards, combined)
+	shards = append(shards, newShards...)
+	next, err := replaceStoryReconcileNodePath(current, shards, target, combined, "reduce")
+	if err != nil {
+		return StoryReconcileManifest{}, err
+	}
+	return next, nil
+}
+
+func intPointer(value int) *int { return &value }
+
+func storyCandidatePartitionHash(stage, shardKey, sourceHash string, start, end int) (string, error) {
+	return CanonicalStoryHash(struct {
+		Schema, Stage, ShardKey, SourceHash string
+		Start, End                          int
+	}{"story-candidate-partition-v1", stage, shardKey, sourceHash, start, end})
+}
+
+func buildStoryReconcileShard(key, treePath string, level int, children []StoryReconcileChild) (StoryReconcileShard, error) {
+	if len(children) == 0 || len(children) > 2 {
+		return StoryReconcileShard{}, errors.New("Story reconcile shard exceeds fixed fan-in")
+	}
+	stage := children[0].Stage
+	sourceHashes := make([]string, len(children))
+	for index, child := range children {
+		if child.Stage != stage {
+			return StoryReconcileShard{}, errors.New("Story reconcile shard mixed candidate layers")
+		}
+		sourceHashes[index] = child.SourceHash
+	}
+	subtreeHash, err := storyReconcileSubtreeHash(level, children)
+	if err != nil {
+		return StoryReconcileShard{}, err
+	}
+	return StoryReconcileShard{
+		Key: key, TreePath: treePath, Kind: "story_reduce", Level: level,
+		Children: children, SourceHashes: sourceHashes, SubtreeHash: subtreeHash, Status: "active",
+	}, nil
+}
+
+func replaceStoryReconcileReference(
+	current StoryReconcileManifest,
+	target StoryReconcileChild,
+	replacements []StoryReconcileChild,
+	rootInputHash string,
+	label string,
+) (StoryReconcileManifest, error) {
+	bridge, err := buildStoryReconcileShard(
+		fmt.Sprintf("%s.partition.v%04d", target.ShardKey, current.Version+1),
+		"reshard."+target.ShardKey+".partition", 0, replacements,
+	)
+	if err != nil {
+		return StoryReconcileManifest{}, err
+	}
+	shards := append([]StoryReconcileShard(nil), current.Shards...)
+	shards = append(shards, bridge)
+	return replaceStoryReconcileChildPath(current, shards, target, bridge, rootInputHash, label)
+}
+
+func replaceStoryReconcileNodePath(
+	current StoryReconcileManifest,
+	shards []StoryReconcileShard,
+	target StoryReconcileShard,
+	replacement StoryReconcileShard,
+	label string,
+) (StoryReconcileManifest, error) {
+	oldRef := StoryReconcileChild{Stage: ReconcileStoryStage, ShardKey: target.Key, SourceHash: target.SubtreeHash}
+	return replaceStoryReconcileChildPath(current, shards, oldRef, replacement, current.RootInputHash, label)
+}
+
+func replaceStoryReconcileChildPath(
+	current StoryReconcileManifest,
+	shards []StoryReconcileShard,
+	oldRef StoryReconcileChild,
+	replacement StoryReconcileShard,
+	rootInputHash string,
+	label string,
+) (StoryReconcileManifest, error) {
+	newRef := StoryReconcileChild{Stage: ReconcileStoryStage, ShardKey: replacement.Key, SourceHash: replacement.SubtreeHash}
+	sequence := 0
+	for {
+		parentIndex := -1
+		var parent StoryReconcileShard
+		for index, shard := range current.Shards {
+			if shard.Status != "active" {
+				continue
+			}
+			for _, child := range shard.Children {
+				if child.Stage == oldRef.Stage && child.ShardKey == oldRef.ShardKey && child.SourceHash == oldRef.SourceHash {
+					parentIndex, parent = index, shard
+					break
+				}
+			}
+			if parentIndex >= 0 {
+				break
+			}
+		}
+		if parentIndex < 0 {
+			break
+		}
+		for index := range shards {
+			if shards[index].Key == parent.Key && shards[index].Status == "active" {
+				shards[index].Status = "superseded"
+				break
+			}
+		}
+		children := append([]StoryReconcileChild(nil), parent.Children...)
+		for index, child := range children {
+			if child.Stage == oldRef.Stage && child.ShardKey == oldRef.ShardKey && child.SourceHash == oldRef.SourceHash {
+				children[index] = newRef
+				break
+			}
+		}
+		stage := children[0].Stage
+		mixed := false
+		for _, child := range children[1:] {
+			mixed = mixed || child.Stage != stage
+		}
+		if mixed {
+			for index, child := range children {
+				if child.Stage == ReconcileStoryStage {
+					continue
+				}
+				key := fmt.Sprintf("%s.%s.v%04d.wrap.%04d", parent.Key, label, current.Version+1, sequence)
+				sequence++
+				wrapper, err := buildStoryReconcileShard(key, parent.TreePath+".wrap", 0, []StoryReconcileChild{child})
+				if err != nil {
+					return StoryReconcileManifest{}, err
+				}
+				shards = append(shards, wrapper)
+				children[index] = StoryReconcileChild{
+					Stage: ReconcileStoryStage, ShardKey: wrapper.Key, SourceHash: wrapper.SubtreeHash,
+				}
+			}
+		}
+		level := 0
+		if children[0].Stage == ReconcileStoryStage {
+			for _, child := range children {
+				for _, candidate := range shards {
+					if candidate.Key == child.ShardKey && candidate.Status == "active" && candidate.Level >= level {
+						level = candidate.Level + 1
+					}
+				}
+			}
+		}
+		key := fmt.Sprintf("%s.%s.v%04d.%04d", parent.Key, label, current.Version+1, sequence)
+		sequence++
+		clone, err := buildStoryReconcileShard(key, parent.TreePath+"."+label, level, children)
+		if err != nil {
+			return StoryReconcileManifest{}, err
+		}
+		shards = append(shards, clone)
+		oldRef = StoryReconcileChild{Stage: ReconcileStoryStage, ShardKey: parent.Key, SourceHash: parent.SubtreeHash}
+		newRef = StoryReconcileChild{Stage: ReconcileStoryStage, ShardKey: clone.Key, SourceHash: clone.SubtreeHash}
+	}
+	parentHash := current.ManifestHash
+	next := current
+	next.Version++
+	next.ParentManifestHash = &parentHash
+	next.RootInputHash = rootInputHash
+	next.RootShardKey = newRef.ShardKey
+	next.Shards = shards
+	recomputeStoryReconcileParents(next.Shards, next.RootShardKey)
+	root, exists := storyReconcileShardByKey(next.Shards, next.RootShardKey)
+	if !exists || root.Status != "active" {
+		return StoryReconcileManifest{}, errors.New("Story reconcile reshard lost its root")
+	}
+	coverageHash, err := storyReconcileCoverageHash(root.Key, root.SubtreeHash)
+	if err != nil {
+		return StoryReconcileManifest{}, err
+	}
+	next.CoverageHash = coverageHash
+	next.ManifestHash = ""
+	manifestHash, err := storyReconcileManifestHash(next)
+	if err != nil {
+		return StoryReconcileManifest{}, err
+	}
+	next.ManifestHash = manifestHash
+	return next, nil
+}
+
+func recomputeStoryReconcileParents(shards []StoryReconcileShard, rootKey string) {
+	parents := make(map[string][]string)
+	for _, shard := range shards {
+		if shard.Status != "active" {
+			continue
+		}
+		for _, child := range shard.Children {
+			if child.Stage == ReconcileStoryStage {
+				parents[child.ShardKey] = append(parents[child.ShardKey], shard.Key)
+			}
+		}
+	}
+	for index := range shards {
+		if shards[index].Status != "active" {
+			continue
+		}
+		values := parents[shards[index].Key]
+		if shards[index].Key == rootKey || len(values) != 1 {
+			shards[index].ParentKey = ""
+		} else {
+			shards[index].ParentKey = values[0]
+		}
+	}
+}
+
+func storyReconcileShardByKey(shards []StoryReconcileShard, key string) (StoryReconcileShard, bool) {
+	for _, shard := range shards {
+		if shard.Key == key {
+			return shard, true
+		}
+	}
+	return StoryReconcileShard{}, false
+}
+
+func storyReconcileCoverageHash(rootKey, subtreeHash string) (string, error) {
+	return CanonicalStoryHash(struct {
+		Schema      string `json:"schema"`
+		RootKey     string `json:"root_shard_key"`
+		SubtreeHash string `json:"subtree_hash"`
+	}{"story-reconcile-coverage-v1", rootKey, subtreeHash})
+}
+
 func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile StoryReconcileManifest) error {
 	for _, identifier := range []string{
 		analyze.ManifestID, reconcile.ManifestID, analyze.WorkspaceID, analyze.WorkflowRunID, analyze.NodeRunID,
@@ -233,20 +646,29 @@ func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile Sto
 			return errors.New("invalid Story analysis manifest owner")
 		}
 	}
-	if analyze.Version != 1 || reconcile.Version != 1 || analyze.Stage != AnalyzeStoryStage ||
+	if analyze.Version < 1 || reconcile.Version < 1 || analyze.Stage != AnalyzeStoryStage ||
 		reconcile.Stage != ReconcileStoryStage || analyze.WorkspaceID != reconcile.WorkspaceID ||
 		analyze.WorkflowRunID != reconcile.WorkflowRunID || analyze.NodeRunID != reconcile.NodeRunID ||
 		reconcile.FanIn != 2 || reconcile.RootInputHash != analyze.ManifestHash ||
 		!hashPattern.MatchString(analyze.RootInputHash) || len(analyze.Shards) == 0 || len(reconcile.Shards) == 0 {
 		return errors.New("invalid Story analysis manifest relationship")
 	}
+	if analyze.Version == 1 && analyze.ParentManifestHash != nil || analyze.Version > 1 &&
+		(analyze.ParentManifestHash == nil || !hashPattern.MatchString(*analyze.ParentManifestHash)) ||
+		reconcile.Version == 1 && reconcile.ParentManifestHash != nil || reconcile.Version > 1 &&
+		(reconcile.ParentManifestHash == nil || !hashPattern.MatchString(*reconcile.ParentManifestHash)) {
+		return errors.New("invalid Story analysis manifest lineage")
+	}
 	analyzeKeys := make(map[string]StoryAnalysisShard, len(analyze.Shards))
-	position := 0
+	activeAnalyze := make(map[string]StoryAnalysisShard)
+	childrenByParent := make(map[string][]StoryAnalysisShard)
 	for _, shard := range analyze.Shards {
-		if strings.TrimSpace(shard.Key) == "" || strings.TrimSpace(shard.ParentKey) == "" ||
-			shard.Kind != "story_map" || shard.Status != "active" || shard.LogicalStart != position ||
-			shard.LogicalEnd <= shard.LogicalStart || len(shard.SourceHashes) != 1 ||
-			shard.SourceHashes[0] != shard.UpstreamCandidateHash || !hashPattern.MatchString(shard.UpstreamCandidateHash) {
+		if strings.TrimSpace(shard.Key) == "" || strings.TrimSpace(shard.TreePath) == "" ||
+			shard.Kind != "story_map" || (shard.Status != "active" && shard.Status != "superseded") ||
+			shard.LogicalStart < 0 || shard.LogicalEnd <= shard.LogicalStart ||
+			shard.CandidateItemStart < 0 || shard.CandidateItemEnd < shard.CandidateItemStart ||
+			len(shard.SourceHashes) != 1 || !hashPattern.MatchString(shard.SourceHashes[0]) ||
+			!hashPattern.MatchString(shard.UpstreamCandidateHash) {
 			return errors.New("invalid Story analysis map shard")
 		}
 		if _, err := uuid.Parse(shard.UpstreamCandidateRevision); err != nil {
@@ -256,21 +678,80 @@ func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile Sto
 			return errors.New("duplicate Story analysis map shard")
 		}
 		analyzeKeys[shard.Key] = shard
-		position = shard.LogicalEnd
+		if shard.Status == "active" {
+			activeAnalyze[shard.Key] = shard
+		}
+		if shard.ParentKey != "" {
+			childrenByParent[shard.ParentKey] = append(childrenByParent[shard.ParentKey], shard)
+		}
+	}
+	roots := make([]StoryAnalysisShard, 0)
+	for _, shard := range analyze.Shards {
+		if shard.ParentKey == "" {
+			roots = append(roots, shard)
+			continue
+		}
+		parent, exists := analyzeKeys[shard.ParentKey]
+		if !exists || parent.EvidenceShardKey != shard.EvidenceShardKey ||
+			parent.LogicalStart != shard.LogicalStart || parent.LogicalEnd != shard.LogicalEnd ||
+			parent.UpstreamCandidateRevision != shard.UpstreamCandidateRevision ||
+			parent.UpstreamCandidateHash != shard.UpstreamCandidateHash ||
+			shard.CandidateItemStart < parent.CandidateItemStart || shard.CandidateItemEnd > parent.CandidateItemEnd {
+			return errors.New("Story analysis map shard lineage has drifted")
+		}
+	}
+	slices.SortFunc(roots, func(left, right StoryAnalysisShard) int { return left.LogicalStart - right.LogicalStart })
+	position := 0
+	for _, root := range roots {
+		if root.LogicalStart != position {
+			return errors.New("Story analysis Evidence coverage contains a gap or overlap")
+		}
+		position = root.LogicalEnd
+		leaves := make([]StoryAnalysisShard, 0)
+		for _, shard := range activeAnalyze {
+			if shard.EvidenceShardKey == root.EvidenceShardKey && shard.LogicalStart == root.LogicalStart &&
+				shard.LogicalEnd == root.LogicalEnd && shard.UpstreamCandidateRevision == root.UpstreamCandidateRevision {
+				leaves = append(leaves, shard)
+			}
+		}
+		slices.SortFunc(leaves, func(left, right StoryAnalysisShard) int {
+			return left.CandidateItemStart - right.CandidateItemStart
+		})
+		itemPosition := root.CandidateItemStart
+		for _, leaf := range leaves {
+			if leaf.CandidateItemStart != itemPosition {
+				return errors.New("Story analysis candidate coverage contains a gap or overlap")
+			}
+			itemPosition = leaf.CandidateItemEnd
+		}
+		if len(leaves) == 0 || itemPosition != root.CandidateItemEnd {
+			return errors.New("Story analysis candidate coverage is incomplete")
+		}
+	}
+	for parentKey, children := range childrenByParent {
+		parent := analyzeKeys[parentKey]
+		if parent.Status != "superseded" || len(children) < 2 {
+			return errors.New("Story analysis reshard parent is not superseded")
+		}
 	}
 	reconcileKeys := make(map[string]StoryReconcileShard, len(reconcile.Shards))
-	rootCount := 0
 	for _, shard := range reconcile.Shards {
-		if strings.TrimSpace(shard.Key) == "" || shard.Kind != "story_reduce" || shard.Status != "active" ||
+		if strings.TrimSpace(shard.Key) == "" || strings.TrimSpace(shard.TreePath) == "" ||
+			shard.Kind != "story_reduce" || (shard.Status != "active" && shard.Status != "superseded") ||
 			shard.Level < 0 || len(shard.Children) == 0 || len(shard.Children) > reconcile.FanIn ||
 			len(shard.SourceHashes) != len(shard.Children) || !hashPattern.MatchString(shard.SubtreeHash) {
 			return errors.New("invalid Story reconcile shard")
 		}
+		childStage := shard.Children[0].Stage
 		for index, child := range shard.Children {
-			if (child.Stage != AnalyzeStoryStage && child.Stage != ReconcileStoryStage) ||
+			if child.Stage != childStage || (child.Stage != AnalyzeStoryStage && child.Stage != ReconcileStoryStage) ||
 				strings.TrimSpace(child.ShardKey) == "" || !hashPattern.MatchString(child.SourceHash) ||
 				shard.SourceHashes[index] != child.SourceHash {
 				return errors.New("invalid Story reconcile child")
+			}
+			if (child.CandidateItemStart == nil) != (child.CandidateItemEnd == nil) || child.CandidateItemStart != nil &&
+				(*child.CandidateItemStart < 0 || *child.CandidateItemEnd <= *child.CandidateItemStart) {
+				return errors.New("invalid Story reconcile candidate partition")
 			}
 		}
 		expected, err := storyReconcileSubtreeHash(shard.Level, shard.Children)
@@ -281,30 +762,64 @@ func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile Sto
 			return errors.New("duplicate Story reconcile shard")
 		}
 		reconcileKeys[shard.Key] = shard
-		if shard.ParentKey == "" {
-			rootCount++
-			if shard.Key != reconcile.RootShardKey {
-				return errors.New("Story reconcile root key mismatch")
-			}
+	}
+	root, exists := reconcileKeys[reconcile.RootShardKey]
+	if !exists || root.Status != "active" {
+		return errors.New("Story reconcile root key mismatch")
+	}
+	reachableReduce := make(map[string]struct{})
+	reachableAnalyze := make(map[string]struct{})
+	visiting := make(map[string]struct{})
+	var visit func(string) error
+	visit = func(key string) error {
+		if _, done := reachableReduce[key]; done {
+			return nil
 		}
-	}
-	if rootCount != 1 {
-		return errors.New("Story reconcile tree must have one root")
-	}
-	for _, shard := range reconcile.Shards {
+		if _, cycle := visiting[key]; cycle {
+			return errors.New("Story reconcile graph contains a cycle")
+		}
+		shard, exists := reconcileKeys[key]
+		if !exists || shard.Status != "active" {
+			return errors.New("Story reconcile active path references a stale shard")
+		}
+		visiting[key] = struct{}{}
 		for _, child := range shard.Children {
 			if child.Stage == AnalyzeStoryStage {
-				value, exists := analyzeKeys[child.ShardKey]
-				if !exists || value.ParentKey != shard.Key || value.UpstreamCandidateHash != child.SourceHash {
+				value, exists := activeAnalyze[child.ShardKey]
+				if !exists || value.SourceHashes[0] != child.SourceHash {
 					return errors.New("Story reconcile map child has drifted")
 				}
+				reachableAnalyze[child.ShardKey] = struct{}{}
 				continue
 			}
 			value, exists := reconcileKeys[child.ShardKey]
-			if !exists || value.ParentKey != shard.Key || value.SubtreeHash != child.SourceHash || value.Level >= shard.Level {
+			if !exists || value.Status != "active" || value.SubtreeHash != child.SourceHash || value.Level >= shard.Level {
 				return errors.New("Story reconcile tree child has drifted")
 			}
+			if err := visit(child.ShardKey); err != nil {
+				return err
+			}
 		}
+		delete(visiting, key)
+		reachableReduce[key] = struct{}{}
+		return nil
+	}
+	if err := visit(root.Key); err != nil {
+		return err
+	}
+	for _, shard := range reconcile.Shards {
+		if shard.Status == "active" {
+			if _, exists := reachableReduce[shard.Key]; !exists {
+				return errors.New("Story reconcile manifest contains an unreachable active shard")
+			}
+		}
+	}
+	if len(reachableAnalyze) != len(activeAnalyze) {
+		return errors.New("Story reconcile manifest omitted an active map shard")
+	}
+	expectedCoverage, err := storyReconcileCoverageHash(root.Key, root.SubtreeHash)
+	if err != nil || expectedCoverage != reconcile.CoverageHash {
+		return errors.New("Story reconcile coverage hash mismatch")
 	}
 	if expected, err := storyAnalysisManifestHash(analyze); err != nil || expected != analyze.ManifestHash {
 		return errors.New("Story analysis manifest hash mismatch")
@@ -332,33 +847,35 @@ func storyReconcileSubtreeHash(level int, children []StoryReconcileChild) (strin
 
 func storyAnalysisManifestHash(value StoryAnalysisManifest) (string, error) {
 	return CanonicalStoryHash(struct {
-		Schema        string               `json:"schema"`
-		Version       int64                `json:"version"`
-		WorkspaceID   string               `json:"workspace_id"`
-		WorkflowRunID string               `json:"workflow_run_id"`
-		NodeRunID     string               `json:"node_run_id"`
-		Stage         string               `json:"stage"`
-		RootInputHash string               `json:"root_input_hash"`
-		Shards        []StoryAnalysisShard `json:"shards"`
-		CoverageHash  string               `json:"coverage_hash"`
-	}{"story-analysis-shard-manifest-v1", value.Version, value.WorkspaceID, value.WorkflowRunID,
+		Schema             string               `json:"schema"`
+		Version            int64                `json:"version"`
+		ParentManifestHash *string              `json:"parent_manifest_hash"`
+		WorkspaceID        string               `json:"workspace_id"`
+		WorkflowRunID      string               `json:"workflow_run_id"`
+		NodeRunID          string               `json:"node_run_id"`
+		Stage              string               `json:"stage"`
+		RootInputHash      string               `json:"root_input_hash"`
+		Shards             []StoryAnalysisShard `json:"shards"`
+		CoverageHash       string               `json:"coverage_hash"`
+	}{"story-analysis-shard-manifest-v1", value.Version, value.ParentManifestHash, value.WorkspaceID, value.WorkflowRunID,
 		value.NodeRunID, value.Stage, value.RootInputHash, value.Shards, value.CoverageHash})
 }
 
 func storyReconcileManifestHash(value StoryReconcileManifest) (string, error) {
 	return CanonicalStoryHash(struct {
-		Schema        string                `json:"schema"`
-		Version       int64                 `json:"version"`
-		WorkspaceID   string                `json:"workspace_id"`
-		WorkflowRunID string                `json:"workflow_run_id"`
-		NodeRunID     string                `json:"node_run_id"`
-		Stage         string                `json:"stage"`
-		RootInputHash string                `json:"root_input_hash"`
-		FanIn         int                   `json:"fan_in"`
-		RootShardKey  string                `json:"root_shard_key"`
-		Shards        []StoryReconcileShard `json:"shards"`
-		CoverageHash  string                `json:"coverage_hash"`
-	}{"story-reconcile-shard-manifest-v1", value.Version, value.WorkspaceID, value.WorkflowRunID,
+		Schema             string                `json:"schema"`
+		Version            int64                 `json:"version"`
+		ParentManifestHash *string               `json:"parent_manifest_hash"`
+		WorkspaceID        string                `json:"workspace_id"`
+		WorkflowRunID      string                `json:"workflow_run_id"`
+		NodeRunID          string                `json:"node_run_id"`
+		Stage              string                `json:"stage"`
+		RootInputHash      string                `json:"root_input_hash"`
+		FanIn              int                   `json:"fan_in"`
+		RootShardKey       string                `json:"root_shard_key"`
+		Shards             []StoryReconcileShard `json:"shards"`
+		CoverageHash       string                `json:"coverage_hash"`
+	}{"story-reconcile-shard-manifest-v1", value.Version, value.ParentManifestHash, value.WorkspaceID, value.WorkflowRunID,
 		value.NodeRunID, value.Stage, value.RootInputHash, value.FanIn, value.RootShardKey,
 		value.Shards, value.CoverageHash})
 }
@@ -463,6 +980,80 @@ type StoryReconciliationCandidate struct {
 	MergedArcs            []StoryArcCandidate        `json:"merged_arcs"`
 	Conflicts             []ReviewIssue              `json:"conflicts"`
 	ReviewIssues          []ReviewIssue              `json:"review_issues"`
+}
+
+func SourceEvidenceCandidateItemCount(value SourceEvidenceCandidate) int {
+	return len(value.Observations) + len(value.ReviewIssues)
+}
+
+func SliceSourceEvidenceCandidate(value SourceEvidenceCandidate, start, end int) (SourceEvidenceCandidate, error) {
+	total := SourceEvidenceCandidateItemCount(value)
+	if start < 0 || end < start || end > total {
+		return SourceEvidenceCandidate{}, errors.New("invalid Source Evidence candidate item range")
+	}
+	result := SourceEvidenceCandidate{
+		Observations: []SourceObservation{}, ReviewIssues: []SourceEvidenceIssue{},
+	}
+	cursor := 0
+	appendCandidateItems(&result.Observations, value.Observations, start, end, &cursor)
+	appendCandidateItems(&result.ReviewIssues, value.ReviewIssues, start, end, &cursor)
+	return result, nil
+}
+
+func StoryAnalysisCandidateItemCount(value StoryAnalysisCandidate) int {
+	return len(value.Entities) + len(value.WorldEntries) + len(value.Claims) + len(value.Arcs) + len(value.ReviewIssues)
+}
+
+func SliceStoryAnalysisCandidate(value StoryAnalysisCandidate, start, end int) (StoryAnalysisCandidate, error) {
+	total := StoryAnalysisCandidateItemCount(value)
+	if start < 0 || end <= start || end > total {
+		return StoryAnalysisCandidate{}, errors.New("invalid Story analysis candidate item range")
+	}
+	result := StoryAnalysisCandidate{
+		Entities: []StoryEntityCandidate{}, WorldEntries: []StoryWorldEntryCandidate{},
+		Claims: []StoryClaimCandidate{}, Arcs: []StoryArcCandidate{}, ReviewIssues: []ReviewIssue{},
+	}
+	cursor := 0
+	appendCandidateItems(&result.Entities, value.Entities, start, end, &cursor)
+	appendCandidateItems(&result.WorldEntries, value.WorldEntries, start, end, &cursor)
+	appendCandidateItems(&result.Claims, value.Claims, start, end, &cursor)
+	appendCandidateItems(&result.Arcs, value.Arcs, start, end, &cursor)
+	appendCandidateItems(&result.ReviewIssues, value.ReviewIssues, start, end, &cursor)
+	return result, nil
+}
+
+func StoryReconciliationCandidateItemCount(value StoryReconciliationCandidate) int {
+	return len(value.CanonicalEntities) + len(value.CanonicalWorldEntries) + len(value.MergedClaims) +
+		len(value.MergedArcs) + len(value.Conflicts) + len(value.ReviewIssues)
+}
+
+func SliceStoryReconciliationCandidate(value StoryReconciliationCandidate, start, end int) (StoryReconciliationCandidate, error) {
+	total := StoryReconciliationCandidateItemCount(value)
+	if start < 0 || end <= start || end > total {
+		return StoryReconciliationCandidate{}, errors.New("invalid Story reconciliation candidate item range")
+	}
+	result := StoryReconciliationCandidate{
+		CanonicalEntities: []StoryEntityCandidate{}, CanonicalWorldEntries: []StoryWorldEntryCandidate{},
+		MergedClaims: []StoryClaimCandidate{}, MergedArcs: []StoryArcCandidate{},
+		Conflicts: []ReviewIssue{}, ReviewIssues: []ReviewIssue{},
+	}
+	cursor := 0
+	appendCandidateItems(&result.CanonicalEntities, value.CanonicalEntities, start, end, &cursor)
+	appendCandidateItems(&result.CanonicalWorldEntries, value.CanonicalWorldEntries, start, end, &cursor)
+	appendCandidateItems(&result.MergedClaims, value.MergedClaims, start, end, &cursor)
+	appendCandidateItems(&result.MergedArcs, value.MergedArcs, start, end, &cursor)
+	appendCandidateItems(&result.Conflicts, value.Conflicts, start, end, &cursor)
+	appendCandidateItems(&result.ReviewIssues, value.ReviewIssues, start, end, &cursor)
+	return result, nil
+}
+
+func appendCandidateItems[T any](target *[]T, source []T, start, end int, cursor *int) {
+	sectionStart, sectionEnd := *cursor, *cursor+len(source)
+	from, to := max(start, sectionStart), min(end, sectionEnd)
+	if from < to {
+		*target = append(*target, source[from-sectionStart:to-sectionStart]...)
+	}
+	*cursor = sectionEnd
 }
 
 func DecodeStoryAnalysisCandidate(raw json.RawMessage, allowed []Evidence) (StoryAnalysisCandidate, error) {

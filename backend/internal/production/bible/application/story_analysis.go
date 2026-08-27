@@ -19,7 +19,10 @@ type StoryAnalysisCommand struct {
 	EvidenceCandidateRevisionHash                    string
 }
 
-var ErrStoryAnalysisUpstreamStale = errors.New("Story analysis upstream Candidate Revision is stale")
+var (
+	ErrStoryAnalysisUpstreamStale = errors.New("Story analysis upstream Candidate Revision is stale")
+	ErrStoryAnalysisManifestStale = errors.New("Story analysis Shard Manifest is stale")
+)
 
 type StoryAnalysisState struct {
 	Status                                     string
@@ -93,6 +96,7 @@ func (service *StoryAnalysisService) Ensure(ctx context.Context, command StoryAn
 	fragments := make([]domain.StoryAnalysisEvidenceFragment, len(seed.Evidence))
 	for index := range seed.Evidence {
 		fragments[index] = seed.Evidence[index].Fragment
+		fragments[index].CandidateItemCount = domain.SourceEvidenceCandidateItemCount(seed.Evidence[index].Candidate)
 	}
 	analyze, reconcile, err := domain.BuildStoryAnalysisManifests(domain.StoryAnalysisManifestInput{
 		AnalyzeManifestID: service.config.NewID(), ReconcileManifestID: service.config.NewID(),
@@ -127,12 +131,21 @@ func buildStoryAnalysisInvocations(
 	result := make([]domain.Invocation, 0, len(manifest.Shards))
 	policy := agentcontract.StoryGraphDefinition().ExecutionPolicy()
 	for _, shard := range manifest.Shards {
+		if shard.Status != "active" {
+			continue
+		}
 		evidence, exists := byRevision[shard.UpstreamCandidateRevision]
 		if !exists || evidence.Fragment.ShardKey != shard.EvidenceShardKey ||
 			evidence.Fragment.CandidateRevisionHash != shard.UpstreamCandidateHash {
 			return nil, errors.New("Story analysis manifest lost its Evidence seed")
 		}
-		evidenceJSON, err := json.Marshal(evidence.Candidate)
+		candidate, err := domain.SliceSourceEvidenceCandidate(
+			evidence.Candidate, shard.CandidateItemStart, shard.CandidateItemEnd,
+		)
+		if err != nil {
+			return nil, err
+		}
+		evidenceJSON, err := json.Marshal(candidate)
 		if err != nil {
 			return nil, err
 		}
@@ -141,6 +154,7 @@ func buildStoryAnalysisInvocations(
 			EvidenceCandidateRevisionID:   shard.UpstreamCandidateRevision,
 			EvidenceCandidateRevisionHash: shard.UpstreamCandidateHash,
 			LogicalStart:                  shard.LogicalStart, LogicalEnd: shard.LogicalEnd,
+			CandidateItemStart: shard.CandidateItemStart, CandidateItemEnd: shard.CandidateItemEnd,
 			EvidenceCandidate: evidenceJSON,
 		})
 		if err != nil {
@@ -189,3 +203,94 @@ func buildStoryAnalysisInvocations(
 }
 
 var storyAnalysisHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+type StoryAnalysisReshardSeed struct {
+	Stage, ShardKey         string
+	ProjectID               string
+	AnalyzeManifest         domain.StoryAnalysisManifest
+	ReconcileManifest       domain.StoryReconcileManifest
+	Evidence                []StoryAnalysisEvidenceSeed
+	ReconcileCandidateSizes []domain.StoryReconcileCandidateSize
+}
+
+type StoryAnalysisReshardPreparation struct {
+	InvocationID, ErrorCode, ErrorSummary string
+	ClaimVersion                          int
+	CreatedAt                             time.Time
+	PreviousAnalyzeManifestHash           string
+	PreviousReconcileManifestHash         string
+	AnalyzeManifest                       *domain.StoryAnalysisManifest
+	ReconcileManifest                     domain.StoryReconcileManifest
+	Invocations                           []domain.Invocation
+}
+
+type StoryAnalysisReshardRepository interface {
+	LoadStoryAnalysisReshardSeed(context.Context, string, int, time.Time) (StoryAnalysisReshardSeed, error)
+	ApplyStoryAnalysisReshard(context.Context, StoryAnalysisReshardPreparation) (bool, error)
+}
+
+func (service *StoryAnalysisService) ReshardBudgetExceeded(
+	ctx context.Context,
+	invocationID string,
+	claimVersion int,
+	summary string,
+) (bool, error) {
+	if service == nil || service.config.Now == nil || service.config.NewID == nil {
+		return false, errors.New("Story analysis reshard service is unavailable")
+	}
+	repository, ok := service.repository.(StoryAnalysisReshardRepository)
+	if !ok {
+		return false, errors.New("Story analysis reshard service is unavailable")
+	}
+	if _, err := uuid.Parse(invocationID); err != nil || claimVersion < 1 {
+		return false, errors.New("invalid Story analysis reshard identity")
+	}
+	createdAt := service.config.Now().UTC()
+	seed, err := repository.LoadStoryAnalysisReshardSeed(ctx, invocationID, claimVersion, createdAt)
+	if err != nil {
+		return false, err
+	}
+	preparation := StoryAnalysisReshardPreparation{
+		InvocationID: invocationID, ClaimVersion: claimVersion,
+		ErrorCode: "execution_budget_exceeded", ErrorSummary: summary, CreatedAt: createdAt,
+		PreviousAnalyzeManifestHash:   seed.AnalyzeManifest.ManifestHash,
+		PreviousReconcileManifestHash: seed.ReconcileManifest.ManifestHash,
+	}
+	switch seed.Stage {
+	case domain.AnalyzeStoryStage:
+		nextAnalyze, nextReconcile, buildErr := domain.ReshardStoryAnalysisMap(
+			seed.AnalyzeManifest, seed.ReconcileManifest, seed.ShardKey,
+		)
+		if buildErr != nil {
+			return false, buildErr
+		}
+		invocations, buildErr := buildStoryAnalysisInvocations(
+			nextAnalyze,
+			StoryAnalysisSeed{
+				WorkspaceID: nextAnalyze.WorkspaceID, WorkflowRunID: nextAnalyze.WorkflowRunID,
+				NodeRunID: nextAnalyze.NodeRunID, RootInputHash: nextAnalyze.RootInputHash,
+				Evidence:  seed.Evidence,
+				ProjectID: seed.ProjectID,
+			},
+			service.config.NewID,
+			createdAt,
+		)
+		if buildErr != nil {
+			return false, buildErr
+		}
+		preparation.AnalyzeManifest = &nextAnalyze
+		preparation.ReconcileManifest = nextReconcile
+		preparation.Invocations = invocations
+	case domain.ReconcileStoryStage:
+		nextReconcile, buildErr := domain.ReshardStoryReconcile(
+			seed.ReconcileManifest, seed.ShardKey, seed.ReconcileCandidateSizes,
+		)
+		if buildErr != nil {
+			return false, buildErr
+		}
+		preparation.ReconcileManifest = nextReconcile
+	default:
+		return false, errors.New("unsupported Story analysis reshard stage")
+	}
+	return repository.ApplyStoryAnalysisReshard(ctx, preparation)
+}

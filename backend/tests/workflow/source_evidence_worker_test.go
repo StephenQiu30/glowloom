@@ -162,17 +162,18 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	var releaseOnce sync.Once
 	t.Cleanup(func() { releaseOnce.Do(func() { close(lateRelease) }) })
 	agent := &recoveringSourceEvidenceAgent{failed: map[string]bool{}, lateRelease: lateRelease}
+	agentLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	agentWorker := bibleapp.NewSourceEvidenceWorker(
 		bibleStore, evidenceService, agent, func() time.Time { return time.Now().UTC() },
-		time.Millisecond, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)),
+		time.Millisecond, time.Minute, agentLogger,
 	)
 	storyWorker := bibleapp.NewStoryAnalysisWorker(
-		bibleStore, agent, func() time.Time { return time.Now().UTC() },
-		time.Millisecond, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)),
+		bibleStore, storyAnalysisService, agent, func() time.Time { return time.Now().UTC() },
+		time.Millisecond, time.Minute, agentLogger,
 	)
 	bibleWorker := bibleapp.NewWorker(
 		bibleStore, agent, func() time.Time { return time.Now().UTC() },
-		time.Millisecond, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)),
+		time.Millisecond, time.Minute, agentLogger,
 	)
 	go agentWorker.Run(agentContext)
 	go agentWorker.Run(agentContext)
@@ -346,7 +347,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		t.Fatalf("Story analysis NodeRun did not complete definition-first: %#v", storyNode)
 	}
 	var storyManifests []model.ShardManifest
-	if err = database.Where("node_run_id = ?", storyNode.ID).Order("stage").Find(&storyManifests).Error; err != nil || len(storyManifests) != 2 {
+	if err = database.Where("node_run_id = ?", storyNode.ID).Order("stage").Order("version").Find(&storyManifests).Error; err != nil || len(storyManifests) != 5 {
 		t.Fatalf("Story analysis manifest pair=%d err=%v", len(storyManifests), err)
 	}
 	var analyzeManifest bibledomain.StoryAnalysisManifest
@@ -354,33 +355,54 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	for _, record := range storyManifests {
 		switch record.Stage {
 		case bibledomain.AnalyzeStoryStage:
+			if record.Version < analyzeManifest.Version {
+				continue
+			}
 			var values []bibledomain.StoryAnalysisShard
 			if err = json.Unmarshal(record.Shards, &values); err != nil {
 				t.Fatal(err)
 			}
 			analyzeManifest = bibledomain.StoryAnalysisManifest{
-				ManifestID: record.ID.String(), Version: record.Version, WorkspaceID: record.WorkspaceID.String(),
+				ManifestID: record.ID.String(), Version: record.Version, ParentManifestHash: record.ParentManifestHash, WorkspaceID: record.WorkspaceID.String(),
 				WorkflowRunID: record.WorkflowRunID.String(), NodeRunID: record.NodeRunID.String(), Stage: record.Stage,
 				RootInputHash: record.RootInputHash, Shards: values, CoverageHash: record.CoverageHash, ManifestHash: record.ManifestHash,
 			}
 		case bibledomain.ReconcileStoryStage:
+			if record.Version < reconcileManifest.Version {
+				continue
+			}
 			var values []bibledomain.StoryReconcileShard
 			if err = json.Unmarshal(record.Shards, &values); err != nil {
 				t.Fatal(err)
 			}
+			referenced := map[string]bool{}
+			for _, value := range values {
+				if value.Status != "active" {
+					continue
+				}
+				for _, child := range value.Children {
+					if child.Stage == bibledomain.ReconcileStoryStage {
+						referenced[child.ShardKey] = true
+					}
+				}
+			}
 			rootKey := ""
 			for _, value := range values {
-				if value.ParentKey == "" {
+				if value.Status == "active" && !referenced[value.Key] {
 					rootKey = value.Key
 				}
 			}
 			reconcileManifest = bibledomain.StoryReconcileManifest{
-				ManifestID: record.ID.String(), Version: record.Version, WorkspaceID: record.WorkspaceID.String(),
+				ManifestID: record.ID.String(), Version: record.Version, ParentManifestHash: record.ParentManifestHash, WorkspaceID: record.WorkspaceID.String(),
 				WorkflowRunID: record.WorkflowRunID.String(), NodeRunID: record.NodeRunID.String(), Stage: record.Stage,
 				RootInputHash: record.RootInputHash, FanIn: 2, RootShardKey: rootKey,
 				Shards: values, CoverageHash: record.CoverageHash, ManifestHash: record.ManifestHash,
 			}
 		}
+	}
+	if analyzeManifest.Version != 2 || analyzeManifest.ParentManifestHash == nil ||
+		reconcileManifest.Version != 3 || reconcileManifest.ParentManifestHash == nil {
+		t.Fatalf("Story analysis budget failures did not publish versioned manifests: analyze=%#v reconcile=%#v", analyzeManifest, reconcileManifest)
 	}
 	if err = bibledomain.ValidateStoryAnalysisManifests(analyzeManifest, reconcileManifest); err != nil {
 		t.Fatalf("persisted Story analysis map/reduce topology is invalid: %v", err)
@@ -389,18 +411,29 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	if err = database.Where("node_run_id = ?", storyNode.ID).Order("stage").Order("shard_key").Find(&storyInvocations).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(storyInvocations) != len(analyzeManifest.Shards)+len(reconcileManifest.Shards) {
-		t.Fatalf("Story analysis invocation count=%d want=%d", len(storyInvocations), len(analyzeManifest.Shards)+len(reconcileManifest.Shards))
-	}
+	budgetFailures := 0
 	for _, invocation := range storyInvocations {
 		request, decodeErr := agentgorm.StageInvocation(invocation)
-		if decodeErr != nil || invocation.Status != "succeeded" || invocation.Attempts < 1 {
+		if decodeErr != nil || invocation.Status == "succeeded" && invocation.Attempts < 1 {
 			t.Fatalf("Story analysis invocation is not replayable: %#v err=%v", invocation, decodeErr)
 		}
-		if invocation.Stage == bibledomain.ReconcileStoryStage &&
+		if invocation.Status == "failed" {
+			switch {
+			case strings.Contains(string(invocation.Error), "execution_budget_exceeded"):
+				budgetFailures++
+			case !strings.Contains(string(invocation.Error), "manifest_superseded"):
+				t.Fatalf("Story analysis failed unexpectedly: %#v", invocation)
+			}
+		} else if invocation.Status != "succeeded" {
+			t.Fatalf("Story analysis left an invocation unresolved: %#v", invocation)
+		}
+		if invocation.Status == "succeeded" && invocation.Stage == bibledomain.ReconcileStoryStage &&
 			(len(request.Payload.UpstreamCandidates) < 1 || len(request.Payload.UpstreamCandidates) > 2) {
 			t.Fatalf("Story reconcile invocation exceeded fan-in: %#v", request.Payload.UpstreamCandidates)
 		}
+	}
+	if budgetFailures != 2 {
+		t.Fatalf("Story analysis budget failure count=%d want=2", budgetFailures)
 	}
 	storyOutput, _, storyOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(storyNode.Output))
 	if err != nil || storyOutputHash != *storyNode.OutputHash || len(storyOutput.Bindings) != 1 ||
@@ -422,7 +455,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		t.Fatalf("Story analysis replay created invocations: before=%d after=%d err=%v", beforeReplay, afterReplay, err)
 	}
 	var analyzeInvocation model.AgentInvocation
-	if err = database.Where("node_run_id = ? AND stage = ?", storyNode.ID, bibledomain.AnalyzeStoryStage).
+	if err = database.Where("node_run_id = ? AND stage = ? AND shard_manifest_version = ? AND status = ?",
+		storyNode.ID, bibledomain.AnalyzeStoryStage, analyzeManifest.Version, "succeeded").
 		Order("shard_key").First(&analyzeInvocation).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -473,11 +507,13 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 }
 
 type recoveringSourceEvidenceAgent struct {
-	mutex         sync.Mutex
-	failed        map[string]bool
-	budget        bool
-	originalCalls int
-	lateRelease   <-chan struct{}
+	mutex             sync.Mutex
+	failed            map[string]bool
+	budget            bool
+	storyMapBudget    bool
+	storyReduceBudget bool
+	originalCalls     int
+	lateRelease       <-chan struct{}
 }
 
 func (agent *recoveringSourceEvidenceAgent) Invoke(
@@ -487,6 +523,24 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 	_ int64,
 ) (agentcontract.StageResult, error) {
 	if invocation.Payload.Stage == bibledomain.AnalyzeStoryStage || invocation.Payload.Stage == bibledomain.ReconcileStoryStage {
+		agent.mutex.Lock()
+		itemCount, countErr := storyFixtureInputItemCount(invocation)
+		budget := false
+		if countErr == nil && itemCount >= 2 {
+			if invocation.Payload.Stage == bibledomain.AnalyzeStoryStage && !agent.storyMapBudget {
+				agent.storyMapBudget, budget = true, true
+			}
+			if invocation.Payload.Stage == bibledomain.ReconcileStoryStage && !agent.storyReduceBudget {
+				agent.storyReduceBudget, budget = true, true
+			}
+		}
+		agent.mutex.Unlock()
+		if countErr != nil {
+			return agentcontract.StageResult{}, countErr
+		}
+		if budget {
+			return storyFixtureBudgetExceeded(invocation), nil
+		}
 		return storyAnalysisFixtureResult(invocation)
 	}
 	agent.mutex.Lock()
@@ -545,6 +599,14 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 				SourceStart: localStart, SourceEnd: localEnd,
 				TextHash: bibledomain.SourceTextHash(anchor), ExactAnchor: anchor,
 			}},
+		}, {
+			ObservationKey: "observation-detail:" + strings.ReplaceAll(invocation.Payload.ShardKey, ".", "-"),
+			Kind:           "event", ProposedKey: "detail:" + invocation.Payload.ShardKey,
+			Label: "分片细节", Facts: []string{"保留第二个候选条目"}, Ambiguities: []string{},
+			Evidence: []bibledomain.Evidence{{
+				SourceStart: localStart, SourceEnd: localEnd,
+				TextHash: bibledomain.SourceTextHash(anchor), ExactAnchor: anchor,
+			}},
 		}},
 		ReviewIssues: []bibledomain.SourceEvidenceIssue{},
 	})
@@ -564,6 +626,61 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 		Issues:   []agentcontract.StageIssue{},
 		Executor: agentcontract.Executor{Name: "test-agent", Version: "source-evidence-v1", Model: "deterministic-fixture"},
 	}, nil
+}
+
+func storyFixtureBudgetExceeded(invocation agentcontract.StageInvocation) agentcontract.StageResult {
+	candidateType, _ := agentcontract.CandidateTypeForStage(invocation.Payload.Stage)
+	return agentcontract.StageResult{
+		InvocationID: invocation.InvocationID, Kind: "storygraph_stage",
+		WireSchemaVersion: agentcontract.StoryGraphWireSchemaVersion,
+		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
+		Status: "failed", CandidateType: candidateType, Candidate: json.RawMessage("null"),
+		InputHash: invocation.InputHash, Issues: []agentcontract.StageIssue{},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-budget-v1", Model: "deterministic-fixture"},
+		Error: &agentcontract.ResultError{
+			Code: "execution_budget_exceeded", Summary: "fixture requires an exact candidate partition", Retryable: false,
+		},
+	}
+}
+
+func storyFixtureInputItemCount(invocation agentcontract.StageInvocation) (int, error) {
+	switch invocation.Payload.Stage {
+	case bibledomain.AnalyzeStoryStage:
+		var input agentcontract.StoryAnalysisStageInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+			return 0, err
+		}
+		var candidate bibledomain.SourceEvidenceCandidate
+		if err := json.Unmarshal(input.EvidenceCandidate, &candidate); err != nil {
+			return 0, err
+		}
+		return bibledomain.SourceEvidenceCandidateItemCount(candidate), nil
+	case bibledomain.ReconcileStoryStage:
+		var input agentcontract.StoryReconciliationStageInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+			return 0, err
+		}
+		total := 0
+		for _, child := range input.Candidates {
+			switch input.CandidateType {
+			case "story_analysis_candidate":
+				var candidate bibledomain.StoryAnalysisCandidate
+				if err := json.Unmarshal(child.Candidate, &candidate); err != nil {
+					return 0, err
+				}
+				total += bibledomain.StoryAnalysisCandidateItemCount(candidate)
+			case "story_reconciliation_candidate":
+				var candidate bibledomain.StoryReconciliationCandidate
+				if err := json.Unmarshal(child.Candidate, &candidate); err != nil {
+					return 0, err
+				}
+				total += bibledomain.StoryReconciliationCandidateItemCount(candidate)
+			}
+		}
+		return total, nil
+	default:
+		return 0, errors.New("fixture Story stage is unsupported")
+	}
 }
 
 func storyAnalysisFixtureResult(invocation agentcontract.StageInvocation) (agentcontract.StageResult, error) {
