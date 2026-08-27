@@ -175,9 +175,9 @@
 - [x] `SGA-EVD-003`（`SG-I08`、`SG-I13`）：中阿拉伯 Episode marker 与 AI 仅提议歧义边界。
 - [x] `SGA-EVD-004`（`SG-I08`）：chunk-local offset 经 Backend 校正重验后才成正式 Evidence。
 - [ ] `SGA-EVD-005`（`SG-I08` fixture、`SG-I27` final）：两集开发 + 完整原稿统计和代表集人工细查。
-- [ ] `SGA-CAN-001`（`SG-I09`）：不可变 StageCandidateRevision/Head CAS/并发。
-- [ ] `SGA-CAN-002`（`SG-I09`）：invocation/aggregate/repair strict origin union。
-- [ ] `SGA-CAN-003`（`SG-I09`）：content hash 与 revision hash 分层单字段突变。
+- [x] `SGA-CAN-001`（`SG-I09`）：不可变 StageCandidateRevision/Head CAS/并发。
+- [x] `SGA-CAN-002`（`SG-I09`）：invocation/aggregate/repair strict origin union。
+- [x] `SGA-CAN-003`（`SG-I09`）：content hash 与 revision hash 分层单字段突变。
 - [ ] `SGA-CAN-004`（`SG-I09`、`SG-I10`）：exact revision 下游与 Head 变更 stale closure，不覆盖历史。
 - [ ] `SGA-REP-001`（`SG-I10`、`SG-I22`）：模型 Review Issue 不冒充确定性 Gate/blocker。
 - [ ] `SGA-REP-002`（`SG-I10`、`SG-I22`）：Repair Patch 冻结 target/allowlist/base/邻接且不能改已发布 Graph。
@@ -420,4 +420,14 @@
 - 通过范围：以上证据完成 `SGA-SHR-006` 与 `SG-I09`。Candidate Repair、Head expected CAS 和旧下游 stale closure 仍属于 `SG-I10`，所以 `SGA-CAN-*`、`SGA-REP-*` 不提前勾选；完整原稿、Human Gate 与最终 `agent-browser` 同样未执行。
 - Git：本 Evidence 与实现由描述失败分片持久恢复的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 84 条 Requirement 与 `SG-I01`–`SG-I09`，其余保持未通过。下一步继续且只允许进入 `SG-I10`，完成 Candidate Repair、Head expected CAS 与旧下游 stale closure，不提前进入后续实现。
+### 候选修复版本的原子切换（2026-08-28）
+
+- Red 与哈希契约：`backend/tests/agent/candidate_revision_test.go` 先因缺少 Repair origin 类型和哈希材料稳定编译失败。实现后 invocation/aggregate 只允许无 parent 的 Revision 1，repair 只允许带 parent hash 的 Revision N+1；Manifest、leaf、父 Revision、Repair Invocation、Repair Result 或 Candidate 内容任一单字段变化都会改变 `candidate_revision_hash`，而 `candidate_content_hash` 仍只证明规范化内容。
+- GORM 事实约束：唯一 Model Catalog 的 `StageCandidateRevision` check constraint 同步收紧三类 origin 的互斥联合。Backend 修复发布原语只接受精确 Workspace、stage instance、expected Revision ID/hash/head revision、成功的 `repair_candidate` Invocation/Result 和已校验的新 Candidate；无内容变化、来源漂移或 Head 漂移均失败。实现没有 Migration、Raw SQL、第二 ORM 或兼容回退。
+- 原子并发：同一 GORM/PostgreSQL 事务先 `FOR UPDATE` 锁定 Candidate Head，再重验不可变父 Revision和 Repair Result，创建带 parent/repair provenance 的 N+1，最后以相同 expected ID/hash/revision 条件 CAS Head。两个不同 Repair Result 并发争用同一 Head 时恰好一个成功，另一个返回显式 Head conflict；失败事务不留下孤立 Revision，旧 Revision 拒绝原地更新。
+- 真实 PostgreSQL：`TestRepairCandidateRevisionAdvancesHeadOnceUnderContention` 在独立 PostgreSQL `16.15` 上连续 10 次通过，结果 `39.277s`。压力复跑曾暴露固定 stage identity 与 repair identity 污染后续轮次，夹具改为从每轮新 Workspace 派生 identity 后重新通过；没有通过清表、放宽唯一约束或串行化测试掩盖竞争。
+- Backend CI：`gofmt`、`go vet ./...` 与全新空 PostgreSQL 下 `go test -count=1 -p 1 ./...` 全通过，Workflow 包 `68.377s`。首次全量运行还发现测试直接导入 GORM 违反架构门禁，夹具已改为普通错误函数；第二次复用污染库触发全库计数失败后，按 CI 契约改用全新数据库并从头通过，未把失败运行报告为成功。
+- 通过范围：以上证据完成 `SGA-CAN-001`–`003`，但只建立修复发布的事实原语。`review_storygraph`、冻结 Patch 允许集、确定性 Gate、幂等 Receipt、旧下游 stale closure 与有界重审尚未实现，因此 `SGA-CAN-004`、`SGA-REP-*` 和整个 `SG-I10` 继续保持未通过；最终 `agent-browser` 未执行。
+- Git：本 Evidence 与实现由描述候选修复版本原子切换的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 87 条 Requirement 与 `SG-I01`–`SG-I09`，其余保持未通过。下一步继续且只允许完成 Bible Review/Repair 的冻结输入与确定性 Gate，不提前勾选 Patch Receipt、stale closure、有界重审或后续实现。

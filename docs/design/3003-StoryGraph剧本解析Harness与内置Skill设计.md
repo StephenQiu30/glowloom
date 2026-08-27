@@ -281,6 +281,8 @@ StageCandidateHead
 
 三种 origin 是严格互斥联合，恰好一个非空。首次成功 Invocation Result 以 `invocation` origin 原子创建 Candidate Revision 1；Shard 聚合以 `aggregate` origin 创建聚合 Revision，其 leaf refs 按 `(stage_instance_key, shard_key, candidate_revision_id)` 排序且每项冻结 revision hash；Repair Invocation 只返回不可变 Patch Result，Backend 将它应用到 expected current Candidate Revision 后以 `repair` origin 创建 N+1，并 CAS 切换 Candidate Head。`candidate_content_hash` 只证明规范化候选内容；`candidate_revision_hash` 还覆盖 stage instance、revision number、parent revision hash、origin kind、该 origin 的全部 Canonical Material 和 content hash，因而同时证明调用、聚合或修复谱系。原 Manifest/Invocation/Result/Revision 永不覆盖。下游与 Shard 聚合只绑定精确 `candidate_revision_id + candidate_revision_hash`；Head 切换后，引用旧 Revision 的下游 stage instance 才被标记 stale。
 
+`invocation` 与 `aggregate` origin 只允许 `revision_no=1` 且无 parent；`repair` origin 只允许 `revision_no>=2`，必须同时冻结 parent revision id/hash 与成功的 `repair_candidate` Invocation/Result hash。Backend 的修复发布原语只接收上层已经按冻结允许集生成并完成确定性校验的新 Candidate：在一个 GORM/PostgreSQL 事务中锁定 Head，重验 expected revision id/hash/revision、父 Revision 与 Repair Result，拒绝无内容变化，创建不可变 N+1 后以相同 expected 条件 CAS 切换 Head。该原语不自行解释 Patch、不创建 Receipt、也不扫描下游；Patch 允许集、幂等 Receipt、stale closure 和有界重审继续由同一业务 Coordinator 在后续交付单元内完成，避免底层 Adapter 变成第二业务编排层。
+
 ### Stage 列表
 
 | Stage | Shard/输入 | Candidate 输出 | 正式应用 Owner |
@@ -465,6 +467,8 @@ Skill Markdown 由 Harness 显式读取并注入，不依赖 Codex 用户目录�
 ### Candidate Repair 与已发布事实修改
 
 模型 Repair 只处理尚未发布的 Candidate。`CandidateRepairPatch` 必须冻结 `target_candidate_revision_id/hash`、允许修改的 node/edge/temp keys、base fragment hashes 和邻接只读边界；Repair Invocation 的 Patch Result 保持不可变。Backend 以 expected Candidate Head Hash 做 CAS，应用 Patch 后创建带 parent/repair provenance 的下一 `StageCandidateRevision`，同一 Patch 重投只能返回相同 Receipt，不同 Patch 争用同一 Head 时整体冲突。随后把所有仍引用旧 Candidate Revision Hash 的下游 stage instance 标记 stale 后精确重跑，并对受影响闭包重新执行 deterministic gates 与 `review_storygraph`；只有当前 Shard Manifest 的所有 current Candidate Revision 无 blocker 才能进入 Human Gate，循环次数耗尽则保持 needs_review/failed。模型不能直接 Patch 已发布 StoryGraphVersion。
+
+实施顺序固定为：先完成三类 Revision origin/hash 与原子 Head CAS；再冻结 Bible Review/Repair 输入、允许集和确定性 Gate；随后在同一 Backend 事务中加入 Patch Receipt 与旧下游 stale closure；最后接入 Temporal Node 的有界 review→repair→gate 循环。每一单元都必须独立 Red/Green/真实 PostgreSQL 验证并提交，不能把尚未完成的后续语义伪装进底层 CAS。
 
 已发布图上的 Canvas 修改必须经过 Human-approved typed Domain Intent → 对应 Owner Command → 新 Owner revision → StoryGraph recompile。两条路径不共享 Patch DTO，也不允许 Graph Repository 代写 Owner。
 

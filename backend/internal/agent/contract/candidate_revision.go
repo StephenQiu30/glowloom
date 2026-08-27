@@ -27,6 +27,11 @@ type AggregateCandidateOrigin struct {
 	LeafCandidates    []AggregateLeafCandidateRef `json:"leaf_candidates"`
 }
 
+type RepairCandidateOrigin struct {
+	RepairInvocationID string `json:"repair_invocation_id"`
+	RepairResultHash   string `json:"repair_result_hash"`
+}
+
 type CandidateRevisionMaterial struct {
 	StageInstanceKey            string                     `json:"stage_instance_key"`
 	RevisionNo                  int64                      `json:"revision_no"`
@@ -34,6 +39,7 @@ type CandidateRevisionMaterial struct {
 	OriginKind                  string                     `json:"origin_kind"`
 	InvocationOrigin            *InvocationCandidateOrigin `json:"invocation_origin"`
 	AggregateOrigin             *AggregateCandidateOrigin  `json:"aggregate_origin,omitempty"`
+	RepairOrigin                *RepairCandidateOrigin     `json:"repair_origin,omitempty"`
 	CandidateContentHash        string                     `json:"candidate_content_hash"`
 }
 
@@ -44,13 +50,18 @@ func (value CandidateRevisionMaterial) Hash() (string, error) {
 	}
 	switch value.OriginKind {
 	case "invocation":
-		if value.InvocationOrigin == nil || value.AggregateOrigin != nil ||
+		if value.RevisionNo != 1 || value.ParentCandidateRevisionHash != nil ||
+			value.InvocationOrigin == nil || value.AggregateOrigin != nil || value.RepairOrigin != nil ||
 			value.InvocationOrigin.SourceInvocationID == "" ||
 			!hashPattern.MatchString(value.InvocationOrigin.SourceResultHash) {
 			return "", errors.New("invalid Stage invocation candidate origin")
 		}
+		if _, err := uuid.Parse(value.InvocationOrigin.SourceInvocationID); err != nil {
+			return "", errors.New("invalid Stage invocation candidate origin")
+		}
 	case "aggregate":
-		if value.InvocationOrigin != nil || value.AggregateOrigin == nil ||
+		if value.RevisionNo != 1 || value.ParentCandidateRevisionHash != nil ||
+			value.InvocationOrigin != nil || value.AggregateOrigin == nil || value.RepairOrigin != nil ||
 			value.AggregateOrigin.ManifestVersion < 1 ||
 			!hashPattern.MatchString(value.AggregateOrigin.ShardManifestHash) ||
 			len(value.AggregateOrigin.LeafCandidates) == 0 {
@@ -67,6 +78,16 @@ func (value CandidateRevisionMaterial) Hash() (string, error) {
 			if _, err := uuid.Parse(leaf.CandidateRevisionID); err != nil {
 				return "", errors.New("invalid Stage aggregate leaf candidate")
 			}
+		}
+	case "repair":
+		if value.RevisionNo < 2 || value.ParentCandidateRevisionHash == nil ||
+			!hashPattern.MatchString(*value.ParentCandidateRevisionHash) ||
+			value.InvocationOrigin != nil || value.AggregateOrigin != nil || value.RepairOrigin == nil ||
+			!hashPattern.MatchString(value.RepairOrigin.RepairResultHash) {
+			return "", errors.New("invalid Stage repair candidate origin")
+		}
+		if _, err := uuid.Parse(value.RepairOrigin.RepairInvocationID); err != nil {
+			return "", errors.New("invalid Stage repair candidate origin")
 		}
 	default:
 		return "", errors.New("invalid Stage candidate revision origin")
