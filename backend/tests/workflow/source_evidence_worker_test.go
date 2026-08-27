@@ -91,10 +91,12 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "script", DefinitionKey: "input.script_revision", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"document_revision_id":"` + fixture.scriptRevisionID.String() + `"}`)},
 				{ID: "evidence", DefinitionKey: "agent.source_evidence", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "story", DefinitionKey: "agent.story_analysis", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "story-review", DefinitionKey: "agent.story_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"max_repair_rounds":2}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
 				{ID: "evidence-to-story", FromNodeID: "evidence", FromPort: "evidence", ToNodeID: "story", ToPort: "evidence"},
+				{ID: "story-to-review", FromNodeID: "story", FromPort: "candidate", ToNodeID: "story-review", ToPort: "candidate"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -134,11 +136,17 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	storyAnalysisService := bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, FanIn: 2,
 	})
+	storyReviewService := bibleapp.NewStoryReviewService(
+		bibleStore,
+		bibleapp.NewStoryCandidateRepairService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}),
+		bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+	)
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		evidenceService,
 		storyAnalysisService,
+		storyReviewService,
 		bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
@@ -179,6 +187,10 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		bibleStore, storyAnalysisService, agent, func() time.Time { return time.Now().UTC() },
 		time.Millisecond, time.Minute, agentLogger,
 	)
+	storyReviewWorker := bibleapp.NewStoryReviewWorker(
+		bibleStore, agent, func() time.Time { return time.Now().UTC() },
+		time.Millisecond, time.Minute, agentLogger,
+	)
 	bibleWorker := bibleapp.NewWorker(
 		bibleStore, agent, func() time.Time { return time.Now().UTC() },
 		time.Millisecond, time.Minute, agentLogger,
@@ -187,6 +199,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	go agentWorker.Run(agentContext)
 	go storyWorker.Run(agentContext)
 	go storyWorker.Run(agentContext)
+	go storyReviewWorker.Run(agentContext)
+	go storyReviewWorker.Run(agentContext)
 	go bibleWorker.Run(agentContext)
 	t.Cleanup(stopAgent)
 
@@ -308,7 +322,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	}
 	deadlineReleaseOnce.Do(func() { close(deadlineRecoveryRelease) })
 
-	deadline := time.Now().Add(25 * time.Second)
+	deadline := time.Now().Add(50 * time.Second)
 	var persistedRun model.WorkflowRun
 	for {
 		if err = database.First(&persistedRun, "id = ?", run.ID).Error; err != nil {
@@ -559,6 +573,41 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		storyOutput.Bindings[0].Port != "candidate" || storyOutput.Bindings[0].ValueType != "story_reconciliation_candidate" {
 		t.Fatalf("Story analysis Node output=%#v hash=%s err=%v", storyOutput, storyOutputHash, err)
 	}
+	var reviewNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "story-review").First(&reviewNode).Error; err != nil {
+		t.Fatalf("load Story review NodeRun: %v", err)
+	}
+	if reviewNode.Status != "SUCCEEDED" || reviewNode.OutputHash == nil {
+		t.Fatalf("Story review NodeRun did not complete: %#v", reviewNode)
+	}
+	reviewOutput, _, reviewOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(reviewNode.Output))
+	if err != nil || reviewOutputHash != *reviewNode.OutputHash || len(reviewOutput.Bindings) != 1 ||
+		reviewOutput.Bindings[0].ReferenceVersion != "2" ||
+		reviewOutput.Bindings[0].ReferenceID == storyOutput.Bindings[0].ReferenceID ||
+		reviewOutput.Bindings[0].ContentHash == storyOutput.Bindings[0].ContentHash {
+		t.Fatalf("Story review did not publish the repaired Candidate Revision: output=%#v err=%v", reviewOutput, err)
+	}
+	var reviewManifests []model.ShardManifest
+	if err = database.Where("node_run_id = ? AND stage = ?", reviewNode.ID, bibledomain.ReviewStoryGraphStage).
+		Order("version").Find(&reviewManifests).Error; err != nil || len(reviewManifests) != 2 ||
+		reviewManifests[1].ParentManifestHash == nil ||
+		*reviewManifests[1].ParentManifestHash != reviewManifests[0].ManifestHash {
+		t.Fatalf("Story review did not persist a two-version bounded lineage: manifests=%#v err=%v", reviewManifests, err)
+	}
+	var reviewInvocationCount, repairInvocationCount int64
+	if err = database.Model(&model.AgentInvocation{}).
+		Where("node_run_id = ? AND stage = ? AND status = ?", reviewNode.ID, bibledomain.ReviewStoryGraphStage, "succeeded").
+		Count(&reviewInvocationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.AgentInvocation{}).
+		Where("node_run_id = ? AND stage = ? AND status = ?", reviewNode.ID, "repair_candidate", "succeeded").
+		Count(&repairInvocationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if reviewInvocationCount != 2 || repairInvocationCount != 1 {
+		t.Fatalf("bounded Story review invocation counts: review=%d repair=%d", reviewInvocationCount, repairInvocationCount)
+	}
 	beforeReplay := len(storyInvocations)
 	replayed, err := storyAnalysisService.Ensure(ctx, bibleapp.StoryAnalysisCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
@@ -566,8 +615,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		EvidenceCandidateRevisionID:   output.Bindings[0].ReferenceID,
 		EvidenceCandidateRevisionHash: output.Bindings[0].ContentHash,
 	})
-	if err != nil || replayed.Status != "ready" || replayed.CandidateRevisionID != storyOutput.Bindings[0].ReferenceID {
-		t.Fatalf("Story analysis replay drifted: state=%#v err=%v", replayed, err)
+	if !errors.Is(err, bibleapp.ErrStoryAnalysisUpstreamStale) || replayed.Status != "" {
+		t.Fatalf("Story analysis replay ignored the repaired Candidate Head: state=%#v err=%v", replayed, err)
 	}
 	var afterReplay int64
 	if err = database.Model(&model.AgentInvocation{}).Where("node_run_id = ?", storyNode.ID).Count(&afterReplay).Error; err != nil || afterReplay != int64(beforeReplay) {
@@ -644,6 +693,9 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 	_ int,
 	_ int64,
 ) (agentcontract.StageResult, error) {
+	if invocation.Payload.Stage == bibledomain.ReviewStoryGraphStage || invocation.Payload.Stage == "repair_candidate" {
+		return storyReviewFixtureResult(invocation)
+	}
 	if invocation.Payload.Stage == bibledomain.AnalyzeStoryStage || invocation.Payload.Stage == bibledomain.ReconcileStoryStage {
 		agent.mutex.Lock()
 		itemCount, countErr := storyFixtureInputItemCount(invocation)
@@ -765,6 +817,87 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 		Candidate: candidate, InputHash: invocation.InputHash, ResultHash: &resultHash,
 		Issues:   []agentcontract.StageIssue{},
 		Executor: agentcontract.Executor{Name: "test-agent", Version: "source-evidence-v1", Model: "deterministic-fixture"},
+	}, nil
+}
+
+func storyReviewFixtureResult(invocation agentcontract.StageInvocation) (agentcontract.StageResult, error) {
+	var candidate json.RawMessage
+	switch invocation.Payload.Stage {
+	case bibledomain.ReviewStoryGraphStage:
+		var input agentcontract.StoryGraphReviewStageInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+			return agentcontract.StageResult{}, err
+		}
+		var target bibledomain.StoryReconciliationCandidate
+		if err := json.Unmarshal(input.TargetCandidate, &target); err != nil || len(target.CanonicalEntities) == 0 {
+			return agentcontract.StageResult{}, errors.New("fixture Story review received no canonical entity")
+		}
+		issues := []agentcontract.StoryGraphReviewIssue{}
+		entity := target.CanonicalEntities[0]
+		if entity.CanonicalName != "已修复角色" {
+			if len(entity.Evidence) == 0 {
+				return agentcontract.StageResult{}, errors.New("fixture Story review received no entity Evidence")
+			}
+			evidence := entity.Evidence[0]
+			subject := entity.EntityKey
+			issues = append(issues, agentcontract.StoryGraphReviewIssue{
+				IssueKey: "review:canonical-name", Code: "canonical_name_ambiguous", Severity: "blocking",
+				Scope: "entity", SubjectKey: &subject, Summary: "角色规范名需要统一",
+				Evidence: []agentcontract.StoryGraphEvidence{{
+					SourceStart: evidence.SourceStart, SourceEnd: evidence.SourceEnd,
+					TextHash: evidence.TextHash, ExactAnchor: evidence.ExactAnchor,
+				}},
+			})
+		}
+		encoded, err := json.Marshal(agentcontract.StoryGraphReviewCandidate{
+			ReviewedStage:               input.ReviewedStage,
+			TargetCandidateRevisionID:   input.TargetCandidateRevisionID,
+			TargetCandidateRevisionHash: input.TargetCandidateRevisionHash,
+			ReviewIssues:                issues,
+		})
+		if err != nil {
+			return agentcontract.StageResult{}, err
+		}
+		candidate = encoded
+	case "repair_candidate":
+		var input agentcontract.StoryGraphRepairStageInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil || len(input.AllowedTargets) != 1 {
+			return agentcontract.StageResult{}, errors.New("fixture Story repair received an invalid boundary")
+		}
+		replacement := "已修复角色"
+		encoded, err := json.Marshal(agentcontract.CandidateRepairPatch{
+			TargetCandidateRevisionID:   input.TargetCandidateRevisionID,
+			TargetCandidateRevisionHash: input.TargetCandidateRevisionHash,
+			Operations: []agentcontract.StoryGraphRepairOperation{{
+				TargetCandidateKey: input.AllowedTargets[0].CandidateKey,
+				BaseFragmentHash:   input.AllowedTargets[0].BaseFragmentHash,
+				FieldName:          "canonical_name",
+				Replacement:        agentcontract.StoryGraphRepairReplacement{Text: &replacement},
+			}},
+			ReviewIssues: []agentcontract.StoryGraphReviewIssue{},
+		})
+		if err != nil {
+			return agentcontract.StageResult{}, err
+		}
+		candidate = encoded
+	default:
+		return agentcontract.StageResult{}, errors.New("fixture Story review stage is unsupported")
+	}
+	resultHash, err := agentcontract.CanonicalHash(candidate)
+	if err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	candidateType, ok := agentcontract.CandidateTypeForStage(invocation.Payload.Stage)
+	if !ok {
+		return agentcontract.StageResult{}, errors.New("fixture Story review stage has no candidate type")
+	}
+	return agentcontract.StageResult{
+		InvocationID: invocation.InvocationID, Kind: "storygraph_stage",
+		WireSchemaVersion: agentcontract.StoryGraphWireSchemaVersion,
+		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
+		Status: "succeeded", CandidateType: candidateType, Candidate: candidate,
+		InputHash: invocation.InputHash, ResultHash: &resultHash, Issues: []agentcontract.StageIssue{},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-review-v1", Model: "deterministic-fixture"},
 	}, nil
 }
 

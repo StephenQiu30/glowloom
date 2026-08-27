@@ -140,6 +140,11 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, ClaimLease: time.Minute,
 	})
+	storyReviewService := bibleapp.NewStoryReviewService(
+		bibleStore,
+		bibleapp.NewStoryCandidateRepairService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}),
+		bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+	)
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}),
@@ -147,7 +152,7 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 		bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, FanIn: 2,
 		}),
-		bibleService, projectService, planningService, storyboardService, reviewService,
+		storyReviewService, bibleService, projectService, planningService, storyboardService, reviewService,
 		nil, nil,
 	)
 	if err != nil {

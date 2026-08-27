@@ -144,6 +144,11 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 	evidenceService := bibleapp.NewSourceEvidenceService(bibleStore, bibleapp.SourceEvidenceConfig{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 	})
+	storyReviewService := bibleapp.NewStoryReviewService(
+		bibleStore,
+		bibleapp.NewStoryCandidateRepairService(bibleStore, bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
+	)
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
@@ -151,6 +156,7 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 		bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
 			Now: func() time.Time { return now }, NewID: uuid.NewString, FanIn: 2,
 		}),
+		storyReviewService,
 		bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),

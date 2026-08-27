@@ -225,6 +225,44 @@ func ApplyStoryCandidateRepairPatch(
 	return json.RawMessage(repaired), nil
 }
 
+func StoryCandidateRepairAllowedTarget(
+	candidate json.RawMessage,
+	candidateKey string,
+) (agentcontract.StoryGraphRepairAllowedTarget, error) {
+	if strings.TrimSpace(candidateKey) == "" {
+		return agentcontract.StoryGraphRepairAllowedTarget{}, errors.New("Story candidate repair target key is required")
+	}
+	var value map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(candidate))
+	decoder.UseNumber()
+	if err := decoder.Decode(&value); err != nil || value == nil {
+		return agentcontract.StoryGraphRepairAllowedTarget{}, errors.New("Story candidate repair parent must be one JSON object")
+	}
+	indexed, err := indexCandidateRepairFragments(value, map[string]struct{}{candidateKey: {}})
+	if err != nil {
+		return agentcontract.StoryGraphRepairAllowedTarget{}, err
+	}
+	fragment, exists := indexed[candidateKey]
+	if !exists {
+		return agentcontract.StoryGraphRepairAllowedTarget{}, errors.New("Story candidate repair target is absent from its frozen candidate")
+	}
+	encoded, err := json.Marshal(fragment)
+	if err != nil {
+		return agentcontract.StoryGraphRepairAllowedTarget{}, err
+	}
+	fields, err := agentcontract.StoryGraphRepairableFields(encoded)
+	if err != nil {
+		return agentcontract.StoryGraphRepairAllowedTarget{}, err
+	}
+	hash, err := agentcontract.StoryGraphCandidateFragmentHash(encoded)
+	if err != nil {
+		return agentcontract.StoryGraphRepairAllowedTarget{}, err
+	}
+	return agentcontract.StoryGraphRepairAllowedTarget{
+		CandidateKey: candidateKey, AllowedFields: fields, BaseFragmentHash: hash, Fragment: encoded,
+	}, nil
+}
+
 func StoryCandidateStaleClosure(
 	root CandidateRevisionRef,
 	appliedRepairInvocationID string,

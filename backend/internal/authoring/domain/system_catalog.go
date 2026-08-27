@@ -3,7 +3,7 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "4.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "5.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
@@ -16,6 +16,11 @@ func SystemCatalog() (Catalog, error) {
 		systemNodeDefinition(
 			"agent.story_analysis", "Story Reconciliation Candidate", "agent", "activity.story_analysis", "by_inputs", "external_ai",
 			[]PortDefinition{requiredPort("evidence", "source_evidence_candidate")}, []PortDefinition{requiredPort("candidate", "story_reconciliation_candidate")}, emptyNodeConfig(),
+		),
+		systemNodeDefinition(
+			"agent.story_review", "Story Candidate Review", "agent", "activity.story_review", "by_inputs", "external_ai",
+			[]PortDefinition{requiredPort("candidate", "story_reconciliation_candidate")}, []PortDefinition{requiredPort("candidate", "story_reconciliation_candidate")},
+			json.RawMessage(`{"type":"object","properties":{"max_repair_rounds":{"type":"integer","minimum":1,"maximum":3}},"required":["max_repair_rounds"],"additionalProperties":false}`),
 		),
 		systemNodeDefinition(
 			"agent.production_bible", "Production Bible Candidate", "agent", "activity.production_bible", "by_inputs", "external_ai",

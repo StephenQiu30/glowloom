@@ -108,11 +108,17 @@ func TestProductionWorkflowWorkerExecutesAuthorizedScriptWorkflow(t *testing.T) 
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 	})
+	storyReviewService := bibleapp.NewStoryReviewService(
+		bibleStore,
+		bibleapp.NewStoryCandidateRepairService(bibleStore, bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
+	)
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore, scriptService, evidenceService,
 		bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
 			Now: func() time.Time { return now }, NewID: uuid.NewString, FanIn: 2,
 		}),
+		storyReviewService,
 		bibleService,
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),

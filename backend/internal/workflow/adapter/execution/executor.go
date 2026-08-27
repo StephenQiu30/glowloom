@@ -33,6 +33,7 @@ func (executor *NodeExecutor) Execute(
 	case "workflow.input.script_revision",
 		"activity.source_evidence",
 		"activity.story_analysis",
+		"activity.story_review",
 		"activity.production_bible",
 		"activity.episode_plan",
 		"activity.episode_structure",

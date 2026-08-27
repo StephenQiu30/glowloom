@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "4.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "5.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -22,6 +22,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"agent.production_bible",
 		"agent.source_evidence",
 		"agent.story_analysis",
+		"agent.story_review",
 		"agent.storyboard_draft",
 		"human.episode_plan_review",
 		"human.episode_structure_review",
@@ -46,6 +47,33 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
+	}
+}
+
+func TestStoryReviewNodeFreezesBoundedRepairRounds(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph := authoring.Graph{
+		Nodes: []authoring.Node{
+			{ID: "script", DefinitionKey: "input.script_revision", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"document_revision_id":"00000000-0000-0000-0000-000000000001"}`)},
+			{ID: "evidence", DefinitionKey: "agent.source_evidence", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "story", DefinitionKey: "agent.story_analysis", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "review", DefinitionKey: "agent.story_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"max_repair_rounds":2}`)},
+		},
+		Edges: []authoring.Edge{
+			{ID: "script-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
+			{ID: "evidence-story", FromNodeID: "evidence", FromPort: "evidence", ToNodeID: "story", ToPort: "evidence"},
+			{ID: "story-review", FromNodeID: "story", FromPort: "candidate", ToNodeID: "review", ToPort: "candidate"},
+		},
+	}
+	if _, err = authoring.ValidateGraph(graph, catalog); err != nil {
+		t.Fatalf("bounded Story Review node was rejected: %v", err)
+	}
+	graph.Nodes[3].Config = json.RawMessage(`{"max_repair_rounds":4}`)
+	if _, err = authoring.ValidateGraph(graph, catalog); err == nil {
+		t.Fatal("Story Review accepted an unbounded repair budget")
 	}
 }
 

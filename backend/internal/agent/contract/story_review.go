@@ -308,6 +308,27 @@ func StoryGraphCandidateFragmentHash(fragment json.RawMessage) (string, error) {
 	return CanonicalHash(fragment)
 }
 
+func StoryGraphRepairableFields(fragment json.RawMessage) ([]string, error) {
+	if !jsonObject(fragment) {
+		return nil, errors.New("StoryGraph candidate fragment must be an object")
+	}
+	var value map[string]json.RawMessage
+	if err := decodeStrict(fragment, &value); err != nil {
+		return nil, err
+	}
+	fields := make([]string, 0, len(value))
+	for field := range value {
+		if _, supported := bibleRepairFields[field]; supported {
+			fields = append(fields, field)
+		}
+	}
+	slices.Sort(fields)
+	if len(fields) == 0 {
+		return nil, errors.New("StoryGraph candidate fragment has no repairable field")
+	}
+	return fields, nil
+}
+
 func storyReconciliationCandidateItemCount(raw json.RawMessage) (int, error) {
 	var value struct {
 		CanonicalEntities     []json.RawMessage `json:"canonical_entities"`

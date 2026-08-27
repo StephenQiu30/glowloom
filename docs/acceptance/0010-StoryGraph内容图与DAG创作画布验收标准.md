@@ -182,7 +182,7 @@
 - [x] `SGA-REP-001`（`SG-I10`、`SG-I22`）：模型 Review Issue 不冒充确定性 Gate/blocker。
 - [x] `SGA-REP-002`（`SG-I10`、`SG-I22`）：Repair Patch 冻结 target/allowlist/base/邻接且不能改已发布 Graph。
 - [x] `SGA-REP-003`（`SG-I10`、`SG-I22`）：expected Head 应用 N+1、幂等 Receipt 与并发单胜。
-- [ ] `SGA-REP-004`（`SG-I10`、`SG-I22`）：每轮重跑影响闭包 Gate/Review，有界预算耗尽不半成功。
+- [x] `SGA-REP-004`（`SG-I10`、`SG-I22`）：每轮重跑影响闭包 Gate/Review，有界预算耗尽不半成功。
 
 ### 3.4 Codex、错误、CI 与旅程
 
@@ -220,7 +220,7 @@
 - [x] `SG-I07`：真实 Review Workbench 与错误/unknown/a11y 完成。
 - [x] `SG-I08`：Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate 完成。
 - [x] `SG-I09`：Story analyze/reconcile map-tree 与 Candidate Revision 完成。
-- [ ] `SG-I10`：StoryGraph review 与有界 Repair/Gate 完成。
+- [x] `SG-I10`：StoryGraph review 与有界 Repair/Gate 完成。
 - [ ] `SG-I11`：Bible Human Gate/Confirm Receipt 且零资产物化完成。
 - [ ] `SG-I12`：Confirmed Bible 资产/Specification/State/ProductionBinding 原子物化完成。
 - [ ] `SG-I13`：Episode segmentation Candidate 与 coverage 完成。
@@ -454,4 +454,16 @@
 - 通过范围：以上证据完成 `SGA-CAN-004` 与 `SGA-REP-003`。当前只证明 Patch 原子应用、幂等 Receipt 与 stale closure；尚未创建 replacement Invocation、重跑闭包 Gate/Review 或处理轮次预算耗尽，因此 `SGA-REP-004` 与整个 `SG-I10` 继续保持未通过，最终 `agent-browser` 未执行。
 - Git：本 Evidence 与实现由描述候选修复幂等应用与精确失效闭包的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 91 条 Requirement 与 `SG-I01`–`SG-I09`，其余保持未通过。下一步继续且只允许完成 Temporal 驱动的有界 Gate/Review 闭包重跑与预算耗尽语义，不提前勾选 Human Gate 或后续实现。
+### 有界候选审核与自动修复闭环（2026-08-28）
+
+- Red 与 Workflow 契约：`backend/tests/authoring/graph_contract_test.go` 和 `backend/tests/workflow/story_review_executor_test.go` 先稳定失败于缺少 `agent.story_review`、Review Owner 与 Executor。Green 后 Catalog 只新增 `agent.story_review@1.0.0`，输入/输出均为 `story_reconciliation_candidate`，配置只允许显式 `max_repair_rounds=1..3`；Node pending 时保持 `RETRYING`，只有干净 current Revision 才产生 Output，预算耗尽返回失败且 Output 为空。
+- 持久有界闭环：Backend 为 current Candidate Head 创建 `review_storygraph` ShardManifest 与 Invocation，Review 成功后对同一精确 Candidate 重跑 `bible-deterministic-gate-v1`。排序后的首个可修 blocking Issue 才能创建冻结 Repair Invocation；Patch 经既有原子 Coordinator 产生 N+1 后，下一次 Temporal 持久轮询创建同 Manifest identity 的 V+1 与 replacement Review。Repair Invocation 的数据库计数是轮次事实，重启、重复 Activity、unknown 领取与并发 Worker 都不会重置预算；Gate blocker、模型失败、不可修边界和 `execution_budget_exceeded` 都停在 `needs_review/failed`，不会伪造成功或半成品 Output。
+- 单一事实源与边界：API 只运行 Review/Repair Agent Worker，`workflow-worker` 只通过 Application Owner 驱动闭环；二者复用 Backend Composition Root、唯一 PostgreSQL/GORM Catalog 和唯一 Temporal Workflow。实现只扩展既有 `ShardManifest` stage constraint，并复用 `AgentInvocation`、`StageCandidateRevision/Head`、`CommandReceipt` 与 `StageInstanceStaleness`，没有 Migration、Raw SQL、第二 ORM、第二数据库、Kafka Command Topic或 Agent 业务写入。
+- 真实 Workflow 剧本：全新 PostgreSQL `16.15` 与真实 Temporal 下，`Script → Source Evidence → Story Analysis → Story Review` 先生成一个 Evidence-scoped blocking Issue，再由 Repair 只修改允许的 `canonical_name`，随后对 Revision 2 重新 Review 并清零 blocker。最终 Review Node `SUCCEEDED` 且只输出 Revision 2；数据库中恰好 2 个父 Hash 相连的 Review Manifest、2 个成功 Review Invocation、1 个成功 Repair Invocation，旧根 Candidate id/hash 均未作为最终 Output。定向命令 `go test -count=1 -run TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce ./tests/workflow` 结果通过，耗时 `31.783s`；该旅程还验证旧 Story Analysis root 在 Head 切换后返回 exact upstream stale，而不是重放旧成功。
+- 预算与失败语义：`backend/tests/production/bible/story_review_cycle_test.go` 固定 Repair 轮次已用尽与模型调用 `execution_budget_exceeded` 两种路径都返回 `needs_review`；`backend/tests/workflow/story_review_executor_test.go` 固定该状态不得被转换为成功 Node 或任何 Output。确定性 Gate 每次都从 current Candidate 重新计算，Reviewer 结果不能携带或覆盖 Gate blocker。
+- 当前完整 CI：首次复用定向验收数据库运行全量测试时，Authoring 与 Workflow 的全库初始计数按设计发现旧事实，因此该轮记为失败；在本 feature 专属 PostgreSQL 中精确重建全新测试库后，Backend `gofmt`、`go vet ./...` 与 PostgreSQL/Temporal/MinIO/Kafka `4.3.1`/Elasticsearch、Logstash、Kibana `9.4.4` 下的 `go test -count=1 -p 1 ./...` 全通过，Workflow 包 `151.566s`。Agent Python `3.11.15` 的 Ruff check/format、Pyright、Pytest 为 `32 passed, 1 skipped`，唯一跳过项仍是已在前一交付单元真实通过的 opt-in Codex；Frontend OpenAPI 零漂移、lint/typecheck、18 个 Vitest 文件 54 项测试和 Next.js `16.2.12` production build 全通过，Delivery hygiene 继续保持独立测试目录与语言边界。
+- 镜像与故障部署：开发/生产 Compose 校验，Backend/Frontend/Agent 三镜像重建，Backend 三 Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Bundle 契约通过。首次独立 Backend 镜像探针因测试用 Agent secret 少于既有 32 字节门禁而正确 fail-fast，修正验收配置后 API、Workflow Worker 与 Event Worker 均连接真实依赖启动。随后隔离 Compose Project 完成注册、项目写入、日志脱敏检索和 Agent Bundle health；Filebeat/Logstash/Kibana 逐项停机不影响 Owner 写入与 Workflow，Kafka/Elasticsearch 停机时 Event Worker readiness 正确为 503、进程仍存活，恢复后重新 ready 且日志继续摄取。专属容器、网络和 Volume 已精确删除，原 development 镜像标签恢复，未触碰其他本地资源。
+- 通过范围：以上证据完成 `SGA-REP-004` 与 `SG-I10`。Bible Human Gate、Production Bible Confirm/资产物化、Episode/Shot/Canvas、完整原稿和最终浏览器验收仍未实现；因此 `SG-I11` 以后与 `SGA-JRN-001` 保持未通过，`agent-browser` 按既定顺序未执行。
+- Git：本 Evidence 与实现由描述有界候选审核和自动修复的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 91 条 Requirement 与 `SG-I01`–`SG-I10`，其余保持未通过。下一步继续且只允许完成 Bible Human Gate 与 Production Bible Confirm Receipt，blocker 未清零、Decision/Receipt/Node output 不精确绑定或恢复失败时不得进入资产物化。
