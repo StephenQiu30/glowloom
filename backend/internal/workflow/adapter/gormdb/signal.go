@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
@@ -398,16 +399,22 @@ func expectedHumanGateSubject(
 	if err != nil {
 		return "", uuid.Nil, 0, "", err
 	}
-	if node.Executor != "gate.production_bible_review" || node.DefinitionVersion != "2.0.0" {
+	productionBibleV2 := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
+	episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
+	if !productionBibleV2 && !episodePlanV2 {
 		return humanGateSubjectType(node.Executor), node.ID, node.Revision, resolved.InputHash, nil
 	}
 	if len(resolved.Input.Bindings) != 1 {
-		return "", uuid.Nil, 0, "", errors.New("Production Bible Human Gate input has drifted")
+		return "", uuid.Nil, 0, "", errors.New("StoryGraph Human Gate input has drifted")
 	}
 	candidate := resolved.Input.Bindings[0]
-	if candidate.Port != "candidate" || candidate.ValueType != "story_reconciliation_candidate" ||
+	expectedValueType, subjectType := "story_reconciliation_candidate", "story_reconciliation_candidate"
+	if episodePlanV2 {
+		expectedValueType, subjectType = "episode_segmentation_candidate", "episode_plan_candidate"
+	}
+	if candidate.Port != "candidate" || candidate.ValueType != expectedValueType ||
 		candidate.SourceKind != domain.NodeInputSourceNodeOutput || len(candidate.ContentHash) != 64 {
-		return "", uuid.Nil, 0, "", errors.New("Production Bible Human Gate Candidate has drifted")
+		return "", uuid.Nil, 0, "", errors.New("StoryGraph Human Gate Candidate has drifted")
 	}
 	candidateID, err := uuid.Parse(candidate.ReferenceID)
 	if err != nil {
@@ -417,7 +424,7 @@ func expectedHumanGateSubject(
 	if err != nil || candidateRevision < 1 {
 		return "", uuid.Nil, 0, "", errors.New("Production Bible Human Gate Candidate revision is invalid")
 	}
-	return "story_reconciliation_candidate", candidateID, candidateRevision, candidate.ContentHash, nil
+	return subjectType, candidateID, candidateRevision, candidate.ContentHash, nil
 }
 
 func humanTaskContainsDecision(raw []byte, decision string) bool {
@@ -521,9 +528,14 @@ func validateHumanGateOwnerEvidence(
 	if err := transaction.First(&receipt, "id = ?", *apply.OwnerReceiptID).Error; err != nil {
 		return normalizeNotFound(err)
 	}
-	expectedOperation, supported := humanGateOwnerOperation(node.Executor)
+	expectedOperation, supported := humanGateOwnerOperation(node)
+	episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
+	receiptMatchesOutput := receipt.ResourceID.String() == binding.ReferenceID
+	if episodePlanV2 {
+		receiptMatchesOutput = receipt.ID.String() == binding.ReferenceID && receipt.ResourceID.String() == candidate.ReferenceID
+	}
 	if !supported || *apply.OwnerOperation != expectedOperation || receipt.WorkspaceID != run.WorkspaceID || receipt.Operation != *apply.OwnerOperation ||
-		receipt.ResourceID.String() != binding.ReferenceID || receipt.CreatedBy != apply.CreatedBy {
+		!receiptMatchesOutput || receipt.CreatedBy != apply.CreatedBy {
 		return errors.New("workflow human gate owner receipt has drifted")
 	}
 	if node.Executor == "gate.production_bible_review" {
@@ -544,14 +556,69 @@ func validateHumanGateOwnerEvidence(
 			return errors.New("Production Bible Version does not match the frozen Candidate and ReviewDecision")
 		}
 	}
+	if episodePlanV2 {
+		var set struct {
+			ID                    string `json:"id"`
+			WorkspaceID           string `json:"workspace_id"`
+			ProjectID             string `json:"project_id"`
+			CandidateRevisionID   string `json:"candidate_revision_id"`
+			CandidateRevisionHash string `json:"candidate_revision_hash"`
+			CandidateRevision     int64  `json:"candidate_revision"`
+			DocumentRevisionID    string `json:"document_revision_id"`
+			DocumentRevisionHash  string `json:"document_revision_hash"`
+			ContentHash           string `json:"content_hash"`
+			Episodes              []struct {
+				EpisodeID       string `json:"episode_id"`
+				ScriptVersionID string `json:"script_version_id"`
+				ContentHash     string `json:"content_hash"`
+				Position        int    `json:"position"`
+				SourceStart     int    `json:"source_start"`
+				SourceEnd       int    `json:"source_end"`
+			} `json:"episodes"`
+		}
+		if err := json.Unmarshal(receipt.Result, &set); err != nil || set.ID != receipt.ID.String() ||
+			set.WorkspaceID != run.WorkspaceID.String() || set.ProjectID != run.ProjectID.String() ||
+			set.CandidateRevisionID != candidate.ReferenceID || set.CandidateRevisionHash != candidate.ContentHash ||
+			set.CandidateRevision != int64(task.SubjectRevision) || set.ContentHash != binding.ContentHash || len(set.Episodes) == 0 {
+			return errors.New("Episode set Receipt does not match the frozen Candidate")
+		}
+		setHash, hashErr := platformcommand.InputHash(set.Episodes)
+		if hashErr != nil || setHash != set.ContentHash {
+			return errors.New("Episode set Receipt content hash has drifted")
+		}
+		for _, item := range set.Episodes {
+			episodeID, episodeErr := uuid.Parse(item.EpisodeID)
+			versionID, versionErr := uuid.Parse(item.ScriptVersionID)
+			if episodeErr != nil || versionErr != nil {
+				return errors.New("Episode set Receipt contains an invalid owner identity")
+			}
+			var episode model.Episode
+			if err := transaction.First(&episode, "id = ?", episodeID).Error; err != nil {
+				return normalizeNotFound(err)
+			}
+			var version model.EpisodeScriptVersion
+			if err := transaction.First(&version, "id = ?", versionID).Error; err != nil {
+				return normalizeNotFound(err)
+			}
+			if episode.WorkspaceID != run.WorkspaceID || episode.ProjectID != run.ProjectID || episode.Position != item.Position ||
+				episode.CurrentScriptVersionID == nil || *episode.CurrentScriptVersionID != version.ID ||
+				version.EpisodeID != episode.ID || version.Status != "published" || version.SourceStart != item.SourceStart ||
+				version.SourceEnd != item.SourceEnd || version.ContentHash != item.ContentHash {
+				return errors.New("Episode set owner facts have drifted")
+			}
+		}
+	}
 	return nil
 }
 
-func humanGateOwnerOperation(executor string) (string, bool) {
-	switch executor {
+func humanGateOwnerOperation(node model.NodeRunProjection) (string, bool) {
+	switch node.Executor {
 	case "gate.production_bible_review":
 		return "production_bible.confirm", true
 	case "gate.episode_plan_review":
+		if node.DefinitionVersion == "2.0.0" {
+			return "episode_plan.apply", true
+		}
 		return "episode_plan.confirm", true
 	case "gate.episode_structure_review":
 		return "episode_structure.confirm_batch", true

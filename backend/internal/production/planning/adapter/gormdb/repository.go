@@ -4,15 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 )
@@ -178,6 +181,253 @@ func (repo *repository) HasConfirmedBible(ctx context.Context, projectID, revisi
 	var count int64
 	err = repo.database.WithContext(ctx).Model(&model.ProductionBible{}).Where("project_id = ? AND document_revision_id = ? AND status = ?", project, revision, "confirmed").Count(&count).Error
 	return count > 0, err
+}
+
+func (repo *repository) GetEpisodeSegmentationSource(
+	ctx context.Context,
+	actor application.Actor,
+	candidateRevisionID string,
+	forUpdate bool,
+) (application.EpisodeSegmentationSource, error) {
+	candidateID, err := uuid.Parse(candidateRevisionID)
+	if err != nil {
+		return application.EpisodeSegmentationSource{}, application.ErrNotFound
+	}
+	query := repo.database.WithContext(ctx).Where("id = ?", candidateID)
+	if forUpdate {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var candidate model.StageCandidateRevision
+	if err = query.First(&candidate).Error; err != nil {
+		return application.EpisodeSegmentationSource{}, normalizeNotFound(err)
+	}
+	var head model.StageCandidateHead
+	headQuery := repo.database.WithContext(ctx).Where("workspace_id = ? AND stage_instance_key = ?", candidate.WorkspaceID, candidate.StageInstanceKey)
+	if forUpdate {
+		headQuery = headQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	if err = headQuery.First(&head).Error; err != nil {
+		return application.EpisodeSegmentationSource{}, normalizeNotFound(err)
+	}
+	if head.CurrentRevisionID != candidate.ID || head.CurrentCandidateRevisionHash != candidate.CandidateRevisionHash ||
+		head.Revision != candidate.RevisionNo || candidate.OriginKind != "invocation" || candidate.SourceInvocationID == nil ||
+		candidate.SourceResultHash == nil || *candidate.SourceResultHash != candidate.CandidateContentHash {
+		return application.EpisodeSegmentationSource{}, &application.Error{
+			Code: "resource_conflict", Message: "Episode segmentation Candidate head changed before approval", Status: 409,
+		}
+	}
+	contentHash, err := agentcontract.CanonicalHash(json.RawMessage(candidate.Candidate))
+	if err != nil || contentHash != candidate.CandidateContentHash {
+		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation Candidate content hash has drifted")
+	}
+	var invocation model.AgentInvocation
+	if err = repo.database.WithContext(ctx).First(&invocation, "id = ?", *candidate.SourceInvocationID).Error; err != nil {
+		return application.EpisodeSegmentationSource{}, normalizeNotFound(err)
+	}
+	request, err := episodeSegmentationInvocation(invocation)
+	if err != nil ||
+		invocation.WorkspaceID != candidate.WorkspaceID || invocation.Stage != bibledomain.EpisodeSegmentationStage ||
+		invocation.Status != "succeeded" || invocation.ResultHash == nil || *invocation.ResultHash != candidate.CandidateContentHash ||
+		invocation.CandidateType == nil || *invocation.CandidateType != "episode_segmentation_candidate" {
+		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation Candidate invocation has drifted")
+	}
+	if persistedHash, hashErr := agentcontract.CanonicalHash(json.RawMessage(invocation.Candidate)); hashErr != nil || persistedHash != candidate.CandidateContentHash {
+		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation Candidate invocation result has drifted")
+	}
+	projectID, err := uuid.Parse(request.Payload.ProjectID)
+	if err != nil || request.Payload.WorkspaceID != candidate.WorkspaceID.String() {
+		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation Candidate owner has drifted")
+	}
+	if err = authorizeProject(ctx, repo.database, actor, projectID, forUpdate); err != nil {
+		return application.EpisodeSegmentationSource{}, err
+	}
+	var input agentcontract.EpisodeSegmentationStageInput
+	if err = json.Unmarshal(request.Payload.StageInput, &input); err != nil {
+		return application.EpisodeSegmentationSource{}, err
+	}
+	documentRevisionID, err := uuid.Parse(input.DocumentRevisionID)
+	if err != nil {
+		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation source revision is invalid")
+	}
+	var revision model.DocumentRevision
+	if err = repo.database.WithContext(ctx).First(&revision, "id = ?", documentRevisionID).Error; err != nil {
+		return application.EpisodeSegmentationSource{}, normalizeNotFound(err)
+	}
+	if revision.WorkspaceID != candidate.WorkspaceID || revision.NormalizedHash != input.NormalizedHash ||
+		revision.CodepointCount != input.SourceCodePoints || revision.CodepointCount != len([]rune(revision.NormalizedText)) {
+		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation source revision has drifted")
+	}
+	allowed := make([]bibledomain.Evidence, 0, len(input.EvidenceIndex)+len(input.MarkerHints))
+	for _, item := range input.EvidenceIndex {
+		allowed = append(allowed, episodeSegmentationEvidence(item.Evidence))
+	}
+	markers := make([]bibledomain.EpisodeSegmentationMarker, 0, len(input.MarkerHints))
+	for _, marker := range input.MarkerHints {
+		evidence := episodeSegmentationEvidence(marker.Evidence)
+		allowed = append(allowed, evidence)
+		markers = append(markers, bibledomain.EpisodeSegmentationMarker{
+			EpisodeNumber: marker.EpisodeNumber, Label: marker.Label, Evidence: evidence,
+		})
+	}
+	decoded, err := bibledomain.DecodeEpisodeSegmentationCandidate(
+		json.RawMessage(candidate.Candidate), revision.NormalizedText, allowed, markers,
+	)
+	if err != nil {
+		return application.EpisodeSegmentationSource{}, fmt.Errorf("invalid persisted Episode segmentation Candidate: %w", err)
+	}
+	return application.EpisodeSegmentationSource{
+		CandidateRevisionID: candidate.ID.String(), CandidateRevisionHash: candidate.CandidateRevisionHash,
+		CandidateRevision: candidate.RevisionNo, WorkspaceID: candidate.WorkspaceID.String(), ProjectID: projectID.String(),
+		DocumentRevisionID: revision.ID.String(), DocumentRevisionHash: revision.NormalizedHash,
+		NormalizedText: revision.NormalizedText, TargetDurationMS: input.TargetDurationMS,
+		AllowedEvidence: allowed, Markers: markers, Candidate: decoded,
+	}, nil
+}
+
+func (repo *repository) GetEpisodeSet(
+	ctx context.Context,
+	actor application.Actor,
+	reference application.EpisodeSetReference,
+) ([]domain.Episode, []application.Version, error) {
+	projectID, err := uuid.Parse(reference.ProjectID)
+	if err != nil {
+		return nil, nil, application.ErrNotFound
+	}
+	if err = authorizeProject(ctx, repo.database, actor, projectID, false); err != nil {
+		return nil, nil, err
+	}
+	episodeIDs := make([]uuid.UUID, len(reference.Episodes))
+	versionIDs := make([]uuid.UUID, len(reference.Episodes))
+	for index, item := range reference.Episodes {
+		if episodeIDs[index], err = uuid.Parse(item.EpisodeID); err != nil {
+			return nil, nil, application.ErrNotFound
+		}
+		if versionIDs[index], err = uuid.Parse(item.ScriptVersionID); err != nil {
+			return nil, nil, application.ErrNotFound
+		}
+	}
+	var episodeRecords []model.Episode
+	if err = repo.database.WithContext(ctx).Where("project_id = ? AND id IN ?", projectID, episodeIDs).Find(&episodeRecords).Error; err != nil {
+		return nil, nil, err
+	}
+	var versionRecords []model.EpisodeScriptVersion
+	if err = repo.database.WithContext(ctx).Where("project_id = ? AND id IN ?", projectID, versionIDs).Find(&versionRecords).Error; err != nil {
+		return nil, nil, err
+	}
+	episodesByID := make(map[string]domain.Episode, len(episodeRecords))
+	for _, record := range episodeRecords {
+		episodesByID[record.ID.String()] = episodeDomain(record)
+	}
+	versionsByID := make(map[string]application.Version, len(versionRecords))
+	for _, record := range versionRecords {
+		versionsByID[record.ID.String()] = versionDomain(record)
+	}
+	episodes := make([]domain.Episode, len(reference.Episodes))
+	versions := make([]application.Version, len(reference.Episodes))
+	for index, item := range reference.Episodes {
+		var exists bool
+		if episodes[index], exists = episodesByID[item.EpisodeID]; !exists {
+			return nil, nil, application.ErrNotFound
+		}
+		if versions[index], exists = versionsByID[item.ScriptVersionID]; !exists {
+			return nil, nil, application.ErrNotFound
+		}
+	}
+	return episodes, versions, nil
+}
+
+func (repo *repository) ApplyEpisodeSet(
+	ctx context.Context,
+	episodes []domain.Episode,
+	versions []application.Version,
+	events []domain.OutboxEvent,
+) error {
+	if len(episodes) == 0 || len(episodes) != len(versions) || len(episodes) != len(events) {
+		return errors.New("Episode set batch is incomplete")
+	}
+	projectID, err := uuid.Parse(episodes[0].ProjectID)
+	if err != nil {
+		return err
+	}
+	var project model.Project
+	if err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).First(&project, "id = ?", projectID).Error; err != nil {
+		return normalizeNotFound(err)
+	}
+	var existing int64
+	if err = repo.database.WithContext(ctx).Model(&model.Episode{}).Where("project_id = ?", projectID).Count(&existing).Error; err != nil {
+		return err
+	}
+	if existing != 0 {
+		return &application.Error{Code: "resource_conflict", Message: "Project Episode boundaries changed before approval", Status: 409}
+	}
+	episodeRecords := make([]model.Episode, len(episodes))
+	for index, value := range episodes {
+		if value.ProjectID != episodes[0].ProjectID || value.WorkspaceID != episodes[0].WorkspaceID {
+			return errors.New("Episode set owner changed within the batch")
+		}
+		episodeRecords[index], err = episodeRecord(value)
+		if err != nil {
+			return err
+		}
+	}
+	versionRecords := make([]model.EpisodeScriptVersion, len(versions))
+	for index, value := range versions {
+		versionRecords[index], err = versionRecord(value)
+		if err != nil {
+			return err
+		}
+	}
+	eventRecords := make([]model.OutboxEvent, len(events))
+	for index, value := range events {
+		eventRecords[index], err = outboxRecord(value)
+		if err != nil {
+			return err
+		}
+	}
+	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&episodeRecords).Error; err != nil {
+		return err
+	}
+	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&versionRecords).Error; err != nil {
+		return err
+	}
+	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&eventRecords).Error; err != nil {
+		return err
+	}
+	updated := repo.database.WithContext(ctx).Model(&model.Project{}).Where("id = ? AND revision = ?", project.ID, project.Revision).
+		Updates(map[string]any{"revision": project.Revision + 1, "updated_at": episodes[0].UpdatedAt})
+	if updated.Error != nil {
+		return updated.Error
+	}
+	if updated.RowsAffected != 1 {
+		return &application.Error{Code: "resource_conflict", Message: "Project changed before Episode Plan approval", Status: 409}
+	}
+	return nil
+}
+
+func episodeSegmentationEvidence(value agentcontract.EpisodeSegmentationEvidence) bibledomain.Evidence {
+	return bibledomain.Evidence{
+		SourceStart: value.SourceStart, SourceEnd: value.SourceEnd, TextHash: value.TextHash,
+		ExactAnchor: value.ExactAnchor, EpisodeNumber: value.EpisodeNumber,
+	}
+}
+
+func episodeSegmentationInvocation(record model.AgentInvocation) (agentcontract.StageInvocation, error) {
+	var policy agentcontract.StageExecutionPolicy
+	if err := json.Unmarshal(record.ExecutionPolicy, &policy); err != nil {
+		return agentcontract.StageInvocation{}, err
+	}
+	var payload agentcontract.StageInvocationPayload
+	if err := json.Unmarshal(record.Payload, &payload); err != nil {
+		return agentcontract.StageInvocation{}, err
+	}
+	value := agentcontract.StageInvocation{
+		InvocationID: record.ID.String(), Kind: record.Kind, WireSchemaVersion: record.WireSchemaVersion,
+		InputHash: record.InputHash, ExecutionPolicy: policy, Payload: payload,
+	}
+	if err := agentcontract.ValidateEpisodeSegmentationInvocation(value); err != nil {
+		return agentcontract.StageInvocation{}, err
+	}
+	return value, nil
 }
 
 func (repo *repository) Materialize(ctx context.Context, plan domain.Plan, commit domain.ImportCommit, episodes []domain.Episode, versions []application.Version) error {
@@ -486,7 +736,28 @@ func episodeRecord(value domain.Episode) (model.Episode, error) {
 	if err != nil {
 		return model.Episode{}, err
 	}
-	return model.Episode{ID: id, WorkspaceID: workspace, ProjectID: project, Name: value.Name, Position: value.Position, TargetDurationMS: value.TargetDurationMS, Status: value.Status, Revision: value.Revision, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt}, nil
+	var currentScriptVersionID *uuid.UUID
+	if value.CurrentScriptVersionID != nil {
+		parsed, parseErr := uuid.Parse(*value.CurrentScriptVersionID)
+		if parseErr != nil {
+			return model.Episode{}, parseErr
+		}
+		currentScriptVersionID = &parsed
+	}
+	var currentTimelineVersionID *uuid.UUID
+	if value.CurrentTimelineVersionID != nil {
+		parsed, parseErr := uuid.Parse(*value.CurrentTimelineVersionID)
+		if parseErr != nil {
+			return model.Episode{}, parseErr
+		}
+		currentTimelineVersionID = &parsed
+	}
+	return model.Episode{
+		ID: id, WorkspaceID: workspace, ProjectID: project, Name: value.Name,
+		Position: value.Position, TargetDurationMS: value.TargetDurationMS, Status: value.Status,
+		Revision: value.Revision, CurrentScriptVersionID: currentScriptVersionID,
+		CurrentTimelineVersionID: currentTimelineVersionID, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}, nil
 }
 func episodeDomain(record model.Episode) domain.Episode {
 	var current *string
@@ -527,6 +798,16 @@ func versionRecord(value application.Version) (model.EpisodeScriptVersion, error
 		return model.EpisodeScriptVersion{}, err
 	}
 	return model.EpisodeScriptVersion{ID: id, WorkspaceID: workspace, ProjectID: project, EpisodeID: episode, VersionNo: value.VersionNo, DocumentRevisionID: revision, SourceStart: value.SourceStart, SourceEnd: value.SourceEnd, Content: value.Content, ContentHash: value.ContentHash, Status: value.Status, CreatedBy: creator, CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt}, nil
+}
+
+func versionDomain(value model.EpisodeScriptVersion) application.Version {
+	return application.Version{
+		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
+		EpisodeID: value.EpisodeID.String(), DocumentRevisionID: value.DocumentRevisionID.String(),
+		VersionNo: value.VersionNo, SourceStart: value.SourceStart, SourceEnd: value.SourceEnd,
+		Content: value.Content, ContentHash: value.ContentHash, Status: value.Status,
+		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt,
+	}
 }
 
 func outboxRecord(value domain.OutboxEvent) (model.OutboxEvent, error) {

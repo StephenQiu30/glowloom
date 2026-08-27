@@ -84,6 +84,40 @@ func TestHumanGateSignalReusesStableIdentityUntilUnknownIsReconciled(t *testing.
 	}
 }
 
+func TestRejectedEpisodePlanGateResumesWithoutCallingThePlanningOwner(t *testing.T) {
+	now := time.Date(2026, time.August, 28, 9, 0, 0, 0, time.UTC)
+	repository := newSignalRepository()
+	repository.application = workflow.HumanGateOwnerApplication{
+		ProjectID: "project-1", Executor: "gate.episode_plan_review", Decision: "rejected",
+		Candidate: workflow.NodeInputBinding{
+			Port: "candidate", ValueType: "episode_segmentation_candidate", SourceKind: workflow.NodeInputSourceNodeOutput,
+			ReferenceID: "00000000-0000-0000-0000-000000000401", ReferenceVersion: "1", ContentHash: strings.Repeat("e", 64),
+		},
+		OutputPort: "episodes", OutputValueType: "episode_set",
+	}
+	owner := &scriptedGateOwner{}
+	signaler := &scriptedSignaler{outcomes: []workflow.SignalObservation{{
+		Outcome: workflow.SignalOutcomeSignaled, ObservedInputHash: "match_request",
+	}}}
+	service := workflowapp.NewSignalService(repository, signaler, workflowapp.SignalConfig{
+		Now:   func() time.Time { now = now.Add(time.Second); return now },
+		NewID: func() string { return "00000000-0000-0000-0000-000000000402" }, Owner: owner,
+	})
+	intent, err := service.SignalHumanGate(context.Background(), workflowapp.Actor{
+		UserID: "reviewer-1", TokenVersion: 1,
+	}, workflowapp.SignalHumanGateCommand{
+		WorkspaceID: "workspace-1", WorkflowRunID: "run-1", NodeRunID: "node-run-1",
+		HumanTaskID: "task-1", ReviewDecisionID: "decision-1", SubjectRevision: 1,
+		Decision: "rejected", IdempotencyKey: "episode-plan-rejected",
+	})
+	if err != nil || intent.Status != "completed" || owner.calls != 0 ||
+		repository.prepared.ApplyReceipt.Status != "not_required" || repository.prepared.ApplyReceipt.OwnerReceiptID != "" ||
+		repository.prepared.ApplyReceipt.OutputHash != "" || len(repository.prepared.ApplyReceipt.Output.Bindings) != 0 {
+		t.Fatalf("rejected Episode Plan Gate produced an owner effect: intent=%#v apply=%#v owner_calls=%d err=%v",
+			intent, repository.prepared.ApplyReceipt, owner.calls, err)
+	}
+}
+
 type signalRepository struct {
 	mu          sync.Mutex
 	prepared    workflow.SignalPreparation

@@ -690,6 +690,7 @@ func (store *Store) PrepareHumanGate(
 		var candidateSet domain.NodeInputBinding
 		candidateRevision := 0
 		productionBibleV2 := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
+		episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
 		if node.Executor == "gate.generation_image_review" {
 			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidates" ||
 				resolved.Input.Bindings[0].ValueType != "generation_candidate_set" ||
@@ -706,6 +707,17 @@ func (store *Store) PrepareHumanGate(
 			parsedCandidateRevision, parseErr := strconv.Atoi(resolved.Input.Bindings[0].ReferenceVersion)
 			if parseErr != nil || parsedCandidateRevision < 1 || len(resolved.Input.Bindings[0].ContentHash) != 64 {
 				return errors.New("workflow Production Bible Human Gate Candidate Revision is invalid")
+			}
+			candidateRevision = parsedCandidateRevision
+		} else if episodePlanV2 {
+			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidate" ||
+				resolved.Input.Bindings[0].ValueType != "episode_segmentation_candidate" ||
+				resolved.Input.Bindings[0].SourceKind != domain.NodeInputSourceNodeOutput || len(candidateIDs) != 1 {
+				return errors.New("workflow Episode Plan Human Gate has no Episode segmentation Candidate input")
+			}
+			parsedCandidateRevision, parseErr := strconv.Atoi(resolved.Input.Bindings[0].ReferenceVersion)
+			if parseErr != nil || parsedCandidateRevision < 1 || len(resolved.Input.Bindings[0].ContentHash) != 64 {
+				return errors.New("workflow Episode Plan Human Gate Candidate Revision is invalid")
 			}
 			candidateRevision = parsedCandidateRevision
 		} else if len(candidateIDs) == 0 {
@@ -752,6 +764,10 @@ func (store *Store) PrepareHumanGate(
 		if productionBibleV2 {
 			candidate := resolved.Input.Bindings[0]
 			subjectType, subjectID, subjectHash = "story_reconciliation_candidate", candidate.ReferenceID, candidate.ContentHash
+			subjectRevision = candidateRevision
+		} else if episodePlanV2 {
+			candidate := resolved.Input.Bindings[0]
+			subjectType, subjectID, subjectHash = "episode_plan_candidate", candidate.ReferenceID, candidate.ContentHash
 			subjectRevision = candidateRevision
 		}
 		binding = domain.HumanGateBinding{
@@ -852,7 +868,10 @@ func (store *Store) ApplyHumanGate(
 		} else if decision == "changes_requested" {
 			progressStage, nextAction = "human_gate:changes_requested", "revise_node_output"
 		}
-		if node.Status == targetNodeStatus && node.Revision == apply.SubjectRevision+1 {
+		candidateRevisionSubject :=
+			node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0" ||
+				node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
+		if node.Status == targetNodeStatus && (candidateRevisionSubject || node.Revision == apply.SubjectRevision+1) {
 			if targetNodeStatus != "SUCCEEDED" {
 				return nil
 			}
@@ -863,7 +882,7 @@ func (store *Store) ApplyHumanGate(
 			}
 			return errors.New("completed workflow human gate output has drifted")
 		}
-		if node.Status != "WAITING_HUMAN" || node.Revision != apply.SubjectRevision || run.Status != "WAITING_HUMAN" {
+		if node.Status != "WAITING_HUMAN" || !candidateRevisionSubject && node.Revision != apply.SubjectRevision || run.Status != "WAITING_HUMAN" {
 			return &application.Error{Code: "resource_conflict", Message: "Workflow human gate changed before decision application", Status: 409}
 		}
 		node.Status = targetNodeStatus

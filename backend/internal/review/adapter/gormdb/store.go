@@ -491,7 +491,7 @@ func (store *Store) Decide(
 			task.ClaimToken == nil || *task.ClaimToken != token || task.ClaimExpiresAt == nil || !task.ClaimExpiresAt.After(now) {
 			return conflict("Human task changed before decision")
 		}
-		stale, err = staleProductionBibleCandidateTask(transaction, &task, now)
+		stale, err = staleStoryGraphCandidateTask(transaction, &task, now)
 		if err != nil || stale {
 			return err
 		}
@@ -533,13 +533,13 @@ func (store *Store) Decide(
 		return storeResultReceipt(ctx, transaction, task.WorkspaceID, decideOperation, command.IdempotencyKey, inputHash, task.ID, actorID, result, now)
 	})
 	if err == nil && stale {
-		return domain.DecisionResult{}, conflict("Production Bible Candidate changed before decision")
+		return domain.DecisionResult{}, conflict("StoryGraph Candidate changed before decision")
 	}
 	return result, err
 }
 
-func staleProductionBibleCandidateTask(transaction *gorm.DB, task *model.HumanTask, now time.Time) (bool, error) {
-	if task.SubjectType != "story_reconciliation_candidate" {
+func staleStoryGraphCandidateTask(transaction *gorm.DB, task *model.HumanTask, now time.Time) (bool, error) {
+	if task.SubjectType != "story_reconciliation_candidate" && task.SubjectType != "episode_plan_candidate" {
 		return false, nil
 	}
 	var revision model.StageCandidateRevision

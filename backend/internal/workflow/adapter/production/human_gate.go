@@ -19,6 +19,7 @@ import (
 const (
 	productionBibleConfirmOperation       = "production_bible.confirm"
 	episodePlanConfirmOperation           = "episode_plan.confirm"
+	episodePlanApplyOperation             = "episode_plan.apply"
 	episodeStructureBatchConfirmOperation = "episode_structure.confirm_batch"
 	storyboardApplySetOperation           = "storyboard.apply_set"
 )
@@ -29,6 +30,7 @@ type BibleOwner interface {
 
 type PlanningConfirmationOwner interface {
 	ConfirmPlan(context.Context, planningapp.Actor, planningapp.ConfirmPlanCommand) (planningapp.ConfirmPlanResult, error)
+	ApplyEpisodePlan(context.Context, planningapp.Actor, planningapp.ApplyEpisodePlanCommand) (planningapp.ApplyEpisodePlanResult, error)
 	ConfirmPublishedStructureBatch(context.Context, planningapp.Actor, planningapp.ConfirmStructureBatchCommand) (planningapp.ConfirmStructureBatchResult, error)
 }
 
@@ -231,6 +233,9 @@ func (applier *Applier) applyEpisodePlan(
 	actor workflowapp.Actor,
 	application domain.HumanGateOwnerApplication,
 ) (domain.HumanGateOwnerResult, error) {
+	if application.Candidate.ValueType == "episode_segmentation_candidate" {
+		return applier.applyEpisodeSegmentation(ctx, actor, application)
+	}
 	if applier.plans == nil || application.Candidate.ValueType != "episode_plan_candidate" ||
 		application.OutputPort != "episodes" || application.OutputValueType != "episode_plan" {
 		return domain.HumanGateOwnerResult{}, errors.New("unsupported workflow human gate owner application")
@@ -258,6 +263,52 @@ func (applier *Applier) applyEpisodePlan(
 		Bindings: []domain.NodeOutputBinding{{
 			Port: application.OutputPort, ValueType: application.OutputValueType,
 			ReferenceID: plan.ID, ReferenceVersion: strconv.Itoa(plan.Revision), ContentHash: plan.InputHash,
+		}},
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	return domain.HumanGateOwnerResult{
+		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
+	}, nil
+}
+
+func (applier *Applier) applyEpisodeSegmentation(
+	ctx context.Context,
+	actor workflowapp.Actor,
+	application domain.HumanGateOwnerApplication,
+) (domain.HumanGateOwnerResult, error) {
+	if applier.plans == nil || application.OutputPort != "episodes" || application.OutputValueType != "episode_set" {
+		return domain.HumanGateOwnerResult{}, errors.New("unsupported Episode segmentation Human Gate owner application")
+	}
+	expectedRevision, err := strconv.ParseInt(application.Candidate.ReferenceVersion, 10, 64)
+	if err != nil || expectedRevision < 1 || len(application.Candidate.ContentHash) != 64 {
+		return domain.HumanGateOwnerResult{}, errors.New("invalid Episode segmentation Candidate revision")
+	}
+	result, err := applier.plans.ApplyEpisodePlan(ctx, planningapp.Actor{
+		UserID: actor.UserID, TokenVersion: actor.TokenVersion,
+	}, planningapp.ApplyEpisodePlanCommand{
+		CandidateRevisionID: application.Candidate.ReferenceID, CandidateRevisionHash: application.Candidate.ContentHash,
+		ExpectedCandidateRevision: expectedRevision, ReviewDecisionID: application.ReviewDecisionID,
+		IdempotencyKey: "workflow-review:" + application.ReviewDecisionID,
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	set := result.Set
+	if set.ID != result.Receipt.ID || set.WorkspaceID != application.WorkspaceID || set.ProjectID != application.ProjectID ||
+		set.CandidateRevisionID != application.Candidate.ReferenceID ||
+		set.CandidateRevisionHash != application.Candidate.ContentHash || set.CandidateRevision != expectedRevision ||
+		len(set.ContentHash) != 64 || len(set.Episodes) == 0 || result.Receipt.Operation != episodePlanApplyOperation ||
+		result.Receipt.ResourceID != application.Candidate.ReferenceID || result.Receipt.WorkspaceID != application.WorkspaceID ||
+		result.Receipt.CreatedBy != actor.UserID {
+		return domain.HumanGateOwnerResult{}, errors.New("Episode Plan owner result does not match workflow gate")
+	}
+	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: application.OutputPort, ValueType: application.OutputValueType,
+			ReferenceID: set.ID, ReferenceVersion: "1", ContentHash: set.ContentHash,
 		}},
 	})
 	if err != nil {

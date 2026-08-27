@@ -13,12 +13,14 @@ import (
 
 	eventing "github.com/StephenQiu30/lanverse/backend/internal/eventing/domain"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 )
 
 const (
 	createPlanOperation            = "episode_plan.create"
 	confirmPlanOperation           = "episode_plan.confirm"
+	applyEpisodePlanOperation      = "episode_plan.apply"
 	materializeOperation           = "episode_plan.materialize"
 	publishCommitOperation         = "episode_plan.publish"
 	acceptTaskOperation            = "episode_structure.accept_task"
@@ -53,6 +55,9 @@ type Repository interface {
 	SavePlan(context.Context, domain.Plan) error
 	ProjectImpact(context.Context, Actor, string, bool) (domain.Impact, error)
 	HasConfirmedBible(context.Context, string, string) (bool, error)
+	GetEpisodeSegmentationSource(context.Context, Actor, string, bool) (EpisodeSegmentationSource, error)
+	GetEpisodeSet(context.Context, Actor, EpisodeSetReference) ([]domain.Episode, []Version, error)
+	ApplyEpisodeSet(context.Context, []domain.Episode, []Version, []domain.OutboxEvent) error
 	Materialize(context.Context, domain.Plan, domain.ImportCommit, []domain.Episode, []Version) error
 	GetCommit(context.Context, Actor, string, bool) (domain.ImportCommit, error)
 	GetPlanCommit(context.Context, Actor, string) (domain.ImportCommit, error)
@@ -81,6 +86,45 @@ type Version struct {
 	VersionNo, SourceStart, SourceEnd                         int
 	Content, ContentHash, Status, CreatedBy                   string
 	CreatedAt                                                 time.Time
+}
+type EpisodeSegmentationSource struct {
+	CandidateRevisionID, CandidateRevisionHash               string
+	CandidateRevision                                        int64
+	WorkspaceID, ProjectID                                   string
+	DocumentRevisionID, DocumentRevisionHash, NormalizedText string
+	TargetDurationMS                                         int
+	AllowedEvidence                                          []bibledomain.Evidence
+	Markers                                                  []bibledomain.EpisodeSegmentationMarker
+	Candidate                                                bibledomain.EpisodeSegmentationCandidate
+}
+type EpisodeVersionReference struct {
+	EpisodeID       string `json:"episode_id"`
+	ScriptVersionID string `json:"script_version_id"`
+	ContentHash     string `json:"content_hash"`
+	Position        int    `json:"position"`
+	SourceStart     int    `json:"source_start"`
+	SourceEnd       int    `json:"source_end"`
+}
+type EpisodeSetReference struct {
+	ID                    string                    `json:"id"`
+	WorkspaceID           string                    `json:"workspace_id"`
+	ProjectID             string                    `json:"project_id"`
+	CandidateRevisionID   string                    `json:"candidate_revision_id"`
+	CandidateRevisionHash string                    `json:"candidate_revision_hash"`
+	CandidateRevision     int64                     `json:"candidate_revision"`
+	DocumentRevisionID    string                    `json:"document_revision_id"`
+	DocumentRevisionHash  string                    `json:"document_revision_hash"`
+	ContentHash           string                    `json:"content_hash"`
+	Episodes              []EpisodeVersionReference `json:"episodes"`
+}
+type ApplyEpisodePlanCommand struct {
+	CandidateRevisionID, CandidateRevisionHash string
+	ExpectedCandidateRevision                  int64
+	ReviewDecisionID, IdempotencyKey           string
+}
+type ApplyEpisodePlanResult struct {
+	Set     EpisodeSetReference
+	Receipt platformcommand.Receipt
 }
 type View struct {
 	Plan   domain.Plan
@@ -134,6 +178,228 @@ type resourceReceipt struct {
 
 func NewService(transactions TransactionManager, config Config) *Service {
 	return &Service{transactions: transactions, config: config}
+}
+
+func (service *Service) ApplyEpisodePlan(
+	ctx context.Context,
+	actor Actor,
+	command ApplyEpisodePlanCommand,
+) (ApplyEpisodePlanResult, error) {
+	command.CandidateRevisionID = strings.TrimSpace(command.CandidateRevisionID)
+	command.CandidateRevisionHash = strings.TrimSpace(command.CandidateRevisionHash)
+	command.ReviewDecisionID = strings.TrimSpace(command.ReviewDecisionID)
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if command.CandidateRevisionID == "" || len(command.CandidateRevisionHash) != 64 ||
+		command.ExpectedCandidateRevision < 1 || command.ReviewDecisionID == "" ||
+		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return ApplyEpisodePlanResult{}, invalid("Invalid Episode Plan application")
+	}
+	var result ApplyEpisodePlanResult
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		source, err := repo.GetEpisodeSegmentationSource(ctx, actor, command.CandidateRevisionID, true)
+		if err != nil {
+			return err
+		}
+		if source.CandidateRevisionID != command.CandidateRevisionID ||
+			source.CandidateRevisionHash != command.CandidateRevisionHash ||
+			source.CandidateRevision != command.ExpectedCandidateRevision {
+			return conflict("Episode segmentation Candidate changed before approval")
+		}
+		inputHash, err := platformcommand.InputHash(command)
+		if err != nil {
+			return err
+		}
+		if receipt, receiptErr := repo.FindReceipt(ctx, source.WorkspaceID, applyEpisodePlanOperation, command.IdempotencyKey); receiptErr == nil {
+			reference, replayErr := platformcommand.Replay[EpisodeSetReference](receipt, inputHash)
+			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
+				return conflict("Idempotency key was already used with different input")
+			}
+			if replayErr != nil {
+				return replayErr
+			}
+			if err = validateEpisodeSetReference(reference, source, receipt); err != nil {
+				return err
+			}
+			episodes, versions, loadErr := repo.GetEpisodeSet(ctx, actor, reference)
+			if loadErr != nil {
+				return loadErr
+			}
+			observed, buildErr := buildEpisodeSetReference(reference.ID, source, episodes, versions)
+			if buildErr != nil || observed.ContentHash != reference.ContentHash {
+				return conflict("Materialized Episode set changed after approval")
+			}
+			result = ApplyEpisodePlanResult{Set: reference, Receipt: receipt}
+			return nil
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		if err = validateEpisodeSegmentationSource(source); err != nil {
+			return err
+		}
+		now, receiptID := service.config.Now().UTC(), service.config.NewID()
+		episodes := make([]domain.Episode, len(source.Candidate.Boundaries))
+		versions := make([]Version, len(source.Candidate.Boundaries))
+		runes := []rune(source.NormalizedText)
+		for index, boundary := range source.Candidate.Boundaries {
+			episodeID, versionID := service.config.NewID(), service.config.NewID()
+			content := string(runes[boundary.AbsoluteStart:boundary.AbsoluteEnd])
+			episodes[index] = domain.Episode{
+				ID: episodeID, WorkspaceID: source.WorkspaceID, ProjectID: source.ProjectID,
+				Name: strings.TrimSpace(boundary.Title), Position: boundary.EpisodeOrder,
+				TargetDurationMS: source.TargetDurationMS, Status: "active", Revision: 1,
+				CurrentScriptVersionID: &versionID, CreatedAt: now, UpdatedAt: now,
+			}
+			versions[index] = Version{
+				ID: versionID, WorkspaceID: source.WorkspaceID, ProjectID: source.ProjectID,
+				EpisodeID: episodeID, DocumentRevisionID: source.DocumentRevisionID,
+				VersionNo: 1, SourceStart: boundary.AbsoluteStart, SourceEnd: boundary.AbsoluteEnd,
+				Content: content, ContentHash: bibledomain.SourceTextHash(content), Status: "published",
+				CreatedBy: actor.UserID, CreatedAt: now,
+			}
+		}
+		set, err := buildEpisodeSetReference(receiptID, source, episodes, versions)
+		if err != nil {
+			return err
+		}
+		receiptResult, err := platformcommand.Result(set)
+		if err != nil {
+			return err
+		}
+		receipt := platformcommand.Receipt{
+			ID: receiptID, WorkspaceID: source.WorkspaceID, Operation: applyEpisodePlanOperation,
+			IdempotencyKey: command.IdempotencyKey, InputHash: inputHash,
+			ResourceID: source.CandidateRevisionID, Result: receiptResult,
+			CreatedBy: actor.UserID, CreatedAt: now,
+		}
+		events, err := episodeSetEvents(service.config.NewID, now, receipt.ID, source, versions)
+		if err != nil {
+			return err
+		}
+		if err = repo.ApplyEpisodeSet(ctx, episodes, versions, events); err != nil {
+			return err
+		}
+		if err = repo.CreateReceipt(ctx, receipt); err != nil {
+			return err
+		}
+		result = ApplyEpisodePlanResult{Set: set, Receipt: receipt}
+		return nil
+	})
+	return result, normalizeError(err)
+}
+
+func validateEpisodeSegmentationSource(source EpisodeSegmentationSource) error {
+	if source.CandidateRevision < 1 || len(source.CandidateRevisionHash) != 64 ||
+		len(source.DocumentRevisionHash) != 64 || source.TargetDurationMS <= 0 ||
+		bibledomain.SourceTextHash(source.NormalizedText) != source.DocumentRevisionHash {
+		return conflict("Episode segmentation Candidate source changed before approval")
+	}
+	if err := bibledomain.ValidateEpisodeSegmentationCandidate(
+		source.Candidate, source.NormalizedText, source.AllowedEvidence, source.Markers,
+	); err != nil {
+		return conflict("Episode segmentation Candidate is no longer valid")
+	}
+	for _, issue := range source.Candidate.ReviewIssues {
+		if issue.Severity == "blocking" {
+			return conflict("Episode segmentation Candidate still has blocking review issues")
+		}
+	}
+	return nil
+}
+
+func buildEpisodeSetReference(
+	setID string,
+	source EpisodeSegmentationSource,
+	episodes []domain.Episode,
+	versions []Version,
+) (EpisodeSetReference, error) {
+	if len(episodes) == 0 || len(episodes) != len(versions) {
+		return EpisodeSetReference{}, errors.New("materialized Episode set is incomplete")
+	}
+	if len(episodes) != len(source.Candidate.Boundaries) {
+		return EpisodeSetReference{}, errors.New("materialized Episode set does not cover the approved boundaries")
+	}
+	references := make([]EpisodeVersionReference, len(episodes))
+	for index := range episodes {
+		episode, version := episodes[index], versions[index]
+		boundary := source.Candidate.Boundaries[index]
+		expectedContent := string([]rune(source.NormalizedText)[boundary.AbsoluteStart:boundary.AbsoluteEnd])
+		if episode.ID != version.EpisodeID || episode.WorkspaceID != source.WorkspaceID ||
+			episode.ProjectID != source.ProjectID || episode.Status != "active" ||
+			episode.Position != boundary.EpisodeOrder || strings.TrimSpace(episode.Name) != strings.TrimSpace(boundary.Title) ||
+			episode.CurrentScriptVersionID == nil || *episode.CurrentScriptVersionID != version.ID ||
+			version.WorkspaceID != source.WorkspaceID || version.ProjectID != source.ProjectID ||
+			version.DocumentRevisionID != source.DocumentRevisionID || version.Status != "published" ||
+			version.VersionNo != 1 || version.SourceStart != boundary.AbsoluteStart || version.SourceEnd != boundary.AbsoluteEnd ||
+			version.Content != expectedContent || version.ContentHash != bibledomain.SourceTextHash(expectedContent) {
+			return EpisodeSetReference{}, errors.New("materialized Episode set contains an invalid owner fact")
+		}
+		references[index] = EpisodeVersionReference{
+			EpisodeID: episode.ID, ScriptVersionID: version.ID, ContentHash: version.ContentHash,
+			Position: episode.Position, SourceStart: version.SourceStart, SourceEnd: version.SourceEnd,
+		}
+	}
+	contentHash, err := platformcommand.InputHash(references)
+	if err != nil {
+		return EpisodeSetReference{}, err
+	}
+	return EpisodeSetReference{
+		ID: setID, WorkspaceID: source.WorkspaceID, ProjectID: source.ProjectID,
+		CandidateRevisionID: source.CandidateRevisionID, CandidateRevisionHash: source.CandidateRevisionHash,
+		CandidateRevision: source.CandidateRevision, DocumentRevisionID: source.DocumentRevisionID,
+		DocumentRevisionHash: source.DocumentRevisionHash, ContentHash: contentHash, Episodes: references,
+	}, nil
+}
+
+func validateEpisodeSetReference(
+	set EpisodeSetReference,
+	source EpisodeSegmentationSource,
+	receipt platformcommand.Receipt,
+) error {
+	if set.ID != receipt.ID || set.WorkspaceID != source.WorkspaceID || set.ProjectID != source.ProjectID ||
+		set.CandidateRevisionID != source.CandidateRevisionID || set.CandidateRevisionHash != source.CandidateRevisionHash ||
+		set.CandidateRevision != source.CandidateRevision || set.DocumentRevisionID != source.DocumentRevisionID ||
+		set.DocumentRevisionHash != source.DocumentRevisionHash || len(set.ContentHash) != 64 || len(set.Episodes) == 0 ||
+		receipt.Operation != applyEpisodePlanOperation || receipt.ResourceID != source.CandidateRevisionID {
+		return conflict("Episode Plan owner receipt changed after approval")
+	}
+	return nil
+}
+
+func episodeSetEvents(
+	newID func() string,
+	now time.Time,
+	receiptID string,
+	source EpisodeSegmentationSource,
+	versions []Version,
+) ([]domain.OutboxEvent, error) {
+	events := make([]domain.OutboxEvent, len(versions))
+	for index, version := range versions {
+		payload := struct {
+			ScriptVersionID    string `json:"script_version_id"`
+			EpisodeID          string `json:"episode_id"`
+			VersionNo          int64  `json:"version_no"`
+			DocumentRevisionID string `json:"document_revision_id"`
+			ContentHash        string `json:"content_hash"`
+			SourceStart        int    `json:"source_start"`
+			SourceEnd          int    `json:"source_end"`
+		}{version.ID, version.EpisodeID, int64(version.VersionNo), version.DocumentRevisionID, version.ContentHash, version.SourceStart, version.SourceEnd}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
+		payloadHash, err := eventing.HashPayload(encoded)
+		if err != nil {
+			return nil, err
+		}
+		events[index] = domain.OutboxEvent{
+			ID: newID(), EventType: eventing.ScriptVersionPublished, EventVersion: 1,
+			WorkspaceID: source.WorkspaceID, ProjectID: source.ProjectID,
+			AggregateKind: "episode_script", AggregateID: version.EpisodeID, AggregateRevision: int64(version.VersionNo),
+			SourceReceiptID: receiptID, Payload: encoded, PayloadHash: payloadHash,
+			Status: "pending", OccurredAt: now, CreatedAt: now,
+		}
+	}
+	return events, nil
 }
 
 func (service *Service) CreatePlan(ctx context.Context, actor Actor, command CreatePlanCommand) (View, error) {

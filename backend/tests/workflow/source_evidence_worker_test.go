@@ -98,6 +98,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "bible-review", DefinitionKey: "human.production_bible_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{"expected_bible_version":1}`)},
 				{ID: "bible-materialization", DefinitionKey: "production.bible_materialization", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "episode-segmentation", DefinitionKey: "agent.episode_segmentation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "episode-review", DefinitionKey: "human.episode_plan_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
@@ -107,6 +108,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "bible-to-materialization", FromNodeID: "bible-review", FromPort: "bible", ToNodeID: "bible-materialization", ToPort: "bible"},
 				{ID: "evidence-to-segmentation", FromNodeID: "evidence", FromPort: "evidence", ToNodeID: "episode-segmentation", ToPort: "evidence"},
 				{ID: "materialization-to-segmentation", FromNodeID: "bible-materialization", FromPort: "materialization", ToNodeID: "episode-segmentation", ToPort: "materialization"},
+				{ID: "segmentation-to-episode-review", FromNodeID: "episode-segmentation", FromPort: "candidate", ToNodeID: "episode-review", ToPort: "candidate"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -158,6 +160,9 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, ClaimLease: time.Minute,
 	})
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
+	planningService := planningapp.NewService(planninggorm.New(database), planningapp.Config{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+	})
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
@@ -166,7 +171,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		storyReviewService,
 		bibleService,
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
-		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		planningService,
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		reviewService,
 		nil, nil, episodeSegmentationService,
@@ -399,9 +404,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	unknownSignaler := &unknownOnceWorkflowSignaler{delegate: temporalRuntime}
 	signalService := workflowapp.NewSignalService(workflowStore, unknownSignaler, workflowapp.SignalConfig{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
-		Owner: workflowproduction.New(bibleService, planningapp.NewService(planninggorm.New(database), planningapp.Config{
-			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
-		}), storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
+		Owner: workflowproduction.New(bibleService, planningService, storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 		})),
 	})
@@ -545,15 +548,22 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	if err != nil || replayedIntent.ID != completedIntent.ID || replayedIntent.Status != "completed" {
 		t.Fatalf("replay completed Production Bible Signal: intent=%#v err=%v", replayedIntent, err)
 	}
+	var episodeGateNode model.NodeRunProjection
+	var episodeTask model.HumanTask
 	for {
 		if err = database.First(&persistedRun, "id = ?", run.ID).Error; err != nil {
 			t.Fatalf("reload Source Evidence Workflow Run: %v", err)
 		}
-		if persistedRun.Status == "SUCCEEDED" {
-			break
+		if persistedRun.Status == "WAITING_HUMAN" {
+			if queryErr := database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "episode-review").First(&episodeGateNode).Error; queryErr == nil &&
+				episodeGateNode.Status == "WAITING_HUMAN" {
+				if queryErr = database.Where("node_run_id = ?", episodeGateNode.ID).First(&episodeTask).Error; queryErr == nil {
+					break
+				}
+			}
 		}
 		if persistedRun.Status == "FAILED" || persistedRun.Status == "CANCELLED" || time.Now().After(deadline) {
-			t.Fatalf("Source Evidence Workflow did not complete after Bible confirmation: %#v", persistedRun)
+			t.Fatalf("Source Evidence Workflow did not reach the Episode Plan Human Gate: %#v", persistedRun)
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -627,6 +637,201 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 			segmentationInvocation, segmentationCandidate, segmentationRevisionCount, segmentationHeadCount,
 			postSegmentationEpisodeCount, err,
 		)
+	}
+	var episodeTaskCandidateIDs []string
+	if err = json.Unmarshal(episodeTask.CandidateIDs, &episodeTaskCandidateIDs); err != nil || len(episodeTaskCandidateIDs) != 1 ||
+		episodeTask.SubjectType != "episode_plan_candidate" || episodeTask.SubjectID.String() != segmentationOutput.Bindings[0].ReferenceID ||
+		episodeTask.SubjectRevision != 1 || episodeTask.SubjectHash != segmentationOutput.Bindings[0].ContentHash ||
+		episodeTaskCandidateIDs[0] != segmentationOutput.Bindings[0].ReferenceID {
+		t.Fatalf("Episode Plan HumanTask did not freeze the segmentation Candidate: task=%#v candidates=%v err=%v", episodeTask, episodeTaskCandidateIDs, err)
+	}
+
+	duplicateVersionID := uuid.NewString()
+	rollbackIDCall := 0
+	rollbackPlanningService := planningapp.NewService(planninggorm.New(database), planningapp.Config{
+		Now: func() time.Time { return time.Now().UTC() },
+		NewID: func() string {
+			rollbackIDCall++
+			switch rollbackIDCall {
+			case 3, 5:
+				return duplicateVersionID
+			default:
+				return uuid.NewString()
+			}
+		},
+	})
+	_, err = rollbackPlanningService.ApplyEpisodePlan(ctx, planningapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, planningapp.ApplyEpisodePlanCommand{
+		CandidateRevisionID:       segmentationOutput.Bindings[0].ReferenceID,
+		CandidateRevisionHash:     segmentationOutput.Bindings[0].ContentHash,
+		ExpectedCandidateRevision: 1, ReviewDecisionID: uuid.NewString(),
+		IdempotencyKey: "episode-plan-forced-batch-rollback",
+	})
+	if err == nil {
+		t.Fatal("forced second ScriptVersion collision did not fail the Episode set transaction")
+	}
+	var rolledBackEpisodeCount, rolledBackVersionCount, rolledBackEventCount, rolledBackEpisodeReceiptCount int64
+	if err = database.Model(&model.Episode{}).Where("project_id = ?", fixture.projectID).Count(&rolledBackEpisodeCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.EpisodeScriptVersion{}).Where("project_id = ?", fixture.projectID).Count(&rolledBackVersionCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.OutboxEvent{}).Where("project_id = ? AND event_type = ?", fixture.projectID, "ScriptVersionPublished").Count(&rolledBackEventCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND idempotency_key = ?",
+		fixture.workspaceID, "episode_plan.apply", "episode-plan-forced-batch-rollback",
+	).Count(&rolledBackEpisodeReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if rolledBackEpisodeCount != 0 || rolledBackVersionCount != 0 || rolledBackEventCount != 0 || rolledBackEpisodeReceiptCount != 0 {
+		t.Fatalf("failed Episode set transaction leaked facts: episodes=%d versions=%d events=%d receipts=%d",
+			rolledBackEpisodeCount, rolledBackVersionCount, rolledBackEventCount, rolledBackEpisodeReceiptCount)
+	}
+
+	episodeClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: episodeTask.ID.String(), ExpectedRevision: episodeTask.Revision,
+		IdempotencyKey: "episode-plan-review-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim Episode Plan HumanTask: %v", err)
+	}
+	episodeDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: episodeClaim.Task.ID, ClaimToken: episodeClaim.ClaimToken,
+		ExpectedTaskRevision:    episodeClaim.Task.Revision,
+		ExpectedSubjectRevision: episodeClaim.Task.SubjectRevision,
+		ExpectedSubjectHash:     episodeClaim.Task.SubjectHash,
+		Decision:                "approved", IdempotencyKey: "episode-plan-review-decision",
+	})
+	if err != nil {
+		t.Fatalf("approve Episode Plan HumanTask: %v", err)
+	}
+	episodeSignalCommand := workflowapp.SignalHumanGateCommand{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: run.ID, NodeRunID: episodeGateNode.ID.String(),
+		HumanTaskID: episodeDecision.Task.ID, ReviewDecisionID: episodeDecision.Decision.ID,
+		SubjectRevision: episodeDecision.Decision.SubjectRevision, Decision: episodeDecision.Decision.Decision,
+		IdempotencyKey: "episode-plan-review-signal",
+	}
+	episodeSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, episodeSignalCommand)
+	if err != nil || episodeSignal.Status != "completed" {
+		t.Fatalf("resume Episode Plan Human Gate: intent=%#v err=%v", episodeSignal, err)
+	}
+	replayedEpisodeSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, episodeSignalCommand)
+	if err != nil || replayedEpisodeSignal.ID != episodeSignal.ID || replayedEpisodeSignal.Status != "completed" {
+		t.Fatalf("replay Episode Plan Human Gate signal: intent=%#v err=%v", replayedEpisodeSignal, err)
+	}
+	completionDeadline := time.Now().Add(20 * time.Second)
+	for {
+		if err = database.First(&persistedRun, "id = ?", run.ID).Error; err != nil {
+			t.Fatalf("reload completed Episode Plan Workflow Run: %v", err)
+		}
+		if persistedRun.Status == "SUCCEEDED" {
+			break
+		}
+		if persistedRun.Status == "FAILED" || persistedRun.Status == "CANCELLED" || time.Now().After(completionDeadline) {
+			t.Fatalf("Source Evidence Workflow did not complete after Episode Plan approval: %#v", persistedRun)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if err = database.First(&episodeGateNode, "id = ?", episodeGateNode.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	episodeOutput, _, episodeOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(episodeGateNode.Output))
+	if err != nil || episodeGateNode.Status != "SUCCEEDED" || episodeGateNode.OutputHash == nil ||
+		*episodeGateNode.OutputHash != episodeOutputHash || len(episodeOutput.Bindings) != 1 ||
+		episodeOutput.Bindings[0].Port != "episodes" || episodeOutput.Bindings[0].ValueType != "episode_set" ||
+		episodeOutput.Bindings[0].ReferenceVersion != "1" || len(episodeOutput.Bindings[0].ContentHash) != 64 {
+		t.Fatalf("Episode Plan Gate output=%#v node=%#v err=%v", episodeOutput, episodeGateNode, err)
+	}
+	var episodeSetReceipt model.CommandReceipt
+	if err = database.Where("id = ? AND workspace_id = ? AND operation = ?", episodeOutput.Bindings[0].ReferenceID, fixture.workspaceID, "episode_plan.apply").
+		First(&episodeSetReceipt).Error; err != nil {
+		t.Fatalf("load Episode set owner Receipt: %v", err)
+	}
+	var publishedEpisodes []model.Episode
+	if err = database.Where("project_id = ?", fixture.projectID).Order("position").Find(&publishedEpisodes).Error; err != nil {
+		t.Fatal(err)
+	}
+	var publishedVersions []model.EpisodeScriptVersion
+	if err = database.Where("project_id = ?", fixture.projectID).Order("source_start").Find(&publishedVersions).Error; err != nil {
+		t.Fatal(err)
+	}
+	var publishedEventCount int64
+	if err = database.Model(&model.OutboxEvent{}).Where(
+		"project_id = ? AND event_type = ? AND source_receipt_id = ?",
+		fixture.projectID, "ScriptVersionPublished", episodeSetReceipt.ID,
+	).Count(&publishedEventCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	joined, previousEnd := "", 0
+	for index := range publishedEpisodes {
+		episode, scriptVersion := publishedEpisodes[index], publishedVersions[index]
+		if episode.Position != index+1 || episode.CurrentScriptVersionID == nil || *episode.CurrentScriptVersionID != scriptVersion.ID ||
+			scriptVersion.EpisodeID != episode.ID || scriptVersion.Status != "published" || scriptVersion.VersionNo != 1 ||
+			scriptVersion.SourceStart != previousEnd || scriptVersion.ContentHash != bibledomain.SourceTextHash(scriptVersion.Content) {
+			t.Fatalf("published Episode %d is not bound to its exact ScriptVersion: episode=%#v version=%#v", index, episode, scriptVersion)
+		}
+		joined += scriptVersion.Content
+		previousEnd = scriptVersion.SourceEnd
+	}
+	if len(publishedEpisodes) != len(segmentationCandidate.Boundaries) || len(publishedVersions) != len(segmentationCandidate.Boundaries) ||
+		publishedEventCount != int64(len(segmentationCandidate.Boundaries)) || joined != text || previousEnd != len([]rune(text)) {
+		t.Fatalf("published Episode set is incomplete: episodes=%d versions=%d events=%d source_end=%d joined=%q",
+			len(publishedEpisodes), len(publishedVersions), publishedEventCount, previousEnd, joined)
+	}
+
+	replayCommand := planningapp.ApplyEpisodePlanCommand{
+		CandidateRevisionID:       segmentationOutput.Bindings[0].ReferenceID,
+		CandidateRevisionHash:     segmentationOutput.Bindings[0].ContentHash,
+		ExpectedCandidateRevision: 1, ReviewDecisionID: episodeDecision.Decision.ID,
+		IdempotencyKey: "workflow-review:" + episodeDecision.Decision.ID,
+	}
+	replayResults := make(chan planningapp.ApplyEpisodePlanResult, 2)
+	replayErrors := make(chan error, 2)
+	for range 2 {
+		go func() {
+			result, applyErr := planningService.ApplyEpisodePlan(ctx, planningapp.Actor{
+				UserID: fixture.userID.String(), TokenVersion: 1,
+			}, replayCommand)
+			replayResults <- result
+			replayErrors <- applyErr
+		}()
+	}
+	for range 2 {
+		result, applyErr := <-replayResults, <-replayErrors
+		if applyErr != nil || result.Receipt.ID != episodeSetReceipt.ID.String() ||
+			result.Set.ID != episodeOutput.Bindings[0].ReferenceID || result.Set.ContentHash != episodeOutput.Bindings[0].ContentHash {
+			t.Fatalf("concurrent Episode set replay drifted: result=%#v err=%v", result, applyErr)
+		}
+	}
+	_, err = planningService.ApplyEpisodePlan(ctx, planningapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, planningapp.ApplyEpisodePlanCommand{
+		CandidateRevisionID:       segmentationOutput.Bindings[0].ReferenceID,
+		CandidateRevisionHash:     segmentationOutput.Bindings[0].ContentHash,
+		ExpectedCandidateRevision: 1, ReviewDecisionID: uuid.NewString(),
+		IdempotencyKey: "episode-plan-boundary-conflict",
+	})
+	var boundaryConflict *planningapp.Error
+	if !errors.As(err, &boundaryConflict) || boundaryConflict.Code != "resource_conflict" {
+		t.Fatalf("existing Episode boundaries did not reject a second owner application: %#v", err)
+	}
+	var conflictReceiptCount int64
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND idempotency_key = ?",
+		fixture.workspaceID, "episode_plan.apply", "episode-plan-boundary-conflict",
+	).Count(&conflictReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if conflictReceiptCount != 0 {
+		t.Fatalf("boundary conflict created an Episode Plan Receipt: %d", conflictReceiptCount)
 	}
 	var assets []model.Asset
 	if err = database.Where("project_id = ?", fixture.projectID).Order("identity_key").Find(&assets).Error; err != nil {

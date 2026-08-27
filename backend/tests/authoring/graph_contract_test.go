@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "8.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "9.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -26,6 +26,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"agent.story_review@1.0.0",
 		"agent.storyboard_draft@1.0.0",
 		"human.episode_plan_review@1.0.0",
+		"human.episode_plan_review@2.0.0",
 		"human.episode_structure_review@1.0.0",
 		"human.production_bible_review@1.0.0",
 		"human.production_bible_review@2.0.0",
@@ -47,6 +48,26 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
 	}
+}
+
+func TestEpisodePlanHumanGateConsumesSegmentationCandidateAndPublishesEpisodeSet(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.Key != "human.episode_plan_review" || definition.Version != "2.0.0" {
+			continue
+		}
+		if definition.Executor != "gate.episode_plan_review" || definition.RiskLevel != "human_gate" ||
+			definition.CachePolicy != "never" || len(definition.InputPorts) != 1 || len(definition.OutputPorts) != 1 ||
+			definition.InputPorts[0].Key != "candidate" || definition.InputPorts[0].ValueType != "episode_segmentation_candidate" ||
+			definition.OutputPorts[0].Key != "episodes" || definition.OutputPorts[0].ValueType != "episode_set" {
+			t.Fatalf("Episode Plan Human Gate contract = %#v", definition)
+		}
+		return
+	}
+	t.Fatal("Episode Plan Human Gate v2 is absent from the system catalog")
 }
 
 func TestProductionBibleMaterializationConsumesConfirmedVersionAndPublishesBindingSnapshot(t *testing.T) {
