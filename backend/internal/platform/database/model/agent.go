@@ -12,6 +12,7 @@ import (
 var (
 	ErrImmutableShardManifest          = errors.New("ShardManifest is immutable")
 	ErrImmutableStageCandidateRevision = errors.New("StageCandidateRevision is immutable")
+	ErrImmutableStageInstanceStaleness = errors.New("StageInstanceStaleness is immutable")
 )
 
 type ShardManifest struct {
@@ -82,3 +83,24 @@ type StageCandidateHead struct {
 }
 
 func (StageCandidateHead) TableName() string { return "agt_stage_candidate_heads" }
+
+type StageInstanceStaleness struct {
+	ID                         uuid.UUID              `gorm:"type:uuid;primaryKey"`
+	WorkspaceID                uuid.UUID              `gorm:"type:uuid;not null"`
+	InvocationID               *uuid.UUID             `gorm:"type:uuid;index"`
+	StageInstanceKey           string                 `gorm:"type:char(64);not null;uniqueIndex;check:ck_agt_stale_stage_key,char_length(stage_instance_key) = 64"`
+	CauseCandidateRevisionID   uuid.UUID              `gorm:"type:uuid;not null"`
+	CauseCandidateRevisionHash string                 `gorm:"type:char(64);not null;check:ck_agt_stale_candidate_hash,char_length(cause_candidate_revision_hash) = 64"`
+	CreatedAt                  time.Time              `gorm:"type:timestamptz;not null"`
+	Workspace                  Workspace              `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Invocation                 *AgentInvocation       `gorm:"foreignKey:InvocationID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	CauseCandidateRevision     StageCandidateRevision `gorm:"foreignKey:CauseCandidateRevisionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (StageInstanceStaleness) TableName() string { return "agt_stage_instance_staleness" }
+func (*StageInstanceStaleness) BeforeUpdate(*gorm.DB) error {
+	return ErrImmutableStageInstanceStaleness
+}
+func (*StageInstanceStaleness) BeforeDelete(*gorm.DB) error {
+	return ErrImmutableStageInstanceStaleness
+}

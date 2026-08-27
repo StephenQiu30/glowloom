@@ -178,10 +178,10 @@
 - [x] `SGA-CAN-001`（`SG-I09`）：不可变 StageCandidateRevision/Head CAS/并发。
 - [x] `SGA-CAN-002`（`SG-I09`）：invocation/aggregate/repair strict origin union。
 - [x] `SGA-CAN-003`（`SG-I09`）：content hash 与 revision hash 分层单字段突变。
-- [ ] `SGA-CAN-004`（`SG-I09`、`SG-I10`）：exact revision 下游与 Head 变更 stale closure，不覆盖历史。
+- [x] `SGA-CAN-004`（`SG-I09`、`SG-I10`）：exact revision 下游与 Head 变更 stale closure，不覆盖历史。
 - [x] `SGA-REP-001`（`SG-I10`、`SG-I22`）：模型 Review Issue 不冒充确定性 Gate/blocker。
 - [x] `SGA-REP-002`（`SG-I10`、`SG-I22`）：Repair Patch 冻结 target/allowlist/base/邻接且不能改已发布 Graph。
-- [ ] `SGA-REP-003`（`SG-I10`、`SG-I22`）：expected Head 应用 N+1、幂等 Receipt 与并发单胜。
+- [x] `SGA-REP-003`（`SG-I10`、`SG-I22`）：expected Head 应用 N+1、幂等 Receipt 与并发单胜。
 - [ ] `SGA-REP-004`（`SG-I10`、`SG-I22`）：每轮重跑影响闭包 Gate/Review，有界预算耗尽不半成功。
 
 ### 3.4 Codex、错误、CI 与旅程
@@ -442,4 +442,16 @@
 - 通过范围：以上证据完成 `SGA-REP-001` 与 `SGA-REP-002`。这只证明冻结输入、确定性 Gate、Review Evidence 和 Patch scope，不代表 Patch 已应用；幂等 Receipt、旧下游 stale closure、并发 Patch 业务事务和有界重审仍未完成，因此 `SGA-CAN-004`、`SGA-REP-003`–`004` 与整个 `SG-I10` 保持未通过，最终 `agent-browser` 未执行。
 - Git：本 Evidence 与实现由描述候选审核和修复边界的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 89 条 Requirement 与 `SG-I01`–`SG-I09`，其余保持未通过。下一步继续且只允许完成幂等 Patch Receipt 与旧下游 stale closure，不提前勾选有界重审或后续实现。
+### 候选修复的幂等应用与精确失效闭包（2026-08-28）
+
+- Red 与职责边界：独立 Backend 测试先稳定编译失败于缺少 frozen Patch 应用和 stale closure API。Green 后 Application 负责按 Candidate stable key 定位允许片段、重算 base fragment hash、应用 `text/strings` replacement 并重新执行严格 Story Reconciliation Candidate 校验；GORM Adapter 只负责事务、锁和持久化，Application 与测试均未直接导入 `gorm.io`。所有测试继续只位于 `backend/tests`。
+- 单一 SQL 事实源：唯一 GORM Model Catalog 新增不可变 `StageInstanceStaleness`，每个 stale Stage Instance 绑定直接致因 Candidate Revision id/hash；Invocation Stage 绑定其 Invocation，Backend Aggregate Stage 保持 Invocation 为空并由 Aggregate Origin 证明 leaf 谱系。没有 Migration、Raw SQL、第二 ORM、Graph JSON 直写或新 Workflow 引擎。既有 `CommandReceipt` 以 `production_bible.candidate_repair.apply` 承载幂等结果，没有建立第二 Receipt 体系。
+- 原子事务：Backend 先重验 exact Parent Candidate Revision、产生目标 Issue 的 Review Candidate Revision、两者内容 Hash、成功 Repair Invocation/Result 与 frozen Patch，再在同一 PostgreSQL 事务中锁定 expected Head、创建 Repair N+1、CAS Head、计算并写入 stale closure、最后写 Receipt。测试注入一个无法严格解码的下游依赖后，事务按设计失败，Head 仍指向父 Revision，N+1/Receipt/staleness 计数均为零，证明不是“先切 Head 再补闭包”。
+- 精确闭包与历史：闭包同时沿 Invocation exact upstream candidate revision id+hash 与 Aggregate Origin exact leaf revision id+hash 传播。真实旅程中 Review Invocation → Backend Review Aggregate → Episode Segment → Episode Analysis 四层被依次标 stale，Aggregate staleness 的 Invocation 外键保持空；已应用 Repair Invocation 作为新 Revision provenance 明确排除，无关 Shot 分支不标记。原 Invocation/Result/Revision 保持不变，staleness 自身拒绝 update/delete，因此旧版本仍可精确重放和审计。
+- 幂等与并发：同一 Patch/expected Head/幂等键并发提交返回同一 N+1、同一 Receipt 和同一排序 stale key 集合；补齐 Aggregate 闭包后的真实 PostgreSQL 旅程连续 10 次通过，耗时 `33.980s`。使用新幂等键继续争用旧 expected Head 返回 conflict，不创建额外 Revision、Receipt 或 staleness；底层不同 Repair Result 的并发单胜仍由上一交付单元的 Head CAS 压力测试覆盖。
+- 完整 CI：最终代码的 Backend 无外部依赖 `gofmt`、`go vet ./...`、`go test -count=1 ./...` 全通过；全新 PostgreSQL `16.15`、Temporal、MinIO、Kafka `4.3.1` 与 Elasticsearch/Logstash/Kibana `9.4.4` 下 `go test -count=1 -p 1 ./...` 全通过，Workflow 包 `132.815s`。Agent Ruff/Pyright/Pytest 为 `32 passed, 1 skipped`，唯一跳过项仍是上一交付单元已经真实通过的 opt-in Codex；Frontend OpenAPI 零漂移、lint/typecheck、18 个 Vitest 文件 54 项测试和 Next.js `16.2.12` production build 全通过。
+- 镜像与部署：开发/生产 Compose 校验和 Frontend/Backend/Agent 三镜像重建、三 Backend Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Bundle 探针通过。首次隔离部署因测试用 `AGENT_EXECUTION_SECRET` 少于既有 32 字节门禁而按设计退出，修正测试配置后 Backend 空库 Catalog 同步、Frontend、Workflow/Event Worker、Temporal、MinIO、Kafka/ELK/Filebeat 全部真实健康；补齐 Aggregate 闭包后又重建最终 Backend 镜像，API、Workflow/Event Worker 及空库新事实表再次通过实际运行探针。本 feature 专属容器、网络和 Volume 已精确删除，原有资源未受影响。
+- 通过范围：以上证据完成 `SGA-CAN-004` 与 `SGA-REP-003`。当前只证明 Patch 原子应用、幂等 Receipt 与 stale closure；尚未创建 replacement Invocation、重跑闭包 Gate/Review 或处理轮次预算耗尽，因此 `SGA-REP-004` 与整个 `SG-I10` 继续保持未通过，最终 `agent-browser` 未执行。
+- Git：本 Evidence 与实现由描述候选修复幂等应用与精确失效闭包的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 91 条 Requirement 与 `SG-I01`–`SG-I09`，其余保持未通过。下一步继续且只允许完成 Temporal 驱动的有界 Gate/Review 闭包重跑与预算耗尽语义，不提前勾选 Human Gate 或后续实现。
