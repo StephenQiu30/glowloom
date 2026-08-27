@@ -227,6 +227,7 @@ func main() {
 	storyAnalysisService := bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 	})
+	storyAnalysisRecoveryHandler := biblehttp.NewStoryAnalysisRecovery(storyAnalysisService, tokenVerifier)
 	storyAnalysisWorker := bibleapp.NewStoryAnalysisWorker(
 		bibleStore, storyAnalysisService, agentRuntime, func() time.Time { return time.Now().UTC() },
 		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
@@ -330,6 +331,7 @@ func main() {
 				costHandler.Register(mux)
 				scriptHandler.Register(mux)
 				bibleHandler.Register(mux)
+				storyAnalysisRecoveryHandler.Register(mux)
 				planningHandler.Register(mux)
 				storyboardHandler.Register(mux)
 				storyGraphHandler.Register(mux)

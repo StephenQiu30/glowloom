@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 )
 
@@ -54,6 +56,35 @@ type StoryAnalysisPreparation struct {
 type StoryAnalysisRepository interface {
 	LoadStoryAnalysisSeed(context.Context, StoryAnalysisCommand) (StoryAnalysisSeed, error)
 	EnsureStoryAnalysis(context.Context, StoryAnalysisPreparation) (StoryAnalysisState, error)
+}
+
+const StoryAnalysisRecoveryOperation = "story_analysis.recover"
+
+type StoryAnalysisRecoveryCommand struct {
+	WorkflowRunID, NodeRunID, IdempotencyKey string
+}
+
+type StoryAnalysisRecovery struct {
+	ReceiptID            string `json:"receipt_id"`
+	WorkflowRunID        string `json:"workflow_run_id"`
+	NodeRunID            string `json:"node_run_id"`
+	InvocationID         string `json:"invocation_id"`
+	Stage                string `json:"stage"`
+	ShardKey             string `json:"shard_key"`
+	Status               string `json:"status"`
+	FailureCode          string `json:"failure_code"`
+	PreviousClaimVersion int    `json:"previous_claim_version"`
+}
+
+type StoryAnalysisRecoveryPreparation struct {
+	Command   StoryAnalysisRecoveryCommand
+	InputHash string
+	ReceiptID string
+	CreatedAt time.Time
+}
+
+type StoryAnalysisRecoveryRepository interface {
+	RecoverStoryAnalysis(context.Context, Actor, StoryAnalysisRecoveryPreparation) (StoryAnalysisRecovery, error)
 }
 
 type StoryAnalysisConfig struct {
@@ -116,6 +147,45 @@ func (service *StoryAnalysisService) Ensure(ctx context.Context, command StoryAn
 		Command: command, CreatedAt: createdAt, AnalyzeManifest: analyze,
 		ReconcileManifest: reconcile, Invocations: invocations,
 	})
+}
+
+func (service *StoryAnalysisService) Recover(
+	ctx context.Context,
+	actor Actor,
+	command StoryAnalysisRecoveryCommand,
+) (StoryAnalysisRecovery, error) {
+	command.WorkflowRunID = strings.TrimSpace(command.WorkflowRunID)
+	command.NodeRunID = strings.TrimSpace(command.NodeRunID)
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	actor.UserID = strings.TrimSpace(actor.UserID)
+	if service == nil || service.config.Now == nil || service.config.NewID == nil || actor.UserID == "" ||
+		actor.TokenVersion < 1 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return StoryAnalysisRecovery{}, invalid("Invalid Story analysis recovery request")
+	}
+	if _, err := uuid.Parse(command.WorkflowRunID); err != nil {
+		return StoryAnalysisRecovery{}, invalid("Invalid Story analysis recovery request")
+	}
+	if _, err := uuid.Parse(command.NodeRunID); err != nil {
+		return StoryAnalysisRecovery{}, invalid("Invalid Story analysis recovery request")
+	}
+	repository, supported := service.repository.(StoryAnalysisRecoveryRepository)
+	if !supported {
+		return StoryAnalysisRecovery{}, errors.New("Story analysis recovery service is unavailable")
+	}
+	inputHash, err := platformcommand.InputHash(command)
+	if err != nil {
+		return StoryAnalysisRecovery{}, err
+	}
+	result, err := repository.RecoverStoryAnalysis(ctx, actor, StoryAnalysisRecoveryPreparation{
+		Command: command, InputHash: inputHash,
+		ReceiptID: service.config.NewID(), CreatedAt: service.config.Now().UTC(),
+	})
+	if errors.Is(err, ErrNotFound) {
+		return StoryAnalysisRecovery{}, &Error{
+			Code: "not_found", Message: "Story analysis recovery target not found", Status: 404,
+		}
+	}
+	return result, err
 }
 
 func buildStoryAnalysisInvocations(

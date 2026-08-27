@@ -18,6 +18,7 @@ import (
 
 	agentgorm "github.com/StephenQiu30/lanverse/backend/internal/agent/adapter/gormdb"
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
@@ -238,6 +239,179 @@ func (store *Store) EnsureStoryAnalysis(
 		return err
 	})
 	return state, err
+}
+
+func (store *Store) RecoverStoryAnalysis(
+	ctx context.Context,
+	actor application.Actor,
+	preparation application.StoryAnalysisRecoveryPreparation,
+) (application.StoryAnalysisRecovery, error) {
+	runID, err := uuid.Parse(preparation.Command.WorkflowRunID)
+	if err != nil {
+		return application.StoryAnalysisRecovery{}, application.ErrNotFound
+	}
+	nodeRunID, err := uuid.Parse(preparation.Command.NodeRunID)
+	if err != nil {
+		return application.StoryAnalysisRecovery{}, application.ErrNotFound
+	}
+	var recovered application.StoryAnalysisRecovery
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var run model.WorkflowRun
+		if loadErr := transaction.First(&run, "id = ?", runID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var node model.NodeRunProjection
+		if loadErr := transaction.First(&node, "id = ?", nodeRunID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if node.WorkflowRunID != run.ID || node.WorkspaceID != run.WorkspaceID ||
+			node.Executor != "activity.story_analysis" {
+			return application.ErrNotFound
+		}
+		if err = authorizeProject(ctx, transaction, actor, run.ProjectID, true); err != nil {
+			return err
+		}
+		repository := &repository{database: transaction}
+		receipt, receiptErr := repository.FindReceipt(
+			ctx, run.WorkspaceID.String(), application.StoryAnalysisRecoveryOperation,
+			preparation.Command.IdempotencyKey,
+		)
+		if receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[application.StoryAnalysisRecovery](receipt, preparation.InputHash)
+			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
+				return &application.Error{
+					Code: "resource_conflict", Message: "Idempotency key was already used with different Story analysis recovery input", Status: 409,
+				}
+			}
+			if replayErr != nil {
+				return replayErr
+			}
+			recovered = replayed
+			return nil
+		}
+		if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		analyze, reconcile, loadErr := loadLatestStoryManifestPair(transaction, node.ID.String(), true)
+		if loadErr != nil {
+			return loadErr
+		}
+		if validateErr := domain.ValidateStoryAnalysisManifests(analyze, reconcile); validateErr != nil {
+			return validateErr
+		}
+		if loadErr = transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if loadErr = transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&node, "id = ?", nodeRunID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if node.WorkflowRunID != run.ID || node.WorkspaceID != run.WorkspaceID ||
+			node.Executor != "activity.story_analysis" {
+			return application.ErrNotFound
+		}
+		if (run.Status != "RUNNING" && run.Status != "RETRYING") ||
+			(node.Status != "RUNNING" && node.Status != "RETRYING") {
+			return &application.Error{
+				Code: "resource_conflict", Message: "Story analysis NodeRun is not recoverable", Status: 409,
+			}
+		}
+		var failures []model.AgentInvocation
+		if loadErr = transaction.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("node_run_id = ? AND stage IN ? AND status = ?", node.ID,
+				[]string{domain.AnalyzeStoryStage, domain.ReconcileStoryStage}, "failed").
+			Order("updated_at").Order("id").Find(&failures).Error; loadErr != nil {
+			return loadErr
+		}
+		var target *model.AgentInvocation
+		for index := range failures {
+			invocation := &failures[index]
+			if !recoverableCurrentStoryInvocation(*invocation, analyze, reconcile) {
+				continue
+			}
+			var failure struct {
+				Code string `json:"code"`
+			}
+			if json.Unmarshal(invocation.Error, &failure) != nil || failure.Code != "execution_deadline_exceeded" {
+				continue
+			}
+			if target != nil {
+				return &application.Error{
+					Code: "resource_conflict", Message: "Story analysis NodeRun has multiple recoverable deadline failures", Status: 409,
+				}
+			}
+			target = invocation
+		}
+		if target == nil {
+			return &application.Error{
+				Code: "resource_conflict", Message: "Story analysis NodeRun has no recoverable deadline failure", Status: 409,
+			}
+		}
+		recovered = application.StoryAnalysisRecovery{
+			ReceiptID: preparation.ReceiptID, WorkflowRunID: run.ID.String(), NodeRunID: node.ID.String(),
+			InvocationID: target.ID.String(), Stage: target.Stage, ShardKey: target.ShardKey,
+			Status: "queued", FailureCode: "execution_deadline_exceeded",
+			PreviousClaimVersion: target.ClaimVersion,
+		}
+		updated := transaction.Model(&model.AgentInvocation{}).
+			Where("id = ? AND status = ? AND claim_version = ?", target.ID, "failed", target.ClaimVersion).
+			Updates(map[string]any{
+				"status": "queued", "error": nil, "lease_expires_at": nil,
+				"started_at": nil, "completed_at": nil, "updated_at": preparation.CreatedAt,
+			})
+		if updated.Error != nil {
+			return updated.Error
+		}
+		if updated.RowsAffected != 1 {
+			return &application.Error{
+				Code: "resource_conflict", Message: "Story analysis failure changed before recovery", Status: 409,
+			}
+		}
+		result, resultErr := platformcommand.Result(recovered)
+		if resultErr != nil {
+			return resultErr
+		}
+		return repository.CreateReceipt(ctx, platformcommand.Receipt{
+			ID: preparation.ReceiptID, WorkspaceID: run.WorkspaceID.String(),
+			Operation:      application.StoryAnalysisRecoveryOperation,
+			IdempotencyKey: preparation.Command.IdempotencyKey, InputHash: preparation.InputHash,
+			ResourceID: target.ID.String(), Result: result,
+			CreatedBy: actor.UserID, CreatedAt: preparation.CreatedAt,
+		})
+	})
+	return recovered, err
+}
+
+func recoverableCurrentStoryInvocation(
+	invocation model.AgentInvocation,
+	analyze domain.StoryAnalysisManifest,
+	reconcile domain.StoryReconcileManifest,
+) bool {
+	if invocation.ShardManifestID == nil || invocation.ShardManifestVersion == nil {
+		return false
+	}
+	switch invocation.Stage {
+	case domain.AnalyzeStoryStage:
+		if invocation.ShardManifestID.String() != analyze.ManifestID ||
+			*invocation.ShardManifestVersion != analyze.Version || invocation.ShardManifestHash != analyze.ManifestHash {
+			return false
+		}
+		for _, shard := range analyze.Shards {
+			if shard.Key == invocation.ShardKey {
+				return shard.Status == "active"
+			}
+		}
+	case domain.ReconcileStoryStage:
+		if invocation.ShardManifestID.String() != reconcile.ManifestID ||
+			*invocation.ShardManifestVersion != reconcile.Version || invocation.ShardManifestHash != reconcile.ManifestHash {
+			return false
+		}
+		for _, shard := range reconcile.Shards {
+			if shard.Key == invocation.ShardKey {
+				return shard.Status == "active"
+			}
+		}
+	}
+	return false
 }
 
 func (store *Store) ClaimNextStoryAnalysis(

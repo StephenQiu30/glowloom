@@ -159,9 +159,17 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	t.Cleanup(runtimeWorker.Stop)
 	agentContext, stopAgent := context.WithCancel(ctx)
 	lateRelease := make(chan struct{})
+	deadlineRecoveryRelease := make(chan struct{})
 	var releaseOnce sync.Once
-	t.Cleanup(func() { releaseOnce.Do(func() { close(lateRelease) }) })
-	agent := &recoveringSourceEvidenceAgent{failed: map[string]bool{}, lateRelease: lateRelease}
+	var deadlineReleaseOnce sync.Once
+	t.Cleanup(func() {
+		releaseOnce.Do(func() { close(lateRelease) })
+		deadlineReleaseOnce.Do(func() { close(deadlineRecoveryRelease) })
+	})
+	agent := &recoveringSourceEvidenceAgent{
+		failed: map[string]bool{}, lateRelease: lateRelease,
+		deadlineRecoveryRelease: deadlineRecoveryRelease,
+	}
 	agentLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	agentWorker := bibleapp.NewSourceEvidenceWorker(
 		bibleStore, evidenceService, agent, func() time.Time { return time.Now().UTC() },
@@ -210,6 +218,95 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 			}
 		}
 	}()
+
+	recoveryDeadline := time.Now().Add(20 * time.Second)
+	var deadlineFailure model.AgentInvocation
+	for {
+		var failedInvocations []model.AgentInvocation
+		lookup := database.Where(
+			"workflow_run_id = ? AND request_type IN ? AND status = ?",
+			run.ID, []string{"story_analysis_shard", "story_reconcile_shard"}, "failed",
+		).Order("updated_at DESC").Find(&failedInvocations)
+		if lookup.Error != nil {
+			t.Fatalf("load deadline-failed Story invocation: %v", lookup.Error)
+		}
+		for index := range failedInvocations {
+			if strings.Contains(string(failedInvocations[index].Error), "execution_deadline_exceeded") {
+				deadlineFailure = failedInvocations[index]
+				break
+			}
+		}
+		if deadlineFailure.ID != uuid.Nil {
+			break
+		}
+		var observedRun model.WorkflowRun
+		if err = database.First(&observedRun, "id = ?", run.ID).Error; err != nil {
+			t.Fatalf("load Workflow while waiting for deadline: %v", err)
+		}
+		if observedRun.Status == "FAILED" || observedRun.Status == "CANCELLED" || time.Now().After(recoveryDeadline) {
+			t.Fatalf(
+				"Story deadline did not remain recoverable: run_status=%s failed_invocations=%d",
+				observedRun.Status, len(failedInvocations),
+			)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	deadlineIdentity := struct {
+		ID, StageInstanceKey, InputHash, ManifestHash string
+		ClaimVersion, Attempts                        int
+	}{
+		ID: deadlineFailure.ID.String(), StageInstanceKey: deadlineFailure.StageInstanceKey,
+		InputHash: deadlineFailure.InputHash, ManifestHash: deadlineFailure.ShardManifestHash,
+		ClaimVersion: deadlineFailure.ClaimVersion, Attempts: deadlineFailure.Attempts,
+	}
+	var successfulSibling model.AgentInvocation
+	if err = database.Where(
+		"node_run_id = ? AND id <> ? AND status = ?", deadlineFailure.NodeRunID, deadlineFailure.ID, "succeeded",
+	).Order("updated_at").First(&successfulSibling).Error; err != nil {
+		t.Fatalf("deadline failure removed or preempted successful sibling: %v", err)
+	}
+	var siblingRevision model.StageCandidateRevision
+	if err = database.First(&siblingRevision, "source_invocation_id = ?", successfulSibling.ID).Error; err != nil {
+		t.Fatalf("load successful sibling Candidate Revision: %v", err)
+	}
+	recovered, err := storyAnalysisService.Recover(ctx, bibleapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, bibleapp.StoryAnalysisRecoveryCommand{
+		WorkflowRunID: run.ID, NodeRunID: deadlineFailure.NodeRunID.String(),
+		IdempotencyKey: "recover-story-deadline",
+	})
+	if err != nil || recovered.InvocationID != deadlineIdentity.ID || recovered.Status != "queued" || recovered.ReceiptID == "" {
+		t.Fatalf("recover Story deadline: result=%#v err=%v", recovered, err)
+	}
+	replayedRecovery, err := storyAnalysisService.Recover(ctx, bibleapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, bibleapp.StoryAnalysisRecoveryCommand{
+		WorkflowRunID: run.ID, NodeRunID: deadlineFailure.NodeRunID.String(),
+		IdempotencyKey: "recover-story-deadline",
+	})
+	if err != nil || replayedRecovery.ReceiptID != recovered.ReceiptID || replayedRecovery.InvocationID != recovered.InvocationID {
+		t.Fatalf("replay Story deadline recovery: result=%#v err=%v", replayedRecovery, err)
+	}
+	for {
+		if err = database.First(&deadlineFailure, "id = ?", deadlineIdentity.ID).Error; err != nil {
+			t.Fatalf("reload recovered Story invocation: %v", err)
+		}
+		if deadlineFailure.Status == "running" && deadlineFailure.ClaimVersion == deadlineIdentity.ClaimVersion+1 {
+			break
+		}
+		if time.Now().After(recoveryDeadline) {
+			t.Fatalf("recovered Story invocation was not reclaimed: %#v", deadlineFailure)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	lateApplied, err := bibleStore.FailStoryAnalysisInvocation(
+		ctx, deadlineIdentity.ID, deadlineIdentity.ClaimVersion, "failed", "late_worker",
+		"旧 Worker 的迟到结果", false, time.Now().UTC(),
+	)
+	if err != nil || lateApplied {
+		t.Fatalf("pre-recovery claim crossed the recovery fence: applied=%v err=%v", lateApplied, err)
+	}
+	deadlineReleaseOnce.Do(func() { close(deadlineRecoveryRelease) })
 
 	deadline := time.Now().Add(25 * time.Second)
 	var persistedRun model.WorkflowRun
@@ -345,6 +442,28 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	}
 	if storyNode.Status != "SUCCEEDED" || storyNode.OutputHash == nil || storyNode.CreatedAt.Before(definition.CreatedAt) {
 		t.Fatalf("Story analysis NodeRun did not complete definition-first: %#v", storyNode)
+	}
+	var recoveredInvocation model.AgentInvocation
+	if err = database.First(&recoveredInvocation, "id = ?", deadlineIdentity.ID).Error; err != nil {
+		t.Fatalf("load completed recovered Story invocation: %v", err)
+	}
+	if recoveredInvocation.Status != "succeeded" || recoveredInvocation.StageInstanceKey != deadlineIdentity.StageInstanceKey ||
+		recoveredInvocation.InputHash != deadlineIdentity.InputHash || recoveredInvocation.ShardManifestHash != deadlineIdentity.ManifestHash ||
+		recoveredInvocation.ClaimVersion != deadlineIdentity.ClaimVersion+1 || recoveredInvocation.Attempts != deadlineIdentity.Attempts+1 {
+		t.Fatalf("Story recovery changed identity or did not complete on the next fenced claim: %#v", recoveredInvocation)
+	}
+	var unchangedSibling model.AgentInvocation
+	if err = database.First(&unchangedSibling, "id = ?", successfulSibling.ID).Error; err != nil {
+		t.Fatalf("reload successful sibling after recovery: %v", err)
+	}
+	var unchangedSiblingRevision model.StageCandidateRevision
+	if err = database.First(&unchangedSiblingRevision, "id = ?", siblingRevision.ID).Error; err != nil {
+		t.Fatalf("reload successful sibling Candidate Revision after recovery: %v", err)
+	}
+	if unchangedSibling.Status != "succeeded" || unchangedSibling.ResultHash == nil ||
+		unchangedSiblingRevision.CandidateRevisionHash != siblingRevision.CandidateRevisionHash ||
+		unchangedSiblingRevision.SourceInvocationID == nil || *unchangedSiblingRevision.SourceInvocationID != successfulSibling.ID {
+		t.Fatalf("Story recovery changed a successful sibling fact: invocation=%#v revision=%#v", unchangedSibling, unchangedSiblingRevision)
 	}
 	var storyManifests []model.ShardManifest
 	if err = database.Where("node_run_id = ?", storyNode.ID).Order("stage").Order("version").Find(&storyManifests).Error; err != nil || len(storyManifests) != 5 {
@@ -507,13 +626,16 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 }
 
 type recoveringSourceEvidenceAgent struct {
-	mutex             sync.Mutex
-	failed            map[string]bool
-	budget            bool
-	storyMapBudget    bool
-	storyReduceBudget bool
-	originalCalls     int
-	lateRelease       <-chan struct{}
+	mutex                   sync.Mutex
+	failed                  map[string]bool
+	budget                  bool
+	storyMapBudget          bool
+	storyReduceBudget       bool
+	storyDeadline           bool
+	storyDeadlineID         string
+	originalCalls           int
+	lateRelease             <-chan struct{}
+	deadlineRecoveryRelease <-chan struct{}
 }
 
 func (agent *recoveringSourceEvidenceAgent) Invoke(
@@ -526,6 +648,8 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 		agent.mutex.Lock()
 		itemCount, countErr := storyFixtureInputItemCount(invocation)
 		budget := false
+		deadline := false
+		waitForRecovery := false
 		if countErr == nil && itemCount >= 2 {
 			if invocation.Payload.Stage == bibledomain.AnalyzeStoryStage && !agent.storyMapBudget {
 				agent.storyMapBudget, budget = true, true
@@ -534,12 +658,28 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 				agent.storyReduceBudget, budget = true, true
 			}
 		}
+		if countErr == nil && !budget && agent.storyMapBudget &&
+			invocation.Payload.Stage == bibledomain.AnalyzeStoryStage &&
+			invocation.Payload.ShardManifestRef.Version >= 2 {
+			if !agent.storyDeadline {
+				agent.storyDeadline, deadline = true, true
+				agent.storyDeadlineID = invocation.InvocationID
+			} else if agent.storyDeadlineID == invocation.InvocationID {
+				waitForRecovery = true
+			}
+		}
 		agent.mutex.Unlock()
 		if countErr != nil {
 			return agentcontract.StageResult{}, countErr
 		}
 		if budget {
 			return storyFixtureBudgetExceeded(invocation), nil
+		}
+		if deadline {
+			return storyFixtureDeadlineExceeded(invocation), nil
+		}
+		if waitForRecovery {
+			<-agent.deadlineRecoveryRelease
 		}
 		return storyAnalysisFixtureResult(invocation)
 	}
@@ -626,6 +766,21 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 		Issues:   []agentcontract.StageIssue{},
 		Executor: agentcontract.Executor{Name: "test-agent", Version: "source-evidence-v1", Model: "deterministic-fixture"},
 	}, nil
+}
+
+func storyFixtureDeadlineExceeded(invocation agentcontract.StageInvocation) agentcontract.StageResult {
+	candidateType, _ := agentcontract.CandidateTypeForStage(invocation.Payload.Stage)
+	return agentcontract.StageResult{
+		InvocationID: invocation.InvocationID, Kind: "storygraph_stage",
+		WireSchemaVersion: agentcontract.StoryGraphWireSchemaVersion,
+		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
+		Status: "failed", CandidateType: candidateType, Candidate: json.RawMessage("null"),
+		InputHash: invocation.InputHash, Issues: []agentcontract.StageIssue{},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-deadline-v1", Model: "deterministic-fixture"},
+		Error: &agentcontract.ResultError{
+			Code: "execution_deadline_exceeded", Summary: "fixture exhausted the frozen shard deadline", Retryable: false,
+		},
+	}
 }
 
 func storyFixtureBudgetExceeded(invocation agentcontract.StageInvocation) agentcontract.StageResult {

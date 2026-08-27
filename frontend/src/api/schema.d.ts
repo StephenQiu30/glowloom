@@ -1160,6 +1160,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow-runs/{workflow_run_id}/story-analysis-recoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["recoverStoryAnalysisShard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/storygraph/current": {
         parameters: {
             query?: never;
@@ -1626,6 +1642,32 @@ export interface components {
             created_by: string;
             /** Format: date-time */
             created_at: string;
+        };
+        StoryAnalysisRecoveryRequest: {
+            /** Format: uuid */
+            node_run_id: string;
+            idempotency_key: string;
+        };
+        StoryAnalysisRecoveryResponse: {
+            /** Format: uuid */
+            receipt_id: string;
+            /** Format: uuid */
+            workflow_run_id: string;
+            /** Format: uuid */
+            node_run_id: string;
+            /** Format: uuid */
+            invocation_id: string;
+            /** @enum {string} */
+            stage: "analyze_story" | "reconcile_story";
+            shard_key: string;
+            /** @constant */
+            status: "queued";
+            /** @constant */
+            failure_code: "execution_deadline_exceeded";
+            previous_claim_version: number;
+        };
+        StoryAnalysisRecoveryEnvelope: {
+            data: components["schemas"]["StoryAnalysisRecoveryResponse"];
         };
         WorkflowStartRequest: {
             /** Format: uuid */
@@ -4860,6 +4902,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowControlEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    recoverStoryAnalysisShard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_run_id: components["parameters"]["workflow_run_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoryAnalysisRecoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description 当前 Story Analysis deadline 失败已按原 Invocation 重新排队 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryAnalysisRecoveryEnvelope"];
                 };
             };
             401: components["responses"]["Problem"];

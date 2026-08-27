@@ -166,7 +166,7 @@
 - [x] `SGA-SHR-003`（`SG-I08` 起）：超预算发布新 Manifest 完整覆盖，无截断/临时扩预算。
 - [x] `SGA-SHR-004`（`SG-I08` 起）：旧结果只审计，current active leaf + gate 才聚合。
 - [x] `SGA-SHR-005`（`SG-I09`、`SG-I15`）：有界 reduce 只传必要 Ref/Hash/冲突，超预算再分片。
-- [ ] `SGA-SHR-006`（全部分片 Stage）：单 shard 失败不毁成功事实，Workflow 无固定业务墙钟终止。
+- [x] `SGA-SHR-006`（全部分片 Stage）：单 shard 失败不毁成功事实，Workflow 无固定业务墙钟终止。
 
 ### 3.3 Evidence、Candidate 与 Repair
 
@@ -219,7 +219,7 @@
 - [x] `SG-I06`：公共 HumanTask/Lease/Decision/Resume Backend API 与恢复完成。
 - [x] `SG-I07`：真实 Review Workbench 与错误/unknown/a11y 完成。
 - [x] `SG-I08`：Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate 完成。
-- [ ] `SG-I09`：Story analyze/reconcile map-tree 与 Candidate Revision 完成。
+- [x] `SG-I09`：Story analyze/reconcile map-tree 与 Candidate Revision 完成。
 - [ ] `SG-I10`：StoryGraph review 与有界 Repair/Gate 完成。
 - [ ] `SG-I11`：Bible Human Gate/Confirm Receipt 且零资产物化完成。
 - [ ] `SG-I12`：Confirmed Bible 资产/Specification/State/ProductionBinding 原子物化完成。
@@ -408,4 +408,16 @@
 - 通过范围：以上证据完成 `SGA-SHR-005`。当前没有实现通用单 shard deadline/失败后的同 Stage Instance 恢复，因此 `SGA-SHR-006` 与整个 `SG-I09` 仍保持未通过；Candidate Repair、完整原稿、Human Gate 和最终 `agent-browser` 也未提前执行。
 - Git：本 Evidence 与实现由描述候选输入版本化重分片的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 82 条 Requirement 与 `SG-I01`–`SG-I08`，其余保持未通过。下一步继续且只允许补齐当前故事分析归并的单 shard deadline/失败恢复，完成 `SG-I09` 后才能进入 `SG-I10`。
+### 失败分片的持久恢复（2026-08-27）
+
+- Red 与恢复契约：独立测试先声明恢复 Command、HTTP 契约和真实 Workflow 剧本，实施前稳定编译失败于缺少恢复入口。恢复只接受精确 WorkflowRun、NodeRun 与幂等键；不存在唯一 current deadline failure、目标已终态、上游 stale 或幂等键冲突时均 fail closed，不把 deadline 自动解释为可重试成功。
+- 单一事实源与身份守恒：Backend 在单个 GORM/PostgreSQL 事务中锁定 current Manifest、Run/NodeRun 和目标 Invocation，通过既有 Command Receipt 返回幂等结果。恢复只重新排队原 Invocation，不创建新 Stage identity、Input、Policy 或 Manifest，不清除已成功兄弟 Invocation、Candidate Revision、Decision 或 Receipt；领取后 claim version 单调递增，旧 Worker 的迟到结果被围栏拒绝。实现没有 Migration、Raw SQL、第二 ORM、第二 Workflow 引擎或兼容回退。
+- 持久等待：故事分析 Node 遇到 deadline failure 后保持 `RETRYING`，Temporal 通过持久定时器轮询 Backend 状态，不以固定业务墙钟终止整个 Workflow。只有显式恢复命令成功后原失败分片才重新进入队列，因此服务重启和等待期间均由既有事实恢复，不依赖内存状态。
+- 真实 Workflow 剧本：真实 PostgreSQL 与 Temporal 下，`Script → Source Evidence → Story Analysis` 先触发 map 超预算并发布 V2 Manifest，再向一个 current analyze Invocation 注入 `execution_deadline_exceeded`；恢复命令及其幂等重放返回同一 Invocation，下一次领取的 claim version 恰好加一，旧 claim 完成被拒绝，未失败兄弟和既有 Candidate 保持不变。随后 reduce 超预算路径继续执行，最终 Workflow 成功并绑定新的根 Candidate。
+- 并发验证：重复剧本曾真实复现过期单结构查询、非确定注入点和 PostgreSQL deadlock，均按事实修正；恢复事务现在统一按 Manifest → Run/NodeRun → Invocation 的顺序加锁，与 Worker 接受结果的锁顺序一致。修复后同一完整恢复旅程连续 10 次通过，耗时 `141.301s`，没有 deadlock、身份漂移、成功事实丢失或延长超时掩盖。
+- 当前完整 CI：全新 PostgreSQL/Temporal/MinIO/Kafka/Elasticsearch/Kibana 下的 Backend `gofmt`、`go vet ./...` 与 `go test -count=1 -p 1 ./...` 全通过，Workflow 包 `146.358s`；Frontend OpenAPI 生成零漂移、lint/typecheck、18 个 Vitest 文件 54 项测试与 Next.js `16.2.12` production build 全通过；Agent Ruff check/format、Pyright、Pytest 为 `29 passed, 1 skipped`，跳过项仍仅为已单独验证的显式真实 Codex 集成测试。
+- 镜像与故障部署：开发/生产 Compose 校验、Backend/Agent/Frontend 三镜像和镜像内 Binary/standalone/非 root Bundle 契约全部通过。隔离部署中 API、Frontend、Workflow/Event Worker、Kafka/ELK、私有 Agent、日志脱敏与检索均通过；Filebeat/Logstash/Kibana、Kafka、Elasticsearch 逐项停机时 readiness 与业务边界符合设计，恢复后重新收敛。
+- 通过范围：以上证据完成 `SGA-SHR-006` 与 `SG-I09`。Candidate Repair、Head expected CAS 和旧下游 stale closure 仍属于 `SG-I10`，所以 `SGA-CAN-*`、`SGA-REP-*` 不提前勾选；完整原稿、Human Gate 与最终 `agent-browser` 同样未执行。
+- Git：本 Evidence 与实现由描述失败分片持久恢复的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 84 条 Requirement 与 `SG-I01`–`SG-I09`，其余保持未通过。下一步继续且只允许进入 `SG-I10`，完成 Candidate Repair、Head expected CAS 与旧下游 stale closure，不提前进入后续实现。

@@ -74,6 +74,9 @@ declare global {
     type SearchHit = components["schemas"]["SearchHit"];
     type SearchProjectionSource = components["schemas"]["SearchProjectionSource"];
     type SearchResult = components["schemas"]["SearchResult"];
+    type StoryAnalysisRecoveryEnvelope = components["schemas"]["StoryAnalysisRecoveryEnvelope"];
+    type StoryAnalysisRecoveryRequest = components["schemas"]["StoryAnalysisRecoveryRequest"];
+    type StoryAnalysisRecoveryResponse = components["schemas"]["StoryAnalysisRecoveryResponse"];
     type StoryGraphDiffEnvelope = components["schemas"]["StoryGraphDiffEnvelope"];
     type StoryGraphDiffResponse = components["schemas"]["StoryGraphDiffResponse"];
     type StoryGraphEdge = components["schemas"]["StoryGraphEdge"];

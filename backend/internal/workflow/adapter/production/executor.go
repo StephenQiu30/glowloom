@@ -260,7 +260,7 @@ func (executor *NodeExecutor) executeStoryAnalysis(
 	case "pending":
 		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
 	case "failed":
-		return domain.NodeExecutorResult{}, errors.New("Story analysis has a failed active shard")
+		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
 	case "ready":
 		if _, parseErr := uuid.Parse(state.CandidateRevisionID); parseErr != nil ||
 			state.CandidateRevisionNo < 1 || !workflowContentHashPattern.MatchString(state.CandidateRevisionHash) {

@@ -1,6 +1,7 @@
 package bible_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -41,6 +42,42 @@ func TestBibleResponseIncludesGenerationError(t *testing.T) {
 	}
 }
 
+func TestStoryAnalysisRecoveryResponseExposesPersistedIdentity(t *testing.T) {
+	service := storyAnalysisRecoveryHTTPService{result: bibleapp.StoryAnalysisRecovery{
+		ReceiptID:     "00000000-0000-0000-0000-000000000004",
+		WorkflowRunID: "00000000-0000-0000-0000-000000000001",
+		NodeRunID:     "00000000-0000-0000-0000-000000000002",
+		InvocationID:  "00000000-0000-0000-0000-000000000003",
+		Stage:         "analyze_story", ShardKey: "map:0001", Status: "queued",
+		FailureCode: "execution_deadline_exceeded", PreviousClaimVersion: 2,
+	}}
+	mux := http.NewServeMux()
+	biblehttp.NewStoryAnalysisRecovery(&service, bibleHTTPAuthenticator{}).Register(mux)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/workflow-runs/00000000-0000-0000-0000-000000000001/story-analysis-recoveries",
+		bytes.NewBufferString(`{"node_run_id":"00000000-0000-0000-0000-000000000002","idempotency_key":"recover-deadline"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Data bibleapp.StoryAnalysisRecovery `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if service.command.WorkflowRunID != service.result.WorkflowRunID ||
+		service.command.NodeRunID != service.result.NodeRunID ||
+		service.command.IdempotencyKey != "recover-deadline" ||
+		payload.Data != service.result {
+		t.Fatalf("recovery command=%#v response=%#v", service.command, payload.Data)
+	}
+}
+
 type bibleHTTPAuthenticator struct{}
 
 func (bibleHTTPAuthenticator) Authenticate(*http.Request) (authentication.Claims, error) {
@@ -48,6 +85,20 @@ func (bibleHTTPAuthenticator) Authenticate(*http.Request) (authentication.Claims
 }
 
 type bibleHTTPService struct{ bible domain.Bible }
+
+type storyAnalysisRecoveryHTTPService struct {
+	result  bibleapp.StoryAnalysisRecovery
+	command bibleapp.StoryAnalysisRecoveryCommand
+}
+
+func (service *storyAnalysisRecoveryHTTPService) Recover(
+	_ context.Context,
+	_ bibleapp.Actor,
+	command bibleapp.StoryAnalysisRecoveryCommand,
+) (bibleapp.StoryAnalysisRecovery, error) {
+	service.command = command
+	return service.result, nil
+}
 
 func (service bibleHTTPService) Create(context.Context, bibleapp.Actor, bibleapp.CreateCommand) (domain.Bible, error) {
 	return domain.Bible{}, errors.New("not implemented")

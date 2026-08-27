@@ -436,6 +436,8 @@ Skill Markdown 由 Harness 显式读取并注入，不依赖 Codex 用户目录�
 
 完整 Temporal WorkflowRun 不设置业务墙钟上限。单次 Codex call 或单 shard 技术 deadline 耗尽只让该 stage instance 进入可恢复失败/unknown，已成功 shard 和 Human Decision 保持不变；不得把整剧伪装成完成、丢弃 checkpoint 或自动放宽预算。
 
+`execution_deadline_exceeded` 不进入自动领取集合。Story Analysis 宏观 Node 保持 `RETRYING`，Temporal 继续使用持久 Timer 轮询 Backend 事实；有写权限的成员必须通过显式、幂等的 NodeRun Recovery Command 恢复当前 Manifest 中的 deadline 失败。该 Command 只把失败的原 `AgentInvocation` 重新置为 `queued`，不创建新 stage identity、不改 Input/Execution Policy/Manifest、不清除成功 Invocation/Candidate Revision/Decision/Owner Receipt。重新领取时沿用原 Invocation ID 并递增 `claim_version`，旧 Worker 的迟到结果因此不能成为正式效果。若当前 NodeRun 没有唯一可恢复的 deadline 失败、已终态、Manifest 已变化或幂等输入冲突，Command 必须 fail closed。
+
 ## 开源与依赖决策
 
 - 继续复用 Pydantic 生成严格 Schema、FastAPI 私有 Runtime、Codex CLI 结构化输出和现有 Canonical Hash/Grant 契约。

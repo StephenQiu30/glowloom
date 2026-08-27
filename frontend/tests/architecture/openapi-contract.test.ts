@@ -32,8 +32,15 @@ describe("Go Backend OpenAPI type ownership", () => {
     expect(openapi.components.schemas).toHaveProperty(
       "HumanGateCoordinationResponse",
     );
+    expect(openapi.paths).toHaveProperty(
+      "/api/v1/workflow-runs/{workflow_run_id}/story-analysis-recoveries",
+    );
+    expect(openapi.components.schemas).toHaveProperty(
+      "StoryAnalysisRecoveryResponse",
+    );
     expect(generated).toContain("review_decisions");
     expect(generated).toContain("HumanGateCoordinationResponse");
+    expect(generated).toContain("StoryAnalysisRecoveryResponse");
     expect(generated).not.toMatch(/migration|kafka|redis|sqlalchemy/i);
   });
 });
