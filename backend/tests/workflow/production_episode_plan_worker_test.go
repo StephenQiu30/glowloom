@@ -205,7 +205,8 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 	}
 	decision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
 		TaskID: bibleTask.ID.String(), ClaimToken: claimed.ClaimToken, ExpectedTaskRevision: claimed.Task.Revision,
-		ExpectedSubjectRevision: claimed.Task.SubjectRevision, Decision: "approved", IdempotencyKey: "episode-plan-bible-review-decision",
+		ExpectedSubjectRevision: claimed.Task.SubjectRevision, ExpectedSubjectHash: claimed.Task.SubjectHash,
+		Decision: "approved", IdempotencyKey: "episode-plan-bible-review-decision",
 	})
 	if err != nil {
 		t.Fatalf("approve Production Bible review: %v", err)
@@ -277,7 +278,8 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 	}
 	planDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
 		TaskID: planTask.ID.String(), ClaimToken: claimedPlan.ClaimToken, ExpectedTaskRevision: claimedPlan.Task.Revision,
-		ExpectedSubjectRevision: claimedPlan.Task.SubjectRevision, Decision: "approved", IdempotencyKey: "episode-plan-review-decision",
+		ExpectedSubjectRevision: claimedPlan.Task.SubjectRevision, ExpectedSubjectHash: claimedPlan.Task.SubjectHash,
+		Decision: "approved", IdempotencyKey: "episode-plan-review-decision",
 	})
 	if err != nil {
 		t.Fatalf("approve Episode Plan review: %v", err)
@@ -489,7 +491,8 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 	structureDecision, err := reviewService.Decide(ctx, structureReviewActor, reviewapp.DecideCommand{
 		TaskID: structureTask.ID.String(), ClaimToken: claimedStructure.ClaimToken,
 		ExpectedTaskRevision: claimedStructure.Task.Revision, ExpectedSubjectRevision: claimedStructure.Task.SubjectRevision,
-		Decision: "approved", IdempotencyKey: "episode-structure-review-decision",
+		ExpectedSubjectHash: claimedStructure.Task.SubjectHash,
+		Decision:            "approved", IdempotencyKey: "episode-structure-review-decision",
 	})
 	if err != nil {
 		t.Fatalf("approve Episode Structure review: %v", err)
@@ -743,7 +746,8 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 	storyboardDecision, err := reviewService.Decide(ctx, structureReviewActor, reviewapp.DecideCommand{
 		TaskID: storyboardTask.ID.String(), ClaimToken: claimedStoryboard.ClaimToken,
 		ExpectedTaskRevision: claimedStoryboard.Task.Revision, ExpectedSubjectRevision: claimedStoryboard.Task.SubjectRevision,
-		Decision: "approved", IdempotencyKey: "storyboard-review-decision",
+		ExpectedSubjectHash: claimedStoryboard.Task.SubjectHash,
+		Decision:            "approved", IdempotencyKey: "storyboard-review-decision",
 	})
 	if err != nil {
 		t.Fatalf("approve Storyboard review: %v", err)

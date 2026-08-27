@@ -212,7 +212,7 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 	}
 	decision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
 		TaskID: task.ID.String(), ClaimToken: claim.ClaimToken, ExpectedTaskRevision: claim.Task.Revision,
-		ExpectedSubjectRevision: claim.Task.SubjectRevision, Decision: "selected",
+		ExpectedSubjectRevision: claim.Task.SubjectRevision, ExpectedSubjectHash: claim.Task.SubjectHash, Decision: "selected",
 		SelectedCandidateID: set.Candidates[1].ID, IdempotencyKey: "formal-shot-review-select",
 	})
 	if err != nil {
@@ -282,7 +282,7 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 	}
 	rerunDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
 		TaskID: rerunTask.ID.String(), ClaimToken: rerunClaim.ClaimToken, ExpectedTaskRevision: rerunClaim.Task.Revision,
-		ExpectedSubjectRevision: rerunClaim.Task.SubjectRevision, Decision: "selected",
+		ExpectedSubjectRevision: rerunClaim.Task.SubjectRevision, ExpectedSubjectHash: rerunClaim.Task.SubjectHash, Decision: "selected",
 		SelectedCandidateID: set.Candidates[0].ID, IdempotencyKey: "formal-shot-rerun-review-select",
 	})
 	if err != nil {

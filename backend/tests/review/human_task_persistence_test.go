@@ -2,6 +2,7 @@ package review_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"sync"
@@ -33,10 +34,12 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	}
 	now := time.Date(2026, time.August, 26, 1, 0, 0, 0, time.UTC)
 	workspaceID, projectID := uuid.New(), uuid.New()
-	reviewerA, reviewerB := uuid.New(), uuid.New()
+	reviewerA, reviewerB, viewer, outsider := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	users := []model.UserAccount{
 		{ID: reviewerA, EmailNormalized: "reviewer-a@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "A", Status: "active", CreatedAt: now, UpdatedAt: now},
 		{ID: reviewerB, EmailNormalized: "reviewer-b@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "B", Status: "active", CreatedAt: now, UpdatedAt: now},
+		{ID: viewer, EmailNormalized: "viewer@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "Viewer", Status: "active", CreatedAt: now, UpdatedAt: now},
+		{ID: outsider, EmailNormalized: "outsider@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "Outsider", Status: "active", CreatedAt: now, UpdatedAt: now},
 	}
 	if err = database.Create(&users).Error; err != nil {
 		t.Fatalf("seed reviewers: %v", err)
@@ -47,6 +50,7 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	memberships := []model.Membership{
 		{ID: uuid.New(), WorkspaceID: workspaceID, UserID: reviewerA, Role: "editor", Status: "active", JoinedAt: now},
 		{ID: uuid.New(), WorkspaceID: workspaceID, UserID: reviewerB, Role: "editor", Status: "active", JoinedAt: now},
+		{ID: uuid.New(), WorkspaceID: workspaceID, UserID: viewer, Role: "viewer", Status: "active", JoinedAt: now},
 	}
 	if err = database.Create(&memberships).Error; err != nil {
 		t.Fatalf("seed memberships: %v", err)
@@ -65,7 +69,9 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	task, err := service.Open(ctx, reviewapp.OpenCommand{
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		SubjectType: "workflow_node_output", SubjectID: uuid.NewString(), SubjectRevision: 3,
-		CandidateIDs: []string{uuid.NewString(), uuid.NewString()}, RubricVersion: "storyboard-review-v1",
+		SubjectHash:      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		CandidateIDs:     []string{uuid.NewString(), uuid.NewString()},
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "storyboard-review-v1",
 	})
 	if err != nil {
 		t.Fatalf("open persisted human task: %v", err)
@@ -75,6 +81,43 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("claim persisted human task: %v", err)
+	}
+	page, err := service.ListTasks(ctx, reviewapp.Actor{UserID: reviewerA.String(), TokenVersion: 1}, reviewapp.ListTasksQuery{
+		ProjectID: projectID.String(), Status: "active", Limit: 20,
+	})
+	if err != nil || len(page.Tasks) != 1 || page.Tasks[0].ID != task.ID || page.Tasks[0].ClaimToken != nil {
+		t.Fatalf("list persisted human tasks without claim token: page=%#v err=%v", page, err)
+	}
+	ownerDetail, err := service.GetTask(ctx, reviewapp.Actor{UserID: reviewerA.String(), TokenVersion: 1}, task.ID)
+	if err != nil || ownerDetail.Task.ClaimToken == nil || *ownerDetail.Task.ClaimToken != first.ClaimToken {
+		t.Fatalf("load current owner's claim token: detail=%#v err=%v", ownerDetail, err)
+	}
+	otherDetail, err := service.GetTask(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, task.ID)
+	if err != nil || otherDetail.Task.ClaimToken != nil {
+		t.Fatalf("hide claim token from other reviewer: detail=%#v err=%v", otherDetail, err)
+	}
+	if _, err = service.ListTasks(ctx, reviewapp.Actor{UserID: viewer.String(), TokenVersion: 1}, reviewapp.ListTasksQuery{
+		ProjectID: projectID.String(), Status: "active", Limit: 20,
+	}); err != nil {
+		t.Fatalf("viewer lists human tasks: %v", err)
+	}
+	if _, err = service.Claim(ctx, reviewapp.Actor{UserID: viewer.String(), TokenVersion: 1}, reviewapp.ClaimCommand{
+		TaskID: task.ID, ExpectedRevision: first.Task.Revision, IdempotencyKey: "viewer-cannot-claim",
+	}); err == nil {
+		t.Fatal("viewer claimed persisted human task")
+	} else {
+		var permissionError *reviewapp.Error
+		if !errors.As(err, &permissionError) || permissionError.Status != 403 {
+			t.Fatalf("viewer claim error=%v", err)
+		}
+	}
+	if _, err = service.ListTasks(ctx, reviewapp.Actor{UserID: outsider.String(), TokenVersion: 1}, reviewapp.ListTasksQuery{
+		ProjectID: projectID.String(), Status: "active", Limit: 20,
+	}); !errors.Is(err, reviewapp.ErrNotFound) {
+		t.Fatalf("cross-workspace list error=%v", err)
+	}
+	if _, err = service.GetTask(ctx, reviewapp.Actor{UserID: reviewerA.String(), TokenVersion: 2}, task.ID); !errors.Is(err, reviewapp.ErrNotFound) {
+		t.Fatalf("token-version drift detail error=%v", err)
 	}
 	now = now.Add(time.Minute)
 	renewCommand := reviewapp.RenewCommand{
@@ -118,20 +161,38 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	}
 	if _, err = service.Decide(ctx, reviewapp.Actor{UserID: reviewerA.String(), TokenVersion: 1}, reviewapp.DecideCommand{
 		TaskID: task.ID, ClaimToken: first.ClaimToken, ExpectedTaskRevision: third.Task.Revision,
-		ExpectedSubjectRevision: task.SubjectRevision, Decision: "approved", IdempotencyKey: "persisted-old-token",
+		ExpectedSubjectRevision: task.SubjectRevision, ExpectedSubjectHash: task.SubjectHash,
+		Decision: "approved", IdempotencyKey: "persisted-old-token",
 	}); err == nil {
 		t.Fatal("persisted expired claim token submitted a decision")
 	}
+	if _, err = service.Decide(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, reviewapp.DecideCommand{
+		TaskID: task.ID, ClaimToken: third.ClaimToken, ExpectedTaskRevision: third.Task.Revision,
+		ExpectedSubjectRevision: task.SubjectRevision,
+		ExpectedSubjectHash:     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		Decision:                "approved", IdempotencyKey: "persisted-stale-subject-hash",
+	}); err == nil {
+		t.Fatal("persisted decision accepted a stale subject hash")
+	}
+	if _, err = service.Decide(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, reviewapp.DecideCommand{
+		TaskID: task.ID, ClaimToken: third.ClaimToken, ExpectedTaskRevision: third.Task.Revision,
+		ExpectedSubjectRevision: task.SubjectRevision, ExpectedSubjectHash: task.SubjectHash,
+		Decision: "selected", SelectedCandidateID: task.CandidateIDs[0], IdempotencyKey: "persisted-disallowed-decision",
+	}); err == nil {
+		t.Fatal("persisted decision escaped the frozen allowed decision set")
+	}
 	decided, err := service.Decide(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, reviewapp.DecideCommand{
 		TaskID: task.ID, ClaimToken: third.ClaimToken, ExpectedTaskRevision: third.Task.Revision,
-		ExpectedSubjectRevision: task.SubjectRevision, Decision: "approved", IdempotencyKey: "persisted-decision",
+		ExpectedSubjectRevision: task.SubjectRevision, ExpectedSubjectHash: task.SubjectHash,
+		Decision: "approved", IdempotencyKey: "persisted-decision",
 	})
 	if err != nil {
 		t.Fatalf("persist review decision: %v", err)
 	}
 	replayed, err := service.Decide(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, reviewapp.DecideCommand{
 		TaskID: task.ID, ClaimToken: third.ClaimToken, ExpectedTaskRevision: third.Task.Revision,
-		ExpectedSubjectRevision: task.SubjectRevision, Decision: "approved", IdempotencyKey: "persisted-decision",
+		ExpectedSubjectRevision: task.SubjectRevision, ExpectedSubjectHash: task.SubjectHash,
+		Decision: "approved", IdempotencyKey: "persisted-decision",
 	})
 	if err != nil || replayed.Decision.ID != decided.Decision.ID {
 		t.Fatalf("replay persisted decision: result=%#v err=%v", replayed, err)
@@ -164,7 +225,8 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	expiringTask, err := service.Open(ctx, reviewapp.OpenCommand{
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		SubjectType: "workflow_node_output", SubjectID: uuid.NewString(), SubjectRevision: 4,
-		CandidateIDs: []string{}, RubricVersion: "expire-review-v1",
+		SubjectHash:  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		CandidateIDs: []string{}, AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "expire-review-v1",
 	})
 	if err != nil {
 		t.Fatalf("open task for expiry sweep: %v", err)
@@ -179,7 +241,8 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	activeTask, err := service.Open(ctx, reviewapp.OpenCommand{
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		SubjectType: "workflow_node_output", SubjectID: uuid.NewString(), SubjectRevision: 5,
-		CandidateIDs: []string{}, RubricVersion: "active-review-v1",
+		SubjectHash:  "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		CandidateIDs: []string{}, AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "active-review-v1",
 	})
 	if err != nil {
 		t.Fatalf("open active task beside expiry sweep: %v", err)
@@ -236,5 +299,17 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 		activeRecord.Status != "CLAIMED" || activeRecord.ClaimToken == nil ||
 		activeRecord.ClaimToken.String() != activeClaim.ClaimToken || activeRecord.Revision != activeClaim.Task.Revision {
 		t.Fatalf("expiry sweep facts = expired %#v active %#v", expiredRecord, activeRecord)
+	}
+	firstPage, err := service.ListTasks(ctx, reviewapp.Actor{UserID: viewer.String(), TokenVersion: 1}, reviewapp.ListTasksQuery{
+		ProjectID: projectID.String(), Status: "active", SubjectType: "workflow_node_output", Limit: 1,
+	})
+	if err != nil || len(firstPage.Tasks) != 1 || firstPage.NextAfter == nil || firstPage.Tasks[0].ClaimToken != nil {
+		t.Fatalf("first stable human task page=%#v err=%v", firstPage, err)
+	}
+	secondPage, err := service.ListTasks(ctx, reviewapp.Actor{UserID: viewer.String(), TokenVersion: 1}, reviewapp.ListTasksQuery{
+		ProjectID: projectID.String(), Status: "active", SubjectType: "workflow_node_output", Limit: 1, After: *firstPage.NextAfter,
+	})
+	if err != nil || len(secondPage.Tasks) != 1 || secondPage.Tasks[0].ID == firstPage.Tasks[0].ID || secondPage.Tasks[0].ClaimToken != nil {
+		t.Fatalf("second stable human task page=%#v err=%v", secondPage, err)
 	}
 }

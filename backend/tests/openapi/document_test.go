@@ -36,6 +36,13 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 		"/api/v1/projects/{project_id}/storygraph/versions/{version_ref}/lens",
 		"/api/v1/projects/{project_id}/storygraph/versions/{version_ref}/nodes/{story_node_key}/trace",
 		"/api/v1/projects/{project_id}/storygraph/diff",
+		"/api/v1/projects/{project_id}/human-tasks",
+		"/api/v1/human-tasks/{human_task_id}",
+		"/api/v1/human-tasks/{human_task_id}/claims",
+		"/api/v1/human-tasks/{human_task_id}/claim-renewals",
+		"/api/v1/human-tasks/{human_task_id}/claim-releases",
+		"/api/v1/human-tasks/{human_task_id}/decisions",
+		"/api/v1/review-decisions/{review_decision_id}/resume",
 	} {
 		if _, exists := document.Paths[path]; !exists {
 			t.Errorf("public contract is missing %s", path)
@@ -73,5 +80,22 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 		if _, exists := document.Components.Schemas[schema]; !exists {
 			t.Errorf("public contract is missing %s", schema)
 		}
+	}
+	for _, schema := range []string{
+		"HumanTaskListEnvelope", "HumanTaskDetailEnvelope", "HumanTaskCommandEnvelope",
+		"HumanGateDecisionEnvelope", "HumanGateResumeEnvelope", "HumanGateCoordinationResponse",
+	} {
+		if _, exists := document.Components.Schemas[schema]; !exists {
+			t.Errorf("public contract is missing %s", schema)
+		}
+	}
+	var listClaim struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(document.Components.Schemas["HumanTaskClaimSummary"], &listClaim); err != nil {
+		t.Fatalf("decode HumanTaskClaimSummary: %v", err)
+	}
+	if _, exposesToken := listClaim.Properties["claim_token"]; exposesToken {
+		t.Error("HumanTask list claim summary exposes claim_token")
 	}
 }

@@ -33,6 +33,125 @@ type Store struct {
 
 func New(database *gorm.DB) *Store { return &Store{database: database} }
 
+func (store *Store) ListTasks(
+	ctx context.Context,
+	actor application.Actor,
+	query application.ListTasksQuery,
+	now time.Time,
+) (domain.HumanTaskPage, error) {
+	projectID, err := uuid.Parse(query.ProjectID)
+	if err != nil {
+		return domain.HumanTaskPage{}, application.ErrNotFound
+	}
+	actorID, err := uuid.Parse(actor.UserID)
+	if err != nil {
+		return domain.HumanTaskPage{}, application.ErrNotFound
+	}
+	var page domain.HumanTaskPage
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var project model.Project
+		if loadErr := transaction.First(&project, "id = ?", projectID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if authorizeErr := authorizeReviewAccess(ctx, transaction, project.WorkspaceID, actorID, actor.TokenVersion, false); authorizeErr != nil {
+			return authorizeErr
+		}
+		queryBuilder := transaction.WithContext(ctx).Where("project_id = ?", projectID)
+		switch query.Status {
+		case "active":
+			queryBuilder = queryBuilder.Where("status IN ?", []string{"OPEN", "CLAIMED"})
+		case "OPEN", "CLAIMED", "COMPLETED", "CANCELLED", "STALE":
+			queryBuilder = queryBuilder.Where("status = ?", query.Status)
+		}
+		if query.SubjectType != "" {
+			queryBuilder = queryBuilder.Where("subject_type = ?", query.SubjectType)
+		}
+		if query.After != "" {
+			afterID, parseErr := uuid.Parse(query.After)
+			if parseErr != nil {
+				return parseErr
+			}
+			var cursor model.HumanTask
+			if loadErr := transaction.Where("id = ? AND project_id = ?", afterID, projectID).First(&cursor).Error; loadErr != nil {
+				return normalizeNotFound(loadErr)
+			}
+			queryBuilder = queryBuilder.Where(
+				"created_at < ? OR (created_at = ? AND id < ?)", cursor.CreatedAt, cursor.CreatedAt, cursor.ID,
+			)
+		}
+		var records []model.HumanTask
+		if loadErr := queryBuilder.Order("created_at DESC").Order("id DESC").Limit(query.Limit + 1).Find(&records).Error; loadErr != nil {
+			return loadErr
+		}
+		hasMore := len(records) > query.Limit
+		if hasMore {
+			records = records[:query.Limit]
+		}
+		page.Tasks = make([]domain.HumanTask, len(records))
+		for index, record := range records {
+			mapped, mapErr := taskDomain(record)
+			if mapErr != nil {
+				return mapErr
+			}
+			mapped.ClaimToken = nil
+			page.Tasks[index] = mapped
+		}
+		if hasMore && len(page.Tasks) != 0 {
+			cursor := page.Tasks[len(page.Tasks)-1].ID
+			page.NextAfter = &cursor
+		}
+		return nil
+	})
+	return page, err
+}
+
+func (store *Store) GetTask(
+	ctx context.Context,
+	actor application.Actor,
+	taskID string,
+	now time.Time,
+) (domain.HumanTaskDetail, error) {
+	id, err := uuid.Parse(taskID)
+	if err != nil {
+		return domain.HumanTaskDetail{}, application.ErrNotFound
+	}
+	actorID, err := uuid.Parse(actor.UserID)
+	if err != nil {
+		return domain.HumanTaskDetail{}, application.ErrNotFound
+	}
+	var detail domain.HumanTaskDetail
+	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var record model.HumanTask
+		if loadErr := transaction.First(&record, "id = ?", id).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if authorizeErr := authorizeReviewAccess(ctx, transaction, record.WorkspaceID, actorID, actor.TokenVersion, false); authorizeErr != nil {
+			return authorizeErr
+		}
+		mapped, mapErr := taskDomain(record)
+		if mapErr != nil {
+			return mapErr
+		}
+		if record.Status != "CLAIMED" || record.ClaimedBy == nil || *record.ClaimedBy != actorID ||
+			record.ClaimExpiresAt == nil || !record.ClaimExpiresAt.After(now) {
+			mapped.ClaimToken = nil
+		}
+		detail.Task = mapped
+		var decision model.ReviewDecision
+		loadErr := transaction.Where("human_task_id = ?", record.ID).First(&decision).Error
+		if errors.Is(loadErr, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if loadErr != nil {
+			return loadErr
+		}
+		mappedDecision := decisionDomain(decision)
+		detail.Decision = &mappedDecision
+		return nil
+	})
+	return detail, err
+}
+
 func (store *Store) GetDecision(ctx context.Context, actor application.Actor, decisionID string) (domain.DecisionResult, error) {
 	decisionUUID, err := uuid.Parse(decisionID)
 	if err != nil {
@@ -52,7 +171,7 @@ func (store *Store) GetDecision(ctx context.Context, actor application.Actor, de
 		if loadErr := transaction.WithContext(ctx).First(&task, "id = ?", decision.HumanTaskID).Error; loadErr != nil {
 			return normalizeNotFound(loadErr)
 		}
-		if authorizeErr := authorizeReviewer(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion); authorizeErr != nil {
+		if authorizeErr := authorizeReviewAccess(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion, false); authorizeErr != nil {
 			return authorizeErr
 		}
 		persistedTask, mapErr := taskDomain(task)
@@ -126,7 +245,7 @@ func (store *Store) Claim(
 		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, "id = ?", taskID).Error; loadErr != nil {
 			return normalizeNotFound(loadErr)
 		}
-		if authorizeErr := authorizeReviewer(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion); authorizeErr != nil {
+		if authorizeErr := authorizeReviewAccess(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion, true); authorizeErr != nil {
 			return authorizeErr
 		}
 		inputHash, hashErr := platformcommand.InputHash(struct {
@@ -186,7 +305,7 @@ func (store *Store) Renew(
 		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, "id = ?", taskID).Error; loadErr != nil {
 			return normalizeNotFound(loadErr)
 		}
-		if authorizeErr := authorizeReviewer(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion); authorizeErr != nil {
+		if authorizeErr := authorizeReviewAccess(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion, true); authorizeErr != nil {
 			return authorizeErr
 		}
 		inputHash, hashErr := platformcommand.InputHash(struct {
@@ -248,7 +367,7 @@ func (store *Store) Release(
 		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, "id = ?", taskID).Error; loadErr != nil {
 			return normalizeNotFound(loadErr)
 		}
-		if authorizeErr := authorizeReviewer(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion); authorizeErr != nil {
+		if authorizeErr := authorizeReviewAccess(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion, true); authorizeErr != nil {
 			return authorizeErr
 		}
 		inputHash, hashErr := platformcommand.InputHash(struct {
@@ -345,7 +464,7 @@ func (store *Store) Decide(
 		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, "id = ?", taskID).Error; loadErr != nil {
 			return normalizeNotFound(loadErr)
 		}
-		if authorizeErr := authorizeReviewer(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion); authorizeErr != nil {
+		if authorizeErr := authorizeReviewAccess(ctx, transaction, task.WorkspaceID, actorID, actor.TokenVersion, true); authorizeErr != nil {
 			return authorizeErr
 		}
 		inputHash, hashErr := platformcommand.InputHash(struct {
@@ -366,6 +485,7 @@ func (store *Store) Decide(
 			return receiptErr
 		}
 		if task.Revision != command.ExpectedTaskRevision || task.SubjectRevision != command.ExpectedSubjectRevision ||
+			task.SubjectHash != command.ExpectedSubjectHash ||
 			task.Status != "CLAIMED" || task.ClaimedBy == nil || *task.ClaimedBy != actorID ||
 			task.ClaimToken == nil || *task.ClaimToken != token || task.ClaimExpiresAt == nil || !task.ClaimExpiresAt.After(now) {
 			return conflict("Human task changed before decision")
@@ -373,9 +493,13 @@ func (store *Store) Decide(
 		if command.Decision == "selected" && !containsCandidate(task.CandidateIDs, command.SelectedCandidateID) {
 			return conflict("Selected candidate is not bound to the human task")
 		}
+		if !containsDecision(task.AllowedDecisions, command.Decision) {
+			return conflict("Decision is not allowed by the frozen human task rubric")
+		}
 		decision := model.ReviewDecision{
 			ID: decisionID, WorkspaceID: task.WorkspaceID, HumanTaskID: task.ID, Decision: desired.Decision,
-			SubjectRevision: desired.SubjectRevision, CreatedBy: actorID, CreatedAt: now.UTC(),
+			SubjectRevision: desired.SubjectRevision, SubjectHash: desired.SubjectHash,
+			CreatedBy: actorID, CreatedAt: now.UTC(),
 		}
 		if command.SelectedCandidateID != "" {
 			selected, parseErr := uuid.Parse(command.SelectedCandidateID)
@@ -431,10 +555,15 @@ func taskRecord(value domain.HumanTask) (model.HumanTask, error) {
 	if err != nil {
 		return model.HumanTask{}, err
 	}
+	allowedDecisions, err := json.Marshal(value.AllowedDecisions)
+	if err != nil {
+		return model.HumanTask{}, err
+	}
 	return model.HumanTask{
 		ID: id, WorkspaceID: workspaceID, ProjectID: projectID, WorkflowRunID: runID, NodeRunID: nodeID,
 		SubjectType: value.SubjectType, SubjectID: subjectID, SubjectRevision: value.SubjectRevision,
-		CandidateIDs: datatypes.JSON(candidates), RubricVersion: value.RubricVersion, Status: value.Status,
+		SubjectHash: value.SubjectHash, CandidateIDs: datatypes.JSON(candidates), RubricVersion: value.RubricVersion,
+		AllowedDecisions: datatypes.JSON(allowedDecisions), Status: value.Status,
 		Revision: value.Revision, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}, nil
 }
@@ -442,6 +571,10 @@ func taskRecord(value domain.HumanTask) (model.HumanTask, error) {
 func taskDomain(value model.HumanTask) (domain.HumanTask, error) {
 	var candidates []string
 	if err := json.Unmarshal(value.CandidateIDs, &candidates); err != nil {
+		return domain.HumanTask{}, err
+	}
+	var allowedDecisions []string
+	if err := json.Unmarshal(value.AllowedDecisions, &allowedDecisions); err != nil {
 		return domain.HumanTask{}, err
 	}
 	var claimedBy, claimToken *string
@@ -456,8 +589,9 @@ func taskDomain(value model.HumanTask) (domain.HumanTask, error) {
 	return domain.HumanTask{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
 		WorkflowRunID: value.WorkflowRunID.String(), NodeRunID: value.NodeRunID.String(), SubjectType: value.SubjectType,
-		SubjectID: value.SubjectID.String(), SubjectRevision: value.SubjectRevision, CandidateIDs: candidates,
-		RubricVersion: value.RubricVersion, Status: value.Status, ClaimedBy: claimedBy, ClaimToken: claimToken,
+		SubjectID: value.SubjectID.String(), SubjectRevision: value.SubjectRevision, SubjectHash: value.SubjectHash,
+		CandidateIDs: candidates, RubricVersion: value.RubricVersion, AllowedDecisions: allowedDecisions,
+		Status: value.Status, ClaimedBy: claimedBy, ClaimToken: claimToken,
 		ClaimExpiresAt: value.ClaimExpiresAt, Revision: value.Revision, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}, nil
 }
@@ -470,14 +604,16 @@ func decisionDomain(value model.ReviewDecision) domain.ReviewDecision {
 	}
 	return domain.ReviewDecision{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), HumanTaskID: value.HumanTaskID.String(),
-		Decision: value.Decision, SubjectRevision: value.SubjectRevision, SelectedCandidateID: selected,
-		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt,
+		Decision: value.Decision, SubjectRevision: value.SubjectRevision, SubjectHash: value.SubjectHash,
+		SelectedCandidateID: selected,
+		CreatedBy:           value.CreatedBy.String(), CreatedAt: value.CreatedAt,
 	}
 }
 
 func validateDecisionResult(task domain.HumanTask, decision domain.ReviewDecision) error {
 	if task.Status != "COMPLETED" || decision.WorkspaceID != task.WorkspaceID ||
 		decision.HumanTaskID != task.ID || decision.SubjectRevision != task.SubjectRevision ||
+		decision.SubjectHash != task.SubjectHash ||
 		task.ClaimedBy == nil || *task.ClaimedBy != decision.CreatedBy {
 		return errors.New("review task and decision facts have drifted")
 	}
@@ -525,10 +661,17 @@ func claimIdentities(taskID, claimToken, actorID string) (uuid.UUID, uuid.UUID, 
 	return task, token, actor, err
 }
 
-func authorizeReviewer(ctx context.Context, transaction *gorm.DB, workspaceID, actorID uuid.UUID, tokenVersion int) error {
+func authorizeReviewAccess(
+	ctx context.Context,
+	transaction *gorm.DB,
+	workspaceID uuid.UUID,
+	actorID uuid.UUID,
+	tokenVersion int,
+	write bool,
+) error {
 	var membership model.Membership
 	if err := transaction.WithContext(ctx).Where(
-		"workspace_id = ? AND user_id = ? AND status = ? AND role IN ?", workspaceID, actorID, "active", []string{"owner", "editor"},
+		"workspace_id = ? AND user_id = ? AND status = ?", workspaceID, actorID, "active",
 	).First(&membership).Error; err != nil {
 		return normalizeNotFound(err)
 	}
@@ -539,7 +682,15 @@ func authorizeReviewer(ctx context.Context, transaction *gorm.DB, workspaceID, a
 	if user.Status != "active" || user.TokenVersion != tokenVersion {
 		return application.ErrNotFound
 	}
+	if write && membership.Role != "owner" && membership.Role != "editor" {
+		return &application.Error{Code: "forbidden", Message: "Review permission is required", Status: 403}
+	}
 	return nil
+}
+
+func containsDecision(raw []byte, decision string) bool {
+	var allowed []string
+	return json.Unmarshal(raw, &allowed) == nil && slices.Contains(allowed, decision)
 }
 
 func containsCandidate(raw []byte, candidate string) bool {

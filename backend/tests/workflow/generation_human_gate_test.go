@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"slices"
 	"strings"
@@ -19,6 +21,7 @@ import (
 	"go.temporal.io/sdk/worker"
 	temporalworkflow "go.temporal.io/sdk/workflow"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/access/authentication"
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
@@ -31,6 +34,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
+	reviewhttp "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/httpapi"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	reviewdomain "github.com/StephenQiu30/lanverse/backend/internal/review/domain"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
@@ -256,6 +260,7 @@ func TestGenerationHumanGateOpenerExpandsAuthoritativeCandidateSet(t *testing.T)
 		WorkspaceID: workspaceID, ProjectID: projectID, WorkflowRunID: runID, NodeRunID: nodeRunID,
 		Executor: "gate.generation_image_review", InitiatorUserID: userID, InitiatorTokenVersion: 1,
 		SubjectType: "workflow_node_output", SubjectID: nodeRunID, SubjectRevision: 2,
+		SubjectHash: setHash, AllowedDecisions: []string{"changes_requested", "rejected", "selected"},
 		CandidateSet: workflow.NodeInputBinding{
 			Port: "candidates", ValueType: "generation_candidate_set", SourceKind: workflow.NodeInputSourceNodeOutput,
 			ReferenceID: setID, ReferenceVersion: "1", ContentHash: setHash,
@@ -465,7 +470,7 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 	}
 	decision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
 		TaskID: task.ID.String(), ClaimToken: claim.ClaimToken, ExpectedTaskRevision: claim.Task.Revision,
-		ExpectedSubjectRevision: claim.Task.SubjectRevision, Decision: "selected",
+		ExpectedSubjectRevision: claim.Task.SubjectRevision, ExpectedSubjectHash: claim.Task.SubjectHash, Decision: "selected",
 		SelectedCandidateID: candidateIDs[1].String(), IdempotencyKey: "generation-review-select",
 	})
 	if err != nil {
@@ -481,22 +486,29 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 		Now: func() time.Time { now = now.Add(time.Second); return now }, NewID: uuid.NewString,
 		Owner: workflowgeneration.NewHumanGateApplier(selectionService),
 	})
-	signalCommand := workflowapp.SignalHumanGateCommand{
-		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: startResult.ID, NodeRunID: gateNode.ID.String(),
-		HumanTaskID: decision.Task.ID, ReviewDecisionID: decision.Decision.ID,
-		SubjectRevision: decision.Decision.SubjectRevision, Decision: "selected", IdempotencyKey: "generation-review-signal",
+	coordinator := workflowapp.NewHumanGateCoordinator(workflowreview.NewDecisionReader(reviewService), signals, workflowStore)
+	unknown, err := coordinator.ResumeHumanGate(ctx, workflowActor, decision.Decision.ID)
+	if err != nil || unknown.WorkflowResumeStatus != "unknown" || unknown.OwnerApplyStatus != "completed" {
+		t.Fatalf("persist unknown Generation selection coordination: status=%#v err=%v", unknown, err)
 	}
-	unknown, err := signals.SignalHumanGate(ctx, workflowActor, signalCommand)
-	if err != nil || unknown.Status != "unknown" {
-		t.Fatalf("persist unknown Generation selection Signal: intent=%#v err=%v", unknown, err)
-	}
+	// Recompose the public API services to prove recovery uses only PostgreSQL, Temporal history,
+	// and the immutable ReviewDecision identity rather than process memory or client-owned gate facts.
 	signals = workflowapp.NewSignalService(workflowStore, signaler, workflowapp.SignalConfig{
 		Now: func() time.Time { now = now.Add(time.Second); return now }, NewID: uuid.NewString,
 		Owner: workflowgeneration.NewHumanGateApplier(selectionService),
 	})
-	completed, err := signals.SignalHumanGate(ctx, workflowActor, signalCommand)
-	if err != nil || completed.Status != "completed" || completed.ID != unknown.ID {
-		t.Fatalf("reconcile Generation selection Signal: intent=%#v err=%v", completed, err)
+	coordinator = workflowapp.NewHumanGateCoordinator(workflowreview.NewDecisionReader(reviewService), signals, workflowStore)
+	restartedAPI := http.NewServeMux()
+	reviewhttp.New(reviewService, coordinator, workflowReviewAuthenticator{userID: fixture.userID.String()}).Register(restartedAPI)
+	resumeResponse := httptest.NewRecorder()
+	restartedAPI.ServeHTTP(resumeResponse, httptest.NewRequest(
+		http.MethodPost, "/api/v1/review-decisions/"+decision.Decision.ID+"/resume", nil,
+	))
+	completed, err := coordinator.GetHumanGate(ctx, workflowActor, decision.Decision.ID)
+	if err != nil || completed.WorkflowResumeStatus != "completed" || completed.OwnerApplyStatus != "completed" ||
+		completed.ReviewDecisionID != unknown.ReviewDecisionID || resumeResponse.Code != http.StatusOK ||
+		!strings.Contains(resumeResponse.Body.String(), `"workflow_resume_status":"completed"`) {
+		t.Fatalf("reconcile Generation selection coordination: status=%#v response=%d %s err=%v", completed, resumeResponse.Code, resumeResponse.Body.String(), err)
 	}
 	const replayCallers = 8
 	replayErrors := make(chan error, replayCallers)
@@ -505,12 +517,12 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 		replayWorkers.Add(1)
 		go func() {
 			defer replayWorkers.Done()
-			replayed, replayErr := signals.SignalHumanGate(ctx, workflowActor, signalCommand)
+			replayed, replayErr := coordinator.ResumeHumanGate(ctx, workflowActor, decision.Decision.ID)
 			if replayErr != nil {
 				replayErrors <- replayErr
 				return
 			}
-			if replayed.ID != completed.ID || replayed.Status != "completed" {
+			if replayed.ReviewDecisionID != completed.ReviewDecisionID || replayed.WorkflowResumeStatus != "completed" {
 				replayErrors <- errors.New("concurrent Generation Signal replay returned different facts")
 			}
 		}()
@@ -525,6 +537,11 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 		requests[0].Output.Bindings[0].ValueType != "generation_candidate_selection" {
 		t.Fatalf("Generation selection Signal evidence drifted: %#v", requests)
 	}
+	var completedIntent model.WorkflowSignalIntent
+	if err = database.Where("review_decision_id = ?", decision.Decision.ID).First(&completedIntent).Error; err != nil ||
+		completedIntent.Status != "completed" {
+		t.Fatalf("load recovered Generation signal intent: intent=%#v err=%v", completedIntent, err)
+	}
 	var completedRun model.WorkflowRun
 	deadline = time.Now().Add(20 * time.Second)
 	for {
@@ -537,29 +554,86 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	rejectedRun, err := startService.Start(ctx, workflowActor, workflowapp.StartCommand{
+		AuthoringRevisionID: revision.ID, IdempotencyKey: "generation-review-rejected-start",
+	})
+	if err != nil || rejectedRun.Status != "RUNNING" {
+		t.Fatalf("start rejected Generation Human Gate Workflow: run=%#v err=%v", rejectedRun, err)
+	}
+	var rejectedTask model.HumanTask
+	deadline = time.Now().Add(20 * time.Second)
+	for {
+		err = database.Where("workflow_run_id = ?", rejectedRun.ID).First(&rejectedTask).Error
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("wait for rejected Generation HumanTask: %v", err)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	rejectedClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: rejectedTask.ID.String(), ExpectedRevision: rejectedTask.Revision,
+		IdempotencyKey: "generation-review-rejected-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim rejected Generation HumanTask: %v", err)
+	}
+	rejectedDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: rejectedTask.ID.String(), ClaimToken: rejectedClaim.ClaimToken,
+		ExpectedTaskRevision: rejectedClaim.Task.Revision, ExpectedSubjectRevision: rejectedClaim.Task.SubjectRevision,
+		ExpectedSubjectHash: rejectedClaim.Task.SubjectHash, Decision: "rejected",
+		IdempotencyKey: "generation-review-rejected-decision",
+	})
+	if err != nil {
+		t.Fatalf("reject Generation HumanTask: %v", err)
+	}
+	rejectedCoordination, err := coordinator.ResumeHumanGate(ctx, workflowActor, rejectedDecision.Decision.ID)
+	if err != nil || rejectedCoordination.OwnerApplyStatus != "not_required" ||
+		rejectedCoordination.WorkflowResumeStatus != "completed" || rejectedCoordination.OwnerReceiptID != "" {
+		t.Fatalf("resume rejected Generation Human Gate: status=%#v err=%v", rejectedCoordination, err)
+	}
+	var rejectedRunProjection model.WorkflowRun
+	var rejectedGateProjection model.NodeRunProjection
+	deadline = time.Now().Add(20 * time.Second)
+	for {
+		err = database.First(&rejectedRunProjection, "id = ?", rejectedRun.ID).Error
+		if err == nil && rejectedRunProjection.Status == "NEEDS_ATTENTION" {
+			err = database.First(&rejectedGateProjection, "id = ?", rejectedTask.NodeRunID).Error
+			if err == nil && rejectedGateProjection.Status == "FAILED" {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("wait for rejected Generation gate projection: run=%#v node=%#v err=%v", rejectedRunProjection, rejectedGateProjection, err)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	temporalClient, err := client.Dial(client.Options{HostPort: temporalAddress, Namespace: "default"})
 	if err != nil {
 		t.Fatalf("dial Generation Human Gate Temporal history: %v", err)
 	}
 	t.Cleanup(temporalClient.Close)
-	iterator := temporalClient.GetWorkflowHistory(
-		ctx, startResult.TemporalWorkflowID, "", false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT,
-	)
-	history := &historypb.History{}
-	for iterator.HasNext() {
-		event, historyErr := iterator.Next()
-		if historyErr != nil {
-			t.Fatalf("read Generation Human Gate Temporal history: %v", historyErr)
+	for _, temporalWorkflowID := range []string{startResult.TemporalWorkflowID, rejectedRun.TemporalWorkflowID} {
+		iterator := temporalClient.GetWorkflowHistory(
+			ctx, temporalWorkflowID, "", false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT,
+		)
+		history := &historypb.History{}
+		for iterator.HasNext() {
+			event, historyErr := iterator.Next()
+			if historyErr != nil {
+				t.Fatalf("read Generation Human Gate Temporal history: %v", historyErr)
+			}
+			history.Events = append(history.Events, event)
 		}
-		history.Events = append(history.Events, event)
-	}
-	replayer := worker.NewWorkflowReplayer()
-	replayer.RegisterWorkflowWithOptions(
-		workflowtemporal.EpisodeProductionWorkflow,
-		temporalworkflow.RegisterOptions{Name: workflowtemporal.EpisodeProductionWorkflowName},
-	)
-	if err = replayer.ReplayWorkflowHistory(nil, history); err != nil {
-		t.Fatalf("replay Generation Human Gate Temporal history: %v", err)
+		replayer := worker.NewWorkflowReplayer()
+		replayer.RegisterWorkflowWithOptions(
+			workflowtemporal.EpisodeProductionWorkflow,
+			temporalworkflow.RegisterOptions{Name: workflowtemporal.EpisodeProductionWorkflowName},
+		)
+		if err = replayer.ReplayWorkflowHistory(nil, history); err != nil {
+			t.Fatalf("replay Generation Human Gate Temporal history for %s: %v", temporalWorkflowID, err)
+		}
 	}
 	var selectionCount, ownerReceiptCount, applyCount, signalIntentCount int64
 	checks := []struct {
@@ -589,3 +663,9 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 }
 
 var _ workflowapp.HumanGateOwnerApplier = (*workflowgeneration.HumanGateApplier)(nil)
+
+type workflowReviewAuthenticator struct{ userID string }
+
+func (authenticator workflowReviewAuthenticator) Authenticate(*http.Request) (authentication.Claims, error) {
+	return authentication.Claims{UserID: authenticator.userID, TokenVersion: 1}, nil
+}

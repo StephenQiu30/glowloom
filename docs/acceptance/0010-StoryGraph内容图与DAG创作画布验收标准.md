@@ -51,10 +51,10 @@
 
 ### 2.3 Review、Production 与视觉资产
 
-- [ ] `SG-REV-001`（`SG-I06`）：Gate input 建立冻结 HumanTask 且客户端不能自报 Candidate。
+- [x] `SG-REV-001`（`SG-I06`）：Gate input 建立冻结 HumanTask 且客户端不能自报 Candidate。
 - [ ] `SG-REV-002`（`SG-I06`、`SG-I07`）：列表/详情/Lease/Decision/Resume OpenAPI 与生成 Client 无漂移。
 - [ ] `SG-REV-003`（`SG-I06`、`SG-I07`）：Claim/Renew/Release Actor/revision/token/expiry/幂等与零泄漏矩阵。
-- [ ] `SG-REV-004`（`SG-I06`）：不可变 Decision、允许集合与 selected 单候选并发证据。
+- [x] `SG-REV-004`（`SG-I06`）：不可变 Decision、允许集合与 selected 单候选并发证据。
 - [ ] `SG-REV-005`（`SG-I06`、`SG-I07`）：Decision/Owner Apply/Workflow Resume 三状态 API/UI 分离证据。
 - [ ] `SG-REV-006`（`SG-I11`、`SG-I14`、`SG-I16`、`SG-I19`、`SG-I21`、`SG-I23`、`SG-I24`）：七类 Gate 的显式 Owner Apply 与负向零写入证据。
 - [ ] `SG-REV-007`（同上）：按 Decision ID 幂等 Resume、并发/重启/UNKNOWN 收敛证据。
@@ -216,7 +216,7 @@
 - [x] `SG-I03`：StoryGraph Version/Head/Compiler/Owner Set/Outbox 单事务发布完成。
 - [x] `SG-I04`：Graph Query + Kafka Event + Elasticsearch Search + ELK 日志真实消费者、故障 CI 完成。
 - [x] `SG-I05`：`build-storygraph` 唯一 Bundle、Stage Wire/Policy/Candidate Revision、旧入口原子删除完成。
-- [ ] `SG-I06`：公共 HumanTask/Lease/Decision/Resume Backend API 与恢复完成。
+- [x] `SG-I06`：公共 HumanTask/Lease/Decision/Resume Backend API 与恢复完成。
 - [ ] `SG-I07`：真实 Review Workbench 与错误/unknown/a11y 完成。
 - [ ] `SG-I08`：Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate 完成。
 - [ ] `SG-I09`：Story analyze/reconcile map-tree 与 Candidate Revision 完成。
@@ -346,4 +346,16 @@
 - 尚未完成：`SG-I06` 才实现公共 HumanTask/Lease/Decision/Resume；`SG-I08` 起才创建 Definition-first ShardManifest 和真实业务 Candidate 聚合；`SG-I09/I10` 才完成 Candidate Head CAS 与 Repair。按顺序未运行 `agent-browser`。
 - Git：本 Evidence 与实现由当前 `SG-I05` 独立提交承载；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 63 条 Requirement 与 `SG-I01`–`SG-I05`，其余保持未通过。下一步继续且只允许实施 `SG-I06` 的公共 HumanTask/Lease/Decision/Resume Backend API。
+### `SG-I06` — 公共 HumanTask、Decision 与 Workflow Resume（2026-08-27）
+
+- Red 与公共契约：先在 `backend/tests/review` 和 `backend/tests/workflow` 建立失败测试，固定项目内列表/详情、Claim/Renew/Release、Decision 和按已持久化 Decision ID 恢复的七个公共端点。Handler 严格拒绝未知 JSON/Query 字段，不接受客户端自报 Workspace、Run、Node、候选集合、Owner 输出或 Workflow Signal 内容。
+- 冻结审核事实：HumanTask 由 Backend 冻结 Subject revision/hash、Candidate Set 与允许决议集合；ReviewDecision 不可变并再次固化 Subject Hash。过期 Subject、漂移 Rubric、未知决议、非 UUID 或不在冻结集合中的单候选均 fail closed；并发相同决议幂等收敛，输入漂移冲突，不创建第二审核状态机。
+- Lease 与权限：列表使用 `created_at DESC,id DESC` 稳定游标且永不返回 Claim Token；详情仅向未过期的当前 Claim Owner 返回 write-only Token。Owner/Editor 可写、Viewer 只读；跨项目、非成员和 Token Version 撤销均返回防枚举 Not Found。接管、续租、释放、过期、Revision/Token fencing 和重放由真实 PostgreSQL/GORM 覆盖。
+- 三阶段恢复：公共响应独立暴露 `Decision recorded → Owner Apply pending/not_required/completed/conflict → Workflow Resume pending/unknown/completed/conflict`。Coordinator 只从 Review 事实解析上下文，以 `human-gate-decision:<decision-id>` 作为稳定幂等键；Production Bible、Episode Plan、Episode Structure、Storyboard 和 Generation Selection 五类既有 Owner 使用真实 Application/Receipt，未知 Executor 返回冲突。`rejected|changes_requested` 不执行正向 Owner 效果，但仍以同一 Decision 恢复 Temporal 分支。
+- 真实旅程：`TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal` 在独立 PostgreSQL、Temporal 与 MinIO 上完成 selected 正向旅程；首次 Signal 结果被刻意丢失后状态保持 `unknown`，重新装配公共 API 服务并仅提交 Decision ID 可恢复为 `completed`，并发 Resume 收敛为同一 Signal/Receipt。第二条 rejected 旅程证明 Owner `not_required`、Workflow 继续到拒绝分支、Node `FAILED`、Run `NEEDS_ATTENTION`，两条 Temporal History 均可 Replay。
+- OpenAPI 与生成 Client：`backend/api/openapi/lanverse-v1.json` 固定七端点、Token 可见性和三阶段状态；重新生成 `frontend/src/api/schema.d.ts`、`typings.d.ts` 后，OpenAPI contract、Frontend lint/typecheck、16 个 Vitest 文件 45 项测试与 Next.js production build 全部通过。真实 Workbench 尚未实现，因此 `SG-REV-002/003/005` 与 `SG-I07` 保持未通过。
+- 全量真实 CI：空 PostgreSQL、真实 Temporal、MinIO、Kafka `4.3.1` 与 Elasticsearch/Logstash/Kibana `9.4.4` 下，Backend `gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Workflow 包耗时 `245.079s`；Agent Python 3.11 editable install、Ruff、format、Pyright 与 Pytest `24 passed`；Frontend OpenAPI 生成、lint、typecheck、45 项测试与 production build；开发/生产 Compose 和 Backend/Agent/Frontend 三镜像及镜像内运行时检查均通过。
+- 架构与范围：新增业务表仍由单一 GORM Model Catalog 建立，无 Migration、Raw SQL、第二 ORM 或 Kafka Command Consumer；Kafka/ELK 仅参与当前全量回归，不承载 Gate 恢复。测试只位于各应用 `tests/`。七类新 StoryGraph Gate、完整原稿和浏览器旅程仍属后续实施项，未提前运行 `agent-browser`。
+- Git：本 Evidence 与实现由当前公共人工审核功能提交承载；提交标题和正文只描述功能，不包含任务编号或任务名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 65 条 Requirement 与 `SG-I01`–`SG-I06`，其余保持未通过。下一步继续且只允许实施 `SG-I07` 的真实 Review Workbench。

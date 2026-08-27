@@ -16,7 +16,9 @@ type WorkflowHumanGateApplyReceipt struct {
 	ReviewDecisionID uuid.UUID         `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_gate_apply_decision"`
 	SubjectRevision  int               `gorm:"not null;check:ck_wrk_gate_apply_subject_revision,subject_revision >= 1"`
 	Decision         string            `gorm:"type:varchar(30);not null;check:ck_wrk_gate_apply_decision,decision IN ('approved','rejected','changes_requested','selected')"`
-	OwnerReceiptID   *uuid.UUID        `gorm:"type:uuid;uniqueIndex:uq_wrk_gate_apply_owner_receipt;check:ck_wrk_gate_apply_owner_evidence,(decision IN ('approved','selected') AND owner_receipt_id IS NOT NULL AND owner_operation IS NOT NULL AND output IS NOT NULL AND output_hash IS NOT NULL) OR (decision IN ('rejected','changes_requested') AND owner_receipt_id IS NULL AND owner_operation IS NULL AND output IS NULL AND output_hash IS NULL)"`
+	Status           string            `gorm:"type:varchar(20);not null;check:ck_wrk_gate_apply_status,status IN ('not_required','completed','conflict');check:ck_wrk_gate_apply_owner_evidence,(status = 'completed' AND decision IN ('approved','selected') AND owner_receipt_id IS NOT NULL AND owner_operation IS NOT NULL AND output IS NOT NULL AND output_hash IS NOT NULL AND conflict_code IS NULL) OR (status = 'not_required' AND decision IN ('rejected','changes_requested') AND owner_receipt_id IS NULL AND owner_operation IS NULL AND output IS NULL AND output_hash IS NULL AND conflict_code IS NULL) OR (status = 'conflict' AND decision IN ('approved','selected') AND owner_receipt_id IS NULL AND owner_operation IS NULL AND output IS NULL AND output_hash IS NULL AND conflict_code IS NOT NULL)"`
+	ConflictCode     *string           `gorm:"type:varchar(80)"`
+	OwnerReceiptID   *uuid.UUID        `gorm:"type:uuid;uniqueIndex:uq_wrk_gate_apply_owner_receipt"`
 	OwnerOperation   *string           `gorm:"type:varchar(120)"`
 	Output           datatypes.JSON    `gorm:"type:jsonb"`
 	OutputHash       *string           `gorm:"type:char(64);check:ck_wrk_gate_apply_output_hash,output_hash IS NULL OR char_length(output_hash) = 64"`

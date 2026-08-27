@@ -18,6 +18,10 @@ type SignalRepository interface {
 	FinalizeSignalAttempt(context.Context, domain.SignalIntent, domain.SignalReceipt, int) error
 }
 
+type HumanGateOwnerConflictRepository interface {
+	RecordHumanGateOwnerConflict(context.Context, domain.HumanGateApplyReceipt) error
+}
+
 type WorkflowSignaler interface {
 	Signal(context.Context, domain.SignalRequest) (domain.SignalObservation, error)
 }
@@ -93,7 +97,23 @@ func (service *SignalService) SignalHumanGate(
 		if command.Decision == "approved" || command.Decision == "selected" {
 			owner, err = service.config.Owner.ApplyHumanGateDecision(ctx, actor, application)
 			if err != nil {
-				return domain.SignalIntent{}, normalizeError(err)
+				normalizedErr := normalizeError(err)
+				var typed *Error
+				conflicts, supported := service.repository.(HumanGateOwnerConflictRepository)
+				if supported && errors.As(normalizedErr, &typed) && typed.Status == 409 {
+					now := service.config.Now().UTC()
+					recordErr := conflicts.RecordHumanGateOwnerConflict(ctx, domain.HumanGateApplyReceipt{
+						ID:          stableID("workflow-human-gate-apply", command.WorkspaceID, command.ReviewDecisionID),
+						WorkspaceID: command.WorkspaceID, WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
+						HumanTaskID: command.HumanTaskID, ReviewDecisionID: command.ReviewDecisionID,
+						SubjectRevision: command.SubjectRevision, Decision: command.Decision,
+						Status: "conflict", ConflictCode: typed.Code, CreatedBy: actor.UserID, CreatedAt: now,
+					})
+					if recordErr != nil {
+						return domain.SignalIntent{}, normalizeError(recordErr)
+					}
+				}
+				return domain.SignalIntent{}, normalizedErr
 			}
 			owner, err = normalizeHumanGateOwnerResult(application, owner)
 			if err != nil {
@@ -119,6 +139,11 @@ func (service *SignalService) SignalHumanGate(
 				SubjectRevision: command.SubjectRevision, Status: "pending", Revision: 1,
 				CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now,
 			},
+		}
+		if command.Decision == "approved" || command.Decision == "selected" {
+			desired.ApplyReceipt.Status = "completed"
+		} else {
+			desired.ApplyReceipt.Status = "not_required"
 		}
 		prepared, err = service.repository.PrepareSignal(ctx, desired)
 		if err != nil {
@@ -168,11 +193,13 @@ func NewSignalRequest(prepared domain.SignalPreparation) (domain.SignalRequest, 
 	}
 	if intent.Decision == "approved" || intent.Decision == "selected" {
 		normalized, _, outputHash, outputErr := domain.BuildNodeOutput(apply.Output)
-		if outputErr != nil || apply.OwnerReceiptID == "" || apply.OutputHash != outputHash {
+		if outputErr != nil || apply.Status != "completed" || apply.ConflictCode != "" ||
+			apply.OwnerReceiptID == "" || apply.OutputHash != outputHash {
 			return domain.SignalRequest{}, errors.New("workflow human gate owner evidence is invalid")
 		}
 		request.Output = normalized
-	} else if apply.OwnerReceiptID != "" || apply.OutputHash != "" || apply.Output.SchemaVersion != "" || len(apply.Output.Bindings) != 0 {
+	} else if apply.Status != "not_required" || apply.ConflictCode != "" || apply.OwnerReceiptID != "" ||
+		apply.OutputHash != "" || apply.Output.SchemaVersion != "" || len(apply.Output.Bindings) != 0 {
 		return domain.SignalRequest{}, errors.New("workflow rejected human gate has owner output")
 	}
 	inputHash, err := platformcommand.InputHash(request)

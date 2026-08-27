@@ -40,7 +40,8 @@ func (opener *Opener) OpenHumanTask(ctx context.Context, binding domain.HumanGat
 		WorkspaceID: binding.WorkspaceID, ProjectID: binding.ProjectID,
 		WorkflowRunID: binding.WorkflowRunID, NodeRunID: binding.NodeRunID,
 		SubjectType: binding.SubjectType, SubjectID: binding.SubjectID, SubjectRevision: binding.SubjectRevision,
-		CandidateIDs: binding.CandidateIDs, RubricVersion: binding.RubricVersion,
+		SubjectHash: binding.SubjectHash, CandidateIDs: binding.CandidateIDs, RubricVersion: binding.RubricVersion,
+		AllowedDecisions: binding.AllowedDecisions,
 	}
 	if binding.Executor == "gate.generation_image_review" {
 		if opener.candidateSets == nil || binding.InitiatorTokenVersion < 1 || !validUUID(binding.InitiatorUserID) ||

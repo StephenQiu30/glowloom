@@ -28,6 +28,7 @@ const (
 	defaultAgentImageDigest   = "sha256:4cf64c94b7d181945da678721db36c4bc45921a9c833164bdea46cb7af149c42"
 	defaultAgentPollMillis    = 500
 	defaultAgentLeaseSeconds  = 30 * 60
+	defaultReviewLeaseSeconds = 5 * 60
 	defaultTemporalAddress    = "127.0.0.1:7233"
 	defaultTemporalNamespace  = "default"
 	defaultTemporalTaskQueue  = "lanverse-production-v1"
@@ -81,6 +82,7 @@ type Config struct {
 	AgentRuntimeAdditionalRevisions []AgentRuntimeRevision
 	AgentPollInterval               time.Duration
 	AgentClaimLease                 time.Duration
+	ReviewClaimLease                time.Duration
 	TemporalAddress                 string
 	TemporalNamespace               string
 	TemporalTaskQueue               string
@@ -155,6 +157,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	agentLeaseSeconds, err := positiveInteger("AGENT_CLAIM_LEASE_SECONDS", defaultAgentLeaseSeconds)
+	if err != nil {
+		return Config{}, err
+	}
+	reviewLeaseSeconds, err := positiveInteger("REVIEW_CLAIM_LEASE_SECONDS", defaultReviewLeaseSeconds)
 	if err != nil {
 		return Config{}, err
 	}
@@ -259,6 +265,7 @@ func Load() (Config, error) {
 		AgentRuntimeAdditionalRevisions: agentAdditionalRevisions,
 		AgentPollInterval:               time.Duration(agentPollMillis) * time.Millisecond,
 		AgentClaimLease:                 time.Duration(agentLeaseSeconds) * time.Second,
+		ReviewClaimLease:                time.Duration(reviewLeaseSeconds) * time.Second,
 		TemporalAddress:                 temporalAddress,
 		TemporalNamespace:               temporalNamespace,
 		TemporalTaskQueue:               temporalTaskQueue,

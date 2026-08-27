@@ -93,7 +93,9 @@ type HumanGateBinding struct {
 	InitiatorTokenVersion                            int
 	SubjectType, SubjectID                           string
 	SubjectRevision                                  int
+	SubjectHash                                      string
 	CandidateIDs                                     []string
 	CandidateSet                                     NodeInputBinding
 	RubricVersion                                    string
+	AllowedDecisions                                 []string
 }

@@ -1,6 +1,6 @@
 # Workflow 公共 Human Gate 命令与恢复设计
 
-> 状态：StoryGraph Human Gate 复核已接受（`SG-D16`，2026-08-27）；只代表 Design 已接受，不代表公共 HTTP 或新 Gate 已实现
+> 状态：StoryGraph Human Gate 复核已接受（`SG-D16`，2026-08-27）；Backend 公共 HTTP 与既有五类 Owner 路由已于 2026-08-27 实现，新 StoryGraph Gate 和 Review Workbench 仍按唯一实施队列逐项交付
 >
 > 基线：[后端领域模块功能设计](2002-后端领域模块功能设计.md) · [前端功能模块设计](1002-前端功能模块设计.md) · [StoryGraph 内容图与 DAG 创作画布设计](0010-StoryGraph内容图与DAG创作画布设计.md)
 >
@@ -22,7 +22,7 @@
 - 官方 Temporal Go Client 的 Signal/History 对账与 UNKNOWN 重试；
 - PostgreSQL/GORM Model Catalog 的单一 SQL 事实源。
 
-当前缺口是：
+设计接受时的缺口是：
 
 - `lanverse-api` 没有公共 HumanTask 列表/详情/Claim/Decision/Resume HTTP；
 - StoryGraph 新链路需要 Bible、Episode、Planning、Storyboard Intent、Storyboard Detail、Reference 和 Shot Frame 多种 Gate；
@@ -252,7 +252,7 @@ Review Workbench 首版只做：项目 Task 队列、详情、Claim/Renew/Releas
 
 ## 11. 实施门禁
 
-本设计完成 `SG-D16`，不声明公共 HTTP、新 GORM 字段或七类 Gate 已实现。下一步依次完成 `SG-D17` PRD、`SG-D18` 跨服务 Requirement、`SG-D19` Agent Requirement、`SG-D20` 唯一 Plan 和初始全未勾选的 `SG-D21` Acceptance。
+本设计在 `SG-D16` 接受时不声明公共 HTTP、新 GORM 字段或七类 Gate 已实现；后续 `SG-D17` PRD、`SG-D18` 跨服务 Requirement、`SG-D19` Agent Requirement、`SG-D20` 唯一 Plan 和初始全未勾选的 `SG-D21` Acceptance 已按顺序完成。当前 Backend 公共 API、既有五类 Owner 路由与恢复闭环已有实现和验收证据，七类新 StoryGraph Gate 与 Review Workbench 仍未实现。
 
 代码实现只按 [0010 的唯一 `SG-Ixx` 队列](0010-StoryGraph内容图与DAG创作画布设计.md#唯一实施任务队列)：`SG-I06` 完成 Backend 公共 API，`SG-I07` 完成真实 Review Workbench，后续 Gate 随各自 Owner 任务逐个接入。每个完整任务通过局部验证和当前全量真实 CI 后独立提交；禁止兼容 fallback、跳过 CI、假 Owner Receipt 或本地模拟成功。
 

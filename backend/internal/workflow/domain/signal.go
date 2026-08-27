@@ -16,7 +16,7 @@ type HumanGateApplyReceipt struct {
 	ID, WorkspaceID, WorkflowRunID, NodeRunID string
 	HumanTaskID, ReviewDecisionID             string
 	SubjectRevision                           int
-	Decision                                  string
+	Decision, Status, ConflictCode            string
 	OwnerReceiptID, OwnerOperation            string
 	Output                                    NodeOutputSnapshot
 	OutputHash                                string

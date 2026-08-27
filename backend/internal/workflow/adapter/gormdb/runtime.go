@@ -697,6 +697,10 @@ func (store *Store) PrepareHumanGate(
 		} else if len(candidateIDs) == 0 {
 			return errors.New("workflow human gate has no candidate input")
 		}
+		allowedDecisions, allowedErr := humanGateAllowedDecisions(node.Executor)
+		if allowedErr != nil {
+			return allowedErr
+		}
 		if node.Status == "QUEUED" {
 			node.Status = "WAITING_HUMAN"
 			node.Attempt++
@@ -734,13 +738,25 @@ func (store *Store) PrepareHumanGate(
 			NodeRunID: node.ID.String(), Executor: node.Executor, InitiatorUserID: run.CreatedBy.String(),
 			InitiatorTokenVersion: run.InitiatorTokenVersion,
 			SubjectType:           "workflow_node_output", SubjectID: node.ID.String(),
-			SubjectRevision: node.Revision, CandidateIDs: candidateIDs,
-			CandidateSet:  candidateSet,
-			RubricVersion: node.Executor + "@" + node.DefinitionVersion,
+			SubjectRevision: node.Revision, SubjectHash: resolved.InputHash, CandidateIDs: candidateIDs,
+			CandidateSet:     candidateSet,
+			RubricVersion:    node.Executor + "@" + node.DefinitionVersion,
+			AllowedDecisions: allowedDecisions,
 		}
 		return nil
 	})
 	return binding, err
+}
+
+func humanGateAllowedDecisions(executor string) ([]string, error) {
+	switch executor {
+	case "gate.generation_image_review":
+		return []string{"changes_requested", "rejected", "selected"}, nil
+	case "gate.production_bible_review", "gate.episode_plan_review", "gate.episode_structure_review", "gate.storyboard_review":
+		return []string{"approved", "changes_requested", "rejected"}, nil
+	default:
+		return nil, errors.New("unsupported workflow human gate rubric")
+	}
 }
 
 func humanGateCandidateIDs(input domain.NodeInputSnapshot) []string {

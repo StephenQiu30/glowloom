@@ -353,7 +353,8 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 	}
 	decision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
 		TaskID: humanTask.ID.String(), ClaimToken: claimed.ClaimToken, ExpectedTaskRevision: claimed.Task.Revision,
-		ExpectedSubjectRevision: claimed.Task.SubjectRevision, Decision: "approved", IdempotencyKey: "workflow-gate-decision",
+		ExpectedSubjectRevision: claimed.Task.SubjectRevision, ExpectedSubjectHash: claimed.Task.SubjectHash,
+		Decision: "approved", IdempotencyKey: "workflow-gate-decision",
 	})
 	if err != nil {
 		t.Fatalf("decide workflow human task: %v", err)

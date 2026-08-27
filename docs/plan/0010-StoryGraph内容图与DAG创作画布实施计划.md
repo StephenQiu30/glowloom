@@ -1,6 +1,6 @@
 # StoryGraph 内容图与 DAG 创作画布实施计划
 
-- 状态：实施中；`SG-I01`–`SG-I05` 已完成（2026-08-27）
+- 状态：实施中；`SG-I01`–`SG-I06` 已完成（2026-08-27）
 - Design：[0010 StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
 - Agent Design：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 - PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
@@ -71,7 +71,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 3. 实现最小 Green，只修改本项 Owner 和必要 Composition Root；禁止兼容回退、假成功、跳过检查或内存替身抵扣真实依赖。
 4. Refactor 后运行本项定向测试、架构/import/secret/SQL 门禁和当前完整真实 CI；涉及 Kafka、Elastic、ELK、Temporal、MinIO、PostgreSQL 或 Provider 时使用真实服务。
 5. 回填本项 Acceptance Evidence；检查 diff、生成文件、secret、日志、缓存和报告产物。
-6. 只提交已完整通过的本项或本项中的完整交付单元，格式为 `type(scope): 中文说明`；最后一个提交必须使该 `SG-Ixx` 的全部门通过，再进入下一项。
+6. 只提交已完整通过的本项或本项中的完整交付单元，格式为 `type(scope): 中文功能说明`；提交标题和正文只描述交付的功能，不包含 `SG-Ixx` 等任务编号或任务名。最后一个提交必须使当前实施项的全部门通过，再进入下一项。
 
 若外部 Codex 登录、Runware Staging、真实服务资源或人工决议缺失，保留 failed/unknown/blocked 事实并停止；不得使用 mock、旧证据或静默降级宣称通过。
 
@@ -86,7 +86,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 - [x] `SG-I03`：实现 StoryGraphVersion/Head、Owner Set 冻结、GORM Record、线性 Compiler/发布；首版只编译已有 Owner 事实。完成门：独立 PostgreSQL、并发/CAS、无环、Hash、重放和 stale 标记通过。**完成（2026-08-27）**：不可变 JSONB Version/唯一 Head、正式 Owner Set、完整 Edge 矩阵、单 GORM SERIALIZABLE 事务 Version/Head/Receipt/Outbox、跨版本精确重放、并发 CAS、权限与故障回滚均由真实 PostgreSQL 和全量 CI 证明；查询与 Kafka/Search/ELK 仍只属于 `SG-I04`。
 - [x] `SG-I04`：在 `SG-I03` 发布契约上实现 Current/Version/Lens Query、Version Diff、上下游追踪和影响闭包。完成门：Query 仅读、大图有界、相同版本结果确定，全量 CI 通过并已提交。**完成（2026-08-27）**：Query、Kafka Event、Elasticsearch Search 与独立 ELK 日志四个交付单元均完成；Script/StoryGraph 业务链与日志链使用独立 SASL 身份、Topic/Schema/ACL/Retention/Group/DLQ/Index。三个应用 Binary 使用统一脱敏 JSON Logger，真实 Backend HTTP 日志经 Filebeat/Kafka/Logstash 进入严格 Log Index 并可由 Kibana Data View 查询；关联字段、敏感字段零泄露、非法日志 Hash-only DLQ、逐组件停机下 Owner 事务/Workflow/Search 不变及恢复后继续采集均由真实服务和全量 CI 证明。
 - [x] `SG-I05`：只在 `SG-I04` 完成后建立 Backend-owned Stage Envelope/Policy/Candidate Revision，将 8 个过渡 Skill 收口为 `agent/skills/build-storygraph` Bundle、Stage Reference 和 Bundle Hash，原子删除旧 Skill 名。完成门：跨语言 fixture、golden、Bundle 完整性、旧 Invocation 精确路由和全量 CI 通过。**完成（2026-08-27）**：唯一 Bundle、十 Stage 严格 Wire/Pydantic Candidate、Backend 精确 Runtime Catalog 与首个不可变 Candidate Revision 已落地；旧 Skill/Invocation 入口和无消费者依赖已原子删除，本地真实 Codex、空 PostgreSQL、Temporal/MinIO/Kafka/ELK、三镜像及完整故障部署 CI 全部通过。
-- [ ] `SG-I06`：按已接受 `2055` 完成 HumanTask 列表/详情、Claim/Renew/Release、Decision 和 Resume Backend API，复用已有 Review/Workflow 事实。完成门：Owner Receipt、Signal unknown/recovery、权限、幂等/冲突和 API 重启恢复通过，无第二审核状态机。
+- [x] `SG-I06`：按已接受 `2055` 完成 HumanTask 列表/详情、Claim/Renew/Release、Decision 和 Resume Backend API，复用已有 Review/Workflow 事实。完成门：Owner Receipt、Signal unknown/recovery、权限、幂等/冲突和 API 重启恢复通过，无第二审核状态机。**完成（2026-08-27）**：冻结 Subject/Rubric、Lease 零泄漏、不可变 Decision、三阶段 Coordinator、五类既有 Owner 路由和真实 Temporal UNKNOWN 恢复均已落地；OpenAPI/生成 Client、空 PostgreSQL/真实基础设施、全量 CI/Compose/三镜像证据见 Acceptance。
 - [ ] `SG-I07`：在 `SG-I06` 真实 API 上交付最小 Review Workbench，显式区分 Task、Decision、Owner Apply 和 Workflow Resume。完成门：刷新、过期 Lease、unknown/conflict、键盘和可访问性自动化通过，不模拟 Backend 成功。
 
 `SG-I04` 同时承接 Event/Search/ELK 的首个真实消费者，不新增任务编号：先完成 StoryGraph 查询契约，再完成 Outbox Publisher + Kafka Envelope/Inbox/DLQ/Replay，再完成 Script/StoryGraph Elasticsearch Projection/Reindex/Search API，最后接通独立日志 Topic 与 ELK 管道；这些是该项内可分别完成、验证和提交的交付单元，但 `SG-I04` 只有在真实 Kafka/Elastic/日志故障 CI 全部通过后才完成。业务 Outbox 由 `SG-I03` 与 Owner 事务同库写入，Kafka ACK unknown 以同 Event ID 重试；Elasticsearch 与日志索引始终是可重建派生数据。

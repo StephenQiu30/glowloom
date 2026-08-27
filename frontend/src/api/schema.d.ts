@@ -984,6 +984,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/human-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listHumanTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/human-tasks/{human_task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getHumanTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/human-tasks/{human_task_id}/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["claimHumanTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/human-tasks/{human_task_id}/claim-renewals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["renewHumanTaskClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/human-tasks/{human_task_id}/claim-releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["releaseHumanTaskClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/human-tasks/{human_task_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decideHumanTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review-decisions/{review_decision_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resumeHumanGateFromReviewDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflow-runs": {
         parameters: {
             query?: never;
@@ -1164,6 +1276,137 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        HumanTaskBaseResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            workflow_run_id: string;
+            /** Format: uuid */
+            node_run_id: string;
+            subject_type: string;
+            /** Format: uuid */
+            subject_id: string;
+            subject_revision: number;
+            subject_hash: string;
+            candidate_ids: string[];
+            rubric_version: string;
+            allowed_decisions: ("approved" | "rejected" | "changes_requested" | "selected")[];
+            /** @enum {string} */
+            status: "OPEN" | "CLAIMED" | "COMPLETED" | "CANCELLED" | "STALE";
+            revision: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        HumanTaskClaimSummary: {
+            /** Format: uuid */
+            claimed_by: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        HumanTaskClaimDetail: {
+            /** Format: uuid */
+            claimed_by: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uuid */
+            claim_token?: string;
+        };
+        HumanTaskListItemResponse: components["schemas"]["HumanTaskBaseResponse"] & {
+            claim: components["schemas"]["HumanTaskClaimSummary"] | null;
+        };
+        HumanTaskResponse: components["schemas"]["HumanTaskBaseResponse"] & {
+            claim: components["schemas"]["HumanTaskClaimDetail"] | null;
+        };
+        ReviewDecisionResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            human_task_id: string;
+            /** @enum {string} */
+            decision: "approved" | "rejected" | "changes_requested" | "selected";
+            subject_revision: number;
+            subject_hash: string;
+            /** Format: uuid */
+            selected_candidate_id: string | null;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        HumanGateCoordinationResponse: {
+            /** Format: uuid */
+            review_decision_id: string;
+            /** @constant */
+            decision_status: "recorded";
+            /** @enum {string} */
+            owner_apply_status: "pending" | "not_required" | "completed" | "conflict";
+            /** Format: uuid */
+            owner_receipt_id: string | null;
+            /** @enum {string} */
+            workflow_resume_status: "pending" | "unknown" | "completed" | "conflict";
+            /** Format: uuid */
+            workflow_signal_receipt_id: string | null;
+            conflict_code: string | null;
+        };
+        HumanTaskListEnvelope: {
+            data: {
+                items: components["schemas"]["HumanTaskListItemResponse"][];
+                /** Format: uuid */
+                next_after: string | null;
+            };
+        };
+        HumanTaskDetailEnvelope: {
+            data: {
+                task: components["schemas"]["HumanTaskResponse"];
+                decision: components["schemas"]["ReviewDecisionResponse"] | null;
+                coordination: components["schemas"]["HumanGateCoordinationResponse"] | null;
+            };
+        };
+        HumanTaskCommandEnvelope: {
+            data: {
+                task: components["schemas"]["HumanTaskResponse"];
+            };
+        };
+        HumanGateDecisionEnvelope: {
+            data: {
+                task: components["schemas"]["HumanTaskResponse"];
+                decision: components["schemas"]["ReviewDecisionResponse"];
+                coordination: components["schemas"]["HumanGateCoordinationResponse"];
+            };
+        };
+        HumanGateResumeEnvelope: {
+            data: {
+                coordination: components["schemas"]["HumanGateCoordinationResponse"];
+            };
+        };
+        HumanTaskClaimRequest: {
+            expected_revision: number;
+            idempotency_key: string;
+        };
+        HumanTaskClaimTokenRequest: {
+            /** Format: uuid */
+            claim_token: string;
+            expected_revision: number;
+            idempotency_key: string;
+        };
+        HumanTaskDecisionRequest: {
+            /** Format: uuid */
+            claim_token: string;
+            expected_task_revision: number;
+            expected_subject_revision: number;
+            expected_subject_hash: string;
+            /** @enum {string} */
+            decision: "approved" | "rejected" | "changes_requested" | "selected";
+            /** Format: uuid */
+            selected_candidate_id: string | null;
+            idempotency_key: string;
+        };
         StoryGraphVersionEnvelope: {
             data: components["schemas"]["StoryGraphVersionResponse"];
         };
@@ -2883,6 +3126,8 @@ export interface components {
         batch_id: string;
         export_id: string;
         workflow_run_id: string;
+        human_task_id: string;
+        review_decision_id: string;
         storygraph_version_ref: string | "current";
         story_node_key: string;
         storygraph_depth: number;
@@ -4287,6 +4532,228 @@ export interface operations {
                     "application/zip": string;
                 };
             };
+        };
+    };
+    listHumanTasks: {
+        parameters: {
+            query?: {
+                status?: "active" | "OPEN" | "CLAIMED" | "COMPLETED" | "CANCELLED" | "STALE";
+                subject_type?: string;
+                limit?: number;
+                after?: string;
+            };
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 项目 HumanTask 稳定分页列表；永不返回 claim_token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanTaskListEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getHumanTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                human_task_id: components["parameters"]["human_task_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description HumanTask、不可变决策及三阶段协调状态；仅当前未过期 Owner 可见 claim_token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanTaskDetailEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    claimHumanTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                human_task_id: components["parameters"]["human_task_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HumanTaskClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description HumanTask Claim 已获得或幂等重放 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanTaskCommandEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    renewHumanTaskClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                human_task_id: components["parameters"]["human_task_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HumanTaskClaimTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description HumanTask Claim 租约已续期或幂等重放 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanTaskCommandEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    releaseHumanTaskClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                human_task_id: components["parameters"]["human_task_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HumanTaskClaimTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description HumanTask Claim 已释放或幂等重放 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanTaskCommandEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    decideHumanTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                human_task_id: components["parameters"]["human_task_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HumanTaskDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description 决策已记录、Owner Apply 与 Workflow Resume 均完成 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanGateDecisionEnvelope"];
+                };
+            };
+            /** @description 决策已记录，Owner Apply 或 Workflow Resume 仍需恢复 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanGateDecisionEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    resumeHumanGateFromReviewDecision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_decision_id: components["parameters"]["review_decision_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 由已持久化 ReviewDecision 恢复且 Workflow Resume 已完成 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanGateResumeEnvelope"];
+                };
+            };
+            /** @description 恢复已受理但 Temporal 结果仍未知 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanGateResumeEnvelope"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     startWorkflowRun: {

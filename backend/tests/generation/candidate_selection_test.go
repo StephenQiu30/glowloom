@@ -153,12 +153,27 @@ func TestSelectedReviewDecisionCreatesOneGenerationSelection(t *testing.T) {
 		t.Fatalf("redeliver generation selection with a new key: result=%#v err=%v", redelivered, err)
 	}
 
-	approved := decidedReview(t, ctx, reviewService, reviewapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}, now,
-		workspaceID.String(), projectID.String(), []string{firstCandidate.Candidate.ID}, "approved", "", "selection-approved")
-	if _, err = selectionService.ApplySelection(ctx, actor, generationapp.ApplySelectionCommand{
-		ReviewDecisionID: approved.Decision.ID, IdempotencyKey: "apply-selection-approved",
+	invalidTask, err := reviewService.Open(ctx, reviewapp.OpenCommand{
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
+		SubjectType: "generation_candidate_selection", SubjectID: uuid.NewString(), SubjectRevision: 1,
+		SubjectHash: strings.Repeat("b", 64), CandidateIDs: []string{firstCandidate.Candidate.ID},
+		AllowedDecisions: []string{"changes_requested", "rejected", "selected"}, RubricVersion: "generation-image-selection-v1",
+	})
+	if err != nil {
+		t.Fatalf("open frozen Generation selection rubric: %v", err)
+	}
+	invalidClaim, err := reviewService.Claim(ctx, reviewapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}, reviewapp.ClaimCommand{
+		TaskID: invalidTask.ID, ExpectedRevision: invalidTask.Revision, IdempotencyKey: "selection-approved-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim frozen Generation selection rubric: %v", err)
+	}
+	if _, err = reviewService.Decide(ctx, reviewapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}, reviewapp.DecideCommand{
+		TaskID: invalidTask.ID, ClaimToken: invalidClaim.ClaimToken, ExpectedTaskRevision: invalidClaim.Task.Revision,
+		ExpectedSubjectRevision: invalidTask.SubjectRevision, ExpectedSubjectHash: invalidTask.SubjectHash,
+		Decision: "approved", IdempotencyKey: "selection-approved-decision",
 	}); err == nil {
-		t.Fatal("approved review decision created a CandidateSelection")
+		t.Fatal("Generation selection rubric accepted an approved decision")
 	}
 	failed := selectedDecision(t, ctx, reviewService, reviewapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}, now,
 		workspaceID.String(), projectID.String(), []string{firstCandidate.Candidate.ID, failedCandidate.Candidate.ID}, firstCandidate.Candidate.ID, "selection-qc-failed")
@@ -244,7 +259,8 @@ func decidedReview(t *testing.T, ctx context.Context, service *reviewapp.Service
 	task, err := service.Open(ctx, reviewapp.OpenCommand{
 		WorkspaceID: workspaceID, ProjectID: projectID, WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		SubjectType: "generation_candidate_selection", SubjectID: uuid.NewString(), SubjectRevision: 1,
-		CandidateIDs: candidateIDs, RubricVersion: "generation-image-selection-v1",
+		SubjectHash: strings.Repeat("a", 64), CandidateIDs: candidateIDs,
+		AllowedDecisions: []string{"changes_requested", "rejected", "selected"}, RubricVersion: "generation-image-selection-v1",
 	})
 	if err != nil {
 		t.Fatalf("open %s generation selection review: %v", key, err)
@@ -255,7 +271,8 @@ func decidedReview(t *testing.T, ctx context.Context, service *reviewapp.Service
 	}
 	result, err := service.Decide(ctx, actor, reviewapp.DecideCommand{
 		TaskID: task.ID, ClaimToken: claimed.ClaimToken, Decision: decision, SelectedCandidateID: selectedCandidateID,
-		ExpectedTaskRevision: claimed.Task.Revision, ExpectedSubjectRevision: task.SubjectRevision, IdempotencyKey: key + "-decide",
+		ExpectedTaskRevision: claimed.Task.Revision, ExpectedSubjectRevision: task.SubjectRevision,
+		ExpectedSubjectHash: task.SubjectHash, IdempotencyKey: key + "-decide",
 	})
 	if err != nil {
 		t.Fatalf("decide %s generation selection review at %s: %v", key, now, err)

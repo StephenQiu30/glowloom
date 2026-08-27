@@ -19,6 +19,8 @@ import (
 	agentclient "github.com/StephenQiu30/lanverse/backend/internal/agent/client"
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	agentgrant "github.com/StephenQiu30/lanverse/backend/internal/agent/grant"
+	assetgorm "github.com/StephenQiu30/lanverse/backend/internal/asset/adapter/gormdb"
+	assetapp "github.com/StephenQiu30/lanverse/backend/internal/asset/application"
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoringdomain "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
@@ -27,6 +29,10 @@ import (
 	costgorm "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/gormdb"
 	costhttp "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/httpapi"
 	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
+	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
+	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
+	generationreview "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/review"
+	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	mediagorm "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gormdb"
 	mediahttp "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/httpapi"
 	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
@@ -49,6 +55,9 @@ import (
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboardhttp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/httpapi"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
+	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
+	reviewhttp "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/httpapi"
+	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	searches "github.com/StephenQiu30/lanverse/backend/internal/search/adapter/elasticsearch"
 	searchgorm "github.com/StephenQiu30/lanverse/backend/internal/search/adapter/gormdb"
 	searchhttp "github.com/StephenQiu30/lanverse/backend/internal/search/adapter/httpapi"
@@ -59,8 +68,12 @@ import (
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
+	workflowexecution "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/execution"
+	workflowgeneration "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/generation"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowhttp "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/httpapi"
+	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
+	workflowreview "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/review"
 	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 )
@@ -211,6 +224,23 @@ func main() {
 	storyboardService := storyboardapp.NewService(storyboardStore, storyboardapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	storyboardHandler := storyboardhttp.New(storyboardService, tokenVerifier)
 	storyboardWorker := storyboardapp.NewWorker(storyboardStore, agentRuntime, func() time.Time { return time.Now().UTC() }, configuration.AgentPollInterval, configuration.AgentClaimLease, logger)
+	reviewStore := reviewgorm.New(database)
+	reviewService := reviewapp.NewService(reviewStore, reviewapp.Config{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+		ClaimLease: configuration.ReviewClaimLease,
+	})
+	assetService := assetapp.NewService(assetgorm.New(database), objects, assetapp.Config{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+		Bucket: configuration.ObjectStoreBucket, StorageProfile: "private-primary",
+		Region: configuration.ObjectStoreRegion, MaxImageBytes: 20 << 20,
+	})
+	candidateService := generationapp.NewService(
+		generationgorm.New(database), generationasset.NewReadiness(assetService), generationapp.Config{},
+	)
+	selectionService := generationapp.NewSelectionService(
+		generationgorm.New(database), candidateService, generationreview.NewDecisionReader(reviewService),
+		generationapp.SelectionConfig{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+	)
 	storyGraphStore := storygraphgorm.New(database)
 	storyGraphQueryService := storygraphapp.NewQueryService(storyGraphStore)
 	storyGraphHandler := storygraphhttp.New(storyGraphQueryService, tokenVerifier)
@@ -244,6 +274,24 @@ func main() {
 		workflowapp.ControlConfig{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
 	)
 	workflowHandler := workflowhttp.New(workflowStartService, workflowQueryService, workflowControlService, tokenVerifier)
+	humanGateOwners, err := workflowexecution.NewHumanGateOwnerRouter(
+		workflowproduction.New(bibleService, planningService, storyboardService),
+		workflowgeneration.NewHumanGateApplier(selectionService),
+	)
+	if err != nil {
+		logger.Error("workflow Human Gate owner composition failed", "error", err)
+		os.Exit(1)
+	}
+	workflowSignalService := workflowapp.NewSignalService(
+		workflowStore, temporalRuntime,
+		workflowapp.SignalConfig{
+			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, Owner: humanGateOwners,
+		},
+	)
+	humanGateCoordinator := workflowapp.NewHumanGateCoordinator(
+		workflowreview.NewDecisionReader(reviewService), workflowSignalService, workflowStore,
+	)
+	reviewHandler := reviewhttp.New(reviewService, humanGateCoordinator, tokenVerifier)
 	httpMetrics := telemetry.NewHTTPMetrics()
 	server := &http.Server{
 		Addr: configuration.ListenAddress,
@@ -273,6 +321,7 @@ func main() {
 				storyGraphHandler.Register(mux)
 				searchHandler.Register(mux)
 				workflowHandler.Register(mux)
+				reviewHandler.Register(mux)
 			},
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

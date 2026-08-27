@@ -23,7 +23,17 @@ describe("Go Backend OpenAPI type ownership", () => {
       "/api/v1/production-bibles/{bible_id}/review-decisions",
     );
     expect(openapi.components.schemas).toHaveProperty("ProductionBibleResponse");
+    expect(openapi.paths).toHaveProperty(
+      "/api/v1/projects/{project_id}/human-tasks",
+    );
+    expect(openapi.paths).toHaveProperty(
+      "/api/v1/review-decisions/{review_decision_id}/resume",
+    );
+    expect(openapi.components.schemas).toHaveProperty(
+      "HumanGateCoordinationResponse",
+    );
     expect(generated).toContain("review_decisions");
+    expect(generated).toContain("HumanGateCoordinationResponse");
     expect(generated).not.toMatch(/migration|kafka|redis|sqlalchemy/i);
   });
 });
