@@ -9,9 +9,11 @@ import pytest
 from pydantic import ValidationError
 
 from app.candidate_runtime.schemas import (
+    StoryAnalysisStageInput,
     StoryGraphExecutionGrantClaims,
     StoryGraphStageInvocation,
     StoryGraphStageResult,
+    StoryReconciliationStageInput,
 )
 
 FIXTURE = (
@@ -64,6 +66,59 @@ def test_source_evidence_stage_input_is_strict_and_bound_to_the_source_shard() -
     drifted_source["payload"]["stage_input"]["normalized_hash"] = "b" * 64
     with pytest.raises(ValidationError):
         StoryGraphStageInvocation.model_validate(drifted_source)
+
+
+def test_story_analysis_input_binds_one_exact_evidence_revision() -> None:
+    value = StoryAnalysisStageInput.model_validate(
+        {
+            "evidence_shard_key": "source:00000000:00000012",
+            "evidence_candidate_revision_id": "10000000-0000-0000-0000-000000000001",
+            "evidence_candidate_revision_hash": "a" * 64,
+            "logical_start": 0,
+            "logical_end": 12,
+            "evidence_candidate": {"observations": [], "review_issues": []},
+        }
+    )
+    assert value.logical_end == 12
+    with pytest.raises(ValidationError):
+        StoryAnalysisStageInput.model_validate(
+            {**value.model_dump(mode="json"), "unexpected": True}
+        )
+
+
+def test_story_reconciliation_input_is_bounded_and_exact() -> None:
+    candidate: dict[str, Any] = {
+        "entities": [],
+        "world_entries": [],
+        "claims": [],
+        "arcs": [],
+        "review_issues": [],
+    }
+    value = StoryReconciliationStageInput.model_validate(
+        {
+            "level": 1,
+            "candidate_type": "story_analysis_candidate",
+            "candidates": [
+                {
+                    "shard_key": "story-map:0000",
+                    "candidate_revision_id": "10000000-0000-0000-0000-000000000001",
+                    "candidate_revision_hash": "a" * 64,
+                    "candidate": candidate,
+                },
+                {
+                    "shard_key": "story-map:0001",
+                    "candidate_revision_id": "10000000-0000-0000-0000-000000000002",
+                    "candidate_revision_hash": "b" * 64,
+                    "candidate": candidate,
+                },
+            ],
+        }
+    )
+    assert len(value.candidates) == 2
+    too_many = value.model_dump(mode="json")
+    too_many["candidates"] = too_many["candidates"] * 2
+    with pytest.raises(ValidationError):
+        StoryReconciliationStageInput.model_validate(too_many)
 
 
 def test_storygraph_stage_result_is_strict_and_hashes_candidate() -> None:

@@ -10,7 +10,7 @@ type Evidence struct {
 	SourceEnd     int    `json:"source_end"`
 	TextHash      string `json:"text_hash"`
 	ExactAnchor   string `json:"exact_anchor"`
-	EpisodeNumber *int   `json:"episode_number,omitempty"`
+	EpisodeNumber *int   `json:"episode_number"`
 }
 
 type ReviewIssue struct {
@@ -18,9 +18,9 @@ type ReviewIssue struct {
 	Code       string     `json:"code"`
 	Severity   string     `json:"severity"`
 	Scope      string     `json:"scope"`
-	SubjectKey *string    `json:"subject_key,omitempty"`
+	SubjectKey *string    `json:"subject_key"`
 	Summary    string     `json:"summary"`
-	RepairHint *string    `json:"repair_hint,omitempty"`
+	RepairHint *string    `json:"repair_hint"`
 	Evidence   []Evidence `json:"evidence"`
 }
 

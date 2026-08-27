@@ -148,6 +148,9 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		evidenceService,
+		bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString, FanIn: 2,
+		}),
 		bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),

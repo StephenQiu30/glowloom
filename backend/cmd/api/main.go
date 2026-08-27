@@ -224,6 +224,10 @@ func main() {
 		bibleStore, sourceEvidenceService, agentRuntime, func() time.Time { return time.Now().UTC() },
 		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
 	)
+	storyAnalysisWorker := bibleapp.NewStoryAnalysisWorker(
+		bibleStore, agentRuntime, func() time.Time { return time.Now().UTC() },
+		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
+	)
 	planningStore := planninggorm.New(database)
 	planningService := planningapp.NewService(planningStore, planningapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	planningHandler := planninghttp.New(planningService, tokenVerifier)
@@ -339,6 +343,7 @@ func main() {
 	defer stop()
 	go bibleWorker.Run(shutdownSignal)
 	go sourceEvidenceWorker.Run(shutdownSignal)
+	go storyAnalysisWorker.Run(shutdownSignal)
 	go storyboardWorker.Run(shutdownSignal)
 	serverErrors := make(chan error, 1)
 	go func() {

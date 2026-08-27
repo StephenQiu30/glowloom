@@ -103,6 +103,9 @@ func main() {
 	evidenceService := bibleapp.NewSourceEvidenceService(bibleStore, bibleapp.SourceEvidenceConfig{
 		Now: now, NewID: uuid.NewString,
 	})
+	storyAnalysisService := bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
+		Now: now, NewID: uuid.NewString, FanIn: 2,
+	})
 	projectService := projectapp.NewService(projectgorm.New(database), now, uuid.NewString)
 	planningService := planningapp.NewService(
 		planninggorm.New(database), planningapp.Config{Now: now, NewID: uuid.NewString},
@@ -138,7 +141,7 @@ func main() {
 		storyboardapp.Config{Now: now, NewID: uuid.NewString},
 	)
 	activities, err := bootstrap.NewWorkflowRuntime(
-		workflowgorm.New(database), scriptService, evidenceService, bibleService, projectService, planningService, storyboardService, reviewService,
+		workflowgorm.New(database), scriptService, evidenceService, storyAnalysisService, bibleService, projectService, planningService, storyboardService, reviewService,
 		imageBindings, candidateSets,
 	)
 	if err != nil {

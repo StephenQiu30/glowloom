@@ -112,7 +112,11 @@ func TestProductionWorkflowWorkerDurablyCompletesBibleCandidate(t *testing.T) {
 		scriptapp.NewService(
 			scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 		),
-		evidenceService, bibleService,
+		evidenceService,
+		bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
+			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, FanIn: 2,
+		}),
+		bibleService,
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),

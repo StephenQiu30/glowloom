@@ -31,6 +31,7 @@ func NewWorkflowRuntime(
 	repository WorkflowRuntimeRepository,
 	scripts workflowproduction.ScriptSource,
 	evidence workflowproduction.SourceEvidenceOwner,
+	stories workflowproduction.StoryAnalysisOwner,
 	bibles workflowproduction.BibleCandidateOwner,
 	projects *projectapp.Service,
 	plans *planningapp.Service,
@@ -39,7 +40,7 @@ func NewWorkflowRuntime(
 	bindings workflowproduction.ShotImageWorkflowOwner,
 	candidateSets workflowreview.CandidateSetSource,
 ) (*workflowapp.RuntimeService, error) {
-	if repository == nil || scripts == nil || evidence == nil || bibles == nil || projects == nil || plans == nil || storyboards == nil || reviews == nil {
+	if repository == nil || scripts == nil || evidence == nil || stories == nil || bibles == nil || projects == nil || plans == nil || storyboards == nil || reviews == nil {
 		return nil, errors.New("workflow runtime dependencies are required")
 	}
 	now := func() time.Time { return time.Now().UTC() }
@@ -48,7 +49,7 @@ func NewWorkflowRuntime(
 		humanTasks = workflowreview.NewWithGeneration(reviews, candidateSets)
 	}
 	executor := workflowapp.NodeExecutor(
-		workflowproduction.NewNodeExecutor(scripts, evidence, bibles, projects, plans, storyboards, bindings),
+		workflowproduction.NewNodeExecutor(scripts, evidence, stories, bibles, projects, plans, storyboards, bindings),
 	)
 	if candidateSets != nil {
 		var err error

@@ -7,6 +7,11 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.candidate_runtime.canonical import canonical_hash
+from app.modules.storygraph.candidate_schemas import (
+    SourceEvidenceCandidate,
+    StoryAnalysisCandidate,
+    StoryReconciliationCandidate,
+)
 
 StoryGraphStage = Literal[
     "extract_source_evidence",
@@ -147,6 +152,56 @@ class SourceEvidenceStageInput(BaseModel):
         return self
 
 
+class StoryAnalysisStageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_shard_key: str = Field(min_length=1)
+    evidence_candidate_revision_id: UUID
+    evidence_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    logical_start: int = Field(ge=0)
+    logical_end: int = Field(ge=1)
+    evidence_candidate: SourceEvidenceCandidate
+
+    @model_validator(mode="after")
+    def validate_range(self) -> StoryAnalysisStageInput:
+        if self.logical_end <= self.logical_start:
+            raise ValueError("Story analysis range must be increasing")
+        return self
+
+
+class StoryReconciliationInputCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    shard_key: str = Field(min_length=1)
+    candidate_revision_id: UUID
+    candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    candidate: dict[str, Any]
+
+
+class StoryReconciliationStageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    level: int = Field(ge=0)
+    candidate_type: Literal["story_analysis_candidate", "story_reconciliation_candidate"]
+    candidates: list[StoryReconciliationInputCandidate] = Field(min_length=1, max_length=2)
+
+    @model_validator(mode="after")
+    def validate_candidates(self) -> StoryReconciliationStageInput:
+        model: type[BaseModel] = (
+            StoryAnalysisCandidate
+            if self.candidate_type == "story_analysis_candidate"
+            else StoryReconciliationCandidate
+        )
+        identities: set[tuple[UUID, str]] = set()
+        for value in self.candidates:
+            model.model_validate(value.candidate)
+            identity = (value.candidate_revision_id, value.candidate_revision_hash)
+            if identity in identities:
+                raise ValueError("Story reconcile candidates must be unique")
+            identities.add(identity)
+        return self
+
+
 class StoryGraphStagePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -184,6 +239,49 @@ class StoryGraphStagePayload(BaseModel):
                 raise ValueError(
                     "Source Evidence input does not match its immutable source and shard"
                 )
+        elif self.stage == "analyze_story":
+            stage_input = StoryAnalysisStageInput.model_validate(self.stage_input)
+            if (
+                len(self.source_refs) != 1
+                or len(self.upstream_candidates) != 1
+                or self.upstream_candidates[0].stage != "extract_source_evidence"
+                or self.upstream_candidates[0].shard_key != stage_input.evidence_shard_key
+                or self.upstream_candidates[0].candidate_revision_id
+                != stage_input.evidence_candidate_revision_id
+                or self.upstream_candidates[0].candidate_revision_hash
+                != stage_input.evidence_candidate_revision_hash
+                or self.base_storygraph_version_id is not None
+                or self.shard.kind != "story_map"
+                or self.shard.absolute_start != stage_input.logical_start
+                or self.shard.absolute_end != stage_input.logical_end
+            ):
+                raise ValueError("Story analysis input does not match its exact Evidence revision")
+        elif self.stage == "reconcile_story":
+            stage_input = StoryReconciliationStageInput.model_validate(self.stage_input)
+            expected_stage = (
+                "analyze_story"
+                if stage_input.candidate_type == "story_analysis_candidate"
+                else "reconcile_story"
+            )
+            upstream = {
+                (value.shard_key, value.candidate_revision_id, value.candidate_revision_hash)
+                for value in self.upstream_candidates
+                if value.stage == expected_stage
+            }
+            supplied = {
+                (value.shard_key, value.candidate_revision_id, value.candidate_revision_hash)
+                for value in stage_input.candidates
+            }
+            if (
+                len(self.source_refs) != 1
+                or len(self.upstream_candidates) != len(stage_input.candidates)
+                or upstream != supplied
+                or self.base_storygraph_version_id is not None
+                or self.shard.kind != "story_reduce"
+                or self.shard.absolute_start is not None
+                or self.shard.absolute_end is not None
+            ):
+                raise ValueError("Story reconcile input does not match its exact child revisions")
         return self
 
 

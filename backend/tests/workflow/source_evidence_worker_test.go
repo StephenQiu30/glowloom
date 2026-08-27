@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	agentgorm "github.com/StephenQiu30/lanverse/backend/internal/agent/adapter/gormdb"
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
@@ -44,7 +45,7 @@ import (
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-func TestSourceEvidenceWorkflowIsDefinitionFirstAndRecoversTheSameShardIdentity(t *testing.T) {
+func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	temporalAddress := os.Getenv("LANVERSE_TEST_TEMPORAL_ADDRESS")
 	if databaseURL == "" || temporalAddress == "" {
@@ -89,10 +90,14 @@ func TestSourceEvidenceWorkflowIsDefinitionFirstAndRecoversTheSameShardIdentity(
 			Nodes: []authoring.Node{
 				{ID: "script", DefinitionKey: "input.script_revision", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"document_revision_id":"` + fixture.scriptRevisionID.String() + `"}`)},
 				{ID: "evidence", DefinitionKey: "agent.source_evidence", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "story", DefinitionKey: "agent.story_analysis", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			},
-			Edges: []authoring.Edge{{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"}},
+			Edges: []authoring.Edge{
+				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
+				{ID: "evidence-to-story", FromNodeID: "evidence", FromPort: "evidence", ToNodeID: "story", ToPort: "evidence"},
+			},
 		},
-		Layout: json.RawMessage(`{"guided":{"step":2}}`), FrozenInputs: []authoring.FrozenReference{{
+		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
 			Kind: "script_revision", ID: fixture.scriptRevisionID.String(), Version: "1", Hash: fixture.normalizedHash,
 		}}, CatalogKey: catalog.Key, CatalogVersion: catalog.Version,
 		IdempotencyKey: "source-evidence-authoring-create",
@@ -126,10 +131,14 @@ func TestSourceEvidenceWorkflowIsDefinitionFirstAndRecoversTheSameShardIdentity(
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 		MaxShardCodePoints: 24, OverlapCodePoints: 3,
 	})
+	storyAnalysisService := bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, FanIn: 2,
+	})
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		evidenceService,
+		storyAnalysisService,
 		bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
@@ -157,8 +166,19 @@ func TestSourceEvidenceWorkflowIsDefinitionFirstAndRecoversTheSameShardIdentity(
 		bibleStore, evidenceService, agent, func() time.Time { return time.Now().UTC() },
 		time.Millisecond, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)),
 	)
+	storyWorker := bibleapp.NewStoryAnalysisWorker(
+		bibleStore, agent, func() time.Time { return time.Now().UTC() },
+		time.Millisecond, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	bibleWorker := bibleapp.NewWorker(
+		bibleStore, agent, func() time.Time { return time.Now().UTC() },
+		time.Millisecond, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
 	go agentWorker.Run(agentContext)
 	go agentWorker.Run(agentContext)
+	go storyWorker.Run(agentContext)
+	go storyWorker.Run(agentContext)
+	go bibleWorker.Run(agentContext)
 	t.Cleanup(stopAgent)
 
 	startService := workflowapp.NewStartService(compiler, workflowStore, temporalRuntime, workflowapp.StartConfig{
@@ -303,13 +323,152 @@ func TestSourceEvidenceWorkflowIsDefinitionFirstAndRecoversTheSameShardIdentity(
 	if strings.Contains(string(aggregateRevision.AggregateOrigin), oldRevision.ID.String()) {
 		t.Fatalf("late old-manifest Candidate entered current aggregate: %s", aggregateRevision.AggregateOrigin)
 	}
-	if invocationRevisionCount != int64(len(invocations)+1) || aggregateRevisionCount != 1 {
+	var succeededInvocationCount int64
+	if err = database.Model(&model.AgentInvocation{}).
+		Where("workspace_id = ? AND status = ?", fixture.workspaceID, "succeeded").
+		Count(&succeededInvocationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if invocationRevisionCount != succeededInvocationCount || aggregateRevisionCount != 1 {
 		t.Fatalf("Source Evidence revisions: invocation=%d aggregate=%d", invocationRevisionCount, aggregateRevisionCount)
 	}
 	output, _, outputHash, err := workflow.ParseNodeOutput(json.RawMessage(evidenceNode.Output))
 	if err != nil || outputHash != *evidenceNode.OutputHash || len(output.Bindings) != 1 ||
 		output.Bindings[0].Port != "evidence" || output.Bindings[0].ValueType != "source_evidence_candidate" {
 		t.Fatalf("Source Evidence Node output=%#v hash=%s err=%v", output, outputHash, err)
+	}
+
+	var storyNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "story").First(&storyNode).Error; err != nil {
+		t.Fatalf("load Story analysis NodeRun: %v", err)
+	}
+	if storyNode.Status != "SUCCEEDED" || storyNode.OutputHash == nil || storyNode.CreatedAt.Before(definition.CreatedAt) {
+		t.Fatalf("Story analysis NodeRun did not complete definition-first: %#v", storyNode)
+	}
+	var storyManifests []model.ShardManifest
+	if err = database.Where("node_run_id = ?", storyNode.ID).Order("stage").Find(&storyManifests).Error; err != nil || len(storyManifests) != 2 {
+		t.Fatalf("Story analysis manifest pair=%d err=%v", len(storyManifests), err)
+	}
+	var analyzeManifest bibledomain.StoryAnalysisManifest
+	var reconcileManifest bibledomain.StoryReconcileManifest
+	for _, record := range storyManifests {
+		switch record.Stage {
+		case bibledomain.AnalyzeStoryStage:
+			var values []bibledomain.StoryAnalysisShard
+			if err = json.Unmarshal(record.Shards, &values); err != nil {
+				t.Fatal(err)
+			}
+			analyzeManifest = bibledomain.StoryAnalysisManifest{
+				ManifestID: record.ID.String(), Version: record.Version, WorkspaceID: record.WorkspaceID.String(),
+				WorkflowRunID: record.WorkflowRunID.String(), NodeRunID: record.NodeRunID.String(), Stage: record.Stage,
+				RootInputHash: record.RootInputHash, Shards: values, CoverageHash: record.CoverageHash, ManifestHash: record.ManifestHash,
+			}
+		case bibledomain.ReconcileStoryStage:
+			var values []bibledomain.StoryReconcileShard
+			if err = json.Unmarshal(record.Shards, &values); err != nil {
+				t.Fatal(err)
+			}
+			rootKey := ""
+			for _, value := range values {
+				if value.ParentKey == "" {
+					rootKey = value.Key
+				}
+			}
+			reconcileManifest = bibledomain.StoryReconcileManifest{
+				ManifestID: record.ID.String(), Version: record.Version, WorkspaceID: record.WorkspaceID.String(),
+				WorkflowRunID: record.WorkflowRunID.String(), NodeRunID: record.NodeRunID.String(), Stage: record.Stage,
+				RootInputHash: record.RootInputHash, FanIn: 2, RootShardKey: rootKey,
+				Shards: values, CoverageHash: record.CoverageHash, ManifestHash: record.ManifestHash,
+			}
+		}
+	}
+	if err = bibledomain.ValidateStoryAnalysisManifests(analyzeManifest, reconcileManifest); err != nil {
+		t.Fatalf("persisted Story analysis map/reduce topology is invalid: %v", err)
+	}
+	var storyInvocations []model.AgentInvocation
+	if err = database.Where("node_run_id = ?", storyNode.ID).Order("stage").Order("shard_key").Find(&storyInvocations).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(storyInvocations) != len(analyzeManifest.Shards)+len(reconcileManifest.Shards) {
+		t.Fatalf("Story analysis invocation count=%d want=%d", len(storyInvocations), len(analyzeManifest.Shards)+len(reconcileManifest.Shards))
+	}
+	for _, invocation := range storyInvocations {
+		request, decodeErr := agentgorm.StageInvocation(invocation)
+		if decodeErr != nil || invocation.Status != "succeeded" || invocation.Attempts < 1 {
+			t.Fatalf("Story analysis invocation is not replayable: %#v err=%v", invocation, decodeErr)
+		}
+		if invocation.Stage == bibledomain.ReconcileStoryStage &&
+			(len(request.Payload.UpstreamCandidates) < 1 || len(request.Payload.UpstreamCandidates) > 2) {
+			t.Fatalf("Story reconcile invocation exceeded fan-in: %#v", request.Payload.UpstreamCandidates)
+		}
+	}
+	storyOutput, _, storyOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(storyNode.Output))
+	if err != nil || storyOutputHash != *storyNode.OutputHash || len(storyOutput.Bindings) != 1 ||
+		storyOutput.Bindings[0].Port != "candidate" || storyOutput.Bindings[0].ValueType != "story_reconciliation_candidate" {
+		t.Fatalf("Story analysis Node output=%#v hash=%s err=%v", storyOutput, storyOutputHash, err)
+	}
+	beforeReplay := len(storyInvocations)
+	replayed, err := storyAnalysisService.Ensure(ctx, bibleapp.StoryAnalysisCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		WorkflowRunID: run.ID, NodeRunID: storyNode.ID.String(),
+		EvidenceCandidateRevisionID:   output.Bindings[0].ReferenceID,
+		EvidenceCandidateRevisionHash: output.Bindings[0].ContentHash,
+	})
+	if err != nil || replayed.Status != "ready" || replayed.CandidateRevisionID != storyOutput.Bindings[0].ReferenceID {
+		t.Fatalf("Story analysis replay drifted: state=%#v err=%v", replayed, err)
+	}
+	var afterReplay int64
+	if err = database.Model(&model.AgentInvocation{}).Where("node_run_id = ?", storyNode.ID).Count(&afterReplay).Error; err != nil || afterReplay != int64(beforeReplay) {
+		t.Fatalf("Story analysis replay created invocations: before=%d after=%d err=%v", beforeReplay, afterReplay, err)
+	}
+	var analyzeInvocation model.AgentInvocation
+	if err = database.Where("node_run_id = ? AND stage = ?", storyNode.ID, bibledomain.AnalyzeStoryStage).
+		Order("shard_key").First(&analyzeInvocation).Error; err != nil {
+		t.Fatal(err)
+	}
+	analyzeRequest, err := agentgorm.StageInvocation(analyzeInvocation)
+	if err != nil || len(analyzeRequest.Payload.UpstreamCandidates) != 1 {
+		t.Fatalf("load Story analysis upstream: request=%#v err=%v", analyzeRequest, err)
+	}
+	upstreamID := uuid.MustParse(analyzeRequest.Payload.UpstreamCandidates[0].CandidateRevisionID)
+	var upstreamRevision model.StageCandidateRevision
+	if err = database.First(&upstreamRevision, "id = ?", upstreamID).Error; err != nil {
+		t.Fatal(err)
+	}
+	repairedHash := bibledomain.SourceTextHash(upstreamRevision.ID.String() + ":fixture-repair")
+	parentHash := upstreamRevision.CandidateRevisionHash
+	repairOrigin := append(
+		upstreamRevision.Candidate[:0:0],
+		[]byte(`{"repair_invocation_id":"fixture","repair_result_hash":"fixture"}`)...,
+	)
+	repaired := model.StageCandidateRevision{
+		ID: uuid.New(), WorkspaceID: upstreamRevision.WorkspaceID,
+		StageInstanceKey: upstreamRevision.StageInstanceKey, RevisionNo: upstreamRevision.RevisionNo + 1,
+		ParentCandidateRevisionID: &upstreamRevision.ID, ParentCandidateRevisionHash: &parentHash,
+		OriginKind: "repair", RepairOrigin: repairOrigin,
+		Candidate: upstreamRevision.Candidate, CandidateContentHash: upstreamRevision.CandidateContentHash,
+		CandidateRevisionHash: repairedHash, CreatedAt: time.Now().UTC(),
+	}
+	if err = database.Omit("Workspace", "ParentCandidateRevision", "SourceInvocation").Create(&repaired).Error; err != nil {
+		t.Fatalf("create fixture repaired Evidence revision: %v", err)
+	}
+	if err = database.Model(&model.StageCandidateHead{}).Where("stage_instance_key = ?", upstreamRevision.StageInstanceKey).
+		Updates(map[string]any{
+			"current_revision_id": repaired.ID, "current_candidate_revision_hash": repairedHash,
+			"revision": repaired.RevisionNo, "updated_at": time.Now().UTC(),
+		}).Error; err != nil {
+		t.Fatalf("switch fixture Evidence Head: %v", err)
+	}
+	claimVersion := analyzeInvocation.ClaimVersion + 1
+	leaseExpiresAt := time.Now().UTC().Add(time.Minute)
+	if err = database.Model(&analyzeInvocation).Updates(map[string]any{
+		"status": "running", "claim_version": claimVersion, "lease_expires_at": leaseExpiresAt,
+		"attempts": analyzeInvocation.Attempts + 1, "started_at": time.Now().UTC(),
+	}).Error; err != nil {
+		t.Fatalf("prepare fixture stale invocation claim: %v", err)
+	}
+	if err = bibleStore.ValidateStoryAnalysisInvocation(ctx, analyzeInvocation.ID.String(), claimVersion, time.Now().UTC()); !errors.Is(err, bibleapp.ErrStoryAnalysisUpstreamStale) {
+		t.Fatalf("Story analysis did not reject a stale upstream Head: %v", err)
 	}
 }
 
@@ -327,6 +486,9 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 	_ int,
 	_ int64,
 ) (agentcontract.StageResult, error) {
+	if invocation.Payload.Stage == bibledomain.AnalyzeStoryStage || invocation.Payload.Stage == bibledomain.ReconcileStoryStage {
+		return storyAnalysisFixtureResult(invocation)
+	}
 	agent.mutex.Lock()
 	var release <-chan struct{}
 	if invocation.Payload.ShardManifestRef.Version == 1 {
@@ -402,4 +564,108 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 		Issues:   []agentcontract.StageIssue{},
 		Executor: agentcontract.Executor{Name: "test-agent", Version: "source-evidence-v1", Model: "deterministic-fixture"},
 	}, nil
+}
+
+func storyAnalysisFixtureResult(invocation agentcontract.StageInvocation) (agentcontract.StageResult, error) {
+	var candidate json.RawMessage
+	switch invocation.Payload.Stage {
+	case bibledomain.AnalyzeStoryStage:
+		var input agentcontract.StoryAnalysisStageInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+			return agentcontract.StageResult{}, err
+		}
+		var evidence bibledomain.SourceEvidenceCandidate
+		if err := json.Unmarshal(input.EvidenceCandidate, &evidence); err != nil {
+			return agentcontract.StageResult{}, err
+		}
+		if len(evidence.Observations) == 0 || len(evidence.Observations[0].Evidence) == 0 {
+			return agentcontract.StageResult{}, errors.New("fixture Story analysis received no Evidence")
+		}
+		value, err := json.Marshal(bibledomain.StoryAnalysisCandidate{
+			Entities: []bibledomain.StoryEntityCandidate{{
+				EntityKey: "character:" + invocation.Payload.ShardKey, Kind: "character",
+				CanonicalName: "分片角色", NormalizedName: "分片角色", Aliases: []string{},
+				StableSpec: storyFixtureAssetSpec(), EpisodeNumbers: []int{},
+				Evidence: evidence.Observations[0].Evidence,
+				States:   []bibledomain.StoryEntityStateCandidate{}, Ambiguities: []string{},
+			}},
+			WorldEntries: []bibledomain.StoryWorldEntryCandidate{},
+			Claims:       []bibledomain.StoryClaimCandidate{}, Arcs: []bibledomain.StoryArcCandidate{},
+			ReviewIssues: []bibledomain.ReviewIssue{},
+		})
+		if err != nil {
+			return agentcontract.StageResult{}, err
+		}
+		candidate = value
+	case bibledomain.ReconcileStoryStage:
+		var input agentcontract.StoryReconciliationStageInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+			return agentcontract.StageResult{}, err
+		}
+		result := bibledomain.StoryReconciliationCandidate{
+			CanonicalEntities:     []bibledomain.StoryEntityCandidate{},
+			CanonicalWorldEntries: []bibledomain.StoryWorldEntryCandidate{},
+			MergedClaims:          []bibledomain.StoryClaimCandidate{}, MergedArcs: []bibledomain.StoryArcCandidate{},
+			Conflicts: []bibledomain.ReviewIssue{}, ReviewIssues: []bibledomain.ReviewIssue{},
+		}
+		for _, child := range input.Candidates {
+			switch input.CandidateType {
+			case "story_analysis_candidate":
+				var value bibledomain.StoryAnalysisCandidate
+				if err := json.Unmarshal(child.Candidate, &value); err != nil {
+					return agentcontract.StageResult{}, err
+				}
+				result.CanonicalEntities = append(result.CanonicalEntities, value.Entities...)
+				result.CanonicalWorldEntries = append(result.CanonicalWorldEntries, value.WorldEntries...)
+				result.MergedClaims = append(result.MergedClaims, value.Claims...)
+				result.MergedArcs = append(result.MergedArcs, value.Arcs...)
+				result.ReviewIssues = append(result.ReviewIssues, value.ReviewIssues...)
+			case "story_reconciliation_candidate":
+				var value bibledomain.StoryReconciliationCandidate
+				if err := json.Unmarshal(child.Candidate, &value); err != nil {
+					return agentcontract.StageResult{}, err
+				}
+				result.CanonicalEntities = append(result.CanonicalEntities, value.CanonicalEntities...)
+				result.CanonicalWorldEntries = append(result.CanonicalWorldEntries, value.CanonicalWorldEntries...)
+				result.MergedClaims = append(result.MergedClaims, value.MergedClaims...)
+				result.MergedArcs = append(result.MergedArcs, value.MergedArcs...)
+				result.Conflicts = append(result.Conflicts, value.Conflicts...)
+				result.ReviewIssues = append(result.ReviewIssues, value.ReviewIssues...)
+			default:
+				return agentcontract.StageResult{}, errors.New("fixture Story reconcile candidate type is invalid")
+			}
+		}
+		value, err := json.Marshal(result)
+		if err != nil {
+			return agentcontract.StageResult{}, err
+		}
+		candidate = value
+	default:
+		return agentcontract.StageResult{}, errors.New("fixture Story stage is unsupported")
+	}
+	resultHash, err := agentcontract.CanonicalHash(candidate)
+	if err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	candidateType, ok := agentcontract.CandidateTypeForStage(invocation.Payload.Stage)
+	if !ok {
+		return agentcontract.StageResult{}, errors.New("fixture Story stage has no candidate type")
+	}
+	return agentcontract.StageResult{
+		InvocationID: invocation.InvocationID, Kind: "storygraph_stage",
+		WireSchemaVersion: agentcontract.StoryGraphWireSchemaVersion,
+		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
+		Status: "succeeded", CandidateType: candidateType, Candidate: candidate,
+		InputHash: invocation.InputHash, ResultHash: &resultHash,
+		Issues:   []agentcontract.StageIssue{},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-analysis-v1", Model: "deterministic-fixture"},
+	}, nil
+}
+
+func storyFixtureAssetSpec() bibledomain.AssetSpecCandidate {
+	return bibledomain.AssetSpecCandidate{
+		Temperament: []string{}, Goals: []string{}, Relationships: []string{},
+		VisualElements: []string{}, NegativeConstraints: []string{},
+		PerformanceTraits: []string{}, AllowedUsage: []string{},
+	}
 }

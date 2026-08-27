@@ -100,6 +100,28 @@ type SourceEvidenceStageInput struct {
 	EpisodeMarkerHints []SourceEvidenceEpisodeMarkerHint `json:"episode_marker_hints"`
 }
 
+type StoryAnalysisStageInput struct {
+	EvidenceShardKey              string          `json:"evidence_shard_key"`
+	EvidenceCandidateRevisionID   string          `json:"evidence_candidate_revision_id"`
+	EvidenceCandidateRevisionHash string          `json:"evidence_candidate_revision_hash"`
+	LogicalStart                  int             `json:"logical_start"`
+	LogicalEnd                    int             `json:"logical_end"`
+	EvidenceCandidate             json.RawMessage `json:"evidence_candidate"`
+}
+
+type StoryReconciliationInputCandidate struct {
+	ShardKey              string          `json:"shard_key"`
+	CandidateRevisionID   string          `json:"candidate_revision_id"`
+	CandidateRevisionHash string          `json:"candidate_revision_hash"`
+	Candidate             json.RawMessage `json:"candidate"`
+}
+
+type StoryReconciliationStageInput struct {
+	Level         int                                 `json:"level"`
+	CandidateType string                              `json:"candidate_type"`
+	Candidates    []StoryReconciliationInputCandidate `json:"candidates"`
+}
+
 type StageInvocationPayload struct {
 	Stage                   string                      `json:"stage"`
 	ShardKey                string                      `json:"shard_key"`
@@ -183,9 +205,31 @@ func (value StageInvocation) Validate() error {
 }
 
 func validateStageInput(payload StageInvocationPayload) error {
-	if payload.Stage != "extract_source_evidence" {
-		return nil
+	if payload.Stage == "extract_source_evidence" {
+		return validateSourceEvidenceStageInput(payload)
 	}
+	return nil
+}
+
+// ValidateStoryAnalysisInvocation applies the Production Bible Story Analysis
+// owner contract after the shared StoryGraph wire contract has been decoded.
+// The stage names are part of the shared harness registry, while the exact
+// upstream shape belongs to the backend owner that schedules these shards.
+func ValidateStoryAnalysisInvocation(value StageInvocation) error {
+	if err := value.Validate(); err != nil {
+		return err
+	}
+	switch value.Payload.Stage {
+	case "analyze_story":
+		return validateStoryAnalysisStageInput(value.Payload)
+	case "reconcile_story":
+		return validateStoryReconciliationStageInput(value.Payload)
+	default:
+		return errors.New("invalid Story analysis invocation stage")
+	}
+}
+
+func validateSourceEvidenceStageInput(payload StageInvocationPayload) error {
 	var input SourceEvidenceStageInput
 	if err := decodeStrict(payload.StageInput, &input); err != nil {
 		return errors.New("invalid Source Evidence stage input")
@@ -224,6 +268,83 @@ func validateStageInput(payload StageInvocationPayload) error {
 			marker.AbsoluteEnd > input.ContextEnd {
 			return errors.New("invalid Source Evidence episode marker hint")
 		}
+	}
+	return nil
+}
+
+func validateStoryAnalysisStageInput(payload StageInvocationPayload) error {
+	var input StoryAnalysisStageInput
+	if err := decodeStrict(payload.StageInput, &input); err != nil {
+		return errors.New("invalid Story analysis stage input")
+	}
+	if len(payload.SourceRefs) != 1 || len(payload.UpstreamCandidates) != 1 ||
+		payload.BaseStoryGraphVersionID != "" || payload.BaseStoryGraphHash != "" ||
+		payload.Shard.Kind != "story_map" || payload.Shard.AbsoluteStart == nil ||
+		payload.Shard.AbsoluteEnd == nil || input.LogicalStart < 0 || input.LogicalEnd <= input.LogicalStart ||
+		*payload.Shard.AbsoluteStart != input.LogicalStart || *payload.Shard.AbsoluteEnd != input.LogicalEnd ||
+		strings.TrimSpace(input.EvidenceShardKey) == "" || !jsonObject(input.EvidenceCandidate) ||
+		!hashPattern.MatchString(input.EvidenceCandidateRevisionHash) {
+		return errors.New("invalid Story analysis stage dependencies")
+	}
+	if _, err := uuid.Parse(input.EvidenceCandidateRevisionID); err != nil {
+		return errors.New("invalid Story analysis Evidence revision")
+	}
+	upstream := payload.UpstreamCandidates[0]
+	if upstream.Stage != "extract_source_evidence" || upstream.ShardKey != input.EvidenceShardKey ||
+		upstream.CandidateRevisionID != input.EvidenceCandidateRevisionID ||
+		upstream.CandidateRevisionHash != input.EvidenceCandidateRevisionHash {
+		return errors.New("Story analysis input does not match its exact Evidence revision")
+	}
+	return nil
+}
+
+func validateStoryReconciliationStageInput(payload StageInvocationPayload) error {
+	var input StoryReconciliationStageInput
+	if err := decodeStrict(payload.StageInput, &input); err != nil {
+		return errors.New("invalid Story reconciliation stage input")
+	}
+	if len(payload.SourceRefs) != 1 || input.Level < 0 || len(input.Candidates) < 1 || len(input.Candidates) > 2 ||
+		len(payload.UpstreamCandidates) != len(input.Candidates) || payload.BaseStoryGraphVersionID != "" ||
+		payload.BaseStoryGraphHash != "" || payload.Shard.Kind != "story_reduce" ||
+		payload.Shard.AbsoluteStart != nil || payload.Shard.AbsoluteEnd != nil {
+		return errors.New("invalid Story reconciliation stage dependencies")
+	}
+	expectedStage := ""
+	switch input.CandidateType {
+	case "story_analysis_candidate":
+		expectedStage = "analyze_story"
+	case "story_reconciliation_candidate":
+		expectedStage = "reconcile_story"
+	default:
+		return errors.New("invalid Story reconciliation candidate type")
+	}
+	expected := make(map[string]struct{}, len(input.Candidates))
+	for _, candidate := range input.Candidates {
+		if strings.TrimSpace(candidate.ShardKey) == "" || !jsonObject(candidate.Candidate) ||
+			!hashPattern.MatchString(candidate.CandidateRevisionHash) {
+			return errors.New("invalid Story reconciliation child candidate")
+		}
+		if _, err := uuid.Parse(candidate.CandidateRevisionID); err != nil {
+			return errors.New("invalid Story reconciliation child revision")
+		}
+		key := strings.Join([]string{candidate.ShardKey, candidate.CandidateRevisionID, candidate.CandidateRevisionHash}, "\x00")
+		if _, exists := expected[key]; exists {
+			return errors.New("duplicate Story reconciliation child revision")
+		}
+		expected[key] = struct{}{}
+	}
+	for _, upstream := range payload.UpstreamCandidates {
+		key := strings.Join([]string{upstream.ShardKey, upstream.CandidateRevisionID, upstream.CandidateRevisionHash}, "\x00")
+		if upstream.Stage != expectedStage {
+			return errors.New("Story reconciliation child stage has drifted")
+		}
+		if _, exists := expected[key]; !exists {
+			return errors.New("Story reconciliation input does not match exact child revisions")
+		}
+		delete(expected, key)
+	}
+	if len(expected) != 0 {
+		return errors.New("Story reconciliation input is missing exact child revisions")
 	}
 	return nil
 }

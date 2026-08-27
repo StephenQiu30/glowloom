@@ -143,7 +143,11 @@ func TestProductionWorkflowWorkerCreatesStoryboardDraftSetForEveryConfirmedEpiso
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}),
-		evidenceService, bibleService, projectService, planningService, storyboardService, reviewService,
+		evidenceService,
+		bibleapp.NewStoryAnalysisService(bibleStore, bibleapp.StoryAnalysisConfig{
+			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, FanIn: 2,
+		}),
+		bibleService, projectService, planningService, storyboardService, reviewService,
 		nil, nil,
 	)
 	if err != nil {

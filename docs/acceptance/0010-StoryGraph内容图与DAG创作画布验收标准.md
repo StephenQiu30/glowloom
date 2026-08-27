@@ -157,7 +157,7 @@
 - [x] `SGA-STG-002`（`SG-I05`）：Pydantic 唯一 Schema 事实、临时生成 JSON Schema、无 tracked 第二份。
 - [x] `SGA-STG-003`（`SG-I05` 起）：Candidate 只用给定 Ref/临时 Key，无 Command/SQL/Graph overwrite。
 - [ ] `SGA-STG-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I22`）：无证据不补写事实的对抗/人工证据。
-- [ ] `SGA-STG-005`（`SG-I09`、`SG-I15`）：关系/因果/连续性/伏笔使用 Claim Candidate，无持久环边。
+- [x] `SGA-STG-005`（`SG-I09`、`SG-I15`）：关系/因果/连续性/伏笔使用 Claim Candidate，无持久环边。
 - [ ] `SGA-STG-006`（`SG-I18`）：draft_storyboard 非空 Spec/State、缺资产只产 needs_asset。
 - [ ] `SGA-STG-007`（`SG-I22`）：detail_shots 精确 READY 资产并禁止改变已接受意图/身份/状态。
 - [ ] `SGA-STG-008`（`SG-I18`、`SG-I22`、`SG-I23`）：Backend 生成序号/timecode/UUID/Owner/Binding，Agent 只给 Candidate。
@@ -382,4 +382,16 @@
 - 部署故障 CI：另起非默认端口的隔离 Compose Project，使用刚构建的三镜像启动 PostgreSQL、Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Logstash/Kibana `9.4.4`、Backend、Frontend、Workflow Worker、Event Worker 和 Filebeat；注册/鉴权/项目写入、API/Frontend、Worker 启动日志、ELK 可检索且查询敏感值零泄漏均通过。Filebeat/Logstash/Kibana 逐项停机时核心写入与 Workflow 保持可用；Kafka/Elasticsearch 停机时 Event Worker 进程存活但 readiness 正确为 503，恢复后重新 ready 且日志续传。独立 Agent 容器 health 与 Bundle Hash `4cf64c94b7d181945da678721db36c4bc45921a9c833164bdea46cb7af149c42` 通过。
 - 范围与 Git：本项只交付 `extract_source_evidence` 的 Manifest/Invocation/Candidate/aggregate，不提前实现 `analyze_story`、`reconcile_story`、Candidate Head/Repair 或 Bible Gate，因此 `SGA-CAN-*`、`SGA-REP-*`、完整原稿旅程和全 Stage 对抗条款保持未通过；`agent-browser` 仍只在全部开发完成后执行。Evidence 与实现由当前原稿证据分片功能提交承载，提交标题和正文只描述 feature，不包含任务编号或任务名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 79 条 Requirement 与 `SG-I01`–`SG-I08`，其余保持未通过。下一步继续且只允许实施 `SG-I09` 的 Story analyze/reconcile map-tree 与 Candidate Revision。
+### 有界故事候选归并（2026-08-27）
+
+- Red 与领域契约：`backend/tests/production/bible/story_analysis_test.go` 先固定相同输入随机顺序不改变 Manifest/Coverage Hash、5 个 map leaf 只生成 6 个 reduce node、每个 reduce fan-in 不超过 2、唯一 root 和伪造 Evidence 拒绝。Go/Python Wire 共同固定 `analyze_story` 只消费一个精确 Evidence Candidate Revision，`reconcile_story` 每次只消费 1–2 个同类型精确 child revision；测试继续只位于各应用 `tests/`。
+- Definition-first map/tree：Backend 从 current Source Evidence aggregate 逐项复核 aggregate Head、每个 leaf Head、Invocation、Result 和 Candidate Revision 后，在既有 Story NodeRun 下由 GORM 原子创建 `analyze_story`/`reconcile_story` 两个不可变 Manifest。map Invocation 立即发布；reduce Invocation 只在按树排序的精确 child 全部成功且仍为 current Head 时逐层创建，ID 由 Manifest 与 shard key 确定生成，重放不会增加 Invocation。
+- Candidate 与证据守恒：Go/Pydantic 双侧严格定义 Entity、State、World Entry、Arc、Review Issue 和 Claim Candidate；relationship/causal/continuity/foreshadowing 只能通过带 participant、anchor、scope、polarity、status 与 Evidence 的 Claim 表达，strict Candidate 不存在持久 Edge 字段，因此通过 `SGA-STG-005`。每一级输出 Evidence 必须是精确上游集合的子集，归并 Schema 保留 world entries 与 arcs，未知字段、伪造 Evidence、候选类型漂移或资料丢失均 fail closed。
+- Worker 所有权与 stale：既有 Production Bible worker 只领取 `request_type=production_bible`，新 Story Analysis worker 只领取 `story_analysis_shard|story_reconcile_shard`，共享的 `analyze_story` Stage 名不会造成跨 worker 抢单。Worker 在 Agent 调用前和接受结果事务内均重验 exact revision/hash/result/head；测试切换一个上游 Head 后，旧引用返回稳定 `upstream_candidate_stale`，原 Invocation/Result/Revision 保留。
+- 真实 Workflow 与 Codex：真实 PostgreSQL `16.15`、Temporal、MinIO 下，`Script → Source Evidence → Story Analysis` 旅程并发运行旧 Bible worker 与两个 Story worker，验证两个 Manifest、全部 map/reduce Invocation 成功、fan-in≤2、最终 Node output 精确绑定 root Candidate Revision，以及服务重放零新增 Invocation。本机已登录 Codex CLI 对 Source Evidence、Story Analysis、Story Reconciliation 连续执行，结果 `1 passed in 53.06s`；每级 Candidate 非空且所有 Evidence identity 都严格属于上游集合。
+- 当前完整 CI：Backend `gofmt`、`go vet ./...`、无外部依赖全量测试及空 PostgreSQL/真实 Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Logstash/Kibana `9.4.4` 下的 `go test -count=1 -p 1 ./...` 全通过，Workflow 包 `222.404s`；Agent Ruff check/format、Pyright、Pytest 为 `29 passed, 1 skipped`，跳过项仅为上述已单独通过的 opt-in 真实 Codex；Frontend OpenAPI 生成零漂移、lint/typecheck、18 个 Vitest 文件 54 项测试与 Next.js `16.2.12` production build 全通过。
+- 镜像与故障部署：开发/生产 Compose 校验、Backend/Agent/Frontend 三镜像重建及镜像内 Backend 三 Binary、Frontend standalone、Agent 非 root/Codex/唯一 Bundle 边界全部通过。隔离 Compose Project 中 API、Frontend、Workflow/Event Worker、Kafka/ELK 与私有 Agent 运行态健康；Filebeat/Logstash/Kibana、Kafka、Elasticsearch 逐项停机时，业务写入和 Workflow 保持可用，Event Worker readiness 按依赖正确降级并在恢复后重新 ready，日志恢复摄取。
+- 未提前通过：当前交付单元没有实现 map/reduce 输入超预算后的新 Manifest 再分片，也没有完成单 shard 失败恢复和同名/别名冲突负向门，因此 `SGA-SHR-005/006`、`SG-PRD-004` 与整个 `SG-I09` 仍保持未通过。Candidate Repair、Head expected CAS 与旧下游 stale closure 属于后续 `SG-I10`，所以 `SGA-CAN-*`、`SGA-REP-*` 不提前勾选；完整原稿、Human Gate 与最终 `agent-browser` 同样未执行。
+- Git：本 Evidence 与实现由当前有界故事候选归并 feature 的独立提交承载；提交标题和正文只描述 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 80 条 Requirement 与 `SG-I01`–`SG-I08`，其余保持未通过。下一步继续且只允许补齐当前故事分析归并的超预算/失败恢复与身份冲突门，完成 `SG-I09` 后才能进入 `SG-I10`。

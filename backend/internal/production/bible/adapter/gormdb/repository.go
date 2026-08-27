@@ -214,7 +214,7 @@ func (store *Store) ClaimNext(ctx context.Context, now, leaseExpiresAt time.Time
 	err := platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
 		var record model.AgentInvocation
 		err := transaction.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
-			Where("kind = ? AND stage = ?", "storygraph_stage", "analyze_story").
+			Where("request_type = ? AND kind = ? AND stage = ?", "production_bible", "storygraph_stage", "analyze_story").
 			Where("status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))", "queued", "running", now).
 			Order("created_at").First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {

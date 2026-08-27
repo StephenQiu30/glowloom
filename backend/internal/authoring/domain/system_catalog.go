@@ -3,7 +3,7 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "3.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "4.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
@@ -12,6 +12,10 @@ func SystemCatalog() (Catalog, error) {
 		systemNodeDefinition(
 			"agent.source_evidence", "Source Evidence Candidate", "agent", "activity.source_evidence", "by_inputs", "external_ai",
 			[]PortDefinition{requiredPort("script", "script_revision")}, []PortDefinition{requiredPort("evidence", "source_evidence_candidate")}, emptyNodeConfig(),
+		),
+		systemNodeDefinition(
+			"agent.story_analysis", "Story Reconciliation Candidate", "agent", "activity.story_analysis", "by_inputs", "external_ai",
+			[]PortDefinition{requiredPort("evidence", "source_evidence_candidate")}, []PortDefinition{requiredPort("candidate", "story_reconciliation_candidate")}, emptyNodeConfig(),
 		),
 		systemNodeDefinition(
 			"agent.production_bible", "Production Bible Candidate", "agent", "activity.production_bible", "by_inputs", "external_ai",

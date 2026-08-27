@@ -27,6 +27,7 @@ import (
 const (
 	scriptRevisionExecutor         = "workflow.input.script_revision"
 	sourceEvidenceExecutor         = "activity.source_evidence"
+	storyAnalysisExecutor          = "activity.story_analysis"
 	productionBibleExecutor        = "activity.production_bible"
 	episodePlanExecutor            = "activity.episode_plan"
 	episodeStructureExecutor       = "activity.episode_structure"
@@ -51,6 +52,10 @@ type BibleCandidateOwner interface {
 
 type SourceEvidenceOwner interface {
 	Ensure(context.Context, bibleapp.SourceEvidenceCommand) (bibleapp.SourceEvidenceState, error)
+}
+
+type StoryAnalysisOwner interface {
+	Ensure(context.Context, bibleapp.StoryAnalysisCommand) (bibleapp.StoryAnalysisState, error)
 }
 
 type ProjectSource interface {
@@ -83,6 +88,7 @@ type ShotImageWorkflowOwner interface {
 type NodeExecutor struct {
 	scripts     ScriptSource
 	evidence    SourceEvidenceOwner
+	stories     StoryAnalysisOwner
 	bibles      BibleCandidateOwner
 	projects    ProjectSource
 	plans       EpisodePlanOwner
@@ -93,6 +99,7 @@ type NodeExecutor struct {
 func NewNodeExecutor(
 	scripts ScriptSource,
 	evidence SourceEvidenceOwner,
+	stories StoryAnalysisOwner,
 	bibles BibleCandidateOwner,
 	projects ProjectSource,
 	plans EpisodePlanOwner,
@@ -100,7 +107,7 @@ func NewNodeExecutor(
 	bindings ShotImageWorkflowOwner,
 ) *NodeExecutor {
 	return &NodeExecutor{
-		scripts: scripts, evidence: evidence, bibles: bibles, projects: projects, plans: plans,
+		scripts: scripts, evidence: evidence, stories: stories, bibles: bibles, projects: projects, plans: plans,
 		storyboards: storyboards, bindings: bindings,
 	}
 }
@@ -119,6 +126,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeScriptRevision(ctx, command)
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
+	case storyAnalysisExecutor:
+		return executor.executeStoryAnalysis(ctx, command)
 	case productionBibleExecutor:
 		return executor.executeProductionBible(ctx, command)
 	case episodePlanExecutor:
@@ -204,6 +213,66 @@ func (executor *NodeExecutor) executeSourceEvidence(
 		SchemaVersion: domain.NodeOutputSchemaVersion,
 		Bindings: []domain.NodeOutputBinding{{
 			Port: "evidence", ValueType: "source_evidence_candidate",
+			ReferenceID:      state.CandidateRevisionID,
+			ReferenceVersion: strconv.FormatInt(state.CandidateRevisionNo, 10),
+			ContentHash:      state.CandidateRevisionHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeStoryAnalysis(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.stories == nil {
+		return domain.NodeExecutorResult{}, errors.New("Story analysis workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
+		command.OutputPorts[0].ValueType != "story_reconciliation_candidate" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Story analysis node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Story analysis node config")
+	}
+	binding := input.Bindings[0]
+	if binding.Port != "evidence" || binding.ValueType != "source_evidence_candidate" ||
+		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "evidence" ||
+		strings.TrimSpace(binding.SourceNodeID) == "" {
+		return domain.NodeExecutorResult{}, errors.New("Story analysis Evidence input has drifted")
+	}
+	state, err := executor.stories.Ensure(ctx, bibleapp.StoryAnalysisCommand{
+		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
+		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
+		EvidenceCandidateRevisionID:   binding.ReferenceID,
+		EvidenceCandidateRevisionHash: binding.ContentHash,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	switch state.Status {
+	case "pending":
+		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+	case "failed":
+		return domain.NodeExecutorResult{}, errors.New("Story analysis has a failed active shard")
+	case "ready":
+		if _, parseErr := uuid.Parse(state.CandidateRevisionID); parseErr != nil ||
+			state.CandidateRevisionNo < 1 || !workflowContentHashPattern.MatchString(state.CandidateRevisionHash) {
+			return domain.NodeExecutorResult{}, errors.New("Story reconciliation candidate is incomplete")
+		}
+	default:
+		return domain.NodeExecutorResult{}, errors.New("Story analysis returned an invalid status")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "candidate", ValueType: "story_reconciliation_candidate",
 			ReferenceID:      state.CandidateRevisionID,
 			ReferenceVersion: strconv.FormatInt(state.CandidateRevisionNo, 10),
 			ContentHash:      state.CandidateRevisionHash,

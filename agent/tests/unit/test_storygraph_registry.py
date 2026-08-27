@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.modules.storygraph.bundle import StoryGraphBundle
+from app.modules.storygraph.candidate_schemas import StoryReconciliationCandidate
 from app.modules.storygraph.skill_registry import REGISTRY, RegistryError, stage_spec
 
 EXPECTED = {
@@ -124,6 +125,21 @@ def test_candidate_schema_rejects_nested_business_write_shapes() -> None:
                 "review_issues": [],
             }
         )
+
+
+def test_story_reconciliation_preserves_world_entries_and_story_arcs() -> None:
+    value = StoryReconciliationCandidate.model_validate(
+        {
+            "canonical_entities": [],
+            "canonical_world_entries": [],
+            "merged_claims": [],
+            "merged_arcs": [],
+            "conflicts": [],
+            "review_issues": [],
+        }
+    )
+    assert value.canonical_world_entries == []
+    assert value.merged_arcs == []
 
 
 def test_every_candidate_schema_is_accepted_by_codex_strict_output_rules() -> None:

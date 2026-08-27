@@ -307,6 +307,43 @@ func BuildSourceEvidenceAggregate(
 	return value, encoded, SourceTextHash(string(encoded)), nil
 }
 
+func DecodeSourceEvidenceAggregate(raw json.RawMessage) (SourceEvidenceAggregateCandidate, error) {
+	var value SourceEvidenceAggregateCandidate
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
+		return SourceEvidenceAggregateCandidate{}, errors.New("candidate does not match source Evidence aggregate schema")
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return SourceEvidenceAggregateCandidate{}, errors.New("source Evidence aggregate contains multiple JSON values")
+	}
+	if _, err := uuid.Parse(value.ManifestID); err != nil || value.ManifestVersion < 1 ||
+		!hashPattern.MatchString(value.ManifestHash) || !hashPattern.MatchString(value.CoverageHash) || len(value.Fragments) == 0 {
+		return SourceEvidenceAggregateCandidate{}, errors.New("invalid source Evidence aggregate identity")
+	}
+	for _, fragment := range value.Fragments {
+		if strings.TrimSpace(fragment.ShardKey) == "" || fragment.LogicalStart < 0 ||
+			fragment.LogicalEnd <= fragment.LogicalStart || !hashPattern.MatchString(fragment.CandidateRevisionHash) {
+			return SourceEvidenceAggregateCandidate{}, errors.New("invalid source Evidence aggregate fragment")
+		}
+		if _, err := uuid.Parse(fragment.CandidateRevisionID); err != nil {
+			return SourceEvidenceAggregateCandidate{}, errors.New("invalid source Evidence aggregate fragment revision")
+		}
+	}
+	return value, nil
+}
+
+func SourceEvidenceCandidateEvidence(value SourceEvidenceCandidate) []Evidence {
+	result := []Evidence{}
+	for _, observation := range value.Observations {
+		result = append(result, observation.Evidence...)
+	}
+	for _, issue := range value.ReviewIssues {
+		result = append(result, issue.Evidence...)
+	}
+	return uniqueStoryEvidence(result)
+}
+
 func SourceEvidenceAggregateStageInstanceKey(manifest SourceEvidenceManifest) string {
 	material := "storygraph-stage-aggregate-v1" + manifest.Stage + manifest.ManifestHash + manifest.RootInputHash
 	return SourceTextHash(material)

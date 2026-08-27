@@ -163,7 +163,9 @@ class StoryAnalysisCandidate(StrictModel):
 
 class StoryReconciliationCandidate(StrictModel):
     canonical_entities: list[Entity]
+    canonical_world_entries: list[WorldEntry]
     merged_claims: list[ClaimCandidate]
+    merged_arcs: list[StoryArcCandidate]
     conflicts: list[CandidateIssue]
     review_issues: list[CandidateIssue]
 

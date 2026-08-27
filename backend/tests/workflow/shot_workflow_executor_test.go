@@ -98,7 +98,7 @@ func TestShotWorkflowSourceExecutorsRouteOnlyToOwningApplications(t *testing.T) 
 			ArtifactSHA256: strings.Repeat("d", 64), QCReportID: uuid.NewString(), QCReportHash: strings.Repeat("e", 64),
 		}},
 	}}
-	production := workflowproduction.NewNodeExecutor(nil, nil, nil, nil, nil, nil, owner)
+	production := workflowproduction.NewNodeExecutor(nil, nil, nil, nil, nil, nil, nil, owner)
 	generation := workflowgeneration.NewNodeExecutor(sets)
 	executor, err := workflowexecution.NewNodeExecutor(production, generation)
 	if err != nil {
