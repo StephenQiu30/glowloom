@@ -29,6 +29,15 @@ import {
   initializeUploadApiV1MediaUploadsPost,
 } from "@/api/media";
 import {
+  claimHumanTaskApiV1HumanTasksHumanTaskIdClaimsPost,
+  decideHumanTaskApiV1HumanTasksHumanTaskIdDecisionsPost,
+  getHumanTaskApiV1HumanTasksHumanTaskIdGet,
+  listHumanTasksApiV1ProjectsProjectIdHumanTasksGet,
+  releaseHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimReleasesPost,
+  renewHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimRenewalsPost,
+  resumeHumanGateApiV1ReviewDecisionsReviewDecisionIdResumePost,
+} from "@/api/humanReviews";
+import {
   confirmBibleApiV1ProductionBiblesBibleIdConfirmPost,
   createBibleApiV1DocumentRevisionsRevisionIdProductionBiblesPost,
   getBibleApiV1ProductionBiblesBibleIdGet,
@@ -46,12 +55,14 @@ import {
   importDocumentApiV1ProjectsProjectIdScriptImportsPost,
   previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost,
 } from "@/api/scriptDocuments";
+import { getWorkflowRunApiV1WorkflowRunsWorkflowRunIdGet } from "@/api/workflows";
 import request, { ApiClientError } from "@/lib/request";
 
 export type AppApiError = {
   message: string;
   code: string;
   nextAction?: string;
+  details?: unknown;
 };
 
 export type ProductionBibleReviewDecision = "accepted" | "rejected";
@@ -64,6 +75,7 @@ const errorMessages: Record<string, string> = {
   invalid_verification_code: "验证码不正确，请检查后重新输入。",
   rate_limited: "验证码发送过于频繁，请等待倒计时结束后重试。",
   resource_conflict: "请求所依据的服务端版本已经变化，请刷新后重试。",
+  validation_failed: "提交内容与服务端契约不一致，请刷新后重试。",
   unauthenticated: "邮箱或密码不正确，请重新输入。",
   verification_expired: "验证码或注册凭证已失效，请重新发送验证码。",
 };
@@ -88,6 +100,7 @@ async function runRequest<T>(
           message: error.message,
           code: error.code,
           nextAction: error.nextAction,
+          details: error.details,
         },
       };
     }
@@ -110,6 +123,8 @@ export const appApi = createApi({
     "ScriptDocuments",
     "ProductionBible",
     "EpisodePlans",
+    "HumanTasks",
+    "WorkflowRuns",
   ],
   endpoints: (builder) => ({
     login: builder.mutation<API.AuthResponse, API.LoginRequest>({
@@ -469,11 +484,150 @@ export const appApi = createApi({
         ),
       invalidatesTags: ["EpisodePlans", "Episodes", "Project"],
     }),
+    humanTasks: builder.query<
+      API.HumanTaskListEnvelope["data"],
+      {
+        projectId: string;
+        status: "active" | API.HumanTaskBaseResponse["status"];
+        subjectType?: string;
+        after?: string;
+      }
+    >({
+      queryFn: ({ projectId, status, subjectType, after }) =>
+        runRequest(() =>
+          listHumanTasksApiV1ProjectsProjectIdHumanTasksGet({
+            project_id: projectId,
+            status,
+            subject_type: subjectType ?? null,
+            limit: 50,
+            after: after ?? null,
+          }),
+        ),
+      providesTags: (result, _error, { projectId }) => [
+        { type: "HumanTasks", id: `project:${projectId}` },
+        ...(result?.items.map((task) => ({
+          type: "HumanTasks" as const,
+          id: task.id,
+        })) ?? []),
+      ],
+    }),
+    humanTask: builder.query<API.HumanTaskDetailEnvelope["data"], string>({
+      queryFn: (taskId) =>
+        runRequest(() =>
+          getHumanTaskApiV1HumanTasksHumanTaskIdGet({ human_task_id: taskId }),
+        ),
+      providesTags: (_result, _error, taskId) => [
+        { type: "HumanTasks", id: taskId },
+      ],
+    }),
+    claimHumanTask: builder.mutation<
+      API.HumanTaskCommandEnvelope["data"],
+      { projectId: string; taskId: string; body: API.HumanTaskClaimRequest }
+    >({
+      queryFn: ({ taskId, body }) =>
+        runRequest(() =>
+          claimHumanTaskApiV1HumanTasksHumanTaskIdClaimsPost(
+            { human_task_id: taskId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId, taskId }) => [
+        { type: "HumanTasks", id: taskId },
+        { type: "HumanTasks", id: `project:${projectId}` },
+      ],
+    }),
+    renewHumanTaskClaim: builder.mutation<
+      API.HumanTaskCommandEnvelope["data"],
+      { projectId: string; taskId: string; body: API.HumanTaskClaimTokenRequest }
+    >({
+      queryFn: ({ taskId, body }) =>
+        runRequest(() =>
+          renewHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimRenewalsPost(
+            { human_task_id: taskId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId, taskId }) => [
+        { type: "HumanTasks", id: taskId },
+        { type: "HumanTasks", id: `project:${projectId}` },
+      ],
+    }),
+    releaseHumanTaskClaim: builder.mutation<
+      API.HumanTaskCommandEnvelope["data"],
+      { projectId: string; taskId: string; body: API.HumanTaskClaimTokenRequest }
+    >({
+      queryFn: ({ taskId, body }) =>
+        runRequest(() =>
+          releaseHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimReleasesPost(
+            { human_task_id: taskId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId, taskId }) => [
+        { type: "HumanTasks", id: taskId },
+        { type: "HumanTasks", id: `project:${projectId}` },
+      ],
+    }),
+    decideHumanTask: builder.mutation<
+      API.HumanGateDecisionEnvelope["data"],
+      {
+        projectId: string;
+        taskId: string;
+        workflowRunId: string;
+        body: API.HumanTaskDecisionRequest;
+      }
+    >({
+      queryFn: ({ taskId, body }) =>
+        runRequest(() =>
+          decideHumanTaskApiV1HumanTasksHumanTaskIdDecisionsPost(
+            { human_task_id: taskId },
+            body,
+          ),
+        ),
+      invalidatesTags: (_result, _error, { projectId, taskId, workflowRunId }) => [
+        { type: "HumanTasks", id: taskId },
+        { type: "HumanTasks", id: `project:${projectId}` },
+        { type: "WorkflowRuns", id: workflowRunId },
+      ],
+    }),
+    resumeHumanGate: builder.mutation<
+      API.HumanGateResumeEnvelope["data"],
+      {
+        projectId: string;
+        taskId: string;
+        decisionId: string;
+        workflowRunId: string;
+      }
+    >({
+      queryFn: ({ decisionId }) =>
+        runRequest(() =>
+          resumeHumanGateApiV1ReviewDecisionsReviewDecisionIdResumePost({
+            review_decision_id: decisionId,
+          }),
+        ),
+      invalidatesTags: (_result, _error, { projectId, taskId, workflowRunId }) => [
+        { type: "HumanTasks", id: taskId },
+        { type: "HumanTasks", id: `project:${projectId}` },
+        { type: "WorkflowRuns", id: workflowRunId },
+      ],
+    }),
+    workflowRun: builder.query<API.WorkflowRunViewResponse, string>({
+      queryFn: (workflowRunId) =>
+        runRequest(() =>
+          getWorkflowRunApiV1WorkflowRunsWorkflowRunIdGet({
+            workflow_run_id: workflowRunId,
+          }),
+        ),
+      providesTags: (_result, _error, workflowRunId) => [
+        { type: "WorkflowRuns", id: workflowRunId },
+      ],
+    }),
   }),
 });
 
 export const {
   useChangePasswordMutation,
+  useClaimHumanTaskMutation,
   useCompleteMediaUploadMutation,
   useConfirmEpisodePlanMutation,
   useConfirmProductionBibleMutation,
@@ -484,9 +638,12 @@ export const {
   useCreateWorkspaceMutation,
   useCurrentScriptDocumentQuery,
   useCurrentProductionBibleQuery,
+  useDecideHumanTaskMutation,
   useDeactivateAccountMutation,
   useDecideProductionBibleReviewIssueMutation,
   useEpisodesQuery,
+  useHumanTaskQuery,
+  useHumanTasksQuery,
   useImportScriptDocumentMutation,
   useInitializeMediaUploadMutation,
   useLazyEpisodePlanQuery,
@@ -501,10 +658,14 @@ export const {
   useProjectsQuery,
   usePublishImportCommitMutation,
   useRegisterMutation,
+  useReleaseHumanTaskClaimMutation,
   useRequestRegistrationVerificationMutation,
   useResumeProductionBibleMutation,
+  useResumeHumanGateMutation,
+  useRenewHumanTaskClaimMutation,
   useSetWorkspaceArchivedMutation,
   useUpdateProfileMutation,
   useUpdateWorkspaceMutation,
   useWorkspacesQuery,
+  useWorkflowRunQuery,
 } = appApi;

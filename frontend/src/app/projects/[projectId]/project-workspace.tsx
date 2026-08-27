@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowRight, Clapperboard, LoaderCircle } from "lucide-react";
+import { AlertCircle, ArrowRight, Clapperboard, ClipboardCheck, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
@@ -62,7 +62,21 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
         ) : (
           <div className="space-y-7">
             <PageHeader
-              actions={episodes[0] ? <Button asChild><Link href={`/studio/${episodes[0].id}/script`}>继续制作<ArrowRight aria-hidden="true" /></Link></Button> : <Button asChild><Link href="#script-import">导入剧本<ArrowRight aria-hidden="true" /></Link></Button>}
+              actions={(
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline">
+                    <Link href={`/projects/${project.id}/reviews`}>
+                      <ClipboardCheck aria-hidden="true" />
+                      审核队列
+                    </Link>
+                  </Button>
+                  {episodes[0] ? (
+                    <Button asChild><Link href={`/studio/${episodes[0].id}/script`}>继续制作<ArrowRight aria-hidden="true" /></Link></Button>
+                  ) : (
+                    <Button asChild><Link href="#script-import">导入剧本<ArrowRight aria-hidden="true" /></Link></Button>
+                  )}
+                </div>
+              )}
               badges={[{ label: project.aspect_ratio }, { label: project.visual_style ?? "未设视觉风格" }]}
               breadcrumbs={[{ label: "项目", href: "/projects" }, { label: project.name }]}
               description={project.description || "从不可变原稿开始，依次确认制作圣经、分集、场景任务和分镜。"}

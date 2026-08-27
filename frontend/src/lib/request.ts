@@ -11,18 +11,30 @@ export type RequestOptions = AxiosRequestConfig & {
 };
 
 type ApiErrorEnvelope = {
-  error?: { code?: string; message?: string; next_action?: string };
+  error?: {
+    code?: string;
+    message?: string;
+    next_action?: string;
+    details?: unknown;
+  };
 };
 
 export class ApiClientError extends Error {
   readonly code: string;
   readonly nextAction?: string;
+  readonly details?: unknown;
 
-  constructor(message: string, code = "request_failed", nextAction?: string) {
+  constructor(
+    message: string,
+    code = "request_failed",
+    nextAction?: string,
+    details?: unknown,
+  ) {
     super(message);
     this.name = "ApiClientError";
     this.code = code;
     this.nextAction = nextAction;
+    this.details = details;
   }
 }
 
@@ -96,6 +108,7 @@ export default async function request<T>(
         error?.message ?? "服务暂时不可用，请稍后重试。",
         error?.code,
         error?.next_action,
+        error?.details,
       );
     }
     throw cause;

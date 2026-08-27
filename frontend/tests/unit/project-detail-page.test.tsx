@@ -428,6 +428,10 @@ describe("真实项目生产入口", () => {
       "script-import",
     );
     expect(screen.getByRole("region", { name: "单集工作区" })).toHaveAttribute("id", "episodes");
+    expect(screen.getByRole("link", { name: "审核队列" })).toHaveAttribute(
+      "href",
+      `/projects/${projectId}/reviews`,
+    );
     expect(screen.getByRole("link", { name: "进入第一集 · 雨巷相逢" })).toHaveAttribute(
       "href",
       `/studio/${episodeId}/script`,

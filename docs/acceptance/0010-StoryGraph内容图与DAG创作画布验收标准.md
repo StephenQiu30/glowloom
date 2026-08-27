@@ -52,10 +52,10 @@
 ### 2.3 Review、Production 与视觉资产
 
 - [x] `SG-REV-001`（`SG-I06`）：Gate input 建立冻结 HumanTask 且客户端不能自报 Candidate。
-- [ ] `SG-REV-002`（`SG-I06`、`SG-I07`）：列表/详情/Lease/Decision/Resume OpenAPI 与生成 Client 无漂移。
-- [ ] `SG-REV-003`（`SG-I06`、`SG-I07`）：Claim/Renew/Release Actor/revision/token/expiry/幂等与零泄漏矩阵。
+- [x] `SG-REV-002`（`SG-I06`、`SG-I07`）：列表/详情/Lease/Decision/Resume OpenAPI 与生成 Client 无漂移。
+- [x] `SG-REV-003`（`SG-I06`、`SG-I07`）：Claim/Renew/Release Actor/revision/token/expiry/幂等与零泄漏矩阵。
 - [x] `SG-REV-004`（`SG-I06`）：不可变 Decision、允许集合与 selected 单候选并发证据。
-- [ ] `SG-REV-005`（`SG-I06`、`SG-I07`）：Decision/Owner Apply/Workflow Resume 三状态 API/UI 分离证据。
+- [x] `SG-REV-005`（`SG-I06`、`SG-I07`）：Decision/Owner Apply/Workflow Resume 三状态 API/UI 分离证据。
 - [ ] `SG-REV-006`（`SG-I11`、`SG-I14`、`SG-I16`、`SG-I19`、`SG-I21`、`SG-I23`、`SG-I24`）：七类 Gate 的显式 Owner Apply 与负向零写入证据。
 - [ ] `SG-REV-007`（同上）：按 Decision ID 幂等 Resume、并发/重启/UNKNOWN 收敛证据。
 - [ ] `SG-REV-008`（同上）：Decision 前 stale 与 Decision 后 baseline 冲突不误套用证据。
@@ -102,7 +102,7 @@
 
 - [ ] `SG-FE-001`（`SG-I07`、`SG-I25`–`026`）：单 Next.js/npm + RTK Query + 生成 Client，无第二 Query/monorepo。
 - [ ] `SG-FE-002`（`SG-I12`、`SG-I16`、`SG-I21`、`SG-I25`）：角色/地点卡派生 Owner 事实、State/Style 不重复身份与 Scene 区分。
-- [ ] `SG-FE-003`（`SG-I07`）：真实 Review Workbench，错误/unknown 无 mock/local success。
+- [x] `SG-FE-003`（`SG-I07`）：真实 Review Workbench，错误/unknown 无 mock/local success。
 - [ ] `SG-FE-004`（`SG-I25`）：StoryGraph 路由、五 Lens、scope/version/focus 深链刷新。
 - [ ] `SG-FE-005`（`SG-I25`）：React Flow/Dagre 随真实消费者引入，只读且布局/viewport 零回写。
 - [ ] `SG-FE-006`（`SG-I25`）：Story Lens 与 Workflow Lens Query/DTO/ID/Adapter/renderer 分离。
@@ -217,7 +217,7 @@
 - [x] `SG-I04`：Graph Query + Kafka Event + Elasticsearch Search + ELK 日志真实消费者、故障 CI 完成。
 - [x] `SG-I05`：`build-storygraph` 唯一 Bundle、Stage Wire/Policy/Candidate Revision、旧入口原子删除完成。
 - [x] `SG-I06`：公共 HumanTask/Lease/Decision/Resume Backend API 与恢复完成。
-- [ ] `SG-I07`：真实 Review Workbench 与错误/unknown/a11y 完成。
+- [x] `SG-I07`：真实 Review Workbench 与错误/unknown/a11y 完成。
 - [ ] `SG-I08`：Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate 完成。
 - [ ] `SG-I09`：Story analyze/reconcile map-tree 与 Candidate Revision 完成。
 - [ ] `SG-I10`：StoryGraph review 与有界 Repair/Gate 完成。
@@ -358,4 +358,16 @@
 - 架构与范围：新增业务表仍由单一 GORM Model Catalog 建立，无 Migration、Raw SQL、第二 ORM 或 Kafka Command Consumer；Kafka/ELK 仅参与当前全量回归，不承载 Gate 恢复。测试只位于各应用 `tests/`。七类新 StoryGraph Gate、完整原稿和浏览器旅程仍属后续实施项，未提前运行 `agent-browser`。
 - Git：本 Evidence 与实现由当前公共人工审核功能提交承载；提交标题和正文只描述功能，不包含任务编号或任务名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 65 条 Requirement 与 `SG-I01`–`SG-I06`，其余保持未通过。下一步继续且只允许实施 `SG-I07` 的真实 Review Workbench。
+### `SG-I07` — 真实 Review Workbench（2026-08-27）
+
+- Red 与真实 Client：先增加 `human-review-api.test.ts` 和 `review-workbench.test.tsx`，初次执行因 Workbench 模块不存在而失败。`src/api/humanReviews.ts` 与 `workflows.ts` 随后按 OpenAPI 精确调用列表/详情、Claim/Renew/Release、Decision、只含持久化 Decision ID 的无 Body Resume 和 WorkflowRun Query；Claim Token 只进入 Renew/Release/Decision Body，路由、查询参数和列表均无 Token。
+- 页面与查询：新增 `/projects/{projectId}/reviews?task={task-id}` 动态路由和项目页“审核队列”入口；Task ID 可深链，Claim Token 不进入 URL。单一既有 RTK Query API Slice 以 10 秒轮询队列、5 秒轮询详情/WorkflowRun，命令后只失效当前 Task、项目队列和对应 WorkflowRun；没有第二 Query Client、SSE、通知中心或本地成功状态机。
+- Lease 与权限：OPEN 可领取；CLAIMED 且详情无 Token 时只显示“尝试接管”，是否过期由 Backend 最终判定；同一 Owner 刷新后由详情恢复 write-only Token，可按服务端 revision 续期、释放或决议。Token 只存在受保护 Query/组件调用栈，不写 URL、localStorage、sessionStorage、日志或列表。Viewer 和未知 Subject renderer 保持只读，不猜测动作。
+- 冻结 Subject 与决议：详情只呈现 Backend 冻结的 Subject type/id/revision/hash、Task revision、Rubric、Candidate IDs 和允许决议。`selected` 必须先键盘/鼠标选择冻结候选；其余决议不夹带 Candidate。每个命令按 Task、服务端 revision、动作和候选生成跨刷新稳定的幂等键；服务端 revision 或 Owner baseline 冲突时显示真实错误并立即重取 Detail，不把失败伪装为完成。
+- 四阶段状态：页面分别显示 Task、不可变 Decision、Owner Apply 和 Workflow Resume。`unknown` 只提供“按原决议恢复”；Owner completed 但 Resume 未完成只显示“业务应用完成，正在恢复工作流”。只有 Resume completed、Owner Receipt completed 或 not_required、匹配 NodeRun 已离开等待/运行态且 Gate Output Hash 非空时才显示“工作流已继续”。WorkflowRun 读取失败或事实未收敛时保持显式等待/错误。
+- 组件与可访问性：9 项新增测试覆盖无 Token 列表/路由、键盘 Enter 领取、冻结候选选择、刷新后 Token 恢复、续期/释放、过期接管、Viewer/未知 Subject 只读、Decision 后 Owner 冲突重取、UNKNOWN Resume 和 NodeRun 复核。页面使用原生状态筛选、命名区域、按钮/单选语义、可见焦点与 Alert；不提前执行浏览器脚本。
+- 当前完整 CI：Frontend OpenAPI 重生成、零 warning lint、typecheck、18 个 Vitest 文件 54 项测试和 Next.js `16.2.12` production build 全通过；standalone 镜像真实启动并由 HTTP 返回新审核路由。空 PostgreSQL `16.15`、真实 Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Logstash/Kibana `9.4.4` 下 Backend `gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Workflow `132.911s`；Agent editable install、Ruff/format、Pyright 和 Pytest `24 passed`。开发/生产 Compose、三镜像和镜像内运行时检查均通过。
+- 范围：本项只消费既有 Backend 事实和生成类型，没有数据库、Migration、Raw SQL、第二 ORM、Frontend Owner 写入或兼容回退。新 StoryGraph Subject renderer/Owner Gate、完整 Canvas 与全局键盘/reduced-motion 仍属后续实施项，因此复合 `SG-FE-001/008`、`SG-ARC-007` 保持未通过；`agent-browser` 仍只在全部开发与非浏览器验收完成后执行。
+- Git：本 Evidence 与实现由当前公共审核工作台功能提交承载；提交标题和正文只描述功能，不包含任务编号或任务名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 69 条 Requirement 与 `SG-I01`–`SG-I07`，其余保持未通过。下一步继续且只允许实施 `SG-I08` 的 Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate。

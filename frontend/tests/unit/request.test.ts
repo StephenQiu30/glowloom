@@ -56,6 +56,7 @@ describe("request", () => {
               code: "unauthenticated",
               message: "登录状态已失效。",
               next_action: "login",
+              details: { review_decision_id: "decision-1" },
             },
           },
           401,
@@ -67,6 +68,7 @@ describe("request", () => {
       code: "unauthenticated",
       message: "登录状态已失效。",
       nextAction: "login",
+      details: { review_decision_id: "decision-1" },
     });
     expect(getAccessToken()).toBeNull();
   });
