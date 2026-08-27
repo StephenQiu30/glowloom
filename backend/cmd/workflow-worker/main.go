@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -36,6 +35,7 @@ import (
 	quotaapp "github.com/StephenQiu30/lanverse/backend/internal/quota/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
 )
@@ -43,7 +43,7 @@ import (
 const schemaSyncTimeout = 2 * time.Minute
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := telemetry.NewLogger(os.Stdout, "lanverse-workflow-worker", os.Getenv("ENVIRONMENT"))
 	configuration, err := config.Load()
 	if err != nil {
 		logger.Error("workflow worker configuration is invalid", "error", err)

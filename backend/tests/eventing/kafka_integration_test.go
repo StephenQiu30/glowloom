@@ -33,6 +33,7 @@ func TestRealKafkaCarriesTheExactEnvelopeAndCommitsOnlyAcknowledgedRecords(t *te
 	client, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: strings.Split(rawBrokers, ","), ClientID: "lanverse-kafka-integration",
 		ConsumerGroup: "lanverse-kafka-integration-" + uuid.NewString(), Topics: []string{topic},
+		Username: os.Getenv("LANVERSE_TEST_KAFKA_USERNAME"), Password: os.Getenv("LANVERSE_TEST_KAFKA_PASSWORD"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +78,7 @@ func TestRealKafkaRunRetriesTheSameUnacknowledgedRecord(t *testing.T) {
 	client, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: strings.Split(rawBrokers, ","), ClientID: "lanverse-kafka-retry-integration",
 		ConsumerGroup: "lanverse-kafka-retry-integration-" + uuid.NewString(), Topics: []string{topic},
+		Username: os.Getenv("LANVERSE_TEST_KAFKA_USERNAME"), Password: os.Getenv("LANVERSE_TEST_KAFKA_PASSWORD"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -151,6 +153,7 @@ func TestRealKafkaDuplicateOutOfOrderDLQAndReplayConvergeThroughPostgreSQL(t *te
 	client, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: strings.Split(rawBrokers, ","), ClientID: "lanverse-eventing-integration",
 		ConsumerGroup: group, Topics: []string{topic},
+		Username: os.Getenv("LANVERSE_TEST_KAFKA_USERNAME"), Password: os.Getenv("LANVERSE_TEST_KAFKA_PASSWORD"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -196,6 +199,7 @@ func TestRealKafkaDuplicateOutOfOrderDLQAndReplayConvergeThroughPostgreSQL(t *te
 	dlqConsumer, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: strings.Split(rawBrokers, ","), ClientID: "lanverse-dlq-integration",
 		ConsumerGroup: "lanverse.dlq.integration." + uuid.NewString(), Topics: []string{dlqTopic},
+		Username: os.Getenv("LANVERSE_TEST_KAFKA_USERNAME"), Password: os.Getenv("LANVERSE_TEST_KAFKA_PASSWORD"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -278,7 +282,7 @@ func TestRealKafkaOutboxSurvivesDisconnectedBrokerWithSameEventID(t *testing.T) 
 		t.Fatal(err)
 	}
 	repository := eventinggorm.New(database)
-	disconnected, err := eventingkafka.New(eventingkafka.Config{Brokers: []string{"127.0.0.1:1"}, ClientID: "lanverse-disconnected"})
+	disconnected, err := eventingkafka.New(eventingkafka.Config{Brokers: []string{"127.0.0.1:1"}, ClientID: "lanverse-disconnected", Username: os.Getenv("LANVERSE_TEST_KAFKA_USERNAME"), Password: os.Getenv("LANVERSE_TEST_KAFKA_PASSWORD")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +300,7 @@ func TestRealKafkaOutboxSurvivesDisconnectedBrokerWithSameEventID(t *testing.T) 
 	if err = database.First(&pending, "id = ?", eventID).Error; err != nil || pending.Status != "pending" || pending.Attempts != 1 {
 		t.Fatalf("broker outage changed the owner outbox fact: %#v error=%v", pending, err)
 	}
-	realClient, err := eventingkafka.New(eventingkafka.Config{Brokers: strings.Split(rawBrokers, ","), ClientID: "lanverse-recovered"})
+	realClient, err := eventingkafka.New(eventingkafka.Config{Brokers: strings.Split(rawBrokers, ","), ClientID: "lanverse-recovered", Username: os.Getenv("LANVERSE_TEST_KAFKA_USERNAME"), Password: os.Getenv("LANVERSE_TEST_KAFKA_PASSWORD")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,6 +314,7 @@ func TestRealKafkaOutboxSurvivesDisconnectedBrokerWithSameEventID(t *testing.T) 
 	consumer, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: strings.Split(rawBrokers, ","), ClientID: "lanverse-recovered-consumer",
 		ConsumerGroup: "lanverse.recovered." + uuid.NewString(), Topics: []string{topic},
+		Username: os.Getenv("LANVERSE_TEST_KAFKA_USERNAME"), Password: os.Getenv("LANVERSE_TEST_KAFKA_PASSWORD"),
 	})
 	if err != nil {
 		t.Fatal(err)

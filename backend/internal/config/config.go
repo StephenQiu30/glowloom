@@ -75,6 +75,8 @@ type Config struct {
 	KafkaBrokers                 []string
 	KafkaClientID                string
 	KafkaConsumerGroup           string
+	KafkaUsername                string
+	KafkaPassword                string
 	KafkaScriptTopic             string
 	KafkaScriptDLQTopic          string
 	KafkaStoryGraphTopic         string
@@ -160,6 +162,14 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	kafkaUsername := strings.TrimSpace(os.Getenv("KAFKA_USERNAME"))
+	kafkaPassword := os.Getenv("KAFKA_PASSWORD")
+	if (kafkaUsername == "") != (kafkaPassword == "") {
+		return Config{}, errors.New("KAFKA_USERNAME and KAFKA_PASSWORD must be configured together")
+	}
+	if kafkaUsername != "" && !kafkaNamePattern.MatchString(kafkaUsername) {
+		return Config{}, errors.New("KAFKA_USERNAME contains unsupported characters")
+	}
 	scriptTopic, err := kafkaName("KAFKA_SCRIPT_TOPIC", defaultScriptTopic)
 	if err != nil {
 		return Config{}, err
@@ -229,6 +239,8 @@ func Load() (Config, error) {
 		KafkaBrokers:                 kafkaBrokers,
 		KafkaClientID:                kafkaClientID,
 		KafkaConsumerGroup:           kafkaConsumerGroup,
+		KafkaUsername:                kafkaUsername,
+		KafkaPassword:                kafkaPassword,
 		KafkaScriptTopic:             scriptTopic,
 		KafkaScriptDLQTopic:          scriptDLQTopic,
 		KafkaStoryGraphTopic:         storyGraphTopic,

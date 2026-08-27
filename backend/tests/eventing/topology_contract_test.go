@@ -23,14 +23,17 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	baseText, environmentText := string(base), string(environment)
+	kafkaInit, err := os.ReadFile(filepath.Join(repositoryRoot, "backend", "observability", "kafka", "init.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseText, environmentText, kafkaInitText := string(base), string(environment), string(kafkaInit)
 	for _, required := range []string{
 		"apache/kafka:4.3.1", "lanverse.business.script-version.v1",
 		"lanverse.business.script-version.dlq.v1", "lanverse.business.storygraph-version.v1",
-		"lanverse.business.storygraph-version.dlq.v1", "retention.ms=604800000",
-		"retention.ms=2592000000",
+		"lanverse.business.storygraph-version.dlq.v1", "604800000", "2592000000",
 	} {
-		if !strings.Contains(baseText, required) {
+		if !strings.Contains(baseText+kafkaInitText, required) {
 			t.Errorf("Kafka base topology is missing %q", required)
 		}
 	}

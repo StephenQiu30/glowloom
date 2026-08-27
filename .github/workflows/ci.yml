@@ -17,7 +17,7 @@ jobs:
   backend:
     name: Backend / Go
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16.15-alpine
@@ -65,32 +65,59 @@ jobs:
           done
           docker logs lanverse-ci-minio
           exit 1
-      - name: Start real Kafka KRaft and Elasticsearch services
+      - name: Start real Kafka and ELK services
         env:
           KAFKA_PORT: 19092
           ELASTICSEARCH_PORT: 19200
+          KIBANA_PORT: 15601
+          KAFKA_ADMIN_PASSWORD: lanverse-ci-kafka-admin
+          KAFKA_EVENT_WORKER_PASSWORD: lanverse-ci-event-worker
+          KAFKA_FILEBEAT_PASSWORD: lanverse-ci-filebeat
+          KAFKA_LOGSTASH_PASSWORD: lanverse-ci-logstash
         run: |
-          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --wait --wait-timeout 240 kafka kafka-init elasticsearch
+          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --wait --wait-timeout 300 kafka elasticsearch logstash kibana
+          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach kibana-init
+          kibana_init_container=$(docker compose -f docker-compose.yml -f docker-compose-env.yml ps --all --quiet kibana-init)
+          test -n "$kibana_init_container"
+          test "$(docker wait "$kibana_init_container")" = 0
           docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
-            /opt/kafka/bin/kafka-configs.sh --bootstrap-server 127.0.0.1:9092 \
+            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
+            --command-config /tmp/lanverse-kafka-health.properties \
             --entity-type topics --entity-name lanverse.business.script-version.v1 --describe \
             | grep -q 'retention.ms=604800000'
           docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
-            /opt/kafka/bin/kafka-configs.sh --bootstrap-server 127.0.0.1:9092 \
+            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
+            --command-config /tmp/lanverse-kafka-health.properties \
             --entity-type topics --entity-name lanverse.business.script-version.dlq.v1 --describe \
             | grep -q 'retention.ms=2592000000'
           docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
-            /opt/kafka/bin/kafka-configs.sh --bootstrap-server 127.0.0.1:9092 \
+            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
+            --command-config /tmp/lanverse-kafka-health.properties \
             --entity-type topics --entity-name lanverse.business.storygraph-version.v1 --describe \
             | grep -q 'retention.ms=604800000'
           docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
-            /opt/kafka/bin/kafka-configs.sh --bootstrap-server 127.0.0.1:9092 \
+            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
+            --command-config /tmp/lanverse-kafka-health.properties \
             --entity-type topics --entity-name lanverse.business.storygraph-version.dlq.v1 --describe \
             | grep -q 'retention.ms=2592000000'
+          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
+            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
+            --command-config /tmp/lanverse-kafka-health.properties \
+            --entity-type topics --entity-name lanverse.logs.application.v1 --describe \
+            | grep -q 'retention.ms=259200000'
+          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
+            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
+            --command-config /tmp/lanverse-kafka-health.properties \
+            --entity-type topics --entity-name lanverse.logs.application.dlq.v1 --describe \
+            | grep -q 'retention.ms=1209600000'
           ! docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
-            /opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list \
+            /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 \
+            --command-config /tmp/lanverse-kafka-health.properties --list \
             | grep -qi command
           test "$(curl --fail --silent http://127.0.0.1:19200 | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"]["number"])')" = "9.4.4"
+          curl --fail --silent http://127.0.0.1:19200/_ilm/policy/lanverse-logs-application-30d >/dev/null
+          curl --fail --silent http://127.0.0.1:19200/_index_template/lanverse-logs-application-v1 >/dev/null
+          curl --fail --silent http://127.0.0.1:15601/api/data_views/data_view/lanverse-logs-application-v1 >/dev/null
       - name: Check and test Go backend
         working-directory: backend
         env:
@@ -101,11 +128,18 @@ jobs:
           LANVERSE_TEST_MINIO_SECRET_KEY: lanverse_ci_minio_secret
           LANVERSE_TEST_MINIO_BUCKET: lanverse-asset-ci
           LANVERSE_TEST_KAFKA_BROKERS: 127.0.0.1:19092
+          LANVERSE_TEST_KAFKA_USERNAME: admin
+          LANVERSE_TEST_KAFKA_PASSWORD: lanverse-ci-kafka-admin
+          LANVERSE_TEST_KAFKA_ADMIN_PASSWORD: lanverse-ci-kafka-admin
+          LANVERSE_TEST_KAFKA_EVENT_WORKER_PASSWORD: lanverse-ci-event-worker
+          LANVERSE_TEST_KAFKA_FILEBEAT_PASSWORD: lanverse-ci-filebeat
+          LANVERSE_TEST_KAFKA_LOGSTASH_PASSWORD: lanverse-ci-logstash
           LANVERSE_TEST_KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.v1
           LANVERSE_TEST_KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dlq.v1
           LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
           LANVERSE_TEST_KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
           LANVERSE_TEST_ELASTICSEARCH_URL: http://127.0.0.1:19200
+          LANVERSE_TEST_KIBANA_URL: http://127.0.0.1:15601
         run: |
           test -z "$(gofmt -l .)"
           go vet ./...
@@ -197,6 +231,10 @@ jobs:
           MINIO_PUBLIC_ENDPOINT: media.example.test
           MINIO_ACCESS_KEY: ci-compose-only
           MINIO_SECRET_KEY: ci-compose-only-secret
+          KAFKA_ADMIN_PASSWORD: ci-compose-only-kafka-admin
+          KAFKA_EVENT_WORKER_PASSWORD: ci-compose-only-event-worker
+          KAFKA_FILEBEAT_PASSWORD: ci-compose-only-filebeat
+          KAFKA_LOGSTASH_PASSWORD: ci-compose-only-logstash
           LANVERSE_CORS_ORIGINS: '["https://app.example.test"]'
           MINIO_CORS_ORIGINS: https://app.example.test
         run: |
@@ -225,9 +263,17 @@ jobs:
         run: |
           docker tag lanverse/frontend:ci lanverse/frontend:development
           docker tag lanverse/backend:ci lanverse/backend:development
-          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --no-build --wait --wait-timeout 180
+          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --no-build --wait --wait-timeout 240 \
+            frontend workflow-worker event-worker filebeat logstash kibana
+          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --no-build kibana-init
+          kibana_init_container=$(docker compose -f docker-compose.yml -f docker-compose-env.yml ps --all --quiet kibana-init)
+          test -n "$kibana_init_container"
+          test "$(docker wait "$kibana_init_container")" = 0
           docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx workflow-worker
           docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx event-worker
+          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx filebeat
+          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx logstash
+          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx kibana
           for attempt in $(seq 1 30); do
             if docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color workflow-worker | grep -q "lanverse workflow worker started"; then
               break
@@ -250,6 +296,60 @@ jobs:
           done
           docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
             wget --quiet --spider http://127.0.0.1:8687/readyz
+          test_email=ci-logging-faults@example.test
+          curl --fail --silent --show-error --request POST http://127.0.0.1:8686/api/v1/auth/registration-verifications \
+            --header 'Content-Type: application/json' --data-binary "{\"email\":\"$test_email\"}" >/dev/null
+          registration_ticket=$(curl --fail --silent --show-error --request POST \
+            http://127.0.0.1:8686/api/v1/auth/registration-verifications/confirm \
+            --header 'Content-Type: application/json' \
+            --data-binary "{\"email\":\"$test_email\",\"code\":\"123456\"}" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["registration_ticket"])')
+          auth_result=$(curl --fail --silent --show-error --request POST http://127.0.0.1:8686/api/v1/auth/register \
+            --header 'Content-Type: application/json' \
+            --data-binary "{\"registration_ticket\":\"$registration_ticket\",\"password\":\"ci-logging-password-123\",\"display_name\":\"CI Logging\"}")
+          access_token=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["access_token"])' <<<"$auth_result")
+          workspace_id=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["workspace"]["id"])' <<<"$auth_result")
+          create_project_during_fault() {
+            local fault_name=$1
+            local project_result
+            project_result=$(curl --fail --silent --show-error --request POST http://127.0.0.1:8686/api/v1/projects \
+              --header 'Content-Type: application/json' --header "Authorization: Bearer $access_token" \
+              --data-binary "{\"workspace_id\":\"$workspace_id\",\"name\":\"Logging fault $fault_name\",\"idempotency_key\":\"ci-logging-fault-$fault_name\"}")
+            python3 -c 'import json,sys; data=json.load(sys.stdin)["data"]; assert data["status"] == "active"; assert data["revision"] == 1' <<<"$project_result"
+          }
+          log_request_id=5cffb37f-79b1-42f9-9e34-c55b1d8e9702
+          curl --fail --silent --show-error \
+            --header "X-Request-ID: $log_request_id" \
+            --header 'traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' \
+            --output /dev/null 'http://127.0.0.1:8686/healthz?token=ci-sensitive-query-value'
+          for attempt in $(seq 1 60); do
+            log_result=$(curl --fail --silent --show-error \
+              --request POST http://127.0.0.1:9200/lanverse-logs-application-v1/_search \
+              --header 'Content-Type: application/json' \
+              --data-binary "{\"query\":{\"term\":{\"request_id\":\"$log_request_id\"}},\"size\":1}")
+            if python3 -c 'import json,sys; result=json.load(sys.stdin); source=result["hits"]["hits"][0]["_source"]; assert source["service"] == "lanverse-api"; assert source["event"] == "http_request"; assert source["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"; assert source["route"] == "/healthz"; assert "ci-sensitive-query-value" not in json.dumps(source)' <<<"$log_result" 2>/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color backend filebeat logstash
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:5601/api/data_views/data_view/lanverse-logs-application-v1 >/dev/null
+          search_index_before=$(curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search-v1 | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))')
+          for logging_service in filebeat logstash kibana; do
+            docker compose -f docker-compose.yml -f docker-compose-env.yml stop "$logging_service"
+            docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T backend \
+              wget --quiet --spider http://127.0.0.1:8686/healthz
+            docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
+              wget --quiet --spider http://127.0.0.1:8687/readyz
+            docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx workflow-worker
+            create_project_during_fault "$logging_service"
+            search_index_after=$(curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search-v1 | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))')
+            test "$search_index_after" = "$search_index_before"
+            docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --no-build --wait --wait-timeout 180 "$logging_service"
+          done
           docker compose -f docker-compose.yml -f docker-compose-env.yml stop kafka
           if docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
             wget --quiet --spider http://127.0.0.1:8687/readyz; then
@@ -257,6 +357,10 @@ jobs:
             exit 1
           fi
           docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx event-worker
+          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T backend \
+            wget --quiet --spider http://127.0.0.1:8686/healthz
+          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx workflow-worker
+          create_project_during_fault kafka
           docker compose -f docker-compose.yml -f docker-compose-env.yml start kafka
           for attempt in $(seq 1 60); do
             if docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
@@ -282,6 +386,8 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T backend \
             wget --quiet --spider http://127.0.0.1:8686/healthz
           docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx event-worker
+          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx workflow-worker
+          create_project_during_fault elasticsearch
           docker compose -f docker-compose.yml -f docker-compose-env.yml start elasticsearch
           for attempt in $(seq 1 60); do
             if docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
@@ -290,6 +396,22 @@ jobs:
             fi
             if [ "$attempt" -eq 60 ]; then
               docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color event-worker elasticsearch
+              exit 1
+            fi
+            sleep 1
+          done
+          recovery_request_id=649899b8-2702-474f-a0b8-71aa696b10d8
+          curl --fail --silent --show-error --header "X-Request-ID: $recovery_request_id" \
+            --output /dev/null http://127.0.0.1:8686/healthz
+          for attempt in $(seq 1 60); do
+            recovery_count=$(curl --fail --silent --show-error \
+              "http://127.0.0.1:9200/lanverse-logs-application-v1/_count?q=request_id:$recovery_request_id" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["count"])' 2>/dev/null || echo 0)
+            if [ "$recovery_count" -gt 0 ]; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color backend filebeat logstash kafka elasticsearch
               exit 1
             fi
             sleep 1

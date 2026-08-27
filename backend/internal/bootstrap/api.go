@@ -7,6 +7,7 @@ import (
 	"github.com/rs/cors"
 
 	publicopenapi "github.com/StephenQiu30/lanverse/backend/api/openapi"
+	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 )
 
 type healthResponse struct {
@@ -35,6 +36,7 @@ func NewAPIHandler(runtime RuntimeOptions) http.Handler {
 		runtime.RegisterRoutes(mux)
 	}
 	handler := runtime.Metrics.Middleware(mux)
+	handler = telemetry.HTTPLoggingMiddleware(runtime.Logger)(handler)
 	if len(runtime.AllowedOrigins) > 0 {
 		handler = cors.New(cors.Options{
 			AllowedOrigins:   runtime.AllowedOrigins,

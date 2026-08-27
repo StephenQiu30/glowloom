@@ -67,6 +67,7 @@ func TestRealKafkaProjectsPostgreSQLOwnersIntoElasticsearchWithDeepLinks(t *test
 	client, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: strings.Split(kafkaBrokers, ","), ClientID: "lanverse-search-integration-" + uuid.NewString(),
 		ConsumerGroup: group, Topics: []string{scriptTopic, storyGraphTopic},
+		Username: os.Getenv("LANVERSE_TEST_KAFKA_USERNAME"), Password: os.Getenv("LANVERSE_TEST_KAFKA_PASSWORD"),
 	})
 	if err != nil {
 		t.Fatal(err)

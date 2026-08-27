@@ -25,6 +25,7 @@ import (
 	searchgorm "github.com/StephenQiu30/lanverse/backend/internal/search/adapter/gormdb"
 	searchapp "github.com/StephenQiu30/lanverse/backend/internal/search/application"
 	search "github.com/StephenQiu30/lanverse/backend/internal/search/domain"
+	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 )
 
 const (
@@ -35,7 +36,7 @@ const (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := telemetry.NewLogger(os.Stdout, "lanverse-event-worker", os.Getenv("ENVIRONMENT"))
 	configuration, err := config.Load()
 	if err != nil {
 		logger.Error("event worker configuration is invalid", "error", err)
@@ -98,7 +99,8 @@ func main() {
 	kafkaClient, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: configuration.KafkaBrokers, ClientID: configuration.KafkaClientID,
 		ConsumerGroup: configuration.KafkaConsumerGroup,
-		Topics:        []string{configuration.KafkaScriptTopic, configuration.KafkaStoryGraphTopic},
+		Username:      configuration.KafkaUsername, Password: configuration.KafkaPassword,
+		Topics: []string{configuration.KafkaScriptTopic, configuration.KafkaStoryGraphTopic},
 	})
 	if err != nil {
 		logger.Error("event worker Kafka client configuration failed", "error", err)
@@ -200,6 +202,7 @@ func runReplay(ctx context.Context, configuration config.Config, repository even
 	}
 	kafkaClient, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: configuration.KafkaBrokers, ClientID: configuration.KafkaClientID + "-replay",
+		Username: configuration.KafkaUsername, Password: configuration.KafkaPassword,
 	})
 	if err != nil {
 		return err

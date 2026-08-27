@@ -1,0 +1,39 @@
+{
+  "index_patterns": ["lanverse-logs-application-v1-*"],
+  "priority": 200,
+  "template": {
+    "settings": {
+      "index.lifecycle.name": "lanverse-logs-application-30d",
+      "index.lifecycle.rollover_alias": "lanverse-logs-application-v1",
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "refresh_interval": "1s"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "@timestamp": {"type": "date"},
+        "schema_version": {"type": "keyword"},
+        "service": {"type": "keyword"},
+        "environment": {"type": "keyword"},
+        "level": {"type": "keyword"},
+        "event": {"type": "keyword"},
+        "message": {"type": "match_only_text"},
+        "trace_id": {"type": "keyword"},
+        "request_id": {"type": "keyword"},
+        "workflow_run_id": {"type": "keyword"},
+        "node_run_id": {"type": "keyword"},
+        "node_id": {"type": "keyword"},
+        "task_id": {"type": "keyword"},
+        "decision_id": {"type": "keyword"},
+        "provider_job_id": {"type": "keyword"},
+        "receipt_id": {"type": "keyword"},
+        "error_code": {"type": "keyword"},
+        "method": {"type": "keyword"},
+        "route": {"type": "keyword"},
+        "status_code": {"type": "integer"},
+        "duration_ms": {"type": "double"}
+      }
+    }
+  }
+}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/sasl/plain"
 
 	eventingapp "github.com/StephenQiu30/lanverse/backend/internal/eventing/application"
 )
@@ -19,6 +20,8 @@ type Config struct {
 	ClientID      string
 	ConsumerGroup string
 	Topics        []string
+	Username      string
+	Password      string
 }
 
 type Handler interface {
@@ -38,6 +41,13 @@ func New(config Config) (*Client, error) {
 	options := []kgo.Opt{
 		kgo.SeedBrokers(brokers...), kgo.ClientID(strings.TrimSpace(config.ClientID)),
 		kgo.RequiredAcks(kgo.AllISRAcks()),
+	}
+	username := strings.TrimSpace(config.Username)
+	if (username == "") != (config.Password == "") {
+		return nil, errors.New("Kafka username and password must be configured together")
+	}
+	if username != "" {
+		options = append(options, kgo.SASL(plain.Auth{User: username, Pass: config.Password}.AsMechanism()))
 	}
 	canConsume := strings.TrimSpace(config.ConsumerGroup) != "" || len(config.Topics) > 0
 	if canConsume {

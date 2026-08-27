@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -77,7 +76,7 @@ var (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := telemetry.NewLogger(os.Stdout, "lanverse-api", os.Getenv("ENVIRONMENT"))
 	configuration, err := config.Load()
 	if err != nil {
 		logger.Error("api configuration is invalid", "error", err)
@@ -240,6 +239,7 @@ func main() {
 		Handler: bootstrap.NewAPIHandler(bootstrap.RuntimeOptions{
 			Build:   bootstrap.BuildInfo{Service: "lanverse-api", Version: buildVersion, Commit: buildCommit, BuiltAt: buildTime},
 			Metrics: httpMetrics,
+			Logger:  logger,
 			Ready: func(ctx context.Context) error {
 				if readyErr := platformdatabase.Ping(ctx, database); readyErr != nil {
 					return readyErr

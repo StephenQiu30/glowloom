@@ -17,16 +17,22 @@ services:
 
   backend:
     <<: *backend-service
+    labels:
+      lanverse_log_collect: "true"
 
   workflow-worker:
     <<: *backend-service
     entrypoint: ["/usr/local/bin/lanverse-workflow-worker"]
+    labels:
+      lanverse_log_collect: "true"
     healthcheck:
       disable: true
 
   event-worker:
     <<: *backend-service
     entrypoint: ["/usr/local/bin/lanverse-event-worker"]
+    labels:
+      lanverse_log_collect: "true"
 
   postgres:
     image: postgres:16.15-alpine
@@ -50,25 +56,45 @@ services:
 
   kafka-init:
     image: apache/kafka:4.3.1
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      - >-
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092
-        --create --if-not-exists --topic lanverse.business.script-version.v1
-        --partitions 1 --replication-factor 1
-        --config cleanup.policy=delete --config retention.ms=604800000 &&
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092
-        --create --if-not-exists --topic lanverse.business.script-version.dlq.v1
-        --partitions 1 --replication-factor 1
-        --config cleanup.policy=delete --config retention.ms=2592000000 &&
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092
-        --create --if-not-exists --topic lanverse.business.storygraph-version.v1
-        --partitions 1 --replication-factor 1
-        --config cleanup.policy=delete --config retention.ms=604800000 &&
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092
-        --create --if-not-exists --topic lanverse.business.storygraph-version.dlq.v1
-        --partitions 1 --replication-factor 1
-        --config cleanup.policy=delete --config retention.ms=2592000000
+    entrypoint: ["/usr/share/lanverse-observability/kafka-init.sh"]
+    volumes:
+      - ./backend/observability/kafka/init.sh:/usr/share/lanverse-observability/kafka-init.sh:ro
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.4.4
+
+  elasticsearch-init:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.4
+    entrypoint: ["/usr/share/lanverse-observability/elasticsearch-init.sh"]
+    volumes:
+      - ./backend/observability/elasticsearch/init.sh:/usr/share/lanverse-observability/elasticsearch-init.sh:ro
+      - ./backend/observability/elasticsearch/ilm-policy.json:/usr/share/lanverse-observability/ilm-policy.json:ro
+      - ./backend/observability/logstash/template/lanverse-logs-template.json:/usr/share/lanverse-observability/lanverse-logs-template.json:ro
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:9.4.4
+    user: root
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    volumes:
+      - ./backend/observability/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - filebeat-data:/usr/share/filebeat/data
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:9.4.4
+    volumes:
+      - ./backend/observability/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./backend/observability/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - logstash-data:/usr/share/logstash/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.4.4
+    volumes:
+      - kibana-data:/usr/share/kibana/data
+
+  kibana-init:
+    image: docker.elastic.co/kibana/kibana:9.4.4
+    entrypoint: ["/usr/share/lanverse-observability/kibana-init.sh"]
+    volumes:
+      - ./backend/observability/kibana/init.sh:/usr/share/lanverse-observability/kibana-init.sh:ro

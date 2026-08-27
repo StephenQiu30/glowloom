@@ -112,6 +112,23 @@ func TestLoadRejectsInvalidOrSharedKafkaDestinations(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsPairedKafkaSASLCredentialsAndRejectsPartialCredentials(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
+	t.Setenv("KAFKA_USERNAME", "event_worker")
+	t.Setenv("KAFKA_PASSWORD", "test-password")
+	configuration, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configuration.KafkaUsername != "event_worker" || configuration.KafkaPassword != "test-password" {
+		t.Fatalf("Kafka credentials were not loaded: %#v", configuration)
+	}
+	t.Setenv("KAFKA_PASSWORD", "")
+	if _, err = config.Load(); err == nil {
+		t.Fatal("Load accepted a Kafka username without a password")
+	}
+}
+
 func TestLoadRejectsInvalidOrSharedElasticsearchDestinations(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
 	for name, values := range map[string]map[string]string{

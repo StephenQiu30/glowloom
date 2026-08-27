@@ -88,6 +88,8 @@ services:
       KAFKA_BROKERS: kafka:19092
       KAFKA_CLIENT_ID: lanverse-event-worker
       KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1
+      KAFKA_USERNAME: event_worker
+      KAFKA_PASSWORD: ${KAFKA_EVENT_WORKER_PASSWORD:?KAFKA_EVENT_WORKER_PASSWORD is required}
       KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.v1
       KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dlq.v1
       KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
@@ -127,6 +129,26 @@ services:
   kafka:
     restart: unless-stopped
     ports: !reset []
+    environment:
+      KAFKA_ADMIN_PASSWORD: ${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}
+      KAFKA_LISTENER_NAME_CONTROLLER_PLAIN_SASL_JAAS_CONFIG: >-
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="admin" password="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
+        user_admin="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}";
+      KAFKA_LISTENER_NAME_PLAINTEXT_PLAIN_SASL_JAAS_CONFIG: >-
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="admin" password="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
+        user_admin="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
+        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:?KAFKA_EVENT_WORKER_PASSWORD is required}"
+        user_filebeat="${KAFKA_FILEBEAT_PASSWORD:?KAFKA_FILEBEAT_PASSWORD is required}"
+        user_logstash="${KAFKA_LOGSTASH_PASSWORD:?KAFKA_LOGSTASH_PASSWORD is required}";
+      KAFKA_LISTENER_NAME_PLAINTEXT__HOST_PLAIN_SASL_JAAS_CONFIG: >-
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="admin" password="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
+        user_admin="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
+        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:?KAFKA_EVENT_WORKER_PASSWORD is required}"
+        user_filebeat="${KAFKA_FILEBEAT_PASSWORD:?KAFKA_FILEBEAT_PASSWORD is required}"
+        user_logstash="${KAFKA_LOGSTASH_PASSWORD:?KAFKA_LOGSTASH_PASSWORD is required}";
     deploy:
       resources:
         limits:
@@ -135,6 +157,8 @@ services:
 
   kafka-init:
     restart: "no"
+    environment:
+      KAFKA_ADMIN_PASSWORD: ${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}
 
   elasticsearch:
     restart: unless-stopped
@@ -144,3 +168,38 @@ services:
         limits:
           cpus: "2.0"
           memory: 2G
+
+  elasticsearch-init:
+    restart: "no"
+
+  filebeat:
+    restart: unless-stopped
+    environment:
+      KAFKA_FILEBEAT_PASSWORD: ${KAFKA_FILEBEAT_PASSWORD:?KAFKA_FILEBEAT_PASSWORD is required}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  logstash:
+    restart: unless-stopped
+    environment:
+      KAFKA_LOGSTASH_PASSWORD: ${KAFKA_LOGSTASH_PASSWORD:?KAFKA_LOGSTASH_PASSWORD is required}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+
+  kibana:
+    restart: unless-stopped
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1280M
+
+  kibana-init:
+    restart: "no"

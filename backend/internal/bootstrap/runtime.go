@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
@@ -17,6 +18,7 @@ type BuildInfo struct {
 type RuntimeOptions struct {
 	Build          BuildInfo
 	Metrics        *telemetry.HTTPMetrics
+	Logger         *slog.Logger
 	Ready          func(context.Context) error
 	RegisterRoutes func(*http.ServeMux)
 	AllowedOrigins []string

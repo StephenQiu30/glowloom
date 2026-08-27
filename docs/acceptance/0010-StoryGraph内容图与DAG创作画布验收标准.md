@@ -88,15 +88,15 @@
 - [x] `SG-EVT-001`（`SG-I03`、`SG-I04`）：Owner/Receipt/Outbox 同 GORM 事务且网络 Publisher 不入事务。
 - [x] `SG-EVT-002`（`SG-I04`）：Kafka Envelope 完整字段、payload hash 与剧本/Prompt/Secret/URL 排除。
 - [x] `SG-EVT-003`（`SG-I04`）：真实 Kafka 至少一次、ACK unknown 同 ID、Inbox/revision fencing、DLQ/Replay。
-- [ ] `SG-EVT-004`（`SG-I04`）：Script/StoryGraph Topic 与日志 Topic 的 Schema/Group/Retention/DLQ 隔离，无 Command Topic。
+- [x] `SG-EVT-004`（`SG-I04`）：Script/StoryGraph Topic 与日志 Topic 的 Schema/Group/Retention/DLQ 隔离，无 Command Topic。
 - [x] `SG-EVT-005`（`SG-I04`）：首个真实 Consumer 同任务创建 event-worker，复用唯一 Catalog/连接模型。
 - [x] `SG-SRCH-001`（`SG-I04`）：Script/StoryGraph 两类 index/alias、租户/Owner/Evidence/Node 可追溯文档。
 - [x] `SG-SRCH-002`（`SG-I04`）：重复/乱序 revision fencing、tombstone/snapshot、PostgreSQL 全量 Reindex 原子 Alias。
 - [x] `SG-SRCH-003`（`SG-I04`）：授权 Search API、snippet/score/深链/新鲜度且无 DSL 透传/Owner 回写。
 - [x] `SG-SRCH-004`（`SG-I04`）：Elastic unavailable/lag 的 degraded/stale 与 Owner/PostgreSQL Query 正确性。
-- [ ] `SG-LOG-001`（`SG-I04`）：真实 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 独立日志链。
-- [ ] `SG-LOG-002`（`SG-I04`、`SG-I27`）：全链关联 ID/错误码查询与敏感字段零命中扫描。
-- [ ] `SG-LOG-003`（`SG-I04`、`SG-I27`）：Kafka/Logstash/Elastic/Kibana 逐组件故障不改变业务/Search 投影证据。
+- [x] `SG-LOG-001`（`SG-I04`）：真实 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 独立日志链。
+- [x] `SG-LOG-002`（`SG-I04`、`SG-I27`）：全链关联 ID/错误码查询与敏感字段零命中扫描。
+- [x] `SG-LOG-003`（`SG-I04`、`SG-I27`）：Kafka/Logstash/Elastic/Kibana 逐组件故障不改变业务/Search 投影证据。
 
 ### 2.5 Frontend、运行质量与旅程
 
@@ -114,13 +114,13 @@
 - [x] `SG-OPS-003`（各 Binary 首次消费者，`SG-I04` event-worker）：healthz/readyz 与真实必要依赖故障。
 - [x] `SG-OPS-004`（`SG-I01` 起）：所有测试只在三应用 `tests/`，业务源码零测试文件。
 - [ ] `SG-OPS-005`（每个 `SG-Ixx`）：Red→Green→Refactor、定向门与当时全量真实 CI 证据。
-- [ ] `SG-OPS-006`（`SG-I01`、`SG-I04` 起）：空 PostgreSQL、真实 Temporal/MinIO/Kafka/Elastic/日志链 CI。
+- [x] `SG-OPS-006`（`SG-I01`、`SG-I04` 起）：空 PostgreSQL、真实 Temporal/MinIO/Kafka/Elastic/日志链 CI。
 - [ ] `SG-OPS-007`（`SG-I01` 起）：Go/Agent/Frontend/OpenAPI/Compose/Image/Hygiene 与 Required 聚合真实执行。
 - [ ] `SG-OPS-008`（每个 `SG-Ixx`）：完整任务独立提交且无兼容回退/禁用检查/降断言/旧入口。
 - [ ] `SG-OPS-009`（`SG-I27`、`SG-I28`）：完整实现与 CI 提交后才运行最终 agent-browser 的 Git 顺序。
 - [ ] `SG-JRN-001`（`SG-I08`–`017`、`SG-I27`）：至少两集 Document→Evidence→Bible→Episode/Scene/Beat/Occurrence/Claim→Core Graph 可反查。
 - [ ] `SG-JRN-002`（`SG-I12`、`SG-I18`–`024`、`SG-I27`）：跨集单 Asset、多 State、reference/detail/Shot/frame/Binding/Graph 全链。
-- [ ] `SG-JRN-003`（`SG-I03`–`004`、`SG-I27`）：Outbox→Kafka→Elastic→Search 深链与重复/乱序/重启/Reindex 收敛。
+- [x] `SG-JRN-003`（`SG-I03`–`004`、`SG-I27`）：Outbox→Kafka→Elastic→Search 深链与重复/乱序/重启/Reindex 收敛。
 - [ ] `SG-JRN-004`（`SG-I27`）：完整原稿统计、人工抽查与全故障矩阵零重复事实/费用/配额。
 - [ ] `SG-JRN-005`（`SG-I28`）：最终 agent-browser 旅程与 API/PostgreSQL/Temporal/Kafka/Search/Artifact 对账。
 
@@ -214,7 +214,7 @@
 - [x] `SG-I01`：Schema/Key/Hash/Wire fixture、工具链/导入边界、失败测试与当前真实 CI 基线完成。
 - [x] `SG-I02`：八 Skill 字节保持迁移至 `agent/skills`，单路径、无 fallback、全量 CI、独立提交完成。
 - [x] `SG-I03`：StoryGraph Version/Head/Compiler/Owner Set/Outbox 单事务发布完成。
-- [ ] `SG-I04`：Graph Query + Kafka Event + Elasticsearch Search + ELK 日志真实消费者、故障 CI 完成。
+- [x] `SG-I04`：Graph Query + Kafka Event + Elasticsearch Search + ELK 日志真实消费者、故障 CI 完成。
 - [ ] `SG-I05`：`build-storygraph` 唯一 Bundle、Stage Wire/Policy/Candidate Revision、旧入口原子删除完成。
 - [ ] `SG-I06`：公共 HumanTask/Lease/Decision/Resume Backend API 与恢复完成。
 - [ ] `SG-I07`：真实 Review Workbench 与错误/unknown/a11y 完成。
@@ -320,4 +320,16 @@
 - 尚未完成：日志 Topic 及独立 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 链尚未实施，因此 `SG-EVT-004`、`SG-LOG-*`、`SG-OPS-006`、完整 `SG-JRN-003` 与 `SG-I04` 保持未通过；按门禁未运行 `agent-browser`。
 - Git：本 Evidence 与实现由当前 `SG-I04` Elasticsearch Search 交付单元独立提交承载；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 32 条 Requirement 与 `SG-I01`–`SG-I03`，其余保持未通过。下一步继续且只允许实施 `SG-I04` 的独立 ELK 日志交付单元。
+### `SG-I04` — Kafka + ELK 日志交付单元（2026-08-27）
+
+- Red 与真实故障：先增加 `backend/tests/observability` 的 Logger、HTTP、拓扑和真实日志管道测试，证明缺少统一脱敏 Logger、请求关联中间件、独立日志 Topic/身份/ACL、Filebeat/Logstash/ILM/Kibana Data View。真实部署继续暴露并修复 Filebeat 标签误收集、API Logger 导入、Kafka Controller 认证、容器内 Listener、Logstash 转义、Kibana 内存和 Elasticsearch 恢复轮询问题，没有用 Mock 或跳过替代。
+- 应用日志：三个 Backend Binary 统一使用 `log/slog` JSON Logger 和 `lanverse.log.v1`；HTTP 日志只记录 service/environment/event、request/trace/span、method、受控 route、status、duration 与稳定错误码，不记录 path/query/body。递归脱敏覆盖 map/slice/pointer/struct 和敏感键值，Authorization、Token、Password、Prompt、Candidate、Script、Grant、Cookie、URL 等不会进入输出。
+- 独立拓扑：业务链保持 `PostgreSQL Outbox → Kafka Business Topic → event-worker → Elasticsearch Business Alias`；日志链为 `应用 JSON → Filebeat → Kafka Log Topic → Logstash → Elasticsearch Log Alias → Kibana`。两链使用独立 Schema、SASL Principal、ACL、Retention、Consumer Group、DLQ 与 Index；Kafka Broker/Controller 均启用 SASL，关闭匿名与自动建 Topic，没有 Command Topic。日志保留 3 天、Hash-only DLQ 14 天、业务 7 天、业务 DLQ 30 天。
+- 日志投影：Filebeat 只收集显式 `lanverse_log_collect=true` 的三个 Backend 服务；Logstash 使用持久队列、严格字段 Allowlist 和 `lanverse.logs-indexer.v1` Group。合法记录写入严格 Mapping 的 `lanverse-logs-application-v1` Alias，30 天 ILM 按日或 10 GB rollover；非法记录只把 SHA-256 与稳定错误码写入独立 DLQ，不复制原始正文。Kibana Init 创建对应 Data View。
+- 全链与隔离：真实 Backend `/healthz` 请求携带 request/trace 关联后，经 Filebeat/Kafka/Logstash 写入 Elasticsearch，按 service/event/request/trace/route/error code 可检索且敏感查询值零命中；非法消息进入 Hash-only DLQ。真实 ACL 分别拒绝 Filebeat 写业务 Topic、event-worker 写日志 Topic、Logstash 读业务 Topic，证明不是只靠命名约定隔离。
+- 故障矩阵：分别停止 Filebeat、Logstash、Kibana、Kafka 和 Elasticsearch 时，真实 Project Owner 事务仍成功且 Workflow Worker 持续运行；日志组件故障不改变 Event Worker readiness 或 StoryGraph Business Alias，Kafka/Elasticsearch 故障只让对应 Event/Search readiness 降级。原进程恢复后无需重启应用即可继续采集日志，Outbox→Kafka→Elastic→Search 在重复、乱序、重启和 Reindex 后收敛。
+- 真实 CI 与部署：全新空 PostgreSQL、独立 MinIO、真实 Temporal、Kafka `4.3.1`、Elasticsearch/Logstash/Filebeat/Kibana `9.4.4` 下，Backend 全量 Go 测试、Agent Ruff/format/Pyright/Pytest（31 项）、Frontend OpenAPI/lint/typecheck/Vitest（16 文件 45 项）与 production build 均通过。开发/生产 Compose、三镜像、API/Frontend/Agent HTTP、Backend 三个 Binary、Topic Retention、ILM/Template/Data View 和逐组件停机恢复均由当前工作区真实验证。
+- 尚未完成：`SG-QRY-002/003` 仍需 `SG-I25` 的真实 Frontend 有界加载证据，`SG-LOG-002/003` 在 `SG-I27` 还需完整原稿与全局故障矩阵复验；这些复合条款的当前 `SG-I04` 部分已通过，不提前勾选其余任务。按门禁未运行 `agent-browser`。
+- Git：本 Evidence 与实现由当前 `SG-I04` Kafka + ELK 日志交付单元独立提交承载；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 38 条 Requirement 与 `SG-I01`–`SG-I04`，其余保持未通过。下一步继续且只允许实施 `SG-I05` 的 Backend-owned Stage Envelope/Policy/Candidate Revision 与单一 `agent/skills/build-storygraph` Bundle。

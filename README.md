@@ -10,8 +10,10 @@ Browser / Next.js
 Go lanverse-api ──→ PostgreSQL（唯一 SQL 事实源）
         ├─────────→ MinIO（私有对象字节）
         ├─────────→ Temporal（唯一持久 Workflow History）
-        ├─────────→ Kafka（已提交业务事件）← lanverse-event-worker
+        ├─────────→ Kafka（已提交业务事件）↔ lanverse-event-worker → Elasticsearch（业务检索投影）
         └─────────→ Python Candidate Runtime ──→ 本机 Codex CLI
+
+JSON Logs → Filebeat → Kafka Log Topic → Logstash → Elasticsearch Log Index → Kibana
 ```
 
 - `frontend/`：Next.js 创作工作台，只读取服务端事实并提交人工决议。
@@ -22,7 +24,7 @@ Go lanverse-api ──→ PostgreSQL（唯一 SQL 事实源）
 - `backend/internal/agent/contract`：Backend ↔ Agent 的版本化调用/结果线协议所有者；`agent/app/candidate_runtime/schemas.py` 以禁止额外字段的 Pydantic 模型校验同一协议。
 - `docs/`：Design → PRD/Requirement → Plan → Acceptance 的事实链路。
 
-当前已接入 Apache Kafka KRaft 与 `lanverse-event-worker`：Backend Owner 事务只写 PostgreSQL Outbox，Worker 在事务外发布 `StoryGraphVersionPublished`，并以 Inbox/Revision Checkpoint、隔离 DLQ 和有界 Replay 收敛至少一次投递；Kafka 不承载 Command 或 Workflow。Elasticsearch 业务检索与 ELK 日志链仍未实现，Redis 仍未引入。Backend 只接受一个 PostgreSQL `DATABASE_URL` 作为业务 SQL 事实源；Temporal 只拥有 Workflow History，仓库不保留手写 SQL Schema/Migration、迁移版本字段、第二套 ORM/连接模型或 Python SQLAlchemy Writer。
+当前已接入 Apache Kafka KRaft、`lanverse-event-worker`、Elasticsearch 业务检索和独立 ELK 日志链。Backend Owner 事务只写 PostgreSQL Outbox；Worker 在事务外发布 Script/StoryGraph 已提交事件，并以 Inbox/Revision Checkpoint、隔离 DLQ 和有界 Replay 收敛至少一次投递。Script/StoryGraph Search Alias 可从 PostgreSQL Owner Snapshot 全量重建。三个应用进程输出统一脱敏 JSON，日志经 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana`；业务事件与日志使用独立 Topic、Schema、ACL、Retention、Consumer Group、DLQ 和 Index。Kafka 不承载 Command 或 Workflow，ELK/Elasticsearch 不回写业务事实。Redis 仍未引入。Backend 只接受一个 PostgreSQL `DATABASE_URL` 作为业务 SQL 事实源；Temporal 只拥有 Workflow History，仓库不保留手写 SQL Schema/Migration、迁移版本字段、第二套 ORM/连接模型或 Python SQLAlchemy Writer。
 
 ## 文档入口
 
@@ -76,6 +78,6 @@ uv run --all-extras python -m pytest tests/candidate_runtime tests/architecture/
 cd ../frontend && npm run typecheck && npm run lint && npm test
 ```
 
-最终 `agent-browser` 验收只在实现、真实空库/MinIO 全旅程与自动化回归全部完成后执行；当前进度和未决风险以[验收记录](docs/acceptance/0009-剧本到分镜MVP验收记录.md)为准。
+最终 `agent-browser` 验收只在所有 StoryGraph 实施任务、真实依赖全旅程与自动化回归全部完成后执行；当前进度和未决风险以 [StoryGraph 验收标准](docs/acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md)为准。
 
 本地隔离环境可通过 `.env.example` 的固定验证码完成注册测试；生产环境未接入验证码投递 Provider 前，自助注册不属于可用能力。
