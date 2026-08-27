@@ -96,6 +96,38 @@ func TestStoryGraphStageResultAndGrantClaimsAreStrict(t *testing.T) {
 	}
 }
 
+func TestSourceEvidenceStageInputIsStrictAndBoundToItsSourceShard(t *testing.T) {
+	fixture := loadStoryGraphWireFixture(t)
+	var raw map[string]any
+	if err := json.Unmarshal(fixture.ValidInvocation, &raw); err != nil {
+		t.Fatal(err)
+	}
+	payload := raw["payload"].(map[string]any)
+	stageInput := payload["stage_input"].(map[string]any)
+	stageInput["unexpected"] = true
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = contract.DecodeStageInvocation(encoded); err == nil {
+		t.Fatal("Source Evidence stage input accepted an unknown field")
+	}
+
+	if err = json.Unmarshal(fixture.ValidInvocation, &raw); err != nil {
+		t.Fatal(err)
+	}
+	payload = raw["payload"].(map[string]any)
+	stageInput = payload["stage_input"].(map[string]any)
+	stageInput["logical_end"] = float64(10)
+	encoded, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = contract.DecodeStageInvocation(encoded); err == nil {
+		t.Fatal("Source Evidence stage input accepted a range that drifted from its shard")
+	}
+}
+
 func loadStoryGraphWireFixture(t *testing.T) storyGraphWireFixture {
 	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)

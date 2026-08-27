@@ -140,10 +140,15 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 		storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString},
 	)
 	setSource := &generationCandidateSetSource{set: set}
+	bibleStore := biblegorm.New(database)
+	evidenceService := bibleapp.NewSourceEvidenceService(bibleStore, bibleapp.SourceEvidenceConfig{
+		Now: func() time.Time { return now }, NewID: uuid.NewString,
+	})
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
-		bibleapp.NewService(biblegorm.New(database), bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		evidenceService,
+		bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),

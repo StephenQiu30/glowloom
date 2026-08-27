@@ -48,33 +48,40 @@ func (ProductionBible) TableName() string { return "scr_production_bibles" }
 // AgentInvocation is a durable Backend-owned candidate request. The private
 // Agent runtime receives the signed payload and returns a candidate only.
 type AgentInvocation struct {
-	ID                uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	WorkspaceID       uuid.UUID      `gorm:"type:uuid;not null;index:ix_agt_invocations_status_created,priority:2"`
-	RequestType       string         `gorm:"type:varchar(40);not null;uniqueIndex:uq_agt_invocation_request,priority:1"`
-	RequestID         uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:uq_agt_invocation_request,priority:2"`
-	Kind              string         `gorm:"type:varchar(40);not null;index:ix_agt_invocations_claimable,priority:2;check:ck_agt_invocation_kind,kind = 'storygraph_stage'"`
-	WireSchemaVersion string         `gorm:"type:varchar(40);not null;check:ck_agt_invocation_wire,wire_schema_version = 'storygraph-stage-wire-v1'"`
-	Stage             string         `gorm:"type:varchar(40);not null;index:ix_agt_invocations_stage_shard,priority:1"`
-	ShardKey          string         `gorm:"type:varchar(200);not null;index:ix_agt_invocations_stage_shard,priority:2"`
-	StageInstanceKey  string         `gorm:"type:char(64);not null;uniqueIndex;check:ck_agt_invocation_stage_key,char_length(stage_instance_key) = 64"`
-	ShardManifestHash string         `gorm:"type:char(64);not null;check:ck_agt_invocation_manifest_hash,char_length(shard_manifest_hash) = 64"`
-	InputHash         string         `gorm:"type:char(64);not null;check:ck_agt_invocation_input_hash,char_length(input_hash) = 64"`
-	ExecutionPolicy   datatypes.JSON `gorm:"type:jsonb;not null;check:ck_agt_invocation_execution_policy,jsonb_typeof(execution_policy) = 'object'"`
-	Payload           datatypes.JSON `gorm:"type:jsonb;not null"`
-	Status            string         `gorm:"type:varchar(20);not null;index:ix_agt_invocations_status_created,priority:1;index:ix_agt_invocations_claimable,priority:1;check:ck_agt_invocation_status,status IN ('queued','running','succeeded','failed','unknown')"`
-	ResultHash        *string        `gorm:"type:char(64);check:ck_agt_invocation_result_hash,result_hash IS NULL OR char_length(result_hash) = 64"`
-	CandidateType     *string        `gorm:"type:varchar(80)"`
-	Candidate         datatypes.JSON `gorm:"type:jsonb"`
-	Executor          datatypes.JSON `gorm:"type:jsonb;check:ck_agt_invocation_executor,executor IS NULL OR jsonb_typeof(executor) = 'object'"`
-	Error             datatypes.JSON `gorm:"type:jsonb"`
-	Attempts          int            `gorm:"not null;check:ck_agt_invocation_attempts,attempts >= 0"`
-	ClaimVersion      int            `gorm:"not null;default:0;check:ck_agt_invocation_claim_version,claim_version >= 0"`
-	LeaseExpiresAt    *time.Time     `gorm:"type:timestamptz;index:ix_agt_invocations_claimable,priority:3"`
-	StartedAt         *time.Time     `gorm:"type:timestamptz"`
-	CompletedAt       *time.Time     `gorm:"type:timestamptz"`
-	CreatedAt         time.Time      `gorm:"type:timestamptz;not null;index:ix_agt_invocations_status_created,priority:3;index:ix_agt_invocations_claimable,priority:4"`
-	UpdatedAt         time.Time      `gorm:"type:timestamptz;not null"`
-	Workspace         Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ID                   uuid.UUID          `gorm:"type:uuid;primaryKey"`
+	WorkspaceID          uuid.UUID          `gorm:"type:uuid;not null;index:ix_agt_invocations_status_created,priority:2"`
+	WorkflowRunID        *uuid.UUID         `gorm:"type:uuid;index:ix_agt_invocations_node_manifest,priority:1"`
+	NodeRunID            *uuid.UUID         `gorm:"type:uuid;index:ix_agt_invocations_node_manifest,priority:2"`
+	ShardManifestID      *uuid.UUID         `gorm:"type:uuid;index:ix_agt_invocations_node_manifest,priority:3"`
+	ShardManifestVersion *int64             `gorm:"index:ix_agt_invocations_node_manifest,priority:4;check:ck_agt_invocation_manifest_owner,(workflow_run_id IS NULL AND node_run_id IS NULL AND shard_manifest_id IS NULL AND shard_manifest_version IS NULL) OR (workflow_run_id IS NOT NULL AND node_run_id IS NOT NULL AND shard_manifest_id IS NOT NULL AND shard_manifest_version >= 1);check:ck_agt_invocation_source_owner,stage <> 'extract_source_evidence' OR (workflow_run_id IS NOT NULL AND node_run_id IS NOT NULL AND shard_manifest_id IS NOT NULL AND shard_manifest_version >= 1)"`
+	RequestType          string             `gorm:"type:varchar(40);not null;uniqueIndex:uq_agt_invocation_request,priority:1"`
+	RequestID            uuid.UUID          `gorm:"type:uuid;not null;uniqueIndex:uq_agt_invocation_request,priority:2"`
+	Kind                 string             `gorm:"type:varchar(40);not null;index:ix_agt_invocations_claimable,priority:2;check:ck_agt_invocation_kind,kind = 'storygraph_stage'"`
+	WireSchemaVersion    string             `gorm:"type:varchar(40);not null;check:ck_agt_invocation_wire,wire_schema_version = 'storygraph-stage-wire-v1'"`
+	Stage                string             `gorm:"type:varchar(40);not null;index:ix_agt_invocations_stage_shard,priority:1"`
+	ShardKey             string             `gorm:"type:varchar(200);not null;index:ix_agt_invocations_stage_shard,priority:2"`
+	StageInstanceKey     string             `gorm:"type:char(64);not null;uniqueIndex;check:ck_agt_invocation_stage_key,char_length(stage_instance_key) = 64"`
+	ShardManifestHash    string             `gorm:"type:char(64);not null;check:ck_agt_invocation_manifest_hash,char_length(shard_manifest_hash) = 64"`
+	InputHash            string             `gorm:"type:char(64);not null;check:ck_agt_invocation_input_hash,char_length(input_hash) = 64"`
+	ExecutionPolicy      datatypes.JSON     `gorm:"type:jsonb;not null;check:ck_agt_invocation_execution_policy,jsonb_typeof(execution_policy) = 'object'"`
+	Payload              datatypes.JSON     `gorm:"type:jsonb;not null"`
+	Status               string             `gorm:"type:varchar(20);not null;index:ix_agt_invocations_status_created,priority:1;index:ix_agt_invocations_claimable,priority:1;check:ck_agt_invocation_status,status IN ('queued','running','succeeded','failed','unknown')"`
+	ResultHash           *string            `gorm:"type:char(64);check:ck_agt_invocation_result_hash,result_hash IS NULL OR char_length(result_hash) = 64"`
+	CandidateType        *string            `gorm:"type:varchar(80)"`
+	Candidate            datatypes.JSON     `gorm:"type:jsonb"`
+	Executor             datatypes.JSON     `gorm:"type:jsonb;check:ck_agt_invocation_executor,executor IS NULL OR jsonb_typeof(executor) = 'object'"`
+	Error                datatypes.JSON     `gorm:"type:jsonb"`
+	Attempts             int                `gorm:"not null;check:ck_agt_invocation_attempts,attempts >= 0"`
+	ClaimVersion         int                `gorm:"not null;default:0;check:ck_agt_invocation_claim_version,claim_version >= 0"`
+	LeaseExpiresAt       *time.Time         `gorm:"type:timestamptz;index:ix_agt_invocations_claimable,priority:3"`
+	StartedAt            *time.Time         `gorm:"type:timestamptz"`
+	CompletedAt          *time.Time         `gorm:"type:timestamptz"`
+	CreatedAt            time.Time          `gorm:"type:timestamptz;not null;index:ix_agt_invocations_status_created,priority:3;index:ix_agt_invocations_claimable,priority:4"`
+	UpdatedAt            time.Time          `gorm:"type:timestamptz;not null"`
+	Workspace            Workspace          `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	WorkflowRun          *WorkflowRun       `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	NodeRun              *NodeRunProjection `gorm:"foreignKey:NodeRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ShardManifest        *ShardManifest     `gorm:"foreignKey:ShardManifestID,ShardManifestVersion;references:ID,Version;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (AgentInvocation) TableName() string { return "agt_invocations" }

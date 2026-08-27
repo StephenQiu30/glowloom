@@ -217,6 +217,13 @@ func main() {
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	bibleHandler := biblehttp.New(bibleService, tokenVerifier)
 	bibleWorker := bibleapp.NewWorker(bibleStore, agentRuntime, func() time.Time { return time.Now().UTC() }, configuration.AgentPollInterval, configuration.AgentClaimLease, logger)
+	sourceEvidenceService := bibleapp.NewSourceEvidenceService(bibleStore, bibleapp.SourceEvidenceConfig{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+	})
+	sourceEvidenceWorker := bibleapp.NewSourceEvidenceWorker(
+		bibleStore, sourceEvidenceService, agentRuntime, func() time.Time { return time.Now().UTC() },
+		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
+	)
 	planningStore := planninggorm.New(database)
 	planningService := planningapp.NewService(planningStore, planningapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	planningHandler := planninghttp.New(planningService, tokenVerifier)
@@ -331,6 +338,7 @@ func main() {
 	shutdownSignal, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go bibleWorker.Run(shutdownSignal)
+	go sourceEvidenceWorker.Run(shutdownSignal)
 	go storyboardWorker.Run(shutdownSignal)
 	serverErrors := make(chan error, 1)
 	go func() {

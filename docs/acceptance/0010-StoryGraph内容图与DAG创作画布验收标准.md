@@ -59,7 +59,7 @@
 - [ ] `SG-REV-006`（`SG-I11`、`SG-I14`、`SG-I16`、`SG-I19`、`SG-I21`、`SG-I23`、`SG-I24`）：七类 Gate 的显式 Owner Apply 与负向零写入证据。
 - [ ] `SG-REV-007`（同上）：按 Decision ID 幂等 Resume、并发/重启/UNKNOWN 收敛证据。
 - [ ] `SG-REV-008`（同上）：Decision 前 stale 与 Decision 后 baseline 冲突不误套用证据。
-- [ ] `SG-PRD-001`（`SG-I08`）：DocumentRevision、Unicode 绝对 Evidence 与两集 coverage。
+- [x] `SG-PRD-001`（`SG-I08`）：DocumentRevision、Unicode 绝对 Evidence 与两集 coverage。
 - [ ] `SG-PRD-002`（`SG-I11`）：Bible Confirm 只产 Version/Receipt 的数据库事实计数。
 - [ ] `SG-PRD-003`（`SG-I12`）：MaterializeConfirmedBible 单事务、唯一身份、幂等/回滚/反查。
 - [ ] `SG-PRD-004`（`SG-I09`、`SG-I12`、`SG-I15`）：同名/别名不得自动合并的负向证据。
@@ -130,7 +130,7 @@
 
 - [x] `SGA-BND-001`（`SG-I01`、`SG-I05` 起）：Backend 拥有 Stage/Policy/Invocation/Shard/Candidate 与全部写入。
 - [x] `SGA-BND-002`（`SG-I01`、`SG-I05` 起）：Agent 无 ORM/DB/Object/Kafka/Elastic/Temporal/Provider/Public API。
-- [ ] `SGA-BND-003`（`SG-I08` 起）：Stage/Shard 挂既有 Run/NodeRun，无动态 Workflow Node/Agent Checkpoint。
+- [x] `SGA-BND-003`（`SG-I08` 起）：Stage/Shard 挂既有 Run/NodeRun，无动态 Workflow Node/Agent Checkpoint。
 - [ ] `SGA-BND-004`（全部 Agent Stage）：Agent success 零 Confirm/Apply/正式 UUID/Owner/Event/Resume。
 - [x] `SGA-BND-005`（`SG-I05`）：普通显式 Registry，无 LangGraph 运行路径且无消费者时删除依赖/lock。
 - [x] `SGA-MOV-001`（`SG-I02`）：八 Skill 原名、原 UTF-8 字节、相对路径 SHA-256 等价迁移。
@@ -161,19 +161,19 @@
 - [ ] `SGA-STG-006`（`SG-I18`）：draft_storyboard 非空 Spec/State、缺资产只产 needs_asset。
 - [ ] `SGA-STG-007`（`SG-I22`）：detail_shots 精确 READY 资产并禁止改变已接受意图/身份/状态。
 - [ ] `SGA-STG-008`（`SG-I18`、`SG-I22`、`SG-I23`）：Backend 生成序号/timecode/UUID/Owner/Binding，Agent 只给 Candidate。
-- [ ] `SGA-SHR-001`（`SG-I08`）：不可变 versioned ShardManifest 字段/Hash/约束。
-- [ ] `SGA-SHR-002`（`SG-I08`、`SG-I09`、`SG-I15`）：确定性分片/排序/fan-in/tree，Agent 不决定边界。
-- [ ] `SGA-SHR-003`（`SG-I08` 起）：超预算发布新 Manifest 完整覆盖，无截断/临时扩预算。
-- [ ] `SGA-SHR-004`（`SG-I08` 起）：旧结果只审计，current active leaf + gate 才聚合。
+- [x] `SGA-SHR-001`（`SG-I08`）：不可变 versioned ShardManifest 字段/Hash/约束。
+- [x] `SGA-SHR-002`（`SG-I08`、`SG-I09`、`SG-I15`）：确定性分片/排序/fan-in/tree，Agent 不决定边界。
+- [x] `SGA-SHR-003`（`SG-I08` 起）：超预算发布新 Manifest 完整覆盖，无截断/临时扩预算。
+- [x] `SGA-SHR-004`（`SG-I08` 起）：旧结果只审计，current active leaf + gate 才聚合。
 - [ ] `SGA-SHR-005`（`SG-I09`、`SG-I15`）：有界 reduce 只传必要 Ref/Hash/冲突，超预算再分片。
 - [ ] `SGA-SHR-006`（全部分片 Stage）：单 shard 失败不毁成功事实，Workflow 无固定业务墙钟终止。
 
 ### 3.3 Evidence、Candidate 与 Repair
 
-- [ ] `SGA-EVD-001`（`SG-I08`）：Unicode code-point `[start,end)` 跨语言与逐字回读。
-- [ ] `SGA-EVD-002`（`SG-I08`）：语义边界、显式 overlap、coverage 与 range+hash 去重。
-- [ ] `SGA-EVD-003`（`SG-I08`、`SG-I13`）：中阿拉伯 Episode marker 与 AI 仅提议歧义边界。
-- [ ] `SGA-EVD-004`（`SG-I08`）：chunk-local offset 经 Backend 校正重验后才成正式 Evidence。
+- [x] `SGA-EVD-001`（`SG-I08`）：Unicode code-point `[start,end)` 跨语言与逐字回读。
+- [x] `SGA-EVD-002`（`SG-I08`）：语义边界、显式 overlap、coverage 与 range+hash 去重。
+- [x] `SGA-EVD-003`（`SG-I08`、`SG-I13`）：中阿拉伯 Episode marker 与 AI 仅提议歧义边界。
+- [x] `SGA-EVD-004`（`SG-I08`）：chunk-local offset 经 Backend 校正重验后才成正式 Evidence。
 - [ ] `SGA-EVD-005`（`SG-I08` fixture、`SG-I27` final）：两集开发 + 完整原稿统计和代表集人工细查。
 - [ ] `SGA-CAN-001`（`SG-I09`）：不可变 StageCandidateRevision/Head CAS/并发。
 - [ ] `SGA-CAN-002`（`SG-I09`）：invocation/aggregate/repair strict origin union。
@@ -218,7 +218,7 @@
 - [x] `SG-I05`：`build-storygraph` 唯一 Bundle、Stage Wire/Policy/Candidate Revision、旧入口原子删除完成。
 - [x] `SG-I06`：公共 HumanTask/Lease/Decision/Resume Backend API 与恢复完成。
 - [x] `SG-I07`：真实 Review Workbench 与错误/unknown/a11y 完成。
-- [ ] `SG-I08`：Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate 完成。
+- [x] `SG-I08`：Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate 完成。
 - [ ] `SG-I09`：Story analyze/reconcile map-tree 与 Candidate Revision 完成。
 - [ ] `SG-I10`：StoryGraph review 与有界 Repair/Gate 完成。
 - [ ] `SG-I11`：Bible Human Gate/Confirm Receipt 且零资产物化完成。
@@ -370,4 +370,16 @@
 - 范围：本项只消费既有 Backend 事实和生成类型，没有数据库、Migration、Raw SQL、第二 ORM、Frontend Owner 写入或兼容回退。新 StoryGraph Subject renderer/Owner Gate、完整 Canvas 与全局键盘/reduced-motion 仍属后续实施项，因此复合 `SG-FE-001/008`、`SG-ARC-007` 保持未通过；`agent-browser` 仍只在全部开发与非浏览器验收完成后执行。
 - Git：本 Evidence 与实现由当前公共审核工作台功能提交承载；提交标题和正文只描述功能，不包含任务编号或任务名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 69 条 Requirement 与 `SG-I01`–`SG-I07`，其余保持未通过。下一步继续且只允许实施 `SG-I08` 的 Definition-first Source Evidence、ShardManifest 与 Invocation/Candidate。
+### `SG-I08` — Definition-first 原稿证据分片（2026-08-27）
+
+- Red 与领域契约：`backend/tests/production/bible/source_evidence_test.go` 先固定 Unicode code-point、语义换行边界、显式 overlap、中文数字与阿拉伯数字集标记、coverage、range+hash 去重、重分片父子谱系和伪造 Evidence 拒绝；`backend/tests/agent/storygraph_wire_test.go` 与 `agent/tests/contract/test_storygraph_wire.py` 共同固定唯一 source ref、revision/hash、logical/context range、文本长度和 logical source hash。测试只位于 `backend/tests` 与 `agent/tests`。
+- Definition-first 与单一事实源：Workflow Authoring 先发布 `WorkflowDefinitionVersion`，Start 再创建 `WorkflowRun/NodeRun`；`extract_source_evidence` Executor 只能在该 NodeRun 下通过 GORM 创建 `ShardManifest`、`AgentInvocation` 与 `StageCandidateRevision`。`ShardManifest(ID,Version)` 是不可变复合身份，Update/Delete Hook、复合外键和唯一索引均由真实 PostgreSQL 拒绝漂移；没有 Migration、Raw SQL、第二 ORM、第二 SQL 事实源或 Agent 直写。
+- 分片与恢复：Backend 以冻结 DocumentRevision 的 Unicode 文本确定分片、TreePath、语义边界、overlap、marker hint、每片 source hash、coverage hash 与 manifest hash，Agent 不决定边界。真实 Workflow 先并发执行 V1；一个 Invocation 返回 `execution_budget_exceeded` 后，Backend 不扩预算也不截断文本，而是原子发布同 Manifest ID 的 V2、supersede 触发父片并完整重建 active leaf。另一条 V1 结果被刻意延迟到 V2 后返回，旧 Candidate Revision 保留审计但未进入 current aggregate；V2 每片先模拟 transport outcome unknown，再以同 Invocation/Stage Instance identity 恢复成功，最终 NodeRun 只绑定 V2 的确定性 aggregate。
+- Evidence 与 Harness：Source Evidence Stage Input 在 Go/Python 两侧 `extra=forbid`，精确绑定 DocumentRevision、normalized/logical hash、logical/context range、冻结文本和 marker hint。Codex 只产候选 anchor/range；Harness 逐字回读、校正 chunk-local→absolute code-point offset 并由本地代码重算 SHA-256，Backend 再次独立重验、排序和 range+hash 去重，无法回读或伪造 anchor 时 fail closed。
+- 真实 Codex：本机已登录 `codex-cli 0.149.1`，使用共享 Wire fixture 执行 `LANVERSE_TEST_REAL_CODEX=1 .venv/bin/python -m pytest tests/integration/test_storygraph_real_codex.py -q -s`，结果 `1 passed in 16.40s`。首次真实运行暴露模型无法可靠计算 Evidence SHA-256，随后将哈希责任收回确定性 Harness；复跑得到非空 Observation，所有 anchor、绝对 range 与 SHA-256 均逐项一致。交付镜像仍固定已接受的 Codex CLI `0.147.0`，没有版本兼容分支。
+- 真实 Workflow 与计数：独立 `postgres:16.15-alpine`、仓库固定 digest 的 Temporal 与 MinIO 下，`TestSourceEvidenceWorkflowIsDefinitionFirstAndRecoversTheSameShardIdentity` 通过；断言每个当前 active leaf 恰有一个 V2 Invocation、每个 Invocation attempts≥2 且 succeeded，另外只有一个迟到 V1 invocation revision、一个 current aggregate revision、两个不可变 Manifest version，并验证旧 revision ID 不在 aggregate origin。该测试在共享数据库全套运行时曾暴露全库计数污染，断言已收紧到当前 Workspace 后，在不清库的定向复跑 `9.752s` 和随后全新数据库完整 CI 中均通过。
+- 完整真实 CI：Backend `gofmt`、`go vet ./...`、无外部依赖 `go test -count=1 ./...` 及真实 PostgreSQL/Temporal/MinIO/Kafka/Elastic/Kibana 的 `go test -count=1 -p 1 ./...` 全通过，Workflow 包 `141.992s`；Agent Ruff check/format、Pyright 和 Pytest 为 `26 passed, 1 skipped`，被跳过项仅是上述另行真实执行的 opt-in Codex；Frontend OpenAPI 生成零漂移、lint/typecheck、18 个 Vitest 文件 54 项测试与 Next.js `16.2.12` production build 全通过。开发/生产 Compose、Backend/Agent/Frontend 三镜像和镜像内 Binary/standalone/非 root Bundle 契约均通过。
+- 部署故障 CI：另起非默认端口的隔离 Compose Project，使用刚构建的三镜像启动 PostgreSQL、Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Logstash/Kibana `9.4.4`、Backend、Frontend、Workflow Worker、Event Worker 和 Filebeat；注册/鉴权/项目写入、API/Frontend、Worker 启动日志、ELK 可检索且查询敏感值零泄漏均通过。Filebeat/Logstash/Kibana 逐项停机时核心写入与 Workflow 保持可用；Kafka/Elasticsearch 停机时 Event Worker 进程存活但 readiness 正确为 503，恢复后重新 ready 且日志续传。独立 Agent 容器 health 与 Bundle Hash `4cf64c94b7d181945da678721db36c4bc45921a9c833164bdea46cb7af149c42` 通过。
+- 范围与 Git：本项只交付 `extract_source_evidence` 的 Manifest/Invocation/Candidate/aggregate，不提前实现 `analyze_story`、`reconcile_story`、Candidate Head/Repair 或 Bible Gate，因此 `SGA-CAN-*`、`SGA-REP-*`、完整原稿旅程和全 Stage 对抗条款保持未通过；`agent-browser` 仍只在全部开发完成后执行。Evidence 与实现由当前原稿证据分片功能提交承载，提交标题和正文只描述 feature，不包含任务编号或任务名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 79 条 Requirement 与 `SG-I01`–`SG-I08`，其余保持未通过。下一步继续且只允许实施 `SG-I09` 的 Story analyze/reconcile map-tree 与 Candidate Revision。

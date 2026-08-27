@@ -4,7 +4,7 @@
     "invocation_id": "20000000-0000-0000-0000-000000000001",
     "kind": "storygraph_stage",
     "wire_schema_version": "storygraph-stage-wire-v1",
-    "input_hash": "188c581210b371c834acc0144ce5fa8d30c4336bf9ae0ff491d482576d85935a",
+    "input_hash": "020a3878f55afd59d9d49c015239c909a79caa9f388ff8340fffe4e8694f0142",
     "execution_policy": {
       "definition_key": "storygraph_stage",
       "definition_version": "storygraph-stage-harness-v1",
@@ -26,17 +26,10 @@
       "source_refs": [
         {
           "owner_kind": "production/script",
-          "owner_logical_id": "script-main",
-          "owner_version_id": "50000000-0000-0000-0000-000000000002",
-          "revision": 2,
-          "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-        },
-        {
-          "owner_kind": "production/script",
-          "owner_logical_id": "script-main",
+          "owner_logical_id": "50000000-0000-0000-0000-000000000010",
           "owner_version_id": "50000000-0000-0000-0000-000000000001",
           "revision": 1,
-          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          "content_hash": "f4bf23fffc6c1fede0ab1d6f78954c2403ea60aec35e0707468df175c836c2d5"
         }
       ],
       "upstream_candidates": [],
@@ -50,15 +43,30 @@
         "key": "slice-0001",
         "tree_path": "0001",
         "absolute_start": 0,
-        "absolute_end": 12
+        "absolute_end": 11
       },
       "stage_input": {
-        "normalized_text": "林一说：开始。"
+        "document_revision_id": "50000000-0000-0000-0000-000000000001",
+        "normalized_hash": "f4bf23fffc6c1fede0ab1d6f78954c2403ea60aec35e0707468df175c836c2d5",
+        "logical_source_hash": "f4bf23fffc6c1fede0ab1d6f78954c2403ea60aec35e0707468df175c836c2d5",
+        "logical_start": 0,
+        "logical_end": 11,
+        "context_start": 0,
+        "context_end": 11,
+        "normalized_text": "第1集\n林一说：开始。",
+        "episode_marker_hints": [
+          {
+            "episode_number": 1,
+            "label": "第1集",
+            "absolute_start": 0,
+            "absolute_end": 3
+          }
+        ]
       }
     }
   },
-  "expected_input_hash": "188c581210b371c834acc0144ce5fa8d30c4336bf9ae0ff491d482576d85935a",
-  "expected_stage_instance_key": "aaf4ffa0c346e1e3d2094afecccc2f2f600b6aeb5a639c5790a4c63c1c70da51",
+  "expected_input_hash": "020a3878f55afd59d9d49c015239c909a79caa9f388ff8340fffe4e8694f0142",
+  "expected_stage_instance_key": "785ed68771002433023c40cabd647f9f8d0b6dbb23df0be6c7dc5840c7345aac",
   "valid_success_result": {
     "invocation_id": "20000000-0000-0000-0000-000000000001",
     "kind": "storygraph_stage",
@@ -76,7 +84,7 @@
         }
       ]
     },
-    "input_hash": "188c581210b371c834acc0144ce5fa8d30c4336bf9ae0ff491d482576d85935a",
+    "input_hash": "020a3878f55afd59d9d49c015239c909a79caa9f388ff8340fffe4e8694f0142",
     "result_hash": "cd5611a7a24bf2b181af33e33115894b7a3ffc6a69cf39dccca547690e33b8d9",
     "issues": [],
     "executor": {
@@ -96,7 +104,7 @@
     "status": "unknown",
     "candidate_type": "source_evidence_candidate",
     "candidate": null,
-    "input_hash": "188c581210b371c834acc0144ce5fa8d30c4336bf9ae0ff491d482576d85935a",
+    "input_hash": "020a3878f55afd59d9d49c015239c909a79caa9f388ff8340fffe4e8694f0142",
     "result_hash": null,
     "issues": [],
     "executor": {
@@ -112,7 +120,7 @@
   },
   "execution_grant_claims": {
     "invocation_id": "20000000-0000-0000-0000-000000000001",
-    "input_hash": "188c581210b371c834acc0144ce5fa8d30c4336bf9ae0ff491d482576d85935a",
+    "input_hash": "020a3878f55afd59d9d49c015239c909a79caa9f388ff8340fffe4e8694f0142",
     "execution_policy_hash": "f8ecc9968290567f6e8fbb98e884bdcecc5f67aa761d658102de65f648e0c5aa",
     "expires_at": 1800000000,
     "attempt": 1,

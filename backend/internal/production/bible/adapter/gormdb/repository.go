@@ -447,8 +447,32 @@ func invocationRecord(value domain.Invocation) (model.AgentInvocation, error) {
 	if err != nil {
 		return model.AgentInvocation{}, err
 	}
+	var workflowRunID, nodeRunID, manifestID *uuid.UUID
+	var manifestVersion *int64
+	if value.WorkflowRunID != "" || value.NodeRunID != "" || value.ManifestID != "" || value.ManifestVersion != 0 {
+		parsedWorkflowRunID, parseErr := uuid.Parse(value.WorkflowRunID)
+		if parseErr != nil {
+			return model.AgentInvocation{}, parseErr
+		}
+		parsedNodeRunID, parseErr := uuid.Parse(value.NodeRunID)
+		if parseErr != nil {
+			return model.AgentInvocation{}, parseErr
+		}
+		parsedManifestID, parseErr := uuid.Parse(value.ManifestID)
+		if parseErr != nil || value.ManifestVersion < 1 {
+			return model.AgentInvocation{}, errors.New("invalid Agent invocation manifest owner")
+		}
+		workflowRunID, nodeRunID, manifestID = &parsedWorkflowRunID, &parsedNodeRunID, &parsedManifestID
+		manifestVersion = &value.ManifestVersion
+	}
+	requestType := value.RequestType
+	if requestType == "" {
+		requestType = "production_bible"
+	}
 	return model.AgentInvocation{
-		ID: id, WorkspaceID: workspaceID, RequestType: "production_bible", RequestID: requestID,
+		ID: id, WorkspaceID: workspaceID, RequestType: requestType, RequestID: requestID,
+		WorkflowRunID: workflowRunID, NodeRunID: nodeRunID,
+		ShardManifestID: manifestID, ShardManifestVersion: manifestVersion,
 		Kind: value.Kind, WireSchemaVersion: contract.StoryGraphWireSchemaVersion, Stage: value.Stage,
 		ShardKey: value.ShardKey, StageInstanceKey: value.StageInstanceKey, ShardManifestHash: value.ManifestHash,
 		InputHash: value.InputHash, ExecutionPolicy: datatypes.JSON(value.ExecutionPolicy), Payload: datatypes.JSON(value.Payload),
@@ -458,14 +482,20 @@ func invocationRecord(value domain.Invocation) (model.AgentInvocation, error) {
 }
 
 func invocationDomain(record model.AgentInvocation) domain.Invocation {
-	return domain.Invocation{
-		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), RequestID: record.RequestID.String(),
+	value := domain.Invocation{
+		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(),
+		RequestType: record.RequestType, RequestID: record.RequestID.String(),
 		Kind: record.Kind, Stage: record.Stage, ShardKey: record.ShardKey, InputHash: record.InputHash,
 		StageInstanceKey: record.StageInstanceKey, ManifestHash: record.ShardManifestHash,
 		ExecutionPolicy: append([]byte(nil), record.ExecutionPolicy...), Payload: append([]byte(nil), record.Payload...),
 		Status: record.Status, Attempts: record.Attempts, ClaimVersion: record.ClaimVersion,
 		LeaseExpiresAt: record.LeaseExpiresAt, CreatedAt: record.CreatedAt,
 	}
+	if record.WorkflowRunID != nil && record.NodeRunID != nil && record.ShardManifestID != nil && record.ShardManifestVersion != nil {
+		value.WorkflowRunID, value.NodeRunID = record.WorkflowRunID.String(), record.NodeRunID.String()
+		value.ManifestID, value.ManifestVersion = record.ShardManifestID.String(), *record.ShardManifestVersion
+	}
+	return value
 }
 func normalizeNotFound(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {

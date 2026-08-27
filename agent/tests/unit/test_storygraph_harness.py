@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, cast
@@ -7,13 +8,15 @@ from typing import Any, cast
 import pytest
 from anyio import Path as AsyncPath
 
-from app.candidate_runtime.schemas import StoryGraphStageInvocation
+from app.candidate_runtime.schemas import SourceEvidenceStageInput, StoryGraphStageInvocation
 from app.modules.storygraph.bundle import StoryGraphBundle
 from app.modules.storygraph.candidate_schemas import SourceEvidenceCandidate
 from app.modules.storygraph.harness import (
+    CodexSchemaInvalid,
     CodexToolPolicyViolation,
     SkillBundleUnavailable,
     StoryGraphHarness,
+    normalize_source_evidence,
     unauthorized_item_type,
 )
 
@@ -38,10 +41,10 @@ def candidate() -> dict[str, Any]:
                 "evidence": [
                     {
                         "source_start": 0,
-                        "source_end": 2,
+                        "source_end": 3,
                         "text_hash": "a" * 64,
-                        "exact_anchor": "林一",
-                        "episode_number": None,
+                        "exact_anchor": "第1集",
+                        "episode_number": 1,
                     }
                 ],
                 "ambiguities": [],
@@ -107,6 +110,43 @@ def test_harness_rejects_an_unroutable_bundle_hash_and_tool_event() -> None:
     stdout = b'{"item":{"type":"command_execution"}}\n'
     assert unauthorized_item_type(stdout) == "command_execution"
     assert issubclass(CodexToolPolicyViolation, RuntimeError)
+
+
+def test_source_evidence_normalization_requires_an_exact_anchor() -> None:
+    text = "甲😀乙。"
+    source_input = SourceEvidenceStageInput.model_validate(
+        {
+            "document_revision_id": "50000000-0000-0000-0000-000000000001",
+            "normalized_hash": "a" * 64,
+            "logical_source_hash": hashlib.sha256(text.encode()).hexdigest(),
+            "logical_start": 5,
+            "logical_end": 9,
+            "context_start": 5,
+            "context_end": 9,
+            "normalized_text": text,
+            "episode_marker_hints": [],
+        }
+    )
+    value = SourceEvidenceCandidate.model_validate(candidate())
+    evidence = (
+        value.observations[0]
+        .evidence[0]
+        .model_copy(update={"source_start": 0, "source_end": 2, "exact_anchor": "甲😀"})
+    )
+    value = value.model_copy(
+        update={"observations": [value.observations[0].model_copy(update={"evidence": [evidence]})]}
+    )
+    normalized = normalize_source_evidence(value, source_input)
+    normalized_evidence = normalized.observations[0].evidence[0]
+    assert (normalized_evidence.source_start, normalized_evidence.source_end) == (5, 7)
+    assert normalized_evidence.text_hash == hashlib.sha256("甲😀".encode()).hexdigest()
+
+    drifted = evidence.model_copy(update={"exact_anchor": "甲乙"})
+    invalid = value.model_copy(
+        update={"observations": [value.observations[0].model_copy(update={"evidence": [drifted]})]}
+    )
+    with pytest.raises(CodexSchemaInvalid):
+        normalize_source_evidence(invalid, source_input)
 
 
 def test_bundle_only_loads_the_current_stage_files() -> None:

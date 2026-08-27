@@ -61,6 +61,7 @@ func Catalog() []any {
 		&model.WorkflowSignalReceipt{},
 		&model.WorkflowTask{},
 		&model.ProductionBible{},
+		&model.ShardManifest{},
 		&model.AgentInvocation{},
 		&model.StageCandidateRevision{},
 		&model.StageCandidateHead{},

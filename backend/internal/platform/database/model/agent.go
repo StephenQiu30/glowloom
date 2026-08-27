@@ -9,7 +9,36 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrImmutableStageCandidateRevision = errors.New("StageCandidateRevision is immutable")
+var (
+	ErrImmutableShardManifest          = errors.New("ShardManifest is immutable")
+	ErrImmutableStageCandidateRevision = errors.New("StageCandidateRevision is immutable")
+)
+
+type ShardManifest struct {
+	ID                 uuid.UUID         `gorm:"type:uuid;primaryKey"`
+	Version            int64             `gorm:"primaryKey;not null;uniqueIndex:uq_agt_manifest_node_stage_version,priority:4;check:ck_agt_manifest_version,version >= 1"`
+	WorkspaceID        uuid.UUID         `gorm:"type:uuid;not null"`
+	WorkflowRunID      uuid.UUID         `gorm:"type:uuid;not null;uniqueIndex:uq_agt_manifest_node_stage_version,priority:1"`
+	NodeRunID          uuid.UUID         `gorm:"type:uuid;not null;uniqueIndex:uq_agt_manifest_node_stage_version,priority:2"`
+	Stage              string            `gorm:"type:varchar(40);not null;uniqueIndex:uq_agt_manifest_node_stage_version,priority:3;check:ck_agt_manifest_stage,stage = 'extract_source_evidence'"`
+	RootInputHash      string            `gorm:"type:char(64);not null;check:ck_agt_manifest_root_hash,char_length(root_input_hash) = 64"`
+	ParentManifestHash *string           `gorm:"type:char(64);check:ck_agt_manifest_parent_hash,(version = 1 AND parent_manifest_hash IS NULL) OR (version > 1 AND char_length(parent_manifest_hash) = 64)"`
+	Shards             datatypes.JSON    `gorm:"type:jsonb;not null;check:ck_agt_manifest_shards,jsonb_typeof(shards) = 'array'"`
+	CoverageHash       string            `gorm:"type:char(64);not null;check:ck_agt_manifest_coverage_hash,char_length(coverage_hash) = 64"`
+	ManifestHash       string            `gorm:"type:char(64);not null;uniqueIndex;check:ck_agt_manifest_hash,char_length(manifest_hash) = 64"`
+	CreatedAt          time.Time         `gorm:"type:timestamptz;not null"`
+	Workspace          Workspace         `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	WorkflowRun        WorkflowRun       `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	NodeRun            NodeRunProjection `gorm:"foreignKey:NodeRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (ShardManifest) TableName() string { return "agt_shard_manifests" }
+func (*ShardManifest) BeforeUpdate(*gorm.DB) error {
+	return ErrImmutableShardManifest
+}
+func (*ShardManifest) BeforeDelete(*gorm.DB) error {
+	return ErrImmutableShardManifest
+}
 
 type StageCandidateRevision struct {
 	ID                          uuid.UUID               `gorm:"type:uuid;primaryKey"`

@@ -10,6 +10,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -78,6 +79,25 @@ type InvocationShard struct {
 	ParentKey     string `json:"parent_key,omitempty"`
 	AbsoluteStart *int   `json:"absolute_start,omitempty"`
 	AbsoluteEnd   *int   `json:"absolute_end,omitempty"`
+}
+
+type SourceEvidenceEpisodeMarkerHint struct {
+	EpisodeNumber int    `json:"episode_number"`
+	Label         string `json:"label"`
+	AbsoluteStart int    `json:"absolute_start"`
+	AbsoluteEnd   int    `json:"absolute_end"`
+}
+
+type SourceEvidenceStageInput struct {
+	DocumentRevisionID string                            `json:"document_revision_id"`
+	NormalizedHash     string                            `json:"normalized_hash"`
+	LogicalSourceHash  string                            `json:"logical_source_hash"`
+	LogicalStart       int                               `json:"logical_start"`
+	LogicalEnd         int                               `json:"logical_end"`
+	ContextStart       int                               `json:"context_start"`
+	ContextEnd         int                               `json:"context_end"`
+	NormalizedText     string                            `json:"normalized_text"`
+	EpisodeMarkerHints []SourceEvidenceEpisodeMarkerHint `json:"episode_marker_hints"`
 }
 
 type StageInvocationPayload struct {
@@ -149,12 +169,61 @@ func (value StageInvocation) Validate() error {
 	if err := validateStageRefs(value.Payload); err != nil {
 		return err
 	}
+	if err := validateStageInput(value.Payload); err != nil {
+		return err
+	}
 	computed, err := value.ComputeInputHash()
 	if err != nil {
 		return err
 	}
 	if computed != value.InputHash {
 		return fmt.Errorf("StoryGraph input hash mismatch: got %s want %s", value.InputHash, computed)
+	}
+	return nil
+}
+
+func validateStageInput(payload StageInvocationPayload) error {
+	if payload.Stage != "extract_source_evidence" {
+		return nil
+	}
+	var input SourceEvidenceStageInput
+	if err := decodeStrict(payload.StageInput, &input); err != nil {
+		return errors.New("invalid Source Evidence stage input")
+	}
+	if len(payload.SourceRefs) != 1 || len(payload.UpstreamCandidates) != 0 ||
+		payload.BaseStoryGraphVersionID != "" || payload.BaseStoryGraphHash != "" ||
+		payload.Shard.Kind != "source_slice" || payload.Shard.AbsoluteStart == nil ||
+		payload.Shard.AbsoluteEnd == nil {
+		return errors.New("invalid Source Evidence stage dependencies")
+	}
+	ref := payload.SourceRefs[0]
+	if ref.OwnerKind != "production/script" || ref.OwnerVersionID != input.DocumentRevisionID ||
+		ref.ContentHash != input.NormalizedHash || !hashPattern.MatchString(input.NormalizedHash) ||
+		!hashPattern.MatchString(input.LogicalSourceHash) {
+		return errors.New("Source Evidence stage input does not match its source revision")
+	}
+	if _, err := uuid.Parse(input.DocumentRevisionID); err != nil {
+		return errors.New("invalid Source Evidence document revision")
+	}
+	if input.LogicalStart < 0 || input.LogicalEnd <= input.LogicalStart ||
+		input.ContextStart < 0 || input.ContextStart > input.LogicalStart ||
+		input.ContextEnd < input.LogicalEnd || input.ContextEnd-input.ContextStart != utf8.RuneCountInString(input.NormalizedText) ||
+		*payload.Shard.AbsoluteStart != input.LogicalStart || *payload.Shard.AbsoluteEnd != input.LogicalEnd {
+		return errors.New("invalid Source Evidence stage range")
+	}
+	contextRunes := []rune(input.NormalizedText)
+	logicalStart := input.LogicalStart - input.ContextStart
+	logicalEnd := input.LogicalEnd - input.ContextStart
+	logicalHash := sha256.Sum256([]byte(string(contextRunes[logicalStart:logicalEnd])))
+	if hex.EncodeToString(logicalHash[:]) != input.LogicalSourceHash {
+		return errors.New("Source Evidence logical source hash mismatch")
+	}
+	for _, marker := range input.EpisodeMarkerHints {
+		if marker.EpisodeNumber < 1 || strings.TrimSpace(marker.Label) == "" ||
+			marker.AbsoluteStart < input.ContextStart || marker.AbsoluteEnd <= marker.AbsoluteStart ||
+			marker.AbsoluteEnd > input.ContextEnd {
+			return errors.New("invalid Source Evidence episode marker hint")
+		}
 	}
 	return nil
 }

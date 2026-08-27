@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import shutil
@@ -11,8 +12,13 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from app.candidate_runtime.schemas import StoryGraphExecutionPolicy, StoryGraphStageInvocation
+from app.candidate_runtime.schemas import (
+    SourceEvidenceStageInput,
+    StoryGraphExecutionPolicy,
+    StoryGraphStageInvocation,
+)
 from app.modules.storygraph.bundle import BundleInvalid, BundleManifest, StoryGraphBundle
+from app.modules.storygraph.candidate_schemas import Evidence, SourceEvidenceCandidate
 from app.modules.storygraph.skill_registry import stage_spec
 
 
@@ -137,7 +143,15 @@ class StoryGraphHarness:
             separators=(",", ":"),
             sort_keys=True,
         )
-        return await self._run_codex(guidance, prompt, spec.candidate_model)
+        candidate = await self._run_codex(guidance, prompt, spec.candidate_model)
+        if self.invocation.payload.stage == "extract_source_evidence":
+            if not isinstance(candidate, SourceEvidenceCandidate):
+                raise CodexSchemaInvalid("Codex CLI returned the wrong Source Evidence schema")
+            source_input = SourceEvidenceStageInput.model_validate(
+                self.invocation.payload.stage_input
+            )
+            return normalize_source_evidence(candidate, source_input)
+        return candidate
 
     def _validate_runtime_policy(self, policy: StoryGraphExecutionPolicy) -> None:
         manifest = BundleManifest()
@@ -271,3 +285,57 @@ def unauthorized_item_type(stdout: bytes) -> str | None:
         if isinstance(item_type, str) and item_type not in _SAFE_ITEM_TYPES:
             return item_type[:80]
     return None
+
+
+def normalize_source_evidence(
+    candidate: SourceEvidenceCandidate,
+    source_input: SourceEvidenceStageInput,
+) -> SourceEvidenceCandidate:
+    def normalize(evidence: Evidence) -> Evidence:
+        start, end = evidence.source_start, evidence.source_end
+        local_start, local_end = (
+            start - source_input.context_start,
+            end - source_input.context_start,
+        )
+        absolute_matches = (
+            start >= source_input.context_start
+            and end <= source_input.context_end
+            and source_input.normalized_text[local_start:local_end] == evidence.exact_anchor
+        )
+        if not absolute_matches:
+            local_start, local_end = start, end
+            start, end = (
+                source_input.context_start + local_start,
+                source_input.context_start + local_end,
+            )
+        if (
+            local_start < 0
+            or local_end > len(source_input.normalized_text)
+            or local_end <= local_start
+            or local_end - local_start != len(evidence.exact_anchor)
+            or source_input.normalized_text[local_start:local_end] != evidence.exact_anchor
+        ):
+            raise CodexSchemaInvalid(
+                "Codex CLI returned Source Evidence outside the immutable text slice"
+            )
+        return evidence.model_copy(
+            update={
+                "source_start": start,
+                "source_end": end,
+                "text_hash": hashlib.sha256(evidence.exact_anchor.encode("utf-8")).hexdigest(),
+            }
+        )
+
+    observations = [
+        observation.model_copy(
+            update={"evidence": [normalize(value) for value in observation.evidence]}
+        )
+        for observation in candidate.observations
+    ]
+    review_issues = [
+        issue.model_copy(update={"evidence": [normalize(value) for value in issue.evidence]})
+        for issue in candidate.review_issues
+    ]
+    return candidate.model_copy(
+        update={"observations": observations, "review_issues": review_issues}
+    )

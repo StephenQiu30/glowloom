@@ -99,6 +99,54 @@ class StoryGraphInvocationShard(BaseModel):
         return self
 
 
+class SourceEvidenceEpisodeMarkerHint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    episode_number: int = Field(ge=1)
+    label: str = Field(min_length=1)
+    absolute_start: int = Field(ge=0)
+    absolute_end: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def validate_range(self) -> SourceEvidenceEpisodeMarkerHint:
+        if self.absolute_end <= self.absolute_start:
+            raise ValueError("Source Evidence marker range must be increasing")
+        return self
+
+
+class SourceEvidenceStageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_revision_id: UUID
+    normalized_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    logical_source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    logical_start: int = Field(ge=0)
+    logical_end: int = Field(ge=1)
+    context_start: int = Field(ge=0)
+    context_end: int = Field(ge=1)
+    normalized_text: str = Field(min_length=1)
+    episode_marker_hints: list[SourceEvidenceEpisodeMarkerHint]
+
+    @model_validator(mode="after")
+    def validate_ranges(self) -> SourceEvidenceStageInput:
+        if (
+            self.logical_end <= self.logical_start
+            or self.context_start > self.logical_start
+            or self.context_end < self.logical_end
+            or self.context_end - self.context_start != len(self.normalized_text)
+        ):
+            raise ValueError("Source Evidence stage ranges do not match its context")
+        for marker in self.episode_marker_hints:
+            if marker.absolute_start < self.context_start or marker.absolute_end > self.context_end:
+                raise ValueError("Source Evidence marker is outside its context")
+        relative_start = self.logical_start - self.context_start
+        relative_end = self.logical_end - self.context_start
+        logical_text = self.normalized_text[relative_start:relative_end]
+        if hashlib.sha256(logical_text.encode("utf-8")).hexdigest() != self.logical_source_hash:
+            raise ValueError("Source Evidence logical source hash does not match its text")
+        return self
+
+
 class StoryGraphStagePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -120,6 +168,22 @@ class StoryGraphStagePayload(BaseModel):
             raise ValueError("StoryGraph shard key does not match payload")
         if (self.base_storygraph_version_id is None) != (self.base_storygraph_hash is None):
             raise ValueError("base StoryGraph reference must be complete")
+        if self.stage == "extract_source_evidence":
+            source_input = SourceEvidenceStageInput.model_validate(self.stage_input)
+            if (
+                len(self.source_refs) != 1
+                or self.source_refs[0].owner_kind != "production/script"
+                or self.source_refs[0].owner_version_id != source_input.document_revision_id
+                or self.source_refs[0].content_hash != source_input.normalized_hash
+                or self.upstream_candidates
+                or self.base_storygraph_version_id is not None
+                or self.shard.kind != "source_slice"
+                or self.shard.absolute_start != source_input.logical_start
+                or self.shard.absolute_end != source_input.logical_end
+            ):
+                raise ValueError(
+                    "Source Evidence input does not match its immutable source and shard"
+                )
         return self
 
 

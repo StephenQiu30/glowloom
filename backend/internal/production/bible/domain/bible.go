@@ -86,10 +86,12 @@ type Bible struct {
 }
 
 type Invocation struct {
-	ID, WorkspaceID, RequestID, Kind, Stage, ShardKey string
-	InputHash, StageInstanceKey, ManifestHash, Status string
-	ExecutionPolicy, Payload                          json.RawMessage
-	Attempts, ClaimVersion                            int
-	LeaseExpiresAt                                    *time.Time
-	CreatedAt                                         time.Time
+	ID, WorkspaceID, RequestType, RequestID, Kind, Stage, ShardKey string
+	WorkflowRunID, NodeRunID, ManifestID                           string
+	ManifestVersion                                                int64
+	InputHash, StageInstanceKey, ManifestHash, Status              string
+	ExecutionPolicy, Payload                                       json.RawMessage
+	Attempts, ClaimVersion                                         int
+	LeaseExpiresAt                                                 *time.Time
+	CreatedAt                                                      time.Time
 }

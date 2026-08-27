@@ -31,6 +31,7 @@ func (executor *NodeExecutor) Execute(
 	case "workflow.input.generation_candidate_set":
 		return executor.generation.Execute(ctx, command)
 	case "workflow.input.script_revision",
+		"activity.source_evidence",
 		"activity.production_bible",
 		"activity.episode_plan",
 		"activity.episode_structure",

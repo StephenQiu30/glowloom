@@ -26,6 +26,7 @@ import (
 
 const (
 	scriptRevisionExecutor         = "workflow.input.script_revision"
+	sourceEvidenceExecutor         = "activity.source_evidence"
 	productionBibleExecutor        = "activity.production_bible"
 	episodePlanExecutor            = "activity.episode_plan"
 	episodeStructureExecutor       = "activity.episode_structure"
@@ -46,6 +47,10 @@ type ScriptSource interface {
 type BibleCandidateOwner interface {
 	Create(context.Context, bibleapp.Actor, bibleapp.CreateCommand) (bibledomain.Bible, error)
 	Get(context.Context, bibleapp.Actor, string) (bibledomain.Bible, error)
+}
+
+type SourceEvidenceOwner interface {
+	Ensure(context.Context, bibleapp.SourceEvidenceCommand) (bibleapp.SourceEvidenceState, error)
 }
 
 type ProjectSource interface {
@@ -77,6 +82,7 @@ type ShotImageWorkflowOwner interface {
 
 type NodeExecutor struct {
 	scripts     ScriptSource
+	evidence    SourceEvidenceOwner
 	bibles      BibleCandidateOwner
 	projects    ProjectSource
 	plans       EpisodePlanOwner
@@ -86,6 +92,7 @@ type NodeExecutor struct {
 
 func NewNodeExecutor(
 	scripts ScriptSource,
+	evidence SourceEvidenceOwner,
 	bibles BibleCandidateOwner,
 	projects ProjectSource,
 	plans EpisodePlanOwner,
@@ -93,7 +100,7 @@ func NewNodeExecutor(
 	bindings ShotImageWorkflowOwner,
 ) *NodeExecutor {
 	return &NodeExecutor{
-		scripts: scripts, bibles: bibles, projects: projects, plans: plans,
+		scripts: scripts, evidence: evidence, bibles: bibles, projects: projects, plans: plans,
 		storyboards: storyboards, bindings: bindings,
 	}
 }
@@ -110,6 +117,8 @@ func (executor *NodeExecutor) Execute(
 	switch command.Executor {
 	case scriptRevisionExecutor:
 		return executor.executeScriptRevision(ctx, command)
+	case sourceEvidenceExecutor:
+		return executor.executeSourceEvidence(ctx, command)
 	case productionBibleExecutor:
 		return executor.executeProductionBible(ctx, command)
 	case episodePlanExecutor:
@@ -131,6 +140,79 @@ func (executor *NodeExecutor) Execute(
 	default:
 		return domain.NodeExecutorResult{}, errors.New("unsupported production workflow node execution")
 	}
+}
+
+func (executor *NodeExecutor) executeSourceEvidence(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.scripts == nil || executor.evidence == nil {
+		return domain.NodeExecutorResult{}, errors.New("source Evidence workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "evidence" ||
+		command.OutputPorts[0].ValueType != "source_evidence_candidate" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid source Evidence node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid source Evidence node config")
+	}
+	binding := input.Bindings[0]
+	if binding.Port != "script" || binding.ValueType != "script_revision" ||
+		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "script" ||
+		strings.TrimSpace(binding.SourceNodeID) == "" || !frozenScriptMatches(input, binding) {
+		return domain.NodeExecutorResult{}, errors.New("source Evidence script input has drifted")
+	}
+	analysis, err := executor.scripts.GetRevision(ctx, scriptapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, binding.ReferenceID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if analysis.Document.WorkspaceID != command.WorkspaceID || analysis.Document.ProjectID != command.ProjectID ||
+		analysis.Revision.ID != binding.ReferenceID || analysis.Revision.DocumentID != analysis.Document.ID ||
+		strconv.Itoa(analysis.Revision.VersionNo) != binding.ReferenceVersion ||
+		analysis.Revision.NormalizedHash != binding.ContentHash {
+		return domain.NodeExecutorResult{}, errors.New("source Evidence DocumentRevision has drifted")
+	}
+	state, err := executor.evidence.Ensure(ctx, bibleapp.SourceEvidenceCommand{
+		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
+		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
+		DocumentLogicalID: analysis.Document.ID, DocumentRevisionID: analysis.Revision.ID,
+		DocumentRevision: int64(analysis.Revision.VersionNo),
+		NormalizedText:   analysis.Revision.NormalizedText, NormalizedHash: analysis.Revision.NormalizedHash,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	switch state.Status {
+	case "pending":
+		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+	case "failed":
+		return domain.NodeExecutorResult{}, errors.New("source Evidence extraction has a failed active shard")
+	case "ready":
+		if _, parseErr := uuid.Parse(state.CandidateRevisionID); parseErr != nil ||
+			state.CandidateRevisionNo < 1 || !workflowContentHashPattern.MatchString(state.CandidateRevisionHash) {
+			return domain.NodeExecutorResult{}, errors.New("source Evidence aggregate is incomplete")
+		}
+	default:
+		return domain.NodeExecutorResult{}, errors.New("source Evidence extraction returned an invalid status")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "evidence", ValueType: "source_evidence_candidate",
+			ReferenceID:      state.CandidateRevisionID,
+			ReferenceVersion: strconv.FormatInt(state.CandidateRevisionNo, 10),
+			ContentHash:      state.CandidateRevisionHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
 }
 
 func (executor *NodeExecutor) executeProductionShotInput(

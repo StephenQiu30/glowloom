@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any, cast
@@ -43,6 +44,26 @@ def test_storygraph_stage_invocation_matches_backend_canonical_fixture() -> None
     )
     changed = invocation.model_copy(update={"execution_policy": changed_policy})
     assert changed.compute_input_hash() != invocation.input_hash
+
+
+def test_source_evidence_stage_input_is_strict_and_bound_to_the_source_shard() -> None:
+    fixture = _fixture()
+    valid = cast(dict[str, Any], fixture["valid_invocation"])
+
+    with_extra = copy.deepcopy(valid)
+    with_extra["payload"]["stage_input"]["unexpected"] = True
+    with pytest.raises(ValidationError):
+        StoryGraphStageInvocation.model_validate(with_extra)
+
+    drifted_range = copy.deepcopy(valid)
+    drifted_range["payload"]["stage_input"]["logical_end"] = 10
+    with pytest.raises(ValidationError):
+        StoryGraphStageInvocation.model_validate(drifted_range)
+
+    drifted_source = copy.deepcopy(valid)
+    drifted_source["payload"]["stage_input"]["normalized_hash"] = "b" * 64
+    with pytest.raises(ValidationError):
+        StoryGraphStageInvocation.model_validate(drifted_source)
 
 
 def test_storygraph_stage_result_is_strict_and_hashes_candidate() -> None:

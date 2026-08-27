@@ -3,11 +3,15 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "2.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "3.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
 			json.RawMessage(`{"type":"object","properties":{"document_revision_id":{"type":"string","format":"uuid"}},"required":["document_revision_id"],"additionalProperties":false}`),
+		),
+		systemNodeDefinition(
+			"agent.source_evidence", "Source Evidence Candidate", "agent", "activity.source_evidence", "by_inputs", "external_ai",
+			[]PortDefinition{requiredPort("script", "script_revision")}, []PortDefinition{requiredPort("evidence", "source_evidence_candidate")}, emptyNodeConfig(),
 		),
 		systemNodeDefinition(
 			"agent.production_bible", "Production Bible Candidate", "agent", "activity.production_bible", "by_inputs", "external_ai",
