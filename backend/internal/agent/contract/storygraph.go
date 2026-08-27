@@ -209,8 +209,60 @@ func (value StageInvocation) Validate() error {
 }
 
 func validateStageInput(payload StageInvocationPayload) error {
-	if payload.Stage == "extract_source_evidence" {
+	switch payload.Stage {
+	case "extract_source_evidence":
 		return validateSourceEvidenceStageInput(payload)
+	case "review_storygraph":
+		return validateStoryGraphReviewStageInput(payload)
+	case "repair_candidate":
+		return validateStoryGraphRepairStageInput(payload)
+	}
+	return nil
+}
+
+func validateStoryGraphReviewStageInput(payload StageInvocationPayload) error {
+	var input StoryGraphReviewStageInput
+	if err := decodeStrict(payload.StageInput, &input); err != nil || input.Validate() != nil {
+		return errors.New("invalid StoryGraph review stage input")
+	}
+	if len(payload.SourceRefs) != 1 || len(payload.UpstreamCandidates) != 1 ||
+		payload.BaseStoryGraphVersionID != "" || payload.BaseStoryGraphHash != "" ||
+		payload.Shard.Kind != "story_review" || payload.Shard.AbsoluteStart != nil || payload.Shard.AbsoluteEnd != nil {
+		return errors.New("invalid StoryGraph review stage dependencies")
+	}
+	upstream := payload.UpstreamCandidates[0]
+	if upstream.Stage != input.ReviewedStage || upstream.CandidateRevisionID != input.TargetCandidateRevisionID ||
+		upstream.CandidateRevisionHash != input.TargetCandidateRevisionHash {
+		return errors.New("StoryGraph review input does not match its exact candidate revision")
+	}
+	return nil
+}
+
+func validateStoryGraphRepairStageInput(payload StageInvocationPayload) error {
+	var input StoryGraphRepairStageInput
+	if err := decodeStrict(payload.StageInput, &input); err != nil || input.Validate() != nil {
+		return errors.New("invalid StoryGraph repair stage input")
+	}
+	if len(payload.SourceRefs) != 1 || len(payload.UpstreamCandidates) != 2 ||
+		payload.BaseStoryGraphVersionID != "" || payload.BaseStoryGraphHash != "" ||
+		payload.Shard.Kind != "candidate_repair" || payload.Shard.AbsoluteStart != nil || payload.Shard.AbsoluteEnd != nil {
+		return errors.New("invalid StoryGraph repair stage dependencies")
+	}
+	matchedTarget, matchedReview := false, false
+	for _, upstream := range payload.UpstreamCandidates {
+		switch {
+		case upstream.Stage == "reconcile_story" && upstream.CandidateRevisionID == input.TargetCandidateRevisionID &&
+			upstream.CandidateRevisionHash == input.TargetCandidateRevisionHash:
+			matchedTarget = true
+		case upstream.Stage == "review_storygraph" && upstream.CandidateRevisionID == input.ReviewCandidateRevisionID &&
+			upstream.CandidateRevisionHash == input.ReviewCandidateRevisionHash:
+			matchedReview = true
+		default:
+			return errors.New("StoryGraph repair input does not match its exact candidate revisions")
+		}
+	}
+	if !matchedTarget || !matchedReview {
+		return errors.New("StoryGraph repair input is missing an exact candidate revision")
 	}
 	return nil
 }

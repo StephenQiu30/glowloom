@@ -179,8 +179,8 @@
 - [x] `SGA-CAN-002`（`SG-I09`）：invocation/aggregate/repair strict origin union。
 - [x] `SGA-CAN-003`（`SG-I09`）：content hash 与 revision hash 分层单字段突变。
 - [ ] `SGA-CAN-004`（`SG-I09`、`SG-I10`）：exact revision 下游与 Head 变更 stale closure，不覆盖历史。
-- [ ] `SGA-REP-001`（`SG-I10`、`SG-I22`）：模型 Review Issue 不冒充确定性 Gate/blocker。
-- [ ] `SGA-REP-002`（`SG-I10`、`SG-I22`）：Repair Patch 冻结 target/allowlist/base/邻接且不能改已发布 Graph。
+- [x] `SGA-REP-001`（`SG-I10`、`SG-I22`）：模型 Review Issue 不冒充确定性 Gate/blocker。
+- [x] `SGA-REP-002`（`SG-I10`、`SG-I22`）：Repair Patch 冻结 target/allowlist/base/邻接且不能改已发布 Graph。
 - [ ] `SGA-REP-003`（`SG-I10`、`SG-I22`）：expected Head 应用 N+1、幂等 Receipt 与并发单胜。
 - [ ] `SGA-REP-004`（`SG-I10`、`SG-I22`）：每轮重跑影响闭包 Gate/Review，有界预算耗尽不半成功。
 
@@ -430,4 +430,16 @@
 - 通过范围：以上证据完成 `SGA-CAN-001`–`003`，但只建立修复发布的事实原语。`review_storygraph`、冻结 Patch 允许集、确定性 Gate、幂等 Receipt、旧下游 stale closure 与有界重审尚未实现，因此 `SGA-CAN-004`、`SGA-REP-*` 和整个 `SG-I10` 继续保持未通过；最终 `agent-browser` 未执行。
 - Git：本 Evidence 与实现由描述候选修复版本原子切换的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 87 条 Requirement 与 `SG-I01`–`SG-I09`，其余保持未通过。下一步继续且只允许完成 Bible Review/Repair 的冻结输入与确定性 Gate，不提前勾选 Patch Receipt、stale closure、有界重审或后续实现。
+### 候选审核与修复的冻结边界（2026-08-28）
+
+- Red 与跨语言契约：Backend 测试先稳定编译失败于缺少 Deterministic Gate、Review/Repair Stage Input 和 Patch scope API；Agent contract 测试先因对应 Pydantic Model 不存在而在收集期失败。Green 后 Go/Python 完整 Payload 都必须绑定 exact target Candidate Revision；Repair 还必须同时绑定产生目标 Issue 的 exact Review Candidate Revision，任一 id/hash 漂移或缺失均 fail closed。测试继续只位于 `backend/tests` 与 `agent/tests`。
+- Gate 与模型边界：Backend `bible-deterministic-gate-v1` 只检查冻结 Bible Candidate 的 world/entity 与 claim participant/anchor 引用、重复 Key，并确定性排序 blocker；候选中由模型生成的 blocking Conflict/Review Issue 不进入 Gate。Gate 作为只读 Stage Input 冻结，`StoryGraphReviewCandidate` Schema 已删除 `deterministic_blockers`，额外 Gate 字段和冒用确定性 Gate code 的模型 Issue 都被 strict decoder/Pydantic 拒绝，因此 Reviewer 没有降级或伪装 Tool blocker 的输出通道。
+- Evidence 与允许集：Review 输出 target revision id/hash 必须与输入一致，每个 Issue 至少一个 Evidence 且只能属于冻结 Candidate Evidence 集合。Repair 输入冻结 blocking Issue、轮次、允许 Candidate Key/字段、规范 base fragment hash 和只读邻接；Go/Python 对同一片段得到 `d4d2e657ebe16dd6ecab5d3aa2c8d5e536ffc385fba3ee9e0627e3ee24d8c17b`，Patch 的 target、base hash、字段、replacement 类型或重复操作任一越界都被拒绝。
+- 未发布边界：Bible 可修字段使用显式 allowlist，不包含 Evidence、Identity Key、`graph_json` 或任意 Graph 写入字段；Review/Repair Payload 均要求 Base StoryGraph Ref 为空，带 `base_storygraph_version_id/hash` 的负向用例在 Go/Python 两侧失败。Agent 只返回 Candidate/Patch，不写 PostgreSQL、不应用 Owner Command；已发布 Graph 修改仍只能走 Human-approved Domain Intent。
+- Harness 与真实 Codex：Agent 在 JSON Schema 校验后继续用冻结 Stage Input 复核 Review Evidence 和 Patch allowlist，无法靠符合表面 Schema 绕过上下文。扩展后的本地登录 Codex CLI 真实执行 `Source Evidence → Story Analysis → Reconciliation → Review → Bounded Repair`，结果 `1 passed in 79.14s`；Review 和 Repair 均由同一 `agent/skills/build-storygraph` Bundle 完成，无 Tool、业务写入或第二 Workflow Engine。
+- 完整 CI：Backend 无外部依赖全量门禁通过；最终代码在全新 PostgreSQL `16.15` 下全量通过，Workflow 包 `61.680s`；全新 PostgreSQL、Temporal、MinIO、Kafka `4.3.1` 与 Elasticsearch/Logstash/Kibana `9.4.4` 下 `gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Workflow 包 `131.739s`。Agent Ruff check/format、Pyright 与 Pytest 为 `32 passed, 1 skipped`，跳过项即上述另行真实通过的 opt-in Codex；Frontend OpenAPI 零漂移、lint/typecheck、18 个 Vitest 文件 54 项测试和 Next.js `16.2.12` production build 全通过。
+- 镜像、故障与 hygiene：开发/生产 Compose 校验，Frontend/Backend/Agent 三镜像重建，Backend 三 Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Bundle 均通过。隔离部署中 API、Frontend、Workflow/Event Worker、Kafka/ELK、日志脱敏与检索通过；Filebeat/Logstash/Kibana/Kafka/Elasticsearch 逐项停机时 Owner 写入与 Workflow 保持可用，Event Worker readiness 按依赖降级并在恢复后重新 ready，日志恢复摄取；本次专用容器、网络和 Volume 已精确删除，仓库 hygiene 通过。
+- 通过范围：以上证据完成 `SGA-REP-001` 与 `SGA-REP-002`。这只证明冻结输入、确定性 Gate、Review Evidence 和 Patch scope，不代表 Patch 已应用；幂等 Receipt、旧下游 stale closure、并发 Patch 业务事务和有界重审仍未完成，因此 `SGA-CAN-004`、`SGA-REP-003`–`004` 与整个 `SG-I10` 保持未通过，最终 `agent-browser` 未执行。
+- Git：本 Evidence 与实现由描述候选审核和修复边界的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据通过 89 条 Requirement 与 `SG-I01`–`SG-I09`，其余保持未通过。下一步继续且只允许完成幂等 Patch Receipt 与旧下游 stale closure，不提前勾选有界重审或后续实现。

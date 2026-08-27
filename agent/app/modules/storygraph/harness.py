@@ -15,10 +15,17 @@ from pydantic import BaseModel
 from app.candidate_runtime.schemas import (
     SourceEvidenceStageInput,
     StoryGraphExecutionPolicy,
+    StoryGraphRepairStageInput,
+    StoryGraphReviewStageInput,
     StoryGraphStageInvocation,
 )
 from app.modules.storygraph.bundle import BundleInvalid, BundleManifest, StoryGraphBundle
-from app.modules.storygraph.candidate_schemas import Evidence, SourceEvidenceCandidate
+from app.modules.storygraph.candidate_schemas import (
+    CandidateRepairPatch,
+    Evidence,
+    SourceEvidenceCandidate,
+    StoryGraphReviewCandidate,
+)
 from app.modules.storygraph.skill_registry import stage_spec
 
 
@@ -151,6 +158,20 @@ class StoryGraphHarness:
                 self.invocation.payload.stage_input
             )
             return normalize_source_evidence(candidate, source_input)
+        if self.invocation.payload.stage == "review_storygraph":
+            if not isinstance(candidate, StoryGraphReviewCandidate):
+                raise CodexSchemaInvalid("Codex CLI returned the wrong StoryGraph review schema")
+            review_input = StoryGraphReviewStageInput.model_validate(
+                self.invocation.payload.stage_input
+            )
+            candidate.validate_for(review_input)
+        if self.invocation.payload.stage == "repair_candidate":
+            if not isinstance(candidate, CandidateRepairPatch):
+                raise CodexSchemaInvalid("Codex CLI returned the wrong candidate repair schema")
+            repair_input = StoryGraphRepairStageInput.model_validate(
+                self.invocation.payload.stage_input
+            )
+            candidate.validate_for(repair_input)
         return candidate
 
     def _validate_runtime_policy(self, policy: StoryGraphExecutionPolicy) -> None:

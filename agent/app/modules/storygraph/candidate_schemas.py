@@ -5,6 +5,35 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+BIBLE_REPAIR_FIELD_TYPES = {
+    "aliases": "strings",
+    "ambiguities": "strings",
+    "anchor_keys": "strings",
+    "canonical_name": "text",
+    "category": "text",
+    "claim_type": "text",
+    "entity_keys": "strings",
+    "facts": "strings",
+    "label": "text",
+    "normalized_name": "text",
+    "participant_keys": "strings",
+    "polarity": "text",
+    "rules": "strings",
+    "scope": "text",
+    "status": "text",
+    "summary": "text",
+    "title": "text",
+}
+
+BIBLE_DETERMINISTIC_GATE_CODES = {
+    "world_unknown_entity",
+    "world_duplicate_entity",
+    "claim_unknown_participant",
+    "claim_duplicate_participant",
+    "claim_unknown_anchor",
+    "claim_duplicate_anchor",
+}
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -301,8 +330,22 @@ class ShotDetailCandidate(StrictModel):
 
 class StoryGraphReviewCandidate(StrictModel):
     reviewed_stage: str = Field(min_length=1)
-    deterministic_blockers: list[str]
+    target_candidate_revision_id: UUID
+    target_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     review_issues: list[CandidateIssue]
+
+    def validate_for(self, stage_input: Any) -> None:
+        if (
+            self.reviewed_stage != stage_input.reviewed_stage
+            or self.target_candidate_revision_id != stage_input.target_candidate_revision_id
+            or self.target_candidate_revision_hash != stage_input.target_candidate_revision_hash
+        ):
+            raise ValueError("StoryGraph review candidate does not match its frozen target")
+        _validate_review_issues(
+            self.review_issues,
+            _candidate_evidence_keys(stage_input.target_candidate),
+            require_evidence=True,
+        )
 
 
 class RepairReplacement(StrictModel):
@@ -322,7 +365,7 @@ class RepairReplacement(StrictModel):
 
 
 class RepairOperation(StrictModel):
-    target_temporary_key: str = Field(min_length=1)
+    target_candidate_key: str = Field(min_length=1)
     base_fragment_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     field_name: str = Field(min_length=1)
     replacement: RepairReplacement
@@ -333,3 +376,98 @@ class CandidateRepairPatch(StrictModel):
     target_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     operations: list[RepairOperation] = Field(min_length=1)
     review_issues: list[CandidateIssue]
+
+    def validate_for(self, stage_input: Any) -> None:
+        if (
+            self.target_candidate_revision_id != stage_input.target_candidate_revision_id
+            or self.target_candidate_revision_hash != stage_input.target_candidate_revision_hash
+        ):
+            raise ValueError("Candidate repair Patch does not match its frozen target")
+        allowed = {target.candidate_key: target for target in stage_input.allowed_targets}
+        seen: set[tuple[str, str]] = set()
+        for operation in self.operations:
+            target = allowed.get(operation.target_candidate_key)
+            if (
+                target is None
+                or operation.base_fragment_hash != target.base_fragment_hash
+                or operation.field_name not in target.allowed_fields
+            ):
+                raise ValueError("Candidate repair Patch escaped its frozen allowlist or fragment")
+            if (
+                _replacement_kind(operation.replacement)
+                != BIBLE_REPAIR_FIELD_TYPES[operation.field_name]
+            ):
+                raise ValueError(
+                    "Candidate repair Patch replacement type does not match its frozen field"
+                )
+            identity = (operation.target_candidate_key, operation.field_name)
+            if identity in seen:
+                raise ValueError("Candidate repair Patch contains a duplicate operation")
+            seen.add(identity)
+        _validate_review_issues(
+            self.review_issues,
+            {_evidence_key(value) for value in stage_input.target_issue.evidence},
+            require_evidence=False,
+        )
+
+
+def _evidence_key(value: Evidence) -> tuple[int, int, str, str, int | None]:
+    return (
+        value.source_start,
+        value.source_end,
+        value.text_hash,
+        value.exact_anchor,
+        value.episode_number,
+    )
+
+
+def _replacement_kind(value: RepairReplacement) -> str:
+    if value.text is not None:
+        return "text"
+    if value.integer is not None:
+        return "integer"
+    if value.flag is not None:
+        return "flag"
+    if value.strings is not None:
+        return "strings"
+    return ""
+
+
+def _candidate_evidence_keys(
+    candidate: StoryReconciliationCandidate,
+) -> set[tuple[int, int, str, str, int | None]]:
+    values: list[Evidence] = []
+    for entity in candidate.canonical_entities:
+        values.extend(entity.evidence)
+        for state in entity.states:
+            values.extend(state.evidence)
+    for entry in candidate.canonical_world_entries:
+        values.extend(entry.evidence)
+    for claim in candidate.merged_claims:
+        values.extend(claim.evidence)
+    for arc in candidate.merged_arcs:
+        values.extend(arc.evidence)
+    for issue in (*candidate.conflicts, *candidate.review_issues):
+        values.extend(issue.evidence)
+    return {_evidence_key(value) for value in values}
+
+
+def _validate_review_issues(
+    issues: list[CandidateIssue],
+    allowed_evidence: set[tuple[int, int, str, str, int | None]],
+    *,
+    require_evidence: bool,
+) -> None:
+    issue_keys: set[str] = set()
+    for issue in issues:
+        if issue.code in BIBLE_DETERMINISTIC_GATE_CODES:
+            raise ValueError("model Review Issue cannot use a deterministic Gate code")
+        if issue.issue_key in issue_keys:
+            raise ValueError("StoryGraph review issue keys must be unique")
+        issue_keys.add(issue.issue_key)
+        if require_evidence and not issue.evidence:
+            raise ValueError("StoryGraph Review Issue requires Evidence")
+        if any(_evidence_key(value) not in allowed_evidence for value in issue.evidence):
+            raise ValueError(
+                "StoryGraph Review Issue Evidence is outside the frozen Candidate Revision"
+            )

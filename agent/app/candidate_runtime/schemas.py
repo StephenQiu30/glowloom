@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any, Literal
 from uuid import UUID
 
@@ -8,6 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.candidate_runtime.canonical import canonical_hash
 from app.modules.storygraph.candidate_schemas import (
+    BIBLE_DETERMINISTIC_GATE_CODES,
+    BIBLE_REPAIR_FIELD_TYPES,
+    CandidateIssue,
     SourceEvidenceCandidate,
     StoryAnalysisCandidate,
     StoryReconciliationCandidate,
@@ -250,6 +254,135 @@ class StoryReconciliationStageInput(BaseModel):
         return self
 
 
+class StoryGraphGateBlocker(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1)
+    subject_key: str = Field(min_length=1)
+    related_key: str | None = None
+    summary: str = Field(min_length=1)
+
+
+class StoryGraphDeterministicGateResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    gate_version: Literal["bible-deterministic-gate-v1"]
+    target_candidate_revision_id: UUID
+    target_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    blockers: list[StoryGraphGateBlocker]
+
+    @model_validator(mode="after")
+    def validate_blocker_order(self) -> StoryGraphDeterministicGateResult:
+        identities = [
+            (value.code, value.subject_key, value.related_key or "") for value in self.blockers
+        ]
+        if identities != sorted(set(identities)):
+            raise ValueError("deterministic gate blockers must be unique and sorted")
+        return self
+
+
+class StoryGraphReviewStageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reviewed_stage: Literal["reconcile_story"]
+    target_candidate_revision_id: UUID
+    target_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    candidate_item_start: int = Field(ge=0)
+    candidate_item_end: int = Field(ge=1)
+    target_candidate: StoryReconciliationCandidate
+    deterministic_gate: StoryGraphDeterministicGateResult
+
+    @model_validator(mode="after")
+    def validate_target(self) -> StoryGraphReviewStageInput:
+        item_count = (
+            len(self.target_candidate.canonical_entities)
+            + len(self.target_candidate.canonical_world_entries)
+            + len(self.target_candidate.merged_claims)
+            + len(self.target_candidate.merged_arcs)
+            + len(self.target_candidate.conflicts)
+            + len(self.target_candidate.review_issues)
+        )
+        if (
+            self.candidate_item_end <= self.candidate_item_start
+            or self.candidate_item_end - self.candidate_item_start != item_count
+            or self.deterministic_gate.target_candidate_revision_id
+            != self.target_candidate_revision_id
+            or self.deterministic_gate.target_candidate_revision_hash
+            != self.target_candidate_revision_hash
+        ):
+            raise ValueError("StoryGraph review input does not match its frozen target")
+        return self
+
+
+class StoryGraphRepairAllowedTarget(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_key: str = Field(min_length=1)
+    allowed_fields: list[str] = Field(min_length=1, max_length=32)
+    base_fragment_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fragment: dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_fragment(self) -> StoryGraphRepairAllowedTarget:
+        if (
+            self.allowed_fields != sorted(set(self.allowed_fields))
+            or any(
+                re.fullmatch(r"[a-z][a-z0-9_]{0,79}", value) is None
+                or value not in BIBLE_REPAIR_FIELD_TYPES
+                for value in self.allowed_fields
+            )
+            or canonical_hash(self.fragment) != self.base_fragment_hash
+        ):
+            raise ValueError("invalid StoryGraph repair allowed target")
+        return self
+
+
+class StoryGraphRepairReadOnlyFragment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_key: str = Field(min_length=1)
+    fragment_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fragment: dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_fragment(self) -> StoryGraphRepairReadOnlyFragment:
+        if canonical_hash(self.fragment) != self.fragment_hash:
+            raise ValueError("StoryGraph repair read-only fragment hash mismatch")
+        return self
+
+
+class StoryGraphRepairStageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_candidate_revision_id: UUID
+    target_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    review_candidate_revision_id: UUID
+    review_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    target_issue: CandidateIssue
+    allowed_targets: list[StoryGraphRepairAllowedTarget] = Field(min_length=1, max_length=32)
+    read_only_adjacency: list[StoryGraphRepairReadOnlyFragment] = Field(max_length=64)
+    repair_round: int = Field(ge=1, le=3)
+    max_repair_rounds: int = Field(ge=1, le=3)
+
+    @model_validator(mode="after")
+    def validate_boundary(self) -> StoryGraphRepairStageInput:
+        allowed_keys = [value.candidate_key for value in self.allowed_targets]
+        adjacent_keys = [value.candidate_key for value in self.read_only_adjacency]
+        if (
+            self.target_issue.severity != "blocking"
+            or self.target_issue.code in BIBLE_DETERMINISTIC_GATE_CODES
+            or not self.target_issue.evidence
+            or self.repair_round > self.max_repair_rounds
+            or len(set((*allowed_keys, *adjacent_keys))) != len(allowed_keys) + len(adjacent_keys)
+            or (
+                self.target_issue.subject_key is not None
+                and self.target_issue.subject_key not in allowed_keys
+            )
+        ):
+            raise ValueError("invalid StoryGraph repair boundary")
+        return self
+
+
 class StoryGraphStagePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -330,6 +463,54 @@ class StoryGraphStagePayload(BaseModel):
                 or self.shard.absolute_end is not None
             ):
                 raise ValueError("Story reconcile input does not match its exact child revisions")
+        elif self.stage == "review_storygraph":
+            stage_input = StoryGraphReviewStageInput.model_validate(self.stage_input)
+            if (
+                len(self.source_refs) != 1
+                or len(self.upstream_candidates) != 1
+                or self.upstream_candidates[0].stage != stage_input.reviewed_stage
+                or self.upstream_candidates[0].candidate_revision_id
+                != stage_input.target_candidate_revision_id
+                or self.upstream_candidates[0].candidate_revision_hash
+                != stage_input.target_candidate_revision_hash
+                or self.base_storygraph_version_id is not None
+                or self.shard.kind != "story_review"
+                or self.shard.absolute_start is not None
+                or self.shard.absolute_end is not None
+            ):
+                raise ValueError(
+                    "StoryGraph review input does not match its exact candidate revision"
+                )
+        elif self.stage == "repair_candidate":
+            stage_input = StoryGraphRepairStageInput.model_validate(self.stage_input)
+            expected = {
+                (
+                    "reconcile_story",
+                    stage_input.target_candidate_revision_id,
+                    stage_input.target_candidate_revision_hash,
+                ),
+                (
+                    "review_storygraph",
+                    stage_input.review_candidate_revision_id,
+                    stage_input.review_candidate_revision_hash,
+                ),
+            }
+            supplied = {
+                (value.stage, value.candidate_revision_id, value.candidate_revision_hash)
+                for value in self.upstream_candidates
+            }
+            if (
+                len(self.source_refs) != 1
+                or len(self.upstream_candidates) != 2
+                or supplied != expected
+                or self.base_storygraph_version_id is not None
+                or self.shard.kind != "candidate_repair"
+                or self.shard.absolute_start is not None
+                or self.shard.absolute_end is not None
+            ):
+                raise ValueError(
+                    "StoryGraph repair input does not match its exact candidate revisions"
+                )
         return self
 
 

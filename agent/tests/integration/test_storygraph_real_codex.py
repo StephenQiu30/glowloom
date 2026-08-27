@@ -17,8 +17,10 @@ from app.candidate_runtime.schemas import (
     StoryGraphStagePayload,
 )
 from app.modules.storygraph.candidate_schemas import (
+    CandidateRepairPatch,
     SourceEvidenceCandidate,
     StoryAnalysisCandidate,
+    StoryGraphReviewCandidate,
     StoryReconciliationCandidate,
 )
 from app.modules.storygraph.harness import StoryGraphHarness
@@ -219,3 +221,155 @@ async def test_real_codex_preserves_evidence_through_story_analysis_and_reconcil
     reconciled_evidence = evidence_identities(reconciled)
     assert reconciled_evidence
     assert reconciled_evidence <= analysis_evidence
+
+    reconciled_candidate = reconciled.model_dump(mode="json")
+    reconciled_candidate_hash = canonical_hash(reconciled_candidate)
+    reconciled_revision_id = "70000000-0000-0000-0000-000000000003"
+    reconciled_item_count = (
+        len(reconciled.canonical_entities)
+        + len(reconciled.canonical_world_entries)
+        + len(reconciled.merged_claims)
+        + len(reconciled.merged_arcs)
+        + len(reconciled.conflicts)
+        + len(reconciled.review_issues)
+    )
+    review_invocation = stage_invocation(
+        invocation,
+        invocation_id="20000000-0000-0000-0000-000000000004",
+        payload={
+            "stage": "review_storygraph",
+            "shard_key": "review:bible:0000",
+            "workspace_id": invocation.payload.workspace_id,
+            "project_id": invocation.payload.project_id,
+            "source_refs": [
+                value.model_dump(mode="json") for value in invocation.payload.source_refs
+            ],
+            "upstream_candidates": [
+                {
+                    "stage": "reconcile_story",
+                    "shard_key": reconciliation_invocation.payload.shard_key,
+                    "candidate_revision_id": reconciled_revision_id,
+                    "candidate_revision_hash": reconciled_candidate_hash,
+                    "source_invocation_id": reconciliation_invocation.invocation_id,
+                    "source_result_hash": reconciled_candidate_hash,
+                }
+            ],
+            "shard_manifest_ref": {
+                "manifest_id": "60000000-0000-0000-0000-000000000004",
+                "version": 1,
+                "hash": "f" * 64,
+            },
+            "shard": {
+                "kind": "story_review",
+                "key": "review:bible:0000",
+                "tree_path": "review.bible.0000",
+            },
+            "stage_input": {
+                "reviewed_stage": "reconcile_story",
+                "target_candidate_revision_id": reconciled_revision_id,
+                "target_candidate_revision_hash": reconciled_candidate_hash,
+                "candidate_item_start": 0,
+                "candidate_item_end": reconciled_item_count,
+                "target_candidate": reconciled_candidate,
+                "deterministic_gate": {
+                    "gate_version": "bible-deterministic-gate-v1",
+                    "target_candidate_revision_id": reconciled_revision_id,
+                    "target_candidate_revision_hash": reconciled_candidate_hash,
+                    "blockers": [],
+                },
+            },
+        },
+    )
+    review = await StoryGraphHarness(review_invocation, repository_root=REPOSITORY_ROOT).execute()
+    assert isinstance(review, StoryGraphReviewCandidate)
+    assert review.target_candidate_revision_id == UUID(reconciled_revision_id)
+    assert evidence_identities(review) <= reconciled_evidence
+
+    repair_evidence = reconciled.canonical_entities[0].evidence[0].model_dump(mode="json")
+    target_issue = {
+        "issue_key": "issue:canonical-name",
+        "code": "canonical_name_ambiguous",
+        "severity": "blocking",
+        "scope": "entity",
+        "subject_key": reconciled.canonical_entities[0].entity_key,
+        "summary": "Use the evidence-backed canonical name already present in the candidate.",
+        "repair_hint": "Keep the canonical name aligned with the supplied Evidence.",
+        "evidence": [repair_evidence],
+    }
+    review_candidate = {
+        "reviewed_stage": "reconcile_story",
+        "target_candidate_revision_id": reconciled_revision_id,
+        "target_candidate_revision_hash": reconciled_candidate_hash,
+        "review_issues": [target_issue],
+    }
+    review_candidate_hash = canonical_hash(review_candidate)
+    fragment = reconciled.canonical_entities[0].model_dump(mode="json")
+    fragment_hash = canonical_hash(fragment)
+    repair_invocation = stage_invocation(
+        invocation,
+        invocation_id="20000000-0000-0000-0000-000000000005",
+        payload={
+            "stage": "repair_candidate",
+            "shard_key": "repair:bible:0000",
+            "workspace_id": invocation.payload.workspace_id,
+            "project_id": invocation.payload.project_id,
+            "source_refs": [
+                value.model_dump(mode="json") for value in invocation.payload.source_refs
+            ],
+            "upstream_candidates": [
+                {
+                    "stage": "reconcile_story",
+                    "shard_key": reconciliation_invocation.payload.shard_key,
+                    "candidate_revision_id": reconciled_revision_id,
+                    "candidate_revision_hash": reconciled_candidate_hash,
+                    "source_invocation_id": reconciliation_invocation.invocation_id,
+                    "source_result_hash": reconciled_candidate_hash,
+                },
+                {
+                    "stage": "review_storygraph",
+                    "shard_key": review_invocation.payload.shard_key,
+                    "candidate_revision_id": "70000000-0000-0000-0000-000000000004",
+                    "candidate_revision_hash": review_candidate_hash,
+                    "source_invocation_id": review_invocation.invocation_id,
+                    "source_result_hash": review_candidate_hash,
+                },
+            ],
+            "shard_manifest_ref": {
+                "manifest_id": "60000000-0000-0000-0000-000000000005",
+                "version": 1,
+                "hash": "9" * 64,
+            },
+            "shard": {
+                "kind": "candidate_repair",
+                "key": "repair:bible:0000",
+                "tree_path": "repair.bible.0000",
+            },
+            "stage_input": {
+                "target_candidate_revision_id": reconciled_revision_id,
+                "target_candidate_revision_hash": reconciled_candidate_hash,
+                "review_candidate_revision_id": "70000000-0000-0000-0000-000000000004",
+                "review_candidate_revision_hash": review_candidate_hash,
+                "target_issue": target_issue,
+                "allowed_targets": [
+                    {
+                        "candidate_key": reconciled.canonical_entities[0].entity_key,
+                        "allowed_fields": ["canonical_name"],
+                        "base_fragment_hash": fragment_hash,
+                        "fragment": fragment,
+                    }
+                ],
+                "read_only_adjacency": [],
+                "repair_round": 1,
+                "max_repair_rounds": 2,
+            },
+        },
+    )
+    repair = await StoryGraphHarness(repair_invocation, repository_root=REPOSITORY_ROOT).execute()
+    assert isinstance(repair, CandidateRepairPatch)
+    assert repair.target_candidate_revision_id == UUID(reconciled_revision_id)
+    assert all(
+        operation.target_candidate_key == reconciled.canonical_entities[0].entity_key
+        and operation.field_name == "canonical_name"
+        and operation.base_fragment_hash == fragment_hash
+        for operation in repair.operations
+    )

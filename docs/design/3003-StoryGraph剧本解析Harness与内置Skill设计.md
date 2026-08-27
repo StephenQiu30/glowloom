@@ -470,6 +470,8 @@ Skill Markdown 由 Harness 显式读取并注入，不依赖 Codex 用户目录�
 
 实施顺序固定为：先完成三类 Revision origin/hash 与原子 Head CAS；再冻结 Bible Review/Repair 输入、允许集和确定性 Gate；随后在同一 Backend 事务中加入 Patch Receipt 与旧下游 stale closure；最后接入 Temporal Node 的有界 review→repair→gate 循环。每一单元都必须独立 Red/Green/真实 PostgreSQL 验证并提交，不能把尚未完成的后续语义伪装进底层 CAS。
 
+Bible Review/Repair 的冻结边界已经落地：Backend 本地 `bible-deterministic-gate-v1` 只根据冻结 Reconciliation Candidate 的 Key/引用结构产生排序 blocker，模型已有的 Conflict/Review Issue 不参与 Gate 计算；`review_storygraph` 输出不再包含任何 Gate/blocker 字段，只能返回属于目标 Candidate Evidence 集合的 Review Issue。`repair_candidate` 同时绑定目标 Candidate Revision 与产生目标 Issue 的 Review Candidate Revision，输入冻结目标 Issue、允许字段、规范片段 Hash、只读邻接和轮次上限；输出 Patch 只能命中该允许集，并按字段契约限定为 `text` 或 `strings` replacement。Bible 允许字段为显式集合，不含 Evidence、Identity Key、对象字段或任何 Graph 写入字段，且 Review/Repair Payload 都拒绝 `base_storygraph_version_id/hash`，因此尚未发布的 Candidate Repair 与已发布 StoryGraph 修改保持两条不相交的 DTO 路径。当前只完成输入、Gate、Harness 输出和 Patch scope 校验，尚未应用 Patch、创建 Receipt、扫描 stale closure 或驱动重审循环。
+
 已发布图上的 Canvas 修改必须经过 Human-approved typed Domain Intent → 对应 Owner Command → 新 Owner revision → StoryGraph recompile。两条路径不共享 Patch DTO，也不允许 Graph Repository 代写 Owner。
 
 ## 实施任务映射
