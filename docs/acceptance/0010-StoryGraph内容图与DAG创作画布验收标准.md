@@ -570,3 +570,12 @@
 - Git：实现、测试与 Evidence 由描述冻结已审核分镜意图的 feature 提交承载；提交标题和正文只表达功能，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
 `SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I19`，其余保持未通过。下一步只消费 `approved_storyboard_intents` 实现 reference asset 的 Cost/Quota/Provider Job/Artifact 执行与 unknown 对账；在此之前不得启动 detail shot、正式 Shot Apply、Canvas 写入或 `agent-browser`。
+
+### GenerationTarget 与 Runware 离线任务合同（2026-08-29）
+
+- Red 与独立测试：新增 `backend/tests/generation/target_contract_test.go` 与 `backend/tests/generation/runware_adapter_test.go`，先因生产 Runware Adapter 包缺失而编译失败；处理中/部分结果用例又先以 `Runware result count drifted` 失败，随后实现严格分类并复跑为 Green。测试只位于 `backend/tests`，未与业务代码混放。
+- Target 合同：Backend Domain 新增只允许 `reference_asset|shot_frame` 的严格联合类型，对 Owner Ref、Revision/Content Hash、Prompt Version、尺寸、PNG 和候选数做确定性规范化；`reference_asset` 首版固定 Character composite `reference_sheet` 与 `front/profile/back`，Target Hash 不包含 Target ID、创建人、创建时间等非生成输入状态，且持久化回读漂移会 fail closed。
+- Runware 合同：2026-08-29 重新核验官方 [Task Polling](https://runware.ai/docs/platform/task-polling) 与 [Task Details](https://runware.ai/docs/platform/task-details)。Adapter 固定官方 HTTPS Endpoint、`runware:z-image@turbo`、Bearer Header、`deliveryMethod=async` 和 Backend Provider Job UUID；`processing`/部分成功保持 `accepted` 且不提前 Staging，`taskNotFound` 保持 `unknown`，明确 Provider Error 映射稳定失败码，传输失败不自动重提。`getResponse/getTaskDetails` 只使用同一 UUID，历史请求必须与冻结 Target 等价；输出数、task/image UUID、官方 Host 和 Staging metadata 任一漂移均拒绝。API Key 只进 Authorization Header，测试验证其不进入 JSON 或错误。
+- 本轮验证：`go test -count=1 ./tests/generation` 通过；`test -z "$(gofmt -l .)" && go vet ./... && go test -count=1 -p 1 ./...` 通过，但未注入 `LANVERSE_TEST_*`，不计外部服务验收。Agent Ruff check/format、Pyright 与 Pytest 通过，结果 `39 passed, 4 skipped`，skip 为显式真实 Codex opt-in；Frontend OpenAPI 生成零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试与 production build 全通过。本机现有 Logstash `127.0.0.1:5000` TCP 可连接，本轮未启动、重启或增加 Filebeat/Logstash 服务。
+- 未通过范围：当前进程中 `RUNWARE_API_KEY`、`LANVERSE_TEST_DATABASE_URL`、`LANVERSE_TEST_MINIO_ENDPOINT` 与 `LANVERSE_TEST_TEMPORAL_ADDRESS` 均未配置；因此本证据只是已接受设计的第一个离线交付单元，不勾选 `SG-VIS-001`–`005`、`SG-OPS-002` 或 `SG-I20`。GenerationTarget GORM Catalog/Repository、approved intent 消费、Cost/Quota/Authorization/Job 前置、安全下载、私有 MinIO Staging、Artifact 物化、Temporal 恢复与真实 Runware 任务仍是当前项的后续必做范围；`agent-browser` 未提前执行。
+- Git：本 Evidence 与实现由描述 Runware 图片任务合同的完整功能提交承载；提交标题和正文不包含任务编号、任务名或阶段名，未推送、未创建 PR。

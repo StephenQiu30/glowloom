@@ -45,6 +45,7 @@ type ProviderSubmission struct {
 	ProviderKey, ModelKey, CredentialRef  string
 	InputHash                             string
 	Units                                 int64
+	Target                                domain.GenerationTarget
 }
 
 type ProviderOutcome struct {
