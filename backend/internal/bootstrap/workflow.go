@@ -44,7 +44,8 @@ func NewWorkflowRuntime(
 	bindings workflowproduction.ShotImageWorkflowOwner,
 	candidateSets workflowreview.CandidateSetSource,
 	referenceTargets workflowgeneration.ReferenceTargetBuilder,
-	preparations workflowgeneration.ImagePreparation,
+	preparations workflowgeneration.ReferencePreparation,
+	providers workflowgeneration.ImageProvider,
 	segments workflowproduction.EpisodeSegmentationOwner,
 	episodes workflowproduction.EpisodeAnalysisOwner,
 ) (*workflowapp.RuntimeService, error) {
@@ -56,7 +57,7 @@ func NewWorkflowRuntime(
 	if candidateSets != nil {
 		humanTasks = workflowreview.NewWithGeneration(reviews, candidateSets)
 	}
-	if (referenceTargets == nil) != (preparations == nil) {
+	if (referenceTargets == nil) != (preparations == nil) || (referenceTargets == nil) != (providers == nil) {
 		return nil, errors.New("reference asset workflow dependencies must be configured together")
 	}
 	executor := workflowapp.NodeExecutor(
@@ -65,7 +66,7 @@ func NewWorkflowRuntime(
 	if candidateSets != nil || referenceTargets != nil {
 		var err error
 		executor, err = workflowexecution.NewNodeExecutor(
-			executor, workflowgeneration.NewNodeExecutor(candidateSets, referenceTargets, preparations),
+			executor, workflowgeneration.NewNodeExecutor(candidateSets, referenceTargets, preparations, preparations, providers),
 		)
 		if err != nil {
 			return nil, err

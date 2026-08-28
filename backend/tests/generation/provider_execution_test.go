@@ -183,6 +183,30 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	if submitCalls, queryCalls := gateway.counts(); submitCalls != 1 || queryCalls != 0 {
 		t.Fatalf("initial Provider submission calls = submit %d query %d, want 1/0", submitCalls, queryCalls)
 	}
+	var unknownNode model.NodeRunProjection
+	if err = database.First(&unknownNode, "id = ?", unknown.Intent.NodeRunID).Error; err != nil || unknownNode.InputHash == nil {
+		t.Fatalf("load unknown Provider Workflow node: node=%#v err=%v", unknownNode, err)
+	}
+	progressedPreparation, err := preparations.PrepareImageGeneration(ctx, fixture.editor, generationapp.PrepareImageGenerationCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		WorkflowRunID: fixture.workflowRunID.String(), NodeRunID: unknown.Intent.NodeRunID,
+		WorkflowInputHash: *unknownNode.InputHash, TargetID: unknown.Intent.TargetID, TargetHash: unknown.Intent.TargetHash,
+		Units: unknown.Intent.Units, IdempotencyKey: "generation-prepare-provider-unknown",
+	})
+	if err != nil || progressedPreparation.Intent.ID != unknown.Intent.ID ||
+		progressedPreparation.Intent.Status != generationdomain.IntentOutcomeUnknown ||
+		progressedPreparation.Intent.ProviderJobID != unknown.Job.ID {
+		t.Fatalf("replay preparation after Provider progress: result=%#v err=%v", progressedPreparation, err)
+	}
+	progressedClaim, err := preparations.AcquireExecutionClaim(ctx, generationapp.AcquireExecutionClaimCommand{
+		IntentID: unknown.Intent.ID, Claimant: "model-gateway:provider-worker",
+		IdempotencyKey: "generation-provider-claim-unknown",
+	})
+	if err != nil || progressedClaim.Intent.ID != unknown.Intent.ID ||
+		progressedClaim.Intent.Status != generationdomain.IntentOutcomeUnknown ||
+		progressedClaim.Authorization != unknownClaim.Authorization {
+		t.Fatalf("replay execution claim after Provider progress: result=%#v err=%v", progressedClaim, err)
+	}
 	submission := gateway.lastSubmission()
 	if submission.Target.ID != unknown.Request.TargetID || submission.TargetHash != unknown.Request.TargetHash ||
 		submission.Target.TargetHash != unknown.Intent.TargetHash ||

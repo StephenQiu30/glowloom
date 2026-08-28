@@ -165,7 +165,7 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 		planningapp.NewEpisodePlanningService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
-		reviewService, imageBindings, setSource, nil, nil, nil, nil,
+		reviewService, imageBindings, setSource, nil, nil, nil, nil, nil,
 	)
 	if err != nil {
 		t.Fatalf("compose formal Shot Workflow runtime: %v", err)

@@ -200,7 +200,7 @@ Workflow Node
   → Human Gate → exact Owner Apply
 ```
 
-任何网络调用都在 PostgreSQL 事务外。Executor 使用 NodeRun 稳定幂等身份；`accepted/unknown` 返回正常 `RETRYING`，Temporal Timer 后对账同一 Job。Node Cache 不承担远端防重，也不缓存 RETRYING/UNKNOWN；只有完整 CandidateSet 的 canonical `node-output-v1` 可成为已完成输出。
+任何网络调用都在 PostgreSQL 事务外。Executor 使用 NodeRun 稳定幂等身份；`accepted/unknown` 返回正常 `RETRYING`，Temporal Timer 后对账同一 Job。Preparation/Claim Command Receipt 重放允许 Intent 沿同一不可变 Target、Cost/Quota 和 Claim 授权事实链向 Provider 状态前进，但拒绝绑定、Owner Receipt、Claim Token/Fencing 或时间倒退；不能因为当前 Intent 已进入 `OUTCOME_UNKNOWN` 就把原成功命令误判为输入漂移。Claimant 固定为 `workflow-node:{node_run_id}`，Submit Key 固定到 NodeRun，Reconcile Key 只随持久化 Intent Revision 前进且始终携带原 Provider Job ID。Node Cache 不承担远端防重，也不缓存 RETRYING/UNKNOWN；只有完整 CandidateSet 的 canonical `node-output-v1` 可成为已完成输出。
 
 一个 NodeRun 只绑定一个 Generation Intent。`reference_asset` 节点必须在静态 DAG Config 中用 `asset_id + asset_state_id` 从同一 `approved_storyboard_intents` 输出精确选择一个 Target；同一批准集存在多个角色或状态时，由多个节点并行消费，不能在单节点内循环创建多个 Intent，也不能用数组顺序或运行时 Target ID 选择。Target Builder Receipt 以 WorkflowRun 为稳定边界供这些节点共同重放，每个 NodeRun 的 Preparation Receipt 独立且稳定。
 

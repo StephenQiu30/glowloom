@@ -43,19 +43,48 @@ type ImagePreparation interface {
 	) (generationapp.PreparationResult, error)
 }
 
+type ExecutionClaimOwner interface {
+	AcquireExecutionClaim(
+		context.Context,
+		generationapp.AcquireExecutionClaimCommand,
+	) (generationapp.ExecutionClaimResult, error)
+}
+
+type ReferencePreparation interface {
+	ImagePreparation
+	ExecutionClaimOwner
+}
+
+type ImageProvider interface {
+	SubmitImageRequest(
+		context.Context,
+		generationdomain.ExecutionAuthorization,
+		generationapp.SubmitImageRequestCommand,
+	) (generationapp.ProviderExecutionResult, error)
+	ReconcileProviderJob(
+		context.Context,
+		generationapp.ReconcileProviderJobCommand,
+	) (generationapp.ProviderExecutionResult, error)
+}
+
 type NodeExecutor struct {
 	candidateSets    CandidateSetSource
 	referenceTargets ReferenceTargetBuilder
 	preparations     ImagePreparation
+	claims           ExecutionClaimOwner
+	providers        ImageProvider
 }
 
 func NewNodeExecutor(
 	candidateSets CandidateSetSource,
 	referenceTargets ReferenceTargetBuilder,
 	preparations ImagePreparation,
+	claims ExecutionClaimOwner,
+	providers ImageProvider,
 ) *NodeExecutor {
 	return &NodeExecutor{
 		candidateSets: candidateSets, referenceTargets: referenceTargets, preparations: preparations,
+		claims: claims, providers: providers,
 	}
 }
 
@@ -149,6 +178,7 @@ func (executor *NodeExecutor) executeReferenceAsset(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor == nil || executor.referenceTargets == nil || executor.preparations == nil ||
+		executor.claims == nil || executor.providers == nil ||
 		strings.TrimSpace(command.IdempotencyKey) == "" || command.InitiatorTokenVersion < 1 {
 		return domain.NodeExecutorResult{}, errors.New("reference asset workflow owners are unavailable")
 	}
@@ -220,10 +250,113 @@ func (executor *NodeExecutor) executeReferenceAsset(
 	if !validCandidateSetUUID(intent.ID) || intent.WorkspaceID != command.WorkspaceID || intent.ProjectID != command.ProjectID ||
 		intent.WorkflowRunID != command.WorkflowRunID || intent.NodeRunID != command.NodeRunID ||
 		intent.TargetID != selected.ID || intent.TargetHash != selected.TargetHash ||
-		intent.Units != int64(selected.ReferenceAsset.NumberResults) || intent.Status != generationdomain.IntentPrepared {
+		intent.Units != int64(selected.ReferenceAsset.NumberResults) {
 		return domain.NodeExecutorResult{}, errors.New("reference asset preparation returned drifted facts")
 	}
+	if intent.Status == generationdomain.IntentCancelled || intent.Status == generationdomain.IntentFailed {
+		return domain.NodeExecutorResult{}, errors.New("reference asset generation is terminal without candidates")
+	}
+	if intent.Status == generationdomain.IntentSucceeded {
+		if !validCandidateSetUUID(intent.GenerationRequestID) || !validCandidateSetUUID(intent.ProviderJobID) ||
+			!validCandidateSetUUID(intent.ProviderReceiptID) {
+			return domain.NodeExecutorResult{}, errors.New("reference asset terminal Provider facts have drifted")
+		}
+		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+	}
+	claim, err := executor.claims.AcquireExecutionClaim(ctx, generationapp.AcquireExecutionClaimCommand{
+		IntentID: intent.ID, Claimant: "workflow-node:" + command.NodeRunID,
+		IdempotencyKey: "workflow-node:" + command.NodeRunID + ":generation-claim",
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if !validReferenceAssetClaim(claim, intent, *selected) {
+		return domain.NodeExecutorResult{}, errors.New("reference asset execution claim returned drifted facts")
+	}
+	var provider generationapp.ProviderExecutionResult
+	switch claim.Intent.Status {
+	case generationdomain.IntentClaimed, generationdomain.IntentDispatching:
+		provider, err = executor.providers.SubmitImageRequest(ctx, claim.Authorization, generationapp.SubmitImageRequestCommand{
+			IntentID: intent.ID, IdempotencyKey: "workflow-node:" + command.NodeRunID + ":provider-submit",
+		})
+	case generationdomain.IntentSubmitted, generationdomain.IntentOutcomeUnknown:
+		provider, err = executor.providers.ReconcileProviderJob(ctx, generationapp.ReconcileProviderJobCommand{
+			ProviderJobID:  claim.Intent.ProviderJobID,
+			IdempotencyKey: "workflow-node:" + command.NodeRunID + ":provider-reconcile:" + strconv.FormatInt(claim.Intent.Revision, 10),
+		})
+	case generationdomain.IntentSucceeded:
+		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+	case generationdomain.IntentFailed:
+		return domain.NodeExecutorResult{}, errors.New("reference asset Provider job failed")
+	default:
+		return domain.NodeExecutorResult{}, errors.New("reference asset execution claim returned an invalid state")
+	}
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if !validReferenceAssetProviderResult(provider, claim.Intent, *selected) {
+		return domain.NodeExecutorResult{}, errors.New("reference asset Provider result returned drifted facts")
+	}
+	if provider.Job.Status == generationdomain.ProviderJobFailed {
+		return domain.NodeExecutorResult{}, errors.New("reference asset Provider job failed")
+	}
 	return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+}
+
+func validReferenceAssetClaim(
+	claim generationapp.ExecutionClaimResult,
+	prepared generationdomain.Intent,
+	target generationdomain.GenerationTarget,
+) bool {
+	intent, authorization := claim.Intent, claim.Authorization
+	if !generationdomain.SameIntentBinding(intent, prepared) || intent.ID != prepared.ID ||
+		intent.TargetID != target.ID || intent.TargetHash != target.TargetHash || intent.Revision < 3 ||
+		intent.Claimant == nil || *intent.Claimant != "workflow-node:"+intent.NodeRunID ||
+		intent.ClaimToken == nil || intent.ClaimExpiresAt == nil ||
+		authorization.IntentID != intent.ID || authorization.ClaimToken != *intent.ClaimToken ||
+		authorization.TargetID != target.ID || authorization.TargetHash != target.TargetHash ||
+		authorization.CostReservationID != intent.CostReservationID ||
+		authorization.QuotaReservationID != intent.QuotaReservationID ||
+		authorization.ClaimFencingVersion != intent.ClaimFencingVersion || authorization.IntentRevision != 3 ||
+		authorization.Units != intent.Units || !authorization.ExpiresAt.Equal(*intent.ClaimExpiresAt) {
+		return false
+	}
+	switch intent.Status {
+	case generationdomain.IntentClaimed, generationdomain.IntentDispatching,
+		generationdomain.IntentSubmitted, generationdomain.IntentOutcomeUnknown,
+		generationdomain.IntentSucceeded, generationdomain.IntentFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+func validReferenceAssetProviderResult(
+	result generationapp.ProviderExecutionResult,
+	claimed generationdomain.Intent,
+	target generationdomain.GenerationTarget,
+) bool {
+	intent, request, job := result.Intent, result.Request, result.Job
+	if !generationdomain.SameIntentBinding(intent, claimed) || intent.ID != claimed.ID ||
+		intent.TargetID != target.ID || intent.TargetHash != target.TargetHash ||
+		!validCandidateSetUUID(request.ID) || request.ID != intent.GenerationRequestID ||
+		request.IntentID != intent.ID || request.TargetID != target.ID || request.TargetHash != target.TargetHash ||
+		!validCandidateSetUUID(job.ID) || job.ID != intent.ProviderJobID || job.IntentID != intent.ID ||
+		job.RequestID != request.ID || job.Revision < 1 {
+		return false
+	}
+	switch job.Status {
+	case generationdomain.ProviderJobRunning:
+		return intent.Status == generationdomain.IntentSubmitted
+	case generationdomain.ProviderJobUnknown:
+		return intent.Status == generationdomain.IntentOutcomeUnknown
+	case generationdomain.ProviderJobSucceeded:
+		return intent.Status == generationdomain.IntentSucceeded
+	case generationdomain.ProviderJobFailed:
+		return intent.Status == generationdomain.IntentFailed
+	default:
+		return false
+	}
 }
 
 func referenceAssetSelector(config json.RawMessage) (string, string, error) {

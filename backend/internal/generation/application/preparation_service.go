@@ -819,7 +819,7 @@ func (service *PreparationService) replayPreparation(
 		return platformcommand.ErrInputMismatch
 	}
 	persisted, err := repo.FindIntent(ctx, replayed.Intent.ID)
-	if err != nil || !domain.SameIntentState(persisted, replayed.Intent) {
+	if err != nil || !intentProgressedFromPreparation(persisted, replayed.Intent) {
 		return platformcommand.ErrInputMismatch
 	}
 	view, err := service.loadIntentView(ctx, repo, costs, quotas, actor, persisted)
@@ -869,7 +869,7 @@ func (service *PreparationService) replayClaim(
 		return platformcommand.ErrInputMismatch
 	}
 	persisted, err := repo.FindIntent(ctx, replayed.Intent.ID)
-	if err != nil || !domain.SameIntentState(persisted, replayed.Intent) {
+	if err != nil || !intentProgressedFromClaim(persisted, replayed.Intent) {
 		return platformcommand.ErrInputMismatch
 	}
 	if _, err = service.loadIntentView(ctx, repo, costs, quotas, actor, persisted); err != nil {
@@ -877,6 +877,53 @@ func (service *PreparationService) replayClaim(
 	}
 	*result = ExecutionClaimResult{Intent: persisted, Authorization: replayed.Authorization, Receipt: receipt}
 	return nil
+}
+
+func intentProgressedFromPreparation(current, prepared domain.Intent) bool {
+	if validateIntent(current) != nil || current.ID != prepared.ID || current.Revision < prepared.Revision ||
+		!domain.SameIntentBinding(current, prepared) ||
+		current.CostEstimateID != prepared.CostEstimateID ||
+		current.CostReservationID != prepared.CostReservationID ||
+		current.QuotaReservationID != prepared.QuotaReservationID ||
+		current.CostEstimateReceiptID != prepared.CostEstimateReceiptID ||
+		current.CostReservationReceiptID != prepared.CostReservationReceiptID ||
+		current.QuotaReservationReceiptID != prepared.QuotaReservationReceiptID ||
+		!current.CreatedAt.Equal(prepared.CreatedAt) || current.UpdatedAt.Before(prepared.UpdatedAt) {
+		return false
+	}
+	switch current.Status {
+	case domain.IntentPrepared, domain.IntentClaimed, domain.IntentDispatching,
+		domain.IntentSubmitted, domain.IntentOutcomeUnknown, domain.IntentSucceeded,
+		domain.IntentFailed, domain.IntentCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+func intentProgressedFromClaim(current, claimed domain.Intent) bool {
+	if !intentProgressedFromPreparation(current, claimed) ||
+		!sameIntentStringPointer(current.Claimant, claimed.Claimant) ||
+		!sameIntentStringPointer(current.ClaimToken, claimed.ClaimToken) ||
+		!sameIntentTimePointer(current.ClaimExpiresAt, claimed.ClaimExpiresAt) ||
+		current.ClaimFencingVersion != claimed.ClaimFencingVersion {
+		return false
+	}
+	switch current.Status {
+	case domain.IntentClaimed, domain.IntentDispatching, domain.IntentSubmitted,
+		domain.IntentOutcomeUnknown, domain.IntentSucceeded, domain.IntentFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+func sameIntentStringPointer(left, right *string) bool {
+	return (left == nil && right == nil) || (left != nil && right != nil && *left == *right)
+}
+
+func sameIntentTimePointer(left, right *time.Time) bool {
+	return (left == nil && right == nil) || (left != nil && right != nil && left.Equal(*right))
 }
 
 func (service *PreparationService) storeCancellationReceipt(

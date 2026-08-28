@@ -152,7 +152,7 @@ func RunWorkflowWorker(logger *slog.Logger) {
 	)
 	activities, err := NewWorkflowRuntime(
 		workflowgorm.New(database), scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, planningOwnerService, storyGraphService, storyboardService, reviewService,
-		imageBindings, candidateSets, referenceTargetBuilder, imagePreparations,
+		imageBindings, candidateSets, referenceTargetBuilder, imagePreparations, providerService,
 		episodeSegmentationService, episodeAnalysisService,
 	)
 	if err != nil {
