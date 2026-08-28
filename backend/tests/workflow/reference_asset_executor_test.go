@@ -87,6 +87,25 @@ type providerSubmitCall struct {
 	command       generationapp.SubmitImageRequestCommand
 }
 
+type providerOutputMaterializerStub struct {
+	result generationapp.OutputMaterializationResult
+	calls  []providerOutputMaterializationCall
+}
+
+type providerOutputMaterializationCall struct {
+	actor   generationapp.Actor
+	command generationapp.MaterializeProviderOutputsCommand
+}
+
+func (stub *providerOutputMaterializerStub) MaterializeSucceededOutputs(
+	_ context.Context,
+	actor generationapp.Actor,
+	command generationapp.MaterializeProviderOutputsCommand,
+) (generationapp.OutputMaterializationResult, error) {
+	stub.calls = append(stub.calls, providerOutputMaterializationCall{actor: actor, command: command})
+	return stub.result, nil
+}
+
 func (stub *imageProviderStub) SubmitImageRequest(
 	_ context.Context,
 	authorization generationdomain.ExecutionAuthorization,
@@ -129,6 +148,10 @@ func TestReferenceAssetExecutorSelectsOneApprovedTargetAndPreparesItOncePerNode(
 	unknownIntent := claimedIntent
 	unknownIntent.Status, unknownIntent.Revision = generationdomain.IntentOutcomeUnknown, 5
 	unknownIntent.GenerationRequestID, unknownIntent.ProviderJobID = providerRequestID, providerJobID
+	providerReceiptID := uuid.NewString()
+	succeededIntent := unknownIntent
+	succeededIntent.Status, succeededIntent.Revision = generationdomain.IntentSucceeded, 6
+	succeededIntent.ProviderReceiptID = providerReceiptID
 	authorization := generationdomain.ExecutionAuthorization{
 		IntentID: claimedIntent.ID, ClaimToken: claimToken, TargetID: second.ID, TargetHash: second.TargetHash,
 		CostReservationID: claimedIntent.CostReservationID, QuotaReservationID: claimedIntent.QuotaReservationID,
@@ -137,12 +160,13 @@ func TestReferenceAssetExecutorSelectsOneApprovedTargetAndPreparesItOncePerNode(
 	preparations := &imagePreparationStub{results: []generationapp.PreparationResult{
 		{IntentView: generationapp.IntentView{Intent: preparedIntent}},
 		{IntentView: generationapp.IntentView{Intent: unknownIntent}},
+		{IntentView: generationapp.IntentView{Intent: succeededIntent}},
 	}}
 	claims := &executionClaimStub{results: []generationapp.ExecutionClaimResult{
 		{Intent: claimedIntent, Authorization: authorization},
 		{Intent: unknownIntent, Authorization: authorization},
 	}}
-	providerResult := generationapp.ProviderExecutionResult{
+	unknownProviderResult := generationapp.ProviderExecutionResult{
 		Intent: unknownIntent,
 		Request: generationdomain.GenerationRequest{
 			ID: providerRequestID, IntentID: unknownIntent.ID, TargetID: second.ID, TargetHash: second.TargetHash,
@@ -152,8 +176,24 @@ func TestReferenceAssetExecutorSelectsOneApprovedTargetAndPreparesItOncePerNode(
 			Status: generationdomain.ProviderJobUnknown, Revision: 2,
 		},
 	}
-	providers := &imageProviderStub{submitResult: providerResult, reconcileResult: providerResult}
-	executor := workflowgeneration.NewNodeExecutor(nil, builder, preparations, claims, providers)
+	succeededProviderResult := unknownProviderResult
+	succeededProviderResult.Intent = succeededIntent
+	succeededProviderResult.Job.Status = generationdomain.ProviderJobSucceeded
+	succeededProviderResult.Job.Revision = 3
+	succeededProviderResult.Job.ProviderReceiptID = providerReceiptID
+	candidateSet := generationdomain.CandidateSet{
+		ID: providerJobID, WorkspaceID: workspaceID, ProjectID: projectID, ProviderReceiptID: providerReceiptID,
+		Revision: 1, ContentHash: strings.Repeat("9", 64),
+		Candidates: []generationdomain.CandidateReference{{
+			ID: uuid.NewString(), Revision: 1, ArtifactID: uuid.NewString(), ArtifactRevision: 2,
+			ArtifactSHA256: strings.Repeat("7", 64), QCReportID: uuid.NewString(), QCReportHash: strings.Repeat("8", 64),
+		}},
+	}
+	providers := &imageProviderStub{submitResult: unknownProviderResult, reconcileResult: succeededProviderResult}
+	materializer := &providerOutputMaterializerStub{result: generationapp.OutputMaterializationResult{
+		ProviderReceiptID: providerReceiptID, CandidateSet: candidateSet,
+	}}
+	executor := workflowgeneration.NewNodeExecutor(nil, builder, preparations, claims, providers, materializer)
 	command := referenceAssetExecutorCommand(
 		t, workspaceID, projectID, userID, workflowRunID, nodeRunID, approvedID, approvedHash,
 		second.ReferenceAsset.AssetID, second.ReferenceAsset.AssetStateRef.ID,
@@ -166,10 +206,22 @@ func TestReferenceAssetExecutorSelectsOneApprovedTargetAndPreparesItOncePerNode(
 	command.Attempt = 2
 	command.IdempotencyKey = "workflow-node-redelivery:" + nodeRunID
 	result, err = executor.Execute(context.Background(), command)
-	if err != nil || result.Status != "RETRYING" {
-		t.Fatalf("replay reference asset Workflow node: result=%#v err=%v", result, err)
+	if err != nil || result.Status != "SUCCEEDED" || result.Output.SchemaVersion != workflow.NodeOutputSchemaVersion ||
+		len(result.Output.Bindings) != 1 || result.Output.Bindings[0] != (workflow.NodeOutputBinding{
+		Port: "candidates", ValueType: "generation_candidate_set", ReferenceID: providerJobID,
+		ReferenceVersion: "1", ContentHash: candidateSet.ContentHash,
+	}) {
+		t.Fatalf("complete reference asset Workflow node: result=%#v err=%v", result, err)
 	}
-	if len(builder.calls) != 2 || len(preparations.calls) != 2 {
+	completedOutput := result.Output
+	command.Attempt = 3
+	command.IdempotencyKey = "workflow-node-redelivery-3:" + nodeRunID
+	result, err = executor.Execute(context.Background(), command)
+	if err != nil || result.Status != "SUCCEEDED" || result.Output.SchemaVersion != completedOutput.SchemaVersion ||
+		len(result.Output.Bindings) != 1 || result.Output.Bindings[0] != completedOutput.Bindings[0] {
+		t.Fatalf("replay completed reference asset Workflow node: result=%#v err=%v", result, err)
+	}
+	if len(builder.calls) != 3 || len(preparations.calls) != 3 {
 		t.Fatalf("reference asset call counts: builder=%d preparation=%d", len(builder.calls), len(preparations.calls))
 	}
 	for index := range builder.calls {
@@ -198,6 +250,22 @@ func TestReferenceAssetExecutorSelectsOneApprovedTargetAndPreparesItOncePerNode(
 		len(providers.reconcileCalls) != 1 || providers.reconcileCalls[0].ProviderJobID != providerJobID ||
 		providers.reconcileCalls[0].IdempotencyKey != "workflow-node:"+nodeRunID+":provider-reconcile:5" {
 		t.Fatalf("reference asset Provider calls drifted: submit=%#v reconcile=%#v", providers.submitCalls, providers.reconcileCalls)
+	}
+	if len(materializer.calls) != 2 {
+		t.Fatalf("reference asset materialization calls drifted: %#v", materializer.calls)
+	}
+	for _, call := range materializer.calls {
+		if call.actor != (generationapp.Actor{UserID: userID, TokenVersion: 3}) ||
+			call.command.ProviderJobID != providerJobID {
+			t.Fatalf("reference asset materialization binding drifted: %#v", call)
+		}
+	}
+	materializer.result.CandidateSet.ProjectID = uuid.NewString()
+	command.Attempt = 4
+	command.IdempotencyKey = "workflow-node-redelivery-4:" + nodeRunID
+	if _, err = executor.Execute(context.Background(), command); err == nil ||
+		!strings.Contains(err.Error(), "CandidateSet source has drifted") {
+		t.Fatalf("reference asset Workflow node accepted a drifted materialized CandidateSet: %v", err)
 	}
 }
 
@@ -232,7 +300,7 @@ func TestReferenceAssetExecutorRejectsClaimOwnedByAnotherNodeBeforeProviderSubmi
 		Intent: claimed, Authorization: authorization,
 	}}}
 	providers := &imageProviderStub{}
-	executor := workflowgeneration.NewNodeExecutor(nil, builder, preparations, claims, providers)
+	executor := workflowgeneration.NewNodeExecutor(nil, builder, preparations, claims, providers, &providerOutputMaterializerStub{})
 	command := referenceAssetExecutorCommand(
 		t, workspaceID, projectID, userID, workflowRunID, nodeRunID, approvedID, approvedHash,
 		target.ReferenceAsset.AssetID, target.ReferenceAsset.AssetStateRef.ID,
@@ -258,7 +326,7 @@ func TestReferenceAssetExecutorRejectsAmbiguousOrUnselectedTargetsBeforeCostPrep
 	}}
 	preparations := &imagePreparationStub{results: []generationapp.PreparationResult{{}}}
 	claims, providers := &executionClaimStub{results: []generationapp.ExecutionClaimResult{{}}}, &imageProviderStub{}
-	executor := workflowgeneration.NewNodeExecutor(nil, builder, preparations, claims, providers)
+	executor := workflowgeneration.NewNodeExecutor(nil, builder, preparations, claims, providers, &providerOutputMaterializerStub{})
 	command := referenceAssetExecutorCommand(
 		t, workspaceID, projectID, userID, uuid.NewString(), uuid.NewString(), approvedID, approvedHash,
 		target.ReferenceAsset.AssetID, target.ReferenceAsset.AssetStateRef.ID,

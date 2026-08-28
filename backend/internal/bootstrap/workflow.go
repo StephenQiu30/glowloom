@@ -64,9 +64,13 @@ func NewWorkflowRuntime(
 		workflowproduction.NewNodeExecutor(scripts, evidence, stories, storyReviews, bibles, projects, plans, planningOwners, storygraphs, storyboards, bindings, segments, episodes),
 	)
 	if candidateSets != nil || referenceTargets != nil {
+		materializer, _ := candidateSets.(workflowgeneration.ProviderOutputMaterializer)
+		if referenceTargets != nil && materializer == nil {
+			return nil, errors.New("reference asset output materializer is required")
+		}
 		var err error
 		executor, err = workflowexecution.NewNodeExecutor(
-			executor, workflowgeneration.NewNodeExecutor(candidateSets, referenceTargets, preparations, preparations, providers),
+			executor, workflowgeneration.NewNodeExecutor(candidateSets, referenceTargets, preparations, preparations, providers, materializer),
 		)
 		if err != nil {
 			return nil, err

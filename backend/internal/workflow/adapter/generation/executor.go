@@ -67,12 +67,21 @@ type ImageProvider interface {
 	) (generationapp.ProviderExecutionResult, error)
 }
 
+type ProviderOutputMaterializer interface {
+	MaterializeSucceededOutputs(
+		context.Context,
+		generationapp.Actor,
+		generationapp.MaterializeProviderOutputsCommand,
+	) (generationapp.OutputMaterializationResult, error)
+}
+
 type NodeExecutor struct {
 	candidateSets    CandidateSetSource
 	referenceTargets ReferenceTargetBuilder
 	preparations     ImagePreparation
 	claims           ExecutionClaimOwner
 	providers        ImageProvider
+	materializer     ProviderOutputMaterializer
 }
 
 func NewNodeExecutor(
@@ -81,10 +90,11 @@ func NewNodeExecutor(
 	preparations ImagePreparation,
 	claims ExecutionClaimOwner,
 	providers ImageProvider,
+	materializer ProviderOutputMaterializer,
 ) *NodeExecutor {
 	return &NodeExecutor{
 		candidateSets: candidateSets, referenceTargets: referenceTargets, preparations: preparations,
-		claims: claims, providers: providers,
+		claims: claims, providers: providers, materializer: materializer,
 	}
 }
 
@@ -142,31 +152,10 @@ func (executor *NodeExecutor) executeCandidateSet(
 	if err != nil {
 		return domain.NodeExecutorResult{}, err
 	}
-	if set.ID != providerJobID || set.WorkspaceID != command.WorkspaceID || set.ProjectID != command.ProjectID ||
-		set.Revision != 1 || !validCandidateSetUUID(set.ProviderReceiptID) ||
-		!candidateSetHashPattern.MatchString(set.ContentHash) || len(set.Candidates) == 0 || len(set.Candidates) > 100 {
+	if set.ID != providerJobID {
 		return domain.NodeExecutorResult{}, errors.New("Generation CandidateSet source has drifted")
 	}
-	seenCandidates := make(map[string]struct{}, len(set.Candidates))
-	for _, candidate := range set.Candidates {
-		if !validCandidateSetUUID(candidate.ID) || !validCandidateSetUUID(candidate.ArtifactID) || !validCandidateSetUUID(candidate.QCReportID) ||
-			candidate.Revision < 1 || candidate.ArtifactRevision < 1 ||
-			!candidateSetHashPattern.MatchString(candidate.ArtifactSHA256) ||
-			!candidateSetHashPattern.MatchString(candidate.QCReportHash) {
-			return domain.NodeExecutorResult{}, errors.New("Generation CandidateSet contains an invalid candidate")
-		}
-		if _, exists := seenCandidates[candidate.ID]; exists {
-			return domain.NodeExecutorResult{}, errors.New("Generation CandidateSet contains duplicate candidates")
-		}
-		seenCandidates[candidate.ID] = struct{}{}
-	}
-	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
-		SchemaVersion: domain.NodeOutputSchemaVersion,
-		Bindings: []domain.NodeOutputBinding{{
-			Port: "candidates", ValueType: "generation_candidate_set", ReferenceID: set.ID,
-			ReferenceVersion: strconv.Itoa(set.Revision), ContentHash: set.ContentHash,
-		}},
-	})
+	output, err := candidateSetNodeOutput(set, command.WorkspaceID, command.ProjectID)
 	if err != nil {
 		return domain.NodeExecutorResult{}, err
 	}
@@ -178,7 +167,7 @@ func (executor *NodeExecutor) executeReferenceAsset(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor == nil || executor.referenceTargets == nil || executor.preparations == nil ||
-		executor.claims == nil || executor.providers == nil ||
+		executor.claims == nil || executor.providers == nil || executor.materializer == nil ||
 		strings.TrimSpace(command.IdempotencyKey) == "" || command.InitiatorTokenVersion < 1 {
 		return domain.NodeExecutorResult{}, errors.New("reference asset workflow owners are unavailable")
 	}
@@ -261,7 +250,7 @@ func (executor *NodeExecutor) executeReferenceAsset(
 			!validCandidateSetUUID(intent.ProviderReceiptID) {
 			return domain.NodeExecutorResult{}, errors.New("reference asset terminal Provider facts have drifted")
 		}
-		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+		return executor.materializeReferenceAsset(ctx, actor, command, intent)
 	}
 	claim, err := executor.claims.AcquireExecutionClaim(ctx, generationapp.AcquireExecutionClaimCommand{
 		IntentID: intent.ID, Claimant: "workflow-node:" + command.NodeRunID,
@@ -285,7 +274,7 @@ func (executor *NodeExecutor) executeReferenceAsset(
 			IdempotencyKey: "workflow-node:" + command.NodeRunID + ":provider-reconcile:" + strconv.FormatInt(claim.Intent.Revision, 10),
 		})
 	case generationdomain.IntentSucceeded:
-		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+		return executor.materializeReferenceAsset(ctx, actor, command, claim.Intent)
 	case generationdomain.IntentFailed:
 		return domain.NodeExecutorResult{}, errors.New("reference asset Provider job failed")
 	default:
@@ -300,7 +289,71 @@ func (executor *NodeExecutor) executeReferenceAsset(
 	if provider.Job.Status == generationdomain.ProviderJobFailed {
 		return domain.NodeExecutorResult{}, errors.New("reference asset Provider job failed")
 	}
+	if provider.Job.Status == generationdomain.ProviderJobSucceeded {
+		return executor.materializeReferenceAsset(ctx, actor, command, provider.Intent)
+	}
 	return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+}
+
+func (executor *NodeExecutor) materializeReferenceAsset(
+	ctx context.Context,
+	actor generationapp.Actor,
+	command domain.NodeExecutorCommand,
+	intent generationdomain.Intent,
+) (domain.NodeExecutorResult, error) {
+	if intent.Status != generationdomain.IntentSucceeded || !validCandidateSetUUID(intent.GenerationRequestID) ||
+		!validCandidateSetUUID(intent.ProviderJobID) || !validCandidateSetUUID(intent.ProviderReceiptID) {
+		return domain.NodeExecutorResult{}, errors.New("reference asset terminal Provider facts have drifted")
+	}
+	materialized, err := executor.materializer.MaterializeSucceededOutputs(ctx, actor, generationapp.MaterializeProviderOutputsCommand{
+		ProviderJobID: intent.ProviderJobID,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if materialized.ProviderReceiptID != intent.ProviderReceiptID ||
+		materialized.CandidateSet.ID != intent.ProviderJobID ||
+		materialized.CandidateSet.ProviderReceiptID != intent.ProviderReceiptID {
+		return domain.NodeExecutorResult{}, errors.New("reference asset materialization returned drifted facts")
+	}
+	output, err := candidateSetNodeOutput(materialized.CandidateSet, command.WorkspaceID, command.ProjectID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func candidateSetNodeOutput(
+	set generationdomain.CandidateSet,
+	workspaceID string,
+	projectID string,
+) (domain.NodeOutputSnapshot, error) {
+	if set.WorkspaceID != workspaceID || set.ProjectID != projectID || set.ID == "" ||
+		set.Revision != 1 || !validCandidateSetUUID(set.ID) || !validCandidateSetUUID(set.ProviderReceiptID) ||
+		!candidateSetHashPattern.MatchString(set.ContentHash) || len(set.Candidates) == 0 || len(set.Candidates) > 100 {
+		return domain.NodeOutputSnapshot{}, errors.New("Generation CandidateSet source has drifted")
+	}
+	seenCandidates := make(map[string]struct{}, len(set.Candidates))
+	for _, candidate := range set.Candidates {
+		if !validCandidateSetUUID(candidate.ID) || !validCandidateSetUUID(candidate.ArtifactID) || !validCandidateSetUUID(candidate.QCReportID) ||
+			candidate.Revision < 1 || candidate.ArtifactRevision < 1 ||
+			!candidateSetHashPattern.MatchString(candidate.ArtifactSHA256) ||
+			!candidateSetHashPattern.MatchString(candidate.QCReportHash) {
+			return domain.NodeOutputSnapshot{}, errors.New("Generation CandidateSet contains an invalid candidate")
+		}
+		if _, exists := seenCandidates[candidate.ID]; exists {
+			return domain.NodeOutputSnapshot{}, errors.New("Generation CandidateSet contains duplicate candidates")
+		}
+		seenCandidates[candidate.ID] = struct{}{}
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "candidates", ValueType: "generation_candidate_set", ReferenceID: set.ID,
+			ReferenceVersion: strconv.Itoa(set.Revision), ContentHash: set.ContentHash,
+		}},
+	})
+	return output, err
 }
 
 func validReferenceAssetClaim(
