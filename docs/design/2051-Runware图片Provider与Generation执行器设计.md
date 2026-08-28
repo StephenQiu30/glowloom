@@ -158,7 +158,7 @@ RUNWARE_REQUEST_TIMEOUT_SECONDS=30
 
 Provider Binding 固定 `provider_key=runware`、`model_key=runware:z-image@turbo`、`credential_ref=env/runware_api_key`。Credential Ref 只映射 allowlist 中的 `RUNWARE_API_KEY`；Secret 不进入数据库、Target、Hash、Receipt、日志或 Temporal History。生产 Endpoint 固定为官方 HTTPS；测试只通过构造函数注入本地 Server，不提供任意生产 Base URL 环境变量。
 
-启用图片节点但缺少配置时 Backend Workflow Runtime 启动失败；未启用时不读取 Secret，也不注册假 Provider。
+`IMAGE_PROVIDER` 留空时 Backend 不读取 `RUNWARE_API_KEY`，也不构造或注册假 Provider；只有显式设置为 `runware` 才校验 API Key 与 1–120 秒请求超时并在唯一 Workflow Composition Root 构造 Gateway/Stager。启用图片节点但缺少配置时 Backend Workflow Runtime 启动失败。
 
 ### 7.2 Submit
 
@@ -181,7 +181,7 @@ Provider Binding 固定 `provider_key=runware`、`model_key=runware:z-image@turb
 
 - 只接受官方 Runware HTTPS 输出 Host；每次重定向都重新执行 DNS/IP/Host allowlist，拒绝环回、私网、链路本地和协议降级；
 - 限制响应字节、Content-Type、下载/解码时间和像素数，完整解码 PNG 后计算 SHA-256、字节数与宽高；
-- 使用稳定 Output Key 写 `staging/{workspace_id}/{provider_job_id}/{image_uuid}.png`；
+- 使用稳定 Output Key 写 `staging/{workspace_id}/{provider_job_id}/{image_uuid}.png`；同 Key 重放只接受相同字节、SHA-256、长度与 Media Type，任一漂移失败关闭且不得覆盖已有私有对象；
 - 只有已写入 Staging 的输出才能进入成功 Receipt；远端成功但下载/MinIO 暂时失败保持 unknown，后续 Query 同一任务并重试 Staging；
 - Asset Owner 必须再次完整读取并独立验证，Adapter 检查不替代 Artifact Readiness。
 

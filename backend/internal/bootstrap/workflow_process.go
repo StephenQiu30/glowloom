@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
 	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
 	generationreview "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/review"
+	runwareadapter "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/runware"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstore"
@@ -127,8 +129,27 @@ func RunWorkflowWorker(logger *slog.Logger) {
 	candidateService := generationapp.NewService(
 		generationgorm.New(database), generationasset.NewReadiness(assetService), generationapp.Config{},
 	)
+	var imageProviderGateway generationapp.ProviderGateway
+	if configuration.ImageProvider == "runware" {
+		imageStager, stagerErr := runwareadapter.NewImageStager(runwareadapter.ImageStagerConfig{
+			ObjectStore: objects, DownloadTimeout: configuration.RunwareRequestTimeout,
+			MaxImageBytes: 20 << 20, MaxPixels: 20_000_000,
+		})
+		if stagerErr != nil {
+			logger.Error("workflow Runware image stager configuration failed", "error", stagerErr)
+			os.Exit(1)
+		}
+		imageProviderGateway, err = runwareadapter.New(runwareadapter.Config{
+			APIKey: configuration.RunwareAPIKey, Client: &http.Client{}, Stager: imageStager,
+			RequestTimeout: configuration.RunwareRequestTimeout,
+		})
+		if err != nil {
+			logger.Error("workflow Runware Provider configuration failed", "error", err)
+			os.Exit(1)
+		}
+	}
 	providerService := generationapp.NewProviderService(
-		generationgorm.NewProviderStore(database, costConfig, quotaConfig), nil,
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig), imageProviderGateway,
 		generationapp.ProviderConfig{Now: now, NewID: uuid.NewString},
 	)
 	referenceTargetBuilder := generationapp.NewReferenceTargetBuilderService(

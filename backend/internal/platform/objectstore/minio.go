@@ -1,6 +1,7 @@
 package objectstore
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -70,6 +72,72 @@ func (client *Client) PresignPut(ctx context.Context, objectKey string, expires 
 		return nil, fmt.Errorf("presign object upload: %w", err)
 	}
 	return value, nil
+}
+
+func (client *Client) EnsurePrivateObject(
+	ctx context.Context,
+	objectKey string,
+	contents []byte,
+	mediaType, expectedSHA256 string,
+) error {
+	objectKey = strings.TrimSpace(objectKey)
+	mediaType = strings.TrimSpace(mediaType)
+	if client == nil || client.internal == nil || objectKey == "" || len(objectKey) > 1024 ||
+		strings.HasPrefix(objectKey, "/") || strings.HasSuffix(objectKey, "/") ||
+		strings.Contains(objectKey, "..") || strings.ContainsAny(objectKey, "\\\x00") ||
+		len(contents) == 0 || mediaType == "" {
+		return ErrInvalidObjectDeclaration
+	}
+	digest := sha256.Sum256(contents)
+	if hex.EncodeToString(digest[:]) != expectedSHA256 {
+		return ErrObjectChecksumMismatch
+	}
+	if _, err := client.internal.StatObject(ctx, client.bucket, objectKey, minio.StatObjectOptions{}); err == nil {
+		return client.verifyPrivateObject(ctx, objectKey, int64(len(contents)), mediaType, expectedSHA256)
+	} else if response := minio.ToErrorResponse(err); response.Code != "NoSuchKey" && response.Code != "NoSuchObject" &&
+		response.StatusCode != 404 {
+		return fmt.Errorf("inspect private object: %w", err)
+	}
+	options := minio.PutObjectOptions{ContentType: mediaType}
+	options.SetMatchETagExcept("*")
+	result, err := client.internal.PutObject(
+		ctx, client.bucket, objectKey, bytes.NewReader(contents), int64(len(contents)),
+		options,
+	)
+	if err != nil {
+		response := minio.ToErrorResponse(err)
+		if response.Code == "PreconditionFailed" || response.StatusCode == 412 {
+			return client.verifyPrivateObject(ctx, objectKey, int64(len(contents)), mediaType, expectedSHA256)
+		}
+		return fmt.Errorf("write private object: %w", err)
+	}
+	if result.Key != objectKey || result.Size != int64(len(contents)) {
+		return ErrObjectSizeMismatch
+	}
+	if err = client.verifyPrivateObject(ctx, objectKey, int64(len(contents)), mediaType, expectedSHA256); err != nil {
+		return fmt.Errorf("verify private object: %w", err)
+	}
+	return nil
+}
+
+func (client *Client) verifyPrivateObject(
+	ctx context.Context,
+	objectKey string,
+	expectedSize int64,
+	expectedMediaType, expectedSHA256 string,
+) error {
+	info, err := client.internal.StatObject(ctx, client.bucket, objectKey, minio.StatObjectOptions{})
+	if err != nil {
+		return fmt.Errorf("inspect private object: %w", err)
+	}
+	if info.Size != expectedSize {
+		return ErrObjectSizeMismatch
+	}
+	if info.ContentType != expectedMediaType {
+		return ErrInvalidObjectDeclaration
+	}
+	_, err = client.ReadVerified(ctx, objectKey, expectedSize, expectedSHA256, expectedSize)
+	return err
 }
 
 func (client *Client) ReadVerified(ctx context.Context, objectKey string, expectedSize int64, expectedSHA256 string, maxBytes int64) ([]byte, error) {
