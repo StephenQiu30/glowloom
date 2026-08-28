@@ -64,7 +64,7 @@
 - [x] `SG-PRD-003`（`SG-I12`）：MaterializeConfirmedBible 单事务、唯一身份、幂等/回滚/反查。
 - [x] `SG-PRD-004`（`SG-I09`、`SG-I12`、`SG-I15`）：同名/别名不得自动合并的负向证据。
 - [x] `SG-PRD-005`（`SG-I13`、`SG-I14`）：分集边界与 Episode/Published ScriptVersion 全批原子证据。
-- [ ] `SG-PRD-006`（`SG-I15`、`SG-I16`）：Scene/Dialogue/Beat/Occurrence/Claim 全批应用与未知事实拒绝。
+- [x] `SG-PRD-006`（`SG-I15`、`SG-I16`）：Scene/Dialogue/Beat/Occurrence/Claim 全批应用与未知事实拒绝。
 - [ ] `SG-PRD-007`（`SG-I18`）：Storyboard Draft 精确正式输入、`needs_asset` 与零 Shot 证据。
 - [ ] `SG-PRD-008`（`SG-I19`）：FreezeIntentSet 输出与零 Shot/Cost/Quota/Provider/Graph 副作用证据。
 - [ ] `SG-PRD-009`（`SG-I22`）：detail_shots 精确 READY AssetVersion/Artifact/Lineage/Style/view-role 门禁。
@@ -226,7 +226,7 @@
 - [x] `SG-I13`：Episode segmentation Candidate 与 coverage 完成。
 - [x] `SG-I14`：Episode Plan Gate 与 Episode/Published ScriptVersion 全批物化完成。
 - [x] `SG-I15`：Episode analyze/reconcile 与 Scene/Beat/Occurrence/Claim Candidate 完成。
-- [ ] `SG-I16`：Planning Review/Gate/Owner 全批 Apply 完成。
+- [x] `SG-I16`：Planning Review/Gate/Owner 全批 Apply 完成。
 - [ ] `SG-I17`：Core StoryGraph 多集编译、Diff/Impact 全链完成。
 - [ ] `SG-I18`：Storyboard Draft/Shot Intent/needs_asset 且零正式 Shot 完成。
 - [ ] `SG-I19`：Intent Gate/FreezeIntentSet 与付费前零副作用完成。
@@ -524,4 +524,15 @@
 - 通过范围：本证据完成 `SG-I15`、Episode 维度确定性分片/归并、Claim Candidate 和引用门禁；`SG-PRD-006` 仍包含下一项的全批 Owner Apply，因此保持未勾选。Scene/Beat/Occurrence/Claim Human Gate、正式 Planning 事实、Core StoryGraph 多集编译、Shot/Canvas、完整原稿与最终浏览器验收尚未完成；依据正式队列不提前运行 `agent-browser`。
 - Git：本 Evidence 与实现由描述有证据分集结构候选的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I15`，其余保持未通过。下一步只允许对当前 Episode Structure Candidate 执行 Review、公共 Human Gate 与 Planning Owner 全批应用；在 exact Decision/Receipt 成功前不得创建 Scene/Dialogue/Beat/Occurrence/Claim 正式事实，也不得提前编译对应 Core StoryGraphVersion。
+### 分集结构候选审批与正式规划事实整批发布（2026-08-28）
+
+- Red 与完整边界：独立 `backend/tests/production/planning/episode_planning_owner_test.go` 先因缺少 Planning Owner 命令/返回契约而编译失败，再固定成功整批、Identity/State 错配零写入、批次故障全回滚、幂等重放与候选到正式事实反查。新测试只位于独立 `backend/tests` 目录，未与业务代码混放。
+- 公共 Human Gate 与输出：Catalog `11.0.0` 新增 `human.episode_structure_review@2.0.0`，以 `planning_candidate` 冻结 exact aggregate id/hash/revision。`approved` 才执行 `Decision → Planning Owner Apply → Workflow Resume`，输出是独立 `planning_owner_set` 而非候选身份；第一次 Temporal Signal unknown 从同一 Decision/Receipt 恢复，不重复 Owner 事实。已发布的 v1 Gate 只作不可变历史 Catalog 记录，不是兼容回退。
+- Backend Owner 与单一事实源：Application 以 Candidate 临时 key 和 EpisodeStructure ID 确定性生成正式片段 ID，并重验 Episode/current Published ScriptVersion、confirmed Bible/Materialization、实际 Asset/Specification/State、Evidence、Occurrence 参与者、Claim status/polarity/scope/anchor 与 blocking issue/conflict。GORM Adapter 只负责授权、锁、当前 Head/leaf 校验和事务持久化；未知身份/状态不自动创建。
+- 原子批次、Receipt 与反查：全部 Scene、Dialogue、Beat、Occurrence、Claim 作为一个不可变 `EpisodeStructure` 聚合与 `episode_planning.apply` Receipt 在同一 PostgreSQL/GORM 事务中提交，Receipt 保存 Candidate 临时 key 到 Owner fragment ID 的完整映射。重放会重新读取正式聚合并校验 content hash/映射；注入批次失败时聚合、Receipt 与保存计数全部为零。复用已有 `EpisodeStructure` JSONB 事实，没有 Migration、Raw SQL、新表、第二 ORM、第二 SQL 事实源、Agent Writer 或 Kafka Command Topic。
+- 真实 Workflow 与 CI：真实 PostgreSQL `16.15`/Temporal 的 `TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce` 证明决议前正式结构为零、批准后整批事实与唯一 Receipt、unknown 恢复和反向 Evidence，定向结果 `PASS` 耗时 `45.722s`。最终从空库接入 Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Filebeat/Logstash/Kibana `9.4.4` 执行 `gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Workflow 包 `149.562s`。首轮因本地 MinIO 重启时误用凭据被资产测试真实拒绝，不计通过；后续全量还暴露 Bible Candidate stale Receipt 返回顺序不稳定，固定排序并在空库重跑后才记录通过，未使用 skip 或兼容分支。
+- 跨项目与部署门：Agent Ruff check/format、Pyright 与 Pytest 为 `35 passed, 3 skipped`，三个 skip 是既有需显式本地 Codex 登录的 opt-in 集成，且已在上一个候选交付中真实通过；本次未修改 Agent。Frontend OpenAPI 零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试与 Next.js production build 全通过。开发/生产 Compose、三镜像、Backend 三 Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Bundle 探针均通过；隔离部署完成日志脱敏检索与 Filebeat/Logstash/Kibana/Kafka/Elasticsearch 逐项停机、降级、恢复门禁，临时容器、网络、卷和测试库已清理。
+- 通过范围：以上证据完成 `SG-PRD-006` 与当前 Planning Gate/Owner 整批发布。覆盖七类 Gate 的复合 `SG-REV-006`–`008`、派生角色/地点卡的 `SG-FE-002` 与 Core StoryGraph 编译仍未完成，保持未勾选。`agent-browser` 依约只在全部开发完成后运行，本次未提前执行。
+- Git：实现、测试与 Evidence 由分别描述回执顺序稳定、候选整批发布、审批恢复与验收事实的完整提交承载；提交标题和正文不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I16`，其余保持未通过。下一步只允许从已物化 Bible/Episode/Scene/Beat/Occurrence/Claim Owner 事实编译 Core StoryGraphVersion；在 expected graph hash、Claim scope、Evidence、Owner Ref、Diff 与影响闭包全部通过前，不得解锁后续细化 Gate 或 Canvas。

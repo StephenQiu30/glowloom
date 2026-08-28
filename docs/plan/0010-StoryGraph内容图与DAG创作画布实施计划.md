@@ -1,6 +1,6 @@
 # StoryGraph 内容图与 DAG 创作画布实施计划
 
-- 状态：实施中；`SG-I01`–`SG-I15` 已完成（2026-08-28）
+- 状态：实施中；`SG-I01`–`SG-I16` 已完成（2026-08-28）
 - Design：[0010 StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
 - Agent Design：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 - PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
@@ -101,7 +101,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 - [x] `SG-I13`：Definition-first 接入 `segment_episodes` Candidate，仅产出有证据的边界/顺序/标题提案。完成门：全文 coverage、无重叠/缺口、稳定顺序和恢复通过，不创建 Episode。**完成（2026-08-28）**：Catalog/Temporal 正式节点、全局不可变 Manifest、精确 Script/Evidence/Bible Materialization 输入、显式 marker 优先和有界 Evidence Index 已落地；Backend 重验全文连续 coverage、边界顺序、证据与 marker，结果未知按同一 Invocation 恢复且只发布一个 Candidate Revision/Head。真实 Codex、PostgreSQL/Temporal 全链、完整基础设施 CI、三镜像与故障部署均通过，Episode 保持为零。
 - [x] `SG-I14`：完成 Episode Plan Human Gate 与 Backend Owner 原子物化 Episode/Published ScriptVersion。完成门：边界冲突、幂等、全批回滚和 Receipt 验收通过。**完成（2026-08-28）**：公共 HumanTask 精确冻结分集 Candidate revision/hash，批准后 Planning Owner 在单一 GORM 事务中创建全部 Episode、Published EpisodeScriptVersion、严格引用型 Outbox 与 Apply Receipt，并输出不可变 `episode_set`；拒绝零写入、边界基线冲突、注入中途失败全批回滚、同命令并发重放和真实 Temporal 恢复均已通过全新 PostgreSQL 与完整 CI。
 - [x] `SG-I15`：Definition-first 按 Episode Slice 接入 `analyze_episode` 与 `reconcile_episode`，产出 Scene/Dialogue/Beat/Occurrence/Claim Candidate。完成门：只消费已确认 Bible Snapshot，分片、相邻边界、恢复和引用门禁通过。**完成（2026-08-28）**：Catalog/Temporal 正式接入 `agent.episode_analysis`，Backend 只从已发布 Episode ScriptVersion、confirmed Bible Version 与 Materialization 构造确定性 map/reduce Manifest；每集 scene marker 优先分片、固定 fan-in=2、相邻 Episode 只读上下文、Known Identity/State 和 exact revision/hash 均由 Go/Pydantic 双重重验。Invocation、Candidate Revision/Head 与最终 `episode-planning-candidate-set-v1` 由单一 PostgreSQL/GORM 事实源持久化，结果持久化未知以同一 Invocation 恢复；真实 Codex、全新 PostgreSQL/Temporal 全链和完整 CI 均通过，正式 EpisodeStructure 仍为零。
-- [ ] `SG-I16`：完成 Scene/Beat/Occurrence/Claim Review、Human Gate 和 Planning Owner 全批应用。完成门：未知身份/状态不得自动创建，整批 Receipt、回滚和反查通过。
+- [x] `SG-I16`：完成 Scene/Beat/Occurrence/Claim Review、Human Gate 和 Planning Owner 全批应用。完成门：未知身份/状态不得自动创建，整批 Receipt、回滚和反查通过。**完成（2026-08-28）**：公共 `human.episode_structure_review@2.0.0` 精确冻结分集规划候选，批准后由 Backend Planning Owner 在同一 PostgreSQL/GORM 事务中整批创建 Scene、Dialogue、Beat、Occurrence、Claim 与 Receipt；Identity/State、Evidence、Claim scope/anchor 全部重验，未知或错配引用零写入，故障注入整批回滚，并可从 Receipt 反查候选与正式事实。真实 PostgreSQL/Temporal 旅程与完整 Kafka/ELK/MinIO 依赖 CI、三镜像及故障部署门禁均通过。
 - [ ] `SG-I17`：从已物化 Bible/Episode/Scene/Beat/Occurrence/Claim Owner 事实编译 Core StoryGraphVersion。完成门：多集 DAG、Claim scope、Evidence、Owner Ref、Diff 和影响闭包全链通过。
 
 ### 分镜与视觉资产
