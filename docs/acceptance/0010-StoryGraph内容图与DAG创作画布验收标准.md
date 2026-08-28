@@ -579,3 +579,15 @@
 - 本轮验证：`go test -count=1 ./tests/generation` 通过；`test -z "$(gofmt -l .)" && go vet ./... && go test -count=1 -p 1 ./...` 通过，但未注入 `LANVERSE_TEST_*`，不计外部服务验收。Agent Ruff check/format、Pyright 与 Pytest 通过，结果 `39 passed, 4 skipped`，skip 为显式真实 Codex opt-in；Frontend OpenAPI 生成零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试与 production build 全通过。本机现有 Logstash `127.0.0.1:5000` TCP 可连接，本轮未启动、重启或增加 Filebeat/Logstash 服务。
 - 未通过范围：当前进程中 `RUNWARE_API_KEY`、`LANVERSE_TEST_DATABASE_URL`、`LANVERSE_TEST_MINIO_ENDPOINT` 与 `LANVERSE_TEST_TEMPORAL_ADDRESS` 均未配置；因此本证据只是已接受设计的第一个离线交付单元，不勾选 `SG-VIS-001`–`005`、`SG-OPS-002` 或 `SG-I20`。GenerationTarget GORM Catalog/Repository、approved intent 消费、Cost/Quota/Authorization/Job 前置、安全下载、私有 MinIO Staging、Artifact 物化、Temporal 恢复与真实 Runware 任务仍是当前项的后续必做范围；`agent-browser` 未提前执行。
 - Git：本 Evidence 与实现由描述 Runware 图片任务合同的完整功能提交承载；提交标题和正文不包含任务编号、任务名或阶段名，未推送、未创建 PR。
+
+### GenerationTarget 唯一事实与执行绑定（2026-08-29）
+
+- Red 与唯一事实：现有 Generation PostgreSQL 旅程先要求 `GenerationTarget` 进入唯一 GORM Catalog，并固定 workspace/project/hash 查询索引、严格 JSONB 联合 Payload、Owner/Policy Hash 冗余校验、revision=1 以及 update/delete 拒绝。实现只新增 `gen_targets` GORM Model 与 Adapter Store，继续由 Catalog `AutoMigrate` 空库同步；没有 Migration 文件/字段、DDL、Raw SQL、第二 ORM、第二数据库或 Agent Writer。
+- Hash 语义修正：`WorkflowInputHash` 只验证当前 NodeRun 的 canonical 输入，`TargetID/TargetHash` 单独绑定冻结图片输入；Generation Intent、ExecutionAuthorization、Generation Request 和 ProviderSubmission 必须逐层携带同一 Target ID/Hash。旧的单一 `InputHash` 复用被直接移除，没有 nullable 过渡字段、双写或兼容读取。
+- 出站失败关闭：Preparation 在 Cost/Quota 前重读 Target 并校验 workspace/project/creator/hash；Provider 在创建 Request/Job、Submit、Query、terminal replay 前重新 canonicalize 完整 Target，而非只相信调用方 Hash。真实 PostgreSQL 故障注入篡改持久 Target Hash 后，Reconcile 返回 `state_conflict`，Gateway submit/query 计数保持不变；恢复原事实后仍只对账既有 Job。受控 Gateway 断言收到的完整 Target 与 Intent/Request 相同。
+- Owner 规范：EffectiveStyleSnapshot Owner 固定为既有 StoryGraph 所定义的 `preset`，不再接受错误的 `production` Owner；reference asset 仍严格冻结 approved storyboard intent、Character SpecificationVersion、AssetState、front/profile/back 与 composite reference sheet 参数。
+- 真实验证：专属空 PostgreSQL 库中 `LANVERSE_TEST_DATABASE_URL=... go test -count=1 -p 1 ./tests/generation/...` 通过；最终代码又在另一全新空库并复用本机现有 PostgreSQL、Temporal 与 MinIO 执行 `test -z "$(gofmt -l .)"`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Generation `18.873s`、Workflow `124.843s`。专属数据库与 MinIO Bucket 均已精确删除。本轮没有启动环境容器。
+- 跨项目与镜像：Agent Ruff check/format、Pyright 与 Pytest 为 `39 passed, 4 skipped`，四项 skip 仍仅是显式真实 Codex CLI opt-in；Frontend OpenAPI 零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试与 production build 全通过。开发/环境/生产 Compose 分层渲染和默认服务清单通过；Backend 镜像重建后只存在 `/usr/local/bin/lanverse`，专项镜像已删除。
+- 日志边界：本轮只复用已经启动的 Logstash `127.0.0.1:5000`，没有启动、重启或新增 Logstash，也没有引入或运行 Filebeat。当前日志链继续是 `Backend → Logstash → Elasticsearch/Kibana`，Kafka 只承载业务事件。
+- 未通过范围：本交付单元仍不从 `approved_storyboard_intents` 构造 Target，也未执行真实 Runware、私有下载/Staging 或 Artifact/Candidate 全链，因此 `SG-VIS-001`–`005`、`SG-OPS-002` 和 `SG-I20` 保持未勾选。下一步只实现 approved intent Target Builder；全部开发完成前继续不运行 `agent-browser`。
+- Git：本 Evidence 与实现由描述 GenerationTarget 唯一事实与执行绑定的完整功能提交承载；提交标题和正文不包含任务编号、任务名或阶段名，未推送、未创建 PR。

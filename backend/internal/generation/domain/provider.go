@@ -23,14 +23,15 @@ type ProviderBinding struct {
 }
 
 type GenerationRequest struct {
-	ID, WorkspaceID, ProjectID, IntentID string
-	BindingID                            string
-	BindingRevision                      int64
-	Capability, ProviderKey, ModelKey    string
-	CredentialRef, RequestKey, InputHash string
-	Units                                int64
-	ContentHash, CreatedBy               string
-	CreatedAt                            time.Time
+	ID, WorkspaceID, ProjectID, IntentID  string
+	TargetID                              string
+	BindingID                             string
+	BindingRevision                       int64
+	Capability, ProviderKey, ModelKey     string
+	CredentialRef, RequestKey, TargetHash string
+	Units                                 int64
+	ContentHash, CreatedBy                string
+	CreatedAt                             time.Time
 }
 
 type ProviderOutput struct {
@@ -69,10 +70,11 @@ func SameProviderBinding(left, right ProviderBinding) bool {
 
 func SameGenerationRequest(left, right GenerationRequest) bool {
 	return left.ID == right.ID && left.WorkspaceID == right.WorkspaceID && left.ProjectID == right.ProjectID &&
-		left.IntentID == right.IntentID && left.BindingID == right.BindingID && left.BindingRevision == right.BindingRevision &&
+		left.IntentID == right.IntentID && left.TargetID == right.TargetID &&
+		left.BindingID == right.BindingID && left.BindingRevision == right.BindingRevision &&
 		left.Capability == right.Capability && left.ProviderKey == right.ProviderKey && left.ModelKey == right.ModelKey &&
 		left.CredentialRef == right.CredentialRef && left.RequestKey == right.RequestKey &&
-		left.InputHash == right.InputHash && left.Units == right.Units && left.ContentHash == right.ContentHash &&
+		left.TargetHash == right.TargetHash && left.Units == right.Units && left.ContentHash == right.ContentHash &&
 		left.CreatedBy == right.CreatedBy && left.CreatedAt.Equal(right.CreatedAt)
 }
 

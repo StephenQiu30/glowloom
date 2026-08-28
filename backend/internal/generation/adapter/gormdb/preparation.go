@@ -64,6 +64,13 @@ func (repo *preparationRepository) AuthorizeProject(
 	return (&repository{database: repo.database}).AuthorizeProject(ctx, actor, workspaceID, projectID, write)
 }
 
+func (repo *preparationRepository) FindGenerationTarget(
+	ctx context.Context,
+	targetID string,
+) (domain.GenerationTarget, error) {
+	return findGenerationTarget(ctx, repo.database, targetID)
+}
+
 func (repo *preparationRepository) ValidateWorkflowSource(
 	ctx context.Context,
 	actor application.Actor,
@@ -209,7 +216,7 @@ func (repo *preparationRepository) UpdateIntent(
 
 func intentRecord(value domain.Intent) (model.GenerationIntent, error) {
 	ids := []string{
-		value.ID, value.WorkspaceID, value.ProjectID, value.WorkflowRunID, value.NodeRunID, value.CreatedBy,
+		value.ID, value.WorkspaceID, value.ProjectID, value.WorkflowRunID, value.NodeRunID, value.TargetID, value.CreatedBy,
 	}
 	parsed := make([]uuid.UUID, len(ids))
 	for index, raw := range ids {
@@ -277,7 +284,7 @@ func intentRecord(value domain.Intent) (model.GenerationIntent, error) {
 	}
 	return model.GenerationIntent{
 		ID: parsed[0], WorkspaceID: parsed[1], ProjectID: parsed[2], WorkflowRunID: parsed[3], NodeRunID: parsed[4],
-		Metric: value.Metric, InputHash: value.InputHash, Units: value.Units,
+		TargetID: parsed[5], Metric: value.Metric, TargetHash: value.TargetHash, Units: value.Units,
 		CostEstimateID: costEstimateID, CostReservationID: costReservationID, QuotaReservationID: quotaReservationID,
 		CostEstimateReceiptID: costEstimateReceiptID, CostReservationReceiptID: costReservationReceiptID,
 		QuotaReservationReceiptID: quotaReservationReceiptID, CostReleaseReceiptID: costReleaseReceiptID,
@@ -287,7 +294,7 @@ func intentRecord(value domain.Intent) (model.GenerationIntent, error) {
 		Status: value.Status, Claimant: clonePreparationString(value.Claimant),
 		ClaimToken: claimToken, ClaimExpiresAt: clonePreparationTime(value.ClaimExpiresAt),
 		ClaimFencingVersion: value.ClaimFencingVersion, CancelledAt: clonePreparationTime(value.CancelledAt),
-		Revision: value.Revision, ContentHash: value.ContentHash, CreatedBy: parsed[5],
+		Revision: value.Revision, ContentHash: value.ContentHash, CreatedBy: parsed[6],
 		InitiatorTokenVersion: value.InitiatorTokenVersion, CreatedAt: value.CreatedAt.UTC(), UpdatedAt: value.UpdatedAt.UTC(),
 	}, nil
 }
@@ -295,8 +302,9 @@ func intentRecord(value domain.Intent) (model.GenerationIntent, error) {
 func intentDomain(value model.GenerationIntent) domain.Intent {
 	return domain.Intent{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
-		WorkflowRunID: value.WorkflowRunID.String(), NodeRunID: value.NodeRunID.String(), Metric: value.Metric,
-		InputHash: value.InputHash, Units: value.Units, CostEstimateID: optionalPreparationUUIDString(value.CostEstimateID),
+		WorkflowRunID: value.WorkflowRunID.String(), NodeRunID: value.NodeRunID.String(), TargetID: value.TargetID.String(),
+		Metric: value.Metric, TargetHash: value.TargetHash, Units: value.Units,
+		CostEstimateID:            optionalPreparationUUIDString(value.CostEstimateID),
 		CostReservationID:         optionalPreparationUUIDString(value.CostReservationID),
 		QuotaReservationID:        optionalPreparationUUIDString(value.QuotaReservationID),
 		CostEstimateReceiptID:     optionalPreparationUUIDString(value.CostEstimateReceiptID),

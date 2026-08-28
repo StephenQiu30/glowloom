@@ -36,6 +36,7 @@ type controlledProviderGateway struct {
 	queryError    error
 	submitStarted chan struct{}
 	releaseSubmit chan struct{}
+	submissions   []generationapp.ProviderSubmission
 }
 
 func (gateway *controlledProviderGateway) Submit(
@@ -44,6 +45,7 @@ func (gateway *controlledProviderGateway) Submit(
 ) (generationapp.ProviderOutcome, error) {
 	gateway.mu.Lock()
 	gateway.submitCalls++
+	gateway.submissions = append(gateway.submissions, submission)
 	outcome, err := gateway.submitOutcome, gateway.submitError
 	started, release := gateway.submitStarted, gateway.releaseSubmit
 	gateway.mu.Unlock()
@@ -66,6 +68,7 @@ func (gateway *controlledProviderGateway) Query(
 	gateway.mu.Lock()
 	defer gateway.mu.Unlock()
 	gateway.queryCalls++
+	gateway.submissions = append(gateway.submissions, submission)
 	return controlledProviderOutcome(submission, gateway.queryOutcome), gateway.queryError
 }
 
@@ -99,6 +102,15 @@ func (gateway *controlledProviderGateway) counts() (int, int) {
 	return gateway.submitCalls, gateway.queryCalls
 }
 
+func (gateway *controlledProviderGateway) lastSubmission() generationapp.ProviderSubmission {
+	gateway.mu.Lock()
+	defer gateway.mu.Unlock()
+	if len(gateway.submissions) == 0 {
+		return generationapp.ProviderSubmission{}
+	}
+	return gateway.submissions[len(gateway.submissions)-1]
+}
+
 func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	if databaseURL == "" {
@@ -123,7 +135,7 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	now := time.Date(2026, time.August, 26, 21, 0, 0, 0, time.UTC)
 	currentTime := now
 	create := func(value any) error { return database.Create(value).Error }
-	fixture := seedPreparationFixture(t, create, now, "provider")
+	fixture := seedPreparationFixture(t, create, generationgorm.NewTargetStore(database), now, "provider")
 	t.Cleanup(func() {
 		cleanupProviderFixture(t, func(value any, query string, arguments ...any) error {
 			return database.Where(query, arguments...).Delete(value).Error
@@ -171,6 +183,12 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	if submitCalls, queryCalls := gateway.counts(); submitCalls != 1 || queryCalls != 0 {
 		t.Fatalf("initial Provider submission calls = submit %d query %d, want 1/0", submitCalls, queryCalls)
 	}
+	submission := gateway.lastSubmission()
+	if submission.Target.ID != unknown.Request.TargetID || submission.TargetHash != unknown.Request.TargetHash ||
+		submission.Target.TargetHash != unknown.Intent.TargetHash ||
+		generationdomain.ValidateGenerationTarget(submission.Target) != nil {
+		t.Fatalf("Provider did not receive the frozen GenerationTarget: %#v", submission)
+	}
 
 	replayedUnknown, err := providers.SubmitImageRequest(ctx, unknownClaim.Authorization, generationapp.SubmitImageRequestCommand{
 		IntentID: unknownClaim.Intent.ID, IdempotencyKey: "generation-provider-submit-unknown",
@@ -181,6 +199,22 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	}
 	if submitCalls, queryCalls := gateway.counts(); submitCalls != 1 || queryCalls != 0 {
 		t.Fatalf("idempotent Provider replay called remote boundary: submit %d query %d", submitCalls, queryCalls)
+	}
+	if err = database.Model(&model.GenerationTarget{}).Where("id = ?", unknown.Request.TargetID).
+		UpdateColumn("target_hash", strings.Repeat("0", 64)).Error; err != nil {
+		t.Fatalf("inject persisted GenerationTarget drift: %v", err)
+	}
+	if _, err = providers.ReconcileProviderJob(ctx, generationapp.ReconcileProviderJobCommand{
+		ProviderJobID: unknown.Job.ID, IdempotencyKey: "generation-provider-reconcile-target-drift",
+	}); generationErrorCode(err) != "state_conflict" {
+		t.Fatalf("GenerationTarget drift was accepted: %T %v", err, err)
+	}
+	if submitCalls, queryCalls := gateway.counts(); submitCalls != 1 || queryCalls != 0 {
+		t.Fatalf("GenerationTarget drift reached Provider boundary: submit %d query %d", submitCalls, queryCalls)
+	}
+	if err = database.Model(&model.GenerationTarget{}).Where("id = ?", unknown.Request.TargetID).
+		UpdateColumn("target_hash", unknown.Request.TargetHash).Error; err != nil {
+		t.Fatalf("restore persisted GenerationTarget after drift test: %v", err)
 	}
 
 	output := generationapp.ProviderOutput{

@@ -112,7 +112,7 @@ func NewGenerationTarget(input GenerationTargetInput) (GenerationTarget, error) 
 	if input.Revision != 1 || input.CreatedAt.IsZero() || !validFrozenOwnerReference(input.SourceOwnerRef) ||
 		!validFrozenOwnerReference(input.PolicySnapshotRef) ||
 		input.SourceOwnerRef.Owner != "storyboard" || input.SourceOwnerRef.Resource != "approved_storyboard_intents" ||
-		input.PolicySnapshotRef.Resource != "effective_style_snapshot" {
+		input.PolicySnapshotRef.Owner != "preset" || input.PolicySnapshotRef.Resource != "effective_style_snapshot" {
 		return GenerationTarget{}, errors.New("invalid GenerationTarget owner snapshot")
 	}
 	if (input.ReferenceAsset == nil) == (input.ShotFrame == nil) {
@@ -165,6 +165,10 @@ func ValidateGenerationTarget(target GenerationTarget) error {
 		return errors.New("GenerationTarget has drifted")
 	}
 	return nil
+}
+
+func SameGenerationTarget(left, right GenerationTarget) bool {
+	return reflect.DeepEqual(left, right)
 }
 
 func normalizeReferenceAssetTarget(value ReferenceAssetTarget) (ReferenceAssetTarget, error) {

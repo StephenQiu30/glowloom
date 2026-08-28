@@ -16,7 +16,7 @@ const (
 
 type Intent struct {
 	ID, WorkspaceID, ProjectID, WorkflowRunID, NodeRunID  string
-	Metric, InputHash                                     string
+	TargetID, Metric, TargetHash                          string
 	Units                                                 int64
 	CostEstimateID, CostReservationID, QuotaReservationID string
 	CostEstimateReceiptID, CostReservationReceiptID       string
@@ -33,7 +33,7 @@ type Intent struct {
 }
 
 type ExecutionAuthorization struct {
-	IntentID, ClaimToken, InputHash            string
+	IntentID, ClaimToken, TargetID, TargetHash string
 	CostReservationID, QuotaReservationID      string
 	ClaimFencingVersion, IntentRevision, Units int64
 	ExpiresAt                                  time.Time
@@ -42,7 +42,7 @@ type ExecutionAuthorization struct {
 func SameIntentBinding(left, right Intent) bool {
 	return left.WorkspaceID == right.WorkspaceID && left.ProjectID == right.ProjectID &&
 		left.WorkflowRunID == right.WorkflowRunID && left.NodeRunID == right.NodeRunID &&
-		left.Metric == right.Metric && left.InputHash == right.InputHash && left.Units == right.Units &&
+		left.TargetID == right.TargetID && left.Metric == right.Metric && left.TargetHash == right.TargetHash && left.Units == right.Units &&
 		left.CreatedBy == right.CreatedBy && left.InitiatorTokenVersion == right.InitiatorTokenVersion
 }
 

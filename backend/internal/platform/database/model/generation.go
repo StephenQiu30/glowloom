@@ -13,8 +13,9 @@ type GenerationIntent struct {
 	ProjectID                 uuid.UUID         `gorm:"type:uuid;not null;index"`
 	WorkflowRunID             uuid.UUID         `gorm:"type:uuid;not null;index"`
 	NodeRunID                 uuid.UUID         `gorm:"type:uuid;not null;uniqueIndex:uq_gen_intent_node_run"`
+	TargetID                  uuid.UUID         `gorm:"type:uuid;not null;index"`
 	Metric                    string            `gorm:"type:varchar(64);not null;check:ck_gen_intent_metric,metric = 'generation.image'"`
-	InputHash                 string            `gorm:"type:char(64);not null;check:ck_gen_intent_input_hash,char_length(input_hash) = 64"`
+	TargetHash                string            `gorm:"type:char(64);not null;check:ck_gen_intent_target_hash,char_length(target_hash) = 64"`
 	Units                     int64             `gorm:"not null;check:ck_gen_intent_units,units > 0"`
 	CostEstimateID            *uuid.UUID        `gorm:"type:uuid"`
 	CostReservationID         *uuid.UUID        `gorm:"type:uuid"`
@@ -45,6 +46,7 @@ type GenerationIntent struct {
 	Project                   Project           `gorm:"foreignKey:ProjectID,WorkspaceID;references:ID,WorkspaceID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	WorkflowRun               WorkflowRun       `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	NodeRun                   NodeRunProjection `gorm:"foreignKey:NodeRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Target                    GenerationTarget  `gorm:"foreignKey:TargetID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	CostEstimate              *CostEstimate     `gorm:"foreignKey:CostEstimateID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	CostReservation           *CostReservation  `gorm:"foreignKey:CostReservationID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	QuotaReservation          *QuotaReservation `gorm:"foreignKey:QuotaReservationID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`

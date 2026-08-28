@@ -171,7 +171,7 @@ func TestSucceededProviderOutputsMaterializeThroughAssetReadinessAndCandidateQC(
 			First(&artifact).Error
 		return artifact, err
 	}
-	fixture := seedPreparationFixture(t, create, now, "provider-output")
+	fixture := seedPreparationFixture(t, create, generationgorm.NewTargetStore(database), now, "provider-output")
 	t.Cleanup(func() {
 		deletions := []struct {
 			name string

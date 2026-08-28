@@ -275,26 +275,27 @@ func providerBindingDomain(value model.GenerationProviderBindingVersion) domain.
 
 func generationRequestRecord(value domain.GenerationRequest) (model.GenerationRequest, error) {
 	ids, err := parseProviderUUIDs(
-		value.ID, value.WorkspaceID, value.ProjectID, value.IntentID, value.BindingID, value.CreatedBy,
+		value.ID, value.WorkspaceID, value.ProjectID, value.IntentID, value.TargetID, value.BindingID, value.CreatedBy,
 	)
 	if err != nil {
 		return model.GenerationRequest{}, err
 	}
 	return model.GenerationRequest{
-		ID: ids[0], WorkspaceID: ids[1], ProjectID: ids[2], IntentID: ids[3], BindingID: ids[4],
+		ID: ids[0], WorkspaceID: ids[1], ProjectID: ids[2], IntentID: ids[3], TargetID: ids[4], BindingID: ids[5],
 		BindingRevision: value.BindingRevision, Capability: value.Capability, ProviderKey: value.ProviderKey,
 		ModelKey: value.ModelKey, CredentialRef: value.CredentialRef, RequestKey: value.RequestKey,
-		InputHash: value.InputHash, Units: value.Units, ContentHash: value.ContentHash,
-		CreatedBy: ids[5], CreatedAt: value.CreatedAt.UTC(),
+		TargetHash: value.TargetHash, Units: value.Units, ContentHash: value.ContentHash,
+		CreatedBy: ids[6], CreatedAt: value.CreatedAt.UTC(),
 	}, nil
 }
 
 func generationRequestDomain(value model.GenerationRequest) domain.GenerationRequest {
 	return domain.GenerationRequest{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
-		IntentID: value.IntentID.String(), BindingID: value.BindingID.String(), BindingRevision: value.BindingRevision,
-		Capability: value.Capability, ProviderKey: value.ProviderKey, ModelKey: value.ModelKey,
-		CredentialRef: value.CredentialRef, RequestKey: value.RequestKey, InputHash: value.InputHash,
+		IntentID: value.IntentID.String(), TargetID: value.TargetID.String(), BindingID: value.BindingID.String(),
+		BindingRevision: value.BindingRevision,
+		Capability:      value.Capability, ProviderKey: value.ProviderKey, ModelKey: value.ModelKey,
+		CredentialRef: value.CredentialRef, RequestKey: value.RequestKey, TargetHash: value.TargetHash,
 		Units: value.Units, ContentHash: value.ContentHash, CreatedBy: value.CreatedBy.String(),
 		CreatedAt: value.CreatedAt.UTC(),
 	}

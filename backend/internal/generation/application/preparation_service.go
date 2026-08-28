@@ -22,9 +22,10 @@ const (
 )
 
 var (
-	ErrIntentNotFound = errors.New("generation intent not found")
-	intentHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	claimantPattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]{2,119}$`)
+	ErrIntentNotFound           = errors.New("generation intent not found")
+	ErrGenerationTargetNotFound = errors.New("GenerationTarget not found")
+	intentHashPattern           = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	claimantPattern             = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]{2,119}$`)
 )
 
 type CostPreparationOwner interface {
@@ -44,6 +45,7 @@ type QuotaPreparationOwner interface {
 type PreparationRepository interface {
 	AuthorizeProject(context.Context, Actor, string, string, bool) error
 	ValidateWorkflowSource(context.Context, Actor, string, string, string, string, string) error
+	FindGenerationTarget(context.Context, string) (domain.GenerationTarget, error)
 	FindReceipt(context.Context, string, string, string) (platformcommand.Receipt, error)
 	FindReceiptByID(context.Context, string) (platformcommand.Receipt, error)
 	EnsureReceipt(context.Context, platformcommand.Receipt) (platformcommand.Receipt, error)
@@ -73,7 +75,8 @@ type PreparationService struct {
 
 type PrepareImageGenerationCommand struct {
 	WorkspaceID, ProjectID, WorkflowRunID, NodeRunID string
-	InputHash, IdempotencyKey                        string
+	WorkflowInputHash, TargetID, TargetHash          string
+	IdempotencyKey                                   string
 	Units                                            int64
 }
 
@@ -127,7 +130,7 @@ type cancellationReceipt struct {
 
 type intentHashInput struct {
 	ID, WorkspaceID, ProjectID, WorkflowRunID, NodeRunID  string
-	Metric, InputHash                                     string
+	TargetID, Metric, TargetHash                          string
 	Units                                                 int64
 	CostEstimateID, CostReservationID, QuotaReservationID string
 	CostEstimateReceiptID, CostReservationReceiptID       string
@@ -156,12 +159,15 @@ func (service *PreparationService) PrepareImageGeneration(
 	command.ProjectID = strings.TrimSpace(command.ProjectID)
 	command.WorkflowRunID = strings.TrimSpace(command.WorkflowRunID)
 	command.NodeRunID = strings.TrimSpace(command.NodeRunID)
-	command.InputHash = strings.TrimSpace(command.InputHash)
+	command.WorkflowInputHash = strings.TrimSpace(command.WorkflowInputHash)
+	command.TargetID = strings.TrimSpace(command.TargetID)
+	command.TargetHash = strings.TrimSpace(command.TargetHash)
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil ||
 		!validPreparationActor(actor) || !validUUID(command.WorkspaceID) || !validUUID(command.ProjectID) ||
 		!validUUID(command.WorkflowRunID) || !validUUID(command.NodeRunID) ||
-		!intentHashPattern.MatchString(command.InputHash) || command.Units < 1 ||
+		!intentHashPattern.MatchString(command.WorkflowInputHash) || !validUUID(command.TargetID) ||
+		!intentHashPattern.MatchString(command.TargetHash) || command.Units < 1 ||
 		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return PreparationResult{}, invalid("Invalid image generation preparation")
 	}
@@ -188,9 +194,17 @@ func (service *PreparationService) PrepareImageGeneration(
 			return findErr
 		}
 		if sourceErr := repo.ValidateWorkflowSource(
-			ctx, actor, command.WorkspaceID, command.ProjectID, command.WorkflowRunID, command.NodeRunID, command.InputHash,
+			ctx, actor, command.WorkspaceID, command.ProjectID, command.WorkflowRunID, command.NodeRunID, command.WorkflowInputHash,
 		); sourceErr != nil {
 			return sourceErr
+		}
+		target, targetErr := repo.FindGenerationTarget(ctx, command.TargetID)
+		if targetErr != nil {
+			return targetErr
+		}
+		if domain.ValidateGenerationTarget(target) != nil || target.WorkspaceID != command.WorkspaceID ||
+			target.ProjectID != command.ProjectID || target.TargetHash != command.TargetHash || target.CreatedBy != actor.UserID {
+			return conflict("GenerationTarget binding has drifted")
 		}
 		intentID := strings.TrimSpace(service.config.NewID())
 		if !validUUID(intentID) {
@@ -199,7 +213,7 @@ func (service *PreparationService) PrepareImageGeneration(
 		desired := domain.Intent{
 			ID: intentID, WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
 			WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
-			Metric: costdomain.MetricGenerationImage, InputHash: command.InputHash, Units: command.Units,
+			TargetID: target.ID, Metric: costdomain.MetricGenerationImage, TargetHash: target.TargetHash, Units: command.Units,
 			Status: domain.IntentPreparing, ClaimFencingVersion: 0, Revision: 1,
 			CreatedBy: actor.UserID, InitiatorTokenVersion: actor.TokenVersion,
 			CreatedAt: now, UpdatedAt: now,
@@ -487,13 +501,15 @@ func (service *PreparationService) VerifyExecutionAuthorization(
 ) error {
 	authorization.IntentID = strings.TrimSpace(authorization.IntentID)
 	authorization.ClaimToken = strings.TrimSpace(authorization.ClaimToken)
-	authorization.InputHash = strings.TrimSpace(authorization.InputHash)
+	authorization.TargetID = strings.TrimSpace(authorization.TargetID)
+	authorization.TargetHash = strings.TrimSpace(authorization.TargetHash)
 	authorization.CostReservationID = strings.TrimSpace(authorization.CostReservationID)
 	authorization.QuotaReservationID = strings.TrimSpace(authorization.QuotaReservationID)
 	if service == nil || service.transactions == nil || service.config.Now == nil ||
 		!validUUID(authorization.IntentID) || !validUUID(authorization.ClaimToken) ||
+		!validUUID(authorization.TargetID) ||
 		!validUUID(authorization.CostReservationID) || !validUUID(authorization.QuotaReservationID) ||
-		!intentHashPattern.MatchString(authorization.InputHash) || authorization.ClaimFencingVersion < 1 ||
+		!intentHashPattern.MatchString(authorization.TargetHash) || authorization.ClaimFencingVersion < 1 ||
 		authorization.IntentRevision < 1 || authorization.Units < 1 || authorization.ExpiresAt.IsZero() {
 		return invalid("Invalid Generation execution authorization")
 	}
@@ -515,7 +531,8 @@ func (service *PreparationService) VerifyExecutionAuthorization(
 		}
 		if intent.Status != domain.IntentClaimed || intent.ClaimToken == nil || intent.ClaimExpiresAt == nil ||
 			*intent.ClaimToken != authorization.ClaimToken || !intent.ClaimExpiresAt.Equal(authorization.ExpiresAt) ||
-			intent.InputHash != authorization.InputHash || intent.CostReservationID != authorization.CostReservationID ||
+			intent.TargetID != authorization.TargetID || intent.TargetHash != authorization.TargetHash ||
+			intent.CostReservationID != authorization.CostReservationID ||
 			intent.QuotaReservationID != authorization.QuotaReservationID ||
 			intent.ClaimFencingVersion != authorization.ClaimFencingVersion ||
 			intent.Revision != authorization.IntentRevision || intent.Units != authorization.Units {
@@ -543,6 +560,14 @@ func (service *PreparationService) loadIntentView(
 			return IntentView{}, err
 		}
 		return IntentView{}, conflict("Generation intent preparation is incomplete")
+	}
+	target, err := repo.FindGenerationTarget(ctx, intent.TargetID)
+	if err != nil {
+		return IntentView{}, err
+	}
+	if domain.ValidateGenerationTarget(target) != nil || target.WorkspaceID != intent.WorkspaceID ||
+		target.ProjectID != intent.ProjectID || target.TargetHash != intent.TargetHash || target.CreatedBy != intent.CreatedBy {
+		return IntentView{}, conflict("GenerationTarget binding has drifted")
 	}
 	costActor := costapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}
 	estimate, err := costs.GetEstimate(ctx, costActor, intent.CostEstimateID)
@@ -646,8 +671,8 @@ func (service *PreparationService) validateOwnerReceipts(
 
 func validateIntent(value domain.Intent) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || !validUUID(value.ProjectID) ||
-		!validUUID(value.WorkflowRunID) || !validUUID(value.NodeRunID) ||
-		value.Metric != costdomain.MetricGenerationImage || !intentHashPattern.MatchString(value.InputHash) ||
+		!validUUID(value.WorkflowRunID) || !validUUID(value.NodeRunID) || !validUUID(value.TargetID) ||
+		value.Metric != costdomain.MetricGenerationImage || !intentHashPattern.MatchString(value.TargetHash) ||
 		value.Units < 1 || !validUUID(value.CreatedBy) || value.InitiatorTokenVersion < 1 ||
 		value.Revision < 1 || len(value.ContentHash) != 64 || value.CreatedAt.IsZero() ||
 		value.UpdatedAt.Before(value.CreatedAt) {
@@ -738,7 +763,7 @@ func intentContentHash(value domain.Intent) (string, error) {
 	return platformcommand.InputHash(intentHashInput{
 		ID: value.ID, WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID,
 		WorkflowRunID: value.WorkflowRunID, NodeRunID: value.NodeRunID,
-		Metric: value.Metric, InputHash: value.InputHash, Units: value.Units,
+		TargetID: value.TargetID, Metric: value.Metric, TargetHash: value.TargetHash, Units: value.Units,
 		CostEstimateID: value.CostEstimateID, CostReservationID: value.CostReservationID,
 		QuotaReservationID:        value.QuotaReservationID,
 		CostEstimateReceiptID:     value.CostEstimateReceiptID,
@@ -936,7 +961,7 @@ func authorizationForIntent(intent domain.Intent) domain.ExecutionAuthorization 
 		return domain.ExecutionAuthorization{}
 	}
 	return domain.ExecutionAuthorization{
-		IntentID: intent.ID, ClaimToken: *intent.ClaimToken, InputHash: intent.InputHash,
+		IntentID: intent.ID, ClaimToken: *intent.ClaimToken, TargetID: intent.TargetID, TargetHash: intent.TargetHash,
 		CostReservationID: intent.CostReservationID, QuotaReservationID: intent.QuotaReservationID,
 		ClaimFencingVersion: intent.ClaimFencingVersion, IntentRevision: intent.Revision,
 		Units: intent.Units, ExpiresAt: *intent.ClaimExpiresAt,
@@ -982,6 +1007,9 @@ func normalizePreparationError(err error) error {
 	}
 	if errors.Is(err, ErrIntentNotFound) {
 		return notFound("Generation intent not found")
+	}
+	if errors.Is(err, ErrGenerationTargetNotFound) {
+		return notFound("GenerationTarget not found")
 	}
 	var costError *costapp.Error
 	if errors.As(err, &costError) {

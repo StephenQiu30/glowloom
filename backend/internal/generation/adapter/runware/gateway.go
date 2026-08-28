@@ -265,7 +265,7 @@ func (gateway *Gateway) referenceAssetPayload(
 	if gateway == nil || gateway.client == nil || gateway.stager == nil ||
 		submission.ProviderKey != runwareProviderKey || submission.ModelKey != runwareModelKey ||
 		submission.CredentialRef != runwareCredentialRef || submission.WorkspaceID != submission.Target.WorkspaceID ||
-		submission.ProjectID != submission.Target.ProjectID || submission.InputHash != submission.Target.TargetHash ||
+		submission.ProjectID != submission.Target.ProjectID || submission.TargetHash != submission.Target.TargetHash ||
 		submission.Units != 4 || submission.Target.Kind != domain.GenerationTargetReferenceAsset ||
 		submission.Target.ReferenceAsset == nil || submission.Target.ShotFrame != nil {
 		return domain.ReferenceAssetTarget{}, errors.New("invalid Runware reference_asset submission")

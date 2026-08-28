@@ -39,6 +39,7 @@ type preparationFixture struct {
 	ownerID, editorID      uuid.UUID
 	owner, editor          generationapp.Actor
 	create                 func(any) error
+	targets                *generationgorm.TargetStore
 	now                    time.Time
 }
 
@@ -64,6 +65,12 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 		},
 		func(index string) bool { return database.Migrator().HasIndex(&model.GenerationIntent{}, index) },
 	)
+	assertGenerationTargetSchema(t,
+		func(constraint string) bool {
+			return database.Migrator().HasConstraint(&model.GenerationTarget{}, constraint)
+		},
+		func(index string) bool { return database.Migrator().HasIndex(&model.GenerationTarget{}, index) },
+	)
 	create := func(value any) error { return database.Create(value).Error }
 	countRecords := func(value any, query string, arguments ...any) (int64, error) {
 		var count int64
@@ -73,8 +80,9 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 
 	now := time.Date(2026, time.August, 26, 18, 0, 0, 0, time.UTC)
 	currentTime := now
-	main := seedPreparationFixture(t, create, now, "main")
-	quotaFailure := seedPreparationFixture(t, create, now, "quota-failure")
+	targets := generationgorm.NewTargetStore(database)
+	main := seedPreparationFixture(t, create, targets, now, "main")
+	quotaFailure := seedPreparationFixture(t, create, targets, now, "quota-failure")
 	t.Cleanup(func() {
 		for _, fixture := range []preparationFixture{main, quotaFailure} {
 			deletions := []struct {
@@ -116,6 +124,14 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 	assertNoPreparedFacts(t, countRecords, quotaFailure)
 
 	command := newPreparationCommand(t, main, 2, "main", strings.Repeat("a", 64))
+	assertGenerationTargetPersistence(
+		t, ctx, main.targets, command.TargetID, command.TargetHash,
+		func(id string) error {
+			return database.Model(&model.GenerationTarget{}).Where("id = ?", id).
+				Update("target_hash", strings.Repeat("0", 64)).Error
+		},
+		func(id string) error { return database.Where("id = ?", id).Delete(&model.GenerationTarget{}).Error },
+	)
 	const callers = 8
 	results := make(chan generationapp.PreparationResult, callers)
 	errorsFound := make(chan error, callers)
@@ -178,9 +194,9 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 		t.Fatalf("Generation preparation accepted Units drift: %T %v", err, err)
 	}
 	drifted = command
-	drifted.InputHash = strings.Repeat("b", 64)
+	drifted.TargetHash = strings.Repeat("b", 64)
 	if _, err = preparations.PrepareImageGeneration(ctx, main.editor, drifted); generationErrorCode(err) != "state_conflict" {
-		t.Fatalf("Generation preparation accepted idempotent Input Hash drift: %T %v", err, err)
+		t.Fatalf("Generation preparation accepted idempotent Target Hash drift: %T %v", err, err)
 	}
 	forgedSource := command
 	forgedSource.NodeRunID, forgedSource.IdempotencyKey = uuid.NewString(), "generation-prepare-forged-node"
@@ -330,11 +346,69 @@ func assertPreparationSchema(t *testing.T, hasConstraint, hasIndex func(string) 
 	}
 }
 
-func seedPreparationFixture(t *testing.T, create func(any) error, now time.Time, suffix string) preparationFixture {
+func assertGenerationTargetSchema(t *testing.T, hasConstraint, hasIndex func(string) bool) {
+	t.Helper()
+	for _, constraint := range []string{
+		"ck_gen_target_kind", "ck_gen_target_source_hash", "ck_gen_target_policy_hash",
+		"ck_gen_target_hash", "ck_gen_target_revision",
+	} {
+		if !hasConstraint(constraint) {
+			t.Fatalf("GenerationTarget schema is missing constraint %s", constraint)
+		}
+	}
+	if !hasIndex("ix_gen_targets_workspace_hash") {
+		t.Fatal("GenerationTarget schema is missing workspace/hash index")
+	}
+}
+
+func assertGenerationTargetPersistence(
+	t *testing.T,
+	ctx context.Context,
+	store *generationgorm.TargetStore,
+	targetID, targetHash string,
+	updateTarget, deleteTarget func(string) error,
+) {
+	t.Helper()
+	target, err := store.Find(ctx, targetID)
+	if err != nil || target.TargetHash != targetHash || generationdomain.ValidateGenerationTarget(target) != nil {
+		t.Fatalf("load canonical GenerationTarget: target=%#v err=%v", target, err)
+	}
+	replayed, err := store.Ensure(ctx, target)
+	if err != nil || !generationdomain.SameGenerationTarget(replayed, target) {
+		t.Fatalf("replay canonical GenerationTarget: target=%#v err=%v", replayed, err)
+	}
+	payload := *target.ReferenceAsset
+	payload.PositivePrompt = "drifted character reference sheet"
+	drifted, err := generationdomain.NewGenerationTarget(generationdomain.GenerationTargetInput{
+		ID: target.ID, WorkspaceID: target.WorkspaceID, ProjectID: target.ProjectID, Kind: target.Kind,
+		SourceOwnerRef: target.SourceOwnerRef, PolicySnapshotRef: target.PolicySnapshotRef,
+		ReferenceAsset: &payload, Revision: target.Revision, CreatedBy: target.CreatedBy, CreatedAt: target.CreatedAt,
+	})
+	if err != nil {
+		t.Fatalf("build drifted GenerationTarget fixture: %v", err)
+	}
+	if _, err = store.Ensure(ctx, drifted); err == nil {
+		t.Fatal("GenerationTarget identity accepted different immutable facts")
+	}
+	if err = updateTarget(target.ID); !errors.Is(err, model.ErrImmutableGenerationTarget) {
+		t.Fatalf("GenerationTarget update was not blocked: %v", err)
+	}
+	if err = deleteTarget(target.ID); !errors.Is(err, model.ErrImmutableGenerationTarget) {
+		t.Fatalf("GenerationTarget delete was not blocked: %v", err)
+	}
+}
+
+func seedPreparationFixture(
+	t *testing.T,
+	create func(any) error,
+	targets *generationgorm.TargetStore,
+	now time.Time,
+	suffix string,
+) preparationFixture {
 	t.Helper()
 	fixture := preparationFixture{
 		workspaceID: uuid.New(), projectID: uuid.New(), ownerID: uuid.New(), editorID: uuid.New(),
-		create: create, now: now,
+		create: create, targets: targets, now: now,
 	}
 	users := []model.UserAccount{
 		{ID: fixture.ownerID, EmailNormalized: "generation-preparation-owner-" + suffix + "-" + fixture.ownerID.String() + "@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "Owner", Status: "active", CreatedAt: now, UpdatedAt: now},
@@ -463,11 +537,45 @@ func newPreparationCommand(
 	suffix, frozenHash string,
 ) generationapp.PrepareImageGenerationCommand {
 	t.Helper()
+	target, err := generationdomain.NewGenerationTarget(generationdomain.GenerationTargetInput{
+		ID: uuid.NewString(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		Kind: generationdomain.GenerationTargetReferenceAsset,
+		SourceOwnerRef: generationdomain.FrozenOwnerReference{
+			Owner: "storyboard", Resource: "approved_storyboard_intents", ID: uuid.NewString(),
+			Revision: 1, ContentHash: frozenHash,
+		},
+		PolicySnapshotRef: generationdomain.FrozenOwnerReference{
+			Owner: "preset", Resource: "effective_style_snapshot", ID: uuid.NewString(),
+			Revision: 1, ContentHash: strings.Repeat("9", 64),
+		},
+		ReferenceAsset: &generationdomain.ReferenceAssetTarget{
+			AssetID: uuid.NewString(), AssetKind: "character",
+			SpecificationVersionRef: generationdomain.FrozenOwnerReference{
+				Owner: "production", Resource: "production_bible_specification_version", ID: uuid.NewString(),
+				Revision: 1, ContentHash: strings.Repeat("8", 64),
+			},
+			AssetStateRef: generationdomain.FrozenOwnerReference{
+				Owner: "asset", Resource: "asset_state", ID: uuid.NewString(),
+				Revision: 1, ContentHash: strings.Repeat("7", 64),
+			},
+			OutputKind: "reference_sheet", RequiredViewRoles: []string{"back", "front", "profile"},
+			PromptVersion: "character-reference-sheet-v1", PositivePrompt: "character reference sheet",
+			NegativePrompt: "identity drift", Width: 1536, Height: 1024, NumberResults: 4, OutputFormat: "png",
+		},
+		Revision: 1, CreatedBy: fixture.editorID.String(), CreatedAt: fixture.now,
+	})
+	if err != nil {
+		t.Fatalf("build frozen GenerationTarget: %v", err)
+	}
+	target, err = fixture.targets.Ensure(context.Background(), target)
+	if err != nil {
+		t.Fatalf("persist frozen GenerationTarget: %v", err)
+	}
 	_, input, inputHash, err := workflowdomain.BuildNodeInput(workflowdomain.NodeInputSnapshot{
 		SchemaVersion: workflowdomain.NodeInputSchemaVersion,
 		Config:        json.RawMessage(`{"generation":"image","variant":"` + suffix + `"}`),
 		FrozenInputs: []authoringdomain.FrozenReference{{
-			Kind: "storyboard_shot", ID: uuid.NewString(), Version: "1", Hash: frozenHash,
+			Kind: "generation_target", ID: target.ID, Version: "1", Hash: target.TargetHash,
 		}},
 	})
 	if err != nil {
@@ -485,7 +593,8 @@ func newPreparationCommand(
 	}
 	return generationapp.PrepareImageGenerationCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-		WorkflowRunID: fixture.workflowRunID.String(), NodeRunID: nodeRunID.String(), InputHash: inputHash,
+		WorkflowRunID: fixture.workflowRunID.String(), NodeRunID: nodeRunID.String(), WorkflowInputHash: inputHash,
+		TargetID: target.ID, TargetHash: target.TargetHash,
 		Units: units, IdempotencyKey: "generation-prepare-" + suffix,
 	}
 }

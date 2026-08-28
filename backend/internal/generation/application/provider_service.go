@@ -43,7 +43,7 @@ type ProviderSubmission struct {
 	WorkspaceID, ProjectID, ProviderJobID string
 	RequestID, RequestKey, IntentID       string
 	ProviderKey, ModelKey, CredentialRef  string
-	InputHash                             string
+	TargetHash                            string
 	Units                                 int64
 	Target                                domain.GenerationTarget
 }
@@ -147,10 +147,11 @@ type providerBindingHashInput struct {
 }
 
 type generationRequestHashInput struct {
-	WorkspaceID, ProjectID, IntentID, BindingID      string
+	WorkspaceID, ProjectID, IntentID, TargetID       string
+	BindingID                                        string
 	BindingRevision                                  int64
 	Capability, ProviderKey, ModelKey, CredentialRef string
-	RequestKey, InputHash                            string
+	RequestKey, TargetHash                           string
 	Units                                            int64
 }
 
@@ -175,6 +176,7 @@ type providerInvocation struct {
 	intent     domain.Intent
 	request    domain.GenerationRequest
 	job        domain.ProviderJob
+	target     domain.GenerationTarget
 	result     ProviderExecutionResult
 	receipt    platformcommand.Receipt
 	callRemote bool
@@ -300,7 +302,7 @@ func (service *ProviderService) SubmitImageRequest(
 	if err != nil || !invocation.callRemote {
 		return invocation.result, normalizeProviderError(err)
 	}
-	submission := providerSubmission(invocation.request, invocation.job)
+	submission := providerSubmission(invocation.request, invocation.job, invocation.target)
 	var outcome ProviderOutcome
 	if invocation.submit {
 		outcome, err = service.gateway.Submit(ctx, submission)
@@ -334,7 +336,7 @@ func (service *ProviderService) ReconcileProviderJob(
 	if err != nil || !invocation.callRemote {
 		return invocation.result, normalizeProviderError(err)
 	}
-	outcome, queryErr := service.gateway.Query(ctx, providerSubmission(invocation.request, invocation.job))
+	outcome, queryErr := service.gateway.Query(ctx, providerSubmission(invocation.request, invocation.job, invocation.target))
 	if queryErr != nil {
 		outcome = ProviderOutcome{Status: ProviderOutcomeUnknown, ProviderJobKey: invocation.job.ProviderJobKey}
 	}
@@ -430,6 +432,10 @@ func (service *ProviderService) prepareProviderSubmission(
 			if factsErr := service.validateProviderFacts(ctx, repo, costs, quotas, intent, request, job); factsErr != nil {
 				return factsErr
 			}
+			target, targetErr := repo.FindGenerationTarget(ctx, request.TargetID)
+			if targetErr != nil || validateProviderTargetBinding(target, intent, request) != nil {
+				return conflict("Generation Provider Target snapshot has drifted")
+			}
 			if providerJobTerminal(job.Status) {
 				result, resultErr := service.loadProviderExecutionResult(ctx, repo, costs, quotas, intent, request, job)
 				if resultErr != nil {
@@ -445,7 +451,7 @@ func (service *ProviderService) prepareProviderSubmission(
 				invocation.result = result
 				return nil
 			}
-			invocation.intent, invocation.request, invocation.job = intent, request, job
+			invocation.intent, invocation.request, invocation.job, invocation.target = intent, request, job, target
 			invocation.callRemote = true
 			return nil
 		}
@@ -461,6 +467,10 @@ func (service *ProviderService) prepareProviderSubmission(
 		if loadErr = service.validateProviderOwners(ctx, costs, quotas, intent); loadErr != nil {
 			return loadErr
 		}
+		target, targetErr := repo.FindGenerationTarget(ctx, intent.TargetID)
+		if targetErr != nil || validateIntentTargetBinding(target, intent) != nil {
+			return conflict("Generation Provider Target snapshot has drifted")
+		}
 		binding, bindingErr := repo.LatestProviderBindingForUpdate(ctx, intent.WorkspaceID, intent.ProjectID)
 		if bindingErr != nil {
 			return bindingErr
@@ -474,9 +484,10 @@ func (service *ProviderService) prepareProviderSubmission(
 		}
 		request = domain.GenerationRequest{
 			ID: requestID, WorkspaceID: intent.WorkspaceID, ProjectID: intent.ProjectID, IntentID: intent.ID,
+			TargetID:  intent.TargetID,
 			BindingID: binding.ID, BindingRevision: binding.Revision, Capability: binding.Capability,
 			ProviderKey: binding.ProviderKey, ModelKey: binding.ModelKey, CredentialRef: binding.CredentialRef,
-			RequestKey: "generation-request:" + requestID, InputHash: intent.InputHash, Units: intent.Units,
+			RequestKey: "generation-request:" + requestID, TargetHash: intent.TargetHash, Units: intent.Units,
 			CreatedBy: intent.CreatedBy, CreatedAt: now,
 		}
 		request.ContentHash, loadErr = generationRequestContentHash(request)
@@ -506,7 +517,7 @@ func (service *ProviderService) prepareProviderSubmission(
 		if loadErr != nil {
 			return loadErr
 		}
-		invocation.intent, invocation.request, invocation.job = intent, request, job
+		invocation.intent, invocation.request, invocation.job, invocation.target = intent, request, job, target
 		invocation.callRemote, invocation.submit = true, true
 		return nil
 	})
@@ -548,6 +559,10 @@ func (service *ProviderService) prepareProviderReconcile(
 		if loadErr = service.validateProviderFacts(ctx, repo, costs, quotas, intent, request, job); loadErr != nil {
 			return loadErr
 		}
+		target, targetErr := repo.FindGenerationTarget(ctx, request.TargetID)
+		if targetErr != nil || validateProviderTargetBinding(target, intent, request) != nil {
+			return conflict("Generation Provider Target snapshot has drifted")
+		}
 		if providerJobTerminal(job.Status) {
 			result, resultErr := service.loadProviderExecutionResult(ctx, repo, costs, quotas, intent, request, job)
 			if resultErr != nil {
@@ -563,7 +578,7 @@ func (service *ProviderService) prepareProviderReconcile(
 			invocation.result = result
 			return nil
 		}
-		invocation.intent, invocation.request, invocation.job = intent, request, job
+		invocation.intent, invocation.request, invocation.job, invocation.target = intent, request, job, target
 		invocation.callRemote = true
 		return nil
 	})
@@ -780,12 +795,17 @@ func (service *ProviderService) validateProviderFacts(
 ) error {
 	if validateIntent(intent) != nil || validateGenerationRequest(request) != nil || validateProviderJob(job) != nil ||
 		request.IntentID != intent.ID || job.IntentID != intent.ID || job.RequestID != request.ID ||
+		request.TargetID != intent.TargetID || request.TargetHash != intent.TargetHash ||
 		request.WorkspaceID != intent.WorkspaceID || request.ProjectID != intent.ProjectID ||
 		job.WorkspaceID != intent.WorkspaceID || job.ProjectID != intent.ProjectID ||
 		request.ProviderKey != job.ProviderKey || request.RequestKey != job.RequestKey ||
 		intent.GenerationRequestID != request.ID || intent.ProviderJobID != job.ID ||
 		intent.ProviderReceiptID != job.ProviderReceiptID {
 		return conflict("Generation Provider facts have drifted")
+	}
+	target, err := repo.FindGenerationTarget(ctx, request.TargetID)
+	if err != nil || validateProviderTargetBinding(target, intent, request) != nil {
+		return conflict("Generation Provider Target snapshot has drifted")
 	}
 	binding, err := repo.FindProviderBinding(ctx, request.BindingID)
 	if err != nil || validateProviderBinding(binding) != nil || binding.WorkspaceID != request.WorkspaceID ||
@@ -954,8 +974,10 @@ func replayProviderBinding(
 
 func validateAuthorizationBinding(intent domain.Intent, authorization domain.ExecutionAuthorization, initial bool) error {
 	if validateIntent(intent) != nil || !validUUID(authorization.IntentID) || !validUUID(authorization.ClaimToken) ||
+		!validUUID(authorization.TargetID) || !intentHashPattern.MatchString(authorization.TargetHash) ||
 		intent.ID != authorization.IntentID || intent.ClaimToken == nil || *intent.ClaimToken != authorization.ClaimToken ||
-		intent.InputHash != authorization.InputHash || intent.CostReservationID != authorization.CostReservationID ||
+		intent.TargetID != authorization.TargetID || intent.TargetHash != authorization.TargetHash ||
+		intent.CostReservationID != authorization.CostReservationID ||
 		intent.QuotaReservationID != authorization.QuotaReservationID ||
 		intent.ClaimFencingVersion != authorization.ClaimFencingVersion || authorization.IntentRevision != 3 ||
 		intent.Units != authorization.Units || intent.ClaimExpiresAt == nil ||
@@ -964,6 +986,28 @@ func validateAuthorizationBinding(intent domain.Intent, authorization domain.Exe
 	}
 	if initial && (intent.Status != domain.IntentClaimed || intent.Revision != authorization.IntentRevision) {
 		return conflict("Generation Provider authorization is no longer claimable")
+	}
+	return nil
+}
+
+func validateIntentTargetBinding(target domain.GenerationTarget, intent domain.Intent) error {
+	if domain.ValidateGenerationTarget(target) != nil || target.ID != intent.TargetID || target.WorkspaceID != intent.WorkspaceID ||
+		target.ProjectID != intent.ProjectID || target.TargetHash != intent.TargetHash ||
+		target.CreatedBy != intent.CreatedBy {
+		return conflict("GenerationTarget and intent have drifted")
+	}
+	return nil
+}
+
+func validateProviderTargetBinding(
+	target domain.GenerationTarget,
+	intent domain.Intent,
+	request domain.GenerationRequest,
+) error {
+	if err := validateIntentTargetBinding(target, intent); err != nil || request.TargetID != target.ID ||
+		request.TargetHash != target.TargetHash || request.WorkspaceID != target.WorkspaceID ||
+		request.ProjectID != target.ProjectID || request.CreatedBy != target.CreatedBy || request.Units != intent.Units {
+		return conflict("GenerationTarget, intent and request have drifted")
 	}
 	return nil
 }
@@ -984,10 +1028,10 @@ func validateProviderBinding(value domain.ProviderBinding) error {
 
 func validateGenerationRequest(value domain.GenerationRequest) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || !validUUID(value.ProjectID) ||
-		!validUUID(value.IntentID) || !validUUID(value.BindingID) || value.BindingRevision < 1 ||
+		!validUUID(value.IntentID) || !validUUID(value.TargetID) || !validUUID(value.BindingID) || value.BindingRevision < 1 ||
 		value.Capability != costdomain.MetricGenerationImage || !providerIdentifierPattern.MatchString(value.ProviderKey) ||
 		!providerIdentifierPattern.MatchString(value.ModelKey) || !credentialReferencePattern.MatchString(value.CredentialRef) ||
-		value.RequestKey != "generation-request:"+value.ID || !intentHashPattern.MatchString(value.InputHash) ||
+		value.RequestKey != "generation-request:"+value.ID || !intentHashPattern.MatchString(value.TargetHash) ||
 		value.Units < 1 || !validUUID(value.CreatedBy) || value.CreatedAt.IsZero() {
 		return conflict("Generation request facts have drifted")
 	}
@@ -1130,12 +1174,16 @@ func providerJobTerminal(status string) bool {
 	return status == domain.ProviderJobSucceeded || status == domain.ProviderJobFailed
 }
 
-func providerSubmission(request domain.GenerationRequest, job domain.ProviderJob) ProviderSubmission {
+func providerSubmission(
+	request domain.GenerationRequest,
+	job domain.ProviderJob,
+	target domain.GenerationTarget,
+) ProviderSubmission {
 	return ProviderSubmission{
 		WorkspaceID: request.WorkspaceID, ProjectID: request.ProjectID, ProviderJobID: job.ID,
 		RequestID: request.ID, RequestKey: request.RequestKey, IntentID: request.IntentID,
 		ProviderKey: request.ProviderKey, ModelKey: request.ModelKey, CredentialRef: request.CredentialRef,
-		InputHash: request.InputHash, Units: request.Units,
+		TargetHash: request.TargetHash, Units: request.Units, Target: target,
 	}
 }
 
@@ -1149,10 +1197,10 @@ func providerBindingContentHash(value domain.ProviderBinding) (string, error) {
 
 func generationRequestContentHash(value domain.GenerationRequest) (string, error) {
 	return platformcommand.InputHash(generationRequestHashInput{
-		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID, IntentID: value.IntentID,
+		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID, IntentID: value.IntentID, TargetID: value.TargetID,
 		BindingID: value.BindingID, BindingRevision: value.BindingRevision, Capability: value.Capability,
 		ProviderKey: value.ProviderKey, ModelKey: value.ModelKey, CredentialRef: value.CredentialRef,
-		RequestKey: value.RequestKey, InputHash: value.InputHash, Units: value.Units,
+		RequestKey: value.RequestKey, TargetHash: value.TargetHash, Units: value.Units,
 	})
 }
 
@@ -1191,6 +1239,9 @@ func normalizeProviderError(err error) error {
 	}
 	if errors.Is(err, ErrProviderBindingNotFound) {
 		return notFound("Generation Provider binding is not set")
+	}
+	if errors.Is(err, ErrGenerationTargetNotFound) {
+		return notFound("GenerationTarget not found")
 	}
 	if errors.Is(err, ErrGenerationRequestNotFound) || errors.Is(err, ErrProviderJobNotFound) ||
 		errors.Is(err, ErrProviderResultReceiptNotFound) {

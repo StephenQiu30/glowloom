@@ -20,7 +20,7 @@ func TestGenerationTargetCanonicalizesReferenceAssetAndRejectsMixedPayloads(t *t
 			ContentHash: generationHash("1"),
 		},
 		PolicySnapshotRef: domain.FrozenOwnerReference{
-			Owner: "production", Resource: "effective_style_snapshot",
+			Owner: "preset", Resource: "effective_style_snapshot",
 			ID: "30000000-0000-4000-8000-000000000003", Revision: 3,
 			ContentHash: generationHash("2"),
 		},

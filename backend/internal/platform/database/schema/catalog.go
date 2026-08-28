@@ -51,6 +51,7 @@ func Catalog() []any {
 		&model.QuotaPolicy{},
 		&model.QuotaCounter{},
 		&model.QuotaReservation{},
+		&model.GenerationTarget{},
 		&model.GenerationIntent{},
 		&model.GenerationProviderBindingVersion{},
 		&model.GenerationRequest{},

@@ -31,6 +31,7 @@ type GenerationRequest struct {
 	WorkspaceID     uuid.UUID                        `gorm:"type:uuid;not null;index"`
 	ProjectID       uuid.UUID                        `gorm:"type:uuid;not null;index"`
 	IntentID        uuid.UUID                        `gorm:"type:uuid;not null;uniqueIndex:uq_gen_request_intent"`
+	TargetID        uuid.UUID                        `gorm:"type:uuid;not null;index"`
 	BindingID       uuid.UUID                        `gorm:"type:uuid;not null;index"`
 	BindingRevision int64                            `gorm:"not null;check:ck_gen_request_binding_revision,binding_revision >= 1"`
 	Capability      string                           `gorm:"type:varchar(64);not null;check:ck_gen_request_capability,capability = 'generation.image'"`
@@ -38,7 +39,7 @@ type GenerationRequest struct {
 	ModelKey        string                           `gorm:"type:varchar(120);not null"`
 	CredentialRef   string                           `gorm:"type:varchar(160);not null"`
 	RequestKey      string                           `gorm:"type:varchar(96);not null;uniqueIndex:uq_gen_request_key"`
-	InputHash       string                           `gorm:"type:char(64);not null;check:ck_gen_request_input_hash,char_length(input_hash) = 64"`
+	TargetHash      string                           `gorm:"type:char(64);not null;check:ck_gen_request_target_hash,char_length(target_hash) = 64"`
 	Units           int64                            `gorm:"not null;check:ck_gen_request_units,units > 0"`
 	ContentHash     string                           `gorm:"type:char(64);not null;check:ck_gen_request_hash,char_length(content_hash) = 64"`
 	CreatedBy       uuid.UUID                        `gorm:"type:uuid;not null"`
@@ -46,6 +47,7 @@ type GenerationRequest struct {
 	Workspace       Workspace                        `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	Project         Project                          `gorm:"foreignKey:ProjectID,WorkspaceID;references:ID,WorkspaceID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	Intent          GenerationIntent                 `gorm:"foreignKey:IntentID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Target          GenerationTarget                 `gorm:"foreignKey:TargetID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	Binding         GenerationProviderBindingVersion `gorm:"foreignKey:BindingID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	Creator         UserAccount                      `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }

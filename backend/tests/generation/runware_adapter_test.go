@@ -252,7 +252,7 @@ func generationReferenceTarget(t *testing.T) domain.GenerationTarget {
 			ID: "40000000-0000-4000-8000-000000000004", Revision: 1, ContentHash: generationHash("1"),
 		},
 		PolicySnapshotRef: domain.FrozenOwnerReference{
-			Owner: "production", Resource: "effective_style_snapshot",
+			Owner: "preset", Resource: "effective_style_snapshot",
 			ID: "30000000-0000-4000-8000-000000000003", Revision: 3, ContentHash: generationHash("2"),
 		},
 		ReferenceAsset: &domain.ReferenceAssetTarget{
@@ -286,7 +286,7 @@ func runwareSubmission(target domain.GenerationTarget) generationapp.ProviderSub
 		RequestID:     "91000000-0000-4000-8000-000000000010", RequestKey: "reference-asset-request",
 		IntentID: "92000000-0000-4000-8000-000000000011", ProviderKey: "runware",
 		ModelKey: "runware:z-image@turbo", CredentialRef: "env/runware_api_key",
-		InputHash: target.TargetHash, Units: 4, Target: target,
+		TargetHash: target.TargetHash, Units: 4, Target: target,
 	}
 }
 
