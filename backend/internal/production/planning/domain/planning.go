@@ -3,6 +3,8 @@ package domain
 import (
 	"encoding/json"
 	"time"
+
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 )
 
 type Block struct {
@@ -75,19 +77,79 @@ type ImportCommit struct {
 }
 
 type Dialogue struct {
-	ID          string `json:"id"`
-	Speaker     string `json:"speaker"`
-	Text        string `json:"text"`
-	SourceStart int    `json:"source_start"`
-	SourceEnd   int    `json:"source_end"`
+	ID              string                     `json:"id"`
+	TemporaryKey    string                     `json:"temporary_key,omitempty"`
+	Speaker         string                     `json:"speaker"`
+	SpeakerIdentity *PlanningIdentityReference `json:"speaker_identity,omitempty"`
+	Text            string                     `json:"text"`
+	SourceStart     int                        `json:"source_start"`
+	SourceEnd       int                        `json:"source_end"`
+	Evidence        []bibledomain.Evidence     `json:"evidence,omitempty"`
 }
 
 type NarrativeUnit struct {
+	ID           string                      `json:"id"`
+	TemporaryKey string                      `json:"temporary_key,omitempty"`
+	Kind         string                      `json:"kind"`
+	Text         string                      `json:"text"`
+	SourceStart  int                         `json:"source_start"`
+	SourceEnd    int                         `json:"source_end"`
+	Participants []PlanningIdentityReference `json:"participants,omitempty"`
+	Evidence     []bibledomain.Evidence      `json:"evidence,omitempty"`
+}
+
+type PlanningIdentityReference struct {
+	EntityKey            string `json:"entity_key"`
+	Kind                 string `json:"kind"`
+	AssetID              string `json:"asset_id"`
+	AssetRevision        int    `json:"asset_revision"`
+	AssetContentHash     string `json:"asset_content_hash"`
+	SpecificationID      string `json:"specification_id"`
+	SpecificationVersion int    `json:"specification_version"`
+	SpecificationHash    string `json:"specification_hash"`
+}
+
+type PlanningStateReference struct {
 	ID          string `json:"id"`
-	Kind        string `json:"kind"`
-	Text        string `json:"text"`
-	SourceStart int    `json:"source_start"`
-	SourceEnd   int    `json:"source_end"`
+	StateKey    string `json:"state_key"`
+	Revision    int    `json:"revision"`
+	ContentHash string `json:"content_hash"`
+}
+
+type Occurrence struct {
+	ID           string                    `json:"id"`
+	TemporaryKey string                    `json:"temporary_key"`
+	SceneID      string                    `json:"scene_id"`
+	Summary      string                    `json:"summary"`
+	SourceStart  int                       `json:"source_start"`
+	SourceEnd    int                       `json:"source_end"`
+	Identity     PlanningIdentityReference `json:"identity"`
+	State        PlanningStateReference    `json:"state"`
+	Evidence     []bibledomain.Evidence    `json:"evidence"`
+}
+
+type PlanningClaimParticipant struct {
+	Role     string                    `json:"role"`
+	Identity PlanningIdentityReference `json:"identity"`
+}
+
+type PlanningClaimAnchor struct {
+	Role         string `json:"role"`
+	Kind         string `json:"kind"`
+	FragmentID   string `json:"fragment_id"`
+	TemporaryKey string `json:"temporary_key"`
+}
+
+type PlanningClaim struct {
+	ID           string                     `json:"id"`
+	TemporaryKey string                     `json:"temporary_key"`
+	ClaimType    string                     `json:"claim_type"`
+	Scope        string                     `json:"scope"`
+	Polarity     string                     `json:"polarity"`
+	Status       string                     `json:"status"`
+	Participants []PlanningClaimParticipant `json:"participants"`
+	Anchors      []PlanningClaimAnchor      `json:"anchors"`
+	Evidence     []bibledomain.Evidence     `json:"evidence"`
 }
 
 type ProductionTask struct {
@@ -99,14 +161,20 @@ type ProductionTask struct {
 }
 
 type Scene struct {
-	ID             string           `json:"id"`
-	Heading        string           `json:"heading"`
-	Position       int              `json:"position"`
-	SourceStart    int              `json:"source_start"`
-	SourceEnd      int              `json:"source_end"`
-	Dialogues      []Dialogue       `json:"dialogues"`
-	NarrativeUnits []NarrativeUnit  `json:"narrative_units"`
-	Tasks          []ProductionTask `json:"tasks"`
+	ID               string                     `json:"id"`
+	TemporaryKey     string                     `json:"temporary_key,omitempty"`
+	Heading          string                     `json:"heading"`
+	Position         int                        `json:"position"`
+	SourceStart      int                        `json:"source_start"`
+	SourceEnd        int                        `json:"source_end"`
+	LocationIdentity *PlanningIdentityReference `json:"location_identity,omitempty"`
+	LocationState    *PlanningStateReference    `json:"location_state,omitempty"`
+	Evidence         []bibledomain.Evidence     `json:"evidence,omitempty"`
+	Dialogues        []Dialogue                 `json:"dialogues"`
+	NarrativeUnits   []NarrativeUnit            `json:"narrative_units"`
+	Occurrences      []Occurrence               `json:"occurrences,omitempty"`
+	Claims           []PlanningClaim            `json:"claims,omitempty"`
+	Tasks            []ProductionTask           `json:"tasks"`
 }
 
 type Structure struct {

@@ -166,7 +166,7 @@ func BuildEpisodePlanningCandidateSet(
 	if err != nil {
 		return EpisodePlanningCandidateSet{}, nil, "", "", err
 	}
-	contentHash, err := episodeAnalysisCanonicalHash(value)
+	contentHash, err := EpisodePlanningCandidateSetContentHash(value)
 	if err != nil {
 		return EpisodePlanningCandidateSet{}, nil, "", "", err
 	}
@@ -175,6 +175,10 @@ func BuildEpisodePlanningCandidateSet(
 		return EpisodePlanningCandidateSet{}, nil, "", "", err
 	}
 	return value, encoded, contentHash, stageKey, nil
+}
+
+func EpisodePlanningCandidateSetContentHash(value EpisodePlanningCandidateSet) (string, error) {
+	return episodeAnalysisCanonicalHash(value)
 }
 
 func EpisodePlanningCandidateSetStageInstanceKey(manifest EpisodeReconcileManifest) (string, error) {
@@ -289,6 +293,21 @@ func DecodeEpisodeReconciliationCandidate(
 		}
 	}
 	return value, nil
+}
+
+// ValidateEpisodeReconciliationCandidate validates a frozen Episode candidate
+// without requiring its intermediate map/reduce children. Owner application
+// uses it after the repository has verified the aggregate revision and leaves.
+func ValidateEpisodeReconciliationCandidate(
+	value EpisodeReconciliationCandidate,
+	scope EpisodeCandidateScope,
+) error {
+	if value.EpisodeID != scope.EpisodeID || value.ScriptVersionID != scope.ScriptVersionID ||
+		value.SourceStart != scope.SourceStart || value.SourceEnd != scope.SourceEnd {
+		return errors.New("Episode reconciliation candidate escaped its frozen Episode")
+	}
+	issues := append(append([]bibledomain.ReviewIssue(nil), value.Conflicts...), value.ReviewIssues...)
+	return validateEpisodeCandidateContent(value.OrderedFragments, value.Claims, issues, scope)
 }
 
 func validateEpisodeCandidateContent(
