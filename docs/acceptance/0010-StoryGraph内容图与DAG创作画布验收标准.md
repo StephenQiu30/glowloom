@@ -569,7 +569,7 @@
 - 失败披露与范围：真实实现曾分别暴露 Candidate ID/Draft Set ID 混用、冻结后 revision 回放、PostgreSQL `jsonb` 字段顺序以及最终镜像更新时 Event Worker 首次 DNS 未就绪；均修正根因并从完整旅程或故障矩阵起点复跑，失败轮次不计通过。以上证据完成 `SG-PRD-008` 与当前 Intent Gate；覆盖七类 Gate 的复合 `SG-REV-006`–`008` 仍待后续视觉选择和正式 Shot Gate，因此保持未勾选。reference asset 生成、三视图 QC/选择、detail shot、正式 Shot/Binding/Graph、Canvas、完整原稿与最终浏览器验收尚未完成；`agent-browser` 本次未运行。
 - Git：实现、测试与 Evidence 由描述冻结已审核分镜意图的 feature 提交承载；提交标题和正文只表达功能，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I19`，其余保持未通过。下一步只消费 `approved_storyboard_intents` 实现 reference asset 的 Cost/Quota/Provider Job/Artifact 执行与 unknown 对账；在此之前不得启动 detail shot、正式 Shot Apply、Canvas 写入或 `agent-browser`。
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I19`，其余保持未通过。当前继续只消费 `approved_storyboard_intents` 实现 reference asset 的 Cost/Quota/Provider Job/Artifact 执行与 unknown 对账；在此之前不得启动 detail shot、正式 Shot Apply、Canvas 写入或 `agent-browser`。
 
 ### GenerationTarget 与 Runware 离线任务合同（2026-08-29）
 
@@ -591,3 +591,14 @@
 - 日志边界：本轮只复用已经启动的 Logstash `127.0.0.1:5000`，没有启动、重启或新增 Logstash，也没有引入或运行 Filebeat。当前日志链继续是 `Backend → Logstash → Elasticsearch/Kibana`，Kafka 只承载业务事件。
 - 未通过范围：本交付单元仍不从 `approved_storyboard_intents` 构造 Target，也未执行真实 Runware、私有下载/Staging 或 Artifact/Candidate 全链，因此 `SG-VIS-001`–`005`、`SG-OPS-002` 和 `SG-I20` 保持未勾选。下一步只实现 approved intent Target Builder；全部开发完成前继续不运行 `agent-browser`。
 - Git：本 Evidence 与实现由描述 GenerationTarget 唯一事实与执行绑定的完整功能提交承载；提交标题和正文不包含任务编号、任务名或阶段名，未推送、未创建 PR。
+
+### 已批准分镜意图到角色参考图目标（2026-08-29）
+
+- Red 与职责边界：新增独立 `backend/tests/generation/reference_target_builder_test.go`，先以缺少 Builder Application 合同编译失败，再固定只消费 approved intent ID/hash、重复角色/状态需求合并、确定性 composite 三视图 Prompt、同 Receipt 重放，以及 approved Hash、Specification/State 混用和无角色目标时零写入失败关闭。测试只位于 `backend/tests`，未与业务代码混放。
+- 唯一 Owner 链：Generation Application 不读取当前 Project 画风、不接受调用方 Prompt，也不复制 Storyboard DTO。GORM Adapter 只按 `storyboard.freeze_intent_set` 回执 ID 严格解码并重算 approved intent/visual requirements Hash，锁定同一 Draft Set、Scene Batch 与成功 Agent Invocation，从原 `draft_storyboard` Stage Input 取得冻结的 `preset/effective-style`；随后用成熟 GORM Model 重建并校验 Character Asset、ProductionBible SpecificationVersion 与 AssetState 的不可变 Hash。没有 Migration、DDL、Raw SQL、第二 ORM、第二数据库或 Agent Writer。
+- Target 与幂等：同一 approved set 内相同 Character Identity/AssetState 的重复视觉需求只产生一个 `character-reference-sheet-v1` Target；冻结 front/profile/back、`1536×1024 PNG`、四 Candidate、Specification/State JSON 与 Style Snapshot。Target 和 `generation.reference_targets.build` Command Receipt 在同一 PostgreSQL/GORM 事务中提交；重放返回相同 Target ID/Hash/Receipt。地点和道具需求不会被伪装成 READY；当前 Character MVP 只构造可支持的角色 Target，若没有角色缺图则显式冲突。
+- 真实漂移与付费边界：现有多集 `Script → Evidence → Bible → Episode/Planning → Core StoryGraph → Storyboard Draft → Intent Gate` 旅程已扩展到 Target Builder。全新专属 PostgreSQL 并复用本机 Temporal 执行定向旅程通过；对持久化 SpecificationVersion Content Hash 做 GORM `UpdateColumn` 故障注入后，Builder 返回 `state_conflict` 且没有新 Target Receipt。成功路径只新增不可变 GenerationTarget/Builder Receipt，Generation Intent、Cost/Quota、Provider Job、Artifact、正式 Shot 和新 StoryGraphVersion 仍为零；专属数据库已精确删除。
+- 验证与 CI：`go test -count=1 ./tests/generation -run ReferenceTargetBuilder`、`go vet ./internal/generation/... ./tests/generation/... ./tests/workflow/...` 通过；`LANVERSE_TEST_DATABASE_URL=... LANVERSE_TEST_TEMPORAL_ADDRESS=127.0.0.1:7233 go test -count=1 -p 1 ./tests/workflow -run '^TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce$'` 在全新数据库通过，最终谱系补强后的复跑耗时 `47.020s`。最终又以另一专属空 PostgreSQL、现有 Temporal 与 MinIO 执行 Backend `gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Generation `11.273s`、Workflow `116.067s`；专属数据库和 MinIO Bucket 均已精确删除。Kafka/Elasticsearch 外部集成未在本单元重复配置或冒充通过。
+- 跨项目、Compose 与镜像：Agent Ruff check/format、Pyright 与 Pytest 通过，结果 `39 passed, 4 skipped`，四项仍只是显式真实 Codex CLI opt-in；本单元未修改 Agent。Frontend OpenAPI 生成零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试与 Next.js production build 全通过。开发/环境/生产 Compose 分层渲染通过，项目默认服务仍只有 Backend/Frontend，环境 Compose 默认不启动服务；Backend 镜像重建后只存在 `/usr/local/bin/lanverse` 单入口，专项镜像已删除。
+- 日志与剩余范围：本轮仅确认并复用已启动的 Logstash `127.0.0.1:5000`，没有引入、启动或配置 Filebeat，也没有启动或重启 Logstash。Target Builder 尚未成为正式 `reference_asset` Workflow Executor，未创建 Cost/Quota/Provider Job，未执行真实 Runware、私有下载/Staging 或 Artifact/Candidate 全链，因此 `SG-VIS-001`–`005`、`SG-OPS-002` 与 `SG-I20` 继续保持未勾选；全部开发完成前不运行 `agent-browser`。
+- Git：本 Evidence 与实现由描述从批准分镜构造角色参考图目标的完整 feature 提交承载；提交标题和正文不包含任务编号、任务名或阶段名，未推送、未创建 PR。

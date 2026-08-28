@@ -24,6 +24,9 @@ import (
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
+	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
+	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
+	generationdomain "github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
@@ -1275,11 +1278,12 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 			t.Fatalf("Storyboard aggregate references a non-Scene CandidateRevision: %#v", leaf)
 		}
 	}
-	var storyboardTaskCount, storyboardShotCount, storyboardImageBindingCount, generationIntentCount, providerJobCount int64
+	var storyboardTaskCount, storyboardShotCount, storyboardImageBindingCount, generationTargetCount, generationIntentCount, providerJobCount int64
 	var costEstimateCount, costReservationCount, quotaReservationCount, storyboardArtifactCount, storyboardGraphVersionCount int64
 	for target, destination := range map[any]*int64{
 		&model.StoryboardShot{}:                    &storyboardShotCount,
 		&model.StoryboardShotImageBindingVersion{}: &storyboardImageBindingCount,
+		&model.GenerationTarget{}:                  &generationTargetCount,
 		&model.GenerationIntent{}:                  &generationIntentCount,
 		&model.GenerationProviderJob{}:             &providerJobCount,
 		&model.CostEstimate{}:                      &costEstimateCount,
@@ -1297,11 +1301,11 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	).Count(&storyboardTaskCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if storyboardTaskCount != 0 || storyboardShotCount != 0 || storyboardImageBindingCount != 0 ||
+	if storyboardTaskCount != 0 || storyboardShotCount != 0 || storyboardImageBindingCount != 0 || generationTargetCount != 0 ||
 		generationIntentCount != 0 || providerJobCount != 0 || costEstimateCount != 0 || costReservationCount != 0 ||
 		quotaReservationCount != 0 || storyboardArtifactCount != 0 || storyboardGraphVersionCount != 1 {
-		t.Fatalf("Storyboard intent drafting crossed its candidate-only boundary: tasks=%d shots=%d bindings=%d intents=%d jobs=%d estimates=%d reservations=%d quotas=%d artifacts=%d graph_versions=%d",
-			storyboardTaskCount, storyboardShotCount, storyboardImageBindingCount, generationIntentCount, providerJobCount,
+		t.Fatalf("Storyboard intent drafting crossed its candidate-only boundary: tasks=%d shots=%d bindings=%d targets=%d intents=%d jobs=%d estimates=%d reservations=%d quotas=%d artifacts=%d graph_versions=%d",
+			storyboardTaskCount, storyboardShotCount, storyboardImageBindingCount, generationTargetCount, generationIntentCount, providerJobCount,
 			costEstimateCount, costReservationCount, quotaReservationCount, storyboardArtifactCount, storyboardGraphVersionCount)
 	}
 
@@ -1507,6 +1511,70 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		intentOutput.Bindings[0].ContentHash != approvedIntents.ContentHash {
 		t.Fatalf("Storyboard Intent Gate output=%#v node=%#v err=%v", intentOutput, storyboardGateNode, err)
 	}
+	referenceTargetBuilder := generationapp.NewReferenceTargetBuilderService(
+		generationgorm.New(database),
+		generationapp.ReferenceTargetBuilderConfig{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+	)
+	referenceTargetCommand := generationapp.BuildReferenceTargetsCommand{
+		ApprovedIntentSetID: approvedIntents.ID, ExpectedContentHash: approvedIntents.ContentHash,
+		IdempotencyKey: "workflow-reference-targets:" + approvedIntents.ID,
+	}
+	referenceTargets, err := referenceTargetBuilder.BuildReferenceTargets(ctx, generationapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, referenceTargetCommand)
+	if err != nil || len(referenceTargets.Targets) == 0 ||
+		referenceTargets.Receipt.Operation != "generation.reference_targets.build" ||
+		referenceTargets.Receipt.ResourceID != approvedIntents.ID {
+		t.Fatalf("build reference targets from approved Storyboard Intents: result=%#v err=%v", referenceTargets, err)
+	}
+	for _, target := range referenceTargets.Targets {
+		if generationdomain.ValidateGenerationTarget(target) != nil ||
+			target.SourceOwnerRef.ID != approvedIntents.ID || target.SourceOwnerRef.ContentHash != approvedIntents.ContentHash ||
+			target.PolicySnapshotRef.Owner != "preset" || target.ReferenceAsset == nil ||
+			target.ReferenceAsset.AssetKind != "character" || target.ReferenceAsset.OutputKind != "reference_sheet" ||
+			!slices.Equal(target.ReferenceAsset.RequiredViewRoles, []string{"front", "profile", "back"}) {
+			t.Fatalf("approved reference target is incomplete: %#v", target)
+		}
+	}
+	replayedReferenceTargets, err := referenceTargetBuilder.BuildReferenceTargets(ctx, generationapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, referenceTargetCommand)
+	if err != nil || replayedReferenceTargets.Receipt.ID != referenceTargets.Receipt.ID ||
+		len(replayedReferenceTargets.Targets) != len(referenceTargets.Targets) {
+		t.Fatalf("replay approved reference targets: result=%#v err=%v", replayedReferenceTargets, err)
+	}
+	func() {
+		driftDatabase := database.Begin()
+		if driftDatabase.Error != nil {
+			t.Fatalf("begin reference target drift transaction: %v", driftDatabase.Error)
+		}
+		defer func() { _ = driftDatabase.Rollback().Error }()
+		specificationID := referenceTargets.Targets[0].ReferenceAsset.SpecificationVersionRef.ID
+		if updateErr := driftDatabase.Model(&model.ProductionBibleSpecificationVersion{}).
+			Where("id = ?", specificationID).UpdateColumn("content_hash", strings.Repeat("0", 64)).Error; updateErr != nil {
+			t.Fatalf("inject reference target Specification drift: %v", updateErr)
+		}
+		driftBuilder := generationapp.NewReferenceTargetBuilderService(
+			generationgorm.New(driftDatabase),
+			generationapp.ReferenceTargetBuilderConfig{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+		)
+		driftCommand := referenceTargetCommand
+		driftCommand.IdempotencyKey = "workflow-reference-targets-drift:" + approvedIntents.ID
+		_, driftErr := driftBuilder.BuildReferenceTargets(ctx, generationapp.Actor{
+			UserID: fixture.userID.String(), TokenVersion: 1,
+		}, driftCommand)
+		var typedDrift *generationapp.Error
+		if !errors.As(driftErr, &typedDrift) || typedDrift.Code != "state_conflict" {
+			t.Fatalf("drifted approved Specification reached target persistence: %T %v", driftErr, driftErr)
+		}
+		var driftReceiptCount int64
+		if countErr := driftDatabase.Model(&model.CommandReceipt{}).Where(
+			"workspace_id = ? AND operation = ? AND idempotency_key = ?",
+			fixture.workspaceID, "generation.reference_targets.build", driftCommand.IdempotencyKey,
+		).Count(&driftReceiptCount).Error; countErr != nil || driftReceiptCount != 0 {
+			t.Fatalf("drifted approved Specification wrote a target receipt: count=%d err=%v", driftReceiptCount, countErr)
+		}
+	}()
 	var intentFreezeReceiptCount int64
 	if err = database.Model(&model.CommandReceipt{}).Where(
 		"workspace_id = ? AND operation = ? AND resource_id = ?",
@@ -1517,6 +1585,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	for target, destination := range map[any]*int64{
 		&model.StoryboardShot{}:                    &storyboardShotCount,
 		&model.StoryboardShotImageBindingVersion{}: &storyboardImageBindingCount,
+		&model.GenerationTarget{}:                  &generationTargetCount,
 		&model.GenerationIntent{}:                  &generationIntentCount,
 		&model.GenerationProviderJob{}:             &providerJobCount,
 		&model.CostEstimate{}:                      &costEstimateCount,
@@ -1530,10 +1599,11 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		}
 	}
 	if intentFreezeReceiptCount != 1 || storyboardShotCount != 0 || storyboardImageBindingCount != 0 ||
+		generationTargetCount != int64(len(referenceTargets.Targets)) ||
 		generationIntentCount != 0 || providerJobCount != 0 || costEstimateCount != 0 || costReservationCount != 0 ||
 		quotaReservationCount != 0 || storyboardArtifactCount != 0 || storyboardGraphVersionCount != 1 {
-		t.Fatalf("Storyboard Intent Gate crossed the paid/formal boundary: receipts=%d shots=%d bindings=%d intents=%d jobs=%d estimates=%d reservations=%d quotas=%d artifacts=%d graph_versions=%d",
-			intentFreezeReceiptCount, storyboardShotCount, storyboardImageBindingCount, generationIntentCount, providerJobCount,
+		t.Fatalf("Approved target build crossed the paid/formal boundary: receipts=%d shots=%d bindings=%d targets=%d intents=%d jobs=%d estimates=%d reservations=%d quotas=%d artifacts=%d graph_versions=%d",
+			intentFreezeReceiptCount, storyboardShotCount, storyboardImageBindingCount, generationTargetCount, generationIntentCount, providerJobCount,
 			costEstimateCount, costReservationCount, quotaReservationCount, storyboardArtifactCount, storyboardGraphVersionCount)
 	}
 
