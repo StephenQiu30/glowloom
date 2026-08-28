@@ -202,6 +202,8 @@ Workflow Node
 
 任何网络调用都在 PostgreSQL 事务外。Executor 使用 NodeRun 稳定幂等身份；`accepted/unknown` 返回正常 `RETRYING`，Temporal Timer 后对账同一 Job。Node Cache 不承担远端防重，也不缓存 RETRYING/UNKNOWN；只有完整 CandidateSet 的 canonical `node-output-v1` 可成为已完成输出。
 
+一个 NodeRun 只绑定一个 Generation Intent。`reference_asset` 节点必须在静态 DAG Config 中用 `asset_id + asset_state_id` 从同一 `approved_storyboard_intents` 输出精确选择一个 Target；同一批准集存在多个角色或状态时，由多个节点并行消费，不能在单节点内循环创建多个 Intent，也不能用数组顺序或运行时 Target ID 选择。Target Builder Receipt 以 WorkflowRun 为稳定边界供这些节点共同重放，每个 NodeRun 的 Preparation Receipt 独立且稳定。
+
 `reference_asset` Node 输出 `generation_candidate_set`，Human Gate Apply 后输出精确 `asset_version`。`shot_frame` Node 输出同类型 CandidateSet，但 Human Gate Apply 后输出 `shot_image_binding_version`；HumanTask Subject/Owner Operation 必须区分两种 Target，不能用同一 Apply 分支猜测。
 
 取消在提交前可以原子释放 Cost/Quota；已 Submit 的 Job 进入 Reconcile，不先释放 Reservation，也不把 Temporal CANCELLED 当作远端未执行。只有官方取消合同在未来 Requirement 中明确并经真实测试后才加入 Provider Cancel。

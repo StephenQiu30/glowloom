@@ -43,6 +43,8 @@ func NewWorkflowRuntime(
 	reviews *reviewapp.Service,
 	bindings workflowproduction.ShotImageWorkflowOwner,
 	candidateSets workflowreview.CandidateSetSource,
+	referenceTargets workflowgeneration.ReferenceTargetBuilder,
+	preparations workflowgeneration.ImagePreparation,
 	segments workflowproduction.EpisodeSegmentationOwner,
 	episodes workflowproduction.EpisodeAnalysisOwner,
 ) (*workflowapp.RuntimeService, error) {
@@ -54,12 +56,17 @@ func NewWorkflowRuntime(
 	if candidateSets != nil {
 		humanTasks = workflowreview.NewWithGeneration(reviews, candidateSets)
 	}
+	if (referenceTargets == nil) != (preparations == nil) {
+		return nil, errors.New("reference asset workflow dependencies must be configured together")
+	}
 	executor := workflowapp.NodeExecutor(
 		workflowproduction.NewNodeExecutor(scripts, evidence, stories, storyReviews, bibles, projects, plans, planningOwners, storygraphs, storyboards, bindings, segments, episodes),
 	)
-	if candidateSets != nil {
+	if candidateSets != nil || referenceTargets != nil {
 		var err error
-		executor, err = workflowexecution.NewNodeExecutor(executor, workflowgeneration.NewNodeExecutor(candidateSets))
+		executor, err = workflowexecution.NewNodeExecutor(
+			executor, workflowgeneration.NewNodeExecutor(candidateSets, referenceTargets, preparations),
+		)
 		if err != nil {
 			return nil, err
 		}

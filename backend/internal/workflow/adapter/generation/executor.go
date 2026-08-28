@@ -16,7 +16,10 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-const candidateSetInputExecutor = "workflow.input.generation_candidate_set"
+const (
+	candidateSetInputExecutor  = "workflow.input.generation_candidate_set"
+	referenceAssetNodeExecutor = "activity.reference_asset_generation"
+)
 
 var candidateSetHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
@@ -24,19 +27,57 @@ type CandidateSetSource interface {
 	RequireCandidateSet(context.Context, generationapp.Actor, string) (generationdomain.CandidateSet, error)
 }
 
-type NodeExecutor struct {
-	candidateSets CandidateSetSource
+type ReferenceTargetBuilder interface {
+	BuildReferenceTargets(
+		context.Context,
+		generationapp.Actor,
+		generationapp.BuildReferenceTargetsCommand,
+	) (generationapp.BuildReferenceTargetsResult, error)
 }
 
-func NewNodeExecutor(candidateSets CandidateSetSource) *NodeExecutor {
-	return &NodeExecutor{candidateSets: candidateSets}
+type ImagePreparation interface {
+	PrepareImageGeneration(
+		context.Context,
+		generationapp.Actor,
+		generationapp.PrepareImageGenerationCommand,
+	) (generationapp.PreparationResult, error)
+}
+
+type NodeExecutor struct {
+	candidateSets    CandidateSetSource
+	referenceTargets ReferenceTargetBuilder
+	preparations     ImagePreparation
+}
+
+func NewNodeExecutor(
+	candidateSets CandidateSetSource,
+	referenceTargets ReferenceTargetBuilder,
+	preparations ImagePreparation,
+) *NodeExecutor {
+	return &NodeExecutor{
+		candidateSets: candidateSets, referenceTargets: referenceTargets, preparations: preparations,
+	}
 }
 
 func (executor *NodeExecutor) Execute(
 	ctx context.Context,
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
-	if executor == nil || executor.candidateSets == nil || command.Executor != candidateSetInputExecutor ||
+	switch command.Executor {
+	case candidateSetInputExecutor:
+		return executor.executeCandidateSet(ctx, command)
+	case referenceAssetNodeExecutor:
+		return executor.executeReferenceAsset(ctx, command)
+	default:
+		return domain.NodeExecutorResult{}, errors.New("unsupported Generation workflow node execution")
+	}
+}
+
+func (executor *NodeExecutor) executeCandidateSet(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor == nil || executor.candidateSets == nil ||
 		strings.TrimSpace(command.IdempotencyKey) == "" || command.InitiatorTokenVersion < 1 {
 		return domain.NodeExecutorResult{}, errors.New("unsupported Generation workflow node execution")
 	}
@@ -101,6 +142,103 @@ func (executor *NodeExecutor) Execute(
 		return domain.NodeExecutorResult{}, err
 	}
 	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeReferenceAsset(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor == nil || executor.referenceTargets == nil || executor.preparations == nil ||
+		strings.TrimSpace(command.IdempotencyKey) == "" || command.InitiatorTokenVersion < 1 {
+		return domain.NodeExecutorResult{}, errors.New("reference asset workflow owners are unavailable")
+	}
+	for _, identifier := range []string{
+		command.WorkspaceID, command.ProjectID, command.InitiatorUserID,
+		command.WorkflowRunID, command.NodeRunID,
+	} {
+		if !validCandidateSetUUID(identifier) {
+			return domain.NodeExecutorResult{}, errors.New("invalid reference asset workflow execution boundary")
+		}
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidates" ||
+		command.OutputPorts[0].ValueType != "generation_candidate_set" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid reference asset workflow node contract")
+	}
+	approved := input.Bindings[0]
+	if approved.Port != "intents" || approved.ValueType != "approved_storyboard_intents" ||
+		approved.SourceKind != domain.NodeInputSourceNodeOutput || strings.TrimSpace(approved.SourceNodeID) == "" ||
+		approved.SourcePort != "intents" || approved.ReferenceVersion != "1" ||
+		!validCandidateSetUUID(approved.ReferenceID) || !candidateSetHashPattern.MatchString(approved.ContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("approved Storyboard Intent input has drifted")
+	}
+	assetID, assetStateID, err := referenceAssetSelector(input.Config)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	actor := generationapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
+	built, err := executor.referenceTargets.BuildReferenceTargets(ctx, actor, generationapp.BuildReferenceTargetsCommand{
+		ApprovedIntentSetID: approved.ReferenceID, ExpectedContentHash: approved.ContentHash,
+		IdempotencyKey: "workflow-run:" + command.WorkflowRunID + ":reference-targets",
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	var selected *generationdomain.GenerationTarget
+	for index := range built.Targets {
+		target := &built.Targets[index]
+		if generationdomain.ValidateGenerationTarget(*target) != nil || target.WorkspaceID != command.WorkspaceID ||
+			target.ProjectID != command.ProjectID || target.CreatedBy != command.InitiatorUserID ||
+			target.Kind != generationdomain.GenerationTargetReferenceAsset || target.ReferenceAsset == nil ||
+			target.SourceOwnerRef.Owner != "storyboard" || target.SourceOwnerRef.Resource != "approved_storyboard_intents" ||
+			target.SourceOwnerRef.ID != approved.ReferenceID || target.SourceOwnerRef.Revision != 1 ||
+			target.SourceOwnerRef.ContentHash != approved.ContentHash {
+			return domain.NodeExecutorResult{}, errors.New("reference asset Target Builder returned drifted facts")
+		}
+		if target.ReferenceAsset.AssetID != assetID || target.ReferenceAsset.AssetStateRef.ID != assetStateID {
+			continue
+		}
+		if selected != nil {
+			return domain.NodeExecutorResult{}, errors.New("reference asset selector matched multiple Targets")
+		}
+		selected = target
+	}
+	if selected == nil {
+		return domain.NodeExecutorResult{}, errors.New("reference asset selector did not match an approved Target")
+	}
+	prepared, err := executor.preparations.PrepareImageGeneration(ctx, actor, generationapp.PrepareImageGenerationCommand{
+		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
+		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID, WorkflowInputHash: inputHash,
+		TargetID: selected.ID, TargetHash: selected.TargetHash, Units: int64(selected.ReferenceAsset.NumberResults),
+		IdempotencyKey: "workflow-node:" + command.NodeRunID + ":generation-prepare",
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	intent := prepared.Intent
+	if !validCandidateSetUUID(intent.ID) || intent.WorkspaceID != command.WorkspaceID || intent.ProjectID != command.ProjectID ||
+		intent.WorkflowRunID != command.WorkflowRunID || intent.NodeRunID != command.NodeRunID ||
+		intent.TargetID != selected.ID || intent.TargetHash != selected.TargetHash ||
+		intent.Units != int64(selected.ReferenceAsset.NumberResults) || intent.Status != generationdomain.IntentPrepared {
+		return domain.NodeExecutorResult{}, errors.New("reference asset preparation returned drifted facts")
+	}
+	return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+}
+
+func referenceAssetSelector(config json.RawMessage) (string, string, error) {
+	var fields map[string]json.RawMessage
+	var assetID, assetStateID string
+	if json.Unmarshal(config, &fields) != nil || len(fields) != 2 ||
+		json.Unmarshal(fields["asset_id"], &assetID) != nil ||
+		json.Unmarshal(fields["asset_state_id"], &assetStateID) != nil {
+		return "", "", errors.New("invalid reference asset workflow node config")
+	}
+	assetID, assetStateID = strings.TrimSpace(assetID), strings.TrimSpace(assetStateID)
+	if !validCandidateSetUUID(assetID) || !validCandidateSetUUID(assetStateID) {
+		return "", "", errors.New("invalid reference asset workflow node selector")
+	}
+	return assetID, assetStateID, nil
 }
 
 func validCandidateSetUUID(value string) bool {

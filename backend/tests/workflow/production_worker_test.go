@@ -128,7 +128,7 @@ func TestProductionWorkflowWorkerExecutesAuthorizedScriptWorkflow(t *testing.T) 
 		storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		reviewService,
-		nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil,
 	)
 	if err != nil {
 		t.Fatalf("compose production Workflow Runtime: %v", err)

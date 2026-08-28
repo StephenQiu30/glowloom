@@ -131,6 +131,14 @@ func RunWorkflowWorker(logger *slog.Logger) {
 		generationgorm.NewProviderStore(database, costConfig, quotaConfig), nil,
 		generationapp.ProviderConfig{Now: now, NewID: uuid.NewString},
 	)
+	referenceTargetBuilder := generationapp.NewReferenceTargetBuilderService(
+		generationgorm.New(database),
+		generationapp.ReferenceTargetBuilderConfig{Now: now, NewID: uuid.NewString},
+	)
+	imagePreparations := generationapp.NewPreparationService(
+		generationgorm.NewPreparationStore(database, costConfig, quotaConfig),
+		generationapp.PreparationConfig{Now: now, NewID: uuid.NewString, ClaimTTL: 5 * time.Minute},
+	)
 	candidateSets := generationapp.NewOutputMaterializationService(
 		providerService, generationasset.NewProviderOutputReadiness(assetService), candidateService,
 	)
@@ -144,7 +152,8 @@ func RunWorkflowWorker(logger *slog.Logger) {
 	)
 	activities, err := NewWorkflowRuntime(
 		workflowgorm.New(database), scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, planningOwnerService, storyGraphService, storyboardService, reviewService,
-		imageBindings, candidateSets, episodeSegmentationService, episodeAnalysisService,
+		imageBindings, candidateSets, referenceTargetBuilder, imagePreparations,
+		episodeSegmentationService, episodeAnalysisService,
 	)
 	if err != nil {
 		logger.Error("workflow runtime composition failed", "error", err)
