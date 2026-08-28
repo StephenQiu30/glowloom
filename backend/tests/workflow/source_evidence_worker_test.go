@@ -101,6 +101,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "episode-segmentation", DefinitionKey: "agent.episode_segmentation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "episode-review", DefinitionKey: "human.episode_plan_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "episode-analysis", DefinitionKey: "agent.episode_analysis", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "structure-review", DefinitionKey: "human.episode_structure_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
@@ -113,6 +114,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "segmentation-to-episode-review", FromNodeID: "episode-segmentation", FromPort: "candidate", ToNodeID: "episode-review", ToPort: "candidate"},
 				{ID: "episode-review-to-analysis", FromNodeID: "episode-review", FromPort: "episodes", ToNodeID: "episode-analysis", ToPort: "episodes"},
 				{ID: "materialization-to-analysis", FromNodeID: "bible-materialization", FromPort: "materialization", ToNodeID: "episode-analysis", ToPort: "materialization"},
+				{ID: "analysis-to-structure-review", FromNodeID: "episode-analysis", FromPort: "candidate", ToNodeID: "structure-review", ToPort: "candidate"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -164,11 +166,15 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString, ClaimLease: time.Minute,
 	})
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
-	planningService := planningapp.NewService(planninggorm.New(database), planningapp.Config{
+	planningStore := planninggorm.New(database)
+	planningService := planningapp.NewService(planningStore, planningapp.Config{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 	})
+	episodePlanningService := planningapp.NewEpisodePlanningService(
+		planningStore, planningapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+	)
 	episodeAnalysisService := planningapp.NewEpisodeAnalysisService(
-		planninggorm.New(database), planningapp.EpisodeAnalysisConfig{
+		planningStore, planningapp.EpisodeAnalysisConfig{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 			MaxShardCodePoints: 12, OverlapCodePoints: 2, AdjacentCodePoints: 4, FanIn: 2,
 		},
@@ -420,7 +426,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	unknownSignaler := &unknownOnceWorkflowSignaler{delegate: temporalRuntime}
 	signalService := workflowapp.NewSignalService(workflowStore, unknownSignaler, workflowapp.SignalConfig{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
-		Owner: workflowproduction.New(bibleService, planningService, storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
+		Owner: workflowproduction.New(bibleService, planningService, episodePlanningService, storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 		})),
 	})
@@ -743,16 +749,23 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	if err != nil || replayedEpisodeSignal.ID != episodeSignal.ID || replayedEpisodeSignal.Status != "completed" {
 		t.Fatalf("replay Episode Plan Human Gate signal: intent=%#v err=%v", replayedEpisodeSignal, err)
 	}
-	completionDeadline := time.Now().Add(20 * time.Second)
+	completionDeadline := time.Now().Add(30 * time.Second)
+	var structureGateNode model.NodeRunProjection
+	var structureTask model.HumanTask
 	for {
 		if err = database.First(&persistedRun, "id = ?", run.ID).Error; err != nil {
-			t.Fatalf("reload completed Episode Plan Workflow Run: %v", err)
+			t.Fatalf("reload Episode Planning Workflow Run: %v", err)
 		}
-		if persistedRun.Status == "SUCCEEDED" {
-			break
+		if persistedRun.Status == "WAITING_HUMAN" {
+			if queryErr := database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "structure-review").First(&structureGateNode).Error; queryErr == nil &&
+				structureGateNode.Status == "WAITING_HUMAN" {
+				if queryErr = database.Where("node_run_id = ?", structureGateNode.ID).First(&structureTask).Error; queryErr == nil {
+					break
+				}
+			}
 		}
 		if persistedRun.Status == "FAILED" || persistedRun.Status == "CANCELLED" || time.Now().After(completionDeadline) {
-			t.Fatalf("Source Evidence Workflow did not complete after Episode Plan approval: %#v", persistedRun)
+			t.Fatalf("Source Evidence Workflow did not reach the Episode Planning Human Gate: %#v", persistedRun)
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -853,6 +866,131 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 			"Episode analysis facts: aggregate=%#v maps=%d reduces=%d structures=%d recovered=%#v",
 			aggregate, analysisInvocationCount, reconciliationInvocationCount, formalStructureCount, recoveredEpisodeInvocation,
 		)
+	}
+	var structureTaskCandidateIDs []string
+	if err = json.Unmarshal(structureTask.CandidateIDs, &structureTaskCandidateIDs); err != nil || len(structureTaskCandidateIDs) != 1 ||
+		structureTask.SubjectType != "planning_candidate" || structureTask.SubjectID.String() != analysisOutput.Bindings[0].ReferenceID ||
+		structureTask.SubjectRevision != 1 || structureTask.SubjectHash != analysisOutput.Bindings[0].ContentHash ||
+		structureTaskCandidateIDs[0] != analysisOutput.Bindings[0].ReferenceID {
+		t.Fatalf("Episode Planning HumanTask did not freeze the aggregate Candidate: task=%#v candidates=%v err=%v", structureTask, structureTaskCandidateIDs, err)
+	}
+	structureClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: structureTask.ID.String(), ExpectedRevision: structureTask.Revision,
+		IdempotencyKey: "episode-planning-review-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim Episode Planning HumanTask: %v", err)
+	}
+	structureDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: structureClaim.Task.ID, ClaimToken: structureClaim.ClaimToken,
+		ExpectedTaskRevision:    structureClaim.Task.Revision,
+		ExpectedSubjectRevision: structureClaim.Task.SubjectRevision,
+		ExpectedSubjectHash:     structureClaim.Task.SubjectHash,
+		Decision:                "approved", IdempotencyKey: "episode-planning-review-decision",
+	})
+	if err != nil {
+		t.Fatalf("approve Episode Planning HumanTask: %v", err)
+	}
+	planningUnknownSignaler := &unknownOnceWorkflowSignaler{delegate: temporalRuntime}
+	planningSignalService := workflowapp.NewSignalService(workflowStore, planningUnknownSignaler, workflowapp.SignalConfig{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+		Owner: workflowproduction.New(bibleService, planningService, episodePlanningService, storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
+			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+		})),
+	})
+	structureSignalCommand := workflowapp.SignalHumanGateCommand{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: run.ID, NodeRunID: structureGateNode.ID.String(),
+		HumanTaskID: structureDecision.Task.ID, ReviewDecisionID: structureDecision.Decision.ID,
+		SubjectRevision: structureDecision.Decision.SubjectRevision, Decision: structureDecision.Decision.Decision,
+		IdempotencyKey: "episode-planning-review-signal",
+	}
+	unknownPlanningSignal, err := planningSignalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, structureSignalCommand)
+	if err != nil || unknownPlanningSignal.Status != "unknown" || unknownPlanningSignal.AttemptNo != 1 {
+		t.Fatalf("persist unknown Episode Planning Signal: intent=%#v err=%v", unknownPlanningSignal, err)
+	}
+	var planningReceipt model.CommandReceipt
+	if err = database.Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?",
+		fixture.workspaceID, "episode_planning.apply", episodeAggregateRevision.ID,
+	).First(&planningReceipt).Error; err != nil {
+		t.Fatalf("load Planning owner Receipt after unknown Signal: %v", err)
+	}
+	var planningSet planningapp.PlanningOwnerSetReference
+	if err = json.Unmarshal(planningReceipt.Result, &planningSet); err != nil || planningSet.ID != planningReceipt.ID.String() ||
+		planningSet.CandidateRevisionID != episodeAggregateRevision.ID.String() ||
+		planningSet.CandidateRevisionHash != episodeAggregateRevision.CandidateRevisionHash ||
+		planningSet.ReviewDecisionID != structureDecision.Decision.ID || len(planningSet.Structures) != len(aggregate.Episodes) {
+		t.Fatalf("Planning owner Receipt result is incomplete: set=%#v err=%v", planningSet, err)
+	}
+	var appliedStructureCount, planningReceiptCount int64
+	if err = database.Model(&model.EpisodeStructure{}).Where("project_id = ? AND status = ?", fixture.projectID, "confirmed").
+		Count(&appliedStructureCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?",
+		fixture.workspaceID, "episode_planning.apply", episodeAggregateRevision.ID,
+	).Count(&planningReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if appliedStructureCount != int64(len(aggregate.Episodes)) || planningReceiptCount != 1 {
+		t.Fatalf("Planning owner batch after unknown Signal: structures=%d receipts=%d", appliedStructureCount, planningReceiptCount)
+	}
+	completedPlanningSignal, err := planningSignalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, structureSignalCommand)
+	if err != nil || completedPlanningSignal.ID != unknownPlanningSignal.ID ||
+		completedPlanningSignal.Status != "completed" || completedPlanningSignal.AttemptNo != 2 {
+		t.Fatalf("recover unknown Episode Planning Signal: intent=%#v err=%v", completedPlanningSignal, err)
+	}
+	replayedPlanningSignal, err := planningSignalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, structureSignalCommand)
+	if err != nil || replayedPlanningSignal.ID != completedPlanningSignal.ID || replayedPlanningSignal.Status != "completed" {
+		t.Fatalf("replay completed Episode Planning Signal: intent=%#v err=%v", replayedPlanningSignal, err)
+	}
+	completionDeadline = time.Now().Add(20 * time.Second)
+	for {
+		if err = database.First(&persistedRun, "id = ?", run.ID).Error; err != nil {
+			t.Fatalf("reload completed Episode Planning Workflow Run: %v", err)
+		}
+		if persistedRun.Status == "SUCCEEDED" {
+			break
+		}
+		if persistedRun.Status == "FAILED" || persistedRun.Status == "CANCELLED" || time.Now().After(completionDeadline) {
+			t.Fatalf("Source Evidence Workflow did not complete after Planning approval: %#v", persistedRun)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if err = database.First(&structureGateNode, "id = ?", structureGateNode.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	structureOutput, _, structureOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(structureGateNode.Output))
+	if err != nil || structureGateNode.Status != "SUCCEEDED" || structureGateNode.OutputHash == nil ||
+		*structureGateNode.OutputHash != structureOutputHash || len(structureOutput.Bindings) != 1 ||
+		structureOutput.Bindings[0].Port != "structures" || structureOutput.Bindings[0].ValueType != "planning_owner_set" ||
+		structureOutput.Bindings[0].ReferenceID != planningReceipt.ID.String() ||
+		structureOutput.Bindings[0].ReferenceVersion != "1" || structureOutput.Bindings[0].ContentHash != planningSet.ContentHash {
+		t.Fatalf("Episode Planning Gate output=%#v node=%#v err=%v", structureOutput, structureGateNode, err)
+	}
+	for _, reference := range planningSet.Structures {
+		var structure model.EpisodeStructure
+		if err = database.First(&structure, "id = ?", reference.StructureID).Error; err != nil {
+			t.Fatalf("load formal Planning Structure: %v", err)
+		}
+		var scenes []planningdomain.Scene
+		if err = json.Unmarshal(structure.Scenes, &scenes); err != nil || len(scenes) == 0 || len(reference.Fragments) == 0 ||
+			structure.Status != "confirmed" || structure.ResultHash != reference.ResultHash ||
+			structure.ConfirmedBy == nil || *structure.ConfirmedBy != fixture.userID {
+			t.Fatalf("formal Planning Structure is incomplete: record=%#v scenes=%#v reference=%#v err=%v", structure, scenes, reference, err)
+		}
+		for _, scene := range scenes {
+			if scene.TemporaryKey == "" || len(scene.Evidence) == 0 || scene.Evidence[0].EpisodeNumber == nil {
+				t.Fatalf("formal Scene lost temporary reverse trace or Evidence: %#v", scene)
+			}
+		}
 	}
 
 	replayCommand := planningapp.ApplyEpisodePlanCommand{

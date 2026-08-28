@@ -118,6 +118,11 @@ func HumanGateOutputMatchesCandidate(
 			output.ValueType == "episode_set" && output.ReferenceVersion == "1" &&
 			output.ReferenceID != candidate.ReferenceID && len(output.ContentHash) == 64
 	}
+	if executor == "gate.episode_structure_review" && candidate.ValueType == "episode_planning_candidate_set" {
+		return candidate.ReferenceVersion != "" && len(candidate.ContentHash) == 64 &&
+			output.ValueType == "planning_owner_set" && output.ReferenceVersion == "1" &&
+			output.ReferenceID != candidate.ReferenceID && len(output.ContentHash) == 64
+	}
 	if output.ReferenceID != candidate.ReferenceID {
 		return false
 	}

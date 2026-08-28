@@ -70,3 +70,21 @@ func TestEpisodePlanHumanGateOutputUsesMaterializedSetIdentityAndHash(t *testing
 		t.Fatal("Episode Plan gate accepted the Agent Candidate as the formal Episode set")
 	}
 }
+
+func TestEpisodePlanningHumanGateOutputUsesDistinctOwnerSetIdentityAndHash(t *testing.T) {
+	candidate := workflow.NodeInputBinding{
+		ValueType: "episode_planning_candidate_set", ReferenceID: "47fb8568-bbb9-4071-898a-01bcf812356c",
+		ReferenceVersion: "1", ContentHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
+	output := workflow.NodeOutputBinding{
+		ValueType: "planning_owner_set", ReferenceID: "77bb2559-b058-4309-957b-6f656e096945",
+		ReferenceVersion: "1", ContentHash: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+	}
+	if !workflow.HumanGateOutputMatchesCandidate("gate.episode_structure_review", candidate, output) {
+		t.Fatal("Episode Planning gate must publish a distinct formal owner set")
+	}
+	output.ReferenceID = candidate.ReferenceID
+	if workflow.HumanGateOutputMatchesCandidate("gate.episode_structure_review", candidate, output) {
+		t.Fatal("Episode Planning gate accepted its Agent Candidate as formal facts")
+	}
+}

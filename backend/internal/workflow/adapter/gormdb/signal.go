@@ -17,6 +17,9 @@ import (
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
+	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
+	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -401,7 +404,8 @@ func expectedHumanGateSubject(
 	}
 	productionBibleV2 := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
 	episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
-	if !productionBibleV2 && !episodePlanV2 {
+	episodePlanningV2 := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
+	if !productionBibleV2 && !episodePlanV2 && !episodePlanningV2 {
 		return humanGateSubjectType(node.Executor), node.ID, node.Revision, resolved.InputHash, nil
 	}
 	if len(resolved.Input.Bindings) != 1 {
@@ -411,6 +415,8 @@ func expectedHumanGateSubject(
 	expectedValueType, subjectType := "story_reconciliation_candidate", "story_reconciliation_candidate"
 	if episodePlanV2 {
 		expectedValueType, subjectType = "episode_segmentation_candidate", "episode_plan_candidate"
+	} else if episodePlanningV2 {
+		expectedValueType, subjectType = "episode_planning_candidate_set", "planning_candidate"
 	}
 	if candidate.Port != "candidate" || candidate.ValueType != expectedValueType ||
 		candidate.SourceKind != domain.NodeInputSourceNodeOutput || len(candidate.ContentHash) != 64 {
@@ -530,8 +536,9 @@ func validateHumanGateOwnerEvidence(
 	}
 	expectedOperation, supported := humanGateOwnerOperation(node)
 	episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
+	episodePlanningV2 := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
 	receiptMatchesOutput := receipt.ResourceID.String() == binding.ReferenceID
-	if episodePlanV2 {
+	if episodePlanV2 || episodePlanningV2 {
 		receiptMatchesOutput = receipt.ID.String() == binding.ReferenceID && receipt.ResourceID.String() == candidate.ReferenceID
 	}
 	if !supported || *apply.OwnerOperation != expectedOperation || receipt.WorkspaceID != run.WorkspaceID || receipt.Operation != *apply.OwnerOperation ||
@@ -608,7 +615,103 @@ func validateHumanGateOwnerEvidence(
 			}
 		}
 	}
+	if episodePlanningV2 {
+		var set planningapp.PlanningOwnerSetReference
+		if err := json.Unmarshal(receipt.Result, &set); err != nil || set.ID != receipt.ID.String() ||
+			set.WorkspaceID != run.WorkspaceID.String() || set.ProjectID != run.ProjectID.String() ||
+			set.CandidateRevisionID != candidate.ReferenceID || set.CandidateRevisionHash != candidate.ContentHash ||
+			set.CandidateRevision != int64(task.SubjectRevision) || set.ReviewDecisionID != decision.ID.String() ||
+			set.ContentHash != binding.ContentHash || len(set.Structures) == 0 {
+			return errors.New("Planning owner set Receipt does not match the frozen Candidate")
+		}
+		setHash, hashErr := platformcommand.InputHash(struct {
+			Schema     string                                   `json:"schema"`
+			Structures []planningapp.PlanningStructureReference `json:"structures"`
+		}{"planning-owner-set-v1", set.Structures})
+		if hashErr != nil || setHash != set.ContentHash {
+			return errors.New("Planning owner set Receipt content hash has drifted")
+		}
+		for _, item := range set.Structures {
+			structureID, parseErr := uuid.Parse(item.StructureID)
+			if parseErr != nil {
+				return errors.New("Planning owner set contains an invalid Structure identity")
+			}
+			var structure model.EpisodeStructure
+			if err := transaction.First(&structure, "id = ?", structureID).Error; err != nil {
+				return normalizeNotFound(err)
+			}
+			var scenes []planningdomain.Scene
+			if err := json.Unmarshal(structure.Scenes, &scenes); err != nil || len(scenes) == 0 {
+				return errors.New("Planning owner Structure scenes are invalid")
+			}
+			observedHash, hashErr := bibledomain.CanonicalStoryHash(struct {
+				Schema string                 `json:"schema"`
+				Scenes []planningdomain.Scene `json:"scenes"`
+			}{"episode-planning-owner-v1", scenes})
+			if hashErr != nil || observedHash != structure.ResultHash ||
+				structure.WorkspaceID != run.WorkspaceID || structure.ProjectID != run.ProjectID ||
+				structure.EpisodeID.String() != item.EpisodeID || structure.ScriptVersionID.String() != item.ScriptVersionID ||
+				structure.Status != "confirmed" || structure.ResultHash != item.ResultHash ||
+				structure.Revision != item.Revision || structure.ConfirmedBy == nil || *structure.ConfirmedBy != apply.CreatedBy ||
+				!planningStructureContainsFragments(scenes, item.Fragments) {
+				return errors.New("Planning owner Structure has drifted")
+			}
+		}
+	}
 	return nil
+}
+
+func planningStructureContainsFragments(
+	scenes []planningdomain.Scene,
+	expected []planningapp.PlanningFragmentReference,
+) bool {
+	actual := make(map[string]planningapp.PlanningFragmentReference)
+	add := func(temporaryKey, kind, fragmentID string) bool {
+		if temporaryKey == "" || fragmentID == "" {
+			return false
+		}
+		if _, exists := actual[temporaryKey]; exists {
+			return false
+		}
+		actual[temporaryKey] = planningapp.PlanningFragmentReference{
+			TemporaryKey: temporaryKey, Kind: kind, FragmentID: fragmentID,
+		}
+		return true
+	}
+	for _, scene := range scenes {
+		if !add(scene.TemporaryKey, "scene", scene.ID) {
+			return false
+		}
+		for _, dialogue := range scene.Dialogues {
+			if !add(dialogue.TemporaryKey, "dialogue", dialogue.ID) {
+				return false
+			}
+		}
+		for _, beat := range scene.NarrativeUnits {
+			if !add(beat.TemporaryKey, "beat", beat.ID) {
+				return false
+			}
+		}
+		for _, occurrence := range scene.Occurrences {
+			if !add(occurrence.TemporaryKey, "occurrence", occurrence.ID) {
+				return false
+			}
+		}
+		for _, claim := range scene.Claims {
+			if !add(claim.TemporaryKey, "claim", claim.ID) {
+				return false
+			}
+		}
+	}
+	if len(actual) != len(expected) {
+		return false
+	}
+	for _, item := range expected {
+		if actual[item.TemporaryKey] != item {
+			return false
+		}
+	}
+	return true
 }
 
 func humanGateOwnerOperation(node model.NodeRunProjection) (string, bool) {
@@ -621,6 +724,9 @@ func humanGateOwnerOperation(node model.NodeRunProjection) (string, bool) {
 		}
 		return "episode_plan.confirm", true
 	case "gate.episode_structure_review":
+		if node.DefinitionVersion == "2.0.0" {
+			return "episode_planning.apply", true
+		}
 		return "episode_structure.confirm_batch", true
 	case "gate.storyboard_review":
 		return "storyboard.apply_set", true

@@ -3,7 +3,7 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "10.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "11.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
@@ -71,6 +71,10 @@ func SystemCatalog() (Catalog, error) {
 			"human.episode_structure_review", "Episode Structure Review", "human", "gate.episode_structure_review", "never", "human_gate",
 			[]PortDefinition{requiredPort("candidate", "episode_structure_candidate")}, []PortDefinition{requiredPort("structures", "episode_structures")}, emptyNodeConfig(),
 		),
+		versionedSystemNode("2.0.0", systemNodeDefinition(
+			"human.episode_structure_review", "Episode Planning Review", "human", "gate.episode_structure_review", "never", "human_gate",
+			[]PortDefinition{requiredPort("candidate", "episode_planning_candidate_set")}, []PortDefinition{requiredPort("structures", "planning_owner_set")}, emptyNodeConfig(),
+		)),
 		systemNodeDefinition(
 			"agent.storyboard_draft", "Storyboard Candidate", "agent", "activity.storyboard_draft", "by_inputs", "external_ai",
 			[]PortDefinition{requiredPort("structures", "episode_structures")}, []PortDefinition{requiredPort("candidate", "storyboard_candidate")}, emptyNodeConfig(),

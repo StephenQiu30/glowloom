@@ -242,6 +242,9 @@ func main() {
 	)
 	planningStore := planninggorm.New(database)
 	planningService := planningapp.NewService(planningStore, planningapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
+	episodePlanningService := planningapp.NewEpisodePlanningService(
+		planningStore, planningapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+	)
 	episodeAnalysisWorker := planningapp.NewEpisodeAnalysisWorker(
 		planningStore, agentRuntime, func() time.Time { return time.Now().UTC() },
 		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
@@ -302,7 +305,7 @@ func main() {
 	)
 	workflowHandler := workflowhttp.New(workflowStartService, workflowQueryService, workflowControlService, tokenVerifier)
 	humanGateOwners, err := workflowexecution.NewHumanGateOwnerRouter(
-		workflowproduction.New(bibleService, planningService, storyboardService),
+		workflowproduction.New(bibleService, planningService, episodePlanningService, storyboardService),
 		workflowgeneration.NewHumanGateApplier(selectionService),
 	)
 	if err != nil {

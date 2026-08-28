@@ -20,6 +20,7 @@ const (
 	productionBibleConfirmOperation       = "production_bible.confirm"
 	episodePlanConfirmOperation           = "episode_plan.confirm"
 	episodePlanApplyOperation             = "episode_plan.apply"
+	episodePlanningApplyOperation         = "episode_planning.apply"
 	episodeStructureBatchConfirmOperation = "episode_structure.confirm_batch"
 	storyboardApplySetOperation           = "storyboard.apply_set"
 )
@@ -34,18 +35,28 @@ type PlanningConfirmationOwner interface {
 	ConfirmPublishedStructureBatch(context.Context, planningapp.Actor, planningapp.ConfirmStructureBatchCommand) (planningapp.ConfirmStructureBatchResult, error)
 }
 
+type EpisodePlanningOwner interface {
+	ApplyEpisodePlanningCandidate(context.Context, planningapp.Actor, planningapp.ApplyEpisodePlanningCandidateCommand) (planningapp.ApplyEpisodePlanningCandidateResult, error)
+}
+
 type StoryboardSetOwner interface {
 	ApplySet(context.Context, storyboardapp.Actor, storyboardapp.ApplySetCommand) (storyboardapp.ApplySetResult, error)
 }
 
 type Applier struct {
-	bibles      BibleOwner
-	plans       PlanningConfirmationOwner
-	storyboards StoryboardSetOwner
+	bibles             BibleOwner
+	plans              PlanningConfirmationOwner
+	planningCandidates EpisodePlanningOwner
+	storyboards        StoryboardSetOwner
 }
 
-func New(bibles BibleOwner, plans PlanningConfirmationOwner, storyboards StoryboardSetOwner) *Applier {
-	return &Applier{bibles: bibles, plans: plans, storyboards: storyboards}
+func New(
+	bibles BibleOwner,
+	plans PlanningConfirmationOwner,
+	planningCandidates EpisodePlanningOwner,
+	storyboards StoryboardSetOwner,
+) *Applier {
+	return &Applier{bibles: bibles, plans: plans, planningCandidates: planningCandidates, storyboards: storyboards}
 }
 
 func (applier *Applier) ApplyHumanGateDecision(
@@ -179,6 +190,9 @@ func (applier *Applier) applyEpisodeStructures(
 	actor workflowapp.Actor,
 	application domain.HumanGateOwnerApplication,
 ) (domain.HumanGateOwnerResult, error) {
+	if application.Candidate.ValueType == "episode_planning_candidate_set" {
+		return applier.applyEpisodePlanning(ctx, actor, application)
+	}
 	if applier.plans == nil || application.Candidate.ValueType != "episode_structure_candidate" ||
 		application.OutputPort != "structures" || application.OutputValueType != "episode_structures" {
 		return domain.HumanGateOwnerResult{}, errors.New("unsupported workflow human gate owner application")
@@ -218,6 +232,56 @@ func (applier *Applier) applyEpisodeStructures(
 			Port: application.OutputPort, ValueType: application.OutputValueType,
 			ReferenceID: batch.Commit.ID, ReferenceVersion: strconv.Itoa(batch.Commit.Revision),
 			ContentHash: batch.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	return domain.HumanGateOwnerResult{
+		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
+	}, nil
+}
+
+func (applier *Applier) applyEpisodePlanning(
+	ctx context.Context,
+	actor workflowapp.Actor,
+	application domain.HumanGateOwnerApplication,
+) (domain.HumanGateOwnerResult, error) {
+	if applier.planningCandidates == nil || application.OutputPort != "structures" ||
+		application.OutputValueType != "planning_owner_set" {
+		return domain.HumanGateOwnerResult{}, errors.New("unsupported Episode Planning Human Gate owner application")
+	}
+	expectedRevision, err := strconv.ParseInt(application.Candidate.ReferenceVersion, 10, 64)
+	if err != nil || expectedRevision < 1 || len(application.Candidate.ContentHash) != 64 {
+		return domain.HumanGateOwnerResult{}, errors.New("invalid Episode Planning Candidate revision")
+	}
+	result, err := applier.planningCandidates.ApplyEpisodePlanningCandidate(ctx, planningapp.Actor{
+		UserID: actor.UserID, TokenVersion: actor.TokenVersion,
+	}, planningapp.ApplyEpisodePlanningCandidateCommand{
+		WorkspaceID: application.WorkspaceID, ProjectID: application.ProjectID,
+		CandidateRevisionID:       application.Candidate.ReferenceID,
+		CandidateRevisionHash:     application.Candidate.ContentHash,
+		ExpectedCandidateRevision: expectedRevision, ReviewDecisionID: application.ReviewDecisionID,
+		IdempotencyKey: "workflow-review:" + application.ReviewDecisionID,
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	set := result.Set
+	if set.ID != result.Receipt.ID || set.WorkspaceID != application.WorkspaceID || set.ProjectID != application.ProjectID ||
+		set.CandidateRevisionID != application.Candidate.ReferenceID ||
+		set.CandidateRevisionHash != application.Candidate.ContentHash || set.CandidateRevision != expectedRevision ||
+		set.ReviewDecisionID != application.ReviewDecisionID || len(set.ContentHash) != 64 || len(set.Structures) == 0 ||
+		result.Receipt.Operation != episodePlanningApplyOperation ||
+		result.Receipt.ResourceID != application.Candidate.ReferenceID || result.Receipt.WorkspaceID != application.WorkspaceID ||
+		result.Receipt.CreatedBy != actor.UserID {
+		return domain.HumanGateOwnerResult{}, errors.New("Episode Planning owner result does not match workflow gate")
+	}
+	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: application.OutputPort, ValueType: application.OutputValueType,
+			ReferenceID: set.ID, ReferenceVersion: "1", ContentHash: set.ContentHash,
 		}},
 	})
 	if err != nil {
