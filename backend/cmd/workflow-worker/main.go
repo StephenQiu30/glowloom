@@ -118,6 +118,9 @@ func main() {
 	planningService := planningapp.NewService(
 		planninggorm.New(database), planningapp.Config{Now: now, NewID: uuid.NewString},
 	)
+	episodeAnalysisService := planningapp.NewEpisodeAnalysisService(
+		planninggorm.New(database), planningapp.EpisodeAnalysisConfig{Now: now, NewID: uuid.NewString},
+	)
 	storyboardService := storyboardapp.NewService(
 		storyboardgorm.New(database), storyboardapp.Config{Now: now, NewID: uuid.NewString},
 	)
@@ -150,7 +153,7 @@ func main() {
 	)
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowgorm.New(database), scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, storyboardService, reviewService,
-		imageBindings, candidateSets, episodeSegmentationService,
+		imageBindings, candidateSets, episodeSegmentationService, episodeAnalysisService,
 	)
 	if err != nil {
 		logger.Error("workflow runtime composition failed", "error", err)

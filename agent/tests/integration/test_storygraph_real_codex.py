@@ -12,6 +12,8 @@ from pydantic import BaseModel
 
 from app.candidate_runtime.canonical import canonical_hash
 from app.candidate_runtime.schemas import (
+    EpisodeAnalysisStageInput,
+    EpisodeReconciliationStageInput,
     EpisodeSegmentationStageInput,
     SourceEvidenceStageInput,
     StoryGraphStageInvocation,
@@ -19,6 +21,8 @@ from app.candidate_runtime.schemas import (
 )
 from app.modules.storygraph.candidate_schemas import (
     CandidateRepairPatch,
+    EpisodeAnalysisCandidate,
+    EpisodeReconciliationCandidate,
     EpisodeSegmentationCandidate,
     SourceEvidenceCandidate,
     StoryAnalysisCandidate,
@@ -192,6 +196,220 @@ async def test_real_codex_segments_full_source_without_overriding_markers() -> N
         marker.evidence in candidate.boundaries[index].evidence
         for index, marker in enumerate(stage_input.marker_hints)
     )
+
+
+@pytest.mark.skipif(
+    os.getenv("LANVERSE_TEST_REAL_CODEX") != "1",
+    reason="set LANVERSE_TEST_REAL_CODEX=1 to exercise the locally authenticated Codex CLI",
+)
+@pytest.mark.asyncio
+async def test_real_codex_preserves_episode_structure_children_and_evidence() -> None:
+    fixture = cast(dict[str, Any], json.loads(WIRE_FIXTURE.read_text(encoding="utf-8")))
+    source = StoryGraphStageInvocation.model_validate(fixture["valid_invocation"])
+    episode_text = "内景 客厅 日\n阿澜推门进入。\n阿澜：雨停了。"
+    source_start = 10
+    source_end = source_start + len(episode_text)
+    scene_label = "内景 客厅 日"
+    episode_id = "71000000-0000-0000-0000-000000000001"
+    script_version_id = "71000000-0000-0000-0000-000000000002"
+    bible_version_id = "71000000-0000-0000-0000-000000000003"
+    bible_snapshot = {
+        "entities": [
+            {
+                "entity_key": "character:alan",
+                "kind": "character",
+                "canonical_name": "阿澜",
+            }
+        ]
+    }
+    known_identities = [
+        {
+            "entity_key": "character:alan",
+            "kind": "character",
+            "asset_id": "71000000-0000-0000-0000-000000000004",
+            "specification_version_id": "71000000-0000-0000-0000-000000000005",
+            "specification_hash": "a" * 64,
+            "states": [
+                {
+                    "state_key": "character:alan:default",
+                    "asset_state_id": "71000000-0000-0000-0000-000000000006",
+                    "content_hash": "b" * 64,
+                }
+            ],
+        }
+    ]
+    script_content_hash = hashlib.sha256(episode_text.encode("utf-8")).hexdigest()
+    bible_content_hash = "c" * 64
+    materialization_hash = "d" * 64
+    stage_input = EpisodeAnalysisStageInput.model_validate(
+        {
+            "episode_id": episode_id,
+            "episode_position": 1,
+            "script_version_id": script_version_id,
+            "script_version_no": 1,
+            "document_revision_id": "71000000-0000-0000-0000-000000000007",
+            "episode_source_start": source_start,
+            "episode_source_end": source_end,
+            "script_content_hash": script_content_hash,
+            "logical_start": source_start,
+            "logical_end": source_end,
+            "context_start": source_start,
+            "context_end": source_end,
+            "context_text": episode_text,
+            "logical_text_hash": script_content_hash,
+            "scene_marker_hints": [
+                {
+                    "label": scene_label,
+                    "absolute_start": source_start,
+                    "absolute_end": source_start + len(scene_label),
+                }
+            ],
+            "adjacent_episodes": [],
+            "bible_version_id": bible_version_id,
+            "bible_version": 1,
+            "bible_content_hash": bible_content_hash,
+            "bible_snapshot_hash": canonical_hash(bible_snapshot),
+            "bible_snapshot": bible_snapshot,
+            "materialization_hash": materialization_hash,
+            "known_identities": known_identities,
+        }
+    )
+    source_refs = [
+        {
+            "owner_kind": "production/episode-script",
+            "owner_logical_id": episode_id,
+            "owner_version_id": script_version_id,
+            "revision": 1,
+            "content_hash": script_content_hash,
+        },
+        {
+            "owner_kind": "production/bible-version",
+            "owner_logical_id": bible_version_id,
+            "owner_version_id": bible_version_id,
+            "revision": 1,
+            "content_hash": bible_content_hash,
+        },
+        {
+            "owner_kind": "production/bible-materialization",
+            "owner_logical_id": bible_version_id,
+            "owner_version_id": bible_version_id,
+            "revision": 1,
+            "content_hash": materialization_hash,
+        },
+    ]
+    analysis_invocation = stage_invocation(
+        source,
+        invocation_id="21000000-0000-0000-0000-000000000001",
+        payload={
+            "stage": "analyze_episode",
+            "shard_key": "episode:0001:map:0000",
+            "workspace_id": source.payload.workspace_id,
+            "project_id": source.payload.project_id,
+            "source_refs": source_refs,
+            "upstream_candidates": [],
+            "shard_manifest_ref": {
+                "manifest_id": "61000000-0000-0000-0000-000000000001",
+                "version": 1,
+                "hash": "e" * 64,
+            },
+            "shard": {
+                "kind": "episode_map",
+                "key": "episode:0001:map:0000",
+                "tree_path": "episode.0001.map.0000",
+                "absolute_start": source_start,
+                "absolute_end": source_end,
+            },
+            "stage_input": stage_input.model_dump(mode="json"),
+        },
+    )
+    analysis = await StoryGraphHarness(
+        analysis_invocation, repository_root=REPOSITORY_ROOT
+    ).execute()
+
+    assert isinstance(analysis, EpisodeAnalysisCandidate)
+    assert analysis.episode_id == UUID(episode_id)
+    assert analysis.script_version_id == UUID(script_version_id)
+    assert (analysis.logical_start, analysis.logical_end) == (source_start, source_end)
+    assert analysis.fragments
+    for evidence in evidence_identities(analysis):
+        evidence_start, evidence_end, text_hash, anchor, episode_number = evidence
+        assert episode_number == 1
+        assert episode_text[evidence_start - source_start : evidence_end - source_start] == anchor
+        assert hashlib.sha256(anchor.encode("utf-8")).hexdigest() == text_hash
+
+    analysis_candidate = analysis.model_dump(mode="json")
+    analysis_candidate_hash = canonical_hash(analysis_candidate)
+    reconciliation_input = EpisodeReconciliationStageInput.model_validate(
+        {
+            "episode_id": episode_id,
+            "episode_position": 1,
+            "script_version_id": script_version_id,
+            "script_version_no": 1,
+            "episode_source_start": source_start,
+            "episode_source_end": source_end,
+            "script_content_hash": script_content_hash,
+            "bible_version_id": bible_version_id,
+            "bible_version": 1,
+            "bible_content_hash": bible_content_hash,
+            "materialization_hash": materialization_hash,
+            "known_identities": known_identities,
+            "level": 1,
+            "candidate_type": "episode_analysis_candidate",
+            "candidates": [
+                {
+                    "shard_key": analysis_invocation.payload.shard_key,
+                    "candidate_revision_id": "71000000-0000-0000-0000-000000000008",
+                    "candidate_revision_hash": analysis_candidate_hash,
+                    "candidate": analysis_candidate,
+                }
+            ],
+        }
+    )
+    reconciliation_invocation = stage_invocation(
+        source,
+        invocation_id="21000000-0000-0000-0000-000000000002",
+        payload={
+            "stage": "reconcile_episode",
+            "shard_key": "episode:0001:reduce:0001:0000",
+            "workspace_id": source.payload.workspace_id,
+            "project_id": source.payload.project_id,
+            "source_refs": source_refs,
+            "upstream_candidates": [
+                {
+                    "stage": "analyze_episode",
+                    "shard_key": analysis_invocation.payload.shard_key,
+                    "candidate_revision_id": "71000000-0000-0000-0000-000000000008",
+                    "candidate_revision_hash": analysis_candidate_hash,
+                    "source_invocation_id": analysis_invocation.invocation_id,
+                    "source_result_hash": analysis_candidate_hash,
+                }
+            ],
+            "shard_manifest_ref": {
+                "manifest_id": "61000000-0000-0000-0000-000000000002",
+                "version": 1,
+                "hash": "f" * 64,
+            },
+            "shard": {
+                "kind": "episode_reduce",
+                "key": "episode:0001:reduce:0001:0000",
+                "tree_path": "episode.0001.reduce.0001.0000",
+            },
+            "stage_input": reconciliation_input.model_dump(mode="json"),
+        },
+    )
+    reconciled = await StoryGraphHarness(
+        reconciliation_invocation, repository_root=REPOSITORY_ROOT
+    ).execute()
+
+    assert isinstance(reconciled, EpisodeReconciliationCandidate)
+    assert (reconciled.source_start, reconciled.source_end) == (source_start, source_end)
+    assert {value.temporary_key for value in reconciled.ordered_fragments} == {
+        value.temporary_key for value in analysis.fragments
+    }
+    assert {value.claim_key for value in reconciled.claims} == {
+        value.claim_key for value in analysis.claims
+    }
+    assert evidence_identities(reconciled) <= evidence_identities(analysis)
 
 
 @pytest.mark.skipif(

@@ -242,6 +242,10 @@ func main() {
 	)
 	planningStore := planninggorm.New(database)
 	planningService := planningapp.NewService(planningStore, planningapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
+	episodeAnalysisWorker := planningapp.NewEpisodeAnalysisWorker(
+		planningStore, agentRuntime, func() time.Time { return time.Now().UTC() },
+		configuration.AgentPollInterval, configuration.AgentClaimLease, logger,
+	)
 	planningHandler := planninghttp.New(planningService, tokenVerifier)
 	storyboardStore := storyboardgorm.New(database)
 	storyboardService := storyboardapp.NewService(storyboardStore, storyboardapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
@@ -358,6 +362,7 @@ func main() {
 	go sourceEvidenceWorker.Run(shutdownSignal)
 	go storyAnalysisWorker.Run(shutdownSignal)
 	go episodeSegmentationWorker.Run(shutdownSignal)
+	go episodeAnalysisWorker.Run(shutdownSignal)
 	go storyReviewWorker.Run(shutdownSignal)
 	go storyboardWorker.Run(shutdownSignal)
 	serverErrors := make(chan error, 1)

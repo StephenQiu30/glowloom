@@ -13,6 +13,8 @@ from typing import Any, cast
 from pydantic import BaseModel
 
 from app.candidate_runtime.schemas import (
+    EpisodeAnalysisStageInput,
+    EpisodeReconciliationStageInput,
     SourceEvidenceStageInput,
     StoryGraphExecutionPolicy,
     StoryGraphRepairStageInput,
@@ -22,6 +24,8 @@ from app.candidate_runtime.schemas import (
 from app.modules.storygraph.bundle import BundleInvalid, BundleManifest, StoryGraphBundle
 from app.modules.storygraph.candidate_schemas import (
     CandidateRepairPatch,
+    EpisodeAnalysisCandidate,
+    EpisodeReconciliationCandidate,
     Evidence,
     SourceEvidenceCandidate,
     StoryGraphReviewCandidate,
@@ -165,6 +169,24 @@ class StoryGraphHarness:
                 self.invocation.payload.stage_input
             )
             candidate.validate_for(review_input)
+        if self.invocation.payload.stage == "analyze_episode":
+            if not isinstance(candidate, EpisodeAnalysisCandidate):
+                raise CodexSchemaInvalid("Codex CLI returned the wrong Episode analysis schema")
+            episode_input = EpisodeAnalysisStageInput.model_validate(
+                self.invocation.payload.stage_input
+            )
+            candidate = normalize_episode_candidate_evidence(candidate, episode_input)
+            candidate.validate_for(episode_input)
+        if self.invocation.payload.stage == "reconcile_episode":
+            if not isinstance(candidate, EpisodeReconciliationCandidate):
+                raise CodexSchemaInvalid(
+                    "Codex CLI returned the wrong Episode reconciliation schema"
+                )
+            reconciliation_input = EpisodeReconciliationStageInput.model_validate(
+                self.invocation.payload.stage_input
+            )
+            candidate = normalize_episode_candidate_evidence(candidate, reconciliation_input)
+            candidate.validate_for(reconciliation_input)
         if self.invocation.payload.stage == "repair_candidate":
             if not isinstance(candidate, CandidateRepairPatch):
                 raise CodexSchemaInvalid("Codex CLI returned the wrong candidate repair schema")
@@ -360,3 +382,87 @@ def normalize_source_evidence(
     return candidate.model_copy(
         update={"observations": observations, "review_issues": review_issues}
     )
+
+
+def normalize_episode_candidate_evidence(
+    candidate: EpisodeAnalysisCandidate | EpisodeReconciliationCandidate,
+    stage_input: EpisodeAnalysisStageInput | EpisodeReconciliationStageInput,
+) -> EpisodeAnalysisCandidate | EpisodeReconciliationCandidate:
+    evidence_fields = set(Evidence.model_fields)
+
+    def evidence_values(value: Any) -> list[Evidence]:
+        found: list[Evidence] = []
+
+        def visit(item: Any) -> None:
+            if isinstance(item, dict):
+                mapping = cast(dict[str, Any], item)
+                if set(mapping) == evidence_fields:
+                    found.append(Evidence.model_validate(mapping))
+                    return
+                for child in mapping.values():
+                    visit(child)
+            elif isinstance(item, list):
+                for child in cast(list[Any], item):
+                    visit(child)
+
+        visit(value)
+        return found
+
+    trusted: dict[tuple[int, int, str, int | None], str] = {}
+    if isinstance(stage_input, EpisodeAnalysisStageInput):
+
+        def trusted_hash(evidence: Evidence) -> str:
+            local_start = evidence.source_start - stage_input.context_start
+            local_end = evidence.source_end - stage_input.context_start
+            if (
+                local_start < 0
+                or local_end > len(stage_input.context_text)
+                or local_end <= local_start
+                or local_end - local_start != len(evidence.exact_anchor)
+                or stage_input.context_text[local_start:local_end] != evidence.exact_anchor
+            ):
+                raise CodexSchemaInvalid(
+                    "Codex CLI returned Episode Evidence outside the immutable text slice"
+                )
+            return hashlib.sha256(evidence.exact_anchor.encode("utf-8")).hexdigest()
+
+    else:
+        for child in stage_input.parsed_candidates():
+            for evidence in evidence_values(child.model_dump(mode="python")):
+                key = (
+                    evidence.source_start,
+                    evidence.source_end,
+                    evidence.exact_anchor,
+                    evidence.episode_number,
+                )
+                trusted[key] = evidence.text_hash
+
+        def trusted_hash(evidence: Evidence) -> str:
+            key = (
+                evidence.source_start,
+                evidence.source_end,
+                evidence.exact_anchor,
+                evidence.episode_number,
+            )
+            try:
+                return trusted[key]
+            except KeyError as error:
+                raise CodexSchemaInvalid(
+                    "Codex CLI returned Episode reconciliation Evidence outside its exact children"
+                ) from error
+
+    def normalize(value: Any) -> Any:
+        if isinstance(value, dict):
+            mapping = cast(dict[str, Any], value)
+            if set(mapping) == evidence_fields:
+                evidence = Evidence.model_validate(mapping)
+                return {**mapping, "text_hash": trusted_hash(evidence)}
+            return {key: normalize(item) for key, item in mapping.items()}
+        if isinstance(value, list):
+            return [normalize(item) for item in cast(list[Any], value)]
+        return value
+
+    normalized = normalize(candidate.model_dump(mode="python"))
+    if isinstance(candidate, EpisodeAnalysisCandidate):
+        return EpisodeAnalysisCandidate.model_validate(normalized)
+    return EpisodeReconciliationCandidate.model_validate(normalized)

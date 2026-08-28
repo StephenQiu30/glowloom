@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -237,37 +238,46 @@ func TestStoryCandidateRepairPersistsOneReceiptAndExactStaleClosure(t *testing.T
 		t.Fatalf("seed Repair Invocation: %v", err)
 	}
 
-	segmentRequest := newRepairJourneyInvocation(
-		t, workspace.ID, project.ID, "analyze_episode", "episode:0000", "episode_analysis",
-		sourceRef,
-		[]agentcontract.StageUpstreamCandidateRef{{
-			Stage: "review_storygraph", ShardKey: "review:aggregate",
-			CandidateRevisionID: reviewAggregateRevision.ID.String(), CandidateRevisionHash: reviewAggregateHash,
-			SourceInvocationID: reviewInvocation.ID.String(), SourceResultHash: reviewRevision.CandidateContentHash,
+	firstTransitiveInput := mustJSON(t, agentcontract.StoryReconciliationStageInput{
+		Level: 1, CandidateType: "story_reconciliation_candidate",
+		Candidates: []agentcontract.StoryReconciliationInputCandidate{{
+			ShardKey: baseUpstream.ShardKey, CandidateRevisionID: baseRevision.ID.String(),
+			CandidateRevisionHash: baseRevisionHash, Candidate: baseCandidateJSON,
 		}},
-		json.RawMessage(`{}`),
+	})
+	firstTransitiveRequest := newRepairJourneyInvocation(
+		t, workspace.ID, project.ID, "reconcile_story", "story-reduce:transitive:0000", "story_reduce",
+		sourceRef, []agentcontract.StageUpstreamCandidateRef{baseUpstream}, firstTransitiveInput,
 	)
-	segmentInvocation, segmentRevision, segmentHead := persistedInvocationCandidate(
-		t, segmentRequest, workspace.ID, "episode_analysis_candidate", json.RawMessage(`{"fragments":[]}`), now,
+	firstTransitiveInvocation, firstTransitiveRevision, firstTransitiveHead := persistedInvocationCandidate(
+		t, firstTransitiveRequest, workspace.ID, "story_reconciliation_candidate", baseCandidateJSON, now,
 	)
-	for _, record := range []any{&segmentInvocation, &segmentRevision, &segmentHead} {
+	for _, record := range []any{&firstTransitiveInvocation, &firstTransitiveRevision, &firstTransitiveHead} {
 		if err = database.Create(record).Error; err != nil {
-			t.Fatalf("seed transitive segment dependency: %v", err)
+			t.Fatalf("seed first transitive reconciliation dependency: %v", err)
 		}
 	}
-	detailRequest := newRepairJourneyInvocation(
-		t, workspace.ID, project.ID, "reconcile_episode", "episode-reduce:0000", "episode_reconciliation",
-		sourceRef,
-		[]agentcontract.StageUpstreamCandidateRef{{
-			Stage: "analyze_episode", ShardKey: "episode:0000",
-			CandidateRevisionID: segmentRevision.ID.String(), CandidateRevisionHash: segmentRevision.CandidateRevisionHash,
-			SourceInvocationID: segmentInvocation.ID.String(), SourceResultHash: *segmentInvocation.ResultHash,
+	secondUpstream := agentcontract.StageUpstreamCandidateRef{
+		Stage: "reconcile_story", ShardKey: firstTransitiveRequest.Payload.ShardKey,
+		CandidateRevisionID:   firstTransitiveRevision.ID.String(),
+		CandidateRevisionHash: firstTransitiveRevision.CandidateRevisionHash,
+		SourceInvocationID:    firstTransitiveInvocation.ID.String(),
+		SourceResultHash:      *firstTransitiveInvocation.ResultHash,
+	}
+	secondTransitiveInput := mustJSON(t, agentcontract.StoryReconciliationStageInput{
+		Level: 2, CandidateType: "story_reconciliation_candidate",
+		Candidates: []agentcontract.StoryReconciliationInputCandidate{{
+			ShardKey: secondUpstream.ShardKey, CandidateRevisionID: secondUpstream.CandidateRevisionID,
+			CandidateRevisionHash: secondUpstream.CandidateRevisionHash, Candidate: baseCandidateJSON,
 		}},
-		json.RawMessage(`{}`),
+	})
+	secondTransitiveRequest := newRepairJourneyInvocation(
+		t, workspace.ID, project.ID, "reconcile_story", "story-reduce:transitive:0001", "story_reduce",
+		sourceRef, []agentcontract.StageUpstreamCandidateRef{secondUpstream}, secondTransitiveInput,
 	)
-	detailInvocation := persistedInvocation(t, detailRequest, workspace.ID, "", nil, "queued", now)
-	if err = database.Create(&detailInvocation).Error; err != nil {
-		t.Fatalf("seed transitive detail dependency: %v", err)
+	secondTransitiveInvocation := persistedInvocation(t, secondTransitiveRequest, workspace.ID, "", nil, "queued", now)
+	if err = database.Create(&secondTransitiveInvocation).Error; err != nil {
+		t.Fatalf("seed second transitive reconciliation dependency: %v", err)
 	}
 	unrelatedRequest := newRepairJourneyInvocation(
 		t, workspace.ID, project.ID, "detail_shots", "shots:other", "shot_batch",
@@ -373,9 +383,10 @@ func TestStoryCandidateRepairPersistsOneReceiptAndExactStaleClosure(t *testing.T
 	expectedStale := []string{
 		reviewInvocation.StageInstanceKey,
 		reviewAggregateStageKey,
-		segmentInvocation.StageInstanceKey,
-		detailInvocation.StageInstanceKey,
+		firstTransitiveInvocation.StageInstanceKey,
+		secondTransitiveInvocation.StageInstanceKey,
 	}
+	sort.Strings(expectedStale)
 	if first.CandidateRevisionNo != 2 || !reflect.DeepEqual(first.StaleStageInstanceKeys, expectedStale) {
 		t.Fatalf("Candidate repair result drifted: %#v", first)
 	}

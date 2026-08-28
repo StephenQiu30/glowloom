@@ -157,6 +157,93 @@ type EpisodeSegmentationStageInput struct {
 	EvidenceIndex                 []EpisodeSegmentationEvidenceIndexItem `json:"evidence_index"`
 }
 
+type EpisodeSceneMarkerHint struct {
+	Label         string `json:"label"`
+	AbsoluteStart int    `json:"absolute_start"`
+	AbsoluteEnd   int    `json:"absolute_end"`
+}
+
+type EpisodeAdjacentContext struct {
+	Side            string `json:"side"`
+	EpisodeID       string `json:"episode_id"`
+	EpisodePosition int    `json:"episode_position"`
+	ScriptVersionID string `json:"script_version_id"`
+	ScriptVersionNo int    `json:"script_version_no"`
+	SourceStart     int    `json:"source_start"`
+	SourceEnd       int    `json:"source_end"`
+	ContentHash     string `json:"content_hash"`
+	ExcerptStart    int    `json:"excerpt_start"`
+	ExcerptEnd      int    `json:"excerpt_end"`
+	Excerpt         string `json:"excerpt"`
+	ExcerptHash     string `json:"excerpt_hash"`
+}
+
+type EpisodeKnownState struct {
+	StateKey     string `json:"state_key"`
+	AssetStateID string `json:"asset_state_id"`
+	ContentHash  string `json:"content_hash"`
+}
+
+type EpisodeKnownIdentity struct {
+	EntityKey              string              `json:"entity_key"`
+	Kind                   string              `json:"kind"`
+	AssetID                string              `json:"asset_id"`
+	SpecificationVersionID string              `json:"specification_version_id"`
+	SpecificationHash      string              `json:"specification_hash"`
+	States                 []EpisodeKnownState `json:"states"`
+}
+
+type EpisodeAnalysisStageInput struct {
+	EpisodeID           string                   `json:"episode_id"`
+	EpisodePosition     int                      `json:"episode_position"`
+	ScriptVersionID     string                   `json:"script_version_id"`
+	ScriptVersionNo     int                      `json:"script_version_no"`
+	DocumentRevisionID  string                   `json:"document_revision_id"`
+	EpisodeSourceStart  int                      `json:"episode_source_start"`
+	EpisodeSourceEnd    int                      `json:"episode_source_end"`
+	ScriptContentHash   string                   `json:"script_content_hash"`
+	LogicalStart        int                      `json:"logical_start"`
+	LogicalEnd          int                      `json:"logical_end"`
+	ContextStart        int                      `json:"context_start"`
+	ContextEnd          int                      `json:"context_end"`
+	ContextText         string                   `json:"context_text"`
+	LogicalTextHash     string                   `json:"logical_text_hash"`
+	SceneMarkerHints    []EpisodeSceneMarkerHint `json:"scene_marker_hints"`
+	AdjacentEpisodes    []EpisodeAdjacentContext `json:"adjacent_episodes"`
+	BibleVersionID      string                   `json:"bible_version_id"`
+	BibleVersion        int                      `json:"bible_version"`
+	BibleContentHash    string                   `json:"bible_content_hash"`
+	BibleSnapshotHash   string                   `json:"bible_snapshot_hash"`
+	BibleSnapshot       json.RawMessage          `json:"bible_snapshot"`
+	MaterializationHash string                   `json:"materialization_hash"`
+	KnownIdentities     []EpisodeKnownIdentity   `json:"known_identities"`
+}
+
+type EpisodeReconciliationInputCandidate struct {
+	ShardKey              string          `json:"shard_key"`
+	CandidateRevisionID   string          `json:"candidate_revision_id"`
+	CandidateRevisionHash string          `json:"candidate_revision_hash"`
+	Candidate             json.RawMessage `json:"candidate"`
+}
+
+type EpisodeReconciliationStageInput struct {
+	EpisodeID           string                                `json:"episode_id"`
+	EpisodePosition     int                                   `json:"episode_position"`
+	ScriptVersionID     string                                `json:"script_version_id"`
+	ScriptVersionNo     int                                   `json:"script_version_no"`
+	EpisodeSourceStart  int                                   `json:"episode_source_start"`
+	EpisodeSourceEnd    int                                   `json:"episode_source_end"`
+	ScriptContentHash   string                                `json:"script_content_hash"`
+	BibleVersionID      string                                `json:"bible_version_id"`
+	BibleVersion        int                                   `json:"bible_version"`
+	BibleContentHash    string                                `json:"bible_content_hash"`
+	MaterializationHash string                                `json:"materialization_hash"`
+	KnownIdentities     []EpisodeKnownIdentity                `json:"known_identities"`
+	Level               int                                   `json:"level"`
+	CandidateType       string                                `json:"candidate_type"`
+	Candidates          []EpisodeReconciliationInputCandidate `json:"candidates"`
+}
+
 type StoryReconciliationInputCandidate struct {
 	ShardKey              string          `json:"shard_key"`
 	CandidateRevisionID   string          `json:"candidate_revision_id"`
@@ -260,12 +347,292 @@ func validateStageInput(payload StageInvocationPayload) error {
 		return validateSourceEvidenceStageInput(payload)
 	case "segment_episodes":
 		return validateEpisodeSegmentationStageInput(payload)
+	case "analyze_episode":
+		return validateEpisodeAnalysisStageInput(payload)
+	case "reconcile_episode":
+		return validateEpisodeReconciliationStageInput(payload)
 	case "review_storygraph":
 		return validateStoryGraphReviewStageInput(payload)
 	case "repair_candidate":
 		return validateStoryGraphRepairStageInput(payload)
 	}
 	return nil
+}
+
+// ValidateEpisodeAnalysisInvocation applies the Production Episode owner
+// contract after the shared StoryGraph wire contract has been decoded.
+func ValidateEpisodeAnalysisInvocation(value StageInvocation) error {
+	if err := value.Validate(); err != nil {
+		return err
+	}
+	switch value.Payload.Stage {
+	case "analyze_episode":
+		return validateEpisodeAnalysisStageInput(value.Payload)
+	case "reconcile_episode":
+		return validateEpisodeReconciliationStageInput(value.Payload)
+	default:
+		return errors.New("invalid Episode analysis invocation stage")
+	}
+}
+
+func validateEpisodeAnalysisStageInput(payload StageInvocationPayload) error {
+	var input EpisodeAnalysisStageInput
+	if err := decodeStrict(payload.StageInput, &input); err != nil {
+		return errors.New("invalid Episode analysis stage input")
+	}
+	if len(input.AdjacentEpisodes) > 2 || len(payload.UpstreamCandidates) != 0 ||
+		payload.BaseStoryGraphVersionID != "" || payload.BaseStoryGraphHash != "" ||
+		payload.Shard.Kind != "episode_map" || payload.Shard.AbsoluteStart == nil ||
+		payload.Shard.AbsoluteEnd == nil || input.EpisodePosition < 1 || input.ScriptVersionNo < 1 ||
+		input.BibleVersion < 1 || input.EpisodeSourceStart < 0 ||
+		input.EpisodeSourceEnd <= input.EpisodeSourceStart || input.LogicalStart < input.EpisodeSourceStart ||
+		input.LogicalEnd <= input.LogicalStart || input.LogicalEnd > input.EpisodeSourceEnd ||
+		input.ContextStart < input.EpisodeSourceStart || input.ContextStart > input.LogicalStart ||
+		input.ContextEnd < input.LogicalEnd || input.ContextEnd > input.EpisodeSourceEnd ||
+		input.ContextEnd-input.ContextStart != utf8.RuneCountInString(input.ContextText) ||
+		*payload.Shard.AbsoluteStart != input.LogicalStart || *payload.Shard.AbsoluteEnd != input.LogicalEnd ||
+		!hashPattern.MatchString(input.ScriptContentHash) || !hashPattern.MatchString(input.LogicalTextHash) ||
+		!hashPattern.MatchString(input.BibleContentHash) || !hashPattern.MatchString(input.BibleSnapshotHash) ||
+		!hashPattern.MatchString(input.MaterializationHash) || !jsonObject(input.BibleSnapshot) {
+		return errors.New("invalid Episode analysis stage dependencies")
+	}
+	for _, identifier := range []string{
+		input.EpisodeID, input.ScriptVersionID, input.DocumentRevisionID, input.BibleVersionID,
+	} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return errors.New("invalid Episode analysis exact revision")
+		}
+	}
+	contextRunes := []rune(input.ContextText)
+	relativeStart := input.LogicalStart - input.ContextStart
+	relativeEnd := input.LogicalEnd - input.ContextStart
+	if sourceTextHash(string(contextRunes[relativeStart:relativeEnd])) != input.LogicalTextHash {
+		return errors.New("Episode analysis logical text hash mismatch")
+	}
+	if input.ContextStart == input.EpisodeSourceStart && input.ContextEnd == input.EpisodeSourceEnd &&
+		sourceTextHash(input.ContextText) != input.ScriptContentHash {
+		return errors.New("Episode script content hash mismatch")
+	}
+	snapshotHash, err := CanonicalHash(input.BibleSnapshot)
+	if err != nil || snapshotHash != input.BibleSnapshotHash {
+		return errors.New("Episode Bible snapshot hash mismatch")
+	}
+	previousMarkerStart := -1
+	for _, marker := range input.SceneMarkerHints {
+		if strings.TrimSpace(marker.Label) == "" || marker.AbsoluteStart <= previousMarkerStart ||
+			marker.AbsoluteStart < input.ContextStart || marker.AbsoluteEnd <= marker.AbsoluteStart ||
+			marker.AbsoluteEnd > input.ContextEnd ||
+			string(contextRunes[marker.AbsoluteStart-input.ContextStart:marker.AbsoluteEnd-input.ContextStart]) != marker.Label {
+			return errors.New("Episode scene marker does not match its frozen context")
+		}
+		previousMarkerStart = marker.AbsoluteStart
+	}
+	previousSide := -1
+	for _, adjacent := range input.AdjacentEpisodes {
+		side := 0
+		switch adjacent.Side {
+		case "previous":
+			if adjacent.EpisodePosition >= input.EpisodePosition {
+				return errors.New("invalid previous Episode context")
+			}
+		case "next":
+			side = 1
+			if adjacent.EpisodePosition <= input.EpisodePosition {
+				return errors.New("invalid next Episode context")
+			}
+		default:
+			return errors.New("invalid Episode adjacent side")
+		}
+		if side <= previousSide || adjacent.EpisodeID == input.EpisodeID ||
+			adjacent.ScriptVersionID == input.ScriptVersionID || adjacent.EpisodePosition < 1 ||
+			adjacent.ScriptVersionNo < 1 || adjacent.SourceStart < 0 || adjacent.SourceEnd <= adjacent.SourceStart ||
+			adjacent.ExcerptStart < adjacent.SourceStart || adjacent.ExcerptEnd <= adjacent.ExcerptStart ||
+			adjacent.ExcerptEnd > adjacent.SourceEnd ||
+			adjacent.ExcerptEnd-adjacent.ExcerptStart != utf8.RuneCountInString(adjacent.Excerpt) ||
+			strings.TrimSpace(adjacent.Excerpt) == "" || sourceTextHash(adjacent.Excerpt) != adjacent.ExcerptHash ||
+			!hashPattern.MatchString(adjacent.ContentHash) || !hashPattern.MatchString(adjacent.ExcerptHash) {
+			return errors.New("invalid Episode adjacent context")
+		}
+		for _, identifier := range []string{adjacent.EpisodeID, adjacent.ScriptVersionID} {
+			if _, err := uuid.Parse(identifier); err != nil {
+				return errors.New("invalid Episode adjacent exact revision")
+			}
+		}
+		previousSide = side
+	}
+	if err := validateEpisodeKnownIdentities(input.KnownIdentities); err != nil {
+		return err
+	}
+	expectedSources := []StageSourceRef{
+		{OwnerKind: "production/episode-script", OwnerLogicalID: input.EpisodeID, OwnerVersionID: input.ScriptVersionID, Revision: int64(input.ScriptVersionNo), ContentHash: input.ScriptContentHash},
+		{OwnerKind: "production/bible-version", OwnerLogicalID: input.BibleVersionID, OwnerVersionID: input.BibleVersionID, Revision: int64(input.BibleVersion), ContentHash: input.BibleContentHash},
+		{OwnerKind: "production/bible-materialization", OwnerLogicalID: input.BibleVersionID, OwnerVersionID: input.BibleVersionID, Revision: int64(input.BibleVersion), ContentHash: input.MaterializationHash},
+	}
+	for _, adjacent := range input.AdjacentEpisodes {
+		expectedSources = append(expectedSources, StageSourceRef{
+			OwnerKind: "production/episode-script", OwnerLogicalID: adjacent.EpisodeID,
+			OwnerVersionID: adjacent.ScriptVersionID, Revision: int64(adjacent.ScriptVersionNo),
+			ContentHash: adjacent.ContentHash,
+		})
+	}
+	return validateExactStageSources(payload.SourceRefs, expectedSources, "Episode analysis")
+}
+
+func validateEpisodeReconciliationStageInput(payload StageInvocationPayload) error {
+	var input EpisodeReconciliationStageInput
+	if err := decodeStrict(payload.StageInput, &input); err != nil {
+		return errors.New("invalid Episode reconciliation stage input")
+	}
+	if input.EpisodePosition < 1 || input.ScriptVersionNo < 1 || input.BibleVersion < 1 || input.Level < 1 ||
+		input.EpisodeSourceStart < 0 || input.EpisodeSourceEnd <= input.EpisodeSourceStart ||
+		len(input.Candidates) < 1 || len(input.Candidates) > 2 ||
+		len(payload.UpstreamCandidates) != len(input.Candidates) ||
+		payload.BaseStoryGraphVersionID != "" || payload.BaseStoryGraphHash != "" ||
+		payload.Shard.Kind != "episode_reduce" || payload.Shard.AbsoluteStart != nil || payload.Shard.AbsoluteEnd != nil ||
+		!hashPattern.MatchString(input.ScriptContentHash) || !hashPattern.MatchString(input.BibleContentHash) ||
+		!hashPattern.MatchString(input.MaterializationHash) {
+		return errors.New("invalid Episode reconciliation stage dependencies")
+	}
+	for _, identifier := range []string{input.EpisodeID, input.ScriptVersionID, input.BibleVersionID} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return errors.New("invalid Episode reconciliation exact revision")
+		}
+	}
+	if err := validateEpisodeKnownIdentities(input.KnownIdentities); err != nil {
+		return err
+	}
+	expectedStage := ""
+	switch input.CandidateType {
+	case "episode_analysis_candidate":
+		expectedStage = "analyze_episode"
+	case "episode_reconciliation_candidate":
+		expectedStage = "reconcile_episode"
+	default:
+		return errors.New("invalid Episode reconciliation candidate type")
+	}
+	expectedChildren := make(map[string]struct{}, len(input.Candidates))
+	previousShard := ""
+	for _, candidate := range input.Candidates {
+		if strings.TrimSpace(candidate.ShardKey) == "" || previousShard >= candidate.ShardKey ||
+			!hashPattern.MatchString(candidate.CandidateRevisionHash) || !jsonObject(candidate.Candidate) {
+			return errors.New("invalid Episode reconciliation child candidate")
+		}
+		if _, err := uuid.Parse(candidate.CandidateRevisionID); err != nil {
+			return errors.New("invalid Episode reconciliation child revision")
+		}
+		var identity struct {
+			EpisodeID       string `json:"episode_id"`
+			ScriptVersionID string `json:"script_version_id"`
+			LogicalStart    *int   `json:"logical_start"`
+			LogicalEnd      *int   `json:"logical_end"`
+			SourceStart     *int   `json:"source_start"`
+			SourceEnd       *int   `json:"source_end"`
+		}
+		if err := json.Unmarshal(candidate.Candidate, &identity); err != nil ||
+			identity.EpisodeID != input.EpisodeID || identity.ScriptVersionID != input.ScriptVersionID {
+			return errors.New("Episode reconciliation child belongs to another Episode")
+		}
+		start, end := identity.LogicalStart, identity.LogicalEnd
+		if input.CandidateType == "episode_reconciliation_candidate" {
+			start, end = identity.SourceStart, identity.SourceEnd
+		}
+		if start == nil || end == nil || *start < input.EpisodeSourceStart || *end <= *start || *end > input.EpisodeSourceEnd {
+			return errors.New("Episode reconciliation child escaped its frozen Episode")
+		}
+		key := episodeSegmentationLeafKey(candidate.ShardKey, candidate.CandidateRevisionID, candidate.CandidateRevisionHash)
+		expectedChildren[key] = struct{}{}
+		previousShard = candidate.ShardKey
+	}
+	for _, upstream := range payload.UpstreamCandidates {
+		key := episodeSegmentationLeafKey(upstream.ShardKey, upstream.CandidateRevisionID, upstream.CandidateRevisionHash)
+		if upstream.Stage != expectedStage {
+			return errors.New("Episode reconciliation child stage has drifted")
+		}
+		if _, exists := expectedChildren[key]; !exists {
+			return errors.New("Episode reconciliation input does not match exact child revisions")
+		}
+		delete(expectedChildren, key)
+	}
+	if len(expectedChildren) != 0 {
+		return errors.New("Episode reconciliation input is missing exact child revisions")
+	}
+	expectedSources := []StageSourceRef{
+		{OwnerKind: "production/episode-script", OwnerLogicalID: input.EpisodeID, OwnerVersionID: input.ScriptVersionID, Revision: int64(input.ScriptVersionNo), ContentHash: input.ScriptContentHash},
+		{OwnerKind: "production/bible-version", OwnerLogicalID: input.BibleVersionID, OwnerVersionID: input.BibleVersionID, Revision: int64(input.BibleVersion), ContentHash: input.BibleContentHash},
+		{OwnerKind: "production/bible-materialization", OwnerLogicalID: input.BibleVersionID, OwnerVersionID: input.BibleVersionID, Revision: int64(input.BibleVersion), ContentHash: input.MaterializationHash},
+	}
+	return validateExactStageSources(payload.SourceRefs, expectedSources, "Episode reconciliation")
+}
+
+func validateEpisodeKnownIdentities(values []EpisodeKnownIdentity) error {
+	allowedKinds := map[string]struct{}{
+		"character": {}, "location": {}, "prop": {}, "costume": {}, "visual_style": {}, "voice": {},
+	}
+	previousEntity := ""
+	for _, identity := range values {
+		if strings.TrimSpace(identity.EntityKey) == "" || previousEntity >= identity.EntityKey ||
+			!hashPattern.MatchString(identity.SpecificationHash) {
+			return errors.New("Episode known identities must be unique and sorted")
+		}
+		if _, ok := allowedKinds[identity.Kind]; !ok {
+			return errors.New("invalid Episode known identity kind")
+		}
+		for _, identifier := range []string{identity.AssetID, identity.SpecificationVersionID} {
+			if _, err := uuid.Parse(identifier); err != nil {
+				return errors.New("invalid Episode known identity revision")
+			}
+		}
+		previousState := ""
+		for _, state := range identity.States {
+			if strings.TrimSpace(state.StateKey) == "" || previousState >= state.StateKey ||
+				!hashPattern.MatchString(state.ContentHash) {
+				return errors.New("Episode known states must be unique and sorted")
+			}
+			if _, err := uuid.Parse(state.AssetStateID); err != nil {
+				return errors.New("invalid Episode known state revision")
+			}
+			previousState = state.StateKey
+		}
+		previousEntity = identity.EntityKey
+	}
+	return nil
+}
+
+func validateExactStageSources(actual, expected []StageSourceRef, label string) error {
+	if len(actual) != len(expected) {
+		return fmt.Errorf("%s exact sources are incomplete", label)
+	}
+	remaining := make(map[string]struct{}, len(expected))
+	for _, ref := range expected {
+		key := stageSourceRefKey(ref)
+		if _, exists := remaining[key]; exists {
+			return fmt.Errorf("%s expected sources contain a duplicate", label)
+		}
+		remaining[key] = struct{}{}
+	}
+	for _, ref := range actual {
+		key := stageSourceRefKey(ref)
+		if _, exists := remaining[key]; !exists {
+			return fmt.Errorf("%s source reference has drifted", label)
+		}
+		delete(remaining, key)
+	}
+	if len(remaining) != 0 {
+		return fmt.Errorf("%s exact sources are incomplete", label)
+	}
+	return nil
+}
+
+func stageSourceRefKey(value StageSourceRef) string {
+	return strings.Join([]string{
+		value.OwnerKind, value.OwnerLogicalID, value.OwnerVersionID,
+		fmt.Sprint(value.Revision), value.ContentHash,
+	}, "\x00")
+}
+
+func sourceTextHash(value string) string {
+	hash := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(hash[:])
 }
 
 func ValidateEpisodeSegmentationInvocation(value StageInvocation) error {

@@ -36,6 +36,8 @@ func (executor *NodeExecutor) Execute(
 		"activity.story_review",
 		"activity.production_bible",
 		"activity.production_bible_materialization",
+		"activity.episode_analysis",
+		"activity.episode_segmentation",
 		"activity.episode_plan",
 		"activity.episode_structure",
 		"activity.storyboard_draft",

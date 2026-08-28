@@ -41,6 +41,7 @@ func NewWorkflowRuntime(
 	bindings workflowproduction.ShotImageWorkflowOwner,
 	candidateSets workflowreview.CandidateSetSource,
 	segments workflowproduction.EpisodeSegmentationOwner,
+	episodes workflowproduction.EpisodeAnalysisOwner,
 ) (*workflowapp.RuntimeService, error) {
 	if repository == nil || scripts == nil || evidence == nil || stories == nil || storyReviews == nil || bibles == nil || projects == nil || plans == nil || storyboards == nil || reviews == nil {
 		return nil, errors.New("workflow runtime dependencies are required")
@@ -51,7 +52,7 @@ func NewWorkflowRuntime(
 		humanTasks = workflowreview.NewWithGeneration(reviews, candidateSets)
 	}
 	executor := workflowapp.NodeExecutor(
-		workflowproduction.NewNodeExecutor(scripts, evidence, stories, storyReviews, bibles, projects, plans, storyboards, bindings, segments),
+		workflowproduction.NewNodeExecutor(scripts, evidence, stories, storyReviews, bibles, projects, plans, storyboards, bindings, segments, episodes),
 	)
 	if candidateSets != nil {
 		var err error

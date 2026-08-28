@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Literal, cast
 from uuid import UUID
 
@@ -258,21 +259,125 @@ class StructureFragment(StrictModel):
     temporary_key: str = Field(min_length=1)
     kind: Literal["scene", "dialogue", "beat", "occurrence"]
     source_keys: list[str] = Field(min_length=1)
+    source_start: int = Field(ge=0)
+    source_end: int = Field(gt=0)
     summary: str = Field(min_length=1)
     evidence: list[Evidence] = Field(min_length=1)
     attributes: StructureAttributes
 
+    @model_validator(mode="after")
+    def increasing_range(self) -> StructureFragment:
+        if self.source_end <= self.source_start:
+            raise ValueError("structure fragment range must be increasing")
+        return self
+
 
 class EpisodeAnalysisCandidate(StrictModel):
+    episode_id: UUID
+    script_version_id: UUID
+    logical_start: int = Field(ge=0)
+    logical_end: int = Field(gt=0)
     fragments: list[StructureFragment]
     claims: list[ClaimCandidate]
     review_issues: list[CandidateIssue]
 
+    @model_validator(mode="after")
+    def validate_identity_and_order(self) -> EpisodeAnalysisCandidate:
+        if self.logical_end <= self.logical_start:
+            raise ValueError("episode analysis range must be increasing")
+        _validate_episode_candidate_keys(self.fragments, self.claims, self.review_issues)
+        return self
+
+    def validate_for(self, stage_input: Any) -> None:
+        if (
+            self.episode_id != stage_input.episode_id
+            or self.script_version_id != stage_input.script_version_id
+            or self.logical_start != stage_input.logical_start
+            or self.logical_end != stage_input.logical_end
+        ):
+            raise ValueError("Episode analysis candidate does not match its frozen slice")
+        _validate_episode_candidate_content(
+            self.fragments,
+            self.claims,
+            self.review_issues,
+            stage_input,
+            source_start=self.logical_start,
+            source_end=self.logical_end,
+            context_start=stage_input.context_start,
+            context_text=stage_input.context_text,
+        )
+
 
 class EpisodeReconciliationCandidate(StrictModel):
+    episode_id: UUID
+    script_version_id: UUID
+    source_start: int = Field(ge=0)
+    source_end: int = Field(gt=0)
     ordered_fragments: list[StructureFragment]
+    claims: list[ClaimCandidate]
     conflicts: list[CandidateIssue]
     review_issues: list[CandidateIssue]
+
+    @model_validator(mode="after")
+    def validate_identity_and_order(self) -> EpisodeReconciliationCandidate:
+        if self.source_end <= self.source_start:
+            raise ValueError("episode reconciliation range must be increasing")
+        _validate_episode_candidate_keys(
+            self.ordered_fragments,
+            self.claims,
+            [*self.conflicts, *self.review_issues],
+        )
+        return self
+
+    def validate_for(self, stage_input: Any) -> None:
+        if (
+            self.episode_id != stage_input.episode_id
+            or self.script_version_id != stage_input.script_version_id
+            or self.source_start != stage_input.episode_source_start
+            or self.source_end != stage_input.episode_source_end
+        ):
+            raise ValueError("Episode reconciliation candidate does not match its frozen Episode")
+        child_fragments: dict[str, StructureFragment] = {}
+        child_claims: dict[str, ClaimCandidate] = {}
+        allowed_issue_evidence: set[tuple[int, int, str, str, int | None]] = set()
+        for child in stage_input.parsed_candidates():
+            fragments = (
+                child.fragments
+                if isinstance(child, EpisodeAnalysisCandidate)
+                else child.ordered_fragments
+            )
+            for fragment in fragments:
+                if fragment.temporary_key in child_fragments:
+                    raise ValueError("Episode reconciliation children contain duplicate fragments")
+                child_fragments[fragment.temporary_key] = fragment
+                allowed_issue_evidence.update(_evidence_key(value) for value in fragment.evidence)
+            for claim in child.claims:
+                if claim.claim_key in child_claims:
+                    raise ValueError("Episode reconciliation children contain duplicate claims")
+                child_claims[claim.claim_key] = claim
+                allowed_issue_evidence.update(_evidence_key(value) for value in claim.evidence)
+            for issue in (*getattr(child, "conflicts", []), *child.review_issues):
+                allowed_issue_evidence.update(_evidence_key(value) for value in issue.evidence)
+        if {value.temporary_key for value in self.ordered_fragments} != set(child_fragments):
+            raise ValueError(
+                "Episode reconciliation candidate did not preserve its exact child set"
+            )
+        if {value.claim_key for value in self.claims} != set(child_claims):
+            raise ValueError("Episode reconciliation candidate did not preserve its exact claims")
+        _validate_episode_candidate_content(
+            self.ordered_fragments,
+            self.claims,
+            [*self.conflicts, *self.review_issues],
+            stage_input,
+            source_start=self.source_start,
+            source_end=self.source_end,
+        )
+        if any(
+            _evidence_key(evidence) not in allowed_issue_evidence
+            for issue in (*self.conflicts, *self.review_issues)
+            for evidence in issue.evidence
+        ):
+            raise ValueError("Episode reconciliation issue Evidence is outside its exact children")
 
 
 class ShotVisual(StrictModel):
@@ -441,6 +546,124 @@ def _evidence_key(value: Evidence) -> tuple[int, int, str, str, int | None]:
         value.exact_anchor,
         value.episode_number,
     )
+
+
+def _validate_episode_candidate_keys(
+    fragments: list[StructureFragment],
+    claims: list[ClaimCandidate],
+    issues: list[CandidateIssue],
+) -> None:
+    fragment_keys = [value.temporary_key for value in fragments]
+    claim_keys = [value.claim_key for value in claims]
+    issue_keys = [value.issue_key for value in issues]
+    if len(fragment_keys) != len(set(fragment_keys)):
+        raise ValueError("Episode candidate fragment keys must be unique")
+    if len(claim_keys) != len(set(claim_keys)):
+        raise ValueError("Episode candidate claim keys must be unique")
+    if len(issue_keys) != len(set(issue_keys)):
+        raise ValueError("Episode candidate issue keys must be unique")
+    if fragments != sorted(
+        fragments,
+        key=lambda value: (value.source_start, value.source_end, value.temporary_key),
+    ):
+        raise ValueError("Episode candidate fragments must be source ordered")
+
+
+def _validate_episode_candidate_content(
+    fragments: list[StructureFragment],
+    claims: list[ClaimCandidate],
+    issues: list[CandidateIssue],
+    stage_input: Any,
+    *,
+    source_start: int,
+    source_end: int,
+    context_start: int | None = None,
+    context_text: str | None = None,
+) -> None:
+    known_identities = {value.entity_key for value in stage_input.known_identities}
+    known_states = {
+        value.state_key for identity in stage_input.known_identities for value in identity.states
+    }
+    fragment_keys = {value.temporary_key for value in fragments}
+    scene_keys = {value.temporary_key for value in fragments if value.kind == "scene"}
+    for fragment in fragments:
+        if fragment.source_start < source_start or fragment.source_end > source_end:
+            raise ValueError("Episode candidate fragment escaped its frozen source range")
+        attributes = fragment.attributes
+        referenced_identities = {
+            value
+            for value in (
+                attributes.speaker_key,
+                attributes.location_key,
+                attributes.occurrence_entity_key,
+                *attributes.participant_keys,
+            )
+            if value is not None
+        }
+        if not referenced_identities.issubset(known_identities):
+            raise ValueError("Episode candidate references an unknown known identity")
+        if attributes.state_key is not None and attributes.state_key not in known_states:
+            raise ValueError("Episode candidate references an unknown known identity state")
+        if attributes.scene_key is not None and attributes.scene_key not in scene_keys:
+            raise ValueError("Episode candidate references an unknown scene fragment")
+        _validate_episode_evidence(
+            fragment.evidence,
+            source_start,
+            source_end,
+            stage_input.episode_position,
+            context_start=context_start,
+            context_text=context_text,
+        )
+    for claim in claims:
+        if not set(claim.participant_keys).issubset(known_identities):
+            raise ValueError("Episode candidate Claim references an unknown known identity")
+        if not set(claim.anchor_keys).issubset(fragment_keys | known_identities):
+            raise ValueError("Episode candidate Claim references an unknown anchor")
+        _validate_episode_evidence(
+            claim.evidence,
+            source_start,
+            source_end,
+            stage_input.episode_position,
+            context_start=context_start,
+            context_text=context_text,
+        )
+    for issue in issues:
+        _validate_episode_evidence(
+            issue.evidence,
+            source_start,
+            source_end,
+            stage_input.episode_position,
+            context_start=context_start,
+            context_text=context_text,
+        )
+
+
+def _validate_episode_evidence(
+    values: list[Evidence],
+    source_start: int,
+    source_end: int,
+    episode_position: int,
+    *,
+    context_start: int | None,
+    context_text: str | None,
+) -> None:
+    for value in values:
+        if (
+            value.source_start < source_start
+            or value.source_end > source_end
+            or value.episode_number != episode_position
+            or hashlib.sha256(value.exact_anchor.encode("utf-8")).hexdigest() != value.text_hash
+        ):
+            raise ValueError("Episode candidate Evidence escaped or drifted from its source")
+        if context_start is not None and context_text is not None:
+            relative_start = value.source_start - context_start
+            relative_end = value.source_end - context_start
+            if (
+                relative_start < 0
+                or relative_end > len(context_text)
+                or context_text[relative_start:relative_end] != value.exact_anchor
+            ):
+                raise ValueError("Episode candidate Evidence does not match its frozen context")
 
 
 def _replacement_kind(value: RepairReplacement) -> str:

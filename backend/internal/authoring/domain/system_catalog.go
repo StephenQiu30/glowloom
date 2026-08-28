@@ -3,7 +3,7 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "9.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "10.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
@@ -58,6 +58,11 @@ func SystemCatalog() (Catalog, error) {
 			"human.episode_plan_review", "Episode Plan Review", "human", "gate.episode_plan_review", "never", "human_gate",
 			[]PortDefinition{requiredPort("candidate", "episode_segmentation_candidate")}, []PortDefinition{requiredPort("episodes", "episode_set")}, emptyNodeConfig(),
 		)),
+		systemNodeDefinition(
+			"agent.episode_analysis", "Episode Planning Candidate Set", "agent", "activity.episode_analysis", "by_inputs", "external_ai",
+			[]PortDefinition{requiredPort("episodes", "episode_set"), requiredPort("materialization", "production_bible_materialization")},
+			[]PortDefinition{requiredPort("candidate", "episode_planning_candidate_set")}, emptyNodeConfig(),
+		),
 		systemNodeDefinition(
 			"production.episode_structure", "Episode Structure Candidate", "production", "activity.episode_structure", "by_inputs", "low",
 			[]PortDefinition{requiredPort("episodes", "episode_plan")}, []PortDefinition{requiredPort("candidate", "episode_structure_candidate")}, emptyNodeConfig(),

@@ -12,6 +12,8 @@ from app.modules.storygraph.candidate_schemas import (
     BIBLE_DETERMINISTIC_GATE_CODES,
     BIBLE_REPAIR_FIELD_TYPES,
     CandidateIssue,
+    EpisodeAnalysisCandidate,
+    EpisodeReconciliationCandidate,
     Evidence,
     SourceEvidenceCandidate,
     StoryAnalysisCandidate,
@@ -283,6 +285,239 @@ def _episode_segmentation_evidence_key(
         value.exact_anchor,
         value.episode_number,
     )
+
+
+class EpisodeSceneMarkerHint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(min_length=1)
+    absolute_start: int = Field(ge=0)
+    absolute_end: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_range(self) -> EpisodeSceneMarkerHint:
+        if self.absolute_end <= self.absolute_start:
+            raise ValueError("Episode scene marker range must be increasing")
+        return self
+
+
+class EpisodeAdjacentContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    side: Literal["previous", "next"]
+    episode_id: UUID
+    episode_position: int = Field(ge=1)
+    script_version_id: UUID
+    script_version_no: int = Field(ge=1)
+    source_start: int = Field(ge=0)
+    source_end: int = Field(gt=0)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    excerpt_start: int = Field(ge=0)
+    excerpt_end: int = Field(gt=0)
+    excerpt: str = Field(min_length=1)
+    excerpt_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_excerpt(self) -> EpisodeAdjacentContext:
+        if (
+            self.source_end <= self.source_start
+            or self.excerpt_start < self.source_start
+            or self.excerpt_end > self.source_end
+            or self.excerpt_end <= self.excerpt_start
+            or self.excerpt_end - self.excerpt_start != len(self.excerpt)
+            or hashlib.sha256(self.excerpt.encode("utf-8")).hexdigest() != self.excerpt_hash
+        ):
+            raise ValueError("Episode adjacent excerpt does not match its exact source range")
+        return self
+
+
+class EpisodeKnownState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state_key: str = Field(min_length=1)
+    asset_state_id: UUID
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class EpisodeKnownIdentity(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity_key: str = Field(min_length=1)
+    kind: Literal["character", "location", "prop", "costume", "visual_style", "voice"]
+    asset_id: UUID
+    specification_version_id: UUID
+    specification_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    states: list[EpisodeKnownState]
+
+    @model_validator(mode="after")
+    def validate_states(self) -> EpisodeKnownIdentity:
+        state_keys = [value.state_key for value in self.states]
+        if state_keys != sorted(set(state_keys)):
+            raise ValueError("Episode known states must be unique and sorted")
+        return self
+
+
+class EpisodeAnalysisStageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    episode_id: UUID
+    episode_position: int = Field(ge=1)
+    script_version_id: UUID
+    script_version_no: int = Field(ge=1)
+    document_revision_id: UUID
+    episode_source_start: int = Field(ge=0)
+    episode_source_end: int = Field(gt=0)
+    script_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    logical_start: int = Field(ge=0)
+    logical_end: int = Field(gt=0)
+    context_start: int = Field(ge=0)
+    context_end: int = Field(gt=0)
+    context_text: str = Field(min_length=1)
+    logical_text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scene_marker_hints: list[EpisodeSceneMarkerHint]
+    adjacent_episodes: list[EpisodeAdjacentContext] = Field(max_length=2)
+    bible_version_id: UUID
+    bible_version: int = Field(ge=1)
+    bible_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    bible_snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    bible_snapshot: dict[str, Any]
+    materialization_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    known_identities: list[EpisodeKnownIdentity]
+
+    @model_validator(mode="after")
+    def validate_frozen_episode(self) -> EpisodeAnalysisStageInput:
+        if (
+            self.episode_source_end <= self.episode_source_start
+            or self.logical_start < self.episode_source_start
+            or self.logical_end > self.episode_source_end
+            or self.logical_end <= self.logical_start
+            or self.context_start < self.episode_source_start
+            or self.context_start > self.logical_start
+            or self.context_end < self.logical_end
+            or self.context_end > self.episode_source_end
+            or self.context_end - self.context_start != len(self.context_text)
+        ):
+            raise ValueError("Episode analysis ranges do not match the published Episode slice")
+        relative_start = self.logical_start - self.context_start
+        relative_end = self.logical_end - self.context_start
+        logical_text = self.context_text[relative_start:relative_end]
+        if hashlib.sha256(logical_text.encode("utf-8")).hexdigest() != self.logical_text_hash:
+            raise ValueError("Episode analysis logical text hash does not match its frozen text")
+        if (
+            self.context_start == self.episode_source_start
+            and self.context_end == self.episode_source_end
+            and hashlib.sha256(self.context_text.encode("utf-8")).hexdigest()
+            != self.script_content_hash
+        ):
+            raise ValueError("Episode script content hash does not match its complete frozen text")
+        marker_keys = [
+            (value.absolute_start, value.absolute_end, value.label)
+            for value in self.scene_marker_hints
+        ]
+        if marker_keys != sorted(set(marker_keys)) or any(
+            value.absolute_start < self.context_start
+            or value.absolute_end > self.context_end
+            or self.context_text[
+                value.absolute_start - self.context_start : value.absolute_end - self.context_start
+            ]
+            != value.label
+            for value in self.scene_marker_hints
+        ):
+            raise ValueError("Episode scene markers do not match their frozen context")
+        adjacent_keys = [
+            (0 if value.side == "previous" else 1, value.episode_position)
+            for value in self.adjacent_episodes
+        ]
+        if adjacent_keys != sorted(set(adjacent_keys)) or any(
+            value.episode_id == self.episode_id
+            or value.script_version_id == self.script_version_id
+            or value.side == "previous"
+            and value.episode_position >= self.episode_position
+            or value.side == "next"
+            and value.episode_position <= self.episode_position
+            for value in self.adjacent_episodes
+        ):
+            raise ValueError("Episode adjacent contexts are not exact ordered neighbors")
+        _validate_episode_known_identities(self.known_identities)
+        if canonical_hash(self.bible_snapshot) != self.bible_snapshot_hash:
+            raise ValueError("Episode Bible snapshot hash does not match its frozen snapshot")
+        return self
+
+
+class EpisodeReconciliationInputCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    shard_key: str = Field(min_length=1)
+    candidate_revision_id: UUID
+    candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    candidate: dict[str, Any]
+
+
+class EpisodeReconciliationStageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    episode_id: UUID
+    episode_position: int = Field(ge=1)
+    script_version_id: UUID
+    script_version_no: int = Field(ge=1)
+    episode_source_start: int = Field(ge=0)
+    episode_source_end: int = Field(gt=0)
+    script_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    bible_version_id: UUID
+    bible_version: int = Field(ge=1)
+    bible_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    materialization_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    known_identities: list[EpisodeKnownIdentity]
+    level: int = Field(ge=1)
+    candidate_type: Literal["episode_analysis_candidate", "episode_reconciliation_candidate"]
+    candidates: list[EpisodeReconciliationInputCandidate] = Field(min_length=1, max_length=2)
+
+    @model_validator(mode="after")
+    def validate_exact_children(self) -> EpisodeReconciliationStageInput:
+        if self.episode_source_end <= self.episode_source_start:
+            raise ValueError("Episode reconciliation source range must be increasing")
+        _validate_episode_known_identities(self.known_identities)
+        identities = [
+            (value.shard_key, value.candidate_revision_id, value.candidate_revision_hash)
+            for value in self.candidates
+        ]
+        if identities != sorted(set(identities), key=lambda value: value[0]):
+            raise ValueError("Episode reconciliation children must be unique and shard ordered")
+        for candidate in self.parsed_candidates():
+            candidate_start = (
+                candidate.logical_start
+                if isinstance(candidate, EpisodeAnalysisCandidate)
+                else candidate.source_start
+            )
+            candidate_end = (
+                candidate.logical_end
+                if isinstance(candidate, EpisodeAnalysisCandidate)
+                else candidate.source_end
+            )
+            if (
+                candidate.episode_id != self.episode_id
+                or candidate.script_version_id != self.script_version_id
+                or candidate_start < self.episode_source_start
+                or candidate_end > self.episode_source_end
+            ):
+                raise ValueError("Episode reconciliation child escaped its frozen Episode")
+        return self
+
+    def parsed_candidates(
+        self,
+    ) -> list[EpisodeAnalysisCandidate | EpisodeReconciliationCandidate]:
+        model: type[EpisodeAnalysisCandidate] | type[EpisodeReconciliationCandidate] = (
+            EpisodeAnalysisCandidate
+            if self.candidate_type == "episode_analysis_candidate"
+            else EpisodeReconciliationCandidate
+        )
+        return [model.model_validate(value.candidate) for value in self.candidates]
+
+
+def _validate_episode_known_identities(values: list[EpisodeKnownIdentity]) -> None:
+    keys = [value.entity_key for value in values]
+    if keys != sorted(set(keys)):
+        raise ValueError("Episode known identities must be unique and sorted")
 
 
 class StoryReconciliationInputCandidate(BaseModel):
@@ -606,6 +841,125 @@ class StoryGraphStagePayload(BaseModel):
             ):
                 raise ValueError(
                     "Episode segmentation input does not match its exact immutable sources"
+                )
+        elif self.stage == "analyze_episode":
+            stage_input = EpisodeAnalysisStageInput.model_validate(self.stage_input)
+            expected_sources = {
+                (
+                    "production/episode-script",
+                    str(stage_input.episode_id),
+                    stage_input.script_version_id,
+                    stage_input.script_version_no,
+                    stage_input.script_content_hash,
+                ),
+                (
+                    "production/bible-version",
+                    str(stage_input.bible_version_id),
+                    stage_input.bible_version_id,
+                    stage_input.bible_version,
+                    stage_input.bible_content_hash,
+                ),
+                (
+                    "production/bible-materialization",
+                    str(stage_input.bible_version_id),
+                    stage_input.bible_version_id,
+                    stage_input.bible_version,
+                    stage_input.materialization_hash,
+                ),
+                *(
+                    (
+                        "production/episode-script",
+                        str(value.episode_id),
+                        value.script_version_id,
+                        value.script_version_no,
+                        value.content_hash,
+                    )
+                    for value in stage_input.adjacent_episodes
+                ),
+            }
+            supplied_sources = {
+                (
+                    value.owner_kind,
+                    value.owner_logical_id,
+                    value.owner_version_id,
+                    value.revision,
+                    value.content_hash,
+                )
+                for value in self.source_refs
+            }
+            if (
+                len(self.source_refs) != len(expected_sources)
+                or supplied_sources != expected_sources
+                or self.upstream_candidates
+                or self.base_storygraph_version_id is not None
+                or self.shard.kind != "episode_map"
+                or self.shard.absolute_start != stage_input.logical_start
+                or self.shard.absolute_end != stage_input.logical_end
+            ):
+                raise ValueError(
+                    "Episode analysis input does not match its published slice and Bible"
+                )
+        elif self.stage == "reconcile_episode":
+            stage_input = EpisodeReconciliationStageInput.model_validate(self.stage_input)
+            expected_stage = (
+                "analyze_episode"
+                if stage_input.candidate_type == "episode_analysis_candidate"
+                else "reconcile_episode"
+            )
+            expected_sources = {
+                (
+                    "production/episode-script",
+                    str(stage_input.episode_id),
+                    stage_input.script_version_id,
+                    stage_input.script_version_no,
+                    stage_input.script_content_hash,
+                ),
+                (
+                    "production/bible-version",
+                    str(stage_input.bible_version_id),
+                    stage_input.bible_version_id,
+                    stage_input.bible_version,
+                    stage_input.bible_content_hash,
+                ),
+                (
+                    "production/bible-materialization",
+                    str(stage_input.bible_version_id),
+                    stage_input.bible_version_id,
+                    stage_input.bible_version,
+                    stage_input.materialization_hash,
+                ),
+            }
+            supplied_sources = {
+                (
+                    value.owner_kind,
+                    value.owner_logical_id,
+                    value.owner_version_id,
+                    value.revision,
+                    value.content_hash,
+                )
+                for value in self.source_refs
+            }
+            expected_children = {
+                (value.shard_key, value.candidate_revision_id, value.candidate_revision_hash)
+                for value in stage_input.candidates
+            }
+            supplied_children = {
+                (value.shard_key, value.candidate_revision_id, value.candidate_revision_hash)
+                for value in self.upstream_candidates
+                if value.stage == expected_stage
+            }
+            if (
+                len(self.source_refs) != len(expected_sources)
+                or supplied_sources != expected_sources
+                or len(self.upstream_candidates) != len(expected_children)
+                or supplied_children != expected_children
+                or self.base_storygraph_version_id is not None
+                or self.shard.kind != "episode_reduce"
+                or self.shard.absolute_start is not None
+                or self.shard.absolute_end is not None
+            ):
+                raise ValueError(
+                    "Episode reconciliation input does not match its exact Episode children"
                 )
         elif self.stage == "review_storygraph":
             stage_input = StoryGraphReviewStageInput.model_validate(self.stage_input)

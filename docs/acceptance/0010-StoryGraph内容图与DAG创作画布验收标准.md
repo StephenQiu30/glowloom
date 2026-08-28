@@ -225,7 +225,7 @@
 - [x] `SG-I12`：Confirmed Bible 资产/Specification/State/ProductionBinding 原子物化完成。
 - [x] `SG-I13`：Episode segmentation Candidate 与 coverage 完成。
 - [x] `SG-I14`：Episode Plan Gate 与 Episode/Published ScriptVersion 全批物化完成。
-- [ ] `SG-I15`：Episode analyze/reconcile 与 Scene/Beat/Occurrence/Claim Candidate 完成。
+- [x] `SG-I15`：Episode analyze/reconcile 与 Scene/Beat/Occurrence/Claim Candidate 完成。
 - [ ] `SG-I16`：Planning Review/Gate/Owner 全批 Apply 完成。
 - [ ] `SG-I17`：Core StoryGraph 多集编译、Diff/Impact 全链完成。
 - [ ] `SG-I18`：Storyboard Draft/Shot Intent/needs_asset 且零正式 Shot 完成。
@@ -512,4 +512,16 @@
 - 通过范围：以上证据完成 `SG-PRD-005` 与当前分集 Gate/Owner 项；覆盖七类 Gate 的复合 `SG-REV-006`–`008` 仍只完成 Bible 与 Episode 部分，保持未勾选。Episode 内 Scene/Dialogue/Beat/Occurrence/Claim 分析与审核、Core StoryGraph 多集编译、Shot/Canvas、完整原稿复合旅程和最终浏览器验收仍未完成；`agent-browser` 按约定只在全部开发完成后执行，本次未运行。
 - Git：本 Evidence 与实现由描述审核后原子发布分集的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I14`，其余保持未通过。下一步只允许从正式 Episode/Published ScriptVersion exact ref 接入 `analyze_episode` 与 `reconcile_episode`，产出 Scene/Dialogue/Beat/Occurrence/Claim Candidate；在该 Candidate 审核与 Planning Owner Apply 完成前不得创建对应正式事实。
+### 有证据的分集结构候选与确定性归并（2026-08-28）
+
+- Red 与跨语言契约：`agent/tests/contract/test_episode_analysis_contract.py`、`backend/tests/agent/episode_analysis_wire_test.go` 与 `backend/tests/production/planning/episode_analysis_test.go` 先固定正式 Episode/Published ScriptVersion、confirmed Bible Version、Materialization、Unicode code-point 区间、scene marker、相邻 Episode、Known Identity/State、map/reduce exact child 和 Evidence 守恒。Go 与 Pydantic 都严格拒绝 source revision/hash 漂移、越界 Evidence、未知身份/状态、缺失子 Candidate、乱序分片和业务写入形状；测试只位于独立 `agent/tests` 与 `backend/tests`。
+- Definition-first 与职责：Authoring Catalog `10.0.0` 增加 `agent.episode_analysis@1.0.0`，只在 `episode_set` 与 `production_bible_materialization` 都可用后启动。Backend Planning Application 按每个已发布 Episode 生成确定性 map Manifest 与固定 fan-in=2 的 reduce tree，scene marker 优先切分，超长场次才硬切，相邻 Episode 只作为只读边界上下文；Agent `build-storygraph` Bundle 只返回 Scene/Dialogue/Beat/Occurrence/Claim Candidate，不拥有 GORM、Owner Command、Temporal、Kafka 或正式 UUID。
+- 单一事实源、引用与恢复：Backend 从共享 PostgreSQL/GORM 读取并冻结 Episode ScriptVersion、Bible Version、Materialization 与 Asset/Specification/State exact ref，Manifest ID 由 NodeRun/stage 确定性派生，Invocation、Candidate Revision/Head 和最终 aggregate 全部写入既有 Agent 表；没有 Migration、Raw SQL、第二 ORM、第二 SQL 事实源、兼容入口或新业务 Writer。测试注入一次 Agent transport unknown 与一次结果持久化 unknown，均以相同 Invocation/Input/Stage identity 重新领取并成功；成功兄弟和历史 Candidate 不被清除。
+- Evidence 与候选边界：模型给出的 Evidence 只有在绝对偏移、原文、Episode number 全部精确匹配冻结文本时，Harness 才确定性重算 SHA-256；偏移、原文或归并 child 漂移仍 fail closed。Backend 再次校验每个 Fragment/Claim 的 source range、exact anchor/hash、Known Identity/State、Scene anchor 与 child key 集合。最终只发布一个 `episode-planning-candidate-set-v1` aggregate，覆盖全部已发布 Episode root；真实数据库断言正式 `EpisodeStructure` 计数为 0，因此本项没有越过下一 Human Gate/Owner Apply。
+- 真实 Codex 与 Workflow：本机登录 Codex CLI 后执行 `LANVERSE_TEST_REAL_CODEX=1 uv run pytest -q tests/integration/test_storygraph_real_codex.py -vv`，结果 `3 passed in 163.42s`，覆盖分集切分、Episode analyze/reconcile、Story analyze/reconcile/review/repair；新增 Episode 用例单独执行为 `1 passed, 2 deselected in 57.19s`。真实 PostgreSQL `16.15` 与固定摘要 Temporal 中，三集 `Script → Evidence → Bible → Materialization → Episode Gate/Published ScriptVersion → Episode Analysis` 旅程完成，map/reduce Invocation 均成功、至少一个 Invocation attempts≥2、aggregate revision/hash 与 Node output 一致、正式 Structure 为零；定向旅程最终 `PASS`，耗时 `47.350s`。
+- 完整 CI：Agent Ruff check/format、Pyright 与 Pytest 全通过，结果 `35 passed, 3 skipped`；三个 skip 均为已由上述 opt-in 命令真实通过的 Codex 用例。Backend 使用全新 PostgreSQL 数据库、Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Filebeat/Logstash/Kibana `9.4.4` 执行 `test -z "$(gofmt -l .)"`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Workflow 包 `155.501s`。首次全量 Backend 运行暴露旧 Candidate Repair 旅程用无效 `analyze_episode` 依赖模拟 stale closure；改为两级合法 `reconcile_story` exact child 后，聚焦与全量空库复跑均通过，未添加兼容分支。
+- Frontend、镜像与故障部署：`npm ci`、OpenAPI 生成/零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试与 Next.js `16.2.12` production build 全通过；开发/生产 Compose、Backend/Frontend/Agent 三镜像、Backend 三 Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Bundle 探针均通过。完整部署验证注册/项目写入、日志 request/trace 脱敏检索、Filebeat/Logstash/Kibana 停机不影响 Owner/Workflow、Kafka/Elasticsearch 停机时 Event Worker 正确 503 且 Backend/Workflow 保持可用、恢复后 readiness 与日志摄取收敛；前两次启动分别被宿主 `9000` 与 `5432` 占用在应用验证前阻断，端口审计后只改变宿主映射到 `59001`–`59004`，容器内部正式端口和同一故障剧本不变，最终完整通过。
+- 通过范围：本证据完成 `SG-I15`、Episode 维度确定性分片/归并、Claim Candidate 和引用门禁；`SG-PRD-006` 仍包含下一项的全批 Owner Apply，因此保持未勾选。Scene/Beat/Occurrence/Claim Human Gate、正式 Planning 事实、Core StoryGraph 多集编译、Shot/Canvas、完整原稿与最终浏览器验收尚未完成；依据正式队列不提前运行 `agent-browser`。
+- Git：本 Evidence 与实现由描述有证据分集结构候选的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I15`，其余保持未通过。下一步只允许对当前 Episode Structure Candidate 执行 Review、公共 Human Gate 与 Planning Owner 全批应用；在 exact Decision/Receipt 成功前不得创建 Scene/Dialogue/Beat/Occurrence/Claim 正式事实，也不得提前编译对应 Core StoryGraphVersion。

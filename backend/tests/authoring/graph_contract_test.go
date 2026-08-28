@@ -14,11 +14,12 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "9.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "10.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
 	want := []string{
+		"agent.episode_analysis@1.0.0",
 		"agent.episode_segmentation@1.0.0",
 		"agent.production_bible@1.0.0",
 		"agent.source_evidence@1.0.0",
@@ -48,6 +49,29 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
 	}
+}
+
+func TestEpisodeAnalysisConsumesPublishedSetAndBibleMaterialization(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.Key != "agent.episode_analysis" {
+			continue
+		}
+		if definition.Executor != "activity.episode_analysis" || definition.CachePolicy != "by_inputs" ||
+			definition.RiskLevel != "external_ai" || len(definition.InputPorts) != 2 || len(definition.OutputPorts) != 1 ||
+			definition.InputPorts[0].Key != "episodes" || definition.InputPorts[0].ValueType != "episode_set" ||
+			definition.InputPorts[1].Key != "materialization" ||
+			definition.InputPorts[1].ValueType != "production_bible_materialization" ||
+			definition.OutputPorts[0].Key != "candidate" ||
+			definition.OutputPorts[0].ValueType != "episode_planning_candidate_set" {
+			t.Fatalf("Episode analysis node contract = %#v", definition)
+		}
+		return
+	}
+	t.Fatal("Episode analysis is absent from the system catalog")
 }
 
 func TestEpisodePlanHumanGateConsumesSegmentationCandidateAndPublishesEpisodeSet(t *testing.T) {

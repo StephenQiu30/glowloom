@@ -32,6 +32,7 @@ const (
 	productionBibleExecutor        = "activity.production_bible"
 	bibleMaterializationExecutor   = "activity.production_bible_materialization"
 	episodeSegmentationExecutor    = "activity.episode_segmentation"
+	episodeAnalysisExecutor        = "activity.episode_analysis"
 	episodePlanExecutor            = "activity.episode_plan"
 	episodeStructureExecutor       = "activity.episode_structure"
 	storyboardDraftExecutor        = "activity.storyboard_draft"
@@ -68,6 +69,10 @@ type StoryReviewOwner interface {
 
 type EpisodeSegmentationOwner interface {
 	Ensure(context.Context, bibleapp.EpisodeSegmentationCommand) (bibleapp.EpisodeSegmentationState, error)
+}
+
+type EpisodeAnalysisOwner interface {
+	Ensure(context.Context, planningapp.EpisodeAnalysisCommand) (planningapp.EpisodeAnalysisState, error)
 }
 
 type ProjectSource interface {
@@ -108,6 +113,7 @@ type NodeExecutor struct {
 	storyboards  StoryboardWorkflowOwner
 	bindings     ShotImageWorkflowOwner
 	segments     EpisodeSegmentationOwner
+	episodes     EpisodeAnalysisOwner
 }
 
 func NewNodeExecutor(
@@ -121,10 +127,11 @@ func NewNodeExecutor(
 	storyboards StoryboardWorkflowOwner,
 	bindings ShotImageWorkflowOwner,
 	segments EpisodeSegmentationOwner,
+	episodes EpisodeAnalysisOwner,
 ) *NodeExecutor {
 	return &NodeExecutor{
 		scripts: scripts, evidence: evidence, stories: stories, storyReviews: storyReviews, bibles: bibles, projects: projects, plans: plans,
-		storyboards: storyboards, bindings: bindings, segments: segments,
+		storyboards: storyboards, bindings: bindings, segments: segments, episodes: episodes,
 	}
 }
 
@@ -152,6 +159,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeBibleMaterialization(ctx, command)
 	case episodeSegmentationExecutor:
 		return executor.executeEpisodeSegmentation(ctx, command)
+	case episodeAnalysisExecutor:
+		return executor.executeEpisodeAnalysis(ctx, command)
 	case episodePlanExecutor:
 		return executor.executeEpisodePlan(ctx, command)
 	case episodeStructureExecutor:
@@ -1209,6 +1218,77 @@ func (executor *NodeExecutor) executeEpisodeSegmentation(
 		SchemaVersion: domain.NodeOutputSchemaVersion,
 		Bindings: []domain.NodeOutputBinding{{
 			Port: "candidate", ValueType: "episode_segmentation_candidate",
+			ReferenceID: state.CandidateRevisionID, ReferenceVersion: strconv.FormatInt(state.CandidateRevisionNo, 10),
+			ContentHash: state.CandidateRevisionHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeEpisodeAnalysis(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.episodes == nil {
+		return domain.NodeExecutorResult{}, errors.New("Episode analysis workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 2 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
+		command.OutputPorts[0].ValueType != "episode_planning_candidate_set" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Episode analysis node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Episode analysis node config")
+	}
+	bindings := make(map[string]domain.NodeInputBinding, len(input.Bindings))
+	for _, binding := range input.Bindings {
+		bindings[binding.Port] = binding
+	}
+	episodes, materialization := bindings["episodes"], bindings["materialization"]
+	bibleVersion, versionErr := strconv.Atoi(materialization.ReferenceVersion)
+	if versionErr != nil || bibleVersion < 1 ||
+		episodes.Port != "episodes" || episodes.ValueType != "episode_set" ||
+		episodes.SourceKind != domain.NodeInputSourceNodeOutput || episodes.SourcePort != "episodes" ||
+		strings.TrimSpace(episodes.SourceNodeID) == "" ||
+		materialization.Port != "materialization" || materialization.ValueType != "production_bible_materialization" ||
+		materialization.SourceKind != domain.NodeInputSourceNodeOutput || materialization.SourcePort != "materialization" ||
+		strings.TrimSpace(materialization.SourceNodeID) == "" ||
+		!workflowContentHashPattern.MatchString(episodes.ContentHash) ||
+		!workflowContentHashPattern.MatchString(materialization.ContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Episode analysis exact inputs have drifted")
+	}
+	state, err := executor.episodes.Ensure(ctx, planningapp.EpisodeAnalysisCommand{
+		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
+		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
+		EpisodeSetID: episodes.ReferenceID, EpisodeSetHash: episodes.ContentHash,
+		BibleVersionID: materialization.ReferenceID, BibleVersion: bibleVersion,
+		MaterializationHash: materialization.ContentHash,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	switch state.Status {
+	case "pending":
+		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+	case "failed":
+		return domain.NodeExecutorResult{}, errors.New("Episode analysis candidate generation failed")
+	case "ready":
+		if _, parseErr := uuid.Parse(state.CandidateRevisionID); parseErr != nil ||
+			state.CandidateRevisionNo < 1 || !workflowContentHashPattern.MatchString(state.CandidateRevisionHash) {
+			return domain.NodeExecutorResult{}, errors.New("Episode analysis candidate set is incomplete")
+		}
+	default:
+		return domain.NodeExecutorResult{}, errors.New("Episode analysis returned an invalid status")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "candidate", ValueType: "episode_planning_candidate_set",
 			ReferenceID: state.CandidateRevisionID, ReferenceVersion: strconv.FormatInt(state.CandidateRevisionNo, 10),
 			ContentHash: state.CandidateRevisionHash,
 		}},

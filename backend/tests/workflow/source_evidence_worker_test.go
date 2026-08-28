@@ -32,6 +32,7 @@ import (
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
+	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
@@ -99,6 +100,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "bible-materialization", DefinitionKey: "production.bible_materialization", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "episode-segmentation", DefinitionKey: "agent.episode_segmentation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "episode-review", DefinitionKey: "human.episode_plan_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "episode-analysis", DefinitionKey: "agent.episode_analysis", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
@@ -109,6 +111,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "evidence-to-segmentation", FromNodeID: "evidence", FromPort: "evidence", ToNodeID: "episode-segmentation", ToPort: "evidence"},
 				{ID: "materialization-to-segmentation", FromNodeID: "bible-materialization", FromPort: "materialization", ToNodeID: "episode-segmentation", ToPort: "materialization"},
 				{ID: "segmentation-to-episode-review", FromNodeID: "episode-segmentation", FromPort: "candidate", ToNodeID: "episode-review", ToPort: "candidate"},
+				{ID: "episode-review-to-analysis", FromNodeID: "episode-review", FromPort: "episodes", ToNodeID: "episode-analysis", ToPort: "episodes"},
+				{ID: "materialization-to-analysis", FromNodeID: "bible-materialization", FromPort: "materialization", ToNodeID: "episode-analysis", ToPort: "materialization"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -163,6 +167,12 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	planningService := planningapp.NewService(planninggorm.New(database), planningapp.Config{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 	})
+	episodeAnalysisService := planningapp.NewEpisodeAnalysisService(
+		planninggorm.New(database), planningapp.EpisodeAnalysisConfig{
+			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+			MaxShardCodePoints: 12, OverlapCodePoints: 2, AdjacentCodePoints: 4, FanIn: 2,
+		},
+	)
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
@@ -174,7 +184,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		planningService,
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		reviewService,
-		nil, nil, episodeSegmentationService,
+		nil, nil, episodeSegmentationService, episodeAnalysisService,
 	)
 	if err != nil {
 		t.Fatalf("compose Source Evidence Workflow Runtime: %v", err)
@@ -217,6 +227,10 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		bibleStore, agent, func() time.Time { return time.Now().UTC() },
 		time.Millisecond, time.Minute, agentLogger,
 	)
+	episodeAnalysisWorker := planningapp.NewEpisodeAnalysisWorker(
+		planninggorm.New(database), agent, func() time.Time { return time.Now().UTC() },
+		time.Millisecond, time.Minute, agentLogger,
+	)
 	bibleWorker := bibleapp.NewWorker(
 		bibleStore, agent, func() time.Time { return time.Now().UTC() },
 		time.Millisecond, time.Minute, agentLogger,
@@ -229,6 +243,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	go storyReviewWorker.Run(agentContext)
 	go episodeSegmentationWorker.Run(agentContext)
 	go episodeSegmentationWorker.Run(agentContext)
+	go episodeAnalysisWorker.Run(agentContext)
+	go episodeAnalysisWorker.Run(agentContext)
 	go bibleWorker.Run(agentContext)
 	t.Cleanup(stopAgent)
 
@@ -786,6 +802,58 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		t.Fatalf("published Episode set is incomplete: episodes=%d versions=%d events=%d source_end=%d joined=%q",
 			len(publishedEpisodes), len(publishedVersions), publishedEventCount, previousEnd, joined)
 	}
+	var episodeAnalysisNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "episode-analysis").
+		First(&episodeAnalysisNode).Error; err != nil {
+		t.Fatalf("load Episode analysis NodeRun: %v", err)
+	}
+	analysisOutput, _, analysisOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(episodeAnalysisNode.Output))
+	if err != nil || episodeAnalysisNode.Status != "SUCCEEDED" || episodeAnalysisNode.OutputHash == nil ||
+		*episodeAnalysisNode.OutputHash != analysisOutputHash || len(analysisOutput.Bindings) != 1 ||
+		analysisOutput.Bindings[0].Port != "candidate" ||
+		analysisOutput.Bindings[0].ValueType != "episode_planning_candidate_set" {
+		t.Fatalf("Episode analysis output=%#v node=%#v err=%v", analysisOutput, episodeAnalysisNode, err)
+	}
+	var episodeAggregateRevision model.StageCandidateRevision
+	if err = database.First(&episodeAggregateRevision, "id = ?", analysisOutput.Bindings[0].ReferenceID).Error; err != nil {
+		t.Fatalf("load Episode planning aggregate Candidate: %v", err)
+	}
+	var aggregate planningdomain.EpisodePlanningCandidateSet
+	if err = json.Unmarshal(episodeAggregateRevision.Candidate, &aggregate); err != nil {
+		t.Fatalf("decode Episode planning aggregate Candidate: %v", err)
+	}
+	var analysisInvocationCount, reconciliationInvocationCount, formalStructureCount int64
+	if err = database.Model(&model.AgentInvocation{}).Where(
+		"node_run_id = ? AND request_type = ? AND status = ?", episodeAnalysisNode.ID, "episode_analysis_shard", "succeeded",
+	).Count(&analysisInvocationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.AgentInvocation{}).Where(
+		"node_run_id = ? AND request_type = ? AND status = ?", episodeAnalysisNode.ID, "episode_reconcile_shard", "succeeded",
+	).Count(&reconciliationInvocationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.EpisodeStructure{}).Where("project_id = ?", fixture.projectID).
+		Count(&formalStructureCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	agent.mutex.Lock()
+	recoveredEpisodeInvocationID := agent.episodeAnalysisID
+	agent.mutex.Unlock()
+	var recoveredEpisodeInvocation model.AgentInvocation
+	if err = database.First(&recoveredEpisodeInvocation, "id = ?", recoveredEpisodeInvocationID).Error; err != nil {
+		t.Fatalf("load recovered Episode analysis invocation: %v", err)
+	}
+	if aggregate.SchemaVersion != "episode-planning-candidate-set-v1" ||
+		len(aggregate.Episodes) != len(publishedEpisodes) || analysisInvocationCount < int64(len(publishedEpisodes)) ||
+		reconciliationInvocationCount < int64(len(publishedEpisodes)) || formalStructureCount != 0 ||
+		episodeAggregateRevision.CandidateRevisionHash != analysisOutput.Bindings[0].ContentHash ||
+		recoveredEpisodeInvocation.Attempts < 2 || recoveredEpisodeInvocation.Status != "succeeded" {
+		t.Fatalf(
+			"Episode analysis facts: aggregate=%#v maps=%d reduces=%d structures=%d recovered=%#v",
+			aggregate, analysisInvocationCount, reconciliationInvocationCount, formalStructureCount, recoveredEpisodeInvocation,
+		)
+	}
 
 	replayCommand := planningapp.ApplyEpisodePlanCommand{
 		CandidateRevisionID:       segmentationOutput.Bindings[0].ReferenceID,
@@ -1109,10 +1177,21 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		Count(&invocationRevisionCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err = database.Model(&model.StageCandidateRevision{}).
-		Where("workspace_id = ? AND origin_kind = ?", fixture.workspaceID, "aggregate").
-		Count(&aggregateRevisionCount).Error; err != nil {
+	var aggregateRevisions []model.StageCandidateRevision
+	if err = database.Where("workspace_id = ? AND origin_kind = ?", fixture.workspaceID, "aggregate").
+		Find(&aggregateRevisions).Error; err != nil {
 		t.Fatal(err)
+	}
+	var aggregateRevision model.StageCandidateRevision
+	for _, candidateRevision := range aggregateRevisions {
+		var origin agentcontract.AggregateCandidateOrigin
+		if err = json.Unmarshal(candidateRevision.AggregateOrigin, &origin); err != nil {
+			t.Fatal(err)
+		}
+		if origin.ShardManifestID == manifest.ID.String() {
+			aggregateRevision = candidateRevision
+			aggregateRevisionCount++
+		}
 	}
 	var oldInvocation model.AgentInvocation
 	if err = database.Where("node_run_id = ? AND shard_manifest_version = ? AND status = ?", evidenceNode.ID, 1, "succeeded").
@@ -1123,9 +1202,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	if err = database.First(&oldRevision, "source_invocation_id = ?", oldInvocation.ID).Error; err != nil {
 		t.Fatalf("late old-manifest Candidate Revision was not retained: %v", err)
 	}
-	var aggregateRevision model.StageCandidateRevision
-	if err = database.First(&aggregateRevision, "workspace_id = ? AND origin_kind = ?", fixture.workspaceID, "aggregate").Error; err != nil {
-		t.Fatal(err)
+	if aggregateRevision.ID == uuid.Nil {
+		t.Fatal("Source Evidence aggregate Candidate Revision is missing")
 	}
 	if strings.Contains(string(aggregateRevision.AggregateOrigin), oldRevision.ID.String()) {
 		t.Fatalf("late old-manifest Candidate entered current aggregate: %s", aggregateRevision.AggregateOrigin)
@@ -1399,6 +1477,8 @@ type recoveringSourceEvidenceAgent struct {
 	storyDeadlineID         string
 	segmentUnknown          bool
 	segmentInvocationID     string
+	episodeAnalysisUnknown  bool
+	episodeAnalysisID       string
 	originalCalls           int
 	lateRelease             <-chan struct{}
 	deadlineRecoveryRelease <-chan struct{}
@@ -1410,6 +1490,22 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 	_ int,
 	_ int64,
 ) (agentcontract.StageResult, error) {
+	if invocation.Payload.Stage == planningdomain.AnalyzeEpisodeStage {
+		agent.mutex.Lock()
+		if agent.episodeAnalysisID == "" {
+			agent.episodeAnalysisID = invocation.InvocationID
+			agent.mutex.Unlock()
+			return agentcontract.StageResult{}, errors.New("injected Episode analysis transport outcome unknown")
+		}
+		if agent.episodeAnalysisID == invocation.InvocationID && !agent.episodeAnalysisUnknown {
+			agent.episodeAnalysisUnknown = true
+		}
+		agent.mutex.Unlock()
+		return episodeAnalysisFixtureResult(invocation)
+	}
+	if invocation.Payload.Stage == planningdomain.ReconcileEpisodeStage {
+		return episodeReconciliationFixtureResult(invocation)
+	}
 	if invocation.Payload.Stage == bibledomain.EpisodeSegmentationStage {
 		agent.mutex.Lock()
 		if !agent.segmentUnknown {
@@ -1549,6 +1645,115 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 		Candidate: candidate, InputHash: invocation.InputHash, ResultHash: &resultHash,
 		Issues:   []agentcontract.StageIssue{},
 		Executor: agentcontract.Executor{Name: "test-agent", Version: "source-evidence-v1", Model: "deterministic-fixture"},
+	}, nil
+}
+
+func episodeAnalysisFixtureResult(invocation agentcontract.StageInvocation) (agentcontract.StageResult, error) {
+	var input agentcontract.EpisodeAnalysisStageInput
+	if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	contextRunes := []rune(input.ContextText)
+	localStart, localEnd := input.LogicalStart-input.ContextStart, input.LogicalEnd-input.ContextStart
+	if localStart < 0 || localEnd > len(contextRunes) || localEnd <= localStart {
+		return agentcontract.StageResult{}, errors.New("fixture Episode analysis received an invalid logical range")
+	}
+	anchor := string(contextRunes[localStart:localEnd])
+	episodeNumber := input.EpisodePosition
+	fragments := []planningdomain.EpisodeStructureFragment{}
+	if strings.TrimSpace(anchor) != "" {
+		fragments = append(fragments, planningdomain.EpisodeStructureFragment{
+			TemporaryKey: "scene:" + strings.ReplaceAll(invocation.Payload.ShardKey, ".", "-"),
+			Kind:         "scene", SourceKeys: []string{"episode:" + input.EpisodeID},
+			SourceStart: input.LogicalStart, SourceEnd: input.LogicalEnd, Summary: "冻结分片场景",
+			Evidence: []bibledomain.Evidence{{
+				SourceStart: input.LogicalStart, SourceEnd: input.LogicalEnd,
+				TextHash: bibledomain.SourceTextHash(anchor), ExactAnchor: anchor, EpisodeNumber: &episodeNumber,
+			}},
+			Attributes: planningdomain.EpisodeStructureAttributes{
+				ParticipantKeys: []string{}, ContinuityNotes: []string{},
+			},
+		})
+	}
+	candidate, err := json.Marshal(planningdomain.EpisodeAnalysisCandidate{
+		EpisodeID: input.EpisodeID, ScriptVersionID: input.ScriptVersionID,
+		LogicalStart: input.LogicalStart, LogicalEnd: input.LogicalEnd,
+		Fragments: fragments,
+		Claims:    []planningdomain.EpisodeClaimCandidate{}, ReviewIssues: []bibledomain.ReviewIssue{},
+	})
+	if err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	return episodeFixtureStageResult(invocation, "episode_analysis_candidate", candidate)
+}
+
+func episodeReconciliationFixtureResult(invocation agentcontract.StageInvocation) (agentcontract.StageResult, error) {
+	var input agentcontract.EpisodeReconciliationStageInput
+	if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	fragments := make([]planningdomain.EpisodeStructureFragment, 0)
+	claims := make([]planningdomain.EpisodeClaimCandidate, 0)
+	for _, child := range input.Candidates {
+		switch input.CandidateType {
+		case "episode_analysis_candidate":
+			var candidate planningdomain.EpisodeAnalysisCandidate
+			if err := json.Unmarshal(child.Candidate, &candidate); err != nil {
+				return agentcontract.StageResult{}, err
+			}
+			fragments = append(fragments, candidate.Fragments...)
+			claims = append(claims, candidate.Claims...)
+		case "episode_reconciliation_candidate":
+			var candidate planningdomain.EpisodeReconciliationCandidate
+			if err := json.Unmarshal(child.Candidate, &candidate); err != nil {
+				return agentcontract.StageResult{}, err
+			}
+			fragments = append(fragments, candidate.OrderedFragments...)
+			claims = append(claims, candidate.Claims...)
+		default:
+			return agentcontract.StageResult{}, errors.New("fixture Episode reconciliation received an invalid Candidate type")
+		}
+	}
+	slices.SortFunc(fragments, func(left, right planningdomain.EpisodeStructureFragment) int {
+		if left.SourceStart != right.SourceStart {
+			return left.SourceStart - right.SourceStart
+		}
+		if left.SourceEnd != right.SourceEnd {
+			return left.SourceEnd - right.SourceEnd
+		}
+		return strings.Compare(left.TemporaryKey, right.TemporaryKey)
+	})
+	slices.SortFunc(claims, func(left, right planningdomain.EpisodeClaimCandidate) int {
+		return strings.Compare(left.ClaimKey, right.ClaimKey)
+	})
+	candidate, err := json.Marshal(planningdomain.EpisodeReconciliationCandidate{
+		EpisodeID: input.EpisodeID, ScriptVersionID: input.ScriptVersionID,
+		SourceStart: input.EpisodeSourceStart, SourceEnd: input.EpisodeSourceEnd,
+		OrderedFragments: fragments, Claims: claims,
+		Conflicts: []bibledomain.ReviewIssue{}, ReviewIssues: []bibledomain.ReviewIssue{},
+	})
+	if err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	return episodeFixtureStageResult(invocation, "episode_reconciliation_candidate", candidate)
+}
+
+func episodeFixtureStageResult(
+	invocation agentcontract.StageInvocation,
+	candidateType string,
+	candidate json.RawMessage,
+) (agentcontract.StageResult, error) {
+	resultHash, err := agentcontract.CanonicalHash(candidate)
+	if err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	return agentcontract.StageResult{
+		InvocationID: invocation.InvocationID, Kind: "storygraph_stage",
+		WireSchemaVersion: agentcontract.StoryGraphWireSchemaVersion,
+		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
+		Status: "succeeded", CandidateType: candidateType, Candidate: candidate,
+		InputHash: invocation.InputHash, ResultHash: &resultHash, Issues: []agentcontract.StageIssue{},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "episode-analysis-v1", Model: "deterministic-fixture"},
 	}, nil
 }
 
