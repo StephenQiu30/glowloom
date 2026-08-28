@@ -34,12 +34,12 @@ def _stage_invocation(stage: str, payload: dict[str, object]) -> StoryGraphStage
             {
                 "definition_key": "storygraph_stage",
                 "definition_version": "storygraph-stage-harness-v1",
-                "prompt_version": "build-storygraph-prompt-v1",
-                "skill_bundle_version": "build-storygraph-v1",
+                "prompt_version": "build-storygraph-prompt-v2",
+                "skill_bundle_version": "build-storygraph-v2",
                 "skill_bundle_hash": (
-                    "d19485c0d8ac19c90afa06741c2626b1db55ace1f6c8f9a442231ba05637d95b"
+                    "352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb"
                 ),
-                "output_schema_version": "storygraph-candidate-schema-v1",
+                "output_schema_version": "storygraph-candidate-schema-v2",
                 "model_capability": "structured_text",
                 "codex_runtime_contract": "codex-cli-ephemeral-read-only-v1",
                 "allowed_tools": [],

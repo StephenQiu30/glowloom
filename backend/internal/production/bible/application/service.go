@@ -23,8 +23,8 @@ const (
 	resumeOperation  = "production_bible.resume"
 	decideOperation  = "production_bible.review_issue.decide"
 	engineVersion    = "storygraph-stage-agent-v1"
-	promptVersion    = "build-storygraph-prompt-v1"
-	schemaVersion    = "storygraph-candidate-schema-v1"
+	promptVersion    = "build-storygraph-prompt-v2"
+	schemaVersion    = "storygraph-candidate-schema-v2"
 	harnessVersion   = "storygraph-stage-harness-v1"
 )
 

@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "12.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "13.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -25,19 +25,17 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"agent.source_evidence@1.0.0",
 		"agent.story_analysis@1.0.0",
 		"agent.story_review@1.0.0",
-		"agent.storyboard_draft@1.0.0",
+		"agent.storyboard_draft@2.0.0",
 		"human.episode_plan_review@1.0.0",
 		"human.episode_plan_review@2.0.0",
 		"human.episode_structure_review@1.0.0",
 		"human.episode_structure_review@2.0.0",
 		"human.production_bible_review@1.0.0",
 		"human.production_bible_review@2.0.0",
-		"human.storyboard_review@1.0.0",
 		"input.script_revision@1.0.0",
 		"production.bible_materialization@1.0.0",
 		"production.episode_plan@2.0.0",
 		"production.episode_structure@1.0.0",
-		"production.storyboard_export@1.0.0",
 		"production.storygraph_compile@1.0.0",
 	}
 	got := make([]string, 0, len(catalog.Definitions))
@@ -51,6 +49,29 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
 	}
+}
+
+func TestStoryboardDraftConsumesPublishedStoryGraphWithoutFormalizingShots(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.Key != "agent.storyboard_draft" {
+			continue
+		}
+		if definition.Version != "2.0.0" || definition.Executor != "activity.storyboard_draft" ||
+			definition.CachePolicy != "by_inputs" || definition.RiskLevel != "external_ai" ||
+			len(definition.InputPorts) != 1 || len(definition.OutputPorts) != 1 ||
+			definition.InputPorts[0].Key != "storygraph" ||
+			definition.InputPorts[0].ValueType != "storygraph_version" ||
+			definition.OutputPorts[0].Key != "candidate" ||
+			definition.OutputPorts[0].ValueType != "storyboard_intent_candidate_set" {
+			t.Fatalf("Storyboard Draft contract = %#v", definition)
+		}
+		return
+	}
+	t.Fatal("Storyboard Draft v2 is absent from the system catalog")
 }
 
 func TestStoryGraphCompilerConsumesPlanningOwnerSetAndPublishesExactVersion(t *testing.T) {

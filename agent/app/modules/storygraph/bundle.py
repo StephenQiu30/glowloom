@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.modules.storygraph.skill_registry import RegistryError, stage_spec
 
-SKILL_BUNDLE_HASH = "d19485c0d8ac19c90afa06741c2626b1db55ace1f6c8f9a442231ba05637d95b"
+SKILL_BUNDLE_HASH = "352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb"
 
 
 class BundleInvalid(ValueError):
@@ -17,10 +17,10 @@ class BundleInvalid(ValueError):
 class BundleManifest:
     definition_key: str = "storygraph_stage"
     definition_version: str = "storygraph-stage-harness-v1"
-    prompt_version: str = "build-storygraph-prompt-v1"
-    skill_bundle_version: str = "build-storygraph-v1"
+    prompt_version: str = "build-storygraph-prompt-v2"
+    skill_bundle_version: str = "build-storygraph-v2"
     skill_bundle_hash: str = SKILL_BUNDLE_HASH
-    output_schema_version: str = "storygraph-candidate-schema-v1"
+    output_schema_version: str = "storygraph-candidate-schema-v2"
     model_capability: str = "structured_text"
     codex_runtime_contract: str = "codex-cli-ephemeral-read-only-v1"
     allowed_tools: tuple[str, ...] = ()

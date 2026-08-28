@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +21,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	storyboarddomain "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/domain"
+	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
 )
 
 type Store struct{ database *gorm.DB }
@@ -96,6 +98,246 @@ func (repo *repository) DraftInput(ctx context.Context, actor application.Actor,
 	}, nil
 }
 
+func (repo *repository) StoryGraphDraftInput(
+	ctx context.Context,
+	actor application.Actor,
+	graphVersionID, workflowRunID, nodeRunID string,
+	write bool,
+) (storyboarddomain.StoryGraphDraftInput, error) {
+	graphID, err := uuid.Parse(graphVersionID)
+	if err != nil {
+		return storyboarddomain.StoryGraphDraftInput{}, application.ErrNotFound
+	}
+	if _, err = uuid.Parse(workflowRunID); err != nil {
+		return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft requires a real Workflow Run")
+	}
+	if _, err = uuid.Parse(nodeRunID); err != nil {
+		return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft requires a real Node Run")
+	}
+	var graph model.StoryGraphVersion
+	if err = repo.database.WithContext(ctx).First(&graph, "id = ?", graphID).Error; err != nil {
+		return storyboarddomain.StoryGraphDraftInput{}, normalizeNotFound(err)
+	}
+	if err = authorizeProject(ctx, repo.database, actor, graph.ProjectID, write); err != nil {
+		return storyboarddomain.StoryGraphDraftInput{}, err
+	}
+	if graph.Status != "published" || graph.VersionNo < 1 || len(graph.ContentHash) != 64 {
+		return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft requires a published StoryGraph Version")
+	}
+	var project model.Project
+	if err = repo.database.WithContext(ctx).First(&project, "id = ?", graph.ProjectID).Error; err != nil {
+		return storyboarddomain.StoryGraphDraftInput{}, normalizeNotFound(err)
+	}
+	if project.VisualStyle == nil || strings.TrimSpace(*project.VisualStyle) == "" ||
+		strings.TrimSpace(project.AspectRatio) == "" || project.Revision < 1 {
+		return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft requires a frozen effective visual style")
+	}
+	style := contract.StoryboardStyleSnapshotInput{
+		OwnerVersionID: project.ID.String(), Revision: int64(project.Revision),
+		VisualStyle: strings.TrimSpace(*project.VisualStyle), AspectRatio: project.AspectRatio,
+	}
+	style.ContentHash, err = contract.CanonicalHash(mustMarshal(struct {
+		ProjectID, VisualStyle, AspectRatio string
+		Revision                            int
+	}{project.ID.String(), style.VisualStyle, style.AspectRatio, project.Revision}))
+	if err != nil {
+		return storyboarddomain.StoryGraphDraftInput{}, err
+	}
+	var nodes []storygraph.Node
+	var edges []storygraph.Edge
+	if err = json.Unmarshal(graph.Nodes, &nodes); err != nil {
+		return storyboarddomain.StoryGraphDraftInput{}, err
+	}
+	if err = json.Unmarshal(graph.Edges, &edges); err != nil {
+		return storyboarddomain.StoryGraphDraftInput{}, err
+	}
+	byKey := make(map[string]storygraph.Node, len(nodes))
+	for _, node := range nodes {
+		byKey[node.StoryNodeKey] = node
+	}
+	children := make(map[string][]storygraph.Node)
+	episodeForScene := make(map[string]storygraph.Node)
+	specificationForIdentity := make(map[string]storygraph.Node)
+	for _, edge := range edges {
+		from, fromFound := byKey[edge.FromNodeKey]
+		to, toFound := byKey[edge.ToNodeKey]
+		if !fromFound || !toFound {
+			return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft StoryGraph has a dangling edge")
+		}
+		switch edge.EdgeType {
+		case storygraph.EdgeTypeContains:
+			children[from.StoryNodeKey] = append(children[from.StoryNodeKey], to)
+			if from.NodeType == storygraph.NodeTypeEpisode && to.NodeType == storygraph.NodeTypeScene {
+				episodeForScene[to.StoryNodeKey] = from
+			}
+		case storygraph.EdgeTypeAnchorsOccurrence:
+			if from.NodeType == storygraph.NodeTypeScene && to.NodeType == storygraph.NodeTypeOccurrence {
+				children[from.StoryNodeKey] = append(children[from.StoryNodeKey], to)
+			}
+		case storygraph.EdgeTypeDescribesIdentity:
+			specificationForIdentity[from.StoryNodeKey] = to
+		}
+	}
+	scenes := make([]storyboarddomain.SceneDraftInput, 0)
+	for _, sceneNode := range nodes {
+		if sceneNode.NodeType != storygraph.NodeTypeScene {
+			continue
+		}
+		episodeNode, found := episodeForScene[sceneNode.StoryNodeKey]
+		if !found {
+			return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft Scene has no exact Episode")
+		}
+		var scenePayload struct {
+			Heading string `json:"heading"`
+		}
+		var scenePosition struct {
+			EpisodePosition int `json:"episode_position"`
+			ScenePosition   int `json:"scene_position"`
+		}
+		var episodePayload struct {
+			TargetDurationMS int    `json:"target_duration_ms"`
+			ScriptVersionID  string `json:"script_version_id"`
+		}
+		if json.Unmarshal(sceneNode.Payload, &scenePayload) != nil ||
+			json.Unmarshal(sceneNode.BusinessPosition, &scenePosition) != nil ||
+			json.Unmarshal(episodeNode.Payload, &episodePayload) != nil {
+			return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft Scene metadata is invalid")
+		}
+		stage := contract.StoryboardDraftStageInput{
+			GraphVersionNo: graph.VersionNo,
+			Scene: contract.StoryboardSceneInput{
+				StoryNodeKey: sceneNode.StoryNodeKey, OwnerVersionID: sceneNode.OwnerRef.OwnerVersionID,
+				OwnerRevision: sceneNode.OwnerRef.OwnerRevision, OwnerHash: sceneNode.OwnerRef.ContentHash,
+				EpisodeID: episodeNode.OwnerRef.OwnerLogicalID, EpisodePosition: scenePosition.EpisodePosition,
+				ScenePosition: scenePosition.ScenePosition, Heading: scenePayload.Heading,
+				Evidence: storyboardEvidence(sceneNode.EvidenceRefs),
+			},
+			Beats: []contract.StoryboardBeatInput{}, Dialogues: []contract.StoryboardDialogueInput{},
+			Occurrences: []contract.StoryboardOccurrenceInput{}, EffectiveStyleSnapshot: style,
+			TargetDurationMS: episodePayload.TargetDurationMS, AssetVersions: []contract.StoryboardAssetVersionInput{},
+		}
+		for _, child := range children[sceneNode.StoryNodeKey] {
+			switch child.NodeType {
+			case storygraph.NodeTypeNarrativeBeat:
+				var payload struct {
+					Text string `json:"text"`
+				}
+				if json.Unmarshal(child.Payload, &payload) != nil {
+					return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft Beat payload is invalid")
+				}
+				stage.Beats = append(stage.Beats, contract.StoryboardBeatInput{
+					StoryNodeKey: child.StoryNodeKey, Summary: payload.Text, RequiredForCoverage: true,
+					Evidence: storyboardEvidence(child.EvidenceRefs),
+				})
+			case storygraph.NodeTypeDialogue:
+				var payload struct {
+					Speaker string `json:"speaker"`
+					Text    string `json:"text"`
+				}
+				if json.Unmarshal(child.Payload, &payload) != nil {
+					return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft Dialogue payload is invalid")
+				}
+				stage.Dialogues = append(stage.Dialogues, contract.StoryboardDialogueInput{
+					StoryNodeKey: child.StoryNodeKey, Speaker: payload.Speaker, Text: payload.Text,
+					Evidence: storyboardEvidence(child.EvidenceRefs),
+				})
+			case storygraph.NodeTypeOccurrence:
+				occurrence, occurrenceErr := storyboardOccurrence(child, byKey, specificationForIdentity)
+				if occurrenceErr != nil {
+					return storyboarddomain.StoryGraphDraftInput{}, occurrenceErr
+				}
+				stage.Occurrences = append(stage.Occurrences, occurrence)
+			}
+		}
+		sort.Slice(stage.Beats, func(i, j int) bool { return stage.Beats[i].StoryNodeKey < stage.Beats[j].StoryNodeKey })
+		sort.Slice(stage.Dialogues, func(i, j int) bool { return stage.Dialogues[i].StoryNodeKey < stage.Dialogues[j].StoryNodeKey })
+		sort.Slice(stage.Occurrences, func(i, j int) bool { return stage.Occurrences[i].StoryNodeKey < stage.Occurrences[j].StoryNodeKey })
+		if len(stage.Beats) == 0 || len(stage.Occurrences) == 0 {
+			return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft Scene requires formal Beats and Occurrences")
+		}
+		scenes = append(scenes, storyboarddomain.SceneDraftInput{
+			EpisodeID: episodeNode.OwnerRef.OwnerLogicalID, StructureID: sceneNode.OwnerRef.OwnerVersionID,
+			ScriptVersionID: episodePayload.ScriptVersionID, StageInput: stage,
+		})
+	}
+	if len(scenes) == 0 {
+		return storyboarddomain.StoryGraphDraftInput{}, conflict("Storyboard Draft StoryGraph contains no Scenes")
+	}
+	return storyboarddomain.StoryGraphDraftInput{
+		WorkspaceID: graph.WorkspaceID.String(), ProjectID: graph.ProjectID.String(),
+		WorkflowRunID: workflowRunID, NodeRunID: nodeRunID,
+		GraphVersionID: graph.ID.String(), GraphVersionNo: graph.VersionNo, GraphContentHash: graph.ContentHash,
+		EffectiveStyleSnapshot: style, Scenes: scenes,
+	}, nil
+}
+
+func storyboardOccurrence(
+	node storygraph.Node,
+	byKey map[string]storygraph.Node,
+	specificationForIdentity map[string]storygraph.Node,
+) (contract.StoryboardOccurrenceInput, error) {
+	var payload struct {
+		IdentityStoryNodeKey string `json:"identity_story_node_key"`
+		StateStoryNodeKey    string `json:"state_story_node_key"`
+		Summary              string `json:"summary"`
+	}
+	if json.Unmarshal(node.Payload, &payload) != nil {
+		return contract.StoryboardOccurrenceInput{}, conflict("Storyboard Draft Occurrence payload is invalid")
+	}
+	identity, identityFound := byKey[payload.IdentityStoryNodeKey]
+	state, stateFound := byKey[payload.StateStoryNodeKey]
+	specification, specificationFound := specificationForIdentity[payload.IdentityStoryNodeKey]
+	if !identityFound || !stateFound || !specificationFound {
+		return contract.StoryboardOccurrenceInput{}, conflict("Storyboard Draft Occurrence has no exact Identity, Specification, or State")
+	}
+	var identityPayload struct {
+		AssetID string `json:"asset_id"`
+		Kind    string `json:"kind"`
+	}
+	var specificationPayload struct {
+		SpecificationID string `json:"specification_id"`
+		AssetID         string `json:"asset_id"`
+		Kind            string `json:"kind"`
+	}
+	var statePayload struct {
+		StateID string `json:"state_id"`
+		AssetID string `json:"asset_id"`
+	}
+	if json.Unmarshal(identity.Payload, &identityPayload) != nil ||
+		json.Unmarshal(specification.Payload, &specificationPayload) != nil ||
+		json.Unmarshal(state.Payload, &statePayload) != nil ||
+		identityPayload.AssetID != specificationPayload.AssetID || identityPayload.AssetID != statePayload.AssetID ||
+		identityPayload.Kind != specificationPayload.Kind {
+		return contract.StoryboardOccurrenceInput{}, conflict("Storyboard Draft Occurrence formal assets have drifted")
+	}
+	return contract.StoryboardOccurrenceInput{
+		StoryNodeKey: node.StoryNodeKey, IdentityStoryNodeKey: identity.StoryNodeKey,
+		SpecificationStoryNodeKey: specification.StoryNodeKey, AssetStateStoryNodeKey: state.StoryNodeKey,
+		AssetID: identityPayload.AssetID, SpecificationVersionID: specificationPayload.SpecificationID,
+		AssetStateID: statePayload.StateID, AssetKind: identityPayload.Kind, Summary: payload.Summary,
+		Evidence: storyboardEvidence(node.EvidenceRefs),
+	}, nil
+}
+
+func storyboardEvidence(values []storygraph.EvidenceRef) []contract.StoryboardEvidenceRef {
+	result := make([]contract.StoryboardEvidenceRef, len(values))
+	for index, value := range values {
+		result[index] = contract.StoryboardEvidenceRef{
+			DocumentRevisionID: value.DocumentRevisionID, AbsoluteStart: value.AbsoluteStart,
+			AbsoluteEnd: value.AbsoluteEnd, TextHash: value.TextHash,
+		}
+	}
+	return result
+}
+
+func mustMarshal(value any) []byte {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return encoded
+}
+
 func flattenUnits(scenes []domain.Scene) []storyboarddomain.Unit {
 	sort.Slice(scenes, func(i, j int) bool { return scenes[i].Position < scenes[j].Position })
 	units := make([]storyboarddomain.Unit, 0)
@@ -168,31 +410,13 @@ func (repo *repository) CreateReceipt(ctx context.Context, value platformcommand
 }
 
 func (repo *repository) CreateWorkflow(ctx context.Context, batch storyboarddomain.Batch, invocation storyboarddomain.Invocation) error {
-	batchRecord, err := batchRecord(batch)
-	if err != nil {
-		return err
-	}
-	invocationRecord, err := invocationRecord(invocation)
-	if err != nil {
-		return err
-	}
-	scope, err := json.Marshal(map[string]any{"workspace_id": batch.WorkspaceID, "project_id": batch.ProjectID, "episode_id": batch.EpisodeID})
-	if err != nil {
-		return err
-	}
-	task := model.WorkflowTask{ID: batchRecord.TaskID, WorkspaceID: batchRecord.WorkspaceID, TaskType: "storyboard_draft", RequestType: "storyboard_draft_batch", RequestID: batchRecord.ID, Scope: datatypes.JSON(scope), Status: "queued", ProgressStage: "queued", CancelStatus: "none", Revision: 1, CreatedAt: batch.CreatedAt, UpdatedAt: batch.UpdatedAt}
-	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&task).Error; err != nil {
-		return err
-	}
-	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&batchRecord).Error; err != nil {
-		return err
-	}
-	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&invocationRecord).Error
+	return errors.New("standalone Storyboard Draft batches are not supported")
 }
 
 func (repo *repository) CreateSetWorkflow(
 	ctx context.Context,
 	set storyboarddomain.DraftSet,
+	manifest storyboarddomain.DraftManifest,
 	batches []storyboarddomain.Batch,
 	invocations []storyboarddomain.Invocation,
 ) error {
@@ -203,6 +427,13 @@ func (repo *repository) CreateSetWorkflow(
 	if err != nil {
 		return err
 	}
+	manifestRecord, err := draftManifestRecord(manifest, set.CreatedAt)
+	if err != nil {
+		return err
+	}
+	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&manifestRecord).Error; err != nil {
+		return err
+	}
 	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error; err != nil {
 		return err
 	}
@@ -210,11 +441,143 @@ func (repo *repository) CreateSetWorkflow(
 		if batches[index].ID != set.Batches[index].BatchID || invocations[index].RequestID != batches[index].ID {
 			return errors.New("storyboard draft set workflow references have drifted")
 		}
-		if err = repo.CreateWorkflow(ctx, batches[index], invocations[index]); err != nil {
+		batchRecord, recordErr := batchRecord(batches[index])
+		if recordErr != nil {
+			return recordErr
+		}
+		invocationRecord, recordErr := invocationRecord(invocations[index])
+		if recordErr != nil {
+			return recordErr
+		}
+		if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&batchRecord).Error; err != nil {
+			return err
+		}
+		if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&invocationRecord).Error; err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (repo *repository) CreateCandidateSet(
+	ctx context.Context,
+	set storyboarddomain.DraftSet,
+	batches []storyboarddomain.Batch,
+	now time.Time,
+) (string, string, error) {
+	items := make([]storyboarddomain.CandidateSetItem, len(batches))
+	leaves := make([]contract.AggregateLeafCandidateRef, len(batches))
+	for index, batch := range batches {
+		if batch.CandidateRevisionID == nil || batch.CandidateRevisionHash == nil {
+			return "", "", errors.New("Storyboard Scene candidate revision is incomplete")
+		}
+		revisionID, err := uuid.Parse(*batch.CandidateRevisionID)
+		if err != nil {
+			return "", "", err
+		}
+		var revision model.StageCandidateRevision
+		if err = repo.database.WithContext(ctx).First(&revision, "id = ?", revisionID).Error; err != nil {
+			return "", "", err
+		}
+		var head model.StageCandidateHead
+		if err = repo.database.WithContext(ctx).First(&head, "stage_instance_key = ?", revision.StageInstanceKey).Error; err != nil {
+			return "", "", err
+		}
+		if revision.CandidateRevisionHash != *batch.CandidateRevisionHash ||
+			head.CurrentRevisionID != revision.ID || head.CurrentCandidateRevisionHash != revision.CandidateRevisionHash {
+			return "", "", errors.New("Storyboard Scene candidate revision has drifted")
+		}
+		items[index] = storyboarddomain.CandidateSetItem{
+			SceneStoryNodeKey: batch.SceneStoryNodeKey, ShardKey: "scene:" + batch.SceneStoryNodeKey,
+			StageInstanceKey: revision.StageInstanceKey, CandidateRevisionID: revision.ID.String(),
+			CandidateRevisionHash: revision.CandidateRevisionHash, AssetReadiness: batch.Candidate.AssetReadiness,
+		}
+		leaves[index] = contract.AggregateLeafCandidateRef{
+			StageInstanceKey: revision.StageInstanceKey, ShardKey: "scene:" + batch.SceneStoryNodeKey,
+			CandidateRevisionID: revision.ID.String(), CandidateRevisionHash: revision.CandidateRevisionHash,
+		}
+	}
+	_, candidateJSON, contentHash, stageKey, err := storyboarddomain.BuildCandidateSet(set, items)
+	if err != nil {
+		return "", "", err
+	}
+	sort.Slice(leaves, func(i, j int) bool {
+		if leaves[i].StageInstanceKey != leaves[j].StageInstanceKey {
+			return leaves[i].StageInstanceKey < leaves[j].StageInstanceKey
+		}
+		return leaves[i].ShardKey < leaves[j].ShardKey
+	})
+	origin := contract.AggregateCandidateOrigin{
+		ShardManifestID: set.ManifestID, ManifestVersion: set.ManifestVersion,
+		ShardManifestHash: set.ManifestHash, LeafCandidates: leaves,
+	}
+	revisionHash, err := (contract.CandidateRevisionMaterial{
+		StageInstanceKey: stageKey, RevisionNo: 1, OriginKind: "aggregate",
+		AggregateOrigin: &origin, CandidateContentHash: contentHash,
+	}).Hash()
+	if err != nil {
+		return "", "", err
+	}
+	var existing model.StageCandidateHead
+	if err = repo.database.WithContext(ctx).First(&existing, "stage_instance_key = ?", stageKey).Error; err == nil {
+		if existing.CurrentCandidateRevisionHash != revisionHash {
+			return "", "", agentgorm.ErrCandidateResultConflict
+		}
+		return existing.CurrentRevisionID.String(), revisionHash, nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", "", err
+	}
+	originJSON, err := json.Marshal(origin)
+	if err != nil {
+		return "", "", err
+	}
+	revision := model.StageCandidateRevision{
+		ID: uuid.New(), WorkspaceID: uuid.MustParse(set.WorkspaceID), StageInstanceKey: stageKey,
+		RevisionNo: 1, OriginKind: "aggregate", AggregateOrigin: datatypes.JSON(originJSON),
+		Candidate: datatypes.JSON(candidateJSON), CandidateContentHash: contentHash,
+		CandidateRevisionHash: revisionHash, CreatedAt: now,
+	}
+	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&revision).Error; err != nil {
+		return "", "", err
+	}
+	head := model.StageCandidateHead{
+		WorkspaceID: revision.WorkspaceID, StageInstanceKey: stageKey,
+		CurrentRevisionID: revision.ID, CurrentCandidateRevisionHash: revisionHash,
+		Revision: 1, UpdatedAt: now,
+	}
+	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&head).Error; err != nil {
+		return "", "", err
+	}
+	return revision.ID.String(), revisionHash, nil
+}
+
+func draftManifestRecord(value storyboarddomain.DraftManifest, createdAt time.Time) (model.ShardManifest, error) {
+	id, err := uuid.Parse(value.ManifestID)
+	if err != nil {
+		return model.ShardManifest{}, err
+	}
+	workspaceID, err := uuid.Parse(value.WorkspaceID)
+	if err != nil {
+		return model.ShardManifest{}, err
+	}
+	workflowRunID, err := uuid.Parse(value.WorkflowRunID)
+	if err != nil {
+		return model.ShardManifest{}, err
+	}
+	nodeRunID, err := uuid.Parse(value.NodeRunID)
+	if err != nil {
+		return model.ShardManifest{}, err
+	}
+	shards, err := json.Marshal(value.Shards)
+	if err != nil {
+		return model.ShardManifest{}, err
+	}
+	return model.ShardManifest{
+		ID: id, Version: value.Version, WorkspaceID: workspaceID,
+		WorkflowRunID: workflowRunID, NodeRunID: nodeRunID, Stage: value.Stage,
+		RootInputHash: value.RootInputHash, Shards: datatypes.JSON(shards),
+		CoverageHash: value.CoverageHash, ManifestHash: value.ManifestHash, CreatedAt: createdAt,
+	}, nil
 }
 
 func (repo *repository) GetSet(ctx context.Context, actor application.Actor, setID string, forUpdate bool) (storyboarddomain.DraftSet, error) {
@@ -242,7 +605,9 @@ func (repo *repository) SaveSet(ctx context.Context, value storyboarddomain.Draf
 		return err
 	}
 	result := repo.database.WithContext(ctx).Model(&model.StoryboardDraftSet{}).Where("id = ?", record.ID).Updates(map[string]any{
-		"status": record.Status, "result_hash": record.ResultHash, "batches": record.Batches,
+		"status": record.Status, "result_hash": record.ResultHash,
+		"candidate_revision_id": record.CandidateRevisionID, "candidate_revision_hash": record.CandidateRevisionHash,
+		"batches":  record.Batches,
 		"revision": record.Revision, "updated_at": record.UpdatedAt,
 	})
 	if result.Error != nil {
@@ -297,7 +662,13 @@ func (repo *repository) SaveBatch(ctx context.Context, value storyboarddomain.Ba
 	if err != nil {
 		return err
 	}
-	result := repo.database.WithContext(ctx).Model(&model.StoryboardDraftBatch{}).Where("id = ?", record.ID).Updates(map[string]any{"status": record.Status, "candidate": record.Candidate, "decisions": record.Decisions, "error": record.Error, "revision": record.Revision, "approved_by": record.ApprovedBy, "approved_at": record.ApprovedAt, "applied_at": record.AppliedAt, "updated_at": record.UpdatedAt})
+	result := repo.database.WithContext(ctx).Model(&model.StoryboardDraftBatch{}).Where("id = ?", record.ID).Updates(map[string]any{
+		"status": record.Status, "result_hash": record.ResultHash,
+		"candidate_revision_id": record.CandidateRevisionID, "candidate_revision_hash": record.CandidateRevisionHash,
+		"candidate": record.Candidate, "decisions": record.Decisions, "error": record.Error,
+		"revision": record.Revision, "approved_by": record.ApprovedBy, "approved_at": record.ApprovedAt,
+		"applied_at": record.AppliedAt, "updated_at": record.UpdatedAt,
+	})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -474,9 +845,6 @@ func (store *Store) ClaimNext(ctx context.Context, now, leaseExpiresAt time.Time
 		if err = transaction.Model(&model.StoryboardDraftBatch{}).Where("id = ?", record.RequestID).Updates(map[string]any{"status": "running", "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
 			return err
 		}
-		if err = transaction.Model(&model.WorkflowTask{}).Where("request_type = ? AND request_id = ?", record.RequestType, record.RequestID).Updates(map[string]any{"status": "running", "progress_stage": "agent_invocation", "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
-			return err
-		}
 		record.Status, record.StartedAt, record.Attempts = "running", &now, record.Attempts+1
 		record.ClaimVersion, record.LeaseExpiresAt = record.ClaimVersion+1, &leaseExpiresAt
 		result = invocationDomain(record)
@@ -512,16 +880,23 @@ func (store *Store) CompleteInvocation(ctx context.Context, invocationID string,
 		if err != nil {
 			return err
 		}
-		if _, err = agentgorm.AcceptInvocationCandidate(transaction, invocation, request, result, now); err != nil {
+		revision, err := agentgorm.AcceptInvocationCandidate(transaction, invocation, request, result, now)
+		if err != nil {
 			return err
 		}
 		if err = transaction.Model(&invocation).Updates(map[string]any{"status": "succeeded", "result_hash": result.ResultHash, "candidate_type": result.CandidateType, "candidate": datatypes.JSON(result.Candidate), "executor": datatypes.JSON(executorJSON), "error": nil, "lease_expires_at": nil, "completed_at": now, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		if err := transaction.Model(&model.StoryboardDraftBatch{}).Where("id = ?", invocation.RequestID).Updates(map[string]any{"status": "needs_review", "result_hash": result.ResultHash, "candidate": datatypes.JSON(candidateJSON), "error": nil, "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
-			return err
+		batchStatus := "ready"
+		if candidate.AssetReadiness == "needs_asset" {
+			batchStatus = "needs_asset"
 		}
-		if err := transaction.Model(&model.WorkflowTask{}).Where("request_type = ? AND request_id = ?", invocation.RequestType, invocation.RequestID).Updates(map[string]any{"status": "succeeded", "progress_stage": "candidate_ready", "error": nil, "next_action": nil, "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
+		if err := transaction.Model(&model.StoryboardDraftBatch{}).Where("id = ?", invocation.RequestID).Updates(map[string]any{
+			"status": batchStatus, "result_hash": result.ResultHash,
+			"candidate_revision_id": revision.ID, "candidate_revision_hash": revision.CandidateRevisionHash,
+			"candidate": datatypes.JSON(candidateJSON), "error": nil,
+			"revision": gorm.Expr("revision + 1"), "updated_at": now,
+		}).Error; err != nil {
 			return err
 		}
 		applied = true
@@ -554,14 +929,7 @@ func (store *Store) FailInvocation(ctx context.Context, invocationID string, cla
 		if err := transaction.Model(&invocation).Updates(map[string]any{"status": outcome, "error": datatypes.JSON(errorJSON), "lease_expires_at": nil, "completed_at": now, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		nextAction := "retry_agent"
-		if !retryable {
-			nextAction = "review_input"
-		}
 		if err := transaction.Model(&model.StoryboardDraftBatch{}).Where("id = ?", invocation.RequestID).Updates(map[string]any{"status": outcome, "error": datatypes.JSON(errorJSON), "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
-			return err
-		}
-		if err := transaction.Model(&model.WorkflowTask{}).Where("request_type = ? AND request_id = ?", invocation.RequestType, invocation.RequestID).Updates(map[string]any{"status": outcome, "progress_stage": "agent_result", "error": datatypes.JSON(errorJSON), "next_action": nextAction, "revision": gorm.Expr("revision + 1"), "updated_at": now}).Error; err != nil {
 			return err
 		}
 		applied = true
@@ -622,7 +990,19 @@ func batchRecord(value storyboarddomain.Batch) (model.StoryboardDraftBatch, erro
 	if err != nil {
 		return model.StoryboardDraftBatch{}, err
 	}
-	taskID, err := uuid.Parse(value.TaskID)
+	workflowRunID, err := uuid.Parse(value.WorkflowRunID)
+	if err != nil {
+		return model.StoryboardDraftBatch{}, err
+	}
+	nodeRunID, err := uuid.Parse(value.NodeRunID)
+	if err != nil {
+		return model.StoryboardDraftBatch{}, err
+	}
+	manifestID, err := uuid.Parse(value.ManifestID)
+	if err != nil {
+		return model.StoryboardDraftBatch{}, err
+	}
+	graphVersionID, err := uuid.Parse(value.GraphVersionID)
 	if err != nil {
 		return model.StoryboardDraftBatch{}, err
 	}
@@ -638,6 +1018,14 @@ func batchRecord(value storyboarddomain.Batch) (model.StoryboardDraftBatch, erro
 		}
 		approvedBy = &parsed
 	}
+	var candidateRevisionID *uuid.UUID
+	if value.CandidateRevisionID != nil {
+		parsed, parseErr := uuid.Parse(*value.CandidateRevisionID)
+		if parseErr != nil {
+			return model.StoryboardDraftBatch{}, parseErr
+		}
+		candidateRevisionID = &parsed
+	}
 	candidate, err := json.Marshal(value.Candidate)
 	if err != nil {
 		return model.StoryboardDraftBatch{}, err
@@ -646,7 +1034,19 @@ func batchRecord(value storyboarddomain.Batch) (model.StoryboardDraftBatch, erro
 	if err != nil {
 		return model.StoryboardDraftBatch{}, err
 	}
-	return model.StoryboardDraftBatch{ID: id, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID, StructureID: structureID, ScriptVersionID: versionID, TaskID: taskID, Status: value.Status, InputHash: value.InputHash, ResultHash: value.ResultHash, Candidate: datatypes.JSON(candidate), Decisions: datatypes.JSON(decisions), Error: datatypes.JSON(value.Error), Revision: value.Revision, ApprovedBy: approvedBy, ApprovedAt: value.ApprovedAt, AppliedAt: value.AppliedAt, CreatedBy: createdBy, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt}, nil
+	return model.StoryboardDraftBatch{
+		ID: id, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID,
+		StructureID: structureID, ScriptVersionID: versionID,
+		WorkflowRunID: workflowRunID, NodeRunID: nodeRunID,
+		ManifestID: manifestID, ManifestVersion: value.ManifestVersion,
+		GraphVersionID: graphVersionID, GraphVersionNo: value.GraphVersionNo,
+		SceneStoryNodeKey: value.SceneStoryNodeKey, Status: value.Status, InputHash: value.InputHash,
+		ResultHash: value.ResultHash, CandidateRevisionID: candidateRevisionID,
+		CandidateRevisionHash: value.CandidateRevisionHash,
+		Candidate:             datatypes.JSON(candidate), Decisions: datatypes.JSON(decisions), Error: datatypes.JSON(value.Error),
+		Revision: value.Revision, ApprovedBy: approvedBy, ApprovedAt: value.ApprovedAt,
+		AppliedAt: value.AppliedAt, CreatedBy: createdBy, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}, nil
 }
 
 func setRecord(value storyboarddomain.DraftSet) (model.StoryboardDraftSet, error) {
@@ -662,9 +1062,29 @@ func setRecord(value storyboarddomain.DraftSet) (model.StoryboardDraftSet, error
 	if err != nil {
 		return model.StoryboardDraftSet{}, err
 	}
-	commitID, err := uuid.Parse(value.StructureCommitID)
+	workflowRunID, err := uuid.Parse(value.WorkflowRunID)
 	if err != nil {
 		return model.StoryboardDraftSet{}, err
+	}
+	nodeRunID, err := uuid.Parse(value.NodeRunID)
+	if err != nil {
+		return model.StoryboardDraftSet{}, err
+	}
+	graphVersionID, err := uuid.Parse(value.GraphVersionID)
+	if err != nil {
+		return model.StoryboardDraftSet{}, err
+	}
+	manifestID, err := uuid.Parse(value.ManifestID)
+	if err != nil {
+		return model.StoryboardDraftSet{}, err
+	}
+	var candidateRevisionID *uuid.UUID
+	if value.CandidateRevisionID != nil {
+		parsed, parseErr := uuid.Parse(*value.CandidateRevisionID)
+		if parseErr != nil {
+			return model.StoryboardDraftSet{}, parseErr
+		}
+		candidateRevisionID = &parsed
 	}
 	createdBy, err := uuid.Parse(value.CreatedBy)
 	if err != nil {
@@ -675,9 +1095,14 @@ func setRecord(value storyboarddomain.DraftSet) (model.StoryboardDraftSet, error
 		return model.StoryboardDraftSet{}, err
 	}
 	return model.StoryboardDraftSet{
-		ID: id, WorkspaceID: workspaceID, ProjectID: projectID, StructureCommitID: commitID,
-		StructureRevision: value.StructureRevision, StructureContentHash: value.StructureContentHash,
-		Status: value.Status, InputHash: value.InputHash, ResultHash: value.ResultHash, Batches: datatypes.JSON(batches),
+		ID: id, WorkspaceID: workspaceID, ProjectID: projectID,
+		WorkflowRunID: workflowRunID, NodeRunID: nodeRunID,
+		GraphVersionID: graphVersionID, GraphVersionNo: value.GraphVersionNo,
+		GraphContentHash: value.GraphContentHash, ManifestID: manifestID,
+		ManifestVersion: value.ManifestVersion, ManifestHash: value.ManifestHash,
+		Status: value.Status, InputHash: value.InputHash, ResultHash: value.ResultHash,
+		CandidateRevisionID: candidateRevisionID, CandidateRevisionHash: value.CandidateRevisionHash,
+		Batches:  datatypes.JSON(batches),
 		Revision: value.Revision, CreatedBy: createdBy, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}, nil
 }
@@ -689,9 +1114,14 @@ func setDomain(record model.StoryboardDraftSet) (storyboarddomain.DraftSet, erro
 	}
 	return storyboarddomain.DraftSet{
 		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(),
-		StructureCommitID: record.StructureCommitID.String(), StructureRevision: record.StructureRevision,
-		StructureContentHash: record.StructureContentHash, Status: record.Status, InputHash: record.InputHash,
-		ResultHash: record.ResultHash, Batches: batches, Revision: record.Revision, CreatedBy: record.CreatedBy.String(),
+		WorkflowRunID: record.WorkflowRunID.String(), NodeRunID: record.NodeRunID.String(),
+		GraphVersionID: record.GraphVersionID.String(), GraphVersionNo: record.GraphVersionNo,
+		GraphContentHash: record.GraphContentHash, ManifestID: record.ManifestID.String(),
+		ManifestVersion: record.ManifestVersion, ManifestHash: record.ManifestHash,
+		Status: record.Status, InputHash: record.InputHash, ResultHash: record.ResultHash,
+		CandidateRevisionID:   optionalUUIDString(record.CandidateRevisionID),
+		CandidateRevisionHash: record.CandidateRevisionHash,
+		Batches:               batches, Revision: record.Revision, CreatedBy: record.CreatedBy.String(),
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}, nil
 }
@@ -714,7 +1144,27 @@ func batchDomain(record model.StoryboardDraftBatch) (storyboarddomain.Batch, err
 		value := record.ApprovedBy.String()
 		approvedBy = &value
 	}
-	return storyboarddomain.Batch{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(), EpisodeID: record.EpisodeID.String(), StructureID: record.StructureID.String(), ScriptVersionID: record.ScriptVersionID.String(), TaskID: record.TaskID.String(), Status: record.Status, InputHash: record.InputHash, ResultHash: record.ResultHash, Candidate: candidate, Decisions: decisions, Error: append([]byte(nil), record.Error...), Revision: record.Revision, ApprovedBy: approvedBy, ApprovedAt: record.ApprovedAt, AppliedAt: record.AppliedAt, CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil
+	return storyboarddomain.Batch{
+		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(),
+		EpisodeID: record.EpisodeID.String(), StructureID: record.StructureID.String(), ScriptVersionID: record.ScriptVersionID.String(),
+		WorkflowRunID: record.WorkflowRunID.String(), NodeRunID: record.NodeRunID.String(),
+		ManifestID: record.ManifestID.String(), ManifestVersion: record.ManifestVersion,
+		GraphVersionID: record.GraphVersionID.String(), GraphVersionNo: record.GraphVersionNo,
+		SceneStoryNodeKey: record.SceneStoryNodeKey, Status: record.Status, InputHash: record.InputHash,
+		ResultHash: record.ResultHash, CandidateRevisionID: optionalUUIDString(record.CandidateRevisionID),
+		CandidateRevisionHash: record.CandidateRevisionHash,
+		Candidate:             candidate, Decisions: decisions, Error: append([]byte(nil), record.Error...),
+		Revision: record.Revision, ApprovedBy: approvedBy, ApprovedAt: record.ApprovedAt, AppliedAt: record.AppliedAt,
+		CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+	}, nil
+}
+
+func optionalUUIDString(value *uuid.UUID) *string {
+	if value == nil {
+		return nil
+	}
+	encoded := value.String()
+	return &encoded
 }
 
 func shotRecord(value storyboarddomain.Shot) (model.StoryboardShot, error) {
@@ -882,8 +1332,23 @@ func invocationRecord(value storyboarddomain.Invocation) (model.AgentInvocation,
 	if err != nil {
 		return model.AgentInvocation{}, err
 	}
+	workflowRunID, err := uuid.Parse(value.WorkflowRunID)
+	if err != nil {
+		return model.AgentInvocation{}, err
+	}
+	nodeRunID, err := uuid.Parse(value.NodeRunID)
+	if err != nil {
+		return model.AgentInvocation{}, err
+	}
+	manifestID, err := uuid.Parse(value.ManifestID)
+	if err != nil {
+		return model.AgentInvocation{}, err
+	}
+	manifestVersion := value.ManifestVersion
 	return model.AgentInvocation{
-		ID: id, WorkspaceID: workspaceID, RequestType: "storyboard_draft_batch", RequestID: requestID,
+		ID: id, WorkspaceID: workspaceID, WorkflowRunID: &workflowRunID, NodeRunID: &nodeRunID,
+		ShardManifestID: &manifestID, ShardManifestVersion: &manifestVersion,
+		RequestType: "storyboard_scene_draft", RequestID: requestID,
 		Kind: value.Kind, WireSchemaVersion: contract.StoryGraphWireSchemaVersion, Stage: value.Stage,
 		ShardKey: value.ShardKey, StageInstanceKey: value.StageInstanceKey, ShardManifestHash: value.ManifestHash,
 		InputHash: value.InputHash, ExecutionPolicy: datatypes.JSON(value.ExecutionPolicy), Payload: datatypes.JSON(value.Payload),
@@ -893,7 +1358,7 @@ func invocationRecord(value storyboarddomain.Invocation) (model.AgentInvocation,
 }
 
 func invocationDomain(record model.AgentInvocation) storyboarddomain.Invocation {
-	return storyboarddomain.Invocation{
+	result := storyboarddomain.Invocation{
 		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), RequestID: record.RequestID.String(),
 		Kind: record.Kind, Stage: record.Stage, ShardKey: record.ShardKey, InputHash: record.InputHash,
 		StageInstanceKey: record.StageInstanceKey, ManifestHash: record.ShardManifestHash,
@@ -901,6 +1366,19 @@ func invocationDomain(record model.AgentInvocation) storyboarddomain.Invocation 
 		Status: record.Status, Attempts: record.Attempts, ClaimVersion: record.ClaimVersion,
 		LeaseExpiresAt: record.LeaseExpiresAt, CreatedAt: record.CreatedAt,
 	}
+	if record.WorkflowRunID != nil {
+		result.WorkflowRunID = record.WorkflowRunID.String()
+	}
+	if record.NodeRunID != nil {
+		result.NodeRunID = record.NodeRunID.String()
+	}
+	if record.ShardManifestID != nil {
+		result.ManifestID = record.ShardManifestID.String()
+	}
+	if record.ShardManifestVersion != nil {
+		result.ManifestVersion = *record.ShardManifestVersion
+	}
+	return result
 }
 
 func normalizeNotFound(err error) error {

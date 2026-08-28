@@ -16,6 +16,7 @@ from app.candidate_runtime.schemas import (
     EpisodeAnalysisStageInput,
     EpisodeReconciliationStageInput,
     SourceEvidenceStageInput,
+    StoryboardDraftStageInput,
     StoryGraphExecutionPolicy,
     StoryGraphRepairStageInput,
     StoryGraphReviewStageInput,
@@ -28,6 +29,7 @@ from app.modules.storygraph.candidate_schemas import (
     EpisodeReconciliationCandidate,
     Evidence,
     SourceEvidenceCandidate,
+    StoryboardRowCandidate,
     StoryGraphReviewCandidate,
 )
 from app.modules.storygraph.skill_registry import stage_spec
@@ -187,6 +189,13 @@ class StoryGraphHarness:
             )
             candidate = normalize_episode_candidate_evidence(candidate, reconciliation_input)
             candidate.validate_for(reconciliation_input)
+        if self.invocation.payload.stage == "draft_storyboard":
+            if not isinstance(candidate, StoryboardRowCandidate):
+                raise CodexSchemaInvalid("Codex CLI returned the wrong Storyboard Draft schema")
+            storyboard_input = StoryboardDraftStageInput.model_validate(
+                self.invocation.payload.stage_input
+            )
+            candidate.validate_for(storyboard_input)
         if self.invocation.payload.stage == "repair_candidate":
             if not isinstance(candidate, CandidateRepairPatch):
                 raise CodexSchemaInvalid("Codex CLI returned the wrong candidate repair schema")

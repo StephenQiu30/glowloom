@@ -25,7 +25,7 @@ const (
 	defaultSessionTTLSeconds  = 30 * 24 * 60 * 60
 	defaultAgentURL           = "http://127.0.0.1:8787"
 	defaultAgentSecret        = "development-only-agent-execution-secret"
-	defaultAgentImageDigest   = "sha256:d19485c0d8ac19c90afa06741c2626b1db55ace1f6c8f9a442231ba05637d95b"
+	defaultAgentImageDigest   = "sha256:352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb"
 	defaultAgentPollMillis    = 500
 	defaultAgentLeaseSeconds  = 30 * 60
 	defaultReviewLeaseSeconds = 5 * 60

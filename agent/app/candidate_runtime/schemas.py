@@ -520,6 +520,126 @@ def _validate_episode_known_identities(values: list[EpisodeKnownIdentity]) -> No
         raise ValueError("Episode known identities must be unique and sorted")
 
 
+class StoryboardEvidenceRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_revision_id: UUID
+    absolute_start: int = Field(ge=0)
+    absolute_end: int = Field(gt=0)
+    text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_range(self) -> StoryboardEvidenceRef:
+        if self.absolute_end <= self.absolute_start:
+            raise ValueError("Storyboard Evidence range must be increasing")
+        return self
+
+
+class StoryboardSceneInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    owner_version_id: UUID
+    owner_revision: int = Field(ge=1)
+    owner_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    episode_id: UUID
+    episode_position: int = Field(ge=1)
+    scene_position: int = Field(ge=1)
+    heading: str = Field(min_length=1)
+    evidence: list[StoryboardEvidenceRef] = Field(min_length=1)
+
+
+class StoryboardBeatInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    summary: str = Field(min_length=1)
+    required_for_coverage: bool
+    evidence: list[StoryboardEvidenceRef] = Field(min_length=1)
+
+
+class StoryboardDialogueInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    speaker: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+    evidence: list[StoryboardEvidenceRef] = Field(min_length=1)
+
+
+class StoryboardOccurrenceInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    identity_story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    specification_story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    asset_state_story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    asset_id: UUID
+    specification_version_id: UUID
+    asset_state_id: UUID
+    asset_kind: Literal["character", "location", "prop"]
+    summary: str = Field(min_length=1)
+    evidence: list[StoryboardEvidenceRef] = Field(min_length=1)
+
+
+class StoryboardStyleSnapshotInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    owner_version_id: UUID
+    revision: int = Field(ge=1)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    visual_style: str = Field(min_length=1)
+    aspect_ratio: str = Field(min_length=1)
+
+
+class StoryboardAssetVersionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: UUID
+    asset_state_id: UUID
+    asset_version_id: UUID
+    revision: int = Field(ge=1)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    lineage_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    style_snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    view_roles: list[Literal["front", "profile", "back", "environment", "prop"]] = Field(
+        min_length=1
+    )
+    status: Literal["READY"]
+
+
+class StoryboardDraftStageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    graph_version_no: int = Field(ge=1)
+    scene: StoryboardSceneInput
+    beats: list[StoryboardBeatInput] = Field(min_length=1)
+    dialogues: list[StoryboardDialogueInput]
+    occurrences: list[StoryboardOccurrenceInput] = Field(min_length=1)
+    effective_style_snapshot: StoryboardStyleSnapshotInput
+    target_duration_ms: int = Field(ge=1000, le=7_200_000)
+    asset_versions: list[StoryboardAssetVersionInput]
+
+    @model_validator(mode="after")
+    def validate_exact_scene_inputs(self) -> StoryboardDraftStageInput:
+        beat_keys = [value.story_node_key for value in self.beats]
+        dialogue_keys = [value.story_node_key for value in self.dialogues]
+        occurrence_keys = [value.story_node_key for value in self.occurrences]
+        if beat_keys != sorted(set(beat_keys)):
+            raise ValueError("Storyboard beats must be unique and sorted")
+        if dialogue_keys != sorted(set(dialogue_keys)):
+            raise ValueError("Storyboard dialogues must be unique and sorted")
+        if occurrence_keys != sorted(set(occurrence_keys)):
+            raise ValueError("Storyboard occurrences must be unique and sorted")
+        asset_versions = [
+            (value.asset_id, value.asset_state_id, value.asset_version_id)
+            for value in self.asset_versions
+        ]
+        if asset_versions != sorted(set(asset_versions), key=lambda value: tuple(map(str, value))):
+            raise ValueError("Storyboard exact AssetVersions must be unique and sorted")
+        return self
+
+
 class StoryReconciliationInputCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -960,6 +1080,48 @@ class StoryGraphStagePayload(BaseModel):
             ):
                 raise ValueError(
                     "Episode reconciliation input does not match its exact Episode children"
+                )
+        elif self.stage == "draft_storyboard":
+            stage_input = StoryboardDraftStageInput.model_validate(self.stage_input)
+            expected_sources = {
+                (
+                    "production/storygraph",
+                    str(self.project_id),
+                    self.base_storygraph_version_id,
+                    stage_input.graph_version_no,
+                    self.base_storygraph_hash,
+                ),
+                (
+                    "preset/effective-style",
+                    str(self.project_id),
+                    stage_input.effective_style_snapshot.owner_version_id,
+                    stage_input.effective_style_snapshot.revision,
+                    stage_input.effective_style_snapshot.content_hash,
+                ),
+            }
+            supplied_sources = {
+                (
+                    value.owner_kind,
+                    value.owner_logical_id,
+                    value.owner_version_id,
+                    value.revision,
+                    value.content_hash,
+                )
+                for value in self.source_refs
+            }
+            if (
+                supplied_sources != expected_sources
+                or len(self.source_refs) != 2
+                or self.base_storygraph_version_id is None
+                or self.base_storygraph_hash is None
+                or self.upstream_candidates
+                or self.shard.kind != "story_scene"
+                or self.shard.absolute_start is not None
+                or self.shard.absolute_end is not None
+                or self.shard_key != f"scene:{stage_input.scene.story_node_key}"
+            ):
+                raise ValueError(
+                    "Storyboard Draft input does not match its exact StoryGraph scene and style"
                 )
         elif self.stage == "review_storygraph":
             stage_input = StoryGraphReviewStageInput.model_validate(self.stage_input)

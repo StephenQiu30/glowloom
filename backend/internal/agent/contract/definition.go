@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 )
 
-const StoryGraphSkillBundleHash = "d19485c0d8ac19c90afa06741c2626b1db55ace1f6c8f9a442231ba05637d95b"
+const StoryGraphSkillBundleHash = "352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb"
 
 var ErrSkillBundleUnavailable = errors.New("skill_bundle_unavailable")
 
@@ -43,8 +43,8 @@ type AgentDefinitionManifest struct {
 func StoryGraphDefinition() AgentDefinitionManifest {
 	return AgentDefinitionManifest{
 		DefinitionKey: "storygraph_stage", DefinitionVersion: "storygraph-stage-harness-v1",
-		PromptVersion: "build-storygraph-prompt-v1", SkillBundleVersion: "build-storygraph-v1",
-		SkillBundleHash: StoryGraphSkillBundleHash, OutputSchemaVersion: "storygraph-candidate-schema-v1",
+		PromptVersion: "build-storygraph-prompt-v2", SkillBundleVersion: "build-storygraph-v2",
+		SkillBundleHash: StoryGraphSkillBundleHash, OutputSchemaVersion: "storygraph-candidate-schema-v2",
 		ModelCapability: "structured_text", CodexRuntimeContract: "codex-cli-ephemeral-read-only-v1",
 		AllowedTools: []string{}, MaxModelCalls: 2, MaxExecutionSeconds: 600,
 		Stages: []StageDefinition{

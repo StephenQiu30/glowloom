@@ -130,10 +130,10 @@ func TestAuthoringDraftPublishesImmutableRevisionsFromVerifiedInputs(t *testing.
 		t.Fatalf("later draft edit changed the first revision: %#v", persistedFirst)
 	}
 	var draftCount, revisionCount int64
-	if err = database.Model(&model.AuthoringDraft{}).Count(&draftCount).Error; err != nil {
+	if err = database.Model(&model.AuthoringDraft{}).Where("project_id = ?", fixture.projectID).Count(&draftCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err = database.Model(&model.AuthoringRevision{}).Count(&revisionCount).Error; err != nil {
+	if err = database.Model(&model.AuthoringRevision{}).Where("project_id = ?", fixture.projectID).Count(&revisionCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if draftCount != 1 || revisionCount != 2 {

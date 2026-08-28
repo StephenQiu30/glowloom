@@ -65,7 +65,7 @@
 - [x] `SG-PRD-004`（`SG-I09`、`SG-I12`、`SG-I15`）：同名/别名不得自动合并的负向证据。
 - [x] `SG-PRD-005`（`SG-I13`、`SG-I14`）：分集边界与 Episode/Published ScriptVersion 全批原子证据。
 - [x] `SG-PRD-006`（`SG-I15`、`SG-I16`）：Scene/Dialogue/Beat/Occurrence/Claim 全批应用与未知事实拒绝。
-- [ ] `SG-PRD-007`（`SG-I18`）：Storyboard Draft 精确正式输入、`needs_asset` 与零 Shot 证据。
+- [x] `SG-PRD-007`（`SG-I18`）：Storyboard Draft 精确正式输入、`needs_asset` 与零 Shot 证据。
 - [ ] `SG-PRD-008`（`SG-I19`）：FreezeIntentSet 输出与零 Shot/Cost/Quota/Provider/Graph 副作用证据。
 - [ ] `SG-PRD-009`（`SG-I22`）：detail_shots 精确 READY AssetVersion/Artifact/Lineage/Style/view-role 门禁。
 - [ ] `SG-PRD-010`（`SG-I23`）：Shot + ShotProductionBindingVersion + Receipt 全批 GORM 原子应用。
@@ -158,7 +158,7 @@
 - [x] `SGA-STG-003`（`SG-I05` 起）：Candidate 只用给定 Ref/临时 Key，无 Command/SQL/Graph overwrite。
 - [ ] `SGA-STG-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I22`）：无证据不补写事实的对抗/人工证据。
 - [x] `SGA-STG-005`（`SG-I09`、`SG-I15`）：关系/因果/连续性/伏笔使用 Claim Candidate，无持久环边。
-- [ ] `SGA-STG-006`（`SG-I18`）：draft_storyboard 非空 Spec/State、缺资产只产 needs_asset。
+- [x] `SGA-STG-006`（`SG-I18`）：draft_storyboard 非空 Spec/State、缺资产只产 needs_asset。
 - [ ] `SGA-STG-007`（`SG-I22`）：detail_shots 精确 READY 资产并禁止改变已接受意图/身份/状态。
 - [ ] `SGA-STG-008`（`SG-I18`、`SG-I22`、`SG-I23`）：Backend 生成序号/timecode/UUID/Owner/Binding，Agent 只给 Candidate。
 - [x] `SGA-SHR-001`（`SG-I08`）：不可变 versioned ShardManifest 字段/Hash/约束。
@@ -228,7 +228,7 @@
 - [x] `SG-I15`：Episode analyze/reconcile 与 Scene/Beat/Occurrence/Claim Candidate 完成。
 - [x] `SG-I16`：Planning Review/Gate/Owner 全批 Apply 完成。
 - [x] `SG-I17`：Core StoryGraph 多集编译、Diff/Impact 全链完成。
-- [ ] `SG-I18`：Storyboard Draft/Shot Intent/needs_asset 且零正式 Shot 完成。
+- [x] `SG-I18`：Storyboard Draft/Shot Intent/needs_asset 且零正式 Shot 完成。
 - [ ] `SG-I19`：Intent Gate/FreezeIntentSet 与付费前零副作用完成。
 - [ ] `SG-I20`：reference_asset Cost/Quota/Runware Job/Artifact unknown 对账完成。
 - [ ] `SG-I21`：composite 三视图 QC/Selection/AssetVersion 完成。
@@ -335,7 +335,7 @@
 ### `SG-I05` — StoryGraph Stage Harness 与唯一 Bundle（2026-08-27）
 
 - Red 与收口：先建立唯一 Bundle、严格候选 Schema、Registry/Hash/Grant/Runtime Route/Revision 的 Go/Python 测试；旧 8 Skill、旧 Loader、`production_bible|storyboard_draft` Invocation 和无消费者 `LangGraph/LangChain` 路径均在同一任务原子删除，没有保留兼容读取或相近版本回退。
-- Bundle：`agent/skills/build-storygraph` 只含一个 `SKILL.md` 和 9 个显式 Stage Reference；十个固定 Stage 由普通 Registry 一一映射到 Reference、Pydantic Candidate 和 Policy。Bundle 对排序路径、字节长度和原始字节做 Canonical SHA-256，Go/Python 当前固定 Hash 均为 `d19485c0d8ac19c90afa06741c2626b1db55ace1f6c8f9a442231ba05637d95b`；路径逃逸、缺文件、多文件和任一字节漂移均拒绝。`quick_validate.py` 返回 `Skill is valid!`。
+- Bundle：`agent/skills/build-storygraph` 只含一个 `SKILL.md` 和 9 个显式 Stage Reference；十个固定 Stage 由普通 Registry 一一映射到 Reference、Pydantic Candidate 和 Policy。Bundle 对排序路径、字节长度和原始字节做 Canonical SHA-256；当前 v2 Prompt/Schema 对应的 Go/Python 固定 Hash 均为 `352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb`，路径逃逸、缺文件、多文件和任一字节漂移均拒绝。`quick_validate.py` 返回 `Skill is valid!`。
 - Backend Wire 与事实：Backend 拥有唯一 `storygraph_stage` Envelope、十 Stage Manifest、Execution Policy、Shard/Source/Upstream exact ref、Input/Result/Stage Instance Hash、Execution Grant 和 Runtime Catalog。未终态 Invocation 按 Bundle Hash 精确解析 `base_url + image_digest`，缺失即失败；首次成功结果在同一 GORM 事务中写不可变 `StageCandidateRevision`，Agent 仍无数据库或 Owner 写入。Candidate Head/CAS、aggregate/repair 来源和 stale closure 继续留给 `SG-I09/I10`，未提前勾选 `SGA-CAN/REP-*`。
 - Agent Harness：FastAPI 仅保留 `/healthz` 与私有 `/internal/v1/invocations`；Harness 在临时空目录以 ephemeral/read-only/ignore-user-config、空 Tool Allowlist、临时 JSON Schema、模型调用上限和技术 deadline 启动 Codex。任何 Tool Event、Schema 漂移、预算/超时、Runtime unavailable 和 transport unknown 都不会产生空 Candidate 成功；日志不写 Prompt、Candidate、Grant 或剧本文本。
 - 真实 Codex：本机已登录 `codex-cli 0.149.1` 对 `extract_source_evidence` fixture 执行一次真实调用，无 Tool Event，约 29 秒返回可审计 Candidate；由于 fixture 的来源引用歧义和 shard `[0,12)` 与 7 个 Unicode code point 不一致，结果保留 2 个事实阻塞项而未臆造 Evidence，Result Hash 为 `30e7f1d5d5240b30015a9b6c140799b1927e469a5e44d71a23443ec72aedcd0d`。交付镜像继续使用已接受且可复现的 Codex CLI `0.147.0`，没有为本机较新版本增加兼容分支。完整原稿/全部 Stage 的真实模型证据仍属于 `SG-I08`–`I27`，所以 `SGA-COD-*` 与旅程条款保持未通过。
@@ -379,7 +379,7 @@
 - 真实 Codex：本机已登录 `codex-cli 0.149.1`，使用共享 Wire fixture 执行 `LANVERSE_TEST_REAL_CODEX=1 .venv/bin/python -m pytest tests/integration/test_storygraph_real_codex.py -q -s`，结果 `1 passed in 16.40s`。首次真实运行暴露模型无法可靠计算 Evidence SHA-256，随后将哈希责任收回确定性 Harness；复跑得到非空 Observation，所有 anchor、绝对 range 与 SHA-256 均逐项一致。交付镜像仍固定已接受的 Codex CLI `0.147.0`，没有版本兼容分支。
 - 真实 Workflow 与计数：独立 `postgres:16.15-alpine`、仓库固定 digest 的 Temporal 与 MinIO 下，`TestSourceEvidenceWorkflowIsDefinitionFirstAndRecoversTheSameShardIdentity` 通过；断言每个当前 active leaf 恰有一个 V2 Invocation、每个 Invocation attempts≥2 且 succeeded，另外只有一个迟到 V1 invocation revision、一个 current aggregate revision、两个不可变 Manifest version，并验证旧 revision ID 不在 aggregate origin。该测试在共享数据库全套运行时曾暴露全库计数污染，断言已收紧到当前 Workspace 后，在不清库的定向复跑 `9.752s` 和随后全新数据库完整 CI 中均通过。
 - 完整真实 CI：Backend `gofmt`、`go vet ./...`、无外部依赖 `go test -count=1 ./...` 及真实 PostgreSQL/Temporal/MinIO/Kafka/Elastic/Kibana 的 `go test -count=1 -p 1 ./...` 全通过，Workflow 包 `141.992s`；Agent Ruff check/format、Pyright 和 Pytest 为 `26 passed, 1 skipped`，被跳过项仅是上述另行真实执行的 opt-in Codex；Frontend OpenAPI 生成零漂移、lint/typecheck、18 个 Vitest 文件 54 项测试与 Next.js `16.2.12` production build 全通过。开发/生产 Compose、Backend/Agent/Frontend 三镜像和镜像内 Binary/standalone/非 root Bundle 契约均通过。
-- 部署故障 CI：另起非默认端口的隔离 Compose Project，使用刚构建的三镜像启动 PostgreSQL、Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Logstash/Kibana `9.4.4`、Backend、Frontend、Workflow Worker、Event Worker 和 Filebeat；注册/鉴权/项目写入、API/Frontend、Worker 启动日志、ELK 可检索且查询敏感值零泄漏均通过。Filebeat/Logstash/Kibana 逐项停机时核心写入与 Workflow 保持可用；Kafka/Elasticsearch 停机时 Event Worker 进程存活但 readiness 正确为 503，恢复后重新 ready 且日志续传。独立 Agent 容器 health 与当前 Bundle Hash `d19485c0d8ac19c90afa06741c2626b1db55ace1f6c8f9a442231ba05637d95b` 通过。
+- 部署故障 CI：另起非默认端口的隔离 Compose Project，使用刚构建的三镜像启动 PostgreSQL、Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Logstash/Kibana `9.4.4`、Backend、Frontend、Workflow Worker、Event Worker 和 Filebeat；注册/鉴权/项目写入、API/Frontend、Worker 启动日志、ELK 可检索且查询敏感值零泄漏均通过。Filebeat/Logstash/Kibana 逐项停机时核心写入与 Workflow 保持可用；Kafka/Elasticsearch 停机时 Event Worker 进程存活但 readiness 正确为 503，恢复后重新 ready 且日志续传。独立 Agent 容器 health 与当前 Bundle Hash `352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb` 通过。
 - 范围与 Git：本项只交付 `extract_source_evidence` 的 Manifest/Invocation/Candidate/aggregate，不提前实现 `analyze_story`、`reconcile_story`、Candidate Head/Repair 或 Bible Gate，因此 `SGA-CAN-*`、`SGA-REP-*`、完整原稿旅程和全 Stage 对抗条款保持未通过；`agent-browser` 仍只在全部开发完成后执行。Evidence 与实现由当前原稿证据分片功能提交承载，提交标题和正文只描述 feature，不包含任务编号或任务名；未推送、未创建 PR。
 
 ### 有界故事候选归并（2026-08-27）
@@ -547,4 +547,15 @@
 - 通过范围：以上证据完成 Core StoryGraph 的多集编译、发布后 Diff/Impact/Trace 与 `SG-I17`。`SG-PRD-012` 还要求后续正式 Shot Owner Apply 后再次按 expected graph hash 编译，因此保持未勾选；Storyboard/视觉资产/Canvas、完整原稿复合旅程和最终浏览器验收仍未完成。`agent-browser` 依约只在全部开发完成后运行，本次未提前执行。
 - Git：实现、测试与 Evidence 由描述正式内容图编译和工作流发布的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I17`，其余保持未通过。下一步进入 Storyboard Draft，只能消费非空正式 Specification/AssetState 并产出可审核 Shot Intent 与 `needs_asset`，不得提前创建正式 Shot、付费 Provider Job 或 Canvas 写入。
+### 可审核分镜意图候选与缺资产门禁（2026-08-28）
+
+- Red 与跨语言契约：独立 `agent/tests/contract/test_storygraph_storyboard.py`、`backend/tests/agent/storyboard_draft_contract_test.go` 与真实 Workflow 旅程先固定 exact StoryGraph Version、冻结 Style Snapshot、Scene/Beat/Dialogue/Occurrence/Identity/Specification/State、Evidence、角色/场景/道具视觉角色与视图需求。Go 与 Pydantic 都严格拒绝未知字段、跨 Scene Evidence、遗漏 required Beat/Occurrence、身份或状态漂移、伪造 AssetVersion、错误 visual role/view role 和 Agent 输出正式 Shot 的形状；测试只位于 `agent/tests` 与 `backend/tests`。
+- Definition-first 与职责：当前 Catalog 新增 `agent.storyboard_draft@2.0.0`，只接受已发布 `storygraph_version` 并输出 `storyboard_intent_candidate_set`。Backend 按正式 Scene 生成一个持久 shard，冻结 Graph/style/manifest/input/stage identity，创建 Scene Candidate Revision 与一个 aggregate Candidate Revision；Agent `build-storygraph` Bundle 只生成 Shot Intent、视觉需求、风险和审核问题，不生成正式 UUID、timecode、Shot、Binding、Owner Command、Provider Job 或 Artifact。
+- 单一事实源与资产门禁：Backend 只通过共享 PostgreSQL/GORM 读取发布 Graph 与正式 Asset/Specification/State，并在同一事务持久化 Manifest、Draft Set、Batch、Invocation 与 Candidate Revision；没有 Migration、Raw SQL、第二 ORM、第二 SQL 事实源、Agent Writer 或兼容入口。当前 StoryGraph 尚无 READY reference AssetVersion 时，Candidate 必须逐项返回 `needs_asset`，aggregate 也保持 `needs_asset`；真实数据库精确断言 Shot、ShotProductionBinding、Cost、Quota、Provider Job、Artifact 和新增 StoryGraphVersion 均为零。
+- 真实 Codex 与 Skill：本机登录 Codex CLI 后执行 `LANVERSE_TEST_REAL_CODEX=1 .venv/bin/pytest -q -v tests/integration/test_storygraph_real_codex.py::test_real_codex_drafts_reviewable_intent_without_creating_shot`，结果 `1 passed in 24.87s`。首次模型输出了错误 visual role/view role 组合并被 Harness 正确拒绝；收紧唯一 StoryGraph Skill Reference 后原剧本通过。`quick_validate.py` 返回 `Skill is valid!`，当前 Bundle Hash 为 `352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb`。
+- 完整 CI：最终 Backend 在全新 PostgreSQL `16.15`、Temporal、MinIO、Kafka `4.3.1` 与 Elasticsearch/Logstash/Kibana `9.4.4` 下执行 `test -z "$(gofmt -l .)"`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Workflow 包耗时 `276.974s`，没有外部依赖 skip。Agent Ruff check/format、Pyright 与 Pytest 全通过，结果 `39 passed, 4 skipped`；四项都是显式 opt-in 的真实 Codex 集成，其中本功能用例已由上述命令单独通过。Frontend OpenAPI 生成零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试及 Next.js production build 全通过。
+- 镜像、部署与故障：开发/生产 Compose、Backend/Frontend/Agent 三镜像、Backend 三 Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Bundle Hash 探针均通过。隔离完整部署完成注册、项目写入、Workflow、日志 request/trace 脱敏检索，以及 Filebeat、Logstash、Kibana、Kafka、Elasticsearch 逐项停机、降级、恢复和恢复后日志继续摄取，最终输出 `deployment-fault-ci=passed`；专属容器、网络和 Volume 已精确清理。
+- 通过范围：以上证据完成 `SG-PRD-007`、`SGA-STG-006` 与 `SG-I18`。包含后续 detail/Owner Apply 的 `SGA-STG-008`、完整真实 Codex 矩阵 `SGA-OPS-004`、跨阶段视觉资产旅程及 Storyboard Gate 仍保持未通过。`agent-browser` 依约只在全部开发完成后运行，本次未提前执行。
+- Git：实现、测试与 Evidence 由描述生成可审核分镜意图的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I18`，其余保持未通过。下一步进入 Shot Intent 公共 Human Gate 与 `FreezeIntentSet`，只冻结已审核的 Draft Set revision/hash、Intent 和视觉需求；审批完成前不得创建正式 Shot、Cost、Quota、Provider Job、Artifact 或 Canvas 写入。

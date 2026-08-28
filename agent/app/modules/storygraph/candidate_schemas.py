@@ -428,18 +428,233 @@ class ShotBindingCandidate(StrictModel):
     effective_style_snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class DraftShot(StrictModel):
-    proposal_key: str = Field(min_length=1)
-    position: int = Field(gt=0)
-    title: str = Field(min_length=1)
-    narrative_unit_version_ids: list[UUID] = Field(min_length=1)
-    spec: ShotSpec
-    asset_references: list[AssetReference]
+class StoryboardEvidenceRef(StrictModel):
+    document_revision_id: UUID
+    absolute_start: int = Field(ge=0)
+    absolute_end: int = Field(gt=0)
+    text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_range(self) -> StoryboardEvidenceRef:
+        if self.absolute_end <= self.absolute_start:
+            raise ValueError("Storyboard Evidence range must be increasing")
+        return self
+
+
+class StoryboardCameraIntent(StrictModel):
+    scale: str = Field(min_length=1)
+    angle: str = Field(min_length=1)
+    movement: str = Field(min_length=1)
+    composition: str = Field(min_length=1)
+
+
+class StoryboardFrameIntent(StrictModel):
+    first: str = Field(min_length=1)
+    key: str = Field(min_length=1)
+    last: str = Field(min_length=1)
+
+
+class StoryboardAssetVersionRef(StrictModel):
+    asset_version_id: UUID
+    revision: int = Field(ge=1)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    lineage_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class StoryboardVisualRequirement(StrictModel):
+    occurrence_story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    identity_story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    specification_story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    asset_state_story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    asset_id: UUID
+    specification_version_id: UUID
+    asset_state_id: UUID
+    asset_role: Literal["subject", "environment", "prop"]
+    required_view_roles: list[Literal["front", "profile", "back", "environment", "prop"]] = Field(
+        min_length=1
+    )
+    asset_readiness: Literal["ready", "needs_asset"]
+    asset_version_ref: StoryboardAssetVersionRef | None
+
+    @model_validator(mode="after")
+    def validate_readiness(self) -> StoryboardVisualRequirement:
+        if (self.asset_readiness == "ready") != (self.asset_version_ref is not None):
+            raise ValueError("Storyboard visual readiness does not match its exact AssetVersion")
+        order = {"front": 0, "profile": 1, "back": 2, "environment": 3, "prop": 4}
+        if self.required_view_roles != sorted(
+            set(self.required_view_roles), key=lambda value: order[value]
+        ):
+            raise ValueError("Storyboard required view roles must be unique and sorted")
+        return self
+
+
+class StoryboardReviewIssue(StrictModel):
+    code: str = Field(min_length=1)
+    severity: Literal["warning", "blocking"]
+    summary: str = Field(min_length=1)
+    evidence: list[StoryboardEvidenceRef]
+
+
+class ShotIntent(StrictModel):
+    shot_key: str = Field(min_length=1)
+    intent_order: int = Field(ge=1)
+    source_beat_story_node_keys: list[str] = Field(min_length=1)
+    source_evidence: list[StoryboardEvidenceRef] = Field(min_length=1)
+    purpose: str = Field(min_length=1)
+    proposed_duration_ms: int = Field(ge=500, le=15000)
+    camera: StoryboardCameraIntent
+    action_intent: str = Field(min_length=1)
+    dialogue_intent: str | None
+    sound_intent: str = Field(min_length=1)
+    performance_intent: str = Field(min_length=1)
+    continuity_in: str = Field(min_length=1)
+    continuity_out: str = Field(min_length=1)
+    frame_intent: StoryboardFrameIntent
+    visual_requirements: list[StoryboardVisualRequirement] = Field(min_length=1)
     risk_codes: list[str]
+    review_issues: list[StoryboardReviewIssue]
 
 
 class StoryboardRowCandidate(StrictModel):
-    shots: list[DraftShot] = Field(min_length=1, max_length=120)
+    scene_story_node_key: str = Field(pattern=r"^sgn_[0-9a-f]{64}$")
+    shot_intents: list[ShotIntent] = Field(min_length=1, max_length=120)
+    asset_readiness: Literal["ready", "needs_asset"]
+
+    @model_validator(mode="after")
+    def validate_order_and_readiness(self) -> StoryboardRowCandidate:
+        keys: set[str] = set()
+        for index, intent in enumerate(self.shot_intents, start=1):
+            if intent.intent_order != index or intent.shot_key in keys:
+                raise ValueError(
+                    "Storyboard Shot Intents must be uniquely and contiguously ordered"
+                )
+            keys.add(intent.shot_key)
+        expected = (
+            "needs_asset"
+            if any(
+                requirement.asset_readiness == "needs_asset"
+                for intent in self.shot_intents
+                for requirement in intent.visual_requirements
+            )
+            else "ready"
+        )
+        if self.asset_readiness != expected:
+            raise ValueError(
+                "Storyboard candidate readiness does not match its visual requirements"
+            )
+        return self
+
+    def validate_for(self, stage_input: Any) -> None:
+        from app.candidate_runtime.schemas import StoryboardDraftStageInput
+
+        if not isinstance(stage_input, StoryboardDraftStageInput):
+            raise ValueError("Storyboard candidate has no exact Stage input")
+        if self.scene_story_node_key != stage_input.scene.story_node_key:
+            raise ValueError("Storyboard candidate escaped its frozen Scene")
+        beats = {value.story_node_key: value for value in stage_input.beats}
+        required_beats = {
+            value.story_node_key for value in stage_input.beats if value.required_for_coverage
+        }
+        occurrences = {value.story_node_key: value for value in stage_input.occurrences}
+        exact_versions = {value.asset_version_id: value for value in stage_input.asset_versions}
+        asset_roles = {"character": "subject", "location": "environment", "prop": "prop"}
+        required_views = {
+            "character": ["front", "profile", "back"],
+            "location": ["environment"],
+            "prop": ["prop"],
+        }
+        allowed_evidence = {
+            (
+                value.document_revision_id,
+                value.absolute_start,
+                value.absolute_end,
+                value.text_hash,
+            )
+            for source in [
+                stage_input.scene,
+                *stage_input.beats,
+                *stage_input.dialogues,
+                *stage_input.occurrences,
+            ]
+            for value in source.evidence
+        }
+        covered_beats: set[str] = set()
+        covered_occurrences: set[str] = set()
+        for intent in self.shot_intents:
+            if intent.source_beat_story_node_keys != sorted(
+                set(intent.source_beat_story_node_keys)
+            ) or any(key not in beats for key in intent.source_beat_story_node_keys):
+                raise ValueError("Storyboard intent references an unknown or duplicate Beat")
+            covered_beats.update(intent.source_beat_story_node_keys)
+            if any(
+                (
+                    value.document_revision_id,
+                    value.absolute_start,
+                    value.absolute_end,
+                    value.text_hash,
+                )
+                not in allowed_evidence
+                for value in intent.source_evidence
+            ):
+                raise ValueError("Storyboard intent Evidence is outside its exact Scene")
+            requirement_keys: set[str] = set()
+            for requirement in intent.visual_requirements:
+                source = occurrences.get(requirement.occurrence_story_node_key)
+                if source is None or requirement.occurrence_story_node_key in requirement_keys:
+                    raise ValueError(
+                        "Storyboard intent has an unknown or duplicate visual occurrence"
+                    )
+                requirement_keys.add(requirement.occurrence_story_node_key)
+                covered_occurrences.add(requirement.occurrence_story_node_key)
+                if (
+                    requirement.identity_story_node_key != source.identity_story_node_key
+                    or requirement.specification_story_node_key
+                    != source.specification_story_node_key
+                    or requirement.asset_state_story_node_key != source.asset_state_story_node_key
+                    or requirement.asset_id != source.asset_id
+                    or requirement.specification_version_id != source.specification_version_id
+                    or requirement.asset_state_id != source.asset_state_id
+                    or requirement.asset_role != asset_roles[source.asset_kind]
+                    or requirement.required_view_roles != required_views[source.asset_kind]
+                ):
+                    raise ValueError(
+                        "Storyboard visual requirement changed its frozen identity or state"
+                    )
+                if requirement.asset_version_ref is None:
+                    if requirement.asset_readiness != "needs_asset":
+                        raise ValueError("missing Storyboard AssetVersion must remain needs_asset")
+                    continue
+                exact = exact_versions.get(requirement.asset_version_ref.asset_version_id)
+                if (
+                    exact is None
+                    or exact.asset_id != requirement.asset_id
+                    or exact.asset_state_id != requirement.asset_state_id
+                    or exact.revision != requirement.asset_version_ref.revision
+                    or exact.content_hash != requirement.asset_version_ref.content_hash
+                    or exact.lineage_hash != requirement.asset_version_ref.lineage_hash
+                    or exact.style_snapshot_hash
+                    != stage_input.effective_style_snapshot.content_hash
+                    or not set(requirement.required_view_roles).issubset(exact.view_roles)
+                ):
+                    raise ValueError(
+                        "Storyboard visual requirement references a drifted AssetVersion"
+                    )
+            if any(
+                (
+                    value.document_revision_id,
+                    value.absolute_start,
+                    value.absolute_end,
+                    value.text_hash,
+                )
+                not in allowed_evidence
+                for issue in intent.review_issues
+                for value in issue.evidence
+            ):
+                raise ValueError("Storyboard Review Issue Evidence is outside its exact Scene")
+        if not required_beats.issubset(covered_beats):
+            raise ValueError("Storyboard candidate does not cover every required Beat")
+        if set(occurrences) != covered_occurrences:
+            raise ValueError("Storyboard candidate does not cover every frozen Occurrence")
 
 
 class ShotDetail(StrictModel):

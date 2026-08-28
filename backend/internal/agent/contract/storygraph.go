@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -16,6 +17,8 @@ import (
 )
 
 const StoryGraphWireSchemaVersion = "storygraph-stage-wire-v1"
+
+var storyboardStoryNodePattern = regexp.MustCompile(`^sgn_[0-9a-f]{64}$`)
 
 var storyGraphStages = map[string]struct{}{
 	"extract_source_evidence": {}, "analyze_story": {}, "reconcile_story": {}, "segment_episodes": {},
@@ -244,6 +247,83 @@ type EpisodeReconciliationStageInput struct {
 	Candidates          []EpisodeReconciliationInputCandidate `json:"candidates"`
 }
 
+type StoryboardEvidenceRef struct {
+	DocumentRevisionID string `json:"document_revision_id"`
+	AbsoluteStart      int    `json:"absolute_start"`
+	AbsoluteEnd        int    `json:"absolute_end"`
+	TextHash           string `json:"text_hash"`
+}
+
+type StoryboardSceneInput struct {
+	StoryNodeKey    string                  `json:"story_node_key"`
+	OwnerVersionID  string                  `json:"owner_version_id"`
+	OwnerRevision   int64                   `json:"owner_revision"`
+	OwnerHash       string                  `json:"owner_hash"`
+	EpisodeID       string                  `json:"episode_id"`
+	EpisodePosition int                     `json:"episode_position"`
+	ScenePosition   int                     `json:"scene_position"`
+	Heading         string                  `json:"heading"`
+	Evidence        []StoryboardEvidenceRef `json:"evidence"`
+}
+
+type StoryboardBeatInput struct {
+	StoryNodeKey        string                  `json:"story_node_key"`
+	Summary             string                  `json:"summary"`
+	RequiredForCoverage bool                    `json:"required_for_coverage"`
+	Evidence            []StoryboardEvidenceRef `json:"evidence"`
+}
+
+type StoryboardDialogueInput struct {
+	StoryNodeKey string                  `json:"story_node_key"`
+	Speaker      string                  `json:"speaker"`
+	Text         string                  `json:"text"`
+	Evidence     []StoryboardEvidenceRef `json:"evidence"`
+}
+
+type StoryboardOccurrenceInput struct {
+	StoryNodeKey              string                  `json:"story_node_key"`
+	IdentityStoryNodeKey      string                  `json:"identity_story_node_key"`
+	SpecificationStoryNodeKey string                  `json:"specification_story_node_key"`
+	AssetStateStoryNodeKey    string                  `json:"asset_state_story_node_key"`
+	AssetID                   string                  `json:"asset_id"`
+	SpecificationVersionID    string                  `json:"specification_version_id"`
+	AssetStateID              string                  `json:"asset_state_id"`
+	AssetKind                 string                  `json:"asset_kind"`
+	Summary                   string                  `json:"summary"`
+	Evidence                  []StoryboardEvidenceRef `json:"evidence"`
+}
+
+type StoryboardStyleSnapshotInput struct {
+	OwnerVersionID string `json:"owner_version_id"`
+	Revision       int64  `json:"revision"`
+	ContentHash    string `json:"content_hash"`
+	VisualStyle    string `json:"visual_style"`
+	AspectRatio    string `json:"aspect_ratio"`
+}
+
+type StoryboardAssetVersionInput struct {
+	AssetID           string   `json:"asset_id"`
+	AssetStateID      string   `json:"asset_state_id"`
+	AssetVersionID    string   `json:"asset_version_id"`
+	Revision          int64    `json:"revision"`
+	ContentHash       string   `json:"content_hash"`
+	LineageHash       string   `json:"lineage_hash"`
+	StyleSnapshotHash string   `json:"style_snapshot_hash"`
+	ViewRoles         []string `json:"view_roles"`
+	Status            string   `json:"status"`
+}
+
+type StoryboardDraftStageInput struct {
+	GraphVersionNo         int64                         `json:"graph_version_no"`
+	Scene                  StoryboardSceneInput          `json:"scene"`
+	Beats                  []StoryboardBeatInput         `json:"beats"`
+	Dialogues              []StoryboardDialogueInput     `json:"dialogues"`
+	Occurrences            []StoryboardOccurrenceInput   `json:"occurrences"`
+	EffectiveStyleSnapshot StoryboardStyleSnapshotInput  `json:"effective_style_snapshot"`
+	TargetDurationMS       int                           `json:"target_duration_ms"`
+	AssetVersions          []StoryboardAssetVersionInput `json:"asset_versions"`
+}
+
 type StoryReconciliationInputCandidate struct {
 	ShardKey              string          `json:"shard_key"`
 	CandidateRevisionID   string          `json:"candidate_revision_id"`
@@ -351,10 +431,137 @@ func validateStageInput(payload StageInvocationPayload) error {
 		return validateEpisodeAnalysisStageInput(payload)
 	case "reconcile_episode":
 		return validateEpisodeReconciliationStageInput(payload)
+	case "draft_storyboard":
+		return validateStoryboardDraftStageInput(payload)
 	case "review_storygraph":
 		return validateStoryGraphReviewStageInput(payload)
 	case "repair_candidate":
 		return validateStoryGraphRepairStageInput(payload)
+	}
+	return nil
+}
+
+func validateStoryboardDraftStageInput(payload StageInvocationPayload) error {
+	var input StoryboardDraftStageInput
+	if err := decodeStrict(payload.StageInput, &input); err != nil {
+		return errors.New("invalid Storyboard Draft stage input")
+	}
+	if input.GraphVersionNo < 1 || input.TargetDurationMS < 1000 || input.TargetDurationMS > 7_200_000 ||
+		len(input.Beats) == 0 || len(input.Occurrences) == 0 || len(payload.SourceRefs) != 2 ||
+		len(payload.UpstreamCandidates) != 0 || payload.BaseStoryGraphVersionID == "" ||
+		payload.BaseStoryGraphHash == "" || payload.Shard.Kind != "story_scene" ||
+		payload.Shard.AbsoluteStart != nil || payload.Shard.AbsoluteEnd != nil ||
+		payload.ShardKey != "scene:"+input.Scene.StoryNodeKey ||
+		!storyboardStoryNodePattern.MatchString(input.Scene.StoryNodeKey) || !hashPattern.MatchString(input.Scene.OwnerHash) ||
+		input.Scene.OwnerRevision < 1 || input.Scene.EpisodePosition < 1 || input.Scene.ScenePosition < 1 ||
+		strings.TrimSpace(input.Scene.Heading) == "" || len(input.Scene.Evidence) == 0 ||
+		input.EffectiveStyleSnapshot.Revision < 1 ||
+		!hashPattern.MatchString(input.EffectiveStyleSnapshot.ContentHash) ||
+		strings.TrimSpace(input.EffectiveStyleSnapshot.VisualStyle) == "" ||
+		strings.TrimSpace(input.EffectiveStyleSnapshot.AspectRatio) == "" {
+		return errors.New("invalid Storyboard Draft exact dependencies")
+	}
+	for _, identifier := range []string{
+		payload.BaseStoryGraphVersionID, input.Scene.OwnerVersionID, input.Scene.EpisodeID,
+		input.EffectiveStyleSnapshot.OwnerVersionID,
+	} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return errors.New("invalid Storyboard Draft exact revision")
+		}
+	}
+	if err := validateStoryboardEvidence(input.Scene.Evidence); err != nil {
+		return err
+	}
+	previous := ""
+	for _, beat := range input.Beats {
+		if !storyboardStoryNodePattern.MatchString(beat.StoryNodeKey) || previous >= beat.StoryNodeKey ||
+			strings.TrimSpace(beat.Summary) == "" || len(beat.Evidence) == 0 {
+			return errors.New("Storyboard Draft Beats must be exact, unique, and sorted")
+		}
+		if err := validateStoryboardEvidence(beat.Evidence); err != nil {
+			return err
+		}
+		previous = beat.StoryNodeKey
+	}
+	previous = ""
+	for _, dialogue := range input.Dialogues {
+		if !storyboardStoryNodePattern.MatchString(dialogue.StoryNodeKey) || previous >= dialogue.StoryNodeKey ||
+			strings.TrimSpace(dialogue.Speaker) == "" || strings.TrimSpace(dialogue.Text) == "" || len(dialogue.Evidence) == 0 {
+			return errors.New("Storyboard Draft Dialogues must be exact, unique, and sorted")
+		}
+		if err := validateStoryboardEvidence(dialogue.Evidence); err != nil {
+			return err
+		}
+		previous = dialogue.StoryNodeKey
+	}
+	previous = ""
+	allowedKinds := map[string]struct{}{"character": {}, "location": {}, "prop": {}}
+	for _, occurrence := range input.Occurrences {
+		if !storyboardStoryNodePattern.MatchString(occurrence.StoryNodeKey) || previous >= occurrence.StoryNodeKey ||
+			!storyboardStoryNodePattern.MatchString(occurrence.IdentityStoryNodeKey) ||
+			!storyboardStoryNodePattern.MatchString(occurrence.SpecificationStoryNodeKey) ||
+			!storyboardStoryNodePattern.MatchString(occurrence.AssetStateStoryNodeKey) ||
+			strings.TrimSpace(occurrence.Summary) == "" || len(occurrence.Evidence) == 0 {
+			return errors.New("Storyboard Draft Occurrences must be exact, unique, and sorted")
+		}
+		if _, ok := allowedKinds[occurrence.AssetKind]; !ok {
+			return errors.New("Storyboard Draft Occurrence has an invalid Asset kind")
+		}
+		for _, identifier := range []string{occurrence.AssetID, occurrence.SpecificationVersionID, occurrence.AssetStateID} {
+			if _, err := uuid.Parse(identifier); err != nil {
+				return errors.New("Storyboard Draft Occurrence has an invalid formal reference")
+			}
+		}
+		if err := validateStoryboardEvidence(occurrence.Evidence); err != nil {
+			return err
+		}
+		previous = occurrence.StoryNodeKey
+	}
+	previous = ""
+	for _, version := range input.AssetVersions {
+		key := strings.Join([]string{version.AssetID, version.AssetStateID, version.AssetVersionID}, "\x00")
+		if previous >= key || version.Revision < 1 || version.Status != "READY" ||
+			!hashPattern.MatchString(version.ContentHash) || !hashPattern.MatchString(version.LineageHash) ||
+			!hashPattern.MatchString(version.StyleSnapshotHash) || len(version.ViewRoles) == 0 {
+			return errors.New("Storyboard Draft AssetVersions must be exact, READY, unique, and sorted")
+		}
+		for _, identifier := range []string{version.AssetID, version.AssetStateID, version.AssetVersionID} {
+			if _, err := uuid.Parse(identifier); err != nil {
+				return errors.New("Storyboard Draft AssetVersion has an invalid formal reference")
+			}
+		}
+		previous = key
+	}
+	expectedSources := []StageSourceRef{
+		{
+			OwnerKind: "production/storygraph", OwnerLogicalID: payload.ProjectID,
+			OwnerVersionID: payload.BaseStoryGraphVersionID, Revision: input.GraphVersionNo,
+			ContentHash: payload.BaseStoryGraphHash,
+		},
+		{
+			OwnerKind: "preset/effective-style", OwnerLogicalID: payload.ProjectID,
+			OwnerVersionID: input.EffectiveStyleSnapshot.OwnerVersionID,
+			Revision:       input.EffectiveStyleSnapshot.Revision, ContentHash: input.EffectiveStyleSnapshot.ContentHash,
+		},
+	}
+	return validateExactStageSources(payload.SourceRefs, expectedSources, "Storyboard Draft")
+}
+
+func validateStoryboardEvidence(values []StoryboardEvidenceRef) error {
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if value.AbsoluteStart < 0 || value.AbsoluteEnd <= value.AbsoluteStart ||
+			!hashPattern.MatchString(value.TextHash) {
+			return errors.New("invalid Storyboard Draft Evidence")
+		}
+		if _, err := uuid.Parse(value.DocumentRevisionID); err != nil {
+			return errors.New("invalid Storyboard Draft Evidence")
+		}
+		key := fmt.Sprintf("%s:%d:%d:%s", value.DocumentRevisionID, value.AbsoluteStart, value.AbsoluteEnd, value.TextHash)
+		if _, duplicate := seen[key]; duplicate {
+			return errors.New("duplicate Storyboard Draft Evidence")
+		}
+		seen[key] = struct{}{}
 	}
 	return nil
 }

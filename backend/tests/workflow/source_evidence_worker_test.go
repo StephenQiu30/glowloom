@@ -39,6 +39,7 @@ import (
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
+	storyboarddomain "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/domain"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
@@ -86,6 +87,11 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	}).Error; err != nil {
 		t.Fatalf("update two-Episode source fixture: %v", err)
 	}
+	if err = database.Model(&model.Project{}).Where("id = ?", fixture.projectID).Updates(map[string]any{
+		"visual_style": "cinematic noir", "aspect_ratio": "9:16",
+	}).Error; err != nil {
+		t.Fatalf("freeze Storyboard visual style: %v", err)
+	}
 
 	authoringService := authoringapp.NewService(authoringgorm.New(database), authoringapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
@@ -106,6 +112,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "episode-analysis", DefinitionKey: "agent.episode_analysis", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "structure-review", DefinitionKey: "human.episode_structure_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "storygraph", DefinitionKey: "production.storygraph_compile", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "storyboard", DefinitionKey: "agent.storyboard_draft", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
@@ -120,6 +127,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "materialization-to-analysis", FromNodeID: "bible-materialization", FromPort: "materialization", ToNodeID: "episode-analysis", ToPort: "materialization"},
 				{ID: "analysis-to-structure-review", FromNodeID: "episode-analysis", FromPort: "candidate", ToNodeID: "structure-review", ToPort: "candidate"},
 				{ID: "structure-to-storygraph", FromNodeID: "structure-review", FromPort: "structures", ToNodeID: "storygraph", ToPort: "structures"},
+				{ID: "storygraph-to-storyboard", FromNodeID: "storygraph", FromPort: "storygraph", ToNodeID: "storyboard", ToPort: "storygraph"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -187,6 +195,10 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	storyGraphService := storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 	})
+	storyboardStore := storyboardgorm.New(database)
+	storyboardService := storyboardapp.NewService(
+		storyboardStore, storyboardapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
+	)
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
@@ -196,7 +208,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		bibleService,
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningService, episodePlanningService, storyGraphService,
-		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		storyboardService,
 		reviewService,
 		nil, nil, episodeSegmentationService, episodeAnalysisService,
 	)
@@ -249,6 +261,10 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		bibleStore, agent, func() time.Time { return time.Now().UTC() },
 		time.Millisecond, time.Minute, agentLogger,
 	)
+	storyboardWorker := storyboardapp.NewWorker(
+		storyboardStore, agent, func() time.Time { return time.Now().UTC() },
+		time.Millisecond, time.Minute, agentLogger,
+	)
 	go agentWorker.Run(agentContext)
 	go agentWorker.Run(agentContext)
 	go storyWorker.Run(agentContext)
@@ -260,6 +276,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	go episodeAnalysisWorker.Run(agentContext)
 	go episodeAnalysisWorker.Run(agentContext)
 	go bibleWorker.Run(agentContext)
+	go storyboardWorker.Run(agentContext)
 	t.Cleanup(stopAgent)
 
 	startService := workflowapp.NewStartService(compiler, workflowStore, temporalRuntime, workflowapp.StartConfig{
@@ -1059,7 +1076,10 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		typeCounts[storygraph.NodeTypeAssetState] < 2 || typeCounts[storygraph.NodeTypeProductionBinding] < 2 ||
 		typeCounts[storygraph.NodeTypeWorldRule] == 0 || typeCounts[storygraph.NodeTypeStoryArc] == 0 ||
 		typeCounts[storygraph.NodeTypeRelationshipClaim] == 0 ||
-		typeCounts[storygraph.NodeTypeOccurrence] != len(publishedEpisodes) || typeCounts[storygraph.NodeTypeCausalClaim] != len(publishedEpisodes) {
+		typeCounts[storygraph.NodeTypeScene] == 0 ||
+		typeCounts[storygraph.NodeTypeNarrativeBeat] != typeCounts[storygraph.NodeTypeScene] ||
+		typeCounts[storygraph.NodeTypeOccurrence] != typeCounts[storygraph.NodeTypeScene] ||
+		typeCounts[storygraph.NodeTypeCausalClaim] != typeCounts[storygraph.NodeTypeScene] {
 		t.Fatalf("published multi-Episode StoryGraph is incomplete: version=%#v head=%#v types=%v", graphVersion, graphHead, typeCounts)
 	}
 	if identityKey == "" || sceneKey == "" {
@@ -1134,6 +1154,142 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	}
 	if err = database.Model(&model.StoryGraphVersion{}).Where("project_id = ?", fixture.projectID).Count(&graphReceiptCount).Error; err != nil || graphReceiptCount != 1 {
 		t.Fatalf("StoryGraph replay or conflict created another Version: count=%d err=%v", graphReceiptCount, err)
+	}
+	var storyboardNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "storyboard").First(&storyboardNode).Error; err != nil {
+		t.Fatalf("load Storyboard Draft NodeRun: %v", err)
+	}
+	storyboardOutput, _, storyboardOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(storyboardNode.Output))
+	if err != nil || storyboardNode.Status != "SUCCEEDED" || storyboardNode.OutputHash == nil ||
+		*storyboardNode.OutputHash != storyboardOutputHash || len(storyboardOutput.Bindings) != 1 ||
+		storyboardOutput.Bindings[0].Port != "candidate" ||
+		storyboardOutput.Bindings[0].ValueType != "storyboard_intent_candidate_set" ||
+		storyboardOutput.Bindings[0].ReferenceVersion != "1" || len(storyboardOutput.Bindings[0].ContentHash) != 64 {
+		t.Fatalf("Storyboard Draft output=%#v node=%#v err=%v", storyboardOutput, storyboardNode, err)
+	}
+	var draftSet model.StoryboardDraftSet
+	if err = database.First(&draftSet, "node_run_id = ?", storyboardNode.ID).Error; err != nil {
+		t.Fatalf("load Storyboard Draft set: %v", err)
+	}
+	if draftSet.Status != "needs_asset" || draftSet.Revision != 2 || draftSet.WorkflowRunID.String() != run.ID ||
+		draftSet.NodeRunID != storyboardNode.ID || draftSet.GraphVersionID != graphVersion.ID ||
+		draftSet.GraphVersionNo != graphVersion.VersionNo || draftSet.GraphContentHash != graphVersion.ContentHash ||
+		draftSet.CandidateRevisionID == nil || draftSet.CandidateRevisionHash == nil || draftSet.ResultHash == nil ||
+		storyboardOutput.Bindings[0].ReferenceID != draftSet.CandidateRevisionID.String() ||
+		storyboardOutput.Bindings[0].ContentHash != *draftSet.CandidateRevisionHash ||
+		*draftSet.ResultHash != *draftSet.CandidateRevisionHash {
+		t.Fatalf("Storyboard Draft set lost exact workflow or StoryGraph ownership: %#v", draftSet)
+	}
+	var draftManifest model.ShardManifest
+	if err = database.First(&draftManifest, "id = ? AND version = ?", draftSet.ManifestID, draftSet.ManifestVersion).Error; err != nil {
+		t.Fatalf("load Storyboard Draft manifest: %v", err)
+	}
+	var draftShards []storyboarddomain.DraftManifestShard
+	if err = json.Unmarshal(draftManifest.Shards, &draftShards); err != nil ||
+		draftManifest.Stage != "draft_storyboard" || draftManifest.WorkflowRunID.String() != run.ID ||
+		draftManifest.NodeRunID != storyboardNode.ID || draftManifest.ManifestHash != draftSet.ManifestHash ||
+		len(draftShards) != typeCounts[storygraph.NodeTypeScene] {
+		t.Fatalf("Storyboard Draft manifest does not cover every Scene: manifest=%#v shards=%#v err=%v", draftManifest, draftShards, err)
+	}
+	var storyboardBatches []model.StoryboardDraftBatch
+	if err = database.Where("node_run_id = ?", storyboardNode.ID).Order("scene_story_node_key").Find(&storyboardBatches).Error; err != nil {
+		t.Fatalf("load Storyboard Scene batches: %v", err)
+	}
+	var storyboardInvocations []model.AgentInvocation
+	if err = database.Where("node_run_id = ? AND request_type = ?", storyboardNode.ID, "storyboard_scene_draft").
+		Order("shard_key").Find(&storyboardInvocations).Error; err != nil {
+		t.Fatalf("load Storyboard Scene invocations: %v", err)
+	}
+	if len(storyboardBatches) != len(draftShards) || len(storyboardInvocations) != len(draftShards) {
+		t.Fatalf("Storyboard Draft is not one durable shard per Scene: shards=%d batches=%d invocations=%d",
+			len(draftShards), len(storyboardBatches), len(storyboardInvocations))
+	}
+	leafRevisionIDs := make(map[string]struct{}, len(storyboardInvocations))
+	for _, invocation := range storyboardInvocations {
+		request, requestErr := agentgorm.StageInvocation(invocation)
+		if requestErr != nil || request.Payload.BaseStoryGraphVersionID != graphVersion.ID.String() ||
+			request.Payload.BaseStoryGraphHash != graphVersion.ContentHash || len(request.Payload.SourceRefs) != 2 ||
+			len(request.Payload.UpstreamCandidates) != 0 || request.Payload.Shard.Kind != "story_scene" ||
+			request.Payload.ShardManifestRef.ManifestID != draftManifest.ID.String() ||
+			request.Payload.ShardManifestRef.Version != draftManifest.Version ||
+			request.Payload.ShardManifestRef.Hash != draftManifest.ManifestHash {
+			t.Fatalf("Storyboard Scene invocation lost exact immutable inputs: invocation=%#v request=%#v err=%v", invocation, request, requestErr)
+		}
+		var stageInput agentcontract.StoryboardDraftStageInput
+		if err = json.Unmarshal(request.Payload.StageInput, &stageInput); err != nil || len(stageInput.Beats) == 0 ||
+			len(stageInput.Occurrences) == 0 || len(stageInput.AssetVersions) != 0 ||
+			stageInput.EffectiveStyleSnapshot.VisualStyle != "cinematic noir" ||
+			stageInput.EffectiveStyleSnapshot.AspectRatio != "9:16" {
+			t.Fatalf("Storyboard Scene input is not exact or did not preserve needs_asset: input=%#v err=%v", stageInput, err)
+		}
+		var leaf model.StageCandidateRevision
+		if err = database.First(&leaf, "source_invocation_id = ?", invocation.ID).Error; err != nil {
+			t.Fatalf("load Storyboard Scene CandidateRevision: %v", err)
+		}
+		candidate, candidateErr := storyboarddomain.DecodeAndValidateCandidate(json.RawMessage(leaf.Candidate), request.Payload.StageInput)
+		if candidateErr != nil || leaf.OriginKind != "invocation" || candidate.AssetReadiness != "needs_asset" ||
+			candidate.SceneStoryNodeKey != stageInput.Scene.StoryNodeKey || len(candidate.ShotIntents) == 0 {
+			t.Fatalf("Storyboard Scene Candidate is not reviewable: revision=%#v candidate=%#v err=%v", leaf, candidate, candidateErr)
+		}
+		for _, intent := range candidate.ShotIntents {
+			for _, requirement := range intent.VisualRequirements {
+				if requirement.AssetReadiness != "needs_asset" || requirement.AssetVersionRef != nil {
+					t.Fatalf("missing exact AssetVersion did not remain explicit needs_asset: %#v", requirement)
+				}
+			}
+		}
+		leafRevisionIDs[leaf.ID.String()] = struct{}{}
+	}
+	var storyboardAggregateRevision model.StageCandidateRevision
+	if err = database.First(&storyboardAggregateRevision, "id = ?", storyboardOutput.Bindings[0].ReferenceID).Error; err != nil {
+		t.Fatalf("load Storyboard aggregate CandidateRevision: %v", err)
+	}
+	var candidateSet storyboarddomain.CandidateSet
+	var aggregateOrigin agentcontract.AggregateCandidateOrigin
+	if err = json.Unmarshal(storyboardAggregateRevision.Candidate, &candidateSet); err != nil {
+		t.Fatalf("decode Storyboard aggregate Candidate Set: %v", err)
+	}
+	if err = json.Unmarshal(storyboardAggregateRevision.AggregateOrigin, &aggregateOrigin); err != nil {
+		t.Fatalf("decode Storyboard aggregate origin: %v", err)
+	}
+	if storyboardAggregateRevision.OriginKind != "aggregate" || storyboardAggregateRevision.CandidateRevisionHash != storyboardOutput.Bindings[0].ContentHash ||
+		candidateSet.SchemaVersion != "storyboard-intent-candidate-set-v1" || candidateSet.AssetReadiness != "needs_asset" ||
+		candidateSet.GraphVersionID != graphVersion.ID.String() || candidateSet.GraphContentHash != graphVersion.ContentHash ||
+		candidateSet.ManifestID != draftManifest.ID.String() || candidateSet.ManifestHash != draftManifest.ManifestHash ||
+		len(candidateSet.Scenes) != len(draftShards) || len(aggregateOrigin.LeafCandidates) != len(draftShards) {
+		t.Fatalf("Storyboard aggregate Candidate Set is incomplete: revision=%#v candidate=%#v origin=%#v",
+			storyboardAggregateRevision, candidateSet, aggregateOrigin)
+	}
+	for _, leaf := range aggregateOrigin.LeafCandidates {
+		if _, exists := leafRevisionIDs[leaf.CandidateRevisionID]; !exists {
+			t.Fatalf("Storyboard aggregate references a non-Scene CandidateRevision: %#v", leaf)
+		}
+	}
+	var storyboardTaskCount, storyboardShotCount, generationIntentCount, providerJobCount int64
+	var costEstimateCount, costReservationCount, quotaReservationCount, storyboardArtifactCount int64
+	for target, destination := range map[any]*int64{
+		&model.StoryboardShot{}:        &storyboardShotCount,
+		&model.GenerationIntent{}:      &generationIntentCount,
+		&model.GenerationProviderJob{}: &providerJobCount,
+		&model.CostEstimate{}:          &costEstimateCount,
+		&model.CostReservation{}:       &costReservationCount,
+		&model.QuotaReservation{}:      &quotaReservationCount,
+		&model.Artifact{}:              &storyboardArtifactCount,
+	} {
+		if err = database.Model(target).Where("workspace_id = ?", fixture.workspaceID).Count(destination).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = database.Model(&model.WorkflowTask{}).Where(
+		"workspace_id = ? AND request_type = ?", fixture.workspaceID, "storyboard_scene_draft",
+	).Count(&storyboardTaskCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storyboardTaskCount != 0 || storyboardShotCount != 0 || generationIntentCount != 0 || providerJobCount != 0 ||
+		costEstimateCount != 0 || costReservationCount != 0 || quotaReservationCount != 0 || storyboardArtifactCount != 0 {
+		t.Fatalf("Storyboard intent drafting crossed its candidate-only boundary: tasks=%d shots=%d intents=%d jobs=%d estimates=%d reservations=%d quotas=%d artifacts=%d",
+			storyboardTaskCount, storyboardShotCount, generationIntentCount, providerJobCount,
+			costEstimateCount, costReservationCount, quotaReservationCount, storyboardArtifactCount)
 	}
 
 	replayCommand := planningapp.ApplyEpisodePlanCommand{
@@ -1771,6 +1927,9 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 	_ int,
 	_ int64,
 ) (agentcontract.StageResult, error) {
+	if invocation.Payload.Stage == "draft_storyboard" {
+		return storyboardDraftFixtureResult(invocation)
+	}
 	if invocation.Payload.Stage == planningdomain.AnalyzeEpisodeStage {
 		agent.mutex.Lock()
 		if agent.episodeAnalysisID == "" {
@@ -1929,6 +2088,75 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 	}, nil
 }
 
+func storyboardDraftFixtureResult(invocation agentcontract.StageInvocation) (agentcontract.StageResult, error) {
+	var input agentcontract.StoryboardDraftStageInput
+	if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	beatKeys := make([]string, len(input.Beats))
+	for index, beat := range input.Beats {
+		beatKeys[index] = beat.StoryNodeKey
+	}
+	visualRequirements := make([]storyboarddomain.VisualRequirement, len(input.Occurrences))
+	for index, occurrence := range input.Occurrences {
+		role := "subject"
+		viewRoles := []string{"front", "profile", "back"}
+		switch occurrence.AssetKind {
+		case "location":
+			role, viewRoles = "environment", []string{"environment"}
+		case "prop":
+			role, viewRoles = "prop", []string{"prop"}
+		}
+		visualRequirements[index] = storyboarddomain.VisualRequirement{
+			OccurrenceStoryNodeKey:    occurrence.StoryNodeKey,
+			IdentityStoryNodeKey:      occurrence.IdentityStoryNodeKey,
+			SpecificationStoryNodeKey: occurrence.SpecificationStoryNodeKey,
+			AssetStateStoryNodeKey:    occurrence.AssetStateStoryNodeKey,
+			AssetID:                   occurrence.AssetID, SpecificationVersionID: occurrence.SpecificationVersionID,
+			AssetStateID: occurrence.AssetStateID, AssetRole: role, RequiredViewRoles: viewRoles,
+			AssetReadiness: "needs_asset",
+		}
+	}
+	candidate, err := json.Marshal(storyboarddomain.Candidate{
+		SceneStoryNodeKey: input.Scene.StoryNodeKey,
+		ShotIntents: []storyboarddomain.ShotIntent{{
+			ShotKey: "intent:" + input.Scene.StoryNodeKey, IntentOrder: 1,
+			SourceBeatStoryNodeKeys: beatKeys,
+			SourceEvidence: []storyboarddomain.EvidenceRef{{
+				DocumentRevisionID: input.Beats[0].Evidence[0].DocumentRevisionID,
+				AbsoluteStart:      input.Beats[0].Evidence[0].AbsoluteStart,
+				AbsoluteEnd:        input.Beats[0].Evidence[0].AbsoluteEnd,
+				TextHash:           input.Beats[0].Evidence[0].TextHash,
+			}},
+			Purpose: "建立场景动作", ProposedDurationMS: 2500,
+			Camera: storyboarddomain.CameraIntent{
+				Scale: "medium", Angle: "eye_level", Movement: "static", Composition: "centered",
+			},
+			ActionIntent: "人物完成场景动作", SoundIntent: "保持场景环境声", PerformanceIntent: "克制",
+			ContinuityIn: "承接上一场", ContinuityOut: "保持动作轴线",
+			FrameIntent:        storyboarddomain.FrameIntent{First: "场景建立", Key: "动作发生", Last: "动作完成"},
+			VisualRequirements: visualRequirements, RiskCodes: []string{"reference_asset_missing"},
+			ReviewIssues: []storyboarddomain.ReviewIssue{},
+		}},
+		AssetReadiness: "needs_asset",
+	})
+	if err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	resultHash, err := agentcontract.CanonicalHash(candidate)
+	if err != nil {
+		return agentcontract.StageResult{}, err
+	}
+	return agentcontract.StageResult{
+		InvocationID: invocation.InvocationID, Kind: "storygraph_stage",
+		WireSchemaVersion: agentcontract.StoryGraphWireSchemaVersion,
+		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
+		Status: "succeeded", CandidateType: "storyboard_row_candidate", Candidate: candidate,
+		InputHash: invocation.InputHash, ResultHash: &resultHash, Issues: []agentcontract.StageIssue{},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "storyboard-draft-v1", Model: "deterministic-fixture"},
+	}, nil
+}
+
 func episodeAnalysisFixtureResult(invocation agentcontract.StageInvocation) (agentcontract.StageResult, error) {
 	var input agentcontract.EpisodeAnalysisStageInput
 	if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
@@ -1958,7 +2186,17 @@ func episodeAnalysisFixtureResult(invocation agentcontract.StageInvocation) (age
 				ParticipantKeys: []string{}, ContinuityNotes: []string{},
 			},
 		})
-		if input.LogicalStart == input.EpisodeSourceStart && len(input.KnownIdentities) >= 2 {
+		action := "人物完成冻结分片中的叙事动作"
+		beatKey := "beat:" + strings.ReplaceAll(invocation.Payload.ShardKey, ".", "-")
+		fragments = append(fragments, planningdomain.EpisodeStructureFragment{
+			TemporaryKey: beatKey, Kind: "beat", SourceKeys: []string{"episode:" + input.EpisodeID},
+			SourceStart: input.LogicalStart, SourceEnd: input.LogicalEnd, Summary: action,
+			Evidence: []bibledomain.Evidence{evidence},
+			Attributes: planningdomain.EpisodeStructureAttributes{
+				SceneKey: &sceneKey, Action: &action, ParticipantKeys: []string{}, ContinuityNotes: []string{},
+			},
+		})
+		if len(input.KnownIdentities) >= 2 {
 			occurrenceKey := "occurrence:" + strings.ReplaceAll(invocation.Payload.ShardKey, ".", "-")
 			baseState := "base"
 			fragments = append(fragments, planningdomain.EpisodeStructureFragment{
@@ -1974,7 +2212,7 @@ func episodeAnalysisFixtureResult(invocation agentcontract.StageInvocation) (age
 			claims = append(claims, planningdomain.EpisodeClaimCandidate{
 				ClaimKey: "claim:" + strings.ReplaceAll(invocation.Payload.ShardKey, ".", "-"), ClaimType: "causal",
 				ParticipantKeys: []string{input.KnownIdentities[0].EntityKey, input.KnownIdentities[1].EntityKey},
-				AnchorKeys:      []string{sceneKey, occurrenceKey}, Scope: "episode:" + input.EpisodeID,
+				AnchorKeys:      []string{sceneKey, beatKey, occurrenceKey}, Scope: "episode:" + input.EpisodeID,
 				Polarity: "positive", Status: "proposed", Evidence: []bibledomain.Evidence{evidence},
 			})
 		}

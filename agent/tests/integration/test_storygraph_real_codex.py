@@ -16,6 +16,7 @@ from app.candidate_runtime.schemas import (
     EpisodeReconciliationStageInput,
     EpisodeSegmentationStageInput,
     SourceEvidenceStageInput,
+    StoryboardDraftStageInput,
     StoryGraphStageInvocation,
     StoryGraphStagePayload,
 )
@@ -26,6 +27,7 @@ from app.modules.storygraph.candidate_schemas import (
     EpisodeSegmentationCandidate,
     SourceEvidenceCandidate,
     StoryAnalysisCandidate,
+    StoryboardRowCandidate,
     StoryGraphReviewCandidate,
     StoryReconciliationCandidate,
 )
@@ -85,6 +87,142 @@ def evidence_identities(candidate: BaseModel) -> set[tuple[int, int, str, str, i
 
     visit(candidate.model_dump(mode="json"))
     return identities
+
+
+@pytest.mark.skipif(
+    os.getenv("LANVERSE_TEST_REAL_CODEX") != "1",
+    reason="set LANVERSE_TEST_REAL_CODEX=1 to exercise the locally authenticated Codex CLI",
+)
+@pytest.mark.asyncio
+async def test_real_codex_drafts_reviewable_intent_without_creating_shot() -> None:
+    fixture = cast(dict[str, Any], json.loads(WIRE_FIXTURE.read_text(encoding="utf-8")))
+    source = StoryGraphStageInvocation.model_validate(fixture["valid_invocation"])
+    graph_id = "72000000-0000-0000-0000-000000000001"
+    style_id = "72000000-0000-0000-0000-000000000002"
+    episode_id = "72000000-0000-0000-0000-000000000003"
+    scene_owner_id = "72000000-0000-0000-0000-000000000004"
+    document_revision_id = "72000000-0000-0000-0000-000000000005"
+    asset_id = "72000000-0000-0000-0000-000000000006"
+    specification_id = "72000000-0000-0000-0000-000000000007"
+    state_id = "72000000-0000-0000-0000-000000000008"
+    scene_key = "sgn_" + "1" * 64
+    beat_key = "sgn_" + "2" * 64
+    occurrence_key = "sgn_" + "3" * 64
+    identity_key = "sgn_" + "4" * 64
+    specification_key = "sgn_" + "5" * 64
+    state_key = "sgn_" + "6" * 64
+    graph_hash = "a" * 64
+    style_hash = "b" * 64
+    evidence_hash = "c" * 64
+    evidence = [
+        {
+            "document_revision_id": document_revision_id,
+            "absolute_start": 10,
+            "absolute_end": 24,
+            "text_hash": evidence_hash,
+        }
+    ]
+    stage_input = StoryboardDraftStageInput.model_validate(
+        {
+            "graph_version_no": 1,
+            "scene": {
+                "story_node_key": scene_key,
+                "owner_version_id": scene_owner_id,
+                "owner_revision": 1,
+                "owner_hash": "d" * 64,
+                "episode_id": episode_id,
+                "episode_position": 1,
+                "scene_position": 1,
+                "heading": "内景 客厅 日",
+                "evidence": evidence,
+            },
+            "beats": [
+                {
+                    "story_node_key": beat_key,
+                    "summary": "阿澜推门进入客厅并停在窗边",
+                    "required_for_coverage": True,
+                    "evidence": evidence,
+                }
+            ],
+            "dialogues": [],
+            "occurrences": [
+                {
+                    "story_node_key": occurrence_key,
+                    "identity_story_node_key": identity_key,
+                    "specification_story_node_key": specification_key,
+                    "asset_state_story_node_key": state_key,
+                    "asset_id": asset_id,
+                    "specification_version_id": specification_id,
+                    "asset_state_id": state_id,
+                    "asset_kind": "character",
+                    "summary": "阿澜以日常服装进入客厅",
+                    "evidence": evidence,
+                }
+            ],
+            "effective_style_snapshot": {
+                "owner_version_id": style_id,
+                "revision": 1,
+                "content_hash": style_hash,
+                "visual_style": "cinematic noir",
+                "aspect_ratio": "9:16",
+            },
+            "target_duration_ms": 90_000,
+            "asset_versions": [],
+        }
+    )
+    invocation = stage_invocation(
+        source,
+        invocation_id="22000000-0000-0000-0000-000000000001",
+        payload={
+            "stage": "draft_storyboard",
+            "shard_key": f"scene:{scene_key}",
+            "workspace_id": source.payload.workspace_id,
+            "project_id": source.payload.project_id,
+            "source_refs": [
+                {
+                    "owner_kind": "production/storygraph",
+                    "owner_logical_id": str(source.payload.project_id),
+                    "owner_version_id": graph_id,
+                    "revision": 1,
+                    "content_hash": graph_hash,
+                },
+                {
+                    "owner_kind": "preset/effective-style",
+                    "owner_logical_id": str(source.payload.project_id),
+                    "owner_version_id": style_id,
+                    "revision": 1,
+                    "content_hash": style_hash,
+                },
+            ],
+            "base_storygraph_version_id": graph_id,
+            "base_storygraph_hash": graph_hash,
+            "upstream_candidates": [],
+            "shard_manifest_ref": {
+                "manifest_id": "62000000-0000-0000-0000-000000000001",
+                "version": 1,
+                "hash": "e" * 64,
+            },
+            "shard": {
+                "kind": "story_scene",
+                "key": f"scene:{scene_key}",
+                "tree_path": "scene/0001",
+            },
+            "stage_input": stage_input.model_dump(mode="json"),
+        },
+    )
+
+    candidate = await StoryGraphHarness(invocation, repository_root=REPOSITORY_ROOT).execute()
+
+    assert isinstance(candidate, StoryboardRowCandidate)
+    assert candidate.scene_story_node_key == scene_key
+    assert candidate.asset_readiness == "needs_asset"
+    assert candidate.shot_intents
+    assert all(
+        requirement.asset_readiness == "needs_asset" and requirement.asset_version_ref is None
+        for intent in candidate.shot_intents
+        for requirement in intent.visual_requirements
+    )
+    assert "shots" not in candidate.model_dump(mode="json")
 
 
 @pytest.mark.skipif(

@@ -106,7 +106,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 
 ### 分镜与视觉资产
 
-- [ ] `SG-I18`：接入 Storyboard Draft，只消费非空正式 Specification/AssetState，产出可审核 Shot Intent 与 `needs_asset` 需求。完成门：Candidate 不进入正式 StoryGraphVersion，缺资产时不得创建 Shot。
+- [x] `SG-I18`：接入 Storyboard Draft，只消费非空正式 Specification/AssetState，产出可审核 Shot Intent 与 `needs_asset` 需求。完成门：Candidate 不进入正式 StoryGraphVersion，缺资产时不得创建 Shot。
 - [ ] `SG-I19`：用公共 Human Gate 审批 Shot Intent/visual requirements；Storyboard Owner `FreezeIntentSet` 只冻结 Draft Set revision/hash、已接受 Intent 和视觉需求并返回 Receipt。完成门：Gate completed/Receipt/输出可恢复，不创建正式 Shot；拒绝、unknown 或漂移不得产生 Provider Cost/Job。
 - [ ] `SG-I20`：只消费 `SG-I19` 的 approved intent 输出，按已接受并同步的 `2051` 完成 `reference_asset` Intent/Cost/Quota/Provider Job/Artifact 执行。完成门：Provider 未知结果按同一 Job 对账，不盲目重提，Artifact 只是 Candidate。
 - [ ] `SG-I21`：完成 composite front/profile/back reference sheet 的确定性 QC、单一 CandidateSelection 和 AssetVersion 发布。完成门：身份/AssetState/EffectiveStyleSnapshot/lineage/view-role 门禁和选择幂等通过。
@@ -133,8 +133,8 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 | `SG-I05` | `SGA-BDL-*`、`SGA-WIR-*`、`SGA-STG-001`–`003`、未使用依赖删除门 |
 | `SG-I06`–`007` | `SG-REV-*`、`SG-FE-003`、`SG-OPS-*` |
 | `SG-I08`–`010` | `SG-PRD-*` 对应 Stage 输出、`SGA-EVD-*`、`SGA-SHR-*`、`SGA-CAN-*`、`SGA-REP-*`、对应 `SGA-STG-*` |
-| `SG-I11`–`017` | `SG-PRD-001`–`008`、`SG-REV-006`–`008`、`SG-GRF-*`、对应 `SGA-STG-*` |
-| `SG-I18`–`024` | `SG-PRD-009`–`012`、`SG-VIS-*`、`SG-JRN-002`、`SGA-STG-006`–`008`、`SGA-REP-*` |
+| `SG-I11`–`017` | `SG-PRD-001`–`006`、`SG-REV-006`–`008`、`SG-GRF-*`、对应 `SGA-STG-*` |
+| `SG-I18`–`024` | `SG-PRD-007`–`012`、`SG-VIS-*`、`SG-JRN-002`、`SGA-STG-006`–`008`、`SGA-REP-*` |
 | `SG-I25`–`026` | `SG-FE-001`–`009`、`SG-QRY-*` |
 | `SG-I27` | `SG-OPS-*`、`SG-JRN-004`、`SGA-COD-*`、`SGA-ERR-*`、`SGA-JRN-*`、`SGA-OPS-004`–`005` |
 | `SG-I28` | `SG-JRN-005`、`SG-OPS-009`、`SGA-OPS-006`；不得新增实现 |

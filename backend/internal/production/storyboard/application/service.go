@@ -39,10 +39,12 @@ type Actor struct {
 }
 type Repository interface {
 	DraftInput(context.Context, Actor, string, bool) (domain.DraftInput, error)
+	StoryGraphDraftInput(context.Context, Actor, string, string, string, bool) (domain.StoryGraphDraftInput, error)
 	FindReceipt(context.Context, string, string, string) (platformcommand.Receipt, error)
 	CreateReceipt(context.Context, platformcommand.Receipt) error
 	CreateWorkflow(context.Context, domain.Batch, domain.Invocation) error
-	CreateSetWorkflow(context.Context, domain.DraftSet, []domain.Batch, []domain.Invocation) error
+	CreateSetWorkflow(context.Context, domain.DraftSet, domain.DraftManifest, []domain.Batch, []domain.Invocation) error
+	CreateCandidateSet(context.Context, domain.DraftSet, []domain.Batch, time.Time) (string, string, error)
 	GetSet(context.Context, Actor, string, bool) (domain.DraftSet, error)
 	SaveSet(context.Context, domain.DraftSet) error
 	GetBatch(context.Context, Actor, string, bool) (domain.Batch, error)
@@ -69,13 +71,9 @@ type Service struct {
 	config       Config
 }
 type CreateBatchCommand struct{ EpisodeID, IdempotencyKey string }
-type StructureReference struct {
-	EpisodeID, StructureID, ScriptVersionID string
-}
 type CreateSetCommand struct {
-	StructureCommitID, StructureContentHash, IdempotencyKey string
-	StructureRevision                                       int
-	Structures                                              []StructureReference
+	WorkflowRunID, NodeRunID, GraphVersionID, GraphContentHash, IdempotencyKey string
+	GraphVersionNo                                                             int64
 }
 type DecisionCommand struct {
 	BatchID, ProposalKey, Action, IdempotencyKey string
@@ -124,36 +122,44 @@ func NewService(transactions TransactionManager, config Config) *Service {
 
 func (service *Service) CreateSet(ctx context.Context, actor Actor, command CreateSetCommand) (domain.DraftSet, error) {
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
-	if command.StructureCommitID == "" || command.StructureRevision < 1 || len(command.StructureContentHash) != 64 ||
-		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 || len(command.Structures) == 0 || len(command.Structures) > 100 {
+	if command.WorkflowRunID == "" || command.NodeRunID == "" || command.GraphVersionID == "" ||
+		command.GraphVersionNo < 1 || len(command.GraphContentHash) != 64 || command.IdempotencyKey == "" ||
+		len(command.IdempotencyKey) > 200 {
 		return domain.DraftSet{}, invalid("Invalid storyboard draft set request")
 	}
 	var set domain.DraftSet
 	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
-		inputs := make([]domain.DraftInput, len(command.Structures))
-		inputHashes := make([]string, len(command.Structures))
-		baselineOrderHashes := make([]string, len(command.Structures))
-		seenEpisodes := make(map[string]struct{}, len(command.Structures))
-		seenStructures := make(map[string]struct{}, len(command.Structures))
-		for _, reference := range command.Structures {
-			if reference.EpisodeID == "" || reference.StructureID == "" || reference.ScriptVersionID == "" {
-				return invalid("Invalid storyboard structure reference")
-			}
-			if _, exists := seenEpisodes[reference.EpisodeID]; exists {
-				return conflict("Storyboard draft set contains duplicate Episodes")
-			}
-			if _, exists := seenStructures[reference.StructureID]; exists {
-				return conflict("Storyboard draft set contains duplicate Structures")
-			}
-			seenEpisodes[reference.EpisodeID], seenStructures[reference.StructureID] = struct{}{}, struct{}{}
-		}
-		firstInput, err := repo.DraftInput(ctx, actor, command.Structures[0].EpisodeID, true)
+		input, err := repo.StoryGraphDraftInput(
+			ctx, actor, command.GraphVersionID, command.WorkflowRunID, command.NodeRunID, true,
+		)
 		if err != nil {
 			return err
 		}
-		if found, receiptErr := repo.FindReceipt(ctx, firstInput.WorkspaceID, createSetOperation, command.IdempotencyKey); receiptErr == nil {
-			replayed, replayErr := platformcommand.Replay[receipt](found, found.InputHash)
+		if input.GraphVersionID != command.GraphVersionID || input.GraphVersionNo != command.GraphVersionNo ||
+			input.GraphContentHash != command.GraphContentHash || input.WorkflowRunID != command.WorkflowRunID ||
+			input.NodeRunID != command.NodeRunID {
+			return conflict("Published StoryGraph changed before storyboard drafting")
+		}
+		manifest, err := domain.BuildDraftManifest(input)
+		if err != nil {
+			return err
+		}
+		inputHash, err := platformcommand.InputHash(struct {
+			GraphVersionID, GraphContentHash, StyleHash, ManifestHash string
+			GraphVersionNo, ManifestVersion                           int64
+		}{
+			input.GraphVersionID, input.GraphContentHash, input.EffectiveStyleSnapshot.ContentHash,
+			manifest.ManifestHash, input.GraphVersionNo, manifest.Version,
+		})
+		if err != nil {
+			return err
+		}
+		if found, receiptErr := repo.FindReceipt(ctx, input.WorkspaceID, createSetOperation, command.IdempotencyKey); receiptErr == nil {
+			replayed, replayErr := platformcommand.Replay[receipt](found, inputHash)
 			if replayErr != nil {
+				if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
+					return conflict("Idempotency key was already used with different input")
+				}
 				return replayErr
 			}
 			set, replayErr = repo.GetSet(ctx, actor, replayed.ID, false)
@@ -161,86 +167,60 @@ func (service *Service) CreateSet(ctx context.Context, actor Actor, command Crea
 				return replayErr
 			}
 			if found.ResourceID != set.ID || found.InputHash != set.InputHash || set.CreatedBy != actor.UserID ||
-				set.WorkspaceID != firstInput.WorkspaceID || !draftSetMatchesCreateCommand(set, command) {
+				set.WorkspaceID != input.WorkspaceID || set.NodeRunID != command.NodeRunID ||
+				set.GraphVersionID != command.GraphVersionID || set.GraphContentHash != command.GraphContentHash {
 				return conflict("Storyboard draft set receipt has drifted")
 			}
 			return nil
 		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
 			return receiptErr
 		}
-		for index, reference := range command.Structures {
-			input := firstInput
-			if index > 0 {
-				input, err = repo.DraftInput(ctx, actor, reference.EpisodeID, true)
-			}
-			if err != nil {
-				return err
-			}
-			if input.EpisodeID != reference.EpisodeID || input.StructureID != reference.StructureID ||
-				input.ScriptVersionID != reference.ScriptVersionID {
-				return conflict("Confirmed Episode Structure changed before storyboard drafting")
-			}
-			inputHash, err := platformcommand.InputHash(input)
-			if err != nil {
-				return err
-			}
-			shots, err := repo.ListShots(ctx, actor, reference.EpisodeID)
-			if err != nil {
-				return err
-			}
-			baselineOrderHash, err := domain.OrderHash(shots)
-			if err != nil {
-				return err
-			}
-			inputs[index], inputHashes[index] = input, inputHash
-			baselineOrderHashes[index] = baselineOrderHash
-		}
-		workspaceID, projectID := inputs[0].WorkspaceID, inputs[0].ProjectID
-		for _, input := range inputs[1:] {
-			if input.WorkspaceID != workspaceID || input.ProjectID != projectID {
-				return conflict("Storyboard draft set crosses project boundaries")
-			}
-		}
-		inputHash, err := platformcommand.InputHash(struct {
-			StructureCommitID    string
-			StructureRevision    int
-			StructureContentHash string
-			BatchInputHashes     []string
-			BaselineOrderHashes  []string
-		}{command.StructureCommitID, command.StructureRevision, command.StructureContentHash, inputHashes, baselineOrderHashes})
-		if err != nil {
-			return err
-		}
 		now := service.config.Now().UTC()
 		set = domain.DraftSet{
-			ID: service.config.NewID(), WorkspaceID: workspaceID, ProjectID: projectID,
-			StructureCommitID: command.StructureCommitID, StructureRevision: command.StructureRevision,
-			StructureContentHash: command.StructureContentHash, Status: "queued", InputHash: inputHash,
-			Batches: make([]domain.DraftSetBatch, len(inputs)), Revision: 1, CreatedBy: actor.UserID,
+			ID: service.config.NewID(), WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID,
+			WorkflowRunID: input.WorkflowRunID, NodeRunID: input.NodeRunID,
+			GraphVersionID: input.GraphVersionID, GraphVersionNo: input.GraphVersionNo,
+			GraphContentHash: input.GraphContentHash, ManifestID: manifest.ManifestID,
+			ManifestVersion: manifest.Version, ManifestHash: manifest.ManifestHash,
+			Status: "queued", InputHash: inputHash,
+			Batches: make([]domain.DraftSetBatch, len(manifest.Shards)), Revision: 1, CreatedBy: actor.UserID,
 			CreatedAt: now, UpdatedAt: now,
 		}
-		batches := make([]domain.Batch, len(inputs))
-		invocations := make([]domain.Invocation, len(inputs))
-		for index, input := range inputs {
-			batchID, taskID, invocationID := service.config.NewID(), service.config.NewID(), service.config.NewID()
-			invocation, err := storyGraphInvocation(input, batchID, taskID, invocationID, inputHashes[index], now)
+		byScene := make(map[string]domain.SceneDraftInput, len(input.Scenes))
+		for _, scene := range input.Scenes {
+			byScene[scene.StageInput.Scene.StoryNodeKey] = scene
+		}
+		batches := make([]domain.Batch, len(manifest.Shards))
+		invocations := make([]domain.Invocation, len(manifest.Shards))
+		for index, shard := range manifest.Shards {
+			scene, found := byScene[shard.SceneStoryNodeKey]
+			if !found {
+				return conflict("Storyboard Draft manifest Scene has drifted")
+			}
+			batchID := service.config.NewID()
+			invocationID := service.config.NewID()
+			invocation, err := storyGraphSceneInvocation(input, scene, manifest, shard, batchID, invocationID, now)
 			if err != nil {
 				return err
 			}
 			batches[index] = domain.Batch{
-				ID: batchID, WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID, EpisodeID: input.EpisodeID,
-				StructureID: input.StructureID, ScriptVersionID: input.ScriptVersionID, TaskID: taskID,
-				Status: "queued", InputHash: inputHashes[index], Candidate: domain.Candidate{Shots: []domain.DraftShot{}},
+				ID: batchID, WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID,
+				EpisodeID: scene.EpisodeID, StructureID: scene.StructureID, ScriptVersionID: scene.ScriptVersionID,
+				WorkflowRunID: input.WorkflowRunID, NodeRunID: input.NodeRunID,
+				ManifestID: manifest.ManifestID, ManifestVersion: manifest.Version,
+				GraphVersionID: input.GraphVersionID, GraphVersionNo: input.GraphVersionNo,
+				SceneStoryNodeKey: shard.SceneStoryNodeKey, Status: "queued", InputHash: invocation.InputHash,
+				Candidate: domain.Candidate{ShotIntents: []domain.ShotIntent{}},
 				Decisions: map[string]string{}, Revision: 1, CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now,
 			}
 			invocations[index] = invocation
 			set.Batches[index] = domain.DraftSetBatch{
-				BatchID: batchID, EpisodeID: input.EpisodeID, StructureID: input.StructureID,
-				ScriptVersionID: input.ScriptVersionID, InputHash: inputHashes[index],
-				BaselineOrderHash: baselineOrderHashes[index],
+				BatchID: batchID, EpisodeID: scene.EpisodeID, StructureID: scene.StructureID,
+				ScriptVersionID: scene.ScriptVersionID, SceneStoryNodeKey: shard.SceneStoryNodeKey,
+				InputHash: invocation.InputHash,
 			}
 		}
-		if err = repo.CreateSetWorkflow(ctx, set, batches, invocations); err != nil {
+		if err = repo.CreateSetWorkflow(ctx, set, manifest, batches, invocations); err != nil {
 			return err
 		}
 		result, err := platformcommand.Result(receipt{ID: set.ID})
@@ -269,6 +249,7 @@ func (service *Service) RefreshSet(ctx context.Context, actor Actor, setID strin
 		}
 		ready := true
 		terminal := ""
+		batches := make([]domain.Batch, len(set.Batches))
 		for index, reference := range set.Batches {
 			batch, batchErr := repo.GetBatch(ctx, actor, reference.BatchID, false)
 			if batchErr != nil {
@@ -276,18 +257,28 @@ func (service *Service) RefreshSet(ctx context.Context, actor Actor, setID strin
 			}
 			if batch.WorkspaceID != set.WorkspaceID || batch.ProjectID != set.ProjectID || batch.CreatedBy != set.CreatedBy ||
 				batch.EpisodeID != reference.EpisodeID || batch.StructureID != reference.StructureID ||
-				batch.ScriptVersionID != reference.ScriptVersionID || batch.InputHash != reference.InputHash {
+				batch.ScriptVersionID != reference.ScriptVersionID || batch.SceneStoryNodeKey != reference.SceneStoryNodeKey ||
+				batch.WorkflowRunID != set.WorkflowRunID || batch.NodeRunID != set.NodeRunID ||
+				batch.ManifestID != set.ManifestID || batch.ManifestVersion != set.ManifestVersion ||
+				batch.GraphVersionID != set.GraphVersionID || batch.GraphVersionNo != set.GraphVersionNo ||
+				batch.InputHash != reference.InputHash {
 				return conflict("Storyboard draft set batch has drifted")
 			}
+			batches[index] = batch
 			switch batch.Status {
 			case "queued", "running":
 				ready = false
-			case "needs_review", "approved", "applied":
-				if batch.ResultHash == nil || len(*batch.ResultHash) != 64 {
+			case "ready", "needs_asset":
+				if batch.ResultHash == nil || len(*batch.ResultHash) != 64 ||
+					batch.CandidateRevisionID == nil || batch.CandidateRevisionHash == nil ||
+					len(*batch.CandidateRevisionHash) != 64 {
 					return conflict("Storyboard draft set result is incomplete")
 				}
 				resultHash := *batch.ResultHash
+				candidateID, candidateHash := *batch.CandidateRevisionID, *batch.CandidateRevisionHash
 				set.Batches[index].ResultHash = &resultHash
+				set.Batches[index].CandidateRevisionID = &candidateID
+				set.Batches[index].CandidateRevisionHash = &candidateHash
 			case "failed", "unknown", "cancelled":
 				terminal = batch.Status
 			default:
@@ -301,13 +292,14 @@ func (service *Service) RefreshSet(ctx context.Context, actor Actor, setID strin
 		now := service.config.Now().UTC()
 		if terminal != "" {
 			set.Status = terminal
-			set.ResultHash = nil
+			set.ResultHash, set.CandidateRevisionID, set.CandidateRevisionHash = nil, nil, nil
 		} else {
-			resultHash, hashErr := draftSetCandidateHash(set.Batches)
-			if hashErr != nil {
-				return hashErr
+			candidateID, candidateHash, createErr := repo.CreateCandidateSet(ctx, set, batches, now)
+			if createErr != nil {
+				return createErr
 			}
-			set.Status, set.ResultHash = "needs_review", &resultHash
+			set.Status, set.ResultHash = "needs_asset", &candidateHash
+			set.CandidateRevisionID, set.CandidateRevisionHash = &candidateID, &candidateHash
 		}
 		set.Revision, set.UpdatedAt = set.Revision+1, now
 		if err = repo.SaveSet(ctx, set); err != nil {
@@ -1038,6 +1030,73 @@ func storyGraphInvocation(input domain.DraftInput, batchID, taskID, invocationID
 	}, nil
 }
 
+func storyGraphSceneInvocation(
+	input domain.StoryGraphDraftInput,
+	scene domain.SceneDraftInput,
+	manifest domain.DraftManifest,
+	shard domain.DraftManifestShard,
+	batchID, invocationID string,
+	now time.Time,
+) (domain.Invocation, error) {
+	stageInput, err := json.Marshal(scene.StageInput)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	request, err := agentcontract.NewStageInvocation(
+		invocationID,
+		agentcontract.StoryGraphDefinition().ExecutionPolicy(),
+		agentcontract.StageInvocationPayload{
+			Stage: "draft_storyboard", ShardKey: shard.Key,
+			WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID,
+			SourceRefs: []agentcontract.StageSourceRef{
+				{
+					OwnerKind: "production/storygraph", OwnerLogicalID: input.ProjectID,
+					OwnerVersionID: input.GraphVersionID, Revision: input.GraphVersionNo,
+					ContentHash: input.GraphContentHash,
+				},
+				{
+					OwnerKind: "preset/effective-style", OwnerLogicalID: input.ProjectID,
+					OwnerVersionID: input.EffectiveStyleSnapshot.OwnerVersionID,
+					Revision:       input.EffectiveStyleSnapshot.Revision,
+					ContentHash:    input.EffectiveStyleSnapshot.ContentHash,
+				},
+			},
+			BaseStoryGraphVersionID: input.GraphVersionID, BaseStoryGraphHash: input.GraphContentHash,
+			UpstreamCandidates: []agentcontract.StageUpstreamCandidateRef{},
+			ShardManifestRef: agentcontract.ShardManifestRef{
+				ManifestID: manifest.ManifestID, Version: manifest.Version, Hash: manifest.ManifestHash,
+			},
+			Shard: agentcontract.InvocationShard{
+				Kind: shard.Kind, Key: shard.Key, TreePath: shard.TreePath,
+			},
+			StageInput: stageInput,
+		},
+	)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	stageInstanceKey, err := request.StageInstanceKey()
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	policy, err := json.Marshal(request.ExecutionPolicy)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	payload, err := json.Marshal(request.Payload)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	return domain.Invocation{
+		ID: invocationID, WorkspaceID: input.WorkspaceID, RequestID: batchID,
+		WorkflowRunID: input.WorkflowRunID, NodeRunID: input.NodeRunID,
+		ManifestID: manifest.ManifestID, ManifestVersion: manifest.Version,
+		Kind: "storygraph_stage", Stage: request.Payload.Stage, ShardKey: request.Payload.ShardKey,
+		InputHash: request.InputHash, StageInstanceKey: stageInstanceKey, ManifestHash: manifest.ManifestHash,
+		ExecutionPolicy: policy, Payload: payload, Status: "queued", CreatedAt: now,
+	}, nil
+}
+
 type formalShotReference struct {
 	BatchID, EpisodeID, ShotID, ContentHash string
 	Position                                int
@@ -1055,21 +1114,6 @@ type exportSetContentReference struct {
 
 func draftSetCandidateHash(batches []domain.DraftSetBatch) (string, error) {
 	return platformcommand.InputHash(batches)
-}
-
-func draftSetMatchesCreateCommand(set domain.DraftSet, command CreateSetCommand) bool {
-	if set.StructureCommitID != command.StructureCommitID || set.StructureRevision != command.StructureRevision ||
-		set.StructureContentHash != command.StructureContentHash || len(set.Batches) != len(command.Structures) {
-		return false
-	}
-	for index, reference := range command.Structures {
-		batch := set.Batches[index]
-		if batch.EpisodeID != reference.EpisodeID || batch.StructureID != reference.StructureID ||
-			batch.ScriptVersionID != reference.ScriptVersionID {
-			return false
-		}
-	}
-	return true
 }
 
 func candidateImpact(batch domain.Batch, baselineOrderHash string) (string, string, error) {

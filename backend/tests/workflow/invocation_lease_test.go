@@ -120,20 +120,28 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 		t.Fatalf("unexpected reclaimed invocation: %#v", second)
 	}
 
-	candidateJSON := json.RawMessage(`{"shots":[]}`)
-	resultHash, err := contract.CanonicalHash(candidateJSON)
-	if err != nil {
-		t.Fatal(err)
+	var payload contract.StageInvocationPayload
+	if err = json.Unmarshal(second.Payload, &payload); err != nil {
+		t.Fatalf("decode reclaimed invocation payload: %v", err)
 	}
-	result := contract.StageResult{
+	var policy contract.StageExecutionPolicy
+	if err = json.Unmarshal(second.ExecutionPolicy, &policy); err != nil {
+		t.Fatalf("decode reclaimed execution policy: %v", err)
+	}
+	invocation := contract.StageInvocation{
 		InvocationID: second.ID, Kind: second.Kind, WireSchemaVersion: contract.StoryGraphWireSchemaVersion,
-		Stage: second.Stage, ShardKey: second.ShardKey, Status: "succeeded",
-		CandidateType: "storyboard_row_candidate", Candidate: candidateJSON, InputHash: second.InputHash,
-		ResultHash: &resultHash, Issues: []contract.StageIssue{},
-		Executor: contract.Executor{Name: "lease-test", Version: "1", Model: "deterministic"},
+		InputHash: second.InputHash, ExecutionPolicy: policy, Payload: payload,
+	}
+	result, err := storyboardDraftFixtureResult(invocation)
+	if err != nil {
+		t.Fatalf("build exact Storyboard candidate: %v", err)
+	}
+	validated, err := storyboarddomain.DecodeAndValidateCandidate(result.Candidate, payload.StageInput)
+	if err != nil {
+		t.Fatalf("validate exact Storyboard candidate: %v", err)
 	}
 	staleApplied, err := store.CompleteInvocation(
-		ctx, first.ID, first.ClaimVersion, result, storyboarddomain.Candidate{}, now.Add(62*time.Second),
+		ctx, first.ID, first.ClaimVersion, result, validated, now.Add(62*time.Second),
 	)
 	if err != nil || staleApplied {
 		t.Fatalf("stale claim completion applied: applied=%v err=%v", staleApplied, err)
@@ -148,7 +156,7 @@ func TestExpiredInvocationIsReclaimedAndStaleResultIsFenced(t *testing.T) {
 	}
 
 	currentApplied, err := store.CompleteInvocation(
-		ctx, second.ID, second.ClaimVersion, result, storyboarddomain.Candidate{}, now.Add(63*time.Second),
+		ctx, second.ID, second.ClaimVersion, result, validated, now.Add(63*time.Second),
 	)
 	if err != nil || !currentApplied {
 		t.Fatalf("current claim completion failed: applied=%v err=%v", currentApplied, err)

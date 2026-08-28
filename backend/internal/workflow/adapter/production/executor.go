@@ -805,13 +805,13 @@ func (executor *NodeExecutor) executeStoryboardDraft(
 	ctx context.Context,
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
-	if executor.plans == nil || executor.storyboards == nil {
+	if executor.storyboards == nil {
 		return domain.NodeExecutorResult{}, errors.New("storyboard workflow owners are unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
 		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
-		command.OutputPorts[0].ValueType != "storyboard_candidate" || !command.OutputPorts[0].Required {
+		command.OutputPorts[0].ValueType != "storyboard_intent_candidate_set" || !command.OutputPorts[0].Required {
 		return domain.NodeExecutorResult{}, errors.New("invalid storyboard draft node contract")
 	}
 	var config map[string]json.RawMessage
@@ -819,38 +819,18 @@ func (executor *NodeExecutor) executeStoryboardDraft(
 		return domain.NodeExecutorResult{}, errors.New("invalid storyboard draft node config")
 	}
 	binding := input.Bindings[0]
-	expectedRevision, err := strconv.Atoi(binding.ReferenceVersion)
-	if err != nil || expectedRevision < 1 || binding.Port != "structures" || binding.ValueType != "episode_structures" ||
-		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "structures" ||
-		strings.TrimSpace(binding.SourceNodeID) == "" || len(binding.ContentHash) != 64 {
-		return domain.NodeExecutorResult{}, errors.New("storyboard Episode Structure input has drifted")
-	}
-	planningActor := planningapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
-	batch, err := executor.plans.GetConfirmedStructureBatch(ctx, planningActor, binding.ReferenceID)
-	if err != nil {
-		return domain.NodeExecutorResult{}, err
-	}
-	if batch.Commit.ID != binding.ReferenceID || batch.Commit.WorkspaceID != command.WorkspaceID ||
-		batch.Commit.ProjectID != command.ProjectID || batch.Commit.Status != "published" ||
-		batch.Commit.Revision != expectedRevision || batch.ContentHash != binding.ContentHash ||
-		len(batch.Structures) == 0 || len(batch.Structures) != len(batch.Commit.Segments) {
-		return domain.NodeExecutorResult{}, errors.New("confirmed Episode Structure batch does not match workflow input")
-	}
-	structures := make([]storyboardapp.StructureReference, len(batch.Structures))
-	for index, structure := range batch.Structures {
-		if structure.WorkspaceID != command.WorkspaceID || structure.ProjectID != command.ProjectID ||
-			structure.Status != "confirmed" || structure.ConfirmedBy == nil || len(structure.ResultHash) != 64 {
-			return domain.NodeExecutorResult{}, errors.New("confirmed Episode Structure is invalid for storyboard drafting")
-		}
-		structures[index] = storyboardapp.StructureReference{
-			EpisodeID: structure.EpisodeID, StructureID: structure.ID, ScriptVersionID: structure.ScriptVersionID,
-		}
+	expectedVersion, err := strconv.ParseInt(binding.ReferenceVersion, 10, 64)
+	if err != nil || expectedVersion < 1 || binding.Port != "storygraph" || binding.ValueType != "storygraph_version" ||
+		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "storygraph" ||
+		strings.TrimSpace(binding.SourceNodeID) == "" || !workflowContentHashPattern.MatchString(binding.ContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Storyboard Draft StoryGraph input has drifted")
 	}
 	set, err := executor.storyboards.CreateSet(ctx, storyboardapp.Actor{
 		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
 	}, storyboardapp.CreateSetCommand{
-		StructureCommitID: binding.ReferenceID, StructureRevision: expectedRevision,
-		StructureContentHash: binding.ContentHash, Structures: structures, IdempotencyKey: command.IdempotencyKey,
+		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
+		GraphVersionID: binding.ReferenceID, GraphVersionNo: expectedVersion,
+		GraphContentHash: binding.ContentHash, IdempotencyKey: command.IdempotencyKey,
 	})
 	if err != nil {
 		return domain.NodeExecutorResult{}, err
@@ -862,16 +842,18 @@ func (executor *NodeExecutor) executeStoryboardDraft(
 		return domain.NodeExecutorResult{}, err
 	}
 	if set.WorkspaceID != command.WorkspaceID || set.ProjectID != command.ProjectID ||
-		set.StructureCommitID != binding.ReferenceID || set.StructureRevision != expectedRevision ||
-		set.StructureContentHash != binding.ContentHash || set.CreatedBy != command.InitiatorUserID ||
-		len(set.Batches) != len(structures) {
+		set.WorkflowRunID != command.WorkflowRunID || set.NodeRunID != command.NodeRunID ||
+		set.GraphVersionID != binding.ReferenceID || set.GraphVersionNo != expectedVersion ||
+		set.GraphContentHash != binding.ContentHash || set.CreatedBy != command.InitiatorUserID || len(set.Batches) == 0 {
 		return domain.NodeExecutorResult{}, errors.New("storyboard draft set does not match workflow input")
 	}
 	switch set.Status {
 	case "queued":
 		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
-	case "needs_review":
-		if set.ResultHash == nil || len(*set.ResultHash) != 64 || set.Revision != 2 {
+	case "needs_asset":
+		if set.ResultHash == nil || len(*set.ResultHash) != 64 || set.Revision != 2 ||
+			set.CandidateRevisionID == nil || set.CandidateRevisionHash == nil ||
+			*set.ResultHash != *set.CandidateRevisionHash {
 			return domain.NodeExecutorResult{}, errors.New("storyboard draft set candidate is incomplete")
 		}
 	default:
@@ -880,8 +862,8 @@ func (executor *NodeExecutor) executeStoryboardDraft(
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
 		Bindings: []domain.NodeOutputBinding{{
-			Port: "candidate", ValueType: "storyboard_candidate", ReferenceID: set.ID,
-			ReferenceVersion: strconv.Itoa(set.Revision), ContentHash: *set.ResultHash,
+			Port: "candidate", ValueType: "storyboard_intent_candidate_set", ReferenceID: *set.CandidateRevisionID,
+			ReferenceVersion: "1", ContentHash: *set.CandidateRevisionHash,
 		}},
 	})
 	if err != nil {
