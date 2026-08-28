@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -169,6 +170,7 @@ func (store *Store) ApplyStoryCandidateRepair(
 			}
 			staleKeys = append(staleKeys, stale.StageInstanceKey)
 		}
+		slices.Sort(staleKeys)
 
 		result = application.StoryCandidateRepairResult{
 			ReceiptID: receiptID.String(), CandidateRevisionID: created.ID.String(),
