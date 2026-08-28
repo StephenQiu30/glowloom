@@ -540,7 +540,7 @@ func (store *Store) Decide(
 
 func staleStoryGraphCandidateTask(transaction *gorm.DB, task *model.HumanTask, now time.Time) (bool, error) {
 	if task.SubjectType != "story_reconciliation_candidate" && task.SubjectType != "episode_plan_candidate" &&
-		task.SubjectType != "planning_candidate" {
+		task.SubjectType != "planning_candidate" && task.SubjectType != "storyboard_intent_candidate" {
 		return false, nil
 	}
 	var revision model.StageCandidateRevision

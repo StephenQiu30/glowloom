@@ -118,6 +118,47 @@ func TestRejectedEpisodePlanGateResumesWithoutCallingThePlanningOwner(t *testing
 	}
 }
 
+func TestNonApprovedStoryboardIntentGateResumesWithoutFreezingOrCallingOwner(t *testing.T) {
+	for _, decision := range []string{"rejected", "changes_requested"} {
+		t.Run(decision, func(t *testing.T) {
+			now := time.Date(2026, time.August, 28, 18, 0, 0, 0, time.UTC)
+			repository := newSignalRepository()
+			repository.application = workflow.HumanGateOwnerApplication{
+				ProjectID: "project-1", Executor: "gate.storyboard_review", Decision: decision,
+				Candidate: workflow.NodeInputBinding{
+					Port: "candidate", ValueType: "storyboard_intent_candidate_set", SourceKind: workflow.NodeInputSourceNodeOutput,
+					ReferenceID: "00000000-0000-0000-0000-000000000411", ReferenceVersion: "1",
+					ContentHash: strings.Repeat("f", 64),
+				},
+				OutputPort: "intents", OutputValueType: "approved_storyboard_intents",
+			}
+			owner := &scriptedGateOwner{}
+			signaler := &scriptedSignaler{outcomes: []workflow.SignalObservation{{
+				Outcome: workflow.SignalOutcomeSignaled, ObservedInputHash: "match_request",
+			}}}
+			service := workflowapp.NewSignalService(repository, signaler, workflowapp.SignalConfig{
+				Now:   func() time.Time { now = now.Add(time.Second); return now },
+				NewID: func() string { return "00000000-0000-0000-0000-000000000412" }, Owner: owner,
+			})
+			intent, err := service.SignalHumanGate(context.Background(), workflowapp.Actor{
+				UserID: "reviewer-1", TokenVersion: 1,
+			}, workflowapp.SignalHumanGateCommand{
+				WorkspaceID: "workspace-1", WorkflowRunID: "run-1", NodeRunID: "node-run-1",
+				HumanTaskID: "task-1", ReviewDecisionID: "decision-1", SubjectRevision: 1,
+				Decision: decision, IdempotencyKey: "storyboard-intent-" + decision,
+			})
+			if err != nil || intent.Status != "completed" || owner.calls != 0 ||
+				repository.prepared.ApplyReceipt.Status != "not_required" ||
+				repository.prepared.ApplyReceipt.OwnerReceiptID != "" ||
+				repository.prepared.ApplyReceipt.OwnerOperation != "" ||
+				repository.prepared.ApplyReceipt.OutputHash != "" || len(repository.prepared.ApplyReceipt.Output.Bindings) != 0 {
+				t.Fatalf("non-approved Storyboard Intent Gate produced an owner effect: intent=%#v apply=%#v owner_calls=%d err=%v",
+					intent, repository.prepared.ApplyReceipt, owner.calls, err)
+			}
+		})
+	}
+}
+
 type signalRepository struct {
 	mu          sync.Mutex
 	prepared    workflow.SignalPreparation

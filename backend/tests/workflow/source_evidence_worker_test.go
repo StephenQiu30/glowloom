@@ -113,6 +113,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "structure-review", DefinitionKey: "human.episode_structure_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "storygraph", DefinitionKey: "production.storygraph_compile", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "storyboard", DefinitionKey: "agent.storyboard_draft", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "intent-review", DefinitionKey: "human.storyboard_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
@@ -128,6 +129,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "analysis-to-structure-review", FromNodeID: "episode-analysis", FromPort: "candidate", ToNodeID: "structure-review", ToPort: "candidate"},
 				{ID: "structure-to-storygraph", FromNodeID: "structure-review", FromPort: "structures", ToNodeID: "storygraph", ToPort: "structures"},
 				{ID: "storygraph-to-storyboard", FromNodeID: "storygraph", FromPort: "storygraph", ToNodeID: "storyboard", ToPort: "storygraph"},
+				{ID: "storyboard-to-intent-review", FromNodeID: "storyboard", FromPort: "candidate", ToNodeID: "intent-review", ToPort: "candidate"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -976,16 +978,23 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	if err != nil || replayedPlanningSignal.ID != completedPlanningSignal.ID || replayedPlanningSignal.Status != "completed" {
 		t.Fatalf("replay completed Episode Planning Signal: intent=%#v err=%v", replayedPlanningSignal, err)
 	}
-	completionDeadline = time.Now().Add(20 * time.Second)
+	completionDeadline = time.Now().Add(30 * time.Second)
+	var storyboardGateNode model.NodeRunProjection
+	var storyboardTask model.HumanTask
 	for {
 		if err = database.First(&persistedRun, "id = ?", run.ID).Error; err != nil {
-			t.Fatalf("reload completed Episode Planning Workflow Run: %v", err)
+			t.Fatalf("reload Storyboard Intent Workflow Run: %v", err)
 		}
-		if persistedRun.Status == "SUCCEEDED" {
-			break
+		if persistedRun.Status == "WAITING_HUMAN" {
+			if queryErr := database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "intent-review").First(&storyboardGateNode).Error; queryErr == nil &&
+				storyboardGateNode.Status == "WAITING_HUMAN" {
+				if queryErr = database.Where("node_run_id = ?", storyboardGateNode.ID).First(&storyboardTask).Error; queryErr == nil {
+					break
+				}
+			}
 		}
 		if persistedRun.Status == "FAILED" || persistedRun.Status == "CANCELLED" || time.Now().After(completionDeadline) {
-			t.Fatalf("Source Evidence Workflow did not complete after Planning approval: %#v", persistedRun)
+			t.Fatalf("Source Evidence Workflow did not reach the Storyboard Intent Human Gate: %#v", persistedRun)
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -1254,6 +1263,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	}
 	if storyboardAggregateRevision.OriginKind != "aggregate" || storyboardAggregateRevision.CandidateRevisionHash != storyboardOutput.Bindings[0].ContentHash ||
 		candidateSet.SchemaVersion != "storyboard-intent-candidate-set-v1" || candidateSet.AssetReadiness != "needs_asset" ||
+		candidateSet.DraftSetID != draftSet.ID.String() || candidateSet.DraftSetRevision != draftSet.Revision ||
 		candidateSet.GraphVersionID != graphVersion.ID.String() || candidateSet.GraphContentHash != graphVersion.ContentHash ||
 		candidateSet.ManifestID != draftManifest.ID.String() || candidateSet.ManifestHash != draftManifest.ManifestHash ||
 		len(candidateSet.Scenes) != len(draftShards) || len(aggregateOrigin.LeafCandidates) != len(draftShards) {
@@ -1265,16 +1275,18 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 			t.Fatalf("Storyboard aggregate references a non-Scene CandidateRevision: %#v", leaf)
 		}
 	}
-	var storyboardTaskCount, storyboardShotCount, generationIntentCount, providerJobCount int64
-	var costEstimateCount, costReservationCount, quotaReservationCount, storyboardArtifactCount int64
+	var storyboardTaskCount, storyboardShotCount, storyboardImageBindingCount, generationIntentCount, providerJobCount int64
+	var costEstimateCount, costReservationCount, quotaReservationCount, storyboardArtifactCount, storyboardGraphVersionCount int64
 	for target, destination := range map[any]*int64{
-		&model.StoryboardShot{}:        &storyboardShotCount,
-		&model.GenerationIntent{}:      &generationIntentCount,
-		&model.GenerationProviderJob{}: &providerJobCount,
-		&model.CostEstimate{}:          &costEstimateCount,
-		&model.CostReservation{}:       &costReservationCount,
-		&model.QuotaReservation{}:      &quotaReservationCount,
-		&model.Artifact{}:              &storyboardArtifactCount,
+		&model.StoryboardShot{}:                    &storyboardShotCount,
+		&model.StoryboardShotImageBindingVersion{}: &storyboardImageBindingCount,
+		&model.GenerationIntent{}:                  &generationIntentCount,
+		&model.GenerationProviderJob{}:             &providerJobCount,
+		&model.CostEstimate{}:                      &costEstimateCount,
+		&model.CostReservation{}:                   &costReservationCount,
+		&model.QuotaReservation{}:                  &quotaReservationCount,
+		&model.Artifact{}:                          &storyboardArtifactCount,
+		&model.StoryGraphVersion{}:                 &storyboardGraphVersionCount,
 	} {
 		if err = database.Model(target).Where("workspace_id = ?", fixture.workspaceID).Count(destination).Error; err != nil {
 			t.Fatal(err)
@@ -1285,11 +1297,244 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	).Count(&storyboardTaskCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if storyboardTaskCount != 0 || storyboardShotCount != 0 || generationIntentCount != 0 || providerJobCount != 0 ||
-		costEstimateCount != 0 || costReservationCount != 0 || quotaReservationCount != 0 || storyboardArtifactCount != 0 {
-		t.Fatalf("Storyboard intent drafting crossed its candidate-only boundary: tasks=%d shots=%d intents=%d jobs=%d estimates=%d reservations=%d quotas=%d artifacts=%d",
-			storyboardTaskCount, storyboardShotCount, generationIntentCount, providerJobCount,
-			costEstimateCount, costReservationCount, quotaReservationCount, storyboardArtifactCount)
+	if storyboardTaskCount != 0 || storyboardShotCount != 0 || storyboardImageBindingCount != 0 ||
+		generationIntentCount != 0 || providerJobCount != 0 || costEstimateCount != 0 || costReservationCount != 0 ||
+		quotaReservationCount != 0 || storyboardArtifactCount != 0 || storyboardGraphVersionCount != 1 {
+		t.Fatalf("Storyboard intent drafting crossed its candidate-only boundary: tasks=%d shots=%d bindings=%d intents=%d jobs=%d estimates=%d reservations=%d quotas=%d artifacts=%d graph_versions=%d",
+			storyboardTaskCount, storyboardShotCount, storyboardImageBindingCount, generationIntentCount, providerJobCount,
+			costEstimateCount, costReservationCount, quotaReservationCount, storyboardArtifactCount, storyboardGraphVersionCount)
+	}
+
+	var storyboardTaskCandidateIDs []string
+	if err = json.Unmarshal(storyboardTask.CandidateIDs, &storyboardTaskCandidateIDs); err != nil || len(storyboardTaskCandidateIDs) != 1 ||
+		storyboardTask.SubjectType != "storyboard_intent_candidate" ||
+		storyboardTask.SubjectID.String() != storyboardAggregateRevision.ID.String() || storyboardTask.SubjectRevision != 1 ||
+		storyboardTask.SubjectHash != storyboardAggregateRevision.CandidateRevisionHash ||
+		storyboardTaskCandidateIDs[0] != storyboardAggregateRevision.ID.String() {
+		t.Fatalf("Storyboard Intent HumanTask did not freeze the aggregate Candidate: task=%#v candidates=%v err=%v",
+			storyboardTask, storyboardTaskCandidateIDs, err)
+	}
+	storyboardClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: storyboardTask.ID.String(), ExpectedRevision: storyboardTask.Revision,
+		IdempotencyKey: "storyboard-intent-review-claim",
+	})
+	if err != nil {
+		t.Fatalf("claim Storyboard Intent HumanTask: %v", err)
+	}
+	storyboardDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: storyboardClaim.Task.ID, ClaimToken: storyboardClaim.ClaimToken,
+		ExpectedTaskRevision:    storyboardClaim.Task.Revision,
+		ExpectedSubjectRevision: storyboardClaim.Task.SubjectRevision,
+		ExpectedSubjectHash:     storyboardClaim.Task.SubjectHash, Decision: "approved",
+		IdempotencyKey: "storyboard-intent-review-decision",
+	})
+	if err != nil {
+		t.Fatalf("approve Storyboard Intent HumanTask: %v", err)
+	}
+	storyboardSignalCommand := workflowapp.SignalHumanGateCommand{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: run.ID, NodeRunID: storyboardGateNode.ID.String(),
+		HumanTaskID: storyboardDecision.Task.ID, ReviewDecisionID: storyboardDecision.Decision.ID,
+		SubjectRevision: storyboardDecision.Decision.SubjectRevision, Decision: storyboardDecision.Decision.Decision,
+		IdempotencyKey: "storyboard-intent-review-signal",
+	}
+	func() {
+		driftDatabase := database.Begin()
+		if driftDatabase.Error != nil {
+			t.Fatalf("begin Storyboard baseline drift transaction: %v", driftDatabase.Error)
+		}
+		defer func() { _ = driftDatabase.Rollback().Error }()
+		if updateErr := driftDatabase.Model(&model.StoryboardDraftSet{}).Where("id = ?", draftSet.ID).
+			Update("revision", draftSet.Revision+1).Error; updateErr != nil {
+			t.Fatalf("inject Storyboard Draft Set baseline drift: %v", updateErr)
+		}
+		driftWorkflowStore := workflowgorm.New(driftDatabase)
+		driftSignalService := workflowapp.NewSignalService(driftWorkflowStore, temporalRuntime, workflowapp.SignalConfig{
+			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+			Owner: workflowproduction.New(
+				bibleapp.NewService(biblegorm.New(driftDatabase), bibleapp.Config{Now: time.Now, NewID: uuid.NewString}),
+				planningapp.NewService(planninggorm.New(driftDatabase), planningapp.Config{Now: time.Now, NewID: uuid.NewString}),
+				planningapp.NewEpisodePlanningService(planninggorm.New(driftDatabase), planningapp.Config{Now: time.Now, NewID: uuid.NewString}),
+				storyboardapp.NewService(storyboardgorm.New(driftDatabase), storyboardapp.Config{Now: time.Now, NewID: uuid.NewString}),
+			),
+		})
+		driftCommand := storyboardSignalCommand
+		driftCommand.IdempotencyKey = "storyboard-intent-drift-signal"
+		_, driftErr := driftSignalService.SignalHumanGate(ctx, workflowapp.Actor{
+			UserID: fixture.userID.String(), TokenVersion: 1,
+		}, driftCommand)
+		var typedDrift *workflowapp.Error
+		if !errors.As(driftErr, &typedDrift) || typedDrift.Status != 409 {
+			t.Fatalf("Storyboard baseline drift did not stop the approved Decision: %v", driftErr)
+		}
+		var decisionCount, freezeCount int64
+		var conflictApply model.WorkflowHumanGateApplyReceipt
+		if queryErr := driftDatabase.Model(&model.ReviewDecision{}).Where("id = ?", storyboardDecision.Decision.ID).
+			Count(&decisionCount).Error; queryErr != nil {
+			t.Fatal(queryErr)
+		}
+		if queryErr := driftDatabase.Model(&model.CommandReceipt{}).Where(
+			"workspace_id = ? AND operation = ?", fixture.workspaceID, "storyboard.freeze_intent_set",
+		).Count(&freezeCount).Error; queryErr != nil {
+			t.Fatal(queryErr)
+		}
+		if queryErr := driftDatabase.Where("review_decision_id = ?", storyboardDecision.Decision.ID).
+			First(&conflictApply).Error; queryErr != nil || conflictApply.Status != "conflict" ||
+			conflictApply.ConflictCode == nil || conflictApply.OwnerReceiptID != nil || decisionCount != 1 || freezeCount != 0 {
+			t.Fatalf("Storyboard baseline drift evidence is incomplete: decision=%d freeze=%d apply=%#v err=%v",
+				decisionCount, freezeCount, conflictApply, queryErr)
+		}
+	}()
+	if err = database.First(&draftSet, "id = ?", draftSet.ID).Error; err != nil || draftSet.Revision != 2 || draftSet.Status != "needs_asset" {
+		t.Fatalf("Storyboard baseline drift test leaked state: set=%#v err=%v", draftSet, err)
+	}
+	storyboardUnknownSignaler := &unknownOnceWorkflowSignaler{delegate: temporalRuntime}
+	storyboardSignalService := workflowapp.NewSignalService(workflowStore, storyboardUnknownSignaler, workflowapp.SignalConfig{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+		Owner: workflowproduction.New(bibleService, planningService, episodePlanningService, storyboardService),
+	})
+	unknownStoryboardSignal, err := storyboardSignalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, storyboardSignalCommand)
+	if err != nil || unknownStoryboardSignal.Status != "unknown" || unknownStoryboardSignal.AttemptNo != 1 {
+		t.Fatalf("persist unknown Storyboard Intent Signal: intent=%#v err=%v", unknownStoryboardSignal, err)
+	}
+	var intentFreezeReceipt model.CommandReceipt
+	if err = database.Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?",
+		fixture.workspaceID, "storyboard.freeze_intent_set", draftSet.ID,
+	).First(&intentFreezeReceipt).Error; err != nil {
+		t.Fatalf("load Storyboard Intent freeze Receipt after unknown Signal: %v", err)
+	}
+	var approvedIntents storyboarddomain.ApprovedIntentSet
+	if err = json.Unmarshal(intentFreezeReceipt.Result, &approvedIntents); err != nil ||
+		approvedIntents.SchemaVersion != "approved-storyboard-intents-v1" ||
+		approvedIntents.ID != intentFreezeReceipt.ID.String() || approvedIntents.DraftSetID != draftSet.ID.String() ||
+		approvedIntents.DraftSetRevision != 2 ||
+		approvedIntents.CandidateRevisionID != storyboardAggregateRevision.ID.String() ||
+		approvedIntents.CandidateRevisionHash != storyboardAggregateRevision.CandidateRevisionHash ||
+		approvedIntents.CandidateRevision != 1 || approvedIntents.ReviewDecisionID != storyboardDecision.Decision.ID ||
+		len(approvedIntents.Scenes) != len(candidateSet.Scenes) || len(approvedIntents.VisualRequirementsHash) != 64 ||
+		len(approvedIntents.ContentHash) != 64 {
+		t.Fatalf("Storyboard approved Intent Receipt is incomplete: approved=%#v err=%v", approvedIntents, err)
+	}
+	approvedIntentCount, approvedRequirementCount := 0, 0
+	for _, scene := range approvedIntents.Scenes {
+		if len(scene.ShotIntents) == 0 || scene.AssetReadiness != "needs_asset" {
+			t.Fatalf("Storyboard approved Scene lost accepted Intents or readiness: %#v", scene)
+		}
+		approvedIntentCount += len(scene.ShotIntents)
+		for _, intent := range scene.ShotIntents {
+			approvedRequirementCount += len(intent.VisualRequirements)
+		}
+	}
+	if approvedIntentCount == 0 || approvedRequirementCount == 0 {
+		t.Fatalf("Storyboard Intent freeze did not preserve visual requirements: intents=%d requirements=%d",
+			approvedIntentCount, approvedRequirementCount)
+	}
+	if err = database.First(&draftSet, "id = ?", draftSet.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if draftSet.Status != "intent_frozen" || draftSet.Revision != approvedIntents.DraftSetRevision+1 ||
+		draftSet.ResultHash == nil || *draftSet.ResultHash != approvedIntents.ContentHash ||
+		draftSet.CandidateRevisionID == nil || draftSet.CandidateRevisionID.String() != approvedIntents.CandidateRevisionID ||
+		draftSet.CandidateRevisionHash == nil || *draftSet.CandidateRevisionHash != approvedIntents.CandidateRevisionHash {
+		t.Fatalf("Storyboard Draft Set did not preserve its Candidate while freezing Intents: %#v", draftSet)
+	}
+	var storyboardApplyReceipt model.WorkflowHumanGateApplyReceipt
+	if err = database.Where("review_decision_id = ?", storyboardDecision.Decision.ID).First(&storyboardApplyReceipt).Error; err != nil ||
+		storyboardApplyReceipt.Status != "completed" || storyboardApplyReceipt.OwnerReceiptID == nil ||
+		*storyboardApplyReceipt.OwnerReceiptID != intentFreezeReceipt.ID || storyboardApplyReceipt.OwnerOperation == nil ||
+		*storyboardApplyReceipt.OwnerOperation != "storyboard.freeze_intent_set" {
+		t.Fatalf("Storyboard Workflow Apply Receipt is incomplete: receipt=%#v err=%v", storyboardApplyReceipt, err)
+	}
+	replayedIntentFreeze, err := storyboardService.FreezeIntentSet(ctx, storyboardapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, storyboardapp.FreezeIntentSetCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		CandidateRevisionID:       storyboardAggregateRevision.ID.String(),
+		CandidateRevisionHash:     storyboardAggregateRevision.CandidateRevisionHash,
+		ExpectedCandidateRevision: int64(storyboardTask.SubjectRevision),
+		ReviewDecisionID:          storyboardDecision.Decision.ID,
+		IdempotencyKey:            "workflow-review:" + storyboardDecision.Decision.ID,
+	})
+	var intentFreezeCount int64
+	if countErr := database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?",
+		fixture.workspaceID, "storyboard.freeze_intent_set", draftSet.ID,
+	).Count(&intentFreezeCount).Error; countErr != nil {
+		t.Fatal(countErr)
+	}
+	if err != nil || replayedIntentFreeze.Receipt.ID != intentFreezeReceipt.ID.String() ||
+		replayedIntentFreeze.Approved.ContentHash != approvedIntents.ContentHash ||
+		replayedIntentFreeze.Set.Revision != draftSet.Revision || intentFreezeCount != 1 {
+		t.Fatalf("Storyboard Intent owner replay is not identical: replay=%#v receipts=%d err=%v",
+			replayedIntentFreeze, intentFreezeCount, err)
+	}
+	completedStoryboardSignal, err := storyboardSignalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, storyboardSignalCommand)
+	if err != nil || completedStoryboardSignal.ID != unknownStoryboardSignal.ID ||
+		completedStoryboardSignal.Status != "completed" || completedStoryboardSignal.AttemptNo != 2 {
+		t.Fatalf("recover unknown Storyboard Intent Signal: intent=%#v err=%v", completedStoryboardSignal, err)
+	}
+	replayedStoryboardSignal, err := storyboardSignalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, storyboardSignalCommand)
+	if err != nil || replayedStoryboardSignal.ID != completedStoryboardSignal.ID || replayedStoryboardSignal.Status != "completed" {
+		t.Fatalf("replay completed Storyboard Intent Signal: intent=%#v err=%v", replayedStoryboardSignal, err)
+	}
+	completionDeadline = time.Now().Add(20 * time.Second)
+	for {
+		if err = database.First(&persistedRun, "id = ?", run.ID).Error; err != nil {
+			t.Fatalf("reload completed Storyboard Intent Workflow Run: %v", err)
+		}
+		if persistedRun.Status == "SUCCEEDED" {
+			break
+		}
+		if persistedRun.Status == "FAILED" || persistedRun.Status == "CANCELLED" || time.Now().After(completionDeadline) {
+			t.Fatalf("Source Evidence Workflow did not complete after Storyboard Intent approval: %#v", persistedRun)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if err = database.First(&storyboardGateNode, "id = ?", storyboardGateNode.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	intentOutput, _, intentOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(storyboardGateNode.Output))
+	if err != nil || storyboardGateNode.Status != "SUCCEEDED" || storyboardGateNode.OutputHash == nil ||
+		*storyboardGateNode.OutputHash != intentOutputHash || len(intentOutput.Bindings) != 1 ||
+		intentOutput.Bindings[0].Port != "intents" || intentOutput.Bindings[0].ValueType != "approved_storyboard_intents" ||
+		intentOutput.Bindings[0].ReferenceID != approvedIntents.ID || intentOutput.Bindings[0].ReferenceVersion != "1" ||
+		intentOutput.Bindings[0].ContentHash != approvedIntents.ContentHash {
+		t.Fatalf("Storyboard Intent Gate output=%#v node=%#v err=%v", intentOutput, storyboardGateNode, err)
+	}
+	var intentFreezeReceiptCount int64
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?",
+		fixture.workspaceID, "storyboard.freeze_intent_set", draftSet.ID,
+	).Count(&intentFreezeReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	for target, destination := range map[any]*int64{
+		&model.StoryboardShot{}:                    &storyboardShotCount,
+		&model.StoryboardShotImageBindingVersion{}: &storyboardImageBindingCount,
+		&model.GenerationIntent{}:                  &generationIntentCount,
+		&model.GenerationProviderJob{}:             &providerJobCount,
+		&model.CostEstimate{}:                      &costEstimateCount,
+		&model.CostReservation{}:                   &costReservationCount,
+		&model.QuotaReservation{}:                  &quotaReservationCount,
+		&model.Artifact{}:                          &storyboardArtifactCount,
+		&model.StoryGraphVersion{}:                 &storyboardGraphVersionCount,
+	} {
+		if err = database.Model(target).Where("workspace_id = ?", fixture.workspaceID).Count(destination).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if intentFreezeReceiptCount != 1 || storyboardShotCount != 0 || storyboardImageBindingCount != 0 ||
+		generationIntentCount != 0 || providerJobCount != 0 || costEstimateCount != 0 || costReservationCount != 0 ||
+		quotaReservationCount != 0 || storyboardArtifactCount != 0 || storyboardGraphVersionCount != 1 {
+		t.Fatalf("Storyboard Intent Gate crossed the paid/formal boundary: receipts=%d shots=%d bindings=%d intents=%d jobs=%d estimates=%d reservations=%d quotas=%d artifacts=%d graph_versions=%d",
+			intentFreezeReceiptCount, storyboardShotCount, storyboardImageBindingCount, generationIntentCount, providerJobCount,
+			costEstimateCount, costReservationCount, quotaReservationCount, storyboardArtifactCount, storyboardGraphVersionCount)
 	}
 
 	replayCommand := planningapp.ApplyEpisodePlanCommand{

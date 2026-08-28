@@ -20,6 +20,7 @@ import (
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
+	storyboarddomain "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -405,7 +406,8 @@ func expectedHumanGateSubject(
 	productionBibleV2 := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
 	episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
 	episodePlanningV2 := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
-	if !productionBibleV2 && !episodePlanV2 && !episodePlanningV2 {
+	storyboardIntentV2 := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
+	if !productionBibleV2 && !episodePlanV2 && !episodePlanningV2 && !storyboardIntentV2 {
 		return humanGateSubjectType(node.Executor), node.ID, node.Revision, resolved.InputHash, nil
 	}
 	if len(resolved.Input.Bindings) != 1 {
@@ -417,6 +419,8 @@ func expectedHumanGateSubject(
 		expectedValueType, subjectType = "episode_segmentation_candidate", "episode_plan_candidate"
 	} else if episodePlanningV2 {
 		expectedValueType, subjectType = "episode_planning_candidate_set", "planning_candidate"
+	} else if storyboardIntentV2 {
+		expectedValueType, subjectType = "storyboard_intent_candidate_set", "storyboard_intent_candidate"
 	}
 	if candidate.Port != "candidate" || candidate.ValueType != expectedValueType ||
 		candidate.SourceKind != domain.NodeInputSourceNodeOutput || len(candidate.ContentHash) != 64 {
@@ -537,9 +541,12 @@ func validateHumanGateOwnerEvidence(
 	expectedOperation, supported := humanGateOwnerOperation(node)
 	episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
 	episodePlanningV2 := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
+	storyboardIntentV2 := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
 	receiptMatchesOutput := receipt.ResourceID.String() == binding.ReferenceID
 	if episodePlanV2 || episodePlanningV2 {
 		receiptMatchesOutput = receipt.ID.String() == binding.ReferenceID && receipt.ResourceID.String() == candidate.ReferenceID
+	} else if storyboardIntentV2 {
+		receiptMatchesOutput = receipt.ID.String() == binding.ReferenceID
 	}
 	if !supported || *apply.OwnerOperation != expectedOperation || receipt.WorkspaceID != run.WorkspaceID || receipt.Operation != *apply.OwnerOperation ||
 		!receiptMatchesOutput || receipt.CreatedBy != apply.CreatedBy {
@@ -658,6 +665,70 @@ func validateHumanGateOwnerEvidence(
 			}
 		}
 	}
+	if storyboardIntentV2 {
+		var approved storyboarddomain.ApprovedIntentSet
+		if err := json.Unmarshal(receipt.Result, &approved); err != nil ||
+			approved.SchemaVersion != "approved-storyboard-intents-v1" || approved.ID != receipt.ID.String() ||
+			approved.WorkspaceID != run.WorkspaceID.String() || approved.ProjectID != run.ProjectID.String() ||
+			approved.CandidateRevisionID != candidate.ReferenceID ||
+			approved.CandidateRevisionHash != candidate.ContentHash ||
+			approved.CandidateRevision != int64(task.SubjectRevision) ||
+			approved.ReviewDecisionID != decision.ID.String() || approved.ContentHash != binding.ContentHash ||
+			len(approved.Scenes) == 0 || approved.DraftSetRevision < 1 || receipt.ResourceID.String() != approved.DraftSetID {
+			return errors.New("Storyboard Intent Receipt does not match the frozen Candidate")
+		}
+		visualHash, visualErr := storyboarddomain.ApprovedIntentVisualRequirementsHash(approved.Scenes)
+		contentHash, contentErr := storyboarddomain.ApprovedIntentSetContentHash(approved)
+		if visualErr != nil || contentErr != nil || visualHash != approved.VisualRequirementsHash ||
+			contentHash != approved.ContentHash {
+			return errors.New("Storyboard Intent Receipt content hash has drifted")
+		}
+		draftSetID, parseErr := uuid.Parse(approved.DraftSetID)
+		if parseErr != nil {
+			return errors.New("Storyboard Intent Receipt Draft Set identity is invalid")
+		}
+		var draftSet model.StoryboardDraftSet
+		if err := transaction.First(&draftSet, "id = ?", draftSetID).Error; err != nil {
+			return normalizeNotFound(err)
+		}
+		if draftSet.WorkspaceID != run.WorkspaceID || draftSet.ProjectID != run.ProjectID ||
+			draftSet.Status != "intent_frozen" || draftSet.Revision != approved.DraftSetRevision+1 ||
+			draftSet.ResultHash == nil || *draftSet.ResultHash != approved.ContentHash ||
+			draftSet.CandidateRevisionID == nil || draftSet.CandidateRevisionID.String() != candidate.ReferenceID ||
+			draftSet.CandidateRevisionHash == nil || *draftSet.CandidateRevisionHash != candidate.ContentHash ||
+			draftSet.GraphVersionID.String() != approved.GraphVersionID ||
+			draftSet.GraphVersionNo != approved.GraphVersionNo || draftSet.GraphContentHash != approved.GraphContentHash ||
+			draftSet.ManifestID.String() != approved.ManifestID || draftSet.ManifestVersion != approved.ManifestVersion ||
+			draftSet.ManifestHash != approved.ManifestHash {
+			return errors.New("Storyboard Intent Draft Set has drifted")
+		}
+		for _, scene := range approved.Scenes {
+			batchID, batchErr := uuid.Parse(scene.BatchID)
+			if batchErr != nil {
+				return errors.New("Storyboard Intent Receipt contains an invalid Batch identity")
+			}
+			var batch model.StoryboardDraftBatch
+			if err := transaction.First(&batch, "id = ?", batchID).Error; err != nil {
+				return normalizeNotFound(err)
+			}
+			var persisted storyboarddomain.Candidate
+			if err := json.Unmarshal(batch.Candidate, &persisted); err != nil {
+				return errors.New("Storyboard Intent Batch Candidate is invalid")
+			}
+			expectedHash, expectedErr := platformcommand.InputHash(scene.ShotIntents)
+			observedHash, observedErr := platformcommand.InputHash(persisted.ShotIntents)
+			if expectedErr != nil || observedErr != nil || expectedHash != observedHash ||
+				batch.WorkspaceID != run.WorkspaceID || batch.ProjectID != run.ProjectID ||
+				batch.EpisodeID.String() != scene.EpisodeID || batch.StructureID.String() != scene.StructureID ||
+				batch.ScriptVersionID.String() != scene.ScriptVersionID || batch.SceneStoryNodeKey != scene.SceneStoryNodeKey ||
+				batch.CandidateRevisionID == nil || batch.CandidateRevisionID.String() != scene.CandidateRevisionID ||
+				batch.CandidateRevisionHash == nil || *batch.CandidateRevisionHash != scene.CandidateRevisionHash ||
+				persisted.SceneStoryNodeKey != scene.SceneStoryNodeKey || persisted.AssetReadiness != scene.AssetReadiness ||
+				(batch.Status != "ready" && batch.Status != "needs_asset") || batch.Status != scene.AssetReadiness {
+				return errors.New("Storyboard Intent Batch has drifted")
+			}
+		}
+	}
 	return nil
 }
 
@@ -729,7 +800,10 @@ func humanGateOwnerOperation(node model.NodeRunProjection) (string, bool) {
 		}
 		return "episode_structure.confirm_batch", true
 	case "gate.storyboard_review":
-		return "storyboard.apply_set", true
+		if node.DefinitionVersion == "2.0.0" {
+			return "storyboard.freeze_intent_set", true
+		}
+		return "", false
 	case "gate.generation_image_review":
 		return "generation.candidate.select", true
 	default:

@@ -22,7 +22,7 @@ const (
 	episodePlanApplyOperation             = "episode_plan.apply"
 	episodePlanningApplyOperation         = "episode_planning.apply"
 	episodeStructureBatchConfirmOperation = "episode_structure.confirm_batch"
-	storyboardApplySetOperation           = "storyboard.apply_set"
+	storyboardFreezeIntentSetOperation    = "storyboard.freeze_intent_set"
 )
 
 type BibleOwner interface {
@@ -40,7 +40,7 @@ type EpisodePlanningOwner interface {
 }
 
 type StoryboardSetOwner interface {
-	ApplySet(context.Context, storyboardapp.Actor, storyboardapp.ApplySetCommand) (storyboardapp.ApplySetResult, error)
+	FreezeIntentSet(context.Context, storyboardapp.Actor, storyboardapp.FreezeIntentSetCommand) (storyboardapp.FreezeIntentSetResult, error)
 }
 
 type Applier struct {
@@ -76,7 +76,7 @@ func (applier *Applier) ApplyHumanGateDecision(
 		return applier.applyEpisodeStructures(ctx, actor, application)
 	}
 	if application.Executor == "gate.storyboard_review" {
-		return applier.applyStoryboardSet(ctx, actor, application)
+		return applier.freezeStoryboardIntents(ctx, actor, application)
 	}
 	if applier.bibles == nil || application.Executor != "gate.production_bible_review" ||
 		application.Candidate.ValueType != "story_reconciliation_candidate" ||
@@ -117,7 +117,7 @@ func (applier *Applier) ApplyHumanGateDecision(
 		IdempotencyKey: "workflow-review:" + application.ReviewDecisionID,
 	})
 	if err != nil {
-		return domain.HumanGateOwnerResult{}, err
+		return domain.HumanGateOwnerResult{}, normalizeOwnerApplyError(err)
 	}
 	if err = validateConfirmedBible(application, actor, result.Version, result.Receipt.Operation, result.Receipt.ResourceID,
 		result.Receipt.WorkspaceID, result.Receipt.CreatedBy); err != nil {
@@ -132,53 +132,61 @@ func (applier *Applier) ApplyHumanGateDecision(
 		}},
 	})
 	if err != nil {
-		return domain.HumanGateOwnerResult{}, err
+		return domain.HumanGateOwnerResult{}, normalizeOwnerApplyError(err)
 	}
 	return domain.HumanGateOwnerResult{
 		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
 	}, nil
 }
 
-func (applier *Applier) applyStoryboardSet(
+func (applier *Applier) freezeStoryboardIntents(
 	ctx context.Context,
 	actor workflowapp.Actor,
 	application domain.HumanGateOwnerApplication,
 ) (domain.HumanGateOwnerResult, error) {
-	if applier.storyboards == nil || application.Candidate.ValueType != "storyboard_candidate" ||
-		application.OutputPort != "storyboards" || application.OutputValueType != "storyboards" {
+	if applier.storyboards == nil || application.Candidate.ValueType != "storyboard_intent_candidate_set" ||
+		application.OutputPort != "intents" || application.OutputValueType != "approved_storyboard_intents" {
 		return domain.HumanGateOwnerResult{}, errors.New("unsupported workflow human gate owner application")
 	}
-	expectedRevision, err := strconv.Atoi(application.Candidate.ReferenceVersion)
+	expectedRevision, err := strconv.ParseInt(application.Candidate.ReferenceVersion, 10, 64)
 	if err != nil || expectedRevision < 1 || len(application.Candidate.ContentHash) != 64 {
-		return domain.HumanGateOwnerResult{}, errors.New("invalid Storyboard Draft Set candidate")
+		return domain.HumanGateOwnerResult{}, errors.New("invalid Storyboard Intent Candidate")
 	}
-	result, err := applier.storyboards.ApplySet(ctx, storyboardapp.Actor{
+	result, err := applier.storyboards.FreezeIntentSet(ctx, storyboardapp.Actor{
 		UserID: actor.UserID, TokenVersion: actor.TokenVersion,
-	}, storyboardapp.ApplySetCommand{
-		SetID: application.Candidate.ReferenceID, ExpectedRevision: expectedRevision,
-		ExpectedCandidateHash: application.Candidate.ContentHash,
-		IdempotencyKey:        "workflow-review:" + application.ReviewDecisionID,
+	}, storyboardapp.FreezeIntentSetCommand{
+		WorkspaceID: application.WorkspaceID, ProjectID: application.ProjectID,
+		CandidateRevisionID:       application.Candidate.ReferenceID,
+		CandidateRevisionHash:     application.Candidate.ContentHash,
+		ExpectedCandidateRevision: expectedRevision, ReviewDecisionID: application.ReviewDecisionID,
+		IdempotencyKey: "workflow-review:" + application.ReviewDecisionID,
 	})
 	if err != nil {
-		return domain.HumanGateOwnerResult{}, err
+		return domain.HumanGateOwnerResult{}, normalizeOwnerApplyError(err)
 	}
-	set := result.Set
-	if set.ID != application.Candidate.ReferenceID || set.WorkspaceID != application.WorkspaceID ||
-		set.ProjectID != application.ProjectID || set.Status != "applied" || set.Revision != expectedRevision+1 ||
-		set.ResultHash == nil || len(*set.ResultHash) != 64 || result.Receipt.Operation != storyboardApplySetOperation ||
-		result.Receipt.ResourceID != set.ID || result.Receipt.WorkspaceID != application.WorkspaceID ||
-		result.Receipt.CreatedBy != actor.UserID {
+	set, approved := result.Set, result.Approved
+	if approved.ID != result.Receipt.ID || approved.WorkspaceID != application.WorkspaceID ||
+		approved.ProjectID != application.ProjectID || approved.DraftSetID != set.ID ||
+		approved.CandidateRevisionID != application.Candidate.ReferenceID ||
+		approved.CandidateRevisionHash != application.Candidate.ContentHash ||
+		approved.CandidateRevision != expectedRevision || approved.ReviewDecisionID != application.ReviewDecisionID ||
+		len(approved.Scenes) == 0 || len(approved.VisualRequirementsHash) != 64 || len(approved.ContentHash) != 64 ||
+		set.WorkspaceID != application.WorkspaceID || set.ProjectID != application.ProjectID ||
+		set.Status != "intent_frozen" || set.Revision != approved.DraftSetRevision+1 ||
+		set.ResultHash == nil || *set.ResultHash != approved.ContentHash ||
+		result.Receipt.Operation != storyboardFreezeIntentSetOperation || result.Receipt.ResourceID != set.ID ||
+		result.Receipt.WorkspaceID != application.WorkspaceID || result.Receipt.CreatedBy != actor.UserID {
 		return domain.HumanGateOwnerResult{}, errors.New("Storyboard owner result does not match workflow gate")
 	}
 	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
 		Bindings: []domain.NodeOutputBinding{{
 			Port: application.OutputPort, ValueType: application.OutputValueType,
-			ReferenceID: set.ID, ReferenceVersion: strconv.Itoa(set.Revision), ContentHash: *set.ResultHash,
+			ReferenceID: approved.ID, ReferenceVersion: "1", ContentHash: approved.ContentHash,
 		}},
 	})
 	if err != nil {
-		return domain.HumanGateOwnerResult{}, err
+		return domain.HumanGateOwnerResult{}, normalizeOwnerApplyError(err)
 	}
 	return domain.HumanGateOwnerResult{
 		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
@@ -209,7 +217,7 @@ func (applier *Applier) applyEpisodeStructures(
 		IdempotencyKey:      "workflow-review:" + application.ReviewDecisionID,
 	})
 	if err != nil {
-		return domain.HumanGateOwnerResult{}, err
+		return domain.HumanGateOwnerResult{}, normalizeOwnerApplyError(err)
 	}
 	batch := result.Batch
 	if batch.Commit.ID != application.Candidate.ReferenceID || batch.Commit.Status != "published" ||
@@ -235,7 +243,7 @@ func (applier *Applier) applyEpisodeStructures(
 		}},
 	})
 	if err != nil {
-		return domain.HumanGateOwnerResult{}, err
+		return domain.HumanGateOwnerResult{}, normalizeOwnerApplyError(err)
 	}
 	return domain.HumanGateOwnerResult{
 		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
@@ -381,6 +389,35 @@ func (applier *Applier) applyEpisodeSegmentation(
 	return domain.HumanGateOwnerResult{
 		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
 	}, nil
+}
+
+func normalizeOwnerApplyError(err error) error {
+	var workflowError *workflowapp.Error
+	if errors.As(err, &workflowError) {
+		return err
+	}
+	var bibleError *bibleapp.Error
+	if errors.As(err, &bibleError) {
+		return &workflowapp.Error{
+			Code: bibleError.Code, Message: bibleError.Message,
+			NextAction: bibleError.NextAction, Status: bibleError.Status,
+		}
+	}
+	var planningError *planningapp.Error
+	if errors.As(err, &planningError) {
+		return &workflowapp.Error{
+			Code: planningError.Code, Message: planningError.Message,
+			NextAction: planningError.NextAction, Status: planningError.Status,
+		}
+	}
+	var storyboardError *storyboardapp.Error
+	if errors.As(err, &storyboardError) {
+		return &workflowapp.Error{
+			Code: storyboardError.Code, Message: storyboardError.Message,
+			NextAction: storyboardError.NextAction, Status: storyboardError.Status,
+		}
+	}
+	return err
 }
 
 func validateConfirmedBible(

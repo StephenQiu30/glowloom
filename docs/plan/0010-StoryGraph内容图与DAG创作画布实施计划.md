@@ -107,7 +107,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 ### 分镜与视觉资产
 
 - [x] `SG-I18`：接入 Storyboard Draft，只消费非空正式 Specification/AssetState，产出可审核 Shot Intent 与 `needs_asset` 需求。完成门：Candidate 不进入正式 StoryGraphVersion，缺资产时不得创建 Shot。
-- [ ] `SG-I19`：用公共 Human Gate 审批 Shot Intent/visual requirements；Storyboard Owner `FreezeIntentSet` 只冻结 Draft Set revision/hash、已接受 Intent 和视觉需求并返回 Receipt。完成门：Gate completed/Receipt/输出可恢复，不创建正式 Shot；拒绝、unknown 或漂移不得产生 Provider Cost/Job。
+- [x] `SG-I19`：用公共 Human Gate 审批 Shot Intent/visual requirements；Storyboard Owner `FreezeIntentSet` 只冻结 Draft Set revision/hash、已接受 Intent 和视觉需求并返回 Receipt。完成门：Gate completed/Receipt/输出可恢复，不创建正式 Shot；拒绝、unknown 或漂移不得产生 Provider Cost/Job。**完成（2026-08-28）**：公共 `human.storyboard_review@2.0.0` 精确冻结 `storyboard_intent_candidate_set`；`approved` 后 Backend Storyboard Owner 在单一 PostgreSQL/GORM 事务中重验 StoryGraph、Manifest、Scene Candidate、Agent Invocation、Draft Set baseline 与不可变 ReviewDecision，只把完整 Shot Intent 和 visual requirements 冻结为 `approved_storyboard_intents` 与 Command Receipt。拒绝/要求修改为 `not_required`，Decision 后 baseline 漂移为显式冲突且零效果；Owner/Signal unknown、直接 Owner 重放和 Temporal Resume 均收敛到同一 Receipt。真实全链、完整 CI、三镜像与部署故障矩阵通过，正式 Shot、Cost/Quota、Provider Job、Artifact 和新 StoryGraphVersion 均为零。
 - [ ] `SG-I20`：只消费 `SG-I19` 的 approved intent 输出，按已接受并同步的 `2051` 完成 `reference_asset` Intent/Cost/Quota/Provider Job/Artifact 执行。完成门：Provider 未知结果按同一 Job 对账，不盲目重提，Artifact 只是 Candidate。
 - [ ] `SG-I21`：完成 composite front/profile/back reference sheet 的确定性 QC、单一 CandidateSelection 和 AssetVersion 发布。完成门：身份/AssetState/EffectiveStyleSnapshot/lineage/view-role 门禁和选择幂等通过。
 - [ ] `SG-I22`：让 `detail_shots` 只消费精确 READY AssetVersion，完成分片 Review 与 Candidate Repair。完成门：精确版本非空，跨 Scene 连续性、修复范围和重审门禁通过。

@@ -241,6 +241,8 @@ type CandidateSetItem struct {
 
 type CandidateSet struct {
 	SchemaVersion    string             `json:"schema_version"`
+	DraftSetID       string             `json:"draft_set_id"`
+	DraftSetRevision int                `json:"draft_set_revision"`
 	GraphVersionID   string             `json:"graph_version_id"`
 	GraphContentHash string             `json:"graph_content_hash"`
 	ManifestID       string             `json:"manifest_id"`
@@ -248,6 +250,40 @@ type CandidateSet struct {
 	ManifestHash     string             `json:"manifest_hash"`
 	Scenes           []CandidateSetItem `json:"scenes"`
 	AssetReadiness   string             `json:"asset_readiness"`
+}
+
+type ApprovedIntentScene struct {
+	SceneStoryNodeKey     string       `json:"scene_story_node_key"`
+	BatchID               string       `json:"batch_id"`
+	EpisodeID             string       `json:"episode_id"`
+	StructureID           string       `json:"structure_id"`
+	ScriptVersionID       string       `json:"script_version_id"`
+	CandidateRevisionID   string       `json:"candidate_revision_id"`
+	CandidateRevisionHash string       `json:"candidate_revision_hash"`
+	AssetReadiness        string       `json:"asset_readiness"`
+	ShotIntents           []ShotIntent `json:"shot_intents"`
+}
+
+type ApprovedIntentSet struct {
+	SchemaVersion          string                `json:"schema_version"`
+	ID                     string                `json:"id"`
+	WorkspaceID            string                `json:"workspace_id"`
+	ProjectID              string                `json:"project_id"`
+	DraftSetID             string                `json:"draft_set_id"`
+	DraftSetRevision       int                   `json:"draft_set_revision"`
+	CandidateRevisionID    string                `json:"candidate_revision_id"`
+	CandidateRevisionHash  string                `json:"candidate_revision_hash"`
+	CandidateRevision      int64                 `json:"candidate_revision"`
+	GraphVersionID         string                `json:"graph_version_id"`
+	GraphVersionNo         int64                 `json:"graph_version_no"`
+	GraphContentHash       string                `json:"graph_content_hash"`
+	ManifestID             string                `json:"manifest_id"`
+	ManifestVersion        int64                 `json:"manifest_version"`
+	ManifestHash           string                `json:"manifest_hash"`
+	ReviewDecisionID       string                `json:"review_decision_id"`
+	Scenes                 []ApprovedIntentScene `json:"scenes"`
+	VisualRequirementsHash string                `json:"visual_requirements_hash"`
+	ContentHash            string                `json:"content_hash"`
 }
 
 type Shot struct {
@@ -585,7 +621,8 @@ func BuildCandidateSet(
 		}
 	}
 	candidate := CandidateSet{
-		SchemaVersion: "storyboard-intent-candidate-set-v1", GraphVersionID: set.GraphVersionID,
+		SchemaVersion: "storyboard-intent-candidate-set-v1", DraftSetID: set.ID, DraftSetRevision: set.Revision,
+		GraphVersionID:   set.GraphVersionID,
 		GraphContentHash: set.GraphContentHash, ManifestID: set.ManifestID,
 		ManifestVersion: set.ManifestVersion, ManifestHash: set.ManifestHash,
 		Scenes: ordered, AssetReadiness: readiness,
@@ -599,6 +636,149 @@ func BuildCandidateSet(
 		Schema, NodeRunID, ManifestHash, GraphContentHash string
 	}{"storyboard-intent-candidate-set-stage-v1", set.NodeRunID, set.ManifestHash, set.GraphContentHash}))
 	return candidate, encoded, contentHash, stageKey, err
+}
+
+func BuildApprovedIntentSet(
+	set DraftSet,
+	batches []Batch,
+	candidateRevision int64,
+	reviewDecisionID string,
+	approvedID string,
+) (ApprovedIntentSet, error) {
+	for _, identifier := range []string{
+		set.ID, set.WorkspaceID, set.ProjectID, set.GraphVersionID, set.ManifestID,
+		reviewDecisionID, approvedID,
+	} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return ApprovedIntentSet{}, errors.New("invalid approved Storyboard Intent identity")
+		}
+	}
+	if set.CandidateRevisionID == nil || set.CandidateRevisionHash == nil {
+		return ApprovedIntentSet{}, errors.New("Storyboard Draft Set has no Candidate Revision")
+	}
+	if _, err := uuid.Parse(*set.CandidateRevisionID); err != nil || len(*set.CandidateRevisionHash) != 64 ||
+		set.Revision < 1 || candidateRevision < 1 || set.GraphVersionNo < 1 || len(set.GraphContentHash) != 64 ||
+		set.ManifestVersion < 1 || len(set.ManifestHash) != 64 || len(set.Batches) == 0 || len(batches) != len(set.Batches) {
+		return ApprovedIntentSet{}, errors.New("Storyboard Draft Set is incomplete")
+	}
+	byBatch := make(map[string]Batch, len(batches))
+	for _, batch := range batches {
+		if _, duplicate := byBatch[batch.ID]; duplicate {
+			return ApprovedIntentSet{}, errors.New("duplicate Storyboard Draft Batch")
+		}
+		byBatch[batch.ID] = batch
+	}
+	scenes := make([]ApprovedIntentScene, len(set.Batches))
+	for index, reference := range set.Batches {
+		batch, found := byBatch[reference.BatchID]
+		if !found || reference.CandidateRevisionID == nil || reference.CandidateRevisionHash == nil ||
+			reference.ResultHash == nil || len(*reference.ResultHash) != 64 ||
+			batch.CandidateRevisionID == nil || batch.CandidateRevisionHash == nil || batch.ResultHash == nil ||
+			batch.ID != reference.BatchID || batch.WorkspaceID != set.WorkspaceID || batch.ProjectID != set.ProjectID ||
+			batch.EpisodeID != reference.EpisodeID || batch.StructureID != reference.StructureID ||
+			batch.ScriptVersionID != reference.ScriptVersionID || batch.SceneStoryNodeKey != reference.SceneStoryNodeKey ||
+			batch.ManifestID != set.ManifestID || batch.ManifestVersion != set.ManifestVersion ||
+			batch.GraphVersionID != set.GraphVersionID || batch.GraphVersionNo != set.GraphVersionNo ||
+			batch.InputHash != reference.InputHash || *batch.ResultHash != *reference.ResultHash ||
+			*batch.CandidateRevisionID != *reference.CandidateRevisionID ||
+			*batch.CandidateRevisionHash != *reference.CandidateRevisionHash ||
+			batch.Candidate.SceneStoryNodeKey != reference.SceneStoryNodeKey ||
+			(batch.Status != "ready" && batch.Status != "needs_asset") ||
+			batch.Candidate.AssetReadiness != batch.Status || len(batch.Candidate.ShotIntents) == 0 {
+			return ApprovedIntentSet{}, errors.New("Storyboard Draft Batch changed before Intent freeze")
+		}
+		intents := append([]ShotIntent(nil), batch.Candidate.ShotIntents...)
+		sort.Slice(intents, func(left, right int) bool {
+			if intents[left].IntentOrder != intents[right].IntentOrder {
+				return intents[left].IntentOrder < intents[right].IntentOrder
+			}
+			return intents[left].ShotKey < intents[right].ShotKey
+		})
+		for intentIndex := range intents {
+			if intents[intentIndex].IntentOrder != intentIndex+1 || strings.TrimSpace(intents[intentIndex].ShotKey) == "" {
+				return ApprovedIntentSet{}, errors.New("Storyboard Shot Intent order changed before freeze")
+			}
+			intents[intentIndex].VisualRequirements = append([]VisualRequirement(nil), intents[intentIndex].VisualRequirements...)
+			sort.Slice(intents[intentIndex].VisualRequirements, func(left, right int) bool {
+				return intents[intentIndex].VisualRequirements[left].OccurrenceStoryNodeKey <
+					intents[intentIndex].VisualRequirements[right].OccurrenceStoryNodeKey
+			})
+		}
+		scenes[index] = ApprovedIntentScene{
+			SceneStoryNodeKey: reference.SceneStoryNodeKey, BatchID: batch.ID,
+			EpisodeID: batch.EpisodeID, StructureID: batch.StructureID, ScriptVersionID: batch.ScriptVersionID,
+			CandidateRevisionID: *batch.CandidateRevisionID, CandidateRevisionHash: *batch.CandidateRevisionHash,
+			AssetReadiness: batch.Candidate.AssetReadiness, ShotIntents: intents,
+		}
+	}
+	sort.Slice(scenes, func(left, right int) bool { return scenes[left].SceneStoryNodeKey < scenes[right].SceneStoryNodeKey })
+	for index := 1; index < len(scenes); index++ {
+		if scenes[index-1].SceneStoryNodeKey == scenes[index].SceneStoryNodeKey {
+			return ApprovedIntentSet{}, errors.New("duplicate Storyboard Intent Scene")
+		}
+	}
+	visualHash, err := ApprovedIntentVisualRequirementsHash(scenes)
+	if err != nil {
+		return ApprovedIntentSet{}, err
+	}
+	approved := ApprovedIntentSet{
+		SchemaVersion: "approved-storyboard-intents-v1", ID: approvedID,
+		WorkspaceID: set.WorkspaceID, ProjectID: set.ProjectID, DraftSetID: set.ID, DraftSetRevision: set.Revision,
+		CandidateRevisionID: *set.CandidateRevisionID, CandidateRevisionHash: *set.CandidateRevisionHash,
+		CandidateRevision: candidateRevision, GraphVersionID: set.GraphVersionID, GraphVersionNo: set.GraphVersionNo,
+		GraphContentHash: set.GraphContentHash, ManifestID: set.ManifestID, ManifestVersion: set.ManifestVersion,
+		ManifestHash: set.ManifestHash, ReviewDecisionID: reviewDecisionID, Scenes: scenes,
+		VisualRequirementsHash: visualHash,
+	}
+	approved.ContentHash, err = ApprovedIntentSetContentHash(approved)
+	return approved, err
+}
+
+func ApprovedIntentVisualRequirementsHash(scenes []ApprovedIntentScene) (string, error) {
+	visualRequirements := make([]struct {
+		SceneStoryNodeKey string              `json:"scene_story_node_key"`
+		ShotKey           string              `json:"shot_key"`
+		Requirements      []VisualRequirement `json:"requirements"`
+	}, 0)
+	for _, scene := range scenes {
+		for _, intent := range scene.ShotIntents {
+			visualRequirements = append(visualRequirements, struct {
+				SceneStoryNodeKey string              `json:"scene_story_node_key"`
+				ShotKey           string              `json:"shot_key"`
+				Requirements      []VisualRequirement `json:"requirements"`
+			}{scene.SceneStoryNodeKey, intent.ShotKey, intent.VisualRequirements})
+		}
+	}
+	return agentcontract.CanonicalHash(mustJSON(visualRequirements))
+}
+
+func ApprovedIntentSetContentHash(approved ApprovedIntentSet) (string, error) {
+	return agentcontract.CanonicalHash(mustJSON(struct {
+		SchemaVersion          string                `json:"schema_version"`
+		ID                     string                `json:"id"`
+		WorkspaceID            string                `json:"workspace_id"`
+		ProjectID              string                `json:"project_id"`
+		DraftSetID             string                `json:"draft_set_id"`
+		DraftSetRevision       int                   `json:"draft_set_revision"`
+		CandidateRevisionID    string                `json:"candidate_revision_id"`
+		CandidateRevisionHash  string                `json:"candidate_revision_hash"`
+		CandidateRevision      int64                 `json:"candidate_revision"`
+		GraphVersionID         string                `json:"graph_version_id"`
+		GraphVersionNo         int64                 `json:"graph_version_no"`
+		GraphContentHash       string                `json:"graph_content_hash"`
+		ManifestID             string                `json:"manifest_id"`
+		ManifestVersion        int64                 `json:"manifest_version"`
+		ManifestHash           string                `json:"manifest_hash"`
+		ReviewDecisionID       string                `json:"review_decision_id"`
+		Scenes                 []ApprovedIntentScene `json:"scenes"`
+		VisualRequirementsHash string                `json:"visual_requirements_hash"`
+	}{
+		approved.SchemaVersion, approved.ID, approved.WorkspaceID, approved.ProjectID,
+		approved.DraftSetID, approved.DraftSetRevision, approved.CandidateRevisionID,
+		approved.CandidateRevisionHash, approved.CandidateRevision, approved.GraphVersionID,
+		approved.GraphVersionNo, approved.GraphContentHash, approved.ManifestID, approved.ManifestVersion,
+		approved.ManifestHash, approved.ReviewDecisionID, approved.Scenes, approved.VisualRequirementsHash,
+	}))
 }
 
 func mustJSON(value any) []byte {

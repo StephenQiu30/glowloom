@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -549,6 +550,296 @@ func (repo *repository) CreateCandidateSet(
 		return "", "", err
 	}
 	return revision.ID.String(), revisionHash, nil
+}
+
+func (repo *repository) GetIntentFreezeSource(
+	ctx context.Context,
+	actor application.Actor,
+	candidateRevisionID string,
+	reviewDecisionID string,
+	forUpdate bool,
+) (application.IntentFreezeSource, error) {
+	candidateID, err := uuid.Parse(candidateRevisionID)
+	if err != nil {
+		return application.IntentFreezeSource{}, application.ErrNotFound
+	}
+	decisionID, err := uuid.Parse(reviewDecisionID)
+	if err != nil {
+		return application.IntentFreezeSource{}, application.ErrNotFound
+	}
+	candidateQuery := repo.database.WithContext(ctx).Where("id = ?", candidateID)
+	if forUpdate {
+		candidateQuery = candidateQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var revision model.StageCandidateRevision
+	if err = candidateQuery.First(&revision).Error; err != nil {
+		return application.IntentFreezeSource{}, normalizeNotFound(err)
+	}
+	headQuery := repo.database.WithContext(ctx).
+		Where("workspace_id = ? AND stage_instance_key = ?", revision.WorkspaceID, revision.StageInstanceKey)
+	if forUpdate {
+		headQuery = headQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var head model.StageCandidateHead
+	if err = headQuery.First(&head).Error; err != nil {
+		return application.IntentFreezeSource{}, normalizeNotFound(err)
+	}
+	if revision.OriginKind != "aggregate" || revision.RevisionNo < 1 || len(revision.AggregateOrigin) == 0 ||
+		revision.SourceInvocationID != nil || revision.SourceResultHash != nil ||
+		head.CurrentRevisionID != revision.ID || head.CurrentCandidateRevisionHash != revision.CandidateRevisionHash ||
+		head.Revision != revision.RevisionNo {
+		return application.IntentFreezeSource{}, conflict("Storyboard Intent Candidate head changed before approval")
+	}
+	var candidate storyboarddomain.CandidateSet
+	if err = json.Unmarshal(revision.Candidate, &candidate); err != nil ||
+		candidate.SchemaVersion != "storyboard-intent-candidate-set-v1" || len(candidate.Scenes) == 0 {
+		return application.IntentFreezeSource{}, conflict("Storyboard Intent Candidate schema is invalid")
+	}
+	candidateContentHash, err := contract.CanonicalHash(json.RawMessage(revision.Candidate))
+	if err != nil || candidateContentHash != revision.CandidateContentHash {
+		return application.IntentFreezeSource{}, conflict("Storyboard Intent Candidate content has drifted")
+	}
+	var origin contract.AggregateCandidateOrigin
+	if err = json.Unmarshal(revision.AggregateOrigin, &origin); err != nil {
+		return application.IntentFreezeSource{}, conflict("Storyboard Intent Candidate origin is invalid")
+	}
+	revisionHash, err := (contract.CandidateRevisionMaterial{
+		StageInstanceKey: revision.StageInstanceKey, RevisionNo: revision.RevisionNo,
+		OriginKind: "aggregate", AggregateOrigin: &origin, CandidateContentHash: revision.CandidateContentHash,
+	}).Hash()
+	if err != nil || revisionHash != revision.CandidateRevisionHash {
+		return application.IntentFreezeSource{}, conflict("Storyboard Intent Candidate revision has drifted")
+	}
+	setQuery := repo.database.WithContext(ctx).Where("candidate_revision_id = ?", revision.ID)
+	if forUpdate {
+		setQuery = setQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var setRecord model.StoryboardDraftSet
+	if err = setQuery.First(&setRecord).Error; err != nil {
+		return application.IntentFreezeSource{}, normalizeNotFound(err)
+	}
+	if err = authorizeProject(ctx, repo.database, actor, setRecord.ProjectID, forUpdate); err != nil {
+		return application.IntentFreezeSource{}, err
+	}
+	set, err := setDomain(setRecord)
+	if err != nil {
+		return application.IntentFreezeSource{}, err
+	}
+	expectedSetRevision := candidate.DraftSetRevision
+	if set.Status == "intent_frozen" {
+		expectedSetRevision++
+	}
+	if set.WorkspaceID != revision.WorkspaceID.String() || candidate.DraftSetID != set.ID ||
+		candidate.DraftSetRevision < 1 || set.Revision != expectedSetRevision ||
+		(set.Status != "needs_asset" && set.Status != "intent_frozen") ||
+		set.CandidateRevisionID == nil || *set.CandidateRevisionID != revision.ID.String() ||
+		set.CandidateRevisionHash == nil || *set.CandidateRevisionHash != revision.CandidateRevisionHash ||
+		set.ResultHash == nil || len(*set.ResultHash) != 64 || set.GraphVersionID != candidate.GraphVersionID ||
+		set.GraphContentHash != candidate.GraphContentHash || set.ManifestID != candidate.ManifestID ||
+		set.ManifestVersion != candidate.ManifestVersion || set.ManifestHash != candidate.ManifestHash ||
+		len(set.Batches) != len(candidate.Scenes) || len(origin.LeafCandidates) != len(candidate.Scenes) {
+		return application.IntentFreezeSource{}, conflict("Storyboard Draft Set changed before Intent freeze")
+	}
+	var graph model.StoryGraphVersion
+	if err = repo.database.WithContext(ctx).First(&graph, "id = ?", setRecord.GraphVersionID).Error; err != nil {
+		return application.IntentFreezeSource{}, normalizeNotFound(err)
+	}
+	if graph.WorkspaceID != setRecord.WorkspaceID || graph.ProjectID != setRecord.ProjectID ||
+		graph.VersionNo != set.GraphVersionNo || graph.ContentHash != set.GraphContentHash {
+		return application.IntentFreezeSource{}, conflict("Storyboard Intent StoryGraph source has drifted")
+	}
+	manifestID, err := uuid.Parse(origin.ShardManifestID)
+	if err != nil {
+		return application.IntentFreezeSource{}, conflict("Storyboard Intent manifest identity is invalid")
+	}
+	var manifest model.ShardManifest
+	if err = repo.database.WithContext(ctx).First(
+		&manifest, "id = ? AND version = ?", manifestID, origin.ManifestVersion,
+	).Error; err != nil {
+		return application.IntentFreezeSource{}, normalizeNotFound(err)
+	}
+	if manifest.WorkspaceID != revision.WorkspaceID || manifest.WorkflowRunID != setRecord.WorkflowRunID ||
+		manifest.NodeRunID != setRecord.NodeRunID || manifest.Stage != "draft_storyboard" ||
+		manifest.ManifestHash != origin.ShardManifestHash || manifest.ID.String() != set.ManifestID ||
+		manifest.Version != set.ManifestVersion || manifest.ManifestHash != set.ManifestHash {
+		return application.IntentFreezeSource{}, conflict("Storyboard Intent manifest has drifted")
+	}
+	originByCandidate := make(map[string]contract.AggregateLeafCandidateRef, len(origin.LeafCandidates))
+	previousOriginKey := ""
+	for _, leaf := range origin.LeafCandidates {
+		originKey := leaf.StageInstanceKey + "\x00" + leaf.ShardKey
+		if originKey <= previousOriginKey {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Candidate leaves are not canonical")
+		}
+		if _, duplicate := originByCandidate[leaf.CandidateRevisionID]; duplicate {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Candidate has duplicate leaves")
+		}
+		originByCandidate[leaf.CandidateRevisionID] = leaf
+		previousOriginKey = originKey
+	}
+	sceneByKey := make(map[string]storyboarddomain.CandidateSetItem, len(candidate.Scenes))
+	for _, scene := range candidate.Scenes {
+		if _, duplicate := sceneByKey[scene.SceneStoryNodeKey]; duplicate {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Candidate has duplicate Scenes")
+		}
+		sceneByKey[scene.SceneStoryNodeKey] = scene
+	}
+	batches := make([]storyboarddomain.Batch, len(set.Batches))
+	items := make([]storyboarddomain.CandidateSetItem, len(set.Batches))
+	for index, reference := range set.Batches {
+		batchID, parseErr := uuid.Parse(reference.BatchID)
+		if parseErr != nil || reference.CandidateRevisionID == nil || reference.CandidateRevisionHash == nil {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Batch reference is invalid")
+		}
+		batchQuery := repo.database.WithContext(ctx).Where("id = ?", batchID)
+		if forUpdate {
+			batchQuery = batchQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+		}
+		var batchRecord model.StoryboardDraftBatch
+		if err = batchQuery.First(&batchRecord).Error; err != nil {
+			return application.IntentFreezeSource{}, normalizeNotFound(err)
+		}
+		batch, mapErr := batchDomain(batchRecord)
+		if mapErr != nil {
+			return application.IntentFreezeSource{}, mapErr
+		}
+		if batch.WorkspaceID != set.WorkspaceID || batch.ProjectID != set.ProjectID ||
+			batch.EpisodeID != reference.EpisodeID || batch.StructureID != reference.StructureID ||
+			batch.ScriptVersionID != reference.ScriptVersionID || batch.WorkflowRunID != set.WorkflowRunID ||
+			batch.NodeRunID != set.NodeRunID || batch.ManifestID != set.ManifestID ||
+			batch.ManifestVersion != set.ManifestVersion || batch.GraphVersionID != set.GraphVersionID ||
+			batch.GraphVersionNo != set.GraphVersionNo || batch.SceneStoryNodeKey != reference.SceneStoryNodeKey ||
+			batch.InputHash != reference.InputHash || batch.ResultHash == nil || reference.ResultHash == nil ||
+			*batch.ResultHash != *reference.ResultHash || batch.CandidateRevisionID == nil ||
+			*batch.CandidateRevisionID != *reference.CandidateRevisionID || batch.CandidateRevisionHash == nil ||
+			*batch.CandidateRevisionHash != *reference.CandidateRevisionHash ||
+			(batch.Status != "ready" && batch.Status != "needs_asset") {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Batch changed before approval")
+		}
+		leafID, parseErr := uuid.Parse(*reference.CandidateRevisionID)
+		if parseErr != nil {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Scene Candidate identity is invalid")
+		}
+		var leafRevision model.StageCandidateRevision
+		if err = repo.database.WithContext(ctx).First(&leafRevision, "id = ?", leafID).Error; err != nil {
+			return application.IntentFreezeSource{}, normalizeNotFound(err)
+		}
+		leafHeadQuery := repo.database.WithContext(ctx).
+			Where("workspace_id = ? AND stage_instance_key = ?", revision.WorkspaceID, leafRevision.StageInstanceKey)
+		if forUpdate {
+			leafHeadQuery = leafHeadQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+		}
+		var leafHead model.StageCandidateHead
+		if err = leafHeadQuery.First(&leafHead).Error; err != nil {
+			return application.IntentFreezeSource{}, normalizeNotFound(err)
+		}
+		leafOrigin, found := originByCandidate[leafRevision.ID.String()]
+		scene, sceneFound := sceneByKey[reference.SceneStoryNodeKey]
+		if !found || !sceneFound || leafRevision.WorkspaceID != revision.WorkspaceID ||
+			leafRevision.OriginKind != "invocation" || leafRevision.RevisionNo != 1 ||
+			leafRevision.SourceInvocationID == nil || leafRevision.SourceResultHash == nil ||
+			leafRevision.StageInstanceKey != leafOrigin.StageInstanceKey ||
+			leafRevision.CandidateRevisionHash != leafOrigin.CandidateRevisionHash ||
+			leafRevision.CandidateRevisionHash != *reference.CandidateRevisionHash ||
+			leafHead.CurrentRevisionID != leafRevision.ID ||
+			leafHead.CurrentCandidateRevisionHash != leafRevision.CandidateRevisionHash ||
+			leafHead.Revision != leafRevision.RevisionNo || scene.SceneStoryNodeKey != reference.SceneStoryNodeKey ||
+			scene.ShardKey != "scene:"+reference.SceneStoryNodeKey || scene.StageInstanceKey != leafRevision.StageInstanceKey ||
+			scene.CandidateRevisionID != leafRevision.ID.String() ||
+			scene.CandidateRevisionHash != leafRevision.CandidateRevisionHash {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Scene Candidate changed before approval")
+		}
+		var invocationOrigin contract.InvocationCandidateOrigin
+		if err = json.Unmarshal(leafRevision.InvocationOrigin, &invocationOrigin); err != nil {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Scene Candidate origin is invalid")
+		}
+		leafHash, hashErr := (contract.CandidateRevisionMaterial{
+			StageInstanceKey: leafRevision.StageInstanceKey, RevisionNo: leafRevision.RevisionNo,
+			OriginKind: "invocation", InvocationOrigin: &invocationOrigin,
+			CandidateContentHash: leafRevision.CandidateContentHash,
+		}).Hash()
+		if hashErr != nil || leafHash != leafRevision.CandidateRevisionHash ||
+			invocationOrigin.SourceInvocationID != leafRevision.SourceInvocationID.String() ||
+			invocationOrigin.SourceResultHash != *leafRevision.SourceResultHash ||
+			leafRevision.CandidateContentHash != *leafRevision.SourceResultHash ||
+			leafRevision.CandidateContentHash != *batch.ResultHash {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Scene Candidate revision has drifted")
+		}
+		var invocation model.AgentInvocation
+		if err = repo.database.WithContext(ctx).First(&invocation, "id = ?", *leafRevision.SourceInvocationID).Error; err != nil {
+			return application.IntentFreezeSource{}, normalizeNotFound(err)
+		}
+		if invocation.WorkspaceID != revision.WorkspaceID || invocation.RequestType != "storyboard_scene_draft" ||
+			invocation.RequestID != batchRecord.ID || invocation.WorkflowRunID == nil ||
+			*invocation.WorkflowRunID != setRecord.WorkflowRunID || invocation.NodeRunID == nil ||
+			*invocation.NodeRunID != setRecord.NodeRunID || invocation.ShardManifestID == nil ||
+			*invocation.ShardManifestID != setRecord.ManifestID || invocation.ShardManifestVersion == nil ||
+			*invocation.ShardManifestVersion != set.ManifestVersion || invocation.Stage != "draft_storyboard" ||
+			invocation.ShardKey != "scene:"+reference.SceneStoryNodeKey ||
+			invocation.StageInstanceKey != leafRevision.StageInstanceKey || invocation.ShardManifestHash != set.ManifestHash ||
+			invocation.InputHash != reference.InputHash || invocation.Status != "succeeded" || invocation.ResultHash == nil ||
+			*invocation.ResultHash != leafRevision.CandidateContentHash || invocation.CandidateType == nil ||
+			*invocation.CandidateType != "storyboard_row_candidate" {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Agent result has drifted")
+		}
+		request, requestErr := agentgorm.StageInvocation(invocation)
+		if requestErr != nil || request.InvocationID != invocation.ID.String() ||
+			request.Payload.Stage != "draft_storyboard" || request.Payload.Shard.Key != invocation.ShardKey {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Agent invocation is invalid")
+		}
+		decoded, decodeErr := storyboarddomain.DecodeAndValidateCandidate(
+			json.RawMessage(leafRevision.Candidate), request.Payload.StageInput,
+		)
+		if decodeErr != nil || decoded.SceneStoryNodeKey != reference.SceneStoryNodeKey ||
+			decoded.AssetReadiness != scene.AssetReadiness || decoded.AssetReadiness != batch.Status {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Scene Candidate is no longer valid")
+		}
+		decodedHash, hashErr := contract.CanonicalHash(mustMarshal(decoded))
+		batchHash, batchHashErr := contract.CanonicalHash(mustMarshal(batch.Candidate))
+		if hashErr != nil || batchHashErr != nil || decodedHash != batchHash ||
+			decodedHash != leafRevision.CandidateContentHash {
+			return application.IntentFreezeSource{}, conflict("Storyboard Intent Batch Candidate has drifted")
+		}
+		batches[index], items[index] = batch, scene
+	}
+	candidateBaseline := set
+	candidateBaseline.Revision = candidate.DraftSetRevision
+	rebuilt, _, rebuiltHash, rebuiltStageKey, err := storyboarddomain.BuildCandidateSet(candidateBaseline, items)
+	if err != nil || rebuiltHash != revision.CandidateContentHash || rebuiltStageKey != revision.StageInstanceKey ||
+		rebuilt.AssetReadiness != candidate.AssetReadiness || !slices.EqualFunc(
+		rebuilt.Scenes, candidate.Scenes,
+		func(left, right storyboarddomain.CandidateSetItem) bool { return left == right },
+	) {
+		return application.IntentFreezeSource{}, conflict("Storyboard Intent Candidate Set has drifted")
+	}
+	var decision model.ReviewDecision
+	if err = repo.database.WithContext(ctx).First(&decision, "id = ?", decisionID).Error; err != nil {
+		return application.IntentFreezeSource{}, normalizeNotFound(err)
+	}
+	var task model.HumanTask
+	if err = repo.database.WithContext(ctx).First(&task, "id = ?", decision.HumanTaskID).Error; err != nil {
+		return application.IntentFreezeSource{}, normalizeNotFound(err)
+	}
+	var candidateIDs []string
+	var allowedDecisions []string
+	if json.Unmarshal(task.CandidateIDs, &candidateIDs) != nil ||
+		json.Unmarshal(task.AllowedDecisions, &allowedDecisions) != nil ||
+		task.WorkspaceID != revision.WorkspaceID || task.ProjectID != setRecord.ProjectID ||
+		task.WorkflowRunID != setRecord.WorkflowRunID || task.SubjectType != "storyboard_intent_candidate" ||
+		task.SubjectID != revision.ID || task.SubjectRevision != int(revision.RevisionNo) ||
+		task.SubjectHash != revision.CandidateRevisionHash || task.Status != "COMPLETED" ||
+		len(candidateIDs) != 1 || candidateIDs[0] != revision.ID.String() ||
+		!slices.Contains(allowedDecisions, "approved") || decision.WorkspaceID != revision.WorkspaceID ||
+		decision.Decision != "approved" || decision.SubjectRevision != task.SubjectRevision ||
+		decision.SubjectHash != task.SubjectHash || decision.SelectedCandidateID != nil ||
+		decision.CreatedBy.String() != actor.UserID {
+		return application.IntentFreezeSource{}, conflict("Storyboard Intent ReviewDecision has drifted")
+	}
+	return application.IntentFreezeSource{
+		Set: set, Batches: batches, CandidateRevision: revision.RevisionNo,
+		CandidateRevisionID: revision.ID.String(), CandidateRevisionHash: revision.CandidateRevisionHash,
+		CandidateContentHash: revision.CandidateContentHash, ReviewDecisionID: decision.ID.String(),
+	}, nil
 }
 
 func draftManifestRecord(value storyboarddomain.DraftManifest, createdAt time.Time) (model.ShardManifest, error) {

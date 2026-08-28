@@ -66,7 +66,7 @@
 - [x] `SG-PRD-005`（`SG-I13`、`SG-I14`）：分集边界与 Episode/Published ScriptVersion 全批原子证据。
 - [x] `SG-PRD-006`（`SG-I15`、`SG-I16`）：Scene/Dialogue/Beat/Occurrence/Claim 全批应用与未知事实拒绝。
 - [x] `SG-PRD-007`（`SG-I18`）：Storyboard Draft 精确正式输入、`needs_asset` 与零 Shot 证据。
-- [ ] `SG-PRD-008`（`SG-I19`）：FreezeIntentSet 输出与零 Shot/Cost/Quota/Provider/Graph 副作用证据。
+- [x] `SG-PRD-008`（`SG-I19`）：FreezeIntentSet 输出与零 Shot/Cost/Quota/Provider/Graph 副作用证据。
 - [ ] `SG-PRD-009`（`SG-I22`）：detail_shots 精确 READY AssetVersion/Artifact/Lineage/Style/view-role 门禁。
 - [ ] `SG-PRD-010`（`SG-I23`）：Shot + ShotProductionBindingVersion + Receipt 全批 GORM 原子应用。
 - [ ] `SG-PRD-011`（`SG-I12`、`SG-I23`、`SG-I24`）：三类 Binding Owner/Record/API/Graph 不混用证据。
@@ -229,7 +229,7 @@
 - [x] `SG-I16`：Planning Review/Gate/Owner 全批 Apply 完成。
 - [x] `SG-I17`：Core StoryGraph 多集编译、Diff/Impact 全链完成。
 - [x] `SG-I18`：Storyboard Draft/Shot Intent/needs_asset 且零正式 Shot 完成。
-- [ ] `SG-I19`：Intent Gate/FreezeIntentSet 与付费前零副作用完成。
+- [x] `SG-I19`：Intent Gate/FreezeIntentSet 与付费前零副作用完成。
 - [ ] `SG-I20`：reference_asset Cost/Quota/Runware Job/Artifact unknown 对账完成。
 - [ ] `SG-I21`：composite 三视图 QC/Selection/AssetVersion 完成。
 - [ ] `SG-I22`：精确 READY AssetVersion 的 detail_shots/Review/Repair 完成。
@@ -558,4 +558,15 @@
 - 通过范围：以上证据完成 `SG-PRD-007`、`SGA-STG-006` 与 `SG-I18`。包含后续 detail/Owner Apply 的 `SGA-STG-008`、完整真实 Codex 矩阵 `SGA-OPS-004`、跨阶段视觉资产旅程及 Storyboard Gate 仍保持未通过。`agent-browser` 依约只在全部开发完成后运行，本次未提前执行。
 - Git：实现、测试与 Evidence 由描述生成可审核分镜意图的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I18`，其余保持未通过。下一步进入 Shot Intent 公共 Human Gate 与 `FreezeIntentSet`，只冻结已审核的 Draft Set revision/hash、Intent 和视觉需求；审批完成前不得创建正式 Shot、Cost、Quota、Provider Job、Artifact 或 Canvas 写入。
+### 已审核分镜意图冻结与付费前人工门禁（2026-08-28）
+
+- Red 与公开契约：`backend/tests/authoring/graph_contract_test.go`、`backend/tests/workflow/signal_domain_test.go`、`backend/tests/workflow/signal_service_test.go`、`backend/tests/workflow/source_evidence_worker_test.go` 与独立 `backend/tests/production/storyboard/intent_freeze_test.go` 先固定 `storyboard_intent_candidate_set → approved_storyboard_intents`、`approved` 正向决议、`rejected|changes_requested` 零 Owner 调用、完整 Intent/visual requirements 冻结、稳定 Hash 和可恢复 Receipt。测试只位于 `backend/tests`，未与业务代码混放。
+- 公共 Gate 与 Backend Owner：Catalog `14.0.0` 发布 `human.storyboard_review@2.0.0`，HumanTask subject 精确绑定 aggregate Candidate id/hash/revision。正向 Coordinator 只调用 Storyboard `FreezeIntentSet`；Owner 在单一 GORM 事务中锁定并重验 current aggregate/leaf Head、不可变 StoryGraphVersion、ShardManifest、每个 Batch/Agent Invocation/Stage Input、Draft Set baseline 和已完成的 approved ReviewDecision，再把完整 Shot Intent 与 visual requirements 写入 `approved-storyboard-intents-v1` Command Receipt，并将同一 Draft Set 从 `needs_asset` 推进到 `intent_frozen` 一次。
+- 漂移、幂等与恢复：Decision 后注入 Draft Set revision 漂移会返回 Workflow `409` conflict，保留不可变 Decision，但 Apply Receipt 为 conflict 且 Freeze Receipt 为零；正常路径先提交 Owner Receipt，再模拟 Temporal Signal outcome unknown，以同一 Decision/Intent 第二次恢复 completed。直接重复调用 Owner 返回同一 Receipt、同一 approved content hash 和同一 revision，数据库始终只有一条 `storyboard.freeze_intent_set` Receipt；回放会按冻结前 Draft Set revision 重建 Candidate，并用 canonical JSON hash 校验 PostgreSQL `jsonb` 回执，不依赖字段字节顺序。
+- 单一事实源与零副作用：只扩展既有 Storyboard GORM Model 状态约束和共享 Command Receipt，没有 Migration、Raw SQL、第二 ORM、第二数据库连接、Agent Writer、Kafka Command 或新服务。批准后数据库精确断言正式 Shot、ShotImageBinding、Generation Intent/Provider Job、Cost Estimate/Reservation、Quota Reservation、Artifact 均为零，StoryGraphVersion 仍恰好 1；拒绝、要求修改、baseline conflict 和 Signal unknown 均不产生付费或 Provider 副作用。
+- 定向与完整 CI：真实 PostgreSQL `16.15` 与固定摘要 Temporal 的多集 `Script → Evidence → Bible → Episode/Planning → Core StoryGraph → Storyboard Draft → Intent Gate` 旅程通过；最终加入直接 Owner 重放后，在固定本机 PostgreSQL `18.4` 与常驻 Docker Temporal 上复跑为 `PASS 61.888s`。随后重建隔离 `lanverse_ci` 数据库，连接本机 MinIO 与常驻 Kafka `4.3.1`、Elasticsearch/Logstash/Kibana `9.4.4`，执行 `test -z "$(gofmt -l .)"`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Workflow 包 `140.690s`，没有外部依赖 skip。
+- 跨项目、镜像与故障部署：Agent Ruff check/format、Pyright 与 Pytest 全通过，结果 `39 passed, 4 skipped`；四项是 CI 既有的显式真实 Codex opt-in 用例，本功能未修改 Agent。Frontend OpenAPI 生成零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试及 Next.js production build 全通过。Backend/Frontend/Agent 三镜像、Backend 三 Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Bundle 均通过；常驻 Compose 使用本机已安装 MinIO，不启动重复 MinIO 容器。最终故障矩阵依次停止/恢复 Filebeat、Logstash、Kibana、Kafka、Elasticsearch，验证日志脱敏检索、Owner/Workflow 可用、Event Worker 503 降级及恢复后日志继续摄取，输出 `deployment-fault-ci=passed`，退出后全部常驻服务健康。
+- 失败披露与范围：真实实现曾分别暴露 Candidate ID/Draft Set ID 混用、冻结后 revision 回放、PostgreSQL `jsonb` 字段顺序以及最终镜像更新时 Event Worker 首次 DNS 未就绪；均修正根因并从完整旅程或故障矩阵起点复跑，失败轮次不计通过。以上证据完成 `SG-PRD-008` 与当前 Intent Gate；覆盖七类 Gate 的复合 `SG-REV-006`–`008` 仍待后续视觉选择和正式 Shot Gate，因此保持未勾选。reference asset 生成、三视图 QC/选择、detail shot、正式 Shot/Binding/Graph、Canvas、完整原稿与最终浏览器验收尚未完成；`agent-browser` 本次未运行。
+- Git：实现、测试与 Evidence 由描述冻结已审核分镜意图的 feature 提交承载；提交标题和正文只表达功能，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I19`，其余保持未通过。下一步只消费 `approved_storyboard_intents` 实现 reference asset 的 Cost/Quota/Provider Job/Artifact 执行与 unknown 对账；在此之前不得启动 detail shot、正式 Shot Apply、Canvas 写入或 `agent-browser`。

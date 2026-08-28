@@ -692,6 +692,7 @@ func (store *Store) PrepareHumanGate(
 		productionBibleV2 := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
 		episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
 		episodePlanningV2 := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
+		storyboardIntentV2 := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
 		if node.Executor == "gate.generation_image_review" {
 			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidates" ||
 				resolved.Input.Bindings[0].ValueType != "generation_candidate_set" ||
@@ -730,6 +731,17 @@ func (store *Store) PrepareHumanGate(
 			parsedCandidateRevision, parseErr := strconv.Atoi(resolved.Input.Bindings[0].ReferenceVersion)
 			if parseErr != nil || parsedCandidateRevision < 1 || len(resolved.Input.Bindings[0].ContentHash) != 64 {
 				return errors.New("workflow Episode Planning Human Gate Candidate Revision is invalid")
+			}
+			candidateRevision = parsedCandidateRevision
+		} else if storyboardIntentV2 {
+			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidate" ||
+				resolved.Input.Bindings[0].ValueType != "storyboard_intent_candidate_set" ||
+				resolved.Input.Bindings[0].SourceKind != domain.NodeInputSourceNodeOutput || len(candidateIDs) != 1 {
+				return errors.New("workflow Storyboard Intent Human Gate has no Candidate Set input")
+			}
+			parsedCandidateRevision, parseErr := strconv.Atoi(resolved.Input.Bindings[0].ReferenceVersion)
+			if parseErr != nil || parsedCandidateRevision < 1 || len(resolved.Input.Bindings[0].ContentHash) != 64 {
+				return errors.New("workflow Storyboard Intent Human Gate Candidate Revision is invalid")
 			}
 			candidateRevision = parsedCandidateRevision
 		} else if len(candidateIDs) == 0 {
@@ -784,6 +796,10 @@ func (store *Store) PrepareHumanGate(
 		} else if episodePlanningV2 {
 			candidate := resolved.Input.Bindings[0]
 			subjectType, subjectID, subjectHash = "planning_candidate", candidate.ReferenceID, candidate.ContentHash
+			subjectRevision = candidateRevision
+		} else if storyboardIntentV2 {
+			candidate := resolved.Input.Bindings[0]
+			subjectType, subjectID, subjectHash = "storyboard_intent_candidate", candidate.ReferenceID, candidate.ContentHash
 			subjectRevision = candidateRevision
 		}
 		binding = domain.HumanGateBinding{
@@ -887,7 +903,8 @@ func (store *Store) ApplyHumanGate(
 		candidateRevisionSubject :=
 			node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0" ||
 				node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0" ||
-				node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
+				node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0" ||
+				node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
 		if node.Status == targetNodeStatus && (candidateRevisionSubject || node.Revision == apply.SubjectRevision+1) {
 			if targetNodeStatus != "SUCCEEDED" {
 				return nil

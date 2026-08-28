@@ -6,28 +6,30 @@ import (
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-func TestHumanGateOutputMatchesStoryboardCandidateWithAppliedRevision(t *testing.T) {
+func TestHumanGateOutputMatchesStoryboardIntentFreezeReceipt(t *testing.T) {
 	candidate := workflow.NodeInputBinding{
+		ValueType:        "storyboard_intent_candidate_set",
 		ReferenceID:      "47fb8568-bbb9-4071-898a-01bcf812356c",
-		ReferenceVersion: "2",
+		ReferenceVersion: "1",
 		ContentHash:      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
 	output := workflow.NodeOutputBinding{
-		ReferenceID:      candidate.ReferenceID,
-		ReferenceVersion: "3",
+		ValueType:        "approved_storyboard_intents",
+		ReferenceID:      "77bb2559-b058-4309-957b-6f656e096945",
+		ReferenceVersion: "1",
 		ContentHash:      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 	}
 	if !workflow.HumanGateOutputMatchesCandidate("gate.storyboard_review", candidate, output) {
-		t.Fatal("Storyboard applied output must preserve Set identity and advance from candidate revision")
+		t.Fatal("Storyboard Intent gate must publish a distinct frozen intent receipt reference")
 	}
-	output.ReferenceVersion = candidate.ReferenceVersion
+	output.ReferenceID = candidate.ReferenceID
 	if workflow.HumanGateOutputMatchesCandidate("gate.storyboard_review", candidate, output) {
-		t.Fatal("Storyboard applied output accepted without advancing the Set revision")
+		t.Fatal("Storyboard Intent gate accepted the Agent Candidate as the frozen Owner result")
 	}
-	output.ReferenceVersion = "3"
+	output.ReferenceID = "77bb2559-b058-4309-957b-6f656e096945"
 	output.ContentHash = candidate.ContentHash
 	if workflow.HumanGateOutputMatchesCandidate("gate.storyboard_review", candidate, output) {
-		t.Fatal("Storyboard applied output accepted the candidate hash as the formal Shot hash")
+		t.Fatal("Storyboard Intent gate accepted the unfrozen Candidate hash as Owner output")
 	}
 }
 

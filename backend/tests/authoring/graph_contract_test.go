@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "13.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "14.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -32,6 +32,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"human.episode_structure_review@2.0.0",
 		"human.production_bible_review@1.0.0",
 		"human.production_bible_review@2.0.0",
+		"human.storyboard_review@2.0.0",
 		"input.script_revision@1.0.0",
 		"production.bible_materialization@1.0.0",
 		"production.episode_plan@2.0.0",
@@ -49,6 +50,28 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
 	}
+}
+
+func TestStoryboardIntentHumanGateOnlyFreezesApprovedIntents(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.Key != "human.storyboard_review" || definition.Version != "2.0.0" {
+			continue
+		}
+		if definition.Executor != "gate.storyboard_review" || definition.RiskLevel != "human_gate" ||
+			definition.CachePolicy != "never" || len(definition.InputPorts) != 1 || len(definition.OutputPorts) != 1 ||
+			definition.InputPorts[0].Key != "candidate" ||
+			definition.InputPorts[0].ValueType != "storyboard_intent_candidate_set" ||
+			definition.OutputPorts[0].Key != "intents" ||
+			definition.OutputPorts[0].ValueType != "approved_storyboard_intents" {
+			t.Fatalf("Storyboard Intent Human Gate contract = %#v", definition)
+		}
+		return
+	}
+	t.Fatal("Storyboard Intent Human Gate v2 is absent from the system catalog")
 }
 
 func TestStoryboardDraftConsumesPublishedStoryGraphWithoutFormalizingShots(t *testing.T) {

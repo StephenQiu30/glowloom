@@ -19,7 +19,7 @@ type StoryboardDraftSet struct {
 	ManifestID            uuid.UUID               `gorm:"type:uuid;not null"`
 	ManifestVersion       int64                   `gorm:"not null;check:ck_stb_draft_set_manifest_version,manifest_version >= 1"`
 	ManifestHash          string                  `gorm:"type:char(64);not null;check:ck_stb_draft_set_manifest_hash,char_length(manifest_hash) = 64"`
-	Status                string                  `gorm:"type:varchar(20);not null;check:ck_stb_draft_set_status,status IN ('queued','needs_asset','failed','unknown','cancelled')"`
+	Status                string                  `gorm:"type:varchar(20);not null;check:ck_stb_draft_set_status,status IN ('queued','needs_asset','intent_frozen','failed','unknown','cancelled')"`
 	InputHash             string                  `gorm:"type:char(64);not null;check:ck_stb_draft_set_input_hash,char_length(input_hash) = 64"`
 	ResultHash            *string                 `gorm:"type:char(64);check:ck_stb_draft_set_result_hash,result_hash IS NULL OR char_length(result_hash) = 64"`
 	CandidateRevisionID   *uuid.UUID              `gorm:"type:uuid"`

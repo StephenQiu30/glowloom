@@ -123,6 +123,12 @@ func HumanGateOutputMatchesCandidate(
 			output.ValueType == "planning_owner_set" && output.ReferenceVersion == "1" &&
 			output.ReferenceID != candidate.ReferenceID && len(output.ContentHash) == 64
 	}
+	if executor == "gate.storyboard_review" && candidate.ValueType == "storyboard_intent_candidate_set" {
+		return candidate.ReferenceVersion != "" && len(candidate.ContentHash) == 64 &&
+			output.ValueType == "approved_storyboard_intents" && output.ReferenceVersion == "1" &&
+			output.ReferenceID != candidate.ReferenceID && len(output.ContentHash) == 64 &&
+			output.ContentHash != candidate.ContentHash
+	}
 	if output.ReferenceID != candidate.ReferenceID {
 		return false
 	}

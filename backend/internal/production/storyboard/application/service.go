@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/domain"
@@ -16,6 +18,7 @@ const (
 	createBatchOperation     = "storyboard.create_batch"
 	createSetOperation       = "storyboard.create_set"
 	applySetOperation        = "storyboard.apply_set"
+	freezeIntentSetOperation = "storyboard.freeze_intent_set"
 	createExportSetOperation = "storyboard.create_export_set"
 	decideDraftOperation     = "storyboard.decide_draft"
 	approveBatchOperation    = "storyboard.approve_batch"
@@ -45,6 +48,7 @@ type Repository interface {
 	CreateWorkflow(context.Context, domain.Batch, domain.Invocation) error
 	CreateSetWorkflow(context.Context, domain.DraftSet, domain.DraftManifest, []domain.Batch, []domain.Invocation) error
 	CreateCandidateSet(context.Context, domain.DraftSet, []domain.Batch, time.Time) (string, string, error)
+	GetIntentFreezeSource(context.Context, Actor, string, string, bool) (IntentFreezeSource, error)
 	GetSet(context.Context, Actor, string, bool) (domain.DraftSet, error)
 	SaveSet(context.Context, domain.DraftSet) error
 	GetBatch(context.Context, Actor, string, bool) (domain.Batch, error)
@@ -94,6 +98,26 @@ type ApplySetCommand struct {
 type ApplySetResult struct {
 	Set     domain.DraftSet
 	Receipt platformcommand.Receipt
+}
+type IntentFreezeSource struct {
+	Set                   domain.DraftSet
+	Batches               []domain.Batch
+	CandidateRevision     int64
+	CandidateRevisionID   string
+	CandidateRevisionHash string
+	CandidateContentHash  string
+	ReviewDecisionID      string
+}
+type FreezeIntentSetCommand struct {
+	WorkspaceID, ProjectID                     string
+	CandidateRevisionID, CandidateRevisionHash string
+	ExpectedCandidateRevision                  int64
+	ReviewDecisionID, IdempotencyKey           string
+}
+type FreezeIntentSetResult struct {
+	Set      domain.DraftSet
+	Approved domain.ApprovedIntentSet
+	Receipt  platformcommand.Receipt
 }
 type ExportCommand struct{ EpisodeID, ExpectedOrderHash, IdempotencyKey string }
 type CreateExportSetCommand struct {
@@ -294,7 +318,9 @@ func (service *Service) RefreshSet(ctx context.Context, actor Actor, setID strin
 			set.Status = terminal
 			set.ResultHash, set.CandidateRevisionID, set.CandidateRevisionHash = nil, nil, nil
 		} else {
-			candidateID, candidateHash, createErr := repo.CreateCandidateSet(ctx, set, batches, now)
+			candidateSet := set
+			candidateSet.Revision++
+			candidateID, candidateHash, createErr := repo.CreateCandidateSet(ctx, candidateSet, batches, now)
 			if createErr != nil {
 				return createErr
 			}
@@ -434,6 +460,138 @@ func (service *Service) ApplySet(ctx context.Context, actor Actor, command Apply
 		return nil
 	})
 	return result, normalizeError(err)
+}
+
+func (service *Service) FreezeIntentSet(
+	ctx context.Context,
+	actor Actor,
+	command FreezeIntentSetCommand,
+) (FreezeIntentSetResult, error) {
+	command.WorkspaceID = strings.TrimSpace(command.WorkspaceID)
+	command.ProjectID = strings.TrimSpace(command.ProjectID)
+	command.CandidateRevisionID = strings.TrimSpace(command.CandidateRevisionID)
+	command.CandidateRevisionHash = strings.TrimSpace(command.CandidateRevisionHash)
+	command.ReviewDecisionID = strings.TrimSpace(command.ReviewDecisionID)
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	for _, identifier := range []string{
+		command.WorkspaceID, command.ProjectID, command.CandidateRevisionID, command.ReviewDecisionID, actor.UserID,
+	} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return FreezeIntentSetResult{}, invalid("Invalid Storyboard Intent freeze identity")
+		}
+	}
+	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil ||
+		actor.TokenVersion < 1 || command.ExpectedCandidateRevision < 1 || len(command.CandidateRevisionHash) != 64 ||
+		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return FreezeIntentSetResult{}, invalid("Invalid Storyboard Intent freeze request")
+	}
+	inputHash, err := platformcommand.InputHash(command)
+	if err != nil {
+		return FreezeIntentSetResult{}, err
+	}
+	var result FreezeIntentSetResult
+	err = service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		if receipt, receiptErr := repo.FindReceipt(
+			ctx, command.WorkspaceID, freezeIntentSetOperation, command.IdempotencyKey,
+		); receiptErr == nil {
+			return service.replayIntentFreeze(ctx, repo, actor, command, inputHash, receipt, &result)
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		source, loadErr := repo.GetIntentFreezeSource(
+			ctx, actor, command.CandidateRevisionID, command.ReviewDecisionID, true,
+		)
+		if loadErr != nil {
+			return loadErr
+		}
+		if source.Set.WorkspaceID != command.WorkspaceID || source.Set.ProjectID != command.ProjectID ||
+			source.CandidateRevisionID != command.CandidateRevisionID ||
+			source.CandidateRevisionHash != command.CandidateRevisionHash ||
+			source.CandidateRevision != command.ExpectedCandidateRevision ||
+			source.ReviewDecisionID != command.ReviewDecisionID || source.Set.Status != "needs_asset" ||
+			source.Set.ResultHash == nil || *source.Set.ResultHash != command.CandidateRevisionHash {
+			return conflict("Storyboard Intent Candidate changed before approval")
+		}
+		now, receiptID := service.config.Now().UTC(), service.config.NewID()
+		approved, buildErr := domain.BuildApprovedIntentSet(
+			source.Set, source.Batches, source.CandidateRevision, command.ReviewDecisionID, receiptID,
+		)
+		if buildErr != nil {
+			return conflict(buildErr.Error())
+		}
+		frozenRevision := source.Set.Revision
+		source.Set.Status, source.Set.ResultHash = "intent_frozen", &approved.ContentHash
+		source.Set.Revision, source.Set.UpdatedAt = frozenRevision+1, now
+		if saveErr := repo.SaveSet(ctx, source.Set); saveErr != nil {
+			return saveErr
+		}
+		encoded, encodeErr := platformcommand.Result(approved)
+		if encodeErr != nil {
+			return encodeErr
+		}
+		receipt := platformcommand.Receipt{
+			ID: receiptID, WorkspaceID: source.Set.WorkspaceID, Operation: freezeIntentSetOperation,
+			IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: source.Set.ID,
+			Result: encoded, CreatedBy: actor.UserID, CreatedAt: now,
+		}
+		if createErr := repo.CreateReceipt(ctx, receipt); createErr != nil {
+			return createErr
+		}
+		result = FreezeIntentSetResult{Set: source.Set, Approved: approved, Receipt: receipt}
+		return nil
+	})
+	return result, normalizeError(err)
+}
+
+func (service *Service) replayIntentFreeze(
+	ctx context.Context,
+	repo Repository,
+	actor Actor,
+	command FreezeIntentSetCommand,
+	inputHash string,
+	receipt platformcommand.Receipt,
+	result *FreezeIntentSetResult,
+) error {
+	approved, err := platformcommand.Replay[domain.ApprovedIntentSet](receipt, inputHash)
+	if errors.Is(err, platformcommand.ErrInputMismatch) {
+		return conflict("Idempotency key was already used with different input")
+	}
+	if err != nil {
+		return err
+	}
+	source, err := repo.GetIntentFreezeSource(
+		ctx, actor, command.CandidateRevisionID, command.ReviewDecisionID, true,
+	)
+	if err != nil {
+		return err
+	}
+	if receipt.WorkspaceID != command.WorkspaceID || receipt.Operation != freezeIntentSetOperation ||
+		receipt.ResourceID != source.Set.ID || receipt.CreatedBy != actor.UserID || approved.ID != receipt.ID ||
+		approved.WorkspaceID != command.WorkspaceID || approved.ProjectID != command.ProjectID ||
+		approved.DraftSetID != source.Set.ID || approved.CandidateRevisionID != command.CandidateRevisionID ||
+		approved.CandidateRevisionHash != command.CandidateRevisionHash ||
+		approved.CandidateRevision != command.ExpectedCandidateRevision ||
+		approved.ReviewDecisionID != command.ReviewDecisionID || source.Set.Status != "intent_frozen" ||
+		source.Set.Revision != approved.DraftSetRevision+1 || source.Set.ResultHash == nil ||
+		*source.Set.ResultHash != approved.ContentHash {
+		return conflict("Storyboard Intent freeze receipt has drifted")
+	}
+	baseline := source.Set
+	baseline.Revision = approved.DraftSetRevision
+	rebuilt, err := domain.BuildApprovedIntentSet(
+		baseline, source.Batches, source.CandidateRevision, command.ReviewDecisionID, receipt.ID,
+	)
+	if err != nil {
+		return conflict("Storyboard Intent freeze source has drifted")
+	}
+	encoded, err := platformcommand.Result(rebuilt)
+	rebuiltHash, rebuiltHashErr := agentcontract.CanonicalHash(encoded)
+	receiptHash, receiptHashErr := agentcontract.CanonicalHash(receipt.Result)
+	if err != nil || rebuiltHashErr != nil || receiptHashErr != nil || rebuiltHash != receiptHash {
+		return conflict("Storyboard Intent freeze result has drifted")
+	}
+	*result = FreezeIntentSetResult{Set: source.Set, Approved: approved, Receipt: receipt}
+	return nil
 }
 
 func (service *Service) CreateBatch(ctx context.Context, actor Actor, command CreateBatchCommand) (domain.Batch, error) {
