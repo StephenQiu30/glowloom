@@ -78,7 +78,7 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 1. Backend 业务事务提交 Owner 事实与 Outbox；
 2. Kafka 异步驱动 Script/StoryGraph Elasticsearch 投影和业务事件消费者；
 3. 用户通过 Backend Search 查询剧本片段、角色、地点、Scene、Claim 或 Shot，并深链到精确 Owner/StoryGraphVersion；
-4. 结构化日志通过 Kafka 进入 ELK，维护者按 trace/run/node/task/job/receipt ID 关联诊断；
+4. 结构化日志通过 Logstash 进入 Elasticsearch/Kibana，维护者按 trace/run/node/task/job/receipt ID 关联诊断；
 5. Kafka、Elasticsearch 或 ELK 故障不得回写或覆盖 PostgreSQL/Temporal 的业务事实；恢复和重放收敛到同一投影。
 
 ## 5. MVP 范围
@@ -112,7 +112,7 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 
 - Temporal 是唯一跨步骤持久工作流引擎；
 - Backend 是唯一业务 Writer，使用单一 PostgreSQL/GORM Model Catalog；
-- Kafka 用于 Outbox 后的异步解耦、Script/StoryGraph Search Projection 和结构化日志传输；
+- Kafka 用于 Outbox 后的业务异步解耦和 Script/StoryGraph Search Projection，不承载结构化日志；
 - Elasticsearch 用于剧本与 StoryGraph 检索，索引可从 PostgreSQL 事实重建；
 - ELK 用于日志收集、检索和运行诊断，不成为业务状态源；
 - Provider/Workflow/Consumer 重试、重复投递、结果未知和服务重启可对账。

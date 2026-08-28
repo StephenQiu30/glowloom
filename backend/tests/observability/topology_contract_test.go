@@ -8,44 +8,40 @@ import (
 	"testing"
 )
 
-func TestELKTopologyPinsIndependentKafkaIdentityTopicGroupDLQAndIndex(t *testing.T) {
+func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
 	base := readText(t, filepath.Join(root, "docker-compose.yml"))
 	environment := readText(t, filepath.Join(root, "docker-compose-env.yml"))
 	production := readText(t, filepath.Join(root, "docker-compose-prod.yml"))
-	filebeat := readText(t, filepath.Join(root, "backend", "observability", "filebeat", "filebeat.yml"))
 	kafkaInit := readText(t, filepath.Join(root, "backend", "observability", "kafka", "init.sh"))
 	logstash := readText(t, filepath.Join(root, "backend", "observability", "logstash", "pipeline", "lanverse.conf"))
 	template := readText(t, filepath.Join(root, "backend", "observability", "logstash", "template", "lanverse-logs-template.json"))
-	combined := base + environment + production + filebeat + kafkaInit + logstash + template
+	combined := base + environment + production + kafkaInit + logstash + template
 
 	for _, required := range []string{
-		"docker.elastic.co/beats/filebeat:9.4.4",
 		"docker.elastic.co/logstash/logstash:9.4.4",
 		"docker.elastic.co/kibana/kibana:9.4.4",
-		"lanverse.logs.application.v1",
-		"lanverse.logs.application.dlq.v1",
-		"lanverse.logs-indexer.v1",
-		"lanverse-logs-application-v1-*",
+		"LOGSTASH_ADDRESS:",
+		"port => 5000",
+		"codec => json_lines",
+		"lanverse-logs-application-v1",
+		"lanverse-logs-dead-letter-v1",
 		"lanverse.log.v1",
 		"KAFKA_USERNAME: event_worker",
-		"KAFKA_FILEBEAT_USERNAME: filebeat",
-		"KAFKA_LOGSTASH_USERNAME: logstash",
 		"KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer",
-		"grant_topic filebeat \"${log_topic}\" --operation Write --operation Describe",
-		"grant_topic logstash \"${log_topic}\" --operation Read --operation Describe",
-		"grant_group logstash lanverse.logs-indexer.v1",
-		"create_topic \"${log_topic}\" 259200000",
-		"create_topic \"${log_dlq}\" 1209600000",
 	} {
 		if !strings.Contains(combined, required) {
 			t.Errorf("ELK topology is missing %q", required)
 		}
 	}
-	if strings.Count(base, "lanverse_log_collect:") != 3 ||
-		!strings.Contains(filebeat, "docker.container.labels.lanverse_log_collect: \"true\"") {
-		t.Error("Filebeat must collect only the three explicitly labelled application services")
+	for _, forbidden := range []string{
+		"filebeat", "lanverse.logs.application.v1", "lanverse.logs.application.dlq.v1",
+		"lanverse.logs-indexer.v1", "KAFKA_LOGSTASH", "user_logstash",
+	} {
+		if strings.Contains(strings.ToLower(combined), strings.ToLower(forbidden)) {
+			t.Errorf("direct Logstash topology still contains obsolete %q", forbidden)
+		}
 	}
 	for _, businessName := range []string{
 		"lanverse.business.script-version.v1",
@@ -54,7 +50,7 @@ func TestELKTopologyPinsIndependentKafkaIdentityTopicGroupDLQAndIndex(t *testing
 		"lanverse-script-search-v1",
 		"lanverse-storygraph-search-v1",
 	} {
-		if strings.Contains(filebeat+logstash+template, businessName) {
+		if strings.Contains(logstash+template, businessName) {
 			t.Errorf("log pipeline references business transport or index %q", businessName)
 		}
 	}
@@ -64,20 +60,24 @@ func TestELKTopologyPinsIndependentKafkaIdentityTopicGroupDLQAndIndex(t *testing
 	}
 }
 
-func TestApplicationEntrypointsUseTheSingleRedactingJSONLogger(t *testing.T) {
+func TestSingleBackendEntrypointOwnsTheRedactingLogstashLogger(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
+	main := readText(t, filepath.Join(root, "backend", "cmd", "main.go"))
+	if !strings.Contains(main, "telemetry.NewLogstashLogger(") ||
+		!strings.Contains(main, `os.Stdout, "lanverse-backend"`) {
+		t.Error("the single Backend entrypoint does not own the shared Logstash logger")
+	}
+	if strings.Contains(main, "slog.NewJSONHandler") {
+		t.Error("the Backend entrypoint bypasses the redacting logger")
+	}
 	for _, path := range []string{
-		filepath.Join(root, "backend", "cmd", "api", "main.go"),
-		filepath.Join(root, "backend", "cmd", "workflow-worker", "main.go"),
-		filepath.Join(root, "backend", "cmd", "event-worker", "main.go"),
+		filepath.Join(root, "backend", "internal", "bootstrap", "api_process.go"),
+		filepath.Join(root, "backend", "internal", "bootstrap", "workflow_process.go"),
+		filepath.Join(root, "backend", "internal", "bootstrap", "event_process.go"),
 	} {
-		content := readText(t, path)
-		if !strings.Contains(content, "telemetry.NewLogger") {
-			t.Errorf("%s does not use the shared logger", path)
-		}
-		if strings.Contains(content, "slog.NewJSONHandler") {
-			t.Errorf("%s bypasses the redacting logger", path)
+		if strings.Contains(readText(t, path), "telemetry.NewLogger") {
+			t.Errorf("%s creates a second runtime logger", path)
 		}
 	}
 }

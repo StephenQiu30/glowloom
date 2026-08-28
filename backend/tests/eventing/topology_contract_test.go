@@ -33,17 +33,20 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 		"lanverse.business.script-version.dlq.v1", "lanverse.business.storygraph-version.v1",
 		"lanverse.business.storygraph-version.dlq.v1", "604800000", "2592000000",
 	} {
-		if !strings.Contains(baseText+kafkaInitText, required) {
-			t.Errorf("Kafka base topology is missing %q", required)
+		if !strings.Contains(baseText+environmentText+kafkaInitText, required) {
+			t.Errorf("Kafka service or environment topology is missing %q", required)
 		}
 	}
 	for _, required := range []string{
 		"KAFKA_PROCESS_ROLES: broker,controller", `KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"`,
-		"CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw", "KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1",
+		"CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw",
 	} {
 		if !strings.Contains(environmentText, required) {
 			t.Errorf("Kafka runtime topology is missing %q", required)
 		}
+	}
+	if !strings.Contains(baseText, "KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1") {
+		t.Error("Backend service topology is missing the Event Runtime consumer group")
 	}
 	if strings.Contains(strings.ToLower(baseText+environmentText), "command-topic") ||
 		strings.Contains(strings.ToLower(baseText+environmentText), ".command.") {

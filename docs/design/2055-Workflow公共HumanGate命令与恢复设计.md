@@ -24,7 +24,7 @@
 
 设计接受时的缺口是：
 
-- `lanverse-api` 没有公共 HumanTask 列表/详情/Claim/Decision/Resume HTTP；
+- `lanverse` Backend API Runtime 没有公共 HumanTask 列表/详情/Claim/Decision/Resume HTTP；
 - StoryGraph 新链路需要 Bible、Episode、Planning、Storyboard Intent、Storyboard Detail、Reference 和 Shot Frame 多种 Gate；
 - 现有五类历史 Executor 不能覆盖新的 Candidate Revision/Head、Bible Confirm/Materialize 分离和两阶段 Storyboard；
 - Frontend 无法可靠区分“决议已记录”“Owner 尚未应用”“Signal 结果未知”“Workflow 已继续”。
@@ -218,7 +218,7 @@ PostgreSQL/GORM Catalog 是唯一 SQL 事实源，复用或正向扩展 HumanTas
 
 Temporal History 是 Workflow Wait/Signal/Timer 的执行事实，不替代 Owner 业务事实。Kafka 可以在上述事务成功后从 Outbox 发布 `HumanTaskOpened`、`ReviewDecisionRecorded`、`OwnerApplied`、`WorkflowGateResumed` 等投影事件，用于通知、搜索或审计读模型；Kafka Consumer 不执行 Decision、Owner Apply 或 Temporal Signal，也不能凭重复事件创建第二业务效果。
 
-结构化日志经 Kafka 进入 ELK 时只记录 task/decision/run/node/receipt ID、状态、耗时、错误码和 trace id；不记录 Claim Token、Access Token、完整剧本、Candidate Payload、Prompt、Provider 凭据或私有 Artifact URL。ELK 故障不阻断已提交业务事实，日志也不能用于恢复 Gate。
+结构化日志经 Logstash 进入 Elasticsearch/Kibana 时只记录 task/decision/run/node/receipt ID、状态、耗时、错误码和 trace id；日志不经过 Kafka，也不记录 Claim Token、Access Token、完整剧本、Candidate Payload、Prompt、Provider 凭据或私有 Artifact URL。ELK 故障不阻断已提交业务事实，日志也不能用于恢复 Gate。
 
 ## 9. Frontend MVP
 

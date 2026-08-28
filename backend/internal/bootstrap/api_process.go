@@ -1,8 +1,9 @@
-package main
+package bootstrap
 
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,7 +25,6 @@ import (
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoringdomain "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
 	costgorm "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/gormdb"
 	costhttp "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/httpapi"
@@ -79,18 +79,17 @@ import (
 )
 
 const (
-	shutdownTimeout   = 10 * time.Second
-	schemaSyncTimeout = 2 * time.Minute
+	apiShutdownTimeout   = 10 * time.Second
+	apiSchemaSyncTimeout = 2 * time.Minute
 )
 
 var (
-	buildVersion = "development"
-	buildCommit  = "unknown"
-	buildTime    = "unknown"
+	BuildVersion = "development"
+	BuildCommit  = "unknown"
+	BuildTime    = "unknown"
 )
 
-func main() {
-	logger := telemetry.NewLogger(os.Stdout, "lanverse-api", os.Getenv("ENVIRONMENT"))
+func RunAPI(logger *slog.Logger) {
 	configuration, err := config.Load()
 	if err != nil {
 		logger.Error("api configuration is invalid", "error", err)
@@ -108,7 +107,7 @@ func main() {
 			logger.Error("database close failed", "error", closeErr)
 		}
 	}()
-	syncContext, cancelSync := context.WithTimeout(context.Background(), schemaSyncTimeout)
+	syncContext, cancelSync := context.WithTimeout(context.Background(), apiSchemaSyncTimeout)
 	if err = platformschema.Sync(syncContext, database); err != nil {
 		cancelSync()
 		logger.Error("database schema synchronization failed", "error", err)
@@ -325,8 +324,8 @@ func main() {
 	httpMetrics := telemetry.NewHTTPMetrics()
 	server := &http.Server{
 		Addr: configuration.ListenAddress,
-		Handler: bootstrap.NewAPIHandler(bootstrap.RuntimeOptions{
-			Build:   bootstrap.BuildInfo{Service: "lanverse-api", Version: buildVersion, Commit: buildCommit, BuiltAt: buildTime},
+		Handler: NewAPIHandler(RuntimeOptions{
+			Build:   BuildInfo{Service: "lanverse-backend", Version: BuildVersion, Commit: BuildCommit, BuiltAt: BuildTime},
 			Metrics: httpMetrics,
 			Logger:  logger,
 			Ready: func(ctx context.Context) error {
@@ -375,7 +374,7 @@ func main() {
 	}()
 	select {
 	case <-shutdownSignal.Done():
-		shutdownContext, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		shutdownContext, cancel := context.WithTimeout(context.Background(), apiShutdownTimeout)
 		defer cancel()
 		if err := server.Shutdown(shutdownContext); err != nil {
 			logger.Error("api shutdown failed", "error", err)

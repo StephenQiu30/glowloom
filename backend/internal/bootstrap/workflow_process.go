@@ -1,7 +1,8 @@
-package main
+package bootstrap
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,7 +12,6 @@ import (
 
 	assetgorm "github.com/StephenQiu30/lanverse/backend/internal/asset/adapter/gormdb"
 	assetapp "github.com/StephenQiu30/lanverse/backend/internal/asset/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
 	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
 	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
@@ -19,7 +19,6 @@ import (
 	generationreview "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/review"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
-	platformschema "github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstore"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
@@ -37,15 +36,11 @@ import (
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
 )
 
-const schemaSyncTimeout = 2 * time.Minute
-
-func main() {
-	logger := telemetry.NewLogger(os.Stdout, "lanverse-workflow-worker", os.Getenv("ENVIRONMENT"))
+func RunWorkflowWorker(logger *slog.Logger) {
 	configuration, err := config.Load()
 	if err != nil {
 		logger.Error("workflow worker configuration is invalid", "error", err)
@@ -63,13 +58,6 @@ func main() {
 			logger.Error("workflow worker database close failed", "error", closeErr)
 		}
 	}()
-	syncContext, cancelSync := context.WithTimeout(context.Background(), schemaSyncTimeout)
-	err = platformschema.Sync(syncContext, database)
-	cancelSync()
-	if err != nil {
-		logger.Error("workflow worker database schema synchronization failed", "error", err)
-		os.Exit(1)
-	}
 	temporalRuntime, err := workflowtemporal.New(workflowtemporal.Config{
 		Address: configuration.TemporalAddress, Namespace: configuration.TemporalNamespace,
 		TaskQueue: configuration.TemporalTaskQueue,
@@ -154,7 +142,7 @@ func main() {
 		storyboardgorm.New(database), storyboardgeneration.NewSelectedImageSource(selectionService),
 		storyboardapp.Config{Now: now, NewID: uuid.NewString},
 	)
-	activities, err := bootstrap.NewWorkflowRuntime(
+	activities, err := NewWorkflowRuntime(
 		workflowgorm.New(database), scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, planningOwnerService, storyGraphService, storyboardService, reviewService,
 		imageBindings, candidateSets, episodeSegmentationService, episodeAnalysisService,
 	)

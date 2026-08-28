@@ -4,99 +4,91 @@ x-backend-build: &backend-build
   context: ./backend
   dockerfile: Dockerfile
 
-x-backend-service: &backend-service
-  build: *backend-build
-  image: lanverse/backend:development
-
 services:
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:${API_PORT:-8686}
     image: lanverse/frontend:development
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:${API_PORT:-8686}
+    ports:
+      - 127.0.0.1:${FRONTEND_PORT:-8123}:8123
+    networks:
+      - edge
+    depends_on:
+      backend:
+        condition: service_healthy
 
   backend:
-    <<: *backend-service
-    labels:
-      lanverse_log_collect: "true"
-
-  workflow-worker:
-    <<: *backend-service
-    entrypoint: ["/usr/local/bin/lanverse-workflow-worker"]
-    labels:
-      lanverse_log_collect: "true"
+    build: *backend-build
+    image: lanverse/backend:development
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOGSTASH_ADDRESS: ${DOCKER_LOGSTASH_ADDRESS:-host.docker.internal:5000}
+      API_HOST: 0.0.0.0
+      API_PORT: 8686
+      CORS_ORIGINS: ${LANVERSE_CORS_ORIGINS:-["http://localhost:8123","http://127.0.0.1:8123"]}
+      DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-lanverse-development-only}@${POSTGRES_HOST:-host.docker.internal}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-lanverse}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-development-only-jwt-secret-change-before-production}
+      JWT_ISSUER: ${JWT_ISSUER:-lanverse-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-lanverse-web}
+      JWT_ACCESS_TOKEN_MINUTES: ${JWT_ACCESS_TOKEN_MINUTES:-30}
+      AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-2592000}
+      REGISTRATION_VERIFICATION_CODE: ${REGISTRATION_VERIFICATION_CODE:-123456}
+      AGENT_URL: ${AGENT_URL:-http://host.docker.internal:8787}
+      AGENT_EXECUTION_SECRET: ${AGENT_EXECUTION_SECRET:-development-only-agent-execution-secret}
+      AGENT_RUNTIME_IMAGE_DIGEST: ${AGENT_RUNTIME_IMAGE_DIGEST:-sha256:352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb}
+      AGENT_RUNTIME_ADDITIONAL_REVISIONS: ${AGENT_RUNTIME_ADDITIONAL_REVISIONS:-[]}
+      AGENT_POLL_INTERVAL_MS: ${AGENT_POLL_INTERVAL_MS:-500}
+      REVIEW_CLAIM_LEASE_SECONDS: ${REVIEW_CLAIM_LEASE_SECONDS:-300}
+      TEMPORAL_ADDRESS: ${DOCKER_TEMPORAL_ADDRESS:-host.docker.internal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-host.docker.internal:9000}
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-127.0.0.1:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-lanverse}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-lanverse-development-only}
+      MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+      MINIO_SECURE: "false"
+      MINIO_PUBLIC_SECURE: ${MINIO_PUBLIC_SECURE:-false}
+      EVENT_WORKER_HOST: 127.0.0.1
+      EVENT_WORKER_PORT: 8687
+      KAFKA_BROKERS: ${DOCKER_KAFKA_BROKERS:-host.docker.internal:19093}
+      KAFKA_CLIENT_ID: lanverse-event-worker
+      KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1
+      KAFKA_USERNAME: ${KAFKA_USERNAME:-}
+      KAFKA_PASSWORD: ${KAFKA_PASSWORD:-}
+      KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.v1
+      KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dlq.v1
+      KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
+      KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
+      ELASTICSEARCH_URL: ${DOCKER_ELASTICSEARCH_URL:-http://host.docker.internal:9200}
+      ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME-lanverse_dev}
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD-lanverse-development-elasticsearch}
+      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
+      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
+    ports:
+      - 127.0.0.1:${API_PORT:-8686}:8686
+    networks:
+      - edge
+      - internal
+    extra_hosts:
+      - host.docker.internal:host-gateway
     healthcheck:
-      disable: true
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8686/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
 
-  event-worker:
-    <<: *backend-service
-    entrypoint: ["/usr/local/bin/lanverse-event-worker"]
-    labels:
-      lanverse_log_collect: "true"
-
-  postgres:
-    image: postgres:16.15-alpine
-
-  minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    profiles: ["bundled-minio"]
-    command: ["server", "/data", "--console-address", ":9001"]
-
-  minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
-    profiles: ["bundled-minio"]
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        until mc alias set local http://minio:9000 "$${MINIO_ACCESS_KEY}"
-        "$${MINIO_SECRET_KEY}"; do sleep 1; done;
-        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
-
-  kafka:
-    image: apache/kafka:4.3.1
-    hostname: kafka
-
-  kafka-init:
-    image: apache/kafka:4.3.1
-    entrypoint: ["/usr/share/lanverse-observability/kafka-init.sh"]
-    volumes:
-      - ./backend/observability/kafka/init.sh:/usr/share/lanverse-observability/kafka-init.sh:ro
-
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.4
-
-  elasticsearch-init:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.4
-    entrypoint: ["/usr/share/lanverse-observability/elasticsearch-init.sh"]
-    volumes:
-      - ./backend/observability/elasticsearch/init.sh:/usr/share/lanverse-observability/elasticsearch-init.sh:ro
-      - ./backend/observability/elasticsearch/ilm-policy.json:/usr/share/lanverse-observability/ilm-policy.json:ro
-      - ./backend/observability/logstash/template/lanverse-logs-template.json:/usr/share/lanverse-observability/lanverse-logs-template.json:ro
-
-  filebeat:
-    image: docker.elastic.co/beats/filebeat:9.4.4
-    user: root
-    command: ["filebeat", "-e", "--strict.perms=false"]
-    volumes:
-      - ./backend/observability/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - filebeat-data:/usr/share/filebeat/data
-
-  logstash:
-    image: docker.elastic.co/logstash/logstash:9.4.4
-    volumes:
-      - ./backend/observability/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
-      - ./backend/observability/logstash/pipeline:/usr/share/logstash/pipeline:ro
-      - logstash-data:/usr/share/logstash/data
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:9.4.4
-    volumes:
-      - kibana-data:/usr/share/kibana/data
-
-  kibana-init:
-    image: docker.elastic.co/kibana/kibana:9.4.4
-    entrypoint: ["/usr/share/lanverse-observability/kibana-init.sh"]
-    volumes:
-      - ./backend/observability/kibana/init.sh:/usr/share/lanverse-observability/kibana-init.sh:ro
+networks:
+  edge:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: true

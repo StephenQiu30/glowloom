@@ -25,7 +25,7 @@
 
 | ID | 必须满足的契约 | 验证 |
 |---|---|---|
-| `SG-ARC-001` | Backend Go Module 是 Production、StoryGraph、Workflow 业务投影、Review、Generation、Asset、Cost/Quota、Outbox 和 Search 索引协调的唯一业务 Writer。 | `architecture`：禁止 Frontend/Agent/event-worker 直接写 Owner；跨边界负向调用。 |
+| `SG-ARC-001` | Backend Go Module 是 Production、StoryGraph、Workflow 业务投影、Review、Generation、Asset、Cost/Quota、Outbox 和 Search 索引协调的唯一业务 Writer。 | `architecture`：禁止 Frontend/Agent/Event Runtime 旁路 Owner Application 直接写正式事实；跨边界负向调用。 |
 | `SG-ARC-002` | PostgreSQL 是唯一 SQL 事实源；全部业务表只由一份 GORM Model Catalog 定义并同步。不得存在 Migration 文件/版本/Checksum/Source 元数据、Raw SQL 业务 Schema、第二 ORM、第二数据库 Writer 或兼容双写。 | `architecture + integration`：目录扫描、依赖扫描、空库 Catalog Sync、Model/约束核查。 |
 | `SG-ARC-003` | Domain/Application 不得导入 GORM、Temporal、Kafka、Elasticsearch、对象存储或 Provider SDK；Adapter 实现 Port，Composition Root 负责唯一装配。 | Go import/AST 架构测试。 |
 | `SG-ARC-004` | Temporal 是唯一跨步骤持久 Workflow/Timer/Human Wait/Signal 引擎；Kafka 不调度 Workflow，数据库轮询不建立第二工作流。 | 架构扫描；真实 Temporal wait/signal/replay/restart。 |
@@ -116,15 +116,15 @@
 | `SG-EVT-001` | Owner Command 在同一 GORM 事务中写业务事实、Command Receipt 和 Outbox；网络 Publisher 不得参与 Owner 事务。事务回滚时无 Event。 | PostgreSQL 提交/回滚/网络断开。 |
 | `SG-EVT-002` | Kafka Envelope 至少含 event id/type/version、occurred_at、workspace/project、aggregate kind/id/revision、source receipt、trace context 和 payload hash；不得含完整剧本、Prompt、凭据或私有 URL。 | Schema/PII/secret contract。 |
 | `SG-EVT-003` | Outbox Publisher 至少一次发布；Broker ACK 未知按原 Event ID 重试。Consumer 用 Inbox/Event ID 与 aggregate revision fencing 处理重复/乱序；Poison Message 进入独立 DLQ 并可按范围 Replay。 | 真实 Kafka 重复/乱序/断连/DLQ。 |
-| `SG-EVT-004` | 只为 ScriptVersion 和 StoryGraphVersion 的真实 Search Consumer 建立业务 Topic；日志使用独立 Topic。二者 Schema、ACL、Retention、Consumer Group 和 DLQ 不共享；不得建立 Kafka Command Topic。 | Broker config/consumer/ACL 测试。 |
-| `SG-EVT-005` | `event-worker` 只有在真实 Kafka Consumer 落地时创建，复用 Backend Domain/Application/GORM Catalog；不得拥有独立业务 Repository 或第二数据库连接模型。 | Binary/Compose/import/DB config。 |
+| `SG-EVT-004` | 只为 ScriptVersion 和 StoryGraphVersion 的真实 Search Consumer 建立业务 Topic；日志不得创建或借用 Kafka Topic；不得建立 Kafka Command Topic。 | Broker config/consumer/ACL 测试。 |
+| `SG-EVT-005` | Backend Event Runtime 只有在真实 Kafka Consumer 落地时才由单 `lanverse` Binary 装配，复用 Backend Domain/Application/GORM Catalog；不得创建独立 Worker Binary/Compose 服务、独立业务 Repository 或第二数据库连接模型。 | Binary/Compose/import/DB config。 |
 | `SG-SRCH-001` | Elasticsearch 至少维护 Script 与 StoryGraph 两类可重建业务索引/alias；文档包含 workspace/project、owner kind/logical/version/revision/hash、source event id 和可追溯 Evidence/Story Node key。 | Index mapping/文档/租户 contract。 |
 | `SG-SRCH-002` | 旧或重复 Event 不得覆盖新 revision；删除/重建使用明确 tombstone/snapshot 规则。全量 Reindex 从 PostgreSQL Owner Snapshot 构建新版本索引并原子切换 alias。 | 真实 Elasticsearch 乱序/Reindex/alias。 |
 | `SG-SRCH-003` | Backend `SearchScripts/SearchStoryGraph` 强制 Workspace/Project 授权，返回 snippet、score、Owner/Version/Evidence 深链和索引新鲜度；不得返回 Elasticsearch DSL 或允许 Search 回写 Owner。 | HTTP/权限/输入注入/反查。 |
 | `SG-SRCH-004` | Elasticsearch 不可用或投影落后时返回明确 degraded/stale 状态；Owner Command 和 PostgreSQL StoryGraph Query 继续正确，不能用旧索引覆盖事实。 | 依赖故障 E2E。 |
-| `SG-LOG-001` | 应用输出脱敏结构化 JSON Log，经 `Filebeat → Kafka log topic → Logstash → Elasticsearch log index → Kibana`；日志链与业务事件链隔离。 | 真实 pipeline/index/template/查询。 |
+| `SG-LOG-001` | 应用输出脱敏结构化 JSON Log，同时保留 stdout 并经失败开放 TCP Writer 进入 `Logstash → Elasticsearch log index → Kibana`；日志不经过 Kafka。 | 真实 pipeline/index/template/查询。 |
 | `SG-LOG-002` | 日志至少可按 trace/run/node/task/decision/provider job/receipt ID 和稳定错误码关联；不得记录 Token、Claim Token、完整原稿/Candidate/Prompt、Provider 凭据或私有 Artifact URL。 | 端到端 trace 查询与敏感字段扫描。 |
-| `SG-LOG-003` | Kafka/Logstash/Elasticsearch/Kibana 日志故障不得改变业务事务、Workflow、Owner Receipt 或 Search Projection；日志不得用于恢复业务状态。 | 逐组件故障注入。 |
+| `SG-LOG-003` | Logstash/Elasticsearch/Kibana 日志故障不得改变业务事务、Workflow、Owner Receipt 或 Search Projection；日志不得用于恢复业务状态。 | 逐组件故障注入。 |
 
 ## 8. Frontend
 
@@ -146,7 +146,7 @@
 |---|---|---|
 | `SG-OPS-001` | 所有 Input/Candidate/Event/Provider Response/HTTP JSON 严格解码、限制大小与枚举；未知字段/类型、超深嵌套、非有限数字和无效 UUID/Hash fail closed。 | Fuzz/contract/HTTP 负向。 |
 | `SG-OPS-002` | Runware 输出 URL/对象引用必须经过 scheme/host/path/size/content-type allowlist 与 SSRF 防护；密钥只从服务端 Credential Ref 解析，永不进入数据库明文、Browser、Agent 或日志。 | SSRF/secret/bundle/log 扫描。 |
-| `SG-OPS-003` | `healthz` 只表示进程存活；`readyz` 检查该 Binary 当前已实现的必要依赖。event-worker 落地后必须真实检查 Kafka/Elasticsearch；依赖缺失不得报告 ready。 | Compose/容器/故障 readiness。 |
+| `SG-OPS-003` | `healthz` 只表示进程存活；公共 `readyz` 检查 API 必需依赖，单 Backend 进程内的 Event Runtime 另以内部 readiness 真实检查 Kafka/Elasticsearch；依赖缺失不得报告 Event Runtime ready。 | Compose/容器/故障 readiness。 |
 | `SG-OPS-004` | 测试只能位于 `backend/tests`、`agent/tests`、`frontend/tests`；业务源码目录不得混入 `*_test.go`、`test_*.py`、`*.test.*`、`*.spec.*`。 | 仓库结构检查。 |
 | `SG-OPS-005` | 每个 `SG-Ixx` 必须先有失败测试，再实现并重构；完成前运行该任务局部门禁和当时全部真实 CI，失败/跳过/缺外部依赖不得标记通过。 | Commit/Acceptance/CI 记录。 |
 | `SG-OPS-006` | CI 必须使用空 PostgreSQL、真实 Temporal/MinIO；Kafka/Search/ELK 能力落地时同一任务加入真实 Kafka、Elasticsearch 和日志 pipeline 检查，不用内存替身抵扣集成验收。 | GitHub Actions/本地等价命令。 |

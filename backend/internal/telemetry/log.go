@@ -19,7 +19,7 @@ var (
 )
 
 // NewLogger is the only application JSON logger constructor. It attaches the
-// stable log schema and removes sensitive attributes before stdout collection.
+// stable log schema and removes sensitive attributes before any log transport.
 func NewLogger(writer io.Writer, service, environment string) *slog.Logger {
 	if writer == nil {
 		writer = io.Discard

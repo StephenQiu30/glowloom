@@ -9,7 +9,8 @@ AGENT_ROOT = REPOSITORY_ROOT / "agent"
 
 def test_backend_is_the_only_public_business_runtime() -> None:
     assert (BACKEND_ROOT / "go.mod").is_file()
-    assert (BACKEND_ROOT / "cmd/api/main.go").is_file()
+    command_entries = list((BACKEND_ROOT / "cmd").iterdir())
+    assert command_entries == [BACKEND_ROOT / "cmd/main.go"]
     assert not list(BACKEND_ROOT.rglob("*.py"))
     assert not (BACKEND_ROOT / "pyproject.toml").exists()
 

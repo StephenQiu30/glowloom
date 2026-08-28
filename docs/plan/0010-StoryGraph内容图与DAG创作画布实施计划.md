@@ -20,7 +20,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 
 ### 2.1 当前事实
 
-- Backend 是单 Go Module，已有 GORM、PostgreSQL、Temporal、MinIO、公共 OpenAPI、`api`、`workflow-worker` 与 `event-worker`；业务 Model 由唯一 GORM Catalog 同步。`SG-I04` 已完成 Kafka 业务事件、Script/StoryGraph Elasticsearch 可重建检索投影和独立 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 日志链；PostgreSQL 仍是唯一业务事实源。
+- Backend 是单 Go Module、单 `backend/cmd/main.go` 与单 `lanverse` Binary，进程内装配 API、Workflow、Event Runtime；业务 Model 由唯一 GORM Catalog 同步。`SG-I04` 已完成 Kafka 业务事件、Script/StoryGraph Elasticsearch 可重建检索投影和独立 `Backend → Logstash → Elasticsearch → Kibana` 日志链；PostgreSQL 仍是唯一业务事实源。
 - Agent 是私有 FastAPI Candidate Runtime，`SG-I05` 已将 8 个过渡 Skill 原子收口为唯一 `agent/skills/build-storygraph` Bundle、十个显式 Stage Reference 与严格 Pydantic Candidate；Agent 不拥有 ORM、业务 Writer、Kafka、Elasticsearch 或 Temporal Client。
 - Frontend 是单 Next.js/npm 应用，使用 RTK Query；尚未安装 React Flow 或 Dagre。
 - 当前 Compose 与 CI 已有真实 PostgreSQL、Temporal、MinIO、Kafka KRaft、Elasticsearch 以及独立 ELK 日志管道，并执行 Broker/Search/日志组件停机与恢复门禁。
@@ -32,10 +32,10 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 |---|---|---|---|
 | SQL 事实源 | PostgreSQL 16 + 已有 GORM `v1.31.2`/postgres driver `v1.6.2` | `SG-I01` 复核，`SG-I03` 首个 StoryGraph Record | 只有 `adapter/gormdb` 与 `platform/database` 导入 GORM；只扩展唯一 Model Catalog，不建立 Migration 文件/表、Raw SQL 或第二连接模型 |
 | Durable Workflow | 已有 Temporal Go SDK `v1.44.1` | 随各 Workflow 切片复用 | 只由 Workflow Adapter/Worker 使用；Kafka 不调度、恢复或替代 Workflow |
-| Kafka Broker | 官方 `apache/kafka:4.3.1`，本地/CI 单节点 KRaft | `SG-I04` 首个真实 Script/StoryGraph Search Consumer | 业务 Event、日志 Topic 分离；无 Command Topic；生产扩容不在 MVP |
-| Kafka Go Client | `github.com/twmb/franz-go v1.21.6`，直接使用 `pkg/kgo` | `SG-I04` | 仅 Eventing Kafka Adapter 与 `event-worker` Composition Root 可导入；Domain/Application 只依赖 Port/Envelope |
+| Kafka Broker | 官方 `apache/kafka:4.3.1`，本地/CI 单节点 KRaft | `SG-I04` 首个真实 Script/StoryGraph Search Consumer | 只承载业务 Event；无日志或 Command Topic；生产扩容不在 MVP |
+| Kafka Go Client | `github.com/twmb/franz-go v1.21.6`，直接使用 `pkg/kgo` | `SG-I04` | 仅 Eventing Kafka Adapter 与单 Backend 的 Event Composition Root 可导入；Domain/Application 只依赖 Port/Envelope |
 | Search | Elasticsearch `9.4.4` + `github.com/elastic/go-elasticsearch/v9 v9.4.3` | `SG-I04` | 仅 Search Elasticsearch Adapter 导入客户端；索引是 PostgreSQL Owner Snapshot 的可重建投影，不是事实源 |
-| ELK 日志链 | Filebeat/Logstash/Elasticsearch/Kibana 全部 `9.4.4` | `SG-I04` 随首个真实服务日志消费者 | `Filebeat → Kafka 独立日志 Topic → Logstash → 独立日志索引 → Kibana`；业务与日志 Topic、Group、DLQ、Index 不共享 |
+| ELK 日志链 | Logstash/Elasticsearch/Kibana `9.4.4` | `SG-I04` 随首个真实服务日志消费者 | `Backend fail-open TCP → Logstash → 独立日志/Dead-letter 索引 → Kibana`；日志不经过 Kafka，本机复用已运行 Logstash |
 | 结构化日志 | Go 标准库 `log/slog` JSON Handler，Python/Frontend 输出同一脱敏字段集 | `SG-I01` 固定契约，`SG-I04` 接管真实管道 | 不引入第二日志框架；日志失败不改变业务事务或 Receipt |
 | Agent Schema/Runtime | 已有 Pydantic `2.13.4`、FastAPI `0.140.12`、Codex CLI `0.147.0` | `SG-I01` 固定 Wire fixture，`SG-I05` 最终 Bundle | Agent 无 ORM、Kafka、Elastic、Temporal、对象存储、JWT 或 Provider 业务凭据；未出现真实消费者时在 `SG-I05` 删除 LangGraph |
 | Canvas | `@xyflow/react 12.11.5` + `@dagrejs/dagre 3.1.1` | `SG-I25` | 只在只读 Story Lens 首个组件中安装和导入；不预建通用 Canvas Framework |
@@ -54,7 +54,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 | `backend/internal/storygraph/adapter/gormdb` | StoryGraph Record/Head/Outbox 原子持久化 | GORM、数据库 Model、Application Port | 业务策略、Temporal/Kafka/Elastic Client |
 | `backend/internal/eventing` 的 Domain/Application/Adapter | Envelope、Outbox Publisher、Inbox、DLQ/Replay 与 Kafka 传输 | Application 依赖 Port；Kafka Adapter 依赖 franz-go | Workflow 调度、Owner Command、完整剧本文本/Prompt/Secret |
 | `backend/internal/search` 的 Domain/Application/Adapter | Script/StoryGraph 文档、授权查询、Projection/Reindex/Alias | Owner Snapshot Port；Elastic Adapter 依赖官方 Go Client | Owner 写入、Elastic DSL 透传、第二业务 Repository |
-| `backend/cmd/event-worker` | Kafka Consumer、Search Projector、readiness 的唯一装配 | Backend 已有模块、Event/Search Adapter | 独立 Domain、独立数据库模型、第二 SQL 连接来源 |
+| `backend/internal/bootstrap/event_process.go` | 单 `lanverse` Binary 内 Kafka Consumer、Search Projector、readiness 的唯一装配 | Backend 已有模块、Event/Search Adapter | 第二入口/Binary/Compose 服务、独立 Domain、独立数据库模型、第二 SQL 连接来源 |
 | `backend/internal/workflow` | Temporal Definition、Activity、Signal/Resume 与持久状态 | Backend Application Port、Temporal Adapter | Kafka 等待/调度、Search/ELK 恢复状态 |
 | `backend/internal/agent` | Backend-owned Stage Wire/Policy 与私有 Agent Client | 严格 Contract、HTTP Client Port | Agent 内部文件路径、ORM/Queue/Search Client |
 | `agent/app/candidate_runtime`、`agent/skills/build-storygraph` | 受控 Codex Invocation、Stage/Shard/Candidate/Repair | Pydantic、标准库、Bundle 内资源 | 业务数据库/API、Kafka、Elastic、Temporal、对象存储、Provider |
@@ -84,12 +84,12 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 - [x] `SG-I01`：固定 StoryGraph Schema、稳定 Key、Node/Edge/Claim Owner、Evidence Ref、Canonical Hash、四图边界和跨语言 contract fixture；在首个真实消费者中固定 GORM/PostgreSQL、Temporal、Pydantic/Codex CLI 与 React Flow/Dagre 选型。完成门：Requirement/Acceptance 映射完整，失败 contract 测试先落位，无空工具层、Migration、Raw SQL 或第二 ORM。**完成（2026-08-27）**：Go Domain 与 Go/Python Wire golden、依赖首消费者门、空库/Temporal/MinIO、全量 CI/Compose/三镜像证据见 Acceptance。
 - [x] `SG-I02`：把现有 8 个 Skill 按原名、原字节迁入 `agent/skills`，原子切换 Loader/Docker/独立测试，同一提交删除根目录旧路径。完成门：Guidance 字节等价、单路径、无 fallback，Agent 和全量 CI 通过。**完成（2026-08-27）**：19 个文件的路径与 SHA-256 golden 等价，Loader/Docker/测试已原子切换，旧路径负向与三镜像真实 CI 证据见 Acceptance。
 - [x] `SG-I03`：实现 StoryGraphVersion/Head、Owner Set 冻结、GORM Record、线性 Compiler/发布；首版只编译已有 Owner 事实。完成门：独立 PostgreSQL、并发/CAS、无环、Hash、重放和 stale 标记通过。**完成（2026-08-27）**：不可变 JSONB Version/唯一 Head、正式 Owner Set、完整 Edge 矩阵、单 GORM SERIALIZABLE 事务 Version/Head/Receipt/Outbox、跨版本精确重放、并发 CAS、权限与故障回滚均由真实 PostgreSQL 和全量 CI 证明；查询与 Kafka/Search/ELK 仍只属于 `SG-I04`。
-- [x] `SG-I04`：在 `SG-I03` 发布契约上实现 Current/Version/Lens Query、Version Diff、上下游追踪和影响闭包。完成门：Query 仅读、大图有界、相同版本结果确定，全量 CI 通过并已提交。**完成（2026-08-27）**：Query、Kafka Event、Elasticsearch Search 与独立 ELK 日志四个交付单元均完成；Script/StoryGraph 业务链与日志链使用独立 SASL 身份、Topic/Schema/ACL/Retention/Group/DLQ/Index。三个应用 Binary 使用统一脱敏 JSON Logger，真实 Backend HTTP 日志经 Filebeat/Kafka/Logstash 进入严格 Log Index 并可由 Kibana Data View 查询；关联字段、敏感字段零泄露、非法日志 Hash-only DLQ、逐组件停机下 Owner 事务/Workflow/Search 不变及恢复后继续采集均由真实服务和全量 CI 证明。
+- [x] `SG-I04`：在 `SG-I03` 发布契约上实现 Current/Version/Lens Query、Version Diff、上下游追踪和影响闭包。完成门：Query 仅读、大图有界、相同版本结果确定，全量 CI 通过并已提交。**完成（2026-08-27；运行拓扑于 2026-08-28 收敛）**：Query、Kafka Event、Elasticsearch Search 与独立 ELK 日志四个交付单元均完成。Kafka 只承载 Script/StoryGraph 业务 Topic；单 Backend Binary 使用统一脱敏 JSON Logger，同时写 stdout 并经失败开放 TCP Writer 直送 Logstash。关联字段、敏感字段零泄露、非法日志 Hash-only Dead-letter Index、日志组件停机下 Owner 事务/Workflow/Search 不变及恢复后继续采集由真实服务和 CI 证明。
 - [x] `SG-I05`：只在 `SG-I04` 完成后建立 Backend-owned Stage Envelope/Policy/Candidate Revision，将 8 个过渡 Skill 收口为 `agent/skills/build-storygraph` Bundle、Stage Reference 和 Bundle Hash，原子删除旧 Skill 名。完成门：跨语言 fixture、golden、Bundle 完整性、旧 Invocation 精确路由和全量 CI 通过。**完成（2026-08-27）**：唯一 Bundle、十 Stage 严格 Wire/Pydantic Candidate、Backend 精确 Runtime Catalog 与首个不可变 Candidate Revision 已落地；旧 Skill/Invocation 入口和无消费者依赖已原子删除，本地真实 Codex、空 PostgreSQL、Temporal/MinIO/Kafka/ELK、三镜像及完整故障部署 CI 全部通过。
 - [x] `SG-I06`：按已接受 `2055` 完成 HumanTask 列表/详情、Claim/Renew/Release、Decision 和 Resume Backend API，复用已有 Review/Workflow 事实。完成门：Owner Receipt、Signal unknown/recovery、权限、幂等/冲突和 API 重启恢复通过，无第二审核状态机。**完成（2026-08-27）**：冻结 Subject/Rubric、Lease 零泄漏、不可变 Decision、三阶段 Coordinator、五类既有 Owner 路由和真实 Temporal UNKNOWN 恢复均已落地；OpenAPI/生成 Client、空 PostgreSQL/真实基础设施、全量 CI/Compose/三镜像证据见 Acceptance。
 - [x] `SG-I07`：在 `SG-I06` 真实 API 上交付最小 Review Workbench，显式区分 Task、Decision、Owner Apply 和 Workflow Resume。完成门：刷新、过期 Lease、unknown/conflict、键盘和可访问性自动化通过，不模拟 Backend 成功。**完成（2026-08-27）**：项目队列/固定详情、Claim/Renew/Release、冻结 Candidate 决议、同 Decision Resume 与 WorkflowRun/NodeRun 重取已通过真实 Client 和组件自动化；Claim Token 零持久化、Viewer/未知 Subject 只读、冲突重取、键盘与 standalone 镜像路由证据见 Acceptance。
 
-`SG-I04` 同时承接 Event/Search/ELK 的首个真实消费者，不新增任务编号：先完成 StoryGraph 查询契约，再完成 Outbox Publisher + Kafka Envelope/Inbox/DLQ/Replay，再完成 Script/StoryGraph Elasticsearch Projection/Reindex/Search API，最后接通独立日志 Topic 与 ELK 管道；这些是该项内可分别完成、验证和提交的交付单元，但 `SG-I04` 只有在真实 Kafka/Elastic/日志故障 CI 全部通过后才完成。业务 Outbox 由 `SG-I03` 与 Owner 事务同库写入，Kafka ACK unknown 以同 Event ID 重试；Elasticsearch 与日志索引始终是可重建派生数据。
+`SG-I04` 同时承接 Event/Search/ELK 的首个真实消费者，不新增任务编号：先完成 StoryGraph 查询契约，再完成 Outbox Publisher + Kafka Envelope/Inbox/DLQ/Replay，再完成 Script/StoryGraph Elasticsearch Projection/Reindex/Search API，最后接通 Backend → Logstash 的独立日志管道；这些是该项内可分别完成、验证和提交的交付单元，但 `SG-I04` 只有在真实 Kafka/Elastic/日志故障 CI 全部通过后才完成。业务 Outbox 由 `SG-I03` 与 Owner 事务同库写入，Kafka ACK unknown 以同 Event ID 重试；Elasticsearch 与日志索引始终是可重建派生数据。
 
 ### Harness 与剧本解析
 
@@ -143,7 +143,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 
 - `SG-I01` 先执行并记录当前 Backend/Agent/Frontend/OpenAPI/Compose/Image/Hygiene 基线；若真实失败，先作为本项完整 CI 修复单元解决，不能在失败基线上叠加功能。
 - `SG-I03` 起 Backend CI 每次使用空 PostgreSQL 由唯一 GORM Catalog 建表，并检查无 Migration 元数据、无 Raw SQL 业务 Repository、无第二 ORM。
-- `SG-I04` 起同一 CI Job 启动真实 Kafka 4.3.1 KRaft、Elasticsearch 9.4.4 与最小 Filebeat/Kafka/Logstash/Elasticsearch 日志链，验证重复、乱序、断连、DLQ、Replay、Reindex、Alias、degraded/readiness；内存 Broker/Index 只可用于纯单元测试，不能抵扣集成门。
+- `SG-I04` 起同一 CI Job 启动真实 Kafka 4.3.1 KRaft、Elasticsearch 9.4.4 与最小 Backend/Logstash/Elasticsearch 日志链，验证业务事件重复、乱序、断连、DLQ、Replay、Reindex、Alias、degraded/readiness，以及日志索引、脱敏、Dead-letter 与 Logstash 故障开放；内存 Broker/Index 只可用于纯单元测试，不能抵扣集成门。
 - Temporal、MinIO、Codex CLI、Runware Staging 在各自首个真实消费者任务加入对应 integration/journey；外部不可用必须显式失败或 unknown。
 - `SG-I25` 起 Frontend CI 安装锁定 React Flow/Dagre 后继续运行 OpenAPI drift、lint、typecheck、unit 和 production build；组件测试不得模拟不存在的 Backend 成功。
 - `SG-I27` 执行完整原稿、故障矩阵、全量真实 CI 和三类镜像/Compose；`SG-I28` 只能消费该已提交结果，使用 `agent-browser` 做最终 Browser→API→Owner/Temporal/Kafka/Search/Artifact 对账。
@@ -152,7 +152,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 
 - Schema/Owner/Hash/Wire fixture 未固定或跨语言不一致：停在 `SG-I01`，不创建业务表或最终 Skill Bundle。
 - Skill 迁移存在双路径或字节漂移：在 `SG-I02` 同一原子任务内回正，不保留 fallback。
-- Outbox 与 Owner 无法同一 GORM 事务、Kafka 与日志链未隔离、Search 无法从 PostgreSQL 重建：停在 `SG-I03/004`，不得让 Elastic 成为事实源。
+- Outbox 与 Owner 无法同一 GORM 事务、Kafka 仍承载日志、Search 无法从 PostgreSQL 重建：停在 `SG-I03/004`，不得让 Elastic 成为事实源。
 - Human Decision、Owner Apply、Workflow Resume 无法按同一冻结 Subject 对账：停在对应 Gate，不用 Kafka 或页面状态补偿。
 - Provider ACK/结果未知、配额/费用/资产版本不一致：按同一 Job/Receipt 对账，禁止重新计费式盲重试。
 - 完整原稿或真实 CI 未通过：`SG-I27` 保持未完成；不得运行、引用或提前准备最终 `agent-browser` 通过声明。

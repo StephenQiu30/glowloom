@@ -52,7 +52,7 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: "cd ../backend && go run ./cmd/api",
+      command: "cd ../backend && go run ./cmd",
       env: {
         AGENT_EXECUTION_SECRET: executionSecret,
         AGENT_POLL_INTERVAL_MS: "250",

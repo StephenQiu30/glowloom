@@ -26,24 +26,25 @@ func TestSearchTopologyPinsElasticsearchAndKeepsAPIAvailableDuringIndexOutage(t 
 	if !strings.Contains(module, "github.com/elastic/go-elasticsearch/v9 v9.4.3") {
 		t.Fatal("official Elasticsearch Go client must remain pinned to the accepted version")
 	}
-	for _, required := range []string{`["version"]["number"]`, "_alias/lanverse-script-search-v1", "event-worker stayed ready while Elasticsearch was unavailable"} {
+	for _, required := range []string{`["version"]["number"]`, "_alias/lanverse-script-search-v1", "backend event runtime stayed ready while Elasticsearch was unavailable"} {
 		if !strings.Contains(workflow, required) {
 			t.Errorf("real CI Search proof is missing %q", required)
 		}
 	}
-	backendBlock := composeServiceBlock(environment, "backend", "workflow-worker")
-	if strings.Contains(backendBlock, "\n      elasticsearch:\n") {
-		t.Fatal("API startup must not depend on the asynchronous search index")
+	if strings.Contains(environment, "\n  backend:") {
+		t.Fatal("environment Compose must not own the Backend service")
 	}
-}
-
-func composeServiceBlock(contents, service, nextService string) string {
-	start := strings.Index(contents, "\n  "+service+":")
-	end := strings.Index(contents, "\n  "+nextService+":")
-	if start < 0 || end <= start {
-		return contents
+	backendStart := strings.Index(base, "\n  backend:")
+	if backendStart < 0 {
+		t.Fatal("service Compose is missing Backend")
 	}
-	return contents[start:end]
+	backendBlock := base[backendStart:]
+	if backendEnd := strings.Index(backendBlock, "\nnetworks:"); backendEnd > 0 {
+		backendBlock = backendBlock[:backendEnd]
+	}
+	if strings.Contains(backendBlock, "depends_on:") {
+		t.Fatal("Backend service startup must reuse an already-running environment")
+	}
 }
 
 func searchRepositoryRoot(t *testing.T) string {

@@ -85,7 +85,7 @@ func TestStructuredLoggerSanitizesNestedStructValuesBeforeCollection(t *testing.
 		PrivateURL  string `json:"private_url"`
 	}
 	var output bytes.Buffer
-	logger := telemetry.NewLogger(&output, "lanverse-workflow-worker", "test")
+	logger := telemetry.NewLogger(&output, "lanverse-backend", "test")
 	logger.Info("provider response", "response", &providerResponse{
 		Status:      "accepted",
 		AccessToken: "nested-secret-token",

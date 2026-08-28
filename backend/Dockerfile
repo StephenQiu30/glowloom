@@ -10,12 +10,11 @@ ARG BUILD_VERSION=development
 ARG BUILD_COMMIT=unknown
 ARG BUILD_TIME=unknown
 RUN CGO_ENABLED=0 go build -trimpath \
-    -ldflags="-s -w -X main.buildVersion=${BUILD_VERSION} -X main.buildCommit=${BUILD_COMMIT} -X main.buildTime=${BUILD_TIME}" \
-    -o /out/lanverse-api ./cmd/api
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
-    -o /out/lanverse-workflow-worker ./cmd/workflow-worker
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
-    -o /out/lanverse-event-worker ./cmd/event-worker
+    -ldflags="-s -w \
+    -X github.com/StephenQiu30/lanverse/backend/internal/bootstrap.BuildVersion=${BUILD_VERSION} \
+    -X github.com/StephenQiu30/lanverse/backend/internal/bootstrap.BuildCommit=${BUILD_COMMIT} \
+    -X github.com/StephenQiu30/lanverse/backend/internal/bootstrap.BuildTime=${BUILD_TIME}" \
+    -o /out/lanverse ./cmd
 
 FROM alpine:3.23
 
@@ -23,14 +22,12 @@ RUN apk add --no-cache ca-certificates \
     && addgroup -S lanverse \
     && adduser -S -G lanverse lanverse
 
-COPY --from=builder /out/lanverse-api /usr/local/bin/lanverse-api
-COPY --from=builder /out/lanverse-workflow-worker /usr/local/bin/lanverse-workflow-worker
-COPY --from=builder /out/lanverse-event-worker /usr/local/bin/lanverse-event-worker
+COPY --from=builder /out/lanverse /usr/local/bin/lanverse
 
 USER lanverse
-EXPOSE 8686 8687
+EXPOSE 8686
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=12 \
     CMD wget --quiet --spider http://127.0.0.1:8686/healthz || exit 1
 
-ENTRYPOINT ["/usr/local/bin/lanverse-api"]
+ENTRYPOINT ["/usr/local/bin/lanverse"]

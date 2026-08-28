@@ -67,50 +67,45 @@ jobs:
           exit 1
       - name: Start real Kafka and ELK services
         env:
+          COMPOSE_PROFILES: bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
+          DOCKER_KAFKA_BROKERS: kafka:19092
+          DOCKER_ELASTICSEARCH_URL: http://elasticsearch:9200
           KAFKA_PORT: 19092
+          LOGSTASH_PORT: 15000
           ELASTICSEARCH_PORT: 19200
           KIBANA_PORT: 15601
           KAFKA_ADMIN_PASSWORD: lanverse-ci-kafka-admin
           KAFKA_EVENT_WORKER_PASSWORD: lanverse-ci-event-worker
-          KAFKA_FILEBEAT_PASSWORD: lanverse-ci-filebeat
-          KAFKA_LOGSTASH_PASSWORD: lanverse-ci-logstash
         run: |
-          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --wait --wait-timeout 300 kafka elasticsearch logstash kibana
-          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach kibana-init
-          kibana_init_container=$(docker compose -f docker-compose.yml -f docker-compose-env.yml ps --all --quiet kibana-init)
-          test -n "$kibana_init_container"
-          test "$(docker wait "$kibana_init_container")" = 0
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
+          environment_compose() { docker compose -p lanverse-ci-env -f docker-compose-env.yml "$@"; }
+          environment_compose up --detach --wait --wait-timeout 300 kafka elasticsearch logstash kibana
+          environment_compose up --detach kafka-init kibana-init
+          for init_service in kafka-init kibana-init; do
+            init_container=$(environment_compose ps --all --quiet "$init_service")
+            test -n "$init_container"
+            test "$(docker wait "$init_container")" = 0
+          done
+          environment_compose exec -T kafka \
             /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
             --command-config /tmp/lanverse-kafka-health.properties \
             --entity-type topics --entity-name lanverse.business.script-version.v1 --describe \
             | grep -q 'retention.ms=604800000'
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
+          environment_compose exec -T kafka \
             /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
             --command-config /tmp/lanverse-kafka-health.properties \
             --entity-type topics --entity-name lanverse.business.script-version.dlq.v1 --describe \
             | grep -q 'retention.ms=2592000000'
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
+          environment_compose exec -T kafka \
             /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
             --command-config /tmp/lanverse-kafka-health.properties \
             --entity-type topics --entity-name lanverse.business.storygraph-version.v1 --describe \
             | grep -q 'retention.ms=604800000'
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
+          environment_compose exec -T kafka \
             /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
             --command-config /tmp/lanverse-kafka-health.properties \
             --entity-type topics --entity-name lanverse.business.storygraph-version.dlq.v1 --describe \
             | grep -q 'retention.ms=2592000000'
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
-            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
-            --command-config /tmp/lanverse-kafka-health.properties \
-            --entity-type topics --entity-name lanverse.logs.application.v1 --describe \
-            | grep -q 'retention.ms=259200000'
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
-            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
-            --command-config /tmp/lanverse-kafka-health.properties \
-            --entity-type topics --entity-name lanverse.logs.application.dlq.v1 --describe \
-            | grep -q 'retention.ms=1209600000'
-          ! docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T kafka \
+          ! environment_compose exec -T kafka \
             /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 \
             --command-config /tmp/lanverse-kafka-health.properties --list \
             | grep -qi command
@@ -132,14 +127,13 @@ jobs:
           LANVERSE_TEST_KAFKA_PASSWORD: lanverse-ci-kafka-admin
           LANVERSE_TEST_KAFKA_ADMIN_PASSWORD: lanverse-ci-kafka-admin
           LANVERSE_TEST_KAFKA_EVENT_WORKER_PASSWORD: lanverse-ci-event-worker
-          LANVERSE_TEST_KAFKA_FILEBEAT_PASSWORD: lanverse-ci-filebeat
-          LANVERSE_TEST_KAFKA_LOGSTASH_PASSWORD: lanverse-ci-logstash
           LANVERSE_TEST_KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.v1
           LANVERSE_TEST_KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dlq.v1
           LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
           LANVERSE_TEST_KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
           LANVERSE_TEST_ELASTICSEARCH_URL: http://127.0.0.1:19200
           LANVERSE_TEST_KIBANA_URL: http://127.0.0.1:15601
+          LANVERSE_TEST_LOGSTASH_ADDRESS: 127.0.0.1:15000
         run: |
           test -z "$(gofmt -l .)"
           go vet ./...
@@ -234,13 +228,14 @@ jobs:
           MINIO_SECRET_KEY: ci-compose-only-secret
           KAFKA_ADMIN_PASSWORD: ci-compose-only-kafka-admin
           KAFKA_EVENT_WORKER_PASSWORD: ci-compose-only-event-worker
-          KAFKA_FILEBEAT_PASSWORD: ci-compose-only-filebeat
-          KAFKA_LOGSTASH_PASSWORD: ci-compose-only-logstash
           LANVERSE_CORS_ORIGINS: '["https://app.example.test"]'
           MINIO_CORS_ORIGINS: https://app.example.test
         run: |
-          docker compose -f docker-compose.yml -f docker-compose-env.yml config --quiet
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose-env.yml config --quiet
           docker compose -f docker-compose.yml -f docker-compose-env.yml -f docker-compose-prod.yml config --quiet
+          test "$(docker compose -f docker-compose.yml config --services | sort | tr '\n' ' ')" = "backend frontend "
+          test -z "$(docker compose -f docker-compose-env.yml config --services)"
       - name: Build Frontend deployment image
         run: docker build --tag lanverse/frontend:ci frontend
       - name: Build Backend deployment image
@@ -250,8 +245,10 @@ jobs:
       - name: Require Backend binaries
         run: >-
           docker run --rm --entrypoint /bin/sh lanverse/backend:ci -c
-          'test -x /usr/local/bin/lanverse-api && test -x /usr/local/bin/lanverse-workflow-worker &&
-          test -x /usr/local/bin/lanverse-event-worker'
+          'test -x /usr/local/bin/lanverse &&
+          test ! -e /usr/local/bin/lanverse-api &&
+          test ! -e /usr/local/bin/lanverse-workflow-worker &&
+          test ! -e /usr/local/bin/lanverse-event-worker'
       - name: Require Frontend standalone runtime
         run: >-
           docker run --rm --entrypoint /bin/sh lanverse/frontend:ci -c
@@ -270,44 +267,58 @@ jobs:
           '
       - name: Run deployment images against real dependencies
         env:
-          COMPOSE_PROFILES: bundled-minio
+          COMPOSE_PROFILES: bundled-minio,bundled-postgres,bundled-temporal,bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
+          POSTGRES_HOST: host.docker.internal
+          MINIO_ENDPOINT: host.docker.internal:9000
+          DOCKER_TEMPORAL_ADDRESS: host.docker.internal:7233
+          DOCKER_KAFKA_BROKERS: host.docker.internal:19093
+          DOCKER_ELASTICSEARCH_URL: http://host.docker.internal:9200
+          DOCKER_LOGSTASH_ADDRESS: host.docker.internal:5000
+          KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
+          KAFKA_USERNAME: event_worker
+          KAFKA_PASSWORD: lanverse-development-event-worker
+          ELASTICSEARCH_USERNAME: ""
+          ELASTICSEARCH_PASSWORD: ""
         run: |
+          environment_compose() { docker compose -p lanverse-ci-env -f docker-compose-env.yml "$@"; }
+          service_compose() { docker compose -p lanverse-ci -f docker-compose.yml "$@"; }
           export AGENT_RUNTIME_IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' lanverse/agent:ci)"
           test -n "$AGENT_RUNTIME_IMAGE_DIGEST"
           docker tag lanverse/frontend:ci lanverse/frontend:development
           docker tag lanverse/backend:ci lanverse/backend:development
-          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --no-build --wait --wait-timeout 240 \
-            frontend workflow-worker event-worker filebeat logstash kibana
-          docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --no-build kibana-init
-          kibana_init_container=$(docker compose -f docker-compose.yml -f docker-compose-env.yml ps --all --quiet kibana-init)
-          test -n "$kibana_init_container"
-          test "$(docker wait "$kibana_init_container")" = 0
-          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx workflow-worker
-          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx event-worker
-          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx filebeat
-          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx logstash
-          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx kibana
+          environment_compose up --detach --no-build --wait --wait-timeout 240 \
+            postgres minio temporal kafka elasticsearch logstash kibana
+          environment_compose up --detach --no-build minio-init kafka-init kibana-init
+          for init_service in minio-init kafka-init kibana-init; do
+            init_container=$(environment_compose ps --all --quiet "$init_service")
+            test -n "$init_container"
+            test "$(docker wait "$init_container")" = 0
+          done
+          service_compose up --detach --no-build --wait --wait-timeout 240 frontend backend
+          service_compose ps --status running --services | grep -qx backend
+          environment_compose ps --status running --services | grep -qx logstash
+          environment_compose ps --status running --services | grep -qx kibana
           for attempt in $(seq 1 30); do
-            if docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color workflow-worker | grep -q "lanverse workflow worker started"; then
+            if service_compose logs --no-color backend | grep -q "lanverse workflow worker started"; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
-              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color workflow-worker
+              service_compose logs --no-color backend
               exit 1
             fi
             sleep 1
           done
           for attempt in $(seq 1 30); do
-            if docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color event-worker | grep -q "lanverse event worker started"; then
+            if service_compose logs --no-color backend | grep -q "lanverse event worker started"; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
-              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color event-worker
+              service_compose logs --no-color backend
               exit 1
             fi
             sleep 1
           done
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
+          service_compose exec -T backend \
             wget --quiet --spider http://127.0.0.1:8687/readyz
           test_email=ci-logging-faults@example.test
           curl --fail --silent --show-error --request POST http://127.0.0.1:8686/api/v1/auth/registration-verifications \
@@ -340,75 +351,77 @@ jobs:
               --request POST http://127.0.0.1:9200/lanverse-logs-application-v1/_search \
               --header 'Content-Type: application/json' \
               --data-binary "{\"query\":{\"term\":{\"request_id\":\"$log_request_id\"}},\"size\":1}")
-            if python3 -c 'import json,sys; result=json.load(sys.stdin); source=result["hits"]["hits"][0]["_source"]; assert source["service"] == "lanverse-api"; assert source["event"] == "http_request"; assert source["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"; assert source["route"] == "/healthz"; assert "ci-sensitive-query-value" not in json.dumps(source)' <<<"$log_result" 2>/dev/null; then
+            if python3 -c 'import json,sys; result=json.load(sys.stdin); source=result["hits"]["hits"][0]["_source"]; assert source["service"] == "lanverse-backend"; assert source["event"] == "http_request"; assert source["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"; assert source["route"] == "/healthz"; assert "ci-sensitive-query-value" not in json.dumps(source)' <<<"$log_result" 2>/dev/null; then
               break
             fi
             if [ "$attempt" -eq 60 ]; then
-              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color backend filebeat logstash
+              service_compose logs --no-color backend
+              environment_compose logs --no-color logstash
               exit 1
             fi
             sleep 1
           done
           curl --fail --silent http://127.0.0.1:5601/api/data_views/data_view/lanverse-logs-application-v1 >/dev/null
           search_index_before=$(curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search-v1 | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))')
-          for logging_service in filebeat logstash kibana; do
-            docker compose -f docker-compose.yml -f docker-compose-env.yml stop "$logging_service"
-            docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T backend \
+          for logging_service in logstash kibana; do
+            environment_compose stop "$logging_service"
+            service_compose exec -T backend \
               wget --quiet --spider http://127.0.0.1:8686/healthz
-            docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
+            service_compose exec -T backend \
               wget --quiet --spider http://127.0.0.1:8687/readyz
-            docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx workflow-worker
+            service_compose ps --status running --services | grep -qx backend
             create_project_during_fault "$logging_service"
             search_index_after=$(curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search-v1 | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))')
             test "$search_index_after" = "$search_index_before"
-            docker compose -f docker-compose.yml -f docker-compose-env.yml up --detach --no-build --wait --wait-timeout 180 "$logging_service"
+            environment_compose up --detach --no-build --wait --wait-timeout 180 "$logging_service"
           done
-          docker compose -f docker-compose.yml -f docker-compose-env.yml stop kafka
-          if docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
+          environment_compose stop kafka
+          if service_compose exec -T backend \
             wget --quiet --spider http://127.0.0.1:8687/readyz; then
-            echo 'event-worker stayed ready while Kafka was unavailable' >&2
+            echo 'backend event runtime stayed ready while Kafka was unavailable' >&2
             exit 1
           fi
-          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx event-worker
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T backend \
+          service_compose ps --status running --services | grep -qx backend
+          service_compose exec -T backend \
             wget --quiet --spider http://127.0.0.1:8686/healthz
-          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx workflow-worker
+          service_compose ps --status running --services | grep -qx backend
           create_project_during_fault kafka
-          docker compose -f docker-compose.yml -f docker-compose-env.yml start kafka
+          environment_compose start kafka
           for attempt in $(seq 1 60); do
-            if docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
+            if service_compose exec -T backend \
               wget --quiet --spider http://127.0.0.1:8687/readyz; then
               break
             fi
             if [ "$attempt" -eq 60 ]; then
-              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color event-worker kafka
+              service_compose logs --no-color backend
+              environment_compose logs --no-color kafka
               exit 1
             fi
             sleep 1
           done
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T elasticsearch \
+          environment_compose exec -T elasticsearch \
             curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-script-search-v1 >/dev/null
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T elasticsearch \
+          environment_compose exec -T elasticsearch \
             curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search-v1 >/dev/null
-          docker compose -f docker-compose.yml -f docker-compose-env.yml stop elasticsearch
-          if docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
+          environment_compose stop elasticsearch
+          if service_compose exec -T backend \
             wget --quiet --spider http://127.0.0.1:8687/readyz; then
-            echo 'event-worker stayed ready while Elasticsearch was unavailable' >&2
+            echo 'backend event runtime stayed ready while Elasticsearch was unavailable' >&2
             exit 1
           fi
-          docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T backend \
+          service_compose exec -T backend \
             wget --quiet --spider http://127.0.0.1:8686/healthz
-          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx event-worker
-          docker compose -f docker-compose.yml -f docker-compose-env.yml ps --status running --services | grep -qx workflow-worker
+          service_compose ps --status running --services | grep -qx backend
           create_project_during_fault elasticsearch
-          docker compose -f docker-compose.yml -f docker-compose-env.yml start elasticsearch
+          environment_compose start elasticsearch
           for attempt in $(seq 1 60); do
-            if docker compose -f docker-compose.yml -f docker-compose-env.yml exec -T event-worker \
+            if service_compose exec -T backend \
               wget --quiet --spider http://127.0.0.1:8687/readyz; then
               break
             fi
             if [ "$attempt" -eq 60 ]; then
-              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color event-worker elasticsearch
+              service_compose logs --no-color backend
+              environment_compose logs --no-color elasticsearch
               exit 1
             fi
             sleep 1
@@ -424,7 +437,8 @@ jobs:
               break
             fi
             if [ "$attempt" -eq 60 ]; then
-              docker compose -f docker-compose.yml -f docker-compose-env.yml logs --no-color backend filebeat logstash kafka elasticsearch
+              service_compose logs --no-color backend
+              environment_compose logs --no-color logstash kafka elasticsearch
               exit 1
             fi
             sleep 1
@@ -436,9 +450,12 @@ jobs:
           python3 -c 'import json,sys; value=json.load(sys.stdin); assert value["status"] == "ok"; assert value["skill_bundle_hash"] == "352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb"' <<<"$agent_health"
       - name: Clean deployment runtime
         if: always()
+        env:
+          COMPOSE_PROFILES: bundled-minio,bundled-postgres,bundled-temporal,bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
         run: |
           docker rm --force lanverse-ci-agent-runtime 2>/dev/null || true
-          docker compose -f docker-compose.yml -f docker-compose-env.yml down --volumes --remove-orphans
+          docker compose -p lanverse-ci -f docker-compose.yml down --volumes --remove-orphans
+          docker compose -p lanverse-ci-env -f docker-compose-env.yml down --volumes --remove-orphans
 
   delivery:
     name: Delivery / Hygiene

@@ -7,24 +7,26 @@ Lanverse 当前交付的是“整剧原稿 → 制作圣经 → 分集 → 场�
 ```text
 Browser / Next.js
         ↓
-Go lanverse-api ──→ PostgreSQL（唯一 SQL 事实源）
+Go lanverse Backend（唯一 Binary / 唯一业务 Writer）
+        ├─────────→ PostgreSQL（唯一 SQL 事实源）
         ├─────────→ MinIO（私有对象字节）
-        ├─────────→ Temporal（唯一持久 Workflow History）
-        ├─────────→ Kafka（已提交业务事件）↔ lanverse-event-worker → Elasticsearch（业务检索投影）
+        ├─────────→ Temporal（内置 Workflow Runtime）
+        ├─────────→ Kafka（内置 Event Runtime）→ Elasticsearch（业务检索投影）
         └─────────→ Python Candidate Runtime ──→ 本机 Codex CLI
 
-JSON Logs → Filebeat → Kafka Log Topic → Logstash → Elasticsearch Log Index → Kibana
+JSON Logs → Logstash → Elasticsearch Log Index → Kibana
 ```
 
 - `frontend/`：Next.js 创作工作台，只读取服务端事实并提交人工决议。
 - `backend/`：唯一公共业务 API 与唯一业务 Writer；认证、项目、剧本、制作圣经、分集、结构、分镜、正式镜头、导出和持久任务都在此实现。
+- `backend/cmd/main.go`：唯一 Go 启动入口；同一 `lanverse` 进程装配 API、Workflow 与 Event 三个职责运行时，不创建 Worker Binary 或 Compose 服务。
 - `agent/`：私有 Candidate Runtime；校验短时 Execution Grant，只执行结构化 Codex Harness，不连接 PostgreSQL/MinIO，不拥有公共业务路由。
 - `backend/internal/platform/database/model`：唯一 GORM Model Catalog 与表结构事实源。
 - `backend/api/openapi/lanverse-v1.json`：唯一公共 REST 契约源。
 - `backend/internal/agent/contract`：Backend ↔ Agent 的版本化调用/结果线协议所有者；`agent/app/candidate_runtime/schemas.py` 以禁止额外字段的 Pydantic 模型校验同一协议。
 - `docs/`：Design → PRD/Requirement → Plan → Acceptance 的事实链路。
 
-当前已接入 Apache Kafka KRaft、`lanverse-event-worker`、Elasticsearch 业务检索和独立 ELK 日志链。Backend Owner 事务只写 PostgreSQL Outbox；Worker 在事务外发布 Script/StoryGraph 已提交事件，并以 Inbox/Revision Checkpoint、隔离 DLQ 和有界 Replay 收敛至少一次投递。Script/StoryGraph Search Alias 可从 PostgreSQL Owner Snapshot 全量重建。三个应用进程输出统一脱敏 JSON，日志经 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana`；业务事件与日志使用独立 Topic、Schema、ACL、Retention、Consumer Group、DLQ 和 Index。Kafka 不承载 Command 或 Workflow，ELK/Elasticsearch 不回写业务事实。Redis 仍未引入。Backend 只接受一个 PostgreSQL `DATABASE_URL` 作为业务 SQL 事实源；Temporal 只拥有 Workflow History，仓库不保留手写 SQL Schema/Migration、迁移版本字段、第二套 ORM/连接模型或 Python SQLAlchemy Writer。
+当前已接入 Apache Kafka KRaft、Backend Event Runtime、Elasticsearch 业务检索和独立 ELK 日志链。Backend Owner 事务只写 PostgreSQL Outbox；Event Runtime 在事务外发布 Script/StoryGraph 已提交事件，并以 Inbox/Revision Checkpoint、隔离 DLQ 和有界 Replay 收敛至少一次投递。Script/StoryGraph Search Alias 可从 PostgreSQL Owner Snapshot 全量重建。唯一 Backend 进程输出统一脱敏 JSON，同时保留 stdout 并以失败开放的 TCP Writer 直送 `Logstash → Elasticsearch → Kibana`；日志不再经过 Filebeat 或 Kafka，Kafka 只承载已提交业务事件。ELK/Elasticsearch 不回写业务事实。Redis 仍未引入。Backend 只接受一个 PostgreSQL `DATABASE_URL` 作为业务 SQL 事实源；Temporal 只拥有 Workflow History，仓库不保留手写 SQL Schema/Migration、迁移版本字段、第二套 ORM/连接模型或 Python SQLAlchemy Writer。
 
 ## 文档入口
 
@@ -47,18 +49,40 @@ AGENT_EXECUTION_SECRET=development-only-agent-execution-secret \
   uv run uvicorn app.candidate_runtime.api:app --host 127.0.0.1 --port 8787
 ```
 
-另一个终端启动 Frontend、Backend、PostgreSQL、Temporal、Kafka 与 ELK。开发环境直接复用本机已启动的 MinIO，Docker 内部通过 `.env` 的 `MINIO_ENDPOINT=host.docker.internal:9000` 访问它：
+本机开发默认复用已经启动的 PostgreSQL、MinIO、Homebrew Kafka、Homebrew Temporal、Elasticsearch 与 Kibana；项目容器通过 `host.docker.internal` 连接这些服务。`docker-compose.yml` 只声明 Frontend/Backend 项目服务，`docker-compose-env.yml` 是可独立运行的环境栈。
+
+本机已运行 Logstash 与 Homebrew Temporal，开发时不再创建同类容器。Backend 通过 `host.docker.internal:5000` 直连现有 Logstash；`docker-compose-env.yml` 中的所有环境服务均由显式 `bundled-*` profile 控制，只用于 CI、生产组合或确需隔离环境的场景。
+
+环境保持运行后，日常开发只启动或更新项目服务：
 
 ```bash
 docker compose --env-file .env \
   -f docker-compose.yml \
-  -f docker-compose-env.yml \
   up --build -d
 ```
 
-这套 Compose 服务保持运行，日常测试直接复用，不需要每轮重新启动。只有需要一套隔离的容器内 MinIO 时才显式追加 `--profile bundled-minio`；CI 和生产编排仍使用该隔离模式。
+日常测试直接复用已启动环境，不需要每轮重启。默认环境栈不会创建 PostgreSQL、MinIO、Kafka、Elasticsearch 或 Kibana 容器。本机服务需要满足 `.env` 中的地址与认证配置；Homebrew Kafka 需要公布容器可达的 Broker 地址并已创建项目 Topic，Elasticsearch 需要存在 Lanverse 使用的账号、模板和索引。
 
-开发 Compose 中 Backend 通过 `host.docker.internal:8787` 调用私有 Agent，并通过 `temporal:7233` 连接 Temporal；Temporal UI 仅绑定本机 `127.0.0.1:8233`。生产环境必须显式提供私有网络内的 `AGENT_URL` 与 `TEMPORAL_ADDRESS`，并为 Backend/Agent 注入相同的高强度 `AGENT_EXECUTION_SECRET`；Agent 不接收数据库、JWT、Temporal 或对象存储凭据。
+只有需要完全隔离的容器内存储时才显式启用对应 profile，并让应用连接容器服务：
+
+```bash
+docker compose --env-file .env \
+  --profile bundled-postgres \
+  --profile bundled-minio \
+  --profile bundled-kafka \
+  --profile bundled-elasticsearch \
+  --profile bundled-kibana \
+  --profile bundled-logstash \
+  --profile bundled-temporal \
+  -f docker-compose-env.yml \
+  up -d
+```
+
+隔离环境通过宿主机发布端口供项目服务使用；环境健康后仍单独执行 `docker-compose.yml` 启动项目。CI 和生产可使用独立项目名与线上覆盖组合两层编排，但不把环境服务重新塞入项目启动文件。
+
+CI 和生产编排继续显式启用隔离依赖及其安全配置；本机开发以本机现有服务为准，不另外启动同类环境。
+
+开发 Compose 中 Backend 通过 `host.docker.internal:8787` 调用私有 Agent，并通过 `host.docker.internal:7233` 连接本机 Temporal。生产环境必须显式提供私有网络内的 `AGENT_URL` 与 `TEMPORAL_ADDRESS`，并为 Backend/Agent 注入相同的高强度 `AGENT_EXECUTION_SECRET`；Agent 不接收数据库、JWT、Temporal 或对象存储凭据。
 
 需要独立部署 Agent 时，从仓库根目录构建，镜像会固定安装 Codex CLI 并带入本项目所需的 Skill Pack：
 

@@ -1,3 +1,5 @@
+name: lanverse
+
 services:
   frontend:
     image: ${LANVERSE_FRONTEND_IMAGE:?LANVERSE_FRONTEND_IMAGE is required}
@@ -19,6 +21,7 @@ services:
     init: true
     environment:
       ENVIRONMENT: production
+      LOGSTASH_ADDRESS: logstash:5000
       API_HOST: 0.0.0.0
       API_PORT: 8686
       CORS_ORIGINS: ${LANVERSE_CORS_ORIGINS:?LANVERSE_CORS_ORIGINS is required}
@@ -46,47 +49,7 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
       MINIO_SECURE: "false"
       MINIO_PUBLIC_SECURE: ${MINIO_PUBLIC_SECURE:-true}
-      ELASTICSEARCH_URL: http://elasticsearch:9200
-      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
-      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 256M
-
-  workflow-worker:
-    image: ${LANVERSE_BACKEND_IMAGE:?LANVERSE_BACKEND_IMAGE is required}
-    build: !reset null
-    pull_policy: always
-    restart: unless-stopped
-    init: true
-    environment:
-      ENVIRONMENT: production
-      DATABASE_URL: >-
-        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-lanverse}
-      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:?TEMPORAL_ADDRESS is required}
-      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
-      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
-    healthcheck:
-      disable: true
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 256M
-
-  event-worker:
-    image: ${LANVERSE_BACKEND_IMAGE:?LANVERSE_BACKEND_IMAGE is required}
-    build: !reset null
-    pull_policy: always
-    restart: unless-stopped
-    init: true
-    environment:
-      ENVIRONMENT: production
-      DATABASE_URL: >-
-        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-lanverse}
-      EVENT_WORKER_HOST: 0.0.0.0
+      EVENT_WORKER_HOST: 127.0.0.1
       EVENT_WORKER_PORT: 8687
       KAFKA_BROKERS: kafka:19092
       KAFKA_CLIENT_ID: lanverse-event-worker
@@ -98,15 +61,22 @@ services:
       KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
       KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
       ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: ""
+      ELASTICSEARCH_PASSWORD: ""
       ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
       ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
     deploy:
       resources:
         limits:
           cpus: "1.0"
-          memory: 256M
+          memory: 768M
+    networks:
+      - edge
+      - internal
+      - environment
 
   postgres:
+    profiles: !reset []
     restart: unless-stopped
     ports: !reset []
     deploy:
@@ -132,6 +102,7 @@ services:
     restart: "no"
 
   kafka:
+    profiles: !reset []
     restart: unless-stopped
     ports: !reset []
     environment:
@@ -140,20 +111,21 @@ services:
         org.apache.kafka.common.security.plain.PlainLoginModule required
         username="admin" password="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
         user_admin="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}";
-      KAFKA_LISTENER_NAME_PLAINTEXT_PLAIN_SASL_JAAS_CONFIG: >-
+      KAFKA_LISTENER_NAME_PLAINTEXT__INTERNAL_PLAIN_SASL_JAAS_CONFIG: >-
         org.apache.kafka.common.security.plain.PlainLoginModule required
         username="admin" password="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
         user_admin="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
-        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:?KAFKA_EVENT_WORKER_PASSWORD is required}"
-        user_filebeat="${KAFKA_FILEBEAT_PASSWORD:?KAFKA_FILEBEAT_PASSWORD is required}"
-        user_logstash="${KAFKA_LOGSTASH_PASSWORD:?KAFKA_LOGSTASH_PASSWORD is required}";
+        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:?KAFKA_EVENT_WORKER_PASSWORD is required}";
       KAFKA_LISTENER_NAME_PLAINTEXT__HOST_PLAIN_SASL_JAAS_CONFIG: >-
         org.apache.kafka.common.security.plain.PlainLoginModule required
         username="admin" password="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
         user_admin="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
-        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:?KAFKA_EVENT_WORKER_PASSWORD is required}"
-        user_filebeat="${KAFKA_FILEBEAT_PASSWORD:?KAFKA_FILEBEAT_PASSWORD is required}"
-        user_logstash="${KAFKA_LOGSTASH_PASSWORD:?KAFKA_LOGSTASH_PASSWORD is required}";
+        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:?KAFKA_EVENT_WORKER_PASSWORD is required}";
+      KAFKA_LISTENER_NAME_PLAINTEXT__DOCKER_PLAIN_SASL_JAAS_CONFIG: >-
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="admin" password="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
+        user_admin="${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}"
+        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:?KAFKA_EVENT_WORKER_PASSWORD is required}";
     deploy:
       resources:
         limits:
@@ -161,11 +133,13 @@ services:
           memory: 2G
 
   kafka-init:
+    profiles: !reset []
     restart: "no"
     environment:
       KAFKA_ADMIN_PASSWORD: ${KAFKA_ADMIN_PASSWORD:?KAFKA_ADMIN_PASSWORD is required}
 
   elasticsearch:
+    profiles: !reset []
     restart: unless-stopped
     ports: !reset []
     deploy:
@@ -175,22 +149,17 @@ services:
           memory: 2G
 
   elasticsearch-init:
+    profiles: !reset []
     restart: "no"
 
-  filebeat:
-    restart: unless-stopped
-    environment:
-      KAFKA_FILEBEAT_PASSWORD: ${KAFKA_FILEBEAT_PASSWORD:?KAFKA_FILEBEAT_PASSWORD is required}
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
-
   logstash:
+    profiles: !reset []
     restart: unless-stopped
+    ports: !reset []
     environment:
-      KAFKA_LOGSTASH_PASSWORD: ${KAFKA_LOGSTASH_PASSWORD:?KAFKA_LOGSTASH_PASSWORD is required}
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: ""
+      ELASTICSEARCH_PASSWORD: ""
     deploy:
       resources:
         limits:
@@ -198,6 +167,7 @@ services:
           memory: 768M
 
   kibana:
+    profiles: !reset []
     restart: unless-stopped
     ports: !reset []
     deploy:
@@ -207,4 +177,5 @@ services:
           memory: 1280M
 
   kibana-init:
+    profiles: !reset []
     restart: "no"

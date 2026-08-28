@@ -56,26 +56,13 @@ script_topic=lanverse.business.script-version.v1
 script_dlq=lanverse.business.script-version.dlq.v1
 storygraph_topic=lanverse.business.storygraph-version.v1
 storygraph_dlq=lanverse.business.storygraph-version.dlq.v1
-log_topic=lanverse.logs.application.v1
-log_dlq=lanverse.logs.application.dlq.v1
-
 create_topic "${script_topic}" 604800000
 create_topic "${script_dlq}" 2592000000
 create_topic "${storygraph_topic}" 604800000
 create_topic "${storygraph_dlq}" 2592000000
-create_topic "${log_topic}" 259200000
-create_topic "${log_dlq}" 1209600000
 
 for topic in "${script_topic}" "${script_dlq}" "${storygraph_topic}" "${storygraph_dlq}"; do
   grant_topic event_worker "${topic}" --operation Read --operation Write --operation Describe
 done
 grant_group event_worker lanverse.search-projector.v1
 grant_idempotent_write event_worker
-
-grant_topic filebeat "${log_topic}" --operation Write --operation Describe
-grant_idempotent_write filebeat
-
-grant_topic logstash "${log_topic}" --operation Read --operation Describe
-grant_topic logstash "${log_dlq}" --operation Write --operation Describe
-grant_group logstash lanverse.logs-indexer.v1
-grant_idempotent_write logstash

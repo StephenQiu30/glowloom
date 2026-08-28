@@ -158,7 +158,7 @@ RUNWARE_REQUEST_TIMEOUT_SECONDS=30
 
 Provider Binding 固定 `provider_key=runware`、`model_key=runware:z-image@turbo`、`credential_ref=env/runware_api_key`。Credential Ref 只映射 allowlist 中的 `RUNWARE_API_KEY`；Secret 不进入数据库、Target、Hash、Receipt、日志或 Temporal History。生产 Endpoint 固定为官方 HTTPS；测试只通过构造函数注入本地 Server，不提供任意生产 Base URL 环境变量。
 
-启用图片节点但缺少配置时 `workflow-worker` 启动失败；未启用时不读取 Secret，也不注册假 Provider。
+启用图片节点但缺少配置时 Backend Workflow Runtime 启动失败；未启用时不读取 Secret，也不注册假 Provider。
 
 ### 7.2 Submit
 
@@ -226,7 +226,7 @@ Workflow Node
 
 - PostgreSQL/GORM Catalog 是唯一 SQL 事实源；Runware、Kafka、Elasticsearch、MinIO 都不是业务 Writer。
 - API Key、Authorization Header、签名参数、原始 Prompt 和图片字节不进入普通日志、错误详情、Trace、Receipt 或测试快照。
-- JSON 日志只记录 Backend Target/Intent/Request/Job ID、Target Kind、脱敏 Provider/Model、状态、耗时、输出数量和稳定错误码，并进入既定 Filebeat → Kafka → Logstash → Elasticsearch → Kibana 链。
+- JSON 日志只记录 Backend Target/Intent/Request/Job ID、Target Kind、脱敏 Provider/Model、状态、耗时、输出数量和稳定错误码，并进入既定 Backend → Logstash → Elasticsearch → Kibana 链。
 - HTTP Client 不对可能已写入的 POST 做 Transport Retry；Query 可退避重试但始终使用同一 UUID。
 - 下载防 SSRF、重定向逃逸、DNS rebinding、压缩/像素炸弹、超限响应和媒体伪报。
 - Runware URL 只作短时来源，必须立即写私有 Staging，不能成为 Asset Location。

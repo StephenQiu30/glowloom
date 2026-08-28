@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	"context"
@@ -20,23 +20,19 @@ import (
 	eventingapp "github.com/StephenQiu30/lanverse/backend/internal/eventing/application"
 	eventing "github.com/StephenQiu30/lanverse/backend/internal/eventing/domain"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
-	platformschema "github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	searches "github.com/StephenQiu30/lanverse/backend/internal/search/adapter/elasticsearch"
 	searchgorm "github.com/StephenQiu30/lanverse/backend/internal/search/adapter/gormdb"
 	searchapp "github.com/StephenQiu30/lanverse/backend/internal/search/application"
 	search "github.com/StephenQiu30/lanverse/backend/internal/search/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 )
 
 const (
-	schemaSyncTimeout = 2 * time.Minute
 	dependencyTimeout = 10 * time.Second
 	publisherInterval = 500 * time.Millisecond
 	eventLease        = 30 * time.Second
 )
 
-func main() {
-	logger := telemetry.NewLogger(os.Stdout, "lanverse-event-worker", os.Getenv("ENVIRONMENT"))
+func RunEventWorker(logger *slog.Logger) {
 	configuration, err := config.Load()
 	if err != nil {
 		logger.Error("event worker configuration is invalid", "error", err)
@@ -54,13 +50,6 @@ func main() {
 			logger.Error("event worker database close failed", "error", closeErr)
 		}
 	}()
-	syncContext, cancelSync := context.WithTimeout(context.Background(), schemaSyncTimeout)
-	err = platformschema.Sync(syncContext, database)
-	cancelSync()
-	if err != nil {
-		logger.Error("event worker database schema synchronization failed", "error", err)
-		os.Exit(1)
-	}
 	searchIndex, err := searches.New(searches.Config{
 		Addresses: []string{configuration.ElasticsearchURL}, Username: configuration.ElasticsearchUsername,
 		Password: configuration.ElasticsearchPassword, ScriptAlias: configuration.ElasticsearchScriptAlias,

@@ -1,139 +1,9 @@
+name: lanverse-env
+
 services:
-  frontend:
-    build:
-      args:
-        NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:${API_PORT:-8686}
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:${API_PORT:-8686}
-    ports:
-      - 127.0.0.1:${FRONTEND_PORT:-8123}:8123
-    networks:
-      - edge
-    depends_on:
-      backend:
-        condition: service_healthy
-
-  backend:
-    environment:
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      API_HOST: 0.0.0.0
-      API_PORT: 8686
-      CORS_ORIGINS: ${LANVERSE_CORS_ORIGINS:-["http://localhost:8123","http://127.0.0.1:8123"]}
-      DATABASE_URL: >-
-        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-lanverse-development-only}@postgres:5432/${POSTGRES_DB:-lanverse}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-development-only-jwt-secret-change-before-production}
-      JWT_ISSUER: ${JWT_ISSUER:-lanverse-api}
-      JWT_AUDIENCE: ${JWT_AUDIENCE:-lanverse-web}
-      JWT_ACCESS_TOKEN_MINUTES: ${JWT_ACCESS_TOKEN_MINUTES:-30}
-      AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-2592000}
-      REGISTRATION_VERIFICATION_CODE: ${REGISTRATION_VERIFICATION_CODE:-123456}
-      AGENT_URL: ${AGENT_URL:-http://host.docker.internal:8787}
-      AGENT_EXECUTION_SECRET: ${AGENT_EXECUTION_SECRET:-development-only-agent-execution-secret}
-      AGENT_RUNTIME_IMAGE_DIGEST: ${AGENT_RUNTIME_IMAGE_DIGEST:-sha256:352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb}
-      AGENT_RUNTIME_ADDITIONAL_REVISIONS: ${AGENT_RUNTIME_ADDITIONAL_REVISIONS:-[]}
-      AGENT_POLL_INTERVAL_MS: ${AGENT_POLL_INTERVAL_MS:-500}
-      REVIEW_CLAIM_LEASE_SECONDS: ${REVIEW_CLAIM_LEASE_SECONDS:-300}
-      TEMPORAL_ADDRESS: temporal:7233
-      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
-      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-host.docker.internal:9000}
-      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-127.0.0.1:9000}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-lanverse}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-lanverse-development-only}
-      MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
-      MINIO_REGION: ${MINIO_REGION:-us-east-1}
-      MINIO_SECURE: "false"
-      MINIO_PUBLIC_SECURE: ${MINIO_PUBLIC_SECURE:-false}
-      ELASTICSEARCH_URL: http://elasticsearch:9200
-      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
-      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
-    ports:
-      - 127.0.0.1:${API_PORT:-8686}:8686
-    networks:
-      - edge
-      - internal
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    depends_on:
-      postgres:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
-        required: false
-      temporal:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8686/healthz"]
-      interval: 5s
-      timeout: 3s
-      retries: 24
-      start_period: 10s
-
-  workflow-worker:
-    environment:
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      DATABASE_URL: >-
-        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-lanverse-development-only}@postgres:5432/${POSTGRES_DB:-lanverse}
-      TEMPORAL_ADDRESS: temporal:7233
-      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
-      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-host.docker.internal:9000}
-      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-127.0.0.1:9000}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-lanverse}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-lanverse-development-only}
-      MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
-      MINIO_REGION: ${MINIO_REGION:-us-east-1}
-      MINIO_SECURE: "false"
-      MINIO_PUBLIC_SECURE: ${MINIO_PUBLIC_SECURE:-false}
-    networks:
-      - edge
-      - internal
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    depends_on:
-      backend:
-        condition: service_healthy
-      temporal:
-        condition: service_healthy
-    healthcheck:
-      disable: true
-
-  event-worker:
-    environment:
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      DATABASE_URL: >-
-        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-lanverse-development-only}@postgres:5432/${POSTGRES_DB:-lanverse}
-      EVENT_WORKER_HOST: 0.0.0.0
-      EVENT_WORKER_PORT: 8687
-      KAFKA_BROKERS: kafka:19092
-      KAFKA_CLIENT_ID: lanverse-event-worker
-      KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1
-      KAFKA_USERNAME: event_worker
-      KAFKA_PASSWORD: ${KAFKA_EVENT_WORKER_PASSWORD:-lanverse-development-event-worker}
-      KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.v1
-      KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dlq.v1
-      KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
-      KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
-      ELASTICSEARCH_URL: http://elasticsearch:9200
-      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
-      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
-    networks:
-      - internal
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
-      elasticsearch:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8687/readyz"]
-      interval: 5s
-      timeout: 3s
-      retries: 24
-      start_period: 10s
-
   postgres:
+    image: postgres:16.15-alpine
+    profiles: ["bundled-postgres"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-lanverse}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -141,7 +11,7 @@ services:
     ports:
       - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
     networks:
-      - internal
+      - environment
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -152,6 +22,9 @@ services:
       start_period: 5s
 
   minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    profiles: ["bundled-minio"]
+    command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-lanverse}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-lanverse-development-only}
@@ -160,8 +33,7 @@ services:
       - 127.0.0.1:${MINIO_PORT:-9000}:9000
       - 127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001
     networks:
-      - edge
-      - internal
+      - environment
     volumes:
       - minio-data:/data
     healthcheck:
@@ -172,12 +44,20 @@ services:
       start_period: 5s
 
   minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: ["bundled-minio"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        until mc alias set local http://minio:9000 "$${MINIO_ACCESS_KEY}"
+        "$${MINIO_SECRET_KEY}"; do sleep 1; done;
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
     environment:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-lanverse}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-lanverse-development-only}
       MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
     networks:
-      - internal
+      - environment
     depends_on:
       minio:
         condition: service_healthy
@@ -185,6 +65,7 @@ services:
 
   temporal:
     image: temporalio/temporal@sha256:cf86707827fac99e4d1c4a47dc11b105382d796199c7bd41fb3213fb0471628e
+    profiles: ["bundled-temporal"]
     command:
       - server
       - start-dev
@@ -196,10 +77,10 @@ services:
       - 127.0.0.1:${TEMPORAL_PORT:-7233}:7233
       - 127.0.0.1:${TEMPORAL_UI_PORT:-8233}:8233
     networks:
-      - edge
-      - internal
+      - environment
     volumes:
       - temporal-data:/home/temporal
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "127.0.0.1:7233"]
       interval: 5s
@@ -208,15 +89,18 @@ services:
       start_period: 5s
 
   kafka:
+    image: apache/kafka:4.3.1
+    hostname: kafka
+    profiles: ["bundled-kafka"]
     environment:
       CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
       KAFKA_NODE_ID: 1
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:SASL_PLAINTEXT,PLAINTEXT:SASL_PLAINTEXT,PLAINTEXT_HOST:SASL_PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_HOST://localhost:${KAFKA_PORT:-9092},PLAINTEXT://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:SASL_PLAINTEXT,PLAINTEXT_INTERNAL:SASL_PLAINTEXT,PLAINTEXT_HOST:SASL_PLAINTEXT,PLAINTEXT_DOCKER:SASL_PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_HOST://localhost:${KAFKA_PORT:-9092},PLAINTEXT_DOCKER://host.docker.internal:${KAFKA_DOCKER_PORT:-19093},PLAINTEXT_INTERNAL://kafka:19092
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
-      KAFKA_LISTENERS: CONTROLLER://:29093,PLAINTEXT_HOST://:9092,PLAINTEXT://:19092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENERS: CONTROLLER://:29093,PLAINTEXT_HOST://:9092,PLAINTEXT_DOCKER://:19093,PLAINTEXT_INTERNAL://:19092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
       KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
@@ -229,20 +113,21 @@ services:
         org.apache.kafka.common.security.plain.PlainLoginModule required
         username="admin" password="${KAFKA_ADMIN_PASSWORD:-lanverse-development-kafka-admin}"
         user_admin="${KAFKA_ADMIN_PASSWORD:-lanverse-development-kafka-admin}";
-      KAFKA_LISTENER_NAME_PLAINTEXT_PLAIN_SASL_JAAS_CONFIG: >-
+      KAFKA_LISTENER_NAME_PLAINTEXT__INTERNAL_PLAIN_SASL_JAAS_CONFIG: >-
         org.apache.kafka.common.security.plain.PlainLoginModule required
         username="admin" password="${KAFKA_ADMIN_PASSWORD:-lanverse-development-kafka-admin}"
         user_admin="${KAFKA_ADMIN_PASSWORD:-lanverse-development-kafka-admin}"
-        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:-lanverse-development-event-worker}"
-        user_filebeat="${KAFKA_FILEBEAT_PASSWORD:-lanverse-development-filebeat}"
-        user_logstash="${KAFKA_LOGSTASH_PASSWORD:-lanverse-development-logstash}";
+        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:-lanverse-development-event-worker}";
       KAFKA_LISTENER_NAME_PLAINTEXT__HOST_PLAIN_SASL_JAAS_CONFIG: >-
         org.apache.kafka.common.security.plain.PlainLoginModule required
         username="admin" password="${KAFKA_ADMIN_PASSWORD:-lanverse-development-kafka-admin}"
         user_admin="${KAFKA_ADMIN_PASSWORD:-lanverse-development-kafka-admin}"
-        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:-lanverse-development-event-worker}"
-        user_filebeat="${KAFKA_FILEBEAT_PASSWORD:-lanverse-development-filebeat}"
-        user_logstash="${KAFKA_LOGSTASH_PASSWORD:-lanverse-development-logstash}";
+        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:-lanverse-development-event-worker}";
+      KAFKA_LISTENER_NAME_PLAINTEXT__DOCKER_PLAIN_SASL_JAAS_CONFIG: >-
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="admin" password="${KAFKA_ADMIN_PASSWORD:-lanverse-development-kafka-admin}"
+        user_admin="${KAFKA_ADMIN_PASSWORD:-lanverse-development-kafka-admin}"
+        user_event_worker="${KAFKA_EVENT_WORKER_PASSWORD:-lanverse-development-event-worker}";
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -253,9 +138,9 @@ services:
       KAFKA_LOG_DIRS: /var/lib/kafka/data
     ports:
       - 127.0.0.1:${KAFKA_PORT:-9092}:9092
+      - 127.0.0.1:${KAFKA_DOCKER_PORT:-19093}:19093
     networks:
-      - edge
-      - internal
+      - environment
     volumes:
       - kafka-data:/var/lib/kafka/data
       - ./backend/observability/kafka/healthcheck.sh:/usr/share/lanverse-observability/kafka-healthcheck.sh:ro
@@ -267,16 +152,23 @@ services:
       start_period: 10s
 
   kafka-init:
+    image: apache/kafka:4.3.1
+    profiles: ["bundled-kafka"]
+    entrypoint: ["/usr/share/lanverse-observability/kafka-init.sh"]
     environment:
       KAFKA_ADMIN_PASSWORD: ${KAFKA_ADMIN_PASSWORD:-lanverse-development-kafka-admin}
     networks:
-      - internal
+      - environment
+    volumes:
+      - ./backend/observability/kafka/init.sh:/usr/share/lanverse-observability/kafka-init.sh:ro
     depends_on:
       kafka:
         condition: service_healthy
     restart: "no"
 
   elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.4
+    profiles: ["bundled-elasticsearch"]
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
@@ -285,8 +177,7 @@ services:
     ports:
       - 127.0.0.1:${ELASTICSEARCH_PORT:-9200}:9200
     networks:
-      - edge
-      - internal
+      - environment
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
     healthcheck:
@@ -297,49 +188,41 @@ services:
       start_period: 20s
 
   elasticsearch-init:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.4
+    profiles: ["bundled-elasticsearch"]
+    entrypoint: ["/usr/share/lanverse-observability/elasticsearch-init.sh"]
     environment:
       ELASTICSEARCH_URL: http://elasticsearch:9200
     networks:
-      - internal
+      - environment
+    volumes:
+      - ./backend/observability/elasticsearch/init.sh:/usr/share/lanverse-observability/elasticsearch-init.sh:ro
+      - ./backend/observability/elasticsearch/ilm-policy.json:/usr/share/lanverse-observability/ilm-policy.json:ro
+      - ./backend/observability/logstash/template/lanverse-logs-template.json:/usr/share/lanverse-observability/lanverse-logs-template.json:ro
     depends_on:
       elasticsearch:
         condition: service_healthy
     restart: "no"
 
-  filebeat:
-    environment:
-      KAFKA_BROKERS: kafka:19092
-      KAFKA_LOG_TOPIC: lanverse.logs.application.v1
-      KAFKA_FILEBEAT_USERNAME: filebeat
-      KAFKA_FILEBEAT_PASSWORD: ${KAFKA_FILEBEAT_PASSWORD:-lanverse-development-filebeat}
-    networks:
-      - internal
-    depends_on:
-      kafka-init:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "filebeat", "test", "output", "-e", "--strict.perms=false"]
-      interval: 10s
-      timeout: 10s
-      retries: 24
-      start_period: 10s
-
   logstash:
+    image: docker.elastic.co/logstash/logstash:9.4.4
+    profiles: ["bundled-logstash"]
     environment:
       LS_JAVA_OPTS: -Xms256m -Xmx256m
-      KAFKA_BROKERS: kafka:19092
-      KAFKA_LOG_TOPIC: lanverse.logs.application.v1
-      KAFKA_LOG_DLQ_TOPIC: lanverse.logs.application.dlq.v1
-      KAFKA_LOGSTASH_USERNAME: logstash
-      KAFKA_LOGSTASH_PASSWORD: ${KAFKA_LOGSTASH_PASSWORD:-lanverse-development-logstash}
-      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_URL: ${DOCKER_ELASTICSEARCH_URL:-http://host.docker.internal:9200}
+      ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME-lanverse_dev}
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD-lanverse-development-elasticsearch}
+    ports:
+      - 127.0.0.1:${LOGSTASH_PORT:-5000}:5000
     networks:
-      - internal
-    depends_on:
-      kafka-init:
-        condition: service_completed_successfully
-      elasticsearch-init:
-        condition: service_completed_successfully
+      - environment
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ./backend/observability/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./backend/observability/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - logstash-data:/usr/share/logstash/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:9600/_node/pipelines >/dev/null"]
       interval: 10s
@@ -348,6 +231,8 @@ services:
       start_period: 30s
 
   kibana:
+    image: docker.elastic.co/kibana/kibana:9.4.4
+    profiles: ["bundled-kibana"]
     environment:
       ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
       SERVER_HOST: 0.0.0.0
@@ -355,8 +240,9 @@ services:
     ports:
       - 127.0.0.1:${KIBANA_PORT:-5601}:5601
     networks:
-      - edge
-      - internal
+      - environment
+    volumes:
+      - kibana-data:/usr/share/kibana/data
     depends_on:
       elasticsearch-init:
         condition: service_completed_successfully
@@ -368,21 +254,24 @@ services:
       start_period: 30s
 
   kibana-init:
+    image: docker.elastic.co/kibana/kibana:9.4.4
+    profiles: ["bundled-kibana"]
+    entrypoint: ["/usr/share/lanverse-observability/kibana-init.sh"]
     environment:
       KIBANA_URL: http://kibana:5601
     networks:
-      - internal
+      - environment
+    volumes:
+      - ./backend/observability/kibana/init.sh:/usr/share/lanverse-observability/kibana-init.sh:ro
     depends_on:
       kibana:
         condition: service_healthy
     restart: "no"
 
 networks:
-  edge:
+  environment:
+    name: lanverse-environment
     driver: bridge
-  internal:
-    driver: bridge
-    internal: true
 
 volumes:
   postgres-data:
@@ -390,6 +279,5 @@ volumes:
   temporal-data:
   kafka-data:
   elasticsearch-data:
-  filebeat-data:
   logstash-data:
   kibana-data:
