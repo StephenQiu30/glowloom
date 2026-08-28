@@ -116,6 +116,7 @@ services:
           memory: 2G
 
   minio:
+    profiles: !reset []
     restart: unless-stopped
     ports: !reset []
     environment:
@@ -127,6 +128,7 @@ services:
           memory: 2G
 
   minio-init:
+    profiles: !reset []
     restart: "no"
 
   kafka:

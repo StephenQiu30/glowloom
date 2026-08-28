@@ -47,7 +47,7 @@ AGENT_EXECUTION_SECRET=development-only-agent-execution-secret \
   uv run uvicorn app.candidate_runtime.api:app --host 127.0.0.1 --port 8787
 ```
 
-另一个终端启动 Frontend、Backend、PostgreSQL、MinIO 与 Temporal：
+另一个终端启动 Frontend、Backend、PostgreSQL、Temporal、Kafka 与 ELK。开发环境直接复用本机已启动的 MinIO，Docker 内部通过 `.env` 的 `MINIO_ENDPOINT=host.docker.internal:9000` 访问它：
 
 ```bash
 docker compose --env-file .env \
@@ -55,6 +55,8 @@ docker compose --env-file .env \
   -f docker-compose-env.yml \
   up --build -d
 ```
+
+这套 Compose 服务保持运行，日常测试直接复用，不需要每轮重新启动。只有需要一套隔离的容器内 MinIO 时才显式追加 `--profile bundled-minio`；CI 和生产编排仍使用该隔离模式。
 
 开发 Compose 中 Backend 通过 `host.docker.internal:8787` 调用私有 Agent，并通过 `temporal:7233` 连接 Temporal；Temporal UI 仅绑定本机 `127.0.0.1:8233`。生产环境必须显式提供私有网络内的 `AGENT_URL` 与 `TEMPORAL_ADDRESS`，并为 Backend/Agent 注入相同的高强度 `AGENT_EXECUTION_SECRET`；Agent 不接收数据库、JWT、Temporal 或对象存储凭据。
 

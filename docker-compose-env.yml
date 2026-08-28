@@ -36,7 +36,7 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
-      MINIO_ENDPOINT: minio:9000
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-host.docker.internal:9000}
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-127.0.0.1:9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-lanverse}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-lanverse-development-only}
@@ -59,6 +59,7 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+        required: false
       temporal:
         condition: service_healthy
     healthcheck:
@@ -76,7 +77,7 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
-      MINIO_ENDPOINT: minio:9000
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-host.docker.internal:9000}
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-127.0.0.1:9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-lanverse}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-lanverse-development-only}
@@ -85,7 +86,10 @@ services:
       MINIO_SECURE: "false"
       MINIO_PUBLIC_SECURE: ${MINIO_PUBLIC_SECURE:-false}
     networks:
+      - edge
       - internal
+    extra_hosts:
+      - host.docker.internal:host-gateway
     depends_on:
       backend:
         condition: service_healthy

@@ -269,6 +269,8 @@ jobs:
             python -c "from app.candidate_runtime.api import app; from app.modules.storygraph.bundle import StoryGraphBundle; assert app.title == '\''Lanverse Candidate Runtime'\''; StoryGraphBundle().verify_installed_bundle()"
           '
       - name: Run deployment images against real dependencies
+        env:
+          COMPOSE_PROFILES: bundled-minio
         run: |
           export AGENT_RUNTIME_IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' lanverse/agent:ci)"
           test -n "$AGENT_RUNTIME_IMAGE_DIGEST"
