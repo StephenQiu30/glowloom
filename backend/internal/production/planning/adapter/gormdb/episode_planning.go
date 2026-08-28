@@ -3,6 +3,7 @@ package gormdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
@@ -361,6 +363,28 @@ func (repo *repository) GetPlanningOwnerSet(
 		result[index] = value
 	}
 	return result, nil
+}
+
+func (repo *repository) GetPlanningOwnerSetReceipt(
+	ctx context.Context,
+	receiptID string,
+) (platformcommand.Receipt, error) {
+	id, err := uuid.Parse(receiptID)
+	if err != nil {
+		return platformcommand.Receipt{}, platformcommand.ErrReceiptNotFound
+	}
+	var record model.CommandReceipt
+	if err = repo.database.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return platformcommand.Receipt{}, platformcommand.ErrReceiptNotFound
+		}
+		return platformcommand.Receipt{}, err
+	}
+	return platformcommand.Receipt{
+		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), Operation: record.Operation,
+		IdempotencyKey: record.IdempotencyKey, InputHash: record.InputHash, ResourceID: record.ResourceID.String(),
+		Result: append([]byte(nil), record.Result...), CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt,
+	}, nil
 }
 
 func planningCandidateConflict(message string) error {

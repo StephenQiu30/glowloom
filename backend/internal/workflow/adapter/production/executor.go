@@ -20,6 +20,8 @@ import (
 	scriptdomain "github.com/StephenQiu30/lanverse/backend/internal/production/script/domain"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	storyboarddomain "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/domain"
+	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
+	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -35,6 +37,7 @@ const (
 	episodeAnalysisExecutor        = "activity.episode_analysis"
 	episodePlanExecutor            = "activity.episode_plan"
 	episodeStructureExecutor       = "activity.episode_structure"
+	storyGraphCompileExecutor      = "activity.storygraph_compile"
 	storyboardDraftExecutor        = "activity.storyboard_draft"
 	storyboardExportExecutor       = "activity.storyboard_export"
 	productionShotInputExecutor    = "workflow.input.production_shot"
@@ -89,6 +92,14 @@ type EpisodePlanOwner interface {
 	GetConfirmedStructureBatch(context.Context, planningapp.Actor, string) (planningapp.PublishedStructureBatch, error)
 }
 
+type PlanningOwnerSetSource interface {
+	GetPlanningOwnerSet(context.Context, planningapp.Actor, string) (planningapp.AppliedPlanningOwnerSet, error)
+}
+
+type StoryGraphCompiler interface {
+	CompileOwnerSet(context.Context, storygraphapp.Actor, storygraphapp.CompileOwnerSetCommand) (storygraphapp.CompileResult, error)
+}
+
 type StoryboardWorkflowOwner interface {
 	CreateSet(context.Context, storyboardapp.Actor, storyboardapp.CreateSetCommand) (storyboarddomain.DraftSet, error)
 	RefreshSet(context.Context, storyboardapp.Actor, string) (storyboarddomain.DraftSet, error)
@@ -103,17 +114,19 @@ type ShotImageWorkflowOwner interface {
 }
 
 type NodeExecutor struct {
-	scripts      ScriptSource
-	evidence     SourceEvidenceOwner
-	stories      StoryAnalysisOwner
-	storyReviews StoryReviewOwner
-	bibles       BibleCandidateOwner
-	projects     ProjectSource
-	plans        EpisodePlanOwner
-	storyboards  StoryboardWorkflowOwner
-	bindings     ShotImageWorkflowOwner
-	segments     EpisodeSegmentationOwner
-	episodes     EpisodeAnalysisOwner
+	scripts        ScriptSource
+	evidence       SourceEvidenceOwner
+	stories        StoryAnalysisOwner
+	storyReviews   StoryReviewOwner
+	bibles         BibleCandidateOwner
+	projects       ProjectSource
+	plans          EpisodePlanOwner
+	planningOwners PlanningOwnerSetSource
+	storygraphs    StoryGraphCompiler
+	storyboards    StoryboardWorkflowOwner
+	bindings       ShotImageWorkflowOwner
+	segments       EpisodeSegmentationOwner
+	episodes       EpisodeAnalysisOwner
 }
 
 func NewNodeExecutor(
@@ -124,6 +137,8 @@ func NewNodeExecutor(
 	bibles BibleCandidateOwner,
 	projects ProjectSource,
 	plans EpisodePlanOwner,
+	planningOwners PlanningOwnerSetSource,
+	storygraphs StoryGraphCompiler,
 	storyboards StoryboardWorkflowOwner,
 	bindings ShotImageWorkflowOwner,
 	segments EpisodeSegmentationOwner,
@@ -131,6 +146,7 @@ func NewNodeExecutor(
 ) *NodeExecutor {
 	return &NodeExecutor{
 		scripts: scripts, evidence: evidence, stories: stories, storyReviews: storyReviews, bibles: bibles, projects: projects, plans: plans,
+		planningOwners: planningOwners, storygraphs: storygraphs,
 		storyboards: storyboards, bindings: bindings, segments: segments, episodes: episodes,
 	}
 }
@@ -165,6 +181,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeEpisodePlan(ctx, command)
 	case episodeStructureExecutor:
 		return executor.executeEpisodeStructure(ctx, command)
+	case storyGraphCompileExecutor:
+		return executor.executeStoryGraphCompile(ctx, command)
 	case storyboardDraftExecutor:
 		return executor.executeStoryboardDraft(ctx, command)
 	case storyboardExportExecutor:
@@ -701,6 +719,80 @@ func (executor *NodeExecutor) executeStoryboardExport(
 		Bindings: []domain.NodeOutputBinding{{
 			Port: "export", ValueType: "storyboard_export", ReferenceID: exportSet.ID,
 			ReferenceVersion: strconv.Itoa(exportSet.Revision), ContentHash: exportSet.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeStoryGraphCompile(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.planningOwners == nil || executor.storygraphs == nil {
+		return domain.NodeExecutorResult{}, errors.New("StoryGraph workflow owners are unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "storygraph" ||
+		command.OutputPorts[0].ValueType != "storygraph_version" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid StoryGraph compiler node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid StoryGraph compiler node config")
+	}
+	binding := input.Bindings[0]
+	if binding.Port != "structures" || binding.ValueType != "planning_owner_set" ||
+		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "structures" ||
+		strings.TrimSpace(binding.SourceNodeID) == "" || binding.ReferenceVersion != "1" ||
+		!workflowContentHashPattern.MatchString(binding.ContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Planning owner set input has drifted")
+	}
+	actor := planningapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
+	owners, err := executor.planningOwners.GetPlanningOwnerSet(ctx, actor, binding.ReferenceID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if owners.Set.ID != binding.ReferenceID || owners.Set.WorkspaceID != command.WorkspaceID ||
+		owners.Set.ProjectID != command.ProjectID || owners.Set.ContentHash != binding.ContentHash ||
+		len(owners.Set.Structures) == 0 || len(owners.Set.Structures) != len(owners.Structures) ||
+		!workflowContentHashPattern.MatchString(owners.Set.BibleContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Planning owner set does not match workflow input")
+	}
+	required := make([]storygraph.OwnerHeadRef, len(owners.Set.Structures))
+	for index, reference := range owners.Set.Structures {
+		if reference.Revision < 1 || !workflowContentHashPattern.MatchString(reference.ResultHash) {
+			return domain.NodeExecutorResult{}, errors.New("Planning owner set contains an invalid Structure")
+		}
+		required[index] = storygraph.OwnerHeadRef{
+			OwnerKind: "production/planning", OwnerLogicalID: reference.EpisodeID,
+			OwnerVersionID: reference.StructureID, OwnerRevision: int64(reference.Revision), ContentHash: reference.ResultHash,
+		}
+	}
+	compiled, err := executor.storygraphs.CompileOwnerSet(ctx, storygraphapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, storygraphapp.CompileOwnerSetCommand{
+		ProjectID: command.ProjectID, OwnerSetID: owners.Set.ID, OwnerSetHash: owners.Set.ContentHash,
+		RequiredBibleVersionID: owners.Set.BibleVersionID, RequiredBibleHash: owners.Set.BibleContentHash,
+		RequiredOwners: required, IdempotencyKey: command.IdempotencyKey,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if compiled.Version.WorkspaceID != command.WorkspaceID || compiled.Version.ProjectID != command.ProjectID ||
+		compiled.Version.Status != "published" || compiled.Version.VersionNo < 1 ||
+		compiled.Head.CurrentVersionID != compiled.Version.ID || compiled.Head.CurrentContentHash != compiled.Version.ContentHash ||
+		compiled.Receipt.ResourceID != compiled.Version.ID || compiled.Receipt.CreatedBy != command.InitiatorUserID {
+		return domain.NodeExecutorResult{}, errors.New("StoryGraph publication does not match workflow input")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "storygraph", ValueType: "storygraph_version", ReferenceID: compiled.Version.ID,
+			ReferenceVersion: strconv.FormatInt(compiled.Version.VersionNo, 10), ContentHash: compiled.Version.ContentHash,
 		}},
 	})
 	if err != nil {

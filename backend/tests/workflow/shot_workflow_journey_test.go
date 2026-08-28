@@ -42,6 +42,8 @@ import (
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
+	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgeneration "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/generation"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
@@ -160,6 +162,8 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 		bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		planningapp.NewEpisodePlanningService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		reviewService, imageBindings, setSource, nil, nil,
 	)

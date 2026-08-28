@@ -8,11 +8,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
 )
 
-const compileOperation = "storygraph.compile"
+const (
+	compileOperation         = "storygraph.compile"
+	compileOwnerSetOperation = "storygraph.compile_owner_set"
+)
 
 var hashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
@@ -71,6 +76,16 @@ type CompileCommand struct {
 	IdempotencyKey             string `json:"idempotency_key"`
 }
 
+type CompileOwnerSetCommand struct {
+	ProjectID              string                    `json:"project_id"`
+	OwnerSetID             string                    `json:"owner_set_id"`
+	OwnerSetHash           string                    `json:"owner_set_hash"`
+	RequiredBibleVersionID string                    `json:"required_bible_version_id"`
+	RequiredBibleHash      string                    `json:"required_bible_hash"`
+	RequiredOwners         []storygraph.OwnerHeadRef `json:"required_owners"`
+	IdempotencyKey         string                    `json:"idempotency_key"`
+}
+
 type CompileResult struct {
 	Version storygraph.Version
 	Head    storygraph.Head
@@ -113,22 +128,7 @@ func (service *Service) Compile(ctx context.Context, actor Actor, command Compil
 			return lockErr
 		}
 		if receipt, receiptErr := repo.FindReceipt(ctx, state.WorkspaceID, compileOperation, command.IdempotencyKey); receiptErr == nil {
-			replayed, replayErr := platformcommand.Replay[compileReceipt](receipt, inputHash)
-			if errors.Is(replayErr, platformcommand.ErrInputMismatch) {
-				return conflict("Idempotency key was already used with different input")
-			}
-			if replayErr != nil {
-				return replayErr
-			}
-			version, replayErr := repo.GetVersion(ctx, replayed.VersionID)
-			if replayErr != nil {
-				return replayErr
-			}
-			if version.WorkspaceID != state.WorkspaceID || version.ProjectID != state.ProjectID {
-				return ErrNotFound
-			}
-			result = CompileResult{Version: version, Head: headFromVersion(version), Receipt: receipt}
-			return nil
+			return replayCompilation(ctx, repo, state, receipt, inputHash, &result)
 		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
 			return receiptErr
 		}
@@ -144,53 +144,183 @@ func (service *Service) Compile(ctx context.Context, actor Actor, command Compil
 		if compileErr != nil {
 			return invalid(compiledErrorMessage(compileErr))
 		}
-		now := service.config.Now().UTC()
-		version := newVersion(service.config.NewID(), actor.UserID, now, state, compiled)
-		if createErr := repo.CreateVersion(ctx, version); createErr != nil {
-			return createErr
-		}
-		head, switchErr := repo.SwitchHead(ctx, state, version)
-		if switchErr != nil {
-			return switchErr
-		}
-		receiptResult, resultErr := platformcommand.Result(compileReceipt{VersionID: version.ID})
-		if resultErr != nil {
-			return resultErr
-		}
-		receipt := platformcommand.Receipt{
-			ID: service.config.NewID(), WorkspaceID: state.WorkspaceID, Operation: compileOperation,
-			IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: version.ID,
-			Result: receiptResult, CreatedBy: actor.UserID, CreatedAt: now,
-		}
-		if createErr := repo.CreateReceipt(ctx, receipt); createErr != nil {
-			return createErr
-		}
-		payload := publishedPayload{
-			VersionID: version.ID, VersionNo: version.VersionNo, ParentVersionID: version.ParentVersionID,
-			OwnerSetHash: version.OwnerSetHash, TopologyHash: version.TopologyHash, ContentHash: version.ContentHash,
-		}
-		encodedPayload, encodeErr := json.Marshal(payload)
-		if encodeErr != nil {
-			return encodeErr
-		}
-		payloadHash, hashErr := storygraph.HashCanonicalValue(payload)
-		if hashErr != nil {
-			return hashErr
-		}
-		event := storygraph.OutboxEvent{
-			ID: service.config.NewID(), EventType: "StoryGraphVersionPublished", EventVersion: 1,
-			WorkspaceID: state.WorkspaceID, ProjectID: state.ProjectID,
-			AggregateKind: "storygraph", AggregateID: state.ProjectID, AggregateRevision: version.VersionNo,
-			SourceReceiptID: receipt.ID, Payload: encodedPayload, PayloadHash: payloadHash,
-			Status: "pending", Attempts: 0, OccurredAt: now, CreatedAt: now,
-		}
-		if createErr := repo.CreateOutbox(ctx, event); createErr != nil {
-			return createErr
-		}
-		result = CompileResult{Version: version, Head: head, Receipt: receipt}
-		return nil
+		return service.publishCompilation(ctx, repo, actor, state, compiled, compileOperation, command.IdempotencyKey, inputHash, &result)
 	})
 	return result, normalizeError(err)
+}
+
+func (service *Service) CompileOwnerSet(
+	ctx context.Context,
+	actor Actor,
+	command CompileOwnerSetCommand,
+) (CompileResult, error) {
+	command.ProjectID = strings.TrimSpace(command.ProjectID)
+	command.OwnerSetID = strings.TrimSpace(command.OwnerSetID)
+	command.OwnerSetHash = strings.TrimSpace(command.OwnerSetHash)
+	command.RequiredBibleVersionID = strings.TrimSpace(command.RequiredBibleVersionID)
+	command.RequiredBibleHash = strings.TrimSpace(command.RequiredBibleHash)
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil ||
+		command.ProjectID == "" || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 ||
+		!hashPattern.MatchString(command.OwnerSetHash) || !hashPattern.MatchString(command.RequiredBibleHash) || len(command.RequiredOwners) == 0 {
+		return CompileResult{}, invalid("Invalid StoryGraph owner-set compilation request")
+	}
+	if _, err := uuid.Parse(command.OwnerSetID); err != nil {
+		return CompileResult{}, invalid("Invalid StoryGraph owner-set compilation request")
+	}
+	if _, err := uuid.Parse(command.RequiredBibleVersionID); err != nil {
+		return CompileResult{}, invalid("Invalid StoryGraph owner-set compilation request")
+	}
+	inputHash, err := platformcommand.InputHash(command)
+	if err != nil {
+		return CompileResult{}, err
+	}
+	var result CompileResult
+	err = service.transactions.WithinSerializableTransaction(ctx, func(repo Repository) error {
+		state, lockErr := repo.LockPublication(ctx, actor, command.ProjectID)
+		if lockErr != nil {
+			return lockErr
+		}
+		if receipt, receiptErr := repo.FindReceipt(ctx, state.WorkspaceID, compileOwnerSetOperation, command.IdempotencyKey); receiptErr == nil {
+			return replayCompilation(ctx, repo, state, receipt, inputHash, &result)
+		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
+			return receiptErr
+		}
+		snapshot, snapshotErr := repo.LoadOwnerSnapshot(ctx, state)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
+		compiled, compileErr := storygraph.CompileOwnerSnapshot(snapshot)
+		if compileErr != nil {
+			return invalid(compiledErrorMessage(compileErr))
+		}
+		if !matchesRequiredPlanningOwners(compiled.OwnerHeads, command.RequiredOwners) ||
+			!containsRequiredBible(compiled.Graph.Nodes, command.RequiredBibleVersionID, command.RequiredBibleHash) {
+			return conflict("Planning owner set changed before StoryGraph compilation")
+		}
+		return service.publishCompilation(ctx, repo, actor, state, compiled, compileOwnerSetOperation, command.IdempotencyKey, inputHash, &result)
+	})
+	return result, normalizeError(err)
+}
+
+func containsRequiredBible(nodes []storygraph.Node, versionID, contentHash string) bool {
+	for _, node := range nodes {
+		if node.NodeType == storygraph.NodeTypeSourceEvidence && node.OwnerRef.OwnerKind == "production/bible" &&
+			node.OwnerRef.OwnerVersionID == versionID &&
+			node.OwnerRef.ContentHash == contentHash {
+			return true
+		}
+	}
+	return false
+}
+
+func replayCompilation(
+	ctx context.Context,
+	repo Repository,
+	state storygraph.PublicationState,
+	receipt platformcommand.Receipt,
+	inputHash string,
+	result *CompileResult,
+) error {
+	replayed, err := platformcommand.Replay[compileReceipt](receipt, inputHash)
+	if errors.Is(err, platformcommand.ErrInputMismatch) {
+		return conflict("Idempotency key was already used with different input")
+	}
+	if err != nil {
+		return err
+	}
+	version, err := repo.GetVersion(ctx, replayed.VersionID)
+	if err != nil {
+		return err
+	}
+	if version.WorkspaceID != state.WorkspaceID || version.ProjectID != state.ProjectID {
+		return ErrNotFound
+	}
+	*result = CompileResult{Version: version, Head: headFromVersion(version), Receipt: receipt}
+	return nil
+}
+
+func (service *Service) publishCompilation(
+	ctx context.Context,
+	repo Repository,
+	actor Actor,
+	state storygraph.PublicationState,
+	compiled storygraph.CompiledOwnerSnapshot,
+	operation string,
+	idempotencyKey string,
+	inputHash string,
+	result *CompileResult,
+) error {
+	now := service.config.Now().UTC()
+	version := newVersion(service.config.NewID(), actor.UserID, now, state, compiled)
+	if err := repo.CreateVersion(ctx, version); err != nil {
+		return err
+	}
+	head, err := repo.SwitchHead(ctx, state, version)
+	if err != nil {
+		return err
+	}
+	receiptResult, err := platformcommand.Result(compileReceipt{VersionID: version.ID})
+	if err != nil {
+		return err
+	}
+	receipt := platformcommand.Receipt{
+		ID: service.config.NewID(), WorkspaceID: state.WorkspaceID, Operation: operation,
+		IdempotencyKey: idempotencyKey, InputHash: inputHash, ResourceID: version.ID,
+		Result: receiptResult, CreatedBy: actor.UserID, CreatedAt: now,
+	}
+	if err = repo.CreateReceipt(ctx, receipt); err != nil {
+		return err
+	}
+	payload := publishedPayload{
+		VersionID: version.ID, VersionNo: version.VersionNo, ParentVersionID: version.ParentVersionID,
+		OwnerSetHash: version.OwnerSetHash, TopologyHash: version.TopologyHash, ContentHash: version.ContentHash,
+	}
+	encodedPayload, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	payloadHash, err := storygraph.HashCanonicalValue(payload)
+	if err != nil {
+		return err
+	}
+	event := storygraph.OutboxEvent{
+		ID: service.config.NewID(), EventType: "StoryGraphVersionPublished", EventVersion: 1,
+		WorkspaceID: state.WorkspaceID, ProjectID: state.ProjectID,
+		AggregateKind: "storygraph", AggregateID: state.ProjectID, AggregateRevision: version.VersionNo,
+		SourceReceiptID: receipt.ID, Payload: encodedPayload, PayloadHash: payloadHash,
+		Status: "pending", Attempts: 0, OccurredAt: now, CreatedAt: now,
+	}
+	if err = repo.CreateOutbox(ctx, event); err != nil {
+		return err
+	}
+	*result = CompileResult{Version: version, Head: head, Receipt: receipt}
+	return nil
+}
+
+func matchesRequiredPlanningOwners(actual, required []storygraph.OwnerHeadRef) bool {
+	actualByKey := make(map[string]storygraph.OwnerHeadRef, len(required))
+	for _, owner := range actual {
+		if owner.OwnerKind == "production/planning" {
+			actualByKey[owner.OwnerKind+"\x00"+owner.OwnerLogicalID] = owner
+		}
+	}
+	if len(actualByKey) != len(required) {
+		return false
+	}
+	seen := make(map[string]struct{}, len(required))
+	for _, owner := range required {
+		key := owner.OwnerKind + "\x00" + owner.OwnerLogicalID
+		if owner.OwnerKind != "production/planning" || strings.TrimSpace(owner.OwnerLogicalID) == "" ||
+			owner.OwnerRevision < 1 || !hashPattern.MatchString(owner.ContentHash) || actualByKey[key] != owner {
+			return false
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return false
+		}
+		seen[key] = struct{}{}
+	}
+	return true
 }
 
 func newVersion(id, createdBy string, now time.Time, state storygraph.PublicationState, compiled storygraph.CompiledOwnerSnapshot) storygraph.Version {

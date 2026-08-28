@@ -10,6 +10,7 @@ import (
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	workflowexecution "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/execution"
 	workflowgeneration "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/generation"
 	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
@@ -36,6 +37,8 @@ func NewWorkflowRuntime(
 	bibles workflowproduction.BibleCandidateOwner,
 	projects *projectapp.Service,
 	plans *planningapp.Service,
+	planningOwners *planningapp.EpisodePlanningService,
+	storygraphs *storygraphapp.Service,
 	storyboards *storyboardapp.Service,
 	reviews *reviewapp.Service,
 	bindings workflowproduction.ShotImageWorkflowOwner,
@@ -43,7 +46,7 @@ func NewWorkflowRuntime(
 	segments workflowproduction.EpisodeSegmentationOwner,
 	episodes workflowproduction.EpisodeAnalysisOwner,
 ) (*workflowapp.RuntimeService, error) {
-	if repository == nil || scripts == nil || evidence == nil || stories == nil || storyReviews == nil || bibles == nil || projects == nil || plans == nil || storyboards == nil || reviews == nil {
+	if repository == nil || scripts == nil || evidence == nil || stories == nil || storyReviews == nil || bibles == nil || projects == nil || plans == nil || planningOwners == nil || storygraphs == nil || storyboards == nil || reviews == nil {
 		return nil, errors.New("workflow runtime dependencies are required")
 	}
 	now := func() time.Time { return time.Now().UTC() }
@@ -52,7 +55,7 @@ func NewWorkflowRuntime(
 		humanTasks = workflowreview.NewWithGeneration(reviews, candidateSets)
 	}
 	executor := workflowapp.NodeExecutor(
-		workflowproduction.NewNodeExecutor(scripts, evidence, stories, storyReviews, bibles, projects, plans, storyboards, bindings, segments, episodes),
+		workflowproduction.NewNodeExecutor(scripts, evidence, stories, storyReviews, bibles, projects, plans, planningOwners, storygraphs, storyboards, bindings, segments, episodes),
 	)
 	if candidateSets != nil {
 		var err error

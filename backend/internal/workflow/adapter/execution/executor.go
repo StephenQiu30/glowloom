@@ -40,6 +40,7 @@ func (executor *NodeExecutor) Execute(
 		"activity.episode_segmentation",
 		"activity.episode_plan",
 		"activity.episode_structure",
+		"activity.storygraph_compile",
 		"activity.storyboard_draft",
 		"activity.storyboard_export",
 		"workflow.input.production_shot",

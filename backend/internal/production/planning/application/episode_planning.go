@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -86,12 +87,65 @@ type ApplyEpisodePlanningCandidateResult struct {
 	Receipt platformcommand.Receipt
 }
 
+type AppliedPlanningOwnerSet struct {
+	Set        PlanningOwnerSetReference
+	Structures []domain.Structure
+}
+
 type EpisodePlanningRepository interface {
 	GetEpisodePlanningCandidate(context.Context, Actor, string, bool) (EpisodePlanningCandidateSource, error)
 	FindReceipt(context.Context, string, string, string) (platformcommand.Receipt, error)
 	CreateReceipt(context.Context, platformcommand.Receipt) error
 	GetPlanningOwnerSet(context.Context, Actor, PlanningOwnerSetReference) ([]domain.Structure, error)
 	CreatePlanningOwnerSet(context.Context, []domain.Structure) error
+}
+
+type EpisodePlanningOwnerSetReader interface {
+	GetPlanningOwnerSetReceipt(context.Context, string) (platformcommand.Receipt, error)
+}
+
+func (service *EpisodePlanningService) GetPlanningOwnerSet(
+	ctx context.Context,
+	actor Actor,
+	receiptID string,
+) (AppliedPlanningOwnerSet, error) {
+	receiptID = strings.TrimSpace(receiptID)
+	if service == nil || service.transactions == nil {
+		return AppliedPlanningOwnerSet{}, errors.New("Episode Planning owner service is unavailable")
+	}
+	if _, err := uuid.Parse(receiptID); err != nil {
+		return AppliedPlanningOwnerSet{}, ErrNotFound
+	}
+	var result AppliedPlanningOwnerSet
+	err := service.transactions.WithinEpisodePlanningTransaction(ctx, func(repo EpisodePlanningRepository) error {
+		reader, ok := repo.(EpisodePlanningOwnerSetReader)
+		if !ok {
+			return errors.New("Episode Planning owner reader is unavailable")
+		}
+		receipt, loadErr := reader.GetPlanningOwnerSetReceipt(ctx, receiptID)
+		if loadErr != nil {
+			return loadErr
+		}
+		if receipt.Operation != applyEpisodePlanningOperation || receipt.ID != receiptID {
+			return ErrNotFound
+		}
+		var reference PlanningOwnerSetReference
+		if loadErr = json.Unmarshal(receipt.Result, &reference); loadErr != nil {
+			return conflict("Episode Planning owner Receipt is invalid")
+		}
+		contentHash, hashErr := planningOwnerSetHash(reference.Structures)
+		if hashErr != nil || reference.ID != receipt.ID || reference.WorkspaceID != receipt.WorkspaceID ||
+			reference.CandidateRevisionID != receipt.ResourceID || reference.ContentHash != contentHash {
+			return conflict("Episode Planning owner Receipt has drifted")
+		}
+		structures, loadErr := repo.GetPlanningOwnerSet(ctx, actor, reference)
+		if loadErr != nil {
+			return loadErr
+		}
+		result = AppliedPlanningOwnerSet{Set: reference, Structures: structures}
+		return nil
+	})
+	return result, normalizeError(err)
 }
 
 type EpisodePlanningTransactionManager interface {

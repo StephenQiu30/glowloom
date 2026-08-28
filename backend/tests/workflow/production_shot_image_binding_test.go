@@ -146,7 +146,7 @@ func TestShotImageBindingVersionsConvergeThroughProductionOwner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build Shot image binding node input: %v", err)
 	}
-	executor := workflowproduction.NewNodeExecutor(nil, nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	executor := workflowproduction.NewNodeExecutor(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	executed, err := executor.Execute(ctx, workflow.NodeExecutorCommand{
 		NodeActivityCommand: workflow.NodeActivityCommand{
 			WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(), NodeID: "shot-binding",

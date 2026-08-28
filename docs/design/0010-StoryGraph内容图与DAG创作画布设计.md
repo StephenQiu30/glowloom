@@ -139,6 +139,8 @@ Evidence ─────── supports ─────────┘     valid
 
 Claim 自身也必须有唯一业务 Owner：稳定世界规则、人物关系、跨集 Story Arc/Plot Thread、伏笔与回收归 Production Bible；Episode/Scene 内的因果与连续性归 Planning 的 Episode Structure；Shot 级生产连续性归 Storyboard。StoryGraph Compiler 只读取并编译这些 Owner 事实，绝不创建或修订 Claim。Canvas 可以把 Claim 投影成便于阅读的 A→B 视觉连线，但该语义投影不进入权威拓扑或 Hash。
 
+Production Bible 在 Episode Planning 之前确认，因此 Bible Candidate/Version 的 `anchor_keys` 只能作为候选阶段的冻结引用，不能伪装成尚未存在的正式 Scene/Beat/Occurrence `story_node_key`。Core StoryGraph Compiler 同时拿到 exact Bible Version 与完整 confirmed Planning Owner Set 后，必须用 Claim 的每条精确 Evidence 与已确认 Scene Evidence 的 Unicode code-point 区间重叠确定正式 `claim_anchor`；全部 Evidence 都必须命中，结果按稳定节点键排序。无匹配、越界、跨来源或无法确定唯一语义输入时编译失败，不能沿用候选 key、猜测场景或创建新的 Owner 事实。
+
 ### 规范 Node Type 与唯一 Owner
 
 StoryGraph Node 是 Owner 事实的投影，不为产品别名新建 Record。首版每个规范 Node Type 固定唯一 `owner_kind`：

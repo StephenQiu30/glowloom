@@ -41,6 +41,9 @@ import (
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
+	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
+	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
@@ -102,6 +105,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "episode-review", DefinitionKey: "human.episode_plan_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "episode-analysis", DefinitionKey: "agent.episode_analysis", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 				{ID: "structure-review", DefinitionKey: "human.episode_structure_review", DefinitionVersion: "2.0.0", Config: json.RawMessage(`{}`)},
+				{ID: "storygraph", DefinitionKey: "production.storygraph_compile", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			},
 			Edges: []authoring.Edge{
 				{ID: "script-to-evidence", FromNodeID: "script", FromPort: "script", ToNodeID: "evidence", ToPort: "script"},
@@ -115,6 +119,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				{ID: "episode-review-to-analysis", FromNodeID: "episode-review", FromPort: "episodes", ToNodeID: "episode-analysis", ToPort: "episodes"},
 				{ID: "materialization-to-analysis", FromNodeID: "bible-materialization", FromPort: "materialization", ToNodeID: "episode-analysis", ToPort: "materialization"},
 				{ID: "analysis-to-structure-review", FromNodeID: "episode-analysis", FromPort: "candidate", ToNodeID: "structure-review", ToPort: "candidate"},
+				{ID: "structure-to-storygraph", FromNodeID: "structure-review", FromPort: "structures", ToNodeID: "storygraph", ToPort: "structures"},
 			},
 		},
 		Layout: json.RawMessage(`{"guided":{"step":3}}`), FrozenInputs: []authoring.FrozenReference{{
@@ -179,6 +184,9 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 			MaxShardCodePoints: 12, OverlapCodePoints: 2, AdjacentCodePoints: 4, FanIn: 2,
 		},
 	)
+	storyGraphService := storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+	})
 	activities, err := bootstrap.NewWorkflowRuntime(
 		workflowStore,
 		scriptapp.NewService(scriptgorm.New(database), nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
@@ -187,7 +195,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		storyReviewService,
 		bibleService,
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
-		planningService,
+		planningService, episodePlanningService, storyGraphService,
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		reviewService,
 		nil, nil, episodeSegmentationService, episodeAnalysisService,
@@ -991,6 +999,141 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				t.Fatalf("formal Scene lost temporary reverse trace or Evidence: %#v", scene)
 			}
 		}
+	}
+	var storyGraphNode model.NodeRunProjection
+	if err = database.Where("workflow_run_id = ? AND node_id = ?", run.ID, "storygraph").First(&storyGraphNode).Error; err != nil {
+		t.Fatalf("load StoryGraph compiler NodeRun: %v", err)
+	}
+	storyGraphOutput, _, storyGraphOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(storyGraphNode.Output))
+	if err != nil || storyGraphNode.Status != "SUCCEEDED" || storyGraphNode.OutputHash == nil ||
+		*storyGraphNode.OutputHash != storyGraphOutputHash || len(storyGraphOutput.Bindings) != 1 ||
+		storyGraphOutput.Bindings[0].Port != "storygraph" || storyGraphOutput.Bindings[0].ValueType != "storygraph_version" ||
+		storyGraphOutput.Bindings[0].ReferenceVersion != "1" || len(storyGraphOutput.Bindings[0].ContentHash) != 64 {
+		t.Fatalf("StoryGraph compiler output=%#v node=%#v err=%v", storyGraphOutput, storyGraphNode, err)
+	}
+	var graphVersion model.StoryGraphVersion
+	if err = database.First(&graphVersion, "id = ?", storyGraphOutput.Bindings[0].ReferenceID).Error; err != nil {
+		t.Fatalf("load published StoryGraph Version: %v", err)
+	}
+	var graphHead model.StoryGraphHead
+	if err = database.First(&graphHead, "project_id = ?", fixture.projectID).Error; err != nil {
+		t.Fatalf("load published StoryGraph Head: %v", err)
+	}
+	var graphNodes []storygraph.Node
+	var graphEdges []storygraph.Edge
+	if err = json.Unmarshal(graphVersion.Nodes, &graphNodes); err != nil {
+		t.Fatalf("decode published StoryGraph nodes: %v", err)
+	}
+	if err = json.Unmarshal(graphVersion.Edges, &graphEdges); err != nil {
+		t.Fatalf("decode published StoryGraph edges: %v", err)
+	}
+	typeCounts := map[storygraph.NodeType]int{}
+	nodeTypes := map[string]storygraph.NodeType{}
+	keys := make([]string, len(graphNodes))
+	identityKey := ""
+	sceneKey := ""
+	for index, node := range graphNodes {
+		typeCounts[node.NodeType]++
+		nodeTypes[node.StoryNodeKey] = node.NodeType
+		keys[index] = node.StoryNodeKey
+		if identityKey == "" && node.NodeType == storygraph.NodeTypeAssetIdentity {
+			identityKey = node.StoryNodeKey
+		}
+		if node.OwnerRef.OwnerVersionID == "" || node.OwnerRef.OwnerRevision < 1 || len(node.OwnerRef.ContentHash) != 64 || len(node.ContentHash) != 64 {
+			t.Fatalf("StoryGraph node lost exact Owner reference: %#v", node)
+		}
+	}
+	for _, edge := range graphEdges {
+		if edge.EdgeType == storygraph.EdgeTypeAnchorsOccurrence && nodeTypes[edge.FromNodeKey] == storygraph.NodeTypeScene {
+			sceneKey = edge.FromNodeKey
+			break
+		}
+	}
+	if _, err = storygraph.TopologicalOrder(keys, graphEdges); err != nil {
+		t.Fatalf("published StoryGraph is not a DAG: %v", err)
+	}
+	if graphVersion.VersionNo != 1 || graphVersion.Status != "published" || graphVersion.ContentHash != storyGraphOutput.Bindings[0].ContentHash ||
+		graphHead.CurrentVersionID != graphVersion.ID || graphHead.CurrentContentHash != graphVersion.ContentHash || graphHead.Revision != 1 ||
+		typeCounts[storygraph.NodeTypeEpisode] != len(publishedEpisodes) || typeCounts[storygraph.NodeTypeSourceEvidence] == 0 ||
+		typeCounts[storygraph.NodeTypeAssetIdentity] < 2 || typeCounts[storygraph.NodeTypeCharacterSpecification] < 2 ||
+		typeCounts[storygraph.NodeTypeAssetState] < 2 || typeCounts[storygraph.NodeTypeProductionBinding] < 2 ||
+		typeCounts[storygraph.NodeTypeWorldRule] == 0 || typeCounts[storygraph.NodeTypeStoryArc] == 0 ||
+		typeCounts[storygraph.NodeTypeRelationshipClaim] == 0 ||
+		typeCounts[storygraph.NodeTypeOccurrence] != len(publishedEpisodes) || typeCounts[storygraph.NodeTypeCausalClaim] != len(publishedEpisodes) {
+		t.Fatalf("published multi-Episode StoryGraph is incomplete: version=%#v head=%#v types=%v", graphVersion, graphHead, typeCounts)
+	}
+	if identityKey == "" || sceneKey == "" {
+		t.Fatalf("published StoryGraph has no queryable identity or occurrence anchor: identity=%q scene=%q", identityKey, sceneKey)
+	}
+	queryService := storygraphapp.NewQueryService(storygraphgorm.New(database))
+	queryActor := storygraphapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
+	impact, err := queryService.Lens(ctx, queryActor, storygraphapp.LensQuery{
+		ProjectID: fixture.projectID.String(), VersionRef: graphVersion.ID.String(), Lens: "impact",
+		ScopeKind: storygraphapp.ScopeStoryNode, ScopeID: identityKey, Depth: 1, Limit: 200,
+	})
+	if err != nil || impact.VersionID != graphVersion.ID.String() || impact.ContentHash != graphVersion.ContentHash ||
+		len(impact.ResultHash) != 64 || !containsStoryGraphNodeType(impact.Nodes, storygraph.NodeTypeRelationshipClaim) {
+		t.Fatalf("published StoryGraph Impact Lens is not queryable: result=%#v err=%v", impact, err)
+	}
+	downstream, err := queryService.Trace(ctx, queryActor, storygraphapp.TraceQuery{
+		ProjectID: fixture.projectID.String(), VersionRef: graphVersion.ID.String(), StoryNodeKey: sceneKey,
+		Direction: storygraphapp.DirectionDownstream, Depth: 1, Limit: 200,
+	})
+	if err != nil || downstream.VersionID != graphVersion.ID.String() || len(downstream.ResultHash) != 64 ||
+		!containsStoryGraphNodeType(downstream.Nodes, storygraph.NodeTypeOccurrence) ||
+		!containsStoryGraphNodeType(downstream.Nodes, storygraph.NodeTypeCausalClaim) {
+		t.Fatalf("published StoryGraph downstream trace is incomplete: result=%#v err=%v", downstream, err)
+	}
+	var graphReceipt model.CommandReceipt
+	if err = database.Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, "storygraph.compile_owner_set", graphVersion.ID,
+	).First(&graphReceipt).Error; err != nil {
+		t.Fatal(err)
+	}
+	var graphReceiptCount, graphEventCount int64
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, "storygraph.compile_owner_set", graphVersion.ID,
+	).Count(&graphReceiptCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.OutboxEvent{}).Where(
+		"project_id = ? AND event_type = ? AND aggregate_id = ?", fixture.projectID, "StoryGraphVersionPublished", fixture.projectID.String(),
+	).Count(&graphEventCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if graphReceiptCount != 1 || graphEventCount != 1 {
+		t.Fatalf("StoryGraph publication boundary counts: receipts=%d events=%d", graphReceiptCount, graphEventCount)
+	}
+	requiredPlanningOwners := make([]storygraph.OwnerHeadRef, len(planningSet.Structures))
+	for index, reference := range planningSet.Structures {
+		requiredPlanningOwners[index] = storygraph.OwnerHeadRef{
+			OwnerKind: "production/planning", OwnerLogicalID: reference.EpisodeID,
+			OwnerVersionID: reference.StructureID, OwnerRevision: int64(reference.Revision), ContentHash: reference.ResultHash,
+		}
+	}
+	graphCompileCommand := storygraphapp.CompileOwnerSetCommand{
+		ProjectID: fixture.projectID.String(), OwnerSetID: planningSet.ID, OwnerSetHash: planningSet.ContentHash,
+		RequiredBibleVersionID: planningSet.BibleVersionID, RequiredBibleHash: planningSet.BibleContentHash,
+		RequiredOwners: requiredPlanningOwners, IdempotencyKey: graphReceipt.IdempotencyKey,
+	}
+	replayedGraph, err := storyGraphService.CompileOwnerSet(ctx, storygraphapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, graphCompileCommand)
+	if err != nil || replayedGraph.Version.ID != graphVersion.ID.String() ||
+		replayedGraph.Version.ContentHash != graphVersion.ContentHash || replayedGraph.Receipt.ID != graphReceipt.ID.String() {
+		t.Fatalf("StoryGraph unknown-result replay diverged: result=%#v receipt=%#v err=%v", replayedGraph, graphReceipt, err)
+	}
+	driftedGraphCommand := graphCompileCommand
+	driftedGraphCommand.OwnerSetHash = bibledomain.SourceTextHash("different StoryGraph owner set")
+	_, err = storyGraphService.CompileOwnerSet(ctx, storygraphapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, driftedGraphCommand)
+	var graphConflict *storygraphapp.Error
+	if !errors.As(err, &graphConflict) || graphConflict.Code != "resource_conflict" {
+		t.Fatalf("StoryGraph idempotency mismatch error=%#v", err)
+	}
+	if err = database.Model(&model.StoryGraphVersion{}).Where("project_id = ?", fixture.projectID).Count(&graphReceiptCount).Error; err != nil || graphReceiptCount != 1 {
+		t.Fatalf("StoryGraph replay or conflict created another Version: count=%d err=%v", graphReceiptCount, err)
 	}
 
 	replayCommand := planningapp.ApplyEpisodePlanCommand{
@@ -1799,25 +1942,57 @@ func episodeAnalysisFixtureResult(invocation agentcontract.StageInvocation) (age
 	anchor := string(contextRunes[localStart:localEnd])
 	episodeNumber := input.EpisodePosition
 	fragments := []planningdomain.EpisodeStructureFragment{}
+	claims := []planningdomain.EpisodeClaimCandidate{}
 	if strings.TrimSpace(anchor) != "" {
+		sceneKey := "scene:" + strings.ReplaceAll(invocation.Payload.ShardKey, ".", "-")
+		evidence := bibledomain.Evidence{
+			SourceStart: input.LogicalStart, SourceEnd: input.LogicalEnd,
+			TextHash: bibledomain.SourceTextHash(anchor), ExactAnchor: anchor, EpisodeNumber: &episodeNumber,
+		}
 		fragments = append(fragments, planningdomain.EpisodeStructureFragment{
-			TemporaryKey: "scene:" + strings.ReplaceAll(invocation.Payload.ShardKey, ".", "-"),
+			TemporaryKey: sceneKey,
 			Kind:         "scene", SourceKeys: []string{"episode:" + input.EpisodeID},
 			SourceStart: input.LogicalStart, SourceEnd: input.LogicalEnd, Summary: "冻结分片场景",
-			Evidence: []bibledomain.Evidence{{
-				SourceStart: input.LogicalStart, SourceEnd: input.LogicalEnd,
-				TextHash: bibledomain.SourceTextHash(anchor), ExactAnchor: anchor, EpisodeNumber: &episodeNumber,
-			}},
+			Evidence: []bibledomain.Evidence{evidence},
 			Attributes: planningdomain.EpisodeStructureAttributes{
 				ParticipantKeys: []string{}, ContinuityNotes: []string{},
 			},
 		})
+		if input.LogicalStart == input.EpisodeSourceStart && len(input.KnownIdentities) >= 2 {
+			occurrenceKey := "occurrence:" + strings.ReplaceAll(invocation.Payload.ShardKey, ".", "-")
+			baseState := "base"
+			fragments = append(fragments, planningdomain.EpisodeStructureFragment{
+				TemporaryKey: occurrenceKey, Kind: "occurrence", SourceKeys: []string{"episode:" + input.EpisodeID},
+				SourceStart: input.LogicalStart, SourceEnd: input.LogicalEnd, Summary: "角色以基础状态出现",
+				Evidence: []bibledomain.Evidence{evidence},
+				Attributes: planningdomain.EpisodeStructureAttributes{
+					SceneKey: &sceneKey, ParticipantKeys: []string{},
+					OccurrenceEntityKey: &input.KnownIdentities[0].EntityKey,
+					StateKey:            &baseState, ContinuityNotes: []string{},
+				},
+			})
+			claims = append(claims, planningdomain.EpisodeClaimCandidate{
+				ClaimKey: "claim:" + strings.ReplaceAll(invocation.Payload.ShardKey, ".", "-"), ClaimType: "causal",
+				ParticipantKeys: []string{input.KnownIdentities[0].EntityKey, input.KnownIdentities[1].EntityKey},
+				AnchorKeys:      []string{sceneKey, occurrenceKey}, Scope: "episode:" + input.EpisodeID,
+				Polarity: "positive", Status: "proposed", Evidence: []bibledomain.Evidence{evidence},
+			})
+		}
 	}
+	slices.SortFunc(fragments, func(left, right planningdomain.EpisodeStructureFragment) int {
+		if left.SourceStart != right.SourceStart {
+			return left.SourceStart - right.SourceStart
+		}
+		if left.SourceEnd != right.SourceEnd {
+			return left.SourceEnd - right.SourceEnd
+		}
+		return strings.Compare(left.TemporaryKey, right.TemporaryKey)
+	})
 	candidate, err := json.Marshal(planningdomain.EpisodeAnalysisCandidate{
 		EpisodeID: input.EpisodeID, ScriptVersionID: input.ScriptVersionID,
 		LogicalStart: input.LogicalStart, LogicalEnd: input.LogicalEnd,
 		Fragments: fragments,
-		Claims:    []planningdomain.EpisodeClaimCandidate{}, ReviewIssues: []bibledomain.ReviewIssue{},
+		Claims:    claims, ReviewIssues: []bibledomain.ReviewIssue{},
 	})
 	if err != nil {
 		return agentcontract.StageResult{}, err
@@ -2109,16 +2284,41 @@ func storyAnalysisFixtureResult(invocation agentcontract.StageInvocation) (agent
 		if len(evidence.Observations) == 0 || len(evidence.Observations[0].Evidence) == 0 {
 			return agentcontract.StageResult{}, errors.New("fixture Story analysis received no Evidence")
 		}
+		semanticSuffix := strings.ReplaceAll(invocation.Payload.ShardKey, ".", "-")
+		entityKey := "character:" + invocation.Payload.ShardKey
+		peerEntityKey := "character:peer-" + invocation.Payload.ShardKey
 		value, err := json.Marshal(bibledomain.StoryAnalysisCandidate{
-			Entities: []bibledomain.StoryEntityCandidate{{
-				EntityKey: "character:" + invocation.Payload.ShardKey, Kind: "character",
-				CanonicalName: "分片角色", NormalizedName: "分片角色", Aliases: []string{},
-				StableSpec: storyFixtureAssetSpec(), EpisodeNumbers: []int{},
-				Evidence: evidence.Observations[0].Evidence,
-				States:   []bibledomain.StoryEntityStateCandidate{}, Ambiguities: []string{},
+			Entities: []bibledomain.StoryEntityCandidate{
+				{
+					EntityKey: entityKey, Kind: "character",
+					CanonicalName: "分片角色", NormalizedName: "分片角色", Aliases: []string{},
+					StableSpec: storyFixtureAssetSpec(), EpisodeNumbers: []int{},
+					Evidence: evidence.Observations[0].Evidence,
+					States:   []bibledomain.StoryEntityStateCandidate{}, Ambiguities: []string{},
+				},
+				{
+					EntityKey: peerEntityKey, Kind: "character",
+					CanonicalName: "分片搭档", NormalizedName: "分片搭档", Aliases: []string{},
+					StableSpec: storyFixtureAssetSpec(), EpisodeNumbers: []int{},
+					Evidence: evidence.Observations[0].Evidence,
+					States:   []bibledomain.StoryEntityStateCandidate{}, Ambiguities: []string{},
+				},
+			},
+			WorldEntries: []bibledomain.StoryWorldEntryCandidate{{
+				EntryKey: "world:" + semanticSuffix, Category: "rule", Title: "分片世界规则",
+				Facts: []string{"规则来自原稿"}, Rules: []string{"角色遵循规则"}, EntityKeys: []string{entityKey},
+				EpisodeNumbers: []int{}, Evidence: evidence.Observations[0].Evidence, Ambiguities: []string{},
 			}},
-			WorldEntries: []bibledomain.StoryWorldEntryCandidate{},
-			Claims:       []bibledomain.StoryClaimCandidate{}, Arcs: []bibledomain.StoryArcCandidate{},
+			Claims: []bibledomain.StoryClaimCandidate{{
+				ClaimKey: "relationship:" + semanticSuffix, ClaimType: "relationship",
+				ParticipantKeys: []string{entityKey, peerEntityKey}, AnchorKeys: []string{entityKey},
+				Scope: "project", Polarity: "positive", Status: "proposed",
+				Evidence: evidence.Observations[0].Evidence,
+			}},
+			Arcs: []bibledomain.StoryArcCandidate{{
+				ArcKey: "arc:" + semanticSuffix, Title: "分片故事弧", Summary: "故事弧来自原稿",
+				Evidence: evidence.Observations[0].Evidence,
+			}},
 			ReviewIssues: []bibledomain.ReviewIssue{},
 		})
 		if err != nil {
@@ -2196,4 +2396,8 @@ func storyFixtureAssetSpec() bibledomain.AssetSpecCandidate {
 		VisualElements: []string{}, NegativeConstraints: []string{},
 		PerformanceTraits: []string{}, AllowedUsage: []string{},
 	}
+}
+
+func containsStoryGraphNodeType(nodes []storygraph.Node, nodeType storygraph.NodeType) bool {
+	return slices.ContainsFunc(nodes, func(node storygraph.Node) bool { return node.NodeType == nodeType })
 }

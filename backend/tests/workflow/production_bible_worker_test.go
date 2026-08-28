@@ -31,6 +31,8 @@ import (
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
+	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
@@ -125,6 +127,8 @@ func TestProductionWorkflowWorkerDurablyCompletesBibleCandidate(t *testing.T) {
 		bibleService,
 		projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString),
 		planningapp.NewService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		planningapp.NewEpisodePlanningService(planninggorm.New(database), planningapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
+		storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,

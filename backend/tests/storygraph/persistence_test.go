@@ -20,6 +20,8 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
+	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
@@ -326,13 +328,32 @@ func seedStoryGraphOwners(t *testing.T, create func(any) error, suffix string) s
 	scriptVersionID, structureID := uuid.New(), uuid.New()
 	text := "第一集\n内景·书房·夜\n小岚：我们开始吧。\n镜头转向窗外。"
 	sceneID, dialogueID, beatID := uuid.NewString(), uuid.NewString(), uuid.NewString()
-	scenes, err := json.Marshal([]map[string]any{{
-		"id": sceneID, "heading": "内景·书房·夜", "position": 1,
-		"source_start": 0, "source_end": len([]rune(text)),
-		"dialogues":       []map[string]any{{"id": dialogueID, "speaker": "小岚", "text": "我们开始吧。", "source_start": 0, "source_end": len([]rune(text))}},
-		"narrative_units": []map[string]any{{"id": beatID, "kind": "action", "text": "镜头转向窗外。", "source_start": 0, "source_end": len([]rune(text))}},
-		"tasks":           []map[string]any{},
-	}})
+	episodeNumber := 1
+	evidence := bibledomain.Evidence{
+		SourceStart: 0, SourceEnd: len([]rune(text)), TextHash: bibledomain.SourceTextHash(text),
+		ExactAnchor: text, EpisodeNumber: &episodeNumber,
+	}
+	sceneValues := []planningdomain.Scene{{
+		ID: sceneID, TemporaryKey: "scene:study", Heading: "内景·书房·夜", Position: 1,
+		SourceStart: 0, SourceEnd: len([]rune(text)), Evidence: []bibledomain.Evidence{evidence},
+		Dialogues: []planningdomain.Dialogue{{
+			ID: dialogueID, TemporaryKey: "dialogue:start", Speaker: "小岚", Text: "我们开始吧。",
+			SourceStart: 0, SourceEnd: len([]rune(text)), Evidence: []bibledomain.Evidence{evidence},
+		}},
+		NarrativeUnits: []planningdomain.NarrativeUnit{{
+			ID: beatID, TemporaryKey: "beat:window", Kind: "action", Text: "镜头转向窗外。",
+			SourceStart: 0, SourceEnd: len([]rune(text)), Evidence: []bibledomain.Evidence{evidence},
+		}},
+		Occurrences: []planningdomain.Occurrence{}, Claims: []planningdomain.PlanningClaim{}, Tasks: []planningdomain.ProductionTask{},
+	}}
+	scenes, err := json.Marshal(sceneValues)
+	if err != nil {
+		t.Fatal(err)
+	}
+	structureHash, err := bibledomain.CanonicalStoryHash(struct {
+		Schema string                 `json:"schema"`
+		Scenes []planningdomain.Scene `json:"scenes"`
+	}{"episode-planning-owner-v1", sceneValues})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +367,7 @@ func seedStoryGraphOwners(t *testing.T, create func(any) error, suffix string) s
 		&model.DocumentRevision{ID: revisionID, WorkspaceID: workspaceID, DocumentID: documentID, VersionNo: 1, SourceType: "text", RawText: text, RawHash: hashText(text), NormalizedText: text, NormalizedHash: hashText(text), NormalizerVersion: "test-v1", NormalizationMap: []byte(`{}`), CodepointCount: len([]rune(text)), AnalysisStatus: "deterministic", AnalyzerVersion: "test-v1", Blocks: []byte(`[]`), Issues: []byte(`[]`), CreatedBy: userID, CreatedAt: now},
 		&model.Episode{ID: episodeID, WorkspaceID: workspaceID, ProjectID: projectID, Name: "第一集", Position: 1, TargetDurationMS: 90_000, Status: "active", Revision: 1, CurrentScriptVersionID: &currentScriptVersionID, CreatedAt: now, UpdatedAt: now},
 		&model.EpisodeScriptVersion{ID: scriptVersionID, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID, VersionNo: 1, DocumentRevisionID: revisionID, SourceStart: 0, SourceEnd: len([]rune(text)), Content: text, ContentHash: hashText(text), Status: "published", CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
-		&model.EpisodeStructure{ID: structureID, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID, ScriptVersionID: scriptVersionID, Status: "confirmed", Scenes: scenes, ResultHash: hashText(string(scenes)), Revision: 1, ConfirmedBy: &userID, ConfirmedAt: &now, CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
+		&model.EpisodeStructure{ID: structureID, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID, ScriptVersionID: scriptVersionID, Status: "confirmed", Scenes: scenes, ResultHash: structureHash, Revision: 1, ConfirmedBy: &userID, ConfirmedAt: &now, CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
 	}
 	for _, record := range records {
 		if err = create(record); err != nil {

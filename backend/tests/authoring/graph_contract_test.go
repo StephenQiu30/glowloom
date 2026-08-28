@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "11.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "12.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -38,6 +38,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"production.episode_plan@2.0.0",
 		"production.episode_structure@1.0.0",
 		"production.storyboard_export@1.0.0",
+		"production.storygraph_compile@1.0.0",
 	}
 	got := make([]string, 0, len(catalog.Definitions))
 	for _, definition := range catalog.Definitions {
@@ -50,6 +51,26 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
 	}
+}
+
+func TestStoryGraphCompilerConsumesPlanningOwnerSetAndPublishesExactVersion(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.Key != "production.storygraph_compile" {
+			continue
+		}
+		if definition.Executor != "activity.storygraph_compile" || definition.CachePolicy != "never" ||
+			definition.RiskLevel != "low" || len(definition.InputPorts) != 1 || len(definition.OutputPorts) != 1 ||
+			definition.InputPorts[0].Key != "structures" || definition.InputPorts[0].ValueType != "planning_owner_set" ||
+			definition.OutputPorts[0].Key != "storygraph" || definition.OutputPorts[0].ValueType != "storygraph_version" {
+			t.Fatalf("StoryGraph compiler contract = %#v", definition)
+		}
+		return
+	}
+	t.Fatal("StoryGraph compiler is absent from the system catalog")
 }
 
 func TestEpisodePlanningHumanGatePublishesOwnerSet(t *testing.T) {

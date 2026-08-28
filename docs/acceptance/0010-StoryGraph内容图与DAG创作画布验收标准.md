@@ -227,7 +227,7 @@
 - [x] `SG-I14`：Episode Plan Gate 与 Episode/Published ScriptVersion 全批物化完成。
 - [x] `SG-I15`：Episode analyze/reconcile 与 Scene/Beat/Occurrence/Claim Candidate 完成。
 - [x] `SG-I16`：Planning Review/Gate/Owner 全批 Apply 完成。
-- [ ] `SG-I17`：Core StoryGraph 多集编译、Diff/Impact 全链完成。
+- [x] `SG-I17`：Core StoryGraph 多集编译、Diff/Impact 全链完成。
 - [ ] `SG-I18`：Storyboard Draft/Shot Intent/needs_asset 且零正式 Shot 完成。
 - [ ] `SG-I19`：Intent Gate/FreezeIntentSet 与付费前零副作用完成。
 - [ ] `SG-I20`：reference_asset Cost/Quota/Runware Job/Artifact unknown 对账完成。
@@ -535,4 +535,16 @@
 - 通过范围：以上证据完成 `SG-PRD-006` 与当前 Planning Gate/Owner 整批发布。覆盖七类 Gate 的复合 `SG-REV-006`–`008`、派生角色/地点卡的 `SG-FE-002` 与 Core StoryGraph 编译仍未完成，保持未勾选。`agent-browser` 依约只在全部开发完成后运行，本次未提前执行。
 - Git：实现、测试与 Evidence 由分别描述回执顺序稳定、候选整批发布、审批恢复与验收事实的完整提交承载；提交标题和正文不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I16`，其余保持未通过。下一步只允许从已物化 Bible/Episode/Scene/Beat/Occurrence/Claim Owner 事实编译 Core StoryGraphVersion；在 expected graph hash、Claim scope、Evidence、Owner Ref、Diff 与影响闭包全部通过前，不得解锁后续细化 Gate 或 Canvas。
+### 多集正式内容图编译与工作流发布（2026-08-28）
+
+- Red 与精确输入：独立 `backend/tests/storygraph/owner_set_test.go` 先证明 Compiler 会错误接受 required Planning Owner 之外的额外 Head，再固定完整 Planning Owner Set 必须与数据库当前 confirmed Head 精确相等，禁止缺失、额外、重复或错误 owner kind。相同输入/幂等键只返回同一 Version/Receipt/Outbox；同键不同输入返回 `resource_conflict` 且零新增 Version。全部测试只位于 `backend/tests`，未与业务代码混放。
+- Definition-first 与职责：Authoring Catalog `12.0.0` 新增 `production.storygraph_compile@1.0.0`，真实 Temporal Graph 只允许它在 `planning_owner_set` 成功后执行。Workflow Production Executor 从 Planning Receipt 反查完整正式 Owner Set，传入 exact Bible Version/hash 与稳定幂等键；Agent 不编译、不发布、不写 Owner，Kafka 不承载 Command。
+- 完整 Owner 投影与 Claim DAG：GORM Adapter 在 StoryGraph 发布事务的一致快照内重验唯一 active Script/current DocumentRevision、全部 active Episode/current published ScriptVersion、每集 exact confirmed EpisodeStructure、confirmed Bible Version、Materialization Receipt 及实际 Asset/Specification/State/ProductionBinding。Compiler 投影 SourceEvidence、Episode、Scene、Dialogue、NarrativeBeat、Identity、Specification、State、Binding、Occurrence、WorldRule、StoryArc、Bible Relationship/Foreshadowing Claim 与 Planning Causal/Continuity Claim；每个节点冻结唯一 Owner version/revision/hash 和 Evidence。Bible Candidate anchor 不冒充未来正式键，正式 `claim_anchor` 由 Claim Evidence 与 confirmed Scene Evidence 的精确区间重叠确定；未知 Identity/State、错配 Binding、Evidence 未覆盖、Claim scope/participant/anchor 错误或任意环都 fail closed。
+- 原子发布、查询与对账：Core Snapshot 经稳定 Key、Canonical Hash 和 Kahn 拓扑排序后，在已有单一 PostgreSQL/GORM `SERIALIZABLE` 事务原子写入一个不可变 StoryGraphVersion、唯一 Head、Command Receipt 与 `StoryGraphVersionPublished` Outbox；没有 Migration、Raw SQL、第二 ORM、第二 SQL/Graph 事实源或兼容入口。真实 Workflow 对同一 unknown 结果用同一幂等键重放，返回同一 Version/content hash/Receipt；同键漂移输入被拒绝且 Version 仍为 1。发布后直接通过 GORM QueryService 对实际版本执行 Identity Impact Lens 和 Scene downstream Trace，分别命中 Relationship Claim 及 Occurrence/Causal Claim；跨版本 add/remove/change 继续由稳定键 Diff golden 覆盖。
+- 定向真实验收：`LANVERSE_TEST_DATABASE_URL=... LANVERSE_TEST_TEMPORAL_ADDRESS=... go test ./tests/workflow -run '^TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce$' -count=1 -p 1 -v` 在 PostgreSQL `16.15` 与固定摘要 Temporal 上通过，耗时 `47.278s`。两集以上正式链完成 `Script → Evidence → Bible/Identity/State/Binding → Episode/Scene/Occurrence/Claim → StoryGraphVersion`，Graph 为 DAG，并能真实查询 Impact/Trace。`LANVERSE_TEST_DATABASE_URL=... go test ./tests/storygraph -count=1 -p 1 -v` 全通过，耗时 `20.200s`，覆盖 PostgreSQL 发布、并发 CAS、事务回滚、权限、五类 Lens、Diff 与 cursor。
+- 完整 CI：清空并重建专属 PostgreSQL、Temporal、MinIO、Kafka `4.3.1`、Elasticsearch/Filebeat/Logstash/Kibana `9.4.4` 后执行 `test -z "$(gofmt -l .)"`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全通过，Workflow 包 `155.824s`。第一次全量命令复用了专项测试数据库，严格全库计数真实失败；该轮不计通过，也未放宽断言，改用全新数据库及全新 Kafka/ELK/MinIO 后从头完整通过。
+- 跨项目与部署门：Agent 在临时 Python `3.11` 环境执行 Ruff check/format、Pyright 与 Pytest，结果 `35 passed, 3 skipped`；三个 skip 是 CI 既有的显式真实 Codex opt-in 用例，之前已单独通过，本功能未修改 Agent。Frontend OpenAPI 生成零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试与 Next.js `16.2.12` production build 全通过。开发/生产 Compose、Repository hygiene、Backend/Frontend/Agent 三镜像、Backend 三 Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Bundle 探针全部通过；隔离部署完成日志脱敏检索，以及 Filebeat/Logstash/Kibana/Kafka/Elasticsearch 逐项停机、降级、恢复和日志恢复摄取，Frontend、Backend、Workflow Worker 与独立 Agent health 均通过。
+- 通过范围：以上证据完成 Core StoryGraph 的多集编译、发布后 Diff/Impact/Trace 与 `SG-I17`。`SG-PRD-012` 还要求后续正式 Shot Owner Apply 后再次按 expected graph hash 编译，因此保持未勾选；Storyboard/视觉资产/Canvas、完整原稿复合旅程和最终浏览器验收仍未完成。`agent-browser` 依约只在全部开发完成后运行，本次未提前执行。
+- Git：实现、测试与 Evidence 由描述正式内容图编译和工作流发布的 feature 提交承载；提交标题和正文只表达 feature，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
+
+`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I17`，其余保持未通过。下一步进入 Storyboard Draft，只能消费非空正式 Specification/AssetState 并产出可审核 Shot Intent 与 `needs_asset`，不得提前创建正式 Shot、付费 Provider Job 或 Canvas 写入。
