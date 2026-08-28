@@ -88,15 +88,15 @@
 - [x] `SG-EVT-001`（`SG-I03`、`SG-I04`）：Owner/Receipt/Outbox 同 GORM 事务且网络 Publisher 不入事务。
 - [x] `SG-EVT-002`（`SG-I04`）：Kafka Envelope 完整字段、payload hash 与剧本/Prompt/Secret/URL 排除。
 - [x] `SG-EVT-003`（`SG-I04`）：真实 Kafka 至少一次、ACK unknown 同 ID、Inbox/revision fencing、DLQ/Replay。
-- [x] `SG-EVT-004`（`SG-I04`）：Script/StoryGraph Topic 与日志 Topic 的 Schema/Group/Retention/DLQ 隔离，无 Command Topic。
+- [x] `SG-EVT-004`（`SG-I04`）：Script/StoryGraph 业务 Topic 的 Schema/Group/Retention/DLQ 隔离，无日志 Topic 与 Command Topic；日志不经过 Kafka。
 - [x] `SG-EVT-005`（`SG-I04`）：首个真实 Consumer 同任务创建 event-worker，复用唯一 Catalog/连接模型。
 - [x] `SG-SRCH-001`（`SG-I04`）：Script/StoryGraph 两类 index/alias、租户/Owner/Evidence/Node 可追溯文档。
 - [x] `SG-SRCH-002`（`SG-I04`）：重复/乱序 revision fencing、tombstone/snapshot、PostgreSQL 全量 Reindex 原子 Alias。
 - [x] `SG-SRCH-003`（`SG-I04`）：授权 Search API、snippet/score/深链/新鲜度且无 DSL 透传/Owner 回写。
 - [x] `SG-SRCH-004`（`SG-I04`）：Elastic unavailable/lag 的 degraded/stale 与 Owner/PostgreSQL Query 正确性。
-- [x] `SG-LOG-001`（`SG-I04`）：真实 `Filebeat → Kafka → Logstash → Elasticsearch → Kibana` 独立日志链。
+- [x] `SG-LOG-001`（`SG-I04`）：真实 `Backend fail-open TCP → Logstash → Elasticsearch → Kibana` 独立日志链；不使用 Filebeat，本机复用已启动的 Logstash。
 - [x] `SG-LOG-002`（`SG-I04`、`SG-I27`）：全链关联 ID/错误码查询与敏感字段零命中扫描。
-- [x] `SG-LOG-003`（`SG-I04`、`SG-I27`）：Kafka/Logstash/Elastic/Kibana 逐组件故障不改变业务/Search 投影证据。
+- [x] `SG-LOG-003`（`SG-I04`、`SG-I27`）：Logstash/Elasticsearch/Kibana 逐组件故障不改变业务事实、Workflow 或 Search 投影；Kafka 故障只属于业务事件链验证。
 
 ### 2.5 Frontend、运行质量与旅程
 
@@ -241,6 +241,8 @@
 - [ ] `SG-I28`：最终 agent-browser Web Journey 与 Backend/Owner/Temporal/Kafka/Search/Artifact 对账已提交。
 
 ## 5. Evidence Log
+
+> 日志拓扑事实源于 2026-08-28 收敛为 `Backend → Logstash → Elasticsearch → Kibana`：不使用 Filebeat，不创建 Kafka 日志 Topic，本机只复用已经启动的 Logstash。下方更早 Evidence 中出现的 Filebeat/Kafka 日志链仅记录当时实际执行过的历史验收，已被当前架构、需求、计划、Checklist 与 2026-08-29 后续 Evidence 取代，不得作为当前实现或后续测试依据。
 
 ### `SG-I01` — StoryGraph 与 Stage Wire 基础契约（2026-08-27）
 
