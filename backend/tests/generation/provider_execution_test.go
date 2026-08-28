@@ -153,14 +153,18 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 			Now: func() time.Time { return currentTime }, NewID: uuid.NewString, ClaimTTL: preparationClaimTTL,
 		},
 	)
+	providerConfig := generationapp.ProviderConfig{
+		Now: func() time.Time { return currentTime }, NewID: uuid.NewString,
+		ProviderKey: "controlled-image", ModelKey: "image-quality-v1", CredentialRef: "provider/image-primary",
+	}
+	publisher := generationapp.NewProviderService(
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig),
+		nil,
+		providerConfig,
+	)
 	gateway := &controlledProviderGateway{}
 	providers := generationapp.NewProviderService(
-		generationgorm.NewProviderStore(database, costConfig, quotaConfig),
-		gateway,
-		generationapp.ProviderConfig{
-			Now: func() time.Time { return currentTime }, NewID: uuid.NewString,
-			ProviderKey: "controlled-image", ModelKey: "image-quality-v1", CredentialRef: "provider/image-primary",
-		},
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig), gateway, providerConfig,
 	)
 	if _, err = providers.RequireConfiguredImageProviderBinding(
 		ctx, fixture.owner, fixture.workspaceID.String(), fixture.projectID.String(),
@@ -168,13 +172,44 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 		t.Fatalf("missing configured Provider binding did not fail before generation: %v", err)
 	}
 
-	binding, err := providers.PublishImageProviderBinding(ctx, fixture.owner, generationapp.PublishProviderBindingCommand{
-		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-		ProviderKey: "controlled-image", ModelKey: "image-quality-v1", CredentialRef: "provider/image-primary",
-		IdempotencyKey: "generation-provider-binding-v1",
-	})
+	binding, err := publisher.PublishConfiguredImageProviderBinding(
+		ctx, fixture.owner, generationapp.PublishConfiguredImageProviderBindingCommand{
+			ProjectID:      fixture.projectID.String(),
+			IdempotencyKey: "generation-provider-binding-v1",
+		})
 	if err != nil || binding.Binding.Revision != 1 || binding.Binding.Capability != costdomain.MetricGenerationImage {
 		t.Fatalf("publish image Provider binding: result=%#v err=%v", binding, err)
+	}
+	replayedBinding, err := publisher.PublishConfiguredImageProviderBinding(
+		ctx, fixture.owner, generationapp.PublishConfiguredImageProviderBindingCommand{
+			ProjectID: fixture.projectID.String(), IdempotencyKey: "generation-provider-binding-v1",
+		},
+	)
+	if err != nil || replayedBinding.Binding.ID != binding.Binding.ID || replayedBinding.Receipt.ID != binding.Receipt.ID {
+		t.Fatalf("replay configured image Provider binding: result=%#v err=%v", replayedBinding, err)
+	}
+	if _, err = publisher.PublishConfiguredImageProviderBinding(
+		ctx, fixture.editor, generationapp.PublishConfiguredImageProviderBindingCommand{
+			ProjectID: fixture.projectID.String(), IdempotencyKey: "generation-provider-binding-editor",
+		},
+	); generationErrorCode(err) != "forbidden" {
+		t.Fatalf("editor published configured image Provider binding: %T %v", err, err)
+	}
+	var configuredBindingCount int64
+	if err = database.Model(&model.GenerationProviderBindingVersion{}).
+		Where("project_id = ?", fixture.projectID).Count(&configuredBindingCount).Error; err != nil || configuredBindingCount != 1 {
+		t.Fatalf("configured image Provider binding count = %d: %v", configuredBindingCount, err)
+	}
+	disabledPublisher := generationapp.NewProviderService(
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig), nil,
+		generationapp.ProviderConfig{Now: func() time.Time { return currentTime }, NewID: uuid.NewString},
+	)
+	if _, err = disabledPublisher.PublishConfiguredImageProviderBinding(
+		ctx, fixture.owner, generationapp.PublishConfiguredImageProviderBindingCommand{
+			ProjectID: fixture.projectID.String(), IdempotencyKey: "generation-provider-binding-disabled",
+		},
+	); generationErrorCode(err) != "state_conflict" {
+		t.Fatalf("disabled image Provider published a binding: %T %v", err, err)
 	}
 	configuredBinding, err := providers.RequireConfiguredImageProviderBinding(
 		ctx, fixture.owner, fixture.workspaceID.String(), fixture.projectID.String(),

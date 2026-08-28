@@ -64,6 +64,14 @@ func (repo *preparationRepository) AuthorizeProject(
 	return (&repository{database: repo.database}).AuthorizeProject(ctx, actor, workspaceID, projectID, write)
 }
 
+func (repo *preparationRepository) AuthorizeProviderProject(
+	ctx context.Context,
+	actor application.Actor,
+	projectID string,
+) (application.ProviderProjectScope, error) {
+	return (&repository{database: repo.database}).AuthorizeProviderProject(ctx, actor, projectID)
+}
+
 func (repo *preparationRepository) FindGenerationTarget(
 	ctx context.Context,
 	targetID string,

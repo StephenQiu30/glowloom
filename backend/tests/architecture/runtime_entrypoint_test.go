@@ -37,6 +37,19 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 		t.Error("Backend image must start the single lanverse binary")
 	}
 
+	apiSource := readArchitectureFile(t, filepath.Join(repositoryRoot, "backend", "internal", "bootstrap", "api_process.go"))
+	for _, required := range []string{
+		"generationhttp.NewProviderBindingHandler(",
+		"providerBindingHandler.Register(mux)",
+	} {
+		if !strings.Contains(apiSource, required) {
+			t.Errorf("single Backend API composition is missing %q", required)
+		}
+	}
+	if strings.Contains(apiSource, "configuration.RunwareAPIKey") {
+		t.Error("Provider Binding API must not receive the Runware secret")
+	}
+
 	playwrightConfig := readArchitectureFile(t, filepath.Join(repositoryRoot, "frontend", "playwright.config.ts"))
 	if !strings.Contains(playwrightConfig, "go run ./cmd") || strings.Contains(playwrightConfig, "go run ./cmd/api") {
 		t.Error("Playwright must start the single Backend entrypoint")

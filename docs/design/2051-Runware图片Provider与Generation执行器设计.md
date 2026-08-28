@@ -160,6 +160,8 @@ Provider Binding 固定 `provider_key=runware`、`model_key=runware:z-image@turb
 
 Binding 继续由既有 Backend Provider Owner 按 Project 追加发布，不由 Workflow 隐式创建新版本。`reference_asset` Executor 在 Target Builder 和 Cost/Quota 之前，必须用发起 Actor 读取并授权校验最新 Binding 与当前进程启用的 Provider 配置完全一致；Provider 未启用、Binding 缺失或 provider/model/credential ref 漂移均在零 Intent、零 Reservation、零远程调用时失败关闭。为关闭门禁后追加 Binding 的竞态，ProviderService 只在首次创建 GenerationRequest/ProviderJob 的同一事务内再次校验最新 Binding 与进程配置；已冻结 Request 的 Submit 重放与同 Job Reconcile 继续使用原 Binding 快照，不被新版本改路。System Catalog 以新不可变版本注册节点，不修改旧 Catalog 内容；Provider 未配置时仍不得用兼容 Gateway 或假 Candidate 让节点成功。
 
+真实项目通过唯一公开命令 `POST /api/v1/projects/{project_id}/generation/image-provider-bindings` 发布当前进程配置的图片 Binding。调用者必须是 Project 所属 Workspace 的 `owner`；Backend 根据 `project_id` 解析 Workspace，Body 只能包含 `idempotency_key`，不得接收 `workspace_id`、`provider_key`、`model_key`、`credential_ref`、API Key 或 Endpoint。命令只从当前进程启用的 allowlist 配置填充固定 `runware / runware:z-image@turbo / env/runware_api_key`，在同一 GORM 事务中完成授权、追加 Revision 与 Command Receipt；相同幂等键重放返回同一 Binding/Receipt，不同键才追加下一 Revision。响应只返回 Binding 非敏感事实、`content_hash` 与 `receipt_id`，绝不返回 `RUNWARE_API_KEY`。Provider 未启用、进程配置不完整、非 Owner、Project 不存在或命令漂移都失败关闭且不写 Binding；不增加管理 UI、任意 Provider 配置 API 或第二套 Secret Store。
+
 `IMAGE_PROVIDER` 留空时 Backend 不读取 `RUNWARE_API_KEY`，也不构造或注册假 Provider；只有显式设置为 `runware` 才校验 API Key 与 1–120 秒请求超时并在唯一 Workflow Composition Root 构造 Gateway/Stager。启用图片节点但缺少配置时 Backend Workflow Runtime 启动失败。
 
 ### 7.2 Submit

@@ -31,6 +31,7 @@ import (
 	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
 	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
 	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
+	generationhttp "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/httpapi"
 	generationreview "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/review"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	mediagorm "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gormdb"
@@ -55,6 +56,7 @@ import (
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboardhttp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/httpapi"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
+	quotaapp "github.com/StephenQiu30/lanverse/backend/internal/quota/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewhttp "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/httpapi"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
@@ -162,7 +164,18 @@ func RunAPI(logger *slog.Logger) {
 	projectStore := projectgorm.New(database)
 	projectService := projectapp.NewService(projectStore, func() time.Time { return time.Now().UTC() }, uuid.NewString)
 	costStore := costgorm.New(database)
-	costService := costapp.NewService(costStore, costapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
+	costConfig := costapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}
+	quotaConfig := quotaapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}
+	costService := costapp.NewService(costStore, costConfig)
+	providerConfig := generationapp.ProviderConfig{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}
+	if configuration.ImageProvider == "runware" {
+		providerConfig.ProviderKey = "runware"
+		providerConfig.ModelKey = "runware:z-image@turbo"
+		providerConfig.CredentialRef = "env/runware_api_key"
+	}
+	providerBindingService := generationapp.NewProviderService(
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig), nil, providerConfig,
+	)
 	tokenVerifier := authentication.NewVerifier(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, func() time.Time { return time.Now().UTC() })
 	tokenIssuer := authentication.NewIssuer(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, configuration.AccessTokenTTL, func() time.Time { return time.Now().UTC() }, uuid.NewString)
 	verificationCode := authentication.RandomNumericCode
@@ -286,6 +299,7 @@ func RunAPI(logger *slog.Logger) {
 	searchHandler := searchhttp.New(searchService, tokenVerifier)
 	projectHandler := projecthttp.New(projectService, tokenVerifier)
 	costHandler := costhttp.New(costService, tokenVerifier)
+	providerBindingHandler := generationhttp.NewProviderBindingHandler(providerBindingService, tokenVerifier)
 	authoringService := authoringapp.NewService(authoringStore, authoringapp.Config{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 	})
@@ -343,6 +357,7 @@ func RunAPI(logger *slog.Logger) {
 				mediaHandler.Register(mux)
 				projectHandler.Register(mux)
 				costHandler.Register(mux)
+				providerBindingHandler.Register(mux)
 				scriptHandler.Register(mux)
 				bibleHandler.Register(mux)
 				storyAnalysisRecoveryHandler.Register(mux)

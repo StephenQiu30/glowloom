@@ -108,6 +108,7 @@
 | `SG-VIS-009` | AssetVersion 发布必须绑定精确 selected Artifact、Asset/State/Specification/Style/Lineage/view roles；发布后不可替换，修改产生新 Version。 | Version/Hash/历史引用。 |
 | `SG-VIS-010` | `shot_frame` 必须冻结正式 Shot revision 与完整 ShotProductionBindingVersion；所需 Occurrence 均绑定正确身份/状态/画风且精确 AssetVersion READY，否则不得生成。 | 完整性/跨身份/最新指针负向。 |
 | `SG-VIS-011` | 选定 frame 只能发布 ShotImageBindingVersion，不得修改 ShotProductionBindingVersion；单 Shot 局部重跑创建新 Run/Selection/Output Binding，旧 Run/Binding 不变。 | 真实 Workflow/Provider/Binding 旅程。 |
+| `SG-VIS-012` | 图片 Provider Binding 发布命令必须由 Project Owner 调用，只接受 Project ID 与幂等键，并从 Backend 当前启用配置追加固定非敏感 Provider/Model/Credential Reference；客户端自报配置、未启用 Provider、重复/漂移命令或非 Owner 均不得写入。 | HTTP strict decode、真实 PostgreSQL 权限/幂等/Revision/Receipt 与 Secret 零泄漏。 |
 
 ## 7. Kafka、Search 与 ELK
 

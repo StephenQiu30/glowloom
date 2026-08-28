@@ -376,6 +376,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/generation/image-provider-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["publishConfiguredImageProviderBinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/delete-preflight": {
         parameters: {
             query?: never;
@@ -1626,6 +1642,33 @@ export interface components {
             created_by: string;
             /** Format: date-time */
             created_at: string;
+        };
+        ImageProviderBindingPublishRequest: {
+            idempotency_key: string;
+        };
+        ImageProviderBindingResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @constant */
+            capability: "generation.image";
+            /** @constant */
+            provider_key: "runware";
+            /** @constant */
+            model_key: "runware:z-image@turbo";
+            /** @constant */
+            credential_ref: "env/runware_api_key";
+            revision: number;
+            content_hash: string;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            receipt_id: string;
         };
         StoryAnalysisRecoveryRequest: {
             /** Format: uuid */
@@ -3787,6 +3830,39 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["CostPriceQuoteResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    publishConfiguredImageProviderBinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageProviderBindingPublishRequest"];
+            };
+        };
+        responses: {
+            /** @description 当前进程配置的图片 Provider Binding Revision 已发布 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImageProviderBindingResponse"];
                     };
                 };
             };

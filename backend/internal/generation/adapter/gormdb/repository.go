@@ -31,41 +31,79 @@ func (store *Store) WithinTransaction(ctx context.Context, operation func(applic
 }
 
 func (repo *repository) AuthorizeProject(ctx context.Context, actor application.Actor, workspaceID, projectID string, write bool) error {
+	access := "read"
+	if write {
+		access = "write"
+	}
+	_, err := repo.authorizeProject(ctx, actor, workspaceID, projectID, access)
+	return err
+}
+
+func (repo *repository) AuthorizeProviderProject(
+	ctx context.Context,
+	actor application.Actor,
+	projectID string,
+) (application.ProviderProjectScope, error) {
+	return repo.authorizeProject(ctx, actor, "", projectID, "owner")
+}
+
+func (repo *repository) authorizeProject(
+	ctx context.Context,
+	actor application.Actor,
+	workspaceID, projectID, access string,
+) (application.ProviderProjectScope, error) {
 	userID, err := uuid.Parse(actor.UserID)
 	if err != nil {
-		return unauthenticated()
-	}
-	workspaceUUID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		return notFound("Project not found")
+		return application.ProviderProjectScope{}, unauthenticated()
 	}
 	projectUUID, err := uuid.Parse(projectID)
 	if err != nil {
-		return notFound("Project not found")
+		return application.ProviderProjectScope{}, notFound("Project not found")
+	}
+	var project model.Project
+	query := repo.database.WithContext(ctx).Where("id = ?", projectUUID)
+	if workspaceID != "" {
+		workspaceUUID, parseErr := uuid.Parse(workspaceID)
+		if parseErr != nil {
+			return application.ProviderProjectScope{}, notFound("Project not found")
+		}
+		query = query.Where("workspace_id = ?", workspaceUUID)
+	}
+	if err = query.First(&project).Error; err != nil {
+		return application.ProviderProjectScope{}, normalizeAuthorizationNotFound(err)
 	}
 	var user model.UserAccount
 	if err = repo.database.WithContext(ctx).First(&user, "id = ?", userID).Error; err != nil {
-		return normalizeAuthorizationNotFound(err)
+		return application.ProviderProjectScope{}, normalizeAuthorizationNotFound(err)
 	}
 	var workspace model.Workspace
-	if err = repo.database.WithContext(ctx).First(&workspace, "id = ?", workspaceUUID).Error; err != nil {
-		return normalizeAuthorizationNotFound(err)
+	if err = repo.database.WithContext(ctx).First(&workspace, "id = ?", project.WorkspaceID).Error; err != nil {
+		return application.ProviderProjectScope{}, normalizeAuthorizationNotFound(err)
 	}
 	var membership model.Membership
-	if err = repo.database.WithContext(ctx).Where("workspace_id = ? AND user_id = ? AND status = ?", workspaceUUID, userID, "active").First(&membership).Error; err != nil {
-		return normalizeAuthorizationNotFound(err)
-	}
-	var project model.Project
-	if err = repo.database.WithContext(ctx).Where("id = ? AND workspace_id = ?", projectUUID, workspaceUUID).First(&project).Error; err != nil {
-		return normalizeAuthorizationNotFound(err)
+	if err = repo.database.WithContext(ctx).Where(
+		"workspace_id = ? AND user_id = ? AND status = ?", project.WorkspaceID, userID, "active",
+	).First(&membership).Error; err != nil {
+		return application.ProviderProjectScope{}, normalizeAuthorizationNotFound(err)
 	}
 	if user.Status != "active" || user.TokenVersion != actor.TokenVersion {
-		return unauthenticated()
+		return application.ProviderProjectScope{}, unauthenticated()
 	}
-	if write && (workspace.Status != "active" || project.Status != "active" || membership.Role == "viewer") {
-		return &application.Error{Code: "forbidden", Message: "Action is not allowed", Status: 403}
+	if access != "read" && (workspace.Status != "active" || project.Status != "active") {
+		return application.ProviderProjectScope{}, forbidden()
 	}
-	return nil
+	if access == "write" && membership.Role != "owner" && membership.Role != "editor" {
+		return application.ProviderProjectScope{}, forbidden()
+	}
+	if access == "owner" && membership.Role != "owner" {
+		return application.ProviderProjectScope{}, forbidden()
+	}
+	if access != "read" && access != "write" && access != "owner" {
+		return application.ProviderProjectScope{}, forbidden()
+	}
+	return application.ProviderProjectScope{
+		WorkspaceID: project.WorkspaceID.String(), ProjectID: project.ID.String(),
+	}, nil
 }
 
 func (repo *repository) FindReceipt(ctx context.Context, workspaceID, operation, key string) (platformcommand.Receipt, error) {
@@ -281,6 +319,10 @@ func normalizeAuthorizationNotFound(err error) error {
 
 func unauthenticated() error {
 	return &application.Error{Code: "unauthenticated", Message: "Invalid credentials", Status: 401, NextAction: "login"}
+}
+
+func forbidden() error {
+	return &application.Error{Code: "forbidden", Message: "Action is not allowed", Status: 403}
 }
 
 func notFound(message string) error {

@@ -37,6 +37,8 @@ declare global {
     type HumanTaskListEnvelope = components["schemas"]["HumanTaskListEnvelope"];
     type HumanTaskListItemResponse = components["schemas"]["HumanTaskListItemResponse"];
     type HumanTaskResponse = components["schemas"]["HumanTaskResponse"];
+    type ImageProviderBindingPublishRequest = components["schemas"]["ImageProviderBindingPublishRequest"];
+    type ImageProviderBindingResponse = components["schemas"]["ImageProviderBindingResponse"];
     type ImportCommitDetailResponse = components["schemas"]["ImportCommitDetailResponse"];
     type ImportCommitResponse = components["schemas"]["ImportCommitResponse"];
     type LoginRequest = components["schemas"]["LoginRequest"];

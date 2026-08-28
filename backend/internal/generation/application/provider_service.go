@@ -75,6 +75,7 @@ type QuotaProviderOwner interface {
 
 type ProviderRepository interface {
 	PreparationRepository
+	AuthorizeProviderProject(context.Context, Actor, string) (ProviderProjectScope, error)
 	LatestProviderBindingForUpdate(context.Context, string, string) (domain.ProviderBinding, error)
 	FindProviderBinding(context.Context, string) (domain.ProviderBinding, error)
 	CreateProviderBinding(context.Context, domain.ProviderBinding) (domain.ProviderBinding, error)
@@ -103,6 +104,10 @@ type ProviderConfig struct {
 	CredentialRef string
 }
 
+type ProviderProjectScope struct {
+	WorkspaceID, ProjectID string
+}
+
 type ProviderService struct {
 	transactions ProviderTransactionManager
 	gateway      ProviderGateway
@@ -112,6 +117,10 @@ type ProviderService struct {
 type PublishProviderBindingCommand struct {
 	WorkspaceID, ProjectID, ProviderKey, ModelKey string
 	CredentialRef, IdempotencyKey                 string
+}
+
+type PublishConfiguredImageProviderBindingCommand struct {
+	ProjectID, IdempotencyKey string
 }
 
 type SubmitImageRequestCommand struct {
@@ -194,6 +203,27 @@ func NewProviderService(
 	return &ProviderService{transactions: transactions, gateway: gateway, config: config}
 }
 
+func (service *ProviderService) PublishConfiguredImageProviderBinding(
+	ctx context.Context,
+	actor Actor,
+	command PublishConfiguredImageProviderBindingCommand,
+) (ProviderBindingResult, error) {
+	command.ProjectID = strings.TrimSpace(command.ProjectID)
+	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	if !service.readValid() || !validPreparationActor(actor) || !validUUID(command.ProjectID) ||
+		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return ProviderBindingResult{}, invalid("Invalid configured Generation Provider binding")
+	}
+	providerKey, modelKey, credentialRef, err := service.configuredProviderValues()
+	if err != nil {
+		return ProviderBindingResult{}, err
+	}
+	return service.PublishImageProviderBinding(ctx, actor, PublishProviderBindingCommand{
+		ProjectID: command.ProjectID, ProviderKey: providerKey, ModelKey: modelKey,
+		CredentialRef: credentialRef, IdempotencyKey: command.IdempotencyKey,
+	})
+}
+
 func (service *ProviderService) PublishImageProviderBinding(
 	ctx context.Context,
 	actor Actor,
@@ -206,29 +236,38 @@ func (service *ProviderService) PublishImageProviderBinding(
 	command.ModelKey = strings.TrimSpace(command.ModelKey)
 	command.CredentialRef = strings.TrimSpace(command.CredentialRef)
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
-	if !service.valid() || !validPreparationActor(actor) || !validUUID(command.WorkspaceID) ||
+	if !service.readValid() || !validPreparationActor(actor) ||
+		(command.WorkspaceID != "" && !validUUID(command.WorkspaceID)) ||
 		!validUUID(command.ProjectID) || !providerIdentifierPattern.MatchString(command.ProviderKey) ||
 		!providerIdentifierPattern.MatchString(command.ModelKey) ||
 		!credentialReferencePattern.MatchString(command.CredentialRef) || command.IdempotencyKey == "" ||
 		len(command.IdempotencyKey) > 200 {
 		return ProviderBindingResult{}, invalid("Invalid Generation Provider binding")
 	}
-	inputHash, err := platformcommand.InputHash(struct {
-		ActorID string
-		Command PublishProviderBindingCommand
-	}{ActorID: actor.UserID, Command: command})
-	if err != nil {
-		return ProviderBindingResult{}, err
-	}
 	now := service.config.Now().UTC().Truncate(time.Microsecond)
 	var result ProviderBindingResult
-	err = service.transactions.WithinProviderTransaction(ctx, func(
+	err := service.transactions.WithinProviderTransaction(ctx, func(
 		repo ProviderRepository,
 		_ CostProviderOwner,
 		_ QuotaProviderOwner,
 	) error {
-		if authorizeErr := repo.AuthorizeProject(ctx, actor, command.WorkspaceID, command.ProjectID, true); authorizeErr != nil {
+		if command.WorkspaceID == "" {
+			scope, authorizeErr := repo.AuthorizeProviderProject(ctx, actor, command.ProjectID)
+			if authorizeErr != nil {
+				return authorizeErr
+			}
+			command.WorkspaceID, command.ProjectID = scope.WorkspaceID, scope.ProjectID
+		} else if authorizeErr := repo.AuthorizeProject(
+			ctx, actor, command.WorkspaceID, command.ProjectID, true,
+		); authorizeErr != nil {
 			return authorizeErr
+		}
+		inputHash, hashErr := platformcommand.InputHash(struct {
+			ActorID string
+			Command PublishProviderBindingCommand
+		}{ActorID: actor.UserID, Command: command})
+		if hashErr != nil {
+			return hashErr
 		}
 		if receipt, findErr := repo.FindReceipt(ctx, command.WorkspaceID, publishProviderBindingOperation, command.IdempotencyKey); findErr == nil {
 			return replayProviderBinding(ctx, repo, receipt, inputHash, &result)
@@ -1282,14 +1321,14 @@ func (service *ProviderService) readValid() bool {
 
 func (service *ProviderService) configuredProviderValues() (string, string, string, error) {
 	if service == nil {
-		return "", "", "", invalid("Configured Generation Provider is unavailable")
+		return "", "", "", conflict("Configured Generation Provider is unavailable")
 	}
 	providerKey := strings.TrimSpace(service.config.ProviderKey)
 	modelKey := strings.TrimSpace(service.config.ModelKey)
 	credentialRef := strings.TrimSpace(service.config.CredentialRef)
 	if !providerIdentifierPattern.MatchString(providerKey) || !providerIdentifierPattern.MatchString(modelKey) ||
 		!credentialReferencePattern.MatchString(credentialRef) {
-		return "", "", "", invalid("Configured Generation Provider is unavailable")
+		return "", "", "", conflict("Configured Generation Provider is unavailable")
 	}
 	return providerKey, modelKey, credentialRef, nil
 }

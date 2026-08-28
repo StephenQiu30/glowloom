@@ -82,6 +82,7 @@
 - [ ] `SG-VIS-009`（`SG-I21`）：AssetVersion 精确绑定、不可变与历史版本引用。
 - [ ] `SG-VIS-010`（`SG-I24`）：shot_frame 冻结正式 Shot/ProductionBinding/Occurrence/AssetVersion 完整性。
 - [ ] `SG-VIS-011`（`SG-I24`）：只发布 ShotImageBindingVersion、单 Shot 局部重跑不改旧事实。
+- [x] `SG-VIS-012`（`SG-I20`）：Project Owner 严格发布进程配置对应的图片 Provider Binding，客户端零配置输入、追加 Revision/Receipt 幂等与 Secret 零泄漏。
 
 ### 2.4 Kafka、Search 与 ELK
 
@@ -652,3 +653,12 @@
 - Backend 全量门：聚焦 Authoring/Workflow/Generation 测试转绿。第一次全量在 Workflow 长测遇到本机 TCP 临时端口分配错误，未记为通过；失败用例单独重跑 `49.783s`、整个 Workflow 包重跑 `114.097s` 均通过。随后误复用已有 Catalog 历史行的测试库时不可变 Catalog 测试正确拒绝，未清表或增加兼容处理；补强 Submit 同事务竞态后再使用第三个全新专用 PostgreSQL `18.4` 空库，并复用已启动的 Temporal、MinIO、Homebrew Kafka `4.3.1` 与 Logstash，单次执行 `test -z "$(gofmt -l .)"`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全部通过，Eventing `24.295s`、Generation `11.285s`、StoryGraph `11.802s`、Workflow `120.071s`。
 - 跨项目、Compose 与镜像：本机没有 `python` 别名后改用仓库 `.venv/bin/python` 执行同一 Agent 质量门，Ruff check/format、Pyright 与 Pytest 为 `39 passed, 4 skipped`，四项仍只是明确 opt-in 的真实 Codex CLI 集成；Frontend OpenAPI 零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试与 Next.js production build 全通过。三层 Compose 使用 `/dev/null` env 文件和显式 render-only 值渲染通过，项目默认服务仍只有 Backend/Frontend、环境 Compose 默认零服务；三镜像从当前工作区构建，单 Backend Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Skill Bundle 探针全部通过，未 `up` 任何环境服务。
 - 日志、清理与剩余范围：本轮只连接已经运行的 Logstash `127.0.0.1:5000`，没有 Filebeat，也没有启动、重启或重新编排 Logstash；Kafka 仍只承载业务事件。验收后精确删除本任务创建的三个测试数据库、三个 MinIO Bucket 与三张临时镜像，PostgreSQL、MinIO、Temporal、Homebrew Kafka 和 Logstash 端口均保持可用。当前进程没有 `RUNWARE_API_KEY`，也未为真实 Project 发布生产 Binding，因此真实 Runware 请求与真实 Candidate 字节尚未验收，`SG-VIS-001`–`005`、`SG-OPS-002` 与 `SG-I20` 继续保持未勾选。下一交付单元只完成生产 Binding 与真实凭据化 reference asset 旅程；全部开发完成前不运行 `agent-browser`。
+
+### Project 图片 Provider Binding 公开发布命令（2026-08-29）
+
+- Design/PRD/Requirement：`POST /api/v1/projects/{project_id}/generation/image-provider-bindings` 固定只接受 `idempotency_key`。Backend 在事务内从 Project 解析 Workspace，要求 active Workspace 的 `owner`，并只从当前进程配置填充非敏感 `provider/model/credential_ref`；API Composition 不接收 `RUNWARE_API_KEY`，响应只返回 Binding、Hash 与 Receipt ID。
+- Red→Green：先新增独立 Generation HTTP 与 OpenAPI 测试，`go test -count=1 ./tests/generation` 因生产 `generation/adapter/httpapi` 包不存在而真实编译失败；OpenAPI 测试随后因路径和 Schema 缺失失败。Green 后 strict JSON Decoder 拒绝 `credential_ref` 等未知字段，未认证返回 401；真实 PostgreSQL 证明 Owner 发布 Revision 1、同幂等键返回同 Binding/Receipt、Editor 返回 403 且行数不变、Provider 未启用返回 409 且不写入。发布本身不需要构造第二个 Provider Gateway，远程调用仍只属于 Workflow Composition Root。
+- 事实源与接口：继续使用唯一 GORM Catalog、`GenerationProviderBindingVersion` 与 Command Receipt；没有 Migration、DDL、Raw SQL、第二 ORM、Secret Store、管理 UI、额外服务或 Backend Entrypoint。OpenAPI 与生成 TypeScript Client 已同步，Schema 把 provider/model/credential ref 固定为 Runware 非敏感常量。
+- Backend 全量门：首次尝试向已启动 MinIO 注入文档示例凭据，真实返回 `The Access Key Id you provided does not exist`，因此该轮没有记为通过，也没有读取 `.env`、猜测凭据或重启 MinIO。随后在第二个全新 Homebrew PostgreSQL `18.4` 数据库中复用 Homebrew Kafka `127.0.0.1:9092` 与 Homebrew Temporal `127.0.0.1:7233`，不注入未知 MinIO 凭据，执行 `test -z "$(gofmt -l .)"`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全部通过；Generation `4.759s`、Eventing `24.226s`、StoryGraph `10.715s`、Workflow `113.612s`。本轮 MinIO 外部用例按既有显式 opt-in 规则未执行，不写成通过；两个全量数据库与更早定向数据库均已精确删除，未创建测试 Bucket。
+- 跨项目与部署门：Agent Ruff check/format、Pyright、Pytest 通过，结果 `39 passed, 4 skipped`，四项仍为明确 opt-in 的真实 Codex CLI 集成；Frontend 连续 OpenAPI 生成 Hash 零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试与 production build 全通过。开发 Compose 默认只有 Backend/Frontend，环境 Compose 默认零服务，三文件生产组合用显式 render-only 值通过。Backend/Frontend/Agent 三镜像均从当前工作区构建，单 Backend Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Skill 探针通过；首次 Agent 镜像命令因错误地使用 `agent/` 上下文失败，改用 Dockerfile 要求的仓库根上下文后通过，三张临时镜像已精确删除。
+- 日志与剩余范围：本轮只探测并复用已启动的 `logstash-local-dev` 与 `127.0.0.1:5000`，未引入 Filebeat，也未启动、重启或重新编排 Logstash；Kafka 只用于已提交业务事件。当前 shell 没有真实 Runware 凭据，不能发布真实项目生产 Binding 或调用 Runware，因此 `SG-VIS-001`–`005`、`SG-OPS-002` 与完整 `SG-I20` 继续保持未勾选；全部开发完成前不运行 `agent-browser`。
