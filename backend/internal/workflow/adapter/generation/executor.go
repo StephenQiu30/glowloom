@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	costdomain "github.com/StephenQiu30/lanverse/backend/internal/cost/domain"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	generationdomain "github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
@@ -56,6 +57,12 @@ type ReferencePreparation interface {
 }
 
 type ImageProvider interface {
+	RequireConfiguredImageProviderBinding(
+		context.Context,
+		generationapp.Actor,
+		string,
+		string,
+	) (generationdomain.ProviderBinding, error)
 	SubmitImageRequest(
 		context.Context,
 		generationdomain.ExecutionAuthorization,
@@ -197,6 +204,15 @@ func (executor *NodeExecutor) executeReferenceAsset(
 		return domain.NodeExecutorResult{}, err
 	}
 	actor := generationapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
+	binding, err := executor.providers.RequireConfiguredImageProviderBinding(
+		ctx, actor, command.WorkspaceID, command.ProjectID,
+	)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if !validReferenceAssetProviderBinding(binding, command.WorkspaceID, command.ProjectID) {
+		return domain.NodeExecutorResult{}, errors.New("reference asset configured Provider binding has drifted")
+	}
 	built, err := executor.referenceTargets.BuildReferenceTargets(ctx, actor, generationapp.BuildReferenceTargetsCommand{
 		ApprovedIntentSetID: approved.ReferenceID, ExpectedContentHash: approved.ContentHash,
 		IdempotencyKey: "workflow-run:" + command.WorkflowRunID + ":reference-targets",
@@ -293,6 +309,18 @@ func (executor *NodeExecutor) executeReferenceAsset(
 		return executor.materializeReferenceAsset(ctx, actor, command, provider.Intent)
 	}
 	return domain.NodeExecutorResult{Status: "RETRYING"}, nil
+}
+
+func validReferenceAssetProviderBinding(
+	binding generationdomain.ProviderBinding,
+	workspaceID string,
+	projectID string,
+) bool {
+	return validCandidateSetUUID(binding.ID) && binding.WorkspaceID == workspaceID && binding.ProjectID == projectID &&
+		binding.Capability == costdomain.MetricGenerationImage && strings.TrimSpace(binding.ProviderKey) != "" &&
+		strings.TrimSpace(binding.ModelKey) != "" && strings.TrimSpace(binding.CredentialRef) != "" &&
+		binding.Revision > 0 && validCandidateSetUUID(binding.CreatedBy) && !binding.CreatedAt.IsZero() &&
+		candidateSetHashPattern.MatchString(binding.ContentHash)
 }
 
 func (executor *NodeExecutor) materializeReferenceAsset(

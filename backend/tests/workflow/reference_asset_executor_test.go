@@ -3,6 +3,7 @@ package workflow_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -76,10 +77,18 @@ func (stub *executionClaimStub) AcquireExecutionClaim(
 }
 
 type imageProviderStub struct {
+	binding         generationdomain.ProviderBinding
+	bindingErr      error
+	bindingCalls    []providerBindingCall
 	submitResult    generationapp.ProviderExecutionResult
 	reconcileResult generationapp.ProviderExecutionResult
 	submitCalls     []providerSubmitCall
 	reconcileCalls  []generationapp.ReconcileProviderJobCommand
+}
+
+type providerBindingCall struct {
+	actor                  generationapp.Actor
+	workspaceID, projectID string
 }
 
 type providerSubmitCall struct {
@@ -113,6 +122,18 @@ func (stub *imageProviderStub) SubmitImageRequest(
 ) (generationapp.ProviderExecutionResult, error) {
 	stub.submitCalls = append(stub.submitCalls, providerSubmitCall{authorization: authorization, command: command})
 	return stub.submitResult, nil
+}
+
+func (stub *imageProviderStub) RequireConfiguredImageProviderBinding(
+	_ context.Context,
+	actor generationapp.Actor,
+	workspaceID string,
+	projectID string,
+) (generationdomain.ProviderBinding, error) {
+	stub.bindingCalls = append(stub.bindingCalls, providerBindingCall{
+		actor: actor, workspaceID: workspaceID, projectID: projectID,
+	})
+	return stub.binding, stub.bindingErr
 }
 
 func (stub *imageProviderStub) ReconcileProviderJob(
@@ -189,7 +210,8 @@ func TestReferenceAssetExecutorSelectsOneApprovedTargetAndPreparesItOncePerNode(
 			ArtifactSHA256: strings.Repeat("7", 64), QCReportID: uuid.NewString(), QCReportHash: strings.Repeat("8", 64),
 		}},
 	}
-	providers := &imageProviderStub{submitResult: unknownProviderResult, reconcileResult: succeededProviderResult}
+	providers := newReferenceImageProviderStub(workspaceID, projectID, userID)
+	providers.submitResult, providers.reconcileResult = unknownProviderResult, succeededProviderResult
 	materializer := &providerOutputMaterializerStub{result: generationapp.OutputMaterializationResult{
 		ProviderReceiptID: providerReceiptID, CandidateSet: candidateSet,
 	}}
@@ -251,6 +273,15 @@ func TestReferenceAssetExecutorSelectsOneApprovedTargetAndPreparesItOncePerNode(
 		providers.reconcileCalls[0].IdempotencyKey != "workflow-node:"+nodeRunID+":provider-reconcile:5" {
 		t.Fatalf("reference asset Provider calls drifted: submit=%#v reconcile=%#v", providers.submitCalls, providers.reconcileCalls)
 	}
+	if len(providers.bindingCalls) != 3 {
+		t.Fatalf("reference asset Provider binding preflight calls drifted: %#v", providers.bindingCalls)
+	}
+	for _, call := range providers.bindingCalls {
+		if call.actor != (generationapp.Actor{UserID: userID, TokenVersion: 3}) ||
+			call.workspaceID != workspaceID || call.projectID != projectID {
+			t.Fatalf("reference asset Provider binding preflight drifted: %#v", call)
+		}
+	}
 	if len(materializer.calls) != 2 {
 		t.Fatalf("reference asset materialization calls drifted: %#v", materializer.calls)
 	}
@@ -266,6 +297,9 @@ func TestReferenceAssetExecutorSelectsOneApprovedTargetAndPreparesItOncePerNode(
 	if _, err = executor.Execute(context.Background(), command); err == nil ||
 		!strings.Contains(err.Error(), "CandidateSet source has drifted") {
 		t.Fatalf("reference asset Workflow node accepted a drifted materialized CandidateSet: %v", err)
+	}
+	if len(providers.bindingCalls) != 4 {
+		t.Fatalf("reference asset Provider binding preflight did not guard completed replay: %#v", providers.bindingCalls)
 	}
 }
 
@@ -299,7 +333,7 @@ func TestReferenceAssetExecutorRejectsClaimOwnedByAnotherNodeBeforeProviderSubmi
 	claims := &executionClaimStub{results: []generationapp.ExecutionClaimResult{{
 		Intent: claimed, Authorization: authorization,
 	}}}
-	providers := &imageProviderStub{}
+	providers := newReferenceImageProviderStub(workspaceID, projectID, userID)
 	executor := workflowgeneration.NewNodeExecutor(nil, builder, preparations, claims, providers, &providerOutputMaterializerStub{})
 	command := referenceAssetExecutorCommand(
 		t, workspaceID, projectID, userID, workflowRunID, nodeRunID, approvedID, approvedHash,
@@ -325,7 +359,8 @@ func TestReferenceAssetExecutorRejectsAmbiguousOrUnselectedTargetsBeforeCostPrep
 		Targets: []generationdomain.GenerationTarget{target, duplicate},
 	}}
 	preparations := &imagePreparationStub{results: []generationapp.PreparationResult{{}}}
-	claims, providers := &executionClaimStub{results: []generationapp.ExecutionClaimResult{{}}}, &imageProviderStub{}
+	claims := &executionClaimStub{results: []generationapp.ExecutionClaimResult{{}}}
+	providers := newReferenceImageProviderStub(workspaceID, projectID, userID)
 	executor := workflowgeneration.NewNodeExecutor(nil, builder, preparations, claims, providers, &providerOutputMaterializerStub{})
 	command := referenceAssetExecutorCommand(
 		t, workspaceID, projectID, userID, uuid.NewString(), uuid.NewString(), approvedID, approvedHash,
@@ -367,6 +402,36 @@ func TestReferenceAssetExecutorRejectsAmbiguousOrUnselectedTargetsBeforeCostPrep
 	}
 	if len(builder.calls) != buildCallsBeforeInvalidConfig || len(preparations.calls) != 0 {
 		t.Fatalf("invalid reference config reached owners: builder=%d preparation=%d", len(builder.calls), len(preparations.calls))
+	}
+}
+
+func TestReferenceAssetExecutorRejectsUnavailableProviderBeforeTargetAndCost(t *testing.T) {
+	workspaceID, projectID, userID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	approvedID, approvedHash := uuid.NewString(), strings.Repeat("6", 64)
+	target := newReferenceExecutorTarget(t, workspaceID, projectID, userID, approvedID, approvedHash)
+	builder := &referenceTargetBuilderStub{result: generationapp.BuildReferenceTargetsResult{
+		Targets: []generationdomain.GenerationTarget{target},
+	}}
+	preparations := &imagePreparationStub{results: []generationapp.PreparationResult{{}}}
+	claims := &executionClaimStub{results: []generationapp.ExecutionClaimResult{{}}}
+	providers := newReferenceImageProviderStub(workspaceID, projectID, userID)
+	providers.bindingErr = errors.New("configured image Provider binding is unavailable")
+	executor := workflowgeneration.NewNodeExecutor(
+		nil, builder, preparations, claims, providers, &providerOutputMaterializerStub{},
+	)
+	command := referenceAssetExecutorCommand(
+		t, workspaceID, projectID, userID, uuid.NewString(), uuid.NewString(), approvedID, approvedHash,
+		target.ReferenceAsset.AssetID, target.ReferenceAsset.AssetStateRef.ID,
+	)
+
+	if _, err := executor.Execute(context.Background(), command); err == nil ||
+		!strings.Contains(err.Error(), "Provider binding is unavailable") {
+		t.Fatalf("reference asset Workflow node accepted an unavailable Provider: %v", err)
+	}
+	if len(builder.calls) != 0 || len(preparations.calls) != 0 || len(claims.calls) != 0 ||
+		len(providers.submitCalls) != 0 || len(providers.reconcileCalls) != 0 {
+		t.Fatalf("unavailable Provider reached paid owners: builder=%d preparation=%d claim=%d submit=%d reconcile=%d",
+			len(builder.calls), len(preparations.calls), len(claims.calls), len(providers.submitCalls), len(providers.reconcileCalls))
 	}
 }
 
@@ -438,4 +503,13 @@ func newReferenceExecutorTarget(
 		t.Fatalf("build reference asset Target fixture: %v", err)
 	}
 	return target
+}
+
+func newReferenceImageProviderStub(workspaceID, projectID, userID string) *imageProviderStub {
+	return &imageProviderStub{binding: generationdomain.ProviderBinding{
+		ID: uuid.NewString(), WorkspaceID: workspaceID, ProjectID: projectID,
+		Capability: "generation.image", ProviderKey: "runware", ModelKey: "runware:z-image@turbo",
+		CredentialRef: "env/runware_api_key", ContentHash: strings.Repeat("5", 64), Revision: 1,
+		CreatedBy: userID, CreatedAt: time.Now().UTC(),
+	}}
 }

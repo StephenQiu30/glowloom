@@ -204,7 +204,10 @@ func TestSucceededProviderOutputsMaterializeThroughAssetReadinessAndCandidateQC(
 	gateway := &stagingProviderGateway{t: t, objects: objects}
 	providers := generationapp.NewProviderService(
 		generationgorm.NewProviderStore(database, costConfig, quotaConfig), gateway,
-		generationapp.ProviderConfig{Now: func() time.Time { return now }, NewID: uuid.NewString},
+		generationapp.ProviderConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString,
+			ProviderKey: "staging-image", ModelKey: "image-quality-v1", CredentialRef: "provider/image-primary",
+		},
 	)
 	if _, err = providers.PublishImageProviderBinding(ctx, fixture.owner, generationapp.PublishProviderBindingCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),

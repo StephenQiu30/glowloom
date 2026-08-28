@@ -158,6 +158,8 @@ RUNWARE_REQUEST_TIMEOUT_SECONDS=30
 
 Provider Binding 固定 `provider_key=runware`、`model_key=runware:z-image@turbo`、`credential_ref=env/runware_api_key`。Credential Ref 只映射 allowlist 中的 `RUNWARE_API_KEY`；Secret 不进入数据库、Target、Hash、Receipt、日志或 Temporal History。生产 Endpoint 固定为官方 HTTPS；测试只通过构造函数注入本地 Server，不提供任意生产 Base URL 环境变量。
 
+Binding 继续由既有 Backend Provider Owner 按 Project 追加发布，不由 Workflow 隐式创建新版本。`reference_asset` Executor 在 Target Builder 和 Cost/Quota 之前，必须用发起 Actor 读取并授权校验最新 Binding 与当前进程启用的 Provider 配置完全一致；Provider 未启用、Binding 缺失或 provider/model/credential ref 漂移均在零 Intent、零 Reservation、零远程调用时失败关闭。为关闭门禁后追加 Binding 的竞态，ProviderService 只在首次创建 GenerationRequest/ProviderJob 的同一事务内再次校验最新 Binding 与进程配置；已冻结 Request 的 Submit 重放与同 Job Reconcile 继续使用原 Binding 快照，不被新版本改路。System Catalog 以新不可变版本注册节点，不修改旧 Catalog 内容；Provider 未配置时仍不得用兼容 Gateway 或假 Candidate 让节点成功。
+
 `IMAGE_PROVIDER` 留空时 Backend 不读取 `RUNWARE_API_KEY`，也不构造或注册假 Provider；只有显式设置为 `runware` 才校验 API Key 与 1–120 秒请求超时并在唯一 Workflow Composition Root 构造 Gateway/Stager。启用图片节点但缺少配置时 Backend Workflow Runtime 启动失败。
 
 ### 7.2 Submit

@@ -96,8 +96,11 @@ type ProviderTransactionManager interface {
 }
 
 type ProviderConfig struct {
-	Now   func() time.Time
-	NewID func() string
+	Now           func() time.Time
+	NewID         func() string
+	ProviderKey   string
+	ModelKey      string
+	CredentialRef string
 }
 
 type ProviderService struct {
@@ -275,6 +278,46 @@ func (service *ProviderService) PublishImageProviderBinding(
 			return receiptErr
 		}
 		result = ProviderBindingResult{Binding: binding, Receipt: receipt}
+		return nil
+	})
+	return result, normalizeProviderError(err)
+}
+
+func (service *ProviderService) RequireConfiguredImageProviderBinding(
+	ctx context.Context,
+	actor Actor,
+	workspaceID string,
+	projectID string,
+) (domain.ProviderBinding, error) {
+	actor.UserID = strings.TrimSpace(actor.UserID)
+	workspaceID = strings.TrimSpace(workspaceID)
+	projectID = strings.TrimSpace(projectID)
+	if !service.valid() || !validPreparationActor(actor) || !validUUID(workspaceID) || !validUUID(projectID) {
+		return domain.ProviderBinding{}, invalid("Invalid configured Generation Provider binding request")
+	}
+	providerKey, modelKey, credentialRef, configErr := service.configuredProviderValues()
+	if configErr != nil {
+		return domain.ProviderBinding{}, configErr
+	}
+	var result domain.ProviderBinding
+	err := service.transactions.WithinProviderTransaction(ctx, func(
+		repo ProviderRepository,
+		_ CostProviderOwner,
+		_ QuotaProviderOwner,
+	) error {
+		if authorizeErr := repo.AuthorizeProject(ctx, actor, workspaceID, projectID, true); authorizeErr != nil {
+			return authorizeErr
+		}
+		binding, findErr := repo.LatestProviderBindingForUpdate(ctx, workspaceID, projectID)
+		if findErr != nil {
+			return findErr
+		}
+		if validateProviderBinding(binding) != nil || binding.WorkspaceID != workspaceID || binding.ProjectID != projectID ||
+			binding.Capability != costdomain.MetricGenerationImage || binding.ProviderKey != providerKey ||
+			binding.ModelKey != modelKey || binding.CredentialRef != credentialRef {
+			return conflict("Configured Generation Provider binding has drifted")
+		}
+		result = binding
 		return nil
 	})
 	return result, normalizeProviderError(err)
@@ -477,6 +520,13 @@ func (service *ProviderService) prepareProviderSubmission(
 		}
 		if bindingErr = validateProviderBinding(binding); bindingErr != nil {
 			return bindingErr
+		}
+		providerKey, modelKey, credentialRef, bindingErr := service.configuredProviderValues()
+		if bindingErr != nil {
+			return bindingErr
+		}
+		if binding.ProviderKey != providerKey || binding.ModelKey != modelKey || binding.CredentialRef != credentialRef {
+			return conflict("Configured Generation Provider binding has drifted")
 		}
 		requestID, jobID := strings.TrimSpace(service.config.NewID()), strings.TrimSpace(service.config.NewID())
 		if !validUUID(requestID) || !validUUID(jobID) {
@@ -1228,6 +1278,20 @@ func (service *ProviderService) valid() bool {
 
 func (service *ProviderService) readValid() bool {
 	return service != nil && service.transactions != nil && service.config.Now != nil && service.config.NewID != nil
+}
+
+func (service *ProviderService) configuredProviderValues() (string, string, string, error) {
+	if service == nil {
+		return "", "", "", invalid("Configured Generation Provider is unavailable")
+	}
+	providerKey := strings.TrimSpace(service.config.ProviderKey)
+	modelKey := strings.TrimSpace(service.config.ModelKey)
+	credentialRef := strings.TrimSpace(service.config.CredentialRef)
+	if !providerIdentifierPattern.MatchString(providerKey) || !providerIdentifierPattern.MatchString(modelKey) ||
+		!credentialReferencePattern.MatchString(credentialRef) {
+		return "", "", "", invalid("Configured Generation Provider is unavailable")
+	}
+	return providerKey, modelKey, credentialRef, nil
 }
 
 func normalizeProviderError(err error) error {

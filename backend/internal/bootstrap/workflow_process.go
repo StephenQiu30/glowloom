@@ -148,9 +148,15 @@ func RunWorkflowWorker(logger *slog.Logger) {
 			os.Exit(1)
 		}
 	}
+	providerConfig := generationapp.ProviderConfig{Now: now, NewID: uuid.NewString}
+	if configuration.ImageProvider == "runware" {
+		providerConfig.ProviderKey = "runware"
+		providerConfig.ModelKey = "runware:z-image@turbo"
+		providerConfig.CredentialRef = "env/runware_api_key"
+	}
 	providerService := generationapp.NewProviderService(
 		generationgorm.NewProviderStore(database, costConfig, quotaConfig), imageProviderGateway,
-		generationapp.ProviderConfig{Now: now, NewID: uuid.NewString},
+		providerConfig,
 	)
 	referenceTargetBuilder := generationapp.NewReferenceTargetBuilderService(
 		generationgorm.New(database),

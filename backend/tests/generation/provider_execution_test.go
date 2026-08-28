@@ -157,8 +157,16 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	providers := generationapp.NewProviderService(
 		generationgorm.NewProviderStore(database, costConfig, quotaConfig),
 		gateway,
-		generationapp.ProviderConfig{Now: func() time.Time { return currentTime }, NewID: uuid.NewString},
+		generationapp.ProviderConfig{
+			Now: func() time.Time { return currentTime }, NewID: uuid.NewString,
+			ProviderKey: "controlled-image", ModelKey: "image-quality-v1", CredentialRef: "provider/image-primary",
+		},
 	)
+	if _, err = providers.RequireConfiguredImageProviderBinding(
+		ctx, fixture.owner, fixture.workspaceID.String(), fixture.projectID.String(),
+	); generationErrorCode(err) != "not_found" {
+		t.Fatalf("missing configured Provider binding did not fail before generation: %v", err)
+	}
 
 	binding, err := providers.PublishImageProviderBinding(ctx, fixture.owner, generationapp.PublishProviderBindingCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
@@ -167,6 +175,12 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	})
 	if err != nil || binding.Binding.Revision != 1 || binding.Binding.Capability != costdomain.MetricGenerationImage {
 		t.Fatalf("publish image Provider binding: result=%#v err=%v", binding, err)
+	}
+	configuredBinding, err := providers.RequireConfiguredImageProviderBinding(
+		ctx, fixture.owner, fixture.workspaceID.String(), fixture.projectID.String(),
+	)
+	if err != nil || !generationdomain.SameProviderBinding(configuredBinding, binding.Binding) {
+		t.Fatalf("require configured Provider binding: binding=%#v err=%v", configuredBinding, err)
 	}
 
 	unknownClaim := prepareAndClaimProviderIntent(t, ctx, preparations, fixture, 2, "unknown", strings.Repeat("2", 64))
@@ -282,6 +296,40 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	})
 	if err != nil || bindingV2.Binding.Revision != 2 || terminalReplay.Request.BindingID != binding.Binding.ID {
 		t.Fatalf("append Provider binding without rerouting old request: v2=%#v old=%#v err=%v", bindingV2, terminalReplay, err)
+	}
+	if _, err = providers.RequireConfiguredImageProviderBinding(
+		ctx, fixture.owner, fixture.workspaceID.String(), fixture.projectID.String(),
+	); generationErrorCode(err) != "state_conflict" {
+		t.Fatalf("configured Provider binding drift was accepted: %T %v", err, err)
+	}
+	driftClaim := prepareAndClaimProviderIntent(t, ctx, preparations, fixture, 1, "binding-drift", strings.Repeat("8", 64))
+	submitCallsBeforeDrift, queryCallsBeforeDrift := gateway.counts()
+	if _, err = providers.SubmitImageRequest(ctx, driftClaim.Authorization, generationapp.SubmitImageRequestCommand{
+		IntentID: driftClaim.Intent.ID, IdempotencyKey: "generation-provider-submit-binding-drift",
+	}); generationErrorCode(err) != "state_conflict" {
+		t.Fatalf("binding drift between preflight and Submit was accepted: %T %v", err, err)
+	}
+	if submitCalls, queryCalls := gateway.counts(); submitCalls != submitCallsBeforeDrift || queryCalls != queryCallsBeforeDrift {
+		t.Fatalf("binding drift reached Provider: before=%d/%d after=%d/%d",
+			submitCallsBeforeDrift, queryCallsBeforeDrift, submitCalls, queryCalls)
+	}
+	var driftRequestCount int64
+	if err = database.Model(&model.GenerationRequest{}).Where("intent_id = ?", driftClaim.Intent.ID).
+		Count(&driftRequestCount).Error; err != nil || driftRequestCount != 0 {
+		t.Fatalf("binding drift created %d Generation requests: %v", driftRequestCount, err)
+	}
+	providers = generationapp.NewProviderService(
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig),
+		gateway,
+		generationapp.ProviderConfig{
+			Now: func() time.Time { return currentTime }, NewID: uuid.NewString,
+			ProviderKey: "controlled-image", ModelKey: "image-quality-v2", CredentialRef: "provider/image-primary",
+		},
+	)
+	if configuredV2, configureErr := providers.RequireConfiguredImageProviderBinding(
+		ctx, fixture.owner, fixture.workspaceID.String(), fixture.projectID.String(),
+	); configureErr != nil || !generationdomain.SameProviderBinding(configuredV2, bindingV2.Binding) {
+		t.Fatalf("activate configured Provider binding v2: binding=%#v err=%v", configuredV2, configureErr)
 	}
 
 	jobKeyDriftClaim := prepareAndClaimProviderIntent(t, ctx, preparations, fixture, 1, "job-key-drift", strings.Repeat("6", 64))

@@ -28,6 +28,8 @@ JSON Logs → Logstash → Elasticsearch Log Index → Kibana
 
 当前已接入 Apache Kafka KRaft、Backend Event Runtime、Elasticsearch 业务检索和独立 ELK 日志链。Backend Owner 事务只写 PostgreSQL Outbox；Event Runtime 在事务外发布 Script/StoryGraph 已提交事件，并以 Inbox/Revision Checkpoint、隔离 DLQ 和有界 Replay 收敛至少一次投递。Script/StoryGraph Search Alias 可从 PostgreSQL Owner Snapshot 全量重建。唯一 Backend 进程输出统一脱敏 JSON，同时保留 stdout 并以失败开放的 TCP Writer 直送 `Logstash → Elasticsearch → Kibana`；日志不再经过 Filebeat 或 Kafka，Kafka 只承载已提交业务事件。ELK/Elasticsearch 不回写业务事实。Redis 仍未引入。Backend 只接受一个 PostgreSQL `DATABASE_URL` 作为业务 SQL 事实源；Temporal 只拥有 Workflow History，仓库不保留手写 SQL Schema/Migration、迁移版本字段、第二套 ORM/连接模型或 Python SQLAlchemy Writer。
 
+StoryGraph 当前完成到已批准分镜意图的角色参考资产生成执行链：系统目录 `lanverse.production@15.0.0` 已注册 `generation.reference_asset@1.0.0`，节点只消费 `approved_storyboard_intents`，并在 Target、Intent、Cost/Quota 和远程调用前校验 Project 最新 Provider Binding 与进程启用的 Runware 配置一致。真实 Runware 凭据化旅程尚未执行，因此当前实施项仍未宣告完成，也不会提前进入 `shot_frame`、Candidate Selection 或 AssetVersion 发布。
+
 ## 文档入口
 
 - [剧本到分镜 MVP 设计](docs/design/0009-剧本到分镜MVP垂直切片设计.md)

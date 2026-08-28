@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "14.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "15.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -26,6 +26,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"agent.story_analysis@1.0.0",
 		"agent.story_review@1.0.0",
 		"agent.storyboard_draft@2.0.0",
+		"generation.reference_asset@1.0.0",
 		"human.episode_plan_review@1.0.0",
 		"human.episode_plan_review@2.0.0",
 		"human.episode_structure_review@1.0.0",
@@ -50,6 +51,34 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
 	}
+}
+
+func TestReferenceAssetGenerationConsumesApprovedIntentsBeforeReturningCandidates(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.Key != "generation.reference_asset" {
+			continue
+		}
+		if definition.Version != "1.0.0" || definition.Executor != "activity.reference_asset_generation" ||
+			definition.CachePolicy != "by_inputs" || definition.RiskLevel != "external_ai" ||
+			len(definition.InputPorts) != 1 || len(definition.OutputPorts) != 1 ||
+			definition.InputPorts[0].Key != "intents" ||
+			definition.InputPorts[0].ValueType != "approved_storyboard_intents" ||
+			definition.OutputPorts[0].Key != "candidates" ||
+			definition.OutputPorts[0].ValueType != "generation_candidate_set" {
+			t.Fatalf("Reference Asset generation contract = %#v", definition)
+		}
+		configSchema := string(definition.ConfigSchema)
+		if !strings.Contains(configSchema, `"asset_id"`) || !strings.Contains(configSchema, `"asset_state_id"`) ||
+			!strings.Contains(configSchema, `"additionalProperties":false`) {
+			t.Fatalf("Reference Asset config schema = %s", definition.ConfigSchema)
+		}
+		return
+	}
+	t.Fatal("Reference Asset generation is absent from the system catalog")
 }
 
 func TestStoryboardIntentHumanGateOnlyFreezesApprovedIntents(t *testing.T) {
