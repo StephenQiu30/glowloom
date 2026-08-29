@@ -1,6 +1,6 @@
 # StoryGraph 内容图与 DAG 创作画布实施计划
 
-- 状态：Plan 已重新接受（`SG-D20`，2026-08-29）；`SG-I01`–`SG-I19` 已完成，`SG-I20`–`SG-I35` 全部待实施，`SG-D21` 接受前不编码
+- 状态：Plan 已重新接受（`SG-D20`，2026-08-29）；`SG-D21` 已重新接受，`SG-I01`–`SG-I19` 已完成，当前只实施新版 `SG-I20`
 - Design：[0010 StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
 - Agent Design：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 - PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
@@ -181,4 +181,4 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 - Provider ACK/结果未知、配额/费用/资产版本不一致：按同一 Call/Job/Receipt 和真实 Provider capability 对账，禁止重新计费式盲重试或模型/接口 fallback。
 - 完整原稿、任一必接模型真实旅程或真实 CI 未通过：`SG-I34` 保持未完成；不得运行、引用或提前准备最终 `agent-browser` 通过声明。
 
-本文完成 `SG-D20` 重新同步。下一步 `SG-D21` 必须保留 `SG-I01`–`SG-I19` 历史 Evidence，并为 `SG-I20`–`SG-I35` 建立全未勾选目标 Checklist；其重新接受并独立提交后，只能从 `SG-I20` 开始编码。
+本文完成 `SG-D20` 重新同步；`SG-D21` 已保留 `SG-I01`–`SG-I19` 历史 Evidence，并为 `SG-I20`–`SG-I35` 建立全未勾选目标 Checklist。当前只能从新版 `SG-I20` 开始编码。

@@ -1,6 +1,6 @@
 # StoryGraph 内容图与 DAG 创作画布验收标准
 
-- 状态：验收标准已接受（`SG-D21`，2026-08-27）；全部标准初始未通过
+- 状态：验收标准已重新接受（`SG-D21`，2026-08-29）；`SG-I01`–`SG-I19` 保留未变合同的历史 Evidence，新增/改写媒体合同与 `SG-I20`–`SG-I35` 全部未通过
 - Design：[0010 StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
 - Agent Design：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 - PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
@@ -10,25 +10,25 @@
 
 ## 1. 证据口径
 
-本文件只承认 `SG-D21` 接受后、由对应 `SG-Ixx` 在当前源码重新执行的证据。历史实现、旧 Acceptance、mock、内存替身、跳过项、被禁用的 CI、兼容回退、静态推断或“理论可行”均不能勾选。
+`SG-I01`–`SG-I19` 的已勾选项只保留 2026-08-27 首次 `SG-D21` 接受后真实执行、且合同未被本次设计修改的证据。2026-08-29 新增或改写的媒体 Provider 合同必须从本次重新接受后的 `[ ]` 目标项重新产生证据；历史 Runware/环境变量实现、旧 Acceptance、mock、内存替身、跳过项、被禁用的 CI、兼容回退、静态推断或“理论可行”均不能抵扣。
 
-每次勾选必须在本文件追加：实施任务与提交、真实命令、fixture/完整原稿、依赖版本与隔离方式、关键计数/Hash/Receipt、成功或失败结果、残余风险。涉及外部依赖时必须记录真实 PostgreSQL/GORM、Temporal、Kafka、Elasticsearch、ELK、MinIO、Codex CLI 或 Runware Staging；缺失条件保持 `[ ]`。
+每次勾选必须在本文件追加：实施任务与提交、真实命令、fixture/完整原稿、依赖版本与隔离方式、关键计数/Hash/Receipt、成功或失败结果、残余风险。涉及外部依赖时必须记录真实 PostgreSQL/GORM、Temporal、Kafka、Elasticsearch、ELK、MinIO、Codex CLI，以及对应 Seedream、GPT Image、Nano Banana 或 Seedance 精确 Profile；缺失凭据、额度或外部条件时保持 `[ ]`。
 
-统一验收顺序为定向 Red→Green→Refactor → 架构/安全门禁 → 当时全量真实 CI → 独立提交。`agent-browser` 只能由 `SG-I28` 在 `SG-I27` 完成并提交后执行，不能提前替代任何非浏览器证据。
+统一验收顺序为定向 Red→Green→Refactor → 架构/安全门禁 → 当时全量真实 CI → 独立提交。`agent-browser` 只能由 `SG-I35` 在 `SG-I34` 完成并提交后执行，不能提前替代任何非浏览器证据。
 
 ## 2. Cross-service Requirement Checklist
 
 ### 2.1 架构与事实源
 
-- [x] `SG-ARC-001`（`SG-I01`、`SG-I03`–`028` 回归）：Backend 唯一业务 Writer，Agent/Frontend/event-worker 零 Owner 直写证据。
+- [x] `SG-ARC-001`（`SG-I01`、`SG-I03`–`035` 回归）：Backend 唯一业务 Writer，Agent/Frontend/event-worker 零 Owner 直写证据。
 - [x] `SG-ARC-002`（`SG-I01`、`SG-I03` 起）：空 PostgreSQL 的唯一 GORM Catalog、无 Migration 元数据/Raw SQL/第二 ORM/第二 Writer 证据。
 - [x] `SG-ARC-003`（`SG-I01` 起）：Domain/Application 与 GORM/Temporal/Kafka/Elastic/Provider 的 import/AST 负向证据。
-- [ ] `SG-ARC-004`（`SG-I01`、`SG-I06`–`024`）：真实 Temporal wait/signal/replay/restart 与无 Kafka/DB 第二 Workflow 证据。
-- [x] `SG-ARC-005`（`SG-I01`、`SG-I03`、`SG-I25`）：四图 Schema/ID/DTO 不可互换证据。
+- [ ] `SG-ARC-004`（`SG-I01`、`SG-I06`–`031`）：真实 Temporal wait/signal/replay/restart 与无 Kafka/DB 第二 Workflow 证据。
+- [x] `SG-ARC-005`（`SG-I01`、`SG-I03`、`SG-I32`）：四图 Schema/ID/DTO 不可互换证据。
 - [ ] `SG-ARC-006`（`SG-I01`、`SG-I05`、全部 Agent 切片）：Agent Candidate-only 环境、依赖、网络和零业务写入证据。
-- [ ] `SG-ARC-007`（`SG-I07`、`SG-I25`–`026`、`SG-I28`）：Browser 仅访问 Backend `/api/v1` 的 bundle/import/网络证据。
-- [ ] `SG-ARC-008`（`SG-I03`–`024`）：外部边界稳定身份、known failure/unknown 与同 ID 对账故障矩阵。
-- [ ] `SG-ARC-009`（`SG-I03`–`026`）：Workspace/Project Token Version/Membership 与防枚举权限矩阵。
+- [ ] `SG-ARC-007`（`SG-I07`、`SG-I22`、`SG-I32`–`033`、`SG-I35`）：Browser 仅访问 Backend `/api/v1`，不直连媒体 Provider/私有对象地址的 bundle/import/网络证据。
+- [ ] `SG-ARC-008`（`SG-I03`–`031`）：外部边界 Intent/Request/Job/Call/Receipt 稳定身份、known failure/unknown 与同 ID 对账故障矩阵。
+- [ ] `SG-ARC-009`（`SG-I03`–`033`）：Workspace/Project Token Version/Membership 与防枚举权限矩阵。
 - [x] `SG-ARC-010`（所有首次消费者任务）：新增结构均有真实消费者、测试和装配，无未来空层/Binary/Topic/Index/兼容层证据。
 
 ### 2.2 StoryGraph 与 Query
@@ -40,12 +40,12 @@
 - [x] `SG-GRF-005`（`SG-I01`、`SG-I03`、`SG-I04`）：Node/Edge 稳定 Key 与跨版本 change 证据。
 - [x] `SG-GRF-006`（`SG-I01`、`SG-I03`）：Canonical Hash 跨语言、随机顺序和 Canvas 无关证据。
 - [x] `SG-GRF-007`（`SG-I01`、`SG-I03`、`SG-I17`）：DAG、最小环路径与 Claim 表达证据。
-- [x] `SG-GRF-008`（`SG-I03`、`SG-I17`、`SG-I23`）：Compiler 只读已确认精确 Owner、污染源拒绝证据。
-- [x] `SG-GRF-009`（`SG-I03`、`SG-I17`、`SG-I23`）：Owner Set/Version/Head/Receipt/Outbox 单 GORM 事务故障注入。
+- [x] `SG-GRF-008`（`SG-I03`、`SG-I17`、`SG-I28` 回归）：Compiler 只读已确认精确 Owner、污染源拒绝证据。
+- [x] `SG-GRF-009`（`SG-I03`、`SG-I17`、`SG-I28` 回归）：Owner Set/Version/Head/Receipt/Outbox 单 GORM 事务故障注入。
 - [x] `SG-GRF-010`（`SG-I03`）：JSONB Version + Head 且无图数据库/EAV/递归 Raw SQL/第二 Graph Writer 证据。
 - [x] `SG-QRY-001`（`SG-I04`）：Current/Exact/Lens/Diff/Trace/Impact Application 与 HTTP Query 证据。
-- [ ] `SG-QRY-002`（`SG-I04`、`SG-I25`）：版本、lens、scope、depth/cursor、truncated/继续条件 contract。
-- [ ] `SG-QRY-003`（`SG-I04`、`SG-I25`）：五类有界 Lens、大图分层和确定性结果 Hash。
+- [ ] `SG-QRY-002`（`SG-I04`、`SG-I32`）：版本、lens、scope、depth/cursor、truncated/继续条件 contract。
+- [ ] `SG-QRY-003`（`SG-I04`、`SG-I32`）：五类有界 Lens、大图分层和确定性结果 Hash。
 - [x] `SG-QRY-004`（`SG-I04`、`SG-I17`）：稳定 Key 的 add/remove/change 跨版本 golden。
 - [x] `SG-QRY-005`（`SG-I04`）：Query 零写入与 Elasticsearch 故障不影响 PostgreSQL Query 的证据。
 
@@ -56,7 +56,7 @@
 - [x] `SG-REV-003`（`SG-I06`、`SG-I07`）：Claim/Renew/Release Actor/revision/token/expiry/幂等与零泄漏矩阵。
 - [x] `SG-REV-004`（`SG-I06`）：不可变 Decision、允许集合与 selected 单候选并发证据。
 - [x] `SG-REV-005`（`SG-I06`、`SG-I07`）：Decision/Owner Apply/Workflow Resume 三状态 API/UI 分离证据。
-- [ ] `SG-REV-006`（`SG-I11`、`SG-I14`、`SG-I16`、`SG-I19`、`SG-I21`、`SG-I23`、`SG-I24`）：七类 Gate 的显式 Owner Apply 与负向零写入证据。
+- [ ] `SG-REV-006`（`SG-I11`、`SG-I14`、`SG-I16`、`SG-I19`、`SG-I26`、`SG-I28`–`031`）：八类 Gate 的显式 Owner Apply 与负向零写入证据。
 - [ ] `SG-REV-007`（同上）：按 Decision ID 幂等 Resume、并发/重启/UNKNOWN 收敛证据。
 - [ ] `SG-REV-008`（同上）：Decision 前 stale 与 Decision 后 baseline 冲突不误套用证据。
 - [x] `SG-PRD-001`（`SG-I08`）：DocumentRevision、Unicode 绝对 Evidence 与两集 coverage。
@@ -67,22 +67,32 @@
 - [x] `SG-PRD-006`（`SG-I15`、`SG-I16`）：Scene/Dialogue/Beat/Occurrence/Claim 全批应用与未知事实拒绝。
 - [x] `SG-PRD-007`（`SG-I18`）：Storyboard Draft 精确正式输入、`needs_asset` 与零 Shot 证据。
 - [x] `SG-PRD-008`（`SG-I19`）：FreezeIntentSet 输出与零 Shot/Cost/Quota/Provider/Graph 副作用证据。
-- [ ] `SG-PRD-009`（`SG-I22`）：detail_shots 精确 READY AssetVersion/Artifact/Lineage/Style/view-role 门禁。
-- [ ] `SG-PRD-010`（`SG-I23`）：Shot + ShotProductionBindingVersion + Receipt 全批 GORM 原子应用。
-- [ ] `SG-PRD-011`（`SG-I12`、`SG-I23`、`SG-I24`）：三类 Binding Owner/Record/API/Graph 不混用证据。
-- [ ] `SG-PRD-012`（`SG-I17`、`SG-I23`）：Owner Apply 后 expected graph hash 编译与 unknown 同 Receipt 对账。
-- [ ] `SG-VIS-001`（`SG-I20`、`SG-I24`）：`reference_asset|shot_frame` strict union 与旧入口拒绝。
-- [ ] `SG-VIS-002`（`SG-I20`）：reference_asset 冻结身份/Specification/State/Style/view roles 与先行顺序。
-- [ ] `SG-VIS-003`（`SG-I20`、`SG-I24`）：Runware 稳定 Task UUID 与同 Job unknown 查询对账。
-- [ ] `SG-VIS-004`（`SG-I20`、`SG-I24`）：Provider 前 Intent/Cost/Quota/Authorization/Job 全部已提交。
-- [ ] `SG-VIS-005`（`SG-I20`、`SG-I24`）：私有 Staging、Backend 字节/Hash/媒体重验与 READY/QUARANTINED。
-- [ ] `SG-VIS-006`（`SG-I21`）：composite 三视图 role/输入 Hash/READY/lineage QC 门禁。
-- [ ] `SG-VIS-007`（`SG-I21`）：确定性 QC 与人工视觉一致性判断边界。
-- [ ] `SG-VIS-008`（`SG-I21`、`SG-I24`）：冻结 CandidateSet 的单一不可变 Selection 并发收敛。
-- [ ] `SG-VIS-009`（`SG-I21`）：AssetVersion 精确绑定、不可变与历史版本引用。
-- [ ] `SG-VIS-010`（`SG-I24`）：shot_frame 冻结正式 Shot/ProductionBinding/Occurrence/AssetVersion 完整性。
-- [ ] `SG-VIS-011`（`SG-I24`）：只发布 ShotImageBindingVersion、单 Shot 局部重跑不改旧事实。
-- [x] `SG-VIS-012`（`SG-I20`）：Project Owner 严格发布进程配置对应的图片 Provider Binding，客户端零配置输入、追加 Revision/Receipt 幂等与 Secret 零泄漏。
+- [ ] `SG-PRD-009`（`SG-I27`）：detail_shots 精确 READY AssetVersion/Artifact/Lineage/Style/view-role 门禁。
+- [ ] `SG-PRD-010`（`SG-I28`）：Shot + ShotProductionBindingVersion + Receipt 全批 GORM 原子应用。
+- [ ] `SG-PRD-011`（`SG-I12`、`SG-I28`–`031`）：Production/Image/Video/Asset 四类 Binding Owner/Record/API/Graph 不混用证据。
+- [ ] `SG-PRD-012`（`SG-I17`、`SG-I28`）：Owner Apply 后 expected graph hash 编译与 unknown 同 Receipt 对账。
+- [ ] `SG-VIS-001`（`SG-I23`–`031`）：`reference_asset|shot_frame|shot_video` strict union、按 kind 字段与旧入口拒绝。
+- [ ] `SG-VIS-002`（`SG-I23`–`026`）：reference_asset 冻结身份/Specification/State/Style/view roles/Project Binding，Intent Gate 前零费用/零 Call。
+- [ ] `SG-VIS-003`（`SG-I20`、`SG-I22`–`025`、`SG-I31`）：Catalog 只展示已注册真实 Factory；受控版本命令、未知/篡改 Preset 与任意 URL/Header/JSON 失败关闭。
+- [ ] `SG-VIS-004`（`SG-I21`、`SG-I23`–`025`、`SG-I29`、`SG-I31`）：Provider 前 Intent/Price/Cost/Quota/Authorization/Binding/Job/Call 全部已提交。
+- [ ] `SG-VIS-005`（`SG-I21`、`SG-I23`–`025`、`SG-I29`–`031`）：图片/视频私有 Staging、Backend 字节/Hash/媒体重验与 READY/QUARANTINED。
+- [ ] `SG-VIS-006`（`SG-I26`）：composite 三视图 role/输入 Hash/READY/lineage QC 门禁。
+- [ ] `SG-VIS-007`（`SG-I26`、`SG-I29`–`031`）：Image/Video 确定性 QC 与人工语义判断边界。
+- [ ] `SG-VIS-008`（`SG-I26`、`SG-I29`–`031`）：Reference/Shot Frame/Shot Video 冻结 CandidateSet 的单一不可变 Selection 并发收敛。
+- [ ] `SG-VIS-009`（`SG-I26`）：AssetVersion 精确绑定、不可变与历史版本引用。
+- [ ] `SG-VIS-010`（`SG-I29`）：shot_frame 冻结正式 Shot/ProductionBinding/Occurrence/AssetVersion 完整性。
+- [ ] `SG-VIS-011`（`SG-I29`）：只发布 ShotImageBindingVersion、单 Shot 局部重跑不改旧事实。
+- [ ] `SG-VIS-012`（`SG-I20`、`SG-I22`）：Workspace Owner 配置/轮换/禁用 Connection/Credential/Profile/Project Binding 的权限、CAS、幂等、版本与重启证据。
+- [ ] `SG-VIS-013`（`SG-I20`、`SG-I23`–`025`、`SG-I31`）：Seedream 5.0 Pro+、Seedance 2.0/2.0 Fast/2.0 Mini/2.5、GPT Image 2、Nano Banana 2 Lite/2/Pro/Legacy 精确 Profile/Capability/PriceQuote golden。
+- [ ] `SG-VIS-014`（`SG-I20`、`SG-I22`）：Web 一次性 API Key、root-key Docker Secret、CredentialVersion AEAD/HMAC、零配置/错误 key/重启与 DB/API/log/cache/bundle 零泄漏。
+- [ ] `SG-VIS-015`（`SG-I21`、`SG-I23`–`025`、`SG-I29`、`SG-I31`）：一个候选一个 ProviderCall、四候选四 Call、首次 dispatch 唯一发送与单终态输出故障矩阵。
+- [ ] `SG-VIS-016`（`SG-I21`、`SG-I23`–`025`、`SG-I29`）：同步 Provider `outcome_unknown` 保留 Reservation 且禁止自动重提，迟到结果不覆盖终态。
+- [ ] `SG-VIS-017`（`SG-I21`、`SG-I31`）：异步 remote task id 同身份查询、重启/Timer/Activity replay 与保留窗口到期显式阻塞。
+- [ ] `SG-VIS-018`（`SG-I23`、`SG-I29`）：Seedream 5.0 Pro+ 精确协议、单 Call 单 Candidate、Staging/协议漂移与真实 reference/shot_frame。
+- [ ] `SG-VIS-019`（`SG-I24`、`SG-I29`）：GPT Image 2 精确 Image API、`n=1`/单 b64_json、Usage/Staging 与真实 reference/shot_frame。
+- [ ] `SG-VIS-020`（`SG-I25`、`SG-I29`）：Nano Banana 四模型精确 Interactions/Generate Content 合同、无试探/回退与真实 reference/shot_frame。
+- [ ] `SG-VIS-021`（`SG-I30`–`031`）：shot_video 冻结 Shot/Production/Image Binding/Artifact/时长/比例/motion/Profile，capability mismatch 零费用且无静默改参。
+- [ ] `SG-VIS-022`（`SG-I30`–`031`）：Video QC 后追加 ShotVideoBindingVersion，冻结完整 lineage/媒体 Hash 并投影 StoryGraph，局部重跑不改旧事实。
 
 ### 2.4 Kafka、Search 与 ELK
 
@@ -96,34 +106,37 @@
 - [x] `SG-SRCH-003`（`SG-I04`）：授权 Search API、snippet/score/深链/新鲜度且无 DSL 透传/Owner 回写。
 - [x] `SG-SRCH-004`（`SG-I04`）：Elastic unavailable/lag 的 degraded/stale 与 Owner/PostgreSQL Query 正确性。
 - [x] `SG-LOG-001`（`SG-I04`）：真实 `Backend fail-open TCP → Logstash → Elasticsearch → Kibana` 独立日志链；不使用 Filebeat，本机复用已启动的 Logstash。
-- [x] `SG-LOG-002`（`SG-I04`、`SG-I27`）：全链关联 ID/错误码查询与敏感字段零命中扫描。
-- [x] `SG-LOG-003`（`SG-I04`、`SG-I27`）：Logstash/Elasticsearch/Kibana 逐组件故障不改变业务事实、Workflow 或 Search 投影；Kafka 故障只属于业务事件链验证。
+- [ ] `SG-LOG-002`（`SG-I04` 历史、`SG-I21`–`031`、`SG-I34` 新目标）：全链 trace/run/node/task/decision/provider job/call/receipt 关联与敏感字段零命中扫描。
+- [x] `SG-LOG-003`（`SG-I04`、`SG-I34` 回归）：Logstash/Elasticsearch/Kibana 逐组件故障不改变业务事实、Workflow 或 Search 投影；Kafka 故障只属于业务事件链验证。
 
 ### 2.5 Frontend、运行质量与旅程
 
-- [ ] `SG-FE-001`（`SG-I07`、`SG-I25`–`026`）：单 Next.js/npm + RTK Query + 生成 Client，无第二 Query/monorepo。
-- [ ] `SG-FE-002`（`SG-I12`、`SG-I16`、`SG-I21`、`SG-I25`）：角色/地点卡派生 Owner 事实、State/Style 不重复身份与 Scene 区分。
+- [ ] `SG-FE-001`（`SG-I07`、`SG-I22`、`SG-I32`–`033`）：单 Next.js/npm + RTK Query + 生成 Client，无第二 Query/monorepo。
+- [ ] `SG-FE-002`（`SG-I12`、`SG-I16`、`SG-I26`、`SG-I32`）：角色/地点卡派生 Owner 事实、State/Style 不重复身份与 Scene 区分。
 - [x] `SG-FE-003`（`SG-I07`）：真实 Review Workbench，错误/unknown 无 mock/local success。
-- [ ] `SG-FE-004`（`SG-I25`）：StoryGraph 路由、五 Lens、scope/version/focus 深链刷新。
-- [ ] `SG-FE-005`（`SG-I25`）：React Flow/Dagre 随真实消费者引入，只读且布局/viewport 零回写。
-- [ ] `SG-FE-006`（`SG-I25`）：Story Lens 与 Workflow Lens Query/DTO/ID/Adapter/renderer 分离。
-- [ ] `SG-FE-007`（`SG-I25`）：Server fact/URL/local 状态边界，View Model 不复制到 Redux/Context/localStorage。
-- [ ] `SG-FE-008`（`SG-I07`、`SG-I25`–`026`）：完整状态、键盘、焦点、列表替代与 reduced-motion。
-- [ ] `SG-FE-009`（`SG-I26`）：类型化 Domain Intent + base/expected/idempotency，Owner Command 重编译且无 Graph JSON 直写。
+- [ ] `SG-FE-004`（`SG-I32`）：StoryGraph 路由、五 Lens、scope/version/focus 深链刷新。
+- [ ] `SG-FE-005`（`SG-I32`）：React Flow/Dagre 随真实消费者引入，只读且布局/viewport 零回写。
+- [ ] `SG-FE-006`（`SG-I32`）：Story Lens 与 Workflow Lens Query/DTO/ID/Adapter/renderer 分离。
+- [ ] `SG-FE-007`（`SG-I32`）：Server fact/URL/local 状态边界，View Model 不复制到 Redux/Context/localStorage。
+- [ ] `SG-FE-008`（`SG-I07`、`SG-I22`、`SG-I32`–`033`）：完整状态、键盘、焦点、列表替代与 reduced-motion。
+- [ ] `SG-FE-009`（`SG-I33`）：类型化 Domain Intent + base/expected/idempotency，Owner Command 重编译且无 Graph JSON 直写。
+- [ ] `SG-FE-010`（`SG-I22`）：Catalog 驱动 Provider Settings、Connection/Credential/Profile/Price/Binding 受控表单与 Secret 提交后 URL/cache/storage/log/bundle 零残留。
+- [ ] `SG-FE-011`（`SG-I22`、`SG-I26`、`SG-I29`–`032`）：Reference/Shot Frame/Shot Video 的 Target/Candidate/QC/Cost/Selection/Apply 和零配置/root-key/stale/unknown 状态可区分。
 - [ ] `SG-OPS-001`（`SG-I01` 起）：严格输入/事件/Provider/HTTP 解码、大小/深度/数字/UUID/Hash 负向证据。
-- [ ] `SG-OPS-002`（`SG-I20`、`SG-I24`）：Runware SSRF/allowlist/Credential Ref 与 secret 零泄漏。
+- [ ] `SG-OPS-002`（`SG-I20`–`025`、`SG-I29`–`031`）：编译期 Provider Host/Region/redirect allowlist、SSRF、短生命周期 Credential 注入与 secret 零泄漏。
 - [x] `SG-OPS-003`（各 Binary 首次消费者，`SG-I04` event-worker）：healthz/readyz 与真实必要依赖故障。
 - [x] `SG-OPS-004`（`SG-I01` 起）：所有测试只在三应用 `tests/`，业务源码零测试文件。
 - [ ] `SG-OPS-005`（每个 `SG-Ixx`）：Red→Green→Refactor、定向门与当时全量真实 CI 证据。
 - [x] `SG-OPS-006`（`SG-I01`、`SG-I04` 起）：空 PostgreSQL、真实 Temporal/MinIO/Kafka/Elastic/日志链 CI。
 - [ ] `SG-OPS-007`（`SG-I01` 起）：Go/Agent/Frontend/OpenAPI/Compose/Image/Hygiene 与 Required 聚合真实执行。
 - [ ] `SG-OPS-008`（每个 `SG-Ixx`）：完整任务独立提交且无兼容回退/禁用检查/降断言/旧入口。
-- [ ] `SG-OPS-009`（`SG-I27`、`SG-I28`）：完整实现与 CI 提交后才运行最终 agent-browser 的 Git 顺序。
-- [ ] `SG-JRN-001`（`SG-I08`–`017`、`SG-I27`）：至少两集 Document→Evidence→Bible→Episode/Scene/Beat/Occurrence/Claim→Core Graph 可反查。
-- [ ] `SG-JRN-002`（`SG-I12`、`SG-I18`–`024`、`SG-I27`）：跨集单 Asset、多 State、reference/detail/Shot/frame/Binding/Graph 全链。
-- [x] `SG-JRN-003`（`SG-I03`–`004`、`SG-I27`）：Outbox→Kafka→Elastic→Search 深链与重复/乱序/重启/Reindex 收敛。
-- [ ] `SG-JRN-004`（`SG-I27`）：完整原稿统计、人工抽查与全故障矩阵零重复事实/费用/配额。
-- [ ] `SG-JRN-005`（`SG-I28`）：最终 agent-browser 旅程与 API/PostgreSQL/Temporal/Kafka/Search/Artifact 对账。
+- [ ] `SG-OPS-009`（`SG-I34`、`SG-I35`）：完整实现与 CI 提交后才运行最终 agent-browser 的 Git 顺序。
+- [ ] `SG-OPS-010`（`SG-I20`、`SG-I30`、`SG-I34`）：Backend Runtime Image 固定 `ffprobe`、Compose 仅 Backend/Frontend、root-key Secret 挂载、本机环境复用与 Provider API Key 零环境变量证据。
+- [ ] `SG-JRN-001`（`SG-I08`–`017` 历史、`SG-I34` final）：至少两集 Document→Evidence→Bible→Episode/Scene/Beat/Occurrence/Claim→Core Graph 可反查。
+- [ ] `SG-JRN-002`（`SG-I12`、`SG-I18`–`031`、`SG-I34`）：Web 配置三类图片/Seedance；跨集单 Asset、多 State、reference/detail/Shot/frame/video/四类 Binding/Graph 全链。
+- [x] `SG-JRN-003`（`SG-I03`–`004`、`SG-I34` 回归）：Outbox→Kafka→Elastic→Search 深链与重复/乱序/重启/Reindex 收敛。
+- [ ] `SG-JRN-004`（`SG-I34`）：完整原稿统计、人工抽查与全故障矩阵零重复事实/费用/配额。
+- [ ] `SG-JRN-005`（`SG-I35`）：最终 agent-browser 旅程与 Web/API/PostgreSQL/Temporal/Kafka/Search/ProviderCall/Artifact 对账。
 
 ## 3. Agent Requirement Checklist
 
@@ -134,6 +147,7 @@
 - [x] `SGA-BND-003`（`SG-I08` 起）：Stage/Shard 挂既有 Run/NodeRun，无动态 Workflow Node/Agent Checkpoint。
 - [ ] `SGA-BND-004`（全部 Agent Stage）：Agent success 零 Confirm/Apply/正式 UUID/Owner/Event/Resume。
 - [x] `SGA-BND-005`（`SG-I05`）：普通显式 Registry，无 LangGraph 运行路径且无消费者时删除依赖/lock。
+- [ ] `SGA-BND-006`（`SG-I20`、`SG-I27`、`SG-I34`）：Provider 配置/Secret/Target/Call/Staging/QC/Selection/Binding 全归 Backend；Agent Wire/env/dependency/network 中零媒体 Secret/Endpoint/字节/私有 URL/调用。
 - [x] `SGA-MOV-001`（`SG-I02`）：八 Skill 原名、原 UTF-8 字节、相对路径 SHA-256 等价迁移。
 - [x] `SGA-MOV-002`（`SG-I02`）：Loader/Docker/tests 原子切换，根旧路径删除且无双读/fallback。
 - [x] `SGA-MOV-003`（`SG-I02`）：只迁移不改行为，Agent/Backend/Frontend 全量 CI 通过。
@@ -157,11 +171,11 @@
 - [x] `SGA-STG-001`（`SG-I05`）：十 Stage/Reference/Candidate 一一对应与跨语言 count=10。
 - [x] `SGA-STG-002`（`SG-I05`）：Pydantic 唯一 Schema 事实、临时生成 JSON Schema、无 tracked 第二份。
 - [x] `SGA-STG-003`（`SG-I05` 起）：Candidate 只用给定 Ref/临时 Key，无 Command/SQL/Graph overwrite。
-- [ ] `SGA-STG-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I22`）：无证据不补写事实的对抗/人工证据。
+- [ ] `SGA-STG-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I27`）：无证据不补写事实的对抗/人工证据。
 - [x] `SGA-STG-005`（`SG-I09`、`SG-I15`）：关系/因果/连续性/伏笔使用 Claim Candidate，无持久环边。
 - [x] `SGA-STG-006`（`SG-I18`）：draft_storyboard 非空 Spec/State、缺资产只产 needs_asset。
-- [ ] `SGA-STG-007`（`SG-I22`）：detail_shots 精确 READY 资产并禁止改变已接受意图/身份/状态。
-- [ ] `SGA-STG-008`（`SG-I18`、`SG-I22`、`SG-I23`）：Backend 生成序号/timecode/UUID/Owner/Binding，Agent 只给 Candidate。
+- [ ] `SGA-STG-007`（`SG-I27`）：detail_shots 精确 READY 资产并禁止改变已接受意图/身份/状态。
+- [ ] `SGA-STG-008`（`SG-I18`、`SG-I27`、`SG-I28`）：Backend 生成序号/timecode/UUID/Owner/Binding，Agent 只给 Candidate。
 - [x] `SGA-SHR-001`（`SG-I08`）：不可变 versioned ShardManifest 字段/Hash/约束。
 - [x] `SGA-SHR-002`（`SG-I08`、`SG-I09`、`SG-I15`）：确定性分片/排序/fan-in/tree，Agent 不决定边界。
 - [x] `SGA-SHR-003`（`SG-I08` 起）：超预算发布新 Manifest 完整覆盖，无截断/临时扩预算。
@@ -175,19 +189,19 @@
 - [x] `SGA-EVD-002`（`SG-I08`）：语义边界、显式 overlap、coverage 与 range+hash 去重。
 - [x] `SGA-EVD-003`（`SG-I08`、`SG-I13`）：中阿拉伯 Episode marker 与 AI 仅提议歧义边界。
 - [x] `SGA-EVD-004`（`SG-I08`）：chunk-local offset 经 Backend 校正重验后才成正式 Evidence。
-- [ ] `SGA-EVD-005`（`SG-I08` fixture、`SG-I27` final）：两集开发 + 完整原稿统计和代表集人工细查。
+- [ ] `SGA-EVD-005`（`SG-I08` fixture、`SG-I34` final）：两集开发 + 完整原稿统计和代表集人工细查。
 - [x] `SGA-CAN-001`（`SG-I09`）：不可变 StageCandidateRevision/Head CAS/并发。
 - [x] `SGA-CAN-002`（`SG-I09`）：invocation/aggregate/repair strict origin union。
 - [x] `SGA-CAN-003`（`SG-I09`）：content hash 与 revision hash 分层单字段突变。
 - [x] `SGA-CAN-004`（`SG-I09`、`SG-I10`）：exact revision 下游与 Head 变更 stale closure，不覆盖历史。
-- [x] `SGA-REP-001`（`SG-I10`、`SG-I22`）：模型 Review Issue 不冒充确定性 Gate/blocker。
-- [x] `SGA-REP-002`（`SG-I10`、`SG-I22`）：Repair Patch 冻结 target/allowlist/base/邻接且不能改已发布 Graph。
-- [x] `SGA-REP-003`（`SG-I10`、`SG-I22`）：expected Head 应用 N+1、幂等 Receipt 与并发单胜。
-- [x] `SGA-REP-004`（`SG-I10`、`SG-I22`）：每轮重跑影响闭包 Gate/Review，有界预算耗尽不半成功。
+- [x] `SGA-REP-001`（`SG-I10`、`SG-I27`）：模型 Review Issue 不冒充确定性 Gate/blocker。
+- [x] `SGA-REP-002`（`SG-I10`、`SG-I27`）：Repair Patch 冻结 target/allowlist/base/邻接且不能改已发布 Graph。
+- [x] `SGA-REP-003`（`SG-I10`、`SG-I27`）：expected Head 应用 N+1、幂等 Receipt 与并发单胜。
+- [x] `SGA-REP-004`（`SG-I10`、`SG-I27`）：每轮重跑影响闭包 Gate/Review，有界预算耗尽不半成功。
 
 ### 3.4 Codex、错误、CI 与旅程
 
-- [ ] `SGA-COD-001`（`SG-I05` 起、`SG-I27`）：真实本地 Codex ephemeral/read-only/ignore config/临时空目录与 Policy 模型。
+- [ ] `SGA-COD-001`（`SG-I05` 起、`SG-I34`）：真实本地 Codex ephemeral/read-only/ignore config/临时空目录与 Policy 模型。
 - [ ] `SGA-COD-002`（同上）：Tool allowlist 为空，任何 Tool event 丢弃 Candidate 并报错。
 - [ ] `SGA-COD-003`（同上）：Harness 显式注入 Guidance，工作目录与用户 Skill/项目配置隔离。
 - [ ] `SGA-COD-004`（同上）：模型调用/技术 deadline、进程回收与脱敏有界诊断。
@@ -200,17 +214,17 @@
 - [x] `SGA-OPS-001`（`SG-I01` 起）：Agent 测试只在 `agent/tests` 独立分类。
 - [x] `SGA-OPS-002`（每个 Agent 任务）：Ruff check/format、Pyright、Pytest 与 Go/Python fixture 同时通过。
 - [x] `SGA-OPS-003`（`SG-I02`、`SG-I05`）：非 root 镜像含唯一 Bundle/Codex，旧路径不存在且启动 Hash 验证。
-- [ ] `SGA-OPS-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I22`、`SG-I27`）：各类至少一次真实 Codex，完整原稿无模型桩。
+- [ ] `SGA-OPS-004`（`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18`、`SG-I27`、`SG-I34`）：各类至少一次真实 Codex，完整原稿无模型桩。
 - [x] `SGA-OPS-005`（每个 `SG-Ixx`）：完整任务 Red→Green→Refactor、全量 CI、Evidence 与独立提交。
-- [ ] `SGA-OPS-006`（`SG-I28`）：仅在 `SG-I27` 提交后运行最终 agent-browser，无新 Agent 实现。
-- [ ] `SGA-JRN-001`（`SG-I08`–`011`、`SG-I27`）：完整原稿 Evidence→Story analyze/reconcile→review/repair→Bible Gate 可恢复。
-- [ ] `SGA-JRN-002`（`SG-I12`–`017`、`SG-I27`）：confirmed Bible→episode analyze/reconcile→Owner Apply→Core Graph。
-- [ ] `SGA-JRN-003`（`SG-I18`–`023`、`SG-I27`）：draft→needs_asset→READY AssetVersion→detail/review/repair，Agent 零 Shot/Binding。
-- [ ] `SGA-JRN-004`（`SG-I27`）：Bundle 滚动、deadline、runtime unavailable、迟到、Head/Repair 竞争恢复收敛。
+- [ ] `SGA-OPS-006`（`SG-I35`）：仅在 `SG-I34` 提交后运行最终 agent-browser，无新 Agent 实现。
+- [ ] `SGA-JRN-001`（`SG-I08`–`011`、`SG-I34`）：完整原稿 Evidence→Story analyze/reconcile→review/repair→Bible Gate 可恢复。
+- [ ] `SGA-JRN-002`（`SG-I12`–`017`、`SG-I34`）：confirmed Bible→episode analyze/reconcile→Owner Apply→Core Graph。
+- [ ] `SGA-JRN-003`（`SG-I18`、`SG-I26`–`028`、`SG-I34`）：draft→needs_asset→READY AssetVersion→detail/review/repair，Agent 零媒体调用/Shot/Binding。
+- [ ] `SGA-JRN-004`（`SG-I34`）：Bundle 滚动、deadline、runtime unavailable、迟到、Head/Repair 竞争恢复收敛。
 
 ## 4. 实施任务完成 Checklist
 
-以下 28 项必须与 Plan 同序；每项只有在其映射 Requirement、定向验证、当时全量真实 CI、Acceptance Evidence 和独立 Git 提交均完成后才能勾选。
+以下 35 项必须与 Plan 同序；`SG-I01`–`SG-I19` 只保留已提交的历史完成事实，`SG-I20`–`SG-I35` 是本次重新接受后全未勾选的新目标。每项只有在其映射 Requirement、定向验证、当时全量真实 CI、Acceptance Evidence 和独立 Git 提交均完成后才能勾选。
 
 - [x] `SG-I01`：Schema/Key/Hash/Wire fixture、工具链/导入边界、失败测试与当前真实 CI 基线完成。
 - [x] `SG-I02`：八 Skill 字节保持迁移至 `agent/skills`，单路径、无 fallback、全量 CI、独立提交完成。
@@ -231,19 +245,28 @@
 - [x] `SG-I17`：Core StoryGraph 多集编译、Diff/Impact 全链完成。
 - [x] `SG-I18`：Storyboard Draft/Shot Intent/needs_asset 且零正式 Shot 完成。
 - [x] `SG-I19`：Intent Gate/FreezeIntentSet 与付费前零副作用完成。
-- [ ] `SG-I20`：reference_asset Cost/Quota/Runware Job/Artifact unknown 对账完成。
-- [ ] `SG-I21`：composite 三视图 QC/Selection/AssetVersion 完成。
-- [ ] `SG-I22`：精确 READY AssetVersion 的 detail_shots/Review/Repair 完成。
-- [ ] `SG-I23`：Storyboard Gate/Shot/ProductionBinding/Graph 原子 Apply 完成。
-- [ ] `SG-I24`：shot_frame/Selection/ShotImageBinding 与单 Shot 局部重跑完成。
-- [ ] `SG-I25`：只读 Story Lens、React Flow/Dagre、有界查询与无写入完成。
-- [ ] `SG-I26`：类型化 Domain Intent/Owner Command/重编译/Patch Diff 完成。
-- [ ] `SG-I27`：完整原稿、代表集人工细查、故障矩阵与全量真实 CI 证据已提交。
-- [ ] `SG-I28`：最终 agent-browser Web Journey 与 Backend/Owner/Temporal/Kafka/Search/Artifact 对账已提交。
+- [ ] `SG-I20`：Preset Catalog/Factory、配置版本、Secret Store、root-key Docker Secret、零配置启动与旧 Runware/环境变量链直接替换完成。
+- [ ] `SG-I21`：精确 Binding/Profile/Price 的 Intent/Job/Call/Receipt、四 Call、Cost/Quota 与同步/异步故障恢复完成。
+- [ ] `SG-I22`：真实 Web Provider Settings、一次性 Secret、Connection/Profile/Price/Binding 管理完成。
+- [ ] `SG-I23`：Seedream 5.0 Pro+ `reference_asset` 精确 Adapter、真实调用、Staging/QC/CandidateSet 完成。
+- [ ] `SG-I24`：GPT Image 2 `reference_asset` 精确 Adapter、真实调用、Staging/QC/CandidateSet 完成。
+- [ ] `SG-I25`：Nano Banana 2 Lite/2/Pro/Legacy 四个 `reference_asset` 精确合同与真实调用完成。
+- [ ] `SG-I26`：composite 三视图 QC/Selection/AssetVersion 与三类图片候选 Owner Apply 完成。
+- [ ] `SG-I27`：精确 READY AssetVersion 的 detail_shots/Review/Repair 与 Agent 媒体隔离完成。
+- [ ] `SG-I28`：Storyboard Gate/Shot/ProductionBinding/Graph 原子 Apply 完成。
+- [ ] `SG-I29`：三类图片 Provider 全部完成 shot_frame/Selection/ShotImageBinding 与单 Shot 局部重跑。
+- [ ] `SG-I30`：shot_video Target/Cost/Staging/ffprobe/Video QC/Selection/ShotVideoBinding/Graph 完成。
+- [ ] `SG-I31`：Seedance 2.0/2.0 Fast/2.0 Mini/2.5 四个真实异步视频闭环完成。
+- [ ] `SG-I32`：只读 Story Lens、React Flow/Dagre、有界查询与无写入完成。
+- [ ] `SG-I33`：类型化 Domain Intent/Owner Command/重编译/Patch Diff 完成。
+- [ ] `SG-I34`：完整原稿、四类 Provider 全模型、代表集人工细查、故障矩阵与全量真实 CI 证据已提交。
+- [ ] `SG-I35`：最终 agent-browser Web Journey 与 Provider 设置、Backend/Owner/Temporal/Kafka/Search/ProviderCall/Artifact 对账已提交。
 
 ## 5. Evidence Log
 
 > 日志拓扑事实源于 2026-08-28 收敛为 `Backend → Logstash → Elasticsearch → Kibana`：不使用 Filebeat，不创建 Kafka 日志 Topic，本机只复用已经启动的 Logstash。下方更早 Evidence 中出现的 Filebeat/Kafka 日志链仅记录当时实际执行过的历史验收，已被当前架构、需求、计划、Checklist 与 2026-08-29 后续 Evidence 取代，不得作为当前实现或后续测试依据。
+>
+> 下方 2026-08-29 的 Runware、`IMAGE_PROVIDER`、`RUNWARE_API_KEY`、固定 Binding/Route/Test Evidence 同样只记录当时真实实现增量。它们证明不了当前 Provider 配置/Secret/Call、Seedream、GPT Image、Nano Banana、Seedance、图片/视频 Binding 或 Web 设置合同，也不给新 `SG-I20`–`SG-I35` 任何预先通过状态。
 
 ### `SG-I01` — StoryGraph 与 Stage Wire 基础契约（2026-08-27）
 
@@ -572,7 +595,7 @@
 - 失败披露与范围：真实实现曾分别暴露 Candidate ID/Draft Set ID 混用、冻结后 revision 回放、PostgreSQL `jsonb` 字段顺序以及最终镜像更新时 Event Worker 首次 DNS 未就绪；均修正根因并从完整旅程或故障矩阵起点复跑，失败轮次不计通过。以上证据完成 `SG-PRD-008` 与当前 Intent Gate；覆盖七类 Gate 的复合 `SG-REV-006`–`008` 仍待后续视觉选择和正式 Shot Gate，因此保持未勾选。reference asset 生成、三视图 QC/选择、detail shot、正式 Shot/Binding/Graph、Canvas、完整原稿与最终浏览器验收尚未完成；`agent-browser` 本次未运行。
 - Git：实现、测试与 Evidence 由描述冻结已审核分镜意图的 feature 提交承载；提交标题和正文只表达功能，不包含任务编号、任务名、阶段名或内部计划名；未推送、未创建 PR。
 
-`SG-D21` 建立时 188 个 Checklist 全部未勾选；当前已按新证据完成 `SG-I01`–`SG-I19`，其余保持未通过。当前继续只消费 `approved_storyboard_intents` 实现 reference asset 的 Cost/Quota/Provider Job/Artifact 执行与 unknown 对账；在此之前不得启动 detail shot、正式 Shot Apply、Canvas 写入或 `agent-browser`。
+首次 `SG-D21` 建立时 188 个 Checklist 全部未勾选，随后按当时合同完成 `SG-I01`–`SG-I19`；这是 2026-08-29 通用媒体设计变更前的历史队列状态。其后的 Runware 增量仍保持未通过，并在本次重新接受后只作为重构输入，不决定新版 `SG-I20` 的内容或完成状态。
 
 ### GenerationTarget 与 Runware 离线任务合同（2026-08-29）
 
@@ -662,3 +685,10 @@
 - Backend 全量门：首次尝试向已启动 MinIO 注入文档示例凭据，真实返回 `The Access Key Id you provided does not exist`，因此该轮没有记为通过，也没有读取 `.env`、猜测凭据或重启 MinIO。随后在第二个全新 Homebrew PostgreSQL `18.4` 数据库中复用 Homebrew Kafka `127.0.0.1:9092` 与 Homebrew Temporal `127.0.0.1:7233`，不注入未知 MinIO 凭据，执行 `test -z "$(gofmt -l .)"`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全部通过；Generation `4.759s`、Eventing `24.226s`、StoryGraph `10.715s`、Workflow `113.612s`。本轮 MinIO 外部用例按既有显式 opt-in 规则未执行，不写成通过；两个全量数据库与更早定向数据库均已精确删除，未创建测试 Bucket。
 - 跨项目与部署门：Agent Ruff check/format、Pyright、Pytest 通过，结果 `39 passed, 4 skipped`，四项仍为明确 opt-in 的真实 Codex CLI 集成；Frontend 连续 OpenAPI 生成 Hash 零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试与 production build 全通过。开发 Compose 默认只有 Backend/Frontend，环境 Compose 默认零服务，三文件生产组合用显式 render-only 值通过。Backend/Frontend/Agent 三镜像均从当前工作区构建，单 Backend Binary、Frontend standalone、Agent 非 root/固定 Codex/唯一 Skill 探针通过；首次 Agent 镜像命令因错误地使用 `agent/` 上下文失败，改用 Dockerfile 要求的仓库根上下文后通过，三张临时镜像已精确删除。
 - 日志与剩余范围：本轮只探测并复用已启动的 `logstash-local-dev` 与 `127.0.0.1:5000`，未引入 Filebeat，也未启动、重启或重新编排 Logstash；Kafka 只用于已提交业务事件。当前 shell 没有真实 Runware 凭据，不能发布真实项目生产 Binding 或调用 Runware，因此 `SG-VIS-001`–`005`、`SG-OPS-002` 与完整 `SG-I20` 继续保持未勾选；全部开发完成前不运行 `agent-browser`。
+
+## 6. 重新接受后的目标基线（2026-08-29）
+
+- 本次 Checklist 精确覆盖 105 个跨服务 Requirement、70 个 Agent Requirement 和 35 个实施任务；Requirement ID 与实施任务均一一映射且无重复。
+- `SG-I01`–`SG-I19` 的勾选只证明未变合同的既有真实证据；`SG-VIS-001`–`022`、新增/改写的 Provider/Secret/Web/视频/日志关联/Agent 媒体隔离合同，以及 `SG-I20`–`SG-I35` 全部保持 `[ ]`。
+- 当前只解锁新版 `SG-I20`：先实现 Backend Preset Catalog/Factory、不可变配置版本、Secret Store、root-key Docker Secret 与零配置启动，并直接删除固定 Runware/环境变量链。未通过其完成门和当时全量真实 CI 前，不领取后续任务。
+- 最终 `agent-browser` 只在 `SG-I34` 全部实现与 CI Evidence 已独立提交后由 `SG-I35` 执行；本次文档重新接受没有运行浏览器验收。
