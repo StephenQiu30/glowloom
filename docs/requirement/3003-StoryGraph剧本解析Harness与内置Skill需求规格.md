@@ -1,6 +1,6 @@
 # StoryGraph 剧本解析 Harness 与内置 Skill 需求规格
 
-> 状态：Agent Contract Requirement 已接受（`SG-D19`，2026-08-27）；全部条款初始待实施、待验收
+> 状态：Agent Contract Requirement 已复核接受（`SG-D19`，2026-08-29）；既有实施证据只按未变合同保留，新增媒体职责边界初始待验收
 >
 > 设计依据：[StoryGraph Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 >
@@ -10,9 +10,9 @@
 
 ## 1. 范围
 
-本文只固定 Agent Runtime 与 Backend Agent Owner 之间的 Skill Bundle、Invocation Wire、Stage/Shard、Candidate Revision、Codex CLI、Review/Repair 和恢复契约。Production/StoryGraph/Workflow/Review/Asset/Kafka/Search/Frontend 的业务 Owner 与用户范围以 `0010` Requirement 为唯一来源。
+本文只固定 Agent Runtime 与 Backend Agent Owner 之间的 Skill Bundle、Invocation Wire、Stage/Shard、Candidate Revision、Codex CLI、Review/Repair 和恢复契约。Production/StoryGraph/Workflow/Review/Asset/Generation/Media Provider/Kafka/Search/Frontend 的业务 Owner 与用户范围以 `0010` Requirement 为唯一来源。
 
-本文所有条款初始均未完成；历史 `production_bible`、`storyboard_draft` Invocation、8 个根 Skill、测试或 Acceptance 不能抵扣本规格。
+历史 `production_bible`、`storyboard_draft` Invocation、8 个根 Skill、测试或 Acceptance 不能抵扣本规格。2026-08-27 后已按本规格产生的证据可继续证明未变合同；本次新增的媒体职责边界必须在 `SG-D21` 建立全未勾选目标项，不能由既有 Runware 或 Agent 证据抵扣。
 
 ## 2. 运行与所有权边界
 
@@ -23,6 +23,7 @@
 | `SGA-BND-003` | WorkflowDefinition/Temporal 只编排稳定宏观 Node；Stage shard/Invocation 必须挂到预先存在的 WorkflowRun/NodeRun，不得创建动态 Workflow Node 或 Agent Checkpoint 状态机。 | Backend integration + Temporal History/Replay。 |
 | `SGA-BND-004` | Agent 成功不得自动 Confirm/Apply、创建正式 UUID、Episode/Scene/Claim/Asset/Shot/Binding/StoryGraphVersion、发送 Kafka Event 或恢复 Human Gate。 | Candidate-only contract 与零业务写入 E2E。 |
 | `SGA-BND-005` | 首版 StoryGraphHarness 使用普通 Python 显式 Registry/函数，不使用 LangGraph 重复 Temporal 编排；若 `langgraph` 在目标实现后无真实消费者，必须从依赖和 lock 中删除。 | import/依赖/运行路径测试。 |
+| `SGA-BND-006` | Provider Catalog/Connection/Credential/Profile/Binding、Generation Target/Job/Call/Receipt、Staging/QC/Selection、AssetVersion 与 Shot 图片/视频 Binding 全部由 Backend 拥有。Agent 只可接收无密钥的冻结业务 Ref/视觉要求并返回文本或结构化 Candidate；不得接收 Provider Secret/Endpoint、图片或视频字节/私有 URL，不得调用 Seedream、Seedance、GPT Image、Nano Banana 或任意媒体 Provider。 | Wire/env/dependency/network/fixture/零 Provider 调用与零业务写入测试。 |
 
 ## 3. Skill 目录迁移与最终 Bundle
 
@@ -105,7 +106,7 @@
 | `SGA-EVD-002` | Slice 以段落/Scene/Episode marker 为优先边界；overlap 显式记录且不重复正式 coverage；相同 range+text hash 去重。 | coverage/overlap/golden。 |
 | `SGA-EVD-003` | Episode marker 必须覆盖阿拉伯数字、常用中文数字和真实原稿格式；显式 marker 优先，AI 只为缺失/歧义边界生成 Candidate，不覆盖已确认边界。 | 完整原稿 marker/歧义 fixture。 |
 | `SGA-EVD-004` | Candidate 中的 chunk-local offset 不能直接成为正式 Evidence；Backend 必须用冻结 Slice 校正并重验绝对 range/hash。 | 偏移篡改/边界测试。 |
-| `SGA-EVD-005` | 两集 fixture 用于契约开发；最终必须运行完整原稿，报告各 Stage shard/coverage/candidate/issue/repair/unknown 统计，并对代表集人工细查。 | `SG-I27` 机器报告 + manual sample。 |
+| `SGA-EVD-005` | 两集 fixture 用于契约开发；最终必须运行完整原稿，报告各 Stage shard/coverage/candidate/issue/repair/unknown 统计，并对代表集人工细查。 | `SG-I34` 机器报告 + manual sample。 |
 
 ## 8. Candidate Revision、Head 与 Repair
 
@@ -149,7 +150,7 @@
 | `SGA-OPS-003` | Agent 镜像必须包含唯一 Bundle 和 Codex CLI，且以非 root 运行；镜像内根 `.agents`/旧 Skill 不存在，Bundle Hash 可在启动时验证。 | Docker build/run/digest/path。 |
 | `SGA-OPS-004` | 测试模型桩只能证明协议/错误；`extract_source_evidence`、Bible、Episode、Storyboard Draft/Detail、Review/Repair 至少各有一次真实本地 Codex 合约，最终完整原稿不使用模型桩。 | Integration/Acceptance 条件标记与真实输出 hash。 |
 | `SGA-OPS-005` | 每个 `SG-Ixx` 完整任务先 Red → Green → Refactor，通过局部和当前全量真实 CI，回填 Evidence 后独立 Git 提交；失败/跳过/缺 Codex 登录不得报告通过。 | Git/CI/Acceptance。 |
-| `SGA-OPS-006` | 最终 `agent-browser` 只能在 `SG-I27` 全部实现、完整原稿和真实 CI 完成并提交后由 `SG-I28` 执行；Agent 测试不得提前替代浏览器验收。 | 顺序/Git 历史。 |
+| `SGA-OPS-006` | 最终 `agent-browser` 只能在 `SG-I34` 全部实现、四类媒体 Provider、完整原稿和真实 CI 完成并提交后由 `SG-I35` 执行；Agent 测试不得提前替代浏览器验收。 | 顺序/Git 历史。 |
 
 ## 12. 端到端 Harness 契约
 
@@ -170,9 +171,9 @@
 | `SG-I08` | `SGA-EVD-*`、`SGA-SHR-*`、`extract_source_evidence` |
 | `SG-I09`–`010` | `analyze_story/reconcile_story/review_storygraph/repair_candidate`、`SGA-CAN-*`、`SGA-REP-*` |
 | `SG-I13`、`SG-I15` | `segment_episodes/analyze_episode/reconcile_episode` |
-| `SG-I18`、`SG-I22` | `draft_storyboard/detail_shots`、`SGA-STG-006`–`008` |
+| `SG-I18`、`SG-I27` | `draft_storyboard/detail_shots`、`SGA-STG-006`–`008` |
 | 所有 Agent 任务 | `SGA-COD-*`、`SGA-ERR-*`、`SGA-OPS-*` |
-| `SG-I27` | `SGA-JRN-*` 与完整原稿/真实 Codex |
-| `SG-I28` | `SGA-OPS-006`，无新 Agent 实现 |
+| `SG-I34` | `SGA-JRN-*` 与完整原稿/真实 Codex；只验证 Agent 候选链，不在 Agent 接入媒体 Provider |
+| `SG-I35` | `SGA-OPS-006`，无新 Agent 实现 |
 
-本文完成 `SG-D19`。`SG-D20` 必须引用而非复制这些 Requirement，并按 `SG-I01`–`SG-I28` 唯一顺序安排实现；`SG-D21` 必须为本文全部 ID 建立初始未勾选验收映射。在 `SG-D21` 接受前不得移动 Skill 或编码。
+本文完成 `SG-D19` 复核。`SG-D20` 必须引用而非复制这些 Requirement，并按 `SG-I01`–`SG-I35` 唯一顺序安排实现；`SG-D21` 必须为本次新增的 `SGA-BND-006` 和改写的顺序门禁建立初始未勾选目标项，并保留未变合同的真实历史 Evidence。在 `SG-D21` 接受前不得编码。
