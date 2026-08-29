@@ -1,11 +1,12 @@
 # 通用媒体 Provider 与 Generation 执行器设计
 
-- 状态：待重新接受（2026-08-29）
+- 状态：已重新接受（2026-08-29）
+- 接受依据：用户明确要求按本设计把四类必接 Provider 统一进入实施，不再将 GPT Image 2、Nano Banana 或 Seedance 解释为计划项或预留项
 - 变更原因：用户将固定 Runware/环境变量方案调整为可空启动、Backend 管理、Web 配置的通用图片/视频 Provider 服务；Seedream 5.0 Pro 及以上、Seedance 2.0 及以上、GPT Image 2 与 Nano Banana 都是当前必须真实接入的固定范围；连接创建体验参考 CC-Switch 的“预设 + 必填字段”方式
 - 取代范围：取代本文件此前已接受的“固定 Runware 图片 Provider”目标；既有 Runware 代码与验收只作为当前事实，不形成兼容要求
 - 产品依据：[产品范围与验收基线](../prd/0001-产品范围与验收基线.md)
 - 架构依据：[后端领域模块功能设计](2002-后端领域模块功能设计.md) · [StoryGraph 内容图与 DAG 创作画布设计](0010-StoryGraph内容图与DAG创作画布设计.md) · [前端功能模块设计](1002-前端功能模块设计.md)
-- 实施门禁：本设计重新接受前只允许事实核验与设计修订；接受后先同步受影响 Design，再更新 PRD、Requirement、Plan 与全未勾选 Acceptance，最后才能修改代码
+- 实施门禁：本设计已解锁受影响 Design 的同步；Design 同步完成后仍须依次更新 PRD、Requirement、唯一 Plan 与全未勾选 Acceptance，全部重新接受后才能修改代码
 
 ## 结论
 
@@ -692,7 +693,7 @@ Web Provider Settings 只能配置和绑定 `shot_video` Provider，不能直接
 
 ## 11. MVP 强制交付顺序
 
-本 Design 接受后，先按文档链更新受影响的 Backend/Frontend Design、PRD、Requirement、唯一 Plan 和全未勾选 Acceptance，再按以下依赖拆成独立提交。此处只解决一个完整工程不能同时修改全部边界的落地顺序，不表示任何 Provider 可选、延期或只做预留：
+本 Design 已接受。先按文档链更新受影响的 Backend/Frontend Design、PRD、Requirement、唯一 Plan 和全未勾选 Acceptance，再按以下依赖拆成独立提交。此处只解决一个完整工程不能同时修改全部边界的落地顺序，不表示任何 Provider 可选、延期或只做预留：
 
 1. 内置 Preset Catalog、Provider Connection/Credential/ModelProfile/Binding Schema、加密 Secret Store 和空配置启动语义；
 2. 精确 ModelProfile PriceQuote/Quota、ProviderCall/Call Receipt 与 Job 聚合状态，先用受控 Gateway 证明四 Call、部分失败、outcome unknown 和重启恢复；
@@ -727,9 +728,9 @@ Runware 专用 Config、Adapter、Route、OpenAPI Schema 与测试在新链路�
 
 缺少火山、OpenAI、Google 任一 API Key/额度、OpenAI GPT Image 所需 Organization Verification/模型权限、Docker Secret Root Key，或 Google 在 Legacy Nano Banana 真实验收前已关闭该模型时，必须如实阻塞对应验收和 2051 整体完成；`shot_video` Target/Owner 是本设计的必交代码，不再作为外部前置条件或延期理由。不得把任何 Provider 降级为计划项，也不得使用 Runware、Codex、占位媒体、受控测试 Gateway 或历史 CandidateSet 报告真实 Provider 通过。
 
-## 13. 重新接受后的同步清单
+## 13. 正式同步清单
 
-本设计重新接受后，按依赖而不是文件编号依次同步：
+本设计于 2026-08-29 重新接受后，按依赖而不是文件编号依次同步：
 
 1. `0001` 完整设计基线、`0003` 系统总体架构：把固定图片 Provider 更新为可空通用媒体 Provider、Web 配置与图片/视频能力边界；
 2. `2001` Backend 服务架构、`2002` Backend 领域设计：加入 Connection/Credential/ModelProfile/Binding Owner、Secret Resolver 与 Registry/Adapter 依赖方向，保持单 Backend Binary；
@@ -739,7 +740,9 @@ Runware 专用 Config、Adapter、Route、OpenAPI Schema 与测试在新链路�
 6. `0010` 唯一 Plan：重新拆分当前视觉切片，先交付通用配置事实和 Web，再依次交付三类图片 Adapter 与 `shot_frame`，最后交付本设计已固定的 `shot_video` Owner 链和 Seedance 2.0+；这里仅表达依赖顺序，四类 Provider 均为本轮必做；
 7. `0010` Acceptance：新增全未勾选的新 Requirement/Task 条目；既有 Runware Evidence 保留为历史实现事实，不改写成火山通过，也不能抵扣新验收。
 
-接受前事实扫描已经定位以下精确同步点，接受后不得只做全局替换：
+同步状态：2026-08-29 已完成上述 1–4 的 Design 同步，并把唯一设计队列的剩余实施段更新为 `SG-I20`–`SG-I35`；当前只解锁第 5 项的 `SG-D17` PRD，同步第 5–7 项并重新接受前仍不编码。
+
+设计事实扫描已经定位以下精确同步点，不得只做全局替换：
 
 | 文件 | 当前冲突事实 | 接受后动作 |
 |---|---|---|

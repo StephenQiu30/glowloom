@@ -1,6 +1,6 @@
 # Workflow 公共 Human Gate 命令与恢复设计
 
-> 状态：StoryGraph Human Gate 复核已接受（`SG-D16`，2026-08-27）；Backend 公共 HTTP、既有五类 Owner 路由和 Review Workbench 已于 2026-08-27 实现，新 StoryGraph Gate 仍按唯一实施队列逐项交付
+> 状态：StoryGraph Human Gate 复核已接受（`SG-D16`，2026-08-27），通用媒体 Provider/Shot Video Gate 已重新同步（2026-08-29）；Backend 公共 HTTP、既有五类 Owner 路由和 Review Workbench 已于 2026-08-27 实现，新 StoryGraph Gate 仍按唯一实施队列逐项交付
 >
 > 基线：[后端领域模块功能设计](2002-后端领域模块功能设计.md) · [前端功能模块设计](1002-前端功能模块设计.md) · [StoryGraph 内容图与 DAG 创作画布设计](0010-StoryGraph内容图与DAG创作画布设计.md)
 >
@@ -25,7 +25,7 @@
 设计接受时的缺口是：
 
 - `lanverse` Backend API Runtime 没有公共 HumanTask 列表/详情/Claim/Decision/Resume HTTP；
-- StoryGraph 新链路需要 Bible、Episode、Planning、Storyboard Intent、Storyboard Detail、Reference 和 Shot Frame 多种 Gate；
+- StoryGraph 新链路需要 Bible、Episode、Planning、Storyboard Intent、Storyboard Detail、Reference、Shot Frame 和 Shot Video 多种 Gate；
 - 现有五类历史 Executor 不能覆盖新的 Candidate Revision/Head、Bible Confirm/Materialize 分离和两阶段 Storyboard；
 - Frontend 无法可靠区分“决议已记录”“Owner 尚未应用”“Signal 结果未知”“Workflow 已继续”。
 
@@ -39,7 +39,7 @@
 2. Claim/Renew/Release 保留 Actor、Revision、Lease Token、Expiry 和幂等 fencing；
 3. 一次 Decision 请求先提交不可变决议，再尝试显式 Owner Apply 和 Temporal Resume；
 4. 只凭已持久化 ReviewDecision ID 即可在 Browser/API/Worker 重启后恢复同一协调效果；
-5. Bible、Episode、Planning、Storyboard Intent/Detail、Reference 与 Shot Frame Gate 使用同一公共协议、不同显式 Owner Applier；
+5. Bible、Episode、Planning、Storyboard Intent/Detail、Reference、Shot Frame 与 Shot Video Gate 使用同一公共协议、不同显式 Owner Applier；
 6. Frontend 可分别展示 Task、Decision、Owner Apply 和 Workflow Resume 状态。
 
 ### 2.2 非目标
@@ -110,10 +110,11 @@ Subject/Rubric 决定允许的决议集合。`selected` 必须有 `selected_cand
 | `reference_asset_candidate_set` | `selected` | Generation `CandidateSelection` | Selection/selected Artifact Ref/Hash | Task 直接写 AssetVersion 或按 URL 选图 |
 | `storyboard_detail_candidate` | `approved` | Storyboard 全批创建正式 Shot 与完整 ShotProductionBindingVersion | Shot/Binding set Ref/Hash | 空 Binding、读取最新 AssetVersion、部分批应用 |
 | `shot_frame_candidate_set` | `selected` | Generation `CandidateSelection` | Selection/selected frame Artifact Ref/Hash | 写入 ShotProductionBindingVersion |
+| `shot_video_candidate_set` | `selected` | Generation `CandidateSelection` | Selection/selected video Artifact Ref/Hash | 按 URL 选视频、写入 ShotImageBindingVersion 或跳过 Video QC |
 
 `MaterializeConfirmedBible` 不是 Human Gate Owner Apply。它只在 `production_bible_candidate` Gate 输出已完成后由下游独立 Backend Coordinator 执行，拥有单独 Receipt，并创建 Asset/SpecificationVersion/AssetState/ProductionBinding；它不创建视觉 AssetVersion。
 
-Reference 的 AssetVersion 发布和 Shot Frame 的 ShotImageBindingVersion 发布也必须消费精确 Selection/Artifact 并走各自正式 Owner Service；可与对应工作流节点相邻，但不能把 Task/ReviewDecision 当成视觉版本或输出 Binding。
+Reference 的 AssetVersion 发布、Shot Frame 的 ShotImageBindingVersion 和 Shot Video 的 ShotVideoBindingVersion 发布都必须消费精确 Selection/Artifact 并走各自正式 Owner Service；可与对应工作流节点相邻，但不能把 Task/ReviewDecision 当成视觉版本或输出 Binding。Shot Video Apply 还必须重验同一正式 Shot、精确 ShotProductionBindingVersion、ShotImageBindingVersion、Target、视频 Artifact 元数据和 Video QC；任何一个漂移都保留 Decision 但拒绝 Owner Apply。
 
 `rejected`/`changes_requested` 不调用表中正向 Owner Command。Coordinator 持久化 `owner_apply_status=not_required` 和类型化 Gate rejection/repair output，再 Signal 同一个等待 Workflow；Workflow Definition 决定终止还是进入有界 Repair，浏览器不能自行重跑 Agent。
 
@@ -240,7 +241,7 @@ Review Workbench 首版只做：项目 Task 队列、详情、Claim/Renew/Releas
 1. 跨 Workspace/Project、Viewer、Token Version 撤销与防枚举授权；
 2. Claim/Renew/Release 的 Revision、Token、Expiry、接管、幂等重放和输入漂移；
 3. Subject revision/hash/head、candidate set、rubric 和允许 Decision 的防篡改；
-4. 表中七类 StoryGraph Gate 的显式 Owner 路由；未知 subject/executor fail closed；
+4. 表中八类 StoryGraph Gate 的显式 Owner 路由；未知 subject/executor fail closed；
 5. Bible Confirm 不创建 Asset，Intent Freeze 不创建 Shot/Cost/Provider Job，拒绝/修改不产生正向 Owner 效果；
 6. 进程在 Decision、Owner Receipt、Apply Intent、Signal Intent、Temporal 响应各边界退出后的同 ID 恢复；
 7. UNKNOWN、AlreadyApplied、Input Hash 冲突、Owner stale、重复/并发 Decision/resume 的独立结果；
@@ -252,11 +253,11 @@ Review Workbench 首版只做：项目 Task 队列、详情、Claim/Renew/Releas
 
 ## 11. 实施门禁
 
-本设计在 `SG-D16` 接受时不声明公共 HTTP、新 GORM 字段或七类 Gate 已实现；后续 `SG-D17` PRD、`SG-D18` 跨服务 Requirement、`SG-D19` Agent Requirement、`SG-D20` 唯一 Plan 和初始全未勾选的 `SG-D21` Acceptance 已按顺序完成。当前 Backend 公共 API、既有五类 Owner 路由、恢复闭环与 Review Workbench 已有实现和验收证据，七类新 StoryGraph Gate 仍未实现。
+本设计在 `SG-D16` 接受时不声明公共 HTTP、新 GORM 字段或八类 Gate 已实现。2026-08-29 的 Provider 变更只重新同步 Design；`SG-D17` PRD、`SG-D18` 跨服务 Requirement、`SG-D20` 唯一 Plan 和 `SG-D21` Acceptance 仍须重新同步并接受。当前 Backend 公共 API、既有五类 Owner 路由、恢复闭环与 Review Workbench 已有实现和验收证据，新增 StoryGraph/媒体 Gate 仍按任务逐项实现。
 
-代码实现只按 [0010 的唯一 `SG-Ixx` 队列](0010-StoryGraph内容图与DAG创作画布设计.md#唯一实施任务队列)：`SG-I06` 完成 Backend 公共 API，`SG-I07` 完成真实 Review Workbench，后续 Gate 随各自 Owner 任务逐个接入。每个完整任务通过局部验证和当前全量真实 CI 后独立提交；禁止兼容 fallback、跳过 CI、假 Owner Receipt 或本地模拟成功。
+代码实现只按 [0010 的唯一 `SG-Ixx` 队列](0010-StoryGraph内容图与DAG创作画布设计.md#唯一实施任务队列)：`SG-I06` 已完成 Backend 公共 API，`SG-I07` 已完成真实 Review Workbench，Reference/Shot Frame/Shot Video Gate 随 `SG-I26`、`SG-I29`、`SG-I30` 的精确 Owner 任务逐个接入。每个完整任务通过局部验证和当前全量真实 CI 后独立提交；禁止兼容 fallback、跳过 CI、假 Owner Receipt 或本地模拟成功。
 
-全部功能与真实 CI 在 `SG-I27` 完成并提交前不运行 `agent-browser`；最终浏览器验收只在 `SG-I28` 执行。
+全部功能与真实 CI 在 `SG-I34` 完成并提交前不运行 `agent-browser`；最终浏览器验收只在 `SG-I35` 执行。
 
 ## 12. 风险与事实来源
 

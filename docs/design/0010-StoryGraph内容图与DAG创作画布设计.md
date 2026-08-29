@@ -1,15 +1,15 @@
 # StoryGraph 内容图与 DAG 创作画布设计
 
-- 状态：已接受（`SG-D01`）
+- 状态：已接受（`SG-D01`）；通用媒体 Provider/Shot 视频关系已同步（2026-08-29）
 - 日期：2026-08-26
 - 接受日期：2026-08-27
 - 上位设计：[系统总体架构](0003-系统总体架构.md) · [领域语言与模块命名规范](0006-领域语言与模块命名规范.md) · [剧本到分镜 MVP 垂直切片设计](0009-剧本到分镜MVP垂直切片设计.md)
-- 相关设计：[前端应用架构](1001-前端应用架构.md) · [后端领域模块功能设计](2002-后端领域模块功能设计.md) · [项目制作圣经生成执行框架设计](3001-项目制作圣经生成执行框架设计.md) · [StoryGraph 剧本解析 Harness 与内置 Skill 设计](3003-StoryGraph剧本解析Harness与内置Skill设计.md)
-- 后续门禁：本次接受只解锁 `SG-D02`；仍需依次完成 `SG-D02`–`SG-D21`，在统一 Plan 与全未勾选 Acceptance 建立前不编码
+- 相关设计：[前端应用架构](1001-前端应用架构.md) · [后端领域模块功能设计](2002-后端领域模块功能设计.md) · [通用媒体 Provider 与 Generation 执行器设计](2051-通用媒体Provider与Generation执行器设计.md) · [项目制作圣经生成执行框架设计](3001-项目制作圣经生成执行框架设计.md) · [StoryGraph 剧本解析 Harness 与内置 Skill 设计](3003-StoryGraph剧本解析Harness与内置Skill设计.md)
+- 当前门禁：`SG-D01`–`SG-D16` 的 Design 已接受并完成 2026-08-29 Provider 变更同步；下一步只解锁 `SG-D17` PRD 重新同步，统一 Plan 与全未勾选 Acceptance 重新接受前不编码
 
 ## 设计结论
 
-Lanverse 的内容生产核心从“以 Storyboard 为终点”升级为“以 StoryGraph 为内容关系主干”。Storyboard 不被简单改名或删除，它继续表示分镜候选、审核、正式 Shot、图片绑定和导出生命周期；StoryGraph 负责把剧本证据、分集、场景、叙事节拍、角色、地点、剧情状态、分镜和生产绑定组织成一个可版本化、可追溯、可投影的内容 DAG。
+Lanverse 的内容生产核心从“以 Storyboard 为终点”升级为“以 StoryGraph 为内容关系主干”。Storyboard 不被简单改名或删除，它继续表示分镜候选、审核、正式 Shot、图片/视频绑定和导出生命周期；StoryGraph 负责把剧本证据、分集、场景、叙事节拍、角色、地点、剧情状态、分镜和生产绑定组织成一个可版本化、可追溯、可投影的内容 DAG。
 
 ```text
 DocumentRevision → ProductionBibleVersion → Episode → Scene → NarrativeBeat → Shot
@@ -19,7 +19,8 @@ Specification / AssetState / EffectiveStyleSnapshot → Reference GenerationTarg
 Specification / AssetState ─┐
 Asset / AssetVersion ────────┴→ ProductionBinding（关系声明结果）
 Shot + Occurrence + exact AssetVersion → ShotProductionBindingVersion → Frame GenerationTarget → Artifact
-Shot + selected frame Artifact → ShotImageBindingVersion
+Shot + selected frame Artifact → ShotImageBindingVersion → Video GenerationTarget → video Artifact
+Shot + selected video Artifact → ShotVideoBindingVersion
 ```
 
 StoryGraph、Authoring Graph、Workflow Definition 和 Temporal History 必须保持四个不同语义：
@@ -111,14 +112,14 @@ ID 也必须分离：
 | `constrains` | WorldRule/EffectiveStyleSnapshot → Shot/GenerationTarget | 上游规则约束下游生产 |
 | `materializes` | Specification/AssetState/Asset/AssetVersion → ProductionBinding；Specification/AssetState/EffectiveStyleSnapshot → ReferenceGenerationTarget → Artifact → AssetVersion | Binding 是由各参与事实共同指向的关系声明结果；参考生成保持从输入到产物的依赖方向 |
 | `binds_input` | Shot/Occurrence/AssetVersion → ShotProductionBindingVersion | Shot 使用哪些精确生产参考版本 |
-| `feeds_generation` | ShotProductionBindingVersion → ShotFrameGenerationTarget → Artifact | 冻结绑定进入 Shot 画面生成 |
-| `binds_output` | Shot/Artifact → ShotImageBindingVersion | 现有正式 Shot 选择哪一个生成画面 |
+| `feeds_generation` | ShotProductionBindingVersion → ShotFrameGenerationTarget → Artifact；ShotImageBindingVersion → ShotVideoGenerationTarget → Artifact(video) | 冻结生产输入进入 Shot 画面生成，选中首帧再进入视频生成 |
+| `binds_output` | Shot/Artifact(image) → ShotImageBindingVersion；Shot/Artifact(video) → ShotVideoBindingVersion | 正式 Shot 分别选择哪一个图片或视频产物 |
 | `supports` | Evidence → Claim | 来源证据支持一条语义主张 |
 | `claim_participant` | `asset_identity`/WorldRule → Claim | 主张的 subject/object 等参与者 |
 | `claim_anchor` | Episode/Scene/Beat/Occurrence → Claim | 主张成立、变化、伏笔或回收的剧情锚点 |
 | `supersedes` | Older Claim → Newer Claim | 新主张在明确有效范围内取代旧主张 |
 
-首版不开放用户自定义 Edge Type。`GenerationTarget` Payload 必须是 `reference_asset` 或 `shot_frame` 严格联合类型：前者才能发布 AssetVersion，后者只能产生供 ShotImageBindingVersion 选择的 frame Artifact。新增类型必须提升 StoryGraph Schema Version，并补齐允许的 source/target 类型、Hash、无环和反向追踪测试。
+首版不开放用户自定义 Edge Type。`GenerationTarget` Payload 必须是 `reference_asset|shot_frame|shot_video` 严格联合类型：前者才能发布 AssetVersion；`shot_frame` 只能产生供 ShotImageBindingVersion 选择的图片 Artifact；`shot_video` 必须冻结正式 Shot、精确 ShotProductionBindingVersion、ShotImageBindingVersion、目标时长与视频 Profile，只能产生供 ShotVideoBindingVersion 选择的视频 Artifact。新增类型必须提升 StoryGraph Schema Version，并补齐允许的 source/target 类型、Hash、无环和反向追踪测试。
 
 `materializes` 指向 `production_binding` 时必须带严格 `binding_role=specification|state|asset|asset_version` qualifier，且 source type 必须与 role 匹配；四类参与事实全部指向 Binding Node，Binding 不再反向指向 Asset/AssetVersion。这样 `asset_identity → asset_state` 与物化关系不会形成 `Asset → State → Binding → Asset` 环，Compiler 的类型矩阵也必须拒绝任何 `production_binding → asset_identity|asset_version` 权威边。
 
@@ -160,7 +161,7 @@ StoryGraph Node 是 Owner 事实的投影，不为产品别名新建 Record。�
 | `shot`、`shot_continuity_claim` | `production/storyboard` | Owner Apply 后的正式 Shot/Claim；Draft Row/Shot Intent 不进入正式图 |
 | `generation_target` | `generation` | 冻结 Generation Intent/Job Target |
 | `artifact`、`asset_version` | `asset` | READY Artifact 与发布 AssetVersion |
-| `shot_production_binding_version`、`shot_image_binding_version` | `production/storyboard` | Shot 输入参考集合与生成画面结果绑定 |
+| `shot_production_binding_version`、`shot_image_binding_version`、`shot_video_binding_version` | `production/storyboard` | Shot 输入参考集合、生成画面结果与最终视频结果绑定 |
 
 Canvas rank 由合法边经过稳定拓扑排序后计算。Claim 可能只依赖人物，也可能依赖后段 Scene/Beat/Occurrence，因此不能固定在第 2 层。业务 sequence/position/timecode 属于 Owner 内容并进入 Content Hash；Canvas 坐标、折叠和 viewport 只是视图状态，不进入 Hash。合法边仍由类型矩阵与上表 owner_kind 共同放行，不能仅凭展示分组放行。
 
@@ -387,21 +388,24 @@ NarrativeBeat ────────────────────┘   
                                                 ├─┐
 Occurrence + exact AssetVersion ────────────────┘ ├→ ShotProductionBindingVersion → GenerationTarget
 Shot + selected frame Artifact ──────────────────→ ShotImageBindingVersion
+ShotImageBindingVersion + ShotProductionBindingVersion → GenerationTarget(kind=shot_video) → Artifact(video)
+Shot + selected video Artifact ──────────────────→ ShotVideoBindingVersion
 ```
 
 Occurrence 必须带来源证据和剧情状态。每个 `ShotProductionBindingVersion` 是不可变完整集合，冻结 `shot_id + shot_revision + version_no + parent_version_id + entries[] + content_hash`；`entries` 按 `(occurrence_ref, asset_role)` 排序且不可重复，每项包含精确 AssetVersion Ref、所需 view roles 和 lineage hash。一个 Shot revision 同时只有一个 current Binding Version；修改必须以 expected current version/hash 发布下一完整集合，不能逐资产覆盖或由多个 Writer 追加。
 
 发布门禁必须证明：每个已审核 Shot Intent 要求的视觉 Occurrence 恰好有对应 Entry；Entry 的 AssetVersion 为 READY，其 lineage 指回与 Occurrence 相同的 Asset（StoryGraph 中投影为 `asset_identity`）和 AssetState、兼容的 EffectiveStyleSnapshot，并覆盖该 Shot 要求的 view roles；未知、重复、跨身份、跨剧情状态、错误画风或“最新版本”引用全部拒绝。
 
-三个 Binding 名称不能混用：
+四个 Binding 名称不能混用：
 
 | 名称 | 语义 | 唯一 Owner |
 |---|---|---|
 | `ProductionBinding` | Bible Specification/State 与物化 Asset/AssetVersion 的既有发布关系 | Production Bible |
 | `ShotProductionBindingVersion` | Shot 的完整不可变生产输入集合：精确 Character/Location/Prop AssetVersion | Storyboard |
 | `ShotImageBindingVersion` | 现有输出结果绑定：Shot 选择的生成 frame Artifact | Storyboard |
+| `ShotVideoBindingVersion` | 视频输出结果绑定：Shot 选择通过 Video QC 的视频 Artifact，并冻结 Target/Selection/首帧/时长/媒体元数据 | Storyboard |
 
-StoryGraph 只投影三种 Owner 事实，不复制 Writer；`ProductionBinding` 必须以自己的 `production_binding` Node 携带 Owner Ref，Specification、AssetState、Asset 和 AssetVersion 分别通过带 `binding_role` 的入向 `materializes` Edge 指向该节点，因而可精确反查 Binding ID/revision/hash且不引入权威环。Shot 输入 Binding 既不能借用 Bible materialization Binding，也不能借用现有图片结果绑定来保存。
+StoryGraph 只投影四种 Owner Binding 事实，不复制 Writer；`ProductionBinding` 必须以自己的 `production_binding` Node 携带 Owner Ref，Specification、AssetState、Asset 和 AssetVersion 分别通过带 `binding_role` 的入向 `materializes` Edge 指向该节点，因而可精确反查 Binding ID/revision/hash且不引入权威环。Shot 输入 Binding 既不能借用 Bible materialization Binding，也不能借用图片/视频结果 Binding 来保存；媒体 Provider Connection/Credential/Profile/Job/Call 仍不进入 StoryGraph 权威节点。
 
 ## 剧本深度解析与 StoryGraph 内容范围
 
@@ -413,7 +417,7 @@ StoryGraph 不只保存层级拆分，还允许保存有证据的深层叙事节
 - Character/Location/Prop Occurrence；
 - RelationshipClaim、ContinuityClaim、Foreshadowing/Payoff Claim；
 - Owner Apply 后的正式 Shot 及其 purpose、镜头语言、声画意图和时长；Storyboard Row/Shot Intent 候选不进入正式图；
-- Character Look typed lens、Location AssetVersion 投影、ShotProductionBindingVersion、ShotImageBindingVersion 和 Artifact lineage。
+- Character Look typed lens、Location AssetVersion 投影、ShotProductionBindingVersion、ShotImageBindingVersion、ShotVideoBindingVersion 和 Artifact lineage。
 
 Agent 产生的深层分析起初都是候选，必须保留 EvidenceRef、置信/歧义和 Review Issue；只有经 Human Gate 和真实 Owner Apply 物化的事实才能被 Compiler 编入正式 StoryGraphVersion。模型不得用“常见套路”补写剧本中不存在的关系、动机、伏笔或形象。
 
@@ -518,15 +522,22 @@ StoryGraphVersion 只有不可变 `published` 状态；旧版本不原地改写�
 | `SG-I17` | 从已物化 Bible/Episode/Scene/Beat/Occurrence/Claim Owner 事实编译 Core StoryGraphVersion | 多集 DAG、Claim scope、Evidence、Owner Ref、Diff 和影响闭包全链通过 |
 | `SG-I18` | 接入 Storyboard Draft，只消费非空正式 Specification/AssetState，产出可审核 Shot Intent 与 `needs_asset` 需求 | Candidate 不进入正式 StoryGraphVersion，缺资产时不得创建 Shot |
 | `SG-I19` | 用公共 Human Gate 审批 Shot Intent/visual requirements；Storyboard Owner `FreezeIntentSet` 只冻结 Draft Set revision/hash、已接受 Intent 和视觉需求并返回 Receipt | Gate completed/Receipt/输出可恢复，不创建正式 Shot；拒绝、unknown 或漂移不得产生 Provider Cost/Job |
-| `SG-I20` | 只消费 `SG-I19` 的 approved intent 输出，按已接受并同步的 `2051` 完成 `reference_asset` Intent/Cost/Quota/Provider Job/Artifact 执行 | Provider 未知结果按同一 Job 对账，不盲目重提，Artifact 只是 Candidate |
-| `SG-I21` | 完成 composite front/profile/back reference sheet 的确定性 QC、单一 CandidateSelection 和 AssetVersion 发布 | 身份/AssetState/EffectiveStyleSnapshot/lineage/view-role 门禁和选择幂等通过 |
-| `SG-I22` | 让 `detail_shots` 只消费精确 READY AssetVersion，完成分片 Review 与 Candidate Repair | 精确版本非空，跨 Scene 连续性、修复范围和重审门禁通过 |
-| `SG-I23` | 完成 Storyboard Human Gate/Owner Apply，创建正式 Shot 并发布完整 ShotProductionBindingVersion，编译下一 StoryGraphVersion | 全批原子、Binding 完整、精确 Owner Ref、冲突/回滚和重放通过 |
-| `SG-I24` | 接入 `shot_frame` 生成、动态 Shot 执行、CandidateSet/Selection 和现有 ShotImageBindingVersion | 与 ShotProductionBindingVersion 不混用，单 Shot 局部重跑、结果对账和反查通过 |
-| `SG-I25` | 用 React Flow + Dagre 实现按 Episode/Scene 加载的单人只读 Story Lens，与 Workflow Lens 明确分离 | Query、Diff、影响闭包、大图分层加载和无写入入口通过 |
-| `SG-I26` | 在只读 Lens 通过后增加类型化 Domain Intent 编辑、Owner Command、重编译和 Patch Diff；Yjs/Hocuspocus 另立设计 | Canvas 无 Graph JSON/SQL 直写，过期 base 冲突和新 Version 反查通过 |
-| `SG-I27` | 使用完整原稿执行全量机器统计、代表集人工细查、故障恢复与全量真实 CI，回填非浏览器最终证据 | 所有代码与全量 CI 完成，该 Acceptance Evidence 已独立提交 |
-| `SG-I28` | 只在 `SG-I27` 通过并提交后运行 `agent-browser` Web Journey，回填浏览器/最终 Acceptance 并独立提交 | 浏览器、API、PostgreSQL Owner 事实和 Artifact 系谱一致，无未说明失败 |
+| `SG-I20` | 直接替换固定 Runware 配置，建立内置 Preset Catalog、Provider Connection/Credential/ModelProfile/Project Binding GORM 事实、加密 Secret Store 与零配置启动语义 | 单 SQL 事实源、API Key 只存密文、root key 缺失只阻塞配置/执行、无 Migration/Raw SQL/兼容入口，全量 CI 通过 |
+| `SG-I21` | 建立精确 PriceQuote/Quota、ProviderJob/独立 ProviderCall/Receipt 聚合与 Registry Adapter Port，使用受控 Gateway 验证四候选四 Call、一次发送权、部分失败、unknown 与重启恢复 | 只有首次 `PENDING → DISPATCHING` 可 Submit，终态只结算一次，unknown 不释放预留也不盲目重提 |
+| `SG-I22` | 在 `SG-I20`/`SG-I21` 真实 Backend/OpenAPI 上实现 Workspace Provider Settings、Credential 轮换、ModelProfile 和 Project Purpose Binding Web 旅程 | Owner 权限、Secret 只写不读、预设/字段/版本/PriceQuote/零配置状态与刷新恢复通过；无任意 Provider URL |
+| `SG-I23` | 只消费 `SG-I19` approved intent，接入火山 Seedream 5.0 Pro+ 的精确 Profile、PriceQuote、真实 `reference_asset` 调用、Staging 和 Candidate | 真实凭据、单 Call 单输出、媒体校验、unknown 边界、重启和 Lineage 通过 |
+| `SG-I24` | 在相同 Target/Owner 链接入 OpenAI GPT Image 2 与 snapshot 的精确 Image API 合同 | 独立连接/Profile/Binding、`n=1`、Base64 Staging、费用和真实调用恢复证据通过 |
+| `SG-I25` | 在相同 Target/Owner 链接入 Google Nano Banana 2 Lite、2、Pro、Legacy 四个精确 Profile 与两种官方调用协议 | Interactions/Generate Content 不试探回退，四模型分别完成真实调用、Staging、费用和 Lineage |
+| `SG-I26` | 完成 composite front/profile/back reference sheet 确定性 QC、公共 Human Gate、单一 CandidateSelection 和 AssetVersion 发布 | 三类图片 Provider 的身份/State/Style/lineage/view-role、Selection/Owner Apply 幂等与失败路径通过 |
+| `SG-I27` | 让 `detail_shots` 只消费精确 READY AssetVersion，完成分片 Review 与 Candidate Repair | 精确版本非空，跨 Scene 连续性、修复范围和重审门禁通过 |
+| `SG-I28` | 完成 Storyboard Human Gate/Owner Apply，创建正式 Shot 并发布完整 ShotProductionBindingVersion，编译下一 StoryGraphVersion | 全批原子、Binding 完整、精确 Owner Ref、冲突/回滚和重放通过 |
+| `SG-I29` | 接入 `shot_frame` Target，在 Seedream/GPT Image/Nano Banana 三类图片 Adapter 上完成动态 Shot、CandidateSet/Selection 和 ShotImageBindingVersion | 精确 AssetVersion 输入、与 ShotProductionBindingVersion 不混用、单 Shot 局部重跑、结果对账和反查通过 |
+| `SG-I30` | 实现严格 `shot_video` Target、视频 Artifact 元数据/FFprobe、Video QC、公共 Human Gate、ShotVideoBindingVersion 与 StoryGraph 受控 Edge | 精确首帧/生产 Binding/时长、Selection/Owner Apply、局部重跑、无 Provider URL 和跨 Target 绑定通过 |
+| `SG-I31` | 接入 Seedance 2.0、2.0 Fast、2.0 Mini、2.5 精确 Profile/PriceQuote/异步任务协议，完成真实视频生成和同 remote id 恢复 | 四模型分别通过真实创建/查询/重启/Staging/Video QC/Selection/ShotVideoBindingVersion 全链 |
+| `SG-I32` | 用 React Flow + Dagre 实现按 Episode/Scene 加载的单人只读 Story Lens，与 Workflow Lens 明确分离并展示图片/视频 Binding | Query、Diff、影响闭包、大图分层加载和无写入入口通过 |
+| `SG-I33` | 在只读 Lens 通过后增加类型化 Domain Intent 编辑、Owner Command、重编译和 Patch Diff；Yjs/Hocuspocus 另立设计 | Canvas 无 Graph JSON/SQL 直写，过期 base 冲突和新 Version 反查通过 |
+| `SG-I34` | 使用完整原稿执行全量机器统计、代表集人工细查、Provider 故障恢复与全量真实 CI，回填非浏览器最终证据 | 四类 Provider 真实验收和所有代码/全量 CI 完成，该 Acceptance Evidence 已独立提交 |
+| `SG-I35` | 只在 `SG-I34` 通过并提交后运行 `agent-browser` Web Journey，回填浏览器/最终 Acceptance 并独立提交 | 浏览器、API、PostgreSQL Owner 事实、Provider Call 与图片/视频 Artifact 系谱一致，无未说明失败 |
 
 每个 `SG-Ixx` 都是一个完整任务：先 Red，再 Green/Refactor；随后运行该任务所需的真实局部 CI 和当前全量 CI，回填该任务 Acceptance Evidence，检查 diff/hygiene，最后独立 Git 提交。任一项未通过都不解锁下一项。Backend 测试进入 `backend/tests/production/storygraph`；Agent 测试按性质进入 `agent/tests/unit`、`agent/tests/contract`、`agent/tests/integration`；Frontend 测试进入 `frontend/tests/unit` 或 `frontend/tests/e2e`，不与生产源码混放。不得用兼容 fallback、跳过检查或模型桩冒充正式闭环。
 
@@ -538,7 +549,7 @@ StoryGraphVersion 只有不可变 `published` 状态；旧版本不原地改写�
 
 ### B. Visual Consistency Milestone
 
-证明同一角色跨两集和两个 AssetState 仍只有一个 Asset/角色卡身份；一个已发布角色参考 AssetVersion 由单一 READY composite reference sheet 覆盖 front/profile/back；至少一个 Scene 绑定正确 Location AssetState；Storyboard Draft 输入 Specification/AssetState 非空，Shot Detail 在资产 READY 后发布完整 ShotProductionBindingVersion，Human Gate/Owner Apply 创建正式 Shot，并编译包含 Shot/Binding 的下一 StoryGraphVersion。正式 Shot 可反查 Occurrence → AssetState → AssetVersion，生成结果继续落入 ShotImageBindingVersion。
+证明同一角色跨两集和两个 AssetState 仍只有一个 Asset/角色卡身份；一个已发布角色参考 AssetVersion 由单一 READY composite reference sheet 覆盖 front/profile/back；至少一个 Scene 绑定正确 Location AssetState；Storyboard Draft 输入 Specification/AssetState 非空，Shot Detail 在资产 READY 后发布完整 ShotProductionBindingVersion，Human Gate/Owner Apply 创建正式 Shot，并编译包含 Shot/Binding 的下一 StoryGraphVersion。正式 Shot 可反查 Occurrence → AssetState → AssetVersion，图片结果落入 ShotImageBindingVersion，视频 Target 消费该精确首帧并最终落入 ShotVideoBindingVersion；Provider 配置/凭据/Job/Call 不成为 StoryGraph 节点。
 
 ### C1. Read-only Canvas Milestone
 
@@ -546,7 +557,7 @@ StoryGraphVersion 只有不可变 `published` 状态；旧版本不原地改写�
 
 ### C2. Domain Intent 与完整故事验收
 
-再证明 Canvas 类型化 Domain Intent 只能通过真实 Owner Command 修改并触发重编译，不能写 Graph JSON。两集样本只证明契约，完整原稿还必须覆盖全部分集的机器统计和代表集人工细查。所有自动化、真实 CI 和完整故事链均通过后，最后才使用 `agent-browser` 完成浏览器故事验收。
+再证明 Canvas 类型化 Domain Intent 只能通过真实 Owner Command 修改并触发重编译，不能写 Graph JSON。两集样本只证明契约，完整原稿还必须覆盖全部分集的机器统计和代表集人工细查，并完成四类 Provider 的真实图片/视频旅程。所有自动化、真实 CI 和完整故事链均通过后，最后才使用 `agent-browser` 完成浏览器故事验收。
 
 ## 文档派生与实现门禁
 
@@ -554,10 +565,11 @@ StoryGraphVersion 只有不可变 `published` 状态；旧版本不原地改写�
 
 0010 PRD 统一拥有用户价值与跨服务范围，3003 不重复创建第二份产品愿景；3003 只派生 Agent 专项 Requirement 条目并被 0010 总 Plan 引用。已验收 `0009` 只增加演进链接，不回写历史范围或证据；旧 `3001/3002` 派生文档在同步前冻结。Acceptance 文档可以在编码前建立标准，但所有 Checklist 初始为 `[ ]`；没有真实执行证据不得勾选。
 
-## 待用户接受的核心决策
+## 已接受的核心决策
 
 1. StoryGraph 的权威边全部保持 DAG；天然成环的业务语义使用带 participant/anchor 输入边、有效范围和演进状态的 Claim Node 表达。
 2. Storyboard 保留为分镜生命周期和 StoryGraph Lens，不做简单改名、删除或双写兼容。
 3. 角色稳定身份、剧情形象、渲染画风和生成 Artifact 四轴分离；Character Look 只是 AssetVersion typed lens，MVP 用单一 composite reference sheet 覆盖 front/profile/back。
 4. StoryGraph 首版使用 PostgreSQL/GORM 不可变 JSONB Version + 线性 Head 和 Backend 内存拓扑校验，不引入图数据库、Raw SQL 或通用关系表。
 5. Canvas 首版采用 React Flow + Dagre 的按 Lens 子图，不提前实现多人协作和全项目无限展开。
+6. 媒体生成使用 Backend-owned 通用 Provider 配置与严格 `reference_asset|shot_frame|shot_video` Target；StoryGraph 只投影 Target、Artifact 和四类 Owner Binding，不投影 Provider 配置、凭据、Job 或 Call。
