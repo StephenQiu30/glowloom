@@ -1,6 +1,6 @@
 # StoryGraph 内容图与 DAG 创作画布实施计划
 
-- 状态：实施中；`SG-I01`–`SG-I19` 已完成（2026-08-28），当前只实施 `SG-I20`
+- 状态：Plan 已重新接受（`SG-D20`，2026-08-29）；`SG-I01`–`SG-I19` 已完成，`SG-I20`–`SG-I35` 全部待实施，`SG-D21` 接受前不编码
 - Design：[0010 StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
 - Agent Design：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 - PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
@@ -10,7 +10,7 @@
 
 ## 1. 计划边界
 
-本文是当前 StoryGraph 目标唯一实施计划，只安排已接受设计中的 `SG-I01`–`SG-I28`，不从 `0007/0008/1001/2001/2002/3001/3002` 旧计划领取重叠任务，也不为 Kafka、Search、ELK、Agent 或 Canvas 建立第二队列。
+本文是当前 StoryGraph 目标唯一实施计划，只安排已接受设计中的 `SG-I01`–`SG-I35`，不从 `0007/0008/1001/2001/2002/3001/3002` 旧计划领取重叠任务，也不为 Kafka、Search、ELK、Agent、媒体 Provider 或 Canvas 建立第二队列。
 
 计划状态不代表功能事实。编码前先建立全未勾选 Acceptance；实施时任何时刻只推进一个 `SG-Ixx`。一个 `SG-Ixx` 内允许把相互独立且可完整验证的 Red→Green 交付单元分别提交，但不得把半成品、只红不绿的测试或多个尚未完成任务堆入一次提交；该项所有门通过并提交后才解锁下一项。
 
@@ -24,6 +24,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 - Agent 是私有 FastAPI Candidate Runtime，`SG-I05` 已将 8 个过渡 Skill 原子收口为唯一 `agent/skills/build-storygraph` Bundle、十个显式 Stage Reference 与严格 Pydantic Candidate；Agent 不拥有 ORM、业务 Writer、Kafka、Elasticsearch 或 Temporal Client。
 - Frontend 是单 Next.js/npm 应用，使用 RTK Query；尚未安装 React Flow 或 Dagre。
 - 当前 Compose 与 CI 已有真实 PostgreSQL、Temporal、MinIO、Kafka KRaft、Elasticsearch 以及独立 ELK 日志管道，并执行 Broker/Search/日志组件停机与恢复门禁。
+- 当前代码已经有 strict GenerationTarget、Cost/Quota、Provider Request/Job、Runware Adapter、MinIO Stager、CandidateSet 与 ShotImageBinding 的增量事实，但它依赖环境变量和固定 Runware，且未通过真实 Runware 凭据完成门。本轮只把这些代码当作重构输入：新链路直接替换旧 Config/Binding/Adapter/Route/Test，不做双写、Migration、转换脚本、读取回退或兼容入口。
 - 2026-08-27 检查到最近一次已推送 GitHub `CI` 为成功；本地后续每个实施提交仍须重新运行当前完整 CI，不能用历史结果抵扣。
 
 ### 2.2 选型、版本与引入时点
@@ -38,8 +39,10 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 | ELK 日志链 | Logstash/Elasticsearch/Kibana `9.4.4` | `SG-I04` 随首个真实服务日志消费者 | `Backend fail-open TCP → Logstash → 独立日志/Dead-letter 索引 → Kibana`；日志不经过 Kafka，本机复用已运行 Logstash |
 | 结构化日志 | Go 标准库 `log/slog` JSON Handler，Python/Frontend 输出同一脱敏字段集 | `SG-I01` 固定契约，`SG-I04` 接管真实管道 | 不引入第二日志框架；日志失败不改变业务事务或 Receipt |
 | Agent Schema/Runtime | 已有 Pydantic `2.13.4`、FastAPI `0.140.12`、Codex CLI `0.147.0` | `SG-I01` 固定 Wire fixture，`SG-I05` 最终 Bundle | Agent 无 ORM、Kafka、Elastic、Temporal、对象存储、JWT 或 Provider 业务凭据；未出现真实消费者时在 `SG-I05` 删除 LangGraph |
-| Canvas | `@xyflow/react 12.11.5` + `@dagrejs/dagre 3.1.1` | `SG-I25` | 只在只读 Story Lens 首个组件中安装和导入；不预建通用 Canvas Framework |
-| 图片 Provider | Go `net/http` + 已接受 Runware REST Contract | `SG-I20` | 不增加 SDK 包装层；同一个稳定 Provider Job ID 做 unknown 对账 |
+| Provider 配置与 Secret | 唯一 GORM Catalog + Go 标准库 AEAD/HMAC + root-key Docker Secret | `SG-I20` | API Key 只写；密文版本在 PostgreSQL，根密钥只读 `/run/secrets/lanverse_media_provider_master_key`，不进 `.env`/普通业务列/日志；零配置不阻止非视觉服务启动 |
+| Provider 调用 | Go `net/http` + 编译期 Registry/Factory + 精确官方协议 DTO | `SG-I21`–`SG-I25`、`SG-I31` | 不建通用 HTTP 代理、动态插件或 SDK 包装层；每 Candidate 一个 ProviderCall，按同步/异步真实能力恢复，不自动 fallback |
+| 视频探测 | Backend Runtime Image 固定发行版 `ffmpeg` 包中的 `ffprobe` JSON | `SG-I30` | `exec.CommandContext` 固定参数、超时与资源上限；不手写 MP4/Codec Parser，不依赖宿主机二进制 |
+| Canvas | `@xyflow/react 12.11.5` + `@dagrejs/dagre 3.1.1` | `SG-I32` | 只在只读 Story Lens 首个组件中安装和导入；不预建通用 Canvas Framework |
 
 版本只在上述首个真实消费者落地时写入对应锁文件；不得为“将来会用”提前安装。升级任何版本必须先修改 Design/Requirement 的受影响事实、重跑真实依赖 CI，不增加版本兼容分支。
 
@@ -57,8 +60,10 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 | `backend/internal/bootstrap/event_process.go` | 单 `lanverse` Binary 内 Kafka Consumer、Search Projector、readiness 的唯一装配 | Backend 已有模块、Event/Search Adapter | 第二入口/Binary/Compose 服务、独立 Domain、独立数据库模型、第二 SQL 连接来源 |
 | `backend/internal/workflow` | Temporal Definition、Activity、Signal/Resume 与持久状态 | Backend Application Port、Temporal Adapter | Kafka 等待/调度、Search/ELK 恢复状态 |
 | `backend/internal/agent` | Backend-owned Stage Wire/Policy 与私有 Agent Client | 严格 Contract、HTTP Client Port | Agent 内部文件路径、ORM/Queue/Search Client |
-| `agent/app/candidate_runtime`、`agent/skills/build-storygraph` | 受控 Codex Invocation、Stage/Shard/Candidate/Repair | Pydantic、标准库、Bundle 内资源 | 业务数据库/API、Kafka、Elastic、Temporal、对象存储、Provider |
-| `frontend/src/features/storygraph` | Owner API View Model、Review、Story Lens 与类型化 Intent | 生成 API Client、RTK Query；`SG-I25` 后可用 React Flow/Dagre | 直连 Agent/Temporal/Kafka/Elastic/ELK、SQL/Graph JSON 写入 |
+| `backend/internal/generation` | Preset Catalog、Connection/Credential/Profile/Binding、Target/Job/Call/Receipt、Staging/QC/Selection 与 Provider Adapter | Domain/Application 依赖 Port；GORM/HTTP/Secret/ffprobe Adapter 依赖成熟库或标准库 | Agent、任意 URL/Header/JSON、全局明文 Secret、第二 SQL、Raw SQL、Runware fallback |
+| `agent/app/candidate_runtime`、`agent/skills/build-storygraph` | 受控 Codex Invocation、Stage/Shard/Candidate/Repair | Pydantic、标准库、Bundle 内资源 | 业务数据库/API、Kafka、Elastic、Temporal、对象存储、Provider Secret/Endpoint/图片视频调用 |
+| `frontend/src/features/provider-settings` | Catalog 驱动的 Connection/Credential/Profile/Price/Binding 管理 | 生成 API Client、RTK Query、受控一次性 Secret 表单 | 任意 Provider JSON/URL、浏览器直连 Provider、Secret 回显/cache/storage |
+| `frontend/src/features/storygraph` | Owner API View Model、Media Review、Story Lens 与类型化 Intent | 生成 API Client、RTK Query；`SG-I32` 后可用 React Flow/Dagre | 直连 Agent/Provider/Temporal/Kafka/Elastic/ELK、SQL/Graph JSON 写入 |
 
 目录只在对应真实类、Port、Adapter 或页面落地时创建；禁止先建立空 `utils`、`common`、`services`、Repository 转发层或未来 Binary。
 
@@ -73,11 +78,11 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 5. 回填本项 Acceptance Evidence；检查 diff、生成文件、secret、日志、缓存和报告产物。
 6. 只提交已完整通过的本项或本项中的完整交付单元，格式为 `type(scope): 中文功能说明`；提交标题和正文只描述交付的功能，不包含 `SG-Ixx` 等任务编号或任务名。最后一个提交必须使当前实施项的全部门通过，再进入下一项。
 
-若外部 Codex 登录、Runware Staging、真实服务资源或人工决议缺失，保留 failed/unknown/blocked 事实并停止；不得使用 mock、旧证据或静默降级宣称通过。
+若外部 Codex 登录、精确媒体 Provider 凭据/额度、真实服务资源或人工决议缺失，保留 failed/unknown/blocked 事实并停止；不得使用 mock、旧证据或静默降级宣称通过。
 
 ## 4. 唯一实施任务队列
 
-以下顺序原样引用已接受 Design 的 `SG-I01`–`SG-I28`；Checklist 只表示实施进度，初始全部未完成。
+以下顺序原样引用已接受 Design 的 `SG-I01`–`SG-I35`；`SG-I01`–`SG-I19` 的勾选只保留已经提交的真实历史完成事实，`SG-I20`–`SG-I35` 是本次重新接受后全未勾选的新目标。
 
 ### 基础契约与公共能力
 
@@ -108,18 +113,25 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 
 - [x] `SG-I18`：接入 Storyboard Draft，只消费非空正式 Specification/AssetState，产出可审核 Shot Intent 与 `needs_asset` 需求。完成门：Candidate 不进入正式 StoryGraphVersion，缺资产时不得创建 Shot。
 - [x] `SG-I19`：用公共 Human Gate 审批 Shot Intent/visual requirements；Storyboard Owner `FreezeIntentSet` 只冻结 Draft Set revision/hash、已接受 Intent 和视觉需求并返回 Receipt。完成门：Gate completed/Receipt/输出可恢复，不创建正式 Shot；拒绝、unknown 或漂移不得产生 Provider Cost/Job。**完成（2026-08-28）**：公共 `human.storyboard_review@2.0.0` 精确冻结 `storyboard_intent_candidate_set`；`approved` 后 Backend Storyboard Owner 在单一 PostgreSQL/GORM 事务中重验 StoryGraph、Manifest、Scene Candidate、Agent Invocation、Draft Set baseline 与不可变 ReviewDecision，只把完整 Shot Intent 和 visual requirements 冻结为 `approved_storyboard_intents` 与 Command Receipt。拒绝/要求修改为 `not_required`，Decision 后 baseline 漂移为显式冲突且零效果；Owner/Signal unknown、直接 Owner 重放和 Temporal Resume 均收敛到同一 Receipt。真实全链、完整 CI、三镜像与部署故障矩阵通过，正式 Shot、Cost/Quota、Provider Job、Artifact 和新 StoryGraphVersion 均为零。
-- [ ] `SG-I20`：只消费 `SG-I19` 的 approved intent 输出，按已接受并同步的 `2051` 完成 `reference_asset` Intent/Cost/Quota/Provider Job/Artifact 执行。完成门：Provider 未知结果按同一 Job 对账，不盲目重提，Artifact 只是 Candidate。**实施中（2026-08-29）**：已完成 strict `GenerationTarget`/Snapshot/Hash、Runware REST Adapter 离线合同、唯一 GORM Catalog 中不可变 Target 持久化、approved intent Target Builder、Cost/Quota Preparation、Execution Claim、Provider Request/Job Submit/Reconcile、生产 Runware HTTPS 安全下载与私有 MinIO Stager，以及 terminal Provider Result → READY Artifact/Candidate/QC/CandidateSet → canonical `node-output-v1`。`lanverse.production@15.0.0` 已正式注册 `generation.reference_asset@1.0.0`；Executor 每次执行和成功重放都在 Target Builder/Cost/Quota 前，用发起 Actor 校验 Project 最新 Provider Binding 必须与进程启用的 provider/model/credential ref 完全一致，未启用、缺失或漂移均以零 Target、零 Intent、零 Reservation、零远程调用失败关闭。首次创建 Request/Job 的同一事务再次校验最新 Binding，关闭前置门禁后追加漂移版本的竞态；已有 Request 的 Submit 重放和同 Job Reconcile 继续使用冻结 Binding，不被新版本改路。一个 NodeRun 仍只对应一个 Intent；Target Build 按 WorkflowRun、Preparation/Claim/Submit 按 NodeRun 使用稳定幂等键，unknown 只按同一 Provider Job 查询，成功重投返回同一 Job/Receipt/CandidateSet 节点输出。Stager 每次请求/重定向复核官方 Host 和公共 IP，限制响应字节并完整解码 PNG；稳定对象 Key 只允许相同 SHA/长度/Media Type 重放。`IMAGE_PROVIDER` 留空时不读取 Runware Secret，显式 `runware` 才构造生产 Gateway/Stager。Project Owner 公开命令现已从 `project_id` 解析 Workspace，只接受幂等键，并从进程配置追加固定 Binding/Receipt；非 Owner、客户端配置字段、Provider 未启用与重放漂移均失败关闭。当前只缺真实 `RUNWARE_API_KEY` 与额度下的凭据化 reference asset 旅程；本项保持未勾选，不提前实现 `shot_frame`、Selection 或 AssetVersion 发布。
-- [ ] `SG-I21`：完成 composite front/profile/back reference sheet 的确定性 QC、单一 CandidateSelection 和 AssetVersion 发布。完成门：身份/AssetState/EffectiveStyleSnapshot/lineage/view-role 门禁和选择幂等通过。
-- [ ] `SG-I22`：让 `detail_shots` 只消费精确 READY AssetVersion，完成分片 Review 与 Candidate Repair。完成门：精确版本非空，跨 Scene 连续性、修复范围和重审门禁通过。
-- [ ] `SG-I23`：完成 Storyboard Human Gate/Owner Apply，创建正式 Shot 并发布完整 ShotProductionBindingVersion，编译下一 StoryGraphVersion。完成门：全批原子、Binding 完整、精确 Owner Ref、冲突/回滚和重放通过。
-- [ ] `SG-I24`：接入 `shot_frame` 生成、动态 Shot 执行、CandidateSet/Selection 和现有 ShotImageBindingVersion。完成门：与 ShotProductionBindingVersion 不混用，单 Shot 局部重跑、结果对账和反查通过。
+- [ ] `SG-I20`：先以 Red 合同固定 Backend 内置 Preset Catalog、Factory 一致性、ProviderConnection/Credential/ModelProfile/ProjectBinding 不可变版本、Owner Command/Query、AEAD/HMAC Secret Store、root-key Docker Secret、零配置启动和唯一 GORM Catalog；同项直接删除 Runware Config/Binding/Adapter/Route/Test 与 Provider API Key 环境变量。完成门：权限/CAS/幂等/重启/错误 root key/Secret 零泄漏/Compose 仅 Backend+Frontend/空库同步通过，Catalog 不暴露尚无真实 Factory 的预设，无 Migration、双写、Raw SQL 或兼容读取。
+- [ ] `SG-I21`：重构 Generation Intent/Request/Job/Receipt 为精确 Binding/Profile/PriceQuote，并新增每 Candidate 一个 ProviderCall 与 Call Receipt；用受控 Gateway 先证明四 Call、部分失败、同步 `outcome_unknown`、异步 remote task、Cost/Quota 结算和 Worker/Temporal 重启恢复。完成门：任一前置失败零远端请求，首次 dispatch 之外不再发送，Job 只聚合 Call，不把 output count 冒充供应商账单。
+- [ ] `SG-I22`：在真实 Backend API 上交付 Web Provider Settings，支持 Catalog 卡片、Connection/Credential 轮换、ModelProfile、PriceQuote 和 Project Purpose Binding。完成门：Owner 权限/冲突/刷新/重启通过；Secret 提交后立即清空且不进入 URL、RTK Query cache、localStorage、日志、回显或 bundle；任意 Host/JSON/页面直连 Provider 不存在。
+- [ ] `SG-I23`：实现火山方舟 Seedream 5.0 Pro+ 精确 Adapter/Factory/Profile，把 `reference_asset` 严格 Target 跑通到一个 Call 一个 Candidate、私有 Staging、Image QC 和 CandidateSet。完成门：离线合同、SSRF/redirect/输出数量/协议漂移/Usage 负向与真实凭据生成通过；Artifact 仍只是候选，不在本项发布 AssetVersion。
+- [ ] `SG-I24`：实现 OpenAI GPT Image 2 精确 Image API Adapter/Factory/Profile，以 `n=1` 和单个 `b64_json` 跑通相同 `reference_asset` 候选闭环。完成门：严格 Base64/Usage/PriceQuote/Staging、同步未知结果、无模型/接口 fallback 与真实凭据生成通过。
+- [ ] `SG-I25`：实现 Google Nano Banana 2 Lite、2、Pro、Legacy 四个精确 Profile；2/Pro 走 Interactions，2 Lite/Legacy 走 Generate Content，分别跑通 `reference_asset` 候选闭环。完成门：四组离线合同、Transport 不试探/不回退、Usage/Staging/Cost 与四个真实凭据 Profile 逐一通过。
+- [ ] `SG-I26`：在三类图片 Provider 候选之上完成 composite front/profile/back reference sheet、Image QC、公共 Human Gate/CandidateSelection 和 Asset Owner 发布 AssetVersion。完成门：单一 Selection、身份/AssetState/EffectiveStyleSnapshot/lineage/view-role、Decision→Owner Apply→Resume、并发/漂移/重放与三类真实候选发布通过。
+- [ ] `SG-I27`：让 `detail_shots` 只消费精确 READY AssetVersion，完成确定性分片、Review 与有界 Candidate Repair。完成门：精确版本非空、跨 Scene 连续性、修复范围、重审、旧 Head stale 与真实本地 Codex 通过；Agent 不读取媒体 Secret 或调用 Provider。
+- [ ] `SG-I28`：完成 Storyboard Human Gate/Owner Apply，创建正式 Shot 并发布完整 ShotProductionBindingVersion，再编译下一 StoryGraphVersion。完成门：全批原子、Binding 完整、精确 Owner Ref、冲突/回滚/重放和 StoryGraph Diff/反查通过。
+- [ ] `SG-I29`：让 Seedream、GPT Image 2 与 Nano Banana 四模型全部支持严格 `shot_frame`，完成动态 Shot 执行、Image QC、CandidateSelection 和 ShotImageBindingVersion。完成门：不得修改 ShotProductionBindingVersion；每个 Provider 的真实 Shot Frame、单 Shot 局部重跑、旧 Binding 保留、费用/结果对账与 StoryGraph 反查通过。
+- [ ] `SG-I30`：新增严格 `shot_video` Target/Intent/Cost/Quota、视频 Staging、固定 `ffprobe` 探测、Video QC/Selection、ShotVideoBindingVersion 和 StoryGraph 投影。完成门：精确首帧/时长/比例/motion hash/Profile、capability 前置零费用拒绝、损坏/伪装媒体/跨 Shot/Binding 漂移、局部重跑和 Runtime Image `ffprobe` 通过；不在本项伪造 Seedance 成功。
+- [ ] `SG-I31`：实现火山 Seedance 2.0、2.0 Fast、2.0 Mini、2.5 精确异步 Adapter/Factory/Profile，按同一 remote task id 查询并逐一完成真实 `shot_video` → Staging → Video QC/Selection → ShotVideoBindingVersion。完成门：创建/查询/迟到/超时/保留窗口/重启、四模型 capability/PriceQuote、无版本 fallback 与四个真实 Profile 通过。
 
 ### Canvas、完整原稿与最终验收
 
-- [ ] `SG-I25`：用 React Flow + Dagre 实现按 Episode/Scene 加载的单人只读 Story Lens，与 Workflow Lens 明确分离。完成门：Query、Diff、影响闭包、大图分层加载和无写入入口通过。
-- [ ] `SG-I26`：在只读 Lens 通过后增加类型化 Domain Intent 编辑、Owner Command、重编译和 Patch Diff；Yjs/Hocuspocus 另立设计。完成门：Canvas 无 Graph JSON/SQL 直写，过期 base 冲突和新 Version 反查通过。
-- [ ] `SG-I27`：使用完整原稿执行全量机器统计、代表集人工细查、故障恢复与全量真实 CI，回填非浏览器最终证据。完成门：所有代码与全量 CI 完成，该 Acceptance Evidence 已独立提交。
-- [ ] `SG-I28`：只在 `SG-I27` 通过并提交后运行 `agent-browser` Web Journey，回填浏览器/最终 Acceptance 并独立提交。完成门：浏览器、API、PostgreSQL Owner 事实和 Artifact 系谱一致，无未说明失败。
+- [ ] `SG-I32`：用 React Flow + Dagre 实现按 Episode/Scene 加载的单人只读 Story Lens，与 Workflow Lens 和 Media Review 明确分离。完成门：Query、Diff、影响闭包、大图分层加载、loading/empty/error/a11y 和无写入入口通过。
+- [ ] `SG-I33`：在只读 Lens 通过后增加类型化 Domain Intent 编辑、Owner Command、重编译和 Patch Diff；Yjs/Hocuspocus 另立设计。完成门：Canvas 无 Graph JSON/SQL 直写，过期 base 冲突、Owner Receipt 和新 Version 反查通过。
+- [ ] `SG-I34`：使用完整原稿执行全量机器统计、代表集人工细查、四类 Provider 全模型真实旅程、故障恢复与全量真实 CI，回填非浏览器最终证据并独立提交。完成门：Backend/Agent/Frontend/OpenAPI/Compose/三镜像、PostgreSQL/Temporal/MinIO/Kafka/Elasticsearch/Logstash、Secret/Data/生成物卫生全部真实通过，失败/跳过/缺凭据不报告完成。
+- [ ] `SG-I35`：只在 `SG-I34` 通过并提交后使用 `agent-browser` 执行最终 Web Journey，回填浏览器/最终 Acceptance 并独立提交。完成门：Web Provider 设置、完整剧本→剧集→场景→分镜、Reference/Shot Frame/Shot Video、API/PostgreSQL/Temporal/Kafka/Search/ProviderCall/Artifact 系谱全部一致，无未说明失败。
 
 ## 5. Requirement 覆盖路由
 
@@ -134,19 +146,30 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 | `SG-I06`–`007` | `SG-REV-*`、`SG-FE-003`、`SG-OPS-*` |
 | `SG-I08`–`010` | `SG-PRD-*` 对应 Stage 输出、`SGA-EVD-*`、`SGA-SHR-*`、`SGA-CAN-*`、`SGA-REP-*`、对应 `SGA-STG-*` |
 | `SG-I11`–`017` | `SG-PRD-001`–`006`、`SG-REV-006`–`008`、`SG-GRF-*`、对应 `SGA-STG-*` |
-| `SG-I18`–`024` | `SG-PRD-007`–`012`、`SG-VIS-*`、`SG-JRN-002`、`SGA-STG-006`–`008`、`SGA-REP-*` |
-| `SG-I25`–`026` | `SG-FE-001`–`009`、`SG-QRY-*` |
-| `SG-I27` | `SG-OPS-*`、`SG-JRN-004`、`SGA-COD-*`、`SGA-ERR-*`、`SGA-JRN-*`、`SGA-OPS-004`–`005` |
-| `SG-I28` | `SG-JRN-005`、`SG-OPS-009`、`SGA-OPS-006`；不得新增实现 |
+| `SG-I18`–`019` | `SG-PRD-007`–`008`、`SG-REV-*`、`SGA-STG-006` |
+| `SG-I20` | `SG-VIS-003`、`012`–`014`、`SG-ARC-*`、`SG-OPS-001`–`004`、`010`、`SGA-BND-006` |
+| `SG-I21` | `SG-VIS-004`–`005`、`015`–`017`、`SG-ARC-008`、既有 Cost/Quota 合同 |
+| `SG-I22` | `SG-FE-010`、`SG-VIS-003`、`012`–`014`、`SG-OPS-002` |
+| `SG-I23`–`025` | `SG-VIS-001`–`009`、`013`–`020` 中对应图片 Provider、`SG-JRN-002` 图片候选部分 |
+| `SG-I26` | `SG-VIS-006`–`009`、`SG-REV-*`、AssetVersion Owner Apply |
+| `SG-I27` | `SG-PRD-009`、`SGA-STG-007`–`008`、`SGA-REP-*`、`SGA-BND-006` |
+| `SG-I28` | `SG-PRD-010`–`012`、`SG-REV-*`、StoryGraph 重编译 |
+| `SG-I29` | `SG-VIS-010`–`011`、`018`–`020`、Shot Frame Human Gate/Binding |
+| `SG-I30`–`031` | `SG-VIS-001`、`005`、`007`–`008`、`013`、`017`、`021`–`022`、`SG-JRN-002` 视频部分 |
+| `SG-I32`–`033` | `SG-FE-001`–`009`、`011`、`SG-QRY-*` |
+| `SG-I34` | `SG-OPS-*`、`SG-JRN-001`–`004`、`SGA-COD-*`、`SGA-ERR-*`、`SGA-JRN-*`、`SGA-OPS-004`–`005` |
+| `SG-I35` | `SG-JRN-005`、`SG-OPS-009`、`SGA-OPS-006`；不得新增实现 |
 
 ## 6. 真实 CI 演进门
 
 - `SG-I01` 先执行并记录当前 Backend/Agent/Frontend/OpenAPI/Compose/Image/Hygiene 基线；若真实失败，先作为本项完整 CI 修复单元解决，不能在失败基线上叠加功能。
 - `SG-I03` 起 Backend CI 每次使用空 PostgreSQL 由唯一 GORM Catalog 建表，并检查无 Migration 元数据、无 Raw SQL 业务 Repository、无第二 ORM。
 - `SG-I04` 起同一 CI Job 启动真实 Kafka 4.3.1 KRaft、Elasticsearch 9.4.4 与最小 Backend/Logstash/Elasticsearch 日志链，验证业务事件重复、乱序、断连、DLQ、Replay、Reindex、Alias、degraded/readiness，以及日志索引、脱敏、Dead-letter 与 Logstash 故障开放；内存 Broker/Index 只可用于纯单元测试，不能抵扣集成门。
-- Temporal、MinIO、Codex CLI、Runware Staging 在各自首个真实消费者任务加入对应 integration/journey；外部不可用必须显式失败或 unknown。
-- `SG-I25` 起 Frontend CI 安装锁定 React Flow/Dagre 后继续运行 OpenAPI drift、lint、typecheck、unit 和 production build；组件测试不得模拟不存在的 Backend 成功。
-- `SG-I27` 执行完整原稿、故障矩阵、全量真实 CI 和三类镜像/Compose；`SG-I28` 只能消费该已提交结果，使用 `agent-browser` 做最终 Browser→API→Owner/Temporal/Kafka/Search/Artifact 对账。
+- `SG-I20` 起在空 PostgreSQL 和单 GORM Catalog 验证 Provider 配置版本与 Secret Store；Compose 只启动 Backend/Frontend 并挂载 root-key Docker Secret，本地继续复用 Homebrew Kafka/Temporal/PostgreSQL、既有 MinIO/Logstash，Provider API Key 不进入环境文件。
+- `SG-I21` 起 CI 使用受控 Gateway/故障代理证明 ProviderCall 发送次数和同步/异步恢复；受控服务只证明协议和故障，不能抵扣后续真实凭据旅程。
+- `SG-I23`–`025` 分别加入 Seedream、GPT Image、Nano Banana 的离线合同与真实凭据任务；`SG-I30` 在 Backend Runtime Image 安装并验证固定 `ffprobe`，`SG-I31` 加入 Seedance 四模型真实任务。外部不可用或额度不足必须显式失败/unknown 并保持任务未完成。
+- `SG-I32` 起 Frontend CI 安装锁定 React Flow/Dagre 后继续运行 OpenAPI drift、lint、typecheck、unit 和 production build；组件测试不得模拟不存在的 Backend 成功。
+- `SG-I34` 执行完整原稿、四类 Provider 全模型旅程、故障矩阵、全量真实 CI 和三类镜像/Compose；`SG-I35` 只能消费该已提交结果，使用 `agent-browser` 做最终 Browser→API→Owner/Temporal/Kafka/Search/ProviderCall/Artifact 对账。
 
 ## 7. 停止与回滚点
 
@@ -154,7 +177,8 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 - Skill 迁移存在双路径或字节漂移：在 `SG-I02` 同一原子任务内回正，不保留 fallback。
 - Outbox 与 Owner 无法同一 GORM 事务、Kafka 仍承载日志、Search 无法从 PostgreSQL 重建：停在 `SG-I03/004`，不得让 Elastic 成为事实源。
 - Human Decision、Owner Apply、Workflow Resume 无法按同一冻结 Subject 对账：停在对应 Gate，不用 Kafka 或页面状态补偿。
-- Provider ACK/结果未知、配额/费用/资产版本不一致：按同一 Job/Receipt 对账，禁止重新计费式盲重试。
-- 完整原稿或真实 CI 未通过：`SG-I27` 保持未完成；不得运行、引用或提前准备最终 `agent-browser` 通过声明。
+- root key 缺失/错误、Secret 泄漏、Catalog 与 Factory 不一致或 Project Binding 漂移：停在配置/执行前，保持零 Provider 调用；不得改用环境变量或任意 URL。
+- Provider ACK/结果未知、配额/费用/资产版本不一致：按同一 Call/Job/Receipt 和真实 Provider capability 对账，禁止重新计费式盲重试或模型/接口 fallback。
+- 完整原稿、任一必接模型真实旅程或真实 CI 未通过：`SG-I34` 保持未完成；不得运行、引用或提前准备最终 `agent-browser` 通过声明。
 
-本文完成 `SG-D20`。`SG-D21` 已建立初始全未勾选 Acceptance Criteria；其独立提交后只能从 `SG-I01` 开始编码。
+本文完成 `SG-D20` 重新同步。下一步 `SG-D21` 必须保留 `SG-I01`–`SG-I19` 历史 Evidence，并为 `SG-I20`–`SG-I35` 建立全未勾选目标 Checklist；其重新接受并独立提交后，只能从 `SG-I20` 开始编码。
