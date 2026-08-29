@@ -49,7 +49,7 @@ SG-D01 当前设计评审
   → 全部开发完成后最终 agent-browser 验收
 ```
 
-- [Runware 图片 Provider 与 Generation 执行器 Design](../design/2051-Runware图片Provider与Generation执行器设计.md)尚待用户接受；在此之前不得派生或编码真实图片切片。
+- [通用媒体 Provider 与 Generation 执行器 Design](../design/2051-通用媒体Provider与Generation执行器设计.md)当前待重新接受；在此之前不得派生或编码真实媒体切片。
 - [Workflow 公共 Human Gate 命令与恢复 Design](../design/2055-Workflow公共HumanGate命令与恢复设计.md)尚待用户接受；在此之前不得公开半套 Decision API 或在 Frontend 模拟成功。
 - `QualityGateResult` 与完整 Agent Run/Usage 仍只有高层 Requirement，没有足够的已接受细化设计；不得借本审计自行补表或字段。
 

@@ -33,5 +33,5 @@ Python Candidate Runtime 在创建当前 Invocation 的 `CodexSchemaRunner` 时�
 
 - `BE-MOD-008` 现在已有当前固定 Definition 的调用次数和 Invocation 总执行时限，但 Token、费用、绝对排队 deadline、AgentRun/Usage Receipt、Workflow Run/Node Grant 作用域、防重放 Receipt、Backend Tool API 与生产 Model Gateway 尚未完成，因此总项保持未完成。
 - 超时的本地 Codex 调用没有 Provider Job 可供查询，本切片选择确定失败且禁止自动重试；未来接入可寻址的生产 Model Gateway 后，外部结果不确定必须使用 Usage/Result Receipt 对账，不能沿用本地进程语义。
-- [Runware 图片 Provider 与 Generation 执行器 Design](../design/2051-Runware图片Provider与Generation执行器设计.md)仍待用户接受；本切片没有开始图片 Provider 或 Generation Executor 编码。
+- [通用媒体 Provider 与 Generation 执行器 Design](../design/2051-通用媒体Provider与Generation执行器设计.md)当前待重新接受；本历史切片没有开始媒体 Provider 或 Generation Executor 编码。
 - 最终 `agent-browser` 仍只在全部开发与自动化回归完成后执行，本记录不计作浏览器验收。

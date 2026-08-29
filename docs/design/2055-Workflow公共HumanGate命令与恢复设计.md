@@ -270,4 +270,4 @@ Review Workbench 首版只做：项目 Task 队列、详情、Claim/Renew/Releas
 - Kafka Consumer 执行业务命令，或用 ELK 日志当恢复事实；
 - 为公共 Gate 创建第二数据库、Migration/Raw SQL 或通用 Saga 框架。
 
-Gate 顺序和 Owner 效果以 [0010](0010-StoryGraph内容图与DAG创作画布设计.md)为事实来源；Bible Confirm/Materialize 边界以[Production Bible 设计](3001-项目制作圣经生成执行框架设计.md)为事实来源；Storyboard Intent/Detail 边界以[分镜 Harness 设计](3002-本地-Codex-分镜智能体执行框架设计.md)为事实来源；图片 Selection 以[Runware Provider 设计](2051-Runware图片Provider与Generation执行器设计.md)为事实来源。
+Gate 顺序和 Owner 效果以 [0010](0010-StoryGraph内容图与DAG创作画布设计.md)为事实来源；Bible Confirm/Materialize 边界以[Production Bible 设计](3001-项目制作圣经生成执行框架设计.md)为事实来源；Storyboard Intent/Detail 边界以[分镜 Harness 设计](3002-本地-Codex-分镜智能体执行框架设计.md)为事实来源；媒体 Selection 以[通用媒体 Provider 设计](2051-通用媒体Provider与Generation执行器设计.md)为事实来源。
