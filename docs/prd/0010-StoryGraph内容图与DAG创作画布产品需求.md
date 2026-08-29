@@ -1,10 +1,10 @@
 # StoryGraph 内容图与 DAG 创作画布产品需求
 
-> 状态：已接受产品范围（`SG-D17`，2026-08-27）；不代表 Requirement、Plan、代码或验收已完成
+> 状态：已重新接受产品范围（`SG-D17`，2026-08-29）；不代表 Requirement、Plan、代码或验收已完成
 >
 > 设计依据：[StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
 >
-> 相关设计：[StoryGraph Harness](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) · [公共 Human Gate](../design/2055-Workflow公共HumanGate命令与恢复设计.md) · [前端功能模块](../design/1002-前端功能模块设计.md)
+> 相关设计：[通用媒体 Provider](../design/2051-通用媒体Provider与Generation执行器设计.md) · [StoryGraph Harness](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) · [公共 Human Gate](../design/2055-Workflow公共HumanGate命令与恢复设计.md) · [前端功能模块](../design/1002-前端功能模块设计.md)
 
 ## 1. 产品结论
 
@@ -17,7 +17,7 @@ Lanverse StoryGraph MVP 让创作者把一份拥有合法使用权的完整剧�
 3. 修改一个场景、状态或资产会影响哪些分镜和生成结果？
 4. 某次 AI 生成、人工审核和 Workflow 运行是否真正写入了正确的正式业务事实？
 
-MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 → 可浏览/可追踪”的最小生产闭环。它不承诺完整视频、声音、合成或多人协作平台。
+MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 图片/视频视觉一致性 → 可浏览/可追踪”的最小生产闭环。当前必须完成 Seedream 5.0 Pro+、Seedance 2.0+、GPT Image 2 与 Nano Banana 的真实生成链；声音、字幕、合成、导出与多人协作仍不在本轮 StoryGraph 完成门内。
 
 ## 2. 用户与核心任务
 
@@ -26,6 +26,7 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 | 编剧/剧本统筹 | 检查分集、场景、节拍、人物关系、伏笔和连续性 | 每条正式关系可反查原稿 Evidence 和 Owner Version |
 | 导演/分镜师 | 把已确认剧情拆成可生产 Shot，并理解上下游影响 | 可审核 Shot Intent、正式 Shot 和精确生产 Binding |
 | 角色/资产负责人 | 维护一个角色/地点身份下的多个剧情状态和视觉版本 | 角色卡/地点卡、三视图 reference sheet、版本与使用范围 |
+| Workspace Owner | 用内置预设创建火山/OpenAI/Google 持久连接、轮换凭据并发布项目模型 Binding | 只写 Secret、精确 Connection/Profile/Binding Version 与可解释 PriceQuote |
 | 制片人/审核者 | 在付费生成和正式写入前审核候选 | 冻结 Subject、不可变 Decision、Owner Receipt 与恢复状态 |
 | 运行维护者 | 定位异步任务、Provider、索引和日志问题 | Workflow/Receipt/Trace 可对账，重启与未知结果可恢复 |
 
@@ -38,6 +39,7 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 - AI 候选、人工 Decision、正式 Owner Apply 和 Workflow 恢复容易在 UI 中被混成一个“完成”；
 - 用户无法从剧本证据追到 Shot/Artifact，也无法可靠计算修改影响；
 - 当前 Agent Skill 分散且职责重叠，难以形成可版本化、可恢复的整剧解析 Harness；
+- 当前固定 Runware/环境变量配置无法让 Owner 在 Web 管理三类持久连接，也不能覆盖四类必接图片/视频模型；
 - 剧本/StoryGraph 检索和运行日志缺少真实异步投影链，排障依赖数据库或进程输出；
 - 现有前端没有真正的 StoryGraph Canvas，不能按 Episode/Scene 直观浏览关系。
 
@@ -54,18 +56,29 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 7. StoryGraph Compiler 只读取已确认 Owner 事实，发布不可变 Core StoryGraphVersion；
 8. 用户可以按版本、Episode/Scene、实体和上下游影响查询。
 
-### 4.2 角色/地点视觉一致性到正式 Shot
+### 4.2 Workspace Provider 配置与项目 Binding
+
+1. Workspace Owner 打开 Provider Settings，看到 Backend 当前已注册真实 Factory 的内置连接/模型预设；
+2. Owner 分别创建火山、OpenAI、Google 持久连接，API Key 只输入一次且提交后不回显；
+3. Owner 创建 Seedream 5.0 Pro+、Seedance 2.0/2.0 Fast/2.0 Mini/2.5、GPT Image 2、Nano Banana 2 Lite/2/Pro/Legacy 精确 ModelProfile；
+4. Owner 查看精确 PriceQuote，并为项目的 `reference_asset|shot_frame|shot_video` 发布不可变 Binding Version；
+5. 刷新页面或重启 Backend 后配置谱系仍存在，既有 Run 继续引用冻结版本，轮换只影响新 Job；
+6. 零配置是合法状态；没有 Binding/root key/权限/额度时，视觉命令在费用和远程调用前显示明确阻塞，非视觉服务继续可用。
+
+### 4.3 角色/地点视觉一致性到正式 Shot 与视频
 
 1. 用户在角色卡/地点卡查看唯一身份、Specification、AssetState 和缺失视觉资产；
 2. Storyboard Draft 从正式 Scene/Beat/Occurrence 与非空 Specification/State 生成 Shot Intent；
 3. Intent Gate 先冻结视觉需求；缺资产时明确 `needs_asset`，不创建 Shot 或 Provider Job；
-4. 系统为至少一个角色生成 composite `reference_sheet` 候选，覆盖 front/profile/back；
+4. 系统使用项目精确 Binding 在 Seedream、GPT Image 或 Nano Banana 上为所需角色/地点/道具生成 `reference_sheet` 候选，覆盖 front/profile/back；
 5. 用户审核并选择唯一 READY 候选，Backend 发布精确 AssetVersion；
 6. `detail_shots` 只消费精确 READY AssetVersion；
 7. 用户审核后，Storyboard Owner 原子创建正式 Shot 和完整 ShotProductionBindingVersion；
-8. StoryGraph Compiler 发布包含 Shot/Binding 的新版本；Shot Frame 生成结果写入独立 ShotImageBindingVersion。
+8. StoryGraph Compiler 发布包含 Shot/Binding 的新版本；三类图片 Provider 的 Shot Frame 生成结果写入独立 ShotImageBindingVersion；
+9. `shot_video` 冻结正式 Shot、生产 Binding、精确首帧、目标时长和 Seedance Profile，用户选择通过 Video QC 的候选后发布 ShotVideoBindingVersion；
+10. Story Lens 能从 Shot 反查图片/视频 Target、Artifact 与最终 Binding，但不展示 Provider Secret/Connection/Job 为权威内容节点。
 
-### 4.3 Story Lens 与运行追踪
+### 4.4 Story Lens 与运行追踪
 
 1. 用户从项目、Episode、角色/地点卡、审核任务或 Run 深链进入 Story Lens；
 2. 首版按 Episode/Scene/Entity/Impact 有界加载，不一次展开完整项目；
@@ -73,7 +86,7 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 4. Story Lens 与 Workflow Lens 保持两套 ID/Query；内容节点不能冒充运行节点；
 5. 只读 Lens 通过后，用户可提交少量类型化 Domain Intent；Backend 路由真实 Owner Command 并重编译新版本，前端不能写 Graph JSON。
 
-### 4.4 搜索、异步投影与日志诊断
+### 4.5 搜索、异步投影与日志诊断
 
 1. Backend 业务事务提交 Owner 事实与 Outbox；
 2. Kafka 异步驱动 Script/StoryGraph Elasticsearch 投影和业务事件消费者；
@@ -103,10 +116,14 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 
 - 一个角色身份可有多个剧情 AssetState 和多个画风下的 AssetVersion；
 - 角色卡、地点卡和 Scene View 是只读组合，不创建 Card Record；
-- `reference_asset` 与 `shot_frame` 两种严格 GenerationTarget；
-- Runware 首个真实图片 Provider、Cost/Quota、UNKNOWN 对账、Staging、Artifact Readiness、QC 和 CandidateSelection；
+- `reference_asset|shot_frame|shot_video` 三种严格 GenerationTarget；
+- Backend 内置 Preset Catalog，Workspace Provider Connection/Credential/ModelProfile 与 Project Purpose Binding 不可变版本；
+- API Key 经 Web 一次写入并以 Backend 密文版本保存，不来自 `.env`，不回显浏览器；
+- Seedream 5.0 Pro+、GPT Image 2、Nano Banana 2 Lite/2/Pro/Legacy 三类真实图片 Adapter；
+- Seedance 2.0、2.0 Fast、2.0 Mini、2.5 真实视频 Adapter 和异步任务恢复；
+- 每候选独立 ProviderCall、Cost/Quota、同步 UNKNOWN/异步 remote task 对账、私有 Staging、Artifact Readiness、Image/Video QC 和 CandidateSelection；
 - composite reference sheet 的 front/profile/back coverage；
-- ShotProductionBindingVersion 冻结精确视觉输入，ShotImageBindingVersion 保存最终画面输出。
+- ShotProductionBindingVersion 冻结精确视觉输入，ShotImageBindingVersion/ShotVideoBindingVersion 分别保存最终图片/视频输出。
 
 ### 5.4 Workflow、消息与检索
 
@@ -120,7 +137,8 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 ### 5.5 Frontend
 
 - 当前 npm/Next.js 单应用和 RTK Query，不迁移 monorepo；
-- 项目摘要、角色/地点卡、公共 Review Workbench、StoryGraph Search；
+- Workspace Provider Settings、Project Binding、项目摘要、角色/地点卡、公共图片/视频 Review Workbench、StoryGraph Search；
+- Provider Secret 只写不读，页面无任意 Host/JSON/自动 fallback 或直接 Provider 调用入口；
 - React Flow + Dagre 的单人只读 Story Lens，按 Episode/Scene 有界加载；
 - Story Lens 与 Workflow Lens 严格分离；
 - 只读里程碑之后的类型化 Domain Intent，不提供通用 JSON 写图；
@@ -137,11 +155,14 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 
 ### Gate B：Visual Consistency
 
+- 零 Provider 配置时非视觉服务可用；Owner 可在 Web 创建火山/OpenAI/Google 持久连接、精确 Profile 和 Project Binding，Secret 不回显且重启后可继续使用；
 - 同一角色跨至少两集和两个 AssetState 仍只有一个身份；
 - 至少一个角色 AssetVersion 来自单一 READY composite reference sheet，并完整覆盖 front/profile/back；
 - 至少一个 Scene 使用正确 LocationState；
 - 正式 Shot 绑定精确 AssetVersion，能反查 Occurrence/State/Style/Artifact lineage；
-- reference/shot frame 的费用、配额、Provider UNKNOWN、QC、Selection 与两种 Binding 可恢复。
+- Seedream 5.0 Pro+、GPT Image 2 和四个 Nano Banana 模型分别完成真实 reference/shot frame 调用、费用、Staging、QC、Selection 与 Owner Apply；
+- Seedance 2.0、2.0 Fast、2.0 Mini、2.5 分别完成真实异步视频调用、同 remote id 恢复、Video QC、Selection 与 ShotVideoBindingVersion；
+- 每候选一个 ProviderCall，四候选四 Call；未知结果不盲目重提、不重复付费，图片/视频 Binding 均可恢复。
 
 ### Gate C：Canvas、Search 与诊断
 
@@ -154,7 +175,7 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 
 - 完整原稿所有分集完成机器统计，代表集完成人工细查；两集小样本不替代全量；
 - Backend、Agent、Frontend、Compose、镜像、OpenAPI、数据/Secret 卫生和当前真实 CI 全部通过；
-- 每个完整 `SG-Ixx` 任务已有独立 Git 提交和真实验收证据；
+- 每个完整实施任务已有独立 Git 提交和真实验收证据；
 - 最后才使用 `agent-browser` 执行 Web Journey，并核对浏览器、API、PostgreSQL Owner 事实、Temporal 与 Artifact lineage 一致。
 
 ## 7. 产品成功标准
@@ -166,7 +187,10 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 - 未经 Human Gate/Owner Apply 进入正式 StoryGraph 或创建正式 Shot 的 Candidate 数为 `0`；
 - 未绑定精确 READY AssetVersion 的正式 Shot 数为 `0`；
 - 角色 composite reference sheet 缺 front/profile/back 仍被发布的数量为 `0`；
-- Provider UNKNOWN 被盲目重新提交、重复扣费或重复占用配额的次数为 `0`；
+- API Key/密文进入 Query、日志、Temporal、Kafka、StoryGraph、Candidate Payload 或浏览器持久化的次数为 `0`；
+- Provider UNKNOWN 被盲目重新提交、重复扣费或重复占用配额的次数为 `0`，单个 ProviderCall 的真实发送次数最多为 `1`；
+- 缺失 Seedream/GPT Image/Nano Banana/Seedance 任一强制模型真实验收却报告媒体闭环完成的次数为 `0`；
+- ShotVideoBindingVersion 使用漂移首帧、错误 Target、未通过 Video QC 或跨 Shot Artifact 的数量为 `0`；
 - 同一幂等输入产生多个 Owner Receipt、StoryGraphVersion、Decision、Selection 或 Binding 的次数为 `0`；
 - Search 重建后无法反查 PostgreSQL Owner/StoryGraphVersion 的结果数为 `0`；
 - Agent、Frontend、Kafka Consumer、Search/ELK 对业务 Owner 表的写入次数为 `0`；
@@ -176,12 +200,12 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 
 ## 8. 非目标
 
-- 完整视频/动作、配音、字幕、合成与最终成片；
+- Shot 图片/视频 Binding 之后的配音、字幕、合成与最终成片；
 - 多人实时 Canvas、Yjs/Hocuspocus、Presence、评论或离线合并；
 - 通用知识图谱、图数据库、任意 EAV Schema、图查询语言或图插件市场；
 - 通用 Agent 平台、动态 Tool Registry、无限 Repair 或 Agent 业务写库；
-- 多 Provider 自动路由、Fallback、模型市场、复杂语义图片 QC；
-- 地点/道具参考图全覆盖，除非真实 Shot Gate 证明首个闭环必需；
+- 多 Provider 自动路由、Fallback、动态模型市场、复杂语义图片/视频 QC；
+- 与已批准 Shot Intent 无关的全库地点/道具预生成；真实视觉需求引用的地点/道具仍必须走正式 reference 生成链；
 - 角色状态组合规则引擎、自动角色近似合并或自由文本“最新资产”绑定；
 - 微服务拆分、多地域、多租户企业运营后台或 Kafka Command Bus；
 - 为旧 Storyboard/静态 Provider Job/旧 Skill 建兼容双写或 fallback。
@@ -190,7 +214,7 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 
 - AI 分析有非确定性；Evidence、Review Issue、Human Gate 和 Owner Apply 不能被模型置信度替代；
 - 完整剧本可能存在跨集边界、别名、隐含状态和矛盾，必须暴露歧义而非猜测合并；
-- 本地 Codex 登录、Runware 凭据/额度、Temporal、Kafka、Elasticsearch、ELK、PostgreSQL 和对象存储是不同验收外部条件；缺失时只能记录对应未验收范围；
+- 本地 Codex 登录、火山/OpenAI/Google API Key/额度与模型权限、Docker Secret root key、Temporal、Kafka、Elasticsearch、ELK、PostgreSQL 和对象存储是不同验收外部条件；缺失时只能记录对应未验收范围；
 - Kafka/Elasticsearch/ELK 增加运行复杂度，但用户已明确其异步、检索和日志价值；MVP 只实现真实消费者，不搭建通用平台；
 - 图片语义一致性不能完全由确定性 QC 证明，发布仍需要人工选择；
 - 两集样本用于契约和恢复开发，不能替代完整原稿的最终效果验收；
@@ -198,6 +222,6 @@ MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 视觉一致性 
 
 ## 10. 文档与实施门禁
 
-本 PRD 是 StoryGraph 唯一产品范围来源；`3003` 只派生 Agent Contract Requirement，不创建第二份 Agent 产品愿景。下一步由 `SG-D18` 建立跨 Backend/Frontend/Workflow/Asset/Kafka/Search 可测契约，由 `SG-D19` 补 Agent 专项契约，再由 `SG-D20` 原样引用 `SG-I01`–`SG-I28` 建立唯一 Plan，`SG-D21` 创建初始全未勾选 Acceptance。
+本 PRD 是 StoryGraph 唯一产品范围来源；`3003` 只派生 Agent Contract Requirement，不创建第二份 Agent 产品愿景。下一步由 `SG-D18` 建立跨 Backend/Frontend/Workflow/Asset/Provider/Kafka/Search 可测契约，由 `SG-D19` 复核 Agent 专项契约仍不获得媒体 Provider 职责，再由 `SG-D20` 原样引用 `SG-I01`–`SG-I35` 建立唯一 Plan，`SG-D21` 为新增目标创建初始全未勾选 Acceptance。
 
 在 `SG-D21` 接受前不编码。编码后每个完整任务必须先 Red → Green → Refactor，再通过真实局部和当前全量 CI并独立 Git 提交；所有实现和非浏览器验收完成后才运行 `agent-browser`。

@@ -5,7 +5,7 @@
 - 接受日期：2026-08-27
 - 上位设计：[系统总体架构](0003-系统总体架构.md) · [领域语言与模块命名规范](0006-领域语言与模块命名规范.md) · [剧本到分镜 MVP 垂直切片设计](0009-剧本到分镜MVP垂直切片设计.md)
 - 相关设计：[前端应用架构](1001-前端应用架构.md) · [后端领域模块功能设计](2002-后端领域模块功能设计.md) · [通用媒体 Provider 与 Generation 执行器设计](2051-通用媒体Provider与Generation执行器设计.md) · [项目制作圣经生成执行框架设计](3001-项目制作圣经生成执行框架设计.md) · [StoryGraph 剧本解析 Harness 与内置 Skill 设计](3003-StoryGraph剧本解析Harness与内置Skill设计.md)
-- 当前门禁：`SG-D01`–`SG-D16` 的 Design 已接受并完成 2026-08-29 Provider 变更同步；下一步只解锁 `SG-D17` PRD 重新同步，统一 Plan 与全未勾选 Acceptance 重新接受前不编码
+- 当前门禁：`SG-D01`–`SG-D16` 的 Design 已接受并完成 2026-08-29 Provider 变更同步；`SG-D17`–`SG-D21` 必须继续按 PRD → Requirement → Agent Contract 复核 → Plan → Acceptance 顺序推进，全部重新接受前不编码
 
 ## 设计结论
 

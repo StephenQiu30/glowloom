@@ -253,7 +253,7 @@ Review Workbench 首版只做：项目 Task 队列、详情、Claim/Renew/Releas
 
 ## 11. 实施门禁
 
-本设计在 `SG-D16` 接受时不声明公共 HTTP、新 GORM 字段或八类 Gate 已实现。2026-08-29 的 Provider 变更只重新同步 Design；`SG-D17` PRD、`SG-D18` 跨服务 Requirement、`SG-D20` 唯一 Plan 和 `SG-D21` Acceptance 仍须重新同步并接受。当前 Backend 公共 API、既有五类 Owner 路由、恢复闭环与 Review Workbench 已有实现和验收证据，新增 StoryGraph/媒体 Gate 仍按任务逐项实现。
+本设计在 `SG-D16` 接受时不声明公共 HTTP、新 GORM 字段或八类 Gate 已实现。2026-08-29 的 Provider 变更只重新同步 Design；`SG-D17`–`SG-D21` 仍须按产品、契约、计划和验收顺序重新接受。当前 Backend 公共 API、既有五类 Owner 路由、恢复闭环与 Review Workbench 已有实现和验收证据，新增 StoryGraph/媒体 Gate 仍按任务逐项实现。
 
 代码实现只按 [0010 的唯一 `SG-Ixx` 队列](0010-StoryGraph内容图与DAG创作画布设计.md#唯一实施任务队列)：`SG-I06` 已完成 Backend 公共 API，`SG-I07` 已完成真实 Review Workbench，Reference/Shot Frame/Shot Video Gate 随 `SG-I26`、`SG-I29`、`SG-I30` 的精确 Owner 任务逐个接入。每个完整任务通过局部验证和当前全量真实 CI 后独立提交；禁止兼容 fallback、跳过 CI、假 Owner Receipt 或本地模拟成功。
 

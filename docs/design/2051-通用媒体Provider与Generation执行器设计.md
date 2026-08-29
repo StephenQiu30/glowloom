@@ -740,7 +740,7 @@ Runware 专用 Config、Adapter、Route、OpenAPI Schema 与测试在新链路�
 6. `0010` 唯一 Plan：重新拆分当前视觉切片，先交付通用配置事实和 Web，再依次交付三类图片 Adapter 与 `shot_frame`，最后交付本设计已固定的 `shot_video` Owner 链和 Seedance 2.0+；这里仅表达依赖顺序，四类 Provider 均为本轮必做；
 7. `0010` Acceptance：新增全未勾选的新 Requirement/Task 条目；既有 Runware Evidence 保留为历史实现事实，不改写成火山通过，也不能抵扣新验收。
 
-同步状态：2026-08-29 已完成上述 1–4 的 Design 同步，并把唯一设计队列的剩余实施段更新为 `SG-I20`–`SG-I35`；当前只解锁第 5 项的 `SG-D17` PRD，同步第 5–7 项并重新接受前仍不编码。
+同步状态：2026-08-29 已完成上述 1–4 的 Design 同步，并把唯一设计队列的剩余实施段更新为 `SG-I20`–`SG-I35`；第 5–7 项继续按 PRD → Requirement → Plan → Acceptance 顺序推进并重新接受，全部完成前仍不编码。
 
 设计事实扫描已经定位以下精确同步点，不得只做全局替换：
 
