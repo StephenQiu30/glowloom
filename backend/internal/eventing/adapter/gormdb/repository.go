@@ -119,6 +119,9 @@ func (repo *Repository) Acquire(
 	}
 	var claim eventingapp.InboxClaim
 	err = repo.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if ownerErr := ensureDeliveryOwner(tx, ids); ownerErr != nil {
+			return ownerErr
+		}
 		var inbox model.InboxEvent
 		inboxFound := true
 		if findErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -413,6 +416,15 @@ func parseDeliveryIDs(delivery eventingapp.InboxDelivery) (deliveryIDs, error) {
 		return deliveryIDs{}, errors.New("delivery coordinate is invalid")
 	}
 	return deliveryIDs{workspaceID: workspaceID, projectID: projectID}, nil
+}
+
+func ensureDeliveryOwner(tx *gorm.DB, ids deliveryIDs) error {
+	var project model.Project
+	err := tx.Select("id").Where("id = ? AND workspace_id = ?", ids.projectID, ids.workspaceID).Take(&project).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return eventingapp.Permanent(eventingapp.ErrEventOwnerNotFound)
+	}
+	return err
 }
 
 func (repo *Repository) lockCheckpoint(

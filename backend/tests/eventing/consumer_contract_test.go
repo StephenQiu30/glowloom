@@ -69,6 +69,29 @@ func TestConsumerSendsPoisonMessageToIsolatedDLQWithoutLeakingInvalidBody(t *tes
 	}
 }
 
+func TestConsumerAcknowledgesOwnerlessEventAfterNonReplayableDeadLetter(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, time.August, 29, 15, 0, 0, 0, time.UTC)
+	repository := &consumerRepository{acquireErr: eventingapp.Permanent(eventingapp.ErrEventOwnerNotFound)}
+	processor := &recordingProcessor{}
+	broker := &recordingBroker{}
+	consumer := newContractConsumer(repository, processor, broker, now)
+
+	result, err := consumer.Handle(context.Background(), incomingEnvelope(t, eventingFixture(t), 23))
+	if err != nil || !result.Ack {
+		t.Fatalf("ownerless event was not acknowledged: result=%#v error=%v", result, err)
+	}
+	if processor.calls != 0 || repository.rejected != 1 || repository.deadLetters != 0 || len(broker.messages) != 1 {
+		t.Fatalf("ownerless event crossed the projection boundary: processor=%#v repository=%#v broker=%#v", processor, repository, broker)
+	}
+	deadLetter := string(broker.messages[0].Value)
+	if !strings.Contains(deadLetter, `"failure_code":"event_owner_not_found"`) ||
+		!strings.Contains(deadLetter, `"replayable":false`) ||
+		!strings.Contains(deadLetter, eventingFixture(t).EventID) {
+		t.Fatalf("ownerless event DLQ contract is wrong: %s", deadLetter)
+	}
+}
+
 func newContractConsumer(repository eventingapp.InboxRepository, processor eventingapp.Processor, broker eventingapp.PublisherBroker, now time.Time) *eventingapp.Consumer {
 	return eventingapp.NewConsumer(repository, processor, broker, eventingapp.ConsumerTopics{
 		BusinessToDLQ: map[string]string{
@@ -94,6 +117,7 @@ func incomingEnvelope(t *testing.T, envelope eventing.Envelope, offset int64) ev
 
 type consumerRepository struct {
 	decisions   []eventingapp.InboxClaim
+	acquireErr  error
 	acquired    []eventingapp.InboxDelivery
 	completed   int
 	deadLetters int
@@ -102,6 +126,9 @@ type consumerRepository struct {
 
 func (repo *consumerRepository) Acquire(_ context.Context, delivery eventingapp.InboxDelivery, _ time.Time, _ time.Duration, _ func() string) (eventingapp.InboxClaim, error) {
 	repo.acquired = append(repo.acquired, delivery)
+	if repo.acquireErr != nil {
+		return eventingapp.InboxClaim{}, repo.acquireErr
+	}
 	if len(repo.decisions) == 0 {
 		return eventingapp.InboxClaim{}, errors.New("unexpected acquire")
 	}

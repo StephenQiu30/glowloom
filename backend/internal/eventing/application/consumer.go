@@ -15,6 +15,8 @@ import (
 
 const deadLetterSchemaV1 = "lanverse.dead-letter.v1"
 
+var ErrEventOwnerNotFound = errors.New("event owner project is not present")
+
 type IncomingMessage struct {
 	Topic     string
 	Partition int32
@@ -128,6 +130,9 @@ func (consumer *Consumer) Handle(ctx context.Context, message IncomingMessage) (
 	delivery := InboxDelivery{Group: consumer.config.Group, Message: message, Envelope: envelope}
 	claim, err := consumer.repository.Acquire(ctx, delivery, now, consumer.config.Lease, consumer.config.NewID)
 	if err != nil {
+		if errors.Is(err, ErrEventOwnerNotFound) {
+			return consumer.rejectOwnerless(ctx, delivery, now, err)
+		}
 		return HandleResult{}, fmt.Errorf("acquire inbox event %s: %w", envelope.EventID, err)
 	}
 	switch claim.Disposition {
@@ -209,6 +214,39 @@ func (consumer *Consumer) rejectInvalid(ctx context.Context, message IncomingMes
 	}
 	if err = consumer.repository.RecordRejected(ctx, letter, now); err != nil {
 		return HandleResult{}, fmt.Errorf("persist rejected Kafka record: %w", err)
+	}
+	return HandleResult{Ack: true}, nil
+}
+
+func (consumer *Consumer) rejectOwnerless(
+	ctx context.Context,
+	delivery InboxDelivery,
+	now time.Time,
+	ownerErr error,
+) (HandleResult, error) {
+	dlqTopic, err := consumer.topics.DLQFor(delivery.Message.Topic)
+	if err != nil {
+		return HandleResult{}, err
+	}
+	encodedEnvelope, err := eventing.EncodeEnvelope(delivery.Envelope)
+	if err != nil {
+		return HandleResult{}, err
+	}
+	letter := DeadLetter{
+		ID: consumer.config.NewID(), Schema: deadLetterSchemaV1, ConsumerGroup: consumer.config.Group,
+		EventID: delivery.Envelope.EventID, EventType: delivery.Envelope.EventType,
+		ProjectID: delivery.Envelope.ProjectID, AggregateKind: delivery.Envelope.AggregateKind,
+		AggregateID: delivery.Envelope.AggregateID, AggregateRevision: delivery.Envelope.AggregateRevision,
+		OriginalTopic: delivery.Message.Topic, DLQTopic: dlqTopic, SourcePartition: delivery.Message.Partition,
+		SourceOffset: delivery.Message.Offset, PayloadHash: delivery.Envelope.PayloadHash,
+		FailureCode: "event_owner_not_found", FailureMessage: safeError(ownerErr), Replayable: false,
+		Envelope: encodedEnvelope, FailedAt: now,
+	}
+	if err = consumer.publishDeadLetter(ctx, letter); err != nil {
+		return HandleResult{}, err
+	}
+	if err = consumer.repository.RecordRejected(ctx, letter, now); err != nil {
+		return HandleResult{}, fmt.Errorf("persist ownerless event %s: %w", letter.EventID, err)
 	}
 	return HandleResult{Ack: true}, nil
 }

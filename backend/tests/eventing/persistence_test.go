@@ -61,6 +61,30 @@ func TestGORMOutboxInboxRevisionAndDeadLetterState(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := eventinggorm.New(database)
+	ownerlessProjectID := uuid.New()
+	ownerlessEnvelope := eventingFixtureForProject(t, workspaceID.String(), ownerlessProjectID.String(), 1)
+	ownerlessDelivery := eventingapp.InboxDelivery{
+		Group: "lanverse.search-projector.v1." + ownerlessProjectID.String(),
+		Message: eventingapp.IncomingMessage{
+			Topic: "lanverse.business.storygraph-version.v1", Partition: 0, Offset: 20,
+			Key: ownerlessEnvelope.EventID,
+		},
+		Envelope: ownerlessEnvelope,
+	}
+	if _, ownerErr := repository.Acquire(ctx, ownerlessDelivery, now, time.Minute, uuid.NewString); !eventingapp.IsPermanent(ownerErr) {
+		t.Fatalf("ownerless delivery was not rejected permanently: %v", ownerErr)
+	}
+	var ownerlessInboxCount, ownerlessCheckpointCount int64
+	if err = database.Model(&model.InboxEvent{}).Where("event_id = ?", ownerlessEnvelope.EventID).Count(&ownerlessInboxCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.EventCheckpoint{}).
+		Where("consumer_group = ?", ownerlessDelivery.Group).Count(&ownerlessCheckpointCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ownerlessInboxCount != 0 || ownerlessCheckpointCount != 0 {
+		t.Fatalf("ownerless delivery persisted FK-backed state: inbox=%d checkpoint=%d", ownerlessInboxCount, ownerlessCheckpointCount)
+	}
 	claims, err := repository.ClaimPending(ctx, now, time.Minute, 10, uuid.NewString)
 	if err != nil || len(claims) != 1 || claims[0].Event.ID != eventID.String() {
 		t.Fatalf("outbox was not claimed: claims=%#v error=%v", claims, err)
