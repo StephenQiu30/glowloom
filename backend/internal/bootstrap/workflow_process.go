@@ -2,11 +2,10 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,18 +41,16 @@ import (
 	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
 )
 
-func RunWorkflowWorker(logger *slog.Logger) {
+func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	configuration, err := config.Load()
 	if err != nil {
-		logger.Error("workflow worker configuration is invalid", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("workflow worker configuration is invalid: %w", err)
 	}
-	connectContext, cancelConnect := context.WithTimeout(context.Background(), 10*time.Second)
+	connectContext, cancelConnect := context.WithTimeout(ctx, 10*time.Second)
 	database, err := platformdatabase.Open(connectContext, configuration.DatabaseURL, os.Stderr)
 	cancelConnect()
 	if err != nil {
-		logger.Error("workflow worker database connection failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("workflow worker database connection failed: %w", err)
 	}
 	defer func() {
 		if closeErr := platformdatabase.Close(database); closeErr != nil {
@@ -65,8 +62,7 @@ func RunWorkflowWorker(logger *slog.Logger) {
 		TaskQueue: configuration.TemporalTaskQueue,
 	})
 	if err != nil {
-		logger.Error("workflow worker Temporal connection failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("workflow worker Temporal connection failed: %w", err)
 	}
 	defer temporalRuntime.Close()
 	now := func() time.Time { return time.Now().UTC() }
@@ -77,14 +73,12 @@ func RunWorkflowWorker(logger *slog.Logger) {
 		Secure: configuration.ObjectStoreSecure, PublicSecure: configuration.ObjectStorePublicSecure,
 	})
 	if err != nil {
-		logger.Error("workflow worker object storage configuration failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("workflow worker object storage configuration failed: %w", err)
 	}
-	objectContext, cancelObjects := context.WithTimeout(context.Background(), 15*time.Second)
+	objectContext, cancelObjects := context.WithTimeout(ctx, 15*time.Second)
 	if err = objects.EnsureBucket(objectContext); err != nil {
 		cancelObjects()
-		logger.Error("workflow worker object storage initialization failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("workflow worker object storage initialization failed: %w", err)
 	}
 	cancelObjects()
 	scriptService := scriptapp.NewService(
@@ -136,16 +130,14 @@ func RunWorkflowWorker(logger *slog.Logger) {
 			MaxImageBytes: 20 << 20, MaxPixels: 20_000_000,
 		})
 		if stagerErr != nil {
-			logger.Error("workflow Runware image stager configuration failed", "error", stagerErr)
-			os.Exit(1)
+			return fmt.Errorf("workflow Runware image stager configuration failed: %w", stagerErr)
 		}
 		imageProviderGateway, err = runwareadapter.New(runwareadapter.Config{
 			APIKey: configuration.RunwareAPIKey, Client: &http.Client{}, Stager: imageStager,
 			RequestTimeout: configuration.RunwareRequestTimeout,
 		})
 		if err != nil {
-			logger.Error("workflow Runware Provider configuration failed", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("workflow Runware Provider configuration failed: %w", err)
 		}
 	}
 	providerConfig := generationapp.ProviderConfig{Now: now, NewID: uuid.NewString}
@@ -183,23 +175,19 @@ func RunWorkflowWorker(logger *slog.Logger) {
 		episodeSegmentationService, episodeAnalysisService,
 	)
 	if err != nil {
-		logger.Error("workflow runtime composition failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("workflow runtime composition failed: %w", err)
 	}
 	runtimeWorker, err := temporalRuntime.NewWorker(activities)
 	if err != nil {
-		logger.Error("workflow Temporal Worker composition failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("workflow Temporal Worker composition failed: %w", err)
 	}
 	if err = runtimeWorker.Start(); err != nil {
-		logger.Error("workflow Temporal Worker start failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("workflow Temporal Worker start failed: %w", err)
 	}
 	logger.Info("lanverse workflow worker started", "namespace", configuration.TemporalNamespace, "task_queue", configuration.TemporalTaskQueue)
 
-	shutdownSignal, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	<-shutdownSignal.Done()
+	<-ctx.Done()
 	logger.Info("lanverse workflow worker stopping")
 	runtimeWorker.Stop()
+	return nil
 }

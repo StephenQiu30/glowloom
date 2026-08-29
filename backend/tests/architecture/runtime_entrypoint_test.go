@@ -21,9 +21,25 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 	}
 
 	mainSource := readArchitectureFile(t, filepath.Join(commandRoot, "main.go"))
-	for _, runtime := range []string{"bootstrap.RunAPI(logger)", "bootstrap.RunWorkflowWorker(logger)", "bootstrap.RunEventWorker(logger)"} {
+	for _, runtime := range []string{
+		"bootstrap.RunAPI(runtimeContext, logger)",
+		"bootstrap.RunWorkflowWorker(ctx, logger)",
+		"bootstrap.RunEventWorker(ctx, logger)",
+	} {
 		if !strings.Contains(mainSource, runtime) {
 			t.Errorf("single Backend entrypoint does not start %s", runtime)
+		}
+	}
+	if !strings.Contains(mainSource, "signal.NotifyContext(") || !strings.Contains(mainSource, "superviseRuntime(") {
+		t.Error("single Backend entrypoint must own shutdown signals and runtime retries")
+	}
+	for _, component := range []string{"api_process.go", "workflow_process.go", "event_process.go"} {
+		source := readArchitectureFile(t, filepath.Join(repositoryRoot, "backend", "internal", "bootstrap", component))
+		if strings.Contains(source, "os.Exit(") {
+			t.Errorf("%s can terminate the unified Backend process directly", component)
+		}
+		if strings.Contains(source, "signal.NotifyContext(") {
+			t.Errorf("%s owns a process signal outside the single entrypoint", component)
 		}
 	}
 

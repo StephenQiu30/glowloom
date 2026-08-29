@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,18 +31,16 @@ const (
 	eventLease        = 30 * time.Second
 )
 
-func RunEventWorker(logger *slog.Logger) {
+func RunEventWorker(ctx context.Context, logger *slog.Logger) error {
 	configuration, err := config.Load()
 	if err != nil {
-		logger.Error("event worker configuration is invalid", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("event worker configuration is invalid: %w", err)
 	}
-	connectContext, cancelConnect := context.WithTimeout(context.Background(), dependencyTimeout)
+	connectContext, cancelConnect := context.WithTimeout(ctx, dependencyTimeout)
 	database, err := platformdatabase.Open(connectContext, configuration.DatabaseURL, os.Stderr)
 	cancelConnect()
 	if err != nil {
-		logger.Error("event worker database connection failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("event worker database connection failed: %w", err)
 	}
 	defer func() {
 		if closeErr := platformdatabase.Close(database); closeErr != nil {
@@ -56,34 +53,29 @@ func RunEventWorker(logger *slog.Logger) {
 		StoryGraphAlias: configuration.ElasticsearchStoryGraphAlias,
 	})
 	if err != nil {
-		logger.Error("event worker Elasticsearch configuration failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("event worker Elasticsearch configuration failed: %w", err)
 	}
-	searchContext, cancelSearch := context.WithTimeout(context.Background(), dependencyTimeout)
+	searchContext, cancelSearch := context.WithTimeout(ctx, dependencyTimeout)
 	err = searchIndex.Ensure(searchContext)
 	cancelSearch()
 	if err != nil {
-		logger.Error("event worker Elasticsearch initialization failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("event worker Elasticsearch initialization failed: %w", err)
 	}
 	searchSnapshots := searchgorm.New(database)
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "replay":
-			if err = runReplay(context.Background(), configuration, eventinggorm.New(database), os.Args[2:], logger); err != nil {
-				logger.Error("event replay failed", "error", err)
-				os.Exit(1)
+			if err = runReplay(ctx, configuration, eventinggorm.New(database), os.Args[2:], logger); err != nil {
+				return fmt.Errorf("event replay failed: %w", err)
 			}
 		case "reindex":
-			if err = runReindex(context.Background(), searchSnapshots, searchIndex, os.Args[2:], logger); err != nil {
-				logger.Error("search reindex failed", "error", err)
-				os.Exit(1)
+			if err = runReindex(ctx, searchSnapshots, searchIndex, os.Args[2:], logger); err != nil {
+				return fmt.Errorf("search reindex failed: %w", err)
 			}
 		default:
-			logger.Error("event worker command is invalid", "command", os.Args[1])
-			os.Exit(2)
+			return fmt.Errorf("event worker command %q is invalid", os.Args[1])
 		}
-		return
+		return nil
 	}
 	kafkaClient, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: configuration.KafkaBrokers, ClientID: configuration.KafkaClientID,
@@ -92,16 +84,14 @@ func RunEventWorker(logger *slog.Logger) {
 		Topics: []string{configuration.KafkaScriptTopic, configuration.KafkaStoryGraphTopic},
 	})
 	if err != nil {
-		logger.Error("event worker Kafka client configuration failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("event worker Kafka client configuration failed: %w", err)
 	}
 	defer kafkaClient.Close()
-	pingContext, cancelPing := context.WithTimeout(context.Background(), dependencyTimeout)
+	pingContext, cancelPing := context.WithTimeout(ctx, dependencyTimeout)
 	err = kafkaClient.Ping(pingContext)
 	cancelPing()
 	if err != nil {
-		logger.Error("event worker Kafka connection failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("event worker Kafka connection failed: %w", err)
 	}
 
 	repository := eventinggorm.New(database)
@@ -121,8 +111,8 @@ func RunEventWorker(logger *slog.Logger) {
 		Lease: eventLease, MaxAttempts: 3,
 	})
 
-	runContext, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+	eventContext, stopEvent := context.WithCancel(ctx)
+	defer stopEvent()
 	server := &http.Server{
 		Addr: configuration.EventWorkerListenAddress,
 		Handler: healthHandler(
@@ -137,33 +127,34 @@ func RunEventWorker(logger *slog.Logger) {
 	}()
 	workerErrors := make(chan error, 1)
 	go func() {
-		workerErrors <- kafkaClient.Run(runContext, consumer, func(retryErr error) {
+		workerErrors <- kafkaClient.Run(eventContext, consumer, func(retryErr error) {
 			logger.Warn("event worker consumer will retry", "error", retryErr)
 		})
 	}()
-	go runPublisher(runContext, publisher, logger)
+	go runPublisher(eventContext, publisher, logger)
 	logger.Info("lanverse event worker started", "consumer_group", configuration.KafkaConsumerGroup,
 		"script_topic", configuration.KafkaScriptTopic, "storygraph_topic", configuration.KafkaStoryGraphTopic)
 
+	var runtimeErr error
 	select {
-	case <-runContext.Done():
+	case <-ctx.Done():
 	case workerErr := <-workerErrors:
 		if workerErr != nil {
-			logger.Error("event worker consumer stopped", "error", workerErr)
+			runtimeErr = fmt.Errorf("event worker consumer stopped: %w", workerErr)
 		}
-		stop()
 	case serverErr := <-serverErrors:
 		if !errors.Is(serverErr, http.ErrServerClosed) {
-			logger.Error("event worker health server stopped", "error", serverErr)
+			runtimeErr = fmt.Errorf("event worker health server stopped: %w", serverErr)
 		}
-		stop()
 	}
+	stopEvent()
 	shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelShutdown()
 	if err = server.Shutdown(shutdownContext); err != nil {
-		logger.Error("event worker health server shutdown failed", "error", err)
+		return errors.Join(runtimeErr, fmt.Errorf("event worker health server shutdown failed: %w", err))
 	}
 	logger.Info("lanverse event worker stopped")
+	return runtimeErr
 }
 
 func runReplay(ctx context.Context, configuration config.Config, repository eventingapp.ReplayRepository, args []string, logger *slog.Logger) error {

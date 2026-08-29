@@ -1,48 +1,93 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/bootstrap"
 	"github.com/StephenQiu30/lanverse/backend/internal/telemetry"
 )
 
-const backendStartupTimeout = 2 * time.Minute
+const (
+	backendStartupTimeout = 2 * time.Minute
+	runtimeRetryDelay     = 5 * time.Second
+)
 
 func main() {
+	if err := run(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "lanverse backend stopped: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	logger, closeLogger, err := telemetry.NewLogstashLogger(
 		os.Stdout, "lanverse-backend", os.Getenv("ENVIRONMENT"), os.Getenv("LOGSTASH_ADDRESS"),
 	)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "lanverse backend logging configuration failed: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("configure logging: %w", err)
 	}
 	defer func() { _ = closeLogger.Close() }()
+	runtimeContext, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	if len(os.Args) > 1 {
-		bootstrap.RunEventWorker(logger)
-		return
+		return bootstrap.RunEventWorker(runtimeContext, logger)
 	}
 
-	apiStopped := make(chan struct{})
+	apiStopped := make(chan error, 1)
 	go func() {
-		bootstrap.RunAPI(logger)
-		close(apiStopped)
+		apiStopped <- bootstrap.RunAPI(runtimeContext, logger)
 	}()
 	if err = waitForAPI(apiStopped); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "lanverse backend startup failed: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("start API runtime: %w", err)
 	}
-	go bootstrap.RunWorkflowWorker(logger)
-	go bootstrap.RunEventWorker(logger)
-	<-apiStopped
+	go superviseRuntime(runtimeContext, logger, "workflow", func(ctx context.Context) error {
+		return bootstrap.RunWorkflowWorker(ctx, logger)
+	})
+	go superviseRuntime(runtimeContext, logger, "event", func(ctx context.Context) error {
+		return bootstrap.RunEventWorker(ctx, logger)
+	})
+	if err = <-apiStopped; err != nil {
+		return fmt.Errorf("API runtime stopped: %w", err)
+	}
+	return nil
 }
 
-func waitForAPI(apiStopped <-chan struct{}) error {
+func superviseRuntime(
+	ctx context.Context,
+	logger *slog.Logger,
+	name string,
+	runRuntime func(context.Context) error,
+) {
+	for ctx.Err() == nil {
+		err := runRuntime(ctx)
+		if ctx.Err() != nil {
+			return
+		}
+		if err == nil {
+			err = fmt.Errorf("runtime stopped unexpectedly")
+		}
+		logger.Error("backend runtime stopped; retrying", "runtime", name, "error", err,
+			"retry_delay_ms", runtimeRetryDelay.Milliseconds())
+		timer := time.NewTimer(runtimeRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
+}
+
+func waitForAPI(apiStopped <-chan error) error {
 	deadline := time.NewTimer(backendStartupTimeout)
 	defer deadline.Stop()
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -50,8 +95,11 @@ func waitForAPI(apiStopped <-chan struct{}) error {
 	client := &http.Client{Timeout: time.Second}
 	for {
 		select {
-		case <-apiStopped:
-			return fmt.Errorf("API stopped before readiness")
+		case err := <-apiStopped:
+			if err == nil {
+				return fmt.Errorf("API stopped before readiness")
+			}
+			return fmt.Errorf("API stopped before readiness: %w", err)
 		case <-deadline.C:
 			return fmt.Errorf("API readiness timed out")
 		case <-ticker.C:

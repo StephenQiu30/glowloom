@@ -3,11 +3,10 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -91,62 +90,56 @@ var (
 	BuildTime    = "unknown"
 )
 
-func RunAPI(logger *slog.Logger) {
+func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	configuration, err := config.Load()
 	if err != nil {
-		logger.Error("api configuration is invalid", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("api configuration is invalid: %w", err)
 	}
-	connectContext, cancelConnect := context.WithTimeout(context.Background(), 10*time.Second)
+	connectContext, cancelConnect := context.WithTimeout(ctx, 10*time.Second)
 	database, err := platformdatabase.Open(connectContext, configuration.DatabaseURL, os.Stderr)
 	cancelConnect()
 	if err != nil {
-		logger.Error("database connection failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("database connection failed: %w", err)
 	}
 	defer func() {
 		if closeErr := platformdatabase.Close(database); closeErr != nil {
 			logger.Error("database close failed", "error", closeErr)
 		}
 	}()
-	syncContext, cancelSync := context.WithTimeout(context.Background(), apiSchemaSyncTimeout)
+	apiContext, stopAPI := context.WithCancel(ctx)
+	defer stopAPI()
+	syncContext, cancelSync := context.WithTimeout(ctx, apiSchemaSyncTimeout)
 	if err = platformschema.Sync(syncContext, database); err != nil {
 		cancelSync()
-		logger.Error("database schema synchronization failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("database schema synchronization failed: %w", err)
 	}
 	episodeNodeCatalog, err := authoringdomain.SystemCatalog()
 	if err != nil {
 		cancelSync()
-		logger.Error("system Episode node catalog is invalid", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("system Episode node catalog is invalid: %w", err)
 	}
 	shotNodeCatalog, err := authoringdomain.SystemShotCatalog()
 	if err != nil {
 		cancelSync()
-		logger.Error("system Shot node catalog is invalid", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("system Shot node catalog is invalid: %w", err)
 	}
 	authoringStore := authoringgorm.New(database)
 	for _, catalog := range []authoringdomain.Catalog{episodeNodeCatalog, shotNodeCatalog} {
 		if _, err = authoringStore.EnsureCatalog(syncContext, catalog, time.Now().UTC(), uuid.NewString); err != nil {
 			cancelSync()
-			logger.Error("system node catalog synchronization failed", "catalog", catalog.Key, "error", err)
-			os.Exit(1)
+			return fmt.Errorf("synchronize system node catalog %s: %w", catalog.Key, err)
 		}
 	}
 	cancelSync()
 	logger.Info("database model and system node catalogs synchronized")
 	objects, err := objectstore.Open(objectstore.Config{Endpoint: configuration.ObjectStoreEndpoint, PublicEndpoint: configuration.ObjectStorePublicEndpoint, AccessKey: configuration.ObjectStoreAccessKey, SecretKey: configuration.ObjectStoreSecretKey, Bucket: configuration.ObjectStoreBucket, Region: configuration.ObjectStoreRegion, Secure: configuration.ObjectStoreSecure, PublicSecure: configuration.ObjectStorePublicSecure})
 	if err != nil {
-		logger.Error("object storage configuration failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("object storage configuration failed: %w", err)
 	}
-	objectContext, cancelObjects := context.WithTimeout(context.Background(), 15*time.Second)
+	objectContext, cancelObjects := context.WithTimeout(ctx, 15*time.Second)
 	if err = objects.EnsureBucket(objectContext); err != nil {
 		cancelObjects()
-		logger.Error("object storage initialization failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("object storage initialization failed: %w", err)
 	}
 	cancelObjects()
 	logger.Info("object storage bucket ready")
@@ -155,8 +148,7 @@ func RunAPI(logger *slog.Logger) {
 		TaskQueue: configuration.TemporalTaskQueue,
 	})
 	if err != nil {
-		logger.Error("workflow Temporal connection failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("workflow Temporal connection failed: %w", err)
 	}
 	defer temporalRuntime.Close()
 	logger.Info("workflow Temporal client ready", "namespace", configuration.TemporalNamespace)
@@ -195,8 +187,7 @@ func RunAPI(logger *slog.Logger) {
 		VerificationCode: verificationCode,
 	})
 	if err != nil {
-		logger.Error("identity service initialization failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("identity service initialization failed: %w", err)
 	}
 	identityHandler := identityhttp.New(identityService, tokenVerifier, configuration.SessionTTL, configuration.Environment == "production", uuid.NewString)
 	mediaStore := mediagorm.New(database)
@@ -207,8 +198,7 @@ func RunAPI(logger *slog.Logger) {
 	scriptHandler := scripthttp.New(scriptService, tokenVerifier)
 	agentSigner, err := agentgrant.NewSigner(configuration.AgentExecutionSecret, func() time.Time { return time.Now().UTC() })
 	if err != nil {
-		logger.Error("agent execution grant configuration failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("agent execution grant configuration failed: %w", err)
 	}
 	agentRuntimeRevisions := []agentcontract.RuntimeRevision{{
 		BundleHash: agentcontract.StoryGraphSkillBundleHash, BaseURL: configuration.AgentURL,
@@ -221,8 +211,7 @@ func RunAPI(logger *slog.Logger) {
 	}
 	agentRuntimeCatalog, err := agentcontract.NewRuntimeCatalog(agentRuntimeRevisions)
 	if err != nil {
-		logger.Error("agent runtime configuration failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("agent runtime configuration failed: %w", err)
 	}
 	agentRuntime := agentclient.New(agentRuntimeCatalog, agentSigner, nil)
 	bibleStore := biblegorm.New(database)
@@ -292,8 +281,7 @@ func RunAPI(logger *slog.Logger) {
 		StoryGraphAlias: configuration.ElasticsearchStoryGraphAlias,
 	})
 	if err != nil {
-		logger.Error("search Elasticsearch configuration failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("search Elasticsearch configuration failed: %w", err)
 	}
 	searchService := searchapp.NewService(searchproject.New(projectService), searchgorm.New(database), searchIndex)
 	searchHandler := searchhttp.New(searchService, tokenVerifier)
@@ -322,8 +310,7 @@ func RunAPI(logger *slog.Logger) {
 		workflowgeneration.NewHumanGateApplier(selectionService),
 	)
 	if err != nil {
-		logger.Error("workflow Human Gate owner composition failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("workflow Human Gate owner composition failed: %w", err)
 	}
 	workflowSignalService := workflowapp.NewSignalService(
 		workflowStore, temporalRuntime,
@@ -373,32 +360,30 @@ func RunAPI(logger *slog.Logger) {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	shutdownSignal, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	go bibleWorker.Run(shutdownSignal)
-	go sourceEvidenceWorker.Run(shutdownSignal)
-	go storyAnalysisWorker.Run(shutdownSignal)
-	go episodeSegmentationWorker.Run(shutdownSignal)
-	go episodeAnalysisWorker.Run(shutdownSignal)
-	go storyReviewWorker.Run(shutdownSignal)
-	go storyboardWorker.Run(shutdownSignal)
+	go bibleWorker.Run(apiContext)
+	go sourceEvidenceWorker.Run(apiContext)
+	go storyAnalysisWorker.Run(apiContext)
+	go episodeSegmentationWorker.Run(apiContext)
+	go episodeAnalysisWorker.Run(apiContext)
+	go storyReviewWorker.Run(apiContext)
+	go storyboardWorker.Run(apiContext)
 	serverErrors := make(chan error, 1)
 	go func() {
 		logger.Info("lanverse api started", "address", configuration.ListenAddress)
 		serverErrors <- server.ListenAndServe()
 	}()
 	select {
-	case <-shutdownSignal.Done():
+	case <-ctx.Done():
 		shutdownContext, cancel := context.WithTimeout(context.Background(), apiShutdownTimeout)
 		defer cancel()
 		if err := server.Shutdown(shutdownContext); err != nil {
-			logger.Error("api shutdown failed", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("api shutdown failed: %w", err)
 		}
+		return nil
 	case err := <-serverErrors:
 		if !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("api stopped unexpectedly", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("api stopped unexpectedly: %w", err)
 		}
+		return nil
 	}
 }
