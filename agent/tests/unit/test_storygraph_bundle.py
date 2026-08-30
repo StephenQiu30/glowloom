@@ -28,7 +28,7 @@ def test_bundle_fails_closed_for_missing_extra_non_utf8_and_symlink_files(tmp_pa
     bundle_root = tmp_path / "agent/skills/build-storygraph"
     bundle_root.mkdir(parents=True)
     source = REPOSITORY_ROOT / "agent/skills/build-storygraph"
-    for relative_path in StoryGraphBundle.allowed_paths():
+    for relative_path in StoryGraphBundle.known_paths():
         target = bundle_root / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes((source / relative_path).read_bytes())

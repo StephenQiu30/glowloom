@@ -1,0 +1,106 @@
+{
+  "valid_invocation": {
+    "invocation_id": "44444444-4444-4444-8444-444444444444",
+    "attempt_id": "55555555-5555-4555-8555-555555555555",
+    "kind": "storygraph_stage",
+    "wire_schema_version": "storygraph-stage-wire-v2",
+    "stage_release": {
+      "release_id": "66666666-6666-4666-8666-666666666666",
+      "definition_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+      "bundle_hash": "13f294e3fc9a241d07af80547a792de04d5357270622f3a2361bab84580e5de6",
+      "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "control": {
+      "record_id": "77777777-7777-4777-8777-777777777777",
+      "revision": 1,
+      "status": "approved",
+      "content_hash": "5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    "budget": {
+      "max_model_calls": 1,
+      "max_execution_seconds": 120,
+      "max_output_bytes": 131072
+    },
+    "payload": {
+      "variant": {
+        "stage_key": "propose_script_spans",
+        "profile_key": "default",
+        "lane_key": "primary",
+        "output_schema_version": "script-span-candidate-v1"
+      },
+      "scope": {
+        "workspace_id": "11111111-1111-4111-8111-111111111111",
+        "project_id": "22222222-2222-4222-8222-222222222222",
+        "episode_id": null
+      },
+      "source_refs": [
+        {
+          "owner_kind": "production/script-source",
+          "logical_id": "script:demo",
+          "version_id": "33333333-3333-4333-8333-333333333333",
+          "revision": 1,
+          "content_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",
+          "created_at": "2026-08-31T00:00:00Z"
+        }
+      ],
+      "upstream_candidates": [],
+      "shard": {
+        "manifest_id": "88888888-8888-4888-8888-888888888888",
+        "manifest_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+        "shard_key": "script:full",
+        "codepoint_start": 0,
+        "codepoint_end": 29
+      },
+      "stage_input": {
+        "source_version_id": "33333333-3333-4333-8333-333333333333",
+        "source_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",
+        "normalized_text": "第一场 夜 内\n林舟握住门把。\n第二场 日 外\n林舟离开。",
+        "codepoint_count": 29,
+        "newline_normalization": "lf"
+      }
+    },
+    "input_hash": "803e1df65fa226d5cb59fa28db41c1ee16a1cda7d2317552d3ce228ce44f097f"
+  },
+  "valid_script_span_candidate": {
+    "source_version_id": "33333333-3333-4333-8333-333333333333",
+    "source_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",
+    "codepoint_count": 29,
+    "spans": [
+      {
+        "temporary_span_id": "span_0001",
+        "kind": "scene",
+        "codepoint_start": 0,
+        "codepoint_end": 16,
+        "heading": "第一场 夜 内",
+        "evidence": {
+          "source_start": 0,
+          "source_end": 7,
+          "text_hash": "5f0e33d0b7d4f213bca3978b1e6bee5fe6059b6943ced96ee7e2de561479eb07",
+          "exact_anchor": "第一场 夜 内"
+        }
+      },
+      {
+        "temporary_span_id": "span_0002",
+        "kind": "scene",
+        "codepoint_start": 16,
+        "codepoint_end": 29,
+        "heading": "第二场 日 外",
+        "evidence": {
+          "source_start": 16,
+          "source_end": 23,
+          "text_hash": "8fab80a54578082fb044b14ee1ed8d79c5946691b97a90d44c421cc4534eadff",
+          "exact_anchor": "第二场 日 外"
+        }
+      }
+    ],
+    "review_issues": []
+  },
+  "expected_input_hash": "803e1df65fa226d5cb59fa28db41c1ee16a1cda7d2317552d3ce228ce44f097f",
+  "expected_stage_instance_key": "168c13681ac29877291faae5cb49ea47849acb7e73a0dd4463dbb45a9a6f6c85",
+  "reject_mutations": [
+    {"name": "missing_attempt_id", "operation": "remove", "path": "attempt_id"},
+    {"name": "unknown_style_field", "operation": "add_stage_input", "path": "visual_style", "value": "赛博朋克"},
+    {"name": "input_hash_drift", "operation": "replace", "path": "input_hash", "value": "0000000000000000000000000000000000000000000000000000000000000000"},
+    {"name": "cross_project_scope_drift", "operation": "replace_scope", "path": "project_id", "value": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}
+  ]
+}
