@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const StoryGraphWireSchemaVersion = "storygraph-stage-wire-v1"
+const StoryGraphWireSchemaVersion = "storygraph-stage-wire"
 
 var storyboardStoryNodePattern = regexp.MustCompile(`^sgn_[0-9a-f]{64}$`)
 
@@ -1248,7 +1248,7 @@ func (value StageInvocation) StageInstanceKey() (string, error) {
 	if !hashPattern.MatchString(value.InputHash) || !hashPattern.MatchString(value.Payload.ShardManifestRef.Hash) {
 		return "", errors.New("invalid stage identity hash")
 	}
-	material := "storygraph-stage-v1" + value.Payload.Stage + value.Payload.ShardKey + value.Payload.ShardManifestRef.Hash + value.InputHash
+	material := "storygraph-stage" + value.Payload.Stage + value.Payload.ShardKey + value.Payload.ShardManifestRef.Hash + value.InputHash
 	hash := sha256.Sum256([]byte(material))
 	return hex.EncodeToString(hash[:]), nil
 }

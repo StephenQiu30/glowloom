@@ -161,7 +161,7 @@ func (service *ReferenceTargetBuilderService) BuildReferenceTargets(
 			}
 		}
 		encoded, err := platformcommand.Result(referenceTargetBuildReceipt{
-			SchemaVersion:         "generation-reference-target-build-v1",
+			SchemaVersion:         "generation-reference-target-build",
 			ApprovedIntentSetID:   source.ApprovedIntentSetRef.ID,
 			ApprovedIntentSetHash: source.ApprovedIntentSetRef.ContentHash,
 			Targets:               items,
@@ -269,7 +269,7 @@ func referenceAssetPayload(
 		AssetID: requirement.AssetID, AssetKind: requirement.AssetKind,
 		SpecificationVersionRef: requirement.SpecificationVersionRef, AssetStateRef: requirement.AssetStateRef,
 		OutputKind: "reference_sheet", RequiredViewRoles: []string{"front", "profile", "back"},
-		PromptVersion: "character-reference-sheet-v1", PositivePrompt: positive,
+		PromptVersion: "character-reference-sheet", PositivePrompt: positive,
 		NegativePrompt: "different identities, inconsistent face, inconsistent clothing, missing view, extra panel, cropped body, text, watermark, logo",
 		Width:          1536, Height: 1024, NumberResults: 4, OutputFormat: "PNG",
 	}, nil
@@ -293,7 +293,7 @@ func replayReferenceTargetBuild(
 	}
 	if !validReferenceTargetUUID(receipt.ID) || receipt.WorkspaceID != source.WorkspaceID ||
 		receipt.Operation != referenceTargetBuildOperation || receipt.ResourceID != source.ApprovedIntentSetRef.ID ||
-		receipt.CreatedBy != actor.UserID || recorded.SchemaVersion != "generation-reference-target-build-v1" ||
+		receipt.CreatedBy != actor.UserID || recorded.SchemaVersion != "generation-reference-target-build" ||
 		recorded.ApprovedIntentSetID != source.ApprovedIntentSetRef.ID ||
 		recorded.ApprovedIntentSetHash != source.ApprovedIntentSetRef.ContentHash || len(recorded.Targets) != len(requirements) {
 		return BuildReferenceTargetsResult{}, platformcommand.ErrInputMismatch

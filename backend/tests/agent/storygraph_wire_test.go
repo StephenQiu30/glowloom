@@ -134,7 +134,7 @@ func loadStoryGraphWireFixture(t *testing.T) storyGraphWireFixture {
 	if !ok {
 		t.Fatal("resolve fixture path")
 	}
-	contents, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "fixtures", "agent", "storygraph-stage-wire-v1.json"))
+	contents, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "fixtures", "agent", "storygraph-stage-wire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

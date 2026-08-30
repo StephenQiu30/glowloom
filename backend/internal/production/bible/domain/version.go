@@ -91,7 +91,7 @@ func NewProductionBibleVersion(input ProductionBibleVersionInput) (ProductionBib
 		Version                                                          int
 		ReviewDecisionID, CreatedBy                                      string
 	}{
-		"production-bible-version-v1", version.ID, version.WorkspaceID, version.ProjectID,
+		"production-bible-version", version.ID, version.WorkspaceID, version.ProjectID,
 		version.DocumentRevisionID, version.DocumentRevisionHash,
 		version.CandidateRevisionID, version.CandidateRevisionHash, version.CandidateContentHash,
 		version.CandidateRevisionNo, version.Version, version.ReviewDecisionID, version.CreatedBy,

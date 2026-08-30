@@ -71,7 +71,7 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 		SubjectType: "workflow_node_output", SubjectID: uuid.NewString(), SubjectRevision: 3,
 		SubjectHash:      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		CandidateIDs:     []string{uuid.NewString(), uuid.NewString()},
-		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "storyboard-review-v1",
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "storyboard-review",
 	})
 	if err != nil {
 		t.Fatalf("open persisted human task: %v", err)
@@ -226,7 +226,7 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		SubjectType: "workflow_node_output", SubjectID: uuid.NewString(), SubjectRevision: 4,
 		SubjectHash:  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		CandidateIDs: []string{}, AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "expire-review-v1",
+		CandidateIDs: []string{}, AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "expire-review",
 	})
 	if err != nil {
 		t.Fatalf("open task for expiry sweep: %v", err)
@@ -242,7 +242,7 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		SubjectType: "workflow_node_output", SubjectID: uuid.NewString(), SubjectRevision: 5,
 		SubjectHash:  "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-		CandidateIDs: []string{}, AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "active-review-v1",
+		CandidateIDs: []string{}, AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "active-review",
 	})
 	if err != nil {
 		t.Fatalf("open active task beside expiry sweep: %v", err)

@@ -21,7 +21,7 @@ from app.modules.storygraph.harness import (
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire-v1.json"
+WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire.json"
 
 
 def invocation() -> StoryGraphStageInvocation:

@@ -16,7 +16,7 @@ def test_error_codes_and_retry_semantics_match_the_backend_fixture() -> None:
     errors = cast(
         list[dict[str, Any]],
         json.loads(
-            (REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-errors-v1.json").read_text(
+            (REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-errors.json").read_text(
                 encoding="utf-8"
             )
         ),
@@ -25,7 +25,7 @@ def test_error_codes_and_retry_semantics_match_the_backend_fixture() -> None:
     base: dict[str, Any] = {
         "invocation_id": "20000000-0000-0000-0000-000000000001",
         "kind": "storygraph_stage",
-        "wire_schema_version": "storygraph-stage-wire-v1",
+        "wire_schema_version": "storygraph-stage-wire",
         "stage": "extract_source_evidence",
         "shard_key": "slice-0001",
         "candidate_type": "source_evidence_candidate",

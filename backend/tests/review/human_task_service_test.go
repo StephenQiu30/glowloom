@@ -32,7 +32,7 @@ func TestHumanTaskClaimExpiryAndImmutableDecision(t *testing.T) {
 		WorkspaceID: "workspace-1", ProjectID: "project-1", WorkflowRunID: "run-1", NodeRunID: "node-run-1",
 		SubjectType: "workflow_node_output", SubjectID: "node-run-1", SubjectRevision: 7,
 		SubjectHash: humanTaskSubjectHash, CandidateIDs: []string{},
-		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "production-bible-review-v1",
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "production-bible-review",
 	})
 	if err != nil || opened.Status != "OPEN" || opened.Revision != 1 {
 		t.Fatalf("open human task: task=%#v err=%v", opened, err)
@@ -41,7 +41,7 @@ func TestHumanTaskClaimExpiryAndImmutableDecision(t *testing.T) {
 		WorkspaceID: "workspace-1", ProjectID: "project-1", WorkflowRunID: "run-1", NodeRunID: "node-run-1",
 		SubjectType: "workflow_node_output", SubjectID: "node-run-1", SubjectRevision: 7,
 		SubjectHash: humanTaskSubjectHash, CandidateIDs: []string{},
-		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "production-bible-review-v1",
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "production-bible-review",
 	})
 	if err != nil || replayedOpen.ID != opened.ID {
 		t.Fatalf("replay open human task: task=%#v err=%v", replayedOpen, err)
@@ -111,7 +111,7 @@ func TestHumanTaskOwnerRenewsAndReleasesClaimIdempotently(t *testing.T) {
 		WorkspaceID: "workspace-lease", ProjectID: "project-lease", WorkflowRunID: "run-lease", NodeRunID: "node-lease",
 		SubjectType: "workflow_node_output", SubjectID: "subject-lease", SubjectRevision: 3,
 		SubjectHash: humanTaskSubjectHash, CandidateIDs: []string{},
-		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "lease-review-v1",
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "lease-review",
 	})
 	if err != nil {
 		t.Fatalf("open lease task: %v", err)
@@ -189,7 +189,7 @@ func TestHumanTaskExpireSweepReopensExpiredClaimOnce(t *testing.T) {
 		WorkspaceID: "workspace-expire", ProjectID: "project-expire", WorkflowRunID: "run-expire", NodeRunID: "node-expire",
 		SubjectType: "workflow_node_output", SubjectID: "subject-expire", SubjectRevision: 2,
 		SubjectHash: humanTaskSubjectHash, CandidateIDs: []string{},
-		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "expire-review-v1",
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, RubricVersion: "expire-review",
 	})
 	if err != nil {
 		t.Fatalf("open expiring task: %v", err)

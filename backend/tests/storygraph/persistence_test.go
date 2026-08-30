@@ -353,7 +353,7 @@ func seedStoryGraphOwners(t *testing.T, create func(any) error, suffix string) s
 	structureHash, err := bibledomain.CanonicalStoryHash(struct {
 		Schema string                 `json:"schema"`
 		Scenes []planningdomain.Scene `json:"scenes"`
-	}{"episode-planning-owner-v1", sceneValues})
+	}{"episode-planning-owner", sceneValues})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +364,7 @@ func seedStoryGraphOwners(t *testing.T, create func(any) error, suffix string) s
 		&model.Membership{ID: uuid.New(), WorkspaceID: workspaceID, UserID: userID, Role: "owner", Status: "active", JoinedAt: now},
 		&model.Project{ID: projectID, WorkspaceID: workspaceID, Name: "StoryGraph Project", AspectRatio: "9:16", Language: "zh-CN", TargetDurationMS: 90_000, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now},
 		&model.ScriptDocument{ID: documentID, WorkspaceID: workspaceID, ProjectID: projectID, Title: "StoryGraph Script", SourceType: "text", Language: "zh-CN", RightsDeclaration: "原创测试文本", Status: "active", Revision: 1, CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
-		&model.DocumentRevision{ID: revisionID, WorkspaceID: workspaceID, DocumentID: documentID, VersionNo: 1, SourceType: "text", RawText: text, RawHash: hashText(text), NormalizedText: text, NormalizedHash: hashText(text), NormalizerVersion: "test-v1", NormalizationMap: []byte(`{}`), CodepointCount: len([]rune(text)), AnalysisStatus: "deterministic", AnalyzerVersion: "test-v1", Blocks: []byte(`[]`), Issues: []byte(`[]`), CreatedBy: userID, CreatedAt: now},
+		&model.DocumentRevision{ID: revisionID, WorkspaceID: workspaceID, DocumentID: documentID, VersionNo: 1, SourceType: "text", RawText: text, RawHash: hashText(text), NormalizedText: text, NormalizedHash: hashText(text), NormalizerVersion: "test", NormalizationMap: []byte(`{}`), CodepointCount: len([]rune(text)), AnalysisStatus: "deterministic", AnalyzerVersion: "test", Blocks: []byte(`[]`), Issues: []byte(`[]`), CreatedBy: userID, CreatedAt: now},
 		&model.Episode{ID: episodeID, WorkspaceID: workspaceID, ProjectID: projectID, Name: "第一集", Position: 1, TargetDurationMS: 90_000, Status: "active", Revision: 1, CurrentScriptVersionID: &currentScriptVersionID, CreatedAt: now, UpdatedAt: now},
 		&model.EpisodeScriptVersion{ID: scriptVersionID, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID, VersionNo: 1, DocumentRevisionID: revisionID, SourceStart: 0, SourceEnd: len([]rune(text)), Content: text, ContentHash: hashText(text), Status: "published", CreatedBy: userID, CreatedAt: now, UpdatedAt: now},
 		&model.EpisodeStructure{ID: structureID, WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID, ScriptVersionID: scriptVersionID, Status: "confirmed", Scenes: scenes, ResultHash: structureHash, Revision: 1, ConfirmedBy: &userID, ConfirmedAt: &now, CreatedBy: userID, CreatedAt: now, UpdatedAt: now},

@@ -163,7 +163,7 @@ func (service *EpisodeAnalysisService) Ensure(
 }
 
 func episodeAnalysisManifestID(nodeRunID, stage string) string {
-	return uuid.NewSHA1(uuid.MustParse(nodeRunID), []byte("episode-analysis-manifest-v1\x00"+stage)).String()
+	return uuid.NewSHA1(uuid.MustParse(nodeRunID), []byte("episode-analysis-manifest\x00"+stage)).String()
 }
 
 func EpisodeAnalysisRootInputHash(seed EpisodeAnalysisSeed) (string, error) {
@@ -195,7 +195,7 @@ func EpisodeAnalysisRootInputHash(seed EpisodeAnalysisSeed) (string, error) {
 		MaterializationHash string       `json:"materialization_hash"`
 		Episodes            []episodeRef `json:"episodes"`
 	}{
-		"episode-analysis-input-v1", seed.EpisodeSetID, seed.EpisodeSetHash,
+		"episode-analysis-input", seed.EpisodeSetID, seed.EpisodeSetHash,
 		seed.BibleVersionID, seed.BibleContentHash, seed.BibleVersion,
 		seed.BibleSnapshotHash, seed.MaterializationHash, references,
 	})

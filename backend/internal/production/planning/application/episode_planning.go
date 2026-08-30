@@ -300,7 +300,7 @@ func trimEpisodePlanningCommand(command *ApplyEpisodePlanningCandidateCommand) {
 }
 
 func validateEpisodePlanningSource(source EpisodePlanningCandidateSource) error {
-	if source.Candidate.SchemaVersion != "episode-planning-candidate-set-v1" ||
+	if source.Candidate.SchemaVersion != "episode-planning-candidate-set" ||
 		source.Candidate.BibleVersionID != source.BibleVersionID ||
 		source.Candidate.BibleVersion != source.BibleVersion ||
 		source.Candidate.BibleContentHash != source.BibleContentHash ||
@@ -402,7 +402,7 @@ func (service *EpisodePlanningService) buildPlanningOwnerStructures(
 		resultHash, err := bibledomain.CanonicalStoryHash(struct {
 			Schema string         `json:"schema"`
 			Scenes []domain.Scene `json:"scenes"`
-		}{"episode-planning-owner-v1", scenes})
+		}{"episode-planning-owner", scenes})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -654,7 +654,7 @@ func planningStateReference(
 }
 
 func planningFragmentID(structureID, kind, temporaryKey string) string {
-	return uuid.NewSHA1(uuid.MustParse(structureID), []byte("planning-fragment-v1\x00"+kind+"\x00"+temporaryKey)).String()
+	return uuid.NewSHA1(uuid.MustParse(structureID), []byte("planning-fragment\x00"+kind+"\x00"+temporaryKey)).String()
 }
 
 func planningStructureReferences(structures []domain.Structure) ([]PlanningStructureReference, error) {
@@ -705,7 +705,7 @@ func planningOwnerSetHash(structures []PlanningStructureReference) (string, erro
 	return platformcommand.InputHash(struct {
 		Schema     string                       `json:"schema"`
 		Structures []PlanningStructureReference `json:"structures"`
-	}{"planning-owner-set-v1", structures})
+	}{"planning-owner-set", structures})
 }
 
 func samePlanningStructureReference(left, right PlanningStructureReference) bool {

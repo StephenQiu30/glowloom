@@ -1426,7 +1426,7 @@ export interface components {
             source_revision_hash: string;
             owner_set_hash: string;
             /** @constant */
-            schema_version: "storygraph-v1";
+            schema_version: "storygraph-scene-production";
             topology_hash: string;
             content_hash: string;
             /** @constant */

@@ -689,10 +689,10 @@ func (store *Store) PrepareHumanGate(
 		candidateIDs := humanGateCandidateIDs(resolved.Input)
 		var candidateSet domain.NodeInputBinding
 		candidateRevision := 0
-		productionBibleV2 := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
-		episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
-		episodePlanningV2 := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
-		storyboardIntentV2 := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
+		productionBibleOwnerApply := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
+		episodePlanOwnerApply := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
+		episodePlanningOwnerApply := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
+		storyboardIntentOwnerApply := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
 		if node.Executor == "gate.generation_image_review" {
 			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidates" ||
 				resolved.Input.Bindings[0].ValueType != "generation_candidate_set" ||
@@ -700,7 +700,7 @@ func (store *Store) PrepareHumanGate(
 				return errors.New("workflow Generation Human Gate has no CandidateSet input")
 			}
 			candidateSet, candidateIDs = resolved.Input.Bindings[0], nil
-		} else if productionBibleV2 {
+		} else if productionBibleOwnerApply {
 			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidate" ||
 				resolved.Input.Bindings[0].ValueType != "story_reconciliation_candidate" ||
 				resolved.Input.Bindings[0].SourceKind != domain.NodeInputSourceNodeOutput || len(candidateIDs) != 1 {
@@ -711,7 +711,7 @@ func (store *Store) PrepareHumanGate(
 				return errors.New("workflow Production Bible Human Gate Candidate Revision is invalid")
 			}
 			candidateRevision = parsedCandidateRevision
-		} else if episodePlanV2 {
+		} else if episodePlanOwnerApply {
 			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidate" ||
 				resolved.Input.Bindings[0].ValueType != "episode_segmentation_candidate" ||
 				resolved.Input.Bindings[0].SourceKind != domain.NodeInputSourceNodeOutput || len(candidateIDs) != 1 {
@@ -722,7 +722,7 @@ func (store *Store) PrepareHumanGate(
 				return errors.New("workflow Episode Plan Human Gate Candidate Revision is invalid")
 			}
 			candidateRevision = parsedCandidateRevision
-		} else if episodePlanningV2 {
+		} else if episodePlanningOwnerApply {
 			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidate" ||
 				resolved.Input.Bindings[0].ValueType != "episode_planning_candidate_set" ||
 				resolved.Input.Bindings[0].SourceKind != domain.NodeInputSourceNodeOutput || len(candidateIDs) != 1 {
@@ -733,7 +733,7 @@ func (store *Store) PrepareHumanGate(
 				return errors.New("workflow Episode Planning Human Gate Candidate Revision is invalid")
 			}
 			candidateRevision = parsedCandidateRevision
-		} else if storyboardIntentV2 {
+		} else if storyboardIntentOwnerApply {
 			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidate" ||
 				resolved.Input.Bindings[0].ValueType != "storyboard_intent_candidate_set" ||
 				resolved.Input.Bindings[0].SourceKind != domain.NodeInputSourceNodeOutput || len(candidateIDs) != 1 {
@@ -785,19 +785,19 @@ func (store *Store) PrepareHumanGate(
 		}
 		subjectType, subjectID, subjectHash := "workflow_node_output", node.ID.String(), resolved.InputHash
 		subjectRevision := node.Revision
-		if productionBibleV2 {
+		if productionBibleOwnerApply {
 			candidate := resolved.Input.Bindings[0]
 			subjectType, subjectID, subjectHash = "story_reconciliation_candidate", candidate.ReferenceID, candidate.ContentHash
 			subjectRevision = candidateRevision
-		} else if episodePlanV2 {
+		} else if episodePlanOwnerApply {
 			candidate := resolved.Input.Bindings[0]
 			subjectType, subjectID, subjectHash = "episode_plan_candidate", candidate.ReferenceID, candidate.ContentHash
 			subjectRevision = candidateRevision
-		} else if episodePlanningV2 {
+		} else if episodePlanningOwnerApply {
 			candidate := resolved.Input.Bindings[0]
 			subjectType, subjectID, subjectHash = "planning_candidate", candidate.ReferenceID, candidate.ContentHash
 			subjectRevision = candidateRevision
-		} else if storyboardIntentV2 {
+		} else if storyboardIntentOwnerApply {
 			candidate := resolved.Input.Bindings[0]
 			subjectType, subjectID, subjectHash = "storyboard_intent_candidate", candidate.ReferenceID, candidate.ContentHash
 			subjectRevision = candidateRevision

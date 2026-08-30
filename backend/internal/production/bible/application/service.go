@@ -22,10 +22,10 @@ const (
 	confirmOperation = "production_bible.confirm"
 	resumeOperation  = "production_bible.resume"
 	decideOperation  = "production_bible.review_issue.decide"
-	engineVersion    = "storygraph-stage-agent-v1"
-	promptVersion    = "build-storygraph-prompt-v2"
-	schemaVersion    = "storygraph-candidate-schema-v2"
-	harnessVersion   = "storygraph-stage-harness-v1"
+	engineVersion    = "storygraph-stage-agent"
+	promptVersion    = "build-storygraph-prompt"
+	schemaVersion    = "storygraph-candidate-schema"
+	harnessVersion   = "storygraph-stage-harness"
 )
 
 var ErrNotFound = errors.New("production bible not found")

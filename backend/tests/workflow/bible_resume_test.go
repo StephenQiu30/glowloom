@@ -150,8 +150,8 @@ func seedFailedBible(t *testing.T, create func(any) error) failedBibleFixture {
 		&model.DocumentRevision{
 			ID: revisionID, WorkspaceID: workspaceID, DocumentID: documentID, VersionNo: 1, SourceType: "text",
 			RawText: "雨巷，夜", RawHash: strings.Repeat("1", 64), NormalizedText: "雨巷，夜",
-			NormalizedHash: strings.Repeat("2", 64), NormalizerVersion: "test-v1", NormalizationMap: []byte(`{}`),
-			CodepointCount: 4, AnalysisStatus: "deterministic", AnalyzerVersion: "test-v1",
+			NormalizedHash: strings.Repeat("2", 64), NormalizerVersion: "test", NormalizationMap: []byte(`{}`),
+			CodepointCount: 4, AnalysisStatus: "deterministic", AnalyzerVersion: "test",
 			Blocks: []byte(`[]`), Issues: []byte(`[]`), CreatedBy: userID, CreatedAt: now,
 		},
 		&model.WorkflowTask{
@@ -162,8 +162,8 @@ func seedFailedBible(t *testing.T, create func(any) error) failedBibleFixture {
 		&model.ProductionBible{
 			ID: bibleID, WorkspaceID: workspaceID, ProjectID: projectID, DocumentRevisionID: revisionID, TaskID: taskID,
 			Status: "failed", InputHash: strings.Repeat("2", 64), ResultHash: &resultHash,
-			EngineVersion: "test-v1", ModelName: "deterministic", PromptVersion: "test-v1",
-			SchemaVersion: "production-bible-schema-v1", HarnessVersion: "test-v1", CheckpointRevision: 1,
+			EngineVersion: "test", ModelName: "deterministic", PromptVersion: "test",
+			SchemaVersion: "production-bible-schema", HarnessVersion: "test", CheckpointRevision: 1,
 			Candidate:       []byte(`{"entities":[],"world_entries":[],"review_issues":[]}`),
 			ReviewDecisions: []byte(`{}`), Error: []byte(`{"code":"agent_failed"}`), Revision: bibleRevision,
 			CreatedBy: userID, CreatedAt: now, UpdatedAt: now,

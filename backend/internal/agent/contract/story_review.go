@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const BibleDeterministicGateVersion = "bible-deterministic-gate-v1"
+const BibleDeterministicGateVersion = "bible-deterministic-gate"
 
 var repairFieldPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,79}$`)
 

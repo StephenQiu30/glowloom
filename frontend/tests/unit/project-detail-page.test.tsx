@@ -19,37 +19,37 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock("@/api/identity", async () => ({
   ...(await vi.importActual<typeof import("@/api/identity")>("@/api/identity")),
-  meApiV1MeGet: apiMocks.me,
+  meApiMeGet: apiMocks.me,
 }));
 
 vi.mock("@/api/projects", async () => ({
   ...(await vi.importActual<typeof import("@/api/projects")>("@/api/projects")),
-  createEpisodeApiV1ProjectsProjectIdEpisodesPost: apiMocks.createEpisode,
-  getProjectApiV1ProjectsProjectIdGet: apiMocks.getProject,
-  listEpisodesApiV1ProjectsProjectIdEpisodesGet: apiMocks.listEpisodes,
-  projectProductionSnapshotApiV1ProjectsProjectIdProductionSnapshotGet:
+  createEpisodeApiProjectsProjectIdEpisodesPost: apiMocks.createEpisode,
+  getProjectApiProjectsProjectIdGet: apiMocks.getProject,
+  listEpisodesApiProjectsProjectIdEpisodesGet: apiMocks.listEpisodes,
+  projectProductionSnapshotApiProjectsProjectIdProductionSnapshotGet:
     apiMocks.getSnapshot,
 }));
 
 vi.mock("@/api/media", async () => ({
   ...(await vi.importActual<typeof import("@/api/media")>("@/api/media")),
-  completeUploadApiV1MediaUploadsUploadSessionIdCompletePost:
+  completeUploadApiMediaUploadsUploadSessionIdCompletePost:
     apiMocks.completeUpload,
-  getMediaApiV1MediaVersionIdGet: apiMocks.getMedia,
-  initializeUploadApiV1MediaUploadsPost: apiMocks.initializeUpload,
+  getMediaApiMediaVersionIdGet: apiMocks.getMedia,
+  initializeUploadApiMediaUploadsPost: apiMocks.initializeUpload,
 }));
 
 vi.mock("@/api/scriptDocuments", async () => ({
   ...(await vi.importActual<typeof import("@/api/scriptDocuments")>(
     "@/api/scriptDocuments",
   )),
-  importDocumentApiV1ProjectsProjectIdScriptImportsPost:
+  importDocumentApiProjectsProjectIdScriptImportsPost:
     apiMocks.importScriptDocument,
-  getCurrentDocumentApiV1ProjectsProjectIdCurrentScriptDocumentGet:
+  getCurrentDocumentApiProjectsProjectIdCurrentScriptDocumentGet:
     apiMocks.getCurrentScriptDocument,
-  listDocumentsApiV1ProjectsProjectIdScriptDocumentsGet:
+  listDocumentsApiProjectsProjectIdScriptDocumentsGet:
     apiMocks.listScriptDocuments,
-  previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost:
+  previewDocumentApiProjectsProjectIdScriptImportPreviewsPost:
     apiMocks.previewScriptDocument,
 }));
 
@@ -178,11 +178,11 @@ const documentAnalysis: API.ScriptDocumentAnalysisResponse = {
     raw_hash: "a".repeat(64),
     normalized_text: "场景：控制室。\n甲：开始。",
     normalized_hash: "a".repeat(64),
-    normalizer_version: "identity-v1",
+    normalizer_version: "identity",
     normalization_map: { type: "identity" },
     codepoint_count: 14,
     analysis_status: "ai_candidate_required",
-    analyzer_version: "whole-script-lines-v1",
+    analyzer_version: "whole-script-lines",
     created_by: "019fb2d0-a000-7000-8000-000000000004",
     created_at: "2026-08-13T03:00:00Z",
   },

@@ -373,7 +373,7 @@ func (repo *repository) projectEpisode(
 	computedHash, err := bibledomain.CanonicalStoryHash(struct {
 		Schema string                 `json:"schema"`
 		Scenes []planningdomain.Scene `json:"scenes"`
-	}{"episode-planning-owner-v1", scenes})
+	}{"episode-planning-owner", scenes})
 	if err != nil || computedHash != structure.ResultHash {
 		return invalidOwnerSnapshot("confirmed Episode Structure result hash has drifted")
 	}

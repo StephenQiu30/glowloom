@@ -162,7 +162,7 @@ func EpisodeSegmentationRootInputHash(seed EpisodeSegmentationSeed) (string, err
 		SourceCodePoints            int       `json:"source_code_points"`
 		EvidenceLeaves              []leafRef `json:"evidence_leaves"`
 	}{
-		SchemaVersion: "episode-segmentation-input-v1", DocumentRevisionID: seed.DocumentRevisionID,
+		SchemaVersion: "episode-segmentation-input", DocumentRevisionID: seed.DocumentRevisionID,
 		NormalizedHash: seed.NormalizedHash, EvidenceAggregateRevisionID: seed.EvidenceAggregateRevisionID,
 		EvidenceAggregateHash: seed.EvidenceAggregateRevisionHash, BibleVersionID: seed.BibleVersionID,
 		BibleVersion: seed.BibleVersion, BibleContentHash: seed.BibleContentHash,

@@ -79,7 +79,7 @@ func TestSelectedReviewDecisionCreatesOneGenerationSelection(t *testing.T) {
 	generationStore := generationgorm.New(database)
 	candidateService := generationapp.NewService(generationStore, generationasset.NewReadiness(assetService), generationapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
-		ImageQC: generationapp.ImageQCPolicy{Version: "selection-image-qc-v1", AllowedMediaTypes: []string{"image/png"}, MinWidth: 4, MinHeight: 3, MaxPixels: 100},
+		ImageQC: generationapp.ImageQCPolicy{Version: "selection-image-qc", AllowedMediaTypes: []string{"image/png"}, MinWidth: 4, MinHeight: 3, MaxPixels: 100},
 	})
 	actor := generationapp.Actor{UserID: userID.String(), TokenVersion: 1}
 	assetActor := assetapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}
@@ -157,7 +157,7 @@ func TestSelectedReviewDecisionCreatesOneGenerationSelection(t *testing.T) {
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		SubjectType: "generation_candidate_selection", SubjectID: uuid.NewString(), SubjectRevision: 1,
 		SubjectHash: strings.Repeat("b", 64), CandidateIDs: []string{firstCandidate.Candidate.ID},
-		AllowedDecisions: []string{"changes_requested", "rejected", "selected"}, RubricVersion: "generation-image-selection-v1",
+		AllowedDecisions: []string{"changes_requested", "rejected", "selected"}, RubricVersion: "generation-image-selection",
 	})
 	if err != nil {
 		t.Fatalf("open frozen Generation selection rubric: %v", err)
@@ -260,7 +260,7 @@ func decidedReview(t *testing.T, ctx context.Context, service *reviewapp.Service
 		WorkspaceID: workspaceID, ProjectID: projectID, WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		SubjectType: "generation_candidate_selection", SubjectID: uuid.NewString(), SubjectRevision: 1,
 		SubjectHash: strings.Repeat("a", 64), CandidateIDs: candidateIDs,
-		AllowedDecisions: []string{"changes_requested", "rejected", "selected"}, RubricVersion: "generation-image-selection-v1",
+		AllowedDecisions: []string{"changes_requested", "rejected", "selected"}, RubricVersion: "generation-image-selection",
 	})
 	if err != nil {
 		t.Fatalf("open %s generation selection review: %v", key, err)

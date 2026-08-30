@@ -572,7 +572,7 @@ func BuildDraftManifest(input StoryGraphDraftInput) (DraftManifest, error) {
 	if err != nil {
 		return DraftManifest{}, err
 	}
-	manifestID := uuid.NewSHA1(uuid.MustParse(input.NodeRunID), []byte("storyboard-draft-manifest-v1")).String()
+	manifestID := uuid.NewSHA1(uuid.MustParse(input.NodeRunID), []byte("storyboard-draft-manifest")).String()
 	manifest := DraftManifest{
 		ManifestID: manifestID, WorkspaceID: input.WorkspaceID, WorkflowRunID: input.WorkflowRunID,
 		NodeRunID: input.NodeRunID, Version: 1, Stage: "draft_storyboard", RootInputHash: rootInputHash,
@@ -621,7 +621,7 @@ func BuildCandidateSet(
 		}
 	}
 	candidate := CandidateSet{
-		SchemaVersion: "storyboard-intent-candidate-set-v1", DraftSetID: set.ID, DraftSetRevision: set.Revision,
+		SchemaVersion: "storyboard-intent-candidate-set", DraftSetID: set.ID, DraftSetRevision: set.Revision,
 		GraphVersionID:   set.GraphVersionID,
 		GraphContentHash: set.GraphContentHash, ManifestID: set.ManifestID,
 		ManifestVersion: set.ManifestVersion, ManifestHash: set.ManifestHash,
@@ -634,7 +634,7 @@ func BuildCandidateSet(
 	}
 	stageKey, err := agentcontract.CanonicalHash(mustJSON(struct {
 		Schema, NodeRunID, ManifestHash, GraphContentHash string
-	}{"storyboard-intent-candidate-set-stage-v1", set.NodeRunID, set.ManifestHash, set.GraphContentHash}))
+	}{"storyboard-intent-candidate-set-stage", set.NodeRunID, set.ManifestHash, set.GraphContentHash}))
 	return candidate, encoded, contentHash, stageKey, err
 }
 
@@ -722,7 +722,7 @@ func BuildApprovedIntentSet(
 		return ApprovedIntentSet{}, err
 	}
 	approved := ApprovedIntentSet{
-		SchemaVersion: "approved-storyboard-intents-v1", ID: approvedID,
+		SchemaVersion: "approved-storyboard-intents", ID: approvedID,
 		WorkspaceID: set.WorkspaceID, ProjectID: set.ProjectID, DraftSetID: set.ID, DraftSetRevision: set.Revision,
 		CandidateRevisionID: *set.CandidateRevisionID, CandidateRevisionHash: *set.CandidateRevisionHash,
 		CandidateRevision: candidateRevision, GraphVersionID: set.GraphVersionID, GraphVersionNo: set.GraphVersionNo,

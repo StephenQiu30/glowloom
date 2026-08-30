@@ -5,15 +5,15 @@ const requestMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/request", () => ({ default: requestMock }));
 
 import {
-  claimHumanTaskApiV1HumanTasksHumanTaskIdClaimsPost,
-  decideHumanTaskApiV1HumanTasksHumanTaskIdDecisionsPost,
-  getHumanTaskApiV1HumanTasksHumanTaskIdGet,
-  listHumanTasksApiV1ProjectsProjectIdHumanTasksGet,
-  releaseHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimReleasesPost,
-  renewHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimRenewalsPost,
-  resumeHumanGateApiV1ReviewDecisionsReviewDecisionIdResumePost,
+  claimHumanTaskApiHumanTasksHumanTaskIdClaimsPost,
+  decideHumanTaskApiHumanTasksHumanTaskIdDecisionsPost,
+  getHumanTaskApiHumanTasksHumanTaskIdGet,
+  listHumanTasksApiProjectsProjectIdHumanTasksGet,
+  releaseHumanTaskClaimApiHumanTasksHumanTaskIdClaimReleasesPost,
+  renewHumanTaskClaimApiHumanTasksHumanTaskIdClaimRenewalsPost,
+  resumeHumanGateApiReviewDecisionsReviewDecisionIdResumePost,
 } from "@/api/humanReviews";
-import { getWorkflowRunApiV1WorkflowRunsWorkflowRunIdGet } from "@/api/workflows";
+import { getWorkflowRunApiWorkflowRunsWorkflowRunIdGet } from "@/api/workflows";
 
 const projectId = "019ffb00-a000-7000-8000-000000000001";
 const taskId = "019ffb00-a000-7000-8000-000000000002";
@@ -28,14 +28,14 @@ describe("公共人工审核 API Client", () => {
   });
 
   it("使用稳定列表/详情路由且列表查询不携带 Claim Token", async () => {
-    await listHumanTasksApiV1ProjectsProjectIdHumanTasksGet({
+    await listHumanTasksApiProjectsProjectIdHumanTasksGet({
       project_id: projectId,
       status: "active",
       subject_type: null,
       limit: 50,
       after: null,
     });
-    await getHumanTaskApiV1HumanTasksHumanTaskIdGet({ human_task_id: taskId });
+    await getHumanTaskApiHumanTasksHumanTaskIdGet({ human_task_id: taskId });
 
     expect(requestMock).toHaveBeenNthCalledWith(
       1,
@@ -73,26 +73,26 @@ describe("公共人工审核 API Client", () => {
       idempotency_key: "human-task-decision:one",
     };
 
-    await claimHumanTaskApiV1HumanTasksHumanTaskIdClaimsPost(
+    await claimHumanTaskApiHumanTasksHumanTaskIdClaimsPost(
       { human_task_id: taskId },
       claimBody,
     );
-    await renewHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimRenewalsPost(
+    await renewHumanTaskClaimApiHumanTasksHumanTaskIdClaimRenewalsPost(
       { human_task_id: taskId },
       tokenBody,
     );
-    await releaseHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimReleasesPost(
+    await releaseHumanTaskClaimApiHumanTasksHumanTaskIdClaimReleasesPost(
       { human_task_id: taskId },
       tokenBody,
     );
-    await decideHumanTaskApiV1HumanTasksHumanTaskIdDecisionsPost(
+    await decideHumanTaskApiHumanTasksHumanTaskIdDecisionsPost(
       { human_task_id: taskId },
       decisionBody,
     );
-    await resumeHumanGateApiV1ReviewDecisionsReviewDecisionIdResumePost({
+    await resumeHumanGateApiReviewDecisionsReviewDecisionIdResumePost({
       review_decision_id: decisionId,
     });
-    await getWorkflowRunApiV1WorkflowRunsWorkflowRunIdGet({ workflow_run_id: runId });
+    await getWorkflowRunApiWorkflowRunsWorkflowRunIdGet({ workflow_run_id: runId });
 
     expect(requestMock.mock.calls.map(([url]) => url)).toEqual([
       `/api/human-tasks/${taskId}/claims`,

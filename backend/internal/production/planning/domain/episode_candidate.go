@@ -157,7 +157,7 @@ func BuildEpisodePlanningCandidateSet(
 		}
 	}
 	value := EpisodePlanningCandidateSet{
-		SchemaVersion:  "episode-planning-candidate-set-v1",
+		SchemaVersion:  "episode-planning-candidate-set",
 		BibleVersionID: bibleVersionID, BibleVersion: bibleVersion,
 		BibleContentHash: bibleContentHash, MaterializationHash: materializationHash,
 		Episodes: episodes,
@@ -186,7 +186,7 @@ func EpisodePlanningCandidateSetStageInstanceKey(manifest EpisodeReconcileManife
 		Schema, NodeRunID, ManifestID, ManifestHash string
 		ManifestVersion                             int64
 	}{
-		"episode-planning-candidate-set-stage-v1", manifest.NodeRunID,
+		"episode-planning-candidate-set-stage", manifest.NodeRunID,
 		manifest.ManifestID, manifest.ManifestHash, manifest.Version,
 	})
 }

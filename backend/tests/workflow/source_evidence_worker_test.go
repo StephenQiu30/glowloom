@@ -887,7 +887,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	if err = database.First(&recoveredEpisodeInvocation, "id = ?", recoveredEpisodeInvocationID).Error; err != nil {
 		t.Fatalf("load recovered Episode analysis invocation: %v", err)
 	}
-	if aggregate.SchemaVersion != "episode-planning-candidate-set-v1" ||
+	if aggregate.SchemaVersion != "episode-planning-candidate-set" ||
 		len(aggregate.Episodes) != len(publishedEpisodes) || analysisInvocationCount < int64(len(publishedEpisodes)) ||
 		reconciliationInvocationCount < int64(len(publishedEpisodes)) || formalStructureCount != 0 ||
 		episodeAggregateRevision.CandidateRevisionHash != analysisOutput.Bindings[0].ContentHash ||
@@ -1265,7 +1265,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		t.Fatalf("decode Storyboard aggregate origin: %v", err)
 	}
 	if storyboardAggregateRevision.OriginKind != "aggregate" || storyboardAggregateRevision.CandidateRevisionHash != storyboardOutput.Bindings[0].ContentHash ||
-		candidateSet.SchemaVersion != "storyboard-intent-candidate-set-v1" || candidateSet.AssetReadiness != "needs_asset" ||
+		candidateSet.SchemaVersion != "storyboard-intent-candidate-set" || candidateSet.AssetReadiness != "needs_asset" ||
 		candidateSet.DraftSetID != draftSet.ID.String() || candidateSet.DraftSetRevision != draftSet.Revision ||
 		candidateSet.GraphVersionID != graphVersion.ID.String() || candidateSet.GraphContentHash != graphVersion.ContentHash ||
 		candidateSet.ManifestID != draftManifest.ID.String() || candidateSet.ManifestHash != draftManifest.ManifestHash ||
@@ -1411,7 +1411,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	}
 	var approvedIntents storyboarddomain.ApprovedIntentSet
 	if err = json.Unmarshal(intentFreezeReceipt.Result, &approvedIntents); err != nil ||
-		approvedIntents.SchemaVersion != "approved-storyboard-intents-v1" ||
+		approvedIntents.SchemaVersion != "approved-storyboard-intents" ||
 		approvedIntents.ID != intentFreezeReceipt.ID.String() || approvedIntents.DraftSetID != draftSet.ID.String() ||
 		approvedIntents.DraftSetRevision != 2 ||
 		approvedIntents.CandidateRevisionID != storyboardAggregateRevision.ID.String() ||
@@ -1748,7 +1748,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 			WorkflowRunID: run.ID, NodeRunID: nodeRunID,
 			SubjectType: "story_reconciliation_candidate", SubjectID: confirmedCandidate.ID.String(),
 			SubjectRevision: int(confirmedCandidate.RevisionNo), SubjectHash: confirmedCandidate.CandidateRevisionHash,
-			CandidateIDs: []string{confirmedCandidate.ID.String()}, RubricVersion: "production-bible-v1",
+			CandidateIDs: []string{confirmedCandidate.ID.String()}, RubricVersion: "production-bible",
 			AllowedDecisions: []string{"approved", "rejected", "changes_requested"},
 		}
 	}
@@ -2335,7 +2335,7 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 				Candidate: json.RawMessage("null"), InputHash: invocation.InputHash,
 				Issues: []agentcontract.StageIssue{},
 				Executor: agentcontract.Executor{
-					Name: "test-agent", Version: "source-evidence-v1", Model: "deterministic-fixture",
+					Name: "test-agent", Version: "source-evidence", Model: "deterministic-fixture",
 				},
 				Error: &agentcontract.ResultError{
 					Code: "execution_budget_exceeded", Summary: "fixture requires a smaller immutable shard", Retryable: false,
@@ -2399,7 +2399,7 @@ func (agent *recoveringSourceEvidenceAgent) Invoke(
 		Status: "succeeded", CandidateType: "source_evidence_candidate",
 		Candidate: candidate, InputHash: invocation.InputHash, ResultHash: &resultHash,
 		Issues:   []agentcontract.StageIssue{},
-		Executor: agentcontract.Executor{Name: "test-agent", Version: "source-evidence-v1", Model: "deterministic-fixture"},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "source-evidence", Model: "deterministic-fixture"},
 	}, nil
 }
 
@@ -2468,7 +2468,7 @@ func storyboardDraftFixtureResult(invocation agentcontract.StageInvocation) (age
 		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
 		Status: "succeeded", CandidateType: "storyboard_row_candidate", Candidate: candidate,
 		InputHash: invocation.InputHash, ResultHash: &resultHash, Issues: []agentcontract.StageIssue{},
-		Executor: agentcontract.Executor{Name: "test-agent", Version: "storyboard-draft-v1", Model: "deterministic-fixture"},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "storyboard-draft", Model: "deterministic-fixture"},
 	}, nil
 }
 
@@ -2619,7 +2619,7 @@ func episodeFixtureStageResult(
 		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
 		Status: "succeeded", CandidateType: candidateType, Candidate: candidate,
 		InputHash: invocation.InputHash, ResultHash: &resultHash, Issues: []agentcontract.StageIssue{},
-		Executor: agentcontract.Executor{Name: "test-agent", Version: "episode-analysis-v1", Model: "deterministic-fixture"},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "episode-analysis", Model: "deterministic-fixture"},
 	}, nil
 }
 
@@ -2667,7 +2667,7 @@ func episodeSegmentationFixtureResult(invocation agentcontract.StageInvocation) 
 		Status: "succeeded", CandidateType: "episode_segmentation_candidate",
 		Candidate: candidate, InputHash: invocation.InputHash, ResultHash: &resultHash,
 		Issues:   []agentcontract.StageIssue{},
-		Executor: agentcontract.Executor{Name: "test-agent", Version: "episode-segmentation-v1", Model: "deterministic-fixture"},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "episode-segmentation", Model: "deterministic-fixture"},
 	}, nil
 }
 
@@ -2748,7 +2748,7 @@ func storyReviewFixtureResult(invocation agentcontract.StageInvocation) (agentco
 		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
 		Status: "succeeded", CandidateType: candidateType, Candidate: candidate,
 		InputHash: invocation.InputHash, ResultHash: &resultHash, Issues: []agentcontract.StageIssue{},
-		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-review-v1", Model: "deterministic-fixture"},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-review", Model: "deterministic-fixture"},
 	}, nil
 }
 
@@ -2760,7 +2760,7 @@ func storyFixtureDeadlineExceeded(invocation agentcontract.StageInvocation) agen
 		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
 		Status: "failed", CandidateType: candidateType, Candidate: json.RawMessage("null"),
 		InputHash: invocation.InputHash, Issues: []agentcontract.StageIssue{},
-		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-deadline-v1", Model: "deterministic-fixture"},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-deadline", Model: "deterministic-fixture"},
 		Error: &agentcontract.ResultError{
 			Code: "execution_deadline_exceeded", Summary: "fixture exhausted the frozen shard deadline", Retryable: false,
 		},
@@ -2775,7 +2775,7 @@ func storyFixtureBudgetExceeded(invocation agentcontract.StageInvocation) agentc
 		Stage:             invocation.Payload.Stage, ShardKey: invocation.Payload.ShardKey,
 		Status: "failed", CandidateType: candidateType, Candidate: json.RawMessage("null"),
 		InputHash: invocation.InputHash, Issues: []agentcontract.StageIssue{},
-		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-budget-v1", Model: "deterministic-fixture"},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-budget", Model: "deterministic-fixture"},
 		Error: &agentcontract.ResultError{
 			Code: "execution_budget_exceeded", Summary: "fixture requires an exact candidate partition", Retryable: false,
 		},
@@ -2939,7 +2939,7 @@ func storyAnalysisFixtureResult(invocation agentcontract.StageInvocation) (agent
 		Status: "succeeded", CandidateType: candidateType, Candidate: candidate,
 		InputHash: invocation.InputHash, ResultHash: &resultHash,
 		Issues:   []agentcontract.StageIssue{},
-		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-analysis-v1", Model: "deterministic-fixture"},
+		Executor: agentcontract.Executor{Name: "test-agent", Version: "story-analysis", Model: "deterministic-fixture"},
 	}, nil
 }
 

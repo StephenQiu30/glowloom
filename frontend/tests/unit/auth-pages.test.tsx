@@ -21,11 +21,11 @@ vi.mock("@/api/identity", async () => {
   );
   return {
     ...actual,
-    confirmRegistrationVerificationApiV1AuthRegistrationVerificationsConfirmPost:
+    confirmRegistrationVerificationApiAuthRegistrationVerificationsConfirmPost:
       apiMocks.confirmRegistrationVerification,
-    loginApiV1AuthLoginPost: apiMocks.login,
-    registerApiV1AuthRegisterPost: apiMocks.register,
-    requestRegistrationVerificationApiV1AuthRegistrationVerificationsPost:
+    loginApiAuthLoginPost: apiMocks.login,
+    registerApiAuthRegisterPost: apiMocks.register,
+    requestRegistrationVerificationApiAuthRegistrationVerificationsPost:
       apiMocks.requestRegistrationVerification,
   };
 });

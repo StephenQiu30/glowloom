@@ -450,7 +450,7 @@ func (service *Service) CreatePlan(ctx context.Context, actor Actor, command Cre
 		for index := range proposals {
 			proposals[index].ID, proposals[index].PlanID = service.config.NewID(), planID
 		}
-		plan := domain.Plan{ID: planID, WorkspaceID: workspaceID, ProjectID: projectID, DocumentRevisionID: source.DocumentRevisionID, Strategy: command.Strategy, Status: "review_ready", TargetDurationMS: command.TargetDurationMS, RequestedEpisodeCount: command.RequestedEpisodeCount, TotalEstimatedDurationMS: command.TargetDurationMS * len(proposals), InputHash: inputHash, EngineVersion: "explicit-markers-v1", SchemaVersion: "episode-plan-v1", Revision: 1, CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now, Proposals: proposals, Source: source}
+		plan := domain.Plan{ID: planID, WorkspaceID: workspaceID, ProjectID: projectID, DocumentRevisionID: source.DocumentRevisionID, Strategy: command.Strategy, Status: "review_ready", TargetDurationMS: command.TargetDurationMS, RequestedEpisodeCount: command.RequestedEpisodeCount, TotalEstimatedDurationMS: command.TargetDurationMS * len(proposals), InputHash: inputHash, EngineVersion: "explicit-markers", SchemaVersion: "episode-plan", Revision: 1, CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now, Proposals: proposals, Source: source}
 		if err = repo.CreatePlan(ctx, plan); err != nil {
 			return err
 		}

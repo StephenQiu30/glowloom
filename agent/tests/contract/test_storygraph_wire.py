@@ -24,7 +24,7 @@ FIXTURE = (
     / "tests"
     / "fixtures"
     / "agent"
-    / "storygraph-stage-wire-v1.json"
+    / "storygraph-stage-wire.json"
 )
 
 

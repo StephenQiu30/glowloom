@@ -147,7 +147,7 @@ func TestMaterializeConfirmedBibleKeepsExactIdentityAndReplaysOneReceipt(t *test
 	store.scope.Version, store.scope.Bindings = secondVersion, []bibledomain.ProductionBinding{}
 	second, err := service.MaterializeConfirmedBible(context.Background(), actor, bibleapp.MaterializeCommand{
 		BibleVersionID: secondVersion.ID, ExpectedVersion: secondVersion.Version,
-		ExpectedContentHash: secondVersion.ContentHash, IdempotencyKey: "materialize-confirmed-bible-v2",
+		ExpectedContentHash: secondVersion.ContentHash, IdempotencyKey: "materialize-next-confirmed-bible",
 	})
 	if err != nil || store.createCalls != 2 || len(store.write.NewAssets) != 0 ||
 		len(store.write.NewSpecifications) != 0 || len(store.write.NewStates) != 0 ||

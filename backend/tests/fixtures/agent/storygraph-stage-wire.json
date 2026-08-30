@@ -1,19 +1,19 @@
 {
-  "wire_schema_version": "storygraph-stage-wire-v1",
+  "wire_schema_version": "storygraph-stage-wire",
   "valid_invocation": {
     "invocation_id": "20000000-0000-0000-0000-000000000001",
     "kind": "storygraph_stage",
-    "wire_schema_version": "storygraph-stage-wire-v1",
-    "input_hash": "9919730896324116463ec8bb9d82444ae15efb83290174b6f51c0ef0b085b8e1",
+    "wire_schema_version": "storygraph-stage-wire",
+    "input_hash": "2bc80dafbd6177345297c38cae503010d98ca1eab198d4352547c9099ea9c23c",
     "execution_policy": {
       "definition_key": "storygraph_stage",
-      "definition_version": "storygraph-stage-harness-v1",
-      "prompt_version": "build-storygraph-prompt-v2",
-      "skill_bundle_version": "build-storygraph-v2",
+      "definition_version": "storygraph-stage-harness",
+      "prompt_version": "build-storygraph-prompt",
+      "skill_bundle_version": "build-storygraph",
       "skill_bundle_hash": "352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb",
-      "output_schema_version": "storygraph-candidate-schema-v2",
+      "output_schema_version": "storygraph-candidate-schema",
       "model_capability": "structured_text",
-      "codex_runtime_contract": "codex-cli-ephemeral-read-only-v1",
+      "codex_runtime_contract": "codex-cli-ephemeral-read-only",
       "allowed_tools": [],
       "max_model_calls": 2,
       "max_execution_seconds": 600
@@ -65,12 +65,12 @@
       }
     }
   },
-  "expected_input_hash": "9919730896324116463ec8bb9d82444ae15efb83290174b6f51c0ef0b085b8e1",
-  "expected_stage_instance_key": "e435634f4c78e9a66cf876c173835b7af63db6c9bbfc73c6c4fdbd25266c5cd4",
+  "expected_input_hash": "2bc80dafbd6177345297c38cae503010d98ca1eab198d4352547c9099ea9c23c",
+  "expected_stage_instance_key": "1547517384b9acf3ba5a95e3b408e577003cf4b83541349af8e76771a6dc9ea3",
   "valid_success_result": {
     "invocation_id": "20000000-0000-0000-0000-000000000001",
     "kind": "storygraph_stage",
-    "wire_schema_version": "storygraph-stage-wire-v1",
+    "wire_schema_version": "storygraph-stage-wire",
     "stage": "extract_source_evidence",
     "shard_key": "slice-0001",
     "status": "succeeded",
@@ -84,7 +84,7 @@
         }
       ]
     },
-    "input_hash": "9919730896324116463ec8bb9d82444ae15efb83290174b6f51c0ef0b085b8e1",
+    "input_hash": "2bc80dafbd6177345297c38cae503010d98ca1eab198d4352547c9099ea9c23c",
     "result_hash": "cd5611a7a24bf2b181af33e33115894b7a3ffc6a69cf39dccca547690e33b8d9",
     "issues": [],
     "executor": {
@@ -98,13 +98,13 @@
   "valid_unknown_result": {
     "invocation_id": "20000000-0000-0000-0000-000000000001",
     "kind": "storygraph_stage",
-    "wire_schema_version": "storygraph-stage-wire-v1",
+    "wire_schema_version": "storygraph-stage-wire",
     "stage": "extract_source_evidence",
     "shard_key": "slice-0001",
     "status": "unknown",
     "candidate_type": "source_evidence_candidate",
     "candidate": null,
-    "input_hash": "9919730896324116463ec8bb9d82444ae15efb83290174b6f51c0ef0b085b8e1",
+    "input_hash": "2bc80dafbd6177345297c38cae503010d98ca1eab198d4352547c9099ea9c23c",
     "result_hash": null,
     "issues": [],
     "executor": {
@@ -120,8 +120,8 @@
   },
   "execution_grant_claims": {
     "invocation_id": "20000000-0000-0000-0000-000000000001",
-    "input_hash": "9919730896324116463ec8bb9d82444ae15efb83290174b6f51c0ef0b085b8e1",
-    "execution_policy_hash": "402403d69fd5d74d28064b891e4ba794cc096bec8d8997864e9d799f96cc1763",
+    "input_hash": "2bc80dafbd6177345297c38cae503010d98ca1eab198d4352547c9099ea9c23c",
+    "execution_policy_hash": "96066fb4fc12ec30e6b2863fe23f454f12fa804c932d583d7b7c349057f17fdc",
     "expires_at": 1800000000,
     "attempt": 1,
     "fencing_token": 7

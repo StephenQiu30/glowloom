@@ -472,7 +472,7 @@ func seedPreparationWorkflowRun(
 		},
 		&model.WorkflowDefinitionVersion{
 			ID: definitionID, WorkspaceID: fixture.workspaceID, ProjectID: fixture.projectID,
-			AuthoringRevisionID: revisionID, NodeCatalogVersionID: catalogID, CompilerVersion: "generation-preparation-v1",
+			AuthoringRevisionID: revisionID, NodeCatalogVersionID: catalogID, CompilerVersion: "generation-preparation",
 			WorkflowType: "generation-preparation", WorkflowTypeVersion: "1.0.0", RuntimeContractVersion: "1.0.0",
 			Definition: []byte(`{"nodes":[]}`), ContentHash: hash, CreatedBy: fixture.editorID, CreatedAt: now,
 		},
@@ -559,7 +559,7 @@ func newPreparationCommand(
 				Revision: 1, ContentHash: strings.Repeat("7", 64),
 			},
 			OutputKind: "reference_sheet", RequiredViewRoles: []string{"back", "front", "profile"},
-			PromptVersion: "character-reference-sheet-v1", PositivePrompt: "character reference sheet",
+			PromptVersion: "character-reference-sheet", PositivePrompt: "character reference sheet",
 			NegativePrompt: "identity drift", Width: 1536, Height: 1024, NumberResults: 4, OutputFormat: "png",
 		},
 		Revision: 1, CreatedBy: fixture.editorID.String(), CreatedAt: fixture.now,

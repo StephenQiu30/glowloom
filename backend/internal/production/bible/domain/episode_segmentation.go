@@ -45,7 +45,7 @@ func BuildEpisodeSegmentationManifest(input EpisodeSegmentationManifestInput) (E
 		ManifestID: input.ManifestID, WorkspaceID: input.WorkspaceID,
 		WorkflowRunID: input.WorkflowRunID, NodeRunID: input.NodeRunID,
 		Stage: EpisodeSegmentationStage, Version: 1, RootInputHash: input.RootInputHash,
-		CoverageHash: SourceTextHash(strings.Join([]string{"episode-segmentation-coverage-v1", input.RootInputHash, strconv.Itoa(input.SourceCodePoints)}, "\x00")),
+		CoverageHash: SourceTextHash(strings.Join([]string{"episode-segmentation-coverage", input.RootInputHash, strconv.Itoa(input.SourceCodePoints)}, "\x00")),
 		Shard: EpisodeSegmentationShard{
 			Key: "episode-segmentation:global", TreePath: "global", Kind: "episode_segmentation",
 			AbsoluteStart: 0, AbsoluteEnd: input.SourceCodePoints,

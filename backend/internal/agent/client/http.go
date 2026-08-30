@@ -47,7 +47,7 @@ func (client *HTTP) Invoke(ctx context.Context, invocation contract.StageInvocat
 	if err != nil {
 		return contract.StageResult{}, err
 	}
-	endpoint := strings.TrimRight(runtime.BaseURL, "/") + "/internal/v1/invocations"
+	endpoint := strings.TrimRight(runtime.BaseURL, "/") + "/internal/storygraph/invocations"
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return contract.StageResult{}, err

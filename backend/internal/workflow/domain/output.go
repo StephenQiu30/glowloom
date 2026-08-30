@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const NodeOutputSchemaVersion = "node-output-v1"
+const NodeOutputSchemaVersion = "node-output"
 
 var (
 	nodeOutputPortPattern             = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,99}$`)

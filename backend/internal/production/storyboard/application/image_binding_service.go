@@ -332,7 +332,7 @@ func shotImageBindingInputHash(
 		ExpectedCurrentRevision   int
 		ExpectedBindingTargetHash string
 	}{
-		"shot-image-binding-command-v2", actorID, shot.ID, shot.Revision, shot.ContentHash, selection,
+		"shot-image-binding-command", actorID, shot.ID, shot.Revision, shot.ContentHash, selection,
 		expectedCurrentRevision, expectedBindingTargetHash,
 	})
 }
@@ -358,7 +358,7 @@ func buildShotImageBindingTarget(
 			Revision        int
 		}
 	}{
-		SchemaVersion: "shot-image-binding-target-v1",
+		SchemaVersion: "shot-image-binding-target",
 		Shot: struct {
 			ID, ContentHash string
 			Revision        int
@@ -461,7 +461,7 @@ func shotImageBindingContentHash(
 		Selection SelectedImageSnapshot
 		Revision  int
 	}{
-		SchemaVersion: "shot-image-binding-v1",
+		SchemaVersion: "shot-image-binding",
 		Shot: struct {
 			ID, ContentHash string
 			Revision        int

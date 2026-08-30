@@ -10,7 +10,7 @@ type HumanTaskListParams = {
   after?: string | null;
 };
 
-export function listHumanTasksApiV1ProjectsProjectIdHumanTasksGet(
+export function listHumanTasksApiProjectsProjectIdHumanTasksGet(
   params: HumanTaskListParams,
   options?: RequestOptions,
 ) {
@@ -36,7 +36,7 @@ export function listHumanTasksApiV1ProjectsProjectIdHumanTasksGet(
   );
 }
 
-export function getHumanTaskApiV1HumanTasksHumanTaskIdGet(
+export function getHumanTaskApiHumanTasksHumanTaskIdGet(
   params: { human_task_id: string },
   options?: RequestOptions,
 ) {
@@ -46,7 +46,7 @@ export function getHumanTaskApiV1HumanTasksHumanTaskIdGet(
   );
 }
 
-export function claimHumanTaskApiV1HumanTasksHumanTaskIdClaimsPost(
+export function claimHumanTaskApiHumanTasksHumanTaskIdClaimsPost(
   params: { human_task_id: string },
   body: API.HumanTaskClaimRequest,
   options?: RequestOptions,
@@ -57,7 +57,7 @@ export function claimHumanTaskApiV1HumanTasksHumanTaskIdClaimsPost(
   );
 }
 
-export function renewHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimRenewalsPost(
+export function renewHumanTaskClaimApiHumanTasksHumanTaskIdClaimRenewalsPost(
   params: { human_task_id: string },
   body: API.HumanTaskClaimTokenRequest,
   options?: RequestOptions,
@@ -68,7 +68,7 @@ export function renewHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimRenewalsPost(
   );
 }
 
-export function releaseHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimReleasesPost(
+export function releaseHumanTaskClaimApiHumanTasksHumanTaskIdClaimReleasesPost(
   params: { human_task_id: string },
   body: API.HumanTaskClaimTokenRequest,
   options?: RequestOptions,
@@ -79,7 +79,7 @@ export function releaseHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimReleasesPost
   );
 }
 
-export function decideHumanTaskApiV1HumanTasksHumanTaskIdDecisionsPost(
+export function decideHumanTaskApiHumanTasksHumanTaskIdDecisionsPost(
   params: { human_task_id: string },
   body: API.HumanTaskDecisionRequest,
   options?: RequestOptions,
@@ -90,7 +90,7 @@ export function decideHumanTaskApiV1HumanTasksHumanTaskIdDecisionsPost(
   );
 }
 
-export function resumeHumanGateApiV1ReviewDecisionsReviewDecisionIdResumePost(
+export function resumeHumanGateApiReviewDecisionsReviewDecisionIdResumePost(
   params: { review_decision_id: string },
   options?: RequestOptions,
 ) {

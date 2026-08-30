@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const SchemaVersion = "storygraph-v1"
+const SchemaVersion = "storygraph-scene-production"
 
 var (
 	hashPattern     = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -120,7 +120,7 @@ func DeriveStoryNodeKey(nodeType NodeType, owner OwnerRef) (string, error) {
 		OwnerKind      string   `json:"owner_kind"`
 		OwnerLogicalID string   `json:"owner_logical_id"`
 		FragmentKey    string   `json:"fragment_key"`
-	}{"story-node-key-v1", nodeType, owner.OwnerKind, owner.OwnerLogicalID, owner.FragmentKey}
+	}{"story-node-key-owner-fragment", nodeType, owner.OwnerKind, owner.OwnerLogicalID, owner.FragmentKey}
 	return prefixedHash("sgn_", material)
 }
 
@@ -203,7 +203,7 @@ func DeriveEdgeKey(edgeType EdgeType, fromNodeKey, toNodeKey string, qualifier E
 		From      string        `json:"from_node_key"`
 		To        string        `json:"to_node_key"`
 		Qualifier EdgeQualifier `json:"qualifier"`
-	}{"story-edge-key-v1", edgeType, fromNodeKey, toNodeKey, qualifier}
+	}{"story-edge-key-qualified-endpoints", edgeType, fromNodeKey, toNodeKey, qualifier}
 	return prefixedHash("sge_", material)
 }
 

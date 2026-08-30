@@ -85,7 +85,7 @@ func TestNodeInputContractRejectsAmbiguousBindingsAndOutputPortDrift(t *testing.
 	if _, _, _, err := workflow.BuildNodeInput(invalid); err == nil {
 		t.Fatal("node output input binding accepted a variable value")
 	}
-	if _, _, _, err := workflow.ParseNodeInput(json.RawMessage(`{"schema_version":"node-input-v1","config":{},"bindings":[],"frozen_inputs":[],"extra":true}`)); err == nil {
+	if _, _, _, err := workflow.ParseNodeInput(json.RawMessage(`{"schema_version":"node-input","config":{},"bindings":[],"frozen_inputs":[],"extra":true}`)); err == nil {
 		t.Fatal("node input parser accepted an unknown field")
 	}
 

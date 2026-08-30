@@ -2,7 +2,7 @@ import request, { type RequestOptions } from "@/lib/request";
 
 type Envelope<T> = { data: T };
 
-export function listProjectsApiV1ProjectsGet(
+export function listProjectsApiProjectsGet(
   params: {
     workspace_id: string;
     include_archived: boolean;
@@ -21,7 +21,7 @@ export function listProjectsApiV1ProjectsGet(
   });
 }
 
-export function createProjectApiV1ProjectsPost(
+export function createProjectApiProjectsPost(
   body: API.ProjectCreateRequest,
   options?: RequestOptions,
 ) {
@@ -32,7 +32,7 @@ export function createProjectApiV1ProjectsPost(
   });
 }
 
-export function getProjectApiV1ProjectsProjectIdGet(
+export function getProjectApiProjectsProjectIdGet(
   params: { project_id: string },
   options?: RequestOptions,
 ) {
@@ -42,7 +42,7 @@ export function getProjectApiV1ProjectsProjectIdGet(
   );
 }
 
-export function listEpisodesApiV1ProjectsProjectIdEpisodesGet(
+export function listEpisodesApiProjectsProjectIdEpisodesGet(
   params: { project_id: string; include_archived: boolean },
   options?: RequestOptions,
 ) {

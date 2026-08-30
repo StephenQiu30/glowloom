@@ -64,7 +64,7 @@ func NewSpecificationVersion(input SpecificationVersionInput) (SpecificationVers
 	value.ContentHash, err = CanonicalStoryHash(struct {
 		Schema, AssetID, Kind, EntityKey string
 		Snapshot                         json.RawMessage
-	}{"production-bible-specification-v1", value.AssetID, value.Kind, value.EntityKey, value.Snapshot})
+	}{"production-bible-specification", value.AssetID, value.Kind, value.EntityKey, value.Snapshot})
 	if err != nil {
 		return SpecificationVersion{}, err
 	}
@@ -175,7 +175,7 @@ func NewProductionBinding(input ProductionBindingInput) (ProductionBinding, erro
 		Specification                                       MaterializedSpecification
 		States                                              []MaterializedState
 	}{
-		"production-binding-v1", value.BibleVersionID, value.BibleVersionHash, value.EntityKey,
+		"production-binding", value.BibleVersionID, value.BibleVersionHash, value.EntityKey,
 		value.Asset, value.Specification, value.States,
 	})
 	if err != nil {
@@ -304,7 +304,7 @@ func NewMaterialization(
 		States                                   []MaterializedState
 		Bindings                                 []MaterializedBinding
 	}{
-		"production-bible-materialization-v1", bibleVersionID, bibleVersionHash,
+		"production-bible-materialization", bibleVersionID, bibleVersionHash,
 		assets, specifications, states, bindings,
 	})
 	if err != nil {

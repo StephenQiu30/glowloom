@@ -494,7 +494,7 @@ func newReferenceExecutorTarget(
 				Revision: 1, ContentHash: strings.Repeat("e", 64),
 			},
 			OutputKind: "reference_sheet", RequiredViewRoles: []string{"front", "profile", "back"},
-			PromptVersion: "character-reference-sheet-v1", PositivePrompt: "character reference sheet",
+			PromptVersion: "character-reference-sheet", PositivePrompt: "character reference sheet",
 			NegativePrompt: "identity drift", Width: 1536, Height: 1024, NumberResults: 4, OutputFormat: "PNG",
 		},
 		Revision: 1, CreatedBy: userID, CreatedAt: time.Now().UTC(),
@@ -511,7 +511,7 @@ func newReferenceImageProviderStub(workspaceID, projectID, userID string) *image
 		Purpose: generationdomain.ProviderPurposeReferenceAsset, ProviderKey: "controlled-image",
 		Modality: generationdomain.MediaModalityImage, ConnectionVersionID: uuid.NewString(),
 		CredentialVersionID: uuid.NewString(), ModelProfileVersionID: uuid.NewString(),
-		AdapterContractVersion: "controlled-image-v1", ContentHash: strings.Repeat("5", 64), Revision: 1,
+		AdapterContractVersion: "controlled-image", ContentHash: strings.Repeat("5", 64), Revision: 1,
 		CreatedBy: userID, CreatedAt: time.Now().UTC(),
 	}}
 }

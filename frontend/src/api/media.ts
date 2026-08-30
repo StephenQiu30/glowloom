@@ -2,7 +2,7 @@ import request, { type RequestOptions } from "@/lib/request";
 
 type Envelope<T> = { data: T };
 
-export function initializeUploadApiV1MediaUploadsPost(
+export function initializeUploadApiMediaUploadsPost(
   body: API.UploadDeclaration,
   options?: RequestOptions,
 ) {
@@ -12,7 +12,7 @@ export function initializeUploadApiV1MediaUploadsPost(
   );
 }
 
-export function completeUploadApiV1MediaUploadsUploadSessionIdCompletePost(
+export function completeUploadApiMediaUploadsUploadSessionIdCompletePost(
   params: { upload_session_id: string },
   options?: RequestOptions,
 ) {
@@ -22,7 +22,7 @@ export function completeUploadApiV1MediaUploadsUploadSessionIdCompletePost(
   );
 }
 
-export function getMediaApiV1MediaVersionIdGet(
+export function getMediaApiMediaVersionIdGet(
   params: { version_id: string },
   options?: RequestOptions,
 ) {

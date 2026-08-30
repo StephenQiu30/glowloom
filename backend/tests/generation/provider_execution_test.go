@@ -239,7 +239,7 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	); generationErrorCode(err) != "not_found" {
 		t.Fatalf("missing configured Provider binding did not fail before generation: %v", err)
 	}
-	binding := seedControlledProjectProviderBinding(t, create, fixture, "controlled-image", "image-quality-v1", 1)
+	binding := seedControlledProjectProviderBinding(t, create, fixture, "controlled-image", "image-quality", 1)
 	bindingResolver.set(binding)
 	var configuredBindingCount int64
 	if err = database.Model(&model.ProjectProviderBindingVersion{}).
@@ -359,15 +359,15 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 		t.Fatalf("terminal Provider replay queried remote boundary: submit %d query %d", submitCalls, queryCalls)
 	}
 
-	bindingV2 := seedControlledProjectProviderBinding(t, create, fixture, "controlled-image", "image-quality-v2", 2)
-	bindingResolver.set(bindingV2)
-	if bindingV2.Binding.Revision != 2 || terminalReplay.Request.BindingID != binding.Binding.ID {
-		t.Fatalf("append Provider binding without rerouting old request: v2=%#v old=%#v", bindingV2, terminalReplay)
+	rotatedBinding := seedControlledProjectProviderBinding(t, create, fixture, "controlled-image", "image-quality-updated", 2)
+	bindingResolver.set(rotatedBinding)
+	if rotatedBinding.Binding.Revision != 2 || terminalReplay.Request.BindingID != binding.Binding.ID {
+		t.Fatalf("append Provider binding without rerouting old request: rotated=%#v old=%#v", rotatedBinding, terminalReplay)
 	}
-	if configuredV2, configureErr := providers.RequireProjectProviderBinding(
+	if configuredRotatedBinding, configureErr := providers.RequireProjectProviderBinding(
 		ctx, fixture.owner, fixture.projectID.String(), generationdomain.ProviderPurposeReferenceAsset,
-	); configureErr != nil || configuredV2.ID != bindingV2.Binding.ID {
-		t.Fatalf("activate configured Provider binding v2: binding=%#v err=%v", configuredV2, configureErr)
+	); configureErr != nil || configuredRotatedBinding.ID != rotatedBinding.Binding.ID {
+		t.Fatalf("activate configured Provider rotated binding: binding=%#v err=%v", configuredRotatedBinding, configureErr)
 	}
 
 	jobKeyDriftClaim := prepareAndClaimProviderIntent(t, ctx, preparations, fixture, 1, "job-key-drift", strings.Repeat("6", 64))
@@ -421,7 +421,7 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	})
 	if err != nil || failed.Job.Status != generationdomain.ProviderJobFailed ||
 		failed.Intent.Status != generationdomain.IntentFailed || failed.ProviderReceipt.FailureCode != "content_rejected" ||
-		failed.Request.BindingID != bindingV2.Binding.ID {
+		failed.Request.BindingID != rotatedBinding.Binding.ID {
 		t.Fatalf("apply known Provider failure: result=%#v err=%v", failed, err)
 	}
 	assertProviderReservations(t, ctx, costs, quotas, fixture, failed.Intent, costdomain.ReservationReleased, quotadomain.ReservationReleased)
@@ -545,7 +545,7 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 		generationapp.ProviderConfig{
 			Now: func() time.Time { return currentTime }, NewID: uuid.NewString,
 			Bindings: &transactionalControlledBindingResolver{
-				transactions: generationgorm.NewProviderConfigurationStore(database), resolved: bindingV2,
+				transactions: generationgorm.NewProviderConfigurationStore(database), resolved: rotatedBinding,
 			},
 		},
 	)
@@ -596,12 +596,12 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 		generationapp.ProviderConfigurationConfig{Now: func() time.Time { return currentTime }, NewID: uuid.NewString},
 	)
 	disabledConnection, err := configuration.SetConnectionState(ctx, fixture.owner, generationapp.SetProviderConnectionStateCommand{
-		WorkspaceID: fixture.workspaceID.String(), ConnectionKey: bindingV2.Connection.ConnectionKey,
-		State: generationdomain.ProviderStateDisabled, ExpectedRevision: bindingV2.Connection.Revision,
-		ExpectedContentHash: bindingV2.Connection.ContentHash,
+		WorkspaceID: fixture.workspaceID.String(), ConnectionKey: rotatedBinding.Connection.ConnectionKey,
+		State: generationdomain.ProviderStateDisabled, ExpectedRevision: rotatedBinding.Connection.Revision,
+		ExpectedContentHash: rotatedBinding.Connection.ContentHash,
 		IdempotencyKey:      "generation-provider-disable-in-resolver-gap",
 	})
-	if err != nil || disabledConnection.Connection.Revision != bindingV2.Connection.Revision+1 {
+	if err != nil || disabledConnection.Connection.Revision != rotatedBinding.Connection.Revision+1 {
 		t.Fatalf("disable Provider connection in resolver gap: result=%#v err=%v", disabledConnection, err)
 	}
 	close(releaseResolution)
@@ -743,7 +743,7 @@ func seedControlledProjectProviderBinding(
 		Revision: revision, SourcePresetKey: "controlled.image", SourcePresetVersion: 1,
 		PresetSnapshotHash: strings.Repeat("b", 64), ProviderKey: providerKey, DisplayName: "Controlled image",
 		CredentialVersionID: credentialID.String(), ResolvedConfig: map[string]any{},
-		State: generationdomain.ProviderStateEnabled, AdapterContractVersion: "controlled-image-v1",
+		State: generationdomain.ProviderStateEnabled, AdapterContractVersion: "controlled-image",
 		CreatedBy: fixture.ownerID.String(), CreatedAt: createdAt,
 	}
 	connectionDomain.ContentHash = controlledProviderConnectionContentHash(t, connectionDomain)
@@ -753,7 +753,7 @@ func seedControlledProjectProviderBinding(
 		CreationSource: map[string]any{"kind": "preset"}, ConnectionKey: "controlled-primary",
 		ProviderKey: providerKey, ExternalModelID: externalModelID,
 		Modality: generationdomain.MediaModalityImage, Family: "controlled_image",
-		AdapterTransportContract: "controlled-image-v1", CapabilitySchemaVersion: "controlled-image-v1",
+		AdapterTransportContract: "controlled-image", CapabilitySchemaVersion: "controlled-image",
 		BillingMetric: "generation.image.call", Defaults: map[string]any{},
 		State: generationdomain.ProviderStateEnabled, CreatedBy: fixture.ownerID.String(), CreatedAt: createdAt,
 	}
@@ -769,7 +769,7 @@ func seedControlledProjectProviderBinding(
 		Revision: revision, SourcePresetKey: "controlled.image", SourcePresetVersion: 1,
 		PresetSnapshotHash: strings.Repeat("b", 64), ProviderKey: providerKey, DisplayName: "Controlled image",
 		CredentialVersionID: credentialID, ResolvedConfig: []byte(`{}`),
-		State: generationdomain.ProviderStateEnabled, AdapterContractVersion: "controlled-image-v1",
+		State: generationdomain.ProviderStateEnabled, AdapterContractVersion: "controlled-image",
 		ContentHash: connectionDomain.ContentHash, CreatedBy: fixture.ownerID, CreatedAt: createdAt,
 	}
 	profile := model.ProviderModelProfileVersion{
@@ -777,7 +777,7 @@ func seedControlledProjectProviderBinding(
 		Revision: revision, CreationSource: []byte(`{"kind":"preset"}`),
 		ConnectionKey: "controlled-primary", ProviderKey: providerKey, ExternalModelID: externalModelID,
 		Modality: generationdomain.MediaModalityImage, Family: "controlled_image",
-		AdapterTransportContract: "controlled-image-v1", CapabilitySchemaVersion: "controlled-image-v1",
+		AdapterTransportContract: "controlled-image", CapabilitySchemaVersion: "controlled-image",
 		BillingMetric: "generation.image.call", Defaults: []byte(`{}`),
 		State: generationdomain.ProviderStateEnabled, ContentHash: profileDomain.ContentHash,
 		CreatedBy: fixture.ownerID, CreatedAt: createdAt,
@@ -787,7 +787,7 @@ func seedControlledProjectProviderBinding(
 		Purpose: generationdomain.ProviderPurposeReferenceAsset, Revision: revision,
 		ConnectionVersionID: connectionID.String(), CredentialVersionID: credentialID.String(),
 		ModelProfileVersionID: profileID.String(), ProviderKey: providerKey, Modality: generationdomain.MediaModalityImage,
-		AdapterContractVersion: "controlled-image-v1", CreatedBy: fixture.ownerID.String(), CreatedAt: createdAt,
+		AdapterContractVersion: "controlled-image", CreatedBy: fixture.ownerID.String(), CreatedAt: createdAt,
 	}
 	hashInput := bindingDomain
 	hashInput.ID, hashInput.ContentHash, hashInput.CreatedBy, hashInput.CreatedAt = "", "", "", time.Time{}
@@ -800,7 +800,7 @@ func seedControlledProjectProviderBinding(
 		ID: bindingID, WorkspaceID: fixture.workspaceID, ProjectID: fixture.projectID,
 		Purpose: bindingDomain.Purpose, Revision: revision, ConnectionVersionID: connectionID,
 		CredentialVersionID: credentialID, ModelProfileVersionID: profileID, ProviderKey: providerKey,
-		Modality: generationdomain.MediaModalityImage, AdapterContractVersion: "controlled-image-v1",
+		Modality: generationdomain.MediaModalityImage, AdapterContractVersion: "controlled-image",
 		ContentHash: bindingDomain.ContentHash, CreatedBy: fixture.ownerID, CreatedAt: createdAt,
 	}
 	for _, record := range []any{&credential, &connection, &profile, &binding} {

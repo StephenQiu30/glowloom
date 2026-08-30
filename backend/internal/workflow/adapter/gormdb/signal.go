@@ -403,11 +403,11 @@ func expectedHumanGateSubject(
 	if err != nil {
 		return "", uuid.Nil, 0, "", err
 	}
-	productionBibleV2 := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
-	episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
-	episodePlanningV2 := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
-	storyboardIntentV2 := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
-	if !productionBibleV2 && !episodePlanV2 && !episodePlanningV2 && !storyboardIntentV2 {
+	productionBibleOwnerApply := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
+	episodePlanOwnerApply := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
+	episodePlanningOwnerApply := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
+	storyboardIntentOwnerApply := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
+	if !productionBibleOwnerApply && !episodePlanOwnerApply && !episodePlanningOwnerApply && !storyboardIntentOwnerApply {
 		return humanGateSubjectType(node.Executor), node.ID, node.Revision, resolved.InputHash, nil
 	}
 	if len(resolved.Input.Bindings) != 1 {
@@ -415,11 +415,11 @@ func expectedHumanGateSubject(
 	}
 	candidate := resolved.Input.Bindings[0]
 	expectedValueType, subjectType := "story_reconciliation_candidate", "story_reconciliation_candidate"
-	if episodePlanV2 {
+	if episodePlanOwnerApply {
 		expectedValueType, subjectType = "episode_segmentation_candidate", "episode_plan_candidate"
-	} else if episodePlanningV2 {
+	} else if episodePlanningOwnerApply {
 		expectedValueType, subjectType = "episode_planning_candidate_set", "planning_candidate"
-	} else if storyboardIntentV2 {
+	} else if storyboardIntentOwnerApply {
 		expectedValueType, subjectType = "storyboard_intent_candidate_set", "storyboard_intent_candidate"
 	}
 	if candidate.Port != "candidate" || candidate.ValueType != expectedValueType ||
@@ -539,13 +539,13 @@ func validateHumanGateOwnerEvidence(
 		return normalizeNotFound(err)
 	}
 	expectedOperation, supported := humanGateOwnerOperation(node)
-	episodePlanV2 := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
-	episodePlanningV2 := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
-	storyboardIntentV2 := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
+	episodePlanOwnerApply := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
+	episodePlanningOwnerApply := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
+	storyboardIntentOwnerApply := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
 	receiptMatchesOutput := receipt.ResourceID.String() == binding.ReferenceID
-	if episodePlanV2 || episodePlanningV2 {
+	if episodePlanOwnerApply || episodePlanningOwnerApply {
 		receiptMatchesOutput = receipt.ID.String() == binding.ReferenceID && receipt.ResourceID.String() == candidate.ReferenceID
-	} else if storyboardIntentV2 {
+	} else if storyboardIntentOwnerApply {
 		receiptMatchesOutput = receipt.ID.String() == binding.ReferenceID
 	}
 	if !supported || *apply.OwnerOperation != expectedOperation || receipt.WorkspaceID != run.WorkspaceID || receipt.Operation != *apply.OwnerOperation ||
@@ -570,7 +570,7 @@ func validateHumanGateOwnerEvidence(
 			return errors.New("Production Bible Version does not match the frozen Candidate and ReviewDecision")
 		}
 	}
-	if episodePlanV2 {
+	if episodePlanOwnerApply {
 		var set struct {
 			ID                    string `json:"id"`
 			WorkspaceID           string `json:"workspace_id"`
@@ -622,7 +622,7 @@ func validateHumanGateOwnerEvidence(
 			}
 		}
 	}
-	if episodePlanningV2 {
+	if episodePlanningOwnerApply {
 		var set planningapp.PlanningOwnerSetReference
 		if err := json.Unmarshal(receipt.Result, &set); err != nil || set.ID != receipt.ID.String() ||
 			set.WorkspaceID != run.WorkspaceID.String() || set.ProjectID != run.ProjectID.String() ||
@@ -634,7 +634,7 @@ func validateHumanGateOwnerEvidence(
 		setHash, hashErr := platformcommand.InputHash(struct {
 			Schema     string                                   `json:"schema"`
 			Structures []planningapp.PlanningStructureReference `json:"structures"`
-		}{"planning-owner-set-v1", set.Structures})
+		}{"planning-owner-set", set.Structures})
 		if hashErr != nil || setHash != set.ContentHash {
 			return errors.New("Planning owner set Receipt content hash has drifted")
 		}
@@ -654,7 +654,7 @@ func validateHumanGateOwnerEvidence(
 			observedHash, hashErr := bibledomain.CanonicalStoryHash(struct {
 				Schema string                 `json:"schema"`
 				Scenes []planningdomain.Scene `json:"scenes"`
-			}{"episode-planning-owner-v1", scenes})
+			}{"episode-planning-owner", scenes})
 			if hashErr != nil || observedHash != structure.ResultHash ||
 				structure.WorkspaceID != run.WorkspaceID || structure.ProjectID != run.ProjectID ||
 				structure.EpisodeID.String() != item.EpisodeID || structure.ScriptVersionID.String() != item.ScriptVersionID ||
@@ -665,10 +665,10 @@ func validateHumanGateOwnerEvidence(
 			}
 		}
 	}
-	if storyboardIntentV2 {
+	if storyboardIntentOwnerApply {
 		var approved storyboarddomain.ApprovedIntentSet
 		if err := json.Unmarshal(receipt.Result, &approved); err != nil ||
-			approved.SchemaVersion != "approved-storyboard-intents-v1" || approved.ID != receipt.ID.String() ||
+			approved.SchemaVersion != "approved-storyboard-intents" || approved.ID != receipt.ID.String() ||
 			approved.WorkspaceID != run.WorkspaceID.String() || approved.ProjectID != run.ProjectID.String() ||
 			approved.CandidateRevisionID != candidate.ReferenceID ||
 			approved.CandidateRevisionHash != candidate.ContentHash ||

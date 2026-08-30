@@ -160,7 +160,7 @@ func TestCanonicalSnapshotIsDeterministicAndSeparatesTopologyFromOwnerContent(t 
 }
 
 func TestSnapshotStrictDecodeRejectsCanvasStateAndInvalidEvidence(t *testing.T) {
-	if _, err := storygraph.DecodeSnapshot([]byte(`{"schema_version":"storygraph-v1","nodes":[],"edges":[],"viewport":{"x":0}}`)); err == nil {
+	if _, err := storygraph.DecodeSnapshot([]byte(`{"schema_version":"storygraph-scene-production","nodes":[],"edges":[],"viewport":{"x":0}}`)); err == nil {
 		t.Fatal("StoryGraph snapshot accepted Canvas viewport state")
 	}
 	invalid := storygraph.EvidenceRef{DocumentRevisionID: "80000000-0000-0000-0000-000000000001", AbsoluteStart: 8, AbsoluteEnd: 4, TextHash: hashOf("a")}
@@ -175,7 +175,7 @@ func loadStoryGraphFixture(t *testing.T) storyGraphFixture {
 	if !ok {
 		t.Fatal("resolve fixture path")
 	}
-	contents, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "fixtures", "storygraph", "contract-v1.json"))
+	contents, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "fixtures", "storygraph", "storygraph-contract.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

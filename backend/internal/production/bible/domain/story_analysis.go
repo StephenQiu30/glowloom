@@ -213,7 +213,7 @@ func BuildStoryAnalysisManifests(input StoryAnalysisManifestInput) (StoryAnalysi
 		Schema      string `json:"schema"`
 		RootKey     string `json:"root_shard_key"`
 		SubtreeHash string `json:"subtree_hash"`
-	}{"story-reconcile-coverage-v1", rootKey, reconcileShards[len(reconcileShards)-1].SubtreeHash})
+	}{"story-reconcile-coverage", rootKey, reconcileShards[len(reconcileShards)-1].SubtreeHash})
 	if err != nil {
 		return StoryAnalysisManifest{}, StoryReconcileManifest{}, err
 	}
@@ -430,7 +430,7 @@ func storyCandidatePartitionHash(stage, shardKey, sourceHash string, start, end 
 	return CanonicalStoryHash(struct {
 		Schema, Stage, ShardKey, SourceHash string
 		Start, End                          int
-	}{"story-candidate-partition-v1", stage, shardKey, sourceHash, start, end})
+	}{"story-candidate-partition", stage, shardKey, sourceHash, start, end})
 }
 
 func buildStoryReconcileShard(key, treePath string, level int, children []StoryReconcileChild) (StoryReconcileShard, error) {
@@ -635,7 +635,7 @@ func storyReconcileCoverageHash(rootKey, subtreeHash string) (string, error) {
 		Schema      string `json:"schema"`
 		RootKey     string `json:"root_shard_key"`
 		SubtreeHash string `json:"subtree_hash"`
-	}{"story-reconcile-coverage-v1", rootKey, subtreeHash})
+	}{"story-reconcile-coverage", rootKey, subtreeHash})
 }
 
 func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile StoryReconcileManifest) error {
@@ -834,7 +834,7 @@ func storyAnalysisCoverageHash(fragments []StoryAnalysisEvidenceFragment) (strin
 	return CanonicalStoryHash(struct {
 		Schema    string                          `json:"schema"`
 		Fragments []StoryAnalysisEvidenceFragment `json:"fragments"`
-	}{"story-analysis-coverage-v1", fragments})
+	}{"story-analysis-coverage", fragments})
 }
 
 func storyReconcileSubtreeHash(level int, children []StoryReconcileChild) (string, error) {
@@ -842,7 +842,7 @@ func storyReconcileSubtreeHash(level int, children []StoryReconcileChild) (strin
 		Schema   string                `json:"schema"`
 		Level    int                   `json:"level"`
 		Children []StoryReconcileChild `json:"children"`
-	}{"story-reconcile-subtree-v1", level, children})
+	}{"story-reconcile-subtree", level, children})
 }
 
 func storyAnalysisManifestHash(value StoryAnalysisManifest) (string, error) {
@@ -857,7 +857,7 @@ func storyAnalysisManifestHash(value StoryAnalysisManifest) (string, error) {
 		RootInputHash      string               `json:"root_input_hash"`
 		Shards             []StoryAnalysisShard `json:"shards"`
 		CoverageHash       string               `json:"coverage_hash"`
-	}{"story-analysis-shard-manifest-v1", value.Version, value.ParentManifestHash, value.WorkspaceID, value.WorkflowRunID,
+	}{"story-analysis-shard-manifest", value.Version, value.ParentManifestHash, value.WorkspaceID, value.WorkflowRunID,
 		value.NodeRunID, value.Stage, value.RootInputHash, value.Shards, value.CoverageHash})
 }
 
@@ -875,7 +875,7 @@ func storyReconcileManifestHash(value StoryReconcileManifest) (string, error) {
 		RootShardKey       string                `json:"root_shard_key"`
 		Shards             []StoryReconcileShard `json:"shards"`
 		CoverageHash       string                `json:"coverage_hash"`
-	}{"story-reconcile-shard-manifest-v1", value.Version, value.ParentManifestHash, value.WorkspaceID, value.WorkflowRunID,
+	}{"story-reconcile-shard-manifest", value.Version, value.ParentManifestHash, value.WorkspaceID, value.WorkflowRunID,
 		value.NodeRunID, value.Stage, value.RootInputHash, value.FanIn, value.RootShardKey,
 		value.Shards, value.CoverageHash})
 }

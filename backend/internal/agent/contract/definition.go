@@ -42,10 +42,10 @@ type AgentDefinitionManifest struct {
 
 func StoryGraphDefinition() AgentDefinitionManifest {
 	return AgentDefinitionManifest{
-		DefinitionKey: "storygraph_stage", DefinitionVersion: "storygraph-stage-harness-v1",
-		PromptVersion: "build-storygraph-prompt-v2", SkillBundleVersion: "build-storygraph-v2",
-		SkillBundleHash: StoryGraphSkillBundleHash, OutputSchemaVersion: "storygraph-candidate-schema-v2",
-		ModelCapability: "structured_text", CodexRuntimeContract: "codex-cli-ephemeral-read-only-v1",
+		DefinitionKey: "storygraph_stage", DefinitionVersion: "storygraph-stage-harness",
+		PromptVersion: "build-storygraph-prompt", SkillBundleVersion: "build-storygraph",
+		SkillBundleHash: StoryGraphSkillBundleHash, OutputSchemaVersion: "storygraph-candidate-schema",
+		ModelCapability: "structured_text", CodexRuntimeContract: "codex-cli-ephemeral-read-only",
 		AllowedTools: []string{}, MaxModelCalls: 2, MaxExecutionSeconds: 600,
 		Stages: []StageDefinition{
 			{"extract_source_evidence", "source_evidence_candidate", []string{"source-evidence.md"}},

@@ -64,7 +64,7 @@ func (repo *referenceTargetBuilderRepository) LoadReferenceTargetSource(
 	visualHash, visualErr := storyboarddomain.ApprovedIntentVisualRequirementsHash(approved.Scenes)
 	contentHash, contentErr := storyboarddomain.ApprovedIntentSetContentHash(approved)
 	if visualErr != nil || contentErr != nil || visualHash != approved.VisualRequirementsHash || contentHash != approved.ContentHash ||
-		approved.SchemaVersion != "approved-storyboard-intents-v1" || approved.ID != receipt.ID.String() ||
+		approved.SchemaVersion != "approved-storyboard-intents" || approved.ID != receipt.ID.String() ||
 		approved.WorkspaceID != receipt.WorkspaceID.String() || receipt.Operation != "storyboard.freeze_intent_set" ||
 		receipt.ResourceID.String() != approved.DraftSetID || len(approved.Scenes) == 0 ||
 		!validBuilderUUIDs(approved.ProjectID, approved.DraftSetID, approved.CandidateRevisionID, approved.GraphVersionID,

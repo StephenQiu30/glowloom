@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const NodeCacheKeySchemaVersion = "node-cache-key-v1"
+const NodeCacheKeySchemaVersion = "node-cache-key"
 
 var nodeCacheHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 

@@ -8,7 +8,7 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock("@/api/identity", async () => ({
   ...(await vi.importActual<typeof import("@/api/identity")>("@/api/identity")),
-  meApiV1MeGet: apiMocks.me,
+  meApiMeGet: apiMocks.me,
 }));
 
 import { AppProviders } from "@/app/providers";

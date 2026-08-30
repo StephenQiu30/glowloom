@@ -2,7 +2,7 @@ import request, { type RequestOptions } from "@/lib/request";
 
 type Envelope<T> = { data: T };
 
-export function createEpisodePlanApiV1DocumentRevisionsRevisionIdEpisodePlansPost(
+export function createEpisodePlanApiDocumentRevisionsRevisionIdEpisodePlansPost(
   params: { revision_id: string },
   body: API.EpisodePlanCreateRequest,
   options?: RequestOptions,
@@ -13,7 +13,7 @@ export function createEpisodePlanApiV1DocumentRevisionsRevisionIdEpisodePlansPos
   );
 }
 
-export function getEpisodePlanApiV1EpisodePlansPlanIdGet(
+export function getEpisodePlanApiEpisodePlansPlanIdGet(
   params: { plan_id: string },
   options?: RequestOptions,
 ) {
@@ -23,7 +23,7 @@ export function getEpisodePlanApiV1EpisodePlansPlanIdGet(
   );
 }
 
-export function confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPost(
+export function confirmEpisodePlanApiEpisodePlansPlanIdConfirmPost(
   params: { plan_id: string },
   body: API.ConfirmEpisodePlanRequest,
   options?: RequestOptions,
@@ -34,7 +34,7 @@ export function confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPost(
   );
 }
 
-export function materializeEpisodePlanApiV1EpisodePlansPlanIdMaterializationsPost(
+export function materializeEpisodePlanApiEpisodePlansPlanIdMaterializationsPost(
   params: { plan_id: string },
   body: API.MaterializeEpisodePlanRequest,
   options?: RequestOptions,
@@ -45,7 +45,7 @@ export function materializeEpisodePlanApiV1EpisodePlansPlanIdMaterializationsPos
   );
 }
 
-export function publishImportCommitApiV1ImportCommitsCommitIdPublishPost(
+export function publishImportCommitApiImportCommitsCommitIdPublishPost(
   params: { commit_id: string },
   body: API.PublishImportCommitRequest,
   options?: RequestOptions,

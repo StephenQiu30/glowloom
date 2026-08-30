@@ -26,7 +26,7 @@ func TestStoryGraphDefinitionFreezesTheOnlyAgentManifest(t *testing.T) {
 	}
 	_, currentFile, _, _ := runtime.Caller(0)
 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../.."))
-	encoded, err := os.ReadFile(filepath.Join(repositoryRoot, "backend/tests/fixtures/agent/storygraph-definition-v1.json"))
+	encoded, err := os.ReadFile(filepath.Join(repositoryRoot, "backend/tests/fixtures/agent/storygraph-definition.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

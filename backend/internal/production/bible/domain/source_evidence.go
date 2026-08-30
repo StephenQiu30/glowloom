@@ -345,7 +345,7 @@ func SourceEvidenceCandidateEvidence(value SourceEvidenceCandidate) []Evidence {
 }
 
 func SourceEvidenceAggregateStageInstanceKey(manifest SourceEvidenceManifest) string {
-	material := "storygraph-stage-aggregate-v1" + manifest.Stage + manifest.ManifestHash + manifest.RootInputHash
+	material := "storygraph-stage-aggregate" + manifest.Stage + manifest.ManifestHash + manifest.RootInputHash
 	return SourceTextHash(material)
 }
 
@@ -594,7 +594,7 @@ func sourceCoverageHash(rootHash string, codePointCount int) (string, error) {
 		Schema         string `json:"schema"`
 		RootInputHash  string `json:"root_input_hash"`
 		CodePointCount int    `json:"code_point_count"`
-	}{"source-evidence-coverage-v1", rootHash, codePointCount})
+	}{"source-evidence-coverage", rootHash, codePointCount})
 	if err != nil {
 		return "", err
 	}
@@ -618,7 +618,7 @@ func sourceManifestHash(value SourceEvidenceManifest) (string, error) {
 		Shards             []SourceEvidenceShard `json:"shards"`
 		CoverageHash       string                `json:"coverage_hash"`
 	}{
-		"source-evidence-shard-manifest-v1", value.Version, value.ParentManifestHash,
+		"source-evidence-shard-manifest", value.Version, value.ParentManifestHash,
 		value.WorkspaceID, value.WorkflowRunID, value.NodeRunID, value.Stage,
 		value.RootInputHash, shards, value.CoverageHash,
 	})

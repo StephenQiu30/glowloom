@@ -86,7 +86,7 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 	service := generationapp.NewService(generationStore, generationasset.NewReadiness(assetService), generationapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 		ImageQC: generationapp.ImageQCPolicy{
-			Version: "image-deterministic-v1", AllowedMediaTypes: []string{"image/jpeg", "image/png"},
+			Version: "image-deterministic", AllowedMediaTypes: []string{"image/jpeg", "image/png"},
 			MinWidth: 4, MinHeight: 3, MaxPixels: 100,
 		},
 	})
@@ -127,7 +127,7 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 		if result.Candidate.ID != candidateID || result.Report.ID != reportID || result.Receipt.ID != receiptID ||
 			result.Candidate.Status != generationdomain.CandidateQCPassed || result.Report.Status != generationdomain.QCPassed ||
 			result.Candidate.ArtifactID != ready.ID || result.Candidate.ArtifactRevision != ready.Revision ||
-			result.Report.Policy.Version != "image-deterministic-v1" || result.Report.PolicyHash == "" || len(result.Report.FailureCodes) != 0 {
+			result.Report.Policy.Version != "image-deterministic" || result.Report.PolicyHash == "" || len(result.Report.FailureCodes) != 0 {
 			t.Fatalf("concurrent candidate registration drifted: %#v", result)
 		}
 	}
@@ -171,7 +171,7 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 	pngNotAllowed := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "png-not-allowed", true)
 	jpegOnlyService := generationapp.NewService(generationStore, generationasset.NewReadiness(assetService), generationapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
-		ImageQC: generationapp.ImageQCPolicy{Version: "jpeg-only-v1", AllowedMediaTypes: []string{"image/jpeg"}, MinWidth: 4, MinHeight: 3, MaxPixels: 100},
+		ImageQC: generationapp.ImageQCPolicy{Version: "jpeg-only", AllowedMediaTypes: []string{"image/jpeg"}, MinWidth: 4, MinHeight: 3, MaxPixels: 100},
 	})
 	mediaFailed, err := jpegOnlyService.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{
 		ArtifactID: pngNotAllowed.ID, IdempotencyKey: "candidate-png-not-allowed",
@@ -205,7 +205,7 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 	}
 	driftedPolicyService := generationapp.NewService(generationStore, generationasset.NewReadiness(assetService), generationapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
-		ImageQC: generationapp.ImageQCPolicy{Version: "image-deterministic-v2", AllowedMediaTypes: []string{"image/jpeg", "image/png"}, MinWidth: 5, MinHeight: 3, MaxPixels: 100},
+		ImageQC: generationapp.ImageQCPolicy{Version: "image-deterministic-strict-width", AllowedMediaTypes: []string{"image/jpeg", "image/png"}, MinWidth: 5, MinHeight: 3, MaxPixels: 100},
 	})
 	if _, err = driftedPolicyService.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{
 		ArtifactID: ready.ID, IdempotencyKey: "candidate-ready-policy-drift",

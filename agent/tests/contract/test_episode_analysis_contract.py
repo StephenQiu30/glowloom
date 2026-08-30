@@ -28,20 +28,20 @@ def _stage_invocation(stage: str, payload: dict[str, object]) -> StoryGraphStage
     draft = StoryGraphStageInvocation.model_construct(
         invocation_id=UUID("71000000-0000-0000-0000-000000000001"),
         kind="storygraph_stage",
-        wire_schema_version="storygraph-stage-wire-v1",
+        wire_schema_version="storygraph-stage-wire",
         input_hash="0" * 64,
         execution_policy=StoryGraphExecutionPolicy.model_validate(
             {
                 "definition_key": "storygraph_stage",
-                "definition_version": "storygraph-stage-harness-v1",
-                "prompt_version": "build-storygraph-prompt-v2",
-                "skill_bundle_version": "build-storygraph-v2",
+                "definition_version": "storygraph-stage-harness",
+                "prompt_version": "build-storygraph-prompt",
+                "skill_bundle_version": "build-storygraph",
                 "skill_bundle_hash": (
                     "352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb"
                 ),
-                "output_schema_version": "storygraph-candidate-schema-v2",
+                "output_schema_version": "storygraph-candidate-schema",
                 "model_capability": "structured_text",
-                "codex_runtime_contract": "codex-cli-ephemeral-read-only-v1",
+                "codex_runtime_contract": "codex-cli-ephemeral-read-only",
                 "allowed_tools": [],
                 "max_model_calls": 2,
                 "max_execution_seconds": 600,

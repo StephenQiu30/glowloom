@@ -19,9 +19,9 @@ def test_build_storygraph_is_the_only_agent_owned_skill_bundle() -> None:
     fixture = cast(
         dict[str, Any],
         json.loads(
-            (
-                REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-definition-v1.json"
-            ).read_text(encoding="utf-8")
+            (REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-definition.json").read_text(
+                encoding="utf-8"
+            )
         ),
     )
     bundle = StoryGraphBundle(REPOSITORY_ROOT)

@@ -34,7 +34,7 @@ func TestBibleDeterministicGateKeepsModelOpinionSeparate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gate.GateVersion != "bible-deterministic-gate-v1" || len(gate.Blockers) != 1 ||
+	if gate.GateVersion != "bible-deterministic-gate" || len(gate.Blockers) != 1 ||
 		gate.Blockers[0].Code != "world_unknown_entity" || gate.Blockers[0].SubjectKey != "world:home" {
 		t.Fatalf("deterministic gate mixed in model opinion or lost its structural blocker: %#v", gate)
 	}
@@ -61,7 +61,7 @@ func TestBibleReviewOnlyAcceptsEvidenceScopedIssuesAndCannotRewriteGate(t *testi
 		TargetCandidateRevisionHash: targetHash, CandidateItemStart: 0, CandidateItemEnd: 1,
 		TargetCandidate: mustJSON(t, candidate),
 		DeterministicGate: agentcontract.StoryGraphDeterministicGateResult{
-			GateVersion: "bible-deterministic-gate-v1", TargetCandidateRevisionID: targetID,
+			GateVersion: "bible-deterministic-gate", TargetCandidateRevisionID: targetID,
 			TargetCandidateRevisionHash: targetHash, Blockers: []agentcontract.StoryGraphGateBlocker{},
 		},
 	}

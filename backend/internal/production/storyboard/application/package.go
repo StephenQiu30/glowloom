@@ -56,7 +56,7 @@ func buildPackage(episodeID, inputHash string, shots []domain.Shot) (packageResu
 	for index, file := range payloadFiles {
 		manifestFiles[index] = map[string]any{"name": file.name, "media_type": file.mediaType, "size": len(file.contents), "sha256": hashBytes(file.contents)}
 	}
-	manifest := map[string]any{"schema_version": "storyboard-export-v1", "episode_id": episodeID, "input_hash": inputHash, "shot_count": len(shots), "files": manifestFiles}
+	manifest := map[string]any{"schema_version": "storyboard-export", "episode_id": episodeID, "input_hash": inputHash, "shot_count": len(shots), "files": manifestFiles}
 	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return packageResult{}, err

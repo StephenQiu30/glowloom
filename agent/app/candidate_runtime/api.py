@@ -74,7 +74,7 @@ async def healthz() -> dict[str, str]:
     }
 
 
-@app.post("/internal/v1/invocations", response_model=StoryGraphStageResult)
+@app.post("/internal/storygraph/invocations", response_model=StoryGraphStageResult)
 async def invoke(
     invocation: StoryGraphStageInvocation,
     execution_grant: str = Header(alias="X-Lanverse-Execution-Grant"),
@@ -104,7 +104,7 @@ async def invoke(
             input_hash=invocation.input_hash,
             result_hash=canonical_hash(candidate),
             issues=[],
-            executor=Executor(name="codex-cli", version="storygraph-stage-harness-v1", model=model),
+            executor=Executor(name="codex-cli", version="storygraph-stage-harness", model=model),
             error=None,
         )
     except SkillBundleUnavailable as error:
@@ -154,7 +154,7 @@ def _failure(
         input_hash=invocation.input_hash,
         result_hash=None,
         issues=[],
-        executor=Executor(name="codex-cli", version="storygraph-stage-harness-v1", model="unknown"),
+        executor=Executor(name="codex-cli", version="storygraph-stage-harness", model="unknown"),
         error=ResultError(code=code, summary=summary[:800], retryable=retryable),
     )
 

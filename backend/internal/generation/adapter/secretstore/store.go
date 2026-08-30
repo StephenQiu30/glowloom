@@ -48,8 +48,8 @@ func Open(path string) *Store {
 	if len(root) != 32 {
 		return &Store{}
 	}
-	encryptionKey := derive(root, "lanverse/media-provider/encryption/v1")
-	fingerprintKey := derive(root, "lanverse/media-provider/fingerprint/v1")
+	encryptionKey := derive(root, "lanverse/media-provider/encryption/aes-256-gcm")
+	fingerprintKey := derive(root, "lanverse/media-provider/fingerprint/hmac-sha256")
 	block, err := aes.NewCipher(encryptionKey[:])
 	if err != nil {
 		return &Store{}

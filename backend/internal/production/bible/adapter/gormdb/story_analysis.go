@@ -1193,7 +1193,7 @@ func storyReconcileInvocationRecord(
 		return model.AgentInvocation{}, err
 	}
 	invocationID := uuid.NewSHA1(manifestID, []byte(fmt.Sprintf(
-		"story-reconcile-v1\x00%d\x00%s\x00%s", manifest.Version, manifest.ManifestHash, shard.Key,
+		"story-reconcile\x00%d\x00%s\x00%s", manifest.Version, manifest.ManifestHash, shard.Key,
 	)))
 	request, err := agentcontract.NewStageInvocation(invocationID.String(), agentcontract.StoryGraphDefinition().ExecutionPolicy(), agentcontract.StageInvocationPayload{
 		Stage: domain.ReconcileStoryStage, ShardKey: shard.Key,

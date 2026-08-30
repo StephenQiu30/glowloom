@@ -37,7 +37,7 @@ func TestGenerationTargetCanonicalizesReferenceAssetAndRejectsMixedPayloads(t *t
 				ContentHash: generationHash("4"),
 			},
 			OutputKind: "reference_sheet", RequiredViewRoles: []string{"back", "front", "profile"},
-			PromptVersion:  "character-reference-sheet-v1",
+			PromptVersion:  "character-reference-sheet",
 			PositivePrompt: "same character, front profile and back views",
 			NegativePrompt: "different identities, missing view, text, watermark",
 			Width:          1536, Height: 1024, NumberResults: 4, OutputFormat: "PNG",

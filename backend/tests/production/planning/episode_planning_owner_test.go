@@ -284,7 +284,7 @@ func episodePlanningOwnerFixture() planningapp.EpisodePlanningCandidateSource {
 		BibleVersionID: "76000000-0000-0000-0000-000000000004", BibleVersion: 1,
 		BibleContentHash: strings.Repeat("b", 64), MaterializationHash: strings.Repeat("c", 64),
 		Candidate: domain.EpisodePlanningCandidateSet{
-			SchemaVersion:  "episode-planning-candidate-set-v1",
+			SchemaVersion:  "episode-planning-candidate-set",
 			BibleVersionID: "76000000-0000-0000-0000-000000000004", BibleVersion: 1,
 			BibleContentHash: strings.Repeat("b", 64), MaterializationHash: strings.Repeat("c", 64),
 			Episodes: []domain.EpisodePlanningCandidateRoot{

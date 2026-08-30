@@ -16,30 +16,30 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/humanReviews", () => ({
-  claimHumanTaskApiV1HumanTasksHumanTaskIdClaimsPost: apiMocks.claimTask,
-  decideHumanTaskApiV1HumanTasksHumanTaskIdDecisionsPost: apiMocks.decideTask,
-  getHumanTaskApiV1HumanTasksHumanTaskIdGet: apiMocks.getTask,
-  listHumanTasksApiV1ProjectsProjectIdHumanTasksGet: apiMocks.listTasks,
-  releaseHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimReleasesPost:
+  claimHumanTaskApiHumanTasksHumanTaskIdClaimsPost: apiMocks.claimTask,
+  decideHumanTaskApiHumanTasksHumanTaskIdDecisionsPost: apiMocks.decideTask,
+  getHumanTaskApiHumanTasksHumanTaskIdGet: apiMocks.getTask,
+  listHumanTasksApiProjectsProjectIdHumanTasksGet: apiMocks.listTasks,
+  releaseHumanTaskClaimApiHumanTasksHumanTaskIdClaimReleasesPost:
     apiMocks.releaseClaim,
-  renewHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimRenewalsPost:
+  renewHumanTaskClaimApiHumanTasksHumanTaskIdClaimRenewalsPost:
     apiMocks.renewClaim,
-  resumeHumanGateApiV1ReviewDecisionsReviewDecisionIdResumePost:
+  resumeHumanGateApiReviewDecisionsReviewDecisionIdResumePost:
     apiMocks.resumeDecision,
 }));
 
 vi.mock("@/api/workflows", () => ({
-  getWorkflowRunApiV1WorkflowRunsWorkflowRunIdGet: apiMocks.getWorkflowRun,
+  getWorkflowRunApiWorkflowRunsWorkflowRunIdGet: apiMocks.getWorkflowRun,
 }));
 
 vi.mock("@/api/identity", async () => ({
   ...(await vi.importActual<typeof import("@/api/identity")>("@/api/identity")),
-  meApiV1MeGet: apiMocks.me,
+  meApiMeGet: apiMocks.me,
 }));
 
 vi.mock("@/api/projects", async () => ({
   ...(await vi.importActual<typeof import("@/api/projects")>("@/api/projects")),
-  getProjectApiV1ProjectsProjectIdGet: apiMocks.project,
+  getProjectApiProjectsProjectIdGet: apiMocks.project,
 }));
 
 import { AppProviders } from "@/app/providers";

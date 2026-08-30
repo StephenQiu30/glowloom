@@ -30,7 +30,7 @@ func TestBuildApprovedIntentSetFreezesCanonicalIntentsAndVisualRequirements(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if approved.SchemaVersion != "approved-storyboard-intents-v1" || approved.ID != "81000000-0000-0000-0000-000000000008" ||
+	if approved.SchemaVersion != "approved-storyboard-intents" || approved.ID != "81000000-0000-0000-0000-000000000008" ||
 		approved.DraftSetID != set.ID || approved.DraftSetRevision != set.Revision ||
 		approved.CandidateRevisionID != candidateID || approved.CandidateRevisionHash != candidateHash ||
 		approved.CandidateRevision != 1 || len(approved.Scenes) != 2 ||

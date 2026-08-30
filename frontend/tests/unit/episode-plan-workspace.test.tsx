@@ -18,21 +18,21 @@ vi.mock("@/api/episodePlanning", async () => ({
   ...(await vi.importActual<typeof import("@/api/episodePlanning")>(
     "@/api/episodePlanning",
   )),
-  confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPost: apiMocks.confirmPlan,
-  createEpisodePlanApiV1DocumentRevisionsRevisionIdEpisodePlansPost:
+  confirmEpisodePlanApiEpisodePlansPlanIdConfirmPost: apiMocks.confirmPlan,
+  createEpisodePlanApiDocumentRevisionsRevisionIdEpisodePlansPost:
     apiMocks.createPlan,
-  getEpisodePlanApiV1EpisodePlansPlanIdGet: apiMocks.getPlan,
-  materializeEpisodePlanApiV1EpisodePlansPlanIdMaterializationsPost:
+  getEpisodePlanApiEpisodePlansPlanIdGet: apiMocks.getPlan,
+  materializeEpisodePlanApiEpisodePlansPlanIdMaterializationsPost:
     apiMocks.materializePlan,
-  mergeEpisodeProposalsApiV1EpisodePlansPlanIdMergePost:
+  mergeEpisodeProposalsApiEpisodePlansPlanIdMergePost:
     apiMocks.mergeProposals,
-  moveEpisodeBoundaryApiV1EpisodePlansPlanIdMoveBoundaryPost:
+  moveEpisodeBoundaryApiEpisodePlansPlanIdMoveBoundaryPost:
     apiMocks.moveBoundary,
-  publishImportCommitApiV1ImportCommitsCommitIdPublishPost:
+  publishImportCommitApiImportCommitsCommitIdPublishPost:
     apiMocks.publishCommit,
-  renameEpisodeProposalApiV1EpisodePlansPlanIdRenamePost:
+  renameEpisodeProposalApiEpisodePlansPlanIdRenamePost:
     apiMocks.renameProposal,
-  splitEpisodeProposalApiV1EpisodePlansPlanIdSplitPost:
+  splitEpisodeProposalApiEpisodePlansPlanIdSplitPost:
     apiMocks.splitProposal,
 }));
 
@@ -75,11 +75,11 @@ const analysis = {
     raw_hash: "a".repeat(64),
     normalized_text: source,
     normalized_hash: "a".repeat(64),
-    normalizer_version: "identity-v1",
+    normalizer_version: "identity",
     normalization_map: { type: "identity" },
     codepoint_count: source.length,
     analysis_status: "deterministic" as const,
-    analyzer_version: "whole-script-lines-v1",
+    analyzer_version: "whole-script-lines",
     created_by: "019ff900-a000-7000-8000-000000000013",
     created_at: "2026-08-13T04:00:00Z",
   },
@@ -105,10 +105,10 @@ function planDetail(
       requested_episode_count: null,
       total_estimated_duration_ms: 118_000,
       input_hash: "b".repeat(64),
-      planning_engine_version: "episode-planning-v1",
+      planning_engine_version: "episode-planning",
       model_name: null,
       prompt_version: null,
-      schema_version: "episode-plan-schema-v1",
+      schema_version: "episode-plan-schema",
       planning_task_id: null,
       planning_error_code: null,
       revision,

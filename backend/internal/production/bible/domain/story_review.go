@@ -53,7 +53,7 @@ func BuildStoryReviewManifest(input StoryReviewManifestInput) (StoryReviewManife
 	}
 	coverageHash, err := CanonicalStoryHash(struct {
 		Schema, CandidateRevisionID, CandidateRevisionHash string
-	}{"story-review-coverage-v1", input.TargetCandidateRevisionID, input.TargetCandidateRevisionHash})
+	}{"story-review-coverage", input.TargetCandidateRevisionID, input.TargetCandidateRevisionHash})
 	if err != nil {
 		return StoryReviewManifest{}, err
 	}
@@ -114,7 +114,7 @@ func storyReviewManifestHash(value StoryReviewManifest) (string, error) {
 		Shards             []StoryReviewShard `json:"shards"`
 		CoverageHash       string             `json:"coverage_hash"`
 	}{
-		"story-review-shard-manifest-v1", value.Version, value.ParentManifestHash, value.WorkspaceID,
+		"story-review-shard-manifest", value.Version, value.ParentManifestHash, value.WorkspaceID,
 		value.WorkflowRunID, value.NodeRunID, value.Stage, value.RootInputHash, value.Shards, value.CoverageHash,
 	})
 }

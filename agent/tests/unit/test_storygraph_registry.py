@@ -59,9 +59,9 @@ def test_registry_has_exactly_ten_backend_owned_stages_and_candidate_schemas() -
     fixture = cast(
         dict[str, Any],
         json.loads(
-            (
-                repository_root / "backend/tests/fixtures/agent/storygraph-definition-v1.json"
-            ).read_text(encoding="utf-8")
+            (repository_root / "backend/tests/fixtures/agent/storygraph-definition.json").read_text(
+                encoding="utf-8"
+            )
         ),
     )
     manifest = asdict(StoryGraphBundle(repository_root).manifest)

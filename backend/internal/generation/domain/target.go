@@ -191,7 +191,7 @@ func normalizeReferenceAssetTarget(value ReferenceAssetTarget) (ReferenceAssetTa
 		value.SpecificationVersionRef.Owner != "production" ||
 		value.SpecificationVersionRef.Resource != "production_bible_specification_version" ||
 		!validFrozenOwnerReference(value.AssetStateRef) || value.AssetStateRef.Owner != "asset" ||
-		value.AssetStateRef.Resource != "asset_state" || value.PromptVersion != "character-reference-sheet-v1" ||
+		value.AssetStateRef.Resource != "asset_state" || value.PromptVersion != "character-reference-sheet" ||
 		len(value.PositivePrompt) < 2 || len(value.PositivePrompt) > 10_000 ||
 		len(value.NegativePrompt) < 2 || len(value.NegativePrompt) > 3_000 ||
 		value.Width != 1536 || value.Height != 1024 || value.NumberResults != 4 || value.OutputFormat != "PNG" {

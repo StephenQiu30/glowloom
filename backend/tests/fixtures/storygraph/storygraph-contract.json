@@ -1,5 +1,5 @@
 {
-  "schema_version": "storygraph-v1",
+  "schema_version": "storygraph-scene-production",
   "graph_boundaries": [
     {
       "kind": "storygraph",
@@ -40,7 +40,7 @@
       "owner_revision": 3,
       "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
-    "expected_key": "sgn_95d37507f8df854ede70af6c2ce19bd469bb68c8138494694c73ec5b658cccd4"
+    "expected_key": "sgn_8eaadd92d342ad4bfc7bdf664d18e8a42f6c32d4466af9a3a7730f76aae6133c"
   },
   "edge_key_case": {
     "edge_type": "claim_participant",
@@ -49,10 +49,10 @@
     "qualifier": {
       "participant_role": "subject"
     },
-    "expected_key": "sge_2598426ca57c5a30b2d098600d610a0dee7c7259f332dbc1899749cd56e5c8c8"
+    "expected_key": "sge_cde7f89097d23bba9f10a6b4893833e0b52e5a9542b3c20343ef716e761b4482"
   },
-  "expected_topology_hash": "fa288d7e606af252a772c721d102840c291d346a89eaa5c62cd24005a712717a",
-  "expected_content_hash": "8b2c558e98fc821c63ba7c32ff242b9389478cb95b1a569fb89ae1dbf834a2e9",
+  "expected_topology_hash": "570b993bd37e57b7593c7884b200182b916c098bc7e257060360ab33517b778c",
+  "expected_content_hash": "76059f5270be7a088baa07ae022747c743a5920c36875db334292b62bc24c137",
   "claim": {
     "predicate": "protects",
     "participants": [

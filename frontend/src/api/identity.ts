@@ -2,7 +2,7 @@ import request, { type RequestOptions } from "@/lib/request";
 
 type Envelope<T> = { data: T };
 
-export function requestRegistrationVerificationApiV1AuthRegistrationVerificationsPost(
+export function requestRegistrationVerificationApiAuthRegistrationVerificationsPost(
   body: API.RegistrationVerificationRequest,
   options?: RequestOptions,
 ) {
@@ -12,7 +12,7 @@ export function requestRegistrationVerificationApiV1AuthRegistrationVerification
   );
 }
 
-export function confirmRegistrationVerificationApiV1AuthRegistrationVerificationsConfirmPost(
+export function confirmRegistrationVerificationApiAuthRegistrationVerificationsConfirmPost(
   body: API.RegistrationVerificationConfirmRequest,
   options?: RequestOptions,
 ) {
@@ -22,7 +22,7 @@ export function confirmRegistrationVerificationApiV1AuthRegistrationVerification
   );
 }
 
-export function registerApiV1AuthRegisterPost(
+export function registerApiAuthRegisterPost(
   body: API.RegisterRequest,
   options?: RequestOptions,
 ) {
@@ -33,7 +33,7 @@ export function registerApiV1AuthRegisterPost(
   });
 }
 
-export function loginApiV1AuthLoginPost(
+export function loginApiAuthLoginPost(
   body: API.LoginRequest,
   options?: RequestOptions,
 ) {
@@ -44,14 +44,14 @@ export function loginApiV1AuthLoginPost(
   });
 }
 
-export function logoutApiV1AuthLogoutPost(options?: RequestOptions) {
+export function logoutApiAuthLogoutPost(options?: RequestOptions) {
   return request<Envelope<API.RevocationResponse>>("/api/auth/logout", {
     method: "POST",
     ...(options ?? {}),
   });
 }
 
-export function changePasswordApiV1AuthChangePasswordPost(
+export function changePasswordApiAuthChangePasswordPost(
   body: API.ChangePasswordRequest,
   options?: RequestOptions,
 ) {
@@ -61,14 +61,14 @@ export function changePasswordApiV1AuthChangePasswordPost(
   );
 }
 
-export function meApiV1MeGet(options?: RequestOptions) {
+export function meApiMeGet(options?: RequestOptions) {
   return request<Envelope<API.MeResponse>>("/api/me", {
     method: "GET",
     ...(options ?? {}),
   });
 }
 
-export function updateMeApiV1MePatch(
+export function updateMeApiMePatch(
   body: API.ProfileUpdateRequest,
   options?: RequestOptions,
 ) {
@@ -79,7 +79,7 @@ export function updateMeApiV1MePatch(
   });
 }
 
-export function deactivateMeApiV1MeDeactivatePost(
+export function deactivateMeApiMeDeactivatePost(
   body: API.DeactivateAccountRequest,
   options?: RequestOptions,
 ) {
@@ -90,7 +90,7 @@ export function deactivateMeApiV1MeDeactivatePost(
   });
 }
 
-export function listWorkspacesApiV1WorkspacesGet(
+export function listWorkspacesApiWorkspacesGet(
   params: { include_archived: boolean },
   options?: RequestOptions,
 ) {
@@ -101,7 +101,7 @@ export function listWorkspacesApiV1WorkspacesGet(
   });
 }
 
-export function createWorkspaceApiV1WorkspacesPost(
+export function createWorkspaceApiWorkspacesPost(
   body: API.WorkspaceCreateRequest,
   options?: RequestOptions,
 ) {
@@ -112,7 +112,7 @@ export function createWorkspaceApiV1WorkspacesPost(
   });
 }
 
-export function updateWorkspaceApiV1WorkspacesWorkspaceIdPatch(
+export function updateWorkspaceApiWorkspacesWorkspaceIdPatch(
   params: { workspace_id: string },
   body: API.WorkspaceUpdateRequest,
   options?: RequestOptions,
@@ -123,7 +123,7 @@ export function updateWorkspaceApiV1WorkspacesWorkspaceIdPatch(
   );
 }
 
-export function archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePost(
+export function archiveWorkspaceApiWorkspacesWorkspaceIdArchivePost(
   params: { workspace_id: string },
   body: API.WorkspaceStateRequest,
   options?: RequestOptions,
@@ -134,7 +134,7 @@ export function archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePost(
   );
 }
 
-export function restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePost(
+export function restoreWorkspaceApiWorkspacesWorkspaceIdRestorePost(
   params: { workspace_id: string },
   body: API.WorkspaceStateRequest,
   options?: RequestOptions,

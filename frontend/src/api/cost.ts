@@ -2,7 +2,7 @@ import request, { type RequestOptions } from "@/lib/request";
 
 type Envelope<T> = { data: T };
 
-export function getCostBudgetApiV1ProjectsProjectIdCostBudgetGet(
+export function getCostBudgetApiProjectsProjectIdCostBudgetGet(
   params: { project_id: string },
   options?: RequestOptions,
 ) {
@@ -12,7 +12,7 @@ export function getCostBudgetApiV1ProjectsProjectIdCostBudgetGet(
   );
 }
 
-export function setCostBudgetApiV1ProjectsProjectIdCostBudgetPost(
+export function setCostBudgetApiProjectsProjectIdCostBudgetPost(
   params: { project_id: string },
   body: API.CostBudgetSetRequest,
   options?: RequestOptions,
@@ -23,7 +23,7 @@ export function setCostBudgetApiV1ProjectsProjectIdCostBudgetPost(
   );
 }
 
-export function getCurrentCostPriceQuoteApiV1ProjectsProjectIdCostPricesMetricGet(
+export function getCurrentCostPriceQuoteApiProjectsProjectIdCostPricesMetricGet(
   params: { project_id: string; metric: "generation.image" },
   options?: RequestOptions,
 ) {
@@ -33,7 +33,7 @@ export function getCurrentCostPriceQuoteApiV1ProjectsProjectIdCostPricesMetricGe
   );
 }
 
-export function setCostPriceQuoteApiV1ProjectsProjectIdCostPricesMetricPost(
+export function setCostPriceQuoteApiProjectsProjectIdCostPricesMetricPost(
   params: { project_id: string; metric: "generation.image" },
   body: API.CostPriceQuoteSetRequest,
   options?: RequestOptions,

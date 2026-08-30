@@ -96,7 +96,7 @@ func TestMediaPresetCatalogOnlyExposesRegisteredFactories(t *testing.T) {
 	registry, err := generationapp.NewMediaFactoryRegistry([]generationapp.MediaAdapterFactory{controlledMediaFactory{
 		descriptor: generationapp.MediaFactoryDescriptor{
 			ProviderKey: "openai", Modality: generationdomain.MediaModalityImage,
-			AdapterContractVersion: "openai-image-api-v1",
+			AdapterContractVersion: "openai-image-api",
 		},
 	}})
 	if err != nil {
@@ -114,7 +114,7 @@ func TestMediaPresetCatalogOnlyExposesRegisteredFactories(t *testing.T) {
 	if len(view.Models) != 1 || view.Models[0].PresetKey != "openai.gpt-image-2" {
 		t.Fatalf("available model presets = %#v", view.Models)
 	}
-	resolvedFactory, err := registry.Resolve("openai", generationdomain.MediaModalityImage, "openai-image-api-v1")
+	resolvedFactory, err := registry.Resolve("openai", generationdomain.MediaModalityImage, "openai-image-api")
 	if err != nil || resolvedFactory == nil {
 		t.Fatalf("resolve registered media factory: factory=%T err=%v", resolvedFactory, err)
 	}
@@ -138,8 +138,8 @@ func TestMediaPresetCatalogOnlyExposesRegisteredFactories(t *testing.T) {
 		t.Fatalf("zero-factory catalog resolved an unavailable connection: %v", err)
 	}
 	if _, err = generationapp.NewMediaFactoryRegistry([]generationapp.MediaAdapterFactory{
-		controlledMediaFactory{descriptor: registryDescriptor("openai", generationdomain.MediaModalityImage, "openai-image-api-v1")},
-		controlledMediaFactory{descriptor: registryDescriptor("openai", generationdomain.MediaModalityImage, "openai-image-api-v1")},
+		controlledMediaFactory{descriptor: registryDescriptor("openai", generationdomain.MediaModalityImage, "openai-image-api")},
+		controlledMediaFactory{descriptor: registryDescriptor("openai", generationdomain.MediaModalityImage, "openai-image-api")},
 	}); err == nil {
 		t.Fatal("media factory registry accepted a duplicated execution identity")
 	}
@@ -148,7 +148,7 @@ func TestMediaPresetCatalogOnlyExposesRegisteredFactories(t *testing.T) {
 	for _, preset := range slices.Clone(versionedPresets.Connections) {
 		if preset.PresetKey == "openai.official-api" {
 			preset.PresetVersion = 2
-			preset.DisplayName = "OpenAI 官方 API v2"
+			preset.DisplayName = "OpenAI 官方图像 API"
 			versionedPresets.Connections = append(versionedPresets.Connections, preset)
 		}
 	}
@@ -353,7 +353,7 @@ func TestProviderConfigurationVersionsAreOwnerOnlyImmutableRestartSafeAndSecretF
 	registry, err := generationapp.NewMediaFactoryRegistry([]generationapp.MediaAdapterFactory{controlledMediaFactory{
 		descriptor: generationapp.MediaFactoryDescriptor{
 			ProviderKey: "openai", Modality: generationdomain.MediaModalityImage,
-			AdapterContractVersion: "openai-image-api-v1",
+			AdapterContractVersion: "openai-image-api",
 		},
 	}})
 	if err != nil {
@@ -604,21 +604,21 @@ func TestProviderConfigurationVersionsAreOwnerOnlyImmutableRestartSafeAndSecretF
 	}); generationErrorCode(err) != "state_conflict" {
 		t.Fatalf("Project binding accepted a superseded Provider connection: %T %v", err, err)
 	}
-	bindingV2, err := configuration.PublishProjectBinding(ctx, owner, generationapp.PublishProjectProviderBindingCommand{
+	rotatedBinding, err := configuration.PublishProjectBinding(ctx, owner, generationapp.PublishProjectProviderBindingCommand{
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Purpose: "reference_asset",
 		ConnectionVersionID: rotated.Connection.ID, ModelProfileVersionID: profile.Profile.ID,
 		ExpectedRevision: 1, ExpectedContentHash: binding.Binding.ContentHash,
-		IdempotencyKey: "provider-binding-publish-v2",
+		IdempotencyKey: "provider-binding-publish",
 	})
-	if err != nil || bindingV2.Binding.Revision != 2 {
-		t.Fatalf("republish Project binding after credential rotation: result=%#v err=%v", bindingV2, err)
+	if err != nil || rotatedBinding.Binding.Revision != 2 {
+		t.Fatalf("republish Project binding after credential rotation: result=%#v err=%v", rotatedBinding, err)
 	}
 	if _, err = configuration.ResolveProjectBinding(ctx, owner, projectID.String(), "reference_asset"); generationErrorCode(err) != "secret_store_unavailable" {
 		t.Fatalf("old Provider root key accepted the re-entered credential: %T %v", err, err)
 	}
-	resolvedV2, err := wrongKeyService.ResolveProjectBinding(ctx, owner, projectID.String(), "reference_asset")
-	if err != nil || resolvedV2.Binding.ID != bindingV2.Binding.ID || resolvedV2.Credential.ID != rotated.Credential.ID {
-		t.Fatalf("resolve rotated Provider credential: result=%#v err=%v", resolvedV2, err)
+	resolvedRotatedBinding, err := wrongKeyService.ResolveProjectBinding(ctx, owner, projectID.String(), "reference_asset")
+	if err != nil || resolvedRotatedBinding.Binding.ID != rotatedBinding.Binding.ID || resolvedRotatedBinding.Credential.ID != rotated.Credential.ID {
+		t.Fatalf("resolve rotated Provider credential: result=%#v err=%v", resolvedRotatedBinding, err)
 	}
 	rotatedValues, err := decryptProviderCredential(
 		wrongRootStore,
@@ -656,7 +656,7 @@ func TestProviderConfigurationVersionsAreOwnerOnlyImmutableRestartSafeAndSecretF
 	if _, err = configuration.PublishProjectBinding(ctx, owner, generationapp.PublishProjectProviderBindingCommand{
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Purpose: "reference_asset",
 		ConnectionVersionID: rotated.Connection.ID, ModelProfileVersionID: profile.Profile.ID,
-		ExpectedRevision: 2, ExpectedContentHash: bindingV2.Binding.ContentHash,
+		ExpectedRevision: 2, ExpectedContentHash: rotatedBinding.Binding.ContentHash,
 		IdempotencyKey: "provider-binding-stale-profile",
 	}); generationErrorCode(err) != "state_conflict" {
 		t.Fatalf("Project binding accepted a superseded Provider model profile: %T %v", err, err)
@@ -672,7 +672,7 @@ func TestProviderConfigurationVersionsAreOwnerOnlyImmutableRestartSafeAndSecretF
 	bindingV3, err := configuration.PublishProjectBinding(ctx, owner, generationapp.PublishProjectProviderBindingCommand{
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Purpose: "reference_asset",
 		ConnectionVersionID: rotated.Connection.ID, ModelProfileVersionID: enabledProfile.Profile.ID,
-		ExpectedRevision: 2, ExpectedContentHash: bindingV2.Binding.ContentHash,
+		ExpectedRevision: 2, ExpectedContentHash: rotatedBinding.Binding.ContentHash,
 		IdempotencyKey: "provider-binding-publish-v3",
 	})
 	if err != nil || bindingV3.Binding.Revision != 3 || bindingV3.Binding.ModelProfileVersionID != enabledProfile.Profile.ID {

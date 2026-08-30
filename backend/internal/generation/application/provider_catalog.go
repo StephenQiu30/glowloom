@@ -228,29 +228,29 @@ func BuiltinMediaPresets() domain.MediaPresets {
 	connections := []domain.MediaConnectionPreset{
 		{PresetKey: "volcengine.ark-cn-beijing", PresetVersion: 1, ProviderKey: domain.MediaProviderVolcengine,
 			DisplayName: "火山引擎方舟（北京）", Description: "火山引擎方舟官方北京地域连接",
-			ProviderHomeURL: "https://console.volcengine.com/ark", AdapterContractVersion: "volcengine-ark-media-v1",
+			ProviderHomeURL: "https://console.volcengine.com/ark", AdapterContractVersion: "volcengine-ark-media",
 			FixedConfig: map[string]any{"region": "cn-beijing"}, CredentialFields: apiKey,
 			SupportedFactoryModes: []string{domain.MediaModalityImage, domain.MediaModalityVideo}},
 		{PresetKey: "openai.official-api", PresetVersion: 1, ProviderKey: domain.MediaProviderOpenAI,
 			DisplayName: "OpenAI 官方 API", Description: "OpenAI 官方图片 API 连接",
-			ProviderHomeURL: "https://platform.openai.com/", AdapterContractVersion: "openai-image-api-v1",
+			ProviderHomeURL: "https://platform.openai.com/", AdapterContractVersion: "openai-image-api",
 			FixedConfig: map[string]any{}, CredentialFields: apiKey, SupportedFactoryModes: []string{domain.MediaModalityImage}},
 		{PresetKey: "google.gemini-api", PresetVersion: 1, ProviderKey: domain.MediaProviderGoogle,
 			DisplayName: "Google Gemini API", Description: "Google Gemini 官方图片 API 连接",
-			ProviderHomeURL: "https://ai.google.dev/", AdapterContractVersion: "google-gemini-image-v1",
+			ProviderHomeURL: "https://ai.google.dev/", AdapterContractVersion: "google-gemini-image",
 			FixedConfig: map[string]any{}, CredentialFields: apiKey, SupportedFactoryModes: []string{domain.MediaModalityImage}},
 	}
 	models := []domain.MediaModelPreset{
-		mediaModel("volcengine.seedream-5-0-pro-260628", domain.MediaProviderVolcengine, "Seedream 5.0 Pro", "seedream", domain.MediaModalityImage, "doubao-seedream-5-0-pro-260628", "volcengine-ark-media-v1", "ark-image-generation-v1"),
-		mediaModel("volcengine.seedance-2-0-260128", domain.MediaProviderVolcengine, "Seedance 2.0", "seedance", domain.MediaModalityVideo, "doubao-seedance-2-0-260128", "volcengine-ark-media-v1", "ark-video-generation-v1"),
-		mediaModel("volcengine.seedance-2-0-fast-260128", domain.MediaProviderVolcengine, "Seedance 2.0 Fast", "seedance", domain.MediaModalityVideo, "doubao-seedance-2-0-fast-260128", "volcengine-ark-media-v1", "ark-video-generation-v1"),
-		mediaModel("volcengine.seedance-2-0-mini", domain.MediaProviderVolcengine, "Seedance 2.0 Mini", "seedance", domain.MediaModalityVideo, "", "volcengine-ark-media-v1", "ark-video-generation-v1"),
-		mediaModel("volcengine.seedance-2-5", domain.MediaProviderVolcengine, "Seedance 2.5", "seedance", domain.MediaModalityVideo, "", "volcengine-ark-media-v1", "ark-video-generation-v1"),
-		mediaModel("openai.gpt-image-2", domain.MediaProviderOpenAI, "GPT Image 2", "gpt_image", domain.MediaModalityImage, "gpt-image-2", "openai-image-api-v1", "openai-image-api-v1-nonstreaming"),
-		mediaModel("google.nano-banana-2-lite", domain.MediaProviderGoogle, "Nano Banana 2 Lite", "gemini_image", domain.MediaModalityImage, "gemini-3.1-flash-lite-image", "google-gemini-image-v1", "generate-content-v1-image-v1"),
-		mediaModel("google.nano-banana-2", domain.MediaProviderGoogle, "Nano Banana 2", "gemini_image", domain.MediaModalityImage, "gemini-3.1-flash-image", "google-gemini-image-v1", "interactions-v1beta-image-v1"),
-		mediaModel("google.nano-banana-pro", domain.MediaProviderGoogle, "Nano Banana Pro", "gemini_image", domain.MediaModalityImage, "gemini-3-pro-image", "google-gemini-image-v1", "interactions-v1beta-image-v1"),
-		mediaModel("google.nano-banana-legacy", domain.MediaProviderGoogle, "Nano Banana Legacy", "gemini_image", domain.MediaModalityImage, "gemini-2.5-flash-image", "google-gemini-image-v1", "generate-content-v1-image-v1"),
+		mediaModel("volcengine.seedream-5-0-pro-260628", domain.MediaProviderVolcengine, "Seedream 5.0 Pro", "seedream", domain.MediaModalityImage, "doubao-seedream-5-0-pro-260628", "volcengine-ark-media", "ark-image-generation"),
+		mediaModel("volcengine.seedance-2-0-260128", domain.MediaProviderVolcengine, "Seedance 2.0", "seedance", domain.MediaModalityVideo, "doubao-seedance-2-0-260128", "volcengine-ark-media", "ark-video-generation"),
+		mediaModel("volcengine.seedance-2-0-fast-260128", domain.MediaProviderVolcengine, "Seedance 2.0 Fast", "seedance", domain.MediaModalityVideo, "doubao-seedance-2-0-fast-260128", "volcengine-ark-media", "ark-video-generation"),
+		mediaModel("volcengine.seedance-2-0-mini", domain.MediaProviderVolcengine, "Seedance 2.0 Mini", "seedance", domain.MediaModalityVideo, "", "volcengine-ark-media", "ark-video-generation"),
+		mediaModel("volcengine.seedance-2-5", domain.MediaProviderVolcengine, "Seedance 2.5", "seedance", domain.MediaModalityVideo, "", "volcengine-ark-media", "ark-video-generation"),
+		mediaModel("openai.gpt-image-2", domain.MediaProviderOpenAI, "GPT Image 2", "gpt_image", domain.MediaModalityImage, "gpt-image-2", "openai-image-api", "openai-image-api-nonstreaming"),
+		mediaModel("google.nano-banana-2-lite", domain.MediaProviderGoogle, "Nano Banana 2 Lite", "gemini_image", domain.MediaModalityImage, "gemini-3.1-flash-lite-image", "google-gemini-image", "generate-content-image"),
+		mediaModel("google.nano-banana-2", domain.MediaProviderGoogle, "Nano Banana 2", "gemini_image", domain.MediaModalityImage, "gemini-3.1-flash-image", "google-gemini-image", "interactions-v1beta-image"),
+		mediaModel("google.nano-banana-pro", domain.MediaProviderGoogle, "Nano Banana Pro", "gemini_image", domain.MediaModalityImage, "gemini-3-pro-image", "google-gemini-image", "interactions-v1beta-image"),
+		mediaModel("google.nano-banana-legacy", domain.MediaProviderGoogle, "Nano Banana Legacy", "gemini_image", domain.MediaModalityImage, "gemini-2.5-flash-image", "google-gemini-image", "generate-content-image"),
 	}
 	return domain.MediaPresets{Connections: connections, Models: models}
 }
@@ -264,7 +264,7 @@ func mediaModel(presetKey, providerKey, displayName, family, modality, externalM
 		PresetKey: presetKey, PresetVersion: 1, ProviderKey: providerKey, DisplayName: displayName,
 		Family: family, Modality: modality, ExternalModelID: externalModelID,
 		AdapterContractVersion: adapterContract, AdapterTransportContract: transport,
-		CapabilitySchemaVersion: family + "-v1", BillingMetric: metric, FixedDefaults: map[string]any{},
+		CapabilitySchemaVersion: family + "-capability", BillingMetric: metric, FixedDefaults: map[string]any{},
 	}
 }
 

@@ -592,7 +592,7 @@ func (repo *repository) GetIntentFreezeSource(
 	}
 	var candidate storyboarddomain.CandidateSet
 	if err = json.Unmarshal(revision.Candidate, &candidate); err != nil ||
-		candidate.SchemaVersion != "storyboard-intent-candidate-set-v1" || len(candidate.Scenes) == 0 {
+		candidate.SchemaVersion != "storyboard-intent-candidate-set" || len(candidate.Scenes) == 0 {
 		return application.IntentFreezeSource{}, conflict("Storyboard Intent Candidate schema is invalid")
 	}
 	candidateContentHash, err := contract.CanonicalHash(json.RawMessage(revision.Candidate))

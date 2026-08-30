@@ -12,7 +12,7 @@ FIXTURE_PATH = (
     / "tests"
     / "fixtures"
     / "storygraph"
-    / "contract-v1.json"
+    / "storygraph-contract.json"
 )
 
 
@@ -41,7 +41,7 @@ def owner_ref(
 
 def node_key(node_type: str, owner: dict[str, Any]) -> str:
     material = {
-        "schema": "story-node-key-v1",
+        "schema": "story-node-key-owner-fragment",
         "node_type": node_type,
         "owner_kind": owner["owner_kind"],
         "owner_logical_id": owner["owner_logical_id"],
@@ -82,7 +82,7 @@ def canonical_edge(
     qualifier: dict[str, str],
 ) -> dict[str, Any]:
     key_material = {
-        "schema": "story-edge-key-v1",
+        "schema": "story-edge-key-qualified-endpoints",
         "edge_type": edge_type,
         "from_node_key": source,
         "to_node_key": target,

@@ -34,7 +34,7 @@ from app.modules.storygraph.candidate_schemas import (
 from app.modules.storygraph.harness import StoryGraphHarness
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire-v1.json"
+WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire.json"
 
 
 def stage_invocation(
@@ -46,7 +46,7 @@ def stage_invocation(
     draft = StoryGraphStageInvocation.model_construct(
         invocation_id=UUID(invocation_id),
         kind="storygraph_stage",
-        wire_schema_version="storygraph-stage-wire-v1",
+        wire_schema_version="storygraph-stage-wire",
         input_hash="0" * 64,
         execution_policy=source.execution_policy,
         payload=StoryGraphStagePayload.model_validate(payload),
@@ -741,7 +741,7 @@ async def test_real_codex_preserves_evidence_through_story_analysis_and_reconcil
                 "candidate_item_end": reconciled_item_count,
                 "target_candidate": reconciled_candidate,
                 "deterministic_gate": {
-                    "gate_version": "bible-deterministic-gate-v1",
+                    "gate_version": "bible-deterministic-gate",
                     "target_candidate_revision_id": reconciled_revision_id,
                     "target_candidate_revision_hash": reconciled_candidate_hash,
                     "blockers": [],

@@ -100,7 +100,7 @@ func TestStoryboardIntentHumanGateOnlyFreezesApprovedIntents(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("Storyboard Intent Human Gate v2 is absent from the system catalog")
+	t.Fatal("Storyboard Intent Human Gate Owner Apply is absent from the system catalog")
 }
 
 func TestStoryboardDraftConsumesPublishedStoryGraphWithoutFormalizingShots(t *testing.T) {
@@ -123,7 +123,7 @@ func TestStoryboardDraftConsumesPublishedStoryGraphWithoutFormalizingShots(t *te
 		}
 		return
 	}
-	t.Fatal("Storyboard Draft v2 is absent from the system catalog")
+	t.Fatal("Storyboard Draft Owner Input is absent from the system catalog")
 }
 
 func TestStoryGraphCompilerConsumesPlanningOwnerSetAndPublishesExactVersion(t *testing.T) {
@@ -163,7 +163,7 @@ func TestEpisodePlanningHumanGatePublishesOwnerSet(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("Episode Planning Human Gate v2 is absent from the system catalog")
+	t.Fatal("Episode Planning Human Gate Owner Apply is absent from the system catalog")
 }
 
 func TestEpisodeAnalysisConsumesPublishedSetAndBibleMaterialization(t *testing.T) {
@@ -206,7 +206,7 @@ func TestEpisodePlanHumanGateConsumesSegmentationCandidateAndPublishesEpisodeSet
 		}
 		return
 	}
-	t.Fatal("Episode Plan Human Gate v2 is absent from the system catalog")
+	t.Fatal("Episode Plan Human Gate Owner Apply is absent from the system catalog")
 }
 
 func TestProductionBibleMaterializationConsumesConfirmedVersionAndPublishesBindingSnapshot(t *testing.T) {

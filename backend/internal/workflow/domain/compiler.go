@@ -37,7 +37,7 @@ func Compile(source CompilationSource, contract CompilerContract) (Compilation, 
 		return Compilation{}, err
 	}
 	definition := WorkflowDefinitionVersion{
-		SchemaVersion: "workflow-definition-v1", WorkspaceID: revision.WorkspaceID, ProjectID: revision.ProjectID,
+		SchemaVersion: "workflow-definition", WorkspaceID: revision.WorkspaceID, ProjectID: revision.ProjectID,
 		AuthoringRevisionID: revision.ID, AuthoringRevisionContentHash: revision.ContentHash,
 		AuthoringRevisionExecutionHash: revision.ExecutionHash, NodeCatalogVersionID: revision.CatalogID,
 		NodeCatalogKey:     catalog.Key,
@@ -53,7 +53,7 @@ func Compile(source CompilationSource, contract CompilerContract) (Compilation, 
 	definition.ContentHash = sha256Hex(encodedDefinition)
 
 	snapshot := RunInputSnapshot{
-		SchemaVersion: "run-input-snapshot-v1", WorkspaceID: revision.WorkspaceID, ProjectID: revision.ProjectID,
+		SchemaVersion: "run-input-snapshot", WorkspaceID: revision.WorkspaceID, ProjectID: revision.ProjectID,
 		AuthoringRevisionID: revision.ID, AuthoringExecutionHash: revision.ExecutionHash,
 		WorkflowDefinitionHash: definition.ContentHash,
 		FrozenInputs:           append([]authoring.FrozenReference(nil), revision.FrozenInputs...),

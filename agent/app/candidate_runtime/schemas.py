@@ -44,7 +44,7 @@ class StoryGraphExecutionPolicy(BaseModel):
     skill_bundle_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     output_schema_version: str = Field(min_length=1)
     model_capability: Literal["structured_text"]
-    codex_runtime_contract: Literal["codex-cli-ephemeral-read-only-v1"]
+    codex_runtime_contract: Literal["codex-cli-ephemeral-read-only"]
     allowed_tools: list[str]
     max_model_calls: int = Field(ge=1)
     max_execution_seconds: int = Field(ge=1)
@@ -724,7 +724,7 @@ class StoryGraphGateBlocker(BaseModel):
 class StoryGraphDeterministicGateResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    gate_version: Literal["bible-deterministic-gate-v1"]
+    gate_version: Literal["bible-deterministic-gate"]
     target_candidate_revision_id: UUID
     target_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     blockers: list[StoryGraphGateBlocker]
@@ -1179,7 +1179,7 @@ class StoryGraphStageInvocation(BaseModel):
 
     invocation_id: UUID
     kind: Literal["storygraph_stage"]
-    wire_schema_version: Literal["storygraph-stage-wire-v1"]
+    wire_schema_version: Literal["storygraph-stage-wire"]
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     execution_policy: StoryGraphExecutionPolicy
     payload: StoryGraphStagePayload
@@ -1224,7 +1224,7 @@ class StoryGraphStageInvocation(BaseModel):
 
     def stage_instance_key(self) -> str:
         material = (
-            "storygraph-stage-v1"
+            "storygraph-stage"
             + self.payload.stage
             + self.payload.shard_key
             + self.payload.shard_manifest_ref.hash
@@ -1261,7 +1261,7 @@ class StoryGraphStageResult(BaseModel):
 
     invocation_id: UUID
     kind: Literal["storygraph_stage"]
-    wire_schema_version: Literal["storygraph-stage-wire-v1"]
+    wire_schema_version: Literal["storygraph-stage-wire"]
     stage: StoryGraphStage
     shard_key: str = Field(min_length=1)
     status: Literal["succeeded", "failed", "unknown"]

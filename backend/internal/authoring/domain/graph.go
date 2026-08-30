@@ -177,7 +177,7 @@ func PublishSnapshot(draft DraftSnapshot, catalog Catalog) (RevisionSnapshot, er
 		CatalogKey           string            `json:"catalog_key"`
 		CatalogVersion       string            `json:"catalog_version"`
 		CatalogExecutionHash string            `json:"catalog_execution_hash"`
-	}{"authoring-execution-v1", executionGraph, inputs, catalog.Key, catalog.Version, catalog.ExecutionHash})
+	}{"authoring-execution", executionGraph, inputs, catalog.Key, catalog.Version, catalog.ExecutionHash})
 	if err != nil {
 		return RevisionSnapshot{}, err
 	}

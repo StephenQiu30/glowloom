@@ -2,7 +2,7 @@ import request, { type RequestOptions } from "@/lib/request";
 
 type Envelope<T> = { data: T };
 
-export function createBibleApiV1DocumentRevisionsRevisionIdProductionBiblesPost(
+export function createBibleApiDocumentRevisionsRevisionIdProductionBiblesPost(
   params: { revision_id: string },
   body: API.ProductionBibleCreateRequest,
   options?: RequestOptions,
@@ -13,7 +13,7 @@ export function createBibleApiV1DocumentRevisionsRevisionIdProductionBiblesPost(
   );
 }
 
-export function getBibleApiV1ProductionBiblesBibleIdGet(
+export function getBibleApiProductionBiblesBibleIdGet(
   params: { bible_id: string },
   options?: RequestOptions,
 ) {
@@ -23,7 +23,7 @@ export function getBibleApiV1ProductionBiblesBibleIdGet(
   );
 }
 
-export function resumeBibleApiV1ProductionBiblesBibleIdResumePost(
+export function resumeBibleApiProductionBiblesBibleIdResumePost(
   params: { bible_id: string },
   body: API.ProductionBibleResumeRequest,
   options?: RequestOptions,
@@ -34,7 +34,7 @@ export function resumeBibleApiV1ProductionBiblesBibleIdResumePost(
   );
 }
 
-export function getCurrentBibleApiV1ProjectsProjectIdProductionBibleGet(
+export function getCurrentBibleApiProjectsProjectIdProductionBibleGet(
   params: { project_id: string },
   options?: RequestOptions,
 ) {

@@ -169,7 +169,7 @@ type AgentInvocation struct {
 	RequestType          string             `gorm:"type:varchar(40);not null;uniqueIndex:uq_agt_invocation_request,priority:1"`
 	RequestID            uuid.UUID          `gorm:"type:uuid;not null;uniqueIndex:uq_agt_invocation_request,priority:2"`
 	Kind                 string             `gorm:"type:varchar(40);not null;index:ix_agt_invocations_claimable,priority:2;check:ck_agt_invocation_kind,kind = 'storygraph_stage'"`
-	WireSchemaVersion    string             `gorm:"type:varchar(40);not null;check:ck_agt_invocation_wire,wire_schema_version = 'storygraph-stage-wire-v1'"`
+	WireSchemaVersion    string             `gorm:"type:varchar(40);not null;check:ck_agt_invocation_wire,wire_schema_version = 'storygraph-stage-wire'"`
 	Stage                string             `gorm:"type:varchar(40);not null;index:ix_agt_invocations_stage_shard,priority:1"`
 	ShardKey             string             `gorm:"type:varchar(200);not null;index:ix_agt_invocations_stage_shard,priority:2"`
 	StageInstanceKey     string             `gorm:"type:char(64);not null;uniqueIndex;check:ck_agt_invocation_stage_key,char_length(stage_instance_key) = 64"`

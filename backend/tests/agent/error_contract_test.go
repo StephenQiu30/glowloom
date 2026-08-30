@@ -18,7 +18,7 @@ func TestStoryGraphFailureCodesHaveFrozenStatusAndRetrySemantics(t *testing.T) {
 		Retryable bool   `json:"retryable"`
 	}
 	_, currentFile, _, _ := runtime.Caller(0)
-	encoded, err := os.ReadFile(filepath.Join(filepath.Dir(currentFile), "../fixtures/agent/storygraph-errors-v1.json"))
+	encoded, err := os.ReadFile(filepath.Join(filepath.Dir(currentFile), "../fixtures/agent/storygraph-errors.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

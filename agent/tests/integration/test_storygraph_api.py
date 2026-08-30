@@ -16,7 +16,7 @@ from app.modules.storygraph.candidate_schemas import SourceEvidenceCandidate
 from app.modules.storygraph.harness import CodexRuntimeUnavailable, StoryGraphHarness
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire-v1.json"
+WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire.json"
 SECRET = "a-secure-agent-execution-secret-value"
 
 
@@ -89,7 +89,7 @@ async def test_private_api_only_accepts_storygraph_stage_and_returns_a_hashed_ca
     monkeypatch.setattr(StoryGraphHarness, "execute", execute)
     request = invocation()
     response = await client.post(
-        "/internal/v1/invocations",
+        "/internal/storygraph/invocations",
         json=request.model_dump(mode="json", exclude_none=True),
         headers={"X-Lanverse-Execution-Grant": token(request)},
     )
@@ -102,7 +102,7 @@ async def test_private_api_only_accepts_storygraph_stage_and_returns_a_hashed_ca
     removed = request.model_dump(mode="json", exclude_none=True)
     removed["kind"] = "production_bible"
     response = await client.post(
-        "/internal/v1/invocations",
+        "/internal/storygraph/invocations",
         json=removed,
         headers={"X-Lanverse-Execution-Grant": "invalid"},
     )
@@ -122,7 +122,7 @@ async def test_runtime_unavailable_is_unknown_and_never_an_empty_success(
     monkeypatch.setattr(StoryGraphHarness, "execute", execute)
     request = invocation()
     response = await client.post(
-        "/internal/v1/invocations",
+        "/internal/storygraph/invocations",
         json=request.model_dump(mode="json", exclude_none=True),
         headers={"X-Lanverse-Execution-Grant": token(request)},
     )

@@ -275,9 +275,9 @@ func TestProductionEpisodePlanCandidateAndStructurePublishRecovery(t *testing.T)
 	if err = database.Table(model.ProductionBible{}.TableName()).Create(map[string]any{
 		"id": bibleID, "workspace_id": workspaceID, "project_id": fixture.projectID,
 		"document_revision_id": fixture.scriptRevisionID, "task_id": taskID, "status": "confirmed",
-		"input_hash": fixture.normalizedHash, "result_hash": resultHash, "engine_version": "test-v1",
-		"model_name": "deterministic", "prompt_version": "test-v1", "schema_version": "production-bible-v1",
-		"harness_version": "test-v1", "checkpoint_revision": 0,
+		"input_hash": fixture.normalizedHash, "result_hash": resultHash, "engine_version": "test",
+		"model_name": "deterministic", "prompt_version": "test", "schema_version": "production-bible",
+		"harness_version": "test", "checkpoint_revision": 0,
 		"candidate": `{"entities":[],"world_entries":[],"review_issues":[]}`, "review_decisions": `{}`, "error": `{}`,
 		"revision": 2, "confirmed_at": confirmedAt, "confirmed_by": confirmedBy, "created_by": fixture.userID,
 		"created_at": now, "updated_at": now,

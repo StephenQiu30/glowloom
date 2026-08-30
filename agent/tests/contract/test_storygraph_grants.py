@@ -14,7 +14,7 @@ from app.candidate_runtime.grants import InvalidExecutionGrant, verify_execution
 from app.candidate_runtime.schemas import StoryGraphStageInvocation
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire-v1.json"
+WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire.json"
 SECRET = "a-secure-agent-execution-secret-value"
 
 

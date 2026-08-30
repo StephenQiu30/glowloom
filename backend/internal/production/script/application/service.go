@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	normalizerVersion = "lanverse-text-v1"
-	analyzerVersion   = "lanverse-script-v1"
+	normalizerVersion = "unicode-codepoint-normalizer"
+	analyzerVersion   = "screenplay-structure-analyzer"
 	importOperation   = "script.import"
 )
 

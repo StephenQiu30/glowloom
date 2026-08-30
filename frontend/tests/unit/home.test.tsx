@@ -13,12 +13,12 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/api/identity", async () => ({
   ...(await vi.importActual<typeof import("@/api/identity")>("@/api/identity")),
-  meApiV1MeGet: apiMocks.me,
+  meApiMeGet: apiMocks.me,
 }));
 
 vi.mock("@/api/projects", async () => ({
   ...(await vi.importActual<typeof import("@/api/projects")>("@/api/projects")),
-  listProjectsApiV1ProjectsGet: apiMocks.listProjects,
+  listProjectsApiProjectsGet: apiMocks.listProjects,
 }));
 
 import Home from "@/app/page";

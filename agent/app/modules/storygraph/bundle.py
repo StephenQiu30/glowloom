@@ -16,13 +16,13 @@ class BundleInvalid(ValueError):
 @dataclass(frozen=True)
 class BundleManifest:
     definition_key: str = "storygraph_stage"
-    definition_version: str = "storygraph-stage-harness-v1"
-    prompt_version: str = "build-storygraph-prompt-v2"
-    skill_bundle_version: str = "build-storygraph-v2"
+    definition_version: str = "storygraph-stage-harness"
+    prompt_version: str = "build-storygraph-prompt"
+    skill_bundle_version: str = "build-storygraph"
     skill_bundle_hash: str = SKILL_BUNDLE_HASH
-    output_schema_version: str = "storygraph-candidate-schema-v2"
+    output_schema_version: str = "storygraph-candidate-schema"
     model_capability: str = "structured_text"
-    codex_runtime_contract: str = "codex-cli-ephemeral-read-only-v1"
+    codex_runtime_contract: str = "codex-cli-ephemeral-read-only"
     allowed_tools: tuple[str, ...] = ()
     max_model_calls: int = 2
     max_execution_seconds: int = 600

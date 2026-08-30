@@ -1,60 +1,60 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 
 import {
-  confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPost,
-  createEpisodePlanApiV1DocumentRevisionsRevisionIdEpisodePlansPost,
-  getEpisodePlanApiV1EpisodePlansPlanIdGet,
-  materializeEpisodePlanApiV1EpisodePlansPlanIdMaterializationsPost,
-  publishImportCommitApiV1ImportCommitsCommitIdPublishPost,
+  confirmEpisodePlanApiEpisodePlansPlanIdConfirmPost,
+  createEpisodePlanApiDocumentRevisionsRevisionIdEpisodePlansPost,
+  getEpisodePlanApiEpisodePlansPlanIdGet,
+  materializeEpisodePlanApiEpisodePlansPlanIdMaterializationsPost,
+  publishImportCommitApiImportCommitsCommitIdPublishPost,
 } from "@/api/episodePlanning";
 import {
-  archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePost,
-  changePasswordApiV1AuthChangePasswordPost,
-  confirmRegistrationVerificationApiV1AuthRegistrationVerificationsConfirmPost,
-  createWorkspaceApiV1WorkspacesPost,
-  deactivateMeApiV1MeDeactivatePost,
-  listWorkspacesApiV1WorkspacesGet,
-  loginApiV1AuthLoginPost,
-  logoutApiV1AuthLogoutPost,
-  meApiV1MeGet,
-  registerApiV1AuthRegisterPost,
-  requestRegistrationVerificationApiV1AuthRegistrationVerificationsPost,
-  restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePost,
-  updateMeApiV1MePatch,
-  updateWorkspaceApiV1WorkspacesWorkspaceIdPatch,
+  archiveWorkspaceApiWorkspacesWorkspaceIdArchivePost,
+  changePasswordApiAuthChangePasswordPost,
+  confirmRegistrationVerificationApiAuthRegistrationVerificationsConfirmPost,
+  createWorkspaceApiWorkspacesPost,
+  deactivateMeApiMeDeactivatePost,
+  listWorkspacesApiWorkspacesGet,
+  loginApiAuthLoginPost,
+  logoutApiAuthLogoutPost,
+  meApiMeGet,
+  registerApiAuthRegisterPost,
+  requestRegistrationVerificationApiAuthRegistrationVerificationsPost,
+  restoreWorkspaceApiWorkspacesWorkspaceIdRestorePost,
+  updateMeApiMePatch,
+  updateWorkspaceApiWorkspacesWorkspaceIdPatch,
 } from "@/api/identity";
 import {
-  completeUploadApiV1MediaUploadsUploadSessionIdCompletePost,
-  getMediaApiV1MediaVersionIdGet,
-  initializeUploadApiV1MediaUploadsPost,
+  completeUploadApiMediaUploadsUploadSessionIdCompletePost,
+  getMediaApiMediaVersionIdGet,
+  initializeUploadApiMediaUploadsPost,
 } from "@/api/media";
 import {
-  claimHumanTaskApiV1HumanTasksHumanTaskIdClaimsPost,
-  decideHumanTaskApiV1HumanTasksHumanTaskIdDecisionsPost,
-  getHumanTaskApiV1HumanTasksHumanTaskIdGet,
-  listHumanTasksApiV1ProjectsProjectIdHumanTasksGet,
-  releaseHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimReleasesPost,
-  renewHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimRenewalsPost,
-  resumeHumanGateApiV1ReviewDecisionsReviewDecisionIdResumePost,
+  claimHumanTaskApiHumanTasksHumanTaskIdClaimsPost,
+  decideHumanTaskApiHumanTasksHumanTaskIdDecisionsPost,
+  getHumanTaskApiHumanTasksHumanTaskIdGet,
+  listHumanTasksApiProjectsProjectIdHumanTasksGet,
+  releaseHumanTaskClaimApiHumanTasksHumanTaskIdClaimReleasesPost,
+  renewHumanTaskClaimApiHumanTasksHumanTaskIdClaimRenewalsPost,
+  resumeHumanGateApiReviewDecisionsReviewDecisionIdResumePost,
 } from "@/api/humanReviews";
 import {
-  createBibleApiV1DocumentRevisionsRevisionIdProductionBiblesPost,
-  getBibleApiV1ProductionBiblesBibleIdGet,
-  getCurrentBibleApiV1ProjectsProjectIdProductionBibleGet,
-  resumeBibleApiV1ProductionBiblesBibleIdResumePost,
+  createBibleApiDocumentRevisionsRevisionIdProductionBiblesPost,
+  getBibleApiProductionBiblesBibleIdGet,
+  getCurrentBibleApiProjectsProjectIdProductionBibleGet,
+  resumeBibleApiProductionBiblesBibleIdResumePost,
 } from "@/api/productionBibles";
 import {
-  createProjectApiV1ProjectsPost,
-  getProjectApiV1ProjectsProjectIdGet,
-  listEpisodesApiV1ProjectsProjectIdEpisodesGet,
-  listProjectsApiV1ProjectsGet,
+  createProjectApiProjectsPost,
+  getProjectApiProjectsProjectIdGet,
+  listEpisodesApiProjectsProjectIdEpisodesGet,
+  listProjectsApiProjectsGet,
 } from "@/api/projects";
 import {
-  getCurrentDocumentApiV1ProjectsProjectIdCurrentScriptDocumentGet,
-  importDocumentApiV1ProjectsProjectIdScriptImportsPost,
-  previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost,
+  getCurrentDocumentApiProjectsProjectIdCurrentScriptDocumentGet,
+  importDocumentApiProjectsProjectIdScriptImportsPost,
+  previewDocumentApiProjectsProjectIdScriptImportPreviewsPost,
 } from "@/api/scriptDocuments";
-import { getWorkflowRunApiV1WorkflowRunsWorkflowRunIdGet } from "@/api/workflows";
+import { getWorkflowRunApiWorkflowRunsWorkflowRunIdGet } from "@/api/workflows";
 import request, { ApiClientError } from "@/lib/request";
 
 export type AppApiError = {
@@ -127,10 +127,10 @@ export const appApi = createApi({
   ],
   endpoints: (builder) => ({
     login: builder.mutation<API.AuthResponse, API.LoginRequest>({
-      queryFn: (body) => runRequest(() => loginApiV1AuthLoginPost(body)),
+      queryFn: (body) => runRequest(() => loginApiAuthLoginPost(body)),
     }),
     register: builder.mutation<API.AuthResponse, API.RegisterRequest>({
-      queryFn: (body) => runRequest(() => registerApiV1AuthRegisterPost(body)),
+      queryFn: (body) => runRequest(() => registerApiAuthRegisterPost(body)),
     }),
     requestRegistrationVerification: builder.mutation<
       API.RegistrationVerificationAccepted,
@@ -138,7 +138,7 @@ export const appApi = createApi({
     >({
       queryFn: (body) =>
         runRequest(() =>
-          requestRegistrationVerificationApiV1AuthRegistrationVerificationsPost(body),
+          requestRegistrationVerificationApiAuthRegistrationVerificationsPost(body),
         ),
     }),
     confirmRegistrationVerification: builder.mutation<
@@ -147,35 +147,35 @@ export const appApi = createApi({
     >({
       queryFn: (body) =>
         runRequest(() =>
-          confirmRegistrationVerificationApiV1AuthRegistrationVerificationsConfirmPost(
+          confirmRegistrationVerificationApiAuthRegistrationVerificationsConfirmPost(
             body,
           ),
         ),
     }),
     me: builder.query<API.MeResponse, void>({
-      queryFn: () => runRequest(() => meApiV1MeGet()),
+      queryFn: () => runRequest(() => meApiMeGet()),
       providesTags: ["Me"],
     }),
     logout: builder.mutation<API.RevocationResponse, void>({
-      queryFn: () => runRequest(() => logoutApiV1AuthLogoutPost()),
+      queryFn: () => runRequest(() => logoutApiAuthLogoutPost()),
     }),
     updateProfile: builder.mutation<API.MeResponse, API.ProfileUpdateRequest>({
-      queryFn: (body) => runRequest(() => updateMeApiV1MePatch(body)),
+      queryFn: (body) => runRequest(() => updateMeApiMePatch(body)),
       invalidatesTags: ["Me"],
     }),
     changePassword: builder.mutation<API.RevocationResponse, API.ChangePasswordRequest>({
-      queryFn: (body) => runRequest(() => changePasswordApiV1AuthChangePasswordPost(body)),
+      queryFn: (body) => runRequest(() => changePasswordApiAuthChangePasswordPost(body)),
     }),
     deactivateAccount: builder.mutation<
       API.RevocationResponse,
       API.DeactivateAccountRequest
     >({
-      queryFn: (body) => runRequest(() => deactivateMeApiV1MeDeactivatePost(body)),
+      queryFn: (body) => runRequest(() => deactivateMeApiMeDeactivatePost(body)),
     }),
     workspaces: builder.query<API.WorkspaceResponse[], void>({
       queryFn: () =>
         runRequest(() =>
-          listWorkspacesApiV1WorkspacesGet({ include_archived: true }),
+          listWorkspacesApiWorkspacesGet({ include_archived: true }),
         ),
       providesTags: ["Workspaces"],
     }),
@@ -183,7 +183,7 @@ export const appApi = createApi({
       API.WorkspaceResponse,
       API.WorkspaceCreateRequest
     >({
-      queryFn: (body) => runRequest(() => createWorkspaceApiV1WorkspacesPost(body)),
+      queryFn: (body) => runRequest(() => createWorkspaceApiWorkspacesPost(body)),
       invalidatesTags: ["Workspaces"],
     }),
     updateWorkspace: builder.mutation<
@@ -192,7 +192,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ workspaceId, body }) =>
         runRequest(() =>
-          updateWorkspaceApiV1WorkspacesWorkspaceIdPatch(
+          updateWorkspaceApiWorkspacesWorkspaceIdPatch(
             { workspace_id: workspaceId },
             body,
           ),
@@ -208,8 +208,8 @@ export const appApi = createApi({
         const body = { expected_revision: expectedRevision };
         return runRequest(() =>
           archived
-            ? archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePost(params, body)
-            : restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePost(params, body),
+            ? archiveWorkspaceApiWorkspacesWorkspaceIdArchivePost(params, body)
+            : restoreWorkspaceApiWorkspacesWorkspaceIdRestorePost(params, body),
         );
       },
       invalidatesTags: ["Me", "Workspaces", "Projects"],
@@ -217,7 +217,7 @@ export const appApi = createApi({
     projects: builder.query<API.PaginatedProjects, string>({
       queryFn: (workspaceId) =>
         runRequest(() =>
-          listProjectsApiV1ProjectsGet({
+          listProjectsApiProjectsGet({
             workspace_id: workspaceId,
             include_archived: true,
             search: null,
@@ -230,13 +230,13 @@ export const appApi = createApi({
       providesTags: ["Projects"],
     }),
     createProject: builder.mutation<API.ProjectResponse, API.ProjectCreateRequest>({
-      queryFn: (body) => runRequest(() => createProjectApiV1ProjectsPost(body)),
+      queryFn: (body) => runRequest(() => createProjectApiProjectsPost(body)),
       invalidatesTags: ["Projects"],
     }),
     project: builder.query<API.ProjectResponse, string>({
       queryFn: (projectId) =>
         runRequest(() =>
-          getProjectApiV1ProjectsProjectIdGet({ project_id: projectId }),
+          getProjectApiProjectsProjectIdGet({ project_id: projectId }),
         ),
       providesTags: (_result, _error, projectId) => [
         { type: "Project", id: projectId },
@@ -245,7 +245,7 @@ export const appApi = createApi({
     episodes: builder.query<API.EpisodeResponse[], string>({
       queryFn: (projectId) =>
         runRequest(() =>
-          listEpisodesApiV1ProjectsProjectIdEpisodesGet({
+          listEpisodesApiProjectsProjectIdEpisodesGet({
             project_id: projectId,
             include_archived: true,
           }),
@@ -259,7 +259,7 @@ export const appApi = createApi({
       API.UploadDeclaration
     >({
       queryFn: (body) =>
-        runRequest(() => initializeUploadApiV1MediaUploadsPost(body)),
+        runRequest(() => initializeUploadApiMediaUploadsPost(body)),
     }),
     completeMediaUpload: builder.mutation<
       API.UploadCompletionResponse,
@@ -267,7 +267,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ uploadSessionId }) =>
         runRequest(() =>
-          completeUploadApiV1MediaUploadsUploadSessionIdCompletePost({
+          completeUploadApiMediaUploadsUploadSessionIdCompletePost({
             upload_session_id: uploadSessionId,
           }),
         ),
@@ -278,7 +278,7 @@ export const appApi = createApi({
     mediaVersion: builder.query<API.MediaVersionResponse, string>({
       queryFn: (versionId) =>
         runRequest(() =>
-          getMediaApiV1MediaVersionIdGet({ version_id: versionId }),
+          getMediaApiMediaVersionIdGet({ version_id: versionId }),
         ),
       providesTags: (_result, _error, versionId) => [
         { type: "Media", id: versionId },
@@ -290,7 +290,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ projectId, body }) =>
         runRequest(() =>
-          previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost(
+          previewDocumentApiProjectsProjectIdScriptImportPreviewsPost(
             { project_id: projectId },
             body,
           ),
@@ -302,7 +302,7 @@ export const appApi = createApi({
     >({
       queryFn: (projectId) =>
         runRequest(() =>
-          getCurrentDocumentApiV1ProjectsProjectIdCurrentScriptDocumentGet({
+          getCurrentDocumentApiProjectsProjectIdCurrentScriptDocumentGet({
             project_id: projectId,
           }),
         ),
@@ -316,7 +316,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ projectId, body }) =>
         runRequest(() =>
-          importDocumentApiV1ProjectsProjectIdScriptImportsPost(
+          importDocumentApiProjectsProjectIdScriptImportsPost(
             { project_id: projectId },
             body,
           ),
@@ -329,7 +329,7 @@ export const appApi = createApi({
     currentProductionBible: builder.query<ProductionBibleWithDecisions, string>({
       queryFn: (projectId) =>
         runRequest(() =>
-          getCurrentBibleApiV1ProjectsProjectIdProductionBibleGet({
+          getCurrentBibleApiProjectsProjectIdProductionBibleGet({
             project_id: projectId,
           }) as Promise<{ data: ProductionBibleWithDecisions }>,
         ),
@@ -340,7 +340,7 @@ export const appApi = createApi({
     productionBible: builder.query<ProductionBibleWithDecisions, string>({
       queryFn: (bibleId) =>
         runRequest(() =>
-          getBibleApiV1ProductionBiblesBibleIdGet({
+          getBibleApiProductionBiblesBibleIdGet({
             bible_id: bibleId,
           }) as Promise<{ data: ProductionBibleWithDecisions }>,
         ),
@@ -354,7 +354,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ revisionId, body }) =>
         runRequest(() =>
-          createBibleApiV1DocumentRevisionsRevisionIdProductionBiblesPost(
+          createBibleApiDocumentRevisionsRevisionIdProductionBiblesPost(
             { revision_id: revisionId },
             body,
           ) as Promise<{ data: ProductionBibleWithDecisions }>,
@@ -394,7 +394,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ bibleId, body }) =>
         runRequest(() =>
-          resumeBibleApiV1ProductionBiblesBibleIdResumePost(
+          resumeBibleApiProductionBiblesBibleIdResumePost(
             { bible_id: bibleId },
             body,
           ) as Promise<{ data: ProductionBibleWithDecisions }>,
@@ -407,7 +407,7 @@ export const appApi = createApi({
     episodePlan: builder.query<API.EpisodePlanDetailResponse, string>({
       queryFn: (planId) =>
         runRequest(() =>
-          getEpisodePlanApiV1EpisodePlansPlanIdGet({ plan_id: planId }),
+          getEpisodePlanApiEpisodePlansPlanIdGet({ plan_id: planId }),
         ),
       providesTags: (_result, _error, planId) => [
         { type: "EpisodePlans", id: planId },
@@ -419,7 +419,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ revisionId, body }) =>
         runRequest(() =>
-          createEpisodePlanApiV1DocumentRevisionsRevisionIdEpisodePlansPost(
+          createEpisodePlanApiDocumentRevisionsRevisionIdEpisodePlansPost(
             { revision_id: revisionId },
             body,
           ),
@@ -432,7 +432,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ planId, body }) =>
         runRequest(() =>
-          confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPost(
+          confirmEpisodePlanApiEpisodePlansPlanIdConfirmPost(
             { plan_id: planId },
             body,
           ),
@@ -447,7 +447,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ planId, body }) =>
         runRequest(() =>
-          materializeEpisodePlanApiV1EpisodePlansPlanIdMaterializationsPost(
+          materializeEpisodePlanApiEpisodePlansPlanIdMaterializationsPost(
             { plan_id: planId },
             body,
           ),
@@ -460,7 +460,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ commitId, body }) =>
         runRequest(() =>
-          publishImportCommitApiV1ImportCommitsCommitIdPublishPost(
+          publishImportCommitApiImportCommitsCommitIdPublishPost(
             { commit_id: commitId },
             body,
           ),
@@ -478,7 +478,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ projectId, status, subjectType, after }) =>
         runRequest(() =>
-          listHumanTasksApiV1ProjectsProjectIdHumanTasksGet({
+          listHumanTasksApiProjectsProjectIdHumanTasksGet({
             project_id: projectId,
             status,
             subject_type: subjectType ?? null,
@@ -497,7 +497,7 @@ export const appApi = createApi({
     humanTask: builder.query<API.HumanTaskDetailEnvelope["data"], string>({
       queryFn: (taskId) =>
         runRequest(() =>
-          getHumanTaskApiV1HumanTasksHumanTaskIdGet({ human_task_id: taskId }),
+          getHumanTaskApiHumanTasksHumanTaskIdGet({ human_task_id: taskId }),
         ),
       providesTags: (_result, _error, taskId) => [
         { type: "HumanTasks", id: taskId },
@@ -509,7 +509,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ taskId, body }) =>
         runRequest(() =>
-          claimHumanTaskApiV1HumanTasksHumanTaskIdClaimsPost(
+          claimHumanTaskApiHumanTasksHumanTaskIdClaimsPost(
             { human_task_id: taskId },
             body,
           ),
@@ -525,7 +525,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ taskId, body }) =>
         runRequest(() =>
-          renewHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimRenewalsPost(
+          renewHumanTaskClaimApiHumanTasksHumanTaskIdClaimRenewalsPost(
             { human_task_id: taskId },
             body,
           ),
@@ -541,7 +541,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ taskId, body }) =>
         runRequest(() =>
-          releaseHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimReleasesPost(
+          releaseHumanTaskClaimApiHumanTasksHumanTaskIdClaimReleasesPost(
             { human_task_id: taskId },
             body,
           ),
@@ -562,7 +562,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ taskId, body }) =>
         runRequest(() =>
-          decideHumanTaskApiV1HumanTasksHumanTaskIdDecisionsPost(
+          decideHumanTaskApiHumanTasksHumanTaskIdDecisionsPost(
             { human_task_id: taskId },
             body,
           ),
@@ -584,7 +584,7 @@ export const appApi = createApi({
     >({
       queryFn: ({ decisionId }) =>
         runRequest(() =>
-          resumeHumanGateApiV1ReviewDecisionsReviewDecisionIdResumePost({
+          resumeHumanGateApiReviewDecisionsReviewDecisionIdResumePost({
             review_decision_id: decisionId,
           }),
         ),
@@ -597,7 +597,7 @@ export const appApi = createApi({
     workflowRun: builder.query<API.WorkflowRunViewResponse, string>({
       queryFn: (workflowRunId) =>
         runRequest(() =>
-          getWorkflowRunApiV1WorkflowRunsWorkflowRunIdGet({
+          getWorkflowRunApiWorkflowRunsWorkflowRunIdGet({
             workflow_run_id: workflowRunId,
           }),
         ),

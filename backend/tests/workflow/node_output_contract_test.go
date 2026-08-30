@@ -44,7 +44,7 @@ func TestNodeOutputContractCanonicalizesTypedPortBindings(t *testing.T) {
 			{"content_hash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","reference_version":"2","reference_id":"00000000-0000-0000-0000-000000000202","value_type":"storyboards","port":"storyboards"},
 			{"content_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","reference_version":"1","reference_id":"00000000-0000-0000-0000-000000000101","value_type":"production_bible","port":"bible"}
 		],
-		"schema_version":"node-output-v1"
+		"schema_version":"node-output"
 	}`))
 	if err != nil || decodedHash != outputHash || string(decodedCanonical) != string(canonical) || decoded.Bindings[0].Port != "bible" {
 		t.Fatalf("parse canonical output: output=%#v canonical=%s hash=%s err=%v", decoded, decodedCanonical, decodedHash, err)
@@ -61,7 +61,7 @@ func TestNodeOutputContractRejectsAmbiguousOrInvalidBindings(t *testing.T) {
 		}},
 	}
 	mutations := []func(*workflow.NodeOutputSnapshot){
-		func(value *workflow.NodeOutputSnapshot) { value.SchemaVersion = "node-output-v2" },
+		func(value *workflow.NodeOutputSnapshot) { value.SchemaVersion = "unknown-node-output" },
 		func(value *workflow.NodeOutputSnapshot) { value.Bindings = nil },
 		func(value *workflow.NodeOutputSnapshot) { value.Bindings[0].Port = "Invalid Port" },
 		func(value *workflow.NodeOutputSnapshot) { value.Bindings[0].ValueType = "Invalid Type" },
@@ -80,7 +80,7 @@ func TestNodeOutputContractRejectsAmbiguousOrInvalidBindings(t *testing.T) {
 			t.Fatalf("invalid node output mutation %d was accepted: %#v", index, changed)
 		}
 	}
-	if _, _, _, err := workflow.ParseNodeOutput(json.RawMessage(`{"schema_version":"node-output-v1","bindings":[],"extra":true}`)); err == nil {
+	if _, _, _, err := workflow.ParseNodeOutput(json.RawMessage(`{"schema_version":"node-output","bindings":[],"extra":true}`)); err == nil {
 		t.Fatal("node output parser accepted an unknown field")
 	}
 }

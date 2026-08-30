@@ -11,14 +11,14 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock("@/api/identity", async () => ({
   ...(await vi.importActual<typeof import("@/api/identity")>("@/api/identity")),
-  listWorkspacesApiV1WorkspacesGet: apiMocks.listWorkspaces,
-  meApiV1MeGet: apiMocks.me,
+  listWorkspacesApiWorkspacesGet: apiMocks.listWorkspaces,
+  meApiMeGet: apiMocks.me,
 }));
 
 vi.mock("@/api/projects", async () => ({
   ...(await vi.importActual<typeof import("@/api/projects")>("@/api/projects")),
-  createProjectApiV1ProjectsPost: apiMocks.createProject,
-  listProjectsApiV1ProjectsGet: apiMocks.listProjects,
+  createProjectApiProjectsPost: apiMocks.createProject,
+  listProjectsApiProjectsGet: apiMocks.listProjects,
 }));
 
 import { AppProviders } from "@/app/providers";

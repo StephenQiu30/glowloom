@@ -2,7 +2,7 @@ import request, { type RequestOptions } from "@/lib/request";
 
 type Envelope<T> = { data: T };
 
-export function getWorkflowRunApiV1WorkflowRunsWorkflowRunIdGet(
+export function getWorkflowRunApiWorkflowRunsWorkflowRunIdGet(
   params: { workflow_run_id: string },
   options?: RequestOptions,
 ) {

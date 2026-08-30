@@ -945,7 +945,7 @@ func episodeReconcileInvocationRecord(
 	}
 	manifestID := uuid.MustParse(manifest.ManifestID)
 	invocationID := uuid.NewSHA1(manifestID, []byte(fmt.Sprintf(
-		"episode-reconcile-v1\x00%d\x00%s\x00%s", manifest.Version, manifest.ManifestHash, shard.Key,
+		"episode-reconcile\x00%d\x00%s\x00%s", manifest.Version, manifest.ManifestHash, shard.Key,
 	)))
 	request, err := agentcontract.NewStageInvocation(
 		invocationID.String(),

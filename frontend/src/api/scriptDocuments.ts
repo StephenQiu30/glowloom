@@ -2,7 +2,7 @@ import request, { type RequestOptions } from "@/lib/request";
 
 type Envelope<T> = { data: T };
 
-export function getCurrentDocumentApiV1ProjectsProjectIdCurrentScriptDocumentGet(
+export function getCurrentDocumentApiProjectsProjectIdCurrentScriptDocumentGet(
   params: { project_id: string },
   options?: RequestOptions,
 ) {
@@ -12,7 +12,7 @@ export function getCurrentDocumentApiV1ProjectsProjectIdCurrentScriptDocumentGet
   );
 }
 
-export function previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost(
+export function previewDocumentApiProjectsProjectIdScriptImportPreviewsPost(
   params: { project_id: string },
   body: API.ScriptDocumentPreviewRequest,
   options?: RequestOptions,
@@ -23,7 +23,7 @@ export function previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost(
   );
 }
 
-export function importDocumentApiV1ProjectsProjectIdScriptImportsPost(
+export function importDocumentApiProjectsProjectIdScriptImportsPost(
   params: { project_id: string },
   body: API.ScriptDocumentImportRequest,
   options?: RequestOptions,

@@ -204,7 +204,7 @@ func TestSucceededProviderOutputsMaterializeThroughAssetReadinessAndCandidateQC(
 	gateway := &stagingProviderGateway{t: t, objects: objects}
 	bindingResolver := &controlledBindingResolver{}
 	bindingResolver.set(seedControlledProjectProviderBinding(
-		t, create, fixture, "staging-image", "image-quality-v1", 1,
+		t, create, fixture, "staging-image", "image-quality", 1,
 	))
 	providers := generationapp.NewProviderService(
 		generationgorm.NewProviderStore(database, costConfig, quotaConfig), gateway,
@@ -220,7 +220,7 @@ func TestSucceededProviderOutputsMaterializeThroughAssetReadinessAndCandidateQC(
 		generationgorm.New(database), generationasset.NewReadiness(assetService), generationapp.Config{
 			Now: func() time.Time { return now }, NewID: uuid.NewString,
 			ImageQC: generationapp.ImageQCPolicy{
-				Version: "provider-output-qc-v1", AllowedMediaTypes: []string{"image/png"},
+				Version: "provider-output-qc", AllowedMediaTypes: []string{"image/png"},
 				MinWidth: 4, MinHeight: 3, MaxPixels: 100,
 			},
 		},

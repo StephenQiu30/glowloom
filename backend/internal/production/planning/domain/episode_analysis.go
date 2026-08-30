@@ -169,7 +169,7 @@ func BuildEpisodeAnalysisManifests(
 			shard.InputHash, _ = episodeAnalysisCanonicalHash(struct {
 				Schema string               `json:"schema"`
 				Shard  EpisodeAnalysisShard `json:"shard"`
-			}{"episode-analysis-shard-v1", shard})
+			}{"episode-analysis-shard", shard})
 			analyzeShards = append(analyzeShards, shard)
 			current[shardIndex] = EpisodeReconcileChild{
 				Stage: AnalyzeEpisodeStage, ShardKey: key, SourceHash: shard.InputHash,
@@ -188,7 +188,7 @@ func BuildEpisodeAnalysisManifests(
 					EpisodePosition int                     `json:"episode_position"`
 					Level           int                     `json:"level"`
 					Children        []EpisodeReconcileChild `json:"children"`
-				}{"episode-reconcile-subtree-v1", episode.EpisodeID, episode.EpisodePosition, level, children})
+				}{"episode-reconcile-subtree", episode.EpisodeID, episode.EpisodePosition, level, children})
 				if err != nil {
 					return EpisodeAnalysisManifest{}, EpisodeReconcileManifest{}, err
 				}
@@ -236,7 +236,7 @@ func BuildEpisodeAnalysisManifests(
 		Schema   string                  `json:"schema"`
 		Episodes []EpisodeAnalysisSource `json:"episodes"`
 		Shards   []EpisodeAnalysisShard  `json:"shards"`
-	}{"episode-analysis-coverage-v1", episodes, analyzeShards})
+	}{"episode-analysis-coverage", episodes, analyzeShards})
 	if err != nil {
 		return EpisodeAnalysisManifest{}, EpisodeReconcileManifest{}, err
 	}
@@ -254,7 +254,7 @@ func BuildEpisodeAnalysisManifests(
 	reconcileCoverage, err := episodeAnalysisCanonicalHash(struct {
 		Schema string                 `json:"schema"`
 		Roots  []EpisodeReconcileRoot `json:"roots"`
-	}{"episode-reconcile-coverage-v1", roots})
+	}{"episode-reconcile-coverage", roots})
 	if err != nil {
 		return EpisodeAnalysisManifest{}, EpisodeReconcileManifest{}, err
 	}

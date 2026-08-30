@@ -81,13 +81,13 @@ func TestNodeCacheContractRejectsIncompleteKeysAndCanonicalizesOutput(t *testing
 
 	first, firstHash, err := workflow.CanonicalNodeOutput(json.RawMessage(`{
 		"bindings":[{"value_type":"production_bible","port":"bible","reference_version":"1","content_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","reference_id":"00000000-0000-0000-0000-000000000101"}],
-		"schema_version":"node-output-v1"
+		"schema_version":"node-output"
 	}`))
 	if err != nil {
 		t.Fatalf("canonicalize node output: %v", err)
 	}
 	second, secondHash, err := workflow.CanonicalNodeOutput(json.RawMessage(`{
-		"schema_version":"node-output-v1",
+		"schema_version":"node-output",
 		"bindings":[{"port":"bible","value_type":"production_bible","reference_id":"00000000-0000-0000-0000-000000000101","reference_version":"1","content_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]
 	}`))
 	if err != nil || string(first) != string(second) || firstHash != secondHash || len(firstHash) != 64 {

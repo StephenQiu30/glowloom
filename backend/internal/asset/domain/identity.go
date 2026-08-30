@@ -62,7 +62,7 @@ func NewAsset(input AssetInput) (Asset, error) {
 	}
 	asset.ContentHash = identityHash(struct {
 		Schema, WorkspaceID, ProjectID, Kind, IdentityKey string
-	}{"asset-identity-v1", asset.WorkspaceID, asset.ProjectID, asset.Kind, asset.IdentityKey})
+	}{"asset-identity", asset.WorkspaceID, asset.ProjectID, asset.Kind, asset.IdentityKey})
 	return asset, nil
 }
 
@@ -111,7 +111,7 @@ func NewAssetState(input AssetStateInput) (AssetState, error) {
 	state.ContentHash = identityHash(struct {
 		Schema, AssetID, StateKey, Label string
 		Snapshot                         json.RawMessage
-	}{"asset-state-v1", state.AssetID, state.StateKey, state.Label, state.Snapshot})
+	}{"asset-state", state.AssetID, state.StateKey, state.Label, state.Snapshot})
 	return state, nil
 }
 

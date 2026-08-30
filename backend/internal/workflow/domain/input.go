@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	NodeInputSchemaVersion    = "node-input-v1"
+	NodeInputSchemaVersion    = "node-input"
 	NodeInputSourceNodeOutput = "node_output"
 	NodeInputSourceVariable   = "variable"
 )

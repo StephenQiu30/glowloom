@@ -93,7 +93,7 @@ def _review_input() -> StoryGraphReviewStageInput:
             "candidate_item_end": 1,
             "target_candidate": _candidate(),
             "deterministic_gate": {
-                "gate_version": "bible-deterministic-gate-v1",
+                "gate_version": "bible-deterministic-gate",
                 "target_candidate_revision_id": target_id,
                 "target_candidate_revision_hash": target_hash,
                 "blockers": [],

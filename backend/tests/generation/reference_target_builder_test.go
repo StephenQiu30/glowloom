@@ -46,7 +46,7 @@ func TestReferenceTargetBuilderFreezesApprovedCharacterInputsAndReplays(t *testi
 	if target.SourceOwnerRef != source.ApprovedIntentSetRef || target.PolicySnapshotRef != source.EffectiveStyleSnapshotRef ||
 		target.Kind != generationdomain.GenerationTargetReferenceAsset || target.CreatedBy != actor.UserID ||
 		target.ReferenceAsset == nil || target.ReferenceAsset.AssetID != source.Requirements[0].AssetID ||
-		target.ReferenceAsset.OutputKind != "reference_sheet" || target.ReferenceAsset.PromptVersion != "character-reference-sheet-v1" ||
+		target.ReferenceAsset.OutputKind != "reference_sheet" || target.ReferenceAsset.PromptVersion != "character-reference-sheet" ||
 		target.ReferenceAsset.Width != 1536 || target.ReferenceAsset.Height != 1024 ||
 		target.ReferenceAsset.NumberResults != 4 || target.ReferenceAsset.OutputFormat != "PNG" ||
 		!strings.Contains(target.ReferenceAsset.PositivePrompt, `"hair":"black"`) ||
