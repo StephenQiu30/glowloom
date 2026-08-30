@@ -8,7 +8,7 @@ import (
 
 type UserAccount struct {
 	ID              uuid.UUID  `gorm:"type:uuid;primaryKey"`
-	EmailNormalized string     `gorm:"type:varchar(320);not null;uniqueIndex"`
+	EmailNormalized string     `gorm:"type:varchar(320);not null;unique"`
 	PasswordHash    string     `gorm:"type:text;not null"`
 	TokenVersion    int        `gorm:"not null;check:ck_idn_user_token_version,token_version >= 1"`
 	DisplayName     string     `gorm:"type:varchar(80);not null"`
@@ -49,12 +49,12 @@ func (Membership) TableName() string { return "idn_memberships" }
 
 type RegistrationVerification struct {
 	ID              uuid.UUID  `gorm:"type:uuid;primaryKey"`
-	EmailNormalized string     `gorm:"type:varchar(320);not null;uniqueIndex"`
+	EmailNormalized string     `gorm:"type:varchar(320);not null;unique"`
 	CodeDigest      string     `gorm:"type:char(64);not null"`
 	AttemptCount    int        `gorm:"not null;check:ck_idn_registration_attempt_count,attempt_count >= 0"`
 	Status          string     `gorm:"type:varchar(20);not null;check:ck_idn_registration_status,status IN ('pending','confirmed','consumed')"`
 	ExpiresAt       time.Time  `gorm:"type:timestamptz;not null;index:ix_idn_registration_expires"`
-	TicketDigest    *string    `gorm:"type:char(64);uniqueIndex"`
+	TicketDigest    *string    `gorm:"type:char(64);unique"`
 	TicketExpiresAt *time.Time `gorm:"type:timestamptz"`
 	CreatedAt       time.Time  `gorm:"type:timestamptz;not null"`
 	UpdatedAt       time.Time  `gorm:"type:timestamptz;not null"`
@@ -65,7 +65,7 @@ func (RegistrationVerification) TableName() string { return "idn_registration_ve
 type AuthSession struct {
 	ID           uuid.UUID   `gorm:"type:uuid;primaryKey"`
 	UserID       uuid.UUID   `gorm:"type:uuid;not null;index:ix_idn_auth_sessions_user"`
-	TokenDigest  string      `gorm:"type:char(64);not null;uniqueIndex"`
+	TokenDigest  string      `gorm:"type:char(64);not null;unique"`
 	TokenVersion int         `gorm:"not null;check:ck_idn_auth_session_token_version,token_version >= 1"`
 	ExpiresAt    time.Time   `gorm:"type:timestamptz;not null;index:ix_idn_auth_sessions_expires"`
 	RevokedAt    *time.Time  `gorm:"type:timestamptz"`
