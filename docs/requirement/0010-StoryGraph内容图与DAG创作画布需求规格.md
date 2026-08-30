@@ -1,212 +1,241 @@
-# StoryGraph 内容图与 DAG 创作画布需求规格
+# Lanverse 剧本视觉生产跨服务需求规格
 
-> 状态：跨服务 Requirement 已重新接受（`SG-D18`，2026-08-29）；新增/改写的媒体 Provider 条款初始待实施、待验收，既有证据只按原合同保留
+> 状态：VP-D14 已接受（2026-08-31）
 >
-> 产品依据：[StoryGraph 产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
+> 接受依据：产品映射、Owner/事务、失败/恢复三轴独立反例审阅通过；所有条款从未来实施与验收的未通过状态开始，历史 SG-Ixx 证据不抵扣
 >
-> 设计依据：[StoryGraph 总设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md) · [通用媒体 Provider](../design/2051-通用媒体Provider与Generation执行器设计.md) · [Backend 领域设计](../design/2002-后端领域模块功能设计.md) · [公共 Human Gate](../design/2055-Workflow公共HumanGate命令与恢复设计.md) · [前端应用架构](../design/1001-前端应用架构.md)
+> 正文 SHA-256：dfc9e7360dce9000dd373f7c826f581e7494347411ca1f4ea12c3371dd9241ef
 >
-> Agent 专项契约：由 `SG-D19` 单独复核，不在本文复制 Harness 内部协议；媒体 Provider Secret、Adapter 和业务写入职责不得移入 Agent
+> 产品依据：[Lanverse 剧本视觉生产工作台产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
+>
+> 设计依据：[剧本视觉生产工作台与世界观预设设计](../design/0011-剧本视觉生产工作台与世界观预设设计.md)、[项目制作圣经执行框架](../design/3001-项目制作圣经生成执行框架设计.md)、[Agent/Harness](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)、[Storyboard Harness](../design/3002-本地-Codex-分镜智能体执行框架设计.md)、[Backend 领域](../design/2002-后端领域模块功能设计.md)、[Generation](../design/2051-通用媒体Provider与Generation执行器设计.md)、[Human Gate](../design/2055-Workflow公共HumanGate命令与恢复设计.md)、[Frontend](../design/1002-前端功能模块设计.md)
+>
+> Agent 合同：[StoryGraph 剧本解析 Harness 与内置 Skill 需求规格](3003-StoryGraph剧本解析Harness与内置Skill需求规格.md)
+>
+> 下一文档门：VP-D15。本文被接受前不得据此编写实施 Plan 或代码。
 
-## 1. 规格约定
+## 1. 目的、范围与验证约定
 
-本文是 StoryGraph MVP 的跨 Backend、Workflow、Review、Asset/Generation/Media Provider、Kafka/Search/ELK 和 Frontend 唯一可测契约。每条“必须/不得”都必须由 `SG-D21` Acceptance 映射：2026-08-27 后已有真实证据的未变合同可保留证据；本次新增或改写合同必须创建全未勾选的新目标项，历史 Runware/环境变量证据不能自动满足。
+本文把已接受设计收口为可执行、可追踪、可失败关闭的跨服务合同。范围从完整剧本上传开始，经过结构事实、制作世界、世界观预设、六类视觉参考、逐目标审核、Production Packet 与正式分镜，结束于 Gate 5 接受后的 StoryGraph 与 ShotPlan 正式版本。
 
-验证类型：
+当前 MVP 明确不包含付费、成本、配额、视频生成、通用无限画布、多人实时协作和模型市场。既有 Cost、Quota、视频或旧 DAG 画布实现只作为历史事实，不能改变本文范围，也不能抵扣未来验收。
 
-- `contract`：Schema、Hash、OpenAPI、事件和跨语言 fixture；
-- `unit`：纯领域规则与确定性算法；
-- `integration`：真实 PostgreSQL/GORM、Temporal、Kafka、Elasticsearch、对象存储或 Provider Staging；
-- `e2e`：跨服务真实业务旅程；
-- `architecture`：导入、Writer、SQL/ORM、测试目录和禁止依赖；
-- `manual`：只能补充语义质量判断，不能替代自动化不变量。
+验证类型采用以下固定术语：
 
-## 2. 全局架构与事实源
+- Contract：Go、Python、OpenAPI 与前端生成类型的同一 fixture 正反验证。
+- Unit：领域不变量、Canonical Hash、状态迁移和纯函数验证。
+- Integration：真实 PostgreSQL、对象存储、Temporal 或 Agent 进程边界验证。
+- Journey：从用户动作到正式 Owner 状态的纵向闭环验证。
+- Browser：真实浏览器中的响应式、键盘、焦点、错误恢复和可访问性验证。
+- Negative：越权、陈旧、重复、乱序、部分成功和未知结果必须失败关闭。
 
-| ID | 必须满足的契约 | 验证 |
+所有 ID 在 VP-D15 中必须恰好映射到一个主实施切片和至少一个验收项；不得以“由整体测试覆盖”代替明确映射。
+
+## 2. 全局架构与唯一写入边界
+
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SG-ARC-001` | Backend Go Module 是 Production、StoryGraph、Workflow 业务投影、Review、Generation、Asset、Cost/Quota、Outbox 和 Search 索引协调的唯一业务 Writer。 | `architecture`：禁止 Frontend/Agent/Event Runtime 旁路 Owner Application 直接写正式事实；跨边界负向调用。 |
-| `SG-ARC-002` | PostgreSQL 是唯一 SQL 事实源；全部业务表只由一份 GORM Model Catalog 定义并同步。不得存在 Migration 文件/版本/Checksum/Source 元数据、Raw SQL 业务 Schema、第二 ORM、第二数据库 Writer 或兼容双写。 | `architecture + integration`：目录扫描、依赖扫描、空库 Catalog Sync、Model/约束核查。 |
-| `SG-ARC-003` | Domain/Application 不得导入 GORM、Temporal、Kafka、Elasticsearch、对象存储或 Provider SDK；Adapter 实现 Port，Composition Root 负责唯一装配。 | Go import/AST 架构测试。 |
-| `SG-ARC-004` | Temporal 是唯一跨步骤持久 Workflow/Timer/Human Wait/Signal 引擎；Kafka 不调度 Workflow，数据库轮询不建立第二工作流。 | 架构扫描；真实 Temporal wait/signal/replay/restart。 |
-| `SG-ARC-005` | StoryGraph、Authoring Graph、WorkflowDefinition 和 Temporal History 使用不同 Schema、ID、Owner 和存储，不能经万能 Graph DTO/表互相写入。 | `contract + architecture`：ID/DTO 不可互换负向测试。 |
-| `SG-ARC-006` | Python Agent 是 Backend 私有 Candidate Runtime，只返回严格 Candidate/Repair；不得接收数据库、Kafka、Elasticsearch、Temporal、对象存储、JWT 或 Provider 业务凭据，也不得写业务 API。 | Agent 环境/依赖/网络/Tool allowlist 与 Backend 权限测试；细则见 `SG-D19`。 |
-| `SG-ARC-007` | Browser 只能调用 Backend `/api/v1`；不得直连 PostgreSQL、Temporal、Kafka、Elasticsearch、ELK、Agent、对象存储私有地址或任何媒体 Provider。 | Frontend bundle/import/网络 E2E。 |
-| `SG-ARC-008` | 每个跨外部边界操作必须使用稳定 Intent/Request/Job/Call/Receipt ID，区分 known failure 与 outcome unknown；UNKNOWN 只能按 Provider 真实能力查询原身份或等待人工处理，不能盲目重提。 | 故障注入矩阵。 |
-| `SG-ARC-009` | 所有 Workspace 资源 Query/Command 必须基于当前 Token Version/Membership 重新授权；跨租户不存在与无权按防枚举策略一致处理。 | 全 API 权限矩阵。 |
-| `SG-ARC-010` | 不为未来能力预建空目录、Binary、Topic、Index、通用 Repository、兼容层或微服务；新结构必须和首个真实消费者、测试及运行装配同任务交付。 | Diff/运行清单/架构审查。 |
+| VPR-ARC-001 | Browser 只调用 Backend 公共 API；不得直接调用 Agent、Temporal、对象存储写接口或媒体 Provider。 | Architecture + Negative |
+| VPR-ARC-002 | Go Backend 是 ProductionWorld、StoryGraph、Review、Workflow、ReferenceAsset、Generation、Asset 与 Storyboard 正式状态的唯一写入者。 | Integration |
+| VPR-ARC-003 | PostgreSQL/GORM 保存业务事实，Temporal 保存长流程控制；双方用冻结身份和 Receipt 连接，不复制彼此状态机。 | Integration + Replay |
+| VPR-ARC-004 | Agent 只返回严格 Candidate；不得分配正式业务 UUID、确认 Gate、应用 Owner 版本、恢复 Workflow 或调用媒体 Provider。 | Contract + Negative |
+| VPR-ARC-005 | 每个业务变更先形成 OwnerVersion，再由 StoryGraph 投影引用；StoryGraph 不得成为角色、形象、场景、道具、交互或视觉资产的第二写入源。 | Unit + Integration |
+| VPR-ARC-006 | v2 合同按一个实施切片内的 schema、writer、reader、fixture 原子切换；不得长期双写、fallback、latest 补全或静默兼容旧语义。 | Contract + Migration |
+| VPR-ARC-007 | Workflow 只编排稳定宏观阶段；Agent shard、候选修订和视觉 Target 不得膨胀为动态 WorkflowDefinition 节点。 | Architecture + Replay |
+| VPR-ARC-008 | MVP 生产主链不得依赖 Cost、Quota、Payment、视频生成或通用画布成功；相关服务故障不能阻断本文图片参考与分镜闭环。 | Journey + Fault injection |
+| VPR-ARC-009 | 只实现已被当前纵向切片消费的表、接口、目录和抽象；不得预建未来兼容层、微服务或空 Owner。 | Diff audit |
 
-## 3. StoryGraph 数据与编译
+## 3. 公共版本、Hash、Receipt 与幂等合同
 
-### 3.1 不可变版本契约
-
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SG-GRF-001` | `StoryGraphVersion` 至少冻结 `id/workspace_id/project_id/version_no/parent_version_id/schema_version/owner_set_hash/content_hash/nodes/edges/published_at/created_by`；发布后不得原地修改。 | GORM 空库、约束、更新拒绝与历史读取。 |
-| `SG-GRF-002` | `StoryGraphHead` 每个 Project 恰有一个 current version，更新必须校验 expected head/version/hash；并发发布最多一个成功，失败事务不得留下 Version/Head/Outbox 半成品。 | 真实 PostgreSQL 并发/CAS/回滚。 |
-| `SG-GRF-003` | Node 至少包含稳定 `story_node_key`、`node_type`、精确 `owner_ref`、严格 payload 和排序 Evidence refs；Owner Ref 必须同时包含 `owner_logical_id + fragment_key` 与 `owner_version_id + revision + content_hash`。 | Schema/golden/缺字段负向测试。 |
-| `SG-GRF-004` | Edge 至少包含稳定 `edge_key/edge_type/source_story_node_key/target_story_node_key/qualifier`；边方向与类型矩阵以总设计为唯一来源，未知类型/端点组合必须拒绝。 | 全类型正反 contract fixture。 |
-| `SG-GRF-005` | `story_node_key` 只由 node type、owner kind、owner logical ID、fragment key 确定性生成；精确 Owner 版本变化不得造成逻辑节点全量删增。`edge_key` 同理由类型、稳定端点和 qualifier 生成。 | 跨版本稳定性/Diff fixture。 |
-| `SG-GRF-006` | Canonical Hash 必须对 Schema 版本、排序后的 Node/Edge、Owner Ref/Payload/Evidence 计算；JSON 键序、输入遍历顺序和 Canvas layout/viewport 不得改变 Hash。 | Go/跨语言 golden、随机输入顺序。 |
-| `SG-GRF-007` | 所有权威 Edge 必须构成 DAG；环检测返回可解释的最小环路径。天然可成环的关系只能由带 participant/anchor/evidence/scope 的 Claim Node 表达。 | 拓扑/环/Claim payload-edge 一致性测试。 |
-| `SG-GRF-008` | Compiler 只读取已确认的正式 Owner 事实与精确版本；Agent Candidate、HumanTask、ReviewDecision、Search 文档、Kafka Event 和 Canvas View Model 不得被编入正式 Version。 | Compiler source fixture 与污染负向测试。 |
-| `SG-GRF-009` | Compiler 在一个 GORM 事务中冻结 Owner Set、校验引用/类型/DAG/Hash、写 Version/Head/Command Receipt/`StoryGraphVersionPublished` Outbox；任一步失败全回滚。 | 真实 PostgreSQL 分段故障注入。 |
-| `SG-GRF-010` | 首版持久化使用 PostgreSQL/GORM 不可变 JSONB Version + Head；不得引入图数据库、通用关系表、EAV、Raw SQL 递归图查询或第二 Graph Writer。 | 依赖/Schema/代码扫描。 |
+| VPR-COM-001 | OwnerVersionIdentityV1 固定包含 owner_kind、logical_id、version_id、revision、content_hash、created_at；引用必须携带完整身份，禁止 current/latest。 | Contract |
+| VPR-COM-002 | 每个 logical scope 只有一个线性 Head；发布命令以 expected_head CAS，冲突返回 head_conflict 且不产生部分写入。 | Integration + Concurrency |
+| VPR-COM-003 | Canonical Hash 对语义字段执行版本化、排序稳定、UTF-8 与长度明确的确定性编码；Go/Python/TypeScript fixture 必须同值。 | Cross-language golden |
+| VPR-COM-004 | 业务 OwnerReceipt 证明命令已应用，Workflow EffectReceipt 证明副作用已被流程消费；两层 Receipt 单向引用，不得形成 hash cycle。 | Unit + Replay |
+| VPR-COM-005 | rebase 只允许设计明确列出的空语义变化；任何证据、身份、状态、预设、视觉版本或绑定变化都必须重新计算并重新审核。 | Negative |
+| VPR-COM-006 | 所有命令具有稳定 idempotency_key；同键同输入收敛到同一结果，同键异输入返回 idempotency_conflict。 | Integration |
+| VPR-COM-007 | TypedReadSetProof 精确记录计算读取的 OwnerVersionIdentity 集合；应用时逐项验证，缺失或漂移返回 stale_read_set。 | Unit + Integration |
+| VPR-COM-008 | audit 字段、数据库自增值、租约到期时间、current head 和运行时授权不进入内容 Hash；其余影响语义的字段不得排除。 | Golden + Mutation |
 
-### 3.2 Query 契约
+## 4. P0：剧本结构事实与 Gate 1
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SG-QRY-001` | Backend 必须提供 Current Version、Exact Version、Lens、Version Diff、Upstream Trace、Downstream Trace/Impact Closure 的只读 Application Query，并在 OpenAPI 暴露前完成授权。 | Application + HTTP contract/integration。 |
-| `SG-QRY-002` | Lens Query 必须显式绑定 project、exact version 或 `current`、lens、scope kind/id、depth/cursor；响应返回实际 Version ID/Hash、scope、nodes/edges、`truncated` 和稳定继续条件。 | 参数组合、分页/截断与 current 漂移测试。 |
-| `SG-QRY-003` | `outline/narrative/entity/production/impact` 默认有界；不得下载全项目后在前端筛选。相同版本/参数必须返回确定性排序和相同结果 Hash。 | 大中小 fixture、响应边界/Hash。 |
-| `SG-QRY-004` | Diff 使用稳定 Node/Edge Key 区分 add/remove/change；Owner exact version/hash 变化是 change，不伪装成 remove+add。 | 跨版本 golden。 |
-| `SG-QRY-005` | Query 不得写 Owner、Head、缓存业务事实或 Search 索引；Search 不可用不影响 PostgreSQL StoryGraph Query。 | Query 前后数据库计数与依赖故障。 |
+| VPR-P0-001 | ScriptSourceVersion 保存原始 Unicode 字节、规范化换行策略、code-point 索引规则和 source_hash；span 不能用字节偏移混充字符偏移。 | Unicode golden |
+| VPR-P0-002 | 接受新剧本源必须在同一事务发布 SourceVersion 和 SourceHead；失败不得留下孤儿版本或悬空 Head。 | Integration |
+| VPR-P0-003 | propose_script_spans 的分段按 source 范围无重叠、无遗漏覆盖；暂时 ID 只在 Candidate 内有效。 | Property + Adversarial |
+| VPR-P0-004 | extract_scene_facts 在身份解析前只输出 style-blind 的地点、时间、动作、对白、原始人物提及、原始道具提及和证据 span；不得注入预设或视觉描述。 | Contract + Injection |
+| VPR-P0-005 | resolve_identities 必须把全部 raw mention 精确划分为 resolved、ambiguous 或 rejected；不得丢项、重复归属或静默造人。 | Partition property |
+| VPR-P0-006 | Gate 1 Subject 固定绑定 SourceVersion、SpanCandidateRevision、SceneFactCandidateRevision 与 IdentityCandidateRevision 的完整身份和 Hash。 | Contract |
+| VPR-P0-007 | Gate 1 接受后先原子发布 EpisodeStructureVersion，再独立原子发布 IdentityResolutionVersion；任一步失败都可重放且不得重复应用。 | Integration + Fault injection |
+| VPR-P0-008 | EpisodeStructureVersion 与 IdentityResolutionVersion 只能表达结构与身份，不得提前写角色形象、地点规格、道具状态、预设或参考图计划。 | Negative |
+| VPR-P0-009 | changes_requested 必须包含 typed issue、证据 span 与允许的修复范围；自由文本不能成为机器执行的唯一输入。 | Contract |
+| VPR-P0-010 | P0 可独立形成首个纵向切片：真实剧本输入、Agent Candidate、Gate 1 决策、Owner Apply、Workflow 恢复和查询回读全部可运行。 | Journey |
 
-## 4. 公共 Review 与 Workflow Resume
+## 5. 制作世界、连续性与 Gate 2
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SG-REV-001` | HumanTask 从已提交 Gate `node-input-v1` 建立并冻结 workflow/node、`subject_type/id/revision/hash`、排序 candidate IDs 和 rubric version；客户端不能自报候选。 | Gate Input/Task 重放与篡改测试。 |
-| `SG-REV-002` | 公共 API 必须提供项目 Task 列表/详情、Claim/Renew/Release、Decision 和按 ReviewDecision ID Resume；OpenAPI/生成 Frontend Client 不得漂移。 | HTTP contract、client drift。 |
-| `SG-REV-003` | Claim/Renew/Release 必须校验 Actor、Task revision、token、expiry、幂等键；Claim Token 只返回当前未过期 Owner，且不得进入 URL/日志/列表。 | PostgreSQL Lease/权限/泄漏测试。 |
-| `SG-REV-004` | ReviewDecision 必须不可变并仅允许 `approved/rejected/changes_requested/selected`；Subject/Rubric 决定允许集合；selected 恰有一个且属于冻结 Candidate。 | Decision 状态/候选矩阵。 |
-| `SG-REV-005` | API/Frontend 必须分开表示 `decision_status`、`owner_apply_status` 和 `workflow_resume_status`；Decision recorded 不得显示为 Owner/Workflow 完成。 | HTTP DTO + Frontend component/E2E。 |
-| `SG-REV-006` | 正向 Decision 必须先调用显式 Owner Applier 并冻结真实 Owner Receipt/canonical Gate Output/Hash，再准备 Workflow Signal；拒绝/修改为 `owner_apply_status=not_required`，不得产生正向 Owner 写入。 | 八类 Gate owner/zero-side-effect 测试，包含 Shot Video。 |
-| `SG-REV-007` | Resume 只按已持久化 Decision ID 继续缺失阶段，不能改 Decision/Subject/Candidate 或跳过 Owner Receipt；并发/重复 Resume 收敛到同一 Apply/Signal Receipt。 | API/Worker 重启、并发、UNKNOWN/AlreadyApplied。 |
-| `SG-REV-008` | Decision 前 Subject head/hash 漂移使 Task STALE；Decision 后 Owner baseline 确定性冲突保留旧 Decision 且不得套用新事实，必须新建 Candidate/Task。 | Stale/冲突旅程。 |
+| VPR-WLD-001 | Backend 机械地把身份事实划分为 confirmed、ambiguous、rejected 三个全集分区；Agent 不得决定正式分区。 | Unit + Property |
+| VPR-WLD-002 | 角色、角色形象、地点、道具、道具状态和交互的每项事实必须是 Evidence XOR CreatorDecision，且记录来源、作者与版本。 | Contract |
+| VPR-WLD-003 | Character、CharacterAppearance、Location、Prop、PropState 使用独立稳定 logical_id 和 version；不得用名称、文件名或提示词充当身份。 | Integration |
+| VPR-WLD-004 | 同一 Character 可有多个 Appearance；服装、年龄阶段、伤妆、湿身、伪装等改变必须形成独立 Appearance，而非覆盖角色锚点。 | Journey |
+| VPR-WLD-005 | SceneOccurrence 精确绑定 scene、subject_kind、subject_id、appearance_or_state_id、evidence 与顺序；同一场景内的出现不得靠全文搜索推断。 | Contract |
+| VPR-WLD-006 | InteractionSpec 精确绑定 actor appearance、prop state、动作、手位/身体接触、相对尺度、朝向、连续性和证据；不得仅保存“人物拿道具”的提示词。 | Contract + Journey |
+| VPR-WLD-007 | ContinuityLedger 对相邻场景记录 appearance、prop state、损坏、污渍、持有关系和位置的进入/离开状态，并能指出冲突证据。 | Unit + Journey |
+| VPR-WLD-008 | Gate 2 Subject 固定绑定 ProductionWorldCandidate、SceneOccurrenceCandidate、InteractionCandidate、ContinuityCandidate 与全部上游正式版本。 | Contract |
+| VPR-WLD-009 | Gate 2 接受由一个命令原子发布 ProductionWorldVersion、SceneOccurrenceVersion 和 ContinuityVersion 三个 Owner family；任一失败全部回滚。 | Integration |
+| VPR-WLD-010 | changes_requested 可只关闭受影响的 scene/entity shard；闭包必须包含其交互与连续性邻接，不得默认重跑全剧。 | Closure property |
+| VPR-WLD-011 | Gate 2 之前不得选择世界观预设、规划参考图、生成媒体、写 StoryGraph 正式版本或生成 Shot。 | Negative |
 
-## 5. Production Owner 与 StoryGraph 主链
+## 6. 世界观预设、视觉基础、参考计划与 Gate 3
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SG-PRD-001` | SourceEvidence 必须绑定 DocumentRevision、来源片段类型和 Unicode 绝对区间；区间可回读原文且不能跨越/遗漏所属输入。 | 至少两集 Unicode fixture/coverage。 |
-| `SG-PRD-002` | Production Bible `Confirm` 只创建/返回不可变 ProductionBibleVersion 和 Command Receipt；不得创建 Asset、AssetState、AssetVersion、Episode、Shot 或 StoryGraphVersion。 | 真实 PostgreSQL 事实计数。 |
-| `SG-PRD-003` | `MaterializeConfirmedBible` 必须读取精确 BibleVersion，在一个共享 GORM 事务中创建/复用唯一 Character/Location/Prop Asset、SpecificationVersion、AssetState、ProductionBinding 和 Materialization Receipt；失败全回滚。 | 幂等/冲突/全回滚/反查。 |
-| `SG-PRD-004` | Identity 只可按精确 Owner Ref 或经审核的人工作用链接复用；不得按名称/别名相似度自动合并。 | 同名/别名/跨集负向测试。 |
-| `SG-PRD-005` | Episode Plan 正向 Gate 必须原子物化全部 Episode 与 Published EpisodeScriptVersion；边界冲突或部分失败不得留下部分集合。 | 多集边界/幂等/回滚。 |
-| `SG-PRD-006` | Planning Candidate 正向 Gate 必须全批应用 Scene/Dialogue/Beat/Occurrence/Claim；未知 Identity/State、Evidence 缺失或 Claim scope 不合法时全批拒绝。 | 多集 Owner Set/负向/回滚。 |
-| `SG-PRD-007` | Storyboard Draft 只消费已确认 Scene/Beat/Occurrence、非空 Specification/AssetState 和冻结 Style；缺视觉输入必须产生合法 `needs_asset`，不得创建正式 Shot。 | Input/候选/事实计数。 |
-| `SG-PRD-008` | `FreezeIntentSet` 只冻结 Draft Set revision/hash、accepted Intent、视觉需求、Decision 和 Receipt，输出 `approved_storyboard_intents`；不得创建 Shot、Cost/Quota Reservation、Provider Job 或 StoryGraphVersion。 | 付费前 Gate/零副作用。 |
-| `SG-PRD-009` | `detail_shots` 只消费 Intent Gate 输出和精确 READY AssetVersion Ref；必须冻结 Asset/State/Version/Artifact/Lineage/Style/view-role Hash，不得读取 current/latest 指针。 | 精确版本/漂移/空绑定。 |
-| `SG-PRD-010` | Storyboard Detail 正向 Gate 必须在一个 GORM 事务中全批创建正式 Shot、完整 ShotProductionBindingVersion 和 Receipt；任何 Episode/Asset/Hash 漂移全回滚。 | 全批、并发、重放、反查。 |
-| `SG-PRD-011` | `ProductionBinding`、`ShotProductionBindingVersion`、`ShotImageBindingVersion`、`ShotVideoBindingVersion` 必须为不同 Owner/Record/语义，任何 API/DTO/Graph Node 不得混用。 | Schema/应用/Graph contract 负向测试。 |
-| `SG-PRD-012` | 每次相关 Owner Apply 成功后，StoryGraph Compiler 必须用 expected current graph hash 发布下一 Version；Owner 成功但编译未知时按相同 Receipt/Hash 对账，不创建第二 Version。 | 崩溃窗口与重放。 |
+| VPR-PRE-001 | MVP 内置 4–6 个不可变、版本化、可追溯许可与 NOTICE 的 WorldPreset；用户只选择，不在主链编辑任意风格 DSL。 | Inventory + License |
+| VPR-PRE-002 | P0 SceneFact、Identity 与 ProductionWorld 提取完全 style-blind；WorldPreset 只能从 Gate 2 正式结果之后参与。 | Mutation |
+| VPR-PRE-003 | WorldPreset 同时包含 fidelity invariant 与 world adaptation rule；改编风格不得改变角色身份、剧情事实、持有关系和场景连续性。 | Contract + Adversarial |
+| VPR-PRE-004 | ReferenceTargetKind 严格只允许 character_anchor、character_appearance、location、prop、interaction、scene_composition 六类。 | Schema |
+| VPR-PRE-005 | plan_reference_assets 先从正式制作世界机械计算 expected target set，再由 Agent 提出规格；Agent 不得删除必需 Target。 | Set equality |
+| VPR-PRE-006 | Gate 3 Subject 固定绑定 WorldPresetRelease、VisualFoundationCandidate、ReferencePlanCandidate、expected target set 和 Gate 2 正式版本。 | Contract |
+| VPR-PRE-007 | Gate 3 接受在一个命令中原子发布 VisualFoundationVersion 和 ReferencePlanVersion；Preset 选择作为前者内容的一部分冻结。 | Integration |
+| VPR-PRE-008 | 没有可用图片生成能力时允许保存 Draft Plan，但 Gate 3 不显示 approve；不得在 Gate 3 调用 Provider 或生成图片。 | Capability negative |
+| VPR-PRE-009 | 切换 Preset 只使视觉基础、参考计划、下游 Brief/Bundle/Selection/Packet/Storyboard 过期；不得使 ScriptSource、SceneFact、Identity 或 ProductionWorld 过期。 | Impact closure |
 
-## 6. Asset、Generation 与通用媒体 Provider
+## 7. 六类参考 Target、Brief、Generation 与 Vision
 
-| ID | 必须满足的契约 | 验证 |
+### 7.1 Target 与 Brief
+
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SG-VIS-001` | GenerationTarget 只允许严格 `reference_asset|shot_frame|shot_video` union；字段、Owner Ref、Target Hash 和媒体 modality 按 kind 校验，不得通过通用 Payload 或兼容入口绕过。 | JSONB/Domain/HTTP/StoryGraph contract。 |
-| `SG-VIS-002` | `reference_asset` 必须冻结 Asset identity、SpecificationVersion、AssetState、EffectiveStyleSnapshot、目标 view roles 和精确 Project Provider Binding；只能消费 `approved_storyboard_intents`，Intent Gate 未完成时零费用、零 Call。 | Target Hash/顺序/前置 Gate/事实计数。 |
-| `SG-VIS-003` | Backend 必须提供只包含已注册真实 Factory 的内置 Provider/Model Preset Catalog；Owner 可按受控字段创建不可变 Connection/Credential/ModelProfile Version。未知 Preset、缺 Factory、任意 URL/Header/JSON 或篡改字段均失败关闭。 | Catalog/Registry 一致性、HTTP strict decode、重启与负向 contract。 |
-| `SG-VIS-004` | Provider 远程调用前必须已有冻结 Generation Intent、PriceQuote/Estimate、Cost/Quota Reservation、Execution Claim/Authorization、Project Binding 与已提交 ProviderJob/ProviderCall；任一前置失败不调用 Provider。 | 真实 PostgreSQL + 受控 Gateway/真实凭据调用计数。 |
-| `SG-VIS-005` | Provider 图片/视频输出必须进入私有 Staging；Backend 从真实字节重验 SHA-256、大小、媒体类型，图片解码/尺寸，视频 container/codec/尺寸/时长后进入 READY/QUARANTINED。Provider URL 不是 Artifact，不能进入正式 Binding。 | MinIO、图片解码、FFprobe、损坏/SSRF/redirect/元数据漂移。 |
-| `SG-VIS-006` | composite reference sheet 固定一个 Artifact 覆盖 front/profile/back 语义区域；缺失/重复 role、输入 Hash 不同、非 READY 或 lineage 不完整时不得发布 AssetVersion。 | QC/coverage/selection 负向矩阵。 |
-| `SG-VIS-007` | Image/Video 确定性 QC 只判定版本化 Policy 能证明的格式、尺寸、coverage、容器、codec、时长容差等规则；身份、服装、画风和动作语义仍须 Human CandidateSelection，不得伪装成自动通过。 | QC Report/Policy Snapshot/Review fixture + manual 补充。 |
-| `SG-VIS-008` | CandidateSelection 只从 HumanTask 冻结且 READY/QC 合法的 CandidateSet 产生；单 Task 恰有一个不可变 Selection，重复/并发收敛。Reference、Shot Frame、Shot Video 使用不同 Subject/Owner Apply。 | PostgreSQL 并发/篡改/八类 Gate 路由。 |
-| `SG-VIS-009` | AssetVersion 发布必须绑定精确 selected Artifact、Asset/State/Specification/Style/Lineage/view roles；发布后不可替换，修改产生新 Version。 | Version/Hash/历史引用。 |
-| `SG-VIS-010` | `shot_frame` 必须冻结正式 Shot revision 与完整 ShotProductionBindingVersion；所需 Occurrence 均绑定正确身份/状态/画风且精确 AssetVersion READY，否则不得生成。 | 完整性/跨身份/最新指针负向。 |
-| `SG-VIS-011` | 选定 frame 只能发布 ShotImageBindingVersion，不得修改 ShotProductionBindingVersion；单 Shot 局部重跑创建新 RunInputSnapshot/Target/Selection/Output Binding，旧 Run/Binding 不变。 | 三类图片 Provider 的真实 Workflow/Binding 旅程。 |
-| `SG-VIS-012` | Workspace Owner 才能创建/轮换/禁用 Provider Connection/Credential/Profile 并发布 Project Purpose Binding；所有 Command 带幂等键与 expected revision/hash，轮换只追加新版本，既有 Job 继续引用冻结版本。Editor/Viewer 与跨租户写入失败。 | OpenAPI、权限、并发、幂等、Revision/Receipt、重启恢复。 |
-| `SG-VIS-013` | 必须有精确且不可变的 Seedream 5.0 Pro+、Seedance 2.0/2.0 Fast/2.0 Mini/2.5、GPT Image 2 与 Nano Banana 2 Lite/2/Pro/Legacy ModelProfile；每个 Profile 冻结官方 Model/Endpoint ID、协议、Capability、PriceQuote 和允许参数，不用 `>=` 通配或运行时试探。 | Catalog/Profile golden、官方合同 fixture、Capability/PriceQuote 负向矩阵。 |
-| `SG-VIS-014` | Provider API Key 只经 Web TLS Request 一次写入，使用 `/run/secrets/lanverse_media_provider_master_key` root key 加密为独立 CredentialVersion；不得进入 `.env`、Query/Response、普通业务列、日志、Temporal、Kafka、StoryGraph、Candidate Payload、URL/cache/storage。零配置或 root key 缺失不阻止非视觉服务启动，但配置/执行必须明确阻塞。 | Secret/Data/bundle/log/DB 扫描、错误 root key、容器重启与零配置 E2E。 |
-| `SG-VIS-015` | 一个候选恰好对应一个 ProviderCall；四候选四 Call。每个 Call 只有首次 `PENDING → DISPATCHING` 路径可发送一次真实请求，并最多收敛一个终态输出；并发/Activity 重投/崩溃不得隐藏循环或第二次付费。 | 四个崩溃窗口、并发、发送计数、终态/Cost 聚合故障矩阵。 |
-| `SG-VIS-016` | 同步 Provider 在 dispatch boundary 后连接中断且无官方查询身份时必须进入 `outcome_unknown`，保留 Cost/Quota Reservation 并禁止自动重提；known failed/succeeded 使用独立终态，迟到结果不得覆盖已提交终态。 | Seedream/GPT Image/Nano Banana 故障代理与真实协议边界。 |
-| `SG-VIS-017` | 异步 Provider 必须持久化官方 remote task id，Temporal 以同一身份查询到终态；Worker/Backend 重启、Timer/Activity 重放只恢复原任务。外部保留窗口到期前未确认结果必须显式阻塞，不能创建第二任务。 | Seedance 创建/查询/重启/超时/保留窗口测试。 |
-| `SG-VIS-018` | Seedream 5.0 Pro+ 必须使用火山方舟精确图片协议，每 Call 只请求一个独立 Candidate；零/多顶层输出、协议漂移、能力不匹配或 Staging 校验失败不得物化成功 Receipt。 | 离线合同 + 真实凭据 reference/shot_frame 旅程。 |
-| `SG-VIS-019` | GPT Image 2 必须使用精确 OpenAI Image API Profile、`n=1` 和一个 `data[].b64_json`；严格 Base64/Staging/Usage/PriceQuote 校验，禁止回退其他 OpenAI 模型或接口。 | 离线合同 + 真实凭据 reference/shot_frame 旅程。 |
-| `SG-VIS-020` | Nano Banana 2 Lite/Legacy 必须走各自 Generate Content 合同，2/Pro 必须走各自 Interactions 合同；每个 Call 只接受一个图片输出并校验精确模型/usage，四模型不得运行时试探或互相回退。 | 四组离线合同 + 四个真实 Profile reference/shot_frame 旅程。 |
-| `SG-VIS-021` | `shot_video` 必须冻结正式 Shot、ShotProductionBindingVersion、ShotImageBindingVersion、精确输入 Artifact、目标时长/比例、motion prompt hash 和 Seedance Profile；不支持的组合在 Cost 前返回 capability mismatch，不静默取整、裁切、换模型或开音频。 | Target/Capability/Cost 零副作用与跨 Shot/漂移负向测试。 |
-| `SG-VIS-022` | 选定视频必须通过 Video QC，并由 Storyboard Owner 追加 ShotVideoBindingVersion，冻结 Target/Selection/Candidate/Artifact/首帧/时长/媒体元数据/Hash。StoryGraph 只投影 Target、Artifact 与最终 Binding，不投影 Provider 配置/Secret/Job/Call。 | GORM/Owner Apply/StoryGraph 类型矩阵、局部重跑与真实 Seedance E2E。 |
+| VPR-REF-001 | ReferenceTarget 是创作意图和依赖身份；GenerationExecution 是一次执行事实。两者不得共享状态枚举或让重试创建新 Target。 | Domain unit |
+| VPR-REF-002 | 每个 Brief 必须绑定 ReferencePlanVersion、VisualFoundationVersion、目标 OwnerVersion、dependency selection、StageRelease 和 typed read set；任一漂移后不能执行。 | Fence |
+| VPR-REF-003 | character_anchor 必须请求 front、profile、back 三视图，并冻结体型、面部、发型、比例和不可变身份特征。 | Contract + Media |
+| VPR-REF-004 | character_appearance 必须请求 front、profile、back 三视图，且继承 character_anchor 身份，只改变已批准的服装/年龄/伤妆等状态。 | Contract + Vision |
+| VPR-REF-005 | location 必须请求 empty_establishing、spatial_orientation、material_scale_detail，不能用带主角的气氛图替代空间基底。 | Contract + Media |
+| VPR-REF-006 | prop 必须请求 front、side、back、state_detail；多状态道具必须保持身份并展示明确状态差异。 | Contract + Vision |
+| VPR-REF-007 | interaction 必须请求 interaction_master，绑定已选 appearance、prop/state、姿势、握持、接触点、相对尺度和朝向。 | Contract + Vision |
+| VPR-REF-008 | scene_composition 必须请求 composition_master，绑定场景发生的已选角色形象、地点、道具、交互和连续性状态。 | Contract + Vision |
+| VPR-REF-009 | Target dependency graph 必须无环：anchor/location/prop base 先于 appearance/interaction，全部所需 base 先于 scene_composition。 | DAG property |
 
-## 7. Kafka、Search 与 ELK
+### 7.2 执行、候选、审核与选择
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SG-EVT-001` | Owner Command 在同一 GORM 事务中写业务事实、Command Receipt 和 Outbox；网络 Publisher 不得参与 Owner 事务。事务回滚时无 Event。 | PostgreSQL 提交/回滚/网络断开。 |
-| `SG-EVT-002` | Kafka Envelope 至少含 event id/type/version、occurred_at、workspace/project、aggregate kind/id/revision、source receipt、trace context 和 payload hash；不得含完整剧本、Prompt、凭据或私有 URL。 | Schema/PII/secret contract。 |
-| `SG-EVT-003` | Outbox Publisher 至少一次发布；Broker ACK 未知按原 Event ID 重试。Consumer 用 Inbox/Event ID 与 aggregate revision fencing 处理重复/乱序；Poison Message 进入独立 DLQ 并可按范围 Replay。 | 真实 Kafka 重复/乱序/断连/DLQ。 |
-| `SG-EVT-004` | 只为 ScriptVersion 和 StoryGraphVersion 的真实 Search Consumer 建立业务 Topic；日志不得创建或借用 Kafka Topic；不得建立 Kafka Command Topic。 | Broker config/consumer/ACL 测试。 |
-| `SG-EVT-005` | Backend Event Runtime 只有在真实 Kafka Consumer 落地时才由单 `lanverse` Binary 装配，复用 Backend Domain/Application/GORM Catalog；不得创建独立 Worker Binary/Compose 服务、独立业务 Repository 或第二数据库连接模型。 | Binary/Compose/import/DB config。 |
-| `SG-SRCH-001` | Elasticsearch 至少维护 Script 与 StoryGraph 两类可重建业务索引/alias；文档包含 workspace/project、owner kind/logical/version/revision/hash、source event id 和可追溯 Evidence/Story Node key。 | Index mapping/文档/租户 contract。 |
-| `SG-SRCH-002` | 旧或重复 Event 不得覆盖新 revision；删除/重建使用明确 tombstone/snapshot 规则。全量 Reindex 从 PostgreSQL Owner Snapshot 构建新版本索引并原子切换 alias。 | 真实 Elasticsearch 乱序/Reindex/alias。 |
-| `SG-SRCH-003` | Backend `SearchScripts/SearchStoryGraph` 强制 Workspace/Project 授权，返回 snippet、score、Owner/Version/Evidence 深链和索引新鲜度；不得返回 Elasticsearch DSL 或允许 Search 回写 Owner。 | HTTP/权限/输入注入/反查。 |
-| `SG-SRCH-004` | Elasticsearch 不可用或投影落后时返回明确 degraded/stale 状态；Owner Command 和 PostgreSQL StoryGraph Query 继续正确，不能用旧索引覆盖事实。 | 依赖故障 E2E。 |
-| `SG-LOG-001` | 应用输出脱敏结构化 JSON Log，同时保留 stdout 并经失败开放 TCP Writer 进入 `Logstash → Elasticsearch log index → Kibana`；日志不经过 Kafka。 | 真实 pipeline/index/template/查询。 |
-| `SG-LOG-002` | 日志至少可按 trace/run/node/task/decision/provider job/call/receipt ID 和稳定错误码关联；不得记录 Token、Claim Token、完整原稿/Candidate/Prompt、Provider 凭据或私有 Artifact URL。 | 端到端 trace 查询与敏感字段扫描。 |
-| `SG-LOG-003` | Logstash/Elasticsearch/Kibana 日志故障不得改变业务事务、Workflow、Owner Receipt 或 Search Projection；日志不得用于恢复业务状态。 | 逐组件故障注入。 |
+| VPR-GEN-001 | MVP 至少有一条真实图片 Provider 路径可生成六类 Target；不得因未接支付或成本模块而阻断。 | Real-provider journey |
+| VPR-GEN-002 | ProviderCall 以唯一 submission_token 获得一次发送权；发送后断联进入 outcome_unknown，必须先对账，禁止盲重试。 | Fault injection |
+| VPR-GEN-003 | Provider 输出先进入 staging；校验媒体类型、尺寸、Hash、恶意内容和目标身份后才可提升为 AssetVersion。 | Integration + Security |
+| VPR-GEN-004 | ReferenceBundle 由共享 frozen execution set 与 view-role member 构成，Hash 不包含 VisionReview；VisionReview 引用 Bundle，禁止循环。 | Hash golden |
+| VPR-GEN-005 | CandidateBundle 状态严格为 generated、deterministic_rejected、vision_reviewed、eligible、selected、superseded；非法跃迁拒绝。 | State-machine |
+| VPR-GEN-006 | deterministic QC 只检查文件、尺寸、数量、Hash、角色覆盖和依赖完整性；语义一致性由独立 Vision Review 负责。 | Unit |
+| VPR-GEN-007 | Vision Review 至少输出 identity、view_role、state、interaction_geometry、style_fidelity 五类 typed issue 和证据区域；不得选择候选。 | Vision contract |
+| VPR-GEN-008 | warning 必须被用户逐项确认后 Bundle 才可 eligible；error 必须修复或重新生成，不能通过自由文本豁免。 | Journey |
+| VPR-GEN-009 | 选择以完整 Bundle 为单位，不能拼接不同执行的 front/profile/back 冒充一致三视图。 | Negative |
+| VPR-GEN-010 | 选择命令先写 SelectionReceipt，再由独立 Owner Apply 消费；重复信号收敛，失败可恢复。 | Replay |
+| VPR-GEN-011 | base 目标选择后更新 ReferenceAssetSelectionVersion；只使其依赖 Target 和场景组合过期。 | Impact |
+| VPR-GEN-012 | interaction 与 scene_composition 选择应用到对应场景范围，不得覆盖无关场景或全项目 Head。 | Scope integration |
+| VPR-GEN-013 | Gate 4 是逐 Target HumanTask 与 checkpoint 聚合，不存在一个全局“全部视觉通过”任务；每个 Target 均保留独立决定和恢复边界。 | Workflow journey |
 
-## 8. Frontend
+## 8. 五个 Human Gate 的公共合同
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SG-FE-001` | 继续使用单个 npm/Next.js 应用和现有 RTK Query；新 Lens/Review/卡片只经生成 OpenAPI Client + 唯一 RTK Query endpoint 取数，不引入第二 Query 库或 monorepo。 | package/lock/import/architecture。 |
-| `SG-FE-002` | 角色卡 = Character Asset + current Specification + States + published AssetVersions + Evidence/Rights/Lineage；地点卡同理。不同 State/Style 不得创建重复身份卡；Scene View 不得伪装为 Location Card。 | View Model/component/E2E。 |
-| `SG-FE-003` | Review Workbench 实现真实 Task Query、Claim/Renew/Release、Subject 比较、Decision、Resume；Backend Contract 缺失、错误或 unknown 时不得用 mock/local success。 | Component + API E2E。 |
-| `SG-FE-004` | `/projects/:projectId/storygraph` 支持 outline/narrative/entity/production/impact、有界 scope、exact/current version 和稳定 focus 深链。 | Route/URL/刷新 E2E。 |
-| `SG-FE-005` | `@xyflow/react` 与 `@dagrejs/dagre` 只随首个真实 Story Lens 消费者加入；首版 nodes/edges 不可写/拖动保存/连接/删除，布局与 viewport 不回传 Backend。 | 依赖/DOM/网络负向测试。 |
-| `SG-FE-006` | Story Lens 与 Workflow Lens 使用不同 Query key、DTO、Node ID、Adapter 和 renderer；只能共享无业务语义的 viewport/Inspector shell。 | Type/architecture/运行测试。 |
-| `SG-FE-007` | Server facts 只在 RTK Query；Lens/scope/version 在 URL；选择/viewport 为本地状态；React Flow nodes/edges 是纯派生 View Model，不复制进 Redux slice/Context/localStorage。 | State architecture/unit。 |
-| `SG-FE-008` | 所有主要状态必须区分 loading/empty/401/403/404/409 stale/422/429/dependency unavailable/outcome unknown/truncated；提供键盘选择、焦点、可读列表替代和 reduced-motion。 | Component/a11y/E2E。 |
-| `SG-FE-009` | 只读 Lens 通过后，类型化 Domain Intent 必须携带 base StoryGraph Version/Hash、目标 Owner、expected owner revision 和 idempotency key；Backend Owner Command 成功并重编译后才能显示完成。不得发送通用 Graph JSON/Patch 覆盖。 | HTTP/冲突/无直写 E2E。 |
-| `SG-FE-010` | Provider Settings 必须从 Catalog 渲染受控表单，支持 Connection/Credential 轮换、ModelProfile、PriceQuote 和 Project Binding；API Key 提交成功立即清空且不进入 URL、RTK Query cache、localStorage、日志或回显。任意 Host/JSON/直接生成没有入口。 | Component/网络/浏览器存储/bundle/刷新/权限 E2E。 |
-| `SG-FE-011` | Media/Review 页面必须分别展示 Reference、Shot Frame、Shot Video 的 Target、Candidate、Image/Video QC、Cost、Selection 和 Owner Apply；zero config、root key missing、binding stale、provider unknown、apply pending 是可区分状态。 | Component + 真实 Backend E2E。 |
+| VPR-GAT-001 | HumanTaskInput 固定 gate_key、subject union、input_hash、impact summary、evidence refs、allowed decisions 与 workflow identity。 | Contract |
+| VPR-GAT-002 | gate_key 只允许 structure_identity、production_world、visual_plan、reference_target、storyboard 五个值。 | Schema |
+| VPR-GAT-003 | Decision 只允许 approved、changes_requested、rejected、not_required；每个 Gate 声明允许子集和 typed payload。 | Schema + Negative |
+| VPR-GAT-004 | claim/renew/release 使用 lease token 和 expected revision；过期、越权或旧 token 不得提交决定。 | Concurrency |
+| VPR-GAT-005 | 提交 Decision 前重算 input_hash；任何 Subject 或依赖 Head 漂移返回 stale_subject 且不应用。 | Integration |
+| VPR-GAT-006 | 每种 accepted decision 先产生显式 EffectPlan，列出 Owner 命令、expected heads、read set 和恢复目标；不得用 if/else 隐式猜测。 | Contract |
+| VPR-GAT-007 | not_required 只能用于 expected-set 机械证明为非必需的 Target，并记录 NegativeRequirementProof；不能手工跳过必需项。 | Negative |
+| VPR-GAT-008 | DecisionReceipt、EffectReceipt 与 WorkflowResumeReceipt 分层持久；崩溃后用同一 Decision 继续，不能要求用户再次点击。 | Replay |
+| VPR-GAT-009 | HumanTask、Decision 和 Effect 状态枚举互不混用；查询层可聚合展示但不能覆盖 Owner 状态。 | Contract |
+| VPR-GAT-010 | 服务端从成员资格与项目角色计算 allowed_actions；前端隐藏按钮不能替代授权。 | Security |
 
-## 9. 安全、可靠性与 CI
+## 9. Production Packet、正式分镜与 Gate 5
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SG-OPS-001` | 所有 Input/Candidate/Event/Provider Response/HTTP JSON 严格解码、限制大小与枚举；未知字段/类型、超深嵌套、非有限数字和无效 UUID/Hash fail closed。 | Fuzz/contract/HTTP 负向。 |
-| `SG-OPS-002` | Provider Host/Region、输出 URL/redirect、对象引用、size/content-type 必须由编译 Descriptor allowlist 与 SSRF 防护限制；用户不得配置任意 Host。Secret 只从精确 CredentialVersion 临时解密并注入当前 Authorization Header，随后清理。 | SSRF/redirect/secret/bundle/log/内存生命周期扫描。 |
-| `SG-OPS-003` | `healthz` 只表示进程存活；公共 `readyz` 检查 API 必需依赖，单 Backend 进程内的 Event Runtime 另以内部 readiness 真实检查 Kafka/Elasticsearch；依赖缺失不得报告 Event Runtime ready。 | Compose/容器/故障 readiness。 |
-| `SG-OPS-004` | 测试只能位于 `backend/tests`、`agent/tests`、`frontend/tests`；业务源码目录不得混入 `*_test.go`、`test_*.py`、`*.test.*`、`*.spec.*`。 | 仓库结构检查。 |
-| `SG-OPS-005` | 每个 `SG-Ixx` 必须先有失败测试，再实现并重构；完成前运行该任务局部门禁和当时全部真实 CI，失败/跳过/缺外部依赖不得标记通过。 | Commit/Acceptance/CI 记录。 |
-| `SG-OPS-006` | CI 必须使用空 PostgreSQL、真实 Temporal/MinIO；Kafka/Search/ELK 能力落地时同一任务加入真实 Kafka、Elasticsearch 和日志 pipeline 检查，不用内存替身抵扣集成验收。 | GitHub Actions/本地等价命令。 |
-| `SG-OPS-007` | CI 必须包含 Go format/vet/test、Agent lint/format/type/test、Frontend npm ci/lint/type/test/build、OpenAPI drift、Compose render、镜像 Binary/runtime、依赖/Secret/Data/Generated Artifact hygiene；required job 必须真实聚合全部结果。 | Workflow 静态和真实执行。 |
-| `SG-OPS-008` | 每个完整任务验证通过后仅提交该任务文件，标题/正文符合仓库格式；不得通过 compatibility fallback、禁用检查、降低断言或保留旧入口使 CI 变绿。 | Git diff/commit/负向检索。 |
-| `SG-OPS-009` | 所有代码、四类 Provider 真实调用、完整原稿、故障恢复和全量真实 CI 在 `SG-I34` 完成并提交前不得运行最终 `agent-browser`；`SG-I35` 才执行浏览器 → API → Owner/Temporal/Kafka/Search/图片视频 Artifact 对账。 | Acceptance 顺序与 Git 历史。 |
-| `SG-OPS-010` | Backend Runtime Image 必须安装并验证固定发行版 `ffprobe`；`docker-compose.yml` 仍只启动 Backend/Frontend 并挂载 Provider root-key Docker Secret，本地复用宿主机已启动依赖。Provider API Key 不得出现在 Compose/.env。 | 镜像命令、Compose render/services、Secret/Data hygiene 与本机启动。 |
+| VPR-STB-001 | Scene Coverage 只有在该场景 expected Target 全部 selected 或有合法 not_required proof 后才为 reference_ready。 | Coverage property |
+| VPR-STB-002 | ProductionPacketVersion 对每场景冻结文本事实、角色 appearance、地点、道具状态、交互、连续性、已选 AssetVersion 与视觉基础；禁止 latest。 | Contract |
+| VPR-STB-003 | direct_storyboard 只能读取 ProductionPacket、StageRelease 和显式创作约束；不得联网搜索、补全最新状态或调用媒体 Provider。 | Agent negative |
+| VPR-STB-004 | Shot Candidate 使用 intent union 加 detail，而不是自由 needs_asset；每个 Shot 必须绑定 scene、source span、主体、空间、动作和连续性。 | Schema |
+| VPR-STB-005 | Backend Binding normalizer 把 Agent 临时引用精确解析为 Packet 内 OwnerVersion/AssetVersion；歧义或缺失必须拒绝。 | Integration |
+| VPR-STB-006 | ShotPlan 编译、图校验与顺序校验为确定性 Backend 逻辑，不委托 Agent 决定正式合法性。 | Unit |
+| VPR-STB-007 | review_candidate/repair_candidate 只返回 typed issue 与允许 schema 内的新 Candidate；不得直接 patch 正式 ShotPlan。 | Contract |
+| VPR-STB-008 | Gate 5 接受以 scene scope 原子发布 ShotPlanVersion 与 StoryGraphVersion；单场失败不污染其他场景。 | Integration |
+| VPR-STB-009 | ShotPlan 应用前再次验证 StoryGraph read set、Packet、Reference Selection 与 Continuity Head；陈旧返回 stale_read_set。 | Fault injection |
+| VPR-STB-010 | Workflow Compiler 只消费已发布 OwnerVersion 与 Gate EffectReceipt，不能从 Agent Candidate 或前端缓存编译执行计划。 | Architecture |
 
-## 10. 端到端契约
+## 10. Query、DAG 投影与前端工作台
 
-| ID | 必须满足的契约 | 验证 |
+### 10.1 Query 与投影
+
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SG-JRN-001` | 至少两集真实剧本完成 DocumentRevision → Evidence → confirmed/materialized Bible → Episode/Scene/Beat/Occurrence/Claim → Core StoryGraphVersion；每个 Node/Edge 可反查 Owner/Evidence。 | 真实 PostgreSQL + Temporal + 本地 Codex E2E。 |
-| `SG-JRN-002` | Owner 在 Web 创建火山/OpenAI/Google 持久连接与精确 Project Binding；同一角色跨两集/两个 State 仍只有一个 Asset；Seedream、GPT Image、Nano Banana 四模型分别完成 reference sheet/shot frame → Selection → AssetVersion/ShotImageBindingVersion；Seedance 四模型分别完成 shot video → Video QC/Selection → ShotVideoBindingVersion，并编译可反查的新 StoryGraphVersion。 | PostgreSQL/MinIO/三类图片 Provider/Seedance/Human Gate/Frontend 真实 E2E。 |
-| `SG-JRN-003` | Script/StoryGraph Outbox 经 Kafka 到 Elasticsearch 后可由 Backend Search 深链回相同 Owner/Version；重复/乱序、Broker/Elastic 重启和全量 Reindex 后结果收敛。 | 真实 Kafka/Elasticsearch 故障 E2E。 |
-| `SG-JRN-004` | 完整原稿运行机器统计和代表集人工细查；服务重启、Task lease、Signal UNKNOWN、Provider UNKNOWN、重复 Kafka、索引重建和单 Shot 局部重跑不产生重复正式事实/费用/配额。 | 全量故障矩阵与事实计数/Hash/金额报告。 |
-| `SG-JRN-005` | 最终 Web Journey 覆盖 Provider Preset/Connection/Profile/Binding → 项目 → 原稿 → Bible/Episode/Scene → 角色/地点卡 → Reference/Shot Frame/Shot Video Review → 图片/视频 Binding → Story Lens/Search/Run 反查；浏览器显示与 API/PostgreSQL/Temporal/ProviderCall/Artifact lineage 一致。 | `SG-I35` 的 `agent-browser` + 数据对账。 |
+| VPR-QRY-001 | Backend 至少提供 ProjectProductionSummary、GateTimeline、ProductionWorldDetail、ReferenceCoverageMatrix、ReferenceTargetDetail、ScenePacketDetail、StoryboardDetail 与 ImpactPreview 八个 typed Query。 | OpenAPI contract |
+| VPR-QRY-002 | readiness、coverage、stale reason、allowed action 与时间线由 Backend 计算；前端不得从多个请求自行拼状态机。 | Contract |
+| VPR-QRY-003 | StoryGraphVersion 是 OwnerVersion 和关系的不可变投影；节点携带 owner identity，边携带 typed evidence/continuity/dependency，不复制 Owner 内容。 | Integration |
+| VPR-QRY-004 | DAG 投影必须无环、可追溯到 Source span，并能从场景反查角色形象、地点、道具、交互、资产和 Shot。 | Graph property |
+| VPR-QRY-005 | Graph 与 DAG 只作为有界只读关系 Lens；MVP 不提供任意拖拽改写正式 Owner 的通用画布。 | Browser + Negative |
 
-## 11. `SG-Ixx` 覆盖映射
+### 10.2 Guided Studio
 
-| 实施段 | 主要 Requirement |
-|---|---|
-| `SG-I01` | `SG-ARC-*`、`SG-GRF-001`–`007`、`SG-OPS-004`–`008` |
-| `SG-I02`、`SG-I05`、`SG-I08`–`010`、`SG-I13`、`SG-I15`、`SG-I18` | 跨服务输入/输出由 `SG-PRD-*` 覆盖；Agent 内部契约见 `SG-D19` |
-| `SG-I03`–`004`、`SG-I17` | `SG-GRF-*`、`SG-QRY-*`、`SG-JRN-001` |
-| `SG-I06`–`007` | `SG-REV-*`、`SG-FE-003`、`SG-OPS-*` |
-| `SG-I11`–`012`、`SG-I14`、`SG-I16`、`SG-I19` | `SG-PRD-*`、`SG-REV-006`–`008` |
-| `SG-I20` | `SG-VIS-003`、`012`–`014`、`SG-ARC-*`、`SG-OPS-001`–`004`、`010` |
-| `SG-I21` | `SG-VIS-004`、`005`、`015`–`017`、`SG-ARC-008`、Cost/Quota 既有合同 |
-| `SG-I22` | `SG-FE-010`、`SG-VIS-003`、`012`–`014`、`SG-OPS-002` |
-| `SG-I23` | `SG-VIS-001`–`009`、`013`–`018`、`SG-JRN-002` 的 Seedream 部分 |
-| `SG-I24` | `SG-VIS-001`–`009`、`013`–`016`、`019`、`SG-JRN-002` 的 GPT Image 部分 |
-| `SG-I25` | `SG-VIS-001`–`009`、`013`–`016`、`020`、`SG-JRN-002` 的 Nano Banana 部分 |
-| `SG-I26` | `SG-VIS-006`–`009`、`SG-REV-*`、AssetVersion Owner Apply |
-| `SG-I27` | `SG-PRD-009`、精确 READY AssetVersion 与 Detail Repair |
-| `SG-I28` | `SG-PRD-010`–`012`、`SG-REV-*`、StoryGraph 重编译 |
-| `SG-I29` | `SG-VIS-010`–`011`、`018`–`020`、Shot Frame Human Gate/Binding |
-| `SG-I30` | `SG-VIS-001`、`005`、`007`–`008`、`021`–`022`、`SG-PRD-011`、`SG-REV-*` |
-| `SG-I31` | `SG-VIS-013`、`017`、`021`–`022`、`SG-JRN-002` 的 Seedance 部分 |
-| Event/Search/ELK 随首个真实消费者插入其所属 `SG-Ixx`，不得新增第二队列 | `SG-EVT-*`、`SG-SRCH-*`、`SG-LOG-*`、`SG-JRN-003` |
-| `SG-I32` | `SG-FE-001`–`008`、`011`、`SG-QRY-*` |
-| `SG-I33` | `SG-FE-009`、Owner Command/重编译契约 |
-| `SG-I34` | `SG-OPS-*`、`SG-JRN-001`–`004`、四类 Provider 真实验收 |
-| `SG-I35` | `SG-OPS-009`、`SG-JRN-005` |
+| ID | 必须满足的合同 | 最低验证 |
+|---|---|---|
+| VPR-FE-001 | 主入口为项目级 /production；旧页面只可链接进入，不能形成第二套制作状态。 | Router test |
+| VPR-FE-002 | 前端 API 类型来自已提交 OpenAPI 的生成产物并由 RTK Query 管理服务状态；禁止手写重复 DTO。 | CI |
+| VPR-FE-003 | project_id、episode_id、scene_id、gate_key、target_id 进入 URL；刷新、后退、深链保持同一工作上下文。 | Browser |
+| VPR-FE-004 | Gate 1 同屏展示原文证据、场景切分和身份歧义，支持逐问题 changes_requested。 | Browser |
+| VPR-FE-005 | Gate 2 以角色/形象、地点、道具/状态、场景出现、交互和连续性六个视图审核制作世界。 | Browser |
+| VPR-FE-006 | Gate 3 先选 4–6 个 Preset，再展示 expected Target 覆盖与六类计划；缺生成能力时解释为何不可批准。 | Browser |
+| VPR-FE-007 | Gate 4 用 Target 卡片和完整 Bundle 对比视图展示 view role、依赖、QC、Vision issue、历史与逐项决定。 | Browser |
+| VPR-FE-008 | Gate 5 同屏展示 Packet 证据、Shot 列表、绑定、连续性和 StoryGraph/DAG 只读 Lens。 | Browser |
+| VPR-FE-009 | 任意变化先打开 Impact Drawer，展示失效对象、保留对象、重跑范围和不可逆副作用，再提交命令。 | Browser + Contract |
+| VPR-FE-010 | Inbox 聚合待我处理、即将过期、changes requested、provider_unknown 和失败任务；Provider Settings 不进入项目主旅程。 | Browser |
+| VPR-FE-011 | 页面统一展示 draft、running、needs_review、changes_requested、blocked、failed、stale、ready、approved，并保留 Owner 原始状态详情。 | Visual regression |
+| VPR-FE-012 | 桌面、平板和窄屏均可完成五 Gate；键盘、焦点、对比度、错误摘要和 aria 语义满足 WCAG 2.2 AA 的相关条款。 | Browser + Accessibility |
 
-## 12. 文档门禁
+## 11. 非功能、安全与恢复
 
-本文完成 `SG-D18` 重新同步。下一步 `SG-D19` 只复核 StoryGraph Harness/Skill/Stage/Shard/Candidate/Codex 专项 Requirement，确认 Agent 不获得媒体 Provider Secret、Adapter 或业务写入职责；`SG-D20` 必须原样引用 `SG-I01`–`SG-I35` 并保持 Event/Search/ELK 已完成事实与后续真实消费者边界，不创建第二实施队列；`SG-D21` 为本次新增/改写 ID 建立全未勾选目标 Acceptance，保留但不冒充新合同的历史 Evidence。
+| ID | 必须满足的合同 | 最低验证 |
+|---|---|---|
+| VPR-NFR-001 | 剧本文本、Skill、Preset、Provider 输出和用户评论全部视为不可信数据；不能改变系统指令、允许工具或 Owner 边界。 | Injection suite |
+| VPR-NFR-002 | Provider Secret 只在 Backend 凭据边界解密；不得进入 Agent input、日志、OpenAPI response、前端缓存或 Hash fixture。 | Secret scan |
+| VPR-NFR-003 | 私有资产预览使用短时授权或同源代理；持久记录只保存稳定对象身份，不保存签名 URL。 | Integration |
+| VPR-NFR-004 | 结构化日志至少带 project、workflow、stage、target、invocation、decision 或 provider_call 的适用身份；不得记录完整剧本或密钥。 | Log contract |
+| VPR-NFR-005 | 跨服务错误至少区分 validation、conflict、stale、unauthorized、unavailable、timeout、outcome_unknown、quarantined 和 internal。 | OpenAPI + Journey |
+| VPR-NFR-006 | 长流程在 Backend/Temporal 以 checkpoint、heartbeat、retry policy 和 reconciliation 恢复；HTTP 请求时限不能充当流程总时限。 | Restart + Replay |
+| VPR-NFR-007 | changes_requested 与上游变化用有界依赖闭包计算；规模随受影响节点和边增长，不得默认扫描或重跑全项目。 | Performance property |
+| VPR-NFR-008 | 每次失效都给出机器可读 stale_reason、caused_by_identity、affected_scope 和 recommended_action；不得只显示“请重试”。 | Contract |
 
-在 `SG-D21` 接受前不得编码。
+## 12. 必须通过的端到端旅程
+
+| ID | 必须满足的旅程 | 完成证据 |
+|---|---|---|
+| VPR-JRN-001 | 一份真实完整剧本完成上传、P0 Candidate、Gate 1、Owner Apply 与回读。 | API/DB/Workflow/Agent evidence |
+| VPR-JRN-002 | 同一角色至少两个 Appearance、一个至少两个 State 的道具、一次人物持道具 Interaction 和跨场 Continuity 通过 Gate 2。 | Owner versions + UI |
+| VPR-JRN-003 | 用户可在 4–6 个 Preset 中切换，并验证只失效 Gate 3 之后的视觉链。 | Impact proof |
+| VPR-JRN-004 | 六类 Target 各至少生成一个真实媒体 Bundle；三视图、道具多面/状态、交互和场景构图通过 deterministic 与 Vision 审核。 | Real assets + reviews |
+| VPR-JRN-005 | Gate 4 每个必需 Target 均 selected 或有合法 not_required proof，Production-ready Scene Coverage 达 100%。 | Coverage numerator/denominator |
+| VPR-JRN-006 | 一个 scene_composition changes_requested 只重跑该场景与必要依赖，其他已选 Base Bundle 和已通过场景不失效。 | Closure diff |
+| VPR-JRN-007 | Agent 超时、Backend 重启、Temporal replay、Provider outcome_unknown、媒体校验失败和重复 Gate signal 均在原身份上恢复。 | Fault matrix |
+| VPR-JRN-008 | Gate 5 接受后可从任一 Shot 反查 Packet、资产、Target、制作世界实体、SceneFact 与原始剧本 span。 | Reverse trace |
+
+## 13. 产品指标与守护指标
+
+| ID | 必须满足的计算合同 | 最低验证 |
+|---|---|---|
+| VPR-MET-001 | Production-ready Scene Coverage 的分母是 Gate 2 正式 Scene 集；分子是 expected Target 全部满足且 Packet/Storyboard Gate 已通过的 Scene，由 Backend 计算。 | Query golden |
+| VPR-MET-002 | 前导指标至少包含 identity resolution coverage、interaction coverage、reference target coverage、bundle pass rate 和 stale closure size。 | Metrics contract |
+| VPR-MET-003 | 运营指标至少包含各 Gate 首次通过时延、changes_requested 次数、局部重跑比例、outcome_unknown 对账时延和恢复成功率。 | Observability |
+| VPR-MET-004 | 守护指标为越权写入、跳过必需 Target、盲重试未知 Provider、跨项目污染、Hash/Wire 漂移和未授权 Secret 暴露均为零。 | Security + Incident query |
+
+## 14. VP-D14 文档完成门
+
+- [x] VPR-ARC-001 至 VPR-MET-004 的表格条款全部拥有唯一 ID、明确 Owner 边界和最低验证。
+- [x] 五 Gate、六类 Target、ProductionWorld、Interaction、Continuity、Preset、Packet-first Storyboard 与局部恢复均能从 PRD 追踪到合同。
+- [x] 本文与 3003 Agent Requirement 的 Stage、Wire、Candidate-only 和媒体边界没有冲突。
+- [x] 每个 VPR 条款都具备可供 VP-D15 分配唯一主实施切片和初始未勾选验收项的粒度。
+- [x] 产品映射、Owner/事务、失败/恢复三次独立反例审阅完成。
+- [x] 正文 SHA-256 在接受时写回文首，且只覆盖从第一个正文标题到文件末尾。

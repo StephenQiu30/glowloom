@@ -1,179 +1,213 @@
 # StoryGraph 剧本解析 Harness 与内置 Skill 需求规格
 
-> 状态：Agent Contract Requirement 已复核接受（`SG-D19`，2026-08-29）；既有实施证据只按未变合同保留，新增媒体职责边界初始待验收
+> 状态：VP-D14 已接受（2026-08-31）
+>
+> 接受依据：产品映射、Agent/Backend Owner、失败/恢复三轴独立反例审阅通过；所有条款从未来实施与验收的未通过状态开始，历史 Agent 证据不抵扣
+>
+> 正文 SHA-256：7ac8243bc1648a75ddb701b6e1dadfae1fcd4d0c5bfc54701f3eeea1c93dbbb6
 >
 > 设计依据：[StoryGraph Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 >
-> 跨服务依据：[StoryGraph 跨服务需求规格](0010-StoryGraph内容图与DAG创作画布需求规格.md)
+> 跨服务依据：[Lanverse 剧本视觉生产跨服务需求规格](0010-StoryGraph内容图与DAG创作画布需求规格.md)
 >
-> 产品范围：只引用 [StoryGraph PRD](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)，不建立第二份 Agent 产品愿景
+> 产品范围：[Lanverse 剧本视觉生产工作台产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
+>
+> 下一文档门：VP-D15。本文只定义 Agent/Harness 可测合同，不建立第二份产品愿景或实施计划。
 
-## 1. 范围
+## 1. 范围、术语与边界
 
-本文只固定 Agent Runtime 与 Backend Agent Owner 之间的 Skill Bundle、Invocation Wire、Stage/Shard、Candidate Revision、Codex CLI、Review/Repair 和恢复契约。Production/StoryGraph/Workflow/Review/Asset/Generation/Media Provider/Kafka/Search/Frontend 的业务 Owner 与用户范围以 `0010` Requirement 为唯一来源。
+本文固定成熟 Skill 的吸收供应链、单一内置 Bundle、StageVariantKeyV2、storygraph-stage-wire-v2、十三个 Stage、Candidate Revision、Shard、Review/Repair、Vision 与发布恢复合同。
 
-历史 `production_bible`、`storyboard_draft` Invocation、8 个根 Skill、测试或 Acceptance 不能抵扣本规格。2026-08-27 后已按本规格产生的证据可继续证明未变合同；本次新增的媒体职责边界必须在 `SG-D21` 建立全未勾选目标项，不能由既有 Runware 或 Agent 证据抵扣。
+Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Candidate Head 和所有正式业务写入；Agent Runtime 只消费冻结输入并返回严格 Candidate。Agent 不得接收媒体 Provider 密钥，不调用图片或视频 Provider，不写数据库、对象存储、Kafka、Elasticsearch 或 Temporal。
 
-## 2. 运行与所有权边界
+验证术语与跨服务 Requirement 一致。所有 VPA ID 在 VP-D15 中必须恰好分配到一个主实施切片和至少一个初始未勾选验收项。
 
-| ID | 必须满足的契约 | 验证 |
+## 2. Runtime 与正式状态隔离
+
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-BND-001` | Go Backend 唯一拥有 Stage 枚举、Definition Manifest、Execution Policy、Invocation/Grant/Lease/Result、ShardManifest、StageCandidateRevision/Head 和所有业务写入；Python 只能严格消费和返回 Candidate。 | Go/Python import、Wire、权限和数据库事实计数。 |
-| `SGA-BND-002` | Agent Runtime 不得包含 ORM、数据库/对象存储/Kafka/Elasticsearch/Temporal/Provider client、业务 Repository 或公共业务 HTTP；唯一写入是当前 Invocation 的临时输出流。 | 依赖/环境/路由/网络扫描。 |
-| `SGA-BND-003` | WorkflowDefinition/Temporal 只编排稳定宏观 Node；Stage shard/Invocation 必须挂到预先存在的 WorkflowRun/NodeRun，不得创建动态 Workflow Node 或 Agent Checkpoint 状态机。 | Backend integration + Temporal History/Replay。 |
-| `SGA-BND-004` | Agent 成功不得自动 Confirm/Apply、创建正式 UUID、Episode/Scene/Claim/Asset/Shot/Binding/StoryGraphVersion、发送 Kafka Event 或恢复 Human Gate。 | Candidate-only contract 与零业务写入 E2E。 |
-| `SGA-BND-005` | 首版 StoryGraphHarness 使用普通 Python 显式 Registry/函数，不使用 LangGraph 重复 Temporal 编排；若 `langgraph` 在目标实现后无真实消费者，必须从依赖和 lock 中删除。 | import/依赖/运行路径测试。 |
-| `SGA-BND-006` | Provider Catalog/Connection/Credential/Profile/Binding、Generation Target/Job/Call/Receipt、Staging/QC/Selection、AssetVersion 与 Shot 图片/视频 Binding 全部由 Backend 拥有。Agent 只可接收无密钥的冻结业务 Ref/视觉要求并返回文本或结构化 Candidate；不得接收 Provider Secret/Endpoint、图片或视频字节/私有 URL，不得调用 Seedream、Seedance、GPT Image、Nano Banana 或任意媒体 Provider。 | Wire/env/dependency/network/fixture/零 Provider 调用与零业务写入测试。 |
+| VPA-BND-001 | 最终运行入口唯一为 agent/skills/build-storygraph/SKILL.md；Runtime 不从用户目录、网络或当前工作区动态发现其他 Skill。 | Path + Container negative |
+| VPA-BND-002 | Go Backend 唯一拥有 StageDefinition、StageRelease、ControlHead、CandidateStageSet、Invocation/Attempt/Result、ShardManifest、CandidateRevision/Head。 | Architecture + DB |
+| VPA-BND-003 | Agent 成功只产生 CandidateArtifact 与诊断，不得 Confirm/Apply、分配正式业务 UUID、推进 Gate、恢复 Workflow 或发布 OwnerVersion。 | Journey + Zero-write |
+| VPA-BND-004 | Agent Runtime 不包含 ORM、业务 Repository、Temporal、对象存储、Kafka、Elasticsearch、Provider client 或公共业务 HTTP route。 | Dependency + Network scan |
+| VPA-BND-005 | Agent input 不含 Secret、Provider Endpoint、私有签名 URL、图片/视频字节；Vision Stage 只接收 Backend 颁发的受限媒体读取能力与稳定 Asset ref。 | Contract + Secret scan |
+| VPA-BND-006 | Stage shard 挂到既有 WorkflowRun/NodeRun；Runtime 不建立与 Temporal 重复的 checkpoint 状态机。 | Integration + Replay |
 
-## 3. Skill 目录迁移与最终 Bundle
+## 3. 成熟 Skill 吸收、Bundle 与发布供应链
 
-### 3.1 原子迁移任务（`SG-I02`）
+### 3.1 外部 Skill 吸收
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-MOV-001` | `analyze-scene`、`draft-shots`、`extract-bible-evidence`、`plan-scene`、`reconcile-bible`、`repair-shots`、`review-bible`、`review-shots` 八个 Skill 必须按原名迁至 `agent/skills`；Skill Markdown/Reference 的原始 UTF-8 字节和相对路径不变。 | 迁移前后 manifest + SHA-256 golden。 |
-| `SGA-MOV-002` | 同一提交原子切换 Loader、Docker build context/复制路径和测试到 `agent/skills`，并删除根 `.agents/skills`；任一运行时状态都不能双读、fallback 或优先级选择。 | Git diff、容器路径、旧路径缺失/新路径成功与 fallback 负向。 |
-| `SGA-MOV-003` | `SG-I02` 只做行为保持迁移，不改 Guidance、Invocation kind/schema、调用次数、结果规范化或业务流程；所有现有 Agent/Backend/Frontend CI 必须保持通过。 | byte golden + 全量 CI。 |
+| VPA-SUP-001 | 每个外部 Skill 先建立 SourceInventory，记录来源 URL/commit、抓取时间、作者、版本、文件 Hash、许可、NOTICE、预期能力和审核人。 | Inventory audit |
+| VPA-SUP-002 | 许可不明确、禁止再分发、包含凭据、隐式联网、指令注入、越权工具或不可追溯来源的 Skill 必须 quarantined，不能进入改写队列。 | Adversarial review |
+| VPA-SUP-003 | 通过初审的材料分类为 adopt、rewrite、reference-only 或 reject；禁止原样复制外部运行时、提示词或工具声明进入生产 Bundle。 | Mapping review |
+| VPA-SUP-004 | rewrite 必须映射到七个能力之一：parse-script-structure、build-production-bible、map-scene-continuity、resolve-visual-foundation、design-reference-assets、review-production、direct-storyboard。 | Capability matrix |
+| VPA-SUP-005 | 每个改写通过 golden、adversarial、回归和边界 eval，再以 CandidateStageSet 进入 shadow；独立 reviewer 签署后才可批准。 | Eval + Signature |
+| VPA-SUP-006 | 运行时 Bundle 不下载外部 Skill、不联网搜索“最新最佳实践”、不按来源项目结构加载文件；吸收结果必须是仓库内审计过的重写资产。 | Network + Path negative |
 
-### 3.2 最终 Bundle 收口任务（`SG-I05`）
+### 3.2 单一 Bundle 与渐进披露
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-BDL-001` | 最终运行入口唯一为 `agent/skills/build-storygraph/SKILL.md`；8 个过渡 Skill 名、根 `.agents/skills`、旧 Loader fallback 和无消费者 `agents/openai.yaml` 全部删除。 | 路径/Loader/镜像/运行入口负向扫描。 |
-| `SGA-BDL-002` | `SKILL.md` 只保存 candidate-only、Evidence、Owner、四轴视觉和 DAG/Claim 等全阶段规则；阶段细则位于显式 `references/`，不得在 Python 中复制同一 Guidance。 | Bundle 结构、重复段落/引用检查。 |
-| `SGA-BDL-003` | Registry 必须按 Backend Stage Key 显式映射 Candidate Schema 与允许的 Reference 列表；只读取 `SKILL.md` 和当前 Stage 声明文件，不递归拼接全部 Markdown、不动态发现插件。 | 每 Stage loaded-file golden 与未知 Stage 拒绝。 |
-| `SGA-BDL-004` | Bundle Hash 对允许文件按相对 POSIX 路径排序，逐项覆盖路径 UTF-8 字节、内容长度和原始 UTF-8 内容后计算 Canonical SHA-256；路径逃逸、符号链接逃逸、缺失、多余或非 UTF-8 文件 fail closed。 | 跨语言 hash/golden/路径攻击。 |
-| `SGA-BDL-005` | Manifest 必须同时冻结 definition/prompt/bundle/output-schema version、bundle hash、model capability、`allowed_tools=[]`、max model calls 和 max execution seconds；Version 与字节/Hash 任一单独漂移均拒绝。 | Go/Python manifest 正反 fixture。 |
-| `SGA-BDL-006` | 非终态 Invocation 必须按冻结 Bundle Hash 路由精确 Agent image revision/digest；找不到返回 `skill_bundle_unavailable`，不得使用当前 Bundle、旧名称或相近版本。 | 滚动部署/旧 hash/缺镜像恢复。 |
+| VPA-BDL-001 | 固定目录只包含 SKILL.md、references、recipes、rubrics、eval 与 manifest 允许的资源；路径逃逸、符号链接逃逸、非 UTF-8、缺失或多余文件 fail closed。 | Filesystem adversarial |
+| VPA-BDL-002 | SKILL.md 只保存跨阶段不变量、Owner 边界、证据规则和路由；阶段细则放 references，示例放 recipes，评审标准放 rubrics，不在 Python 复制同一指导。 | Structure audit |
+| VPA-BDL-003 | 每个 StageRelease 显式列出该 Stage 允许加载的资源；Runtime 只加载入口和该白名单，不递归拼接全部 Markdown。 | Loaded-file golden |
+| VPA-BDL-004 | BundleManifest 对相对 POSIX 路径排序并覆盖路径字节、内容长度、原始 UTF-8 内容、输出 schema 和允许工具计算 Canonical SHA-256。 | Go/Python golden |
+| VPA-BDL-005 | Bundle hash、任一资源字节、output schema、tool policy 或 version 单独漂移都必须拒绝；不得用当前 Bundle 替代冻结版本。 | Mutation |
+| VPA-BDL-006 | 非终态 Invocation 必须路由到精确 bundle_hash 对应的 Agent image digest；找不到返回 skill_bundle_unavailable。 | Rolling deployment |
 
-## 4. Wire 与 Canonical Identity
+### 3.3 Definition、Release、Control 与签名
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-WIR-001` | 公共 Invocation `kind` 最终只允许 `storygraph_stage`；旧 `production_bible/storyboard_draft` Kind 在 `SG-I05` 原子移除，不提供兼容 Union 或转发。 | Pydantic/Go strict schema/HTTP 422。 |
-| `SGA-WIR-002` | Invocation 必须严格冻结 invocation id、wire schema version、input hash、Execution Policy，以及 stage/shard、workspace/project、source refs、exact upstream Candidate Revision refs、ShardManifest ref/shard、可选 base StoryGraph 和 stage input。 | 完整/缺失/未知字段 fixture。 |
-| `SGA-WIR-003` | source ref 必须包含 owner kind/logical/version/revision/hash；upstream ref 必须包含 stage/shard/candidate revision id+hash/source invocation+result hash；Agent 不得补全 current/latest。 | 篡改/空 ref/漂移测试。 |
-| `SGA-WIR-004` | Input Hash 覆盖 wire version、完整 canonical payload、排序 source/upstream refs、Manifest/Tree Path 和完整 Execution Policy/Codex contract；不包含 invocation id 或 input hash 自身。任一 Guidance/Schema/Policy/Upstream/Shard 变化必须换 Hash。 | Go/Python canonical golden 与单字段突变。 |
-| `SGA-WIR-005` | `stage_instance_key = SHA-256("storygraph-stage-v1" + stage + shard_key + manifest_hash + input_hash)`；同一身份只能关联一个 Invocation/Result，相同身份不同 Result Hash 冲突。 | Backend 并发/重放。 |
-| `SGA-WIR-006` | Result 只允许 `succeeded/failed/unknown`：成功时 candidate/result_hash 必填且 error 为空；失败/未知时 candidate/result_hash 为空且稳定 error 必填；所有 object `extra=forbid`。 | Schema 正反 fixture/fuzz。 |
-| `SGA-WIR-007` | Result Hash 对规范化 Candidate 计算；Agent 不保存 Result。Backend 首次接受后不可变保存并重验 invocation/kind/stage/shard/input/result/executor identity。 | 跨语言 hash、重复/漂移。 |
-| `SGA-WIR-008` | Execution Grant 必须绑定 Invocation ID/Input Hash/Policy Hash/expiry/attempt/fencing，使用恒时验签；过期、重放到不同输入、旧 fencing 或伪造 Grant 拒绝。 | Grant contract/security tests。 |
+| VPA-REL-001 | StageVariantKeyV2 精确由 stage_key、profile_key、lane_key、output_schema_version 构成；四字段共同决定变体身份。 | Schema |
+| VPA-REL-002 | DefinitionCore 保存变体身份、input/output schema、allowed tools、resource policy、模型能力、预算与不变量，不引用 Release、签名或 Control，避免 hash cycle。 | Hash graph |
+| VPA-REL-003 | StageRelease 保存 release_id、definition_hash、bundle_hash、agent_image_digest、model capability、eval attestation、created_at 与 predecessor_release_id。 | Contract |
+| VPA-REL-004 | CandidateStageSet 必须对当前生产 Profile 的十三个 StageVariantKey 完整且唯一，并携带完整性 proof 和 policy proof；不能混用未声明 Release。 | Set equality |
+| VPA-REL-005 | EvalAttestation 与 ShadowAttestation 绑定同一 CandidateStageSet hash、固定数据集/流量窗口和基线；基线只能是前一 approved set。 | Attestation golden |
+| VPA-REL-006 | SkillRelease 在独立 reviewer 签名后引用 CandidateStageSet、Eval、Shadow、provenance 与 license proof；签名不进入被签内容本身。 | Signature |
+| VPA-REL-007 | ControlRecord 状态只允许 approved、deprecated、quarantined、revoked；ControlHead 用 expected revision CAS 线性推进。 | State machine + Concurrency |
+| VPA-REL-008 | revoked 为终止安全状态；恢复必须创建新 StageRelease 和新审阅，不得把原记录改回 approved。 | Negative |
+| VPA-REL-009 | dispatch、accept result、apply candidate 三处分别验证 StageRelease、SkillRelease 和 ControlHead fence；任一已 quarantined/revoked 都失败关闭。 | Race + Fault injection |
+| VPA-REL-010 | Release、Signature、Attestation、Control 与 Receipt 的引用方向必须无环，Canonical Hash 排除数据库当前态和运行时租约。 | Graph/hash property |
 
-## 5. Stage 与 Reference 契约
+## 4. storygraph-stage-wire-v2 与执行身份
 
-最终 Stage 恰为以下十个，新增/删除/改义必须先更新 Design/Requirement/Bundle/Go/Python fixture：
-
-| Stage | 必需 Reference | Candidate 重点 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `extract_source_evidence` | `source-evidence.md` | 原文 Observation 与绝对 Evidence |
-| `analyze_story` | `story-analysis.md`、`entity-reconciliation.md` | Identity/State/World/Arc/Claim Fragment |
-| `reconcile_story` | `entity-reconciliation.md`、`story-analysis.md` | 规范 Key、冲突和 tree reduce Candidate |
-| `segment_episodes` | `episode-segmentation.md` | 有证据的 Episode Boundary Candidate |
-| `analyze_episode` | `scene-structure.md`、`visual-identity.md` | Scene/Dialogue/Beat/Occurrence/Claim Fragment |
-| `reconcile_episode` | `scene-structure.md`、`continuity-review.md` | Episode Structure Candidate |
-| `draft_storyboard` | `storyboard-table.md`、`visual-identity.md` | Shot Intent、视觉需求、`needs_asset` |
-| `detail_shots` | `shot-detail.md`、`visual-identity.md` | 完整 Shot Detail 与精确 Binding Candidate |
-| `review_storygraph` | `continuity-review.md` + 被审阶段 Reference | Evidence-scoped Review Issue |
-| `repair_candidate` | `continuity-review.md` + 冻结允许集 | CandidateRepairPatch |
+| VPA-WIR-001 | 公共 Invocation kind 只允许 storygraph_stage，wire_schema_version 固定 storygraph-stage-wire-v2；不保留 production_bible、storyboard_draft 或无类型 map union。 | Strict schema |
+| VPA-WIR-002 | Invocation 固定 invocation_id、attempt_id、StageVariantKeyV2、StageRelease identity、SkillRelease identity、Control proof、scope、source refs、upstream refs、shard、payload、input_hash 与执行预算。 | Go/Python fixture |
+| VPA-WIR-003 | scope 必须显式包含 workspace、project、episode 以及该 Stage 允许的 scene/entity/target；未知层级和跨项目引用拒绝。 | Negative |
+| VPA-WIR-004 | source ref 使用完整 OwnerVersionIdentity；upstream ref 使用 CandidateRevision identity、producer Invocation/result hash；Agent 不得补全 current/latest。 | Mutation |
+| VPA-WIR-005 | Stage input 为按 stage_key/profile_key 判别的 strict union，additional properties 默认 false；自由 JSON 只能存在于明确定义的 opaque evidence 字段。 | Schema fuzz |
+| VPA-WIR-006 | input_hash 覆盖 wire version、variant、release、bundle、scope、排序 refs、shard manifest、payload 与执行预算；不覆盖 invocation_id、attempt_id、租约或 dispatch authorization。 | Cross-language golden |
+| VPA-WIR-007 | dispatch authorization 在 Backend 运行时单独颁发并绑定 invocation、attempt、expiry 和 agent image；不能改变 Candidate 语义 Hash。 | Security |
+| VPA-WIR-008 | AttemptResult 只允许 accepted、rejected、outcome_unknown，包含 input_hash、output_hash、diagnostic_hash、release fence 与完成时间；同尝试结果不可覆盖。 | State machine |
+| VPA-WIR-009 | Go/Python 必须共用提交到仓库的正例、缺字段、未知字段、排序、Unicode、Hash 漂移和跨项目攻击 fixture。 | CI |
+| VPA-WIR-010 | 旧 Wire 在 v2 切片中原子移除或明确隔离为历史调用路径；不得 fallback 或自动转换成 v2 正式 Candidate。 | Architecture negative |
 
-| ID | 必须满足的契约 | 验证 |
+## 5. 十三个 StageVariant 合同
+
+生产 Profile 固定包含下列十三个 stage_key；除 review_candidate 与 repair_candidate 外 profile_key 为 default，review/repair 使用被评审目标的显式 profile。lane_key 首版为 primary，Vision Stage 仍通过 capability 和受限媒体读取声明隔离。
+
+| stage_key | 输入 | Candidate 输出 | 明确禁止 |
+|---|---|---|---|
+| propose_script_spans | ScriptSourceVersion | ScriptSpanCandidate | 身份、风格、正式 Scene ID |
+| extract_scene_facts | Source + spans | SceneFactCandidate | 视觉预设、身份合并、Owner 写入 |
+| resolve_identities | Scene facts + raw mentions | IdentityResolutionCandidate | 静默造人、遗漏 mention |
+| derive_production_entities | 正式结构/身份 + scene facts | ProductionWorldCandidate | 预设、参考图、正式 UUID |
+| bind_scene_occurrences | Production world candidate + scenes | SceneOccurrenceCandidate | 全文模糊绑定、未证实状态 |
+| reconcile_interaction_continuity | occurrences + evidence | InteractionContinuityCandidate | 覆盖冲突、无证据持有关系 |
+| review_candidate | profile-bound candidate + rubric | ReviewCandidate | Apply、选择媒体、自由修复 |
+| repair_candidate | candidate + typed issues + allowlist | 新 CandidateRevision | 原地 patch、越界字段修改 |
+| resolve_visual_foundation | Gate 2 versions + WorldPresetRelease | VisualFoundationCandidate | 改写剧情事实、Provider 调用 |
+| plan_reference_assets | foundation + production world | ReferencePlanCandidate | 删除 expected Target、媒体生成 |
+| compile_reference_brief | approved plan + exact dependencies | strict ReferenceBriefCandidate | 自由 prompt、Secret、latest |
+| review_reference_artifact | Bundle ref + restricted media reads | VisionReviewCandidate | 选择 Bundle、写 Asset、Provider 调用 |
+| direct_storyboard | ProductionPacketVersion | StoryboardCandidate | needs_asset、联网搜索、正式 Shot 写入 |
+
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-STG-001` | Stage Registry 必须与上表一一对应；未知 Stage、额外 Reference、Candidate type 错配或 Backend/Agent Stage 列表漂移 fail closed。 | Registry/fixture/count=10。 |
-| `SGA-STG-002` | Pydantic Model 是 Agent Candidate Schema 唯一代码事实；Codex 调用时临时生成 strict JSON Schema，不提交第二份生成 Schema。Go 只以 versioned wire fixture 对齐。 | 文件扫描/schema golden。 |
-| `SGA-STG-003` | 所有 Candidate 只使用输入中给定的正式 Ref 或 schema 允许的临时 Key，保留 Evidence、置信/歧义、Review Issue 和谱系；不得返回业务 Command/SQL/Graph JSON overwrite。 | 每 Stage 正反 fixture。 |
-| `SGA-STG-004` | Agent 不得依据常见套路补写原稿不存在的身份、关系、动机、伏笔、状态、场景或镜头；无 Evidence 时输出 ambiguity/issue，不伪造事实。 | adversarial/golden + representative manual review。 |
-| `SGA-STG-005` | Relationship/causal/continuity/foreshadowing 等必须输出 Claim Candidate 的 participant/anchor/evidence/scope/polarity/status；不得输出可导致正式 DAG 成环的任意持久 Edge。 | Claim schema/环负向 fixture。 |
-| `SGA-STG-006` | `draft_storyboard` 输入 Specification/AssetState 必须非空；缺精确 AssetVersion 时只输出 `needs_asset` 和严格 visual requirement，不得填空 UUID、URL 或 latest。 | Storyboard contract。 |
-| `SGA-STG-007` | `detail_shots` 必须消费已接受 Intent 和精确 READY AssetVersion/Artifact/Lineage/Style/view-role refs；不得改变已接受 source coverage/identity/state/visual requirement。 | 漂移/缺失/修改负向。 |
-| `SGA-STG-008` | Backend 负责全局 Shot 序号、连续 timecode、正式 UUID、Owner 映射和 ShotProductionBindingVersion；Agent 只提出 duration/镜头/声画/连续性 Candidate。 | Candidate 字段/Owner 输出测试。 |
+| VPA-STG-001 | CandidateStageSet 对上表十三个 stage_key 完整且无重复；缺一项、额外项或变体碰撞均不能批准。 | Set golden |
+| VPA-STG-002 | 每个 Stage 使用独立 strict input/output schema、allowed resource list、model capability 和 max model calls；不能共用万能 Candidate。 | Registry audit |
+| VPA-STG-003 | review_candidate 与 repair_candidate 的 profile 必须精确绑定被评审 Stage schema 和 rubric；未知 profile 拒绝。 | Contract |
+| VPA-STG-004 | review_reference_artifact 是唯一允许 Vision 能力的 Stage，只能读取 Invocation 授权的稳定媒体引用。 | Capability negative |
+| VPA-STG-005 | direct_storyboard 只能在 ProductionPacketVersion reference_ready 后 dispatch；前序 Stage 不能绕过 Packet 直接生成 Shot。 | Fence |
 
-## 6. Shard Manifest 与恢复
+## 6. P0 解析与制作世界输出
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-SHR-001` | Backend 为可 fan-out Stage 保存不可变 versioned ShardManifest，冻结 run/node/stage/root input、shard key/tree path/parent/kind/range/overlap/source hash/status、coverage hash 和 manifest hash。 | GORM contract/immutability/hash。 |
-| `SGA-SHR-002` | 初始分片、排序、fan-in 和 reduce tree 必须确定性；相同输入产生相同 Manifest/Hash。Agent 不决定分片边界或 reduce tree。 | 随机遍历/跨重启 golden。 |
-| `SGA-SHR-003` | 超预算不得截断输入或临时扩大预算；Backend 发布下一 Manifest Version，以有序子 shard 完整覆盖父范围并标父 superseded。除显式 overlap 外无缺口/重复。 | 重分片 coverage/overlap 负向。 |
-| `SGA-SHR-004` | 旧 Manifest 迟到 Result 保留审计但不能进入当前聚合；只有 current Manifest 全部 active leaf 成功且 upstream/head/coverage/tree gate 有效时才能聚合。 | 迟到/失败/unknown/漂移。 |
-| `SGA-SHR-005` | 聚合按确定性 tree 只传必要 Candidate refs/hash、Evidence refs 和冲突摘要；任一 reduce 输入超预算再次分片，不把全文或所有 Evidence 塞入一个 Invocation。 | 大输入/预算/调用图统计。 |
-| `SGA-SHR-006` | 单 shard deadline/失败只影响该 stage instance；已成功 shard、Decision 和 Owner Receipt 保持不变。完整 WorkflowRun 不设置固定业务墙钟终止。 | Temporal/Agent restart/resume。 |
+| VPA-P0-001 | ScriptSpanCandidate 用 code-point start/end、source_hash、临时 span_id 和 coverage proof；范围越界、重叠或缺口拒绝。 | Unicode/property |
+| VPA-P0-002 | SceneFactCandidate 是 style-blind，保留 raw_character_mentions、raw_prop_mentions、地点、时间、动作、对白和逐字段 evidence spans。 | Golden + Injection |
+| VPA-P0-003 | IdentityResolutionCandidate 对 raw mention 做 resolved/ambiguous/rejected 精确分区，输出 confidence、rationale 和 evidence，不产生正式 Character。 | Partition |
+| VPA-P0-004 | ProductionWorldCandidate 严格区分 Character、CharacterAppearance、Location、Prop、PropState，并为每项给出 Evidence XOR CreatorDecision 提案。 | Schema |
+| VPA-P0-005 | SceneOccurrenceCandidate 对 scene/subject/appearance_or_state/evidence/ordering 精确绑定，不以名称或 fuzzy search 代替身份。 | Contract |
+| VPA-P0-006 | InteractionContinuityCandidate 同时输出人物—道具几何、持有/接触、相对尺度/朝向与跨场 appearance/prop state ledger。 | Journey |
+| VPA-P0-007 | P0 Candidate 中的所有临时 ID 只能在同一 Candidate graph 内引用；Backend Apply 负责机械分配与返回正式 identity map。 | Integration |
 
-## 7. Evidence 与完整原稿
+## 7. Preset、六类参考与 Vision 输出
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-EVD-001` | Backend Normalize 后的 Source Slice 使用 Unicode code-point absolute half-open `[start,end)`；Go/Python 不得混用 UTF-8 byte 或 UTF-16 offset。Evidence 文本逐字等于该区间。 | 中英/emoji/标点跨语言 fixture。 |
-| `SGA-EVD-002` | Slice 以段落/Scene/Episode marker 为优先边界；overlap 显式记录且不重复正式 coverage；相同 range+text hash 去重。 | coverage/overlap/golden。 |
-| `SGA-EVD-003` | Episode marker 必须覆盖阿拉伯数字、常用中文数字和真实原稿格式；显式 marker 优先，AI 只为缺失/歧义边界生成 Candidate，不覆盖已确认边界。 | 完整原稿 marker/歧义 fixture。 |
-| `SGA-EVD-004` | Candidate 中的 chunk-local offset 不能直接成为正式 Evidence；Backend 必须用冻结 Slice 校正并重验绝对 range/hash。 | 偏移篡改/边界测试。 |
-| `SGA-EVD-005` | 两集 fixture 用于契约开发；最终必须运行完整原稿，报告各 Stage shard/coverage/candidate/issue/repair/unknown 统计，并对代表集人工细查。 | `SG-I34` 机器报告 + manual sample。 |
+| VPA-VIS-001 | WorldPresetRelease 只在 resolve_visual_foundation 及其下游出现；对同一 P0 输入切换 Preset 不得改变 span、scene fact、identity 或 production entity Candidate hash。 | Metamorphic |
+| VPA-VIS-002 | VisualFoundationCandidate 分开输出 fidelity invariants、world adaptations、palette/material/light/camera rules 与 forbidden changes。 | Strict schema |
+| VPA-VIS-003 | ReferencePlanCandidate 必须覆盖 Backend 提供的 expected target keys，类型只允许六类；只能补充规格，不能删除、改名或合并 Target。 | Set equality |
+| VPA-VIS-004 | ReferenceBriefCandidate 使用六类判别 union 和固定 view roles；只表达 Provider-neutral 视觉要求，不含自由 Provider 参数、密钥或执行命令。 | Schema |
+| VPA-VIS-005 | character_anchor 与 character_appearance 输出 front/profile/back；后者显式继承 anchor identity 与批准变化。 | Contract |
+| VPA-VIS-006 | location 输出 empty_establishing/spatial_orientation/material_scale_detail；prop 输出 front/side/back/state_detail。 | Contract |
+| VPA-VIS-007 | interaction 输出 interaction_master 并绑定 appearance、prop state、动作、手位/接触点、尺度和朝向；scene_composition 输出 composition_master 并绑定全部已选 base。 | Contract |
+| VPA-VIS-008 | VisionReviewCandidate 至少含 identity、view_role、state、interaction_geometry、style_fidelity 五类 issue、severity、region/evidence 和 recommendation。 | Vision eval |
+| VPA-VIS-009 | Vision Stage 不得返回 selected、approved 或 Owner mutation；Backend 结合 deterministic QC 与 Human Gate 决定 eligibility/selection。 | Negative |
 
-## 8. Candidate Revision、Head 与 Repair
+## 8. Production Packet 与 Storyboard 输出
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-CAN-001` | Backend-owned StageCandidateRevision 不可变，冻结 stage instance、revision no、parent id/hash、strict origin union、candidate content/hash、candidate revision hash 和 created_at；Head 以 expected revision/hash CAS。 | GORM/union/CAS/并发。 |
-| `SGA-CAN-002` | `origin_kind=invocation|aggregate|repair` 恰有对应 origin 非空：Invocation 冻结 source result；Aggregate 冻结 manifest 和排序 leaf revision refs；Repair 冻结 repair invocation/result。 | Schema/check/golden。 |
-| `SGA-CAN-003` | candidate content hash 只证明规范化内容；candidate revision hash 还覆盖 stage instance、revision、parent、origin 全材料和 content hash。 | canonical 单字段突变。 |
-| `SGA-CAN-004` | 下游和聚合只绑定 exact candidate revision id+hash；Head 切换后，引用旧 Revision 的下游才被标 stale，原 Invocation/Result/Revision 不覆盖。 | stale closure/历史重放。 |
-| `SGA-REP-001` | review_storygraph 只产生 Evidence-scoped Issue，不能把模型意见伪装成 Deterministic Gate；Tool Gate blocker 不能被 Reviewer 降级。 | Review schema/对抗 fixture。 |
-| `SGA-REP-002` | CandidateRepairPatch 必须冻结 target revision id/hash、允许修改 Key、base fragment hash 和只读邻接；不得修改集合外字段或已发布 StoryGraphVersion。 | Patch scope/Graph published 负向。 |
-| `SGA-REP-003` | Backend 以 expected Candidate Head Hash 应用 Patch，创建 N+1 Repair Revision 并 CAS Head；相同 Patch 重放同 Receipt，竞争 Patch 最多一个成功。 | PostgreSQL 并发/幂等。 |
-| `SGA-REP-004` | 每轮 Repair 后必须重跑受影响闭包的全部 Deterministic Gate 与 review；只在无 blocker 时进入 Human Gate。修复轮次/模型调用预算耗尽时保持 needs_review/failed，不返回半成品成功。 | 有界循环/预算/闭包。 |
+| VPA-STB-001 | direct_storyboard 输入冻结每场景 ProductionPacket：source facts、appearance、location、prop state、interaction、continuity、selected assets 和 visual foundation。 | Fixture |
+| VPA-STB-002 | StoryboardCandidate 使用 intent 判别 union 与 typed detail；不得出现 needs_asset、current/latest、Provider、搜索或未绑定自然语言实体名。 | Schema + Negative |
+| VPA-STB-003 | 每个 Shot Candidate 携带临时 shot_id、scene ref、source span、主体、动作、构图、镜头、时长、连续性与 Packet 内 binding refs。 | Contract |
+| VPA-STB-004 | Agent binding 只引用 Packet local key；Backend normalizer 独立解析为正式 OwnerVersion/AssetVersion，歧义时拒绝而非猜测。 | Integration |
+| VPA-STB-005 | review_candidate 对 Storyboard 只输出 typed issue；repair_candidate 只能按 allowlist 生成新完整 CandidateArtifact。 | Repair negative |
 
-## 9. Codex CLI 与沙箱
+## 9. Shard、Candidate Revision、Review 与 Repair
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-COD-001` | 开发阶段真实 AI 执行使用本地 Codex CLI：ephemeral、read-only sandbox、ignore user config、临时空工作目录和临时 output schema；模型只来自 Backend Policy 或允许的 CLI 默认。 | 进程参数/环境/真实 Codex integration。 |
-| `SGA-COD-002` | Tool Allowlist 必须为空；Shell、Web、Browser、Plugins、Skill Search、Workspace/File read/write 等任何 Tool event 立即 `tool_not_allowed`，Candidate 丢弃。 | 伪事件/真实 CLI trace。 |
-| `SGA-COD-003` | Skill Guidance 由 Harness 显式读取并作为输入注入；Codex 工作目录不含仓库源码，不能依赖用户级 Skill 自动发现或项目配置。 | 临时目录、HOME/config 隔离、文件访问负向。 |
-| `SGA-COD-004` | 每个 Invocation 严格执行 max model calls 与单 call/shard technical deadline；不得自动放宽。进程超时必须终止/回收，stderr/诊断脱敏且长度有界。 | budget/deadline/process cleanup/log scan。 |
-| `SGA-COD-005` | Schema-invalid 输出只允许设计固定次数的结构修正，且每次计入 model-call budget；无法修正返回 `candidate_schema_invalid`。业务事实 blocker 不得通过 schema repair 改写。 | 修正次数/预算/错误分类。 |
-| `SGA-COD-006` | Codex unavailable/transport result unknown 返回 `unknown: runtime_unavailable|agent_execution_unknown`；不得返回空 Candidate 成功或自动换 Provider。 | 启动失败/断连/kill 故障。 |
+| VPA-CAN-001 | ShardManifestV2 不可变，包含 manifest_hash、scope universe、shard key、coverage、dependency closure 和 fixed-point proof；同阶段所有 shard 无重叠且完整覆盖。 | Property |
+| VPA-CAN-002 | CandidateRevision 不可变，包含 revision_id、stage variant、shard、input_hash、output_hash、producer union、parent revision 和 status。 | Contract |
+| VPA-CAN-003 | producer union 明确区分 Agent Attempt、Backend mechanical、Human correction；三者字段不可混用。 | Strict union |
+| VPA-CAN-004 | 每个 stage_instance_key 只有一个 CandidateHead，更新使用 expected revision CAS；并发 repair 只能一个成功。 | Concurrency |
+| VPA-CAN-005 | repair 输入必须是 typed issue、field-path allowlist、原 Candidate 与全部冻结 refs；输出完整新 Artifact，不接受 JSON Patch 或原地修改。 | Negative |
+| VPA-CAN-006 | repair 后重新运行 schema、invariant、review 与 affected closure；未受影响 shard 保留原 Revision，不默认全剧重跑。 | Closure |
+| VPA-CAN-007 | source、owner、release、manifest 或 upstream candidate 漂移使当前 Candidate stale；stale 只能重算或明确 canonical-empty rebase。 | Mutation |
+| VPA-CAN-008 | Candidate rejected、stale、quarantined 后不能 Apply；历史 Artifact 仍可审计但不能成为 latest 输入。 | Fence |
 
-## 10. 错误与可观测性
+## 10. Runtime、失败、恢复与安全
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-ERR-001` | 至少稳定支持 `skill_bundle_invalid`、`skill_bundle_unavailable`、`invocation_policy_invalid`、`runtime_unavailable`、`agent_execution_unknown`、`candidate_schema_invalid`、`evidence_invalid`、`upstream_candidate_stale`、`execution_budget_exceeded`、`execution_deadline_exceeded`、`tool_not_allowed`。 | Go/Python error fixture/count。 |
-| `SGA-ERR-002` | failed 与 unknown 必须按是否可安全重试区分；Backend 只对 retryable unknown 使用同 stage identity/Invocation 对账，不为 deterministic failed 自动创建新 Candidate。 | 重试策略/事实计数。 |
-| `SGA-ERR-003` | 日志只记录 invocation/stage/shard/manifest/candidate revision、input/result/bundle hash 前缀、状态、耗时、调用数和稳定错误码；不得记录完整剧本/Candidate/Prompt/Grant/Token/环境凭据。 | 日志字段/敏感扫描。 |
-| `SGA-ERR-004` | Trace context 从 Backend → Agent → Codex process wrapper 传播并在 Result/日志关联，但不进入 Candidate content hash。 | trace E2E/hash 不变。 |
+| VPA-RUN-001 | Invocation 与 Attempt 分离；同 Invocation 可有多个 Attempt，但每次只允许一个有效 lease，成功 Result 收敛到同一 input_hash。 | Restart |
+| VPA-RUN-002 | 超时或进程中断若无法证明未执行，Attempt 进入 outcome_unknown；Backend 先按 invocation/attempt/result identity 对账再决定重试。 | Fault injection |
+| VPA-RUN-003 | dispatch 前、Result 接受前、Candidate Apply 前均重验 release/control/input fence；运行中撤销 Release 不能被旧结果绕过。 | Race |
+| VPA-RUN-004 | Text broker 与 Vision broker 能力分离；除受限媒体读取外 allowed_tools 为空，Stage 不能自行打开网络、shell 或文件系统。 | Sandbox |
+| VPA-RUN-005 | 每次 Attempt 使用独立临时目录和显式文件白名单，完成后可回收；不得读取项目无关文件、用户目录或凭据。 | Filesystem attack |
+| VPA-RUN-006 | 剧本、Skill 引用、用户评论和媒体元数据全部按 untrusted data 处理；提示注入不能更改 Stage、工具、输出 schema 或 Owner 边界。 | Adversarial |
+| VPA-RUN-007 | max model calls、单调用 deadline、总执行 deadline 和输出大小预算由 StageRelease 冻结；超限返回 typed error，不截断成合法 Candidate。 | Budget |
+| VPA-RUN-008 | 错误至少区分 invalid_input、schema_mismatch、bundle_unavailable、release_blocked、lease_lost、timeout、outcome_unknown、model_unavailable、media_unavailable、internal。 | Error fixture |
+| VPA-RUN-009 | HTTP 时限不充当 Workflow 总时限；Backend/Temporal 用心跳、retry policy、reconciliation 和持久 Receipt 恢复。 | Replay |
 
-## 11. 测试、CI 与交付
+## 11. Eval、Shadow 与 CI
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| `SGA-OPS-001` | Agent 测试只位于 `agent/tests/unit|contract|integration` 及既有独立分类；`agent/app` 不得含测试文件。 | 目录检查。 |
-| `SGA-OPS-002` | 每个 Harness 任务必须通过 Ruff check/format、strict Pyright、全量 Pytest；跨语言 fixture 同时由 Go/Agent 测试读取；生成 Schema 不得形成 tracked drift。 | CI。 |
-| `SGA-OPS-003` | Agent 镜像必须包含唯一 Bundle 和 Codex CLI，且以非 root 运行；镜像内根 `.agents`/旧 Skill 不存在，Bundle Hash 可在启动时验证。 | Docker build/run/digest/path。 |
-| `SGA-OPS-004` | 测试模型桩只能证明协议/错误；`extract_source_evidence`、Bible、Episode、Storyboard Draft/Detail、Review/Repair 至少各有一次真实本地 Codex 合约，最终完整原稿不使用模型桩。 | Integration/Acceptance 条件标记与真实输出 hash。 |
-| `SGA-OPS-005` | 每个 `SG-Ixx` 完整任务先 Red → Green → Refactor，通过局部和当前全量真实 CI，回填 Evidence 后独立 Git 提交；失败/跳过/缺 Codex 登录不得报告通过。 | Git/CI/Acceptance。 |
-| `SGA-OPS-006` | 最终 `agent-browser` 只能在 `SG-I34` 全部实现、四类媒体 Provider、完整原稿和真实 CI 完成并提交后由 `SG-I35` 执行；Agent 测试不得提前替代浏览器验收。 | 顺序/Git 历史。 |
+| VPA-EVL-001 | skill-creator 的结构校验用于仓库内 Bundle，但其通过只证明格式，不替代业务 eval、许可、安全和发布审阅。 | CI |
+| VPA-EVL-002 | CI 检查 provenance、license/NOTICE、文件 allowlist、Canonical Hash、十三 Stage 完整性、Wire strictness 与跨语言 fixture。 | CI |
+| VPA-EVL-003 | golden dataset 覆盖中文 Unicode、多集多场、同名人物、多 Appearance、多状态道具、人物持道具、跨场连续性和六类 Target。 | Dataset audit |
+| VPA-EVL-004 | adversarial dataset 覆盖 prompt injection、伪造 system 文本、路径逃逸、恶意媒体元数据、跨项目 ref、latest 补全和超预算输出。 | Security CI |
+| VPA-EVL-005 | Vision eval 使用固定真实图片样本和人工标注，分别评估五类 issue；不能只 mock 图片读取或只验证 JSON 可解析。 | Vision benchmark |
+| VPA-EVL-006 | Shadow 在不写正式 Owner 的条件下运行完整 CandidateStageSet，与前一 approved set 对比质量、错误、时延和局部闭包。 | Shadow evidence |
+| VPA-EVL-007 | forward test 在新 Release 批准后验证新 Invocation 使用新 set、在途 Invocation 保持冻结旧 set、revoked set 三道 fence 均拒绝。 | Deployment integration |
+| VPA-EVL-008 | 最终端到端验收至少一次使用真实 Agent/Codex 执行关键 Stage；mock 只可用于确定性故障注入，不能抵扣最终语义闭环。 | Real-agent journey |
 
-## 12. 端到端 Harness 契约
+## 12. Agent 端到端旅程
 
-| ID | 必须满足的契约 | 验证 |
+| ID | 必须满足的旅程 | 完成证据 |
 |---|---|---|
-| `SGA-JRN-001` | 完整原稿按确定性 Unicode Slice → Evidence → analyze/reconcile story → review/repair → Bible Human Gate 输入，全程可重启且不重复成功 shard。 | Backend + Agent + Temporal + 真实 Codex。 |
-| `SGA-JRN-002` | confirmed Bible/Identity/State 后完成 segment episodes → analyze/reconcile episode，未知身份/状态只产 Issue；Owner Apply 后可编译 Core StoryGraph。 | 两集/完整原稿跨服务 E2E。 |
-| `SGA-JRN-003` | 正式 Scene/Beat/Occurrence + Specification/State 进入 draft_storyboard；`needs_asset` 阻断付费后，精确 READY AssetVersion 进入 detail_shots/review/repair；Agent 从不创建 Shot/Binding。 | 视觉前后两阶段 E2E。 |
-| `SGA-JRN-004` | Bundle 滚动部署、单 shard deadline、Runtime unavailable、迟到 Result、Head 冲突和 Repair 竞争均从 Backend 事实恢复，同一 stage identity 不产生不同 Result/Candidate 正式效果。 | 故障注入矩阵。 |
+| VPA-JRN-001 | 真实剧本依次运行 spans、scene facts、identity，产生严格 Candidate，经 Backend Gate 1 Apply 后可追溯原 span。 | Agent/DB/Workflow |
+| VPA-JRN-002 | production entities、occurrences、interaction continuity 识别两种形象、两种道具状态和持有交互，经 Gate 2 原子应用。 | Candidate + Owner versions |
+| VPA-JRN-003 | 同一正式 P0 输入在两个 Preset 下保持事实 Candidate hash 不变，仅 visual foundation 和下游变化。 | Metamorphic evidence |
+| VPA-JRN-004 | 六类 ReferenceBrief 通过 strict schema；Vision 对真实 Bundle 发现至少一个注入的 identity 或 geometry 缺陷且不自行选择。 | Brief/Vision evidence |
+| VPA-JRN-005 | ProductionPacket 驱动 direct_storyboard，Backend normalizer 精确绑定，review/repair 形成新 Revision，经 Gate 5 原子应用。 | Full journey |
+| VPA-JRN-006 | Agent 崩溃、租约丢失、bundle 缺失、release 撤销、outcome_unknown 和重复 Result 均在冻结身份上恢复或失败关闭。 | Fault matrix |
 
-## 13. `SG-Ixx` 映射与门禁
+## 13. VP-D14 文档完成门
 
-| 实施任务 | 本规格主要条款 |
-|---|---|
-| `SG-I01` | `SGA-BND-*`、`SGA-WIR-*`、`SGA-OPS-001`–`003` 的 fixture/边界，不建立最终 Bundle 目录 |
-| `SG-I02` | `SGA-MOV-*` |
-| `SG-I05` | `SGA-BDL-*`、`SGA-WIR-*`、`SGA-STG-001`–`003` |
-| `SG-I08` | `SGA-EVD-*`、`SGA-SHR-*`、`extract_source_evidence` |
-| `SG-I09`–`010` | `analyze_story/reconcile_story/review_storygraph/repair_candidate`、`SGA-CAN-*`、`SGA-REP-*` |
-| `SG-I13`、`SG-I15` | `segment_episodes/analyze_episode/reconcile_episode` |
-| `SG-I18`、`SG-I27` | `draft_storyboard/detail_shots`、`SGA-STG-006`–`008` |
-| 所有 Agent 任务 | `SGA-COD-*`、`SGA-ERR-*`、`SGA-OPS-*` |
-| `SG-I34` | `SGA-JRN-*` 与完整原稿/真实 Codex；只验证 Agent 候选链，不在 Agent 接入媒体 Provider |
-| `SG-I35` | `SGA-OPS-006`，无新 Agent 实现 |
-
-本文完成 `SG-D19` 复核。`SG-D20` 必须引用而非复制这些 Requirement，并按 `SG-I01`–`SG-I35` 唯一顺序安排实现；`SG-D21` 必须为本次新增的 `SGA-BND-006` 和改写的顺序门禁建立初始未勾选目标项，并保留未变合同的真实历史 Evidence。在 `SG-D21` 接受前不得编码。
+- [x] VPA-BND-001 至 VPA-JRN-006 的表格条款全部拥有唯一 ID、明确 Owner 和最低验证。
+- [x] 十三个 Stage 与已接受 Agent Design 完全一致，六类 Target 和五类 Vision issue 与跨服务 Requirement 一致。
+- [x] 外部成熟 Skill 只能通过来源、许可、安全、改写、eval、shadow、独立签名供应链进入生产。
+- [x] Wire、Definition、Bundle、Release、Attestation、Control、Candidate 和 Receipt 的 Hash 引用无环。
+- [x] 产品映射、Agent/Backend Owner、失败/恢复三次独立反例审阅完成。
+- [x] 每个 VPA 条款都具备可供 VP-D15 分配唯一主实施切片和初始未勾选验收项的粒度。
+- [x] 正文 SHA-256 在接受时写回文首，且覆盖从第一个正文标题到文件末尾。
