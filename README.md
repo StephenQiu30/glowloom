@@ -22,7 +22,7 @@ JSON Logs → Logstash → Elasticsearch Log Index → Kibana
 - `backend/cmd/main.go`：唯一 Go 启动入口；同一 `lanverse` 进程装配 API、Workflow 与 Event 三个职责运行时，不创建 Worker Binary 或 Compose 服务。
 - `agent/`：私有 Candidate Runtime；校验短时 Execution Grant，只执行结构化 Codex Harness，不连接 PostgreSQL/MinIO，不拥有公共业务路由。
 - `backend/internal/platform/database/model`：唯一 GORM Model Catalog 与表结构事实源。
-- `backend/api/openapi/lanverse-v1.json`：唯一公共 REST 契约源。
+- `backend/api/openapi/lanverse-public-api.json`：唯一公共 REST 契约源。
 - `backend/internal/agent/contract`：Backend ↔ Agent 的版本化调用/结果线协议所有者；`agent/app/candidate_runtime/schemas.py` 以禁止额外字段的 Pydantic 模型校验同一协议。
 - `docs/`：Design → PRD/Requirement → Plan → Acceptance 的事实链路。
 

@@ -13,7 +13,7 @@
 ## 实现事实
 
 1. `lanverse-api` 组合既有 Authoring、Workflow Compiler、StartService、ControlService、GORM Store 与官方 Temporal Go SDK Client；API 和 Worker 使用同一 Workflow 领域实现，不复制业务层。
-2. `POST /api/v1/workflow-runs`、`GET /api/v1/workflow-runs/{run_id}`、`POST /api/v1/workflow-runs/{run_id}/reruns` 和 `POST /api/v1/workflow-runs/{run_id}/controls` 使用标准 `net/http`、严格 JSON 解码、既有 Validator 与统一 Problem Envelope。
+2. `POST /api/workflow-runs`、`GET /api/workflow-runs/{run_id}`、`POST /api/workflow-runs/{run_id}/reruns` 和 `POST /api/workflow-runs/{run_id}/controls` 使用标准 `net/http`、严格 JSON 解码、既有 Validator 与统一 Problem Envelope。
 3. 查询每次通过 GORM 复核当前 User Status、Token Version、Workspace Membership，并按不可变 Definition ExecutionOrder 返回 Node 投影；不生成 Receipt 或修改 Run。
 4. 启动和局部重跑通过 Authoring Revision 所属 Project 的写权限重新授权；Viewer 只能查询，不能启动、重跑或控制。Control 不接受 Browser 自报 Workspace，并在创建 Intent 的同一 GORM 事务中再次授权、锁定 Run revision。
 5. API 启动时建立真实 Temporal Client；`/readyz` 在 PostgreSQL 与对象存储之后调用 Temporal SDK `CheckHealth`，任一必需依赖失败统一返回 `dependency_unavailable`，不会在无法调度 Worker 时报告就绪。

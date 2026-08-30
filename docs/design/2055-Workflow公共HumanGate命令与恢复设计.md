@@ -612,11 +612,11 @@ View result 再重算当前 read set，并明确 `ready|stale|blocked`；它不�
 ### 10.2 Commands
 
 ```text
-POST /api/v1/human-tasks/{task_id}/claims
-POST /api/v1/human-tasks/{task_id}/claim-renewals
-POST /api/v1/human-tasks/{task_id}/claim-releases
-POST /api/v1/human-tasks/{task_id}/decisions
-POST /api/v1/review-decisions/{decision_id}/resume
+POST /api/human-tasks/{task_id}/claims
+POST /api/human-tasks/{task_id}/claim-renewals
+POST /api/human-tasks/{task_id}/claim-releases
+POST /api/human-tasks/{task_id}/decisions
+POST /api/review-decisions/{decision_id}/resume
 ```
 
 Decision Request 只接受：

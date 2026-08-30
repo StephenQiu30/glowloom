@@ -34,7 +34,7 @@ PostgreSQL 业务事实仍只有 Backend 的 GORM Model Catalog 一个来源；�
 1. 固定摘要 Temporal 服务运行 `LANVERSE_TEST_TEMPORAL_ADDRESS=127.0.0.1:57244 go test ./tests/workflow -run 'Test(TemporalStarter|EpisodeWorkflowCompletes)' -count=1 -v`：通过。首次发送返回 `signaled`，同一输入重放返回 `already_applied`，相同 SignalID 的漂移输入返回 `conflict`；Episode Workflow 完成后 History Replay 通过。
 2. 全新 PostgreSQL 16.15 与固定摘要 Temporal 服务同时运行 `go vet ./...`、`go test -p 1 ./...`：通过；`backend/tests/workflow` 包含真实 GORM Signal、Apply 投影、正式 Worker 注册、真实 Temporal Start/Signal 与 Replay，最新复验用时 10.065 秒。
 3. Agent 执行 Ruff Check/Format、Pyright 与全量 Pytest：通过，`12 passed`；Agent 继续只运行 Candidate Runtime。
-4. Frontend 从 `backend/api/openapi/lanverse-v1.json` 重新生成 Client 后执行 ESLint、TypeScript、Vitest 与生产构建：通过，`16` 个测试文件、`45` 项测试全部成功。
+4. Frontend 从 `backend/api/openapi/lanverse-public-api.json` 重新生成 Client 后执行 ESLint、TypeScript、Vitest 与生产构建：通过，`16` 个测试文件、`45` 项测试全部成功。
 5. OpenAPI 生成目录无 Diff，仓库 Secret/Data/Report 与语言边界卫生检查通过。
 6. 全新 PostgreSQL 16.15 运行 `LANVERSE_TEST_DATABASE_URL=... go test ./tests/workflow -run TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder -count=1 -v`：通过；漂移 Decision 被拒绝，批准投影落库，重复 Apply 保持同一终态。
 7. 固定摘要 Temporal 服务运行 `LANVERSE_TEST_TEMPORAL_ADDRESS=127.0.0.1:57245 go test ./tests/workflow -run TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory -count=1 -v`：通过；正式 Worker 注册入口消费五类 Activity，Workflow 完成并 Replay 成功。
