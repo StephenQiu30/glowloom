@@ -72,11 +72,11 @@ func (signer *Signer) Verify(value string, invocation contract.StageInvocation, 
 	return nil
 }
 
-func (signer *Signer) IssueV2(invocation contract.V2StageInvocation) (string, error) {
+func (signer *Signer) IssueSceneAnalysis(invocation contract.SceneAnalysisInvocation) (string, error) {
 	if err := invocation.Validate(); err != nil {
 		return "", err
 	}
-	claims := contract.V2ExecutionGrantClaims{
+	claims := contract.SceneAnalysisExecutionGrantClaims{
 		InvocationID: invocation.InvocationID, AttemptID: invocation.AttemptID,
 		InputHash: invocation.InputHash, StageReleaseID: invocation.StageRelease.ReleaseID,
 		AgentImageDigest: invocation.StageRelease.AgentImageDigest,
@@ -93,7 +93,7 @@ func (signer *Signer) IssueV2(invocation contract.V2StageInvocation) (string, er
 	return encoded + "." + signer.signature(encoded), nil
 }
 
-func (signer *Signer) VerifyV2(value string, invocation contract.V2StageInvocation) error {
+func (signer *Signer) VerifySceneAnalysis(value string, invocation contract.SceneAnalysisInvocation) error {
 	if err := invocation.Validate(); err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (signer *Signer) VerifyV2(value string, invocation contract.V2StageInvocati
 	if err != nil {
 		return errors.New("invalid agent execution grant payload")
 	}
-	var claims contract.V2ExecutionGrantClaims
+	var claims contract.SceneAnalysisExecutionGrantClaims
 	if err = json.Unmarshal(payload, &claims); err != nil {
 		return errors.New("invalid agent execution grant payload")
 	}

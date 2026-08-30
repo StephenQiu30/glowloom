@@ -55,9 +55,9 @@ func fixtureStageInvocation(t *testing.T) contract.StageInvocation {
 	return invocation
 }
 
-func TestStoryGraphV2ExecutionGrantBindsAttemptInputReleaseAndImage(t *testing.T) {
-	fixture := loadStoryGraphV2WireFixture(t)
-	invocation, err := contract.DecodeV2StageInvocation(fixture.ValidInvocation)
+func TestSceneAnalysisExecutionGrantBindsAttemptInputReleaseAndImage(t *testing.T) {
+	fixture := loadStoryGraphSceneAnalysisWireFixture(t)
+	invocation, err := contract.DecodeSceneAnalysisInvocation(fixture.ValidInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,17 +67,17 @@ func TestStoryGraphV2ExecutionGrantBindsAttemptInputReleaseAndImage(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := signer.IssueV2(invocation)
+	value, err := signer.IssueSceneAnalysis(invocation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = signer.VerifyV2(value, invocation); err != nil {
+	if err = signer.VerifySceneAnalysis(value, invocation); err != nil {
 		t.Fatal(err)
 	}
 	changedAttempt := invocation
 	changedAttempt.AttemptID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-	if err = signer.VerifyV2(value, changedAttempt); err == nil {
-		t.Fatal("v2 grant authorized a different attempt")
+	if err = signer.VerifySceneAnalysis(value, changedAttempt); err == nil {
+		t.Fatal("Scene Analysis grant authorized a different attempt")
 	}
 	changedImage := invocation
 	changedImage.StageRelease.AgentImageDigest = "sha256:" + strings.Repeat("9", 64)
@@ -85,11 +85,11 @@ func TestStoryGraphV2ExecutionGrantBindsAttemptInputReleaseAndImage(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = signer.VerifyV2(value, changedImage); err == nil {
-		t.Fatal("v2 grant authorized a different runtime image")
+	if err = signer.VerifySceneAnalysis(value, changedImage); err == nil {
+		t.Fatal("Scene Analysis grant authorized a different runtime image")
 	}
 	clock = now.Add(grant.TTL)
-	if err = signer.VerifyV2(value, invocation); err == nil {
-		t.Fatal("v2 grant remained valid at its expiry")
+	if err = signer.VerifySceneAnalysis(value, invocation); err == nil {
+		t.Fatal("Scene Analysis grant remained valid at its expiry")
 	}
 }

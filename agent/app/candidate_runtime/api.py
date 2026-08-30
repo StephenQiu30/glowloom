@@ -13,20 +13,20 @@ from app.candidate_runtime.canonical import canonical_hash
 from app.candidate_runtime.grants import (
     InvalidExecutionGrant,
     verify_execution_grant,
-    verify_v2_execution_grant,
+    verify_scene_analysis_execution_grant,
+)
+from app.candidate_runtime.scene_analysis_schemas import (
+    SceneAnalysisAttemptResult,
+    SceneAnalysisDiagnostic,
+    SceneAnalysisExecutor,
+    SceneAnalysisInvocation,
+    SceneAnalysisResultError,
 )
 from app.candidate_runtime.schemas import (
     Executor,
     ResultError,
     StoryGraphStageInvocation,
     StoryGraphStageResult,
-)
-from app.candidate_runtime.v2_schemas import (
-    StoryGraphV2AttemptResult,
-    StoryGraphV2Diagnostic,
-    StoryGraphV2Executor,
-    StoryGraphV2Invocation,
-    StoryGraphV2ResultError,
 )
 from app.modules.storygraph.bundle import BundleInvalid, StoryGraphBundle
 from app.modules.storygraph.harness import (
@@ -40,16 +40,16 @@ from app.modules.storygraph.harness import (
     SkillBundleUnavailable,
     StoryGraphHarness,
 )
+from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
+from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
+from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
 from app.modules.storygraph.skill_registry import stage_spec
-from app.modules.storygraph.v2_bundle import StoryGraphV2Bundle
-from app.modules.storygraph.v2_harness import StoryGraphV2Harness
-from app.modules.storygraph.v2_registry import stage_spec_v2
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     StoryGraphBundle().verify_installed_bundle()
-    StoryGraphV2Bundle().verify_installed_bundle()
+    SceneAnalysisBundle().verify_installed_bundle()
     yield
 
 
@@ -65,12 +65,12 @@ app = FastAPI(
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     bundle_hash = StoryGraphBundle().verify_installed_bundle()
-    v2_bundle_hash = StoryGraphV2Bundle().verify_installed_bundle()
+    scene_analysis_bundle_hash = SceneAnalysisBundle().verify_installed_bundle()
     return {
         "status": "ok",
         "service": "lanverse-agent-runtime",
         "skill_bundle_hash": bundle_hash,
-        "storygraph_v2_skill_bundle_hash": v2_bundle_hash,
+        "scene_analysis_skill_bundle_hash": scene_analysis_bundle_hash,
     }
 
 
@@ -159,25 +159,27 @@ def _failure(
     )
 
 
-@app.post("/internal/v2/invocations", response_model=StoryGraphV2AttemptResult)
-async def invoke_v2(
-    invocation: StoryGraphV2Invocation,
+@app.post(
+    "/internal/storygraph/scene-analysis/invocations", response_model=SceneAnalysisAttemptResult
+)
+async def invoke_scene_analysis(
+    invocation: SceneAnalysisInvocation,
     execution_grant: str = Header(alias="X-Lanverse-Execution-Grant"),
-) -> StoryGraphV2AttemptResult:
+) -> SceneAnalysisAttemptResult:
     secret = os.getenv("AGENT_EXECUTION_SECRET", "")
     try:
-        verify_v2_execution_grant(execution_grant, secret, invocation)
+        verify_scene_analysis_execution_grant(execution_grant, secret, invocation)
     except InvalidExecutionGrant as error:
         raise HTTPException(status_code=401, detail="invalid execution grant") from error
     try:
-        harness = StoryGraphV2Harness(invocation)
+        harness = SceneAnalysisHarness(invocation)
         try:
             value = await harness.execute()
             model = harness.model_name
         finally:
             await harness.aclose()
         candidate = value.model_dump(mode="json")
-        result = StoryGraphV2AttemptResult(
+        result = SceneAnalysisAttemptResult(
             invocation_id=invocation.invocation_id,
             attempt_id=invocation.attempt_id,
             kind="storygraph_stage",
@@ -186,17 +188,19 @@ async def invoke_v2(
             stage_release=invocation.stage_release,
             control=invocation.control,
             status="accepted",
-            candidate_type=stage_spec_v2(invocation.payload.variant.stage_key).candidate_type,
+            candidate_type=scene_analysis_stage_spec(
+                invocation.payload.variant.stage_key
+            ).candidate_type,
             candidate=candidate,
             input_hash=invocation.input_hash,
             output_hash=canonical_hash(candidate),
             diagnostics=[],
             diagnostic_hash=canonical_hash([]),
             completed_at=datetime.now(UTC),
-            executor=StoryGraphV2Executor(
+            executor=SceneAnalysisExecutor(
                 runtime_class="text",
                 runtime_image_digest=invocation.stage_release.agent_image_digest,
-                harness_version="storygraph-stage-harness-v2",
+                harness_version="scene-analysis-harness",
                 model=model,
             ),
             error=None,
@@ -204,25 +208,39 @@ async def invoke_v2(
         result.validate_for(invocation)
         return result
     except SkillBundleUnavailable as error:
-        return _v2_failure(invocation, "outcome_unknown", "skill_bundle_unavailable", str(error))
+        return _scene_analysis_failure(
+            invocation, "outcome_unknown", "skill_bundle_unavailable", str(error)
+        )
     except BundleInvalid as error:
-        return _v2_failure(invocation, "rejected", "skill_bundle_invalid", str(error))
+        return _scene_analysis_failure(invocation, "rejected", "skill_bundle_invalid", str(error))
     except InvocationPolicyInvalid as error:
-        return _v2_failure(invocation, "rejected", "invocation_policy_invalid", str(error))
+        return _scene_analysis_failure(
+            invocation, "rejected", "invocation_policy_invalid", str(error)
+        )
     except (ValidationError, CodexSchemaInvalid, ValueError) as error:
-        return _v2_failure(invocation, "rejected", "candidate_schema_invalid", str(error))
+        return _scene_analysis_failure(
+            invocation, "rejected", "candidate_schema_invalid", str(error)
+        )
     except CodexBudgetExceeded as error:
-        return _v2_failure(invocation, "rejected", "execution_budget_exceeded", str(error))
+        return _scene_analysis_failure(
+            invocation, "rejected", "execution_budget_exceeded", str(error)
+        )
     except CodexDeadlineExceeded as error:
-        return _v2_failure(invocation, "rejected", "execution_deadline_exceeded", str(error))
+        return _scene_analysis_failure(
+            invocation, "rejected", "execution_deadline_exceeded", str(error)
+        )
     except CodexToolPolicyViolation as error:
-        return _v2_failure(invocation, "rejected", "tool_not_allowed", str(error))
+        return _scene_analysis_failure(invocation, "rejected", "tool_not_allowed", str(error))
     except CodexRuntimeUnavailable as error:
-        return _v2_failure(invocation, "outcome_unknown", "runtime_unavailable", str(error))
+        return _scene_analysis_failure(
+            invocation, "outcome_unknown", "runtime_unavailable", str(error)
+        )
     except CodexExecutionError as error:
-        return _v2_failure(invocation, "outcome_unknown", "agent_execution_unknown", str(error))
+        return _scene_analysis_failure(
+            invocation, "outcome_unknown", "agent_execution_unknown", str(error)
+        )
     except Exception:
-        return _v2_failure(
+        return _scene_analysis_failure(
             invocation,
             "outcome_unknown",
             "agent_execution_unknown",
@@ -230,17 +248,17 @@ async def invoke_v2(
         )
 
 
-def _v2_failure(
-    invocation: StoryGraphV2Invocation,
+def _scene_analysis_failure(
+    invocation: SceneAnalysisInvocation,
     status: Literal["rejected", "outcome_unknown"],
     code: str,
     summary: str,
-) -> StoryGraphV2AttemptResult:
+) -> SceneAnalysisAttemptResult:
     retry_class: Literal["never", "same_release"] = (
         "never" if status == "rejected" else "same_release"
     )
-    diagnostics = [StoryGraphV2Diagnostic(code=code, summary=summary[:800])]
-    result = StoryGraphV2AttemptResult(
+    diagnostics = [SceneAnalysisDiagnostic(code=code, summary=summary[:800])]
+    result = SceneAnalysisAttemptResult(
         invocation_id=invocation.invocation_id,
         attempt_id=invocation.attempt_id,
         kind="storygraph_stage",
@@ -249,20 +267,22 @@ def _v2_failure(
         stage_release=invocation.stage_release,
         control=invocation.control,
         status=status,
-        candidate_type=stage_spec_v2(invocation.payload.variant.stage_key).candidate_type,
+        candidate_type=scene_analysis_stage_spec(
+            invocation.payload.variant.stage_key
+        ).candidate_type,
         candidate=None,
         input_hash=invocation.input_hash,
         output_hash=None,
         diagnostics=diagnostics,
         diagnostic_hash=canonical_hash([value.model_dump(mode="json") for value in diagnostics]),
         completed_at=datetime.now(UTC),
-        executor=StoryGraphV2Executor(
+        executor=SceneAnalysisExecutor(
             runtime_class="text",
             runtime_image_digest=invocation.stage_release.agent_image_digest,
-            harness_version="storygraph-stage-harness-v2",
+            harness_version="scene-analysis-harness",
             model="unknown",
         ),
-        error=StoryGraphV2ResultError(
+        error=SceneAnalysisResultError(
             code=code,
             safe_summary=summary[:800],
             retry_class=retry_class,

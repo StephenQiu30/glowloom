@@ -16,61 +16,61 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 )
 
-func TestStoryGraphV2SpanAndSceneFactContracts(t *testing.T) {
+func TestSceneAnalysisSpanAndSceneFactContracts(t *testing.T) {
 	text := "第一场 夜 内\n林舟握住门把。\n第二场 日 外\n林舟离开。"
-	sourceHash := hashTextV2(text)
+	sourceHash := hashSceneAnalysisText(text)
 	sourceID := uuid.NewString()
-	payload := contract.V2StagePayload{
-		Variant: contract.StageVariantKeyV2{
+	payload := contract.SceneAnalysisPayload{
+		Variant: contract.SceneAnalysisStageVariant{
 			StageKey: "propose_script_spans", ProfileKey: "default", LaneKey: "primary",
-			OutputSchemaVersion: "script-span-candidate-v1",
+			OutputSchemaVersion: "script-span-candidate",
 		},
-		Scope: contract.V2InvocationScope{WorkspaceID: uuid.NewString(), ProjectID: uuid.NewString()},
-		SourceRefs: []contract.OwnerVersionIdentityV1{{
+		Scope: contract.SceneAnalysisScope{WorkspaceID: uuid.NewString(), ProjectID: uuid.NewString()},
+		SourceRefs: []contract.ScriptSourceVersionIdentity{{
 			OwnerKind: "production/script-source", LogicalID: "script:demo",
 			VersionID: sourceID, Revision: 1, ContentHash: sourceHash,
 			CreatedAt: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC),
 		}},
-		Shard: contract.V2InvocationShard{
+		Shard: contract.SceneAnalysisShard{
 			ManifestID: uuid.NewString(), ManifestHash: strings.Repeat("2", 64),
 			ShardKey: "script:full", CodepointStart: 0, CodepointEnd: len([]rune(text)),
 		},
-		StageInput: mustJSON(t, contract.ProposeScriptSpansInput{
+		StageInput: mustJSON(t, contract.ScriptSpanProposalInput{
 			SourceVersionID: sourceID, SourceHash: sourceHash,
 			NormalizedText: text, CodepointCount: len([]rune(text)), NewlineNormalization: "lf",
 		}),
 	}
-	invocation, err := contract.NewV2StageInvocation(
+	invocation, err := contract.NewSceneAnalysisInvocation(
 		uuid.NewString(),
 		uuid.NewString(),
-		contract.StageReleaseIdentityV2{
+		contract.SceneAnalysisReleaseIdentity{
 			ReleaseID: uuid.NewString(), DefinitionHash: strings.Repeat("3", 64),
-			BundleHash:       contract.StoryGraphV2SkillBundleHash,
+			BundleHash:       contract.SceneAnalysisSkillBundleHash,
 			AgentImageDigest: "sha256:" + strings.Repeat("4", 64),
 		},
-		contract.StageControlProofV2{
+		contract.SceneAnalysisControlProof{
 			RecordID: uuid.NewString(), Revision: 1, Status: "approved",
 			ContentHash: strings.Repeat("5", 64),
 		},
-		contract.V2ExecutionBudget{
+		contract.SceneAnalysisExecutionBudget{
 			MaxModelCalls: 1, MaxExecutionSeconds: 120, MaxOutputBytes: 131072,
 		},
 		payload,
 	)
 	if err != nil {
-		t.Fatalf("build v2 invocation: %v", err)
+		t.Fatalf("build Scene Analysis invocation: %v", err)
 	}
-	if invocation.WireSchemaVersion != "storygraph-stage-wire-v2" ||
+	if invocation.WireSchemaVersion != "storygraph-scene-analysis-wire" ||
 		invocation.InputHash == "" || len(invocation.StageInstanceKey()) != 64 {
-		t.Fatalf("unexpected v2 invocation identity: %#v", invocation)
+		t.Fatalf("unexpected Scene Analysis invocation identity: %#v", invocation)
 	}
 	encoded, err := json.Marshal(invocation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := contract.DecodeV2StageInvocation(encoded)
+	decoded, err := contract.DecodeSceneAnalysisInvocation(encoded)
 	if err != nil || decoded.InputHash != invocation.InputHash {
-		t.Fatalf("strict v2 round trip failed: decoded=%#v err=%v", decoded, err)
+		t.Fatalf("strict Scene Analysis round trip failed: decoded=%#v err=%v", decoded, err)
 	}
 
 	spanCandidate := mustJSON(t, map[string]any{
@@ -83,7 +83,7 @@ func TestStoryGraphV2SpanAndSceneFactContracts(t *testing.T) {
 				"codepoint_start": 0, "codepoint_end": 16, "heading": "第一场 夜 内",
 				"evidence": map[string]any{
 					"source_start": 0, "source_end": 7,
-					"text_hash": hashTextV2("第一场 夜 内"), "exact_anchor": "第一场 夜 内",
+					"text_hash": hashSceneAnalysisText("第一场 夜 内"), "exact_anchor": "第一场 夜 内",
 				},
 			},
 			map[string]any{
@@ -91,13 +91,13 @@ func TestStoryGraphV2SpanAndSceneFactContracts(t *testing.T) {
 				"codepoint_start": 16, "codepoint_end": len([]rune(text)), "heading": "第二场 日 外",
 				"evidence": map[string]any{
 					"source_start": 16, "source_end": 23,
-					"text_hash": hashTextV2("第二场 日 外"), "exact_anchor": "第二场 日 外",
+					"text_hash": hashSceneAnalysisText("第二场 日 外"), "exact_anchor": "第二场 日 外",
 				},
 			},
 		},
 		"review_issues": []any{},
 	})
-	if err = contract.ValidateV2ScriptSpanCandidate(spanCandidate, text); err != nil {
+	if err = contract.ValidateScriptSpanCandidate(spanCandidate, text); err != nil {
 		t.Fatalf("valid span candidate rejected: %v", err)
 	}
 	var drifted map[string]any
@@ -106,7 +106,7 @@ func TestStoryGraphV2SpanAndSceneFactContracts(t *testing.T) {
 	}
 	spans := drifted["spans"].([]any)
 	spans[1].(map[string]any)["codepoint_start"] = float64(17)
-	if err = contract.ValidateV2ScriptSpanCandidate(mustJSON(t, drifted), text); err == nil {
+	if err = contract.ValidateScriptSpanCandidate(mustJSON(t, drifted), text); err == nil {
 		t.Fatal("span coverage gap was accepted")
 	}
 
@@ -131,7 +131,7 @@ func TestStoryGraphV2SpanAndSceneFactContracts(t *testing.T) {
 		},
 		"review_issues": []any{},
 	})
-	if err = contract.ValidateV2SceneFactCandidate(sceneFact, text, spanCandidate); err != nil {
+	if err = contract.ValidateSceneFactCandidate(sceneFact, text, spanCandidate); err != nil {
 		t.Fatalf("valid scene fact rejected: %v", err)
 	}
 	var styled map[string]any
@@ -139,12 +139,12 @@ func TestStoryGraphV2SpanAndSceneFactContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	styled["visual_style"] = "赛博朋克"
-	if err = contract.ValidateV2SceneFactCandidate(mustJSON(t, styled), text, spanCandidate); err == nil {
+	if err = contract.ValidateSceneFactCandidate(mustJSON(t, styled), text, spanCandidate); err == nil {
 		t.Fatal("style-bearing SceneFact candidate was accepted")
 	}
 }
 
-type storyGraphV2WireFixture struct {
+type storyGraphSceneAnalysisWireFixture struct {
 	ValidInvocation          json.RawMessage `json:"valid_invocation"`
 	ValidScriptSpanCandidate json.RawMessage `json:"valid_script_span_candidate"`
 	ExpectedInputHash        string          `json:"expected_input_hash"`
@@ -157,18 +157,18 @@ type storyGraphV2WireFixture struct {
 	} `json:"reject_mutations"`
 }
 
-func TestStoryGraphV2WireMatchesSharedFixtureAndRejectsMutations(t *testing.T) {
-	fixture := loadStoryGraphV2WireFixture(t)
-	invocation, err := contract.DecodeV2StageInvocation(fixture.ValidInvocation)
+func TestSceneAnalysisWireMatchesSharedFixtureAndRejectsMutations(t *testing.T) {
+	fixture := loadStoryGraphSceneAnalysisWireFixture(t)
+	invocation, err := contract.DecodeSceneAnalysisInvocation(fixture.ValidInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
 	inputHash, err := invocation.ComputeInputHash()
 	if err != nil || inputHash != fixture.ExpectedInputHash || invocation.InputHash != inputHash {
-		t.Fatalf("v2 input hash drifted: got=%s fixture=%s err=%v", inputHash, fixture.ExpectedInputHash, err)
+		t.Fatalf("Scene Analysis input hash drifted: got=%s fixture=%s err=%v", inputHash, fixture.ExpectedInputHash, err)
 	}
 	if invocation.StageInstanceKey() != fixture.ExpectedStageInstanceKey {
-		t.Fatalf("v2 stage instance key drifted: got=%s fixture=%s", invocation.StageInstanceKey(), fixture.ExpectedStageInstanceKey)
+		t.Fatalf("Scene Analysis stage instance key drifted: got=%s fixture=%s", invocation.StageInstanceKey(), fixture.ExpectedStageInstanceKey)
 	}
 	changedIdentity := invocation
 	changedIdentity.InvocationID = uuid.NewString()
@@ -192,12 +192,12 @@ func TestStoryGraphV2WireMatchesSharedFixtureAndRejectsMutations(t *testing.T) {
 		default:
 			raw[mutation.Path] = mutation.Value
 		}
-		if _, err = contract.DecodeV2StageInvocation(mustJSON(t, raw)); err == nil {
-			t.Fatalf("v2 fixture mutation %q was accepted", mutation.Name)
+		if _, err = contract.DecodeSceneAnalysisInvocation(mustJSON(t, raw)); err == nil {
+			t.Fatalf("Scene Analysis fixture mutation %q was accepted", mutation.Name)
 		}
 	}
 
-	diagnostics := []contract.V2Diagnostic{}
+	diagnostics := []contract.SceneAnalysisDiagnostic{}
 	diagnosticJSON, err := json.Marshal(diagnostics)
 	if err != nil {
 		t.Fatal(err)
@@ -210,51 +210,51 @@ func TestStoryGraphV2WireMatchesSharedFixtureAndRejectsMutations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := contract.V2AttemptResult{
+	result := contract.SceneAnalysisAttemptResult{
 		InvocationID: invocation.InvocationID, AttemptID: invocation.AttemptID,
-		Kind: "storygraph_stage", WireSchemaVersion: contract.StoryGraphV2WireSchemaVersion,
+		Kind: "storygraph_stage", WireSchemaVersion: contract.SceneAnalysisWireSchema,
 		Variant: invocation.Payload.Variant, StageRelease: invocation.StageRelease,
-		Control: invocation.Control, Status: "accepted", CandidateType: "script_span_candidate_v2",
+		Control: invocation.Control, Status: "accepted", CandidateType: "script_span_candidate",
 		Candidate: fixture.ValidScriptSpanCandidate, InputHash: invocation.InputHash,
 		OutputHash: &outputHash, Diagnostics: diagnostics, DiagnosticHash: diagnosticHash,
 		CompletedAt: time.Date(2026, 8, 31, 1, 0, 0, 0, time.UTC),
-		Executor: contract.V2Executor{
+		Executor: contract.SceneAnalysisExecutor{
 			RuntimeClass: "text", RuntimeImageDigest: invocation.StageRelease.AgentImageDigest,
-			HarnessVersion: "storygraph-stage-harness-v2", Model: "codex-cli-default",
+			HarnessVersion: "scene-analysis-harness", Model: "codex-cli-default",
 		},
 	}
 	encodedResult, err := json.Marshal(result)
 	if err != nil {
 		t.Fatal(err)
 	}
-	decodedResult, err := contract.DecodeV2AttemptResult(encodedResult)
+	decodedResult, err := contract.DecodeSceneAnalysisAttemptResult(encodedResult)
 	if err != nil || decodedResult.ValidateFor(invocation) != nil {
-		t.Fatalf("valid v2 AttemptResult rejected: decode=%v validate=%v", err, decodedResult.ValidateFor(invocation))
+		t.Fatalf("valid Scene Analysis AttemptResult rejected: decode=%v validate=%v", err, decodedResult.ValidateFor(invocation))
 	}
 	result.Status = "succeeded"
 	if err = result.ValidateFor(invocation); err == nil {
-		t.Fatal("legacy v1 result status was accepted on the v2 path")
+		t.Fatal("legacy result status was accepted on the Scene Analysis path")
 	}
 }
 
-func loadStoryGraphV2WireFixture(t *testing.T) storyGraphV2WireFixture {
+func loadStoryGraphSceneAnalysisWireFixture(t *testing.T) storyGraphSceneAnalysisWireFixture {
 	t.Helper()
 	_, current, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatal("resolve v2 fixture path")
+		t.Fatal("resolve Scene Analysis fixture path")
 	}
-	contents, err := os.ReadFile(filepath.Join(filepath.Dir(current), "..", "fixtures", "agent", "storygraph-stage-wire-v2.json"))
+	contents, err := os.ReadFile(filepath.Join(filepath.Dir(current), "..", "fixtures", "agent", "storygraph-scene-analysis-wire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var fixture storyGraphV2WireFixture
+	var fixture storyGraphSceneAnalysisWireFixture
 	if err = json.Unmarshal(contents, &fixture); err != nil {
 		t.Fatal(err)
 	}
 	return fixture
 }
 
-func hashTextV2(value string) string {
+func hashSceneAnalysisText(value string) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(value)))
 }
 

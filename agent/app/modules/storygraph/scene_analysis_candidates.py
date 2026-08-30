@@ -7,18 +7,18 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class StrictV2Model(BaseModel):
+class StrictSceneAnalysisModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class EvidenceSpanV2(StrictV2Model):
+class SourceEvidenceSpan(StrictSceneAnalysisModel):
     source_start: int = Field(ge=0)
     source_end: int = Field(gt=0)
     text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     exact_anchor: str = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_range(self) -> EvidenceSpanV2:
+    def validate_range(self) -> SourceEvidenceSpan:
         if self.source_end <= self.source_start:
             raise ValueError("evidence range must be increasing")
         return self
@@ -34,25 +34,25 @@ class EvidenceSpanV2(StrictV2Model):
             raise ValueError("evidence does not match source text")
 
 
-class CandidateIssueV2(StrictV2Model):
+class CandidateReviewIssue(StrictSceneAnalysisModel):
     issue_key: str = Field(pattern=r"^issue_[a-z0-9_]{1,80}$")
     code: str = Field(pattern=r"^[a-z][a-z0-9_]{1,80}$")
     severity: Literal["warning", "blocking"]
     scope: str = Field(min_length=1)
     summary: str = Field(min_length=1)
-    evidence: list[EvidenceSpanV2]
+    evidence: list[SourceEvidenceSpan]
 
 
-class ScriptSpanV2(StrictV2Model):
+class ScriptSceneSpan(StrictSceneAnalysisModel):
     temporary_span_id: str = Field(pattern=r"^span_[a-z0-9_]{1,80}$")
     kind: Literal["scene"]
     codepoint_start: int = Field(ge=0)
     codepoint_end: int = Field(gt=0)
     heading: str = Field(min_length=1)
-    evidence: EvidenceSpanV2
+    evidence: SourceEvidenceSpan
 
     @model_validator(mode="after")
-    def validate_range(self) -> ScriptSpanV2:
+    def validate_range(self) -> ScriptSceneSpan:
         if self.codepoint_end <= self.codepoint_start:
             raise ValueError("script span range must be increasing")
         if (
@@ -63,15 +63,15 @@ class ScriptSpanV2(StrictV2Model):
         return self
 
 
-class ScriptSpanCandidateV2(StrictV2Model):
+class ScriptSpanCandidate(StrictSceneAnalysisModel):
     source_version_id: UUID
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     codepoint_count: int = Field(gt=0)
-    spans: list[ScriptSpanV2] = Field(min_length=1)
-    review_issues: list[CandidateIssueV2]
+    spans: list[ScriptSceneSpan] = Field(min_length=1)
+    review_issues: list[CandidateReviewIssue]
 
     @model_validator(mode="after")
-    def validate_coverage(self) -> ScriptSpanCandidateV2:
+    def validate_coverage(self) -> ScriptSpanCandidate:
         previous_end = 0
         keys: set[str] = set()
         for span in self.spans:
@@ -92,36 +92,36 @@ class ScriptSpanCandidateV2(StrictV2Model):
             span.evidence.validate_for_text(text)
 
 
-class EvidenceFactV2(StrictV2Model):
+class GroundedAction(StrictSceneAnalysisModel):
     text: str = Field(min_length=1)
-    evidence: EvidenceSpanV2
+    evidence: SourceEvidenceSpan
 
 
-class DialogueFactV2(StrictV2Model):
+class GroundedDialogue(StrictSceneAnalysisModel):
     speaker_mention: str = Field(min_length=1)
     text: str = Field(min_length=1)
-    evidence: EvidenceSpanV2
+    evidence: SourceEvidenceSpan
 
 
-class RawMentionV2(StrictV2Model):
+class RawEntityMention(StrictSceneAnalysisModel):
     text: str = Field(min_length=1)
-    evidence: EvidenceSpanV2
+    evidence: SourceEvidenceSpan
 
 
-class SceneFactV2(StrictV2Model):
+class SceneFact(StrictSceneAnalysisModel):
     temporary_scene_id: str = Field(pattern=r"^scene_[a-z0-9_]{1,80}$")
     span_id: str = Field(pattern=r"^span_[a-z0-9_]{1,80}$")
     source_start: int = Field(ge=0)
     source_end: int = Field(gt=0)
     location_text: str | None
     time_text: str | None
-    actions: list[EvidenceFactV2]
-    dialogues: list[DialogueFactV2]
-    raw_character_mentions: list[RawMentionV2]
-    raw_prop_mentions: list[RawMentionV2]
+    actions: list[GroundedAction]
+    dialogues: list[GroundedDialogue]
+    raw_character_mentions: list[RawEntityMention]
+    raw_prop_mentions: list[RawEntityMention]
 
     @model_validator(mode="after")
-    def validate_range(self) -> SceneFactV2:
+    def validate_range(self) -> SceneFact:
         if self.source_end <= self.source_start:
             raise ValueError("scene fact range must be increasing")
         evidence = [
@@ -138,23 +138,23 @@ class SceneFactV2(StrictV2Model):
         return self
 
 
-class SceneFactCandidateV2(StrictV2Model):
+class SceneFactCandidate(StrictSceneAnalysisModel):
     source_version_id: UUID
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     span_candidate_revision_id: UUID
     span_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    scenes: list[SceneFactV2] = Field(min_length=1)
-    review_issues: list[CandidateIssueV2]
+    scenes: list[SceneFact] = Field(min_length=1)
+    review_issues: list[CandidateReviewIssue]
 
     @model_validator(mode="after")
-    def validate_scene_keys(self) -> SceneFactCandidateV2:
+    def validate_scene_keys(self) -> SceneFactCandidate:
         scene_keys = [value.temporary_scene_id for value in self.scenes]
         span_keys = [value.span_id for value in self.scenes]
         if len(scene_keys) != len(set(scene_keys)) or len(span_keys) != len(set(span_keys)):
             raise ValueError("scene facts must map one-to-one to script spans")
         return self
 
-    def validate_for_spans(self, text: str, spans: list[ScriptSpanV2]) -> None:
+    def validate_for_spans(self, text: str, spans: list[ScriptSceneSpan]) -> None:
         if hashlib.sha256(text.encode("utf-8")).hexdigest() != self.source_hash:
             raise ValueError("scene fact source hash drifted")
         expected = {

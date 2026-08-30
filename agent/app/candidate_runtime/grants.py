@@ -7,13 +7,13 @@ import time
 
 from pydantic import ValidationError
 
+from app.candidate_runtime.scene_analysis_schemas import (
+    SceneAnalysisExecutionGrantClaims,
+    SceneAnalysisInvocation,
+)
 from app.candidate_runtime.schemas import (
     StoryGraphExecutionGrantClaims,
     StoryGraphStageInvocation,
-)
-from app.candidate_runtime.v2_schemas import (
-    StoryGraphV2ExecutionGrantClaims,
-    StoryGraphV2Invocation,
 )
 
 MAX_TTL_SECONDS = 300
@@ -62,12 +62,12 @@ def verify_execution_grant(
         raise InvalidExecutionGrant("execution grant expiry exceeds the maximum TTL")
 
 
-def verify_v2_execution_grant(
+def verify_scene_analysis_execution_grant(
     value: str,
     secret: str,
-    invocation: StoryGraphV2Invocation,
+    invocation: SceneAnalysisInvocation,
 ) -> None:
-    claims = _verify_signed_claims(value, secret, StoryGraphV2ExecutionGrantClaims)
+    claims = _verify_signed_claims(value, secret, SceneAnalysisExecutionGrantClaims)
     now = int(time.time())
     try:
         claims.validate_for(invocation, now_unix=now)
@@ -80,8 +80,8 @@ def verify_v2_execution_grant(
 def _verify_signed_claims(
     value: str,
     secret: str,
-    claims_model: type[StoryGraphV2ExecutionGrantClaims],
-) -> StoryGraphV2ExecutionGrantClaims:
+    claims_model: type[SceneAnalysisExecutionGrantClaims],
+) -> SceneAnalysisExecutionGrantClaims:
     if len(secret.encode("utf-8")) < 32:
         raise InvalidExecutionGrant("agent execution secret must contain at least 32 bytes")
     parts = value.split(".")

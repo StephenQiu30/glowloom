@@ -8,10 +8,10 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from app.candidate_runtime.v2_schemas import (
-    ExtractSceneFactsInputV2,
-    ProposeScriptSpansInputV2,
-    StoryGraphV2Invocation,
+from app.candidate_runtime.scene_analysis_schemas import (
+    SceneAnalysisInvocation,
+    SceneFactExtractionInput,
+    ScriptSpanProposalInput,
 )
 from app.modules.storygraph.bundle import BundleInvalid
 from app.modules.storygraph.harness import (
@@ -21,23 +21,23 @@ from app.modules.storygraph.harness import (
     SkillBundleUnavailable,
     run_codex_process,
 )
-from app.modules.storygraph.v2_bundle import StoryGraphV2Bundle
-from app.modules.storygraph.v2_candidate_schemas import (
-    SceneFactCandidateV2,
-    ScriptSpanCandidateV2,
+from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
+from app.modules.storygraph.scene_analysis_candidates import (
+    SceneFactCandidate,
+    ScriptSpanCandidate,
 )
-from app.modules.storygraph.v2_registry import stage_spec_v2
+from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
 
 
-class StoryGraphV2Harness:
+class SceneAnalysisHarness:
     def __init__(
         self,
-        invocation: StoryGraphV2Invocation,
+        invocation: SceneAnalysisInvocation,
         *,
         repository_root: Path | None = None,
     ) -> None:
         self.invocation = invocation
-        self.bundle = StoryGraphV2Bundle(repository_root)
+        self.bundle = SceneAnalysisBundle(repository_root)
         self._validate_runtime_policy()
         try:
             self.bundle.verify_installed_bundle()
@@ -52,19 +52,19 @@ class StoryGraphV2Harness:
     def _validate_runtime_policy(self) -> None:
         manifest = self.bundle.manifest
         if self.invocation.stage_release.bundle_hash != manifest.skill_bundle_hash:
-            raise SkillBundleUnavailable("exact StoryGraph v2 skill bundle is unavailable")
+            raise SkillBundleUnavailable("exact Scene Analysis skill bundle is unavailable")
         if (
             self.invocation.budget.max_model_calls > manifest.max_model_calls
             or self.invocation.budget.max_execution_seconds > manifest.max_execution_seconds
             or self.invocation.budget.max_output_bytes > manifest.max_output_bytes
         ):
             raise InvocationPolicyInvalid(
-                "StoryGraph v2 execution budget is outside the release manifest"
+                "Scene Analysis execution budget is outside the release manifest"
             )
 
     async def execute(self) -> BaseModel:
         stage = self.invocation.payload.variant.stage_key
-        spec = stage_spec_v2(stage)
+        spec = scene_analysis_stage_spec(stage)
         guidance = self.bundle.guidance(stage)
         prompt = json.dumps(
             self.invocation.payload.model_dump(mode="json", exclude_none=True),
@@ -74,17 +74,17 @@ class StoryGraphV2Harness:
         )
         candidate = await self._run_codex(guidance, prompt, spec.candidate_model)
         if stage == "propose_script_spans":
-            if not isinstance(candidate, ScriptSpanCandidateV2):
+            if not isinstance(candidate, ScriptSpanCandidate):
                 raise CodexSchemaInvalid("Codex CLI returned the wrong ScriptSpan schema")
-            source = ProposeScriptSpansInputV2.model_validate(self.invocation.payload.stage_input)
+            source = ScriptSpanProposalInput.model_validate(self.invocation.payload.stage_input)
             if candidate.source_version_id != source.source_version_id:
                 raise CodexSchemaInvalid("ScriptSpan source identity drifted")
             candidate.validate_for_text(source.normalized_text)
         else:
-            if not isinstance(candidate, SceneFactCandidateV2):
+            if not isinstance(candidate, SceneFactCandidate):
                 raise CodexSchemaInvalid("Codex CLI returned the wrong SceneFact schema")
-            source = ExtractSceneFactsInputV2.model_validate(self.invocation.payload.stage_input)
-            spans = ScriptSpanCandidateV2.model_validate(source.span_candidate)
+            source = SceneFactExtractionInput.model_validate(self.invocation.payload.stage_input)
+            spans = ScriptSpanCandidate.model_validate(source.span_candidate)
             if (
                 candidate.source_version_id != source.source_version_id
                 or candidate.span_candidate_revision_id != source.span_candidate_revision_id

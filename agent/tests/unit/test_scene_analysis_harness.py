@@ -7,12 +7,12 @@ from typing import Any
 import pytest
 from anyio import Path as AsyncPath
 
-from app.candidate_runtime.v2_schemas import StoryGraphV2Invocation
-from app.modules.storygraph.v2_candidate_schemas import ScriptSpanCandidateV2
-from app.modules.storygraph.v2_harness import StoryGraphV2Harness
+from app.candidate_runtime.scene_analysis_schemas import SceneAnalysisInvocation
+from app.modules.storygraph.scene_analysis_candidates import ScriptSpanCandidate
+from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire-v2.json"
+WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-scene-analysis-wire.json"
 
 
 def fixture() -> dict[str, Any]:
@@ -42,11 +42,11 @@ class FakeProcess:
 
 
 @pytest.mark.asyncio
-async def test_v2_harness_runs_in_read_only_isolation_and_validates_the_frozen_source(
+async def test_scene_analysis_harness_runs_in_read_only_isolation_and_validates_the_frozen_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     data = fixture()
-    request = StoryGraphV2Invocation.model_validate(data["valid_invocation"])
+    request = SceneAnalysisInvocation.model_validate(data["valid_invocation"])
     seen: dict[str, tuple[str, ...]] = {}
 
     async def create_process(*command: str, **_: Any) -> FakeProcess:
@@ -54,9 +54,9 @@ async def test_v2_harness_runs_in_read_only_isolation_and_validates_the_frozen_s
         return FakeProcess(command, data["valid_script_span_candidate"])
 
     monkeypatch.setattr("asyncio.create_subprocess_exec", create_process)
-    harness = StoryGraphV2Harness(request, repository_root=REPOSITORY_ROOT)
+    harness = SceneAnalysisHarness(request, repository_root=REPOSITORY_ROOT)
     candidate = await harness.execute()
-    assert isinstance(candidate, ScriptSpanCandidateV2)
+    assert isinstance(candidate, ScriptSpanCandidate)
     command = seen["command"]
     assert command[command.index("--sandbox") + 1] == "read-only"
     assert "--ignore-user-config" in command

@@ -9,24 +9,24 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.v2_schemas import (
-    OwnerVersionIdentityV1,
-    StageControlProofV2,
-    StageReleaseIdentityV2,
-    StageVariantKeyV2,
-    StoryGraphV2ExecutionBudget,
-    StoryGraphV2Invocation,
-    StoryGraphV2Payload,
-    StoryGraphV2Scope,
-    StoryGraphV2Shard,
+from app.candidate_runtime.scene_analysis_schemas import (
+    SceneAnalysisControlProof,
+    SceneAnalysisExecutionBudget,
+    SceneAnalysisInvocation,
+    SceneAnalysisPayload,
+    SceneAnalysisReleaseIdentity,
+    SceneAnalysisScope,
+    SceneAnalysisShard,
+    SceneAnalysisStageVariant,
+    ScriptSourceVersionIdentity,
 )
-from app.modules.storygraph.v2_bundle import StoryGraphV2Bundle
-from app.modules.storygraph.v2_candidate_schemas import (
-    EvidenceSpanV2,
-    SceneFactCandidateV2,
-    SceneFactV2,
-    ScriptSpanCandidateV2,
-    ScriptSpanV2,
+from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
+from app.modules.storygraph.scene_analysis_candidates import (
+    SceneFact,
+    SceneFactCandidate,
+    ScriptSceneSpan,
+    ScriptSpanCandidate,
+    SourceEvidenceSpan,
 )
 
 ZERO = "0" * 64
@@ -40,15 +40,15 @@ RELEASE_ID = UUID("66666666-6666-4666-8666-666666666666")
 CONTROL_ID = UUID("77777777-7777-4777-8777-777777777777")
 MANIFEST_ID = UUID("88888888-8888-4888-8888-888888888888")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire-v2.json"
+WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-scene-analysis-wire.json"
 
 
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _source_ref(text: str) -> OwnerVersionIdentityV1:
-    return OwnerVersionIdentityV1(
+def _source_ref(text: str) -> ScriptSourceVersionIdentity:
+    return ScriptSourceVersionIdentity(
         owner_kind="production/script-source",
         logical_id="script:demo",
         version_id=SOURCE_ID,
@@ -58,43 +58,43 @@ def _source_ref(text: str) -> OwnerVersionIdentityV1:
     )
 
 
-def _invocation(text: str) -> StoryGraphV2Invocation:
-    bundle = StoryGraphV2Bundle()
-    return StoryGraphV2Invocation.build(
+def _invocation(text: str) -> SceneAnalysisInvocation:
+    bundle = SceneAnalysisBundle()
+    return SceneAnalysisInvocation.build(
         invocation_id=INVOCATION_ID,
         attempt_id=ATTEMPT_ID,
-        stage_release=StageReleaseIdentityV2(
+        stage_release=SceneAnalysisReleaseIdentity(
             release_id=RELEASE_ID,
             definition_hash=TWO,
             bundle_hash=bundle.manifest.skill_bundle_hash,
             agent_image_digest=f"sha256:{ZERO}",
         ),
-        control=StageControlProofV2(
+        control=SceneAnalysisControlProof(
             record_id=CONTROL_ID,
             revision=1,
             status="approved",
             content_hash=TWO,
         ),
-        budget=StoryGraphV2ExecutionBudget(
+        budget=SceneAnalysisExecutionBudget(
             max_model_calls=1,
             max_execution_seconds=120,
             max_output_bytes=131072,
         ),
-        payload=StoryGraphV2Payload(
-            variant=StageVariantKeyV2(
+        payload=SceneAnalysisPayload(
+            variant=SceneAnalysisStageVariant(
                 stage_key="propose_script_spans",
                 profile_key="default",
                 lane_key="primary",
-                output_schema_version="script-span-candidate-v1",
+                output_schema_version="script-span-candidate",
             ),
-            scope=StoryGraphV2Scope(
+            scope=SceneAnalysisScope(
                 workspace_id=WORKSPACE_ID,
                 project_id=PROJECT_ID,
                 episode_id=None,
             ),
             source_refs=[_source_ref(text)],
             upstream_candidates=[],
-            shard=StoryGraphV2Shard(
+            shard=SceneAnalysisShard(
                 manifest_id=MANIFEST_ID,
                 manifest_hash=TWO,
                 shard_key="script:full",
@@ -112,40 +112,40 @@ def _invocation(text: str) -> StoryGraphV2Invocation:
     )
 
 
-def test_v2_script_span_candidate_requires_exact_codepoint_coverage() -> None:
+def test_scene_analysis_script_span_candidate_requires_exact_codepoint_coverage() -> None:
     text = "第一场 夜 内\n林舟握住门把。\n第二场 日 外\n林舟离开。"
     invocation = _invocation(text)
-    assert invocation.wire_schema_version == "storygraph-stage-wire-v2"
+    assert invocation.wire_schema_version == "storygraph-scene-analysis-wire"
     assert invocation.input_hash == invocation.compute_input_hash()
     stage_instance_key = invocation.stage_instance_key()
     assert len(stage_instance_key) == 64
     int(stage_instance_key, 16)
 
-    candidate = ScriptSpanCandidateV2(
+    candidate = ScriptSpanCandidate(
         source_version_id=SOURCE_ID,
         source_hash=_hash(text),
         codepoint_count=len(text),
         spans=[
-            ScriptSpanV2(
+            ScriptSceneSpan(
                 temporary_span_id="span_0001",
                 kind="scene",
                 codepoint_start=0,
                 codepoint_end=16,
                 heading="第一场 夜 内",
-                evidence=EvidenceSpanV2(
+                evidence=SourceEvidenceSpan(
                     source_start=0,
                     source_end=7,
                     text_hash=_hash("第一场 夜 内"),
                     exact_anchor="第一场 夜 内",
                 ),
             ),
-            ScriptSpanV2(
+            ScriptSceneSpan(
                 temporary_span_id="span_0002",
                 kind="scene",
                 codepoint_start=16,
                 codepoint_end=len(text),
                 heading="第二场 日 外",
-                evidence=EvidenceSpanV2(
+                evidence=SourceEvidenceSpan(
                     source_start=16,
                     source_end=23,
                     text_hash=_hash("第二场 日 外"),
@@ -158,31 +158,31 @@ def test_v2_script_span_candidate_requires_exact_codepoint_coverage() -> None:
     candidate.validate_for_text(text)
 
     with pytest.raises(ValidationError):
-        ScriptSpanCandidateV2(
+        ScriptSpanCandidate(
             source_version_id=SOURCE_ID,
             source_hash=_hash(text),
             codepoint_count=len(text),
             spans=[
-                ScriptSpanV2(
+                ScriptSceneSpan(
                     temporary_span_id="span_0001",
                     kind="scene",
                     codepoint_start=0,
                     codepoint_end=15,
                     heading="第一场 夜 内",
-                    evidence=EvidenceSpanV2(
+                    evidence=SourceEvidenceSpan(
                         source_start=0,
                         source_end=7,
                         text_hash=_hash("第一场 夜 内"),
                         exact_anchor="第一场 夜 内",
                     ),
                 ),
-                ScriptSpanV2(
+                ScriptSceneSpan(
                     temporary_span_id="span_0002",
                     kind="scene",
                     codepoint_start=16,
                     codepoint_end=len(text),
                     heading="第二场 日 外",
-                    evidence=EvidenceSpanV2(
+                    evidence=SourceEvidenceSpan(
                         source_start=16,
                         source_end=23,
                         text_hash=_hash("第二场 日 外"),
@@ -194,15 +194,15 @@ def test_v2_script_span_candidate_requires_exact_codepoint_coverage() -> None:
         )
 
 
-def test_v2_scene_fact_is_style_blind_and_bound_to_script_spans() -> None:
+def test_scene_analysis_scene_fact_is_style_blind_and_bound_to_script_spans() -> None:
     text = "第一场 夜 内\n林舟握住门把。"
-    fact = SceneFactCandidateV2(
+    fact = SceneFactCandidate(
         source_version_id=SOURCE_ID,
         source_hash=_hash(text),
         span_candidate_revision_id=UUID("99999999-9999-4999-8999-999999999999"),
         span_candidate_revision_hash=TWO,
         scenes=[
-            SceneFactV2.model_validate(
+            SceneFact.model_validate(
                 {
                     "temporary_scene_id": "scene_0001",
                     "span_id": "span_0001",
@@ -252,13 +252,13 @@ def test_v2_scene_fact_is_style_blind_and_bound_to_script_spans() -> None:
     fact.validate_for_spans(
         text,
         [
-            ScriptSpanV2(
+            ScriptSceneSpan(
                 temporary_span_id="span_0001",
                 kind="scene",
                 codepoint_start=0,
                 codepoint_end=len(text),
                 heading="第一场 夜 内",
-                evidence=EvidenceSpanV2(
+                evidence=SourceEvidenceSpan(
                     source_start=0,
                     source_end=7,
                     text_hash=_hash("第一场 夜 内"),
@@ -269,7 +269,7 @@ def test_v2_scene_fact_is_style_blind_and_bound_to_script_spans() -> None:
     )
 
     with pytest.raises(ValidationError):
-        SceneFactV2.model_validate(
+        SceneFact.model_validate(
             {
                 **fact.scenes[0].model_dump(mode="json"),
                 "visual_style": "赛博朋克",
@@ -277,8 +277,8 @@ def test_v2_scene_fact_is_style_blind_and_bound_to_script_spans() -> None:
         )
 
 
-def test_v2_bundle_discloses_only_stage_specific_references() -> None:
-    bundle = StoryGraphV2Bundle()
+def test_scene_analysis_bundle_discloses_only_stage_specific_references() -> None:
+    bundle = SceneAnalysisBundle()
     assert bundle.loaded_paths("propose_script_spans") == (
         "SKILL.md",
         "references/script-spans.md",
@@ -290,9 +290,9 @@ def test_v2_bundle_discloses_only_stage_specific_references() -> None:
     assert bundle.compute_hash() == bundle.manifest.skill_bundle_hash
 
 
-def test_v2_wire_matches_the_shared_go_python_fixture_and_rejects_mutations() -> None:
+def test_scene_analysis_wire_matches_the_shared_go_python_fixture_and_rejects_mutations() -> None:
     fixture = json.loads(WIRE_FIXTURE.read_text(encoding="utf-8"))
-    invocation = StoryGraphV2Invocation.model_validate(fixture["valid_invocation"])
+    invocation = SceneAnalysisInvocation.model_validate(fixture["valid_invocation"])
     assert invocation.input_hash == fixture["expected_input_hash"]
     assert invocation.stage_instance_key() == fixture["expected_stage_instance_key"]
 
@@ -316,4 +316,4 @@ def test_v2_wire_matches_the_shared_go_python_fixture_and_rejects_mutations() ->
         else:
             raw[mutation["path"]] = mutation["value"]
         with pytest.raises(ValidationError):
-            StoryGraphV2Invocation.model_validate(raw)
+            SceneAnalysisInvocation.model_validate(raw)

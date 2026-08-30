@@ -9,34 +9,34 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.candidate_runtime.canonical import canonical_hash
 
-V2StageKey = Literal["propose_script_spans", "extract_scene_facts"]
+SceneAnalysisStageKey = Literal["propose_script_spans", "extract_scene_facts"]
 
 
-class StrictV2Model(BaseModel):
+class StrictSceneAnalysisModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class StageVariantKeyV2(StrictV2Model):
-    stage_key: V2StageKey
+class SceneAnalysisStageVariant(StrictSceneAnalysisModel):
+    stage_key: SceneAnalysisStageKey
     profile_key: Literal["default"]
     lane_key: Literal["primary"]
     output_schema_version: Literal[
-        "script-span-candidate-v1",
-        "scene-fact-candidate-v1",
+        "script-span-candidate",
+        "scene-fact-candidate",
     ]
 
     @model_validator(mode="after")
-    def validate_schema_for_stage(self) -> StageVariantKeyV2:
+    def validate_schema_for_stage(self) -> SceneAnalysisStageVariant:
         expected = {
-            "propose_script_spans": "script-span-candidate-v1",
-            "extract_scene_facts": "scene-fact-candidate-v1",
+            "propose_script_spans": "script-span-candidate",
+            "extract_scene_facts": "scene-fact-candidate",
         }
         if self.output_schema_version != expected[self.stage_key]:
-            raise ValueError("stage output schema does not match the v2 variant")
+            raise ValueError("stage output schema does not match the Scene Analysis variant")
         return self
 
 
-class OwnerVersionIdentityV1(StrictV2Model):
+class ScriptSourceVersionIdentity(StrictSceneAnalysisModel):
     owner_kind: Literal["production/script-source"]
     logical_id: str = Field(min_length=1)
     version_id: UUID
@@ -45,7 +45,7 @@ class OwnerVersionIdentityV1(StrictV2Model):
     created_at: datetime
 
 
-class UpstreamCandidateIdentityV2(StrictV2Model):
+class ScriptSpanRevisionIdentity(StrictSceneAnalysisModel):
     stage_key: Literal["propose_script_spans"]
     shard_key: str = Field(min_length=1)
     candidate_revision_id: UUID
@@ -54,33 +54,33 @@ class UpstreamCandidateIdentityV2(StrictV2Model):
     source_result_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class StageReleaseIdentityV2(StrictV2Model):
+class SceneAnalysisReleaseIdentity(StrictSceneAnalysisModel):
     release_id: UUID
     definition_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     bundle_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     agent_image_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
-class StageControlProofV2(StrictV2Model):
+class SceneAnalysisControlProof(StrictSceneAnalysisModel):
     record_id: UUID
     revision: int = Field(ge=1)
     status: Literal["approved"]
     content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class StoryGraphV2ExecutionBudget(StrictV2Model):
+class SceneAnalysisExecutionBudget(StrictSceneAnalysisModel):
     max_model_calls: int = Field(ge=1, le=2)
     max_execution_seconds: int = Field(ge=1, le=600)
     max_output_bytes: int = Field(ge=1024, le=1_048_576)
 
 
-class StoryGraphV2Scope(StrictV2Model):
+class SceneAnalysisScope(StrictSceneAnalysisModel):
     workspace_id: UUID
     project_id: UUID
     episode_id: UUID | None
 
 
-class StoryGraphV2Shard(StrictV2Model):
+class SceneAnalysisShard(StrictSceneAnalysisModel):
     manifest_id: UUID
     manifest_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     shard_key: str = Field(min_length=1)
@@ -88,13 +88,13 @@ class StoryGraphV2Shard(StrictV2Model):
     codepoint_end: int = Field(gt=0)
 
     @model_validator(mode="after")
-    def validate_range(self) -> StoryGraphV2Shard:
+    def validate_range(self) -> SceneAnalysisShard:
         if self.codepoint_end <= self.codepoint_start:
-            raise ValueError("v2 shard range must be increasing")
+            raise ValueError("Scene Analysis shard range must be increasing")
         return self
 
 
-class ProposeScriptSpansInputV2(StrictV2Model):
+class ScriptSpanProposalInput(StrictSceneAnalysisModel):
     source_version_id: UUID
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     normalized_text: str = Field(min_length=1)
@@ -102,17 +102,17 @@ class ProposeScriptSpansInputV2(StrictV2Model):
     newline_normalization: Literal["lf"]
 
     @model_validator(mode="after")
-    def validate_source(self) -> ProposeScriptSpansInputV2:
+    def validate_source(self) -> ScriptSpanProposalInput:
         if len(self.normalized_text) != self.codepoint_count:
             raise ValueError("source codepoint count does not match normalized text")
         if hashlib.sha256(self.normalized_text.encode("utf-8")).hexdigest() != self.source_hash:
             raise ValueError("source hash does not match normalized text")
         if "\r" in self.normalized_text:
-            raise ValueError("normalized v2 source must use LF line endings")
+            raise ValueError("normalized Scene Analysis source must use LF line endings")
         return self
 
 
-class ExtractSceneFactsInputV2(StrictV2Model):
+class SceneFactExtractionInput(StrictSceneAnalysisModel):
     source_version_id: UUID
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     normalized_text: str = Field(min_length=1)
@@ -121,19 +121,19 @@ class ExtractSceneFactsInputV2(StrictV2Model):
     span_candidate: dict[str, Any]
 
 
-class StoryGraphV2Payload(StrictV2Model):
-    variant: StageVariantKeyV2
-    scope: StoryGraphV2Scope
-    source_refs: list[OwnerVersionIdentityV1] = Field(min_length=1, max_length=1)
-    upstream_candidates: list[UpstreamCandidateIdentityV2]
-    shard: StoryGraphV2Shard
+class SceneAnalysisPayload(StrictSceneAnalysisModel):
+    variant: SceneAnalysisStageVariant
+    scope: SceneAnalysisScope
+    source_refs: list[ScriptSourceVersionIdentity] = Field(min_length=1, max_length=1)
+    upstream_candidates: list[ScriptSpanRevisionIdentity]
+    shard: SceneAnalysisShard
     stage_input: dict[str, Any]
 
     @model_validator(mode="after")
-    def validate_stage_input(self) -> StoryGraphV2Payload:
+    def validate_stage_input(self) -> SceneAnalysisPayload:
         source = self.source_refs[0]
         if self.variant.stage_key == "propose_script_spans":
-            value = ProposeScriptSpansInputV2.model_validate(self.stage_input)
+            value = ScriptSpanProposalInput.model_validate(self.stage_input)
             if (
                 self.upstream_candidates
                 or source.version_id != value.source_version_id
@@ -143,7 +143,7 @@ class StoryGraphV2Payload(StrictV2Model):
             ):
                 raise ValueError("script span input does not match its frozen source")
         else:
-            value = ExtractSceneFactsInputV2.model_validate(self.stage_input)
+            value = SceneFactExtractionInput.model_validate(self.stage_input)
             if (
                 len(self.upstream_candidates) != 1
                 or source.version_id != value.source_version_id
@@ -159,15 +159,15 @@ class StoryGraphV2Payload(StrictV2Model):
         return self
 
 
-class StoryGraphV2Invocation(StrictV2Model):
+class SceneAnalysisInvocation(StrictSceneAnalysisModel):
     invocation_id: UUID
     attempt_id: UUID
     kind: Literal["storygraph_stage"]
-    wire_schema_version: Literal["storygraph-stage-wire-v2"]
-    stage_release: StageReleaseIdentityV2
-    control: StageControlProofV2
-    budget: StoryGraphV2ExecutionBudget
-    payload: StoryGraphV2Payload
+    wire_schema_version: Literal["storygraph-scene-analysis-wire"]
+    stage_release: SceneAnalysisReleaseIdentity
+    control: SceneAnalysisControlProof
+    budget: SceneAnalysisExecutionBudget
+    payload: SceneAnalysisPayload
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @classmethod
@@ -176,13 +176,13 @@ class StoryGraphV2Invocation(StrictV2Model):
         *,
         invocation_id: UUID,
         attempt_id: UUID,
-        stage_release: StageReleaseIdentityV2,
-        control: StageControlProofV2,
-        budget: StoryGraphV2ExecutionBudget,
-        payload: StoryGraphV2Payload,
+        stage_release: SceneAnalysisReleaseIdentity,
+        control: SceneAnalysisControlProof,
+        budget: SceneAnalysisExecutionBudget,
+        payload: SceneAnalysisPayload,
     ) -> Self:
         material = {
-            "wire_schema_version": "storygraph-stage-wire-v2",
+            "wire_schema_version": "storygraph-scene-analysis-wire",
             "stage_release": stage_release.model_dump(mode="json"),
             "control": control.model_dump(mode="json"),
             "budget": budget.model_dump(mode="json"),
@@ -192,7 +192,7 @@ class StoryGraphV2Invocation(StrictV2Model):
             invocation_id=invocation_id,
             attempt_id=attempt_id,
             kind="storygraph_stage",
-            wire_schema_version="storygraph-stage-wire-v2",
+            wire_schema_version="storygraph-scene-analysis-wire",
             stage_release=stage_release,
             control=control,
             budget=budget,
@@ -201,9 +201,9 @@ class StoryGraphV2Invocation(StrictV2Model):
         )
 
     @model_validator(mode="after")
-    def validate_input_hash(self) -> StoryGraphV2Invocation:
+    def validate_input_hash(self) -> SceneAnalysisInvocation:
         if self.input_hash != self.compute_input_hash():
-            raise ValueError("storygraph v2 input hash mismatch")
+            raise ValueError("scene analysis input hash mismatch")
         return self
 
     def compute_input_hash(self) -> str:
@@ -219,7 +219,7 @@ class StoryGraphV2Invocation(StrictV2Model):
 
     def stage_instance_key(self) -> str:
         material = (
-            "storygraph-stage-v2"
+            "storygraph-scene-analysis-stage"
             + self.payload.variant.stage_key
             + self.payload.variant.profile_key
             + self.payload.variant.lane_key
@@ -231,7 +231,7 @@ class StoryGraphV2Invocation(StrictV2Model):
         return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-class StoryGraphV2ExecutionGrantClaims(StrictV2Model):
+class SceneAnalysisExecutionGrantClaims(StrictSceneAnalysisModel):
     invocation_id: UUID
     attempt_id: UUID
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -239,7 +239,7 @@ class StoryGraphV2ExecutionGrantClaims(StrictV2Model):
     agent_image_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     expires_at: int = Field(ge=1)
 
-    def validate_for(self, invocation: StoryGraphV2Invocation, *, now_unix: int) -> None:
+    def validate_for(self, invocation: SceneAnalysisInvocation, *, now_unix: int) -> None:
         if (
             self.invocation_id != invocation.invocation_id
             or self.attempt_id != invocation.attempt_id
@@ -248,53 +248,53 @@ class StoryGraphV2ExecutionGrantClaims(StrictV2Model):
             or self.agent_image_digest != invocation.stage_release.agent_image_digest
             or self.expires_at <= now_unix
         ):
-            raise ValueError("invalid StoryGraph v2 execution grant claims")
+            raise ValueError("invalid Scene Analysis execution grant claims")
 
 
-class StoryGraphV2Diagnostic(StrictV2Model):
+class SceneAnalysisDiagnostic(StrictSceneAnalysisModel):
     code: str = Field(pattern=r"^[a-z][a-z0-9_]{1,80}$")
     summary: str = Field(min_length=1, max_length=800)
 
 
-class StoryGraphV2ResultError(StrictV2Model):
+class SceneAnalysisResultError(StrictSceneAnalysisModel):
     code: str = Field(pattern=r"^[a-z][a-z0-9_]{1,80}$")
     safe_summary: str = Field(min_length=1, max_length=800)
     retry_class: Literal["never", "same_release"]
 
 
-class StoryGraphV2Executor(StrictV2Model):
+class SceneAnalysisExecutor(StrictSceneAnalysisModel):
     runtime_class: Literal["text"]
     runtime_image_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    harness_version: Literal["storygraph-stage-harness-v2"]
+    harness_version: Literal["scene-analysis-harness"]
     model: str = Field(min_length=1)
 
 
-class StoryGraphV2AttemptResult(StrictV2Model):
+class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
     invocation_id: UUID
     attempt_id: UUID
     kind: Literal["storygraph_stage"]
-    wire_schema_version: Literal["storygraph-stage-wire-v2"]
-    variant: StageVariantKeyV2
-    stage_release: StageReleaseIdentityV2
-    control: StageControlProofV2
+    wire_schema_version: Literal["storygraph-scene-analysis-wire"]
+    variant: SceneAnalysisStageVariant
+    stage_release: SceneAnalysisReleaseIdentity
+    control: SceneAnalysisControlProof
     status: Literal["accepted", "rejected", "outcome_unknown"]
-    candidate_type: Literal["script_span_candidate_v2", "scene_fact_candidate_v2"]
+    candidate_type: Literal["script_span_candidate", "scene_fact_candidate"]
     candidate: dict[str, Any] | None
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     output_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    diagnostics: list[StoryGraphV2Diagnostic]
+    diagnostics: list[SceneAnalysisDiagnostic]
     diagnostic_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     completed_at: datetime
-    executor: StoryGraphV2Executor
-    error: StoryGraphV2ResultError | None
+    executor: SceneAnalysisExecutor
+    error: SceneAnalysisResultError | None
 
     @model_validator(mode="after")
-    def validate_result_state(self) -> StoryGraphV2AttemptResult:
+    def validate_result_state(self) -> SceneAnalysisAttemptResult:
         expected_diagnostic_hash = canonical_hash(
             [value.model_dump(mode="json") for value in self.diagnostics]
         )
         if self.diagnostic_hash != expected_diagnostic_hash:
-            raise ValueError("StoryGraph v2 diagnostic hash mismatch")
+            raise ValueError("Scene Analysis diagnostic hash mismatch")
         if self.status == "accepted":
             if (
                 self.candidate is None
@@ -302,7 +302,7 @@ class StoryGraphV2AttemptResult(StrictV2Model):
                 or self.error is not None
                 or canonical_hash(self.candidate) != self.output_hash
             ):
-                raise ValueError("accepted StoryGraph v2 result is incomplete")
+                raise ValueError("accepted Scene Analysis result is incomplete")
         elif (
             self.candidate is not None
             or self.output_hash is not None
@@ -310,11 +310,11 @@ class StoryGraphV2AttemptResult(StrictV2Model):
             or (self.status == "rejected" and self.error.retry_class != "never")
             or (self.status == "outcome_unknown" and self.error.retry_class != "same_release")
         ):
-            raise ValueError("failed StoryGraph v2 result has invalid semantics")
+            raise ValueError("failed Scene Analysis result has invalid semantics")
         return self
 
-    def validate_for(self, invocation: StoryGraphV2Invocation) -> None:
-        from app.modules.storygraph.v2_registry import stage_spec_v2
+    def validate_for(self, invocation: SceneAnalysisInvocation) -> None:
+        from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
 
         if (
             self.invocation_id != invocation.invocation_id
@@ -324,13 +324,13 @@ class StoryGraphV2AttemptResult(StrictV2Model):
             or self.control != invocation.control
             or self.input_hash != invocation.input_hash
             or self.candidate_type
-            != stage_spec_v2(invocation.payload.variant.stage_key).candidate_type
+            != scene_analysis_stage_spec(invocation.payload.variant.stage_key).candidate_type
             or self.executor.runtime_image_digest != invocation.stage_release.agent_image_digest
         ):
-            raise ValueError("StoryGraph v2 result identity does not match invocation")
+            raise ValueError("Scene Analysis result identity does not match invocation")
 
 
-def _canonical_payload(payload: StoryGraphV2Payload) -> dict[str, Any]:
+def _canonical_payload(payload: SceneAnalysisPayload) -> dict[str, Any]:
     value = payload.model_dump(mode="json")
     value["source_refs"] = sorted(
         value["source_refs"],
