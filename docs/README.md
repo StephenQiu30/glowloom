@@ -54,7 +54,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D10` | [2002 Backend 领域设计](design/2002-后端领域模块功能设计.md) | **已完成（2026-08-27；通用媒体 Provider 2026-08-29 同步）**：固定 StoryGraph Compiler、Candidate→Owner Apply、Asset/Specification/State、四类 Binding、Provider 配置/执行与 Kafka/Search 领域边界 | 仅解锁 `SG-D11`；不开始 Harness 或 Canvas |
 | `SG-D11` | [3001 Production Bible](design/3001-项目制作圣经生成执行框架设计.md) | **已完成（2026-08-27）**：改为 Evidence/Claim/Specification/State 的 StoryGraph 上游，拆开 Bible Confirm 与资产物化 | 仅解锁 `SG-D12`；旧 `3001` 派生文档继续冻结 |
 | `SG-D12` | [3002 本地 Codex 分镜 Harness](design/3002-本地-Codex-分镜智能体执行框架设计.md) | **已完成（2026-08-27）**：收口到 `3003` 唯一 Bundle，固定 Draft `needs_asset`、付费前 Gate 与 Detail 精确资产边界 | 仅解锁 `SG-D13`；旧 `3002` 派生文档继续冻结 |
-| `SG-D13` | [2051 通用媒体 Provider](design/2051-通用媒体Provider与Generation执行器设计.md) | **已重新接受（2026-08-29）**：固定 CC-Switch 风格内置预设、Web 创建持久连接、加密凭据，并强制真实接入 Seedream 5.0 Pro+、Seedance 2.0+、GPT Image 2 与 Nano Banana 当前四个官方模型 | 受影响 Design 已同步；现在只解锁 `SG-D17`，四类 Provider 均为完成条件 |
+| `SG-D13` | [2051 通用媒体 Provider](design/2051-通用媒体Provider与Generation执行器设计.md) | **已重新接受（2026-08-29）**：固定 CC-Switch 风格内置 `MediaProviderPresetDescriptor`、Web 创建持久连接、加密凭据，并强制真实接入 Seedream 5.0 Pro+、Seedance 2.0+、GPT Image 2 与 Nano Banana 当前四个官方模型 | 受影响 Design 已同步；现在只解锁 `SG-D17`，四类 Provider 均为完成条件 |
 | `SG-D14` | [1001 前端应用架构](design/1001-前端应用架构.md) | **已重新同步（2026-08-29）**：在单 npm/Next.js、RTK Query 和只读 Lens 边界内加入 Workspace Provider Settings 与 Project Binding | 仅解锁 `SG-D15`；浏览器仍不直连 Provider |
 | `SG-D15` | [1002 前端功能模块](design/1002-前端功能模块设计.md) | **已重新同步（2026-08-29）**：对齐 Provider Settings、角色/地点卡、媒体审核、图片/视频 Binding、Story Lens 与 Workflow 诊断 | 仅解锁 `SG-D16`；不模拟 Backend 成功 |
 | `SG-D16` | [2055 公共 Human Gate](design/2055-Workflow公共HumanGate命令与恢复设计.md) | **已重新同步（2026-08-29）**：固定 Decision → Owner Apply → Workflow Resume 三阶段、八类显式 Gate 与同 ID 恢复 | 仅解锁 `SG-D17`；不从旧 Decision 套用漂移 Subject |
@@ -64,17 +64,17 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `SG-D20` | [0010 唯一总 Plan](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | **已重新接受（2026-08-29）**：保留 `SG-I01`–`SG-I19` 历史完成事实，按配置→调用→Web→三类图片→图片选择→分镜→视频→Canvas→最终验收重排 `SG-I20`–`SG-I35` | 只解锁 `SG-D21` Acceptance；仍不编码 |
 | `SG-D21` | [0010 Acceptance Criteria](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | **已重新接受（2026-08-29）**：保留未变合同历史 Evidence；新增/改写媒体合同与 `SG-I20`–`SG-I35` 全部建立为未通过目标 | 文档链路完成，只解锁新版 `SG-I20`；历史 Runware 证据不抵扣新目标 |
 
-`SG-D01`–`SG-D21` 曾于 2026-08-27 依次接受，`SG-I01`–`SG-I19` 已通过各自完成门并分别回填 Evidence；2026-08-29 用户将 `2051` 从固定 Runware/环境变量改为可空启动、Backend 管理、Web 配置的通用媒体 Provider 服务，要求参考 CC-Switch 用内置预设实例化跨重启持久连接，并明确 Seedream 5.0 Pro+、Seedance 2.0+、GPT Image 2 与 Nano Banana 当前四个官方模型都是当前必接范围而不是计划或预留。`SG-D13` 和受影响 Design、`SG-D17` PRD、`SG-D18` Requirement、`SG-D19` Agent Requirement、`SG-D20` 唯一总 Plan、`SG-D21` Acceptance 已重新接受；`SG-I20` 已于 2026-08-30 完成 Backend Preset/Factory、不可变配置版本、Secret Store、root-key Docker Secret、零配置启动和旧 Runware/环境变量链原子删除，并通过当时完整真实 CI。`SG-I21` 当前存在尚未提交的工作区增量；2026-08-30 用户接受 `0011` 后，这些事实原样保留但暂停扩展，不声明完成，也不抵扣视觉生产新目标。当前唯一入口切换到下方 `VP-Dxx` 队列，`VP-D01`–`VP-D02` 已随各自接受记录独立完成，当前只进入 `VP-D03`；`plan/0007`、`plan/0008` 仍只表达未来 Platform Complete 目标，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结。
+`SG-D01`–`SG-D21` 曾于 2026-08-27 依次接受，`SG-I01`–`SG-I19` 已通过各自完成门并分别回填 Evidence；2026-08-29 用户将 `2051` 从固定 Runware/环境变量改为可空启动、Backend 管理、Web 配置的通用媒体 Provider 服务，要求参考 CC-Switch 用内置 `MediaProviderPresetDescriptor` 实例化跨重启持久连接，并明确 Seedream 5.0 Pro+、Seedance 2.0+、GPT Image 2 与 Nano Banana 当前四个官方模型都是当前必接范围而不是计划或预留。`SG-D13` 和受影响 Design、`SG-D17` PRD、`SG-D18` Requirement、`SG-D19` Agent Requirement、`SG-D20` 唯一总 Plan、`SG-D21` Acceptance 已重新接受；`SG-I20` 已于 2026-08-30 完成 Media Provider Descriptor Factory、不可变配置版本、Secret Store、root-key Docker Secret、零配置启动和旧 Runware/环境变量链原子删除，并通过当时完整真实 CI。`SG-I21` 当前存在尚未提交的工作区增量；2026-08-30 用户接受 `0011` 后，这些事实原样保留但暂停扩展，不声明完成，也不抵扣视觉生产新目标。当前唯一入口切换到下方 `VP-Dxx` 队列，`VP-D01`–`VP-D03` 已随各自接受记录独立完成，当前只进入 `VP-D04`；`plan/0007`、`plan/0008` 仍只表达未来 Platform Complete 目标，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结。
 
 ## 当前视觉生产重排推进顺序
 
-用户于 2026-08-30 接受 `0011` 的 11 项核心决策并要求开始展开实现。由于该设计改变剧本解析、Production Bible、参考资产与 Storyboard 的正式顺序，必须先逐份同步既有 Design，再重新接受唯一 PRD、Requirement、Plan 与初始全未通过 Acceptance。每一步完成必要修订、文档检查、用户评审并独立提交后才解锁下一步；`VP-D15` 完成前不编码新目标。
+用户于 2026-08-30 接受 `0011` 的 11 项核心决策并要求开始展开实现。由于该设计改变剧本解析、Production Bible、参考资产与 Storyboard 的正式顺序，必须先逐份同步既有 Design，再重新接受唯一 PRD、Requirement、Plan 与初始全未通过 Acceptance。每一步完成必要修订、文档检查与独立评审并独立提交后才解锁下一步；用户已接受 `VP-D03`，并授权后续 `VP-D04`–`VP-D15` 在独立评审通过后直接按队列实施和提交，不再逐份等待询问，但仍不得跳过前序门禁；`VP-D15` 完成前不编码新目标。
 
 | Step | 唯一对象 | 当前完成门 | 未完成时的限制 |
 |---|---|---|---|
 | `VP-D01` | [0011 视觉生产工作台 Design](design/0011-剧本视觉生产工作台与世界观预设设计.md) | **已完成（2026-08-30）**：用户要求开始展开实现，11 项核心决策全部成为目标事实；本文与索引随本次接受记录独立提交 | 只解锁 `VP-D02`；不表示功能已实现 |
 | `VP-D02` | [0006 领域语言](design/0006-领域语言与模块命名规范.md) | **已完成（2026-08-30）**：用户已接受 Scene Fact、Identity Resolution、Claim-backed Interaction、Reference Plan、组合 Binding 与 Scene Production Packet 规范名；本文与索引随接受记录独立提交 | 只解锁 `VP-D03`；不表示 Wire、数据库或功能已实现 |
-| `VP-D03` | [0001 完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | **当前待同步**：固定视觉生产产品主链、Preset Owner 与 MVP 边界 | 不先改 StoryGraph 总设计 |
+| `VP-D03` | [0001 完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | **已完成（2026-08-30）**：用户已接受 Production-ready Scene Coverage、视觉生产主链、Preset Owner、P0–P4 与当前 MVP/长期平台边界；本文与索引随接受记录独立提交 | 只解锁 `VP-D04`；不表示跨服务架构或功能已实现 |
 | `VP-D04` | [0003 系统总体架构](design/0003-系统总体架构.md) | 待 `VP-D03` 完成后消除 StoryGraph 编译顺序歧义并加入视觉生产包主链 | 不先改跨服务数据流 |
 | `VP-D05` | [0010 StoryGraph 总设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | 待 `VP-D04` 完成后同步 Interaction/Continuity/Reference Plan/Composition Binding 投影 | 不派生产品范围 |
 | `VP-D06` | [3001 Production Bible](design/3001-项目制作圣经生成执行框架设计.md) | 待 `VP-D05` 完成后固定 Scene Fact → Identity/State 全局调和循环 | 不改 Agent Stage |
@@ -127,7 +127,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 
 | 编号 | 主题 | PRD | Design | Requirement | Plan | Acceptance | 当前状态 |
 |---|---|---|---|---|---|---|---|
-| `0001` | 平台产品与完整设计基线 | [产品范围与验收基线](prd/0001-产品范围与验收基线.md) | [完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | [平台 V1 需求规格](requirement/0001-平台V1需求规格.md) | [见 0007 交付计划](plan/0007-平台0到1交付计划.md) | — | `SG-D04` 平台 StoryGraph/Kafka/ELK 主干同步完成；旧 Requirement/Plan 的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
+| `0001` | 平台产品与完整设计基线 | [产品范围与验收基线](prd/0001-产品范围与验收基线.md) | [完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | [平台 V1 需求规格](requirement/0001-平台V1需求规格.md) | [见 0007 交付计划](plan/0007-平台0到1交付计划.md) | — | `VP-D03` 视觉生产主链与 MVP 边界已接受完成；此前 `SG-D04` 平台事实保留，旧 PRD/Requirement/Plan 不抵扣新目标 |
 | `0002` | 采用目标平台架构 | — | [架构决策](design/0002-采用目标平台架构决策.md) | — | — | — | 已接受目标 |
 | `0003` | 系统总体架构 | — | [总体架构](design/0003-系统总体架构.md) | — | — | — | 已接受目标；`SG-D06` StoryGraph/四图架构同步完成 |
 | `0004` | 架构分层与依赖 | — | [分层规则](design/0004-架构分层与依赖规则.md) | — | — | — | 已接受目标；`SG-D07` StoryGraph 依赖方向复核完成 |
@@ -136,8 +136,8 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `0007` | 平台 0→1 交付 | — | — | — | [交付计划](plan/0007-平台0到1交付计划.md) | — | 未来 Platform Complete 目标；当前不是 StoryGraph 执行入口 |
 | `0008` | 资源所有权与交付 | — | — | — | [所有权台账](plan/0008-资源所有权与交付台账.md) | — | 未来 Platform Complete 资源目标；当前不是 StoryGraph 执行入口 |
 | `0009` | 剧本到分镜 MVP 垂直切片 | [产品需求](prd/0009-剧本到分镜MVP产品需求.md) | [垂直切片设计](design/0009-剧本到分镜MVP垂直切片设计.md) | [需求规格](requirement/0009-剧本到分镜MVP需求规格.md) | [实施计划](plan/0009-剧本到分镜MVP实施计划.md) | [验收记录](acceptance/0009-剧本到分镜MVP验收记录.md) | 历史 MVP 已验收；`SG-D08` 演进说明已加入，不回写旧证据 |
-| `0010` | StoryGraph 内容图、DAG 与视觉资产 | [产品需求](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | [内容图与 DAG 创作画布设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | [跨服务需求规格](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) | [唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | [验收标准](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | `SG-I01`–`SG-I20` 保留历史完成事实；`SG-I21` 工作区增量暂停，当前只实施 `VP-D03` |
-| `0011` | 剧本视觉生产工作台与世界观预设 | — | [跨服务产品设计](design/0011-剧本视觉生产工作台与世界观预设设计.md) | — | — | — | 已接受目标（2026-08-30）；`VP-D01`–`VP-D02` 已完成，当前只解锁 `VP-D03`，不表示已实现 |
+| `0010` | StoryGraph 内容图、DAG 与视觉资产 | [产品需求](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | [内容图与 DAG 创作画布设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | [跨服务需求规格](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) | [唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | [验收标准](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | `SG-I01`–`SG-I20` 保留历史完成事实；`SG-I21` 工作区增量暂停，当前只实施 `VP-D04` |
+| `0011` | 剧本视觉生产工作台与世界观预设 | — | [跨服务产品设计](design/0011-剧本视觉生产工作台与世界观预设设计.md) | — | — | — | 已接受目标（2026-08-30）；`VP-D01`–`VP-D03` 已完成，当前只解锁 `VP-D04`，不表示已实现 |
 | `1001` | 前端应用架构与交付 | — | [应用架构](design/1001-前端应用架构.md) | [架构需求规格](requirement/1001-前端应用架构需求规格.md) | [应用与功能交付计划](plan/1001-前端应用与功能交付实施计划.md) | — | `SG-D14` 已同步单应用、Provider Settings、只读双 Lens 与 Query Owner；旧派生文档的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
 | `1002` | 前端创作工作台与功能模块 | [创作工作台产品需求](prd/1002-前端创作工作台产品需求.md) | [模块设计](design/1002-前端功能模块设计.md) | [功能需求规格](requirement/1002-前端功能模块需求规格.md) | [合并至 1001 计划](plan/1001-前端应用与功能交付实施计划.md) | — | `SG-D15` 已同步 Provider 配置、角色/地点卡、图片/视频审核、Guided 与只读 Lens；旧派生文档的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
 | `2001` | 后端服务与运行架构 | — | [服务架构](design/2001-后端服务架构.md) | [运行架构需求规格](requirement/2001-后端运行架构需求规格.md) | [运行架构实施计划](plan/2001-后端运行架构实施计划.md) | [统一入口与本机环境复用](acceptance/2057-Backend统一入口与本机环境复用验收记录.md) | 单 Backend Binary、三层 Compose 与直连现有 Logstash 已通过本机完成门；远端 CI 待后续 push 触发 |
