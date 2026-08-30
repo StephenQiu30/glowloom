@@ -277,6 +277,65 @@ func TestRuntimePlanWaitsForCommittedStartAndRestoresCompiledOrder(t *testing.T)
 		secondEvidenceProjection.CacheKey == nil || *secondEvidenceProjection.CacheKey != *evidenceProjection.CacheKey || reusedCacheCount != 1 {
 		t.Fatalf("cached source evidence projection = %#v cache count=%d", secondEvidenceProjection, reusedCacheCount)
 	}
+
+	attentionRun, attentionStartErr := startService.Start(ctx, actor, workflowapp.StartCommand{
+		AuthoringRevisionID: revision.ID, IdempotencyKey: "runtime-plan-provider-outcome-unknown",
+	})
+	attentionRequest := <-starter.requests
+	if attentionStartErr != nil || attentionRun.Status != "RUNNING" {
+		t.Fatalf("start attention workflow: run=%#v err=%v", attentionRun, attentionStartErr)
+	}
+	attentionExecutor := &scriptedNodeExecutor{status: workflow.NodeActivityNeedsAttention}
+	attentionRuntime := workflowapp.NewRuntimeService(workflowStore, workflowapp.RuntimeConfig{
+		Now: func() time.Time {
+			now = now.Add(time.Second)
+			return now
+		},
+		NewID: uuid.NewString, Executor: attentionExecutor,
+	})
+	attentionPlan, attentionPlanErr := attentionRuntime.LoadExecutionPlan(ctx, attentionRequest)
+	if attentionPlanErr != nil || len(attentionPlan.Nodes) == 0 {
+		t.Fatalf("load attention plan: plan=%#v err=%v", attentionPlan, attentionPlanErr)
+	}
+	attentionNode := attentionPlan.Nodes[0]
+	attentionCommand := workflow.NodeActivityCommand{
+		WorkflowRunID: attentionRequest.WorkflowRunID, NodeRunID: attentionNode.NodeRunID, NodeID: attentionNode.NodeID,
+		Executor: attentionNode.Executor, Attempt: 1,
+	}
+	attentionResult, attentionErr := attentionRuntime.ExecuteNode(ctx, attentionCommand)
+	if attentionErr != nil || attentionResult.Status != workflow.NodeActivityNeedsAttention ||
+		attentionResult.ErrorCode != workflow.ProviderOutcomeUnknownErrorCode ||
+		attentionResult.NextAction != workflow.ManualProviderReconciliationNextAction {
+		t.Fatalf("persist attention result: result=%#v err=%v", attentionResult, attentionErr)
+	}
+	var persistedAttentionRun model.WorkflowRun
+	var persistedAttentionNode model.NodeRunProjection
+	if err = database.First(&persistedAttentionRun, "id = ?", attentionRequest.WorkflowRunID).Error; err != nil {
+		t.Fatalf("load attention run: %v", err)
+	}
+	if err = database.First(&persistedAttentionNode, "id = ?", attentionNode.NodeRunID).Error; err != nil {
+		t.Fatalf("load attention node: %v", err)
+	}
+	var attentionFailure map[string]string
+	if err = json.Unmarshal(persistedAttentionRun.Error, &attentionFailure); err != nil {
+		t.Fatalf("decode attention error: %v", err)
+	}
+	if persistedAttentionRun.Status != "NEEDS_ATTENTION" || persistedAttentionNode.Status != "FAILED" ||
+		persistedAttentionNode.ActiveClaimToken != nil || persistedAttentionNode.OutputHash != nil ||
+		persistedAttentionRun.NextAction == nil || *persistedAttentionRun.NextAction != workflow.ManualProviderReconciliationNextAction ||
+		attentionFailure["code"] != workflow.ProviderOutcomeUnknownErrorCode || attentionFailure["node_id"] != attentionNode.NodeID {
+		t.Fatalf("persisted attention facts: run=%#v node=%#v error=%#v",
+			persistedAttentionRun, persistedAttentionNode, attentionFailure)
+	}
+	// The first Activity response may be lost after commit; redelivery must replay the database fact.
+	replayedAttention, replayAttentionErr := attentionRuntime.ExecuteNode(ctx, attentionCommand)
+	if replayAttentionErr != nil || replayedAttention.Status != attentionResult.Status ||
+		replayedAttention.ErrorCode != attentionResult.ErrorCode || replayedAttention.NextAction != attentionResult.NextAction ||
+		attentionExecutor.CallCount() != 1 {
+		t.Fatalf("replay persisted attention: result=%#v calls=%d err=%v",
+			replayedAttention, attentionExecutor.CallCount(), replayAttentionErr)
+	}
+
 	story := plan.Nodes[2]
 	storyResult, storyErr := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
 		WorkflowRunID: request.WorkflowRunID, NodeRunID: story.NodeRunID, NodeID: story.NodeID,

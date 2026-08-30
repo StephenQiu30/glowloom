@@ -161,6 +161,17 @@ func (store *Store) ClaimNode(
 		if node.WorkflowRunID != run.ID || node.NodeID != command.NodeID || node.Executor != command.Executor {
 			return errors.New("workflow node execution identity has drifted")
 		}
+		if node.Status == "FAILED" && run.Status == "NEEDS_ATTENTION" {
+			result, resultErr := needsAttentionNodeResult(run, node)
+			if resultErr != nil {
+				return resultErr
+			}
+			claim = domain.NodeExecutionClaim{
+				Command: command, Status: domain.NodeActivityNeedsAttention, Attempt: node.Attempt,
+				Revision: node.Revision, Result: result, Replay: true,
+			}
+			return nil
+		}
 		if node.Status == "SUCCEEDED" || node.Status == "CACHED" || node.Status == "SKIPPED" {
 			if _, _, inputErr := persistedNodeInput(node); inputErr != nil {
 				return inputErr
@@ -333,6 +344,89 @@ func (store *Store) RetryNode(ctx context.Context, claim domain.NodeExecutionCla
 	return store.finishNode(ctx, claim, "RETRYING", "RETRYING", "node:"+claim.Command.NodeID+":retrying", nil, now)
 }
 
+func (store *Store) MarkNodeNeedsAttention(
+	ctx context.Context,
+	claim domain.NodeExecutionClaim,
+	result domain.NodeActivityResult,
+	now time.Time,
+) (bool, error) {
+	if result.Status != domain.NodeActivityNeedsAttention || result.ErrorCode != domain.ProviderOutcomeUnknownErrorCode ||
+		result.NextAction != domain.ManualProviderReconciliationNextAction || result.OutputHash != "" ||
+		result.Output.SchemaVersion != "" || len(result.Output.Bindings) != 0 {
+		return false, errors.New("workflow node attention result is invalid")
+	}
+	projected := false
+	err := platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		runID, nodeID, token, identityErr := runtimeNodeIdentities(claim.Command, claim.ClaimToken)
+		if identityErr != nil {
+			return application.ErrNotFound
+		}
+		var run model.WorkflowRun
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, "id = ?", runID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var node model.NodeRunProjection
+		if loadErr := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&node, "id = ?", nodeID).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		if node.WorkflowRunID != run.ID || node.NodeID != claim.Command.NodeID || node.Executor != claim.Command.Executor ||
+			node.Status != "RUNNING" || node.ActiveClaimToken == nil || *node.ActiveClaimToken != token ||
+			node.Revision != claim.Revision || run.WorkspaceID.String() != claim.WorkspaceID ||
+			nodeCacheKeyValue(node.CacheKey) != claim.CacheKey {
+			return &application.Error{Code: "resource_conflict", Message: "Workflow node claim is stale", Status: 409}
+		}
+		stopped, stopErr := stoppingControlExists(transaction, run.ID)
+		if stopErr != nil {
+			return stopErr
+		}
+		if len(node.Output) != 0 || node.OutputHash != nil {
+			return errors.New("workflow node attention projection already has output")
+		}
+		if stopped || run.Status == "PAUSED" || run.Status == "NEEDS_ATTENTION" {
+			node.Status, node.ActiveClaimToken = "RETRYING", nil
+			node.Revision++
+			node.UpdatedAt = now.UTC()
+			return transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
+				"status": node.Status, "active_claim_token": nil, "revision": node.Revision, "updated_at": node.UpdatedAt,
+			}).Error
+		}
+		if run.Status != "RUNNING" && run.Status != "RETRYING" {
+			return &application.Error{Code: "resource_conflict", Message: "Workflow node attention projection is fenced", Status: 409}
+		}
+		failure, encodeErr := json.Marshal(map[string]string{
+			"code": result.ErrorCode, "node_id": claim.Command.NodeID,
+		})
+		if encodeErr != nil {
+			return encodeErr
+		}
+		node.Status, node.ActiveClaimToken = "FAILED", nil
+		node.Revision++
+		node.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.NodeRunProjection{}).Where("id = ?", node.ID).Updates(map[string]any{
+			"status": node.Status, "active_claim_token": nil, "revision": node.Revision, "updated_at": node.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		nextAction := result.NextAction
+		run.Status, run.ProgressStage = "NEEDS_ATTENTION", "node:"+node.NodeID+":needs_attention"
+		run.NextAction, run.Error = &nextAction, datatypes.JSON(failure)
+		run.Revision++
+		run.UpdatedAt = now.UTC()
+		if updateErr := transaction.Model(&model.WorkflowRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+			"status": run.Status, "progress_stage": run.ProgressStage, "next_action": nextAction,
+			"error": run.Error, "revision": run.Revision, "updated_at": run.UpdatedAt,
+		}).Error; updateErr != nil {
+			return updateErr
+		}
+		projected = true
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return projected, nil
+}
+
 func (store *Store) finishNode(
 	ctx context.Context,
 	claim domain.NodeExecutionClaim,
@@ -447,6 +541,25 @@ func completedNodeResult(node model.NodeRunProjection) (domain.NodeActivityResul
 	return domain.NodeActivityResult{Status: node.Status, Output: normalized, OutputHash: outputHash}, nil
 }
 
+func needsAttentionNodeResult(run model.WorkflowRun, node model.NodeRunProjection) (domain.NodeActivityResult, error) {
+	if run.Status != "NEEDS_ATTENTION" || node.Status != "FAILED" || run.NextAction == nil ||
+		*run.NextAction != domain.ManualProviderReconciliationNextAction || len(run.Error) == 0 ||
+		len(node.Output) != 0 || node.OutputHash != nil || node.ActiveClaimToken != nil {
+		return domain.NodeActivityResult{}, errors.New("workflow node attention projection has drifted")
+	}
+	var failure struct {
+		Code   string `json:"code"`
+		NodeID string `json:"node_id"`
+	}
+	if err := json.Unmarshal(run.Error, &failure); err != nil ||
+		failure.Code != domain.ProviderOutcomeUnknownErrorCode || failure.NodeID != node.NodeID {
+		return domain.NodeActivityResult{}, errors.New("workflow node attention error has drifted")
+	}
+	return domain.NodeActivityResult{
+		Status: domain.NodeActivityNeedsAttention, ErrorCode: failure.Code, NextAction: *run.NextAction,
+	}, nil
+}
+
 func persistedNodeInput(node model.NodeRunProjection) (domain.NodeInputSnapshot, string, error) {
 	if len(node.Input) == 0 || node.InputHash == nil {
 		return domain.NodeInputSnapshot{}, "", errors.New("workflow node has no input projection")
@@ -532,6 +645,9 @@ func (store *Store) FailRun(ctx context.Context, command domain.FailRunCommand, 
 		}
 		if node.WorkflowRunID != run.ID || node.NodeID != command.NodeID {
 			return errors.New("workflow failed node identity has drifted")
+		}
+		if run.Status == "NEEDS_ATTENTION" {
+			return nil
 		}
 		if run.Status == "FAILED" && node.Status == "FAILED" {
 			return nil

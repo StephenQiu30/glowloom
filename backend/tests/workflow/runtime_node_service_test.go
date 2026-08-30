@@ -129,6 +129,62 @@ func TestRuntimeProjectsExternalExecutorWaitWithoutOutputOrCache(t *testing.T) {
 	}
 }
 
+func TestRuntimePersistsAndReplaysProviderOutcomeUnknownAttention(t *testing.T) {
+	repository := &runtimeNodeRepository{status: "QUEUED"}
+	executor := &scriptedNodeExecutor{status: workflow.NodeActivityNeedsAttention}
+	service := workflowapp.NewRuntimeService(repository, workflowapp.RuntimeConfig{
+		Now:   func() time.Time { return time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC) },
+		NewID: func() string { return "00000000-0000-0000-0000-000000000555" }, Executor: executor,
+	})
+	command := workflow.NodeActivityCommand{
+		WorkflowRunID: "00000000-0000-0000-0000-000000000111",
+		NodeRunID:     "00000000-0000-0000-0000-000000000222",
+		NodeID:        "reference-assets", Executor: "activity.reference_asset_generation", Attempt: 1,
+	}
+
+	first, err := service.ExecuteNode(context.Background(), command)
+	if err != nil || first.Status != workflow.NodeActivityNeedsAttention ||
+		first.ErrorCode != workflow.ProviderOutcomeUnknownErrorCode ||
+		first.NextAction != workflow.ManualProviderReconciliationNextAction {
+		t.Fatalf("persist attention result = %#v err=%v", first, err)
+	}
+	if repository.status != workflow.NodeActivityNeedsAttention || repository.claimToken != "" ||
+		repository.result.Status != first.Status || repository.result.ErrorCode != first.ErrorCode ||
+		repository.result.NextAction != first.NextAction {
+		t.Fatalf("attention projection = %#v", repository)
+	}
+
+	// Simulate an Activity response loss: the retry must read the committed fact and must not invoke the executor again.
+	replayed, err := service.ExecuteNode(context.Background(), command)
+	if err != nil || replayed.Status != first.Status || replayed.ErrorCode != first.ErrorCode ||
+		replayed.NextAction != first.NextAction || executor.CallCount() != 1 {
+		t.Fatalf("replay attention result = %#v calls=%d err=%v", replayed, executor.CallCount(), err)
+	}
+}
+
+func TestRuntimeYieldsProviderOutcomeUnknownProjectionToPause(t *testing.T) {
+	repository := &runtimeNodeRepository{status: "QUEUED", yieldAttentionToPause: true}
+	executor := &scriptedNodeExecutor{status: workflow.NodeActivityNeedsAttention}
+	service := workflowapp.NewRuntimeService(repository, workflowapp.RuntimeConfig{
+		Now:   func() time.Time { return time.Date(2026, time.August, 30, 12, 30, 0, 0, time.UTC) },
+		NewID: func() string { return "00000000-0000-0000-0000-000000000555" }, Executor: executor,
+	})
+
+	result, err := service.ExecuteNode(context.Background(), workflow.NodeActivityCommand{
+		WorkflowRunID: "00000000-0000-0000-0000-000000000111",
+		NodeRunID:     "00000000-0000-0000-0000-000000000222",
+		NodeID:        "reference-assets", Executor: "activity.reference_asset_generation", Attempt: 1,
+	})
+	if err != nil || result.Status != "RETRYING" || result.ErrorCode != "" || result.NextAction != "" ||
+		result.OutputHash != "" || result.Output.SchemaVersion != "" || len(result.Output.Bindings) != 0 {
+		t.Fatalf("pause-winning node result = %#v err=%v", result, err)
+	}
+	if repository.status != "RETRYING" || repository.claimToken != "" || repository.result.Status != "" ||
+		executor.CallCount() != 1 {
+		t.Fatalf("pause-winning node projection = %#v executor calls=%d", repository, executor.CallCount())
+	}
+}
+
 func TestRuntimeNodeCacheHitSkipsExecutorAndCommitsCachedOutput(t *testing.T) {
 	cachedOutput := successfulExecutorOutput()
 	_, _, cachedHash, err := workflow.BuildNodeOutput(cachedOutput)
@@ -185,16 +241,17 @@ func TestRuntimeNodeCacheMissCommitsFactWithNodeOutput(t *testing.T) {
 }
 
 type runtimeNodeRepository struct {
-	mu           sync.Mutex
-	status       string
-	attempt      int
-	revision     int
-	claimToken   string
-	claims       []string
-	result       workflow.NodeActivityResult
-	cachePolicy  string
-	cachedResult workflow.NodeActivityResult
-	cacheEntry   workflow.NodeCacheEntry
+	mu                    sync.Mutex
+	status                string
+	attempt               int
+	revision              int
+	claimToken            string
+	claims                []string
+	result                workflow.NodeActivityResult
+	cachePolicy           string
+	cachedResult          workflow.NodeActivityResult
+	cacheEntry            workflow.NodeCacheEntry
+	yieldAttentionToPause bool
 }
 
 func (repo *runtimeNodeRepository) LoadExecutionPlan(context.Context, workflow.StartRequest) (workflow.ExecutionPlan, error) {
@@ -209,7 +266,7 @@ func (repo *runtimeNodeRepository) ClaimNode(
 ) (workflow.NodeExecutionClaim, error) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
-	if repo.status == "SUCCEEDED" {
+	if repo.status == "SUCCEEDED" || repo.status == workflow.NodeActivityNeedsAttention {
 		return workflow.NodeExecutionClaim{Command: command, Status: repo.status, Result: repo.result, Replay: true}, nil
 	}
 	repo.status = "RUNNING"
@@ -282,6 +339,30 @@ func (repo *runtimeNodeRepository) RetryNode(
 	return nil
 }
 
+func (repo *runtimeNodeRepository) MarkNodeNeedsAttention(
+	_ context.Context,
+	claim workflow.NodeExecutionClaim,
+	result workflow.NodeActivityResult,
+	_ time.Time,
+) (bool, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if repo.claimToken != claim.ClaimToken {
+		return false, errors.New("stale claim")
+	}
+	if repo.yieldAttentionToPause {
+		repo.status = "RETRYING"
+		repo.claimToken = ""
+		repo.revision++
+		return false, nil
+	}
+	repo.status = workflow.NodeActivityNeedsAttention
+	repo.result = result
+	repo.claimToken = ""
+	repo.revision++
+	return true, nil
+}
+
 func (repo *runtimeNodeRepository) CompleteNodeFromCache(
 	_ context.Context,
 	claim workflow.NodeExecutionClaim,
@@ -341,6 +422,12 @@ func (executor *scriptedNodeExecutor) Execute(
 	}
 	if status == "RETRYING" && !executor.retryingOutput {
 		return workflow.NodeExecutorResult{Status: status}, nil
+	}
+	if status == workflow.NodeActivityNeedsAttention {
+		return workflow.NodeExecutorResult{
+			Status: status, ErrorCode: workflow.ProviderOutcomeUnknownErrorCode,
+			NextAction: workflow.ManualProviderReconciliationNextAction,
+		}, nil
 	}
 	output := successfulExecutorOutputFor(command.OutputPorts)
 	if executor.invalidOutput {

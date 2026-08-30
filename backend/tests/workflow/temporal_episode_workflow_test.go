@@ -205,6 +205,56 @@ func TestEpisodeWorkflowDurablyWaitsForExternalNodeWithStableBusinessAttempt(t *
 	}
 }
 
+func TestEpisodeWorkflowEndsNormallyWhenNodeNeedsAttention(t *testing.T) {
+	request := episodeWorkflowStartRequest()
+	plan := temporaladapter.ExecutionPlan{
+		WorkflowRunID: request.WorkflowRunID, DefinitionVersionID: request.DefinitionVersionID,
+		RunInputSnapshotID: request.RunInputSnapshotID, DefinitionContentHash: request.DefinitionContentHash,
+		InputSnapshotHash: request.InputSnapshotHash,
+		Nodes: []temporaladapter.ExecutionNode{{
+			NodeRunID: "node-run-reference", NodeID: "reference-assets",
+			Executor: "activity.reference_asset_generation", RiskLevel: "external_ai",
+		}},
+	}
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	failCalls, completeCalls := 0, 0
+	environment.RegisterActivityWithOptions(
+		func(context.Context, workflow.StartRequest) (temporaladapter.ExecutionPlan, error) { return plan, nil },
+		activity.RegisterOptions{Name: temporaladapter.LoadExecutionPlanActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(context.Context, temporaladapter.NodeActivityCommand) (temporaladapter.NodeActivityResult, error) {
+			return temporaladapter.NodeActivityResult{
+				Status: workflow.NodeActivityNeedsAttention, ErrorCode: workflow.ProviderOutcomeUnknownErrorCode,
+				NextAction: workflow.ManualProviderReconciliationNextAction,
+			}, nil
+		},
+		activity.RegisterOptions{Name: temporaladapter.ExecuteNodeActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(context.Context, workflow.FailRunCommand) error { failCalls++; return nil },
+		activity.RegisterOptions{Name: temporaladapter.FailRunActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(context.Context, temporaladapter.CompleteRunCommand) error { completeCalls++; return nil },
+		activity.RegisterOptions{Name: temporaladapter.CompleteRunActivityName},
+	)
+
+	environment.ExecuteWorkflow(temporaladapter.EpisodeProductionWorkflow, request)
+	if err := environment.GetWorkflowError(); err != nil {
+		t.Fatalf("needs-attention workflow error: %v", err)
+	}
+	var result temporaladapter.RunResult
+	if err := environment.GetWorkflowResult(&result); err != nil ||
+		result.WorkflowRunID != request.WorkflowRunID || result.Status != "NEEDS_ATTENTION" {
+		t.Fatalf("needs-attention workflow result = %#v err=%v", result, err)
+	}
+	if failCalls != 0 || completeCalls != 0 {
+		t.Fatalf("needs-attention workflow called terminal projectors: fail=%d complete=%d", failCalls, completeCalls)
+	}
+}
+
 func TestEpisodeWorkflowPausesExternalNodePollingUntilResume(t *testing.T) {
 	request := episodeWorkflowStartRequest()
 	plan := temporaladapter.ExecutionPlan{

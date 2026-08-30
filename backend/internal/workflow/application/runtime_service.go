@@ -19,6 +19,7 @@ type NodeRuntimeRepository interface {
 	ClaimNode(context.Context, domain.NodeActivityCommand, string, time.Time) (domain.NodeExecutionClaim, error)
 	CompleteNode(context.Context, domain.NodeExecutionClaim, domain.NodeActivityResult, time.Time) error
 	RetryNode(context.Context, domain.NodeExecutionClaim, time.Time) error
+	MarkNodeNeedsAttention(context.Context, domain.NodeExecutionClaim, domain.NodeActivityResult, time.Time) (bool, error)
 }
 
 type NodeCacheRuntimeRepository interface {
@@ -154,6 +155,12 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		return domain.NodeActivityResult{}, normalizeError(err)
 	}
 	if claim.Replay {
+		if claim.Result.Status == domain.NodeActivityNeedsAttention {
+			if !validNeedsAttentionResult(claim.Result) || claim.Result.Status != claim.Status {
+				return domain.NodeActivityResult{}, errors.New("workflow node attention projection has drifted")
+			}
+			return claim.Result, nil
+		}
 		normalized, _, outputHash, outputErr := domain.BuildNodeOutput(claim.Result.Output)
 		if outputErr != nil || claim.Result.Status != claim.Status || claim.Result.OutputHash != outputHash {
 			return domain.NodeActivityResult{}, errors.New("completed workflow node output has drifted")
@@ -213,6 +220,24 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		}
 		return domain.NodeActivityResult{Status: "RETRYING"}, nil
 	}
+	if executorResult.Status == domain.NodeActivityNeedsAttention {
+		result := domain.NodeActivityResult{
+			Status: executorResult.Status, ErrorCode: executorResult.ErrorCode, NextAction: executorResult.NextAction,
+		}
+		if executorResult.Output.SchemaVersion != "" || len(executorResult.Output.Bindings) != 0 ||
+			!validNeedsAttentionResult(result) {
+			retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
+			return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node executor returned an invalid attention result"), retryErr)
+		}
+		projected, attentionErr := repository.MarkNodeNeedsAttention(ctx, claim, result, service.config.Now().UTC())
+		if attentionErr != nil {
+			return domain.NodeActivityResult{}, normalizeError(attentionErr)
+		}
+		if !projected {
+			return domain.NodeActivityResult{Status: "RETRYING"}, nil
+		}
+		return result, nil
+	}
 	if executorResult.Status != "SUCCEEDED" && executorResult.Status != "SKIPPED" {
 		retryErr := repository.RetryNode(ctx, claim, service.config.Now().UTC())
 		return domain.NodeActivityResult{}, errors.Join(errors.New("workflow node executor returned an invalid status"), retryErr)
@@ -243,6 +268,13 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 		return domain.NodeActivityResult{}, normalizeError(err)
 	}
 	return result, nil
+}
+
+func validNeedsAttentionResult(result domain.NodeActivityResult) bool {
+	return result.Status == domain.NodeActivityNeedsAttention &&
+		result.ErrorCode == domain.ProviderOutcomeUnknownErrorCode &&
+		result.NextAction == domain.ManualProviderReconciliationNextAction &&
+		result.OutputHash == "" && result.Output.SchemaVersion == "" && len(result.Output.Bindings) == 0
 }
 
 func runtimeNodeCacheRepository(

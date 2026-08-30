@@ -251,8 +251,10 @@ func controllableRunStatus(run model.WorkflowRun, action string) bool {
 	switch action {
 	case domain.ControlActionCancel:
 		switch run.Status {
-		case "QUEUED", "RUNNING", "WAITING_HUMAN", "RETRYING", "PAUSED", "NEEDS_ATTENTION":
+		case "QUEUED", "RUNNING", "WAITING_HUMAN", "RETRYING", "PAUSED":
 			return true
+		case "NEEDS_ATTENTION":
+			return run.NextAction == nil || *run.NextAction != domain.ManualProviderReconciliationNextAction
 		}
 	case domain.ControlActionPause:
 		return (run.Status == "RUNNING" || run.Status == "RETRYING") &&

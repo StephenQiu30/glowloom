@@ -124,9 +124,10 @@ func productionWorkflow(
 			continue
 		}
 
-		if _, err := executeNodeUntilTerminal(
+		result, err := executeNodeUntilTerminal(
 			ctx, command, controlChannel, &controlState, request.WorkflowRunID,
-		); err != nil {
+		)
+		if err != nil {
 			failureContext := workflow.WithActivityOptions(ctx, shortActivityOptions("fail-run:"+node.NodeRunID))
 			if failureErr := workflow.ExecuteActivity(failureContext, FailRunActivityName, FailRunCommand{
 				WorkflowRunID: request.WorkflowRunID, NodeRunID: node.NodeRunID, NodeID: node.NodeID,
@@ -135,6 +136,9 @@ func productionWorkflow(
 				return RunResult{}, failureErr
 			}
 			return RunResult{}, err
+		}
+		if result.Status == workflowdomain.NodeActivityNeedsAttention {
+			return RunResult{WorkflowRunID: request.WorkflowRunID, Status: "NEEDS_ATTENTION"}, nil
 		}
 	}
 
@@ -178,6 +182,14 @@ func executeNodeUntilTerminal(
 				return NodeActivityResult{}, err
 			}
 			continue
+		}
+		if result.Status == workflowdomain.NodeActivityNeedsAttention {
+			if result.OutputHash != "" || result.Output.SchemaVersion != "" || len(result.Output.Bindings) != 0 ||
+				result.ErrorCode != workflowdomain.ProviderOutcomeUnknownErrorCode ||
+				result.NextAction != workflowdomain.ManualProviderReconciliationNextAction {
+				return NodeActivityResult{}, contractViolation("node activity returned an invalid attention result")
+			}
+			return result, nil
 		}
 		if !validNodeActivityResult(result) {
 			return NodeActivityResult{}, contractViolation("node activity returned an invalid terminal output")
