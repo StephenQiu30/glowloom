@@ -7,7 +7,7 @@ export function requestRegistrationVerificationApiV1AuthRegistrationVerification
   options?: RequestOptions,
 ) {
   return request<Envelope<API.RegistrationVerificationAccepted>>(
-    "/api/v1/auth/registration-verifications",
+    "/api/auth/registration-verifications",
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -17,7 +17,7 @@ export function confirmRegistrationVerificationApiV1AuthRegistrationVerification
   options?: RequestOptions,
 ) {
   return request<Envelope<API.RegistrationVerificationConfirmed>>(
-    "/api/v1/auth/registration-verifications/confirm",
+    "/api/auth/registration-verifications/confirm",
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -26,7 +26,7 @@ export function registerApiV1AuthRegisterPost(
   body: API.RegisterRequest,
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.AuthResponse>>("/api/v1/auth/register", {
+  return request<Envelope<API.AuthResponse>>("/api/auth/register", {
     method: "POST",
     data: body,
     ...(options ?? {}),
@@ -37,7 +37,7 @@ export function loginApiV1AuthLoginPost(
   body: API.LoginRequest,
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.AuthResponse>>("/api/v1/auth/login", {
+  return request<Envelope<API.AuthResponse>>("/api/auth/login", {
     method: "POST",
     data: body,
     ...(options ?? {}),
@@ -45,7 +45,7 @@ export function loginApiV1AuthLoginPost(
 }
 
 export function logoutApiV1AuthLogoutPost(options?: RequestOptions) {
-  return request<Envelope<API.RevocationResponse>>("/api/v1/auth/logout", {
+  return request<Envelope<API.RevocationResponse>>("/api/auth/logout", {
     method: "POST",
     ...(options ?? {}),
   });
@@ -56,13 +56,13 @@ export function changePasswordApiV1AuthChangePasswordPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.RevocationResponse>>(
-    "/api/v1/auth/change-password",
+    "/api/auth/change-password",
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
 
 export function meApiV1MeGet(options?: RequestOptions) {
-  return request<Envelope<API.MeResponse>>("/api/v1/me", {
+  return request<Envelope<API.MeResponse>>("/api/me", {
     method: "GET",
     ...(options ?? {}),
   });
@@ -72,7 +72,7 @@ export function updateMeApiV1MePatch(
   body: API.ProfileUpdateRequest,
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.MeResponse>>("/api/v1/me", {
+  return request<Envelope<API.MeResponse>>("/api/me", {
     method: "PATCH",
     data: body,
     ...(options ?? {}),
@@ -83,7 +83,7 @@ export function deactivateMeApiV1MeDeactivatePost(
   body: API.DeactivateAccountRequest,
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.RevocationResponse>>("/api/v1/me/deactivate", {
+  return request<Envelope<API.RevocationResponse>>("/api/me/deactivate", {
     method: "POST",
     data: body,
     ...(options ?? {}),
@@ -94,7 +94,7 @@ export function listWorkspacesApiV1WorkspacesGet(
   params: { include_archived: boolean },
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.WorkspaceResponse[]>>("/api/v1/workspaces", {
+  return request<Envelope<API.WorkspaceResponse[]>>("/api/workspaces", {
     method: "GET",
     params,
     ...(options ?? {}),
@@ -105,7 +105,7 @@ export function createWorkspaceApiV1WorkspacesPost(
   body: API.WorkspaceCreateRequest,
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.WorkspaceResponse>>("/api/v1/workspaces", {
+  return request<Envelope<API.WorkspaceResponse>>("/api/workspaces", {
     method: "POST",
     data: body,
     ...(options ?? {}),
@@ -118,7 +118,7 @@ export function updateWorkspaceApiV1WorkspacesWorkspaceIdPatch(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.WorkspaceResponse>>(
-    `/api/v1/workspaces/${params.workspace_id}`,
+    `/api/workspaces/${params.workspace_id}`,
     { method: "PATCH", data: body, ...(options ?? {}) },
   );
 }
@@ -129,7 +129,7 @@ export function archiveWorkspaceApiV1WorkspacesWorkspaceIdArchivePost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.WorkspaceResponse>>(
-    `/api/v1/workspaces/${params.workspace_id}/archive`,
+    `/api/workspaces/${params.workspace_id}/archive`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -140,7 +140,7 @@ export function restoreWorkspaceApiV1WorkspacesWorkspaceIdRestorePost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.WorkspaceResponse>>(
-    `/api/v1/workspaces/${params.workspace_id}/restore`,
+    `/api/workspaces/${params.workspace_id}/restore`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }

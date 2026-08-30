@@ -4,7 +4,7 @@ import _ "embed"
 
 // document is the public REST/SSE contract served by lanverse-api.
 //
-//go:embed lanverse-v1.json
+//go:embed lanverse-public-api.json
 var document []byte
 
 // Document returns a defensive copy of the public API contract.

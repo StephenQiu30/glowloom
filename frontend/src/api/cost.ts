@@ -7,7 +7,7 @@ export function getCostBudgetApiV1ProjectsProjectIdCostBudgetGet(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.CostBudgetResponse>>(
-    `/api/v1/projects/${params.project_id}/cost-budget`,
+    `/api/projects/${params.project_id}/cost-budget`,
     { method: "GET", ...(options ?? {}) },
   );
 }
@@ -18,7 +18,7 @@ export function setCostBudgetApiV1ProjectsProjectIdCostBudgetPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.CostBudgetResponse>>(
-    `/api/v1/projects/${params.project_id}/cost-budget`,
+    `/api/projects/${params.project_id}/cost-budget`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -28,7 +28,7 @@ export function getCurrentCostPriceQuoteApiV1ProjectsProjectIdCostPricesMetricGe
   options?: RequestOptions,
 ) {
   return request<Envelope<API.CostPriceQuoteResponse>>(
-    `/api/v1/projects/${params.project_id}/cost-prices/${params.metric}`,
+    `/api/projects/${params.project_id}/cost-prices/${params.metric}`,
     { method: "GET", ...(options ?? {}) },
   );
 }
@@ -39,7 +39,7 @@ export function setCostPriceQuoteApiV1ProjectsProjectIdCostPricesMetricPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.CostPriceQuoteResponse>>(
-    `/api/v1/projects/${params.project_id}/cost-prices/${params.metric}`,
+    `/api/projects/${params.project_id}/cost-prices/${params.metric}`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }

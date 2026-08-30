@@ -108,30 +108,30 @@ function installBackend(initial: BackendState) {
 
   requestMock.mockImplementation(async (url: string, options?: { method?: string }) => {
     const method = options?.method ?? "GET";
-    if (method === "GET" && url === `/api/v1/episodes/${episodeId}`) return { data: episode };
-    if (method === "GET" && url === `/api/v1/projects/${projectId}`) return { data: project };
-    if (method === "GET" && url === `/api/v1/projects/${projectId}/episodes`) return { data: [episode] };
-    if (method === "GET" && url === `/api/v1/episodes/${episodeId}/structure`) return { data: currentStructure };
-    if (method === "GET" && url === `/api/v1/episodes/${episodeId}/shots`) return { data: currentShots };
-    if (method === "GET" && url === `/api/v1/episodes/${episodeId}/storyboard-draft`) {
+    if (method === "GET" && url === `/api/episodes/${episodeId}`) return { data: episode };
+    if (method === "GET" && url === `/api/projects/${projectId}`) return { data: project };
+    if (method === "GET" && url === `/api/projects/${projectId}/episodes`) return { data: [episode] };
+    if (method === "GET" && url === `/api/episodes/${episodeId}/structure`) return { data: currentStructure };
+    if (method === "GET" && url === `/api/episodes/${episodeId}/shots`) return { data: currentShots };
+    if (method === "GET" && url === `/api/episodes/${episodeId}/storyboard-draft`) {
       if (currentBatch) return { data: currentBatch };
       throw new ApiClientError("尚无候选", "not_found");
     }
-    if (method === "GET" && url === `/api/v1/episodes/${episodeId}/storyboard-export`) {
+    if (method === "GET" && url === `/api/episodes/${episodeId}/storyboard-export`) {
       throw new ApiClientError("尚无导出", "not_found");
     }
-    if (method === "GET" && url.includes("/api/v1/storyboard-exports/") && url.endsWith("/download")) {
+    if (method === "GET" && url.includes("/api/storyboard-exports/") && url.endsWith("/download")) {
       return new Blob(["zip-bytes"], { type: "application/zip" });
     }
-    if (method === "POST" && url === `/api/v1/episode-structures/${structureId}/tasks/${taskId}/accept`) {
+    if (method === "POST" && url === `/api/episode-structures/${structureId}/tasks/${taskId}/accept`) {
       currentStructure = structure("needs_review", 2, "accepted");
       return { data: currentStructure };
     }
-    if (method === "POST" && url === `/api/v1/episode-structures/${structureId}/confirm`) {
+    if (method === "POST" && url === `/api/episode-structures/${structureId}/confirm`) {
       currentStructure = structure("confirmed", 3, "accepted");
       return { data: currentStructure };
     }
-    if (method === "POST" && url === `/api/v1/storyboard-draft-batches/${batchId}/decisions`) {
+    if (method === "POST" && url === `/api/storyboard-draft-batches/${batchId}/decisions`) {
       const accepted = Object.keys(currentBatch?.decisions ?? {}).length;
       currentBatch = draft("needs_review", 6 + accepted, {
         ...(currentBatch?.decisions ?? {}),
@@ -139,17 +139,17 @@ function installBackend(initial: BackendState) {
       });
       return { data: currentBatch };
     }
-    if (method === "POST" && url === `/api/v1/storyboard-draft-batches/${batchId}/approve`) {
+    if (method === "POST" && url === `/api/storyboard-draft-batches/${batchId}/approve`) {
       currentBatch = draft("approved", 8, {
         "shot-001": "accepted",
         "shot-002": "accepted",
       });
       return { data: currentBatch };
     }
-    if (method === "POST" && url === `/api/v1/storyboard-draft-batches/${batchId}/apply-preflight`) {
+    if (method === "POST" && url === `/api/storyboard-draft-batches/${batchId}/apply-preflight`) {
       return { data: { batch_id: batchId, batch_revision: 8, order_hash: "b".repeat(64), impact_hash: "c".repeat(64), created: 2 } };
     }
-    if (method === "POST" && url === `/api/v1/storyboard-draft-batches/${batchId}/apply`) {
+    if (method === "POST" && url === `/api/storyboard-draft-batches/${batchId}/apply`) {
       currentBatch = draft("applied", 9, {
         "shot-001": "accepted",
         "shot-002": "accepted",
@@ -163,15 +163,15 @@ function installBackend(initial: BackendState) {
       }));
       return { data: { batch: currentBatch, shots: currentShots } };
     }
-    if (method === "POST" && url === `/api/v1/episodes/${episodeId}/storyboard-exports/preflight`) {
+    if (method === "POST" && url === `/api/episodes/${episodeId}/storyboard-exports/preflight`) {
       return { data: { order_hash: "d".repeat(64), allowed: true, shot_count: 2, blockers: [] } };
     }
-    if (method === "POST" && url === `/api/v1/episodes/${episodeId}/storyboard-exports`) {
+    if (method === "POST" && url === `/api/episodes/${episodeId}/storyboard-exports`) {
       return {
         data: {
           id: "019fb2c0-a000-7000-8000-000000000030",
           content_hash: "e".repeat(64),
-          download_url: "/api/v1/storyboard-exports/019fb2c0-a000-7000-8000-000000000030/download",
+          download_url: "/api/storyboard-exports/019fb2c0-a000-7000-8000-000000000030/download",
           files: [{ name: "storyboard.json" }],
         },
       };
@@ -206,7 +206,7 @@ describe("单集 MVP 生产工作台", () => {
     await user.click(screen.getByRole("button", { name: "接受" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "确认剧本结构" })).toBeEnabled());
     expect(requestMock).toHaveBeenCalledWith(
-      `/api/v1/episode-structures/${structureId}/tasks/${taskId}/accept`,
+      `/api/episode-structures/${structureId}/tasks/${taskId}/accept`,
       expect.objectContaining({ method: "POST", data: expect.objectContaining({ expected_revision: 1 }) }),
     );
 
@@ -214,7 +214,7 @@ describe("单集 MVP 生产工作台", () => {
     expect(await screen.findByText("结构已确认")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(requestMock).toHaveBeenCalledWith(
-      `/api/v1/episode-structures/${structureId}/confirm`,
+      `/api/episode-structures/${structureId}/confirm`,
       expect.objectContaining({ method: "POST", data: expect.objectContaining({ expected_revision: 2 }) }),
     );
   });
@@ -252,7 +252,7 @@ describe("单集 MVP 生产工作台", () => {
     const download = await screen.findByRole("button", { name: "下载分镜包" });
     await user.click(download);
     expect(requestMock).toHaveBeenCalledWith(
-      "/api/v1/storyboard-exports/019fb2c0-a000-7000-8000-000000000030/download",
+      "/api/storyboard-exports/019fb2c0-a000-7000-8000-000000000030/download",
       expect.objectContaining({ responseType: "blob" }),
     );
     expect(await screen.findByText("分镜包下载已开始")).toBeInTheDocument();

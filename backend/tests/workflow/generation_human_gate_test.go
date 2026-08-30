@@ -502,7 +502,7 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 	reviewhttp.New(reviewService, coordinator, workflowReviewAuthenticator{userID: fixture.userID.String()}).Register(restartedAPI)
 	resumeResponse := httptest.NewRecorder()
 	restartedAPI.ServeHTTP(resumeResponse, httptest.NewRequest(
-		http.MethodPost, "/api/v1/review-decisions/"+decision.Decision.ID+"/resume", nil,
+		http.MethodPost, "/api/review-decisions/"+decision.Decision.ID+"/resume", nil,
 	))
 	completed, err := coordinator.GetHumanGate(ctx, workflowActor, decision.Decision.ID)
 	if err != nil || completed.WorkflowResumeStatus != "completed" || completed.OwnerApplyStatus != "completed" ||

@@ -24,7 +24,7 @@ func TestBibleResponseIncludesGenerationError(t *testing.T) {
 	mux := http.NewServeMux()
 	biblehttp.New(service, bibleHTTPAuthenticator{}).Register(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/production-bibles/bible-1", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/production-bibles/bible-1", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
 	}
@@ -56,7 +56,7 @@ func TestStoryAnalysisRecoveryResponseExposesPersistedIdentity(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/workflow-runs/00000000-0000-0000-0000-000000000001/story-analysis-recoveries",
+		"/api/workflow-runs/00000000-0000-0000-0000-000000000001/story-analysis-recoveries",
 		bytes.NewBufferString(`{"node_run_id":"00000000-0000-0000-0000-000000000002","idempotency_key":"recover-deadline"}`),
 	)
 	request.Header.Set("Content-Type", "application/json")

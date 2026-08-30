@@ -36,11 +36,11 @@ func New(service Service, authenticator Authenticator) *Handler {
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/projects/{project_id}/script-import-previews", handler.preview)
-	mux.HandleFunc("POST /api/v1/projects/{project_id}/script-imports", handler.importDocument)
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/current-script-document", handler.getCurrentAnalysis)
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/script-documents", handler.listDocuments)
-	mux.HandleFunc("GET /api/v1/document-revisions/{revision_id}", handler.getRevision)
+	mux.HandleFunc("POST /api/projects/{project_id}/script-import-previews", handler.preview)
+	mux.HandleFunc("POST /api/projects/{project_id}/script-imports", handler.importDocument)
+	mux.HandleFunc("GET /api/projects/{project_id}/current-script-document", handler.getCurrentAnalysis)
+	mux.HandleFunc("GET /api/projects/{project_id}/script-documents", handler.listDocuments)
+	mux.HandleFunc("GET /api/document-revisions/{revision_id}", handler.getRevision)
 }
 
 type previewRequest struct {

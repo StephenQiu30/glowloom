@@ -33,11 +33,11 @@ func New(service Service, authenticator Authenticator) *Handler {
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/storygraph/current", handler.current)
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/storygraph/versions/{version_id}", handler.exact)
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/storygraph/versions/{version_ref}/lens", handler.lens)
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/storygraph/versions/{version_ref}/nodes/{story_node_key}/trace", handler.trace)
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/storygraph/diff", handler.diff)
+	mux.HandleFunc("GET /api/projects/{project_id}/storygraph/current", handler.current)
+	mux.HandleFunc("GET /api/projects/{project_id}/storygraph/versions/{version_id}", handler.exact)
+	mux.HandleFunc("GET /api/projects/{project_id}/storygraph/versions/{version_ref}/lens", handler.lens)
+	mux.HandleFunc("GET /api/projects/{project_id}/storygraph/versions/{version_ref}/nodes/{story_node_key}/trace", handler.trace)
+	mux.HandleFunc("GET /api/projects/{project_id}/storygraph/diff", handler.diff)
 }
 
 func (handler *Handler) current(writer http.ResponseWriter, request *http.Request) {

@@ -38,7 +38,7 @@ func TestWorkflowHandlerStartsAndReturnsAuthorizedRunProjection(t *testing.T) {
 	handler.Register(mux)
 
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/workflow-runs", strings.NewReader(
+	request := httptest.NewRequest(http.MethodPost, "/api/workflow-runs", strings.NewReader(
 		`{"authoring_revision_id":"`+revisionID+`","idempotency_key":"start-1"}`,
 	))
 	mux.ServeHTTP(response, request)
@@ -65,7 +65,7 @@ func TestWorkflowHandlerControlsAndRerunsWithoutTrustingWorkspaceInput(t *testin
 
 	controlResponse := httptest.NewRecorder()
 	mux.ServeHTTP(controlResponse, httptest.NewRequest(
-		http.MethodPost, "/api/v1/workflow-runs/run-1/controls",
+		http.MethodPost, "/api/workflow-runs/run-1/controls",
 		strings.NewReader(`{"action":"pause","expected_revision":7,"idempotency_key":"pause-1"}`),
 	))
 	if controlResponse.Code != http.StatusAccepted || controls.pause.WorkflowRunID != "run-1" ||
@@ -76,7 +76,7 @@ func TestWorkflowHandlerControlsAndRerunsWithoutTrustingWorkspaceInput(t *testin
 
 	rerunResponse := httptest.NewRecorder()
 	mux.ServeHTTP(rerunResponse, httptest.NewRequest(
-		http.MethodPost, "/api/v1/workflow-runs/run-1/reruns",
+		http.MethodPost, "/api/workflow-runs/run-1/reruns",
 		strings.NewReader(`{"root_node_id":"storyboard","idempotency_key":"rerun-1"}`),
 	))
 	if rerunResponse.Code != http.StatusAccepted || mutations.rerun.SourceWorkflowRunID != "run-1" ||
@@ -93,7 +93,7 @@ func TestWorkflowHandlerRejectsInvalidControlAndAuthentication(t *testing.T) {
 	workflowhttp.New(mutations, queries, controls, workflowAuthenticator{}).Register(mux)
 	invalid := httptest.NewRecorder()
 	mux.ServeHTTP(invalid, httptest.NewRequest(
-		http.MethodPost, "/api/v1/workflow-runs/run-1/controls",
+		http.MethodPost, "/api/workflow-runs/run-1/controls",
 		strings.NewReader(`{"action":"restart","expected_revision":1,"idempotency_key":"control-1"}`),
 	))
 	if invalid.Code != http.StatusUnprocessableEntity || controls.calls != 0 {
@@ -103,7 +103,7 @@ func TestWorkflowHandlerRejectsInvalidControlAndAuthentication(t *testing.T) {
 	unauthorized := http.NewServeMux()
 	workflowhttp.New(mutations, queries, controls, workflowAuthenticator{err: errors.New("invalid token")}).Register(unauthorized)
 	response := httptest.NewRecorder()
-	unauthorized.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workflow-runs/run-1", nil))
+	unauthorized.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/workflow-runs/run-1", nil))
 	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"code":"unauthenticated"`) {
 		t.Fatalf("unauthorized response=%d %s", response.Code, response.Body.String())
 	}

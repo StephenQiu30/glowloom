@@ -33,7 +33,7 @@ describe("request", () => {
     };
 
     await expect(
-      request("/api/v1/example", {
+      request("/api/example", {
         adapter,
         signal: controller.signal,
         timeout: 12_345,
@@ -64,7 +64,7 @@ describe("request", () => {
       );
     };
 
-    await expect(request("/api/v1/me", { adapter })).rejects.toMatchObject({
+    await expect(request("/api/me", { adapter })).rejects.toMatchObject({
       code: "unauthenticated",
       message: "登录状态已失效。",
       nextAction: "login",

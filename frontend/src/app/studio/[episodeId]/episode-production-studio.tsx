@@ -135,7 +135,7 @@ export function EpisodeProductionStudio({
 
   const loadBatch = useCallback(async () => {
     const value = await optional(
-      request<Envelope<DraftBatch>>(`/api/v1/episodes/${episodeId}/storyboard-draft`),
+      request<Envelope<DraftBatch>>(`/api/episodes/${episodeId}/storyboard-draft`),
     );
     setBatch(value);
     return value;
@@ -147,16 +147,16 @@ export function EpisodeProductionStudio({
     void (async () => {
       try {
         setLoading(true);
-        const episodeResponse = await request<Envelope<Episode>>(`/api/v1/episodes/${episodeId}`);
+        const episodeResponse = await request<Envelope<Episode>>(`/api/episodes/${episodeId}`);
         const currentEpisode = episodeResponse.data;
         const [projectResponse, episodeList, currentStructure, currentBatch, currentExport] = await Promise.all([
-          request<Envelope<Project>>(`/api/v1/projects/${currentEpisode.project_id}`),
-          request<Envelope<Episode[]>>(`/api/v1/projects/${currentEpisode.project_id}/episodes`),
-          optional(request<Envelope<Structure>>(`/api/v1/episodes/${episodeId}/structure`)),
-          optional(request<Envelope<DraftBatch>>(`/api/v1/episodes/${episodeId}/storyboard-draft`)),
-          optional(request<Envelope<StoryboardExport>>(`/api/v1/episodes/${episodeId}/storyboard-export`)),
+          request<Envelope<Project>>(`/api/projects/${currentEpisode.project_id}`),
+          request<Envelope<Episode[]>>(`/api/projects/${currentEpisode.project_id}/episodes`),
+          optional(request<Envelope<Structure>>(`/api/episodes/${episodeId}/structure`)),
+          optional(request<Envelope<DraftBatch>>(`/api/episodes/${episodeId}/storyboard-draft`)),
+          optional(request<Envelope<StoryboardExport>>(`/api/episodes/${episodeId}/storyboard-export`)),
         ]);
-        const shotResponse = await request<Envelope<Shot[]>>(`/api/v1/episodes/${episodeId}/shots`);
+        const shotResponse = await request<Envelope<Shot[]>>(`/api/episodes/${episodeId}/shots`);
         if (!active) return;
         setEpisode(currentEpisode);
         setProject(projectResponse.data);
@@ -199,7 +199,7 @@ export function EpisodeProductionStudio({
   async function acceptTask(task: Task) {
     if (!structure) return;
     await run(async () => {
-      const response = await request<Envelope<Structure>>(`/api/v1/episode-structures/${structure.id}/tasks/${task.id}/accept`, { method: "POST", data: { expected_revision: structure.revision, idempotency_key: key("accept-task") } });
+      const response = await request<Envelope<Structure>>(`/api/episode-structures/${structure.id}/tasks/${task.id}/accept`, { method: "POST", data: { expected_revision: structure.revision, idempotency_key: key("accept-task") } });
       setStructure(response.data);
       setNotice(`已接受制作任务：${task.label}`);
     });
@@ -208,7 +208,7 @@ export function EpisodeProductionStudio({
   async function confirmStructure() {
     if (!structure) return;
     await run(async () => {
-      const response = await request<Envelope<Structure>>(`/api/v1/episode-structures/${structure.id}/confirm`, { method: "POST", data: { expected_revision: structure.revision, idempotency_key: key("confirm-structure") } });
+      const response = await request<Envelope<Structure>>(`/api/episode-structures/${structure.id}/confirm`, { method: "POST", data: { expected_revision: structure.revision, idempotency_key: key("confirm-structure") } });
       setStructure(response.data);
       setNotice(`结构已确认，生成剧本 v${response.data.revision} 的稳定叙事单元`);
     });
@@ -216,7 +216,7 @@ export function EpisodeProductionStudio({
 
   async function createDraft() {
     await run(async () => {
-      const response = await request<Envelope<DraftBatch>>(`/api/v1/episodes/${episodeId}/storyboard-drafts`, { method: "POST", data: { idempotency_key: key("storyboard-draft") } });
+      const response = await request<Envelope<DraftBatch>>(`/api/episodes/${episodeId}/storyboard-drafts`, { method: "POST", data: { idempotency_key: key("storyboard-draft") } });
       setBatch(response.data);
       setApplyPreflight(undefined);
       setNotice("分镜候选任务已进入队列");
@@ -226,7 +226,7 @@ export function EpisodeProductionStudio({
   async function acceptDraft(shot: DraftShot) {
     if (!batch) return;
     await run(async () => {
-      const response = await request<Envelope<DraftBatch>>(`/api/v1/storyboard-draft-batches/${batch.id}/decisions`, { method: "POST", data: { proposal_key: shot.proposal_key, action: "accepted", expected_revision: batch.revision, idempotency_key: key("accept-shot") } });
+      const response = await request<Envelope<DraftBatch>>(`/api/storyboard-draft-batches/${batch.id}/decisions`, { method: "POST", data: { proposal_key: shot.proposal_key, action: "accepted", expected_revision: batch.revision, idempotency_key: key("accept-shot") } });
       setBatch(response.data);
       setNotice(`已接受此镜：${shot.title}`);
     });
@@ -235,7 +235,7 @@ export function EpisodeProductionStudio({
   async function approveBatch() {
     if (!batch) return;
     await run(async () => {
-      const response = await request<Envelope<DraftBatch>>(`/api/v1/storyboard-draft-batches/${batch.id}/approve`, { method: "POST", data: { expected_revision: batch.revision, idempotency_key: key("approve-storyboard") } });
+      const response = await request<Envelope<DraftBatch>>(`/api/storyboard-draft-batches/${batch.id}/approve`, { method: "POST", data: { expected_revision: batch.revision, idempotency_key: key("approve-storyboard") } });
       setBatch(response.data);
       setNotice("整批分镜草案已批准");
     });
@@ -244,7 +244,7 @@ export function EpisodeProductionStudio({
   async function preflightApply() {
     if (!batch) return;
     await run(async () => {
-      const response = await request<Envelope<ApplyPreflight>>(`/api/v1/storyboard-draft-batches/${batch.id}/apply-preflight`, { method: "POST", data: { expected_revision: batch.revision } });
+      const response = await request<Envelope<ApplyPreflight>>(`/api/storyboard-draft-batches/${batch.id}/apply-preflight`, { method: "POST", data: { expected_revision: batch.revision } });
       setApplyPreflight(response.data);
       setNotice(`预检完成：将创建 ${response.data.created} 个正式镜头`);
     });
@@ -253,7 +253,7 @@ export function EpisodeProductionStudio({
   async function applyDraft() {
     if (!batch || !applyPreflight) return;
     await run(async () => {
-      const response = await request<Envelope<{ batch: DraftBatch; shots: Shot[] }>>(`/api/v1/storyboard-draft-batches/${batch.id}/apply`, { method: "POST", data: { expected_revision: applyPreflight.batch_revision, expected_order_hash: applyPreflight.order_hash, impact_hash: applyPreflight.impact_hash, idempotency_key: key("apply-storyboard") } });
+      const response = await request<Envelope<{ batch: DraftBatch; shots: Shot[] }>>(`/api/storyboard-draft-batches/${batch.id}/apply`, { method: "POST", data: { expected_revision: applyPreflight.batch_revision, expected_order_hash: applyPreflight.order_hash, impact_hash: applyPreflight.impact_hash, idempotency_key: key("apply-storyboard") } });
       setBatch(response.data.batch);
       setShots(response.data.shots);
       setExportPreflight(undefined);
@@ -263,7 +263,7 @@ export function EpisodeProductionStudio({
 
   async function preflightExportPackage() {
     await run(async () => {
-      const response = await request<Envelope<ExportPreflight>>(`/api/v1/episodes/${episodeId}/storyboard-exports/preflight`, { method: "POST", data: {} });
+      const response = await request<Envelope<ExportPreflight>>(`/api/episodes/${episodeId}/storyboard-exports/preflight`, { method: "POST", data: {} });
       setExportPreflight(response.data);
       setNotice(response.data.allowed ? "分镜包导出条件已满足" : "分镜包仍有阻塞项");
     });
@@ -272,7 +272,7 @@ export function EpisodeProductionStudio({
   async function createExportPackage() {
     if (!exportPreflight?.allowed) return;
     await run(async () => {
-      const response = await request<Envelope<StoryboardExport>>(`/api/v1/episodes/${episodeId}/storyboard-exports`, { method: "POST", data: { expected_order_hash: exportPreflight.order_hash, idempotency_key: key("storyboard-export") } });
+      const response = await request<Envelope<StoryboardExport>>(`/api/episodes/${episodeId}/storyboard-exports`, { method: "POST", data: { expected_order_hash: exportPreflight.order_hash, idempotency_key: key("storyboard-export") } });
       setStoryboardExport(response.data);
       setNotice(`分镜包已生成，内容哈希 ${response.data.content_hash.slice(0, 12)}…`);
     });

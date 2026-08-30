@@ -19,7 +19,7 @@ func TestCreateProjectPreservesPublicContract(t *testing.T) {
 	handler := projecthttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects", strings.NewReader(`{"workspace_id":"workspace-1","name":"Harbor","idempotency_key":"create-project-1"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/projects", strings.NewReader(`{"workspace_id":"workspace-1","name":"Harbor","idempotency_key":"create-project-1"}`))
 	request.Header.Set("Authorization", "Bearer valid")
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
@@ -38,7 +38,7 @@ func TestCreateProjectRejectsUnknownFieldsBeforeApplication(t *testing.T) {
 	handler := projecthttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects", strings.NewReader(`{"workspace_id":"workspace-1","name":"Harbor","idempotency_key":"create-project-1","owner":"browser"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/projects", strings.NewReader(`{"workspace_id":"workspace-1","name":"Harbor","idempotency_key":"create-project-1","owner":"browser"}`))
 	request.Header.Set("Authorization", "Bearer valid")
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
@@ -54,7 +54,7 @@ func TestProjectRouteRejectsMissingBearerToken(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/projects?workspace_id=workspace-1", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/projects?workspace_id=workspace-1", nil))
 	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"unauthenticated"`) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
@@ -65,7 +65,7 @@ func TestProjectHandlerDoesNotExposeLegacyBudgetRoute(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/projects/project-1/budget-limit", strings.NewReader(`{}`)))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/projects/project-1/budget-limit", strings.NewReader(`{}`)))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("legacy budget route status = %d body=%s", response.Code, response.Body.String())
 	}

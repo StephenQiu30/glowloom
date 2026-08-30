@@ -53,22 +53,22 @@ func New(service Service, authenticator Authenticator, sessionTTL time.Duration,
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/auth/registration-verifications", handler.requestVerification)
-	mux.HandleFunc("POST /api/v1/auth/registration-verifications/confirm", handler.confirmVerification)
-	mux.HandleFunc("POST /api/v1/auth/register", handler.register)
-	mux.HandleFunc("POST /api/v1/auth/login", handler.login)
-	mux.HandleFunc("POST /api/v1/auth/refresh", handler.refresh)
-	mux.HandleFunc("POST /api/v1/auth/logout", handler.logout)
-	mux.HandleFunc("POST /api/v1/auth/change-password", handler.changePassword)
-	mux.HandleFunc("GET /api/v1/me", handler.me)
-	mux.HandleFunc("PATCH /api/v1/me", handler.updateMe)
-	mux.HandleFunc("POST /api/v1/me/deactivate", handler.deactivate)
-	mux.HandleFunc("GET /api/v1/workspaces", handler.listWorkspaces)
-	mux.HandleFunc("POST /api/v1/workspaces", handler.createWorkspace)
-	mux.HandleFunc("GET /api/v1/workspaces/{workspace_id}", handler.getWorkspace)
-	mux.HandleFunc("PATCH /api/v1/workspaces/{workspace_id}", handler.updateWorkspace)
-	mux.HandleFunc("POST /api/v1/workspaces/{workspace_id}/archive", handler.archiveWorkspace)
-	mux.HandleFunc("POST /api/v1/workspaces/{workspace_id}/restore", handler.restoreWorkspace)
+	mux.HandleFunc("POST /api/auth/registration-verifications", handler.requestVerification)
+	mux.HandleFunc("POST /api/auth/registration-verifications/confirm", handler.confirmVerification)
+	mux.HandleFunc("POST /api/auth/register", handler.register)
+	mux.HandleFunc("POST /api/auth/login", handler.login)
+	mux.HandleFunc("POST /api/auth/refresh", handler.refresh)
+	mux.HandleFunc("POST /api/auth/logout", handler.logout)
+	mux.HandleFunc("POST /api/auth/change-password", handler.changePassword)
+	mux.HandleFunc("GET /api/me", handler.me)
+	mux.HandleFunc("PATCH /api/me", handler.updateMe)
+	mux.HandleFunc("POST /api/me/deactivate", handler.deactivate)
+	mux.HandleFunc("GET /api/workspaces", handler.listWorkspaces)
+	mux.HandleFunc("POST /api/workspaces", handler.createWorkspace)
+	mux.HandleFunc("GET /api/workspaces/{workspace_id}", handler.getWorkspace)
+	mux.HandleFunc("PATCH /api/workspaces/{workspace_id}", handler.updateWorkspace)
+	mux.HandleFunc("POST /api/workspaces/{workspace_id}/archive", handler.archiveWorkspace)
+	mux.HandleFunc("POST /api/workspaces/{workspace_id}/restore", handler.restoreWorkspace)
 }
 
 type verificationRequest struct {
@@ -381,11 +381,11 @@ func (handler *Handler) writeError(writer http.ResponseWriter, request *http.Req
 }
 
 func (handler *Handler) setRefreshCookie(writer http.ResponseWriter, value string) {
-	http.SetCookie(writer, &http.Cookie{Name: refreshCookieName, Value: value, Path: "/api/v1/auth", MaxAge: int(handler.sessionTTL.Seconds()), HttpOnly: true, Secure: handler.secureCookies, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(writer, &http.Cookie{Name: refreshCookieName, Value: value, Path: "/api/auth", MaxAge: int(handler.sessionTTL.Seconds()), HttpOnly: true, Secure: handler.secureCookies, SameSite: http.SameSiteLaxMode})
 }
 
 func (handler *Handler) clearRefreshCookie(writer http.ResponseWriter) {
-	http.SetCookie(writer, &http.Cookie{Name: refreshCookieName, Value: "", Path: "/api/v1/auth", MaxAge: -1, HttpOnly: true, Secure: handler.secureCookies, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(writer, &http.Cookie{Name: refreshCookieName, Value: "", Path: "/api/auth", MaxAge: -1, HttpOnly: true, Secure: handler.secureCookies, SameSite: http.SameSiteLaxMode})
 }
 
 func (handler *Handler) traceID(request *http.Request) string {

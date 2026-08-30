@@ -53,10 +53,10 @@ func New(
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/workflow-runs", handler.start)
-	mux.HandleFunc("GET /api/v1/workflow-runs/{run_id}", handler.getRun)
-	mux.HandleFunc("POST /api/v1/workflow-runs/{run_id}/reruns", handler.rerun)
-	mux.HandleFunc("POST /api/v1/workflow-runs/{run_id}/controls", handler.control)
+	mux.HandleFunc("POST /api/workflow-runs", handler.start)
+	mux.HandleFunc("GET /api/workflow-runs/{run_id}", handler.getRun)
+	mux.HandleFunc("POST /api/workflow-runs/{run_id}/reruns", handler.rerun)
+	mux.HandleFunc("POST /api/workflow-runs/{run_id}/controls", handler.control)
 }
 
 type startRequest struct {

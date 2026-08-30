@@ -36,14 +36,14 @@ func New(service Service, authenticator Authenticator) *Handler {
 	return &Handler{service: service, authenticator: authenticator, validator: platformvalidation.New()}
 }
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/projects", handler.list)
-	mux.HandleFunc("POST /api/v1/projects", handler.create)
-	mux.HandleFunc("GET /api/v1/projects/{project_id}", handler.get)
-	mux.HandleFunc("PATCH /api/v1/projects/{project_id}", handler.update)
-	mux.HandleFunc("DELETE /api/v1/projects/{project_id}", handler.delete)
-	mux.HandleFunc("POST /api/v1/projects/{project_id}/archive", handler.archive)
-	mux.HandleFunc("POST /api/v1/projects/{project_id}/restore", handler.restore)
-	mux.HandleFunc("POST /api/v1/projects/{project_id}/delete-preflight", handler.preflight)
+	mux.HandleFunc("GET /api/projects", handler.list)
+	mux.HandleFunc("POST /api/projects", handler.create)
+	mux.HandleFunc("GET /api/projects/{project_id}", handler.get)
+	mux.HandleFunc("PATCH /api/projects/{project_id}", handler.update)
+	mux.HandleFunc("DELETE /api/projects/{project_id}", handler.delete)
+	mux.HandleFunc("POST /api/projects/{project_id}/archive", handler.archive)
+	mux.HandleFunc("POST /api/projects/{project_id}/restore", handler.restore)
+	mux.HandleFunc("POST /api/projects/{project_id}/delete-preflight", handler.preflight)
 }
 
 type createRequest struct {

@@ -22,42 +22,42 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 		t.Fatalf("openapi version = %q, want 3.1.0", document.OpenAPI)
 	}
 	for _, path := range []string{
-		"/api/v1/auth/register",
-		"/api/v1/projects",
-		"/api/v1/projects/{project_id}/cost-budget",
-		"/api/v1/projects/{project_id}/cost-prices/{metric}",
-		"/api/v1/projects/{project_id}/current-script-document",
-		"/api/v1/document-revisions/{revision_id}/production-bibles",
-		"/api/v1/episodes/{episode_id}/storyboard-drafts",
-		"/api/v1/storyboard-draft-batches/{batch_id}/apply",
-		"/api/v1/storyboard-exports/{export_id}/download",
-		"/api/v1/projects/{project_id}/storygraph/current",
-		"/api/v1/projects/{project_id}/storygraph/versions/{version_id}",
-		"/api/v1/projects/{project_id}/storygraph/versions/{version_ref}/lens",
-		"/api/v1/projects/{project_id}/storygraph/versions/{version_ref}/nodes/{story_node_key}/trace",
-		"/api/v1/projects/{project_id}/storygraph/diff",
-		"/api/v1/projects/{project_id}/human-tasks",
-		"/api/v1/human-tasks/{human_task_id}",
-		"/api/v1/human-tasks/{human_task_id}/claims",
-		"/api/v1/human-tasks/{human_task_id}/claim-renewals",
-		"/api/v1/human-tasks/{human_task_id}/claim-releases",
-		"/api/v1/human-tasks/{human_task_id}/decisions",
-		"/api/v1/review-decisions/{review_decision_id}/resume",
+		"/api/auth/register",
+		"/api/projects",
+		"/api/projects/{project_id}/cost-budget",
+		"/api/projects/{project_id}/cost-prices/{metric}",
+		"/api/projects/{project_id}/current-script-document",
+		"/api/document-revisions/{revision_id}/production-bibles",
+		"/api/episodes/{episode_id}/storyboard-drafts",
+		"/api/storyboard-draft-batches/{batch_id}/apply",
+		"/api/storyboard-exports/{export_id}/download",
+		"/api/projects/{project_id}/storygraph/current",
+		"/api/projects/{project_id}/storygraph/versions/{version_id}",
+		"/api/projects/{project_id}/storygraph/versions/{version_ref}/lens",
+		"/api/projects/{project_id}/storygraph/versions/{version_ref}/nodes/{story_node_key}/trace",
+		"/api/projects/{project_id}/storygraph/diff",
+		"/api/projects/{project_id}/human-tasks",
+		"/api/human-tasks/{human_task_id}",
+		"/api/human-tasks/{human_task_id}/claims",
+		"/api/human-tasks/{human_task_id}/claim-renewals",
+		"/api/human-tasks/{human_task_id}/claim-releases",
+		"/api/human-tasks/{human_task_id}/decisions",
+		"/api/review-decisions/{review_decision_id}/resume",
 	} {
 		if _, exists := document.Paths[path]; !exists {
 			t.Errorf("public contract is missing %s", path)
 		}
 	}
-	if _, exists := document.Paths["/api/v1/episodes/{episode_id}/storyboard-draft-batches"]; exists {
+	if _, exists := document.Paths["/api/episodes/{episode_id}/storyboard-draft-batches"]; exists {
 		t.Error("public contract still exposes the removed legacy storyboard route")
 	}
-	if _, exists := document.Paths["/api/v1/projects/{project_id}/budget-limit"]; exists {
+	if _, exists := document.Paths["/api/projects/{project_id}/budget-limit"]; exists {
 		t.Error("public contract still exposes the Production-owned legacy budget route")
 	}
-	if _, exists := document.Paths["/api/v1/projects/{project_id}/cost-estimates"]; exists {
+	if _, exists := document.Paths["/api/projects/{project_id}/cost-estimates"]; exists {
 		t.Error("public contract exposes internal estimates before GenerationIntent coordination")
 	}
-	if _, exists := document.Paths["/api/v1/projects/{project_id}/generation/image-provider-bindings"]; exists {
+	if _, exists := document.Paths["/api/projects/{project_id}/generation/image-provider-bindings"]; exists {
 		t.Error("public contract still exposes the removed fixed image Provider binding route")
 	}
 	var projectSchema struct {

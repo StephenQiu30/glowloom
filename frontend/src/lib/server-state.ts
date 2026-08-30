@@ -379,7 +379,7 @@ export const appApi = createApi({
       queryFn: ({ bibleId, body }) =>
         runRequest(() =>
           request<{ data: ProductionBibleWithDecisions }>(
-            `/api/v1/production-bibles/${bibleId}/review-decisions`,
+            `/api/production-bibles/${bibleId}/review-decisions`,
             { method: "POST", data: body },
           ),
         ),

@@ -22,7 +22,7 @@ func TestSetBudgetPreservesCostContract(t *testing.T) {
 	handler := costhttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", strings.NewReader(`{"limit_amount":"100.125","currency":"USD","expected_revision":0,"idempotency_key":"set-budget-1"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", strings.NewReader(`{"limit_amount":"100.125","currency":"USD","expected_revision":0,"idempotency_key":"set-budget-1"}`))
 	request.Header.Set("Authorization", "Bearer valid")
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
@@ -41,7 +41,7 @@ func TestSetBudgetRejectsUnknownFieldsBeforeApplication(t *testing.T) {
 	handler := costhttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", strings.NewReader(`{"limit_amount":"100","currency":"USD","expected_revision":0,"idempotency_key":"set-budget-1","budget_limit":"100"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", strings.NewReader(`{"limit_amount":"100","currency":"USD","expected_revision":0,"idempotency_key":"set-budget-1","budget_limit":"100"}`))
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
 	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), `"validation_failed"`) {
@@ -57,7 +57,7 @@ func TestSetBudgetRequiresDecimalString(t *testing.T) {
 	handler := costhttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", strings.NewReader(`{"limit_amount":100.125,"currency":"USD","expected_revision":0,"idempotency_key":"set-budget-1"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", strings.NewReader(`{"limit_amount":100.125,"currency":"USD","expected_revision":0,"idempotency_key":"set-budget-1"}`))
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
 	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), `"validation_failed"`) {
@@ -73,7 +73,7 @@ func TestBudgetRouteRejectsMissingBearerToken(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/projects/019fb2e0-a000-7000-8000-000000000001/cost-budget", nil))
 	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"unauthenticated"`) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
@@ -143,7 +143,7 @@ func TestSetPriceQuotePreservesDecimalStringContract(t *testing.T) {
 	handler.Register(mux)
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-prices/generation.image",
+		"/api/projects/019fb2e0-a000-7000-8000-000000000001/cost-prices/generation.image",
 		strings.NewReader(`{"unit_amount":"0.125","currency":"USD","expected_revision":0,"idempotency_key":"price-1"}`),
 	)
 	response := httptest.NewRecorder()
@@ -164,7 +164,7 @@ func TestSetPriceQuoteRejectsNumericAmount(t *testing.T) {
 	handler.Register(mux)
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/projects/019fb2e0-a000-7000-8000-000000000001/cost-prices/generation.image",
+		"/api/projects/019fb2e0-a000-7000-8000-000000000001/cost-prices/generation.image",
 		strings.NewReader(`{"unit_amount":0.125,"currency":"USD","expected_revision":0,"idempotency_key":"price-1"}`),
 	)
 	response := httptest.NewRecorder()

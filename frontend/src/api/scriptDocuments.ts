@@ -7,7 +7,7 @@ export function getCurrentDocumentApiV1ProjectsProjectIdCurrentScriptDocumentGet
   options?: RequestOptions,
 ) {
   return request<Envelope<API.ScriptDocumentAnalysisResponse>>(
-    `/api/v1/projects/${params.project_id}/current-script-document`,
+    `/api/projects/${params.project_id}/current-script-document`,
     { method: "GET", ...(options ?? {}) },
   );
 }
@@ -18,7 +18,7 @@ export function previewDocumentApiV1ProjectsProjectIdScriptImportPreviewsPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.ScriptDocumentPreviewResponse>>(
-    `/api/v1/projects/${params.project_id}/script-import-previews`,
+    `/api/projects/${params.project_id}/script-import-previews`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -29,7 +29,7 @@ export function importDocumentApiV1ProjectsProjectIdScriptImportsPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.ScriptDocumentAnalysisResponse>>(
-    `/api/v1/projects/${params.project_id}/script-imports`,
+    `/api/projects/${params.project_id}/script-imports`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }

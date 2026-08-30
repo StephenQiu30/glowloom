@@ -26,25 +26,25 @@ func TestStoryGraphHTTPExposesBoundedVersionLensTraceAndDiffQueries(t *testing.T
 	storygraphhttp.New(service, storyGraphHTTPAuthenticator{}).Register(mux)
 
 	versionResponse := httptest.NewRecorder()
-	mux.ServeHTTP(versionResponse, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+queryProjectID+"/storygraph/current", nil))
+	mux.ServeHTTP(versionResponse, httptest.NewRequest(http.MethodGet, "/api/projects/"+queryProjectID+"/storygraph/current", nil))
 	if versionResponse.Code != http.StatusOK || strings.Contains(versionResponse.Body.String(), `"nodes"`) || !strings.Contains(versionResponse.Body.String(), `"node_count":1`) || !strings.Contains(versionResponse.Body.String(), `"stale":true`) {
 		t.Fatalf("version response=%d %s", versionResponse.Code, versionResponse.Body.String())
 	}
 
 	lensResponse := httptest.NewRecorder()
-	mux.ServeHTTP(lensResponse, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+queryProjectID+"/storygraph/versions/current/lens?lens=outline&scope_kind=project&scope_id="+queryProjectID+"&depth=2&limit=20", nil))
+	mux.ServeHTTP(lensResponse, httptest.NewRequest(http.MethodGet, "/api/projects/"+queryProjectID+"/storygraph/versions/current/lens?lens=outline&scope_kind=project&scope_id="+queryProjectID+"&depth=2&limit=20", nil))
 	if lensResponse.Code != http.StatusOK || service.lens.VersionRef != "current" || service.lens.Depth != 2 || service.actor.TokenVersion != 4 || !strings.Contains(lensResponse.Body.String(), `"result_hash"`) {
 		t.Fatalf("lens response=%d %s query=%#v actor=%#v", lensResponse.Code, lensResponse.Body.String(), service.lens, service.actor)
 	}
 
 	traceResponse := httptest.NewRecorder()
-	mux.ServeHTTP(traceResponse, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+queryProjectID+"/storygraph/versions/current/nodes/sgn_node/trace?direction=downstream&depth=3&limit=20", nil))
+	mux.ServeHTTP(traceResponse, httptest.NewRequest(http.MethodGet, "/api/projects/"+queryProjectID+"/storygraph/versions/current/nodes/sgn_node/trace?direction=downstream&depth=3&limit=20", nil))
 	if traceResponse.Code != http.StatusOK || service.trace.StoryNodeKey != "sgn_node" || service.trace.Direction != "downstream" {
 		t.Fatalf("trace response=%d %s query=%#v", traceResponse.Code, traceResponse.Body.String(), service.trace)
 	}
 
 	diffResponse := httptest.NewRecorder()
-	mux.ServeHTTP(diffResponse, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+queryProjectID+"/storygraph/diff?base_version_id=50000000-0000-0000-0000-000000000003&target_version_id=50000000-0000-0000-0000-000000000002&limit=20", nil))
+	mux.ServeHTTP(diffResponse, httptest.NewRequest(http.MethodGet, "/api/projects/"+queryProjectID+"/storygraph/diff?base_version_id=50000000-0000-0000-0000-000000000003&target_version_id=50000000-0000-0000-0000-000000000002&limit=20", nil))
 	if diffResponse.Code != http.StatusOK || service.diffQuery.BaseVersionID == "" || !strings.Contains(diffResponse.Body.String(), `"node_changes":[]`) {
 		t.Fatalf("diff response=%d %s query=%#v", diffResponse.Code, diffResponse.Body.String(), service.diffQuery)
 	}
@@ -55,7 +55,7 @@ func TestStoryGraphHTTPRequiresExplicitBoundsAndAuthentication(t *testing.T) {
 	mux := http.NewServeMux()
 	storygraphhttp.New(service, storyGraphHTTPAuthenticator{}).Register(mux)
 	invalid := httptest.NewRecorder()
-	mux.ServeHTTP(invalid, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+queryProjectID+"/storygraph/versions/current/lens?lens=outline&scope_kind=project&scope_id="+queryProjectID, nil))
+	mux.ServeHTTP(invalid, httptest.NewRequest(http.MethodGet, "/api/projects/"+queryProjectID+"/storygraph/versions/current/lens?lens=outline&scope_kind=project&scope_id="+queryProjectID, nil))
 	if invalid.Code != http.StatusUnprocessableEntity || service.calls != 0 {
 		t.Fatalf("unbounded Lens response=%d %s calls=%d", invalid.Code, invalid.Body.String(), service.calls)
 	}
@@ -63,7 +63,7 @@ func TestStoryGraphHTTPRequiresExplicitBoundsAndAuthentication(t *testing.T) {
 	unauthorizedMux := http.NewServeMux()
 	storygraphhttp.New(service, storyGraphHTTPAuthenticator{err: errors.New("invalid token")}).Register(unauthorizedMux)
 	unauthorized := httptest.NewRecorder()
-	unauthorizedMux.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+queryProjectID+"/storygraph/current", nil))
+	unauthorizedMux.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/projects/"+queryProjectID+"/storygraph/current", nil))
 	if unauthorized.Code != http.StatusUnauthorized || !strings.Contains(unauthorized.Body.String(), `"code":"unauthenticated"`) {
 		t.Fatalf("unauthorized response=%d %s", unauthorized.Code, unauthorized.Body.String())
 	}

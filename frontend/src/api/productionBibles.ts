@@ -8,7 +8,7 @@ export function createBibleApiV1DocumentRevisionsRevisionIdProductionBiblesPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.ProductionBibleResponse>>(
-    `/api/v1/document-revisions/${params.revision_id}/production-bibles`,
+    `/api/document-revisions/${params.revision_id}/production-bibles`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -18,7 +18,7 @@ export function getBibleApiV1ProductionBiblesBibleIdGet(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.ProductionBibleResponse>>(
-    `/api/v1/production-bibles/${params.bible_id}`,
+    `/api/production-bibles/${params.bible_id}`,
     { method: "GET", ...(options ?? {}) },
   );
 }
@@ -29,7 +29,7 @@ export function resumeBibleApiV1ProductionBiblesBibleIdResumePost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.ProductionBibleResponse>>(
-    `/api/v1/production-bibles/${params.bible_id}/resume`,
+    `/api/production-bibles/${params.bible_id}/resume`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -39,7 +39,7 @@ export function getCurrentBibleApiV1ProjectsProjectIdProductionBibleGet(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.ProductionBibleResponse>>(
-    `/api/v1/projects/${params.project_id}/production-bible`,
+    `/api/projects/${params.project_id}/production-bible`,
     { method: "GET", ...(options ?? {}) },
   );
 }

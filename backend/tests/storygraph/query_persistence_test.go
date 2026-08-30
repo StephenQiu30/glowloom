@@ -114,7 +114,7 @@ func TestStoryGraphPostgreSQLQueriesReauthorizeAndNeverWrite(t *testing.T) {
 	}}).Register(mux)
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet,
-		"/api/v1/projects/"+fixture.projectID.String()+"/storygraph/versions/current/lens?lens=outline&scope_kind=project&scope_id="+fixture.projectID.String()+"&depth=2&limit=20", nil))
+		"/api/projects/"+fixture.projectID.String()+"/storygraph/versions/current/lens?lens=outline&scope_kind=project&scope_id="+fixture.projectID.String()+"&depth=2&limit=20", nil))
 	var envelope struct {
 		Data struct {
 			VersionID  string `json:"version_id"`

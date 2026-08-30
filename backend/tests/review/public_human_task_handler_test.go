@@ -43,14 +43,14 @@ func TestPublicHumanTaskHandlerListsWithoutClaimTokenAndReturnsOwnerTokenOnDetai
 
 	list := httptest.NewRecorder()
 	mux.ServeHTTP(list, httptest.NewRequest(http.MethodGet,
-		"/api/v1/projects/"+publicProjectID+"/human-tasks?status=active&limit=20", nil))
+		"/api/projects/"+publicProjectID+"/human-tasks?status=active&limit=20", nil))
 	if list.Code != http.StatusOK || strings.Contains(list.Body.String(), publicClaimToken) ||
 		!strings.Contains(list.Body.String(), `"subject_hash":"`+publicSubjectHash+`"`) {
 		t.Fatalf("list response=%d %s", list.Code, list.Body.String())
 	}
 
 	detail := httptest.NewRecorder()
-	mux.ServeHTTP(detail, httptest.NewRequest(http.MethodGet, "/api/v1/human-tasks/"+publicTaskID, nil))
+	mux.ServeHTTP(detail, httptest.NewRequest(http.MethodGet, "/api/human-tasks/"+publicTaskID, nil))
 	if detail.Code != http.StatusOK || !strings.Contains(detail.Body.String(), publicClaimToken) {
 		t.Fatalf("detail response=%d %s", detail.Code, detail.Body.String())
 	}
@@ -82,7 +82,7 @@ func TestPublicHumanTaskHandlerMapsLeaseDecisionAndResumeWithoutClientOwnedGateF
 	reviewhttp.New(reviews, coordinator, publicAuthenticator{userID: "00000000-0000-0000-0000-000000000105"}).Register(mux)
 
 	claim := httptest.NewRecorder()
-	mux.ServeHTTP(claim, httptest.NewRequest(http.MethodPost, "/api/v1/human-tasks/"+publicTaskID+"/claims",
+	mux.ServeHTTP(claim, httptest.NewRequest(http.MethodPost, "/api/human-tasks/"+publicTaskID+"/claims",
 		strings.NewReader(`{"expected_revision":1,"idempotency_key":"claim-1"}`)))
 	if claim.Code != http.StatusOK || reviews.claimCommand.TaskID != publicTaskID ||
 		!strings.Contains(claim.Body.String(), publicClaimToken) {
@@ -90,7 +90,7 @@ func TestPublicHumanTaskHandlerMapsLeaseDecisionAndResumeWithoutClientOwnedGateF
 	}
 
 	decide := httptest.NewRecorder()
-	mux.ServeHTTP(decide, httptest.NewRequest(http.MethodPost, "/api/v1/human-tasks/"+publicTaskID+"/decisions",
+	mux.ServeHTTP(decide, httptest.NewRequest(http.MethodPost, "/api/human-tasks/"+publicTaskID+"/decisions",
 		strings.NewReader(`{"claim_token":"`+publicClaimToken+`","expected_task_revision":2,`+
 			`"expected_subject_revision":1,"expected_subject_hash":"`+publicSubjectHash+`",`+
 			`"decision":"approved","selected_candidate_id":null,"idempotency_key":"decision-1"}`)))
@@ -102,7 +102,7 @@ func TestPublicHumanTaskHandlerMapsLeaseDecisionAndResumeWithoutClientOwnedGateF
 
 	resume := httptest.NewRecorder()
 	mux.ServeHTTP(resume, httptest.NewRequest(http.MethodPost,
-		"/api/v1/review-decisions/"+publicDecisionID+"/resume", nil))
+		"/api/review-decisions/"+publicDecisionID+"/resume", nil))
 	if resume.Code != http.StatusAccepted || coordinator.resumeCalls != 2 {
 		t.Fatalf("resume response=%d %s calls=%d", resume.Code, resume.Body.String(), coordinator.resumeCalls)
 	}
@@ -115,7 +115,7 @@ func TestPublicHumanTaskHandlerRejectsMalformedSelectedCandidateOnce(t *testing.
 		userID: "00000000-0000-0000-0000-000000000105",
 	}).Register(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/human-tasks/"+publicTaskID+"/decisions",
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/human-tasks/"+publicTaskID+"/decisions",
 		strings.NewReader(`{"claim_token":"`+publicClaimToken+`","expected_task_revision":2,`+
 			`"expected_subject_revision":1,"expected_subject_hash":"`+publicSubjectHash+`",`+
 			`"decision":"selected","selected_candidate_id":"not-a-uuid","idempotency_key":"invalid-selected"}`)))
@@ -140,7 +140,7 @@ func TestPublicHumanTaskHandlerCarriesCommittedDecisionWhenOwnerApplyConflicts(t
 	mux := http.NewServeMux()
 	reviewhttp.New(reviews, coordinator, publicAuthenticator{userID: "00000000-0000-0000-0000-000000000105"}).Register(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/human-tasks/"+publicTaskID+"/decisions",
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/human-tasks/"+publicTaskID+"/decisions",
 		strings.NewReader(`{"claim_token":"`+publicClaimToken+`","expected_task_revision":2,`+
 			`"expected_subject_revision":1,"expected_subject_hash":"`+publicSubjectHash+`",`+
 			`"decision":"approved","selected_candidate_id":null,"idempotency_key":"decision-conflict"}`)))

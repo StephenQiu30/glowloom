@@ -134,10 +134,10 @@ func deepLinks(kind search.Kind, projectID string, hit search.Hit) search.Hit {
 	hit.OwnerRevision, hit.OwnerContentHash = document.OwnerRevision, document.OwnerContentHash
 	hit.StoryNodeKey, hit.NodeType = document.StoryNodeKey, document.NodeType
 	if kind == search.KindScript {
-		hit.OwnerHref = "/api/v1/episodes/" + url.PathEscape(document.OwnerLogicalID)
+		hit.OwnerHref = "/api/episodes/" + url.PathEscape(document.OwnerLogicalID)
 		hit.VersionHref = hit.OwnerHref
 	} else {
-		hit.OwnerHref = "/api/v1/projects/" + url.PathEscape(projectID) + "/storygraph/versions/" + url.PathEscape(document.ProjectionVersionID)
+		hit.OwnerHref = "/api/projects/" + url.PathEscape(projectID) + "/storygraph/versions/" + url.PathEscape(document.ProjectionVersionID)
 		hit.VersionHref = hit.OwnerHref
 		if document.StoryNodeKey != "" {
 			hit.OwnerHref += "/nodes/" + url.PathEscape(document.StoryNodeKey) + "/trace?direction=upstream&depth=1&limit=20"
@@ -146,7 +146,7 @@ func deepLinks(kind search.Kind, projectID string, hit search.Hit) search.Hit {
 	hit.Evidence = make([]search.EvidenceHit, len(document.Evidence))
 	for index, evidence := range document.Evidence {
 		hit.Evidence[index] = search.EvidenceHit{Evidence: evidence,
-			Href: "/api/v1/document-revisions/" + url.PathEscape(evidence.DocumentRevisionID) + "#range=" + integer(evidence.Start) + ":" + integer(evidence.End),
+			Href: "/api/document-revisions/" + url.PathEscape(evidence.DocumentRevisionID) + "#range=" + integer(evidence.Start) + ":" + integer(evidence.End),
 		}
 	}
 	return hit

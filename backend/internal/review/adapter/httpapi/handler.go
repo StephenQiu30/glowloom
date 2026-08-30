@@ -52,13 +52,13 @@ func New(reviews ReviewService, coordinator HumanGateCoordinator, authenticator 
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/human-tasks", handler.list)
-	mux.HandleFunc("GET /api/v1/human-tasks/{human_task_id}", handler.get)
-	mux.HandleFunc("POST /api/v1/human-tasks/{human_task_id}/claims", handler.claim)
-	mux.HandleFunc("POST /api/v1/human-tasks/{human_task_id}/claim-renewals", handler.renew)
-	mux.HandleFunc("POST /api/v1/human-tasks/{human_task_id}/claim-releases", handler.release)
-	mux.HandleFunc("POST /api/v1/human-tasks/{human_task_id}/decisions", handler.decide)
-	mux.HandleFunc("POST /api/v1/review-decisions/{review_decision_id}/resume", handler.resume)
+	mux.HandleFunc("GET /api/projects/{project_id}/human-tasks", handler.list)
+	mux.HandleFunc("GET /api/human-tasks/{human_task_id}", handler.get)
+	mux.HandleFunc("POST /api/human-tasks/{human_task_id}/claims", handler.claim)
+	mux.HandleFunc("POST /api/human-tasks/{human_task_id}/claim-renewals", handler.renew)
+	mux.HandleFunc("POST /api/human-tasks/{human_task_id}/claim-releases", handler.release)
+	mux.HandleFunc("POST /api/human-tasks/{human_task_id}/decisions", handler.decide)
+	mux.HandleFunc("POST /api/review-decisions/{review_decision_id}/resume", handler.resume)
 }
 
 type claimRequest struct {

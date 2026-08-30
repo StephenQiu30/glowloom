@@ -8,7 +8,7 @@ export function createEpisodePlanApiV1DocumentRevisionsRevisionIdEpisodePlansPos
   options?: RequestOptions,
 ) {
   return request<Envelope<API.EpisodePlanDetailResponse>>(
-    `/api/v1/document-revisions/${params.revision_id}/episode-plans`,
+    `/api/document-revisions/${params.revision_id}/episode-plans`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -18,7 +18,7 @@ export function getEpisodePlanApiV1EpisodePlansPlanIdGet(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.EpisodePlanDetailResponse>>(
-    `/api/v1/episode-plans/${params.plan_id}`,
+    `/api/episode-plans/${params.plan_id}`,
     { method: "GET", ...(options ?? {}) },
   );
 }
@@ -29,7 +29,7 @@ export function confirmEpisodePlanApiV1EpisodePlansPlanIdConfirmPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.EpisodePlanDetailResponse>>(
-    `/api/v1/episode-plans/${params.plan_id}/confirm`,
+    `/api/episode-plans/${params.plan_id}/confirm`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -40,7 +40,7 @@ export function materializeEpisodePlanApiV1EpisodePlansPlanIdMaterializationsPos
   options?: RequestOptions,
 ) {
   return request<Envelope<API.ImportCommitDetailResponse>>(
-    `/api/v1/episode-plans/${params.plan_id}/materializations`,
+    `/api/episode-plans/${params.plan_id}/materializations`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -51,7 +51,7 @@ export function publishImportCommitApiV1ImportCommitsCommitIdPublishPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.ImportCommitDetailResponse>>(
-    `/api/v1/import-commits/${params.commit_id}/publish`,
+    `/api/import-commits/${params.commit_id}/publish`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }

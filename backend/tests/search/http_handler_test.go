@@ -19,14 +19,14 @@ func TestSearchHTTPExposesOnlyBoundedTextQueriesAndExplicitStatus(t *testing.T) 
 	mux := http.NewServeMux()
 	searchhttp.New(service, searchHTTPAuthenticator{}).Register(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+searchProjectID+"/search/storygraph?q=%E7%A0%81%E5%A4%B4&limit=20", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/projects/"+searchProjectID+"/search/storygraph?q=%E7%A0%81%E5%A4%B4&limit=20", nil))
 	if response.Code != http.StatusOK || service.storyGraphCalls != 1 || service.query.Text != "码头" || service.query.Limit != 20 ||
 		!strings.Contains(response.Body.String(), `"status":"degraded"`) || !strings.Contains(response.Body.String(), `"hits":[]`) {
 		t.Fatalf("unexpected Search HTTP response=%d %s query=%#v", response.Code, response.Body.String(), service.query)
 	}
 
 	invalid := httptest.NewRecorder()
-	mux.ServeHTTP(invalid, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+searchProjectID+"/search/scripts?q=rain", nil))
+	mux.ServeHTTP(invalid, httptest.NewRequest(http.MethodGet, "/api/projects/"+searchProjectID+"/search/scripts?q=rain", nil))
 	if invalid.Code != http.StatusUnprocessableEntity || service.scriptCalls != 0 {
 		t.Fatalf("unbounded Search request reached application: %d %s", invalid.Code, invalid.Body.String())
 	}
@@ -37,7 +37,7 @@ func TestSearchHTTPRejectsUnauthenticatedRequestsBeforeApplication(t *testing.T)
 	mux := http.NewServeMux()
 	searchhttp.New(service, searchHTTPAuthenticator{err: errors.New("bad token")}).Register(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+searchProjectID+"/search/scripts?q=rain&limit=10", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/projects/"+searchProjectID+"/search/scripts?q=rain&limit=10", nil))
 	if response.Code != http.StatusUnauthorized || service.scriptCalls != 0 || !strings.Contains(response.Body.String(), `"code":"unauthenticated"`) {
 		t.Fatalf("unauthenticated Search response=%d %s calls=%d", response.Code, response.Body.String(), service.scriptCalls)
 	}

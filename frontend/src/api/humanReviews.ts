@@ -22,7 +22,7 @@ export function listHumanTasksApiV1ProjectsProjectIdHumanTasksGet(
     after,
   } = params;
   return request<Envelope<API.HumanTaskListEnvelope["data"]>>(
-    `/api/v1/projects/${projectId}/human-tasks`,
+    `/api/projects/${projectId}/human-tasks`,
     {
       method: "GET",
       params: {
@@ -41,7 +41,7 @@ export function getHumanTaskApiV1HumanTasksHumanTaskIdGet(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.HumanTaskDetailEnvelope["data"]>>(
-    `/api/v1/human-tasks/${params.human_task_id}`,
+    `/api/human-tasks/${params.human_task_id}`,
     { method: "GET", ...(options ?? {}) },
   );
 }
@@ -52,7 +52,7 @@ export function claimHumanTaskApiV1HumanTasksHumanTaskIdClaimsPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.HumanTaskCommandEnvelope["data"]>>(
-    `/api/v1/human-tasks/${params.human_task_id}/claims`,
+    `/api/human-tasks/${params.human_task_id}/claims`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -63,7 +63,7 @@ export function renewHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimRenewalsPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.HumanTaskCommandEnvelope["data"]>>(
-    `/api/v1/human-tasks/${params.human_task_id}/claim-renewals`,
+    `/api/human-tasks/${params.human_task_id}/claim-renewals`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -74,7 +74,7 @@ export function releaseHumanTaskClaimApiV1HumanTasksHumanTaskIdClaimReleasesPost
   options?: RequestOptions,
 ) {
   return request<Envelope<API.HumanTaskCommandEnvelope["data"]>>(
-    `/api/v1/human-tasks/${params.human_task_id}/claim-releases`,
+    `/api/human-tasks/${params.human_task_id}/claim-releases`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -85,7 +85,7 @@ export function decideHumanTaskApiV1HumanTasksHumanTaskIdDecisionsPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.HumanGateDecisionEnvelope["data"]>>(
-    `/api/v1/human-tasks/${params.human_task_id}/decisions`,
+    `/api/human-tasks/${params.human_task_id}/decisions`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -95,7 +95,7 @@ export function resumeHumanGateApiV1ReviewDecisionsReviewDecisionIdResumePost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.HumanGateResumeEnvelope["data"]>>(
-    `/api/v1/review-decisions/${params.review_decision_id}/resume`,
+    `/api/review-decisions/${params.review_decision_id}/resume`,
     { method: "POST", ...(options ?? {}) },
   );
 }

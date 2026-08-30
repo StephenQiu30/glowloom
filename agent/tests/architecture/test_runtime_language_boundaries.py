@@ -55,5 +55,5 @@ def test_agent_runtime_has_no_business_storage_dependencies() -> None:
 
 
 def test_public_openapi_contract_is_owned_by_backend() -> None:
-    assert (BACKEND_ROOT / "api/openapi/lanverse-v1.json").is_file()
+    assert (BACKEND_ROOT / "api/openapi/lanverse-public-api.json").is_file()
     assert not (AGENT_ROOT / "openapi.json").exists()

@@ -37,16 +37,16 @@ func New(service Service, authenticator Authenticator) *Handler {
 	return &Handler{service: service, authenticator: authenticator, validator: platformvalidation.New()}
 }
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/document-revisions/{revision_id}/episode-plans", handler.createPlan)
-	mux.HandleFunc("GET /api/v1/episode-plans/{plan_id}", handler.getPlan)
-	mux.HandleFunc("POST /api/v1/episode-plans/{plan_id}/confirm", handler.confirmPlan)
-	mux.HandleFunc("POST /api/v1/episode-plans/{plan_id}/materializations", handler.materialize)
-	mux.HandleFunc("POST /api/v1/import-commits/{commit_id}/publish", handler.publish)
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/episodes", handler.listEpisodes)
-	mux.HandleFunc("GET /api/v1/episodes/{episode_id}", handler.getEpisode)
-	mux.HandleFunc("GET /api/v1/episodes/{episode_id}/structure", handler.getStructure)
-	mux.HandleFunc("POST /api/v1/episode-structures/{structure_id}/tasks/{task_id}/accept", handler.acceptTask)
-	mux.HandleFunc("POST /api/v1/episode-structures/{structure_id}/confirm", handler.confirmStructure)
+	mux.HandleFunc("POST /api/document-revisions/{revision_id}/episode-plans", handler.createPlan)
+	mux.HandleFunc("GET /api/episode-plans/{plan_id}", handler.getPlan)
+	mux.HandleFunc("POST /api/episode-plans/{plan_id}/confirm", handler.confirmPlan)
+	mux.HandleFunc("POST /api/episode-plans/{plan_id}/materializations", handler.materialize)
+	mux.HandleFunc("POST /api/import-commits/{commit_id}/publish", handler.publish)
+	mux.HandleFunc("GET /api/projects/{project_id}/episodes", handler.listEpisodes)
+	mux.HandleFunc("GET /api/episodes/{episode_id}", handler.getEpisode)
+	mux.HandleFunc("GET /api/episodes/{episode_id}/structure", handler.getStructure)
+	mux.HandleFunc("POST /api/episode-structures/{structure_id}/tasks/{task_id}/accept", handler.acceptTask)
+	mux.HandleFunc("POST /api/episode-structures/{structure_id}/confirm", handler.confirmStructure)
 }
 
 type createPlanRequest struct {

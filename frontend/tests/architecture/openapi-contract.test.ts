@@ -10,7 +10,7 @@ describe("Go Backend OpenAPI type ownership", () => {
   it("keeps generated frontend types scoped to the current MVP contract", () => {
     const openapi = JSON.parse(
       readFileSync(
-        resolve(repositoryRoot, "backend/api/openapi/lanverse-v1.json"),
+        resolve(repositoryRoot, "backend/api/openapi/lanverse-public-api.json"),
         "utf8",
       ),
     ) as { paths: Record<string, unknown>; components: { schemas: Record<string, unknown> } };
@@ -20,20 +20,20 @@ describe("Go Backend OpenAPI type ownership", () => {
     );
 
     expect(openapi.paths).toHaveProperty(
-      "/api/v1/production-bibles/{bible_id}/review-decisions",
+      "/api/production-bibles/{bible_id}/review-decisions",
     );
     expect(openapi.components.schemas).toHaveProperty("ProductionBibleResponse");
     expect(openapi.paths).toHaveProperty(
-      "/api/v1/projects/{project_id}/human-tasks",
+      "/api/projects/{project_id}/human-tasks",
     );
     expect(openapi.paths).toHaveProperty(
-      "/api/v1/review-decisions/{review_decision_id}/resume",
+      "/api/review-decisions/{review_decision_id}/resume",
     );
     expect(openapi.components.schemas).toHaveProperty(
       "HumanGateCoordinationResponse",
     );
     expect(openapi.paths).toHaveProperty(
-      "/api/v1/workflow-runs/{workflow_run_id}/story-analysis-recoveries",
+      "/api/workflow-runs/{workflow_run_id}/story-analysis-recoveries",
     );
     expect(openapi.components.schemas).toHaveProperty(
       "StoryAnalysisRecoveryResponse",

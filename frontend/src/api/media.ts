@@ -7,7 +7,7 @@ export function initializeUploadApiV1MediaUploadsPost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.UploadInitializationResponse>>(
-    "/api/v1/media/uploads",
+    "/api/media/uploads",
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }
@@ -17,7 +17,7 @@ export function completeUploadApiV1MediaUploadsUploadSessionIdCompletePost(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.UploadCompletionResponse>>(
-    `/api/v1/media/uploads/${params.upload_session_id}/complete`,
+    `/api/media/uploads/${params.upload_session_id}/complete`,
     { method: "POST", ...(options ?? {}) },
   );
 }
@@ -27,7 +27,7 @@ export function getMediaApiV1MediaVersionIdGet(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.MediaVersionResponse>>(
-    `/api/v1/media/${params.version_id}`,
+    `/api/media/${params.version_id}`,
     { method: "GET", ...(options ?? {}) },
   );
 }

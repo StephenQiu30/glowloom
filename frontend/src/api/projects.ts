@@ -14,7 +14,7 @@ export function listProjectsApiV1ProjectsGet(
   },
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.PaginatedProjects>>("/api/v1/projects", {
+  return request<Envelope<API.PaginatedProjects>>("/api/projects", {
     method: "GET",
     params,
     ...(options ?? {}),
@@ -25,7 +25,7 @@ export function createProjectApiV1ProjectsPost(
   body: API.ProjectCreateRequest,
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.ProjectResponse>>("/api/v1/projects", {
+  return request<Envelope<API.ProjectResponse>>("/api/projects", {
     method: "POST",
     data: body,
     ...(options ?? {}),
@@ -37,7 +37,7 @@ export function getProjectApiV1ProjectsProjectIdGet(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.ProjectResponse>>(
-    `/api/v1/projects/${params.project_id}`,
+    `/api/projects/${params.project_id}`,
     { method: "GET", ...(options ?? {}) },
   );
 }
@@ -48,7 +48,7 @@ export function listEpisodesApiV1ProjectsProjectIdEpisodesGet(
 ) {
   const { project_id: projectId, ...query } = params;
   return request<Envelope<API.EpisodeResponse[]>>(
-    `/api/v1/projects/${projectId}/episodes`,
+    `/api/projects/${projectId}/episodes`,
     { method: "GET", params: query, ...(options ?? {}) },
   );
 }

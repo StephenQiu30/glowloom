@@ -30,8 +30,8 @@ type Handler struct {
 func New(service Service, auth Authenticator) *Handler { return &Handler{service: service, auth: auth} }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/search/scripts", handler.scripts)
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/search/storygraph", handler.storyGraph)
+	mux.HandleFunc("GET /api/projects/{project_id}/search/scripts", handler.scripts)
+	mux.HandleFunc("GET /api/projects/{project_id}/search/storygraph", handler.storyGraph)
 }
 
 func (handler *Handler) scripts(writer http.ResponseWriter, request *http.Request) {

@@ -38,11 +38,11 @@ func New(service Service, authenticator Authenticator) *Handler {
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/document-revisions/{revision_id}/production-bibles", handler.create)
-	mux.HandleFunc("GET /api/v1/production-bibles/{bible_id}", handler.get)
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/production-bible", handler.getCurrent)
-	mux.HandleFunc("POST /api/v1/production-bibles/{bible_id}/review-decisions", handler.decideReviewIssue)
-	mux.HandleFunc("POST /api/v1/production-bibles/{bible_id}/resume", handler.resume)
+	mux.HandleFunc("POST /api/document-revisions/{revision_id}/production-bibles", handler.create)
+	mux.HandleFunc("GET /api/production-bibles/{bible_id}", handler.get)
+	mux.HandleFunc("GET /api/projects/{project_id}/production-bible", handler.getCurrent)
+	mux.HandleFunc("POST /api/production-bibles/{bible_id}/review-decisions", handler.decideReviewIssue)
+	mux.HandleFunc("POST /api/production-bibles/{bible_id}/resume", handler.resume)
 }
 
 type createRequest struct {

@@ -35,7 +35,7 @@ func NewStoryAnalysisRecovery(
 
 func (handler *StoryAnalysisRecoveryHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc(
-		"POST /api/v1/workflow-runs/{run_id}/story-analysis-recoveries",
+		"POST /api/workflow-runs/{run_id}/story-analysis-recoveries",
 		handler.recover,
 	)
 }

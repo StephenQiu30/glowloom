@@ -16,13 +16,13 @@ func TestHTTPLoggingProducesBoundedTraceableRecordWithoutRequestContent(t *testi
 	var output bytes.Buffer
 	logger := telemetry.NewLogger(&output, "lanverse-api", "test")
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/v1/projects/{project_id}/commands", func(writer http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("POST /api/projects/{project_id}/commands", func(writer http.ResponseWriter, _ *http.Request) {
 		writer.WriteHeader(http.StatusServiceUnavailable)
 	})
 	handler := telemetry.HTTPLoggingMiddleware(logger)(mux)
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/projects/private-project-id/commands?token=secret-query-value",
+		"/api/projects/private-project-id/commands?token=secret-query-value",
 		strings.NewReader(`{"prompt":"secret-body-value"}`),
 	)
 	request.Header.Set("X-Request-ID", "5cffb37f-79b1-42f9-9e34-c55b1d8e9702")
@@ -42,7 +42,7 @@ func TestHTTPLoggingProducesBoundedTraceableRecordWithoutRequestContent(t *testi
 		"request_id":  "5cffb37f-79b1-42f9-9e34-c55b1d8e9702",
 		"trace_id":    "4bf92f3577b34da6a3ce929d0e0e4736",
 		"method":      http.MethodPost,
-		"route":       "/api/v1/projects/{project_id}/commands",
+		"route":       "/api/projects/{project_id}/commands",
 		"error_code":  "http_status_503",
 		"status_code": float64(http.StatusServiceUnavailable),
 	} {

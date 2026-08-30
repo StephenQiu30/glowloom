@@ -42,19 +42,19 @@ func New(service Service, authenticator Authenticator) *Handler {
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/episodes/{episode_id}/storyboard-drafts", handler.createBatch)
-	mux.HandleFunc("GET /api/v1/episodes/{episode_id}/storyboard-draft", handler.getLatestBatch)
-	mux.HandleFunc("GET /api/v1/storyboard-draft-batches/{batch_id}", handler.getBatch)
-	mux.HandleFunc("POST /api/v1/storyboard-draft-batches/{batch_id}/decisions", handler.decide)
-	mux.HandleFunc("POST /api/v1/storyboard-draft-batches/{batch_id}/approve", handler.approve)
-	mux.HandleFunc("POST /api/v1/storyboard-draft-batches/{batch_id}/apply-preflight", handler.preflightApply)
-	mux.HandleFunc("POST /api/v1/storyboard-draft-batches/{batch_id}/apply", handler.apply)
-	mux.HandleFunc("GET /api/v1/episodes/{episode_id}/shots", handler.listShots)
-	mux.HandleFunc("POST /api/v1/episodes/{episode_id}/storyboard-exports/preflight", handler.preflightExport)
-	mux.HandleFunc("POST /api/v1/episodes/{episode_id}/storyboard-exports", handler.createExport)
-	mux.HandleFunc("GET /api/v1/episodes/{episode_id}/storyboard-export", handler.getLatestExport)
-	mux.HandleFunc("GET /api/v1/storyboard-exports/{export_id}", handler.getExport)
-	mux.HandleFunc("GET /api/v1/storyboard-exports/{export_id}/download", handler.downloadExport)
+	mux.HandleFunc("POST /api/episodes/{episode_id}/storyboard-drafts", handler.createBatch)
+	mux.HandleFunc("GET /api/episodes/{episode_id}/storyboard-draft", handler.getLatestBatch)
+	mux.HandleFunc("GET /api/storyboard-draft-batches/{batch_id}", handler.getBatch)
+	mux.HandleFunc("POST /api/storyboard-draft-batches/{batch_id}/decisions", handler.decide)
+	mux.HandleFunc("POST /api/storyboard-draft-batches/{batch_id}/approve", handler.approve)
+	mux.HandleFunc("POST /api/storyboard-draft-batches/{batch_id}/apply-preflight", handler.preflightApply)
+	mux.HandleFunc("POST /api/storyboard-draft-batches/{batch_id}/apply", handler.apply)
+	mux.HandleFunc("GET /api/episodes/{episode_id}/shots", handler.listShots)
+	mux.HandleFunc("POST /api/episodes/{episode_id}/storyboard-exports/preflight", handler.preflightExport)
+	mux.HandleFunc("POST /api/episodes/{episode_id}/storyboard-exports", handler.createExport)
+	mux.HandleFunc("GET /api/episodes/{episode_id}/storyboard-export", handler.getLatestExport)
+	mux.HandleFunc("GET /api/storyboard-exports/{export_id}", handler.getExport)
+	mux.HandleFunc("GET /api/storyboard-exports/{export_id}/download", handler.downloadExport)
 }
 
 type createRequest struct {
@@ -278,5 +278,5 @@ func presentShots(values []domain.Shot) []map[string]any {
 	return items
 }
 func presentExport(value domain.Export) map[string]any {
-	return map[string]any{"id": value.ID, "workspace_id": value.WorkspaceID, "project_id": value.ProjectID, "episode_id": value.EpisodeID, "status": value.Status, "input_hash": value.InputHash, "content_hash": value.ContentHash, "manifest": value.Manifest, "files": value.Files, "revision": value.Revision, "download_url": "/api/v1/storyboard-exports/" + value.ID + "/download", "created_at": value.CreatedAt, "updated_at": value.UpdatedAt}
+	return map[string]any{"id": value.ID, "workspace_id": value.WorkspaceID, "project_id": value.ProjectID, "episode_id": value.EpisodeID, "status": value.Status, "input_hash": value.InputHash, "content_hash": value.ContentHash, "manifest": value.Manifest, "files": value.Files, "revision": value.Revision, "download_url": "/api/storyboard-exports/" + value.ID + "/download", "created_at": value.CreatedAt, "updated_at": value.UpdatedAt}
 }

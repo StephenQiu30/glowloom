@@ -39,7 +39,7 @@ describe("公共人工审核 API Client", () => {
 
     expect(requestMock).toHaveBeenNthCalledWith(
       1,
-      `/api/v1/projects/${projectId}/human-tasks`,
+      `/api/projects/${projectId}/human-tasks`,
       {
         method: "GET",
         params: { status: "active", limit: 50 },
@@ -47,7 +47,7 @@ describe("公共人工审核 API Client", () => {
     );
     expect(requestMock).toHaveBeenNthCalledWith(
       2,
-      `/api/v1/human-tasks/${taskId}`,
+      `/api/human-tasks/${taskId}`,
       { method: "GET" },
     );
     expect(JSON.stringify(requestMock.mock.calls)).not.toContain(claimToken);
@@ -95,12 +95,12 @@ describe("公共人工审核 API Client", () => {
     await getWorkflowRunApiV1WorkflowRunsWorkflowRunIdGet({ workflow_run_id: runId });
 
     expect(requestMock.mock.calls.map(([url]) => url)).toEqual([
-      `/api/v1/human-tasks/${taskId}/claims`,
-      `/api/v1/human-tasks/${taskId}/claim-renewals`,
-      `/api/v1/human-tasks/${taskId}/claim-releases`,
-      `/api/v1/human-tasks/${taskId}/decisions`,
-      `/api/v1/review-decisions/${decisionId}/resume`,
-      `/api/v1/workflow-runs/${runId}`,
+      `/api/human-tasks/${taskId}/claims`,
+      `/api/human-tasks/${taskId}/claim-renewals`,
+      `/api/human-tasks/${taskId}/claim-releases`,
+      `/api/human-tasks/${taskId}/decisions`,
+      `/api/review-decisions/${decisionId}/resume`,
+      `/api/workflow-runs/${runId}`,
     ]);
     expect(requestMock).toHaveBeenNthCalledWith(5, expect.any(String), {
       method: "POST",

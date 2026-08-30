@@ -68,7 +68,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/registration-verifications": {
+    "/api/auth/registration-verifications": {
         parameters: {
             query?: never;
             header?: never;
@@ -84,7 +84,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/registration-verifications/confirm": {
+    "/api/auth/registration-verifications/confirm": {
         parameters: {
             query?: never;
             header?: never;
@@ -100,7 +100,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/register": {
+    "/api/auth/register": {
         parameters: {
             query?: never;
             header?: never;
@@ -116,7 +116,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/login": {
+    "/api/auth/login": {
         parameters: {
             query?: never;
             header?: never;
@@ -132,7 +132,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/refresh": {
+    "/api/auth/refresh": {
         parameters: {
             query?: never;
             header?: never;
@@ -148,7 +148,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/logout": {
+    "/api/auth/logout": {
         parameters: {
             query?: never;
             header?: never;
@@ -164,7 +164,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/change-password": {
+    "/api/auth/change-password": {
         parameters: {
             query?: never;
             header?: never;
@@ -180,7 +180,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me": {
+    "/api/me": {
         parameters: {
             query?: never;
             header?: never;
@@ -196,7 +196,7 @@ export interface paths {
         patch: operations["updateMe"];
         trace?: never;
     };
-    "/api/v1/me/deactivate": {
+    "/api/me/deactivate": {
         parameters: {
             query?: never;
             header?: never;
@@ -212,7 +212,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces": {
+    "/api/workspaces": {
         parameters: {
             query?: never;
             header?: never;
@@ -228,7 +228,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}": {
+    "/api/workspaces/{workspace_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -246,7 +246,7 @@ export interface paths {
         patch: operations["updateWorkspace"];
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/archive": {
+    "/api/workspaces/{workspace_id}/archive": {
         parameters: {
             query?: never;
             header?: never;
@@ -262,7 +262,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/restore": {
+    "/api/workspaces/{workspace_id}/restore": {
         parameters: {
             query?: never;
             header?: never;
@@ -278,7 +278,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects": {
+    "/api/projects": {
         parameters: {
             query?: never;
             header?: never;
@@ -294,7 +294,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}": {
+    "/api/projects/{project_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -312,7 +312,7 @@ export interface paths {
         patch: operations["updateProject"];
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/archive": {
+    "/api/projects/{project_id}/archive": {
         parameters: {
             query?: never;
             header?: never;
@@ -328,7 +328,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/restore": {
+    "/api/projects/{project_id}/restore": {
         parameters: {
             query?: never;
             header?: never;
@@ -344,7 +344,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/cost-budget": {
+    "/api/projects/{project_id}/cost-budget": {
         parameters: {
             query?: never;
             header?: never;
@@ -360,7 +360,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/cost-prices/{metric}": {
+    "/api/projects/{project_id}/cost-prices/{metric}": {
         parameters: {
             query?: never;
             header?: never;
@@ -376,7 +376,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/delete-preflight": {
+    "/api/projects/{project_id}/delete-preflight": {
         parameters: {
             query?: never;
             header?: never;
@@ -392,7 +392,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/media/uploads": {
+    "/api/media/uploads": {
         parameters: {
             query?: never;
             header?: never;
@@ -408,7 +408,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/media/uploads/{upload_session_id}/complete": {
+    "/api/media/uploads/{upload_session_id}/complete": {
         parameters: {
             query?: never;
             header?: never;
@@ -424,7 +424,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/media/{version_id}": {
+    "/api/media/{version_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -440,7 +440,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/script-import-previews": {
+    "/api/projects/{project_id}/script-import-previews": {
         parameters: {
             query?: never;
             header?: never;
@@ -456,7 +456,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/script-imports": {
+    "/api/projects/{project_id}/script-imports": {
         parameters: {
             query?: never;
             header?: never;
@@ -472,7 +472,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/current-script-document": {
+    "/api/projects/{project_id}/current-script-document": {
         parameters: {
             query?: never;
             header?: never;
@@ -488,7 +488,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/script-documents": {
+    "/api/projects/{project_id}/script-documents": {
         parameters: {
             query?: never;
             header?: never;
@@ -504,7 +504,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/document-revisions/{revision_id}": {
+    "/api/document-revisions/{revision_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -520,7 +520,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/document-revisions/{revision_id}/production-bibles": {
+    "/api/document-revisions/{revision_id}/production-bibles": {
         parameters: {
             query?: never;
             header?: never;
@@ -536,7 +536,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production-bibles/{bible_id}": {
+    "/api/production-bibles/{bible_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -552,7 +552,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/production-bible": {
+    "/api/projects/{project_id}/production-bible": {
         parameters: {
             query?: never;
             header?: never;
@@ -568,7 +568,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production-bibles/{bible_id}/review-decisions": {
+    "/api/production-bibles/{bible_id}/review-decisions": {
         parameters: {
             query?: never;
             header?: never;
@@ -584,7 +584,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production-bibles/{bible_id}/resume": {
+    "/api/production-bibles/{bible_id}/resume": {
         parameters: {
             query?: never;
             header?: never;
@@ -600,7 +600,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/document-revisions/{revision_id}/episode-plans": {
+    "/api/document-revisions/{revision_id}/episode-plans": {
         parameters: {
             query?: never;
             header?: never;
@@ -616,7 +616,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episode-plans/{plan_id}": {
+    "/api/episode-plans/{plan_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -632,7 +632,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episode-plans/{plan_id}/confirm": {
+    "/api/episode-plans/{plan_id}/confirm": {
         parameters: {
             query?: never;
             header?: never;
@@ -648,7 +648,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episode-plans/{plan_id}/materializations": {
+    "/api/episode-plans/{plan_id}/materializations": {
         parameters: {
             query?: never;
             header?: never;
@@ -664,7 +664,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/import-commits/{commit_id}/publish": {
+    "/api/import-commits/{commit_id}/publish": {
         parameters: {
             query?: never;
             header?: never;
@@ -680,7 +680,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/episodes": {
+    "/api/projects/{project_id}/episodes": {
         parameters: {
             query?: never;
             header?: never;
@@ -696,7 +696,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episodes/{episode_id}": {
+    "/api/episodes/{episode_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -712,7 +712,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episodes/{episode_id}/structure": {
+    "/api/episodes/{episode_id}/structure": {
         parameters: {
             query?: never;
             header?: never;
@@ -728,7 +728,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episode-structures/{structure_id}/tasks/{task_id}/accept": {
+    "/api/episode-structures/{structure_id}/tasks/{task_id}/accept": {
         parameters: {
             query?: never;
             header?: never;
@@ -744,7 +744,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episode-structures/{structure_id}/confirm": {
+    "/api/episode-structures/{structure_id}/confirm": {
         parameters: {
             query?: never;
             header?: never;
@@ -760,7 +760,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episodes/{episode_id}/storyboard-drafts": {
+    "/api/episodes/{episode_id}/storyboard-drafts": {
         parameters: {
             query?: never;
             header?: never;
@@ -776,7 +776,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episodes/{episode_id}/storyboard-draft": {
+    "/api/episodes/{episode_id}/storyboard-draft": {
         parameters: {
             query?: never;
             header?: never;
@@ -792,7 +792,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/storyboard-draft-batches/{batch_id}": {
+    "/api/storyboard-draft-batches/{batch_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -808,7 +808,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/storyboard-draft-batches/{batch_id}/decisions": {
+    "/api/storyboard-draft-batches/{batch_id}/decisions": {
         parameters: {
             query?: never;
             header?: never;
@@ -824,7 +824,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/storyboard-draft-batches/{batch_id}/approve": {
+    "/api/storyboard-draft-batches/{batch_id}/approve": {
         parameters: {
             query?: never;
             header?: never;
@@ -840,7 +840,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/storyboard-draft-batches/{batch_id}/apply-preflight": {
+    "/api/storyboard-draft-batches/{batch_id}/apply-preflight": {
         parameters: {
             query?: never;
             header?: never;
@@ -856,7 +856,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/storyboard-draft-batches/{batch_id}/apply": {
+    "/api/storyboard-draft-batches/{batch_id}/apply": {
         parameters: {
             query?: never;
             header?: never;
@@ -872,7 +872,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episodes/{episode_id}/shots": {
+    "/api/episodes/{episode_id}/shots": {
         parameters: {
             query?: never;
             header?: never;
@@ -888,7 +888,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episodes/{episode_id}/storyboard-exports/preflight": {
+    "/api/episodes/{episode_id}/storyboard-exports/preflight": {
         parameters: {
             query?: never;
             header?: never;
@@ -904,7 +904,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episodes/{episode_id}/storyboard-exports": {
+    "/api/episodes/{episode_id}/storyboard-exports": {
         parameters: {
             query?: never;
             header?: never;
@@ -920,7 +920,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/episodes/{episode_id}/storyboard-export": {
+    "/api/episodes/{episode_id}/storyboard-export": {
         parameters: {
             query?: never;
             header?: never;
@@ -936,7 +936,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/storyboard-exports/{export_id}": {
+    "/api/storyboard-exports/{export_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -952,7 +952,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/storyboard-exports/{export_id}/download": {
+    "/api/storyboard-exports/{export_id}/download": {
         parameters: {
             query?: never;
             header?: never;
@@ -968,7 +968,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/human-tasks": {
+    "/api/projects/{project_id}/human-tasks": {
         parameters: {
             query?: never;
             header?: never;
@@ -984,7 +984,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/human-tasks/{human_task_id}": {
+    "/api/human-tasks/{human_task_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1000,7 +1000,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/human-tasks/{human_task_id}/claims": {
+    "/api/human-tasks/{human_task_id}/claims": {
         parameters: {
             query?: never;
             header?: never;
@@ -1016,7 +1016,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/human-tasks/{human_task_id}/claim-renewals": {
+    "/api/human-tasks/{human_task_id}/claim-renewals": {
         parameters: {
             query?: never;
             header?: never;
@@ -1032,7 +1032,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/human-tasks/{human_task_id}/claim-releases": {
+    "/api/human-tasks/{human_task_id}/claim-releases": {
         parameters: {
             query?: never;
             header?: never;
@@ -1048,7 +1048,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/human-tasks/{human_task_id}/decisions": {
+    "/api/human-tasks/{human_task_id}/decisions": {
         parameters: {
             query?: never;
             header?: never;
@@ -1064,7 +1064,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/review-decisions/{review_decision_id}/resume": {
+    "/api/review-decisions/{review_decision_id}/resume": {
         parameters: {
             query?: never;
             header?: never;
@@ -1080,7 +1080,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workflow-runs": {
+    "/api/workflow-runs": {
         parameters: {
             query?: never;
             header?: never;
@@ -1096,7 +1096,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workflow-runs/{workflow_run_id}": {
+    "/api/workflow-runs/{workflow_run_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1112,7 +1112,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workflow-runs/{workflow_run_id}/reruns": {
+    "/api/workflow-runs/{workflow_run_id}/reruns": {
         parameters: {
             query?: never;
             header?: never;
@@ -1128,7 +1128,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workflow-runs/{workflow_run_id}/controls": {
+    "/api/workflow-runs/{workflow_run_id}/controls": {
         parameters: {
             query?: never;
             header?: never;
@@ -1144,7 +1144,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workflow-runs/{workflow_run_id}/story-analysis-recoveries": {
+    "/api/workflow-runs/{workflow_run_id}/story-analysis-recoveries": {
         parameters: {
             query?: never;
             header?: never;
@@ -1160,7 +1160,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/storygraph/current": {
+    "/api/projects/{project_id}/storygraph/current": {
         parameters: {
             query?: never;
             header?: never;
@@ -1176,7 +1176,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/storygraph/versions/{version_id}": {
+    "/api/projects/{project_id}/storygraph/versions/{version_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1192,7 +1192,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/storygraph/versions/{version_ref}/lens": {
+    "/api/projects/{project_id}/storygraph/versions/{version_ref}/lens": {
         parameters: {
             query?: never;
             header?: never;
@@ -1208,7 +1208,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/storygraph/versions/{version_ref}/nodes/{story_node_key}/trace": {
+    "/api/projects/{project_id}/storygraph/versions/{version_ref}/nodes/{story_node_key}/trace": {
         parameters: {
             query?: never;
             header?: never;
@@ -1224,7 +1224,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/storygraph/diff": {
+    "/api/projects/{project_id}/storygraph/diff": {
         parameters: {
             query?: never;
             header?: never;
@@ -1240,7 +1240,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/search/scripts": {
+    "/api/projects/{project_id}/search/scripts": {
         parameters: {
             query?: never;
             header?: never;
@@ -1256,7 +1256,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/search/storygraph": {
+    "/api/projects/{project_id}/search/storygraph": {
         parameters: {
             query?: never;
             header?: never;

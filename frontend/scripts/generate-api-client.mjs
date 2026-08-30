@@ -7,7 +7,7 @@ const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputRoot = resolve(frontendRoot, "src/api");
 const schemaOutput = resolve(outputRoot, "schema.d.ts");
 const schemaInput =
-  process.env.OPENAPI_SCHEMA_URL ?? "../backend/api/openapi/lanverse-v1.json";
+  process.env.OPENAPI_SCHEMA_URL ?? "../backend/api/openapi/lanverse-public-api.json";
 const remote = /^https?:\/\//u.test(schemaInput);
 const resolvedInput = remote ? schemaInput : resolve(frontendRoot, schemaInput);
 if (!remote && !existsSync(resolvedInput)) {

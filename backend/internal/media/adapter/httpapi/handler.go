@@ -34,9 +34,9 @@ func New(service Service, authenticator Authenticator) *Handler {
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/media/uploads", handler.initialize)
-	mux.HandleFunc("POST /api/v1/media/uploads/{upload_session_id}/complete", handler.complete)
-	mux.HandleFunc("GET /api/v1/media/{version_id}", handler.getVersion)
+	mux.HandleFunc("POST /api/media/uploads", handler.initialize)
+	mux.HandleFunc("POST /api/media/uploads/{upload_session_id}/complete", handler.complete)
+	mux.HandleFunc("GET /api/media/{version_id}", handler.getVersion)
 }
 
 type initializeRequest struct {

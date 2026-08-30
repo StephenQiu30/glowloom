@@ -50,7 +50,7 @@ export async function refreshAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = client
     .post<{ data: API.AuthResponse }>(
-      "/api/v1/auth/refresh",
+      "/api/auth/refresh",
       undefined,
       { withCredentials: true },
     )
@@ -70,9 +70,9 @@ export async function refreshAccessToken(): Promise<string | null> {
 }
 
 const AUTH_REFRESH_EXCLUDED_PATHS = new Set([
-  "/api/v1/auth/login",
-  "/api/v1/auth/register",
-  "/api/v1/auth/refresh",
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/refresh",
 ]);
 
 export default async function request<T>(

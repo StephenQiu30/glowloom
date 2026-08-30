@@ -7,7 +7,7 @@ export function getWorkflowRunApiV1WorkflowRunsWorkflowRunIdGet(
   options?: RequestOptions,
 ) {
   return request<Envelope<API.WorkflowRunViewResponse>>(
-    `/api/v1/workflow-runs/${params.workflow_run_id}`,
+    `/api/workflow-runs/${params.workflow_run_id}`,
     { method: "GET", ...(options ?? {}) },
   );
 }

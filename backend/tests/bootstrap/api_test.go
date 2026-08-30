@@ -29,7 +29,7 @@ func TestHealthIsOwnedByGoRuntimeAndDoesNotProbeDependencies(t *testing.T) {
 func TestUnknownBusinessRouteIsNotProxied(t *testing.T) {
 	handler := newTestHandler(nil)
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/not-implemented", strings.NewReader(`{}`)))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/not-implemented", strings.NewReader(`{}`)))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", response.Code)
 	}
@@ -39,7 +39,7 @@ func TestRegisteredBusinessRouteIsOwnedByGo(t *testing.T) {
 	handler := bootstrap.NewAPIHandler(bootstrap.RuntimeOptions{
 		Metrics: telemetry.NewHTTPMetrics(),
 		RegisterRoutes: func(mux *http.ServeMux) {
-			mux.HandleFunc("POST /api/v1/projects", func(writer http.ResponseWriter, _ *http.Request) {
+			mux.HandleFunc("POST /api/projects", func(writer http.ResponseWriter, _ *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
 				writer.WriteHeader(http.StatusCreated)
 				_, _ = writer.Write([]byte(`{"owner":"go"}`))
@@ -47,7 +47,7 @@ func TestRegisteredBusinessRouteIsOwnedByGo(t *testing.T) {
 		},
 	})
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/projects", strings.NewReader(`{}`)))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/projects", strings.NewReader(`{}`)))
 	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"owner":"go"`) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
@@ -100,7 +100,7 @@ func TestMetricsUseBoundedRouteLabels(t *testing.T) {
 func TestCORSAllowsOnlyConfiguredBrowserOrigin(t *testing.T) {
 	handler := bootstrap.NewAPIHandler(bootstrap.RuntimeOptions{Metrics: telemetry.NewHTTPMetrics(), AllowedOrigins: []string{"http://127.0.0.1:8123"}})
 	allowed := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodOptions, "/api/v1/projects", nil)
+	request := httptest.NewRequest(http.MethodOptions, "/api/projects", nil)
 	request.Header.Set("Origin", "http://127.0.0.1:8123")
 	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
 	handler.ServeHTTP(allowed, request)
@@ -109,7 +109,7 @@ func TestCORSAllowsOnlyConfiguredBrowserOrigin(t *testing.T) {
 	}
 
 	denied := httptest.NewRecorder()
-	request = httptest.NewRequest(http.MethodOptions, "/api/v1/projects", nil)
+	request = httptest.NewRequest(http.MethodOptions, "/api/projects", nil)
 	request.Header.Set("Origin", "https://untrusted.example")
 	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
 	handler.ServeHTTP(denied, request)

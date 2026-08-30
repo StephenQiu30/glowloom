@@ -138,7 +138,7 @@ func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.
 	mux := http.NewServeMux()
 	workflowhttp.New(startService, queryService, controlService, verifier).Register(mux)
 
-	startResponse := workflowRequest(t, mux, token, http.MethodPost, "/api/v1/workflow-runs", map[string]any{
+	startResponse := workflowRequest(t, mux, token, http.MethodPost, "/api/workflow-runs", map[string]any{
 		"authoring_revision_id": revision.ID, "idempotency_key": "http-start",
 	})
 	if startResponse.Code != http.StatusAccepted {
@@ -151,7 +151,7 @@ func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.
 	waitForTemporalWorkflow(t, ctx, temporalAddress, started.Data.Run.TemporalWorkflowID)
 
 	queryResponse := workflowRequest(
-		t, mux, token, http.MethodGet, "/api/v1/workflow-runs/"+started.Data.Run.ID, nil,
+		t, mux, token, http.MethodGet, "/api/workflow-runs/"+started.Data.Run.ID, nil,
 	)
 	queried := decodeWorkflowResponse(t, queryResponse)
 	if queryResponse.Code != http.StatusOK || queried.Data.Run.Status != "SUCCEEDED" ||
@@ -160,7 +160,7 @@ func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.
 	}
 
 	rerunResponse := workflowRequest(
-		t, mux, token, http.MethodPost, "/api/v1/workflow-runs/"+started.Data.Run.ID+"/reruns", map[string]any{
+		t, mux, token, http.MethodPost, "/api/workflow-runs/"+started.Data.Run.ID+"/reruns", map[string]any{
 			"root_node_id": "transform", "idempotency_key": "http-rerun",
 		},
 	)
@@ -174,7 +174,7 @@ func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.
 	}
 	waitForTemporalWorkflow(t, ctx, temporalAddress, rerun.Data.Run.TemporalWorkflowID)
 
-	rerunQuery := workflowRequest(t, mux, token, http.MethodGet, "/api/v1/workflow-runs/"+rerun.Data.Run.ID, nil)
+	rerunQuery := workflowRequest(t, mux, token, http.MethodGet, "/api/workflow-runs/"+rerun.Data.Run.ID, nil)
 	completedRerun := decodeWorkflowResponse(t, rerunQuery)
 	if rerunQuery.Code != http.StatusOK || completedRerun.Data.Run.Status != "SUCCEEDED" ||
 		!equalNodeStatuses(completedRerun.Data.Nodes, []string{"source:SKIPPED", "transform:SUCCEEDED", "export:SUCCEEDED"}) {
@@ -190,7 +190,7 @@ func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.
 	}
 
 	executor.status = "RETRYING"
-	controlStartResponse := workflowRequest(t, mux, token, http.MethodPost, "/api/v1/workflow-runs", map[string]any{
+	controlStartResponse := workflowRequest(t, mux, token, http.MethodPost, "/api/workflow-runs", map[string]any{
 		"authoring_revision_id": revision.ID, "idempotency_key": "http-control-start",
 	})
 	if controlStartResponse.Code != http.StatusAccepted {
@@ -200,7 +200,7 @@ func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.
 	controlRun = waitForWorkflowHTTPStatus(t, mux, token, controlRun.Data.Run.ID, "RETRYING")
 
 	pauseResponse := workflowRequest(
-		t, mux, token, http.MethodPost, "/api/v1/workflow-runs/"+controlRun.Data.Run.ID+"/controls", map[string]any{
+		t, mux, token, http.MethodPost, "/api/workflow-runs/"+controlRun.Data.Run.ID+"/controls", map[string]any{
 			"action": "pause", "expected_revision": controlRun.Data.Run.Revision, "idempotency_key": "http-pause",
 		},
 	)
@@ -211,7 +211,7 @@ func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.
 	}
 
 	resumeResponse := workflowRequest(
-		t, mux, token, http.MethodPost, "/api/v1/workflow-runs/"+controlRun.Data.Run.ID+"/controls", map[string]any{
+		t, mux, token, http.MethodPost, "/api/workflow-runs/"+controlRun.Data.Run.ID+"/controls", map[string]any{
 			"action": "resume", "expected_revision": paused.Data.Run.Revision, "idempotency_key": "http-resume",
 		},
 	)
@@ -225,14 +225,14 @@ func TestWorkflowHTTPStartsQueriesAndRerunsOnRealPostgresAndTemporal(t *testing.
 		"action": "cancel", "expected_revision": resumed.Data.Run.Revision, "idempotency_key": "http-cancel",
 	}
 	cancelResponse := workflowRequest(
-		t, mux, token, http.MethodPost, "/api/v1/workflow-runs/"+controlRun.Data.Run.ID+"/controls", cancelBody,
+		t, mux, token, http.MethodPost, "/api/workflow-runs/"+controlRun.Data.Run.ID+"/controls", cancelBody,
 	)
 	if cancelResponse.Code != http.StatusAccepted || !strings.Contains(cancelResponse.Body.String(), `"action":"cancel"`) {
 		t.Fatalf("cancel request response=%d %s", cancelResponse.Code, cancelResponse.Body.String())
 	}
 	waitForTemporalCancellation(t, ctx, temporalAddress, controlRun.Data.Run.TemporalWorkflowID)
 	reconciledCancel := workflowRequest(
-		t, mux, token, http.MethodPost, "/api/v1/workflow-runs/"+controlRun.Data.Run.ID+"/controls", cancelBody,
+		t, mux, token, http.MethodPost, "/api/workflow-runs/"+controlRun.Data.Run.ID+"/controls", cancelBody,
 	)
 	cancelled := decodeWorkflowResponse(t, reconciledCancel)
 	if reconciledCancel.Code != http.StatusAccepted || cancelled.Data.Run.Status != "CANCELLED" {
@@ -327,7 +327,7 @@ func waitForWorkflowHTTPStatus(
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		response := workflowRequest(t, handler, token, http.MethodGet, "/api/v1/workflow-runs/"+workflowRunID, nil)
+		response := workflowRequest(t, handler, token, http.MethodGet, "/api/workflow-runs/"+workflowRunID, nil)
 		view := decodeWorkflowResponse(t, response)
 		if response.Code != http.StatusOK {
 			t.Fatalf("poll workflow response=%d %s", response.Code, response.Body.String())
