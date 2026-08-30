@@ -112,15 +112,24 @@ func StoryGraphBundlePaths() []string {
 	}
 }
 
+func storyGraphKnownBundlePaths() []string {
+	return append(
+		StoryGraphBundlePaths(),
+		"references/scene-facts.md",
+		"references/script-spans.md",
+	)
+}
+
 func ComputeStoryGraphBundleHash(root string) (string, error) {
 	info, err := os.Lstat(root)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return "", errors.New("invalid StoryGraph bundle root")
 	}
 	allowed := StoryGraphBundlePaths()
-	allowedSet := make(map[string]struct{}, len(allowed))
-	for _, path := range allowed {
-		allowedSet[path] = struct{}{}
+	known := storyGraphKnownBundlePaths()
+	knownSet := make(map[string]struct{}, len(known))
+	for _, path := range known {
+		knownSet[path] = struct{}{}
 	}
 	actual := map[string]struct{}{}
 	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
@@ -146,11 +155,11 @@ func ComputeStoryGraphBundleHash(root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(actual) != len(allowedSet) {
+	if len(actual) != len(knownSet) {
 		return "", errors.New("StoryGraph bundle file set is invalid")
 	}
 	for path := range actual {
-		if _, ok := allowedSet[path]; !ok {
+		if _, ok := knownSet[path]; !ok {
 			return "", errors.New("StoryGraph bundle file set is invalid")
 		}
 	}

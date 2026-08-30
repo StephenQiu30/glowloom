@@ -11,6 +11,10 @@ from app.candidate_runtime.schemas import (
     StoryGraphExecutionGrantClaims,
     StoryGraphStageInvocation,
 )
+from app.candidate_runtime.v2_schemas import (
+    StoryGraphV2ExecutionGrantClaims,
+    StoryGraphV2Invocation,
+)
 
 MAX_TTL_SECONDS = 300
 
@@ -56,3 +60,43 @@ def verify_execution_grant(
         raise InvalidExecutionGrant("execution grant does not authorize invocation") from error
     if claims.expires_at > now + MAX_TTL_SECONDS:
         raise InvalidExecutionGrant("execution grant expiry exceeds the maximum TTL")
+
+
+def verify_v2_execution_grant(
+    value: str,
+    secret: str,
+    invocation: StoryGraphV2Invocation,
+) -> None:
+    claims = _verify_signed_claims(value, secret, StoryGraphV2ExecutionGrantClaims)
+    now = int(time.time())
+    try:
+        claims.validate_for(invocation, now_unix=now)
+    except ValueError as error:
+        raise InvalidExecutionGrant("execution grant does not authorize invocation") from error
+    if claims.expires_at > now + MAX_TTL_SECONDS:
+        raise InvalidExecutionGrant("execution grant expiry exceeds the maximum TTL")
+
+
+def _verify_signed_claims(
+    value: str,
+    secret: str,
+    claims_model: type[StoryGraphV2ExecutionGrantClaims],
+) -> StoryGraphV2ExecutionGrantClaims:
+    if len(secret.encode("utf-8")) < 32:
+        raise InvalidExecutionGrant("agent execution secret must contain at least 32 bytes")
+    parts = value.split(".")
+    if len(parts) != 2:
+        raise InvalidExecutionGrant("invalid execution grant format")
+    expected = (
+        base64.urlsafe_b64encode(
+            hmac.new(secret.encode("utf-8"), parts[0].encode("ascii"), hashlib.sha256).digest()
+        )
+        .decode("ascii")
+        .rstrip("=")
+    )
+    if not hmac.compare_digest(parts[1], expected):
+        raise InvalidExecutionGrant("invalid execution grant signature")
+    try:
+        return claims_model.model_validate_json(_decode(parts[0]))
+    except ValidationError as error:
+        raise InvalidExecutionGrant("invalid execution grant payload") from error

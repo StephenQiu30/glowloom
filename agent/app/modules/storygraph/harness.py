@@ -240,75 +240,91 @@ class StoryGraphHarness:
         if self._model_calls >= self.invocation.execution_policy.max_model_calls:
             raise CodexBudgetExceeded("Agent model-call budget is exhausted")
         self._model_calls += 1
-        with tempfile.TemporaryDirectory(prefix="lanverse-codex-") as temporary:
-            root = Path(temporary)
-            schema_path = root / "output-schema.json"
-            response_path = root / "response.json"
-            schema_path.write_text(
-                json.dumps(output_model.model_json_schema(), ensure_ascii=False), encoding="utf-8"
-            )
-            command = [
-                self._codex_bin,
-                "exec",
-                "--ephemeral",
-                "--sandbox",
-                "read-only",
-                "--cd",
-                str(root),
-                "--skip-git-repo-check",
-                "--ignore-user-config",
-                "--output-schema",
-                str(schema_path),
-                "--output-last-message",
-                str(response_path),
-                "--json",
-                "--color",
-                "never",
-            ]
-            for feature in _DISABLED_FEATURES:
-                command.extend(["--disable", feature])
-            command.append("-")
-            try:
-                process = await asyncio.create_subprocess_exec(
-                    *command,
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-            except OSError as error:
-                raise CodexRuntimeUnavailable("Codex CLI could not be started") from error
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(_prompt_with_guidance(guidance, prompt).encode("utf-8")),
-                    timeout=remaining_seconds,
-                )
-            except TimeoutError as error:
-                try:
-                    process.kill()
-                except ProcessLookupError:
-                    pass
-                await process.wait()
-                raise CodexDeadlineExceeded("Agent execution deadline is exhausted") from error
-            unauthorized_item = unauthorized_item_type(stdout)
-            if unauthorized_item is not None:
-                raise CodexToolPolicyViolation(
-                    f"Codex CLI attempted disallowed item type: {unauthorized_item}"
-                )
-            if process.returncode != 0 or not response_path.is_file():
-                raise CodexRuntimeUnavailable(
-                    f"Codex CLI exited {process.returncode}: "
-                    f"{structured_diagnostic(stdout, stderr)}"
-                )
-            try:
-                value: Any = json.loads(response_path.read_text(encoding="utf-8"))
-                return output_model.model_validate(value)
-            except (OSError, json.JSONDecodeError, ValueError) as error:
-                raise CodexSchemaInvalid(
-                    "Codex CLI returned an invalid structured result"
-                ) from error
+        return await run_codex_process(
+            codex_bin=self._codex_bin,
+            guidance=guidance,
+            prompt=prompt,
+            output_model=output_model,
+            timeout_seconds=remaining_seconds,
+        )
 
     async def aclose(self) -> None:
         return None
+
+
+async def run_codex_process(
+    *,
+    codex_bin: str,
+    guidance: str,
+    prompt: str,
+    output_model: type[BaseModel],
+    timeout_seconds: float,
+) -> BaseModel:
+    if timeout_seconds <= 0:
+        raise CodexDeadlineExceeded("Agent execution deadline is exhausted")
+    with tempfile.TemporaryDirectory(prefix="lanverse-codex-") as temporary:
+        root = Path(temporary)
+        schema_path = root / "output-schema.json"
+        response_path = root / "response.json"
+        schema_path.write_text(
+            json.dumps(output_model.model_json_schema(), ensure_ascii=False), encoding="utf-8"
+        )
+        command = [
+            codex_bin,
+            "exec",
+            "--ephemeral",
+            "--sandbox",
+            "read-only",
+            "--cd",
+            str(root),
+            "--skip-git-repo-check",
+            "--ignore-user-config",
+            "--output-schema",
+            str(schema_path),
+            "--output-last-message",
+            str(response_path),
+            "--json",
+            "--color",
+            "never",
+        ]
+        for feature in _DISABLED_FEATURES:
+            command.extend(["--disable", feature])
+        command.append("-")
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except OSError as error:
+            raise CodexRuntimeUnavailable("Codex CLI could not be started") from error
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(_prompt_with_guidance(guidance, prompt).encode("utf-8")),
+                timeout=timeout_seconds,
+            )
+        except TimeoutError as error:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            await process.wait()
+            raise CodexDeadlineExceeded("Agent execution deadline is exhausted") from error
+        unauthorized_item = unauthorized_item_type(stdout)
+        if unauthorized_item is not None:
+            raise CodexToolPolicyViolation(
+                f"Codex CLI attempted disallowed item type: {unauthorized_item}"
+            )
+        if process.returncode != 0 or not response_path.is_file():
+            raise CodexRuntimeUnavailable(
+                f"Codex CLI exited {process.returncode}: {structured_diagnostic(stdout, stderr)}"
+            )
+        try:
+            value: Any = json.loads(response_path.read_text(encoding="utf-8"))
+            return output_model.model_validate(value)
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            raise CodexSchemaInvalid("Codex CLI returned an invalid structured result") from error
 
 
 def _prompt_with_guidance(guidance: str, prompt: str) -> str:

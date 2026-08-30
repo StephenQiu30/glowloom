@@ -72,6 +72,49 @@ func (signer *Signer) Verify(value string, invocation contract.StageInvocation, 
 	return nil
 }
 
+func (signer *Signer) IssueV2(invocation contract.V2StageInvocation) (string, error) {
+	if err := invocation.Validate(); err != nil {
+		return "", err
+	}
+	claims := contract.V2ExecutionGrantClaims{
+		InvocationID: invocation.InvocationID, AttemptID: invocation.AttemptID,
+		InputHash: invocation.InputHash, StageReleaseID: invocation.StageRelease.ReleaseID,
+		AgentImageDigest: invocation.StageRelease.AgentImageDigest,
+		ExpiresAt:        signer.now().UTC().Add(TTL).Unix(),
+	}
+	if err := claims.ValidateFor(invocation, signer.now().UTC().Unix()); err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
+	encoded := base64.RawURLEncoding.EncodeToString(payload)
+	return encoded + "." + signer.signature(encoded), nil
+}
+
+func (signer *Signer) VerifyV2(value string, invocation contract.V2StageInvocation) error {
+	if err := invocation.Validate(); err != nil {
+		return err
+	}
+	parts := strings.Split(value, ".")
+	if len(parts) != 2 || !hmac.Equal([]byte(parts[1]), []byte(signer.signature(parts[0]))) {
+		return errors.New("invalid agent execution grant signature")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return errors.New("invalid agent execution grant payload")
+	}
+	var claims contract.V2ExecutionGrantClaims
+	if err = json.Unmarshal(payload, &claims); err != nil {
+		return errors.New("invalid agent execution grant payload")
+	}
+	if err = claims.ValidateFor(invocation, signer.now().UTC().Unix()); err != nil {
+		return errors.New("agent execution grant does not authorize invocation")
+	}
+	return nil
+}
+
 func (signer *Signer) signature(payload string) string {
 	mac := hmac.New(sha256.New, signer.secret)
 	_, _ = mac.Write([]byte(payload))

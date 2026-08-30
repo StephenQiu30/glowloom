@@ -41,6 +41,11 @@ class StoryGraphBundle:
         "references/storyboard-table.md",
         "references/visual-identity.md",
     )
+    _KNOWN_PATHS = (
+        *_ALLOWED_PATHS,
+        "references/scene-facts.md",
+        "references/script-spans.md",
+    )
 
     def __init__(self, repository_root: Path | None = None) -> None:
         root = repository_root or Path(__file__).resolve().parents[4]
@@ -51,6 +56,10 @@ class StoryGraphBundle:
     def allowed_paths(cls) -> tuple[str, ...]:
         return cls._ALLOWED_PATHS
 
+    @classmethod
+    def known_paths(cls) -> tuple[str, ...]:
+        return cls._KNOWN_PATHS
+
     def compute_hash(self) -> str:
         if self.root.is_symlink() or not self.root.is_dir():
             raise BundleInvalid("StoryGraph bundle root is invalid")
@@ -60,7 +69,7 @@ class StoryGraphBundle:
                 raise BundleInvalid("StoryGraph bundle contains a symlink")
             if path.is_file():
                 actual.add(path.relative_to(self.root).as_posix())
-        if actual != set(self._ALLOWED_PATHS):
+        if actual != set(self._KNOWN_PATHS):
             raise BundleInvalid("StoryGraph bundle file set is invalid")
 
         digest = hashlib.sha256()

@@ -23,20 +23,28 @@ type ResultError struct {
 }
 
 func CanonicalHash(raw json.RawMessage) (string, error) {
+	canonical, err := CanonicalJSON(raw)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256(canonical)
+	return hex.EncodeToString(hash[:]), nil
+}
+
+func CanonicalJSON(raw json.RawMessage) ([]byte, error) {
 	var value any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	if err := decoder.Decode(&value); err != nil {
-		return "", err
+		return nil, err
 	}
 	var canonical bytes.Buffer
 	encoder := json.NewEncoder(&canonical)
 	encoder.SetEscapeHTML(false)
 	if err := encoder.Encode(value); err != nil {
-		return "", err
+		return nil, err
 	}
-	hash := sha256.Sum256(bytes.TrimSpace(canonical.Bytes()))
-	return hex.EncodeToString(hash[:]), nil
+	return bytes.TrimSpace(canonical.Bytes()), nil
 }
 
 func jsonObject(raw json.RawMessage) bool {
