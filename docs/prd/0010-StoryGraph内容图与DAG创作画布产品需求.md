@@ -1,227 +1,514 @@
-# StoryGraph 内容图与 DAG 创作画布产品需求
+# Lanverse 剧本视觉生产工作台产品需求
 
-> 状态：已重新接受产品范围（`SG-D17`，2026-08-29）；不代表 Requirement、Plan、代码或验收已完成
->
-> 设计依据：[StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
->
-> 相关设计：[通用媒体 Provider](../design/2051-通用媒体Provider与Generation执行器设计.md) · [StoryGraph Harness](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) · [公共 Human Gate](../design/2055-Workflow公共HumanGate命令与恢复设计.md) · [前端功能模块](../design/1002-前端功能模块设计.md)
+- 状态：已接受产品范围
+- 接受记录：`VP-D13`（2026-08-31）；产品价值/范围、完整旅程/发布门、指标/非目标三轴隔离反例评审通过（最终正文评审 SHA-256 `1d91b7e06d4a438d2eddf5f7016c5db7544529c5dfc6bc169c69548e9a599a9a`）
+- 本文定位：当前视觉生产目标的唯一 PRD；回答“为什么做、为谁做、做什么、什么算产品闭环”，不在此重新决定 Owner、Schema、Wire、事务或运行时
+- 设计依据：[视觉生产工作台设计](../design/0011-剧本视觉生产工作台与世界观预设设计.md) · [StoryGraph 设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md) · [Production Bible 设计](../design/3001-项目制作圣经生成执行框架设计.md) · [Agent/Harness 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) · [Storyboard Harness 设计](../design/3002-本地-Codex-分镜智能体执行框架设计.md)
+- 产品与交互边界：[前端功能模块设计](../design/1002-前端功能模块设计.md) · [Backend 领域设计](../design/2002-后端领域模块功能设计.md) · [Generation 设计](../design/2051-通用媒体Provider与Generation执行器设计.md) · [Human Gate 设计](../design/2055-Workflow公共HumanGate命令与恢复设计.md)
+- 历史事实：本文在 `SG-D17` 曾以 StoryGraph Canvas、多 Provider、计费和 Shot Video 为当前 MVP 主范围；该范围现由 `VP-D13` 整体取代，旧实现与验收证据只作当前事实，不抵扣新目标
+- 下一门禁：`VP-D14` 跨服务 Requirement 与 Agent Contract Requirement；`VP-D15` 接受前不编码
 
 ## 1. 产品结论
 
-Lanverse StoryGraph MVP 让创作者把一份拥有合法使用权的完整剧本，逐步转换为可审核、可追溯、可恢复的剧集、场景、叙事节拍、角色/地点状态、分镜与视觉资产关系图。产品不再把 Storyboard 当作全部故事数据的终点；Storyboard 保留分镜生产职责，StoryGraph 负责连接完整内容和生产血缘。
+Lanverse MVP 不再以“生成几张图”、“接入几个模型”或“完成一次计费”作为核心价值。产品必须证明：
 
-用户最终可以回答并验证四类问题：
+> 创作者可以将一份完整剧本，通过五个可理解、可追溯、可局部重做的人工决策 Gate，转换为一套身份不重复、人物多形象不混淆、地点与道具状态准确、人物拿取道具关系明确、风格统一，并且可直接进入分镜的视觉生产包。
 
-1. 这段剧情、角色状态、地点状态或镜头来自原稿哪里？
-2. 同一角色跨集、跨造型是否仍是一个身份，并使用了哪个精确视觉版本？
-3. 修改一个场景、状态或资产会影响哪些分镜和生成结果？
-4. 某次 AI 生成、人工审核和 Workflow 运行是否真正写入了正确的正式业务事实？
+用户面对的唯一主流程为：
 
-MVP 的价值是证明“真实原稿 → 正式 StoryGraph → 图片/视频视觉一致性 → 可浏览/可追踪”的最小生产闭环。当前必须完成 Seedream 5.0 Pro+、Seedance 2.0+、GPT Image 2 与 Nano Banana 的真实生成链；声音、字幕、合成、导出与多人协作仍不在本轮 StoryGraph 完成门内。
+```text
+完整剧本
+→ Gate 1 结构与全局身份
+→ Gate 2 制作世界与连续性
+→ Gate 3 视觉基底与参考范围
+→ Gate 4 逐目标候选选择
+→ Gate 5 逐场分镜
+→ 可直接用于后续生产的正式视觉生产包
+```
 
-## 2. 用户与核心任务
+StoryGraph 是追溯、影响分析和稳定投影能力，不是 MVP 首屏；Canvas 不是主产品。Provider 只是完成真实视觉候选的运行条件，不是用户的制作阶段。
 
-| 用户 | 核心任务 | 可交付结果 |
+## 2. 背景与用户问题
+
+### 2.1 用户现在缺少的不是“一个生成按钮”
+
+一份剧本进入视觉制作前，需要同时解决：
+
+1. 结构：整份原稿的分集、分场、时空和原文覆盖是否完整；
+2. 身份：别名、同名和跨集出场是否被正确调和为同一或不同人物/地点/道具；
+3. 多形象：换装、年龄、伤势、伪装和剧情阶段变化是同一人物的不同状态，不是新人物；
+4. 地点与道具：空间拓扑、尺度、材质、开闭/损坏/内容物状态必须跨场一致；
+5. 交互：人物拿哪个道具、用哪只手、如何握持/使用/交接、前后持有者是谁；
+6. 视觉基底：世界观风格必须与剧本事实分离，又能统一编译到人物、地点、道具和组合图；
+7. 参考组：人物三视图、地点板、道具四视图和人物拿道具组合必须按类型整组审核，不能从不同候选拼凑；
+8. 分镜：每场必须绑定前面已确认的精确形象、地点、道具和组合关系，不能边分镜边猜缺失资产。
+
+如果这些问题没有先被结构化处理，“出图”只会把错误快速放大到每个 Scene 和 Shot。
+
+### 2.2 当前产品链的主要断点
+
+- Episode-first 页面使跨集身份与连续性被分散处理；
+- Bible-first 要求不完整全局事实在 Scene 抽取前被提前锁死；
+- 角色形象、地点和道具参考过于笼统，人物拿道具没有独立交互产物；
+- Storyboard Draft 用 `needs_asset` 反向触发视觉资产，使缺失发现太晚；
+- 候选选择、正式业务提交和工作流继续容易被显示为同一个“已完成”；
+- 价格、配额、多 Provider 和视频实现占用了与创作闭环不成比例的 MVP 注意力；
+- Canvas 被当作产品目标，但它不能替代一条清晰、可完成的决策旅程。
+
+## 3. 产品目标与非目标
+
+### 3.1 MVP 产品目标
+
+1. 整本理解：覆盖完整原稿，在 Scene-first 抽取后全局调和结构和身份；
+2. 制作世界：形成可追溯的人物、地点、道具、状态、出场、交互与连续性事实；
+3. 风格切换：用户通过策展 Preset 选择世界观/视觉基底，不污染剧本事实；
+4. 视觉一致性：为人物身份锚点、多形象、地点、道具、场景和人物—道具交互生成严格候选组，由人工逐目标选择；
+5. 分镜就绪：只有满足制作覆盖的 Scene 才进入分镜，且每个 Shot 精确绑定已选视觉事实；
+6. 局部修改：任何结构、身份、状态、预设、参考或分镜变更先解释影响，再只重做受影响范围；
+7. 可恢复的人工决策：清楚区分任务、决议、正式效果和工作流恢复，刷新、重启或结果未知时不重复决策。
+
+### 3.2 当前明确非目标
+
+- 支付、付费墙、套餐、余额、价格对比、复杂预算与 Cost Dashboard；
+- 多 Provider 广度、自动路由、自动 fallback、模型市场与动态 Tool Registry；
+- Shot Frame/Video、音频、口型、字幕、剪辑、合成、渲染、导出与交付中心；
+- StoryGraph 可写 Canvas、通用图编辑、自由拖拽、多人 Presence、评论和离线合并；
+- 通用 Agent 平台、用户上传任意 Skill 直接执行、无界 Repair 或 Agent 直接写业务事实；
+- 全库预生成所有组合、未经授权的风格/案例/社区 Prompt 吸收、自动近似人脸合并；
+- 微服务拆分、图数据库、任意 EAV Schema、Kafka Command Bus 或企业运营后台；
+- 为未来范围预建空页面、兼容双写、通用 Renderer 或平行状态库。
+
+## 4. 用户与待完成任务
+
+| 核心用户 | 他/她需要做什么 | 得到什么 |
 |---|---|---|
-| 编剧/剧本统筹 | 检查分集、场景、节拍、人物关系、伏笔和连续性 | 每条正式关系可反查原稿 Evidence 和 Owner Version |
-| 导演/分镜师 | 把已确认剧情拆成可生产 Shot，并理解上下游影响 | 可审核 Shot Intent、正式 Shot 和精确生产 Binding |
-| 角色/资产负责人 | 维护一个角色/地点身份下的多个剧情状态和视觉版本 | 角色卡/地点卡、三视图 reference sheet、版本与使用范围 |
-| Workspace Owner | 用内置预设创建火山/OpenAI/Google 持久连接、轮换凭据并发布项目模型 Binding | 只写 Secret、精确 Connection/Profile/Binding Version 与可解释 PriceQuote |
-| 制片人/审核者 | 在付费生成和正式写入前审核候选 | 冻结 Subject、不可变 Decision、Owner Receipt 与恢复状态 |
-| 运行维护者 | 定位异步任务、Provider、索引和日志问题 | Workflow/Receipt/Trace 可对账，重启与未知结果可恢复 |
+| 导演/主创 | 快速看懂整份剧本的制作结构、选择视觉世界、做关键裁决 | 可直接进入分镜的视觉生产包和清晰的影响解释 |
+| 编剧/剧本统筹 | 核对分集分场、人物身份、状态、交互和连续性 | 每个生产事实都能反查原文或明确的创作决定 |
+| 角色/美术/资产负责人 | 管理同一身份的多个形象，审核人物、地点、道具和组合参考 | 一致、有版本、有使用范围的正式视觉参考 |
+| 分镜师 | 按场查看剧情、连续性与精确视觉输入，审核镜头方案 | 不需要返工查找“到底用哪个人/衣服/地点/道具”的正式分镜 |
+| 审核者/制片 | 领取待办、对比候选、查看影响后做类型化决策 | 不重复、可恢复、可对账的决策结果 |
+| 项目 Owner/运维 | 保证至少一条真实图片路径可用，定位阻塞与未知结果 | 不依赖价格/支付主链的真实闭环和可恢复运行状态 |
 
-## 3. 用户问题
+MVP 优先保障前四类创作与审核用户的主旅程；项目 Owner 的 Provider 操作仅作为次级运维能力。
 
-当前已实现的剧本到分镜纵向切片把事实分散在 Bible Candidate、Episode Structure、Storyboard JSON、Shot、Artifact 和 Workflow Projection 中，产生以下产品风险：
+## 5. 产品原则
 
-- 同一角色或地点可能在不同剧集被重复识别，缺少统一卡片和状态演进；
-- Storyboard 只引用叙事单元，无法证明 Shot 使用了哪个角色形象、地点状态和视觉版本；
-- AI 候选、人工 Decision、正式 Owner Apply 和 Workflow 恢复容易在 UI 中被混成一个“完成”；
-- 用户无法从剧本证据追到 Shot/Artifact，也无法可靠计算修改影响；
-- 当前 Agent Skill 分散且职责重叠，难以形成可版本化、可恢复的整剧解析 Harness；
-- 当前固定 Runware/环境变量配置无法让 Owner 在 Web 管理三类持久连接，也不能覆盖四类必接图片/视频模型；
-- 剧本/StoryGraph 检索和运行日志缺少真实异步投影链，排障依赖数据库或进程输出；
-- 现有前端没有真正的 StoryGraph Canvas，不能按 Episode/Scene 直观浏览关系。
+1. **原文优先**：原文没说的就是 Design Gap，不用模型自信度伪装成剧本事实；
+2. **身份先于形象**：人物多形象始终属于同一 Identity，风格不创建新人物；
+3. **世界与风格分离**：先确认生产世界，再选视觉基底；切换 Preset 不改写原文证据、身份和剧情状态；
+4. **基础资产先于组合**：先完成人物锚点、形象、地点和道具，再做 Scene/人物—道具组合；
+5. **候选不等于正式结果**：视觉审查只给建议，人工逐 Target 选择是正式参考的必经之路；
+6. **决策不等于已生效**：用户能看到决议已记录、正式效果已提交、工作流已继续三层事实；
+7. **影响先于修改**：用户在 split/merge、Preset 切换、State/Interaction 修改、重生成或替换前先看会影响什么；
+8. **局部阻塞不中断全局**：一个 Scene/Target 未就绪时，无关 scope 可继续制作；
+9. **精确版本不猜“最新”**：卡片、决策、参考和分镜都能说清具体使用了哪个版本与范围；
+10. **真实闭环不用模拟补洞**：缺少后端事实、图片执行或权限时显示真实阻塞，不用假图、本地成功状态或旧页面改名代替。
 
-## 4. MVP 用户旅程
+## 6. 产品主旅程
 
-### 4.1 完整原稿到 Core StoryGraph
+### 6.1 进入项目
 
-1. 用户选择已提交的完整 DocumentRevision；
-2. Backend 创建正式 Workflow Definition/Run/NodeRun，再调用本地 Codex StoryGraph Harness；
-3. Harness 分阶段提取 Evidence、Bible/Claim、Episode、Scene/Dialogue/Beat/Occurrence Candidate；
-4. 确定性 Gate 和有界 Repair 处理结构、引用、证据与覆盖问题；
-5. 用户通过公共 Human Gate 审核冻结 Candidate；
-6. Backend 各 Owner 原子 Confirm/Apply，并保存 Receipt；
-7. StoryGraph Compiler 只读取已确认 Owner 事实，发布不可变 Core StoryGraphVersion；
-8. 用户可以按版本、Episode/Scene、实体和上下游影响查询。
+1. 用户导入一份有合法使用权的完整剧本；
+2. 项目首页告诉用户整体进度、主要阻塞和唯一下一步；
+3. 用户进入项目级 Guided Studio，始终在五 Gate 时间线上理解当前位置；
+4. 用户可按 Project/Episode/Scene/Target 切换 scope，但不需要理解 Agent Stage、DAG 或底层服务名。
 
-### 4.2 Workspace Provider 配置与项目 Binding
+### 6.2 Gate 1 —— 结构与全局身份
 
-1. Workspace Owner 打开 Provider Settings，看到 Backend 当前已注册真实 Factory 的内置连接/模型预设；
-2. Owner 分别创建火山、OpenAI、Google 持久连接，API Key 只输入一次且提交后不回显；
-3. Owner 创建 Seedream 5.0 Pro+、Seedance 2.0/2.0 Fast/2.0 Mini/2.5、GPT Image 2、Nano Banana 2 Lite/2/Pro/Legacy 精确 ModelProfile；
-4. Owner 查看精确 PriceQuote，并为项目的 `reference_asset|shot_frame|shot_video` 发布不可变 Binding Version；
-5. 刷新页面或重启 Backend 后配置谱系仍存在，既有 Run 继续引用冻结版本，轮换只影响新 Job；
-6. 零配置是合法状态；没有 Binding/root key/权限/额度时，视觉命令在费用和远程调用前显示明确阻塞，非视觉服务继续可用。
+用户需要完成：
 
-### 4.3 角色/地点视觉一致性到正式 Shot 与视频
+- 核对整份原稿的 Episode/Scene 边界和原文覆盖；
+- 查看人物、地点、道具的原始称呼/别名聚类；
+- 对同名拆分、别名合并、跨集复用和未解决身份做明确决策；
+- 从任何结构/身份提案反查原文，并在提交前看受影响的 Scene。
 
-1. 用户在角色卡/地点卡查看唯一身份、Specification、AssetState 和缺失视觉资产；
-2. Storyboard Draft 从正式 Scene/Beat/Occurrence 与非空 Specification/State 生成 Shot Intent；
-3. Intent Gate 先冻结视觉需求；缺资产时明确 `needs_asset`，不创建 Shot 或 Provider Job；
-4. 系统使用项目精确 Binding 在 Seedream、GPT Image 或 Nano Banana 上为所需角色/地点/道具生成 `reference_sheet` 候选，覆盖 front/profile/back；
-5. 用户审核并选择唯一 READY 候选，Backend 发布精确 AssetVersion；
-6. `detail_shots` 只消费精确 READY AssetVersion；
-7. 用户审核后，Storyboard Owner 原子创建正式 Shot 和完整 ShotProductionBindingVersion；
-8. StoryGraph Compiler 发布包含 Shot/Binding 的新版本；三类图片 Provider 的 Shot Frame 生成结果写入独立 ShotImageBindingVersion；
-9. `shot_video` 冻结正式 Shot、生产 Binding、精确首帧、目标时长和 Seedance Profile，用户选择通过 Video QC 的候选后发布 ShotVideoBindingVersion；
-10. Story Lens 能从 Shot 反查图片/视频 Target、Artifact 与最终 Binding，但不展示 Provider Secret/Connection/Job 为权威内容节点。
+本 Gate 完成的产品结果是：完整原稿有明确的制作结构，且已批准 scope 内的全局身份不重复、不混淆。
 
-### 4.4 Story Lens 与运行追踪
+### 6.3 Gate 2 —— 制作世界与连续性
 
-1. 用户从项目、Episode、角色/地点卡、审核任务或 Run 深链进入 Story Lens；
-2. 首版按 Episode/Scene/Entity/Impact 有界加载，不一次展开完整项目；
-3. 用户选择节点，在 Inspector 查看 Owner Ref、Evidence、Version/Hash、上下游与版本 Diff；
-4. Story Lens 与 Workflow Lens 保持两套 ID/Query；内容节点不能冒充运行节点；
-5. 只读 Lens 通过后，用户可提交少量类型化 Domain Intent；Backend 路由真实 Owner Command 并重编译新版本，前端不能写 Graph JSON。
+用户需要完成：
 
-### 4.5 搜索、异步投影与日志诊断
+- 确认人物、地点、道具的可制作描述与原文依据；
+- 在同一人物下确认多个形象状态，在同一道具/地点下确认剧情状态；
+- 核对每场的实际出场和精确状态；
+- 核对人物—道具的持有、手侧、握持/使用/交接和前后持有者；
+- 处理无因换装、伤势恢复、道具瞬移、双持有者等连续性问题；
+- 对原文未说明但制作必须知道的内容做结构化创作决定。
 
-1. Backend 业务事务提交 Owner 事实与 Outbox；
-2. Kafka 异步驱动 Script/StoryGraph Elasticsearch 投影和业务事件消费者；
-3. 用户通过 Backend Search 查询剧本片段、角色、地点、Scene、Claim 或 Shot，并深链到精确 Owner/StoryGraphVersion；
-4. 结构化日志通过 Logstash 进入 Elasticsearch/Kibana，维护者按 trace/run/node/task/job/receipt ID 关联诊断；
-5. Kafka、Elasticsearch 或 ELK 故障不得回写或覆盖 PostgreSQL/Temporal 的业务事实；恢复和重放收敛到同一投影。
+“人物拿道具”是交互，不是新的人物形象；人物换装/受伤是形象状态，不是新人物。
 
-## 5. MVP 范围
+本 Gate 完成的产品结果是：已批准 scope 形成可追溯的生产世界、出场计划、交互账本和连续性闭环。
 
-### 5.1 内容与版本
+### 6.4 Gate 3 —— 视觉基底与参考范围
 
-- SourceEvidence、ProductionBibleVersion、Episode、Scene、Dialogue、NarrativeBeat、Occurrence、Claim；
-- Asset Identity、Character/Location SpecificationVersion、AssetState、ProductionBinding；
-- 不可变 StoryGraphVersion、线性 Head、稳定 Node/Edge Key、Canonical Hash 和 DAG 校验；
-- Current/Version/Lens Query、Version Diff、上下游追踪和影响闭包；
-- Storyboard Candidate 与正式 Shot 生命周期保持独立，不做改名或双写兼容。
+用户需要完成：
 
-### 5.2 Agent 与审核
+- 从首批 4–6 个通过完整目标矩阵验收的策展 Preset 中选择世界观/视觉基底；
+- 一次看懂该 Preset 对建筑、服饰、道具、材质、色彩、光照和构图的统一语言；
+- 看到人物、地点、道具和组合参考的真实预览，以及来源/权利信息；
+- 在默认 faithful 模式下保持剧本语义；需要 world adaptation 时，逐项处理原文事实到视觉设计的映射与冲突；
+- 确认哪些人物锚点、多形象、地点、道具、场景和人物—道具交互参考是 required/optional/not generated；
+- 对被提及但并未进入视觉制作的对象，显式保持不生成，不为“看起来完整”扩大范围。
 
-- 唯一 `agent/skills/build-storygraph` Skill Bundle 与 Backend-owned Harness；
-- 本地 Codex CLI 作为开发阶段真实 AI 调用；Agent 只返回严格 Candidate/Patch；
-- Stage/Shard/Candidate Revision、Head CAS、Evidence、确定性 Gate、有界 Review/Repair；
-- 项目 HumanTask 列表/详情、Claim/Renew/Release、Decision 和同 Decision ID Resume；
-- UI 明确区分 Task、Decision、Owner Apply、Workflow Resume。
+本 Gate 完成的产品结果是：生成范围、风格基底、冲突裁决和六类参考目标全部被明确固定。
 
-### 5.3 视觉资产与分镜
+### 6.5 Gate 4 —— 逐目标参考选择
 
-- 一个角色身份可有多个剧情 AssetState 和多个画风下的 AssetVersion；
-- 角色卡、地点卡和 Scene View 是只读组合，不创建 Card Record；
-- `reference_asset|shot_frame|shot_video` 三种严格 GenerationTarget；
-- Backend 内置 Preset Catalog，Workspace Provider Connection/Credential/ModelProfile 与 Project Purpose Binding 不可变版本；
-- API Key 经 Web 一次写入并以 Backend 密文版本保存，不来自 `.env`，不回显浏览器；
-- Seedream 5.0 Pro+、GPT Image 2、Nano Banana 2 Lite/2/Pro/Legacy 三类真实图片 Adapter；
-- Seedance 2.0、2.0 Fast、2.0 Mini、2.5 真实视频 Adapter 和异步任务恢复；
-- 每候选独立 ProviderCall、Cost/Quota、同步 UNKNOWN/异步 remote task 对账、私有 Staging、Artifact Readiness、Image/Video QC 和 CandidateSelection；
-- composite reference sheet 的 front/profile/back coverage；
-- ShotProductionBindingVersion 冻结精确视觉输入，ShotImageBindingVersion/ShotVideoBindingVersion 分别保存最终图片/视频输出。
+Gate 4 不允许全局“批准全部参考”。每个精确目标都有自己的生成、对比、决策、正式结果和恢复状态。
 
-### 5.4 Workflow、消息与检索
+MVP 覆盖六类目标：
 
-- Temporal 是唯一跨步骤持久工作流引擎；
-- Backend 是唯一业务 Writer，使用单一 PostgreSQL/GORM Model Catalog；
-- Kafka 用于 Outbox 后的业务异步解耦和 Script/StoryGraph Search Projection，不承载结构化日志；
-- Elasticsearch 用于剧本与 StoryGraph 检索，索引可从 PostgreSQL 事实重建；
-- ELK 用于日志收集、检索和运行诊断，不成为业务状态源；
-- Provider/Workflow/Consumer 重试、重复投递、结果未知和服务重启可对账。
+| 目标 | 用户要解决的问题 | 必须作为整组审核的视图 |
+|---|---|---|
+| 人物身份锚点 | 这张脸、体型和永久标记能否成为同一人的稳定基底 | front/profile/back |
+| 人物形象 | 换装、年龄、伤势、伪装等变化是否保留身份不变项 | front/profile/back，并显示锚点依赖 |
+| 地点板 | 空间拓扑、出入口、尺度、材质和空场是否可生产 | empty establishing/spatial orientation/material-scale detail |
+| 道具板 | 尺寸、结构、开闭/损坏/内容物状态是否一致 | front/side/back/state detail |
+| Scene 组合 | 精确人物形象、地点和道具能否在本场构图中统一 | composition master |
+| 人物—道具交互组合 | 持有者、手侧、握持点、方向、尺度和使用/交接是否正确 | interaction master |
 
-### 5.5 Frontend
+用户需要：
 
-- 当前 npm/Next.js 单应用和 RTK Query，不迁移 monorepo；
-- Workspace Provider Settings、Project Binding、项目摘要、角色/地点卡、公共图片/视频 Review Workbench、StoryGraph Search；
-- Provider Secret 只写不读，页面无任意 Host/JSON/自动 fallback 或直接 Provider 调用入口；
-- React Flow + Dagre 的单人只读 Story Lens，按 Episode/Scene 有界加载；
-- Story Lens 与 Workflow Lens 严格分离；
-- 只读里程碑之后的类型化 Domain Intent，不提供通用 JSON 写图；
-- 所有前端测试位于 `frontend/tests`。
+- 在覆盖矩阵看到 required/optional/not generated、依赖、当前进度和阻塞；
+- 按“候选方向为列、视图角色为行”比较完整 Bundle；
+- 一次选择整组候选，不从多组中拼凑三视图/道具视图；
+- 同时看到确定性质量问题和视觉评审建议，逐项确认 warning，失败项不能被选中；
+- 选择、要求重生、修改目标简报或请求上游修改，并在后三种行为前查看影响；
+- 仅在基础参考、逐 Scene 组合和所有 required 覆盖闭合后将 Gate 4 视为完成。
 
-## 6. 发布门
+本 Gate 完成的产品结果是：所有 required 视觉目标都有精确、已人工选择、已正式提交、可追溯的参考结果。
 
-### Gate A：Core StoryGraph
+### 6.6 Gate 5 —— 逐场分镜
 
-- 至少两集真实剧本完成 Evidence → Bible/Identity/State → Episode/Scene/Beat/Occurrence/Claim → Core StoryGraphVersion；
-- 所有正式节点/边可反查唯一 Owner Ref、Version/Hash 和 Evidence；
-- DAG、稳定 Key、线性发布、Diff、影响闭包与恢复通过；
-- Candidate、HumanTask 和 StoryGraph 正式事实无混写。
+用户需要完成：
 
-### Gate B：Visual Consistency
+- 从 Scene 队列看到哪些已 production-ready、哪些仍缺精确参考或连续性；
+- 对一个 Scene 同时审核剧情节拍、对话/原文覆盖、镜头目的、时长、机位、动作、表演、声音和连续性；
+- 看到每个镜头绑定的精确人物形象、地点、道具、Scene 组合和交互组合；
+- 批准整场分镜，或通过结构化变更请求产生新候选，不在浏览器里直接改正式 Shot；
+- 在决议后继续看正式提交和工作流恢复，不把投影延迟误报为分镜丢失。
 
-- 零 Provider 配置时非视觉服务可用；Owner 可在 Web 创建火山/OpenAI/Google 持久连接、精确 Profile 和 Project Binding，Secret 不回显且重启后可继续使用；
-- 同一角色跨至少两集和两个 AssetState 仍只有一个身份；
-- 至少一个角色 AssetVersion 来自单一 READY composite reference sheet，并完整覆盖 front/profile/back；
-- 至少一个 Scene 使用正确 LocationState；
-- 正式 Shot 绑定精确 AssetVersion，能反查 Occurrence/State/Style/Artifact lineage；
-- Seedream 5.0 Pro+、GPT Image 2 和四个 Nano Banana 模型分别完成真实 reference/shot frame 调用、费用、Staging、QC、Selection 与 Owner Apply；
-- Seedance 2.0、2.0 Fast、2.0 Mini、2.5 分别完成真实异步视频调用、同 remote id 恢复、Video QC、Selection 与 ShotVideoBindingVersion；
-- 每候选一个 ProviderCall，四候选四 Call；未知结果不盲目重提、不重复付费，图片/视频 Binding 均可恢复。
+Gate 5 不提供 `needs_asset` 或“从分镜发起资产生成”。本 Gate 完成的产品结果是：每个就绪 Scene 有一组正式 Shot，且每个 Shot 都使用已批准的精确视觉输入。
 
-### Gate C：Canvas、Search 与诊断
+## 7. 产品功能范围
 
-- Story Lens 按 Episode/Scene 有界展示、深链、Diff 和影响闭包，首版无写入入口；
-- 类型化 Domain Intent 只能通过真实 Owner Command 产生新 StoryGraphVersion；
-- 剧本/StoryGraph Search 可返回可追溯结果；索引重复消费和重建结果一致；
-- Kafka/ELK 故障不改变业务事实，trace 可关联 Workflow、Review、Provider 和 Receipt。
+### 7.1 P0—P2：整剧解析与生产世界
 
-### Gate D：完整原稿与最终验收
+- 完整原稿导入、证据覆盖和原文深链；
+- Scene-first 的 Episode/Scene 候选与全局边界调和；
+- 人物/地点/道具 mention cluster、别名、同名和跨集 Identity Resolution；
+- 人物/地点/道具的制作描述、状态时间线和 Scene Occurrence；
+- 人物—道具 Interaction、持有/使用/交接与前后连续性；
+- 明确的 Design Gap、创作决定与受影响范围；
+- Gate 1/2 审核、正式结果、局部覆盖和恢复。
 
-- 完整原稿所有分集完成机器统计，代表集完成人工细查；两集小样本不替代全量；
-- Backend、Agent、Frontend、Compose、镜像、OpenAPI、数据/Secret 卫生和当前真实 CI 全部通过；
-- 每个完整实施任务已有独立 Git 提交和真实验收证据；
-- 最后才使用 `agent-browser` 执行 Web Journey，并核对浏览器、API、PostgreSQL Owner 事实、Temporal 与 Artifact lineage 一致。
+### 7.2 P3：世界观预设与视觉参考
 
-## 7. 产品成功标准
+- 首批 4–6 个策展风格 Preset，覆盖人物/地点/道具/Scene/交互完整矩阵；
+- faithful/world adaptation 类型化选择、冲突显示、权利/来源和版本变更说明；
+- 六类视觉目标的 required/optional/not generated 范围和依赖覆盖；
+- 人物三视图、地点板、道具四视图、Scene 与 Interaction 组合的真实候选生成；
+- 候选组一致性、质量问题、视觉建议、warning acknowledgement 和逐 Target 人工选择；
+- 一条真实图片执行路径，零配置合法、缺配置时只阻塞需要生成的 Target；
+- 参考覆盖矩阵、每场就绪状态、局部重生和上游变更影响。
 
-以下标准必须由 Requirement/Acceptance 映射和真实运行证据计算，不能仅由文档宣称：
+### 7.3 P4：分镜与正式生产包
 
-- 正式 StoryGraph 中无无 Owner、无精确版本/hash 或违反边类型矩阵的节点/边；
-- 权威 StoryGraph DAG 环数量为 `0`；
-- 未经 Human Gate/Owner Apply 进入正式 StoryGraph 或创建正式 Shot 的 Candidate 数为 `0`；
-- 未绑定精确 READY AssetVersion 的正式 Shot 数为 `0`；
-- 角色 composite reference sheet 缺 front/profile/back 仍被发布的数量为 `0`；
-- API Key/密文进入 Query、日志、Temporal、Kafka、StoryGraph、Candidate Payload 或浏览器持久化的次数为 `0`；
-- Provider UNKNOWN 被盲目重新提交、重复扣费或重复占用配额的次数为 `0`，单个 ProviderCall 的真实发送次数最多为 `1`；
-- 缺失 Seedream/GPT Image/Nano Banana/Seedance 任一强制模型真实验收却报告媒体闭环完成的次数为 `0`；
-- ShotVideoBindingVersion 使用漂移首帧、错误 Target、未通过 Video QC 或跨 Shot Artifact 的数量为 `0`；
-- 同一幂等输入产生多个 Owner Receipt、StoryGraphVersion、Decision、Selection 或 Binding 的次数为 `0`；
-- Search 重建后无法反查 PostgreSQL Owner/StoryGraphVersion 的结果数为 `0`；
-- Agent、Frontend、Kafka Consumer、Search/ELK 对业务 Owner 表的写入次数为 `0`；
-- 完整原稿 coverage、引用完整性和代表集人工审阅均有可重复报告，无未说明跳过项。
+- 按 Scene 建立不可混入项目其他资产的精确分镜输入包；
+- 一个候选同时表达剧情意图与细节镜头，不再先 Draft 后 Detail；
+- 剧情/对话/证据覆盖、镜头列表、视觉绑定、连续性和问题同屏审核；
+- 整个 Scene 的类型化变更请求、人工批准、正式提交和恢复；
+- 每个正式 Shot 都有精确的人物形象、地点、道具、Scene 和 Interaction 视觉绑定；
+- 可追溯的项目级视觉生产包与 Production-ready Scene Coverage。
 
-产品不预先承诺模型主观质量通过率或大图性能数字；这些阈值必须在 Requirement 中基于选定样本、环境和用户任务定义，并在 Acceptance 记录真实测量。
+### 7.4 Agent/Harness 与内置 Skill 产品能力
 
-## 8. 非目标
+- 剧本解析按 Scene Fact、身份调和、生产世界、视觉规划与分镜等明确阶段运行，不由一个巨型 Prompt 一次猜完；
+- 内置 Skill 以可版本发布物进入 Harness，每个发布物都能说明来源/许可、内容摘要、适用阶段、评测结果与退役影响；
+- 成熟外部 Skill 只经“提案→隔离检查→固定评测→受控试用→激活”供应链吸收；权利不清、行为越界或评测退化时必须隔离/退役；
+- 事实抽取 Skill 始终 style-blind；不同世界观 Preset 通过结构化视觉基底编译后复用同一组视觉规划/评审 Skill，不为每个风格复制一套剧本逻辑；
+- 每次运行固定当时的 Skill/阶段组合，恢复时不暗中换成新版本；新版本只影响新运行或显式重做；
+- Agent 只产生可验证候选与修复建议，不绕过人工 Gate、不直接改写正式业务事实；
+- 阶段失败、超时、输出不合格或修复达到上限时，用户能看到精确阻塞范围并恢复原任务，不把部分输出伪装为全局完成。
 
-- Shot 图片/视频 Binding 之后的配音、字幕、合成与最终成片；
-- 多人实时 Canvas、Yjs/Hocuspocus、Presence、评论或离线合并；
-- 通用知识图谱、图数据库、任意 EAV Schema、图查询语言或图插件市场；
-- 通用 Agent 平台、动态 Tool Registry、无限 Repair 或 Agent 业务写库；
-- 多 Provider 自动路由、Fallback、动态模型市场、复杂语义图片/视频 QC；
-- 与已批准 Shot Intent 无关的全库地点/道具预生成；真实视觉需求引用的地点/道具仍必须走正式 reference 生成链；
-- 角色状态组合规则引擎、自动角色近似合并或自由文本“最新资产”绑定；
-- 微服务拆分、多地域、多租户企业运营后台或 Kafka Command Bus；
-- 为旧 Storyboard/静态 Provider Job/旧 Skill 建兼容双写或 fallback。
+### 7.5 横切产品能力
 
-## 9. 约束与风险
+- 项目级 Guided Studio、五 Gate 时间线、scope 导航和服务端下一步；
+- 审核待办、领取/续租/释放、类型化决策和同决议恢复；
+- 决议、正式效果、工作流恢复的分层状态与未知结果对账；
+- 来源、精确版本、变更前后、直接/传递影响、将失效结果和历史决议；
+- 人物/地点/道具与 Scene readiness 只读卡；
+- 单人、只读、按范围加载的追溯能力；Canvas 不是完成主旅程的前置；
+- loading/empty/stale/conflict/permission/dependency unavailable/outcome unknown/projection delayed 可理解、可恢复；
+- 窄屏、键盘、screen reader、200% zoom 与低敏数媒体加载。
 
-- AI 分析有非确定性；Evidence、Review Issue、Human Gate 和 Owner Apply 不能被模型置信度替代；
-- 完整剧本可能存在跨集边界、别名、隐含状态和矛盾，必须暴露歧义而非猜测合并；
-- 本地 Codex 登录、火山/OpenAI/Google API Key/额度与模型权限、Docker Secret root key、Temporal、Kafka、Elasticsearch、ELK、PostgreSQL 和对象存储是不同验收外部条件；缺失时只能记录对应未验收范围；
-- Kafka/Elasticsearch/ELK 增加运行复杂度，但用户已明确其异步、检索和日志价值；MVP 只实现真实消费者，不搭建通用平台；
-- 图片语义一致性不能完全由确定性 QC 证明，发布仍需要人工选择；
-- 两集样本用于契约和恢复开发，不能替代完整原稿的最终效果验收；
-- 本地绿色不等于远端 CI 绿色，任何失败检查都必须真实修复而非跳过。
+## 8. 世界观 Preset 产品要求
 
-## 10. 文档与实施门禁
+### 8.1 Preset 不是一段 Prompt
 
-本 PRD 是 StoryGraph 唯一产品范围来源；`3003` 只派生 Agent Contract Requirement，不创建第二份 Agent 产品愿景。下一步由 `SG-D18` 建立跨 Backend/Frontend/Workflow/Asset/Provider/Kafka/Search 可测契约，由 `SG-D19` 复核 Agent 专项契约仍不获得媒体 Provider 职责，再由 `SG-D20` 原样引用 `SG-I01`–`SG-I35` 建立唯一 Plan，`SG-D21` 为新增目标创建初始全未勾选 Acceptance。
+用户选择的是一套可解释、可预览、可版本化的视觉基底。每个 Preset 至少必须让用户理解：
 
-在 `SG-D21` 接受前不编码。编码后每个完整任务必须先 Red → Green → Refactor，再通过真实局部和当前全量 CI并独立 Git 提交；所有实现和非浏览器验收完成后才运行 `agent-browser`。
+- 适用的媒介、题材和故事气质；
+- 人物、服饰、建筑、道具、材质、色彩、光照和构图语言；
+- 六类目标各自的效果与必备视图；
+- faithful/world adaptation 的默认行为和已知限制；
+- 合法来源、许可边界、版本变化和退役影响。
+
+Provider 品牌、模型名、单价和内部 Prompt 不是用户在 Preset 画廊的主选择依据。
+
+### 8.2 首批 Preset 策展原则
+
+- 只上架 4–6 个完成全矩阵验收的 Preset，不用数量代替稳定性；
+- 至少覆盖明显不同的视觉世界，但不在 PRD 中锁定易变的市场风格名单；
+- 同一套通用剧本/制作 Skill 必须在不同 Preset 下保持业务语义一致；
+- 社区 Skill/Prompt 只能在权利明确且通过安全/质量验收后作为发布输入，不直接照搬未授权表达；
+- 外部黑盒 Skill/Provider 的输出永远只是候选，不成为剧本事实或正式参考的唯一解释源。
+
+### 8.3 风格切换的用户预期
+
+- 切换 Preset 不重做 Gate 1/2 的原文、身份、状态和交互事实；
+- 切换后用户先看将失效的视觉目标、参考、分镜包和正式分镜；
+- 新预设必须产生新的风格基底与目标轮次，不把旧图改名为新风格；
+- 完全无关的生产世界事实和已批准 scope 不应被重做。
+
+## 9. 视觉资产与人物—道具产品规则
+
+### 9.1 人物多形象
+
+- 同一剧情身份只有一张人物卡；
+- 身份锚点固定脸部结构、体型/比例和永久标记；
+- 换装、年龄、伤势、伪装和剧情阶段形成该身份下的不同形象；
+- 每个形象显示使用 Scene 范围、生效时间、身份锚点依赖和精确视觉版本；
+- 人物被画成不同风格不会改变剧情身份或创建新剧情状态。
+
+### 9.2 地点与道具
+
+- 地点卡要同时表达身份、状态、空间拓扑、材质/尺度、场次使用和已选参考；
+- 道具卡要同时表达身份、尺寸/结构、开闭/损坏/内容物状态、持有者账本和已选参考；
+- 人手、人物或多个道具状态污染基础道具板时不能选择；
+- Scene 是剧情组合范围，不复制新的 Location Identity。
+
+### 9.3 人物拿道具
+
+- 用户能按 Scene 查看人物、道具、持有者、手侧、握持点、方向、尺度和使用/交接状态；
+- 用户审核的组合必须显示其使用的精确人物形象和道具版本；
+- 握持错位、悬空、穿插、尺度错误、手侧错误、持有者错误和交接断裂必须可见；
+- 选择正式交互参考不会创建新人物形象或改写道具状态；
+- 上游人物/道具参考替换后，受影响组合和分镜明确失效且可局部重做。
+
+## 10. 修改、影响与恢复体验
+
+### 10.1 修改之前
+
+对结构拆分/合并、身份拆分/合并、State/Occurrence/Interaction 修改、Preset 切换、参考重生/替换和分镜变更，用户提交前都必须看到：
+
+1. 当前事实与提案变化；
+2. 直接受影响的 Identity/State/Scene/Target/参考/分镜；
+3. 传递受影响的下游范围；
+4. 将失效、需重做或保持不变的结果；
+5. 批准后系统将做什么，不会做什么。
+
+影响已变时必须要求用户重新查看，不能用旧预览提交。
+
+### 10.2 决策之后
+
+用户始终看到三步：
+
+```text
+决议已记录
+→ 正式业务效果提交中/已提交
+→ 工作流恢复中/已继续
+```
+
+页面刷新、浏览器断线、服务重启或远程结果未知后，用户恢复的是同一个决议的后续处理，不被诱导重新选择。一个 scope 失败不掩盖无关 scope 的可继续任务。
+
+## 11. 信息架构与交互产品范围
+
+### 11.1 唯一主入口
+
+项目级 Guided Studio 是 MVP 制作主入口，包含：
+
+- 五 Gate 时间线；
+- Project/Episode/Scene/Target 范围导航；
+- 当前 Gate 工作区；
+- 审核/决策/效果/恢复状态；
+- 来源、影响、版本和历史决策解释。
+
+项目首页只提供摘要和唯一“继续制作”下一步。
+
+### 11.2 次级入口
+
+- 资产库：查看人物、地点、道具和已选版本；
+- 审核待办：按 Gate/scope/状态查看可处理任务，复用同一审核体验；
+- 追溯：按精确版本查来源、上下游与影响，首版只读；
+- 项目设置：保证一条真实图片能力可用，不承载价格/支付主链。
+
+任何次级入口都不会建立第二套业务状态或第二套审核体验。
+
+### 11.3 响应式与可访问性
+
+MVP 是 Desktop-first Web，但在窄屏仍必须完成核心 Claim、决策、候选比较、warning 确认、影响查看和恢复。时间线、矩阵、组图和问题区域必须有等价文本/表格与键盘路径，不依赖颜色、拖拽或 Canvas。
+
+## 12. MVP 发布范围与平台保留范围
+
+### 12.1 MVP 必交
+
+1. 完整剧本级的 Scene-first 结构、全局身份和原文覆盖；
+2. 人物多形象、地点/道具状态、Scene Occurrence、人物—道具交互与连续性；
+3. 五 Gate 与项目级 Guided Studio；
+4. 4–6 个通过全目标矩阵验收的策展视觉 Preset；
+5. 六类视觉目标、严格视图组、人工逐 Target 选择和正式参考；
+6. 人物三视图、多形象三视图、地点板、道具四视图、Scene 组合和人物拿道具组合；
+7. Scene-ready 门与 Packet-first 分镜，每 Shot 绑定精确视觉输入；
+8. 变更前影响、局部失效/重做、可追溯只读结果；
+9. 任务、决议、正式效果、恢复分层和同决议故障恢复；
+10. 一条真实图片路径、真实媒体产物与安全预览，但无支付、价格主链和多 Provider 广度要求；
+11. 精确版本、权限、stale/conflict/unknown/partial/dependency unavailable 失败路径；
+12. 真实完整剧本的全量机器验收与代表范围人工验收。
+
+### 12.2 Platform Complete 保留目标
+
+- 更多 Preset/社区生态、用户自定义视觉基底和高级版本迁移；
+- 多 Provider 策略、路由、成本优化、配额、计费、支付和商业化；
+- Shot Frame/Video、音频、口型、成片渲染、剪辑、导出和交付中心；
+- StoryGraph/Workflow 高级 Lens、可写 Intent、可写 Canvas 和多人协作；
+- 通知、SLA、跨项目 Inbox、批量运营、高级权限和管理报表；
+- 通用 Skill 市场、第三方 Skill 自助上架和未经人工策展的自动吸收。
+
+这些能力不得通过空页面、disabled 菜单、mock DTO 或旧功能改名报告为 MVP 完成。
+
+## 13. 产品成功指标
+
+### 13.1 北极星指标
+
+**Production-ready Scene Coverage**：
+
+```text
+已完成 P0–P2 制作世界、所有 required 参考已正式选择，
+且可构建精确分镜输入包的 Scene 数
+÷
+已批准制作范围内应进入分镜的 Scene 总数
+```
+
+指标必须显示分子/分母、阻塞原因和 scope，不只显示百分比。它不因生成图片数增加，也不因一次候选选择而自动认定整个 Gate 完成。
+
+### 13.2 领先指标
+
+| 指标 | 产品意义 |
+|---|---|
+| Source Coverage | 完整原稿是否无未解释空洞/重叠 |
+| Resolved Identity Coverage | 制作范围内 mention 是否全部归入可追溯身份或明确未解决 |
+| Production World Coverage | 应制作 Scene 的状态、出场、交互与连续性是否闭合 |
+| Approved Reference Plan Coverage | 应有 required/optional/not generated 判定的对象是否已覆盖 |
+| Required Reference Coverage | required 目标是否已有人工选择且正式提交的结果 |
+| Formal Storyboard Coverage | production-ready Scene 是否已批准整场正式分镜 |
+| Decision→Effect→Resume Latency | 人工决议后正式提交与继续是否可用 |
+| Local Rework Ratio | 变更后重做是否被限定在真实受影响范围 |
+| Unknown Recovery Rate | 断线/重启/未知结果是否能恢复到同一决议/目标 |
+
+### 13.3 质量护栏
+
+以下事件在正式结果中的目标数量均为 `0`：
+
+- 无原文 Evidence 也无明确创作决定的制作事实；
+- 同一人物因别名、换装、伤势或画风被拆成重复身份；
+- “人物拿道具”被发布成人物形象或道具状态；
+- 三/四视图从不同候选组拼凑，或必需视图/质量失败仍被选择；
+- 未逐项确认 warning 的视觉 Bundle 被发布；
+- 缺 required 参考或连续性未闭合的 Scene 被标记 production-ready；
+- 使用模糊“最新资产”、错误人物形象/道具状态或跨 Scene 资产的正式 Shot；
+- 候选或人工 Decision 被误报为正式 Owner 结果或 Workflow 已继续；
+- 同一个用户决议、生成目标或正式结果因重试被重复执行；
+- Secret/私有预览地址/原稿全文进入日志、分析事件或浏览器持久化。
+
+图片数、Provider 数、花费、付费转化和 Canvas 节点数不是 MVP 成功指标。
+
+## 14. MVP 发布门
+
+### 14.1 Gate A：完整剧本结构与身份
+
+- 一份有合法使用权的完整验收剧本完成全量原文覆盖，不用两场样本代替整本；
+- 验收剧本必须包含跨 Episode 身份复用、别名或同名歧义，且结果可从正式身份反查原文；
+- Gate 1 批准、变更请求、局部阻塞和浏览器/服务重启恢复均通过。
+
+### 14.2 Gate B：制作世界与连续性
+
+- 验收剧本至少有一个人物两个形象状态、一个道具两个剧情状态和一条跨 Scene 持有/交接链；
+- 人物多形象仍为同一身份，人物—道具交互不污染人物形象；
+- State、Occurrence、Interaction、Continuity 与 Design Gap 的审核、修改、影响和局部恢复通过；
+- 已批准制作范围没有未说明的阻塞，未批准范围被明确标注而不被隐藏。
+
+### 14.3 Gate C：预设与参考视觉
+
+- 4–6 个策展 Preset 各自完成人物锚点/形象、地点、道具、Scene 和 Interaction 全矩阵验收；
+- 在至少一个 faithful 和一个 world adaptation 流程中，风格不改写原文/身份/状态事实，冲突与影响可见；
+- 验收剧本在至少一条真实图片路径上完成六类目标的完整 Bundle、质量问题、人工逐 Target 选择和正式结果；
+- 验收至少覆盖同一人物两个形象三视图、地点板、道具两个状态、Scene 组合和人物拿取/交接道具组合；
+- 任一 required Target 未正式完成时 Gate 4 不显示完成，但无关 Target/Scene 仍可继续；
+- 断线、重启、单次发送结果未知和正式结果提交冲突的原目标恢复通过。
+
+### 14.4 Gate D：分镜与完整产品旅程
+
+- 验收剧本已批准制作范围的 Production-ready Scene Coverage 达到 100%，任何排除项都有显式范围决议；
+- 所有 production-ready Scene 按精确输入包完成分镜候选、整场审核、正式提交与同决议恢复；
+- 至少一个修改旅程证明上游 State/Interaction/参考替换只失效真正受影响的 Scene/参考/分镜；
+- Guided Studio 的五 Gate、scope、候选比较、影响、决议/效果/恢复和失败路径在真实 Backend 事实上完成 Desktop/窄屏/键盘/screen reader 验收；
+- 完整旅程能从正式 Shot 反查精确视觉参考、生产世界、身份与原文/创作决定；
+- 新目标的全量自动化、真实服务重启、安全/数据卫生和最终 Web Journey 均通过。
+
+## 15. 运营与范围决策
+
+### 15.1 内容与权利
+
+- 用户必须对导入原稿和使用资产拥有合法权利；
+- Preset 预览、案例、配方、外部 Skill 与模型能力均需有可追溯来源/许可；
+- 无法证明权利的社区 Prompt/Skill 不进入内置发布物，可只吸收抽象产品概念并重新实现。
+
+### 15.2 缺失外部条件
+
+- 零 Provider 配置不阻止导入、Gate 1–3、查询和历史审核；
+- 没有可用图片路径时，Gate 4 需要生成的 Target 显示真实阻塞，不弹出付费升级；
+- 外部条件缺失的验收项保持未通过，不用 mock 或跳过报告为成功。
+
+## 16. 风险与产品缓解
+
+| 风险 | 产品缓解 |
+|---|---|
+| 完整剧本分析存在模型非确定性 | 原文证据、确定性问题、人工 Gate、局部 Repair 和不隐藏歧义 |
+| 跨集别名/同名造成重复身份 | 全局 mention cluster、显式 split/merge/reuse 和影响预览 |
+| 人物多形象造成人脸/体型漂移 | 身份锚点依赖、不变/可变槽位、整组视图审核和人工选择 |
+| 道具交互组合数量爆炸 | 基础资产先行，只对指定、重复、英雄/特写或高连续性风险组合生成 |
+| 风格 Preset 污染剧本事实 | style-blind 事实阶段、faithful 默认、world adaptation 显式映射 |
+| 视觉模型无法稳定生成一致组图 | strict required views、确定性质量检查、视觉建议和人工整组选择 |
+| 外部 Skill/Provider 是黑盒 | 平台保留自己的目标、输入、产物摘要、问题和人工决议，黑盒输出只是候选 |
+| 用户被五 Gate 和大量 Target 压垮 | 项目级下一步、issue-first 导航、范围过滤、覆盖分子/分母和局部可继续 |
+| 断线/重启/远程未知导致重复决策或重复生成 | 三阶段状态、原决议/原目标对账、明确恢复而不重提 |
+| 历史代码与新主链双写漂移 | 新 run 只走五 Gate，旧 run 精确恢复/终止，不把旧 Subject/页面伪装升级 |
+
+## 17. 产品验收语义
+
+### 17.1 “完成”不等于
+
+- 文档已写或页面已打开；
+- 用 mock/fixture 展示一条成功流程；
+- Agent 返回 Candidate，但人工未决策或正式业务结果未提交；
+- 单张角色图或拼凑三视图通过；
+- 一个 Scene 或两集小样本通过，但完整原稿未统计；
+- 本地单测通过，但重启/未知/真实媒体/数据卫生未验证；
+- Canvas、Cost、Video 或 Provider 数量完成，但五 Gate 主旅程未闭环。
+
+### 17.2 MVP 完成必须同时满足
+
+1. 一份完整验收剧本全量覆盖，未处理范围明确可见；
+2. 五 Gate 各自有真实候选、决策、正式结果、故障/恢复证据；
+3. 人物多形象、地点、道具多状态、人物拿取/交接道具和逐 Scene 组合得到正式参考；
+4. 已批准制作范围的 Production-ready Scene Coverage 为 100%，并完成正式分镜；
+5. 修改与未知结果都能在真实受影响 scope 恢复，不重复或污染无关结果；
+6. 产品、合同、单元/组件、集成、真实服务、安全与 Web Journey 验收都有当次真实证据；
+7. 任何缺少的外部条件和未通过项仍明确记录，不被降级为警告后报告完成。
+
+## 18. 文档与实施门禁
+
+本 PRD 不推翻已接受 Design，不把产品语义复制为第二份 Agent PRD。下一步 `VP-D14` 必须将本文的五 Gate、整本覆盖、人物多形象、地点/道具状态、Interaction、Preset、六类视觉目标、参考 Bundle、Scene-ready、Packet-first Storyboard、影响与恢复转成可测跨服务合同，同时将 Agent/Harness 责任收口到专项 Requirement。
+
+`VP-D15` 再按 P0–P4 排序唯一 Plan 与初始全未通过 Acceptance。历史 `SG-Ixx` 证据不抵扣新合同；`VP-D15` 接受前不编码。
