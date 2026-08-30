@@ -11,9 +11,6 @@ func TestLoadBuildsSingleDatabaseAPIConfiguration(t *testing.T) {
 	t.Setenv("API_HOST", "127.0.0.1")
 	t.Setenv("API_PORT", "8765")
 	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
-	t.Setenv("IMAGE_PROVIDER", "")
-	t.Setenv("RUNWARE_API_KEY", "")
-	t.Setenv("RUNWARE_REQUEST_TIMEOUT_SECONDS", "")
 
 	configuration, err := config.Load()
 	if err != nil {
@@ -40,9 +37,6 @@ func TestLoadBuildsSingleDatabaseAPIConfiguration(t *testing.T) {
 	if configuration.ReviewClaimLease != 5*time.Minute {
 		t.Fatalf("unexpected review claim lease: %s", configuration.ReviewClaimLease)
 	}
-	if configuration.ImageProvider != "" || configuration.RunwareAPIKey != "" || configuration.RunwareRequestTimeout != 0 {
-		t.Fatalf("disabled image Provider configuration = %#v", configuration)
-	}
 	if configuration.TemporalAddress != "127.0.0.1:7233" || configuration.TemporalNamespace != "default" ||
 		configuration.TemporalTaskQueue != "lanverse-production-v1" {
 		t.Fatalf("unexpected Temporal configuration: %#v", configuration)
@@ -54,58 +48,6 @@ func TestLoadBuildsSingleDatabaseAPIConfiguration(t *testing.T) {
 		configuration.ElasticsearchURL != "http://127.0.0.1:9200" ||
 		configuration.ElasticsearchScriptAlias == configuration.ElasticsearchStoryGraphAlias {
 		t.Fatalf("unexpected Kafka eventing configuration: %#v", configuration)
-	}
-}
-
-func TestLoadEnablesOnlyConfiguredRunwareImageProvider(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
-	t.Setenv("IMAGE_PROVIDER", "runware")
-	t.Setenv("RUNWARE_API_KEY", "runware-test-secret")
-	t.Setenv("RUNWARE_REQUEST_TIMEOUT_SECONDS", "45")
-	configuration, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if configuration.ImageProvider != "runware" || configuration.RunwareAPIKey != "runware-test-secret" ||
-		configuration.RunwareRequestTimeout != 45*time.Second {
-		t.Fatalf("Runware image Provider configuration drifted: %#v", configuration)
-	}
-}
-
-func TestLoadDoesNotReadRunwareSecretWhileImageProviderIsDisabled(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
-	t.Setenv("RUNWARE_API_KEY", "must-not-enter-config")
-	t.Setenv("RUNWARE_REQUEST_TIMEOUT_SECONDS", "invalid-while-disabled")
-	configuration, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if configuration.ImageProvider != "" || configuration.RunwareAPIKey != "" || configuration.RunwareRequestTimeout != 0 {
-		t.Fatalf("disabled image Provider read Runware configuration: %#v", configuration)
-	}
-}
-
-func TestLoadRejectsInvalidOrIncompleteRunwareImageProviderConfiguration(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
-	for name, values := range map[string]map[string]string{
-		"unknown Provider": {"IMAGE_PROVIDER": "fallback-provider"},
-		"missing API key":  {"IMAGE_PROVIDER": "runware"},
-		"empty API key":    {"IMAGE_PROVIDER": "runware", "RUNWARE_API_KEY": "   "},
-		"zero timeout": {
-			"IMAGE_PROVIDER": "runware", "RUNWARE_API_KEY": "test-key", "RUNWARE_REQUEST_TIMEOUT_SECONDS": "0",
-		},
-		"excessive timeout": {
-			"IMAGE_PROVIDER": "runware", "RUNWARE_API_KEY": "test-key", "RUNWARE_REQUEST_TIMEOUT_SECONDS": "121",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			for key, value := range values {
-				t.Setenv(key, value)
-			}
-			if _, err := config.Load(); err == nil {
-				t.Fatal("Load accepted invalid Runware image Provider configuration")
-			}
-		})
 	}
 }
 

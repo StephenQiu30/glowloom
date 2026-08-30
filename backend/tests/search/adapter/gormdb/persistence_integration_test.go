@@ -46,8 +46,14 @@ func TestPostgreSQLOwnerSnapshotsDriveAuthorizedRealElasticsearchSearchAndStalen
 	}
 	fixture := seedSearchOwners(t, func(value any) error { return database.Create(value).Error })
 	prefix := "lanverse-pg-search-" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	username := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_USERNAME")
+	password := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_PASSWORD")
+	if (username == "") != (password == "") {
+		t.Fatal("LANVERSE_TEST_ELASTICSEARCH_USERNAME and LANVERSE_TEST_ELASTICSEARCH_PASSWORD must be configured together")
+	}
 	index, err := searches.New(searches.Config{
-		Addresses: []string{elasticsearchURL}, ScriptAlias: prefix + "-script-v1", StoryGraphAlias: prefix + "-storygraph-v1",
+		Addresses: []string{elasticsearchURL}, Username: username, Password: password,
+		ScriptAlias: prefix + "-script-v1", StoryGraphAlias: prefix + "-storygraph-v1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +64,9 @@ func TestPostgreSQLOwnerSnapshotsDriveAuthorizedRealElasticsearchSearchAndStalen
 	t.Cleanup(func() {
 		request, requestErr := http.NewRequest(http.MethodDelete, strings.TrimRight(elasticsearchURL, "/")+"/"+prefix+"-*", nil)
 		if requestErr == nil {
+			if username != "" {
+				request.SetBasicAuth(username, password)
+			}
 			_, _ = http.DefaultClient.Do(request)
 		}
 	})

@@ -14,7 +14,7 @@ import (
 
 const (
 	defaultMaxOpenConnections = 20
-	defaultMaxIdleConnections = 10
+	defaultMaxIdleConnections = defaultMaxOpenConnections
 	defaultConnectionLifetime = 30 * time.Minute
 )
 

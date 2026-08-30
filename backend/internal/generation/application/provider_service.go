@@ -16,9 +16,8 @@ import (
 )
 
 const (
-	publishProviderBindingOperation = "generation.provider_binding.publish"
-	submitProviderOperation         = "generation.provider.submit"
-	reconcileProviderOperation      = "generation.provider.reconcile"
+	submitProviderOperation    = "generation.provider.submit"
+	reconcileProviderOperation = "generation.provider.reconcile"
 
 	ProviderOutcomeAccepted  = "accepted"
 	ProviderOutcomeSucceeded = "succeeded"
@@ -27,12 +26,10 @@ const (
 )
 
 var (
-	ErrProviderBindingNotFound       = errors.New("generation Provider binding not found")
 	ErrGenerationRequestNotFound     = errors.New("generation request not found")
 	ErrProviderJobNotFound           = errors.New("generation Provider job not found")
 	ErrProviderResultReceiptNotFound = errors.New("generation Provider result receipt not found")
 	providerIdentifierPattern        = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{2,119}$`)
-	credentialReferencePattern       = regexp.MustCompile(`^[a-z0-9][a-z0-9/_-]{2,159}$`)
 	providerFailurePattern           = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{2,119}$`)
 	providerOutputKeyPattern         = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$`)
 )
@@ -42,7 +39,10 @@ type ProviderOutput = domain.ProviderOutput
 type ProviderSubmission struct {
 	WorkspaceID, ProjectID, ProviderJobID string
 	RequestID, RequestKey, IntentID       string
-	ProviderKey, ModelKey, CredentialRef  string
+	ProviderKey, ExternalModelID          string
+	ConnectionVersionID                   string
+	CredentialVersionID                   string
+	ModelProfileVersionID                 string
 	TargetHash                            string
 	Units                                 int64
 	Target                                domain.GenerationTarget
@@ -76,9 +76,12 @@ type QuotaProviderOwner interface {
 type ProviderRepository interface {
 	PreparationRepository
 	AuthorizeProviderProject(context.Context, Actor, string) (ProviderProjectScope, error)
-	LatestProviderBindingForUpdate(context.Context, string, string) (domain.ProviderBinding, error)
-	FindProviderBinding(context.Context, string) (domain.ProviderBinding, error)
-	CreateProviderBinding(context.Context, domain.ProviderBinding) (domain.ProviderBinding, error)
+	LockProviderWorkspace(context.Context, string) error
+	LatestProjectProviderBindingForUpdate(context.Context, string, string, string) (domain.ProjectProviderBindingVersion, error)
+	FindProjectProviderBinding(context.Context, string) (domain.ProjectProviderBindingVersion, error)
+	LatestProviderConnectionForUpdate(context.Context, string, string) (domain.ProviderConnectionVersion, error)
+	FindProviderModelProfile(context.Context, string) (domain.ProviderModelProfileVersion, error)
+	LatestProviderModelProfileForUpdate(context.Context, string, string) (domain.ProviderModelProfileVersion, error)
 	FindRequestByIntent(context.Context, string) (domain.GenerationRequest, error)
 	FindGenerationRequest(context.Context, string) (domain.GenerationRequest, error)
 	EnsureRequestAndJob(context.Context, domain.GenerationRequest, domain.ProviderJob) (domain.GenerationRequest, domain.ProviderJob, error)
@@ -97,11 +100,13 @@ type ProviderTransactionManager interface {
 }
 
 type ProviderConfig struct {
-	Now           func() time.Time
-	NewID         func() string
-	ProviderKey   string
-	ModelKey      string
-	CredentialRef string
+	Now      func() time.Time
+	NewID    func() string
+	Bindings ProjectProviderBindingResolver
+}
+
+type ProjectProviderBindingResolver interface {
+	ResolveProjectBinding(context.Context, Actor, string, string) (ResolvedProjectProviderBinding, error)
 }
 
 type ProviderProjectScope struct {
@@ -114,26 +119,12 @@ type ProviderService struct {
 	config       ProviderConfig
 }
 
-type PublishProviderBindingCommand struct {
-	WorkspaceID, ProjectID, ProviderKey, ModelKey string
-	CredentialRef, IdempotencyKey                 string
-}
-
-type PublishConfiguredImageProviderBindingCommand struct {
-	ProjectID, IdempotencyKey string
-}
-
 type SubmitImageRequestCommand struct {
 	IntentID, IdempotencyKey string
 }
 
 type ReconcileProviderJobCommand struct {
 	ProviderJobID, IdempotencyKey string
-}
-
-type ProviderBindingResult struct {
-	Binding domain.ProviderBinding
-	Receipt platformcommand.Receipt
 }
 
 type ProviderExecutionResult struct {
@@ -144,27 +135,19 @@ type ProviderExecutionResult struct {
 	Receipt         platformcommand.Receipt
 }
 
-type providerBindingReceipt struct {
-	BindingID string `json:"binding_id"`
-}
-
 type providerCommandReceipt struct {
 	RequestID, JobID string
 }
 
-type providerBindingHashInput struct {
-	WorkspaceID, ProjectID, Capability   string
-	ProviderKey, ModelKey, CredentialRef string
-	Revision                             int64
-}
-
 type generationRequestHashInput struct {
-	WorkspaceID, ProjectID, IntentID, TargetID       string
-	BindingID                                        string
-	BindingRevision                                  int64
-	Capability, ProviderKey, ModelKey, CredentialRef string
-	RequestKey, TargetHash                           string
-	Units                                            int64
+	WorkspaceID, ProjectID, IntentID, TargetID string
+	BindingID                                  string
+	BindingRevision                            int64
+	Purpose, ProviderKey, ExternalModelID      string
+	ConnectionVersionID, CredentialVersionID   string
+	ModelProfileVersionID                      string
+	RequestKey, TargetHash                     string
+	Units                                      int64
 }
 
 type providerJobHashInput struct {
@@ -195,6 +178,12 @@ type providerInvocation struct {
 	submit     bool
 }
 
+type providerBindingCandidate struct {
+	resolved   ResolvedProjectProviderBinding
+	resolveErr error
+	required   bool
+}
+
 func NewProviderService(
 	transactions ProviderTransactionManager,
 	gateway ProviderGateway,
@@ -203,163 +192,21 @@ func NewProviderService(
 	return &ProviderService{transactions: transactions, gateway: gateway, config: config}
 }
 
-func (service *ProviderService) PublishConfiguredImageProviderBinding(
+func (service *ProviderService) RequireProjectProviderBinding(
 	ctx context.Context,
 	actor Actor,
-	command PublishConfiguredImageProviderBindingCommand,
-) (ProviderBindingResult, error) {
-	command.ProjectID = strings.TrimSpace(command.ProjectID)
-	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
-	if !service.readValid() || !validPreparationActor(actor) || !validUUID(command.ProjectID) ||
-		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
-		return ProviderBindingResult{}, invalid("Invalid configured Generation Provider binding")
-	}
-	providerKey, modelKey, credentialRef, err := service.configuredProviderValues()
-	if err != nil {
-		return ProviderBindingResult{}, err
-	}
-	return service.PublishImageProviderBinding(ctx, actor, PublishProviderBindingCommand{
-		ProjectID: command.ProjectID, ProviderKey: providerKey, ModelKey: modelKey,
-		CredentialRef: credentialRef, IdempotencyKey: command.IdempotencyKey,
-	})
-}
-
-func (service *ProviderService) PublishImageProviderBinding(
-	ctx context.Context,
-	actor Actor,
-	command PublishProviderBindingCommand,
-) (ProviderBindingResult, error) {
-	actor.UserID = strings.TrimSpace(actor.UserID)
-	command.WorkspaceID = strings.TrimSpace(command.WorkspaceID)
-	command.ProjectID = strings.TrimSpace(command.ProjectID)
-	command.ProviderKey = strings.TrimSpace(command.ProviderKey)
-	command.ModelKey = strings.TrimSpace(command.ModelKey)
-	command.CredentialRef = strings.TrimSpace(command.CredentialRef)
-	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
-	if !service.readValid() || !validPreparationActor(actor) ||
-		(command.WorkspaceID != "" && !validUUID(command.WorkspaceID)) ||
-		!validUUID(command.ProjectID) || !providerIdentifierPattern.MatchString(command.ProviderKey) ||
-		!providerIdentifierPattern.MatchString(command.ModelKey) ||
-		!credentialReferencePattern.MatchString(command.CredentialRef) || command.IdempotencyKey == "" ||
-		len(command.IdempotencyKey) > 200 {
-		return ProviderBindingResult{}, invalid("Invalid Generation Provider binding")
-	}
-	now := service.config.Now().UTC().Truncate(time.Microsecond)
-	var result ProviderBindingResult
-	err := service.transactions.WithinProviderTransaction(ctx, func(
-		repo ProviderRepository,
-		_ CostProviderOwner,
-		_ QuotaProviderOwner,
-	) error {
-		if command.WorkspaceID == "" {
-			scope, authorizeErr := repo.AuthorizeProviderProject(ctx, actor, command.ProjectID)
-			if authorizeErr != nil {
-				return authorizeErr
-			}
-			command.WorkspaceID, command.ProjectID = scope.WorkspaceID, scope.ProjectID
-		} else if authorizeErr := repo.AuthorizeProject(
-			ctx, actor, command.WorkspaceID, command.ProjectID, true,
-		); authorizeErr != nil {
-			return authorizeErr
-		}
-		inputHash, hashErr := platformcommand.InputHash(struct {
-			ActorID string
-			Command PublishProviderBindingCommand
-		}{ActorID: actor.UserID, Command: command})
-		if hashErr != nil {
-			return hashErr
-		}
-		if receipt, findErr := repo.FindReceipt(ctx, command.WorkspaceID, publishProviderBindingOperation, command.IdempotencyKey); findErr == nil {
-			return replayProviderBinding(ctx, repo, receipt, inputHash, &result)
-		} else if !errors.Is(findErr, platformcommand.ErrReceiptNotFound) {
-			return findErr
-		}
-		latest, findErr := repo.LatestProviderBindingForUpdate(ctx, command.WorkspaceID, command.ProjectID)
-		revision := int64(1)
-		if findErr == nil {
-			if validateProviderBinding(latest) != nil {
-				return conflict("Generation Provider binding facts have drifted")
-			}
-			revision = latest.Revision + 1
-		} else if !errors.Is(findErr, ErrProviderBindingNotFound) {
-			return findErr
-		}
-		bindingID := strings.TrimSpace(service.config.NewID())
-		if !validUUID(bindingID) {
-			return errors.New("Generation Provider binding identifier is invalid")
-		}
-		desired := domain.ProviderBinding{
-			ID: bindingID, WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
-			Capability: costdomain.MetricGenerationImage, ProviderKey: command.ProviderKey,
-			ModelKey: command.ModelKey, CredentialRef: command.CredentialRef, Revision: revision,
-			CreatedBy: actor.UserID, CreatedAt: now,
-		}
-		desired.ContentHash, findErr = providerBindingContentHash(desired)
-		if findErr != nil {
-			return findErr
-		}
-		binding, createErr := repo.CreateProviderBinding(ctx, desired)
-		if createErr != nil {
-			return createErr
-		}
-		if !domain.SameProviderBinding(binding, desired) {
-			return platformcommand.ErrInputMismatch
-		}
-		encoded, encodeErr := platformcommand.Result(providerBindingReceipt{BindingID: binding.ID})
-		if encodeErr != nil {
-			return encodeErr
-		}
-		receipt, receiptErr := service.ensureProviderCommandReceipt(
-			ctx, repo, actor, binding.WorkspaceID, publishProviderBindingOperation,
-			command.IdempotencyKey, inputHash, binding.ID, encoded, now,
-		)
-		if receiptErr != nil {
-			return receiptErr
-		}
-		result = ProviderBindingResult{Binding: binding, Receipt: receipt}
-		return nil
-	})
-	return result, normalizeProviderError(err)
-}
-
-func (service *ProviderService) RequireConfiguredImageProviderBinding(
-	ctx context.Context,
-	actor Actor,
-	workspaceID string,
 	projectID string,
-) (domain.ProviderBinding, error) {
+	purpose string,
+) (domain.ProjectProviderBindingVersion, error) {
 	actor.UserID = strings.TrimSpace(actor.UserID)
-	workspaceID = strings.TrimSpace(workspaceID)
 	projectID = strings.TrimSpace(projectID)
-	if !service.valid() || !validPreparationActor(actor) || !validUUID(workspaceID) || !validUUID(projectID) {
-		return domain.ProviderBinding{}, invalid("Invalid configured Generation Provider binding request")
+	purpose = strings.TrimSpace(purpose)
+	if !service.readValid() || service.config.Bindings == nil || !validPreparationActor(actor) ||
+		!validUUID(projectID) || !validProviderPurpose(purpose) {
+		return domain.ProjectProviderBindingVersion{}, invalid("Invalid Project Media Provider binding request")
 	}
-	providerKey, modelKey, credentialRef, configErr := service.configuredProviderValues()
-	if configErr != nil {
-		return domain.ProviderBinding{}, configErr
-	}
-	var result domain.ProviderBinding
-	err := service.transactions.WithinProviderTransaction(ctx, func(
-		repo ProviderRepository,
-		_ CostProviderOwner,
-		_ QuotaProviderOwner,
-	) error {
-		if authorizeErr := repo.AuthorizeProject(ctx, actor, workspaceID, projectID, true); authorizeErr != nil {
-			return authorizeErr
-		}
-		binding, findErr := repo.LatestProviderBindingForUpdate(ctx, workspaceID, projectID)
-		if findErr != nil {
-			return findErr
-		}
-		if validateProviderBinding(binding) != nil || binding.WorkspaceID != workspaceID || binding.ProjectID != projectID ||
-			binding.Capability != costdomain.MetricGenerationImage || binding.ProviderKey != providerKey ||
-			binding.ModelKey != modelKey || binding.CredentialRef != credentialRef {
-			return conflict("Configured Generation Provider binding has drifted")
-		}
-		result = binding
-		return nil
-	})
-	return result, normalizeProviderError(err)
+	resolved, err := service.config.Bindings.ResolveProjectBinding(ctx, actor, projectID, purpose)
+	return resolved.Binding, normalizeProviderError(err)
 }
 
 func (service *ProviderService) SubmitImageRequest(
@@ -380,7 +227,11 @@ func (service *ProviderService) SubmitImageRequest(
 	if err != nil {
 		return ProviderExecutionResult{}, err
 	}
-	invocation, err := service.prepareProviderSubmission(ctx, authorization, command, inputHash)
+	bindingCandidate, err := service.prepareProviderBindingCandidate(ctx, authorization)
+	if err != nil {
+		return ProviderExecutionResult{}, normalizeProviderError(err)
+	}
+	invocation, err := service.prepareProviderSubmission(ctx, authorization, command, inputHash, bindingCandidate)
 	if err != nil || !invocation.callRemote {
 		return invocation.result, normalizeProviderError(err)
 	}
@@ -474,11 +325,55 @@ func (service *ProviderService) RequireSucceededProviderResult(
 	return result, normalizeProviderError(err)
 }
 
+func (service *ProviderService) prepareProviderBindingCandidate(
+	ctx context.Context,
+	authorization domain.ExecutionAuthorization,
+) (providerBindingCandidate, error) {
+	var candidate providerBindingCandidate
+	var actor Actor
+	var projectID string
+	err := service.transactions.WithinProviderTransaction(ctx, func(
+		repo ProviderRepository,
+		_ CostProviderOwner,
+		_ QuotaProviderOwner,
+	) error {
+		intent, loadErr := repo.GetIntentForUpdate(ctx, authorization.IntentID)
+		if loadErr != nil {
+			return loadErr
+		}
+		if _, requestErr := repo.FindRequestByIntent(ctx, intent.ID); requestErr == nil {
+			return nil
+		} else if !errors.Is(requestErr, ErrGenerationRequestNotFound) {
+			return requestErr
+		}
+		if loadErr = validateAuthorizationBinding(intent, authorization, true); loadErr != nil {
+			return loadErr
+		}
+		if !service.config.Now().UTC().Before(authorization.ExpiresAt) {
+			return authorizationExpired()
+		}
+		candidate.required = true
+		actor, projectID = intentActor(intent), intent.ProjectID
+		return nil
+	})
+	if err != nil || !candidate.required {
+		return candidate, err
+	}
+	candidate.resolved, candidate.resolveErr = service.config.Bindings.ResolveProjectBinding(
+		ctx,
+		actor,
+		projectID,
+		domain.ProviderPurposeReferenceAsset,
+	)
+	return candidate, nil
+}
+
 func (service *ProviderService) prepareProviderSubmission(
 	ctx context.Context,
 	authorization domain.ExecutionAuthorization,
 	command SubmitImageRequestCommand,
 	inputHash string,
+	bindingCandidate providerBindingCandidate,
 ) (providerInvocation, error) {
 	var invocation providerInvocation
 	now := service.config.Now().UTC().Truncate(time.Microsecond)
@@ -553,19 +448,46 @@ func (service *ProviderService) prepareProviderSubmission(
 		if targetErr != nil || validateIntentTargetBinding(target, intent) != nil {
 			return conflict("Generation Provider Target snapshot has drifted")
 		}
-		binding, bindingErr := repo.LatestProviderBindingForUpdate(ctx, intent.WorkspaceID, intent.ProjectID)
-		if bindingErr != nil {
-			return bindingErr
+		if !bindingCandidate.required {
+			return conflict("Project Media Provider binding candidate is missing")
 		}
-		if bindingErr = validateProviderBinding(binding); bindingErr != nil {
-			return bindingErr
+		if bindingCandidate.resolveErr != nil {
+			return bindingCandidate.resolveErr
 		}
-		providerKey, modelKey, credentialRef, bindingErr := service.configuredProviderValues()
-		if bindingErr != nil {
-			return bindingErr
+		resolved := bindingCandidate.resolved
+		binding, connection, profile := resolved.Binding, resolved.Connection, resolved.Profile
+		if binding.WorkspaceID != intent.WorkspaceID || binding.ProjectID != intent.ProjectID ||
+			binding.Purpose != domain.ProviderPurposeReferenceAsset ||
+			connection.ID != binding.ConnectionVersionID || profile.ID != binding.ModelProfileVersionID ||
+			validateProviderConnectionVersion(connection) != nil || validateProviderModelProfileVersion(profile) != nil {
+			return conflict("Project Media Provider binding has drifted")
 		}
-		if binding.ProviderKey != providerKey || binding.ModelKey != modelKey || binding.CredentialRef != credentialRef {
-			return conflict("Configured Generation Provider binding has drifted")
+		if lockErr := repo.LockProviderWorkspace(ctx, intent.WorkspaceID); lockErr != nil {
+			return lockErr
+		}
+		latestBinding, bindingErr := repo.LatestProjectProviderBindingForUpdate(
+			ctx, intent.WorkspaceID, intent.ProjectID, domain.ProviderPurposeReferenceAsset,
+		)
+		if bindingErr != nil || latestBinding.ID != binding.ID || latestBinding.ContentHash != binding.ContentHash {
+			return conflict("Project Media Provider binding has changed before request creation")
+		}
+		latestConnection, bindingErr := repo.LatestProviderConnectionForUpdate(
+			ctx,
+			intent.WorkspaceID,
+			connection.ConnectionKey,
+		)
+		if bindingErr != nil || latestConnection.ID != connection.ID ||
+			latestConnection.ContentHash != connection.ContentHash || latestConnection.State != domain.ProviderStateEnabled {
+			return conflict("Media Provider connection has changed before request creation")
+		}
+		latestProfile, bindingErr := repo.LatestProviderModelProfileForUpdate(
+			ctx,
+			intent.WorkspaceID,
+			profile.ProfileKey,
+		)
+		if bindingErr != nil || latestProfile.ID != profile.ID || latestProfile.ContentHash != profile.ContentHash ||
+			latestProfile.State != domain.ProviderStateEnabled {
+			return conflict("Media Provider model profile has changed before request creation")
 		}
 		requestID, jobID := strings.TrimSpace(service.config.NewID()), strings.TrimSpace(service.config.NewID())
 		if !validUUID(requestID) || !validUUID(jobID) {
@@ -574,9 +496,11 @@ func (service *ProviderService) prepareProviderSubmission(
 		request = domain.GenerationRequest{
 			ID: requestID, WorkspaceID: intent.WorkspaceID, ProjectID: intent.ProjectID, IntentID: intent.ID,
 			TargetID:  intent.TargetID,
-			BindingID: binding.ID, BindingRevision: binding.Revision, Capability: binding.Capability,
-			ProviderKey: binding.ProviderKey, ModelKey: binding.ModelKey, CredentialRef: binding.CredentialRef,
-			RequestKey: "generation-request:" + requestID, TargetHash: intent.TargetHash, Units: intent.Units,
+			BindingID: binding.ID, BindingRevision: binding.Revision, Purpose: binding.Purpose,
+			ProviderKey: binding.ProviderKey, ExternalModelID: profile.ExternalModelID,
+			ConnectionVersionID: binding.ConnectionVersionID, CredentialVersionID: binding.CredentialVersionID,
+			ModelProfileVersionID: binding.ModelProfileVersionID,
+			RequestKey:            "generation-request:" + requestID, TargetHash: intent.TargetHash, Units: intent.Units,
 			CreatedBy: intent.CreatedBy, CreatedAt: now,
 		}
 		request.ContentHash, loadErr = generationRequestContentHash(request)
@@ -896,12 +820,19 @@ func (service *ProviderService) validateProviderFacts(
 	if err != nil || validateProviderTargetBinding(target, intent, request) != nil {
 		return conflict("Generation Provider Target snapshot has drifted")
 	}
-	binding, err := repo.FindProviderBinding(ctx, request.BindingID)
-	if err != nil || validateProviderBinding(binding) != nil || binding.WorkspaceID != request.WorkspaceID ||
+	binding, err := repo.FindProjectProviderBinding(ctx, request.BindingID)
+	if err != nil || validateProjectProviderBinding(binding) != nil || binding.WorkspaceID != request.WorkspaceID ||
 		binding.ProjectID != request.ProjectID || binding.Revision != request.BindingRevision ||
-		binding.Capability != request.Capability || binding.ProviderKey != request.ProviderKey ||
-		binding.ModelKey != request.ModelKey || binding.CredentialRef != request.CredentialRef {
+		binding.Purpose != request.Purpose || binding.ProviderKey != request.ProviderKey ||
+		binding.ConnectionVersionID != request.ConnectionVersionID ||
+		binding.CredentialVersionID != request.CredentialVersionID ||
+		binding.ModelProfileVersionID != request.ModelProfileVersionID {
 		return conflict("Generation Provider binding snapshot has drifted")
+	}
+	profile, err := repo.FindProviderModelProfile(ctx, request.ModelProfileVersionID)
+	if err != nil || profile.WorkspaceID != request.WorkspaceID || profile.ProviderKey != request.ProviderKey ||
+		profile.ExternalModelID != request.ExternalModelID || profile.Modality != binding.Modality {
+		return conflict("Generation Provider model profile snapshot has drifted")
 	}
 	if err = (&PreparationService{}).validateOwnerReceipts(ctx, repo, intent); err != nil {
 		return err
@@ -1042,25 +973,6 @@ func (service *ProviderService) ensureProviderCommandReceipt(
 	})
 }
 
-func replayProviderBinding(
-	ctx context.Context,
-	repo ProviderRepository,
-	receipt platformcommand.Receipt,
-	inputHash string,
-	result *ProviderBindingResult,
-) error {
-	replayed, err := platformcommand.Replay[providerBindingReceipt](receipt, inputHash)
-	if err != nil || receipt.ResourceID != replayed.BindingID {
-		return platformcommand.ErrInputMismatch
-	}
-	binding, err := repo.FindProviderBinding(ctx, replayed.BindingID)
-	if err != nil || validateProviderBinding(binding) != nil {
-		return platformcommand.ErrInputMismatch
-	}
-	*result = ProviderBindingResult{Binding: binding, Receipt: receipt}
-	return nil
-}
-
 func validateAuthorizationBinding(intent domain.Intent, authorization domain.ExecutionAuthorization, initial bool) error {
 	if validateIntent(intent) != nil || !validUUID(authorization.IntentID) || !validUUID(authorization.ClaimToken) ||
 		!validUUID(authorization.TargetID) || !intentHashPattern.MatchString(authorization.TargetHash) ||
@@ -1101,14 +1013,16 @@ func validateProviderTargetBinding(
 	return nil
 }
 
-func validateProviderBinding(value domain.ProviderBinding) error {
+func validateProjectProviderBinding(value domain.ProjectProviderBindingVersion) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || !validUUID(value.ProjectID) ||
-		value.Capability != costdomain.MetricGenerationImage || !providerIdentifierPattern.MatchString(value.ProviderKey) ||
-		!providerIdentifierPattern.MatchString(value.ModelKey) || !credentialReferencePattern.MatchString(value.CredentialRef) ||
+		!validProviderPurpose(value.Purpose) || !providerIdentifierPattern.MatchString(value.ProviderKey) ||
+		(value.Modality != domain.MediaModalityImage && value.Modality != domain.MediaModalityVideo) ||
+		!validUUID(value.ConnectionVersionID) || !validUUID(value.CredentialVersionID) ||
+		!validUUID(value.ModelProfileVersionID) || !providerIdentifierPattern.MatchString(value.AdapterContractVersion) ||
 		value.Revision < 1 || !validUUID(value.CreatedBy) || value.CreatedAt.IsZero() {
 		return conflict("Generation Provider binding facts have drifted")
 	}
-	hash, err := providerBindingContentHash(value)
+	hash, err := projectProviderBindingContentHash(value)
 	if err != nil || hash != value.ContentHash {
 		return conflict("Generation Provider binding facts have drifted")
 	}
@@ -1118,8 +1032,9 @@ func validateProviderBinding(value domain.ProviderBinding) error {
 func validateGenerationRequest(value domain.GenerationRequest) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || !validUUID(value.ProjectID) ||
 		!validUUID(value.IntentID) || !validUUID(value.TargetID) || !validUUID(value.BindingID) || value.BindingRevision < 1 ||
-		value.Capability != costdomain.MetricGenerationImage || !providerIdentifierPattern.MatchString(value.ProviderKey) ||
-		!providerIdentifierPattern.MatchString(value.ModelKey) || !credentialReferencePattern.MatchString(value.CredentialRef) ||
+		!validProviderPurpose(value.Purpose) || !providerIdentifierPattern.MatchString(value.ProviderKey) ||
+		!providerIdentifierPattern.MatchString(value.ExternalModelID) || !validUUID(value.ConnectionVersionID) ||
+		!validUUID(value.CredentialVersionID) || !validUUID(value.ModelProfileVersionID) ||
 		value.RequestKey != "generation-request:"+value.ID || !intentHashPattern.MatchString(value.TargetHash) ||
 		value.Units < 1 || !validUUID(value.CreatedBy) || value.CreatedAt.IsZero() {
 		return conflict("Generation request facts have drifted")
@@ -1271,25 +1186,21 @@ func providerSubmission(
 	return ProviderSubmission{
 		WorkspaceID: request.WorkspaceID, ProjectID: request.ProjectID, ProviderJobID: job.ID,
 		RequestID: request.ID, RequestKey: request.RequestKey, IntentID: request.IntentID,
-		ProviderKey: request.ProviderKey, ModelKey: request.ModelKey, CredentialRef: request.CredentialRef,
-		TargetHash: request.TargetHash, Units: request.Units, Target: target,
+		ProviderKey: request.ProviderKey, ExternalModelID: request.ExternalModelID,
+		ConnectionVersionID: request.ConnectionVersionID, CredentialVersionID: request.CredentialVersionID,
+		ModelProfileVersionID: request.ModelProfileVersionID,
+		TargetHash:            request.TargetHash, Units: request.Units, Target: target,
 	}
-}
-
-func providerBindingContentHash(value domain.ProviderBinding) (string, error) {
-	return platformcommand.InputHash(providerBindingHashInput{
-		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID, Capability: value.Capability,
-		ProviderKey: value.ProviderKey, ModelKey: value.ModelKey, CredentialRef: value.CredentialRef,
-		Revision: value.Revision,
-	})
 }
 
 func generationRequestContentHash(value domain.GenerationRequest) (string, error) {
 	return platformcommand.InputHash(generationRequestHashInput{
 		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID, IntentID: value.IntentID, TargetID: value.TargetID,
-		BindingID: value.BindingID, BindingRevision: value.BindingRevision, Capability: value.Capability,
-		ProviderKey: value.ProviderKey, ModelKey: value.ModelKey, CredentialRef: value.CredentialRef,
-		RequestKey: value.RequestKey, TargetHash: value.TargetHash, Units: value.Units,
+		BindingID: value.BindingID, BindingRevision: value.BindingRevision, Purpose: value.Purpose,
+		ProviderKey: value.ProviderKey, ExternalModelID: value.ExternalModelID,
+		ConnectionVersionID: value.ConnectionVersionID, CredentialVersionID: value.CredentialVersionID,
+		ModelProfileVersionID: value.ModelProfileVersionID,
+		RequestKey:            value.RequestKey, TargetHash: value.TargetHash, Units: value.Units,
 	})
 }
 
@@ -1312,25 +1223,11 @@ func providerResultReceiptContentHash(value domain.ProviderResultReceipt) (strin
 }
 
 func (service *ProviderService) valid() bool {
-	return service.readValid() && service.gateway != nil
+	return service.readValid() && service.config.Bindings != nil && service.gateway != nil
 }
 
 func (service *ProviderService) readValid() bool {
 	return service != nil && service.transactions != nil && service.config.Now != nil && service.config.NewID != nil
-}
-
-func (service *ProviderService) configuredProviderValues() (string, string, string, error) {
-	if service == nil {
-		return "", "", "", conflict("Configured Generation Provider is unavailable")
-	}
-	providerKey := strings.TrimSpace(service.config.ProviderKey)
-	modelKey := strings.TrimSpace(service.config.ModelKey)
-	credentialRef := strings.TrimSpace(service.config.CredentialRef)
-	if !providerIdentifierPattern.MatchString(providerKey) || !providerIdentifierPattern.MatchString(modelKey) ||
-		!credentialReferencePattern.MatchString(credentialRef) {
-		return "", "", "", conflict("Configured Generation Provider is unavailable")
-	}
-	return providerKey, modelKey, credentialRef, nil
 }
 
 func normalizeProviderError(err error) error {
@@ -1340,7 +1237,7 @@ func normalizeProviderError(err error) error {
 	if errors.Is(err, platformcommand.ErrInputMismatch) {
 		return conflict("Generation Provider command or facts have drifted")
 	}
-	if errors.Is(err, ErrProviderBindingNotFound) {
+	if errors.Is(err, ErrProjectProviderBindingNotFound) {
 		return notFound("Generation Provider binding is not set")
 	}
 	if errors.Is(err, ErrGenerationTargetNotFound) {

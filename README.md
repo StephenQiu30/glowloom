@@ -28,7 +28,7 @@ JSON Logs → Logstash → Elasticsearch Log Index → Kibana
 
 当前已接入 Apache Kafka KRaft、Backend Event Runtime、Elasticsearch 业务检索和独立 ELK 日志链。Backend Owner 事务只写 PostgreSQL Outbox；Event Runtime 在事务外发布 Script/StoryGraph 已提交事件，并以 Inbox/Revision Checkpoint、隔离 DLQ 和有界 Replay 收敛至少一次投递。Script/StoryGraph Search Alias 可从 PostgreSQL Owner Snapshot 全量重建。唯一 Backend 进程输出统一脱敏 JSON，同时保留 stdout 并以失败开放的 TCP Writer 直送 `Logstash → Elasticsearch → Kibana`；日志不再经过 Filebeat 或 Kafka，Kafka 只承载已提交业务事件。ELK/Elasticsearch 不回写业务事实。Redis 仍未引入。Backend 只接受一个 PostgreSQL `DATABASE_URL` 作为业务 SQL 事实源；Temporal 只拥有 Workflow History，仓库不保留手写 SQL Schema/Migration、迁移版本字段、第二套 ORM/连接模型或 Python SQLAlchemy Writer。
 
-StoryGraph 当前完成到已批准分镜意图的角色参考资产生成执行链：系统目录 `lanverse.production@15.0.0` 已注册 `generation.reference_asset@1.0.0`，节点只消费 `approved_storyboard_intents`，并在 Target、Intent、Cost/Quota 和远程调用前校验 Project 最新 Provider Binding 与进程启用的 Runware 配置一致。真实 Runware 凭据化旅程尚未执行，因此当前实施项仍未宣告完成，也不会提前进入 `shot_frame`、Candidate Selection 或 AssetVersion 发布。
+StoryGraph 已完成到 `SG-I20` 的通用媒体 Provider 配置事实，当前只实施 `SG-I21` 的精确 ProviderCall/Receipt 执行闭环。固定 Runware、Provider API Key 环境变量、旧 Binding 路由与兼容读取已直接删除；Backend 使用内置 Preset Catalog、编译期 Factory Registry、不可变 Connection/Credential/ModelProfile/Project Binding 版本和 Docker root-key Secret。尚未注册真实 Adapter Factory 时 Catalog 不暴露预设，零 Provider 配置不阻止非视觉服务启动；Web Settings、真实模型 Adapter 和真实远端调用仍属于后续顺序任务，不能提前报告完成。
 
 ## 文档入口
 
@@ -65,6 +65,8 @@ docker compose --env-file .env \
 
 日常测试直接复用已启动环境，不需要每轮重启。默认环境栈不会创建 PostgreSQL、MinIO、Kafka、Elasticsearch 或 Kibana 容器。本机服务需要满足 `.env` 中的地址与认证配置；Homebrew Kafka 需要公布容器可达的 Broker 地址并已创建项目 Topic，Elasticsearch 需要存在 Lanverse 使用的账号、模板和索引。
 
+零 Provider 配置时无需准备媒体密钥，开发 Compose 会把空 Secret 挂载到 Backend，Provider 配置命令失败关闭而其他能力保持可用。需要保存 Provider 配置时，只在本机创建 `chmod 600` 的 32-byte root-key 文件并把路径写入 `LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE`；Backend 的 root 启动器只在容器 tmpfs 中生成 `0400/lanverse` 的固定路径副本，随后立即通过 `su-exec` 降权执行唯一 Go Binary，非 tmpfs 挂载直接失败关闭。火山、OpenAI、Google 的 API Key 始终不写入 `.env`。当前只有 Backend 领域服务与持久化合同，Web 配置入口按顺序在 `SG-I22` 交付。
+
 只有需要完全隔离的容器内存储时才显式启用对应 profile，并让应用连接容器服务：
 
 ```bash
@@ -99,11 +101,23 @@ docker build --file agent/Dockerfile --tag lanverse/agent-runtime:development .
 ## 验证
 
 ```bash
-cd backend && go test ./... && go vet ./...
-cd ../agent && uv run --all-extras python -m ruff check app/candidate_runtime tests/candidate_runtime tests/architecture/test_runtime_language_boundaries.py
-uv run --all-extras python -m pyright app/candidate_runtime tests/candidate_runtime tests/architecture/test_runtime_language_boundaries.py
-uv run --all-extras python -m pytest tests/candidate_runtime tests/architecture/test_runtime_language_boundaries.py
-cd ../frontend && npm run typecheck && npm run lint && npm test
+cd backend
+test -z "$(gofmt -l .)"
+go vet ./...
+go test -count=1 -p 1 ./...
+
+cd ../agent
+uv run --all-extras ruff check app tests
+uv run --all-extras ruff format --check app tests
+uv run --all-extras pyright app tests
+uv run --all-extras pytest -q
+
+cd ../frontend
+npm run openapi2ts
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
 最终 `agent-browser` 验收只在所有 StoryGraph 实施任务、真实依赖全旅程与自动化回归全部完成后执行；当前进度和未决风险以 [StoryGraph 验收标准](docs/acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md)为准。

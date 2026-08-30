@@ -15,9 +15,10 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 	environment := readText(t, filepath.Join(root, "docker-compose-env.yml"))
 	production := readText(t, filepath.Join(root, "docker-compose-prod.yml"))
 	kafkaInit := readText(t, filepath.Join(root, "backend", "observability", "kafka", "init.sh"))
+	kibanaInit := readText(t, filepath.Join(root, "backend", "observability", "kibana", "init.sh"))
 	logstash := readText(t, filepath.Join(root, "backend", "observability", "logstash", "pipeline", "lanverse.conf"))
 	template := readText(t, filepath.Join(root, "backend", "observability", "logstash", "template", "lanverse-logs-template.json"))
-	combined := base + environment + production + kafkaInit + logstash + template
+	combined := base + environment + production + kafkaInit + kibanaInit + logstash + template
 
 	for _, required := range []string{
 		"docker.elastic.co/logstash/logstash:9.4.4",
@@ -30,6 +31,8 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 		"lanverse.log.v1",
 		"KAFKA_USERNAME: event_worker",
 		"KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer",
+		"KIBANA_USERNAME",
+		"KIBANA_PASSWORD",
 	} {
 		if !strings.Contains(combined, required) {
 			t.Errorf("ELK topology is missing %q", required)

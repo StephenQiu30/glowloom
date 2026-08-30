@@ -20,8 +20,14 @@ func TestRealElasticsearchProjectsFencesAndAtomicallyReindexesBothAliases(t *tes
 		t.Skip("set LANVERSE_TEST_ELASTICSEARCH_URL to run the real Elasticsearch journey")
 	}
 	prefix := "lanverse-test-" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	username := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_USERNAME")
+	password := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_PASSWORD")
+	if (username == "") != (password == "") {
+		t.Fatal("LANVERSE_TEST_ELASTICSEARCH_USERNAME and LANVERSE_TEST_ELASTICSEARCH_PASSWORD must be configured together")
+	}
 	index, err := searches.New(searches.Config{
-		Addresses: []string{address}, ScriptAlias: prefix + "-script-v1", StoryGraphAlias: prefix + "-storygraph-v1",
+		Addresses: []string{address}, Username: username, Password: password,
+		ScriptAlias: prefix + "-script-v1", StoryGraphAlias: prefix + "-storygraph-v1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -34,6 +40,9 @@ func TestRealElasticsearchProjectsFencesAndAtomicallyReindexesBothAliases(t *tes
 	t.Cleanup(func() {
 		request, requestErr := http.NewRequest(http.MethodDelete, strings.TrimRight(address, "/")+"/"+prefix+"-*", nil)
 		if requestErr == nil {
+			if username != "" {
+				request.SetBasicAuth(username, password)
+			}
 			_, _ = http.DefaultClient.Do(request)
 		}
 	})

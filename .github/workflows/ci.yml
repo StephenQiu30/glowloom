@@ -230,7 +230,11 @@ jobs:
           KAFKA_EVENT_WORKER_PASSWORD: ci-compose-only-event-worker
           LANVERSE_CORS_ORIGINS: '["https://app.example.test"]'
           MINIO_CORS_ORIGINS: https://app.example.test
+          LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE: /tmp/lanverse-ci-media-provider-master-key
         run: |
+          umask 077
+          openssl rand -out "$LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE" 32
+          echo "LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE=$LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE" >> "$GITHUB_ENV"
           docker compose -f docker-compose.yml config --quiet
           docker compose -f docker-compose-env.yml config --quiet
           docker compose -f docker-compose.yml -f docker-compose-env.yml -f docker-compose-prod.yml config --quiet
@@ -296,6 +300,19 @@ jobs:
           done
           service_compose up --detach --no-build --wait --wait-timeout 240 frontend backend
           service_compose ps --status running --services | grep -qx backend
+          service_compose exec -T backend /bin/sh -c '
+            set -- $(grep "^Uid:" /proc/1/status)
+            test "$2" = "$(id -u lanverse)"
+            first_arg=$(tr "\000" "\n" < /proc/1/cmdline | head -n 1)
+            test "$first_arg" = /usr/local/bin/lanverse
+          '
+          service_compose exec -T --user lanverse backend /bin/sh -c '
+            test "$(stat -f -c %T /run/secrets)" = tmpfs
+            test -f /run/secrets/lanverse_media_provider_master_key
+            test "$(stat -c %a /run/secrets/lanverse_media_provider_master_key)" = 400
+            test "$(stat -c %U:%G /run/secrets/lanverse_media_provider_master_key)" = lanverse:lanverse
+            test "$(wc -c < /run/secrets/lanverse_media_provider_master_key)" -eq 32
+          '
           environment_compose ps --status running --services | grep -qx logstash
           environment_compose ps --status running --services | grep -qx kibana
           for attempt in $(seq 1 30); do
@@ -456,6 +473,7 @@ jobs:
           docker rm --force lanverse-ci-agent-runtime 2>/dev/null || true
           docker compose -p lanverse-ci -f docker-compose.yml down --volumes --remove-orphans
           docker compose -p lanverse-ci-env -f docker-compose-env.yml down --volumes --remove-orphans
+          unlink /tmp/lanverse-ci-media-provider-master-key 2>/dev/null || true
 
   delivery:
     name: Delivery / Hygiene

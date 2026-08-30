@@ -202,20 +202,16 @@ func TestSucceededProviderOutputsMaterializeThroughAssetReadinessAndCandidateQC(
 		generationapp.PreparationConfig{Now: func() time.Time { return now }, NewID: uuid.NewString, ClaimTTL: preparationClaimTTL},
 	)
 	gateway := &stagingProviderGateway{t: t, objects: objects}
+	bindingResolver := &controlledBindingResolver{}
+	bindingResolver.set(seedControlledProjectProviderBinding(
+		t, create, fixture, "staging-image", "image-quality-v1", 1,
+	))
 	providers := generationapp.NewProviderService(
 		generationgorm.NewProviderStore(database, costConfig, quotaConfig), gateway,
 		generationapp.ProviderConfig{
-			Now: func() time.Time { return now }, NewID: uuid.NewString,
-			ProviderKey: "staging-image", ModelKey: "image-quality-v1", CredentialRef: "provider/image-primary",
+			Now: func() time.Time { return now }, NewID: uuid.NewString, Bindings: bindingResolver,
 		},
 	)
-	if _, err = providers.PublishImageProviderBinding(ctx, fixture.owner, generationapp.PublishProviderBindingCommand{
-		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-		ProviderKey: "staging-image", ModelKey: "image-quality-v1", CredentialRef: "provider/image-primary",
-		IdempotencyKey: "provider-output-binding-v1",
-	}); err != nil {
-		t.Fatalf("publish Provider output test binding: %v", err)
-	}
 	assetService := assetapp.NewService(assetgorm.New(database), objects, assetapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 		Bucket: minioBucket, StorageProfile: "private-primary", Region: "us-east-1", MaxImageBytes: 20 << 20,

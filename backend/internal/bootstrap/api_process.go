@@ -30,8 +30,8 @@ import (
 	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
 	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
 	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
-	generationhttp "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/httpapi"
 	generationreview "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/review"
+	providersecret "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/secretstore"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	mediagorm "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gormdb"
 	mediahttp "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/httpapi"
@@ -55,7 +55,6 @@ import (
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboardhttp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/httpapi"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
-	quotaapp "github.com/StephenQiu30/lanverse/backend/internal/quota/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewhttp "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/httpapi"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
@@ -157,17 +156,23 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	projectService := projectapp.NewService(projectStore, func() time.Time { return time.Now().UTC() }, uuid.NewString)
 	costStore := costgorm.New(database)
 	costConfig := costapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}
-	quotaConfig := quotaapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}
 	costService := costapp.NewService(costStore, costConfig)
-	providerConfig := generationapp.ProviderConfig{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}
-	if configuration.ImageProvider == "runware" {
-		providerConfig.ProviderKey = "runware"
-		providerConfig.ModelKey = "runware:z-image@turbo"
-		providerConfig.CredentialRef = "env/runware_api_key"
+	providerRegistry, err := generationapp.NewMediaFactoryRegistry(nil)
+	if err != nil {
+		return fmt.Errorf("Media Provider registry is invalid: %w", err)
 	}
-	providerBindingService := generationapp.NewProviderService(
-		generationgorm.NewProviderStore(database, costConfig, quotaConfig), nil, providerConfig,
+	providerCatalog, err := generationapp.NewMediaPresetCatalog(generationapp.BuiltinMediaPresets(), providerRegistry)
+	if err != nil {
+		return fmt.Errorf("Media Provider preset catalog is invalid: %w", err)
+	}
+	providerSecrets := providersecret.OpenFixed()
+	providerConfigurationService := generationapp.NewProviderConfigurationService(
+		generationgorm.NewProviderConfigurationStore(database), providerCatalog, providerSecrets,
+		generationapp.ProviderConfigurationConfig{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
 	)
+	providerCatalogView := providerConfigurationService.Catalog()
+	logger.Info("Media Provider configuration ready", "secret_store_available", providerSecrets.Available(),
+		"connection_presets", len(providerCatalogView.Connections), "model_presets", len(providerCatalogView.Models))
 	tokenVerifier := authentication.NewVerifier(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, func() time.Time { return time.Now().UTC() })
 	tokenIssuer := authentication.NewIssuer(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, configuration.AccessTokenTTL, func() time.Time { return time.Now().UTC() }, uuid.NewString)
 	verificationCode := authentication.RandomNumericCode
@@ -287,7 +292,6 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	searchHandler := searchhttp.New(searchService, tokenVerifier)
 	projectHandler := projecthttp.New(projectService, tokenVerifier)
 	costHandler := costhttp.New(costService, tokenVerifier)
-	providerBindingHandler := generationhttp.NewProviderBindingHandler(providerBindingService, tokenVerifier)
 	authoringService := authoringapp.NewService(authoringStore, authoringapp.Config{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 	})
@@ -344,7 +348,6 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				mediaHandler.Register(mux)
 				projectHandler.Register(mux)
 				costHandler.Register(mux)
-				providerBindingHandler.Register(mux)
 				scriptHandler.Register(mux)
 				bibleHandler.Register(mux)
 				storyAnalysisRecoveryHandler.Register(mux)

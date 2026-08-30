@@ -1,6 +1,6 @@
 # StoryGraph 内容图与 DAG 创作画布实施计划
 
-- 状态：Plan 已重新接受（`SG-D20`，2026-08-29）；`SG-D21` 已重新接受，`SG-I01`–`SG-I19` 已完成，当前只实施新版 `SG-I20`
+- 状态：Plan 已重新接受（`SG-D20`，2026-08-29）；`SG-D21` 已重新接受，`SG-I01`–`SG-I20` 已完成，当前只实施 `SG-I21`
 - Design：[0010 StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
 - Agent Design：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 - PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
@@ -39,7 +39,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 | ELK 日志链 | Logstash/Elasticsearch/Kibana `9.4.4` | `SG-I04` 随首个真实服务日志消费者 | `Backend fail-open TCP → Logstash → 独立日志/Dead-letter 索引 → Kibana`；日志不经过 Kafka，本机复用已运行 Logstash |
 | 结构化日志 | Go 标准库 `log/slog` JSON Handler，Python/Frontend 输出同一脱敏字段集 | `SG-I01` 固定契约，`SG-I04` 接管真实管道 | 不引入第二日志框架；日志失败不改变业务事务或 Receipt |
 | Agent Schema/Runtime | 已有 Pydantic `2.13.4`、FastAPI `0.140.12`、Codex CLI `0.147.0` | `SG-I01` 固定 Wire fixture，`SG-I05` 最终 Bundle | Agent 无 ORM、Kafka、Elastic、Temporal、对象存储、JWT 或 Provider 业务凭据；未出现真实消费者时在 `SG-I05` 删除 LangGraph |
-| Provider 配置与 Secret | 唯一 GORM Catalog + Go 标准库 AEAD/HMAC + root-key Docker Secret | `SG-I20` | API Key 只写；密文版本在 PostgreSQL，根密钥只读 `/run/secrets/lanverse_media_provider_master_key`，不进 `.env`/普通业务列/日志；零配置不阻止非视觉服务启动 |
+| Provider 配置与 Secret | 唯一 GORM Catalog + Go 标准库 AEAD/HMAC + root-key Docker Secret | `SG-I20` | API Key 只写；密文版本在 PostgreSQL，宿主 `0600` 根密钥只读挂载并在容器 tmpfs 形成 `0400/lanverse` 固定路径，不进 `.env`/普通业务列/日志；零配置不阻止非视觉服务启动 |
 | Provider 调用 | Go `net/http` + 编译期 Registry/Factory + 精确官方协议 DTO | `SG-I21`–`SG-I25`、`SG-I31` | 不建通用 HTTP 代理、动态插件或 SDK 包装层；每 Candidate 一个 ProviderCall，按同步/异步真实能力恢复，不自动 fallback |
 | 视频探测 | Backend Runtime Image 固定发行版 `ffmpeg` 包中的 `ffprobe` JSON | `SG-I30` | `exec.CommandContext` 固定参数、超时与资源上限；不手写 MP4/Codec Parser，不依赖宿主机二进制 |
 | Canvas | `@xyflow/react 12.11.5` + `@dagrejs/dagre 3.1.1` | `SG-I32` | 只在只读 Story Lens 首个组件中安装和导入；不预建通用 Canvas Framework |
@@ -113,7 +113,7 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 
 - [x] `SG-I18`：接入 Storyboard Draft，只消费非空正式 Specification/AssetState，产出可审核 Shot Intent 与 `needs_asset` 需求。完成门：Candidate 不进入正式 StoryGraphVersion，缺资产时不得创建 Shot。
 - [x] `SG-I19`：用公共 Human Gate 审批 Shot Intent/visual requirements；Storyboard Owner `FreezeIntentSet` 只冻结 Draft Set revision/hash、已接受 Intent 和视觉需求并返回 Receipt。完成门：Gate completed/Receipt/输出可恢复，不创建正式 Shot；拒绝、unknown 或漂移不得产生 Provider Cost/Job。**完成（2026-08-28）**：公共 `human.storyboard_review@2.0.0` 精确冻结 `storyboard_intent_candidate_set`；`approved` 后 Backend Storyboard Owner 在单一 PostgreSQL/GORM 事务中重验 StoryGraph、Manifest、Scene Candidate、Agent Invocation、Draft Set baseline 与不可变 ReviewDecision，只把完整 Shot Intent 和 visual requirements 冻结为 `approved_storyboard_intents` 与 Command Receipt。拒绝/要求修改为 `not_required`，Decision 后 baseline 漂移为显式冲突且零效果；Owner/Signal unknown、直接 Owner 重放和 Temporal Resume 均收敛到同一 Receipt。真实全链、完整 CI、三镜像与部署故障矩阵通过，正式 Shot、Cost/Quota、Provider Job、Artifact 和新 StoryGraphVersion 均为零。
-- [ ] `SG-I20`：先以 Red 合同固定 Backend 内置 Preset Catalog、Factory 一致性、ProviderConnection/Credential/ModelProfile/ProjectBinding 不可变版本、Owner Command/Query、AEAD/HMAC Secret Store、root-key Docker Secret、零配置启动和唯一 GORM Catalog；同项直接删除 Runware Config/Binding/Adapter/Route/Test 与 Provider API Key 环境变量。完成门：权限/CAS/幂等/重启/错误 root key/Secret 零泄漏/Compose 仅 Backend+Frontend/空库同步通过，Catalog 不暴露尚无真实 Factory 的预设，无 Migration、双写、Raw SQL 或兼容读取。
+- [x] `SG-I20`：先以 Red 合同固定 Backend 内置 Preset Catalog、Factory 一致性、ProviderConnection/Credential/ModelProfile/ProjectBinding 不可变版本、Owner Command/Query、AEAD/HMAC Secret Store、root-key Docker Secret、零配置启动和唯一 GORM Catalog；同项直接删除 Runware Config/Binding/Adapter/Route/Test 与 Provider API Key 环境变量。完成门：权限/CAS/幂等/重启/错误 root key/Secret 零泄漏/Compose 仅 Backend+Frontend/空库同步通过，Catalog 不暴露尚无真实 Factory 的预设，无 Migration、双写、Raw SQL 或兼容读取。**完成（2026-08-30）**：Backend 已落地三类官方 Connection Preset、十个精确模型 Preset、编译期 Factory Registry、四类不可变配置版本、Owner revision + content hash CAS、root-key HMAC 幂等 Receipt 与 AES-256-GCM Secret Store；配置变更、Binding 发布/解析和 Request 冻结通过稳定 Workspace 锁及事务内 exact 重验线性化。生产 Registry 在真实 Adapter 尚未进入时保持空 Catalog，零配置不阻塞非视觉 Runtime；宿主 `0600` root key 经只读 Secret 源挂载后只在容器 tmpfs 形成 `0400/lanverse` 固定文件，主进程和 healthcheck 均降权，非 tmpfs、缺失、错误长度或错误 key 均失败关闭，Owner 可在丢失旧 root 后重新录入新 Credential 版本。固定 Runware、公开 Binding Route/Test、Provider API Key 环境变量与兼容读取已直接删除。空 PostgreSQL 唯一 GORM Catalog、真实 MinIO/Temporal/Homebrew Kafka/Elasticsearch/Logstash/Kibana 全量 Backend CI、Agent/Frontend、Compose 与三镜像门均通过；修正数据库池空闲容量后热点 Workflow 会话从 4090 降至 14，完整 CI 不再耗尽临时端口。
 - [ ] `SG-I21`：重构 Generation Intent/Request/Job/Receipt 为精确 Binding/Profile/PriceQuote，并新增每 Candidate 一个 ProviderCall 与 Call Receipt；用受控 Gateway 先证明四 Call、部分失败、同步 `outcome_unknown`、异步 remote task、Cost/Quota 结算和 Worker/Temporal 重启恢复。完成门：任一前置失败零远端请求，首次 dispatch 之外不再发送，Job 只聚合 Call，不把 output count 冒充供应商账单。
 - [ ] `SG-I22`：在真实 Backend API 上交付 Web Provider Settings，支持 Catalog 卡片、Connection/Credential 轮换、ModelProfile、PriceQuote 和 Project Purpose Binding。完成门：Owner 权限/冲突/刷新/重启通过；Secret 提交后立即清空且不进入 URL、RTK Query cache、localStorage、日志、回显或 bundle；任意 Host/JSON/页面直连 Provider 不存在。
 - [ ] `SG-I23`：实现火山方舟 Seedream 5.0 Pro+ 精确 Adapter/Factory/Profile，把 `reference_asset` 严格 Target 跑通到一个 Call 一个 Candidate、私有 Staging、Image QC 和 CandidateSet。完成门：离线合同、SSRF/redirect/输出数量/协议漂移/Usage 负向与真实凭据生成通过；Artifact 仍只是候选，不在本项发布 AssetVersion。
@@ -181,4 +181,4 @@ MVP 非目标保持不变：不建微服务、第二 Workflow、Kafka Command To
 - Provider ACK/结果未知、配额/费用/资产版本不一致：按同一 Call/Job/Receipt 和真实 Provider capability 对账，禁止重新计费式盲重试或模型/接口 fallback。
 - 完整原稿、任一必接模型真实旅程或真实 CI 未通过：`SG-I34` 保持未完成；不得运行、引用或提前准备最终 `agent-browser` 通过声明。
 
-本文完成 `SG-D20` 重新同步；`SG-D21` 已保留 `SG-I01`–`SG-I19` 历史 Evidence，并为 `SG-I20`–`SG-I35` 建立全未勾选目标 Checklist。当前只能从新版 `SG-I20` 开始编码。
+本文完成 `SG-D20` 重新同步；`SG-D21` 已保留 `SG-I01`–`SG-I19` 历史 Evidence，并为重新接受后的媒体目标建立独立 Checklist。`SG-I20` 已按新合同完成并通过当时全量真实 CI，当前只能继续 `SG-I21`。

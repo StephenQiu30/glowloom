@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 
-	costdomain "github.com/StephenQiu30/lanverse/backend/internal/cost/domain"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	generationdomain "github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
@@ -57,12 +56,12 @@ type ReferencePreparation interface {
 }
 
 type ImageProvider interface {
-	RequireConfiguredImageProviderBinding(
+	RequireProjectProviderBinding(
 		context.Context,
 		generationapp.Actor,
 		string,
 		string,
-	) (generationdomain.ProviderBinding, error)
+	) (generationdomain.ProjectProviderBindingVersion, error)
 	SubmitImageRequest(
 		context.Context,
 		generationdomain.ExecutionAuthorization,
@@ -204,8 +203,8 @@ func (executor *NodeExecutor) executeReferenceAsset(
 		return domain.NodeExecutorResult{}, err
 	}
 	actor := generationapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
-	binding, err := executor.providers.RequireConfiguredImageProviderBinding(
-		ctx, actor, command.WorkspaceID, command.ProjectID,
+	binding, err := executor.providers.RequireProjectProviderBinding(
+		ctx, actor, command.ProjectID, generationdomain.ProviderPurposeReferenceAsset,
 	)
 	if err != nil {
 		return domain.NodeExecutorResult{}, err
@@ -312,13 +311,15 @@ func (executor *NodeExecutor) executeReferenceAsset(
 }
 
 func validReferenceAssetProviderBinding(
-	binding generationdomain.ProviderBinding,
+	binding generationdomain.ProjectProviderBindingVersion,
 	workspaceID string,
 	projectID string,
 ) bool {
 	return validCandidateSetUUID(binding.ID) && binding.WorkspaceID == workspaceID && binding.ProjectID == projectID &&
-		binding.Capability == costdomain.MetricGenerationImage && strings.TrimSpace(binding.ProviderKey) != "" &&
-		strings.TrimSpace(binding.ModelKey) != "" && strings.TrimSpace(binding.CredentialRef) != "" &&
+		binding.Purpose == generationdomain.ProviderPurposeReferenceAsset &&
+		binding.Modality == generationdomain.MediaModalityImage && strings.TrimSpace(binding.ProviderKey) != "" &&
+		validCandidateSetUUID(binding.ConnectionVersionID) && validCandidateSetUUID(binding.CredentialVersionID) &&
+		validCandidateSetUUID(binding.ModelProfileVersionID) && strings.TrimSpace(binding.AdapterContractVersion) != "" &&
 		binding.Revision > 0 && validCandidateSetUUID(binding.CreatedBy) && !binding.CreatedAt.IsZero() &&
 		candidateSetHashPattern.MatchString(binding.ContentHash)
 }

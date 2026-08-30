@@ -56,9 +56,6 @@ services:
       MINIO_REGION: ${MINIO_REGION:-us-east-1}
       MINIO_SECURE: "false"
       MINIO_PUBLIC_SECURE: ${MINIO_PUBLIC_SECURE:-false}
-      IMAGE_PROVIDER: ${IMAGE_PROVIDER:-}
-      RUNWARE_API_KEY: ${RUNWARE_API_KEY:-}
-      RUNWARE_REQUEST_TIMEOUT_SECONDS: ${RUNWARE_REQUEST_TIMEOUT_SECONDS:-30}
       EVENT_WORKER_HOST: 127.0.0.1
       EVENT_WORKER_PORT: 8687
       KAFKA_BROKERS: ${DOCKER_KAFKA_BROKERS:-host.docker.internal:19093}
@@ -82,8 +79,15 @@ services:
       - internal
     extra_hosts:
       - host.docker.internal:host-gateway
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /run/secrets:rw,noexec,nosuid,nodev,mode=0711
+    secrets:
+      - source: lanverse_media_provider_master_key
+        target: lanverse_media_provider_master_key_source
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8686/healthz"]
+      test: ["CMD", "su-exec", "lanverse:lanverse", "wget", "--quiet", "--spider", "http://127.0.0.1:8686/healthz"]
       interval: 5s
       timeout: 3s
       retries: 24
@@ -95,3 +99,7 @@ networks:
   internal:
     driver: bridge
     internal: true
+
+secrets:
+  lanverse_media_provider_master_key:
+    file: ${LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE:-/dev/null}

@@ -49,9 +49,6 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
       MINIO_SECURE: "false"
       MINIO_PUBLIC_SECURE: ${MINIO_PUBLIC_SECURE:-true}
-      IMAGE_PROVIDER: ${IMAGE_PROVIDER:-}
-      RUNWARE_API_KEY: ${RUNWARE_API_KEY:-}
-      RUNWARE_REQUEST_TIMEOUT_SECONDS: ${RUNWARE_REQUEST_TIMEOUT_SECONDS:-30}
       EVENT_WORKER_HOST: 127.0.0.1
       EVENT_WORKER_PORT: 8687
       KAFKA_BROKERS: kafka:19092
@@ -182,3 +179,7 @@ services:
   kibana-init:
     profiles: !reset []
     restart: "no"
+
+secrets:
+  lanverse_media_provider_master_key:
+    file: ${LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE:?LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE is required}

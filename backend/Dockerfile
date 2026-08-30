@@ -18,16 +18,18 @@ RUN CGO_ENABLED=0 go build -trimpath \
 
 FROM alpine:3.23
 
-RUN apk add --no-cache ca-certificates \
+RUN apk add --no-cache ca-certificates su-exec \
     && addgroup -S lanverse \
     && adduser -S -G lanverse lanverse
 
 COPY --from=builder /out/lanverse /usr/local/bin/lanverse
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
 
-USER lanverse
 EXPOSE 8686
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=12 \
-    CMD wget --quiet --spider http://127.0.0.1:8686/healthz || exit 1
+    CMD su-exec lanverse:lanverse wget --quiet --spider http://127.0.0.1:8686/healthz || exit 1
 
-ENTRYPOINT ["/usr/local/bin/lanverse"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["/usr/local/bin/lanverse"]

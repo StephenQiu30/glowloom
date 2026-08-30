@@ -10,20 +10,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-
 	costgorm "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/gormdb"
 	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
 	costdomain "github.com/StephenQiu30/lanverse/backend/internal/cost/domain"
 	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
+	providersecret "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/secretstore"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	generationdomain "github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	quotagorm "github.com/StephenQiu30/lanverse/backend/internal/quota/adapter/gormdb"
 	quotaapp "github.com/StephenQiu30/lanverse/backend/internal/quota/application"
 	quotadomain "github.com/StephenQiu30/lanverse/backend/internal/quota/domain"
+	"github.com/google/uuid"
 )
 
 type controlledProviderGateway struct {
@@ -37,6 +38,80 @@ type controlledProviderGateway struct {
 	submitStarted chan struct{}
 	releaseSubmit chan struct{}
 	submissions   []generationapp.ProviderSubmission
+}
+
+type controlledBindingResolver struct {
+	mu                sync.Mutex
+	resolved          generationapp.ResolvedProjectProviderBinding
+	err               error
+	afterResolve      chan struct{}
+	releaseResolution chan struct{}
+	resolveOnce       sync.Once
+}
+
+type transactionalControlledBindingResolver struct {
+	transactions generationapp.ProviderConfigurationTransactionManager
+	resolved     generationapp.ResolvedProjectProviderBinding
+}
+
+func (resolver *transactionalControlledBindingResolver) ResolveProjectBinding(
+	ctx context.Context,
+	_ generationapp.Actor,
+	projectID, purpose string,
+) (generationapp.ResolvedProjectProviderBinding, error) {
+	if resolver.resolved.Binding.ProjectID != projectID || resolver.resolved.Binding.Purpose != purpose {
+		return generationapp.ResolvedProjectProviderBinding{}, generationapp.ErrProjectProviderBindingNotFound
+	}
+	err := resolver.transactions.WithinProviderConfigurationTransaction(ctx, func(
+		repository generationapp.ProviderConfigurationRepository,
+	) error {
+		return repository.LockProviderWorkspace(ctx, resolver.resolved.Binding.WorkspaceID)
+	})
+	if err != nil {
+		return generationapp.ResolvedProjectProviderBinding{}, err
+	}
+	return resolver.resolved, nil
+}
+
+func (resolver *controlledBindingResolver) ResolveProjectBinding(
+	_ context.Context,
+	_ generationapp.Actor,
+	projectID, purpose string,
+) (generationapp.ResolvedProjectProviderBinding, error) {
+	resolver.mu.Lock()
+	resolved, err := resolver.resolved, resolver.err
+	afterResolve, releaseResolution := resolver.afterResolve, resolver.releaseResolution
+	resolver.mu.Unlock()
+	if err != nil {
+		return generationapp.ResolvedProjectProviderBinding{}, err
+	}
+	if resolved.Binding.ProjectID != projectID || resolved.Binding.Purpose != purpose {
+		return generationapp.ResolvedProjectProviderBinding{}, generationapp.ErrProjectProviderBindingNotFound
+	}
+	if afterResolve != nil {
+		resolver.resolveOnce.Do(func() { close(afterResolve) })
+	}
+	if releaseResolution != nil {
+		select {
+		case <-releaseResolution:
+		case <-time.After(5 * time.Second):
+			return generationapp.ResolvedProjectProviderBinding{}, context.DeadlineExceeded
+		}
+	}
+	return resolved, nil
+}
+
+func (resolver *controlledBindingResolver) set(resolved generationapp.ResolvedProjectProviderBinding) {
+	resolver.mu.Lock()
+	defer resolver.mu.Unlock()
+	resolver.resolved, resolver.err = resolved, nil
+}
+
+func (resolver *controlledBindingResolver) pauseAfterResolve(afterResolve, releaseResolution chan struct{}) {
+	resolver.mu.Lock()
+	defer resolver.mu.Unlock()
+	resolver.afterResolve, resolver.releaseResolution = afterResolve, releaseResolution
+	resolver.resolveOnce = sync.Once{}
 }
 
 func (gateway *controlledProviderGateway) Submit(
@@ -153,68 +228,28 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 			Now: func() time.Time { return currentTime }, NewID: uuid.NewString, ClaimTTL: preparationClaimTTL,
 		},
 	)
-	providerConfig := generationapp.ProviderConfig{
-		Now: func() time.Time { return currentTime }, NewID: uuid.NewString,
-		ProviderKey: "controlled-image", ModelKey: "image-quality-v1", CredentialRef: "provider/image-primary",
-	}
-	publisher := generationapp.NewProviderService(
-		generationgorm.NewProviderStore(database, costConfig, quotaConfig),
-		nil,
-		providerConfig,
-	)
+	bindingResolver := &controlledBindingResolver{err: generationapp.ErrProjectProviderBindingNotFound}
 	gateway := &controlledProviderGateway{}
 	providers := generationapp.NewProviderService(
-		generationgorm.NewProviderStore(database, costConfig, quotaConfig), gateway, providerConfig,
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig), gateway,
+		generationapp.ProviderConfig{Now: func() time.Time { return currentTime }, NewID: uuid.NewString, Bindings: bindingResolver},
 	)
-	if _, err = providers.RequireConfiguredImageProviderBinding(
-		ctx, fixture.owner, fixture.workspaceID.String(), fixture.projectID.String(),
+	if _, err = providers.RequireProjectProviderBinding(
+		ctx, fixture.owner, fixture.projectID.String(), generationdomain.ProviderPurposeReferenceAsset,
 	); generationErrorCode(err) != "not_found" {
 		t.Fatalf("missing configured Provider binding did not fail before generation: %v", err)
 	}
-
-	binding, err := publisher.PublishConfiguredImageProviderBinding(
-		ctx, fixture.owner, generationapp.PublishConfiguredImageProviderBindingCommand{
-			ProjectID:      fixture.projectID.String(),
-			IdempotencyKey: "generation-provider-binding-v1",
-		})
-	if err != nil || binding.Binding.Revision != 1 || binding.Binding.Capability != costdomain.MetricGenerationImage {
-		t.Fatalf("publish image Provider binding: result=%#v err=%v", binding, err)
-	}
-	replayedBinding, err := publisher.PublishConfiguredImageProviderBinding(
-		ctx, fixture.owner, generationapp.PublishConfiguredImageProviderBindingCommand{
-			ProjectID: fixture.projectID.String(), IdempotencyKey: "generation-provider-binding-v1",
-		},
-	)
-	if err != nil || replayedBinding.Binding.ID != binding.Binding.ID || replayedBinding.Receipt.ID != binding.Receipt.ID {
-		t.Fatalf("replay configured image Provider binding: result=%#v err=%v", replayedBinding, err)
-	}
-	if _, err = publisher.PublishConfiguredImageProviderBinding(
-		ctx, fixture.editor, generationapp.PublishConfiguredImageProviderBindingCommand{
-			ProjectID: fixture.projectID.String(), IdempotencyKey: "generation-provider-binding-editor",
-		},
-	); generationErrorCode(err) != "forbidden" {
-		t.Fatalf("editor published configured image Provider binding: %T %v", err, err)
-	}
+	binding := seedControlledProjectProviderBinding(t, create, fixture, "controlled-image", "image-quality-v1", 1)
+	bindingResolver.set(binding)
 	var configuredBindingCount int64
-	if err = database.Model(&model.GenerationProviderBindingVersion{}).
+	if err = database.Model(&model.ProjectProviderBindingVersion{}).
 		Where("project_id = ?", fixture.projectID).Count(&configuredBindingCount).Error; err != nil || configuredBindingCount != 1 {
 		t.Fatalf("configured image Provider binding count = %d: %v", configuredBindingCount, err)
 	}
-	disabledPublisher := generationapp.NewProviderService(
-		generationgorm.NewProviderStore(database, costConfig, quotaConfig), nil,
-		generationapp.ProviderConfig{Now: func() time.Time { return currentTime }, NewID: uuid.NewString},
+	configuredBinding, err := providers.RequireProjectProviderBinding(
+		ctx, fixture.owner, fixture.projectID.String(), generationdomain.ProviderPurposeReferenceAsset,
 	)
-	if _, err = disabledPublisher.PublishConfiguredImageProviderBinding(
-		ctx, fixture.owner, generationapp.PublishConfiguredImageProviderBindingCommand{
-			ProjectID: fixture.projectID.String(), IdempotencyKey: "generation-provider-binding-disabled",
-		},
-	); generationErrorCode(err) != "state_conflict" {
-		t.Fatalf("disabled image Provider published a binding: %T %v", err, err)
-	}
-	configuredBinding, err := providers.RequireConfiguredImageProviderBinding(
-		ctx, fixture.owner, fixture.workspaceID.String(), fixture.projectID.String(),
-	)
-	if err != nil || !generationdomain.SameProviderBinding(configuredBinding, binding.Binding) {
+	if err != nil || configuredBinding.ID != binding.Binding.ID {
 		t.Fatalf("require configured Provider binding: binding=%#v err=%v", configuredBinding, err)
 	}
 
@@ -324,46 +359,14 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 		t.Fatalf("terminal Provider replay queried remote boundary: submit %d query %d", submitCalls, queryCalls)
 	}
 
-	bindingV2, err := providers.PublishImageProviderBinding(ctx, fixture.owner, generationapp.PublishProviderBindingCommand{
-		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-		ProviderKey: "controlled-image", ModelKey: "image-quality-v2", CredentialRef: "provider/image-primary",
-		IdempotencyKey: "generation-provider-binding-v2",
-	})
-	if err != nil || bindingV2.Binding.Revision != 2 || terminalReplay.Request.BindingID != binding.Binding.ID {
-		t.Fatalf("append Provider binding without rerouting old request: v2=%#v old=%#v err=%v", bindingV2, terminalReplay, err)
+	bindingV2 := seedControlledProjectProviderBinding(t, create, fixture, "controlled-image", "image-quality-v2", 2)
+	bindingResolver.set(bindingV2)
+	if bindingV2.Binding.Revision != 2 || terminalReplay.Request.BindingID != binding.Binding.ID {
+		t.Fatalf("append Provider binding without rerouting old request: v2=%#v old=%#v", bindingV2, terminalReplay)
 	}
-	if _, err = providers.RequireConfiguredImageProviderBinding(
-		ctx, fixture.owner, fixture.workspaceID.String(), fixture.projectID.String(),
-	); generationErrorCode(err) != "state_conflict" {
-		t.Fatalf("configured Provider binding drift was accepted: %T %v", err, err)
-	}
-	driftClaim := prepareAndClaimProviderIntent(t, ctx, preparations, fixture, 1, "binding-drift", strings.Repeat("8", 64))
-	submitCallsBeforeDrift, queryCallsBeforeDrift := gateway.counts()
-	if _, err = providers.SubmitImageRequest(ctx, driftClaim.Authorization, generationapp.SubmitImageRequestCommand{
-		IntentID: driftClaim.Intent.ID, IdempotencyKey: "generation-provider-submit-binding-drift",
-	}); generationErrorCode(err) != "state_conflict" {
-		t.Fatalf("binding drift between preflight and Submit was accepted: %T %v", err, err)
-	}
-	if submitCalls, queryCalls := gateway.counts(); submitCalls != submitCallsBeforeDrift || queryCalls != queryCallsBeforeDrift {
-		t.Fatalf("binding drift reached Provider: before=%d/%d after=%d/%d",
-			submitCallsBeforeDrift, queryCallsBeforeDrift, submitCalls, queryCalls)
-	}
-	var driftRequestCount int64
-	if err = database.Model(&model.GenerationRequest{}).Where("intent_id = ?", driftClaim.Intent.ID).
-		Count(&driftRequestCount).Error; err != nil || driftRequestCount != 0 {
-		t.Fatalf("binding drift created %d Generation requests: %v", driftRequestCount, err)
-	}
-	providers = generationapp.NewProviderService(
-		generationgorm.NewProviderStore(database, costConfig, quotaConfig),
-		gateway,
-		generationapp.ProviderConfig{
-			Now: func() time.Time { return currentTime }, NewID: uuid.NewString,
-			ProviderKey: "controlled-image", ModelKey: "image-quality-v2", CredentialRef: "provider/image-primary",
-		},
-	)
-	if configuredV2, configureErr := providers.RequireConfiguredImageProviderBinding(
-		ctx, fixture.owner, fixture.workspaceID.String(), fixture.projectID.String(),
-	); configureErr != nil || !generationdomain.SameProviderBinding(configuredV2, bindingV2.Binding) {
+	if configuredV2, configureErr := providers.RequireProjectProviderBinding(
+		ctx, fixture.owner, fixture.projectID.String(), generationdomain.ProviderPurposeReferenceAsset,
+	); configureErr != nil || configuredV2.ID != bindingV2.Binding.ID {
 		t.Fatalf("activate configured Provider binding v2: binding=%#v err=%v", configuredV2, configureErr)
 	}
 
@@ -518,6 +521,112 @@ func TestProviderSubmissionAndReconcileUseOneRequestKeyAndAtomicOwnerTransitions
 	if requestCount != 1 || jobCount != 1 {
 		t.Fatalf("concurrent Provider facts = requests %d jobs %d, want 1/1", requestCount, jobCount)
 	}
+
+	singlePoolClaim := prepareAndClaimProviderIntent(
+		t, ctx, preparations, fixture, 1, "single-pool", strings.Repeat("9", 64),
+	)
+	sqlDatabase, err := database.DB()
+	if err != nil {
+		t.Fatalf("load SQL pool for Provider self-deadlock regression: %v", err)
+	}
+	sqlDatabase.SetMaxIdleConns(1)
+	sqlDatabase.SetMaxOpenConns(1)
+	defer func() {
+		sqlDatabase.SetMaxOpenConns(20)
+		sqlDatabase.SetMaxIdleConns(20)
+	}()
+	singlePoolGateway := &controlledProviderGateway{
+		submitOutcome: generationapp.ProviderOutcome{
+			Status: generationapp.ProviderOutcomeAccepted, ProviderJobKey: "provider-job-single-pool",
+		},
+	}
+	singlePoolProviders := generationapp.NewProviderService(
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig), singlePoolGateway,
+		generationapp.ProviderConfig{
+			Now: func() time.Time { return currentTime }, NewID: uuid.NewString,
+			Bindings: &transactionalControlledBindingResolver{
+				transactions: generationgorm.NewProviderConfigurationStore(database), resolved: bindingV2,
+			},
+		},
+	)
+	singlePoolContext, cancelSinglePool := context.WithTimeout(ctx, 3*time.Second)
+	singlePoolResult, err := singlePoolProviders.SubmitImageRequest(
+		singlePoolContext,
+		singlePoolClaim.Authorization,
+		generationapp.SubmitImageRequestCommand{
+			IntentID: singlePoolClaim.Intent.ID, IdempotencyKey: "generation-provider-submit-single-pool",
+		},
+	)
+	cancelSinglePool()
+	if err != nil || singlePoolResult.Request.ID == "" || singlePoolResult.Job.ProviderJobKey != "provider-job-single-pool" {
+		t.Fatalf("Provider submission self-deadlocked with one DB connection: result=%#v err=%v", singlePoolResult, err)
+	}
+	sqlDatabase.SetMaxOpenConns(20)
+	sqlDatabase.SetMaxIdleConns(20)
+
+	gateway.mu.Lock()
+	gateway.submitStarted, gateway.releaseSubmit = nil, nil
+	gateway.mu.Unlock()
+	gapClaim := prepareAndClaimProviderIntent(t, ctx, preparations, fixture, 1, "binding-gap", strings.Repeat("8", 64))
+	afterResolve, releaseResolution := make(chan struct{}), make(chan struct{})
+	bindingResolver.pauseAfterResolve(afterResolve, releaseResolution)
+	beforeGapSubmit, beforeGapQuery := gateway.counts()
+	gapDone := make(chan error, 1)
+	go func() {
+		_, submitErr := providers.SubmitImageRequest(ctx, gapClaim.Authorization, generationapp.SubmitImageRequestCommand{
+			IntentID: gapClaim.Intent.ID, IdempotencyKey: "generation-provider-submit-binding-gap",
+		})
+		gapDone <- submitErr
+	}()
+	select {
+	case <-afterResolve:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Provider submission did not reach the post-resolver gap")
+	}
+	emptyRegistry, err := generationapp.NewMediaFactoryRegistry(nil)
+	if err != nil {
+		t.Fatalf("create empty Provider registry for execution fencing: %v", err)
+	}
+	emptyCatalog, err := generationapp.NewMediaPresetCatalog(generationdomain.MediaPresets{}, emptyRegistry)
+	if err != nil {
+		t.Fatalf("create empty Provider catalog for execution fencing: %v", err)
+	}
+	configuration := generationapp.NewProviderConfigurationService(
+		generationgorm.NewProviderConfigurationStore(database), emptyCatalog, providersecret.Open(""),
+		generationapp.ProviderConfigurationConfig{Now: func() time.Time { return currentTime }, NewID: uuid.NewString},
+	)
+	disabledConnection, err := configuration.SetConnectionState(ctx, fixture.owner, generationapp.SetProviderConnectionStateCommand{
+		WorkspaceID: fixture.workspaceID.String(), ConnectionKey: bindingV2.Connection.ConnectionKey,
+		State: generationdomain.ProviderStateDisabled, ExpectedRevision: bindingV2.Connection.Revision,
+		ExpectedContentHash: bindingV2.Connection.ContentHash,
+		IdempotencyKey:      "generation-provider-disable-in-resolver-gap",
+	})
+	if err != nil || disabledConnection.Connection.Revision != bindingV2.Connection.Revision+1 {
+		t.Fatalf("disable Provider connection in resolver gap: result=%#v err=%v", disabledConnection, err)
+	}
+	close(releaseResolution)
+	select {
+	case submitErr := <-gapDone:
+		if generationErrorCode(submitErr) != "state_conflict" {
+			t.Fatalf("Provider request froze a connection disabled in the resolver gap: %T %v", submitErr, submitErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Provider submission did not leave the post-resolver gap")
+	}
+	if afterGapSubmit, afterGapQuery := gateway.counts(); afterGapSubmit != beforeGapSubmit || afterGapQuery != beforeGapQuery {
+		t.Fatalf("resolver-gap drift reached Provider boundary: before=%d/%d after=%d/%d",
+			beforeGapSubmit, beforeGapQuery, afterGapSubmit, afterGapQuery)
+	}
+	requestCount, jobCount = 0, 0
+	if err = database.Model(&model.GenerationRequest{}).Where("intent_id = ?", gapClaim.Intent.ID).Count(&requestCount).Error; err != nil {
+		t.Fatalf("count resolver-gap Generation requests: %v", err)
+	}
+	if err = database.Model(&model.GenerationProviderJob{}).Where("intent_id = ?", gapClaim.Intent.ID).Count(&jobCount).Error; err != nil {
+		t.Fatalf("count resolver-gap Provider jobs: %v", err)
+	}
+	if requestCount != 0 || jobCount != 0 {
+		t.Fatalf("resolver-gap drift persisted Provider facts: requests=%d jobs=%d", requestCount, jobCount)
+	}
 }
 
 func prepareAndClaimProviderIntent(
@@ -579,7 +688,8 @@ func assertProviderSchema(
 		model any
 		index string
 	}{
-		{&model.GenerationProviderBindingVersion{}, "uq_gen_provider_binding_revision"},
+		{&model.ProjectProviderBindingVersion{}, "uq_gen_project_provider_binding_revision"},
+		{&model.ProviderConnectionVersion{}, "uq_gen_provider_connection_revision"},
 		{&model.GenerationRequest{}, "uq_gen_request_intent"},
 		{&model.GenerationRequest{}, "uq_gen_request_key"},
 		{&model.GenerationProviderJob{}, "uq_gen_provider_job_request"},
@@ -606,7 +716,6 @@ func cleanupProviderFixture(
 		{"Provider jobs", deleteRecords(&model.GenerationProviderJob{}, "workspace_id = ?", fixture.workspaceID)},
 		{"Generation requests", deleteRecords(&model.GenerationRequest{}, "workspace_id = ?", fixture.workspaceID)},
 		{"Generation intents", deleteRecords(&model.GenerationIntent{}, "workspace_id = ?", fixture.workspaceID)},
-		{"Provider bindings", deleteRecords(&model.GenerationProviderBindingVersion{}, "workspace_id = ?", fixture.workspaceID)},
 		{"Workflow node runs", deleteRecords(&model.NodeRunProjection{}, "workflow_run_id = ?", fixture.workflowRunID)},
 		{"Workflow run", deleteRecords(&model.WorkflowRun{}, "id = ?", fixture.workflowRunID)},
 		{"Workflow input snapshot", deleteRecords(&model.RunInputSnapshot{}, "id = ?", fixture.runInputSnapshotID)},
@@ -617,4 +726,118 @@ func cleanupProviderFixture(
 			t.Errorf("clean test-owned %s: %v", deletion.name, deletion.err)
 		}
 	}
+}
+
+func seedControlledProjectProviderBinding(
+	t *testing.T,
+	create func(any) error,
+	fixture preparationFixture,
+	providerKey, externalModelID string,
+	revision int64,
+) generationapp.ResolvedProjectProviderBinding {
+	t.Helper()
+	credentialID, connectionID, profileID, bindingID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	createdAt := fixture.now.Add(time.Duration(revision) * time.Second)
+	connectionDomain := generationdomain.ProviderConnectionVersion{
+		ID: connectionID.String(), WorkspaceID: fixture.workspaceID.String(), ConnectionKey: "controlled-primary",
+		Revision: revision, SourcePresetKey: "controlled.image", SourcePresetVersion: 1,
+		PresetSnapshotHash: strings.Repeat("b", 64), ProviderKey: providerKey, DisplayName: "Controlled image",
+		CredentialVersionID: credentialID.String(), ResolvedConfig: map[string]any{},
+		State: generationdomain.ProviderStateEnabled, AdapterContractVersion: "controlled-image-v1",
+		CreatedBy: fixture.ownerID.String(), CreatedAt: createdAt,
+	}
+	connectionDomain.ContentHash = controlledProviderConnectionContentHash(t, connectionDomain)
+	profileDomain := generationdomain.ProviderModelProfileVersion{
+		ID: profileID.String(), WorkspaceID: fixture.workspaceID.String(),
+		ProfileKey: "controlled-profile-" + externalModelID, Revision: revision,
+		CreationSource: map[string]any{"kind": "preset"}, ConnectionKey: "controlled-primary",
+		ProviderKey: providerKey, ExternalModelID: externalModelID,
+		Modality: generationdomain.MediaModalityImage, Family: "controlled_image",
+		AdapterTransportContract: "controlled-image-v1", CapabilitySchemaVersion: "controlled-image-v1",
+		BillingMetric: "generation.image.call", Defaults: map[string]any{},
+		State: generationdomain.ProviderStateEnabled, CreatedBy: fixture.ownerID.String(), CreatedAt: createdAt,
+	}
+	profileDomain.ContentHash = controlledProviderProfileContentHash(t, profileDomain)
+	credential := model.ProviderCredentialVersion{
+		ID: credentialID, WorkspaceID: fixture.workspaceID, ConnectionKey: "controlled-primary",
+		Revision: revision, ProviderKey: providerKey, CipherSuite: generationdomain.ProviderCipherAES256GCM,
+		KeyID: "controlled-key", Nonce: []byte("0123456789ab"), Ciphertext: []byte("0123456789abcdef"),
+		SecretFingerprint: strings.Repeat("a", 64), CreatedBy: fixture.ownerID, CreatedAt: createdAt,
+	}
+	connection := model.ProviderConnectionVersion{
+		ID: connectionID, WorkspaceID: fixture.workspaceID, ConnectionKey: "controlled-primary",
+		Revision: revision, SourcePresetKey: "controlled.image", SourcePresetVersion: 1,
+		PresetSnapshotHash: strings.Repeat("b", 64), ProviderKey: providerKey, DisplayName: "Controlled image",
+		CredentialVersionID: credentialID, ResolvedConfig: []byte(`{}`),
+		State: generationdomain.ProviderStateEnabled, AdapterContractVersion: "controlled-image-v1",
+		ContentHash: connectionDomain.ContentHash, CreatedBy: fixture.ownerID, CreatedAt: createdAt,
+	}
+	profile := model.ProviderModelProfileVersion{
+		ID: profileID, WorkspaceID: fixture.workspaceID, ProfileKey: "controlled-profile-" + externalModelID,
+		Revision: revision, CreationSource: []byte(`{"kind":"preset"}`),
+		ConnectionKey: "controlled-primary", ProviderKey: providerKey, ExternalModelID: externalModelID,
+		Modality: generationdomain.MediaModalityImage, Family: "controlled_image",
+		AdapterTransportContract: "controlled-image-v1", CapabilitySchemaVersion: "controlled-image-v1",
+		BillingMetric: "generation.image.call", Defaults: []byte(`{}`),
+		State: generationdomain.ProviderStateEnabled, ContentHash: profileDomain.ContentHash,
+		CreatedBy: fixture.ownerID, CreatedAt: createdAt,
+	}
+	bindingDomain := generationdomain.ProjectProviderBindingVersion{
+		ID: bindingID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		Purpose: generationdomain.ProviderPurposeReferenceAsset, Revision: revision,
+		ConnectionVersionID: connectionID.String(), CredentialVersionID: credentialID.String(),
+		ModelProfileVersionID: profileID.String(), ProviderKey: providerKey, Modality: generationdomain.MediaModalityImage,
+		AdapterContractVersion: "controlled-image-v1", CreatedBy: fixture.ownerID.String(), CreatedAt: createdAt,
+	}
+	hashInput := bindingDomain
+	hashInput.ID, hashInput.ContentHash, hashInput.CreatedBy, hashInput.CreatedAt = "", "", "", time.Time{}
+	var err error
+	bindingDomain.ContentHash, err = platformcommand.InputHash(hashInput)
+	if err != nil {
+		t.Fatalf("hash controlled Project Provider binding: %v", err)
+	}
+	binding := model.ProjectProviderBindingVersion{
+		ID: bindingID, WorkspaceID: fixture.workspaceID, ProjectID: fixture.projectID,
+		Purpose: bindingDomain.Purpose, Revision: revision, ConnectionVersionID: connectionID,
+		CredentialVersionID: credentialID, ModelProfileVersionID: profileID, ProviderKey: providerKey,
+		Modality: generationdomain.MediaModalityImage, AdapterContractVersion: "controlled-image-v1",
+		ContentHash: bindingDomain.ContentHash, CreatedBy: fixture.ownerID, CreatedAt: createdAt,
+	}
+	for _, record := range []any{&credential, &connection, &profile, &binding} {
+		if err = create(record); err != nil {
+			t.Fatalf("seed controlled Provider configuration %T: %v", record, err)
+		}
+	}
+	return generationapp.ResolvedProjectProviderBinding{
+		Binding:    bindingDomain,
+		Connection: connectionDomain,
+		Credential: generationapp.ProviderCredentialView{ID: credentialID.String(), Revision: revision},
+		Profile:    profileDomain,
+	}
+}
+
+func controlledProviderConnectionContentHash(
+	t *testing.T,
+	value generationdomain.ProviderConnectionVersion,
+) string {
+	t.Helper()
+	value.ID, value.ContentHash, value.CreatedBy, value.CreatedAt = "", "", "", time.Time{}
+	hash, err := platformcommand.InputHash(value)
+	if err != nil {
+		t.Fatalf("hash controlled Provider connection: %v", err)
+	}
+	return hash
+}
+
+func controlledProviderProfileContentHash(
+	t *testing.T,
+	value generationdomain.ProviderModelProfileVersion,
+) string {
+	t.Helper()
+	value.ID, value.ContentHash, value.CreatedBy, value.CreatedAt = "", "", "", time.Time{}
+	hash, err := platformcommand.InputHash(value)
+	if err != nil {
+		t.Fatalf("hash controlled Provider model profile: %v", err)
+	}
+	return hash
 }

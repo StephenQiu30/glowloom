@@ -314,7 +314,7 @@ ProviderCredentialVersion
 
 API Key 通过 TLS 从 Web 只写传入，Backend 立即使用标准 AEAD 加密。Associated Data 必须绑定 workspace、provider、credential id、revision 与 key id，防止跨租户或跨版本搬移密文。`secret_fingerprint` 使用由根密钥派生的 HMAC-SHA-256，而不是直接对可能低熵的 API Key 做裸 Hash；它只用于判断用户是否录入了同一凭据，不作为解密或认证材料。数据库不保存明文；Query/API 永不返回 nonce/ciphertext/明文，只返回 provider、版本、创建时间和截断 fingerprint 摘要。
 
-Provider 根密钥不放 `.env`。本地与生产都从固定只读 Docker Secret 文件 `/run/secrets/lanverse_media_provider_master_key` 读取。根密钥不是业务事实，不进入 PostgreSQL、日志、镜像或仓库。Secret 文件不存在时服务仍可空配置启动，但创建/轮换/执行 Provider 返回 `secret_store_unavailable`；不得生成临时根密钥导致重启后无法解密。
+Provider 根密钥不放 `.env`。本地与生产都由 Docker Secret 提供宿主 `0600` 只读源；由于 Compose file-backed Secret 不支持覆盖 `uid/gid/mode`，容器的最小 root 启动器只在 `/run/secrets` tmpfs 内生成 `0400/lanverse` 的固定文件 `/run/secrets/lanverse_media_provider_master_key`，然后立即 `exec su-exec` 降权运行唯一 Backend Binary。非 tmpfs 时必须失败关闭，healthcheck 也以 `lanverse` 执行；不得把明文副本留在容器 writable layer。根密钥不是业务事实，不进入 PostgreSQL、日志、镜像或仓库。Secret 文件不存在时服务仍可空配置启动，但创建/轮换/执行 Provider 返回 `secret_store_unavailable`；不得生成临时根密钥导致重启后无法解密。
 
 根密钥轮换不是 MVP；Credential API Key 轮换通过新 CredentialVersion + ConnectionVersion 完成。丢失根密钥时只能由 Owner 重新录入 Provider 凭据，不允许明文恢复后门。
 

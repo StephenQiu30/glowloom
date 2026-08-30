@@ -13,25 +13,17 @@ const (
 	ProviderResultFailed    = "FAILED"
 )
 
-type ProviderBinding struct {
-	ID, WorkspaceID, ProjectID        string
-	Capability, ProviderKey, ModelKey string
-	CredentialRef, ContentHash        string
-	Revision                          int64
-	CreatedBy                         string
-	CreatedAt                         time.Time
-}
-
 type GenerationRequest struct {
-	ID, WorkspaceID, ProjectID, IntentID  string
-	TargetID                              string
-	BindingID                             string
-	BindingRevision                       int64
-	Capability, ProviderKey, ModelKey     string
-	CredentialRef, RequestKey, TargetHash string
-	Units                                 int64
-	ContentHash, CreatedBy                string
-	CreatedAt                             time.Time
+	ID, WorkspaceID, ProjectID, IntentID          string
+	TargetID                                      string
+	BindingID                                     string
+	BindingRevision                               int64
+	Purpose, ProviderKey, ExternalModelID         string
+	ConnectionVersionID, CredentialVersionID      string
+	ModelProfileVersionID, RequestKey, TargetHash string
+	Units                                         int64
+	ContentHash, CreatedBy                        string
+	CreatedAt                                     time.Time
 }
 
 type ProviderOutput struct {
@@ -61,19 +53,13 @@ type ProviderResultReceipt struct {
 	OccurredAt, ReceivedAt                       time.Time
 }
 
-func SameProviderBinding(left, right ProviderBinding) bool {
-	return left.ID == right.ID && left.WorkspaceID == right.WorkspaceID && left.ProjectID == right.ProjectID &&
-		left.Capability == right.Capability && left.ProviderKey == right.ProviderKey && left.ModelKey == right.ModelKey &&
-		left.CredentialRef == right.CredentialRef && left.Revision == right.Revision &&
-		left.ContentHash == right.ContentHash && left.CreatedBy == right.CreatedBy && left.CreatedAt.Equal(right.CreatedAt)
-}
-
 func SameGenerationRequest(left, right GenerationRequest) bool {
 	return left.ID == right.ID && left.WorkspaceID == right.WorkspaceID && left.ProjectID == right.ProjectID &&
 		left.IntentID == right.IntentID && left.TargetID == right.TargetID &&
 		left.BindingID == right.BindingID && left.BindingRevision == right.BindingRevision &&
-		left.Capability == right.Capability && left.ProviderKey == right.ProviderKey && left.ModelKey == right.ModelKey &&
-		left.CredentialRef == right.CredentialRef && left.RequestKey == right.RequestKey &&
+		left.Purpose == right.Purpose && left.ProviderKey == right.ProviderKey && left.ExternalModelID == right.ExternalModelID &&
+		left.ConnectionVersionID == right.ConnectionVersionID && left.CredentialVersionID == right.CredentialVersionID &&
+		left.ModelProfileVersionID == right.ModelProfileVersionID && left.RequestKey == right.RequestKey &&
 		left.TargetHash == right.TargetHash && left.Units == right.Units && left.ContentHash == right.ContentHash &&
 		left.CreatedBy == right.CreatedBy && left.CreatedAt.Equal(right.CreatedAt)
 }

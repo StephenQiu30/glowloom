@@ -1,6 +1,6 @@
 # StoryGraph 内容图与 DAG 创作画布验收标准
 
-- 状态：验收标准已重新接受（`SG-D21`，2026-08-29）；`SG-I01`–`SG-I19` 保留未变合同的历史 Evidence，新增/改写媒体合同与 `SG-I20`–`SG-I35` 全部未通过
+- 状态：验收标准已重新接受（`SG-D21`，2026-08-29）；`SG-I01`–`SG-I20` 已有对应合同的真实 Evidence，当前只解锁 `SG-I21`
 - Design：[0010 StoryGraph 内容图与 DAG 创作画布设计](../design/0010-StoryGraph内容图与DAG创作画布设计.md)
 - Agent Design：[3003 StoryGraph 剧本解析 Harness 与内置 Skill 设计](../design/3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 - PRD：[0010 StoryGraph 内容图与 DAG 创作画布产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
@@ -245,7 +245,7 @@
 - [x] `SG-I17`：Core StoryGraph 多集编译、Diff/Impact 全链完成。
 - [x] `SG-I18`：Storyboard Draft/Shot Intent/needs_asset 且零正式 Shot 完成。
 - [x] `SG-I19`：Intent Gate/FreezeIntentSet 与付费前零副作用完成。
-- [ ] `SG-I20`：Preset Catalog/Factory、配置版本、Secret Store、root-key Docker Secret、零配置启动与旧 Runware/环境变量链直接替换完成。
+- [x] `SG-I20`：Preset Catalog/Factory、配置版本、Secret Store、root-key Docker Secret、零配置启动与旧 Runware/环境变量链直接替换完成。
 - [ ] `SG-I21`：精确 Binding/Profile/Price 的 Intent/Job/Call/Receipt、四 Call、Cost/Quota 与同步/异步故障恢复完成。
 - [ ] `SG-I22`：真实 Web Provider Settings、一次性 Secret、Connection/Profile/Price/Binding 管理完成。
 - [ ] `SG-I23`：Seedream 5.0 Pro+ `reference_asset` 精确 Adapter、真实调用、Staging/QC/CandidateSet 完成。
@@ -689,6 +689,20 @@
 ## 6. 重新接受后的目标基线（2026-08-29）
 
 - 本次 Checklist 精确覆盖 105 个跨服务 Requirement、70 个 Agent Requirement 和 35 个实施任务；Requirement ID 与实施任务均一一映射且无重复。
-- `SG-I01`–`SG-I19` 的勾选只证明未变合同的既有真实证据；`SG-VIS-001`–`022`、新增/改写的 Provider/Secret/Web/视频/日志关联/Agent 媒体隔离合同，以及 `SG-I20`–`SG-I35` 全部保持 `[ ]`。
-- 当前只解锁新版 `SG-I20`：先实现 Backend Preset Catalog/Factory、不可变配置版本、Secret Store、root-key Docker Secret 与零配置启动，并直接删除固定 Runware/环境变量链。未通过其完成门和当时全量真实 CI 前，不领取后续任务。
+- `SG-I01`–`SG-I19` 的勾选只证明未变合同的既有真实证据；共享的 Provider/Secret/Web/视频/日志关联/Agent 媒体隔离条款仍按完整 Requirement 保持 `[ ]`，不因 `SG-I20` 的局部切片提前勾选。
+- `SG-I20` 的独立 Evidence 记录在下一节；其完成只解锁 `SG-I21`，不抵扣 Web、真实 Adapter、Call/Staging/QC/Selection 或最终全旅程。
 - 最终 `agent-browser` 只在 `SG-I34` 全部实现与 CI Evidence 已独立提交后由 `SG-I35` 执行；本次文档重新接受没有运行浏览器验收。
+
+## 7. `SG-I20` — 通用媒体 Provider 配置事实与 Secret Store（2026-08-30）
+
+- 交付范围：Backend 内置火山方舟、OpenAI、Google 三个受控 Connection Preset，以及 Seedream 5.0 Pro、Seedance 2.0/2.0 Fast/2.0 Mini/2.5、GPT Image 2、Nano Banana 2 Lite/2/Pro/Legacy 十个模型 Preset；Preset 固定 Provider、地域、Transport/Capability/Billing 合同，不接收任意 Provider URL、Header 或 JSON。编译期 `MediaFactoryRegistry` 以 Provider/Modality/Contract Version 精确匹配 Factory，Catalog 和 Resolve 都只暴露已注册真实 Factory 的条目；当前生产 Registry 按实施顺序为空，因此真实 Adapter 进入前 Catalog 为空，而非伪装可用。
+- GORM 事实：唯一 Catalog 新增 `ProviderCredentialVersion`、`ProviderConnectionVersion`、`ProviderModelProfileVersion`、`ProjectProviderBindingVersion`，全部为追加式不可变版本；Workspace Owner Command/Query 覆盖创建、轮换、启停、Profile、三类 Project Purpose Binding、revision + content hash CAS、命令幂等、重启读取和旧版本执行拒绝。配置变更、Binding 发布/解析和 Request 冻结共享稳定 Workspace 行锁，Request 在 resolver gap 后于同一外层事务重验 exact Binding/Connection/Profile。`GenerationRequest` 冻结 exact Binding/Connection/Credential/Profile/Model 身份；没有 Migration、DDL、Raw SQL Repository、第二 ORM、双写或兼容读取。
+- Secret 合同：Go 标准库 AES-256-GCM 加密、root-key 派生 HMAC-SHA256 指纹与 AAD 绑定 Workspace/Provider/Credential/Revision；带 Credentials 的 Receipt 只保存去 Secret 命令与 HMAC 后的输入 Hash，不保存可离线猜测的裸 SHA。root key 只从 `/run/secrets/lanverse_media_provider_master_key` 读取精确原始 32 bytes。Compose 对 file-backed Secret 的 `uid/gid/mode` 覆盖不生效，因此宿主 `0600` 源只读挂载后，由最小 root 启动器在 `/run/secrets` tmpfs 生成 `0400/lanverse` 固定文件并立即降权；实际 Compose、tmpfs/权限/长度/非 root 主进程和 healthcheck 探针通过，非 tmpfs 明确拒绝且不把副本留在 writable layer。未挂载时非视觉 Runtime 正常启动、配置和执行失败关闭；31 bytes、33 bytes、带换行 33 bytes、错误 32-byte key、非法 Nonce 与密文翻转均被拒绝。Owner 丢失旧 root 后可用新 root 重新录入并追加 Credential/Connection 版本，旧 root 随即失败关闭；API Key 不进入 `.env`、Compose 普通环境、响应、日志、缓存、Agent Wire/Bundle 或明文业务列。
+- Red→Green：`backend/tests/generation/provider_configuration_contract_test.go` 固定 Factory 可见性、同 Preset 多版本与深拷贝、未知/快照篡改 Preset、固定模型 ID、Owner/Editor、revision + hash CAS、HMAC 幂等 Receipt、防腐重放、轮换/禁用、重启、错误 root key、Workspace 锁线性化和 Secret 零回显；`provider_execution_test.go` 固定 resolver gap 内禁用后零 Request/Job/远端调用。真实 PostgreSQL 定向合同与架构、配置、OpenAPI、Workflow Executor、Compose 合同通过；固定 Runware Config/Adapter/Stager/Route/Test、公开 Binding Contract 和 `RUNWARE_API_KEY`/`IMAGE_PROVIDER` 已原子删除，没有 fallback。
+- CI 故障修复：完整 Backend CI 曾在 Workflow 热点出现 `dial tcp 127.0.0.1:5432: connect: can't assign requested address`，现场约 4153 个 PostgreSQL `TIME_WAIT`。确定性 Red 测试连续两轮占满 20 连接池，旧 `MaxIdle=10` 得到 `MaxIdleClosed=20`；将空闲容量与既有 `MaxOpen=20` 对齐后测试 Green。相同 `TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce` 在独立新库中由 4090 个数据库 session 降到 14，业务仍完成约 45 万事务；池关闭后连接为零。修复没有提高单池最大连接上限，也没有修改 macOS 端口参数或用重试掩盖失败；单 Binary 的 API/Event/Workflow 三个独立池最多各保留 20 个 idle session，生产 PostgreSQL 仍需按合计 60 个会话预算监控。
+- Backend 全量门：`gofmt -l .` 无输出，`go vet ./...` 通过；在全新 PostgreSQL、Homebrew Temporal `127.0.0.1:7233`、既有 MinIO、Homebrew Kafka 宿主 listener `127.0.0.1:9092`、Elasticsearch/Kibana/Logstash 上运行 `go test -count=1 -p 1 ./...` 全部通过。关键包结果为 Eventing `24.490s`、Generation `13.953s`、Observability `1.381s`、Kafka+GORM+Elasticsearch `14.422s`、StoryGraph `11.272s`、Workflow `113.728s`；本轮没有跳过已注入真实依赖的集成旅程，也未再出现 `EADDRNOTAVAIL`。
+- ELK 与本机复用：现有外部 Logstash pipeline 在用户明确授权后保留 Beats/HTTP 通用输入，并只把 Lanverse TCP `5000` 按仓库脱敏/Hash-only DLQ 合同路由到 `lanverse-logs-application-v1` 和 `lanverse-logs-dead-letter-v1`；Logstash `--config.test_and_exit` 返回 `Configuration OK`，精确重启原 `logstash-local-dev` 后真实 ELK 测试通过。Kibana 初始化脚本新增可选成对 Basic Auth，数据视图真实返回成功；没有引入 Filebeat，Kafka 仍只承载业务事件。该 Logstash 文件位于仓库外 `/Users/stephenqiu/Desktop/Docker/elastic-start-local/config/logstash/pipeline/logstash.conf`，属于本机运行前置而非 Git 产物。
+- 跨项目与部署门：Agent 开发依赖安装、Ruff check/format、Pyright、Pytest 全通过，结果 `39 passed, 4 skipped`；四项 skip 仍是显式 `LANVERSE_TEST_REAL_CODEX=1` 的真实 Codex opt-in，不写成已执行。Frontend `npm ci`、OpenAPI Client 零漂移、lint、typecheck、18 个 Vitest 文件 54 项测试和 production build 全通过。开发/环境/生产组合 Compose render、服务边界和 repository hygiene 通过；Backend/Frontend/Agent 三镜像从最终树构建，单 Binary、standalone、Agent 非 root/固定 Codex/唯一 Skill Bundle 探针通过。Backend 还使用宿主 `0600` 真实 32-byte 文件跑过 Compose 嵌套挂载、tmpfs、`0400/lanverse`、空源清除、非 tmpfs 拒绝与降权 healthcheck 探针。镜像构建压力曾使既有 Elasticsearch 被宿主 OOM 杀死，未冒充通过；精确重启同一 `es-local-dev` 后恢复 healthy，没有启动第二套环境。
+- 隔离与清理：全量测试使用独立 PostgreSQL 数据库和四个临时 Kafka 业务/DLQ Topic；失败轮次均先精确删除并重建，最终数据库与 Topic 已全部删除。没有启动 `docker-compose-env.yml`、没有新建第二套 PostgreSQL/Kafka/Temporal/ELK，也未读取 `.env`；真实 MinIO/ELK 凭据只由测试进程环境传入且未写入或提交。排障时 Docker 事件输出曾意外回显既有 Elasticsearch healthcheck Basic Auth；该值未写仓库、未继续使用，本机 ELK 凭据必须轮换。测试复用既有 MinIO Bucket；现有集成测试仍会留下任务 UUID 前缀对象，后续应单独补测试对象清理，不能把 Bucket 卫生冒充已完成。
+- 剩余范围：本项没有 Provider API/Web Settings、真实远端调用、ProviderCall/Receipt、PriceQuote 结算、Staging/QC/CandidateSet 或模型 Adapter；这些严格留给 `SG-I21`–`SG-I31`。完整 HTTP 权限/归档并发矩阵属于后续共享架构条款，当前只完成 Provider 配置锁域，不冒充 `SG-ARC-009` 已完成。因此 `SG-VIS-003`、`SG-VIS-012`–`022`、`SGA-BND-006`、`SG-FE-010`–`011` 与共享安全/完整旅程条款继续保持未勾选；当前只解锁 `SG-I21`，未运行 `agent-browser`。
+- Git：本 Evidence 与实现由描述通用媒体 Provider 配置 feature 的当前独立提交承载；提交标题和正文不含任务编号或任务名，未推送、未创建 PR。

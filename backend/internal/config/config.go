@@ -29,7 +29,6 @@ const (
 	defaultAgentPollMillis    = 500
 	defaultAgentLeaseSeconds  = 30 * 60
 	defaultReviewLeaseSeconds = 5 * 60
-	defaultRunwareTimeoutSecs = 30
 	defaultTemporalAddress    = "127.0.0.1:7233"
 	defaultTemporalNamespace  = "default"
 	defaultTemporalTaskQueue  = "lanverse-production-v1"
@@ -77,9 +76,6 @@ type Config struct {
 	ObjectStoreRegion               string
 	ObjectStoreSecure               bool
 	ObjectStorePublicSecure         bool
-	ImageProvider                   string
-	RunwareAPIKey                   string
-	RunwareRequestTimeout           time.Duration
 	AgentURL                        string
 	AgentExecutionSecret            string
 	AgentRuntimeImageDigest         string
@@ -143,26 +139,6 @@ func Load() (Config, error) {
 	objectStorePublicSecure, err := boolean("MINIO_PUBLIC_SECURE", false)
 	if err != nil {
 		return Config{}, err
-	}
-	imageProvider := strings.ToLower(strings.TrimSpace(os.Getenv("IMAGE_PROVIDER")))
-	runwareAPIKey := ""
-	runwareRequestTimeout := time.Duration(0)
-	switch imageProvider {
-	case "":
-	case "runware":
-		runwareAPIKey = strings.TrimSpace(os.Getenv("RUNWARE_API_KEY"))
-		if runwareAPIKey == "" {
-			return Config{}, errors.New("RUNWARE_API_KEY is required when IMAGE_PROVIDER=runware")
-		}
-		runwareTimeoutSeconds, timeoutErr := positiveInteger(
-			"RUNWARE_REQUEST_TIMEOUT_SECONDS", defaultRunwareTimeoutSecs,
-		)
-		if timeoutErr != nil || runwareTimeoutSeconds > 120 {
-			return Config{}, errors.New("RUNWARE_REQUEST_TIMEOUT_SECONDS must use a value between 1 and 120")
-		}
-		runwareRequestTimeout = time.Duration(runwareTimeoutSeconds) * time.Second
-	default:
-		return Config{}, errors.New("IMAGE_PROVIDER must be empty or runware")
 	}
 	agentURL, err := serviceURL("AGENT_URL", defaultAgentURL)
 	if err != nil {
@@ -283,9 +259,6 @@ func Load() (Config, error) {
 		ObjectStoreRegion:               environmentValue("MINIO_REGION", "us-east-1"),
 		ObjectStoreSecure:               objectStoreSecure,
 		ObjectStorePublicSecure:         objectStorePublicSecure,
-		ImageProvider:                   imageProvider,
-		RunwareAPIKey:                   runwareAPIKey,
-		RunwareRequestTimeout:           runwareRequestTimeout,
 		AgentURL:                        agentURL,
 		AgentExecutionSecret:            environmentValue("AGENT_EXECUTION_SECRET", defaultAgentSecret),
 		AgentRuntimeImageDigest:         agentImageDigest,

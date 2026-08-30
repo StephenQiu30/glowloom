@@ -26,7 +26,6 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 		"/api/v1/projects",
 		"/api/v1/projects/{project_id}/cost-budget",
 		"/api/v1/projects/{project_id}/cost-prices/{metric}",
-		"/api/v1/projects/{project_id}/generation/image-provider-bindings",
 		"/api/v1/projects/{project_id}/current-script-document",
 		"/api/v1/document-revisions/{revision_id}/production-bibles",
 		"/api/v1/episodes/{episode_id}/storyboard-drafts",
@@ -58,6 +57,9 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 	if _, exists := document.Paths["/api/v1/projects/{project_id}/cost-estimates"]; exists {
 		t.Error("public contract exposes internal estimates before GenerationIntent coordination")
 	}
+	if _, exists := document.Paths["/api/v1/projects/{project_id}/generation/image-provider-bindings"]; exists {
+		t.Error("public contract still exposes the removed fixed image Provider binding route")
+	}
 	var projectSchema struct {
 		Required   []string                   `json:"required"`
 		Properties map[string]json.RawMessage `json:"properties"`
@@ -78,23 +80,9 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 		t.Error("public contract is missing CostPriceQuoteResponse")
 	}
 	for _, schema := range []string{"ImageProviderBindingPublishRequest", "ImageProviderBindingResponse"} {
-		if _, exists := document.Components.Schemas[schema]; !exists {
-			t.Errorf("public contract is missing %s", schema)
+		if _, exists := document.Components.Schemas[schema]; exists {
+			t.Errorf("public contract still exposes removed schema %s", schema)
 		}
-	}
-	var providerBindingRequest struct {
-		Required   []string                   `json:"required"`
-		Properties map[string]json.RawMessage `json:"properties"`
-	}
-	if err := json.Unmarshal(
-		document.Components.Schemas["ImageProviderBindingPublishRequest"],
-		&providerBindingRequest,
-	); err != nil {
-		t.Fatalf("decode ImageProviderBindingPublishRequest: %v", err)
-	}
-	if len(providerBindingRequest.Required) != 1 || providerBindingRequest.Required[0] != "idempotency_key" ||
-		len(providerBindingRequest.Properties) != 1 || providerBindingRequest.Properties["idempotency_key"] == nil {
-		t.Fatalf("Provider binding publish request exposes configuration fields: %#v", providerBindingRequest.Properties)
 	}
 	for _, schema := range []string{"StoryGraphVersionResponse", "StoryGraphSubgraphResponse", "StoryGraphDiffResponse"} {
 		if _, exists := document.Components.Schemas[schema]; !exists {

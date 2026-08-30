@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"time"
 
@@ -17,7 +16,7 @@ import (
 	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
 	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
 	generationreview "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/review"
-	runwareadapter "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/runware"
+	providersecret "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/secretstore"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstore"
@@ -123,33 +122,26 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	candidateService := generationapp.NewService(
 		generationgorm.New(database), generationasset.NewReadiness(assetService), generationapp.Config{},
 	)
-	var imageProviderGateway generationapp.ProviderGateway
-	if configuration.ImageProvider == "runware" {
-		imageStager, stagerErr := runwareadapter.NewImageStager(runwareadapter.ImageStagerConfig{
-			ObjectStore: objects, DownloadTimeout: configuration.RunwareRequestTimeout,
-			MaxImageBytes: 20 << 20, MaxPixels: 20_000_000,
-		})
-		if stagerErr != nil {
-			return fmt.Errorf("workflow Runware image stager configuration failed: %w", stagerErr)
-		}
-		imageProviderGateway, err = runwareadapter.New(runwareadapter.Config{
-			APIKey: configuration.RunwareAPIKey, Client: &http.Client{}, Stager: imageStager,
-			RequestTimeout: configuration.RunwareRequestTimeout,
-		})
-		if err != nil {
-			return fmt.Errorf("workflow Runware Provider configuration failed: %w", err)
-		}
+	providerRegistry, err := generationapp.NewMediaFactoryRegistry(nil)
+	if err != nil {
+		return fmt.Errorf("workflow Media Provider registry is invalid: %w", err)
 	}
-	providerConfig := generationapp.ProviderConfig{Now: now, NewID: uuid.NewString}
-	if configuration.ImageProvider == "runware" {
-		providerConfig.ProviderKey = "runware"
-		providerConfig.ModelKey = "runware:z-image@turbo"
-		providerConfig.CredentialRef = "env/runware_api_key"
+	providerCatalog, err := generationapp.NewMediaPresetCatalog(generationapp.BuiltinMediaPresets(), providerRegistry)
+	if err != nil {
+		return fmt.Errorf("workflow Media Provider preset catalog is invalid: %w", err)
 	}
-	providerService := generationapp.NewProviderService(
-		generationgorm.NewProviderStore(database, costConfig, quotaConfig), imageProviderGateway,
-		providerConfig,
+	providerSecrets := providersecret.OpenFixed()
+	providerConfigurationService := generationapp.NewProviderConfigurationService(
+		generationgorm.NewProviderConfigurationStore(database), providerCatalog, providerSecrets,
+		generationapp.ProviderConfigurationConfig{Now: now, NewID: uuid.NewString},
 	)
+	providerService := generationapp.NewProviderService(
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig), nil,
+		generationapp.ProviderConfig{Now: now, NewID: uuid.NewString, Bindings: providerConfigurationService},
+	)
+	logger.Info("workflow Media Provider configuration ready", "secret_store_available", providerSecrets.Available(),
+		"connection_presets", len(providerConfigurationService.Catalog().Connections),
+		"model_presets", len(providerConfigurationService.Catalog().Models))
 	referenceTargetBuilder := generationapp.NewReferenceTargetBuilderService(
 		generationgorm.New(database),
 		generationapp.ReferenceTargetBuilderConfig{Now: now, NewID: uuid.NewString},

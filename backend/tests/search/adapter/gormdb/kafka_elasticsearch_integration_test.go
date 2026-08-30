@@ -52,8 +52,14 @@ func TestRealKafkaProjectsPostgreSQLOwnersIntoElasticsearchWithDeepLinks(t *test
 	fixture := seedSearchOwners(t, func(value any) error { return database.Create(value).Error })
 
 	prefix := "lanverse-kafka-search-" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	username := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_USERNAME")
+	password := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_PASSWORD")
+	if (username == "") != (password == "") {
+		t.Fatal("LANVERSE_TEST_ELASTICSEARCH_USERNAME and LANVERSE_TEST_ELASTICSEARCH_PASSWORD must be configured together")
+	}
 	index, err := searches.New(searches.Config{
-		Addresses: []string{elasticsearchURL}, ScriptAlias: prefix + "-script-v1", StoryGraphAlias: prefix + "-storygraph-v1",
+		Addresses: []string{elasticsearchURL}, Username: username, Password: password,
+		ScriptAlias: prefix + "-script-v1", StoryGraphAlias: prefix + "-storygraph-v1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -212,6 +218,9 @@ func environmentOr(name, fallback string) string {
 func deleteSearchIndices(elasticsearchURL, prefix string) {
 	request, err := http.NewRequest(http.MethodDelete, strings.TrimRight(elasticsearchURL, "/")+"/"+prefix+"-*", nil)
 	if err == nil {
+		if username := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_USERNAME"); username != "" {
+			request.SetBasicAuth(username, os.Getenv("LANVERSE_TEST_ELASTICSEARCH_PASSWORD"))
+		}
 		_, _ = http.DefaultClient.Do(request)
 	}
 }

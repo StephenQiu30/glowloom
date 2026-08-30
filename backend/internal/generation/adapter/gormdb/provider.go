@@ -51,59 +51,78 @@ func (store *ProviderStore) WithinProviderTransaction(
 	})
 }
 
-func (repo *providerRepository) LatestProviderBindingForUpdate(
+func (repo *providerRepository) LatestProjectProviderBindingForUpdate(
 	ctx context.Context,
-	workspaceID, projectID string,
-) (domain.ProviderBinding, error) {
+	workspaceID, projectID, purpose string,
+) (domain.ProjectProviderBindingVersion, error) {
 	workspace, err := uuid.Parse(workspaceID)
 	if err != nil {
-		return domain.ProviderBinding{}, application.ErrProviderBindingNotFound
+		return domain.ProjectProviderBindingVersion{}, application.ErrProjectProviderBindingNotFound
 	}
 	project, err := uuid.Parse(projectID)
 	if err != nil {
-		return domain.ProviderBinding{}, application.ErrProviderBindingNotFound
+		return domain.ProjectProviderBindingVersion{}, application.ErrProjectProviderBindingNotFound
 	}
 	var projectRecord model.Project
 	if err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("id = ? AND workspace_id = ?", project, workspace).First(&projectRecord).Error; err != nil {
-		return domain.ProviderBinding{}, normalizeProviderNotFound(err, application.ErrProviderBindingNotFound)
+		return domain.ProjectProviderBindingVersion{}, normalizeProviderNotFound(err, application.ErrProjectProviderBindingNotFound)
 	}
-	var record model.GenerationProviderBindingVersion
+	var record model.ProjectProviderBindingVersion
 	if err = repo.database.WithContext(ctx).
-		Where("workspace_id = ? AND project_id = ? AND capability = ?", workspace, project, "generation.image").
+		Where("workspace_id = ? AND project_id = ? AND purpose = ?", workspace, project, purpose).
 		Order("revision DESC").First(&record).Error; err != nil {
-		return domain.ProviderBinding{}, normalizeProviderNotFound(err, application.ErrProviderBindingNotFound)
+		return domain.ProjectProviderBindingVersion{}, normalizeProviderNotFound(err, application.ErrProjectProviderBindingNotFound)
 	}
-	return providerBindingDomain(record), nil
+	return projectProviderBindingDomain(record), nil
 }
 
-func (repo *providerRepository) FindProviderBinding(
+func (repo *providerRepository) LockProviderWorkspace(ctx context.Context, workspaceID string) error {
+	return lockProviderWorkspace(ctx, repo.database, workspaceID)
+}
+
+func (repo *providerRepository) FindProjectProviderBinding(
 	ctx context.Context,
 	bindingID string,
-) (domain.ProviderBinding, error) {
+) (domain.ProjectProviderBindingVersion, error) {
 	id, err := uuid.Parse(bindingID)
 	if err != nil {
-		return domain.ProviderBinding{}, application.ErrProviderBindingNotFound
+		return domain.ProjectProviderBindingVersion{}, application.ErrProjectProviderBindingNotFound
 	}
-	var record model.GenerationProviderBindingVersion
+	var record model.ProjectProviderBindingVersion
 	if err = repo.database.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
-		return domain.ProviderBinding{}, normalizeProviderNotFound(err, application.ErrProviderBindingNotFound)
+		return domain.ProjectProviderBindingVersion{}, normalizeProviderNotFound(err, application.ErrProjectProviderBindingNotFound)
 	}
-	return providerBindingDomain(record), nil
+	return projectProviderBindingDomain(record), nil
 }
 
-func (repo *providerRepository) CreateProviderBinding(
+func (repo *providerRepository) LatestProviderConnectionForUpdate(
 	ctx context.Context,
-	value domain.ProviderBinding,
-) (domain.ProviderBinding, error) {
-	record, err := providerBindingRecord(value)
-	if err != nil {
-		return domain.ProviderBinding{}, err
-	}
-	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error; err != nil {
-		return domain.ProviderBinding{}, fmt.Errorf("create Generation Provider binding: %w", err)
-	}
-	return providerBindingDomain(record), nil
+	workspaceID, connectionKey string,
+) (domain.ProviderConnectionVersion, error) {
+	return (&providerConfigurationRepository{database: repo.database}).LatestProviderConnectionForUpdate(
+		ctx,
+		workspaceID,
+		connectionKey,
+	)
+}
+
+func (repo *providerRepository) FindProviderModelProfile(
+	ctx context.Context,
+	profileID string,
+) (domain.ProviderModelProfileVersion, error) {
+	return (&providerConfigurationRepository{database: repo.database}).FindProviderModelProfile(ctx, profileID)
+}
+
+func (repo *providerRepository) LatestProviderModelProfileForUpdate(
+	ctx context.Context,
+	workspaceID, profileKey string,
+) (domain.ProviderModelProfileVersion, error) {
+	return (&providerConfigurationRepository{database: repo.database}).LatestProviderModelProfileForUpdate(
+		ctx,
+		workspaceID,
+		profileKey,
+	)
 }
 
 func (repo *providerRepository) FindRequestByIntent(
@@ -251,41 +270,21 @@ func (repo *providerRepository) EnsureProviderResultReceipt(
 	return providerReceiptDomain(persisted)
 }
 
-func providerBindingRecord(value domain.ProviderBinding) (model.GenerationProviderBindingVersion, error) {
-	ids, err := parseProviderUUIDs(value.ID, value.WorkspaceID, value.ProjectID, value.CreatedBy)
-	if err != nil {
-		return model.GenerationProviderBindingVersion{}, err
-	}
-	return model.GenerationProviderBindingVersion{
-		ID: ids[0], WorkspaceID: ids[1], ProjectID: ids[2], Capability: value.Capability,
-		Revision: value.Revision, ProviderKey: value.ProviderKey, ModelKey: value.ModelKey,
-		CredentialRef: value.CredentialRef, ContentHash: value.ContentHash,
-		CreatedBy: ids[3], CreatedAt: value.CreatedAt.UTC(),
-	}, nil
-}
-
-func providerBindingDomain(value model.GenerationProviderBindingVersion) domain.ProviderBinding {
-	return domain.ProviderBinding{
-		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
-		Capability: value.Capability, ProviderKey: value.ProviderKey, ModelKey: value.ModelKey,
-		CredentialRef: value.CredentialRef, Revision: value.Revision, ContentHash: value.ContentHash,
-		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt.UTC(),
-	}
-}
-
 func generationRequestRecord(value domain.GenerationRequest) (model.GenerationRequest, error) {
 	ids, err := parseProviderUUIDs(
-		value.ID, value.WorkspaceID, value.ProjectID, value.IntentID, value.TargetID, value.BindingID, value.CreatedBy,
+		value.ID, value.WorkspaceID, value.ProjectID, value.IntentID, value.TargetID, value.BindingID,
+		value.ConnectionVersionID, value.CredentialVersionID, value.ModelProfileVersionID, value.CreatedBy,
 	)
 	if err != nil {
 		return model.GenerationRequest{}, err
 	}
 	return model.GenerationRequest{
 		ID: ids[0], WorkspaceID: ids[1], ProjectID: ids[2], IntentID: ids[3], TargetID: ids[4], BindingID: ids[5],
-		BindingRevision: value.BindingRevision, Capability: value.Capability, ProviderKey: value.ProviderKey,
-		ModelKey: value.ModelKey, CredentialRef: value.CredentialRef, RequestKey: value.RequestKey,
+		BindingRevision: value.BindingRevision, Purpose: value.Purpose, ProviderKey: value.ProviderKey,
+		ExternalModelID: value.ExternalModelID, ConnectionVersionID: ids[6], CredentialVersionID: ids[7],
+		ModelProfileVersionID: ids[8], RequestKey: value.RequestKey,
 		TargetHash: value.TargetHash, Units: value.Units, ContentHash: value.ContentHash,
-		CreatedBy: ids[6], CreatedAt: value.CreatedAt.UTC(),
+		CreatedBy: ids[9], CreatedAt: value.CreatedAt.UTC(),
 	}, nil
 }
 
@@ -294,8 +293,9 @@ func generationRequestDomain(value model.GenerationRequest) domain.GenerationReq
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
 		IntentID: value.IntentID.String(), TargetID: value.TargetID.String(), BindingID: value.BindingID.String(),
 		BindingRevision: value.BindingRevision,
-		Capability:      value.Capability, ProviderKey: value.ProviderKey, ModelKey: value.ModelKey,
-		CredentialRef: value.CredentialRef, RequestKey: value.RequestKey, TargetHash: value.TargetHash,
+		Purpose:         value.Purpose, ProviderKey: value.ProviderKey, ExternalModelID: value.ExternalModelID,
+		ConnectionVersionID: value.ConnectionVersionID.String(), CredentialVersionID: value.CredentialVersionID.String(),
+		ModelProfileVersionID: value.ModelProfileVersionID.String(), RequestKey: value.RequestKey, TargetHash: value.TargetHash,
 		Units: value.Units, ContentHash: value.ContentHash, CreatedBy: value.CreatedBy.String(),
 		CreatedAt: value.CreatedAt.UTC(),
 	}

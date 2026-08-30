@@ -77,7 +77,7 @@ func (stub *executionClaimStub) AcquireExecutionClaim(
 }
 
 type imageProviderStub struct {
-	binding         generationdomain.ProviderBinding
+	binding         generationdomain.ProjectProviderBindingVersion
 	bindingErr      error
 	bindingCalls    []providerBindingCall
 	submitResult    generationapp.ProviderExecutionResult
@@ -87,8 +87,8 @@ type imageProviderStub struct {
 }
 
 type providerBindingCall struct {
-	actor                  generationapp.Actor
-	workspaceID, projectID string
+	actor              generationapp.Actor
+	projectID, purpose string
 }
 
 type providerSubmitCall struct {
@@ -124,14 +124,14 @@ func (stub *imageProviderStub) SubmitImageRequest(
 	return stub.submitResult, nil
 }
 
-func (stub *imageProviderStub) RequireConfiguredImageProviderBinding(
+func (stub *imageProviderStub) RequireProjectProviderBinding(
 	_ context.Context,
 	actor generationapp.Actor,
-	workspaceID string,
 	projectID string,
-) (generationdomain.ProviderBinding, error) {
+	purpose string,
+) (generationdomain.ProjectProviderBindingVersion, error) {
 	stub.bindingCalls = append(stub.bindingCalls, providerBindingCall{
-		actor: actor, workspaceID: workspaceID, projectID: projectID,
+		actor: actor, projectID: projectID, purpose: purpose,
 	})
 	return stub.binding, stub.bindingErr
 }
@@ -278,7 +278,7 @@ func TestReferenceAssetExecutorSelectsOneApprovedTargetAndPreparesItOncePerNode(
 	}
 	for _, call := range providers.bindingCalls {
 		if call.actor != (generationapp.Actor{UserID: userID, TokenVersion: 3}) ||
-			call.workspaceID != workspaceID || call.projectID != projectID {
+			call.projectID != projectID || call.purpose != generationdomain.ProviderPurposeReferenceAsset {
 			t.Fatalf("reference asset Provider binding preflight drifted: %#v", call)
 		}
 	}
@@ -506,10 +506,12 @@ func newReferenceExecutorTarget(
 }
 
 func newReferenceImageProviderStub(workspaceID, projectID, userID string) *imageProviderStub {
-	return &imageProviderStub{binding: generationdomain.ProviderBinding{
+	return &imageProviderStub{binding: generationdomain.ProjectProviderBindingVersion{
 		ID: uuid.NewString(), WorkspaceID: workspaceID, ProjectID: projectID,
-		Capability: "generation.image", ProviderKey: "runware", ModelKey: "runware:z-image@turbo",
-		CredentialRef: "env/runware_api_key", ContentHash: strings.Repeat("5", 64), Revision: 1,
+		Purpose: generationdomain.ProviderPurposeReferenceAsset, ProviderKey: "controlled-image",
+		Modality: generationdomain.MediaModalityImage, ConnectionVersionID: uuid.NewString(),
+		CredentialVersionID: uuid.NewString(), ModelProfileVersionID: uuid.NewString(),
+		AdapterContractVersion: "controlled-image-v1", ContentHash: strings.Repeat("5", 64), Revision: 1,
 		CreatedBy: userID, CreatedAt: time.Now().UTC(),
 	}}
 }
